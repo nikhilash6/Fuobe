@@ -60,7 +60,6 @@ export function launcherCurrent(pathname: string): string | undefined {
 export const LAUNCHER_PANEL =
   "absolute inset-x-0 top-full max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain border-b border-sidebar-border bg-popover text-popover-foreground shadow-heavy motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-150";
 
-const LINK_FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function NewBadge() {
   return <span className="shrink-0 rounded-full bg-highlight px-1.5 py-px text-[10px] leading-4 font-semibold text-highlight-foreground">New</span>;
@@ -73,11 +72,7 @@ function LeadCard({ e, col, current, now }: { e: NavEntry; col: number; current:
       data-col={col}
       data-row={0}
       aria-current={current ? "page" : undefined}
-      className={cn(
-        "group/lead flex flex-col overflow-hidden rounded-[14px] border bg-card text-card-foreground hover:border-border-strong motion-safe:transition-colors motion-reduce:transition-none",
-        current && "border-brand-text/40 bg-brand-faint",
-        LINK_FOCUS,
-      )}
+      className="nav-row group/lead flex flex-col overflow-hidden rounded-[14px] border bg-card text-card-foreground"
     >
       <CoverThumb
         id={e.cover}
@@ -86,12 +81,12 @@ function LeadCard({ e, col, current, now }: { e: NavEntry; col: number; current:
         eager
         className="max-h-[max(64px,calc(100dvh-592px))] rounded-none md:max-lg:max-h-[max(56px,calc(100dvh-460px))]"
       />
-      <span className="flex min-w-0 flex-col gap-0.5 px-3 pt-2.5 pb-3 md:max-lg:px-2.5 md:max-lg:py-2">
+      <span className="nav-mark-start flex min-w-0 flex-col gap-0.5 px-3 pt-2.5 pb-3 md:max-lg:px-2.5 md:max-lg:py-2">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className={cn("truncate text-[14px] leading-snug font-semibold md:max-lg:text-[13px]")}>{e.label}</span>
+          <span className="truncate text-[14px] leading-[18px] font-semibold md:max-lg:text-[13px]">{e.label}</span>
           {isNew(e, now) && <NewBadge />}
         </span>
-        <span className="line-clamp-2 text-[12px] leading-[1.35] text-muted-foreground md:max-lg:hidden">{e.what}</span>
+        <span className="line-clamp-2 text-[12px] leading-4 text-muted-foreground md:max-lg:hidden">{e.what}</span>
       </span>
     </IntentLink>
   );
@@ -105,20 +100,16 @@ function Row({ e, col, row, current, now }: { e: NavEntry; col: number; row: num
       data-row={row}
       aria-current={current ? "page" : undefined}
       title={e.label}
-      className={cn(
-        "flex min-h-11 items-center gap-2.5 rounded-[10px] px-2 py-1.5 hover:bg-accent motion-safe:transition-colors motion-reduce:transition-none md:max-lg:min-h-9 md:max-lg:px-1.5",
-        current && "bg-brand-faint",
-        LINK_FOCUS,
-      )}
+      className="nav-row nav-mark-start -mx-2 flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-1.5 md:max-lg:min-h-10"
     >
       {/* Six columns leave a row its name and line below 1440 px, and its name alone below 1280 px. */}
       <CoverThumb id={e.cover} size="row" icon={e.icon} eager className="max-[1439.98px]:hidden" />
       <span className="flex min-w-0 flex-col">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className={cn("truncate text-[13px] leading-snug font-medium max-xl:line-clamp-2 max-xl:whitespace-normal", current && "font-semibold")}>{e.label}</span>
+          <span className={cn("truncate text-[13px] leading-[18px] font-medium max-xl:line-clamp-2 max-xl:whitespace-normal", current && "font-semibold")}>{e.label}</span>
           {isNew(e, now) && <NewBadge />}
         </span>
-        <span className="line-clamp-2 text-[11.5px] leading-snug text-muted-foreground max-xl:hidden">{e.what}</span>
+        <span className="line-clamp-2 text-[12px] leading-4 text-muted-foreground max-xl:hidden">{e.what}</span>
       </span>
     </IntentLink>
   );
@@ -131,10 +122,10 @@ function Row({ e, col, row, current, now }: { e: NavEntry; col: number; row: num
 export function LauncherColumns({ kind, current, now }: { kind: ViewerKind | undefined; current?: string; now: number }) {
   const ids = useId();
   return (
-    <div className="grid grid-cols-6 gap-4 2xl:gap-6">
+    <div className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 2xl:gap-x-6">
       {launcherColumns(kind).map((c, ci) => (
         <div key={c.group.id} data-group={c.group.id} className="flex min-w-0 flex-col gap-2">
-          <p id={`${ids}-${c.group.id}`} className="px-0.5 text-[11px] leading-4 font-semibold tracking-[.08em] text-brand-text uppercase">
+          <p id={`${ids}-${c.group.id}`} title={c.group.label} className="truncate text-[11px] leading-4 font-semibold tracking-[.08em] text-brand-text uppercase">
             {c.group.label}
           </p>
           <ul aria-labelledby={`${ids}-${c.group.id}`} className="flex flex-col gap-0.5">
@@ -166,7 +157,7 @@ export function LauncherPanel({ onClose, onSearch }: { onClose: () => void; onSe
     onClose();
   }, [pathname, onClose]);
   return (
-    <div className="mx-auto max-w-[1440px] px-6 pt-5 pb-6 lg:px-10 lg:pt-6 lg:pb-7">
+    <div className="max-w-[1440px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
       <div className="flex items-center gap-3.5 pb-4">
         <p className="text-[13px] text-muted-foreground">{studioCount()} studios, grouped by what you want to make</p>
         {/* A plain link in Tab order before the grid; the grid's arrow keys skip it (it has no data-col). */}
@@ -174,7 +165,7 @@ export function LauncherPanel({ onClose, onSearch }: { onClose: () => void; onSe
           href={STUDIOS_AREA_HREF}
           aria-current={pathname === STUDIOS_AREA_HREF ? "page" : undefined}
           aria-label="See all studios"
-          className={cn("group/all -ml-1 inline-flex h-9 items-center gap-1 rounded-[10px] px-2 text-[13px] font-medium text-brand-text hover:bg-brand-faint", LINK_FOCUS)}
+          className="nav-row group/all -ml-1 inline-flex h-9 items-center gap-1 rounded-[10px] px-2 text-[13px] font-medium text-brand-text"
         >
           See all
           <ArrowRight aria-hidden className="size-3.5 motion-safe:transition-transform group-hover/all:translate-x-0.5" />
@@ -184,7 +175,7 @@ export function LauncherPanel({ onClose, onSearch }: { onClose: () => void; onSe
           type="button"
           onClick={onSearch}
           aria-keyshortcuts="/"
-          className={cn("inline-flex h-9 items-center gap-2 rounded-[10px] px-2.5 text-[13px] font-medium text-brand-text hover:bg-brand-faint", LINK_FOCUS)}
+          className="nav-row inline-flex h-10 items-center gap-2 rounded-[10px] px-2.5 text-[13px] font-medium text-brand-text"
         >
           <Search aria-hidden className="size-4" />
           Search all apps, effects and tools
@@ -270,6 +261,14 @@ export function StudiosLauncher({ active, current, onTap }: { active?: boolean; 
     if (next) panel.current.querySelector<HTMLElement>(`[data-col="${next.col}"][data-row="${next.row}"]`)?.focus();
   };
 
+  // The mouse moves the keyboard's place: the link under it takes focus (quietly: the ring is the keyboard's), so the
+  // arrow keys go on from where the mouse left off and only one link is ever highlighted.
+  const onPanelPointer = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
+    const at = (e.target as HTMLElement).closest<HTMLElement>("[data-col]");
+    if (at && at !== document.activeElement) at.focus({ preventScroll: true });
+  };
+
   return (
     <div
       ref={root}
@@ -338,6 +337,7 @@ export function StudiosLauncher({ active, current, onTap }: { active?: boolean; 
           aria-label="All studios"
           hidden={!open}
           onKeyDown={onPanelKey}
+          onPointerMove={onPanelPointer}
           onClick={(e) => {
             if ((e.target as Element).closest("a[href]")) close(false);
           }}

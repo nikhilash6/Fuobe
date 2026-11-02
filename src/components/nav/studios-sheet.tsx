@@ -7,11 +7,10 @@ import { CoverThumb } from "@/components/nav/cover-thumb";
 import { useNavUi, useViewerKind } from "@/components/nav/nav-ui";
 import { IntentLink } from "@/components/intent-link";
 import { isNew, LAUNCHER_GROUPS, launcherActive, launcherEntries, type LauncherGroupId, type NavEntry } from "@/lib/nav-model";
-import { cn } from "@/lib/utils";
 
 /** A goal chip: 32 px to look at, 44 px to tap (the row's padding holds the larger hit area). */
 const CHIP =
-  "relative h-8 min-w-11 shrink-0 rounded-full border border-border bg-secondary px-[7px] text-[12px] font-medium text-secondary-foreground outline-none after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring aria-pressed:border-transparent aria-pressed:bg-foreground aria-pressed:text-background motion-safe:transition-colors";
+  "nav-focus relative h-8 min-w-11 shrink-0 rounded-full border border-border bg-secondary px-[7px] text-[12px] font-medium text-secondary-foreground after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[''] active:bg-[var(--nav-press)] aria-pressed:border-transparent aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:active:bg-foreground/85 motion-safe:transition-colors";
 
 function Tile({ entry, current }: { entry: NavEntry; current: boolean }) {
   const fresh = isNew(entry);
@@ -20,7 +19,7 @@ function Tile({ entry, current }: { entry: NavEntry; current: boolean }) {
       <IntentLink
         href={entry.href}
         aria-current={current ? "page" : undefined}
-        className="group/tile flex flex-col items-center gap-1 rounded-[16px] px-0.5 pt-0.5 pb-0.5 text-center outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring"
+        className="nav-row nav-mark-under group/tile flex flex-col items-center gap-1 rounded-[16px] px-0.5 pt-1 pb-2.5 text-center"
       >
         <span className="relative">
           <CoverThumb
@@ -28,7 +27,7 @@ function Tile({ entry, current }: { entry: NavEntry; current: boolean }) {
             icon={entry.icon}
             size="tile"
             eager
-            className="size-13 group-aria-[current=page]/tile:ring-2 group-aria-[current=page]/tile:ring-primary group-aria-[current=page]/tile:ring-offset-2 group-aria-[current=page]/tile:ring-offset-popover"
+            className="size-13"
           />
           {fresh && (
             <span aria-hidden className="absolute -top-1 -right-1.5 rounded-full bg-highlight px-1 py-px text-[9px] leading-none font-semibold text-highlight-foreground">
@@ -49,7 +48,7 @@ function Tile({ entry, current }: { entry: NavEntry; current: boolean }) {
 }
 
 const SHORTCUT =
-  "flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl bg-secondary px-2 text-[12.5px] font-medium text-secondary-foreground outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring";
+  "nav-focus flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl bg-secondary px-2 text-[12.5px] font-medium text-secondary-foreground active:bg-[var(--nav-press)]";
 
 /**
  * Where to go from a full-screen studio, which has no tab bar: Home, Library, You and Search, above the studios. Only
@@ -98,7 +97,7 @@ export function StudiosSheet({ group: initial, onSearch }: { group?: LauncherGro
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
-        <ul aria-label={group ? LAUNCHER_GROUPS.find((g) => g.id === group)?.label : "All studios"} className="grid grid-cols-5 gap-x-1 gap-y-1.5 pb-1">
+        <ul aria-label={group ? LAUNCHER_GROUPS.find((g) => g.id === group)?.label : "All studios"} className="grid grid-cols-5 gap-x-1 gap-y-0.5 pb-1">
           {tiles.map((e) => (
             <Tile key={e.id} entry={e} current={e.id === current} />
           ))}

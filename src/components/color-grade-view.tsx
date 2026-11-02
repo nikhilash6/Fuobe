@@ -433,7 +433,7 @@ function Grader() {
 
   return (
     <div className="flex flex-col lg:h-content">
-      <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-6">
+      <header className="flex h-14 shrink-0 items-center gap-2 px-4 sm:px-6">
         <h1 className="font-heading text-[22px] leading-none">Color grading</h1>
         <span className="ml-2 hidden rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success sm:inline">Free · runs in your browser</span>
         <div className="ml-auto flex items-center gap-2">
@@ -441,7 +441,7 @@ function Grader() {
         </div>
         <PhoneNavButton />
       </header>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 sm:px-6 lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-3 sm:px-6 lg:flex-row">
         <div
           ref={box}
           className={cn(

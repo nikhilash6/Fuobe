@@ -800,7 +800,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
               )}
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+112px)]">
+            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               {mode === "picture" && <PictureSteps stage={pictureStage} />}
               <p className="text-[13px] text-pretty text-muted-foreground">{modeInfo.hint}</p>
 
@@ -1183,7 +1183,7 @@ function ModeTabsRow({ modes, mode, onMode, onlyYou }: { modes: typeof GENJUTSU_
   }, [mode, row]);
   return (
     <div className="border-b">
-      <div ref={row} style={fade} role="tablist" aria-label="Genjutsu modes" onKeyDown={tabKeys} className="scrollbar-none flex gap-1 overflow-x-auto px-3 sm:px-6">
+      <div ref={row} style={fade} role="tablist" aria-label="Genjutsu modes" onKeyDown={tabKeys} className="scrollbar-none flex gap-1 overflow-x-auto px-4 sm:px-6">
         {modes.map((m) => {
           const on = m.id === mode;
           return (

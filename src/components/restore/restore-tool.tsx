@@ -221,7 +221,7 @@ export function RestoreTool() {
               )}
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+112px)]">
+            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               <p className="flex gap-2 rounded-lg bg-muted/60 px-3 py-2 text-[12px] leading-snug text-muted-foreground">
                 <Cpu className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                 <span>{open ? GPU_NOTE : CLOUD_NOTE}</span>

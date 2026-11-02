@@ -66,7 +66,7 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
   return (
     <div className={cn("flex min-w-0 flex-col", !projectId && "min-h-content")}>
       {!projectId && (
-        <header className="sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur sm:px-6">
+        <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-4 backdrop-blur sm:px-6">
           <RailButton />
           <h1 className="font-heading text-[22px] leading-none">Memory</h1>
           {owner && (
@@ -83,7 +83,7 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
           <PhoneNavButton />
         </header>
       )}
-      <div className={cn("w-full max-w-[900px] min-w-0 flex-1 px-3 pb-16 sm:px-6", projectId ? "pt-2" : "pt-4 md:pt-8")}>
+      <div className={cn("w-full max-w-[900px] min-w-0 flex-1 px-4 pb-16 sm:px-6", projectId ? "pt-2" : "pt-4 md:pt-8")}>
         {!projectId && <p className="max-w-2xl text-[15px] text-pretty text-muted-foreground">Learning from every chat. Assist follows these in every reply, and saves new ones when you tell it something worth keeping{" "}— it asks first while Ask first is on.</p>}
         {!projectId && <AssistVisitorNote className="mt-4 max-w-2xl" />}
         {projectId && (

@@ -61,7 +61,7 @@ export function MobileView({
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-4 backdrop-blur">
         <Button asChild variant="ghost" size="icon-sm" aria-label="All projects">
           <Link href="/layers">
             <ArrowLeft />

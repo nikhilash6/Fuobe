@@ -8,7 +8,7 @@ import { IntentLink } from "@/components/intent-link";
 import { awayFix, openConnect, useComputerSupport } from "@/components/gpu/open-connect";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { useHadItems } from "@/components/use-had-items";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ownGpuOf, signInHref, useEngineMode, useHydrated, useStatus, useViewer, type EngineMode, type StatusInfo } from "@/lib/api";
@@ -17,6 +17,7 @@ import { deviceLabel } from "@/lib/gpu/readiness";
 import { safeLink, useInterest } from "@/lib/hosted";
 import type { ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
+import { MENU_ROW_1, NavMenuItem } from "./nav-row";
 
 /*
  * What the sidebar's footer said about GPUs, keys and balance, moved here unchanged in what it says and to whom: the
@@ -44,10 +45,20 @@ const ComputerNoteLive = dynamic(() => import("@/components/gpu/computer-runner"
 
 type Viewer = NonNullable<StatusInfo["viewer"]>;
 
-const CHIP = "flex min-h-11 w-full flex-col justify-center gap-1 rounded-md px-2 py-1.5 text-left text-[12px] text-muted-foreground transition-colors hover:bg-accent motion-reduce:transition-none";
+/** A status row of the account menu or the You sheet: its dot on the rows' icon column, its words on their label column. */
+const CHIP = "nav-row flex min-h-11 w-full flex-col justify-center gap-1 py-1.5 text-left text-[12px] text-muted-foreground";
 
 export function StatusDot({ ok }: { ok: boolean | undefined }) {
   return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", ok ? "bg-success" : "bg-subtle-foreground")} />;
+}
+
+/** A status dot centred in a 16 px slot: the icon column of the menu's rows. */
+function DotSlot({ ok }: { ok: boolean | undefined }) {
+  return (
+    <span aria-hidden className="grid w-4 shrink-0 place-items-center">
+      <StatusDot ok={ok} />
+    </span>
+  );
 }
 
 /**
@@ -55,11 +66,12 @@ export function StatusDot({ ok }: { ok: boolean | undefined }) {
  * elsewhere. The classes go through the menu item, so they win over its defaults.
  */
 function Actionable({ item, className, children }: { item?: boolean; className: string; children: React.ReactElement<{ className?: string }> }) {
-  if (!item) return cloneElement(children, { className: cn(className, children.props.className) });
+  // A sheet row's words sit on the sheet's gutter (its fill reaches 8 px past it); a menu row's on the menu's.
+  if (!item) return cloneElement(children, { className: cn("-mx-2 rounded-xl px-2", className, children.props.className) });
   return (
-    <DropdownMenuItem asChild className={cn("items-stretch focus:bg-accent", className)}>
+    <NavMenuItem asChild className={cn("items-stretch", className)}>
       {children}
-    </DropdownMenuItem>
+    </NavMenuItem>
   );
 }
 
@@ -75,12 +87,12 @@ export function YourGpuChip({ gpu, guest, hosted, item }: { gpu: Viewer["gpu"]; 
     const vram = g.vramBytes ? `${Math.round(g.vramBytes / 2 ** 30)} GB` : "";
     const inner = (
       <>
-        <span className="flex w-full items-center gap-2">
-          <StatusDot ok={g.online} /> Your GPU
+        <span className="flex w-full items-center gap-3">
+          <DotSlot ok={g.online} /> Your GPU
           <span className="ml-auto">{g.online ? "online" : g.comfy === "down" ? "ComfyUI not running" : g.comfy === "no-setting" ? "needs a setting" : "offline"}</span>
         </span>
         {(g.device || vram || g.mode === "computer") && (
-          <span className="truncate text-[11px]">{[g.mode === "computer" && "Your computer", deviceLabel(g.device), vram && `${vram} VRAM`].filter(Boolean).join(" · ")}</span>
+          <span className="truncate pl-7 text-[11px]">{[g.mode === "computer" && "Your computer", deviceLabel(g.device), vram && `${vram} VRAM`].filter(Boolean).join(" · ")}</span>
         )}
       </>
     );
@@ -97,8 +109,8 @@ export function YourGpuChip({ gpu, guest, hosted, item }: { gpu: Viewer["gpu"]; 
     );
   }
   const body = (
-    <span className="flex w-full items-center gap-2">
-      <StatusDot ok={false} /> Your GPU
+    <span className="flex w-full items-center gap-3">
+      <DotSlot ok={false} /> Your GPU
       {/* Runs go to this studio's GPUs too (hosted runs): one's own is an option. */}
       <span className={cn("ml-auto font-medium", hosted ? "text-muted-foreground" : "text-brand-text")}>{hosted ? "Optional" : "Connect"}</span>
     </span>
@@ -134,37 +146,37 @@ function BalanceItems({ viewer }: { viewer: Viewer }) {
   const action = safeLink(b.action?.url);
   return (
     <>
-      <DropdownMenuLabel className="text-[12px] font-normal text-muted-foreground">{b.text}</DropdownMenuLabel>
+      <DropdownMenuLabel className="px-2.5 text-[12px] font-normal text-muted-foreground">{b.text}</DropdownMenuLabel>
       {b.detail.map((d, i) => (
-        <div key={i} className="flex justify-between gap-3 px-2 py-1 text-[12px]">
+        <div key={i} className="flex justify-between gap-3 px-2.5 py-1 text-[12px]">
           <span className="text-muted-foreground">{d.label}</span>
           <span className="text-right">{d.text}</span>
         </div>
       ))}
-      <DropdownMenuSeparator />
+      <DropdownMenuSeparator className="mx-2.5 my-1.5" />
       {action && b.action && (
-        <DropdownMenuItem asChild>
+        <NavMenuItem asChild className={MENU_ROW_1}>
           <a href={action} target={action.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer">
             {b.action.label}
           </a>
-        </DropdownMenuItem>
+        </NavMenuItem>
       )}
-      {b.offer && <DropdownMenuItem onSelect={() => interest.mutate(b.offer!.key)}>{b.offer.label}</DropdownMenuItem>}
+      {b.offer && <NavMenuItem className={MENU_ROW_1} onSelect={() => interest.mutate(b.offer!.key)}>{b.offer.label}</NavMenuItem>}
       {(viewer.links ?? []).map((l, i) => {
         const href = safeLink(l.url);
         return href ? (
-          <DropdownMenuItem key={i} asChild>
+          <NavMenuItem key={i} asChild className={MENU_ROW_1}>
             <a href={href} target={href.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer">
               {l.label}
             </a>
-          </DropdownMenuItem>
+          </NavMenuItem>
         ) : null;
       })}
-      <DropdownMenuItem asChild>
+      <NavMenuItem asChild className={MENU_ROW_1}>
         <IntentLink href="/connect">
           <Cpu /> Use your own GPU or keys (free)
         </IntentLink>
-      </DropdownMenuItem>
+      </NavMenuItem>
     </>
   );
 }
@@ -189,16 +201,16 @@ export function BalanceChip({ viewer, pill, className }: { viewer: Viewer; pill?
           aria-label={`${chip}${refill ? `, ${refill}` : ""}`}
           className={cn(
             pill
-              ? "inline-flex h-9 max-w-56 items-center gap-2 rounded-full [@media(pointer:coarse)]:h-11 border border-sidebar-border px-3 text-[12.5px] text-muted-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none data-[state=open]:bg-accent"
-              : CHIP,
+              ? "inline-flex h-9 max-w-56 items-center gap-2 rounded-full [@media(pointer:coarse)]:h-11 border border-sidebar-border px-3 text-[12.5px] text-muted-foreground nav-row"
+              : cn(CHIP, "-mx-2 rounded-xl px-2"),
             className,
           )}
         >
-          <span className="flex min-w-0 items-center gap-2">
-            <StatusDot ok={b.amount > 0} /> <span className="truncate font-medium text-foreground">{chip}</span>
+          <span className={cn("flex min-w-0 items-center", pill ? "gap-2" : "gap-3")}>
+            {pill ? <StatusDot ok={b.amount > 0} /> : <DotSlot ok={b.amount > 0} />} <span className="truncate font-medium text-foreground">{chip}</span>
             {refill && <span className={cn("ml-auto shrink-0", pill && "hidden xl:inline")}>{refill}</span>}
           </span>
-          {!pill && b.sub && <span className="truncate text-[11px]">{b.sub}</span>}
+          {!pill && b.sub && <span className="truncate pl-7 text-[11px]">{b.sub}</span>}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side={pill ? "bottom" : "top"} align={pill ? "end" : "start"} className="w-64">
@@ -214,12 +226,12 @@ export function BalanceSection({ viewer }: { viewer: Viewer }) {
   const { chip, refill } = balanceLabel(viewer);
   return (
     <>
-      <DropdownMenuLabel className="flex flex-col gap-0.5 font-normal">
-        <span className="flex items-center gap-2 text-[12.5px]">
-          <StatusDot ok={b.amount > 0} /> <span className="font-medium text-foreground">{chip}</span>
+      <DropdownMenuLabel className="flex flex-col gap-0.5 px-2.5 font-normal">
+        <span className="flex items-center gap-3 text-[12.5px]">
+          <DotSlot ok={b.amount > 0} /> <span className="font-medium text-foreground">{chip}</span>
           {refill && <span className="ml-auto text-[12px] text-muted-foreground">{refill}</span>}
         </span>
-        {b.sub && <span className="text-[11px] text-muted-foreground">{b.sub}</span>}
+        {b.sub && <span className="pl-7 text-[11px] text-muted-foreground">{b.sub}</span>}
       </DropdownMenuLabel>
       <BalanceItems viewer={viewer} />
     </>
@@ -253,7 +265,7 @@ export function OwnerStatus({ item }: { item?: boolean }) {
   if (status?.viewer) return null;
   const cloud = !!status && !!(status.providers.fal?.configured || status.providers.replicate?.configured);
   const comfy = status?.providers.comfyui?.configured;
-  const modeLine = mode !== "both" && <span className="px-2 pb-1 text-[11px] text-muted-foreground">{mode === "open" ? "Open source only" : "Paid APIs only"}</span>;
+  const modeLine = mode !== "both" && <span className={cn("pb-1 text-[11px] text-muted-foreground", item ? "pl-[38px]" : "pl-7")}>{mode === "open" ? "Open source only" : "Paid APIs only"}</span>;
   if (!status)
     return (
       <div aria-hidden className="flex h-[30px] items-center px-2">
@@ -264,9 +276,9 @@ export function OwnerStatus({ item }: { item?: boolean }) {
     return (
       <>
         {mode !== "open" && (
-          <Actionable item={item} className={cn(CHIP, "flex-row items-center gap-2")}>
+          <Actionable item={item} className={cn(CHIP, "flex-row items-center gap-3")}>
             <IntentLink href="/settings">
-              <StatusDot ok={cloud} /> Cloud models
+              <DotSlot ok={cloud} /> Cloud models
               <span className="ml-auto">{cloud ? "connected" : "add key"}</span>
             </IntentLink>
           </Actionable>
@@ -279,18 +291,18 @@ export function OwnerStatus({ item }: { item?: boolean }) {
     <Actionable item={item} className={cn(CHIP, "gap-1.5")}>
       <IntentLink href="/settings">
         {mode !== "open" && (
-          <span className="flex w-full items-center gap-2">
-            <StatusDot ok={cloud} /> Cloud models
+          <span className="flex w-full items-center gap-3">
+            <DotSlot ok={cloud} /> Cloud models
             <span className="ml-auto">{cloud ? "connected" : "add key"}</span>
           </span>
         )}
         {mode !== "cloud" && (
-          <span className="flex w-full items-center gap-2">
-            <StatusDot ok={comfy} /> ComfyUI
+          <span className="flex w-full items-center gap-3">
+            <DotSlot ok={comfy} /> ComfyUI
             <span className="ml-auto">{comfy ? "online" : "offline"}</span>
           </span>
         )}
-        {mode !== "both" && <span className="text-[11px] text-muted-foreground">{mode === "open" ? "Open source only" : "Paid APIs only"}</span>}
+        {mode !== "both" && <span className="pl-7 text-[11px] text-muted-foreground">{mode === "open" ? "Open source only" : "Paid APIs only"}</span>}
       </IntentLink>
     </Actionable>
   );
@@ -357,14 +369,14 @@ export function ComputerPill() {
     <>
       <Popover>
         <PopoverTrigger
-          className="inline-flex h-9 w-full min-w-9 items-center justify-center gap-2 rounded-full [@media(pointer:coarse)]:h-11 border border-sidebar-border px-2 text-[12.5px] text-muted-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none data-[state=open]:bg-accent xl:px-3"
+          className="inline-flex h-9 w-full min-w-9 items-center justify-center gap-2 rounded-full [@media(pointer:coarse)]:h-11 border border-sidebar-border px-2 text-[12.5px] text-muted-foreground nav-row xl:px-3"
         >
           <ComputerPillFace />
         </PopoverTrigger>
         <PopoverContent align="end" className="group/note w-72">
           <ComputerNote />
           <p className="text-[12px] text-muted-foreground group-has-[[role=status]]/note:hidden">Your runs go to the GPU on this computer. Keep a Fuobe tab open while they run.</p>
-          <IntentLink href="/connect" className="text-[12px] font-medium text-brand-text underline-offset-4 hover:underline">
+          <IntentLink href="/connect" className="text-[12px] font-medium text-brand-text underline-offset-4 nav-hover:underline">
             Your GPU
           </IntentLink>
         </PopoverContent>

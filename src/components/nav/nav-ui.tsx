@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useHydrated, useViewer } from "@/lib/api";
 import type { NavCover, NavCovers } from "@/lib/nav-covers";
 import { viewerKindOf, type LauncherGroupId, type ViewerKind } from "@/lib/nav-model";
+import { installInputModality } from "./input-modality";
 
 /*
  * The app frame's shared state: the covers the server resolved for the nav (preset id → thumb and poster URLs), who is
@@ -38,6 +39,8 @@ export function NavUiProvider({ covers, children }: { covers: NavCovers; childre
   const [launcher, setLauncher] = useState<{ open: boolean; group?: LauncherGroupId }>({ open: false });
   const [sheet, setSheetState] = useState<{ sheet: NavSheet | null; group?: LauncherGroupId }>({ sheet: null });
   const launcherReturn = useRef<HTMLElement | null>(null);
+  // Which input leads (keyboard or pointer), for the nav states: one highlighted row at a time.
+  useEffect(() => installInputModality(), []);
 
   // Opened or closed by the launcher's own button: focus goes back to it. openStudios() says otherwise.
   const setLauncherOpen = useCallback((open: boolean) => {

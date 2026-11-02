@@ -17,23 +17,23 @@ import { useViewerKind } from "./nav-ui";
 
 /**
  * Fixed widths, so the placeholder and what replaces it take the same room: Log in 68 (from 1440 px), Sign up 84, the menu
- * button 36 (44 on a touch screen), 6 between.
+ * button 40 like the bar's other items (44 on a touch screen), 6 between.
  */
 export const VIEWER_W = {
-  guest: "w-[126px] min-[1440px]:w-[200px] [@media(pointer:coarse)]:w-[134px] [@media(pointer:coarse)]:min-[1440px]:w-[208px]",
-  member: "w-9 [@media(pointer:coarse)]:w-11",
+  guest: "w-[130px] min-[1440px]:w-[204px] [@media(pointer:coarse)]:w-[134px] [@media(pointer:coarse)]:min-[1440px]:w-[208px]",
+  member: "w-10 [@media(pointer:coarse)]:w-11",
 } as const;
 
 const GUEST_BUTTON =
-  "inline-flex h-9 shrink-0 items-center justify-center rounded-full text-[13.5px] [@media(pointer:coarse)]:h-11 font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:transition-colors";
+  "nav-focus-out inline-flex h-10 shrink-0 items-center justify-center rounded-full text-[13.5px] [@media(pointer:coarse)]:h-11 font-medium whitespace-nowrap motion-safe:transition-colors";
 
 function GuestButtons({ here }: { here: string }) {
   return (
     <>
-      <a href={signInHref("login", here)} className={cn(GUEST_BUTTON, "hidden w-[68px] text-foreground/80 hover:bg-accent hover:text-foreground min-[1440px]:inline-flex")}>
+      <a href={signInHref("login", here)} className={cn(GUEST_BUTTON, "hidden w-[68px] text-foreground/80 nav-hover:bg-[var(--nav-hi)] nav-hover:text-foreground active:bg-[var(--nav-press)] min-[1440px]:inline-flex")}>
         Log in
       </a>
-      <a href={signInHref("signup", here)} className={cn(GUEST_BUTTON, "w-[84px] bg-primary font-semibold text-primary-foreground hover:bg-primary/90")}>
+      <a href={signInHref("signup", here)} className={cn(GUEST_BUTTON, "w-[84px] bg-primary font-semibold text-primary-foreground nav-hover:bg-primary/90 active:bg-primary/85")}>
         Sign up
       </a>
     </>
@@ -66,7 +66,7 @@ export function ViewerSlot() {
       <span
         aria-hidden
         data-slot="viewer"
-        className={cn("block h-9 shrink-0", VIEWER_W.guest, "[html[data-viewer='account']_&]:w-9 [html[data-viewer='owner']_&]:w-9 [@media(pointer:coarse)]:[html[data-viewer='account']_&]:w-11 [@media(pointer:coarse)]:[html[data-viewer='owner']_&]:w-11")}
+        className={cn("block h-10 shrink-0", VIEWER_W.guest, "[html[data-viewer='account']_&]:w-10 [html[data-viewer='owner']_&]:w-10 [@media(pointer:coarse)]:[html[data-viewer='account']_&]:w-11 [@media(pointer:coarse)]:[html[data-viewer='owner']_&]:w-11")}
       />
     );
   if (kind !== "guest")

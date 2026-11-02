@@ -244,7 +244,7 @@ export function EvolutionTool() {
               </Panel>
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+112px)]">
+            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               <Field label="How much should change?">
                 <Segmented label="How much should change?" value={intensity} onChange={setIntensity} options={INTENSITIES.map((i) => ({ value: i.id, label: i.label }))} />
                 <p className="text-[12px] text-muted-foreground" aria-live="polite">

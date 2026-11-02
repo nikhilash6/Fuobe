@@ -418,7 +418,7 @@ try {
   // 9. Section tabs stay under the bar and mark the section being read; a phone shows two cards a row.
   for (const [device, tag, barH] of [
     [DESKTOP, "1440", 56],
-    [PHONE, "390", 48],
+    [PHONE, "390", 56],
   ]) {
     const ctx = await as("visitor", device);
     const p = await page(ctx);

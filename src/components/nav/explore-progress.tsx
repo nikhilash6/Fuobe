@@ -2,12 +2,12 @@
 
 import { Sparkles } from "lucide-react";
 import { IntentLink } from "@/components/intent-link";
-import { DropdownMenuItem, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
+import { DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { exploreProgress, nextToTry } from "@/lib/nav-explore";
 import type { NavEntry } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
 import { CoverThumb } from "./cover-thumb";
-import { NAV_MENU_ITEM } from "./create-menu";
+import { NavMenuItem, SHEET_ROW } from "./nav-row";
 import { useExplored } from "./explore-tracker";
 import { useViewerKind } from "./nav-ui";
 
@@ -33,7 +33,7 @@ export function ExploreProgress({
   return <ExploreView variant={variant} done={done} total={total} next={next} onNavigate={onNavigate} />;
 }
 
-const ROW = "flex min-h-12 items-center gap-3 rounded-[12px] px-1.5 py-1 text-left";
+const ROW = "flex min-h-12 items-center gap-3 py-1 text-left";
 
 /** The row itself, from numbers (ExploreProgress reads them from this browser). */
 export function ExploreView({
@@ -60,7 +60,7 @@ export function ExploreView({
         <span className="text-[13px] font-medium text-foreground">{done >= total ? "You have tried every studio" : count}</span>
       </>
     );
-    return menu ? <DropdownMenuLabel className={cn(ROW, "font-normal")}>{body}</DropdownMenuLabel> : <div className={ROW}>{body}</div>;
+    return menu ? <DropdownMenuLabel className={cn(ROW, "px-2.5 font-normal")}>{body}</DropdownMenuLabel> : <div className={ROW}>{body}</div>;
   }
   const body = (
     <>
@@ -77,17 +77,17 @@ export function ExploreView({
   // One name for the whole row.
   const label = `Next to try: ${next.label}, ${next.what}. ${count}`;
   return menu ? (
-    <DropdownMenuItem asChild className={cn(ROW, "cursor-pointer focus:bg-accent", NAV_MENU_ITEM)}>
+    <NavMenuItem asChild className={ROW}>
       <IntentLink href={next.href} aria-label={label} onClick={onNavigate}>
         {body}
       </IntentLink>
-    </DropdownMenuItem>
+    </NavMenuItem>
   ) : (
     <IntentLink
       href={next.href}
       aria-label={label}
       onClick={onNavigate}
-      className={cn(ROW, "outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-safe:transition-colors motion-reduce:transition-none")}
+      className={cn(SHEET_ROW, "py-1")}
     >
       {body}
     </IntentLink>

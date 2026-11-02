@@ -98,7 +98,7 @@ function Project({ p }: { p: AssistProject }) {
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-4 backdrop-blur sm:px-6">
         <RailButton />
         <ProjectDot project={p} className="ml-1" />
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">{p.name}</h1>
@@ -121,7 +121,7 @@ function Project({ p }: { p: AssistProject }) {
         </div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[860px] min-w-0 flex-1 px-3 pb-16 sm:px-6">
+      <div className="mx-auto w-full max-w-[860px] min-w-0 flex-1 px-4 pb-16 sm:px-6">
         <div className="mx-auto max-w-[760px] pt-[6vh] sm:pt-[9vh]">
           <h2 className="text-center font-heading text-display text-balance">What are we creating in {p.name}?</h2>
           <button onClick={() => setSettings(true)} className="mx-auto mt-2 block max-w-xl text-center text-[14px] text-pretty text-muted-foreground hover:text-foreground">
@@ -187,10 +187,10 @@ function Project({ p }: { p: AssistProject }) {
           <TabsContent value="sources">
             <Sources p={p} />
           </TabsContent>
-          <TabsContent value="memory" className="-mx-3 sm:-mx-6">
+          <TabsContent value="memory" className="-mx-4 sm:-mx-6">
             <MemoryView projectId={p.id} />
           </TabsContent>
-          <TabsContent value="scheduled" className="-mx-3 sm:-mx-6">
+          <TabsContent value="scheduled" className="-mx-4 sm:-mx-6">
             <ScheduledView projectId={p.id} />
           </TabsContent>
         </Tabs>

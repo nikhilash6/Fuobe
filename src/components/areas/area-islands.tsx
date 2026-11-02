@@ -97,7 +97,7 @@ export function AreaTabs({ tabs, label }: { tabs: AreaTab[]; label: string }) {
       aria-label={label}
       // Under the phone's bar (48 px and the notch), or the desktop's (top-chrome). Its background and lower rule reach
       // the screen's edges (shadows clipped to its own height), so cards scrolling under it never show at its sides.
-      className="sticky top-[calc(3rem+env(safe-area-inset-top))] z-10 mt-5 flex h-[52px] items-stretch border-y bg-background shadow-[0_0_0_100vmax_var(--background),0_1px_0_100vmax_var(--border)] [clip-path:inset(0_-100vmax_-1px)] max-sm:-mx-4 md:top-chrome"
+      className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-10 mt-5 flex h-[52px] items-stretch border-y bg-background shadow-[0_0_0_100vmax_var(--background),0_1px_0_100vmax_var(--border)] [clip-path:inset(0_-100vmax_-1px)] max-sm:-mx-4 md:top-chrome"
     >
       <div ref={strip} className="fade-x scrollbar-none relative flex min-w-0 flex-1 snap-x items-stretch gap-0.5 overflow-x-auto max-sm:px-1">
         {tabs.map((t) => {

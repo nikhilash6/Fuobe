@@ -23,7 +23,7 @@ export function PhoneNavButton({ className }: { className?: string }) {
       size="icon"
       aria-haspopup="dialog"
       data-phone-nav-button
-      className={cn("size-11 shrink-0 rounded-full text-muted-foreground motion-reduce:transition-none md:hidden", className)}
+      className={cn("nav-row size-11 shrink-0 rounded-full text-muted-foreground focus-visible:border-transparent focus-visible:ring-0 motion-reduce:transition-none md:hidden", className)}
       onTouchStart={search.warm}
       onPointerEnter={search.warm}
       onFocus={search.warm}

@@ -240,14 +240,14 @@ export function ContentFactoryHome({ voices, starters = [], fills = {} }: { voic
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="truncate font-heading text-[22px] leading-none">Content Factory</h1>
         <div className="ml-auto">
           <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-12 px-3 pb-16 sm:px-6">
+      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-12 px-4 pb-16 sm:px-6">
         <div className="mx-auto max-w-[780px] pt-[5vh] text-center sm:pt-[8vh]">
           <h2 className="font-heading text-display text-balance">Faceless shorts in the style of a video you love</h2>
           <p className="mx-auto mt-2 max-w-[600px] text-body text-muted-foreground">Show it a reference, say what to make, and get a whole series: script, narrator, pictures, motion, music and captions that follow the same pacing and look.</p>

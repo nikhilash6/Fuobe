@@ -174,7 +174,7 @@ export function EpisodeWizard({ channelId, picker, initialTopic }: { channelId: 
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <Link href={`/faceless/${channelId}`} className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4 shrink-0" />
           <span className="truncate">{channel?.name ?? "Channel"}</span>
@@ -184,7 +184,7 @@ export function EpisodeWizard({ channelId, picker, initialTopic }: { channelId: 
         </div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[920px] min-w-0 flex-1 px-3 pb-32 sm:px-6">
+      <div className="mx-auto w-full max-w-[920px] min-w-0 flex-1 px-4 pb-32 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3 pt-6">
           <Steps step={step} />
         </div>
@@ -353,7 +353,7 @@ export function EpisodeWizard({ channelId, picker, initialTopic }: { channelId: 
 
       {channel && settings && (
         <div className="sticky bottom-chrome z-20 border-t bg-background/90 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
-          <div className="mx-auto flex w-full max-w-[920px] min-w-0 flex-wrap items-center gap-3 px-3 pt-3 sm:px-6">
+          <div className="mx-auto flex w-full max-w-[920px] min-w-0 flex-wrap items-center gap-3 px-4 pt-3 sm:px-6">
             {step === 2 ? (
               <>
                 <Button variant="ghost" onClick={() => setStep(1)}>

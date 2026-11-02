@@ -182,7 +182,7 @@ export function PhoneSheets() {
                   <IntentLink
                     href={SEE_ALL[shown]}
                     aria-label={`See all ${TITLES[shown].toLowerCase()}`}
-                    className="group/all ml-auto inline-flex h-11 items-center gap-1 rounded-full px-3 text-[13px] font-medium text-brand-text outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring"
+                    className="nav-row group/all ml-auto inline-flex h-11 items-center gap-1 rounded-full px-3 text-[13px] font-medium text-brand-text"
                   >
                     See all
                     <ArrowRight aria-hidden className="size-4" />
@@ -194,14 +194,14 @@ export function PhoneSheets() {
                     type="button"
                     onClick={openSearch}
                     aria-label="Search everything"
-                    className="grid size-11 shrink-0 place-items-center rounded-full text-brand-text outline-none [-webkit-tap-highlight-color:transparent] hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring [html[data-fullscreen-studio]_&]:hidden"
+                    className="nav-row grid size-11 shrink-0 place-items-center rounded-full text-brand-text [html[data-fullscreen-studio]_&]:hidden"
                   >
                     <Search className="size-[18px]" aria-hidden />
                   </button>
                 )}
                 <SheetPrimitive.Close
                   className={cn(
-                    "grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                    "nav-row grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground nav-hover:text-foreground",
                     !SEE_ALL[shown] && "ml-auto",
                   )}
                 >

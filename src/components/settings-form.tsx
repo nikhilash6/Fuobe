@@ -165,7 +165,7 @@ function ChoiceField({
 function StatusStrip({ status, onGuide, guideOpen }: { status?: StatusInfo; onGuide: () => void; guideOpen: boolean }) {
   const place = usePagePlace();
   return (
-    <div className="sticky top-12 z-10 -mx-4 border-b bg-background/90 px-4 py-2.5 backdrop-blur sm:-mx-8 sm:px-8 md:top-chrome">
+    <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-10 -mx-4 border-b bg-background/90 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6 md:top-chrome">
       <nav aria-label="Connections" className="scrollbar-none -my-1 flex items-center gap-1.5 overflow-x-auto py-1">
         {status ? (
           <>

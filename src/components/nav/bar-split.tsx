@@ -15,23 +15,23 @@ import { useNavUi } from "./nav-ui";
  * ArrowDown on the name, and, with a mouse, resting on the item (not on the item of the page you are on). A touch
  * screen never opens it by hovering: a tap on the name goes to the page, a tap on the chevron opens the menu.
  *
- * States use the bar's own attributes, so its styling applies: aria-current="page" on the name on the area's page,
- * data-active on the pill inside the area, data-state="open" on the chevron and data-open on the pill while the menu
- * is open. The pill is exactly as wide as a plain item with a chevron (the name keeps its padding on the left, the
+ * States are the nav's (nav-states.css): each half has the highlight on hover or keyboard focus and the pressed fill;
+ * the pill shows the open page's pip under it (data-active inside the area, aria-current="page" on the name on the
+ * area's own page), and while the menu is open (data-open, data-state="open" on the chevron) foreground words and a
+ * turned chevron, never a fill. The pill is exactly as wide as a plain item with a chevron (the name keeps its padding on the left, the
  * chevron takes the right padding and the gap), so the bar never grows.
  */
 
 /** The pill around the two controls. */
 export const BAR_SPLIT =
-  "group/bar-item inline-flex h-10 shrink-0 items-stretch rounded-[10px] text-[14px] whitespace-nowrap text-foreground/80 [@media(pointer:coarse)]:h-11 data-[active]:bg-accent data-[active]:font-semibold data-[active]:text-foreground has-[[aria-current=page]]:bg-accent has-[[aria-current=page]]:text-foreground data-[open]:bg-accent data-[open]:text-foreground motion-safe:transition-colors";
+  "nav-mark-under group/bar-item inline-flex h-10 shrink-0 items-stretch rounded-[10px] text-[14px] whitespace-nowrap text-foreground/80 [@media(pointer:coarse)]:h-11 data-[active]:font-semibold data-[active]:text-foreground has-[[aria-current=page]]:font-semibold has-[[aria-current=page]]:text-foreground data-[open]:text-foreground";
 
 /** The name: the area's page. */
-export const BAR_LABEL =
-  "inline-flex items-center gap-1.5 rounded-l-[10px] pr-1 pl-2.5 outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-[current=page]:font-semibold motion-safe:transition-colors min-[1440px]:pl-3.5";
+export const BAR_LABEL = "nav-row inline-flex items-center gap-1.5 rounded-l-[10px] pr-1 pl-2.5 nav-hover:text-foreground focus-visible:text-foreground min-[1440px]:pl-3.5";
 
 /** The chevron: the menu. 26 px wide (30 from 1440) with a mouse; 44 px to tap. */
 export const BAR_CHEVRON =
-  "inline-flex w-[26px] items-center justify-center rounded-r-[10px] text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-[state=open]:text-foreground motion-safe:transition-colors min-[1440px]:w-[30px] [@media(pointer:coarse)]:w-11";
+  "nav-row inline-flex w-[26px] items-center justify-center rounded-r-[10px] text-muted-foreground nav-hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground min-[1440px]:w-[30px] [@media(pointer:coarse)]:w-11";
 
 export const BarChevron = () => <ChevronDown aria-hidden className="size-3.5 group-data-[open]/bar-item:rotate-180 motion-safe:transition-transform" />;
 
@@ -123,6 +123,7 @@ export function BarSplitMenu({
   onTap,
   className,
   contentClassName,
+  onContentKeyDown,
   children,
 }: {
   href: string;
@@ -134,6 +135,8 @@ export function BarSplitMenu({
   onTap?: (href: string) => void;
   className?: string;
   contentClassName?: string;
+  /** Keys the menu's content handles beyond Radix's own (the Create menu's Left and Right across its columns). */
+  onContentKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -252,6 +255,7 @@ export function BarSplitMenu({
         sideOffset={8}
         collisionPadding={12}
         className={contentClassName}
+        onKeyDown={onContentKeyDown}
         onPointerEnter={(e) => {
           hover.enter(e);
           warmNav(panel);

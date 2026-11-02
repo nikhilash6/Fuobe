@@ -19,7 +19,7 @@ type TabDot = ReturnType<typeof avatarDot>;
 
 /** One cell: at least 64 x 56, the icon in a 44 x 28 pill that tints when its tab is selected. */
 const CELL =
-  "group/tab relative flex h-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-[11px] leading-none font-medium text-muted-foreground outline-none select-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring data-[active]:text-foreground";
+  "nav-row group/tab flex h-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-[11px] leading-none font-medium text-muted-foreground select-none data-[active]:text-foreground";
 
 function TabFace({ icon: Icon, label, dot }: { icon: LucideIcon; label: string; dot?: TabDot }) {
   return (

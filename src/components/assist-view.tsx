@@ -151,7 +151,7 @@ export function AssistView() {
 
   return (
     <div className="flex h-content min-w-0 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-1.5 px-3 sm:px-6">
+      <header className="flex h-14 shrink-0 items-center gap-1.5 px-4 sm:px-6">
         <RailButton />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {project && (
@@ -196,7 +196,7 @@ export function AssistView() {
       </header>
 
       {!id ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-3 pt-[10vh] pb-16 sm:px-6 sm:pt-[14vh]">
+        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pt-[10vh] pb-16 sm:px-6 sm:pt-[14vh]">
           <div className="w-full max-w-[760px]">
             <div className="mb-6 text-center">
               <h2 className="font-heading text-display text-balance">What are we creating today?</h2>
@@ -228,7 +228,7 @@ export function AssistView() {
         </div>
       ) : (
         <>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 sm:px-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6">
             <div className="mx-auto w-full max-w-[760px] py-4">
               {view.isError ? (
                 <div className="py-20 text-center">
@@ -245,7 +245,7 @@ export function AssistView() {
               <div ref={end} className="h-4" />
             </div>
           </div>
-          <div className="shrink-0 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+          <div className="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
             <div className="mx-auto w-full max-w-[760px]">
               <AssistComposer
                 skills={available}

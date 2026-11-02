@@ -304,7 +304,7 @@ export function HomeView({
             )}
           />
           <div className="flex items-center gap-1.5">
-            <div role="radiogroup" aria-label="What to make" className="flex min-w-0 items-center gap-1">
+            <div role="radiogroup" aria-label="What to make" className="scrollbar-none flex min-w-0 items-center gap-0.5 overflow-x-auto sm:gap-1">
               {MODES.map((m) => (
                 <button
                   key={m.id}
@@ -313,7 +313,7 @@ export function HomeView({
                   aria-checked={mode.id === m.id}
                   onClick={() => setMode(m)}
                   className={cn(
-                    "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition-colors",
+                    "inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors sm:gap-1.5 sm:px-3",
                     mode.id === m.id ? "bg-brand-faint text-brand-text" : "text-muted-foreground hover:bg-accent",
                   )}
                 >

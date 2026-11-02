@@ -24,7 +24,7 @@ function MarketingFrame({ title, active, children }: { title: string; active: Su
 export function MarketingToolSkeleton({ title, active }: { title: string; active: SuiteTab }) {
   return (
     <MarketingFrame title={title} active={active}>
-      <div className="mx-auto flex w-full max-w-[760px] flex-col items-center px-3 pt-8 sm:px-6 sm:pt-[10vh]">
+      <div className="mx-auto flex w-full max-w-[760px] flex-col items-center px-4 pt-8 sm:px-6 sm:pt-[10vh]">
         <Skeleton className="h-9 w-2/3 max-w-[420px] rounded-xl" />
         <Skeleton className="mt-3 h-4 w-1/2 max-w-[300px]" />
         <Skeleton className="mt-10 h-40 w-full rounded-[20px]" />
@@ -37,7 +37,7 @@ export function MarketingToolSkeleton({ title, active }: { title: string; active
 export function MarketingSkeleton() {
   return (
     <MarketingFrame title="Marketing Studio" active="studio">
-      <div className="mx-auto w-full max-w-[1240px] flex-1 px-3 sm:px-6">
+      <div className="mx-auto w-full max-w-[1240px] flex-1 px-4 sm:px-6">
         <div className="flex flex-col items-center pt-6 pb-2 sm:pt-10">
           <Skeleton className="h-10 w-3/4 max-w-[560px] rounded-xl" />
           <Skeleton className="mt-3 h-4 w-2/3 max-w-[420px]" />
@@ -57,7 +57,7 @@ export function MarketingSkeleton() {
           ))}
         </div>
       </div>
-      <div className="sticky bottom-chrome px-3 pb-3 sm:px-6">
+      <div className="sticky bottom-chrome px-4 pb-3 sm:px-6">
         <Skeleton className="mx-auto h-14 w-full max-w-[860px] rounded-[20px] sm:rounded-composer" />
       </div>
     </MarketingFrame>

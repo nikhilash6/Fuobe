@@ -129,7 +129,7 @@ function LiveShowcase({ kind }: { kind: "guest" | "connect" | "unsupported" }) {
   const [nudge, setNudge] = useState(false);
   return (
     <div className="flex min-h-content flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-6">
+      <header className="flex h-14 shrink-0 items-center gap-2 px-4 sm:px-6">
         <h1 className="flex items-center gap-2 font-heading text-[22px] leading-none">
           <Zap className="size-4 text-primary" />
           Live edit
@@ -137,7 +137,7 @@ function LiveShowcase({ kind }: { kind: "guest" | "connect" | "unsupported" }) {
         <span className="ml-1 rounded-full bg-highlight px-2 py-0.5 text-[11px] font-semibold text-highlight-foreground">New</span>
         <PhoneNavButton className="ml-auto" />
       </header>
-      <div className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-6 px-3 pb-6 sm:px-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-10">
+      <div className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-6 px-4 pb-6 sm:px-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-10">
         <LiveDemo className="aspect-[4/3] w-full shadow-strong" onTypeAttempt={() => setNudge(true)} />
         <div className="max-w-md">
           <p className="font-heading text-[34px] leading-[1.08] text-balance sm:text-[40px]">Change a picture as you type</p>

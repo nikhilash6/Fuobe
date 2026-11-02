@@ -744,7 +744,7 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
             <h3 id="any-angle-results" className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-semibold">
               <Images className="size-3.5" /> Your angles
             </h3>
-            <div className="-mx-3 flex snap-x gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:px-6">
+            <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
               {shots.map((g) => (
                 <ShotCard key={g.id} g={g} original={ref} onAgain={again} />
               ))}

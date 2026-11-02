@@ -422,7 +422,7 @@ function Timeline({ view, onOpen }: { view: View; onOpen: (g: Generation) => voi
           </Button>
         </div>
       </div>
-      <div className="scrollbar-none -mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:-mx-0 sm:px-0" role="group" aria-label="Scenes">
+      <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-0 sm:px-0" role="group" aria-label="Scenes">
         {scenes.map((s) => (
           <SceneTile key={s.id} scene={s} selected={selected.includes(s.id)} onSelect={(e) => pick(s.index, e)} aspect={ep.settings.aspect} />
         ))}
@@ -484,7 +484,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <Link href={backHref} className="inline-flex min-w-0 shrink items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4 shrink-0" />
           <span className="truncate">{view?.channel?.name ?? backLabel}</span>
@@ -543,7 +543,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
         )}
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1100px] min-w-0 flex-1 space-y-6 px-3 pb-16 sm:px-6">
+      <div className="mx-auto w-full max-w-[1100px] min-w-0 flex-1 space-y-6 px-4 pb-16 sm:px-6">
         {isLoading || !view || !ep ? (
           <div className="space-y-4 pt-6">
             <Skeleton className="h-8 w-96 max-w-full" />

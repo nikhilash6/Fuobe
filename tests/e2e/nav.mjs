@@ -560,6 +560,234 @@ try {
     await phone.close();
   }
 
+  // 11b. One state system: one highlighted row per open menu whatever the mouse and the keys did, the current page's mark
+  // is not the highlight, the keyboard's ring shows (2 px, the ring colour) and the mouse's never does, pressed differs.
+  {
+    // What each item shows: its fill compared with the highlight and pressed fills (read from the page's own tokens),
+    // its outline, and the current page's pip (a ::before). Read after the 120 ms colour transition has run.
+    const states = async (p, root, items) =>
+      (await p.waitForTimeout(250)) ||
+      p.evaluate(
+        ([root, items]) => {
+          const probe = (v) => {
+            const d = document.createElement("div");
+            d.style.background = `var(${v})`;
+            document.body.append(d);
+            const c = getComputedStyle(d).backgroundColor;
+            d.remove();
+            return c;
+          };
+          const hi = probe("--nav-hi");
+          const press = probe("--nav-press");
+          const ring = probe("--ring");
+          const box = document.querySelector(root);
+          return [...(box?.querySelectorAll(items) ?? [])].map((e) => {
+            const s = getComputedStyle(e);
+            const pip = [e, ...e.querySelectorAll(".nav-mark-start, .nav-mark-under")].some((x) => getComputedStyle(x, "::before").content !== "none");
+            return {
+              name: (e.getAttribute("aria-label") || e.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40),
+              lit: s.backgroundColor === hi,
+              pressed: s.backgroundColor === press,
+              ring: s.outlineStyle !== "none" && parseFloat(s.outlineWidth) >= 2 && s.outlineColor === ring,
+              current: e.getAttribute("aria-current") === "page" || e.hasAttribute("data-active"),
+              pip,
+            };
+          });
+        },
+        [root, items],
+      );
+    const lit = (rows) => rows.filter((r) => r.lit || r.pressed).map((r) => r.name);
+    const steps = [];
+    const one = (rows, what, expect) => {
+      const on = lit(rows);
+      const ok = on.length === 1 && (!expect || on[0].startsWith(expect));
+      steps.push(ok);
+      check(ok, `one highlight: ${what}`, `lit: ${on.join(" | ") || "none"}`);
+    };
+    const ctx = await as("owner");
+    const p = await page(ctx);
+    await openRoute(p, `${app}/edit`);
+    const bar = p.locator("[data-top-bar]");
+    const menu = p.getByRole("menu");
+    const ITEMS = "[role=menuitem]";
+
+    // On /edit the Create pill (a name and a chevron) carries the pip under it, and no fill.
+    const pill = await bar.locator("[data-bar-split]").first().evaluate((e) => ({
+      pip: getComputedStyle(e, "::before").content !== "none",
+      fill: getComputedStyle(e).backgroundColor,
+      active: e.hasAttribute("data-active"),
+    }));
+    check(pill.active && pill.pip && /rgba\(0, 0, 0, 0\)|transparent/.test(pill.fill), "bar: Create (a Create page is open) has the pip under the pill, no fill", JSON.stringify(pill));
+
+    // The owner's case: on /edit, Create opened by the mouse, the mouse on Live edit.
+    await bar.getByRole("button", { name: "Create menu", exact: true }).click();
+    await menu.waitFor();
+    const live = menu.getByRole("menuitem", { name: /^Live edit/ });
+    const box = await live.boundingBox();
+    await p.mouse.move(box.x + 30, box.y + box.height / 2, { steps: 4 });
+    let rows = await states(p, "[role=menu]", ITEMS);
+    one(rows, "Create on /edit, mouse on Live edit", "Live edit");
+    const edit = rows.find((r) => r.name.startsWith("Edit"));
+    check(!!edit && edit.current && edit.pip && !edit.lit, "current page: Edit carries the pip, not the highlight fill", JSON.stringify(edit));
+    check(!rows.some((r) => r.ring), "mouse: no keyboard ring on the hovered row");
+    if (shots) await shot(p, "states-create-hover-live-edit");
+
+    // Keys go on from where the mouse is: Down to Inpaint, Right across to the Make column, each with the ring.
+    await p.keyboard.press("ArrowDown");
+    rows = await states(p, "[role=menu]", ITEMS);
+    one(rows, "ArrowDown after the mouse", "Inpaint");
+    check(rows.find((r) => r.lit)?.ring === true, "keyboard: the highlighted row shows the 2 px ring");
+    await p.keyboard.press("ArrowLeft");
+    rows = await states(p, "[role=menu]", ITEMS);
+    one(rows, "ArrowLeft moves across the two columns");
+    await p.keyboard.press("ArrowRight");
+    rows = await states(p, "[role=menu]", ITEMS);
+    one(rows, "ArrowRight comes back", "Inpaint");
+
+    // The mouse takes the highlight back, without the ring; then a press shows the pressed fill.
+    const image = menu.getByRole("menuitem", { name: /^Image/ });
+    const ib = await image.boundingBox();
+    await p.mouse.move(ib.x + 40, ib.y + ib.height / 2, { steps: 4 });
+    rows = await states(p, "[role=menu]", ITEMS);
+    one(rows, "the mouse back on Image after the keys", "Image");
+    check(!rows.some((r) => r.ring), "mouse again: the ring steps aside");
+    await p.mouse.down();
+    rows = await states(p, "[role=menu]", ITEMS);
+    check(rows.find((r) => r.name.startsWith("Image"))?.pressed === true, "pressed: mouse-down shows the pressed fill", JSON.stringify(rows.find((r) => r.name.startsWith("Image"))));
+    await p.mouse.move(ib.x + ib.width + 200, ib.y + 300);
+    await p.mouse.up();
+
+    // The open menu's trigger is not a second fill beside the hovered row.
+    await p.mouse.move(ib.x + 40, ib.y + ib.height / 2, { steps: 4 });
+    const trig = await states(p, "[data-top-bar] nav", ":scope > div > a, :scope > div > button");
+    check(!trig.some((r) => r.name.startsWith("Create") && r.lit), "open trigger: Create keeps no fill while its menu is open", JSON.stringify(trig.find((r) => r.name.startsWith("Create"))));
+
+    // The mouse leaves the menu: the highlight stays on Image, and ArrowDown goes on from there.
+    const before = (await states(p, "[role=menu]", ITEMS)).findIndex((r) => r.name.startsWith("Image"));
+    const mb = await menu.boundingBox();
+    const outX = mb.x + mb.width + 40 < p.viewportSize().width ? mb.x + mb.width + 40 : mb.x - 40;
+    await p.mouse.move(outX, ib.y + ib.height / 2, { steps: 1 });
+    rows = await states(p, "[role=menu]", ITEMS);
+    one(rows, "the mouse left the menu: the last row keeps the highlight", "Image");
+    await p.keyboard.press("ArrowDown");
+    rows = await states(p, "[role=menu]", ITEMS);
+    one(rows, "ArrowDown after the mouse left the menu");
+    check(rows.findIndex((r) => r.lit) === before + 1, "ArrowDown goes on from the row the mouse left", lit(rows).join(" | "));
+
+    // Typeahead after the mouse: the letter hands the lead to the keyboard, so the row it picks shows the ring.
+    await p.mouse.move(ib.x + 40, ib.y + ib.height / 2, { steps: 4 });
+    await p.keyboard.press("i");
+    rows = await states(p, "[role=menu]", ITEMS);
+    one(rows, "typeahead after the mouse");
+    check(rows.find((r) => r.lit)?.ring === true, "typeahead: the picked row shows the ring", JSON.stringify(rows.find((r) => r.lit)));
+    await p.keyboard.press("Escape");
+    await menu.waitFor({ state: "detached" }).catch(() => {});
+
+    // A bar control outside the menus (search field) under a resting mouse drops its hover once the keyboard leads.
+    {
+      const field = bar.getByRole("button", { name: /^Search/ });
+      const fb = await field.boundingBox();
+      await p.mouse.move(fb.x - 400, fb.y + 300, { steps: 2 });
+      await p.waitForTimeout(250);
+      const rest = await field.evaluate((e) => getComputedStyle(e).backgroundColor + getComputedStyle(e).borderColor);
+      await p.mouse.move(fb.x + fb.width / 2, fb.y + fb.height / 2, { steps: 3 });
+      await p.waitForTimeout(250);
+      const hovered = await field.evaluate((e) => getComputedStyle(e).backgroundColor + getComputedStyle(e).borderColor);
+      await p.keyboard.press("Tab");
+      await p.waitForTimeout(250);
+      const keyed = await field.evaluate((e) => getComputedStyle(e).backgroundColor + getComputedStyle(e).borderColor);
+      check(hovered !== rest && keyed === rest, "bar: the search field under the mouse drops its hover while the keyboard leads", `${rest} / ${hovered} / ${keyed}`);
+      await p.mouse.move(fb.x - 400, fb.y + 300, { steps: 2 });
+    }
+
+    // The bar on /library: the hovered item is the one highlight, Library keeps only its pip.
+    await openRoute(p, `${app}/library`);
+    const create = bar.getByRole("link", { name: "Create", exact: true });
+    const cb = await create.boundingBox();
+    await p.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2, { steps: 3 });
+    rows = await states(p, "[data-top-bar] nav", ":scope > a, :scope > button, :scope > div > a, :scope > div > button");
+    one(rows, "bar on /library, mouse on Create", "Create");
+    const library = rows.find((r) => r.name === "Library");
+    check(!!library && library.current && library.pip && !library.lit, "bar: Library (current) has the pip, no fill", JSON.stringify(library));
+
+    // The launcher: the mouse moves the keyboard's place, so Down goes on from the hovered row.
+    await openRoute(p, `${app}/storyboard`);
+    await bar.getByRole("button", { name: /^Studios/ }).click();
+    const panel = p.locator("#studios-launcher");
+    await panel.waitFor({ state: "visible" });
+    rows = await states(p, "#studios-launcher", "[data-col]");
+    check(lit(rows).length === 0, "launcher opened by the mouse: nothing highlighted yet", lit(rows).join(" | "));
+    const hovered = panel.locator('[data-col="1"][data-row="1"]');
+    const hb = await hovered.boundingBox();
+    await p.mouse.move(hb.x + 20, hb.y + hb.height / 2, { steps: 4 });
+    rows = await states(p, "#studios-launcher", "[data-col]");
+    one(rows, "launcher, mouse on a row");
+    await p.keyboard.press("ArrowDown");
+    const at = await p.evaluate(() => [document.activeElement?.getAttribute("data-col"), document.activeElement?.getAttribute("data-row")].join(","));
+    rows = await states(p, "#studios-launcher", "[data-col]");
+    one(rows, "launcher, ArrowDown after the mouse");
+    check(at === "1,2", "launcher: ArrowDown goes on from the hovered row", at);
+    const sb = rows.find((r) => r.current);
+    check(!!sb && sb.pip && !sb.lit, "launcher: Storyboard (current) has the pip, no fill", JSON.stringify(sb));
+    await p.keyboard.press("Escape");
+
+    // Home's goal row: the open goal is an underline; hover is the one highlight.
+    await openRoute(p, `${app}/`);
+    await p.locator('[data-goal="sell"]').click();
+    const people = p.locator('[data-goal="people"]');
+    const pb = await people.boundingBox();
+    await p.mouse.move(pb.x + pb.width / 2, pb.y + pb.height / 2, { steps: 3 });
+    rows = await states(p, "[data-goal-row] [role=toolbar]", "[data-goal]");
+    one(rows, "goal row: Sell open, mouse on People", "People");
+
+    // Search: one selected row, whatever the mouse and the keys did.
+    await p.keyboard.press("ControlOrMeta+k");
+    const dialog = p.getByRole("dialog");
+    await dialog.waitFor();
+    await p.keyboard.type("video");
+    await p.waitForTimeout(700);
+    const options = dialog.getByRole("option");
+    const ob = await options.nth(2).boundingBox();
+    await p.mouse.move(ob.x + 40, ob.y + ob.height / 2, { steps: 3 });
+    await p.keyboard.press("ArrowDown");
+    rows = await states(p, "[role=dialog]", "[role=option]");
+    one(rows, "search: mouse on a row, then ArrowDown");
+    await p.keyboard.press("Escape");
+    await dialog.waitFor({ state: "detached" }).catch(() => {});
+
+    // Search opened with "/" under a resting mouse (it last moved, then rests where the list appears): one row.
+    const vp = p.viewportSize();
+    await p.mouse.move(vp.width / 2, vp.height / 2 + 40, { steps: 3 });
+    await p.keyboard.press("/");
+    await dialog.waitFor();
+    await p.waitForTimeout(700);
+    rows = await states(p, "[role=dialog]", "[role=option]");
+    one(rows, "search opened by / under a resting mouse");
+    await p.keyboard.type("vid");
+    await p.waitForTimeout(700);
+    rows = await states(p, "[role=dialog]", "[role=option]");
+    one(rows, "search: typing after / under a resting mouse");
+    check(rows.find((r) => r.lit)?.ring === true, "search: typing hands the lead to the keyboard (the Enter row shows the ring)", JSON.stringify(rows.find((r) => r.lit)));
+    await p.keyboard.press("Escape");
+    check(ctx.errors.length === 0, "state checks: no console errors", ctx.errors.join(" | "));
+    await ctx.close();
+
+    // A phone: no fill is left on a row after a tap (no sticky hover), and no grey tap flash.
+    const phone = await as("owner", PHONE);
+    const q = await page(phone);
+    await openRoute(q, `${app}/edit`);
+    await q.locator("[data-phone-tabs]").getByRole("button", { name: "Create" }).tap();
+    await q.locator("#phone-sheet").waitFor({ state: "visible" });
+    await q.waitForTimeout(300);
+    const sheetRows = await states(q, "#phone-sheet", "a[href]");
+    check(lit(sheetRows).length === 0, "phone: the Create sheet opens with nothing highlighted", lit(sheetRows).join(" | "));
+    const sheetEdit = sheetRows.find((r) => r.current);
+    check(!!sheetEdit && sheetEdit.pip && !sheetEdit.lit, "phone: Edit (current) carries the pip", JSON.stringify(sheetEdit));
+    const flash = await q.locator("#phone-sheet a.nav-row").first().evaluate((e) => getComputedStyle(e).webkitTapHighlightColor);
+    check(/rgba\(0, 0, 0, 0\)|transparent/.test(flash), "phone: sheet rows have no grey tap flash", flash);
+    await phone.close();
+  }
+
   // 12. Screenshots in both themes for review.
   if (shots) {
     for (const scheme of ["dark", "light"]) {

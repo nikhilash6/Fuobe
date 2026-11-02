@@ -39,8 +39,8 @@ export function ThanksList({ groups, makers = [] }: { groups: ThanksGroup[]; mak
 
   return (
     <>
-      <div id="thanks-list" className="scroll-mt-12 md:scroll-mt-[var(--chrome-top)]" />
-      <div className="sticky top-12 z-10 -mx-4 border-b bg-background/90 px-4 py-2 backdrop-blur sm:-mx-8 sm:px-8 md:top-chrome">
+      <div id="thanks-list" className="scroll-mt-[calc(3.5rem+env(safe-area-inset-top))] md:scroll-mt-[var(--chrome-top)]" />
+      <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-10 -mx-4 border-b bg-background/90 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:top-chrome">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <label className="relative block min-w-0 lg:w-80 lg:shrink-0">
             <span className="sr-only">Search models, LoRAs, node packs and libraries</span>
@@ -63,7 +63,7 @@ export function ThanksList({ groups, makers = [] }: { groups: ThanksGroup[]; mak
               </button>
             )}
           </label>
-          <nav aria-label="Jump to a group" className="-mx-4 min-w-0 overflow-x-auto px-4 [scrollbar-width:none] sm:-mx-8 sm:px-8 lg:mx-0 lg:overflow-visible lg:px-0 [&::-webkit-scrollbar]:hidden">
+          <nav aria-label="Jump to a group" className="-mx-4 min-w-0 overflow-x-auto px-4 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:mx-0 lg:overflow-visible lg:px-0 [&::-webkit-scrollbar]:hidden">
             <ul className="flex w-max gap-1.5 lg:w-auto lg:flex-wrap">
               {shown
                 .filter((g) => g.rows.length)

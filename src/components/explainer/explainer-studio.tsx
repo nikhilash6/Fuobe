@@ -306,15 +306,15 @@ export function ExplainerStudio({ picker, starters = [], fills = {} }: { picker:
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="truncate font-heading text-[22px] leading-none">Explainer</h1>
         <div className="ml-auto">
           <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto grid w-full max-w-[1240px] min-w-0 flex-1 gap-8 px-3 pt-6 pb-16 sm:px-6 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
-        <section aria-label="New explainer" className="min-w-0 lg:sticky lg:top-[calc(var(--chrome-top)+5rem)] lg:self-start">
+      <div className="mx-auto grid w-full max-w-[1240px] min-w-0 flex-1 gap-8 px-4 pt-6 pb-16 sm:px-6 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
+        <section aria-label="New explainer" className="min-w-0 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:self-start">
           <div className="rounded-[20px] border bg-background p-3 shadow-soft transition-[border-color,box-shadow] focus-within:border-primary focus-within:ring-4 focus-within:ring-brand-faint sm:rounded-composer sm:p-4">
             <p className="px-1 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Fuobe Explainer</p>
             <div className="mt-2 flex items-center gap-3 rounded-2xl bg-muted/60 p-2">

@@ -83,7 +83,7 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">Shorts Studio</h1>
         <div role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} className="ml-2 flex h-8 shrink-0 items-center rounded-full bg-muted p-0.5 sm:ml-4">
           {(["presets", "history"] as const).map((t) => (
@@ -106,7 +106,7 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
         </div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">
+      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-4 pb-28 sm:px-6 lg:pb-16">
         {tab === "history" ? (
           <ShortsHistory onStart={() => pickTab("presets")} />
         ) : (
@@ -187,7 +187,7 @@ function Workspace({
           onEdit={(id) => setDialog({ open: true, preset: custom.data?.find((p) => p.id === id) })}
         />
       </section>
-      <aside ref={setup} id="shorts-setup" aria-labelledby="shorts-step-2" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-[calc(var(--chrome-top)+4rem)] lg:max-h-[calc(var(--content-h)-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
+      <aside ref={setup} id="shorts-setup" aria-labelledby="shorts-step-2" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:max-h-[calc(var(--content-h)-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
         <SetupPanel
           visitor={visitor}
           engine={engine}

@@ -120,7 +120,7 @@ export function AdsHome({ examples, starters = [] }: { examples?: ExampleRowData
   return (
     <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title="Ads Studio" active="ads" engine={engine} onEngine={setEngine} />
-      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-3 pb-20 sm:px-6">
+      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-4 pb-20 sm:px-6">
         <section className="mx-auto max-w-[720px] pt-8 text-center sm:pt-14">
           <h2 className="font-heading text-display text-balance">Static ads that perform</h2>
           <p className="mx-auto mt-2 max-w-lg text-[15px] text-muted-foreground">Enter your website. Your logo, colours, brand voice and selling points load on their own — then on-brand ads for every product, in 1:1, 4:5 and 9:16, with headlines and CTAs.</p>

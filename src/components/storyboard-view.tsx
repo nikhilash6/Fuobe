@@ -434,14 +434,14 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">Storyboard</h1>
         <div className="ml-auto">
           <EngineSwitch value={engine} onChange={setEngine} />
         </div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 space-y-10 px-3 pb-16 sm:px-6">
+      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 space-y-10 px-4 pb-16 sm:px-6">
         <div className="mx-auto max-w-[820px] pt-6 text-center">
           <h2 className="font-heading text-display text-balance">Tell it frame by frame</h2>
           <p className="mt-2 text-[13px] text-muted-foreground">

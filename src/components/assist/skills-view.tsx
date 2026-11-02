@@ -106,7 +106,7 @@ function Skills() {
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-4 backdrop-blur sm:px-6">
         <RailButton />
         <h1 className="font-heading text-[22px] leading-none">Skills</h1>
         {owner && (
@@ -133,7 +133,7 @@ function Skills() {
         )}
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1100px] min-w-0 flex-1 px-3 pt-4 pb-16 sm:px-6 md:pt-8">
+      <div className="mx-auto w-full max-w-[1100px] min-w-0 flex-1 px-4 pt-4 pb-16 sm:px-6 md:pt-8">
         <p className="max-w-2xl text-[15px] text-pretty text-muted-foreground">
           Playbooks Assist loads for whole kinds of jobs. Type <span className="rounded bg-muted px-1 font-mono text-[13px]">/name</span> at the start of a message to use one, or let Assist pick it. Skills also reach other agents through Fuobe&apos;s MCP server.
         </p>

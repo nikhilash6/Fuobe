@@ -79,7 +79,7 @@ export function ShortsSessionView({ id }: { id: string }) {
 function Frame({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <Link href="/shorts?tab=history" aria-label="Back to your shorts" className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
           <ArrowLeft className="size-4" />
         </Link>
@@ -87,7 +87,7 @@ function Frame({ title, children, actions }: { title: string; children: React.Re
         <div className="ml-auto flex items-center gap-1">{actions}</div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1180px] min-w-0 flex-1 px-3 pb-16 sm:px-6">{children}</div>
+      <div className="mx-auto w-full max-w-[1180px] min-w-0 flex-1 px-4 pb-16 sm:px-6">{children}</div>
     </div>
   );
 }
@@ -146,7 +146,7 @@ function Session({ s }: { s: View }) {
     >
       <Steps steps={STEPS} current={finalVideo && !outdated ? 3 : 2} className="pt-6" />
       <div className="mt-6 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start">
-        <section aria-label="Full video" className="min-w-0 space-y-3 lg:sticky lg:top-[calc(var(--chrome-top)+4rem)]">
+        <section aria-label="Full video" className="min-w-0 space-y-3 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
           <div className="relative mx-auto max-h-[72svh] w-full overflow-hidden rounded-2xl bg-muted" style={{ aspectRatio: ratio, maxWidth: ratio < 1 ? 360 : undefined }}>
             {finalVideo ? (
               <video src={finalVideo.url} controls playsInline preload="metadata" className="size-full bg-black object-contain" aria-label="Your short" />

@@ -98,7 +98,7 @@ export function BrandWorkspace({ brandId }: { brandId: string }) {
       <Suspense fallback={null}>
         <StepFromUrl onStep={setStep} />
       </Suspense>
-      <div className="mx-auto flex w-full min-w-0 max-w-[1440px] flex-1 gap-6 px-3 pt-5 pb-16 sm:px-6">
+      <div className="mx-auto flex w-full min-w-0 max-w-[1440px] flex-1 gap-6 px-4 pt-5 pb-16 sm:px-6">
         <div className="min-w-0 flex-1">
           <Link href="/ads" className="mb-4 inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-3.5" /> All brands
@@ -176,7 +176,7 @@ export function BrandWorkspace({ brandId }: { brandId: string }) {
             </>
           )}
         </div>
-        {chatReady && <div className="sticky top-[calc(var(--chrome-top)+7rem)] hidden h-[calc(var(--content-h)-8rem)] w-[340px] shrink-0 xl:block">{chatPanel(false)}</div>}
+        {chatReady && <div className="sticky top-[calc(var(--chrome-top)+1rem)] hidden h-[calc(var(--content-h)-2rem)] w-[340px] shrink-0 xl:block">{chatPanel(false)}</div>}
       </div>
       <Sheet open={chat} onOpenChange={setChat}>
         <SheetContent side="right" showCloseButton={false} className="w-full gap-0 p-0 sm:max-w-md">

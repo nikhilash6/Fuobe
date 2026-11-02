@@ -429,7 +429,7 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
         <UrlParams onTemplate={pickTemplate} onTab={setTab} />
         <ProductParam products={products.data} onProduct={(p) => set({ product: productChoice(p) })} />
       </Suspense>
-      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-3 pb-10 sm:px-6">
+      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-4 pb-10 sm:px-6">
         <div className="pt-6 pb-2 text-center sm:pt-10">
           <h2 className="font-heading text-display text-balance">Turn a product into ready-to-post content</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">
@@ -478,7 +478,7 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
       </div>
 
       {/* Docked composer */}
-      <div className="sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+      <div className="sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-4 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
         <div
           ref={composer}
           data-slim={slim || undefined}

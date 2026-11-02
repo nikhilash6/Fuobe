@@ -550,7 +550,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
             addRefs(e.dataTransfer.files);
           }}
         >
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-4 pb-6 sm:px-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-6 sm:px-6">
             {currentView.kind === "elements" ? (
               <ElementsPanel onMention={mention} onCast={() => setCastOpen(true)} onLocation={() => setLocationOpen(true)} />
             ) : loading ? (

@@ -10,11 +10,11 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 export function StudioSkeleton() {
   return (
     <div className="flex min-h-content min-w-0 flex-col" aria-busy="true" aria-label="Loading">
-      <div className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 sm:px-6">
+      <div className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 sm:px-6">
         <Skeleton className="h-6 w-32 rounded-lg" />
         <Skeleton className="ml-auto h-9 w-44 rounded-full" />
       </div>
-      <div className="mx-auto flex w-full max-w-[760px] flex-col items-center px-3 pt-[16vh] sm:px-6">
+      <div className="mx-auto flex w-full max-w-[760px] flex-col items-center px-4 pt-[16vh] sm:px-6">
         <Skeleton className="h-9 w-2/3 max-w-[420px] rounded-xl" />
         <Skeleton className="mt-3 h-4 w-1/2 max-w-[300px]" />
         <div className="mt-10 w-full rounded-[20px] border bg-background p-2.5 shadow-soft sm:rounded-composer">
@@ -37,7 +37,7 @@ export function StudioSkeleton() {
  */
 export function HubBodySkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-[760px] flex-col items-center px-3 pt-6 sm:px-6 sm:pt-[12vh]" aria-busy="true" aria-label="Loading" data-hub-skeleton>
+    <div className="mx-auto flex w-full max-w-[760px] flex-col items-center px-4 pt-6 sm:px-6 sm:pt-[12vh]" aria-busy="true" aria-label="Loading" data-hub-skeleton>
       <Skeleton className="h-9 w-2/3 max-w-[420px] rounded-xl" />
       <Skeleton className="mt-3 h-4 w-1/2 max-w-[300px]" />
       <div className="mt-10 w-full rounded-[20px] border bg-background p-2.5 shadow-soft sm:rounded-composer">

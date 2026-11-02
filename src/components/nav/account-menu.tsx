@@ -10,9 +10,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { signInHref, signOut, useEngineMode, useViewer } from "@/lib/api";
 import type { ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { NAV_MENU_ITEM } from "./create-menu";
 import { ExploreProgress } from "./explore-progress";
 import { useViewerKind } from "./nav-ui";
+import { keepHighlight, MENU_HEADING, MENU_ROW_1, NavMenuItem, SHEET_HEADING, SHEET_ROW as SHEET_ROW_BASE } from "./nav-row";
 import { avatarDot, OwnerStatus, usePlaceholdersOn, useShownStatus, VisitorGpu } from "./status-chips";
 
 /*
@@ -35,37 +35,38 @@ function useHere(): string {
   return search ? `${pathname}?${search}` : pathname;
 }
 
-const SHEET_ROW =
-  "flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-safe:transition-colors [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:text-muted-foreground";
-const MENU_ROW = `h-9 gap-2.5 rounded-md px-2 text-[13.5px] [&_svg]:text-muted-foreground ${NAV_MENU_ITEM}`;
+/** The You sheet's rows: the sheet's 48 px row, an 18 px icon on the gutter. */
+const SHEET_ROW = cn(SHEET_ROW_BASE, "text-[15px] [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:text-muted-foreground");
+/** The account menu's rows: the menus' 40 px one-line row, a 16 px icon on the icon column. */
+const MENU_ROW = cn(MENU_ROW_1, "[&_svg]:size-4 [&_svg]:text-muted-foreground");
 
 function GuestIdentity({ variant, here }: { variant: Variant; here: string }) {
   if (variant === "menu")
     return (
       <DropdownMenuGroup className="flex flex-col gap-1 p-1">
-        <DropdownMenuItem asChild className="h-9 justify-center gap-2 rounded-lg bg-primary text-[13.5px] font-semibold text-primary-foreground focus:bg-primary/90 focus:text-primary-foreground [&_svg]:text-primary-foreground">
+        <DropdownMenuItem asChild onPointerLeave={keepHighlight} className="nav-focus-out h-10 justify-center gap-2 rounded-[10px] bg-primary text-[13.5px] font-semibold text-primary-foreground focus:bg-primary/90 focus:text-primary-foreground active:bg-primary/85 [&_svg]:text-primary-foreground">
           <a href={signInHref("signup", here)}>
             <UserPlus aria-hidden /> Sign up free
           </a>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild className="h-9 justify-center gap-2 rounded-lg border text-[13.5px]">
+        <NavMenuItem asChild className="h-10 justify-center gap-2 border font-medium">
           <a href={signInHref("login", here)}>
-            <LogIn aria-hidden /> Log in
+            <LogIn aria-hidden className="size-4" /> Log in
           </a>
-        </DropdownMenuItem>
+        </NavMenuItem>
       </DropdownMenuGroup>
     );
   return (
     <div className="grid grid-cols-2 gap-2">
       <a
         href={signInHref("signup", here)}
-        className="flex h-12 items-center justify-center gap-2 rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="nav-focus-out flex h-12 items-center justify-center gap-2 rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground nav-hover:bg-primary/90 active:bg-primary/85"
       >
         <UserPlus aria-hidden className="size-[18px]" /> Sign up free
       </a>
       <a
         href={signInHref("login", here)}
-        className="flex h-12 items-center justify-center gap-2 rounded-xl border text-[15px] font-medium outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+        className="nav-row flex h-12 items-center justify-center gap-2 rounded-xl border text-[15px] font-medium"
       >
         <LogIn aria-hidden className="size-[18px]" /> Log in
       </a>
@@ -87,21 +88,21 @@ function Identity({ kind, variant }: { kind: ViewerKind | undefined; variant: Va
     );
   if (kind === "account" && email)
     return variant === "menu" ? (
-      <DropdownMenuLabel className="flex flex-col font-normal">
+      <DropdownMenuLabel className="flex flex-col px-2.5 font-normal">
         <span className="text-[11px] text-muted-foreground">Signed in as</span>
         <span className="text-[13px] [overflow-wrap:anywhere] text-foreground">{email}</span>
       </DropdownMenuLabel>
     ) : (
-      <div className="flex flex-col px-1">
+      <div className="flex flex-col">
         <span className="text-[12px] text-muted-foreground">Signed in as</span>
         <span className="text-[15px] font-medium [overflow-wrap:anywhere]">{email}</span>
       </div>
     );
   if (kind === "owner")
     return variant === "menu" ? (
-      <DropdownMenuLabel className="pt-2 pb-1 text-[11px] font-semibold tracking-[.08em] text-brand-text uppercase">Your setup</DropdownMenuLabel>
+      <DropdownMenuLabel className={MENU_HEADING}>Your setup</DropdownMenuLabel>
     ) : (
-      <p className="px-1 text-[11px] font-semibold tracking-[.08em] text-brand-text uppercase">Your setup</p>
+      <p className={SHEET_HEADING}>Your setup</p>
     );
   return null;
 }
@@ -117,11 +118,11 @@ function GpuSection({ kind, variant }: { kind: ViewerKind | undefined; variant: 
         {placeholders &&
           (item ? (
             // From xl the bar shows this pill itself, so the menu leaves it out.
-            <DropdownMenuLabel className="py-1 font-normal xl:hidden">
+            <DropdownMenuLabel className="px-2.5 py-1 font-normal xl:hidden">
               <PlaceholdersOnChip />
             </DropdownMenuLabel>
           ) : (
-            <div className="px-2 py-1">
+            <div className="py-1">
               <PlaceholdersOnChip />
             </div>
           ))}
@@ -144,7 +145,7 @@ function ThemeToggle({ variant }: { variant: Variant }) {
     </>
   );
   return variant === "menu" ? (
-    <DropdownMenuItem
+    <NavMenuItem
       className={MENU_ROW}
       onSelect={(e) => {
         // The menu stays open: the change shows on it at once.
@@ -153,7 +154,7 @@ function ThemeToggle({ variant }: { variant: Variant }) {
       }}
     >
       {inner}
-    </DropdownMenuItem>
+    </NavMenuItem>
   ) : (
     <button type="button" className={SHEET_ROW} onClick={flip}>
       {inner}
@@ -161,17 +162,19 @@ function ThemeToggle({ variant }: { variant: Variant }) {
   );
 }
 
-/** One link of the Links section, as a menu item or a sheet row. */
+/** One link of the Links section, as a menu item or a sheet row; the open page's row carries the current mark. */
 function LinkRow({ variant, href, children }: { variant: Variant; href: string; children: React.ReactNode }) {
+  const pathname = usePathname();
+  const current = pathname === href;
   const link = (
-    <IntentLink href={href} className={variant === "sheet" ? SHEET_ROW : undefined}>
+    <IntentLink href={href} aria-current={current ? "page" : undefined} className={cn(variant === "sheet" && SHEET_ROW, current && "font-semibold")}>
       {children}
     </IntentLink>
   );
   return variant === "menu" ? (
-    <DropdownMenuItem asChild className={MENU_ROW}>
+    <NavMenuItem asChild className={MENU_ROW}>
       {link}
-    </DropdownMenuItem>
+    </NavMenuItem>
   ) : (
     link
   );
@@ -198,9 +201,9 @@ function Links({ kind, variant }: { kind: ViewerKind | undefined; variant: Varia
 
 function SignOut({ variant }: { variant: Variant }) {
   return variant === "menu" ? (
-    <DropdownMenuItem className={MENU_ROW} onSelect={() => void signOut()}>
+    <NavMenuItem className={MENU_ROW} onSelect={() => void signOut()}>
       <LogOut aria-hidden /> Sign out
-    </DropdownMenuItem>
+    </NavMenuItem>
   ) : (
     <button type="button" className={SHEET_ROW} onClick={() => void signOut()}>
       <LogOut aria-hidden /> Sign out
@@ -209,7 +212,7 @@ function SignOut({ variant }: { variant: Variant }) {
 }
 
 function Sep({ variant }: { variant: Variant }) {
-  return variant === "menu" ? <DropdownMenuSeparator className="my-1.5" /> : <hr className="my-1 border-border" />;
+  return variant === "menu" ? <DropdownMenuSeparator className="mx-2.5 my-1.5" /> : <hr className="my-2 border-border" />;
 }
 
 /**
@@ -222,7 +225,8 @@ export function AccountSections({ variant, onNavigate }: { variant: Variant; onN
   const body = (
     <>
       <Identity kind={kind} variant={variant} />
-      {kind && <Sep variant={variant} />}
+      {/* The owner's heading introduces the status under it: no rule between them. */}
+      {kind && kind !== "owner" && <Sep variant={variant} />}
       <GpuSection kind={kind} variant={variant} />
       <ExploreProgress variant={variant} />
       <Sep variant={variant} />
@@ -238,7 +242,7 @@ export function AccountSections({ variant, onNavigate }: { variant: Variant; onN
   if (variant === "menu") return body;
   return (
     <div
-      className="flex flex-col gap-2"
+      className="flex flex-col"
       onClick={(e) => {
         if ((e.target as Element).closest("a[href]")) onNavigate?.();
       }}
@@ -262,8 +266,10 @@ export function AccountMenu({ kind }: { kind: ViewerKind }) {
       <DropdownMenuTrigger
         aria-label={label}
         className={cn(
-          "relative grid size-9 shrink-0 place-items-center rounded-full [@media(pointer:coarse)]:size-11 text-[13px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:transition-colors",
-          kind === "guest" ? "border border-sidebar-border text-muted-foreground hover:bg-accent data-[state=open]:bg-accent" : "bg-brand-faint text-brand-text hover:bg-brand-faint-hover data-[state=open]:bg-brand-faint-hover",
+          "nav-focus relative grid size-10 shrink-0 place-items-center rounded-full [@media(pointer:coarse)]:size-11 text-[13px] font-semibold motion-safe:transition-colors",
+          kind === "guest"
+            ? "border border-sidebar-border text-muted-foreground nav-hover:bg-[var(--nav-hi)] nav-hover:text-foreground active:bg-[var(--nav-press)] data-[state=open]:border-border-strong data-[state=open]:text-foreground"
+            : "bg-brand-faint text-brand-text nav-hover:[background-image:linear-gradient(var(--nav-hi),var(--nav-hi))] active:[background-image:linear-gradient(var(--nav-press),var(--nav-press))]",
         )}
       >
         {kind === "account" && email ? <span aria-hidden>{email.charAt(0).toUpperCase()}</span> : <UserRound aria-hidden className="size-[18px]" />}

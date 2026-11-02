@@ -15,7 +15,7 @@ export function SearchButton({ className }: { className?: string }) {
       type="button"
       variant="ghost"
       size="icon"
-      className={cn("size-11 rounded-full text-muted-foreground motion-reduce:transition-none", className)}
+      className={cn("nav-row size-11 rounded-full text-muted-foreground focus-visible:border-transparent focus-visible:ring-0 motion-reduce:transition-none", className)}
       aria-label="Search"
       aria-haspopup="dialog"
       onTouchStart={search.warm}
@@ -36,7 +36,7 @@ export function PhoneBar({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "sticky top-chrome z-20 flex h-[calc(3rem+env(safe-area-inset-top))] items-center gap-1.5 bg-background/85 pt-[env(safe-area-inset-top)] pr-[max(0.25rem,env(safe-area-inset-right))] pl-[max(0.75rem,env(safe-area-inset-left))] backdrop-blur md:hidden",
+        "sticky top-chrome z-20 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-1.5 bg-background/85 pt-[env(safe-area-inset-top)] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(0.75rem,env(safe-area-inset-left))] backdrop-blur md:hidden",
         className,
       )}
     >
@@ -44,7 +44,7 @@ export function PhoneBar({ className }: { className?: string }) {
         href="/"
         eager
         aria-label="Fuobe home"
-        className="rounded-md px-1 font-heading text-[22px] leading-none outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="nav-focus rounded-md px-1 font-heading text-[22px] leading-none"
       >
         Fuobe
       </IntentLink>

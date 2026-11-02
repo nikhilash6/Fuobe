@@ -104,7 +104,7 @@ export function MixedStudio({
   };
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="sr-only font-heading text-[22px] leading-none sm:not-sr-only sm:truncate">Mixed Media</h1>
         <div role="tablist" aria-label="Mixed Media" onKeyDown={tabKeys} className="fade-x scrollbar-none flex h-8 min-w-0 items-center overflow-x-auto rounded-full bg-muted p-0.5 sm:ml-4">
           {TABS.map((t) => (
@@ -127,7 +127,7 @@ export function MixedStudio({
         </div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">
+      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-4 pb-28 sm:px-6 lg:pb-16">
         {tab === "history" ? (
           <MixedHistory onStart={() => pick("presets")} />
         ) : tab === "how" ? (
@@ -273,7 +273,7 @@ function Workspace({ visitor, engine, models, frameModels }: { visitor: boolean;
           </div>
         )}
       </section>
-      <aside ref={panel} id="mm-editor" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-[calc(var(--chrome-top)+4rem)] lg:max-h-[calc(var(--content-h)-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
+      <aside ref={panel} id="mm-editor" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:max-h-[calc(var(--content-h)-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
         <Editor visitor={visitor} engine={engine} models={models} frameModels={frameModels} preset={preset} values={values} setValues={setValues} onClip={setHasClip} />
       </aside>
       {preset && !panelVisible && (

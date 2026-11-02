@@ -94,10 +94,8 @@ function StepLink({ step, variant, onNavigate }: { step: NextStep; variant: "row
       prefetch={false}
       onClick={onNavigate}
       className={cn(
-        "flex items-center outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset motion-safe:transition-colors motion-reduce:transition-none",
-        row
-          ? "h-[52px] gap-2.5 rounded-[14px] border bg-card pr-4 pl-1.5 text-card-foreground hover:border-border-strong hover:bg-accent"
-          : "min-h-12 gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-accent",
+        "nav-row flex items-center",
+        row ? "h-[52px] gap-2.5 rounded-[14px] border bg-card pr-4 pl-1.5 text-card-foreground nav-hover:border-border-strong" : "min-h-12 gap-2.5 rounded-[10px] px-1.5 py-1.5",
       )}
     >
       <CoverThumb id={step.cover} size="pill" icon="Sparkles" className={row ? undefined : "size-9 rounded-lg"} />

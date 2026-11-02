@@ -367,7 +367,7 @@ export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) 
               </div>
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+112px)]">
+            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               <Field label="How do you point at it?">
                 <Segmented
                   label="How do you point at it?"

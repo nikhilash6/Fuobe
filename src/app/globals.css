@@ -1,8 +1,18 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./nav-states.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Hover for the app frame's controls: like hover:, but only while the mouse leads (nav-states.css), so a control under a
+   resting mouse never shows a second highlight beside the keyboard's. */
+@custom-variant nav-hover {
+  @media (hover: hover) {
+    &:is(html:not([data-input="keyboard"]) *):hover {
+      @slot;
+    }
+  }
+}
 
 :root {
   --radius: 0.625rem; /* 10px = Liner radius-medium. With the multipliers below: sm 6, md 8, lg 10, xl 14 */

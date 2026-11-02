@@ -138,7 +138,7 @@ function HubTabs({
 
   return (
     <nav aria-label="Modes" className="border-b">
-      <div ref={ref} style={fade} className="scrollbar-none flex gap-1 overflow-x-auto px-3 sm:px-6">
+      <div ref={ref} style={fade} className="scrollbar-none flex gap-1 overflow-x-auto px-4 sm:px-6">
         {modes.map((m) => {
           const on = m.id === active;
           const href = modeHref(kind, m.id);
@@ -209,8 +209,8 @@ export function HubFrame({ kind, skeleton, children }: { kind: HubKind; skeleton
   const skeletonShown = waiting && late;
   return (
     <div className="flex min-h-content min-w-0 flex-col" data-hub={kind}>
-      <div className="sticky top-chrome z-20 bg-background/85 backdrop-blur" data-hub-chrome>
-        <header className="flex h-14 items-center gap-2 px-3 sm:px-6">
+      <div className="max-md:sticky top-chrome z-20 bg-background/85 backdrop-blur" data-hub-chrome>
+        <header className="flex h-14 items-center gap-2 px-4 sm:px-6">
           <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{HUB_TITLE[kind]}</h1>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <div ref={slotRef} className="contents" />

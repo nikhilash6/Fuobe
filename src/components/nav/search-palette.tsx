@@ -43,7 +43,7 @@ const keepKeys = (e: React.KeyboardEvent) => {
   if (e.key === "Enter" || e.key === " ") e.stopPropagation();
 };
 
-const focusRing = "outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const focusRing = "nav-focus";
 
 /** On the page and shown (a launcher link is gone once the launcher closes). */
 function shownEl(el: Element | null | undefined): el is HTMLElement {
@@ -277,7 +277,7 @@ export function PaletteBody({
               setQ("");
               input.current?.focus();
             }}
-            className={cn("grid size-10 shrink-0 place-items-center rounded-[10px] text-muted-foreground hover:bg-accent hover:text-foreground max-md:size-11 [@media(pointer:coarse)]:size-11", focusRing)}
+            className="nav-row grid size-10 shrink-0 place-items-center rounded-[10px] text-muted-foreground nav-hover:text-foreground max-md:size-11 [@media(pointer:coarse)]:size-11"
           >
             <X className="size-4" />
           </button>
@@ -289,7 +289,7 @@ export function PaletteBody({
           onClick={onClose}
           // Its name starts with the words it shows (Esc on a desktop, Cancel on a phone), for voice control.
           className={cn(
-            "h-10 shrink-0 rounded-[10px] border bg-secondary px-3 max-md:h-11 [@media(pointer:coarse)]:h-11 text-[12px] font-medium text-secondary-foreground hover:bg-accent max-md:border-0 max-md:bg-transparent max-md:px-2 max-md:text-[15px] max-md:text-brand-text [@media(hover:none)]:border-0 [@media(hover:none)]:bg-transparent [@media(hover:none)]:text-[15px] [@media(hover:none)]:text-brand-text",
+            "h-10 shrink-0 rounded-[10px] border bg-secondary px-3 max-md:h-11 [@media(pointer:coarse)]:h-11 text-[12px] font-medium text-secondary-foreground nav-hover:bg-[var(--nav-hi)] active:bg-[var(--nav-press)] max-md:border-0 max-md:bg-transparent max-md:px-2 max-md:text-[15px] max-md:text-brand-text [@media(hover:none)]:border-0 [@media(hover:none)]:bg-transparent [@media(hover:none)]:text-[15px] [@media(hover:none)]:text-brand-text",
             focusRing,
           )}
         >
@@ -307,7 +307,7 @@ export function PaletteBody({
       {!searching && !scoped && (
         <div className="shrink-0 px-5 pt-2.5 max-md:px-3">
           <div className="flex flex-wrap items-center gap-x-2.5 py-1 md:h-10 md:flex-nowrap md:py-0">
-            <span aria-hidden className="ml-1.5 text-[11px] leading-[14px] font-semibold tracking-[.08em] text-brand-text uppercase">
+            <span aria-hidden className="ml-2 text-[11px] leading-[14px] font-semibold tracking-[.08em] text-brand-text uppercase">
               Every studio
             </span>
             <span className="text-[12px] text-muted-foreground">{groupLabel ? `${tiles.length} in ${groupLabel}` : studioCount()}</span>
@@ -422,7 +422,7 @@ function Hints() {
   const mod = useModKey();
   const cap = "h-[22px] min-w-[22px] rounded-md border border-b-2 bg-secondary px-1.5 text-[11px] text-foreground";
   return (
-    <div className="flex h-[46px] shrink-0 items-center gap-3 border-t bg-muted/40 px-[22px] text-[12px] text-muted-foreground max-md:hidden [@media(hover:none)]:hidden">
+    <div className="flex h-[46px] shrink-0 items-center gap-3 border-t bg-muted/40 px-6 text-[12px] text-muted-foreground max-md:hidden [@media(hover:none)]:hidden">
       <span className="flex items-center gap-1">
         <Kbd className={cap}>↑</Kbd>
         <Kbd className={cap}>↓</Kbd>

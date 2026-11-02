@@ -207,7 +207,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
 
   return (
     <div className="grid gap-4 pt-4 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
-      <div className="min-w-0 space-y-3 lg:sticky lg:top-[calc(var(--chrome-top)+5rem)] lg:self-start">
+      <div className="min-w-0 space-y-3 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:self-start">
         <Preview video={video} cues={cues} look={lookFor(route, look)} route={route} player={player} onTime={setTime} onDuration={setDuration} />
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">{video.name}</p>

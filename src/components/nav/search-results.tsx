@@ -1,6 +1,7 @@
 "use client";
 
 import { Command as CommandPrimitive } from "cmdk";
+import { usePathname } from "next/navigation";
 import { ChevronRight, Clapperboard, CornerDownLeft, Film, LayoutGrid, Play, Wand2 } from "lucide-react";
 import { MediaThumb } from "@/components/studio/result-media";
 import type { Generation } from "@/lib/catalog/types";
@@ -16,12 +17,22 @@ import { CoverThumb } from "./cover-thumb";
  * picture arrives.
  */
 
-/** A section's heading, as the launcher's columns have them. */
+/** A section's heading, as the launcher's columns have them: on the rows' cover column (8 px in, clear of the open page's pip). */
 export const sectionHeading =
-  "**:[[cmdk-group-heading]]:mb-1.5 **:[[cmdk-group-heading]]:ml-1.5 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:leading-[14px] **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[.08em] **:[[cmdk-group-heading]]:text-brand-text";
+  "**:[[cmdk-group-heading]]:mb-1.5 **:[[cmdk-group-heading]]:ml-2 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:leading-[14px] **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[.08em] **:[[cmdk-group-heading]]:text-brand-text";
 
-/** A selected row: a tint and a brand ring strong enough to find (focus stays in the field; cmdk marks it data-selected). */
-const selected = "data-[selected=true]:bg-accent data-[selected=true]:shadow-[inset_0_0_0_1.5px_var(--brand-text)]";
+/**
+ * A row's states are the nav's (nav-states.css): cmdk's one selected row (the mouse and the arrow keys move the same
+ * one; focus stays in the field) has the highlight, and the keyboard's ring while the keyboard leads. The open page's
+ * row carries the current mark.
+ */
+const selected = "nav-row nav-mark-start";
+
+/** aria-current for a hit that is the open page. */
+function useCurrent(href: string | undefined): "page" | undefined {
+  const pathname = usePathname();
+  return href && pathname === href.split(/[?#]/)[0] ? "page" : undefined;
+}
 
 /** What kind of thing a hit is, as the tag at the end of its row says it. */
 export function kindTag(hit: Pick<NavHit, "kind" | "navKind">): string {
@@ -122,7 +133,8 @@ export function BestRow({ hit, onPick }: { hit: NavHit; onPick: (h: NavHit) => v
     <CommandPrimitive.Item
       value={hit.key}
       onSelect={() => onPick(hit)}
-      className={cn("group/hit flex h-[58px] cursor-pointer items-center gap-3.5 rounded-xl py-[5px] pr-3 pl-[5px] outline-none", selected)}
+      aria-current={useCurrent(hit.href)}
+      className={cn("group/hit flex h-[58px] cursor-pointer items-center gap-3.5 rounded-xl py-[5px] pr-3 pl-2", selected)}
     >
       <HitCover hit={hit} size="thumb" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -141,7 +153,8 @@ export function AlsoTile({ hit, onPick }: { hit: NavHit; onPick: (h: NavHit) => 
     <CommandPrimitive.Item
       value={hit.key}
       onSelect={() => onPick(hit)}
-      className={cn("group/hit flex h-14 min-w-0 cursor-pointer items-center gap-3 rounded-xl py-[5px] pr-3 pl-[5px] outline-none", selected)}
+      aria-current={useCurrent(hit.href)}
+      className={cn("group/hit flex h-14 min-w-0 cursor-pointer items-center gap-3 rounded-xl py-[5px] pr-3 pl-2", selected)}
     >
       <HitCover hit={hit} size="chip" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -159,7 +172,8 @@ export function HitRow({ hit, onPick }: { hit: NavHit; onPick: (h: NavHit) => vo
     <CommandPrimitive.Item
       value={hit.key}
       onSelect={() => onPick(hit)}
-      className={cn("group/hit flex h-11 cursor-pointer items-center gap-3 rounded-[10px] pr-3 pl-1 text-[14px] outline-none", selected)}
+      aria-current={useCurrent(hit.href)}
+      className={cn("group/hit flex h-11 cursor-pointer items-center gap-3 rounded-[10px] pr-3 pl-2 text-[14px]", selected)}
     >
       <HitCover hit={hit} size="row" />
       <Name hit={hit} crumb={hit.kind === "tool" ? hit.hint : undefined} className="min-w-0 flex-1 font-medium" />
@@ -177,10 +191,11 @@ export function StudioTile({ e, onPick }: { e: NavEntry; onPick: (e: NavEntry) =
       value={`tile:${e.id}`}
       keywords={[e.label]}
       onSelect={() => onPick(e)}
-      className={cn("group/hit flex h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-[10px] pr-2 pl-1 outline-none md:h-10", selected)}
+      aria-current={useCurrent(e.href)}
+      className={cn("group/hit flex h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-[10px] pr-2 pl-2 md:h-10", selected)}
     >
       <CoverThumb id={e.cover} size="row" icon={e.icon} />
-      <span className="line-clamp-2 min-w-0 text-[13px] leading-[1.2] font-medium text-foreground">
+      <span className="line-clamp-2 min-w-0 text-[13px] leading-[1.2] font-medium text-foreground group-aria-[current=page]/hit:font-semibold">
         <span className="md:hidden">{e.short ?? e.label}</span>
         <span className="max-md:hidden">{e.label}</span>
       </span>
@@ -194,7 +209,7 @@ export function RecentRow({ g, onOpen }: { g: Generation; onOpen: (g: Generation
     <CommandPrimitive.Item
       value={`recent:${g.id}`}
       onSelect={() => onOpen(g)}
-      className={cn("group/hit flex h-14 min-w-0 cursor-pointer items-center gap-3 rounded-xl py-1 pr-3 pl-1 outline-none", selected)}
+      className={cn("group/hit flex h-14 min-w-0 cursor-pointer items-center gap-3 rounded-xl py-1 pr-3 pl-2", selected)}
     >
       <span aria-hidden className="relative h-12 w-16 shrink-0 overflow-hidden rounded-[8px] bg-muted">
         {g.outputs[0] && <MediaThumb output={g.outputs[0]} g={g} />}

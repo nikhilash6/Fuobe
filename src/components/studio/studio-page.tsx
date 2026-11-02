@@ -38,7 +38,7 @@ import { PresetUrlCtx, StartRequestCtx, StudioProvider, usePresetUrl, useStudio,
  */
 function ExampleCardsPlaceholder() {
   return (
-    <div aria-hidden className="mx-auto grid w-full max-w-[1000px] grid-cols-2 gap-3 px-3 pb-10 sm:grid-cols-4 sm:gap-4 sm:px-6">
+    <div aria-hidden className="mx-auto grid w-full max-w-[1000px] grid-cols-2 gap-3 px-4 pb-10 sm:grid-cols-4 sm:gap-4 sm:px-6">
       {[0, 1, 2, 3].map((i) => (
         <div key={i} className={cn("aspect-[4/5] rounded-xl bg-muted", i >= 2 && "max-sm:hidden")} />
       ))}
@@ -396,7 +396,7 @@ function StudioExamples({ row }: { row: ExampleRowData }) {
   if (draft.presetId && draft.presetId !== config.preset?.id) return null;
   // An app's page shows its examples in its card above the composer.
   if (config.preset && row.cards.some((c) => c.load.via !== "look")) return null;
-  return <ExampleRow row={row} activeId={loader?.activeId} onPick={(c) => loader?.use(c)} className="px-3 pb-10 sm:px-6" />;
+  return <ExampleRow row={row} activeId={loader?.activeId} onPick={(c) => loader?.use(c)} className="px-4 pb-10 sm:px-6" />;
 }
 
 /** Once there are results, "Examples" beside the composer opens the cards: a picked motion's or effect's, else the page's. */
@@ -448,8 +448,8 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
       </HubHeaderExtras>
     );
   return (
-    <div className="sticky top-chrome z-20 bg-background/85 backdrop-blur">
-      <header className="flex h-14 items-center gap-2 px-3 sm:px-6">
+    <div className="max-md:sticky top-chrome z-20 bg-background/85 backdrop-blur">
+      <header className="flex h-14 items-center gap-2 px-4 sm:px-6">
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{title}</h1>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {header}
@@ -545,13 +545,13 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
       />
 
       {live && (
-        <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-4 sm:px-6">
+        <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-4 pb-4 sm:px-6">
           <div className="h-[calc(var(--content-h)-4.5rem)] min-h-[520px]">
             <LiveArea onClose={() => setLive(false)} />
           </div>
         </div>
       )}
-      <div className={cn("mx-auto w-full max-w-[1240px] min-w-0 px-3 sm:px-6", hasItems && "flex-1 pb-8", live && "hidden")}>
+      <div className={cn("mx-auto w-full max-w-[1240px] min-w-0 px-4 sm:px-6", hasItems && "flex-1 pb-8", live && "hidden")}>
         {hasItems ? (
           <div className="pt-4">
             <Feed items={items} onReuse={reuse} />
@@ -594,8 +594,8 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
         className={cn(
           live && "hidden",
           hasItems
-            ? "sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6"
-            : "px-3 pt-6 sm:px-6 sm:pt-10",
+            ? "sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-4 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6"
+            : "px-4 pt-6 sm:px-6 sm:pt-10",
         )}
       >
           {hasItems && offscreen.count > 0 && (

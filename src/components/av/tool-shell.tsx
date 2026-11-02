@@ -33,7 +33,7 @@ export function ToolShell({
 }) {
   const [engine, setEngine] = useEngine();
   const inHub = useInHub();
-  const body = <div className={cn("mx-auto w-full min-w-0 flex-1 px-3 pb-16 sm:px-6", wide ? "max-w-[1240px]" : "max-w-[1040px]")}>{children}</div>;
+  const body = <div className={cn("mx-auto w-full min-w-0 flex-1 px-4 pb-16 sm:px-6", wide ? "max-w-[1240px]" : "max-w-[1040px]")}>{children}</div>;
   if (inHub)
     return (
       <>
@@ -43,8 +43,8 @@ export function ToolShell({
     );
   return (
     <div className="flex min-h-content min-w-0 flex-col">
-      <div className="sticky top-chrome z-20 bg-background/85 backdrop-blur">
-        <header className="flex h-14 items-center gap-2 px-3 sm:px-6">
+      <div className="max-md:sticky top-chrome z-20 bg-background/85 backdrop-blur">
+        <header className="flex h-14 items-center gap-2 px-4 sm:px-6">
           <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{title}</h1>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {header}

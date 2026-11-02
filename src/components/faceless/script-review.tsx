@@ -254,7 +254,7 @@ export function ScriptReview({ view }: { view: EpisodeView }) {
           />
         ))}
       </ol>
-      <div className="sticky bottom-chrome z-10 -mx-3 border-t bg-background/90 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6">
+      <div className="sticky bottom-chrome z-10 -mx-4 border-t bg-background/90 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground" aria-live="polite">
             {update.isPending ? <Loader2 className="size-3 animate-spin" /> : dirty ? null : <Check className="size-3" />}

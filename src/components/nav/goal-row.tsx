@@ -73,7 +73,8 @@ function useFadeEdges<T extends HTMLElement>() {
 }
 
 const LABEL = "text-[11px] font-semibold tracking-[0.08em] text-brand-text uppercase";
-const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-ring";
+/** The band's links and buttons take the nav's states (nav-states.css): highlight, keyboard ring, pressed. */
+const FOCUS = "nav-row";
 
 function NewBadge() {
   return <span className="ml-1.5 inline-block rounded-full bg-highlight px-1.5 align-[2px] text-[10px] leading-4 font-semibold text-highlight-foreground">New</span>;
@@ -85,7 +86,7 @@ function GoalCard({ e }: { e: NavEntry }) {
     <IntentLink
       href={e.href}
       className={cn(
-        "group/card relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-card hover:border-border-strong motion-safe:transition-colors",
+        "group/card flex h-full flex-col overflow-hidden rounded-[14px] border bg-card nav-hover:border-border-strong",
         FOCUS,
       )}
     >
@@ -125,7 +126,8 @@ export function GoalBand({ id, kind, names, onClose }: { id: GoalId; kind: Viewe
       aria-labelledby="goal-band-title"
       className={cn(
         "flex flex-col gap-5 border-b bg-popover px-4 pt-5 pb-6 text-popover-foreground max-sm:-mx-4",
-        "sm:rounded-b-[18px] sm:border-x sm:px-6 sm:pt-6 sm:pb-7 sm:shadow-soft",
+        // 16 px in, its 1 px border included: the band's words sit on the goal tabs' icon column above.
+        "sm:rounded-b-[18px] sm:border-x sm:px-[15px] sm:pt-6 sm:pb-7 sm:shadow-soft",
         "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-150",
       )}
     >
@@ -140,7 +142,7 @@ export function GoalBand({ id, kind, names, onClose }: { id: GoalId; kind: Viewe
           <IntentLink
             href={assist}
             className={cn(
-              "col-span-2 row-start-2 inline-flex h-11 items-center gap-2 justify-self-start rounded-full border bg-card pr-4 pl-3.5 text-[13.5px] font-medium hover:bg-accent motion-safe:transition-colors sm:h-10 pointer-coarse:h-11",
+              "col-span-2 row-start-2 inline-flex h-11 items-center gap-2 justify-self-start rounded-full border bg-card pr-4 pl-3.5 text-[13.5px] font-medium sm:h-10 pointer-coarse:h-11",
               "sm:col-span-1 sm:col-start-2 sm:row-start-1",
               FOCUS,
             )}
@@ -154,7 +156,7 @@ export function GoalBand({ id, kind, names, onClose }: { id: GoalId; kind: Viewe
           aria-label={`Close ${goal.title}`}
           onClick={onClose}
           className={cn(
-            "col-start-2 row-start-1 grid size-11 place-items-center rounded-xl border bg-card hover:bg-accent motion-safe:transition-colors sm:col-start-3 sm:size-10 pointer-coarse:size-11",
+            "col-start-2 row-start-1 grid size-11 place-items-center rounded-xl border bg-card sm:col-start-3 sm:size-10 pointer-coarse:size-11",
             FOCUS,
           )}
         >
@@ -194,7 +196,7 @@ export function GoalBand({ id, kind, names, onClose }: { id: GoalId; kind: Viewe
                 <IntentLink
                   href={tapHref(t.preset)}
                   className={cn(
-                    "relative flex h-[60px] min-w-0 items-center gap-2.5 rounded-xl border bg-card py-2 pr-3 pl-2 hover:bg-accent motion-safe:transition-colors",
+                    "flex h-[60px] min-w-0 items-center gap-2.5 rounded-xl border bg-card py-2 pr-3 pl-2",
                     FOCUS,
                   )}
                 >
@@ -218,7 +220,7 @@ export function GoalBand({ id, kind, names, onClose }: { id: GoalId; kind: Viewe
                   <IntentLink
                     href={e.href}
                     className={cn(
-                      "group/finish flex h-11 min-w-0 items-center gap-3 rounded-xl border bg-card px-3.5 hover:bg-accent motion-safe:transition-colors",
+                      "group/finish flex h-11 min-w-0 items-center gap-3 rounded-xl border bg-card px-3.5",
                       FOCUS,
                     )}
                   >
@@ -334,7 +336,7 @@ export function GoalRow({ names }: { names: Readonly<Record<string, string>> }) 
         <IntentLink
           href={area("studios").href}
           className={cn(
-            "flex shrink-0 items-center justify-center gap-2 self-center rounded-[10px] text-[13.5px] font-medium text-brand-text hover:bg-brand-faint motion-safe:transition-colors",
+            "flex shrink-0 items-center justify-center gap-2 self-center rounded-[10px] text-[13.5px] font-medium text-brand-text",
             // Its words from xl; narrower, its icon (with the words for screen readers) leaves the goals the room.
             "ml-1 size-11 max-sm:mr-1 xl:ml-2 xl:h-10 xl:w-auto xl:px-3",
             FOCUS,
