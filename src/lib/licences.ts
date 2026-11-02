@@ -111,7 +111,7 @@ export function licenceTerms(text: string): { flags: LicenceFlag[]; excludes?: s
   const noWeights = /^(n\/a|no model)\b/i.test(text.trim());
   const nonCommercial = /NON-COMMERCIAL/.test(text) || /^CC-BY-NC/.test(text.trim());
   const excludes = /\bEXCLUDES\s+([^);]+)/.exec(text)?.[1].trim();
-  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Terms of Use|free below|below US\$/i.test(text);
+  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Corridor Key Licence|Terms of Use|free below|below US\$/i.test(text);
   const flags: LicenceFlag[] = [];
   if (nonCommercial) flags.push("non-commercial");
   if (excludes) flags.push("territory");

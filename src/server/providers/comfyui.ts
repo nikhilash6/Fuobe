@@ -54,6 +54,7 @@ import { installedReuse, NO_REUSE_PACK, rateFor, reuseFileFor, STRENGTH_DB, type
 import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
 import { exportValues, framesPerPass, hdrColorSpace, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
+import { keyFormatValues } from "@/lib/av/keying";
 import { guessKind } from "@/lib/catalog/payload";
 import { loraByFile, needsToken } from "@/lib/catalog/loras";
 import { CHARACTER_SWAP, packResolution, samCoords, swapPrompt, SWAP_LORAS, windowPlan } from "@/lib/catalog/character-swap";
@@ -1604,6 +1605,16 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   }
   // Matte graphs save a cut-out and a black-and-white matte: params.matteOutput keeps one.
   const keepRole: string | undefined = ctx.op === "bg-remove-video" ? input.matteOutput : undefined;
+  // The green-screen key (video-key-corridorkey) writes its cut-out as a transparent WebM, ProRes 4444 with alpha, or EXR
+  // frames beside the WebM (params.format; src/lib/av/keying.ts).
+  const keyExr = ctx.op === "bg-remove-video" && !!b.format && input.format === "exr";
+  if (ctx.op === "bg-remove-video" && b.format) {
+    try {
+      Object.assign(values, keyFormatValues(input.format, input.matteOutput));
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
+    }
+  }
 
   if (b.filenamePrefix) values.filenamePrefix = `fuobe/${ctx.generationId}`;
   const cues = manifest.expand === "captions" ? captionCues(input, extra) : [];
@@ -1824,7 +1835,9 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     wf = injectLoras(wf, loras);
   }
   // The output not asked for isn't saved (nor encoded: ComfyUI runs only what an output node needs).
-  if (keepRole && manifest.outputs.some((o) => o.role === keepRole)) for (const o of manifest.outputs) if (o.role && o.role !== keepRole) delete wf[o.node];
+  if (keepRole && manifest.outputs.some((o) => o.role === keepRole)) for (const o of manifest.outputs) if (o.role && o.role !== keepRole && !(keyExr && o.role === "frames")) delete wf[o.node];
+  // A key's EXR frames are written only when asked for (they ride on the cut-out, zipped).
+  if (ctx.op === "bg-remove-video" && !keyExr) for (const o of manifest.outputs) if (o.role === "frames") delete wf[o.node];
   if (ctx.op === "remove-object" && !handOff) for (const o of manifest.outputs) if (o.role === "mask") delete wf[o.node];
   const metaBatch = Object.values(wf).some((n) => n.class_type === "VHS_BatchManager");
   return {

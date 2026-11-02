@@ -16,6 +16,7 @@ import {
   VIDEO_COLOR_MATCH_STUDIO,
   VIDEO_DEPTH_STUDIO,
   VIDEO_EXPORT_STUDIO,
+  VIDEO_KEY_STUDIO,
   VIDEO_MATTE_STUDIO,
   VIDEO_RELIGHT_STUDIO,
   VIDEO_UPSCALE_STUDIO,
@@ -51,6 +52,7 @@ const CONFIGS: Record<HubKind, Record<string, StudioConfig>> = {
   },
   "video-tools": {
     matte: VIDEO_MATTE_STUDIO,
+    "green-screen": VIDEO_KEY_STUDIO,
     relight: VIDEO_RELIGHT_STUDIO,
     depth: VIDEO_DEPTH_STUDIO,
     join: JOIN_CLIPS_STUDIO,

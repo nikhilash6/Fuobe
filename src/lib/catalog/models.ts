@@ -593,6 +593,18 @@ const open: ModelDef[] = [
     routes: [comfy("bg-remove", "bg-remove-birefnet")],
     options: {},
   }),
+  // Image cut-outs, Fine hair (nm10-keying): FeyNoBg's matte for hair, fur, lace and glass, its edges refined.
+  o({
+    id: "oss-matte-feynobg",
+    name: "FeyNoBg fine hair",
+    vendor: "1038lab",
+    family: "feynobg",
+    kind: "image",
+    tagline: "Cut-outs that keep every strand of hair, fur and see-through edges",
+    badges: ["new"],
+    routes: [comfy("bg-remove", "image-matte-feynobg")],
+    options: {},
+  }),
 
   // ---------------- Video
   // MiniMax H3: text, image and start + end frame to video with its own sound, on the fl2va model. Fast runs larryvrh's
@@ -1000,6 +1012,41 @@ const open: ModelDef[] = [
     tagline: "Keep just what you name (“the dog”, “the red car”) — a transparent WebM, or its alpha mask",
     routes: [comfy("bg-remove-video", "video-bg-remove-sam3")],
     options: { keepsNamed: true, matteOutputs: ["cutout", "matte"] },
+  }),
+  // Bria's VRMBG 3.0 on your GPU (nm10-keying): the model behind the cloud's Bria matte, each frame following the one before.
+  // Its weights are gated (Bria approves access by hand) and placed by hand; the GPU check says so until they are there.
+  o({
+    id: "oss-video-matte-vrmbg3",
+    name: "Bria VRMBG 3.0",
+    vendor: "Bria",
+    family: "bria",
+    kind: "video",
+    tagline: "Steady, flicker-free cut-outs that follow the subject frame to frame — the same model as the cloud's Bria matte · needs Bria's approval for the weights",
+    badges: ["new"],
+    routes: [comfy("bg-remove-video", "video-matte-vrmbg3", "Bria VRMBG 3.0 (gated weights, placed by hand)")],
+    options: { promptless: true, matteOutputs: ["cutout", "matte"], formats: ["webm_alpha", "prores_4444", "exr"] },
+    defaults: { format: "webm_alpha" },
+  }),
+  // Video tools → Green screen on your GPU (nm10-keying): Corridor Digital's CorridorKey neural keyer on footage shot on a
+  // green or blue screen, in passes so long clips fit. The cut-out, its mask or the clean foreground; WebM, ProRes 4444 with
+  // alpha, or linear EXR frames. It runs the v1.0 weights: no ComfyUI node loads CorridorKey 2.0 yet.
+  o({
+    id: "oss-video-key-corridorkey",
+    name: "CorridorKey",
+    vendor: "Corridor Digital",
+    family: "corridorkey",
+    kind: "video",
+    tagline: "Neural green-screen keying: clean hair, motion blur and see-through edges, with the green spill taken out",
+    badges: ["new"],
+    routes: [comfy("bg-remove-video", "video-key-corridorkey", "CorridorKey v1.0 weights")],
+    options: {
+      promptless: true,
+      greenScreen: true,
+      matteOutputs: ["cutout", "matte", "foreground"],
+      formats: ["webm_alpha", "prores_4444", "exr"],
+      sliders: [{ param: "despill", label: "Spill cleanup", min: 0, max: 3, step: 0.1, default: 1 }],
+    },
+    defaults: { format: "webm_alpha" },
   }),
   o({
     id: "oss-video-depth-da3",

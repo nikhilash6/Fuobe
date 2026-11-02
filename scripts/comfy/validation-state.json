@@ -840,10 +840,10 @@
     "at": "2026-10-27T11:01:36.148Z"
   },
   "video-matte-vrmbg3": {
-    "sha256": "f806cd861886340d33fd1e1b6d54b94de93f83ab7aacd940a4143a0239ba7b3f",
+    "sha256": "bc8e7b99a0f2e29af5355f6fc2823966f18a0012acf2dac1f6c65fdf90b6591a",
     "validated": false,
     "error": "HTTP 400: missing_node_type: Node 'VRMBG 3.0: each frame conditioned on the one before' not found. The custom node may not be installed. (Node ID '#3')",
-    "at": "2026-11-02T10:56:31.291Z"
+    "at": "2026-11-02T10:58:42.274Z"
   },
   "video-mux-audio": {
     "sha256": "68af795bae0c0e89749819173916044e4024a6ce3035f830b48c80e0b6899181",

@@ -30,6 +30,7 @@ export const HUB_MODES: Record<HubKind, { id: string; label: string }[]> = {
   ],
   "video-tools": [
     { id: "matte", label: "Remove background" },
+    { id: "green-screen", label: "Green screen" },
     { id: "remove-object", label: "Remove object" },
     { id: "remove-dialogue", label: "Remove dialogue" },
     { id: "evolution", label: "Evolution" },

@@ -13844,7 +13844,10 @@
           "COMBO",
           {
             "multiselect": false,
-            "options": [],
+            "options": [
+              "fuobe_validate.mp4",
+              "fuobe_validate.wav"
+            ],
             "audio_upload": true
           }
         ]
@@ -14052,7 +14055,10 @@
     "input": {
       "required": {
         "image": [
-          [],
+          [
+            "fuobe_validate.png",
+            "fuobe_validate_mask.png"
+          ],
           {
             "image_upload": true
           }
@@ -14135,7 +14141,10 @@
     "input": {
       "required": {
         "image": [
-          [],
+          [
+            "fuobe_validate.png",
+            "fuobe_validate_mask.png"
+          ],
           {
             "image_upload": true
           }
@@ -14233,7 +14242,9 @@
           "COMBO",
           {
             "multiselect": false,
-            "options": [],
+            "options": [
+              "fuobe_validate.mp4"
+            ],
             "video_upload": true
           }
         ]
@@ -25139,7 +25150,10 @@
     "input": {
       "required": {
         "audio": [
-          []
+          [
+            "fuobe_validate.mp4",
+            "fuobe_validate.wav"
+          ]
         ]
       },
       "optional": {
@@ -25200,7 +25214,9 @@
     "input": {
       "required": {
         "video": [
-          []
+          [
+            "fuobe_validate.mp4"
+          ]
         ],
         "force_rate": [
           "FLOAT",

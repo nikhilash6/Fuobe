@@ -81,6 +81,11 @@ export interface StudioConfig {
    * seconds and the request carries them (params.sourceDuration). Not while a video is attached (lip re-sync).
    */
   voiceFacts?: boolean;
+  /**
+   * Video tools → Green screen: the picker lists only keyers for green-screen footage (ModelOptions.greenScreen); every
+   * other Remove background studio leaves them out.
+   */
+  greenScreen?: boolean;
   /** Offer every output format of the studio's models on this engine; picking one another model writes moves the request there (SDR to HDR, Export). */
   formatPicker?: boolean;
   /** The models' enum settings chip ("Director" by default; "Options" for a tool's settings such as Topaz's model). */
