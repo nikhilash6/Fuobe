@@ -203,11 +203,15 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   // for a photo; one picked from the library (a Fuobe result, usually) for a render or a generated image.
   const [idolQuality, setIdolQuality] = useState<IdolQuality>("best");
   const [idolPhoto, setIdolPhoto] = useState(true);
+  // The last value the drop gave (an upload reports twice: uploading, then done, from one closure).
+  const lastPhoto = useRef<SlotValue | null>(null);
   const takePhoto = (v: SlotValue | null) => {
+    const prev = lastPhoto.current;
+    lastPhoto.current = v;
     setPhoto(v);
-    if (v && v.ref !== photo?.ref) {
+    if (v && v.ref !== prev?.ref) {
       if (v.uploading) setIdolPhoto(true);
-      else if (!photo?.uploading) setIdolPhoto(false);
+      else if (!prev?.uploading) setIdolPhoto(false);
     }
   };
   const [views, setViews] = useState<Partial<Record<ViewSide, SlotValue | null>>>({});
@@ -244,7 +248,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const blocker = visitor ? "Image to 3D isn't available here" : (model3dBlocker(input) ?? (uploading ? "Uploading…" : null));
   // The price before anything is attached: placeholders stand in for the files and the words.
   const priced: GenerationRequest | null = modelId
-    ? model3dRequest({ ...input, photo: input.photo ?? PLACEHOLDER, views: { front: PLACEHOLDER, left: PLACEHOLDER, ...sides }, prompt: input.prompt?.trim() || "an object" })
+    ? model3dRequest({ ...input, photo: input.photo || PLACEHOLDER, views: { front: PLACEHOLDER, left: PLACEHOLDER, ...sides }, prompt: input.prompt?.trim() || "an object" })
     : null;
   const preview = useRunPreview(engineKnown ? priced : null);
   // A free run (open weights) is free on a self-hosted Fuobe: a guest or an account reads that, not "your ComfyUI".
