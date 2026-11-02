@@ -345,7 +345,7 @@
   "version": "0.1.0",
   "publisherId": "nynxz",
   "licence": "Apache-2.0",
-  "registry": "not listed (api.comfy.org/nodes/comfyui-idol 404; search 'idol' 0)",
+  "registry": "not listed (api.comfy.org/nodes/comfyui-idol 404; search 'idol' 0). Correction 2026-11-02 (idol-2): the id comfyui-idol now belongs to another author's pack (PedroMarinhoDev/ComfyUI-Idol 1.0.0, flagged, ComfyUI >= 0.43.0); Nynxz's pack is still not in the Registry, so Fuobe pins its repository by commit",
   "requiresPython": ">=3.10",
   "comfyApi": "V3 (comfy_api.latest ComfyExtension; __init__.py L11-23)",
   "minComfyUI": "v0.23.0 (TripoSplat); README says 0.22, which is wrong",
