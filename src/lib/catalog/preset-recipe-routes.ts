@@ -24,7 +24,7 @@
 import type { Engine, Preset, PresetEndStep, PresetRecipeEdit, PresetRoute } from "./types";
 
 /** What the rules read of a preset. */
-export type RecipePreset = Pick<Preset, "id" | "type" | "open" | "cloud" | "prestep" | "promptTemplate" | "grade" | "recipe" | "userPrompt" | "inputs">;
+export type RecipePreset = Pick<Preset, "id" | "type" | "open" | "openAlso" | "cloud" | "prestep" | "promptTemplate" | "grade" | "recipe" | "userPrompt" | "inputs">;
 
 /** Whether the viewer's catalog has a model (the server's full catalog, or a studio's slice in the browser). */
 export type HasModel = (id: string) => boolean;
@@ -143,7 +143,9 @@ export const ownRoute = (p: Pick<Preset, "open" | "cloud">, engine: Engine): Pre
 export function presetRoutes(p: RecipePreset, engine: Engine, has: HasModel): PresetRoute[] {
   const recipe = recipeRoute(p, engine);
   const own = ownRoute(p, engine);
-  return [...(recipe && has(recipe.modelId) ? [recipe] : []), ...(own ? [own] : [])];
+  // The open engine's extra routes (the Angles app's QMA · 96 views) after its own, when the viewer's catalog has their model.
+  const also = engine === "open" ? (p.openAlso ?? []).filter((r) => has(r.modelId)) : [];
+  return [...(recipe && has(recipe.modelId) ? [recipe] : []), ...(own ? [own] : []), ...also];
 }
 
 /**

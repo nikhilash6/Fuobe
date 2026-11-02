@@ -112,6 +112,10 @@ export const GenerateBody = z.object({
     modelId: z.string().max(80).optional(),
     prompt: z.string().max(60_000).default(""),
     moves: z.array(z.string().max(40)).max(12).optional(),
+    // N7-7: the first move as an exact orbit.
+    exact: z
+      .object({ degrees: z.number().min(30).max(360), direction: z.enum(["cw", "ccw"]), tilt: z.number().min(0).max(20).optional(), pulse: z.number().min(0).max(0.25).optional() })
+      .optional(),
     settings: DirectorSchema.optional(),
     images: z.array(FileRef).max(30).optional(),
     videos: z.array(FileRef).max(10).optional(),

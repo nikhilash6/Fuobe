@@ -9,7 +9,7 @@ import type { MediaKind } from "@/lib/catalog/types";
 import { fileToSlot } from "@/components/studio/media-slot";
 import { cn } from "@/lib/utils";
 import { EMPTY_VIEW, NodeIcon, useEditorActions, useEditorSnapshot } from "./canvas-context";
-import { costLabel, ElementPicker, EngineBadge, LibraryButton, MediaPreview, OutputThumb, Results } from "./nodes";
+import { CameraPathFields, costLabel, ElementPicker, EngineBadge, LayoutNodeRow, LibraryButton, MediaPreview, OutputThumb, Results } from "./nodes";
 
 const KIND: Partial<Record<CanvasNode["type"], MediaKind>> = { "image-input": "image", "video-input": "video", "audio-input": "audio", "clone-voice": "audio" };
 
@@ -107,6 +107,7 @@ function NodeCard({ node, index }: { node: CanvasNode; index: number }) {
             />
           </>
         )}
+        {node.type === "layout" && <LayoutNodeRow id={node.id} data={node.data} className={pill} />}
         {node.type === "table" && (
           <p className="text-[13px] text-muted-foreground">
             {(() => {
@@ -115,6 +116,7 @@ function NodeCard({ node, index }: { node: CanvasNode; index: number }) {
             })()}
           </p>
         )}
+        {node.type === "camera-path" && <CameraPathFields data={node.data} label={nodeLabel(node)} onChange={(patch) => actions.update(node.id, patch)} />}
         {node.type === "element" && (
           <div className="flex items-center gap-2">
             <p className="min-w-0 flex-1 truncate font-mono text-[13px] text-brand-text">{node.data.handle ? `@${node.data.handle}` : "No element picked"}</p>

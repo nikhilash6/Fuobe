@@ -786,7 +786,15 @@ export function useElement(id: string) {
 export function useSaveElement() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { id?: string; name: string; kind?: ElementKind; description?: string | null; references: string[] }) => {
+    mutationFn: async (body: {
+      id?: string;
+      name: string;
+      kind?: ElementKind;
+      description?: string | null;
+      references: string[];
+      /** Design a voice: the model that made the take, its words and its line (the server keeps the rest). */
+      voice?: { modelId: string; description?: string; transcript?: string };
+    }) => {
       const { id, ...rest } = body;
       return json<StudioElement>(
         await fetch(id ? `/api/elements/${id}` : "/api/elements", {
@@ -932,6 +940,19 @@ export async function enhance(prompt: string, kind: MediaKind, op: string): Prom
       }),
     )
   ).prompt;
+}
+
+/** Audio → Music's "Write the lyrics": tagged lyrics for the song `idea` describes (the install's AI helper writes them). */
+export async function writeLyrics(idea: string, o: { seconds?: number; max?: number } = {}): Promise<string> {
+  return (
+    await json<{ lyrics: string }>(
+      await fetch("/api/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: idea, target: "lyrics", ...o }),
+      }),
+    )
+  ).lyrics;
 }
 
 // ---------------------------------------------------------------------------

@@ -122,6 +122,10 @@ export interface Draft {
   frames?: FrameAttachment<SlotValue>[];
   /** Layout mode is on (studios with `layout`): the boxes, as fractions of the picture (the prompt is its caption). */
   layout?: LayoutDraft;
+  /** Song lyrics with section tags (Audio → Music): sent as params.extra.lyrics to a model that sings them (ModelOptions.lyrics). */
+  lyrics?: string;
+  /** The attached song is one of Mureka's own (a music result's meta.songId): its song tools take it by id, not as a file. */
+  song?: { id: string; url: string };
 }
 
 interface Actions {

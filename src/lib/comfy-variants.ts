@@ -1,5 +1,6 @@
 import { exrWorkflow } from "@/lib/av/video-finish";
 import { qwen21Graph } from "@/lib/qwen21-speed";
+import { H3_TIER_PARAM, tierGraphFor } from "@/lib/gpu/h3-tier";
 
 /**
  * Which workflow a ComfyUI route runs for a request: the route's endpoint, or a variant picked by an option.
@@ -46,6 +47,9 @@ export const H3_ORBIT_GRAPH: Record<string, string> = { "minimax-h3-i2v": "minim
  */
 export const REUSE_BED_GRAPH: Record<string, string> = { "voice-clean-reuse": "voice-clean-bed-reuse" };
 
+/** YuE2 with a song attached (Audio → Music's "Song to cover"): the cover graph sings its melody with the new style and lyrics. */
+export const YUE2_COVER_GRAPH: Record<string, string> = { "music-yue2-song": "music-yue2-cover" };
+
 export interface VariantRequest {
   op: string;
   /** Clips a join takes ("video-concat-{n}"). */
@@ -55,6 +59,8 @@ export interface VariantRequest {
   format?: string;
   /** A second audio track is given (a mux with a background stem). */
   audio2: boolean;
+  /** An audio input is given (a song to cover). */
+  audio?: boolean;
   extra: Record<string, unknown>;
   /** Is this workflow in the library. */
   has: (id: string) => boolean;
@@ -78,13 +84,23 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   if (shot && r.extra.productShot === true && r.images === 1 && r.has(shot)) endpoint = shot;
   // Qwen-Image 2.1: Options → Speed's graph, or the small encoder's when Options → GPU says Small (src/lib/qwen21-speed.ts).
   endpoint = qwen21Graph(endpoint, r.extra, r.has);
-  // MiniMax H3: an orbit runs the Orbit LoRA graph (whatever the quality), else Best runs the 20-step graph and Pika Flex
-  // its 6-step graph.
+  // MiniMax H3: an orbit runs the Orbit LoRA graph (whatever the quality or tier). Else Quality → Fast · Pika Flex runs its
+  // 6-step graph: Pika's bf16 adapters ride on the full fl2va int8 model, so Flex is the full model's alone, and it wins over a
+  // smaller card's tier. The plan sees to it that the two never meet here by chance (src/server/h3-gpu.ts): Flex with Auto keeps
+  // the full model (the GPU pre-flight then judges the card), and Flex with FastH3 V2 or Trim picked in Options → GPU tier is
+  // refused with a plain message, never run as either one alone. Else a smaller card's tier (FastH3 V2 or Trim, as the plan
+  // decided it), which wins over Best; else Best runs the 20-step graph.
   const orbit = H3_ORBIT_GRAPH[endpoint];
   const best = H3_BEST_GRAPH[endpoint];
+  const tier = r.extra[H3_TIER_PARAM];
+  const small = tier === "fast" || tier === "trim" ? tierGraphFor(endpoint, tier, r.has) : undefined;
+  const flex = H3_FLEX_GRAPH[endpoint];
   if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
+  else if (flex && r.extra.quality === "flex" && r.has(flex)) endpoint = flex;
+  else if (small) endpoint = small;
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
-  else if (H3_FLEX_GRAPH[endpoint] && r.extra.quality === "flex" && r.has(H3_FLEX_GRAPH[endpoint])) endpoint = H3_FLEX_GRAPH[endpoint];
+  const cover = YUE2_COVER_GRAPH[endpoint];
+  if (cover && r.audio && r.has(cover)) endpoint = cover;
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
   return endpoint;

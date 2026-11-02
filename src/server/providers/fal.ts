@@ -4,6 +4,8 @@ import { loraEndpointFor, routeLoraField } from "@/lib/catalog/loras";
 import { buildPayload, extractOutputs, noOutputsError } from "@/lib/catalog/payload";
 import { accountKeyError, balanceRefusal, cloudKey, missingKeyError, originOf, redactKey, standIn } from "../provider-keys";
 import { tenant } from "../tenant";
+import { unzip } from "../unzip";
+import type { FieldMap } from "@/lib/catalog/types";
 import { ProviderError, type ProviderAdapter } from "./types";
 
 /**
@@ -20,6 +22,8 @@ import { ProviderError, type ProviderAdapter } from "./types";
  */
 const QUEUE = "https://queue.fal.run";
 const REST = "https://rest.fal.ai";
+/** fal.ai's synchronous runs: a song tool's song sent first through the provider's files/upload (Mureka's), which answers at once. */
+const RUN = "https://fal.run";
 
 /** fal.ai's queue: the real one, or a stand-in on this machine in tests and `next dev` (provider-keys.ts standIn). */
 export const falQueue = () => standIn("fal") ?? QUEUE;
@@ -27,8 +31,78 @@ export const falQueue = () => standIn("fal") ?? QUEUE;
 /** Where a fal.ai key may go: the queue and the REST API (storage uploads), or the stand-in. */
 function keyOrigin(url: string): boolean {
   const o = originOf(url);
-  return o === QUEUE || o === REST || (!!o && o === standIn("fal"));
+  return o === QUEUE || o === REST || o === RUN || (!!o && o === standIn("fal"));
 }
+
+/** A synchronous fal.ai run: the real one, or the stand-in in tests and `next dev`. */
+const falRun = () => standIn("fal") ?? RUN;
+
+/**
+ * A song tool's song that isn't one of the provider's own, sent first through its files/upload (FieldMap.songSource: Mureka's,
+ * $0.01, priced as Pricing.uploadUsd): the id the tool then takes.
+ */
+async function uploadSong(upload: { endpoint: string; purpose: string }, fileUrl: string): Promise<string> {
+  const res = (await falFetch(`${falRun()}/${upload.endpoint}`, { method: "POST", body: JSON.stringify({ file_url: fileUrl, purpose: upload.purpose }) })) as { id?: unknown };
+  if (typeof res?.id !== "string" || !res.id) throw new ProviderError("The song couldn't be sent to Mureka: try again");
+  return res.id;
+}
+
+/** The most a stems download may be, and how long it may take: past either, it stops and the run fails. */
+const STEMS_MAX_BYTES = 256 * 1024 * 1024;
+const STEMS_WAIT_MS = 3 * 60 * 1000;
+
+/** A download read with a byte count: past `max` bytes (declared or streamed) it stops at once, never held whole. */
+async function bytesWithin(res: Response, max: number): Promise<Buffer> {
+  const tooBig = () => new Error("The stems download is larger than Fuobe keeps from one result");
+  if (Number(res.headers.get("content-length")) > max) {
+    res.body?.cancel().catch(() => {});
+    throw tooBig();
+  }
+  const reader = res.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      reader.cancel().catch(() => {});
+      throw tooBig();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, total);
+}
+
+/** The stems a song tool answers with in one zip (Mureka's zip_url), one result each, named by their file (meta.stem). */
+export async function stemsFromZip(
+  zipUrl: string,
+  limits: { maxBytes?: number; waitMs?: number } = {},
+): Promise<{ url: string; kind: "audio"; contentType: string; meta: { stem: string } }[]> {
+  const maxBytes = limits.maxBytes ?? STEMS_MAX_BYTES;
+  let zipped: Buffer;
+  try {
+    const res = await fetch(zipUrl, { signal: AbortSignal.timeout(limits.waitMs ?? STEMS_WAIT_MS) });
+    if (!res.ok) throw new Error(`The stems couldn't be downloaded (${res.status})`);
+    zipped = await bytesWithin(res, maxBytes);
+  } catch (e) {
+    const name = (e as Error).name;
+    if (name === "TimeoutError" || name === "AbortError") throw new Error("The stems took too long to download. Try again.");
+    throw e;
+  }
+  const files = (await unzip(zipped, { maxBytes: 2 * maxBytes })).filter((f) => AUDIO_FILE.test(f.name));
+  if (!files.length) throw new Error("The stems archive held no audio");
+  return files.map((f) => {
+    const ext = AUDIO_FILE.exec(f.name)![1].toLowerCase();
+    const contentType = AUDIO_TYPES[ext] ?? "audio/mpeg";
+    const stem = f.name.split("/").pop()!.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().toLowerCase();
+    return { url: `data:${contentType};base64,${f.data.toString("base64")}`, kind: "audio" as const, contentType, meta: { stem } };
+  });
+}
+
+const AUDIO_FILE = /\.(mp3|wav|flac|m4a|ogg)$/i;
+const AUDIO_TYPES: Record<string, string> = { mp3: "audio/mpeg", wav: "audio/wav", flac: "audio/flac", m4a: "audio/mp4", ogg: "audio/ogg" };
 
 function key(): string {
   return cloudKey("fal");
@@ -87,6 +161,33 @@ function fileName(name: string | undefined): string | undefined {
   return base && /^[\w.\-()[\] ]{1,200}\.[A-Za-z0-9]{1,12}$/.test(base) && !base.startsWith(".") ? base : undefined;
 }
 
+/** How long the clone step of a two-step voice may take (it is a few seconds of work on fal). */
+const CLONE_WAIT_MS = 3 * 60 * 1000;
+
+/**
+ * Step 1 of a two-step voice (FieldMap.cloneFirst): the sample (and what it says) to the clone endpoint, waited for on its
+ * queue, and the URL of the file it returns (Qwen3-TTS's speaker_embedding safetensors).
+ */
+export async function cloneVoice(cf: NonNullable<FieldMap["cloneFirst"]>, audio: string, transcript?: string, waitMs = CLONE_WAIT_MS): Promise<string> {
+  const body = { [cf.audio]: audio, ...(cf.text && transcript?.trim() && { [cf.text]: transcript.trim() }) };
+  const job = (await falFetch(`${falQueue()}/${cf.endpoint}`, { method: "POST", body: JSON.stringify(body) })) as { status_url: string; response_url: string };
+  const until = Date.now() + waitMs;
+  for (let wait = 500; ; wait = Math.min(wait * 1.5, 3000)) {
+    const st = (await falFetch(job.status_url)) as { status?: string; error?: string };
+    if (st.status === "COMPLETED") {
+      if (st.error) throw new ProviderError(`Couldn't clone the voice: ${st.error}`);
+      break;
+    }
+    if (Date.now() + wait > until) throw new ProviderError("Cloning the voice took too long. Try again.");
+    await new Promise((r) => setTimeout(r, wait));
+  }
+  const result = (await falFetch(job.response_url)) as Record<string, unknown>;
+  const file = result?.[cf.output] as { url?: unknown } | string | undefined;
+  const url = typeof file === "string" ? file : typeof file?.url === "string" ? file.url : undefined;
+  if (!url) throw new ProviderError("Couldn't clone the voice: the sample gave no voice back. Try a longer, cleaner sample.");
+  return url;
+}
+
 export const falProvider: ProviderAdapter = {
   id: "fal",
   label: "fal.ai",
@@ -111,10 +212,24 @@ export const falProvider: ProviderAdapter = {
   },
 
   async submit({ route, input }) {
+    // A voice sample the endpoint can't take is cloned first (Qwen3-TTS: clone-voice makes an embedding file, which the
+    // text-to-speech call speaks with). A saved voice that already has its file skips the clone (src/server/voices.ts).
+    const cf = route.map?.cloneFirst;
+    let embedding: string | undefined;
+    if (cf && input.voiceAudio && !input.voiceEmbedding) {
+      embedding = await cloneVoice(cf, input.voiceAudio, input.voiceTranscript);
+      input = { ...input, voiceEmbedding: embedding };
+    }
     // LoRAs (trained identities, a recipe's looks and motions) go in the route's LoRA field (FieldMap.loras:
     // `transformer` per file on Wan 2.2, `weight_name`, at most the API's maximum) and switch to its LoRA endpoint.
     const map = { ...route.map, loras: routeLoraField(route) };
     const payload = buildPayload(map, input);
+    // A song tool's song that isn't one of the provider's own goes up first (Mureka's files/upload).
+    const song = map.songSource;
+    if (song && payload[song.songId] === undefined) {
+      if (!input.audio) throw new ProviderError("Add the song");
+      payload[song.uploadId] = await uploadSong(song.upload, input.audio);
+    }
     let endpoint: string;
     try {
       endpoint = loraEndpointFor({ ...route, map }, input.loras);
@@ -127,7 +242,7 @@ export const falProvider: ProviderAdapter = {
     })) as { request_id: string; status_url: string; response_url: string; cancel_url: string };
     return {
       externalId: res.request_id,
-      meta: { statusUrl: res.status_url, responseUrl: res.response_url, cancelUrl: res.cancel_url },
+      meta: { statusUrl: res.status_url, responseUrl: res.response_url, cancelUrl: res.cancel_url, ...(embedding && { voiceEmbedding: embedding }) },
       payload,
     };
   },
@@ -151,6 +266,9 @@ export const falProvider: ProviderAdapter = {
       if (status.error) return { state: "failed", error: status.error };
       try {
         const result = await falFetch(meta.responseUrl as string);
+        // A song's stems come back as one zip (Mureka): each track becomes a result of its own.
+        const zipUrl = route?.op === "song-stems" ? (result as { zip_url?: unknown })?.zip_url : undefined;
+        if (typeof zipUrl === "string" && zipUrl) return { state: "succeeded", outputs: await stemsFromZip(zipUrl) };
         // Layers, text blocks, transcripts, 3D models and stems keep their structure (OutputFile.meta / text).
         const outputs = extractOutputs(result, route?.op);
         if (!outputs.length) return { state: "failed", error: noOutputsError(result) };

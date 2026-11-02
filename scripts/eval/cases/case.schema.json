@@ -541,7 +541,8 @@
               "temporal",
               "lipsync",
               "continuity",
-              "palette"
+              "palette",
+              "background"
             ]
           }
         },
@@ -1285,7 +1286,8 @@
                 "temporal",
                 "lipsync",
                 "continuity",
-                "palette"
+                "palette",
+                "background"
               ]
             }
           },
