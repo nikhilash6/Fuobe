@@ -306,5 +306,86 @@
     "subdir": null,
     "file": "comfyui/viggle_turbo.py",
     "folders": []
+  },
+  "ComfyUI-MiniMaxH3-Context-Loop": {
+    "repo": "https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop",
+    "commit": "43afeffcc570beb5f7382593e79e4b211c7e02f6",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-Fantastic-MiniMaxH3-PromptBuilder": {
+    "repo": "https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder",
+    "commit": "22e719fe89336c628383363182a4da3cb58d4f9b",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "comfyui-h3-oneclick-swap": {
+    "repo": "https://github.com/D3voz/comfyui-h3-oneclick-swap",
+    "commit": "e44a56e92920000e675d14be484aea0d7498d63e",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "comfyui-image-detail-contrast": {
+    "repo": "https://github.com/D3voz/comfyui-image-detail-contrast",
+    "commit": "485a5e246424ce012b998862b45f06d21e8d63b2",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "Orion4D_FXMax": {
+    "repo": "https://github.com/orion4d/Orion4D_FXMax",
+    "commit": "7048e8423ad7d1a6a52119d0d4870c2b7fc2885f",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "SolarRenderer": {
+    "repo": "https://github.com/Enderfga/SolarRenderer",
+    "commit": "0ca4f5e45b062cc9e9aee506de46aabdc22e4c3d",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-H3-FaceRefine": {
+    "repo": "https://github.com/Carasibana/ComfyUI-H3-FaceRefine",
+    "commit": "",
+    "registry": { "id": "comfyui-h3-facerefine", "version": "1.1.1" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-Impact-Pack": {
+    "repo": "https://github.com/ltdrdata/ComfyUI-Impact-Pack",
+    "commit": "",
+    "registry": { "id": "comfyui-impact-pack", "version": "8.28.3" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "comfyui_controlnet_aux": {
+    "repo": "https://github.com/Fannovel16/comfyui_controlnet_aux",
+    "commit": "a587a4c1594524c1d2de5cd1a86cd868ff448e1c",
+    "registry": { "id": "comfyui_controlnet_aux", "version": "1.1.6" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
   }
 }

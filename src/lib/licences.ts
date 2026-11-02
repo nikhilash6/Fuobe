@@ -483,6 +483,54 @@ export const NODE_PACKS: NodePack[] = [
     ...GPL,
     note: "H3 Relay 2.0 (Sendy Software LLC and contributors); GPL-3.0 code, vendored Context Loop and Spectrum GPL-3.0. Opt-in (H3_RELAY=1): it registers HTTP routes when it loads",
   }),
+  // Genjutsu's Openjutsu modes (Group swap, Scene edit, From picture, Fix faces, Fix colours): pinned in packs.json and
+  // install-comfyui.sh (OPENJUTSU_MODES=1). LICENSE files read at the pinned commits.
+  pack("ComfyUI-MiniMaxH3-Context-Loop", "https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop/tree/43afeffcc570beb5f7382593e79e4b211c7e02f6", {
+    ...GPL,
+    note: "MiniMax H3 Context Loop (NikoDemon80, Ethanfel): long H3 edits clip by clip, each continuing from the last; GPL-3.0 code. It registers local HTTP routes when it loads",
+  }),
+  pack("ComfyUI-Fantastic-MiniMaxH3-PromptBuilder", "https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder/tree/22e719fe89336c628383363182a4da3cb58d4f9b", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "The masked edit latent the H3 edits start from (source, mask and sound); MIT code",
+  }),
+  pack("comfyui-h3-oneclick-swap", "https://github.com/D3voz/comfyui-h3-oneclick-swap/tree/e44a56e92920000e675d14be484aea0d7498d63e", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "D3voz's swap, scene edit and face section nodes (plans, role masks, grey mannequins); MIT code. Fuobe applies a patch that words its H3 prompts positively",
+  }),
+  pack("comfyui-image-detail-contrast", "https://github.com/D3voz/comfyui-image-detail-contrast/tree/485a5e246424ce012b998862b45f06d21e8d63b2", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Softens fine detail contrast for Fix colours; MIT code, no model",
+  }),
+  pack("Orion4D_FXMax", "https://github.com/orion4d/Orion4D_FXMax/tree/7048e8423ad7d1a6a52119d0d4870c2b7fc2885f", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Philippe Joye's DCTL tone mapper (Fix colours' film finish); MIT code, no model",
+  }),
+  pack("SolarRenderer", "https://github.com/Enderfga/SolarRenderer/tree/0ca4f5e45b062cc9e9aee506de46aabdc22e4c3d", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "From picture's renderer; Apache-2.0 code (cloned only, never pip-installed), with Openjutsu's long-clip patch. Its LoRAs are under the MiniMax H3 Community License",
+  }),
+  pack("ComfyUI-H3-FaceRefine", "https://github.com/Carasibana/ComfyUI-H3-FaceRefine", {
+    name: "See its repository",
+    class: "unknown",
+    note: "Face tracking, masks and paste-back for Fix faces (registry 1.1.1). The InsightFace buffalo_l models it uses are for non-commercial research only; the YOLO face and person weights are AGPL-3.0",
+  }),
+  pack("ComfyUI-Impact-Pack", "https://github.com/ltdrdata/ComfyUI-Impact-Pack", { ...GPL, note: "Its SAM loader (Fix faces' face masks; SAM ViT-B is Apache-2.0); GPL-3.0 code" }),
+  pack("comfyui_controlnet_aux", "https://github.com/Fannovel16/comfyui_controlnet_aux/tree/a587a4c1594524c1d2de5cd1a86cd868ff448e1c", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Metric3D normals that carry the clip's motion into From picture; Apache-2.0 code, the Metric3D model is BSD-2-Clause",
+  }),
   // Restore & colourise (package archive-restore): Lightricks' LTX nodes (IC-LoRA loader and guide, tiled fusion sampler).
   pack("ComfyUI-LTXVideo", "https://github.com/Lightricks/ComfyUI-LTXVideo/tree/220e1d45aa0469f518e982102fca4dca92a61862", {
     name: "LTX-2 Community License",
@@ -585,6 +633,12 @@ export const ATTRIBUTIONS: Attribution[] = [
     licence: "OpenMDW-1.1",
     url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE",
     note: "Trained in part on WSJ (LDC) and an internal NVIDIA set (model card). The older nvidia/RE-USE repository is non-commercial (NSCLv1); Fuobe uses only the NemotronLabs repositories.",
+  },
+  {
+    for: "Genjutsu: Group swap, Scene edit, From picture, Fix faces and Fix colours",
+    text: "Openjutsu, copyright (c) 2026 D3voz: the graphs Fuobe sends to your GPU, the settings code Fuobe ported from it, the SolarRenderer long-clip patch and the 17 light looks' wording",
+    licence: "MIT",
+    url: "https://github.com/D3voz/openjutsu",
   },
 ];
 

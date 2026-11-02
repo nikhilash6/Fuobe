@@ -1059,5 +1059,24 @@
   "revision": "13007eec2648c09529e930164c2ccc9c8c12428c",
   "sizeBytes": 318820224,
   "sha256": "ad2c20e0e103b6ad3ffffc56ab4e89c0822263c488aa4dd70e7e03091ff37b8d"
+ },
+ "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/loras/minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors": {
+  "revision": "f5c3b1d5a63e008a691fca1b6096fd57a5307536",
+  "sizeBytes": 366647000,
+  "sha256": "ddfdd94f4c9a0f32bf3649bb8e98ca20db572e4db6bcd9cca546a5b33ea32d11"
+ },
+ "https://huggingface.co/mdevoz/SolarRendererRank64/resolve/984a10b7c167bbb94614f9644d5fedbb93a8c6e6/solarrenderer_4step_lora_rank64.safetensors": {
+  "revision": "984a10b7c167bbb94614f9644d5fedbb93a8c6e6",
+  "sizeBytes": 691873992,
+  "sha256": "3ad1a6593813499bc351822062cc5f0b35ec761c69110614b2d2ccd7d34ae3e8"
+ },
+ "https://huggingface.co/mdevoz/SolarRendererRank64/resolve/984a10b7c167bbb94614f9644d5fedbb93a8c6e6/solarrenderer_control_lora_rank64.safetensors": {
+  "revision": "984a10b7c167bbb94614f9644d5fedbb93a8c6e6",
+  "sizeBytes": 691873968,
+  "sha256": "5ab559206030075e268b788547b9f3e420e6d96a4711a8f58a8fc7744c01365f"
+ },
+ "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors": {
+  "revision": "feef60b0aaf63a4773ace96636ebbcf43b881312",
+  "sizeBytes": 9748113996
  }
 }

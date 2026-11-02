@@ -214,6 +214,17 @@ export const CUSTOM_NODE_REPOS = {
   // is the file: it is downloaded as custom_nodes/viggle_turbo/__init__.py, never cloned (the repo holds the weights).
   // Qwen Research License (a Qwen-Image 2.1 derivative). Not on the validation server: the entry lists it with `packs`.
   viggle_turbo: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/comfyui/viggle_turbo.py',
+  // Genjutsu's Openjutsu modes (D3voz/openjutsu @ 7fe118bb): pinned in install-comfyui.sh (OPENJUTSU_MODES=1), not on the
+  // validation server (the entries list them with `packs`). H3-FaceRefine, Impact Pack and controlnet_aux are registry packs.
+  'ComfyUI-MiniMaxH3-Context-Loop': 'https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop/tree/43afeffcc570beb5f7382593e79e4b211c7e02f6',
+  'ComfyUI-Fantastic-MiniMaxH3-PromptBuilder': 'https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder/tree/22e719fe89336c628383363182a4da3cb58d4f9b',
+  'comfyui-h3-oneclick-swap': 'https://github.com/D3voz/comfyui-h3-oneclick-swap/tree/e44a56e92920000e675d14be484aea0d7498d63e',
+  'comfyui-image-detail-contrast': 'https://github.com/D3voz/comfyui-image-detail-contrast/tree/485a5e246424ce012b998862b45f06d21e8d63b2',
+  Orion4D_FXMax: 'https://github.com/orion4d/Orion4D_FXMax/tree/7048e8423ad7d1a6a52119d0d4870c2b7fc2885f',
+  SolarRenderer: 'https://github.com/Enderfga/SolarRenderer/tree/0ca4f5e45b062cc9e9aee506de46aabdc22e4c3d',
+  'ComfyUI-H3-FaceRefine': 'https://github.com/Carasibana/ComfyUI-H3-FaceRefine',
+  'ComfyUI-Impact-Pack': 'https://github.com/ltdrdata/ComfyUI-Impact-Pack',
+  comfyui_controlnet_aux: 'https://github.com/Fannovel16/comfyui_controlnet_aux/tree/a587a4c1594524c1d2de5cd1a86cd868ff448e1c',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -240,6 +251,17 @@ export const PACK_CLASSES = {
   'ComfyUI-QwenTTS': /^AILab_Qwen3TTS(VoiceDesign|VoiceClone|CustomVoice)(_Advanced)?$/,
   'ComfyUI-VoxCPM2': /^VoxCPM2_(TTS|Clone)$/,
   viggle_turbo: /^ViggleTurbo(Lora|Sigmas)$/,
+  // Genjutsu's Openjutsu modes.
+  'ComfyUI-MiniMaxH3-Context-Loop': /^MiniMaxH3(GenerationProfile|ChainPlanModern|SourceTimeline|ChainLoopStart|ChainCurrent|ChainContext|ContexMaskedTarget|ContexMaskGridPreview|ContexLoopMaskSlice|LoopTrim|ChainSegmentSave|ChainReview|ChainLoopEnd|ChainAssemble)$/,
+  'ComfyUI-Fantastic-MiniMaxH3-PromptBuilder': /^MiniMaxH3FantasticVideoEditLatent$/,
+  'comfyui-h3-oneclick-swap': /^H3(OneClickSwapPlan|AdvancedSwapPlan|ObjectSwapPlan|SourceSlice|ClipShots|FillShots|PeopleMask|GreyMannequins|TrackCrops|TrackRoles|RoleMask|SubjectPrompt|Montage(People|Tracks|Picks|Plan|Pass)|FaceChunks|FaceJoin|AddFitCheck|SoundtrackOrSilence|ObjectPlacementMask|AddMovingArea|PaintedEditArea|RelightPass)$/,
+  'comfyui-image-detail-contrast': /^ImageDetailContrast$/,
+  Orion4D_FXMax: /^Orion4D_FXMax_/,
+  SolarRenderer: /^SolarRenderer(Model|LoraLoader|Conditioning|Sigmas)$/,
+  'ComfyUI-H3-FaceRefine': /^H3Face(TrackCrop|MaskSAM|Stitch)$/,
+  'ComfyUI-Impact-Pack': /^SAMLoader$/,
+  comfyui_controlnet_aux: /^Metric3D-NormalMapPreprocessor$/,
+  'ComfyUI-KJNodes': /^VRAM_Debug$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -320,6 +342,12 @@ export const KNOWN_MODELS = {
   'minimax_h3_video_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors' },
   'minimax_h3_turbo_v4_step600_ema.safetensors': { folder: 'loras', url: 'https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/43a74557ac3f6539db8e0f2a959d03feb7a81480/minimax_h3_turbo_v4_step600_ema.safetensors' },
   'minimax_h3_flf2v_lora_v1.safetensors': { folder: 'loras', url: 'https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA/resolve/5ddbc2dbbe95edbbdaf5017c3e934b1d01791697/minimax_h3_flf2v_lora_v1.safetensors' },
+  // Genjutsu's Openjutsu modes: Kijai's rank-39 DMAD 4-step LoRA (from ZhengmingYu/DMAD), mdevoz's rank-64 SolarRenderer
+  // pair (same speed and VRAM as rank 384, a sixth of the size) and BFL's int8 FLUX 3 prompt upsampler, at pinned revisions.
+  'minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/loras/minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors' },
+  'solarrenderer_4step_lora_rank64.safetensors': { folder: 'loras', url: 'https://huggingface.co/mdevoz/SolarRendererRank64/resolve/984a10b7c167bbb94614f9644d5fedbb93a8c6e6/solarrenderer_4step_lora_rank64.safetensors' },
+  'solarrenderer_control_lora_rank64.safetensors': { folder: 'loras', url: 'https://huggingface.co/mdevoz/SolarRendererRank64/resolve/984a10b7c167bbb94614f9644d5fedbb93a8c6e6/solarrenderer_control_lora_rank64.safetensors' },
+  'qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors' },
   'depth_anything_3_mono_large.safetensors': { folder: 'geometry_estimation', url: 'https://huggingface.co/Comfy-Org/Depth-Anything-3/resolve/main/geometry_estimation/depth_anything_3_mono_large.safetensors' },
   // comfyui-oss-3 additions (docs/research/comfyui-oss-3.json, sizes from the Hugging Face tree API)
   // MOSS-Image (research #7 §4.4): Comfy-Org's int8 / w4a8 set (the Comfy template's) at a pinned commit, and Spectrallic's SFT with the
@@ -643,6 +671,13 @@ const qwen21Tier = (op, tier, base, extra) => ({
     `Options → Speed "${tier}" on qwen-image-21-${op}: the same graph with a LoraLoaderModelOnly after the UNETLoader${extra?.after ?? ''} and its KSampler replaced by ` +
     `RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. ${QWEN21_TIERS[tier].notes}${extra?.notes ?? ''}${QWEN21_CLEAN_NOTE}`,
 });
+
+// Genjutsu's Openjutsu modes: the packs their H3 graphs need, and the licence line they share.
+const OJ_PACKS = ['ComfyUI-MiniMaxH3-Context-Loop', 'ComfyUI-Fantastic-MiniMaxH3-PromptBuilder', 'comfyui-h3-oneclick-swap', 'ComfyUI-KJNodes', 'ComfyUI-VideoHelperSuite'];
+const OJ_H3_LICENCE =
+  'MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; ' +
+  'commercial use above US$20M yearly revenue needs MiniMax\'s written authorization; show "MiniMax H3" on the product\'s interface; no outputs used to improve other AI models · ' +
+  'Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta\'s SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT';
 
 export const SPEC = [
   // =========================================================================
@@ -4918,5 +4953,149 @@ export const SPEC = [
       'frame as a half-float EXR with input_color_space HDR, i.e. the inverse HLG curve: scene-linear light in Rec.2020 primaries, highlights above 1.0 kept. Node 6 saves the 10-bit HLG MP4 with the clip\'s sound as ' +
       'the result to watch (role preview); Fuobe zips the frames (role frames) and attaches the zip to it. Decodes the whole clip: RAM grows with the length (Fuobe refuses a clip too long for the memory it has). ' +
       'Tested through Fuobe on CPU (2 s 160x96 30 fps clip with sound): 60 half-float EXR frames zipped onto an H.264 High 10 HLG (arib-std-b67, bt2020) preview with AAC.',
+  },
+
+  // ---- Genjutsu's Openjutsu modes (D3voz/openjutsu @ 7fe118bb, MIT): Group swap, Scene edit, From picture, Fix faces,
+  // Fix colours. Fuobe's copies of its graphs (scripts/comfy/hand-built/), with the NVFP4 H3 text encoder, BFL's FLUX 3
+  // Klein file name, the rank-64 SolarRenderer pair and words that name only what is wanted. The provider writes each
+  // request's settings by node title (src/lib/openjutsu-graphs.ts, params.extra.openjutsu). Genjutsu trims and scales the
+  // part first (video-fit-clip: 24 fps, the target short edge, the clip's sound), so the VHS loaders read it whole.
+  {
+    id: 'video-group-swap-h3',
+    title: 'Group swap: 1-4 characters each take over one person, named by role (Openjutsu advanced: SAM 3.1 tracks, Qwen3-VL labels them, MiniMax H3 + DMAD redraw the labelled people clip by clip)',
+    capability: 'video-group-swap',
+    handBuilt: 'hand-built/video-group-swap-h3.json',
+    packs: OJ_PACKS,
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    bindings: { video: [b('14', 'video')], image: [b('2', 'image')], image2: [b('5', 'image')], image3: [b('8', 'image')], image4: [b('11', 'image')] },
+    outputs: [{ node: '82', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    license: OJ_H3_LICENCE,
+    notes:
+      'video = the part (Genjutsu fits it first), image..image4 = the characters (unused pictures, their shrink and describer are deleted). params.extra.openjutsu: pictures, roles (one line each, ordinal fill), quality 480p | 720p (pack 736p) | 1080p, motion 512 | 768, hats, mouthsFollowSound, edge tight | normal | loose (20 / 40 / 60 px), seed. ' +
+      'Every job runs under its own Context Loop run name (fuobe_<generation id>); the provider deletes output/h3_chains/<run> through the pack\'s run-folder routes once the result is in. Weights touched one stage after another: H3 21 GB, NVFP4 text encoder 15.7 GB, describer 9.4 GB, SAM 3.1 1.7 GB, VAEs 3.8 GB. Upstream timing: 6 s at 480p in 6-13 min on a 16 GB card.',
+  },
+  {
+    id: 'video-group-swap-h3-one-by-one',
+    title: 'Group swap, one by one: exactly 2 characters, each person redrawn on a pass of their own (Openjutsu advanced_maxq)',
+    capability: 'video-group-swap',
+    handBuilt: 'hand-built/video-group-swap-h3-one-by-one.json',
+    packs: OJ_PACKS,
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    bindings: { video: [b('8', 'video')], image: [b('2', 'image')], image2: [b('5', 'image')] },
+    outputs: [{ node: '96', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    license: OJ_H3_LICENCE,
+    notes: 'The same settings as video-group-swap-h3 with pictures 2; about twice as long, sharper on two people.',
+  },
+  {
+    id: 'video-scene-edit-h3',
+    title: 'Scene edit: change, remove or replace the background of what SAM 3.1 tracks, the rest of the shot and its sound kept (Openjutsu object, MiniMax H3 + DMAD)',
+    capability: 'video-scene-edit',
+    handBuilt: 'hand-built/video-scene-edit-h3.json',
+    packs: OJ_PACKS,
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    bindings: { video: [b('5', 'video')], image: [b('2', 'image')] },
+    outputs: [{ node: '55', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    license: OJ_H3_LICENCE,
+    notes:
+      'params.extra.openjutsu: action change | remove | background, target (SAM words, comma list; background: what stays), becomes, picture (image sent), biggestOnly, keepShape, edge (10 / 20 / 40 px), motion, quality, seed, paint (one run-length keyframe at <= 256 px). ' +
+      'Remove drops the picture and the grey shape; background flips the grown mask. Own run name and run-folder clean-up as video-group-swap-h3.',
+  },
+  {
+    id: 'image-from-picture-prepare',
+    title: 'From picture, first frame: FLUX 3 Image Klein puts the character in the pose of the part\'s first frame, in the picture\'s setting, or relights it (one pass)',
+    capability: 'image-from-picture',
+    handBuilt: 'hand-built/image-from-picture-prepare.json',
+    packs: ['ComfyUI-VideoHelperSuite'],
+    bindings: { video: [b('1', 'video')], startFrame: [b('1', 'skip_first_frames')], image: [b('4', 'image')] },
+    outputs: [{ node: '21', kind: 'image' }],
+    defaults: { fps: 24 },
+    vramGb: 16,
+    license: 'FLUX Kommunity License v1.0 (FLUX 3 Image Klein and its prompt upsampler) · Qwen3-VL 4B Apache-2.0 base · flux2-vae Apache-2.0',
+    notes:
+      'video = the clip, startFrame = round(part start x 24), image = the character (left out for the clip\'s own person). params.extra.openjutsu: light (the look\'s words), ownPerson, keepCrop (denoise 0.9 from the frame), adjust, seed; the canvas is the clip\'s shape at 768 px on the short side. ' +
+      'A light rebuilds it as one pass: the upsampler writes the pose from the frame, FLUX sees only the character at 3 MP.',
+  },
+  {
+    id: 'video-scene-describe',
+    title: 'From picture, what happens: Qwen3-VL 8B describes the part at 2 fps and rewrites it for the approved first frame',
+    capability: 'video-describe',
+    handBuilt: 'hand-built/video-scene-describe.json',
+    packs: ['ComfyUI-VideoHelperSuite'],
+    bindings: { video: [b('1', 'video')], startFrame: [b('1', 'skip_first_frames')], image: [b('74', 'image')] },
+    outputs: [{ node: '79', kind: 'text' }],
+    defaults: { fps: 24 },
+    vramGb: 12,
+    license: 'Qwen3-VL 8B: Apache-2.0',
+    notes: 'image = the approved first frame (left out for the clip\'s own person: pass 1 is then the description). params.extra.openjutsu: seconds, ownPerson. About 15-40 s.',
+  },
+  {
+    id: 'video-from-picture-solar',
+    title: 'From picture, the video: SolarRenderer (MiniMax H3 + its 4-step and control LoRAs) animates the approved first frame with the part\'s motion as Metric3D normals; the clip\'s sound kept',
+    capability: 'video-from-picture',
+    handBuilt: 'hand-built/video-from-picture-solar.json',
+    packs: [...OJ_PACKS, 'SolarRenderer', 'comfyui_controlnet_aux'],
+    bindings: { video: [b('1', 'video')], image: [b('20', 'image')] },
+    outputs: [{ node: '63', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    autoDownloads: ['Metric3D vit-small (metric_depth_vit_small_800k.pth) -> custom_nodes/comfyui_controlnet_aux/ckpts/JUGGHM/Metric3D (fetched on first run unless placed there)'],
+    license: `${OJ_H3_LICENCE} · SolarRenderer LoRAs (rank 64): MiniMax H3 Community License; SolarRenderer code Apache-2.0 · Metric3D BSD-2-Clause`,
+    notes:
+      'video = the fitted part, image = the approved first frame. params.extra.openjutsu: seconds (17k+5 frames at 24 fps), quality 480p | 720p (canvas clamped to 2048 px), motion 0 | 512 | 768, seed, scene (the editable description, opening the detailed description). ' +
+      'Parts over 170 frames need SolarRenderer\'s long-clip patch, which the install script applies.',
+  },
+  {
+    id: 'video-from-picture-h3',
+    title: 'From picture, the video on native MiniMax H3 (DMAD, 6 steps) from the approved first frame and the part\'s normals',
+    capability: 'video-from-picture',
+    handBuilt: 'hand-built/video-from-picture-h3.json',
+    packs: [...OJ_PACKS, 'comfyui_controlnet_aux'],
+    bindings: { video: [b('1', 'video')], image: [b('20', 'image')] },
+    outputs: [{ node: '63', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    autoDownloads: ['Metric3D vit-small (metric_depth_vit_small_800k.pth) -> custom_nodes/comfyui_controlnet_aux/ckpts/JUGGHM/Metric3D (fetched on first run unless placed there)'],
+    license: `${OJ_H3_LICENCE} · Metric3D BSD-2-Clause`,
+    notes: 'A second renderer for From picture, on native MiniMax H3; the same settings as video-from-picture-solar.',
+  },
+  {
+    id: 'video-fix-faces-h3',
+    title: 'Fix faces: H3-FaceRefine tracks the character\'s face, MiniMax H3 redraws it in overlapping sections and it is pasted back (faces over 20 % of the frame are left alone)',
+    capability: 'video-fix-faces',
+    handBuilt: 'hand-built/video-fix-faces-h3.json',
+    packs: [...OJ_PACKS, 'ComfyUI-H3-FaceRefine', 'ComfyUI-Impact-Pack'],
+    bindings: { video: [b('1', 'video')], image: [b('2', 'image')] },
+    outputs: [{ node: '30', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 10 },
+    vramGb: 24,
+    autoDownloads: ['YOLO face and person detectors (ultralytics/bbox/face_yolov8m.pt, ultralytics/segm/person_yolov8m-seg.pt), SAM ViT-B (sams/sam_vit_b_01ec64.pth) and InsightFace buffalo_l (insightface/models/buffalo_l), as H3-FaceRefine documents'],
+    license: `${OJ_H3_LICENCE} · YOLO face/person weights AGPL-3.0 · SAM ViT-B Apache-2.0 · InsightFace buffalo_l (identity tracking): NON-COMMERCIAL research only`,
+    notes: 'video = the finished video, image = the character photo. params.extra.openjutsu: faceStyle photo | mouth, chunkSeconds 4 | 6.5 | 10, seed. H3FaceTrackCrop.select is largest_face (H3-FaceRefine 1.1.1). The whole clip is decoded and pasted back at full size (two frame-sized copies of every frame: 1080p 10 s is about 12 GB), so a part is fitted to 1080 px on its short side and kept to 10 s.',
+  },
+  {
+    id: 'video-fix-colours',
+    title: 'Fix colours: a soft film finish (Image Detail Contrast + Orion4D\'s DCTL tone mapper), no model',
+    capability: 'video-tone',
+    handBuilt: 'hand-built/video-fix-colours.json',
+    packs: ['comfyui-image-detail-contrast', 'Orion4D_FXMax', 'ComfyUI-VideoHelperSuite'],
+    bindings: { video: [b('1', 'video')], framesPerBatch: [b('5', 'frames_per_batch')] },
+    outputs: [{ node: '4', kind: 'video' }],
+    defaults: { framesPerBatch: 48 },
+    limits: { maxDurationSec: 60 },
+    vramGb: 2,
+    license: 'n/a (no model; Image Detail Contrast MIT, Orion4D_FXMax MIT, VideoHelperSuite GPL-3.0 code)',
+    notes: 'params.extra.openjutsu: finish soft | filmic | rich | off (the tone mapper\'s settings travel in raw_settings, no preset files), strength 0-1 (Orion 0-0.5), soften 0-1 (detail contrast 0 to -0.6; 0 drops the step). Both steps work frame by frame, so the clip goes through in passes (VHS_BatchManager re-queues the prompt until the clip is done, as upscale-video-esrgan-chunked does) into one H.264 encode that stays open; the last pass writes the file with the source\'s sound. framesPerBatch: the provider sizes it from the clip\'s header so a pass holds about 1.5 GB of frames (three frame-sized copies: decoded, softened, toned), so memory stays flat whatever the length.',
   },
 ];

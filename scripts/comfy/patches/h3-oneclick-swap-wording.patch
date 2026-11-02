@@ -1,0 +1,181 @@
+Fuobe: comfyui-h3-oneclick-swap @ e44a56e (D3voz, MIT) with its H3 video prompts worded positively (each line says what
+the clip shows). Apply in the pack folder: git apply h3-oneclick-swap-wording.patch
+
+diff --git a/__init__.py b/__init__.py
+index 607d660..f0929cb 100644
+--- a/__init__.py
++++ b/__init__.py
+@@ -94,15 +94,15 @@ def ordinal_people(count):
+ 
+ 
+ SOUND = """overall_soundscape:
+-Any ambience and physical sounds already present in <Audio 1> remain part of its unchanged mix. Add no new room noise, footsteps, voices or impacts.
++Any ambience and physical sounds already present in <Audio 1> remain part of its unchanged mix, which is the whole sound of the scene.
+ 
+ non_diegetic_music:
+-Reuse the original music and vocals in <Audio 1> at their original tempo, pitch, mix and synchronization. Do not generate a new performance or additional score."""
++Reuse the original music and vocals in <Audio 1> at their original tempo, pitch, mix and synchronization, as the one performance and score."""
+ 
+ 
+ LIP_SYNC = "The visible people lip-sync any vocals in <Audio 1> where the source people sing or speak; the soundtrack itself is unchanged. "
+-NO_LIP_SYNC = ("Nobody on screen sings, speaks or lip-syncs; the music in <Audio 1> is a background track added later. "
+-               "Mouths stay closed or keep the source expressions such as smiles; the soundtrack itself is unchanged. ")
++NO_LIP_SYNC = ("Everyone on screen keeps a quiet face: mouths stay closed or keep the source expressions such as smiles, "
++               "and the music in <Audio 1> is a background track added later; the soundtrack itself is unchanged. ")
+ 
+ 
+ def build_prompt(descriptions, roles, length, overlap, only=None, lip_sync=True):
+@@ -115,7 +115,7 @@ def build_prompt(descriptions, roles, length, overlap, only=None, lip_sync=True)
+         lines.append("<Subject %d> is the person from <Picture %d>. %sThey replace %s in <Video 1>, in every shot where that person appears. "
+                      "Their face, hair, body and clothing all come from <Picture %d>." % (i, pic, desc + " " if desc else "", role, pic))
+     for i, role in kept:
+-        lines.append("<Subject %d> is %s in <Video 1>, who is not replaced here and keeps exactly their look in <Video 1>." % (i, role))
++        lines.append("<Subject %d> is %s in <Video 1>, who keeps exactly their own look from <Video 1>." % (i, role))
+     lines += [
+         "<Subject %d> is the setting, props and lighting in <Video 1>." % setting,
+         "<Video 1> is the source footage being edited, a %.3f-second section at 24 fps, in which the people to replace are shown as smooth grey "
+@@ -140,20 +140,20 @@ def build_prompt(descriptions, roles, length, overlap, only=None, lip_sync=True)
+         "<Subject %d> (setting and props): fully_preserved - the location, props and lighting retain their source appearance and position." % setting,
+         "<Video 1> (edited source): partially_preserved - the replaced people's identities and outfits change; camera movement, shot composition, "
+         "actions, interaction, cuts and timing are retained.",
+-        "<Audio 1>: fully_copy - the original synchronized soundtrack is the complete final audio, without additional generated vocals or sound effects.",
++        "<Audio 1>: fully_copy - the original synchronized soundtrack is the complete final audio.",
+         "",
+         "detailed_description:",
+         "Live-action footage in the same setting as <Video 1>, with natural skin tones and the source lighting and lens perspective. "
+-        "The replacement people appear only where the people they replace are visible; the backgrounds of the pictures do not enter the scene.",
++        "The replacement people appear only where the people they replace are visible; the whole scene is the setting of <Video 1>.",
+         SHOTS_PLACEHOLDER,
+     ]
+     for i, role, _, _ in swap:
+         lines.append("<Subject %d> performs every action of %s: the same gestures, steps, gaze, expressions and mouth shapes at the same moments." % (i, role))
+     lines += [
+-        "Throughout all shots, %s, regardless of screen position or size. Their outfits replace the original clothing completely; "
+-        "no face, hair, skin, costume, fabric pattern or accessory of %s remains. %sContinue the original camera movement and performance through the last frame "
+-        "without adding transitions or changing speed." % (", ".join("%s is always the person in <Picture %d>" % (role, pic) for _, role, _, pic in swap),
+-                                                           " or ".join(role for _, role, _, _ in swap), LIP_SYNC if lip_sync else NO_LIP_SYNC),
++        "Throughout all shots, %s, regardless of screen position or size. Their outfits replace the original clothing completely, "
++        "and each of them has entirely the face, hair, skin, outfit and accessories of their picture. %sContinue the original camera movement and performance through the last frame "
++        "at the original speed in one continuous take." % (", ".join("%s is always the person in <Picture %d>" % (role, pic) for _, role, _, pic in swap),
++                                                           LIP_SYNC if lip_sync else NO_LIP_SYNC),
+         "",
+         SOUND,
+     ]
+@@ -182,13 +182,13 @@ def build_picture_prompt(desc, role, length, overlap, lip_sync=True):
+         "<Subject 1> (all shots): fully_preserved - the referenced facial identity, hair, skin tone and complete outfit remain consistent while poses and "
+         "mouth movements follow %s." % role,
+         "<Subject 2> (setting): fully_preserved - the location, lighting and atmosphere of <Picture 1> surround <Subject 1> in every shot.",
+-        "<Audio 1>: fully_copy - the original synchronized soundtrack is the complete final audio, without additional generated vocals or sound effects.",
++        "<Audio 1>: fully_copy - the original synchronized soundtrack is the complete final audio.",
+         "",
+         "detailed_description:",
+         "Live-action footage in the setting of <Picture 1>, with natural skin tones and the lighting of <Picture 1>.",
+         SHOTS_PLACEHOLDER,
+         "<Subject 1> performs every action of %s: the same gestures, steps, gaze, expressions and mouth shapes at the same moments. %sContinue the "
+-        "camera movement and performance through the last frame without adding transitions or changing speed." % (role, LIP_SYNC if lip_sync else NO_LIP_SYNC),
++        "camera movement and performance through the last frame at the original speed in one continuous take." % (role, LIP_SYNC if lip_sync else NO_LIP_SYNC),
+         "",
+         SOUND,
+     ])
+@@ -344,7 +344,7 @@ def build_scene_prompt(desc, role, length, overlap, lip_sync=True):
+         "<Subject 1> is the person from <Picture 1>. %sThey perform the actions of %s in <Video 1>." % (desc + " " if desc else "", role),
+         "<Subject 2> is the entire environment, props, colours and lighting of <Picture 1>.",
+         "<Video 1> is a %.3f-second motion guide at 24 fps. Its grey figure supplies body poses, gestures, footwork, "
+-        "expressions and timing. Its flat grey surroundings carry no appearance or lighting to preserve." % (length / FPS),
++        "expressions and timing. Its flat grey surroundings are a neutral placeholder." % (length / FPS),
+         "<Picture 1> defines the complete visual appearance and composition of the recreated scene.",
+         "<Audio 1> is the original synchronized soundtrack, reused unchanged.",
+         "", "summary:", summary,
+@@ -353,10 +353,10 @@ def build_scene_prompt(desc, role, length, overlap, lip_sync=True):
+         "<Subject 2>: fully_preserved - the picture's environment and illumination fill the entire frame throughout the clip.",
+         "<Video 1>: partially_preserved - retain the performance, framing, camera movement, cuts and timing. "
+         "Replace its original visual appearance and lighting across the whole frame.",
+-        "<Audio 1>: fully_copy - reuse the original soundtrack without additional sounds.",
++        "<Audio 1>: fully_copy - reuse the original soundtrack as the whole sound.",
+         "", "detailed_description:",
+         "Live-action footage with the setting and lighting of <Picture 1>. The illumination stays coherent on the person, "
+-        "surfaces and contact shadows as the person moves. The picture is a visual reference, not a still image held on screen.",
++        "surfaces and contact shadows as the person moves. The picture is a visual reference for a living, moving scene.",
+         SHOTS_PLACEHOLDER,
+         "<Subject 1> performs the same movements as the grey figure in <Video 1>, at the same moments, through the last frame. "
+         + (LIP_SYNC if lip_sync else NO_LIP_SYNC),
+@@ -542,7 +542,7 @@ def build_edit_prompt(mode, thing, plural, change_to, picture, desc, length, ove
+         lines += ["", "summary:"]
+         if mode == "remove":
+             lines.append("[video editing + audio reuse] The target video is an edited version of the source footage in which the regenerated "
+-                         "area shows only %s, as if nothing had ever been there. " % (change_to or "the background and surfaces that continue naturally around it"))
++                         "area shows only %s, as one continuous natural surface. " % (change_to or "the background and surfaces that continue naturally around it"))
+         else:
+             lines.append("[video editing + %saudio reuse] The target video is an edited version of the source footage in which %s %s "
+                          "replaced by %s, with %s own shape, cut, colours and materials. " %
+@@ -561,8 +561,7 @@ def build_edit_prompt(mode, thing, plural, change_to, picture, desc, length, ove
+             "movement of %s in <Video 1>." % thing,
+             "<Video 1> (edited source): partially_preserved - only %s change%s; the people, actions, camera movement, shot composition, "
+             "setting, cuts and timing are retained." % (thing, s),
+-            "<Audio 1>: fully_copy - the original synchronized soundtrack is the complete final audio, without additional "
+-            "generated vocals or sound effects.",
++            "<Audio 1>: fully_copy - the original synchronized soundtrack is the complete final audio.",
+         ]
+     elif mode == "change":
+         if picture:
+@@ -577,19 +576,17 @@ def build_edit_prompt(mode, thing, plural, change_to, picture, desc, length, ove
+             "framing and movement are those of <Video 1>.",
+             "<Video 1> (edited source): partially_preserved - only the setting changes; %s, the actions, camera movement, cuts and "
+             "timing are retained." % thing,
+-            "<Audio 1>: fully_copy - the original synchronized soundtrack is the complete final audio, without additional "
+-            "generated vocals or sound effects.",
++            "<Audio 1>: fully_copy - the original synchronized soundtrack is the complete final audio.",
+         ]
+     lines += ["", "detailed_description:", "Live-action footage with the source lighting and lens perspective.", SHOTS_PLACEHOLDER]
+     if mode == "change":
+-        lines.append("Throughout all shots, %s %s always %s, regardless of screen position or size; no colour, pattern or detail of the "
+-                     "original remains." % (thing, is_, new))
++        lines.append("Throughout all shots, %s %s always %s, regardless of screen position or size, with only the colours, patterns and details of the new one." % (thing, is_, new))
+     elif mode == "background":
+-        lines.append("Throughout all shots, the surroundings are %s, lit to match %s; no part of the original location remains." % (new, thing))
++        lines.append("Throughout all shots, the surroundings are %s, lit to match %s, and the whole surroundings are the new place." % (new, thing))
+     else:
+         lines.append("Throughout all shots, the regenerated area shows %s, matching the surrounding light, texture and perspective." %
+                      (change_to or "the background and surfaces that continue naturally around it"))
+-    lines += ["Continue the original camera movement and performance through the last frame without adding transitions or changing speed.",
++    lines += ["Continue the original camera movement and performance through the last frame at the original speed in one continuous take.",
+               "", SOUND if ref else SOUND.replace("<Audio 1>", "the source soundtrack")]
+     return "\n".join(lines)
+ 
+@@ -633,13 +630,12 @@ def build_add_prompt(target, change_to, picture, desc, length, overlap, where, a
+     lines += [
+         "The source footage (edited source): partially_preserved - the only change is %s %s; the people, actions, camera movement, "
+         "shot composition, cuts and timing are retained." % (new, target),
+-        "The soundtrack: fully_copy - the original synchronized soundtrack is the complete final audio, without additional "
+-        "generated vocals or sound effects.",
++        "The soundtrack: fully_copy - the original synchronized soundtrack is the complete final audio.",
+         "", "detailed_description:", "Live-action footage with the source lighting and lens perspective.", SHOTS_PLACEHOLDER,
+         "Throughout all shots, %s is %s, %s. %s" % (new, target, where, action) if action else
+         "Throughout all shots, %s is clearly visible %s, %s, with the same size, identity and materials in every frame; people "
+         "who move in front of it pass in front of it." % (new, target, where),
+-        "Continue the original camera movement and performance through the last frame without adding transitions or changing speed.",
++        "Continue the original camera movement and performance through the last frame at the original speed in one continuous take.",
+         "", SOUND.replace("<Audio 1>", "the source soundtrack"),
+     ]
+     return "\n".join(lines)
+@@ -1072,7 +1068,7 @@ def build_face_prompt(desc, follow_mouth, length):
+     lines = ["subject_definitions:", ("<Subject 1> is the person from <Picture 1>. %s Their face, skin tone, eyebrows and facial hair come from <Picture 1>." % desc).replace("  ", " ")]
+     if follow_mouth:
+         lines.append("<Video 1> is a soft, blurred copy of the same close-up footage. It supplies only the exact head movement, gaze, expressions, "
+-                     "mouth shapes and framing, not the facial details.")
++                     "mouth shapes and framing.")
+     lines += [
+         "<Audio 1> is the synchronized original soundtrack, reused unchanged as the complete final audio.",
+         "",
+@@ -1922,9 +1918,8 @@ class H3FillShots:
+             here = [k for k in replaced if k in present]
+             absent = [k for k in replaced if k not in present]
+             if here and absent:
+-                shots += "\nOnly %s %s replaced in this clip; %s %s not appear." % (
+-                    " and ".join("<Subject %d>" % k for k in here), "is" if len(here) == 1 else "are",
+-                    " and ".join("<Subject %d>" % k for k in absent), "does" if len(absent) == 1 else "do")
++                shots += "\nOnly %s %s replaced in this clip." % (
++                    " and ".join("<Subject %d>" % k for k in here), "is" if len(here) == 1 else "are")
+         return (prompt.replace(SHOTS_PLACEHOLDER, shots),)
+ 
+ 

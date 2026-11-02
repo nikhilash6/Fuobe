@@ -74,6 +74,8 @@ export const LOADER_FOLDERS = {
   MiniMaxH3TurboLoRA: { lora_name: 'loras' },
   // Relight: Viggle's speed-LoRA loader (viggle_turbo) reads models/loras.
   ViggleTurboLora: { lora_name: 'loras' },
+  // Genjutsu's From picture: SolarRenderer's LoRA loader reads models/loras.
+  SolarRendererLoraLoader: { lora_name: 'loras' },
   // Open-H3 Regenerate (rdh9616's pack): the merged refiner LoRA, LBH's latent upscaler and NVIDIA's fast H3 VAE decoder.
   OpenH3RegenLora: { lora_name: 'loras' },
   OpenH3RegenUpscale: { model_name: 'latent_upscale_models' },
@@ -83,7 +85,9 @@ export const LOADER_FOLDERS = {
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
 // Zen Image Edit's adapter loader reads paths: its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
-const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader']);
+const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader',
+  // Fix faces: H3-FaceRefine's detectors and Impact's SAM loader read their packs' own folders (the entry lists them in autoDownloads).
+  'H3FaceTrackCrop', 'SAMLoader']);
 // Binding keys whose input is a user-supplied model file (not part of "models").
 const USER_MODEL_KEYS = new Set(['lora', 'loraHigh', 'loraLow', 'upscaleModel']);
 const MODEL_EXT = /\.(safetensors|sft|gguf|ckpt|pt|pth|bin|onnx)$/i;
