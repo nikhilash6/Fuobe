@@ -1866,13 +1866,15 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
   // A node class the server doesn't have: name the pack to install (opt-in packs like ComfyUI-Whisper).
   const packs = missingClass?.pack ? [missingClass.pack] : manifest.customNodes.map((c) => c.name);
   const where = worker === "isolated" ? "the isolated ComfyUI worker" : "your ComfyUI";
+  // An account's run (on its own GPU, or on this install's GPUs as a hosted run) gets the visitor's words, never the owner's.
+  const visitorRun = !!ownGpu() || !!tenantAccount();
   const missingPack =
     body.error?.type === "missing_node_type" && manifest.id === REGEN_WORKFLOW && worker === "main"
-      ? ownGpu()
+      ? visitorRun
         ? REGEN_COPY.missingVisitor
         : REGEN_COPY.missing
       : body.error?.type === "missing_node_type" && RTX_WORKFLOWS.has(manifest.id) && worker === "main"
-        ? ownGpu()
+        ? visitorRun
           ? RTX_MISSING.visitor
           : RTX_MISSING.owner
       : body.error?.type === "missing_node_type" && packs.length

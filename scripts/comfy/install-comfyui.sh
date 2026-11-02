@@ -130,10 +130,11 @@ fi
 # docs/research/new-models-10.md §6): Comfy-Org's ComfyUI Nvidia VFX Nodes 0.2.1 (Apache-2.0) and NVIDIA's nvidia-vfx
 # runtime (its requirements.txt; NVIDIA Software License Agreement, a wheel from pypi.nvidia.com with the SDK's models).
 # They run only on an NVIDIA RTX card (frame generation: RTX 40 or later) with a CUDA PyTorch (cu130 or newer, the
-# pack's README) and a recent driver, so they go in only where nvidia-smi names an RTX card (or RTX_VIDEO=1);
-# RTX_VIDEO=0 leaves them out. This script installs CPU PyTorch: on a GPU server install a CUDA build too.
+# pack's README) and a recent driver, so they go in only where nvidia-smi names an RTX card on an x86_64 machine (or
+# RTX_VIDEO=1); RTX_VIDEO=0 leaves them out. nvidia-vfx 0.2.0.0 has no Linux arm64 wheel, so a DGX Spark (GB10) is skipped. This script installs CPU PyTorch: on a GPU server install a CUDA build too.
 RTX_VIDEO_REF="${RTX_VIDEO_REF:-38d790ded00650681fa3645362efe28c8560cf40}"   # 0.2.1 (registry comfyui_nvidia_rtx_nodes), 2026-10-14
-rtx_card="$(command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | grep -i -m1 -E 'RTX|GB10' || true)"
+rtx_card="$(command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | grep -i -m1 -E 'RTX' || true)"
+[ "$(uname -m)" = "x86_64" ] || rtx_card=""
 if [ "${RTX_VIDEO:-auto}" = "1" ] || { [ "${RTX_VIDEO:-auto}" = "auto" ] && [ -n "$rtx_card" ]; }; then
   dest="$COMFYUI_DIR/custom_nodes/ComfyUI_Nvidia_VFX_Nodes"
   if [ -d "$dest/.git" ] || git clone -q https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes "$dest"; then

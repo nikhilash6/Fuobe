@@ -21,6 +21,16 @@ export function deviceLabel(name: string | undefined): string {
     .trim();
 }
 
+/**
+ * A graphics card's name for words that say "your …" (a fix plan's gpu): only a CUDA or Intel card, never ComfyUI's bare
+ * "cpu" or "mps" device names.
+ */
+export function cardLabel(d: { name: string; type: string } | undefined): string | undefined {
+  if (!d || (d.type !== "cuda" && d.type !== "xpu")) return undefined;
+  const n = deviceLabel(d.name);
+  return n && !/^(cpu|mps|cuda|xpu)(:\d+)?$/i.test(n) ? n : undefined;
+}
+
 /** The short name people use: "NVIDIA GeForce RTX 4070" → "RTX 4070". */
 export function shortGpu(name: string | undefined): string {
   return deviceLabel(name).replace(/^(NVIDIA\s+)?(GeForce\s+)?/i, "").trim() || "GPU";

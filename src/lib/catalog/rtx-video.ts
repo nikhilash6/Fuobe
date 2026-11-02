@@ -14,6 +14,9 @@ export { RTX_UPSCALE_WORKFLOW } from "@/lib/av/video-finish";
 export const RTX_FRAMEGEN_WORKFLOW = "fps-rtx-framegen";
 export const RTX_HDR_WORKFLOW = "sdr-to-hdr-rtx";
 
+/** The pack's node classes (ComfyUI_Nvidia_VFX_Nodes), as the GPU check lists them. */
+export const RTX_CLASSES = ["RTXVideoSuperResolution", "RTXVideoFrameGeneration", "RTXTrueHDR"] as const;
+
 /** The card each model needs. */
 export const RTX_CARD: Record<string, GpuNeed> = {
   [RTX_UPSCALE_MODEL]: "nvidia-rtx",

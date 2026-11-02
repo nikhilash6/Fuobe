@@ -25,8 +25,9 @@ export function readCard(name: string | undefined, type?: string): CardReading {
   if (!n) return { rtx: type === undefined ? undefined : false };
   // ROCm reports its cards as "cuda" devices; Intel and Apple have their own device types.
   if (/\b(AMD|Radeon|Instinct|Intel|Arc|Apple|M\d( Pro| Max| Ultra)?)\b/i.test(n) || /^cpu$/i.test(n)) return { rtx: false };
-  // NVIDIA's DGX Spark (GB10, Blackwell), which the pack's README lists as supported.
-  if (/\bGB10\b/i.test(n)) return { rtx: true, series: 50 };
+  // NVIDIA's DGX Spark (GB10, Blackwell, Linux arm64): the pack's README lists it, but NVIDIA's nvidia-vfx runtime has no
+  // arm64 Linux wheel yet, so it reads as unknown: never blocked, never put first.
+  if (/\bGB10\b/i.test(n)) return { rtx: undefined };
   if (/\bRTX\b/i.test(n)) return { rtx: true, ...seriesOf(n) };
   // GeForce GTX / older Quadro and Tesla cards have no RTX Video support.
   if (/\b(GTX|GT \d|Quadro (?!RTX)|Tesla [KMP]\d|TITAN (X|V|Xp))\b/i.test(n)) return { rtx: false };

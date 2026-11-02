@@ -272,7 +272,7 @@ function Body({ detail, actions, titleRef }: { detail: GpuSetupDetail; actions: 
         <div className="space-y-3 text-[13px] text-muted-foreground">
           <p>
             {plan.gpuNeed
-              ? `It runs on NVIDIA's RTX video engine, which only ${plan.gpuNeed === "nvidia-rtx-40" ? "RTX 40 series cards and newer" : "NVIDIA RTX cards"} have${plan.gpu ? `, and your ${plan.gpu} isn't one` : ""}. The other choices in this tool work on your GPU.`
+              ? `It runs on NVIDIA's RTX video engine, which only ${plan.gpuNeed === "nvidia-rtx-40" ? "RTX 40 series cards and newer" : "NVIDIA RTX cards"} have${plan.gpu ? `, and your ${plan.gpu} isn't one` : ""}. Pick another choice in this tool for this clip.`
               : "This one needs its own ComfyUI, so it can't run next to your other add-ons."}
           </p>
           <Button variant="secondary" className="h-11 sm:h-9" onClick={actions.close}>

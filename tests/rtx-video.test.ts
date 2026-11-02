@@ -16,7 +16,7 @@ delete process.env.FUOBE_PASSWORD;
 
 const RTX = await import("@/lib/catalog/rtx-video");
 const { readCard, cardFits, offerOn, GPU_NEED_TEXT } = await import("@/lib/gpu/rtx");
-const { badgeOf, stateLine, toolReadiness, workflowReadiness } = await import("@/lib/gpu/readiness");
+const { badgeOf, cardLabel, stateLine, toolReadiness, workflowReadiness } = await import("@/lib/gpu/readiness");
 const { parseIndex } = await import("@/lib/gpu/requirements");
 const { emptyInventory } = await import("@/lib/gpu/gather");
 const { parseArgv } = await import("@/lib/gpu/argv");
@@ -32,6 +32,7 @@ const studios = await import("@/lib/studios");
 const { NODE_PACKS, licenceInfo, workflowLicence } = await import("@/lib/licences");
 const { prepareWorkflow, getWorkflow, promptRefusal } = await import("@/server/providers/comfyui");
 const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
+const { runAsTenant } = await import("@/server/tenant");
 
 const ROOT = path.resolve(__dirname, "..");
 const read = (f: string) => JSON.parse(fs.readFileSync(path.join(ROOT, f), "utf8"));
@@ -119,7 +120,8 @@ describe("the graphs against the pack's node definitions", () => {
   it("the installer adds the pack only on an NVIDIA RTX host, at the pinned commit with the runtime", () => {
     const sh = fs.readFileSync(path.join(ROOT, "scripts/comfy/install-comfyui.sh"), "utf8");
     expect(sh).toContain('RTX_VIDEO_REF="${RTX_VIDEO_REF:-38d790ded00650681fa3645362efe28c8560cf40}"');
-    expect(sh).toMatch(/nvidia-smi --query-gpu=name --format=csv,noheader .*grep -i -m1 -E 'RTX\|GB10'/);
+    expect(sh).toMatch(/nvidia-smi --query-gpu=name --format=csv,noheader .*grep -i -m1 -E 'RTX'/);
+    expect(sh).toContain('[ "$(uname -m)" = "x86_64" ] || rtx_card=""');
     expect(sh).toContain('"nvidia-vfx==0.2.0.0"');
     expect(sh).toContain('"${RTX_VIDEO:-auto}" = "auto" ] && [ -n "$rtx_card" ]');
   });
@@ -245,7 +247,7 @@ describe("the card check", () => {
     expect(readCard("NVIDIA RTX 6000 Ada Generation")).toEqual({ rtx: true, series: 40 });
     expect(readCard("NVIDIA RTX PRO 6000 Blackwell Workstation Edition")).toEqual({ rtx: true, series: 50 });
     expect(readCard("Quadro RTX 8000")).toEqual({ rtx: true, series: 20 });
-    expect(readCard("NVIDIA GB10")).toEqual({ rtx: true, series: 50 });
+    expect(readCard("NVIDIA GB10")).toEqual({ rtx: undefined });
     expect(readCard("NVIDIA GeForce GTX 1080 Ti").rtx).toBe(false);
     expect(readCard("cuda:0 AMD Radeon RX 7900 XTX : native").rtx).toBe(false);
     expect(readCard("mps", "mps").rtx).toBe(false);
@@ -387,5 +389,21 @@ describe("where the choices show up", () => {
     const body = { error: { type: "missing_node_type", message: "Node 'x' not found" } };
     const { message } = promptRefusal(body, 400, getWorkflow(RTX.RTX_UPSCALE_WORKFLOW).manifest, []);
     expect(message).toBe(RTX.RTX_MISSING.owner);
+    // An account's run on this install's GPUs (a hosted run) gets the visitor's words, never the setup script's name.
+    const pooled = runAsTenant({ kind: "account", id: "acct-rtx" }, () => promptRefusal(body, 400, getWorkflow(RTX.RTX_UPSCALE_WORKFLOW).manifest, []));
+    expect(pooled.message).toBe(RTX.RTX_MISSING.visitor);
+    expect(pooled.message).not.toMatch(/install-comfyui|RTX_VIDEO|scripts\//);
+  });
+
+  it("the guided fix names a graphics card only when it is one (never 'your cpu' or 'your mps')", () => {
+    expect(cardLabel({ name: "cpu", type: "cpu" })).toBeUndefined();
+    expect(cardLabel({ name: "mps", type: "mps" })).toBeUndefined();
+    expect(cardLabel({ name: "cuda:0", type: "cuda" })).toBeUndefined();
+    expect(cardLabel(undefined)).toBeUndefined();
+    expect(cardLabel({ name: "cuda:0 NVIDIA GeForce GTX 1080 Ti : cudaMallocAsync", type: "cuda" })).toBe("NVIDIA GeForce GTX 1080 Ti");
+    const fix = fs.readFileSync(path.join(ROOT, "src/components/gpu/guided-fix.tsx"), "utf8");
+    expect(fix).not.toContain("The other choices in this tool work on your GPU");
+    // The arrow keys skip a choice that is switched off (Quick · RTX on a card that can't run it).
+    expect(fs.readFileSync(path.join(ROOT, "src/components/studio/radio-keys.ts"), "utf8")).toContain(':not([aria-disabled="true"])');
   });
 });
