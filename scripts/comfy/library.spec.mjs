@@ -474,6 +474,10 @@ const H3_NOTES_SOL =
   'Fast decode (vae = minimax_h3_sol_vae_int8_convrot, 1.99 GB, optional): Sol-H3-VAE, a 24-layer whole-clip decoder distilled from the H3 VAE ' +
   '(its card: 12.5 s -> 5.0 s for a 5 s 768p clip on an RTX 5090, 45.4 dB PSNR against the stock decoder); the core VAELoader reads it from ComfyUI master ' +
   '0df1646a (2026-10-28, #17411) on, and its memory grows with the clip (about 24 GiB at 720p for 5 s, the card).';
+// Sol-H3-VAE's licence as recorded (the full graphs carry it as an optional file): its model page has no licence tag.
+const H3_LICENSE_SOL =
+  ' · Sol-H3-VAE (Efficient-Large-Model; the optional fast decoder): licence unconfirmed, no licence tag on its model page; its card says code Apache-2.0 ' +
+  'and weights under the MiniMax H3 Community License';
 // The FastH3 tiers (nm10-h3-any-gpu): FastVideo's distills carry the MiniMax H3 Community License (their cards).
 const H3_LICENSE_FASTH3 = `${H3_LICENSE} · FastH3 V2 and FastH3 Trim (FastVideo): MiniMax H3 Community License`;
 const H3_NOTES_FASTH3_FILES =
@@ -1581,7 +1585,7 @@ export const SPEC = [
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
     optionalModels: [H3_SOL_VAE],
-    license: H3_LICENSE_FAST,
+    license: `${H3_LICENSE_FAST}${H3_LICENSE_SOL}`,
     notes:
       'Text to video with sound: MiniMaxH3ImageToVideo with no frames given, the fl2va pruned int8 model with the turbo v4 LoRA at 1.0 (MiniMaxH3TurboLoRA, ' +
       'MiniMaxH3TurboSampler), BasicScheduler simple 8 steps, H3SLAAttention (sparsity 0.85, block 64, int8 QK; needs Triton) and H3AdaLNLoRAFix (port), CFG 1. ' +
@@ -1605,7 +1609,7 @@ export const SPEC = [
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
     optionalModels: [H3_SOL_VAE],
-    license: H3_LICENSE_FAST,
+    license: `${H3_LICENSE_FAST}${H3_LICENSE_SOL}`,
     notes:
       'Image to video with sound: image = the first frame (MiniMaxH3ImageToVideo first_frame), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, ' +
       `8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON} ${H3_NOTES_TIME}`,
@@ -1628,7 +1632,7 @@ export const SPEC = [
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
     optionalModels: [H3_SOL_VAE],
-    license: H3_LICENSE_FAST,
+    license: `${H3_LICENSE_FAST}${H3_LICENSE_SOL}`,
     notes:
       'Start and end frame to video with sound: image = the first frame, endImage = the last (cover-cropped to the canvas), the fl2va pruned int8 model with ' +
       `the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON} ${H3_NOTES_TIME}`,
@@ -1650,7 +1654,7 @@ export const SPEC = [
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
     optionalModels: [H3_SOL_VAE],
-    license: H3_LICENSE,
+    license: `${H3_LICENSE}${H3_LICENSE_SOL}`,
     notes:
       'Text to video with sound, the sharper setting: the fl2va pruned int8 model without the turbo LoRA, BasicScheduler simple 20 steps, KSamplerSelect res_multistep, ' +
       `CFG 1; core nodes only. About 2.3 times as long as minimax-h3-t2v. ${H3_NOTES_COMMON}`,
@@ -1672,7 +1676,7 @@ export const SPEC = [
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
     optionalModels: [H3_SOL_VAE],
-    license: H3_LICENSE,
+    license: `${H3_LICENSE}${H3_LICENSE_SOL}`,
     notes:
       'Image to video with sound, the sharper setting: image = the first frame, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; ' +
       `core nodes only. About 2.3 times as long as minimax-h3-i2v. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON}`,
@@ -1694,7 +1698,7 @@ export const SPEC = [
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
     optionalModels: [H3_SOL_VAE],
-    license: H3_LICENSE,
+    license: `${H3_LICENSE}${H3_LICENSE_SOL}`,
     notes:
       'Start and end frame to video with sound, the sharper setting: image = the first frame, endImage = the last, the fl2va pruned int8 model without the turbo LoRA, ' +
       `20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-flf2v. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON}`,

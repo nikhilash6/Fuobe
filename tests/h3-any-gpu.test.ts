@@ -324,6 +324,14 @@ describe("Models & licences", () => {
     expect(T.H3_TIER_MODEL).toEqual({ fast: "oss-minimax-h3-fast", trim: "oss-minimax-h3-trim" });
   });
 
+  it("records Sol-H3-VAE's licence as unconfirmed on the full model's row", () => {
+    const full = modelLicence(getModel("oss-minimax-h3")!).licence;
+    expect(full.class).toBe("regions");
+    expect(full.note).toMatch(/Sol-H3-VAE \(Efficient-Large-Model; the optional fast decoder\): licence unconfirmed/);
+    for (const id of ["minimax-h3-t2v", "minimax-h3-i2v-hq"]) expect(entry(id).license, id).toMatch(/Sol-H3-VAE.*licence unconfirmed/);
+    expect(entry("minimax-h3-fast-t2v").license).not.toMatch(/Sol-H3-VAE/);
+  });
+
   it("holds Fast decode back until a ComfyUI with Sol's loader validates it, and keeps it off by default when offered", () => {
     const controls = getModel("oss-minimax-h3")!.options.controls!;
     expect(T.H3_FAST_DECODE_OFFERED).toBe(false);
