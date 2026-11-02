@@ -117,7 +117,9 @@ export function TurnaroundButton({
   const [run, setRun] = useState<Run | null>(null);
   const state = useRunState(run, runFeatures(props));
   const text = label ?? (props.flyAround ? "Fly around this character" : "Turnaround video");
-  const status = !run ? undefined : state.video ? "ready" : state.failed ? "stopped" : `${state.done} of ${state.total}`;
+  // A still set has no film: it is ready once every picture is drawn.
+  const ready = !!state.video || (!!run && state.total > 0 && state.done === state.total);
+  const status = !run ? undefined : ready ? "ready" : state.failed ? "stopped" : `${state.done} of ${state.total}`;
   return (
     <>
       <Button
@@ -129,7 +131,7 @@ export function TurnaroundButton({
         onClick={() => setOpen(true)}
         aria-label={compact ? `${text}${status ? ` (${status})` : ""}` : undefined}
       >
-        {run && !state.video && !state.failed ? <Loader2 className="animate-spin" /> : <Rotate3d />}
+        {run && !ready && !state.failed ? <Loader2 className="animate-spin" /> : <Rotate3d />}
         <span className={cn(compact && "hidden sm:inline")}>{text}</span>
         {status && <span className={cn("font-mono text-[11px] text-muted-foreground", compact && "hidden sm:inline")}>· {status}</span>}
       </Button>
@@ -461,7 +463,7 @@ function RunView({ heading, state, elementId, onAgain }: { heading: string; stat
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="font-heading text-[24px] font-normal">{heading}</DialogTitle>
+        <DialogTitle className="font-heading text-[24px] font-normal">{pictures.length ? "Turnaround stills" : heading}</DialogTitle>
         <DialogDescription>{pictures.length ? "Your views are ready." : video ? "Your turnaround is ready." : failed ? "A step didn't finish." : "Making it now: you can close this, it carries on."}</DialogDescription>
       </DialogHeader>
       {pictures.length > 0 ? (
