@@ -52,6 +52,8 @@ import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
 import { dbsChannelsFor, dbsModelFor, dbsSurroundBed, installedDbs, surroundSource, type DbsModel } from "@/lib/av/split";
 import { installedReuse, NO_REUSE_PACK, rateFor, reuseFileFor, STRENGTH_DB, type ReuseModel } from "@/lib/av/clean-voice";
 import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins";
+import { expandInbetweenWorkflow, type InbetweenPass } from "@/lib/av/inbetween-graph";
+import { gapPrompt, requestTiming, type InbetweenTiming } from "@/lib/inbetween";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
 import { exportValues, framesPerPass, hdrColorSpace, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
 import { guessKind } from "@/lib/catalog/payload";
@@ -1606,6 +1608,22 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   const keepRole: string | undefined = ctx.op === "bg-remove-video" ? input.matteOutput : undefined;
 
   if (b.filenamePrefix) values.filenamePrefix = `fuobe/${ctx.generationId}`;
+  // Keyframe animation: every gap's timing and words (src/lib/inbetween.ts); the graph is rewritten for the keyframes below.
+  let inbetween: InbetweenPass[] | null = null;
+  if (manifest.expand === "keyframes") {
+    let timing: InbetweenTiming;
+    try {
+      timing = requestTiming(extra, images.length, input.keyframeTimes, "open");
+    } catch (e) {
+      throw new ProviderError((e as Error).message);
+    }
+    const stillMouth = extra.stillMouth === true;
+    const seed = Number(values.seed);
+    inbetween = timing.gaps.map((g, i) => ({ frames: g.frames, speed: g.speed, prompt: gapPrompt(input.prompt, g, stillMouth), seed: seed + i }));
+    Object.assign(values, { fps: timing.fps, frames: timing.gaps[0].frames, prompt: inbetween[0].prompt, image: images[0], endImage: images[1] });
+    delete extra.inbetween;
+    delete extra.stillMouth;
+  }
   const cues = manifest.expand === "captions" ? captionCues(input, extra) : [];
   delete extra.cues;
   delete extra.wordsPerCaption;
@@ -1807,6 +1825,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (timeline) {
     try {
       wf = expandTimelineWorkflow(wf, input.audios?.length ? input.audios : [String(values.audio)], timeline);
+    } catch (e) {
+      throw new ProviderError((e as Error).message);
+    }
+  }
+  // Keyframe animation: one pass per gap on the shared loaders, every keyframe loaded once.
+  if (inbetween) {
+    try {
+      wf = expandInbetweenWorkflow(wf, images, inbetween);
     } catch (e) {
       throw new ProviderError((e as Error).message);
     }

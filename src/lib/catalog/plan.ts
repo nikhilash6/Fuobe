@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { billedClipSeconds, editClipsProblem, insertRangeProblem, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
+import { requestTiming } from "@/lib/inbetween";
 import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { qmaRunPrompt } from "@/lib/qma";
@@ -715,6 +716,11 @@ function checkVideoToolOptions(model: ModelDef, op: "bg-remove-video" | "depth-v
  * chain (one start/end-frame clip per pair) also needs every gap to be a clip its model can make.
  */
 function checkKeyframes(model: ModelDef, n: number, params: GenParams) {
+  // Keyframe animation: the film is as long as its gaps (params.extra.inbetween, else made from the times), each gap one pass.
+  if (model.options.inbetween) {
+    requestTiming(params.extra, n, params.keyframeTimes, model.engine);
+    return;
+  }
   const chain = keyframeChain(model);
   const max = chain ? MAX_KEYFRAMES : model.options.maxImages;
   if (max && n > max) throw new Error(`${model.name} takes up to ${max} keyframes`);

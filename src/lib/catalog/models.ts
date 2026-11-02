@@ -59,6 +59,8 @@ const RESTORE_LORA = (() => {
 })();
 /** Fuobe Try-On's LoRA (research adapterLoras): xocialize's try-on LoRA for FLUX.2 [klein] 4B, Apache-2.0. */
 const TRYON_LORA = loraEntry("tryon-klein-4b");
+/** Fuobe Animation's LoRA: bilibili's AniSora 3.2 on Wan 2.2's high-noise expert (Apache-2.0; Kijai's rank-64 extraction). */
+const ANISORA_LORA = loraEntry("anisora-3-2-i2v-high");
 /** akhaliq's Next-Scene LoRA for Qwen-Image 2.1: the 2.1 next-scene graph loads it, and its switch in Models & licences holds the model. */
 const NEXT_SCENE_21_LORA = loraEntry("qwen21-next-scene");
 /** gribbliest's QMA camera-angles LoRA for Qwen-Image 2.1: the QMA graph loads it, and its switch in Models & licences holds the model. */
@@ -2272,6 +2274,37 @@ const originals: ModelDef[] = [
     }),
     // Sound in the cloud only (fal's generate_audio): the open LTX-2.3 graphs decode no audio, so no toggle there.
     engineOptions: { open: { audio: false } },
+  },
+  // Fuobe Animation (package inbetweening): keyframe in-betweening. On your GPU one graph makes every gap between 2-10
+  // keyframes on one set of Wan 2.2 loaders (AniSora 3.2 high, lightx2v 4-step low), keeps every Nth frame per gap and plays
+  // the film at 24 or 16 fps (src/lib/av/inbetween-graph.ts); in the cloud one hosted Wan 2.2 clip per gap with AniSora on
+  // the high-noise expert, every frame at 16 fps, joined (createKeyframeFilm). Timing: src/lib/inbetween.ts.
+  {
+    ...original({
+      id: "fuobe-animation",
+      open: [comfy("keyframes", "wan22-inbetween-anisora", "every gap on one set of loaders: AniSora 3.2 + lightx2v 4 steps, every Nth frame, one video")],
+      tagline: "Keyframes in, the in-betweens drawn, one finished animation · Wan 2.2 + AniSora free on your GPU (24 GB), or hosted on fal",
+      options: {
+        inbetween: true,
+        aspectRatios: ["auto", ...VID_AR],
+        resolutions: ["480p", "720p"],
+        seed: true,
+        negativePrompt: true,
+        maxImages: 10,
+        promptOptional: true,
+        ...(ANISORA_LORA && { loras: [loraRef(ANISORA_LORA)] }),
+      },
+    }),
+    // One clip per gap, joined, in the cloud: a chain like the open Frames film's (src/server/chains.ts createKeyframeFilm).
+    routes: [
+      comfy("keyframes", "wan22-inbetween-anisora", "every gap on one set of loaders: AniSora 3.2 + lightx2v 4 steps, every Nth frame, one video"),
+      ...(ORIGINAL_HALVES.get("fuobe-animation")?.routes ?? []),
+      { op: "keyframes", provider: "fal", endpoint: "fal-ai/wan/v2.2-a14b/image-to-video", chained: true, note: "one hosted clip per gap with AniSora, joined" },
+    ],
+    engineDefaults: { open: { resolution: "720p" } },
+    // The GPU graph needs two keyframes; in the cloud each gap's clip runs on its own (a start and an end frame).
+    engineOptions: { open: { requires: { images: 2, msg: "Add at least two keyframes: the in-betweens go between them" } } },
+    engineNote: "In the cloud every frame is kept and the animation plays at 16 fps; speeds ×2–×4 and 24 fps playback run on your GPU",
   },
   // Fuobe Cinema (O6): Cinema Studio 4.0's Original (src/lib/catalog/cinema.ts compiles the Director into the prompt and
   // turns a camera move into a camera LoRA, a Fun Camera pose or LTX-2.3's camera_lora). On the user's GPU it is Wan 2.2

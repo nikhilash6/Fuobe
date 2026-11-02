@@ -150,7 +150,8 @@ describe("round-4 cloud models", () => {
     expect(ids("model3d", ["splat"])).toEqual(["triposplat"]);
     expect(ids("model3d", ["text-to-3d"])).toEqual(["tripo-h3-1-text"]);
     expect(ids("model3d", ["rig-3d"])).toEqual(["meshy-rigging"]);
-    expect(ids("video", ["keyframes"])).toEqual(["flux-3-max"]);
+    // Fuobe Animation (keyframe in-betweening) makes its cloud film from one hosted clip per gap.
+    expect(ids("video", ["keyframes"])).toEqual(["fuobe-animation", "flux-3-max"]);
   });
 
   it("runs the Grok models on fal alone, and Genjutsu Lite as the Original's Lite tier", () => {

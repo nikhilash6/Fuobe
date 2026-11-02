@@ -3753,6 +3753,154 @@
       "notes": "Uses the Wan 2.2 I2V high/low experts. High->low switch at step 10 (end_at_step of node 84 / start_at_step of node 87, not a binding). Start and end images should share the output aspect ratio."
     },
     {
+      "id": "wan22-inbetween-anisora",
+      "title": "Keyframe animation: Wan 2.2 14B first/last-frame in-betweens with AniSora 3.2, every Nth frame per gap, one video",
+      "capability": "keyframes",
+      "file": "wan22-inbetween-anisora.json",
+      "source": "hand-built (scripts/comfy/hand-built/wan22-inbetween-anisora.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "p1",
+            "input": "text"
+          }
+        ],
+        "negativePrompt": [
+          {
+            "node": "9",
+            "input": "text"
+          }
+        ],
+        "image": [
+          {
+            "node": "k1",
+            "input": "image"
+          }
+        ],
+        "endImage": [
+          {
+            "node": "k2",
+            "input": "image"
+          }
+        ],
+        "width": [
+          {
+            "node": "f1",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "f1",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "f1",
+            "input": "length"
+          }
+        ],
+        "fps": [
+          {
+            "node": "video",
+            "input": "fps"
+          }
+        ],
+        "seed": [
+          {
+            "node": "h1",
+            "input": "noise_seed"
+          }
+        ],
+        "shift": [
+          {
+            "node": "3",
+            "input": "shift"
+          },
+          {
+            "node": "6",
+            "input": "shift"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "save",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "save",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1280,
+        "height": 720,
+        "frames": 33,
+        "fps": 24,
+        "shift": 5,
+        "frameStep": 4
+      },
+      "limits": {
+        "maxWidth": 1280,
+        "maxHeight": 1280,
+        "maxFrames": 81,
+        "dimensionMultiple": 16
+      },
+      "models": [
+        {
+          "file": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+          "sizeGb": 14.29
+        },
+        {
+          "file": "Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/AniSora/Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors",
+          "sizeGb": 0.63
+        },
+        {
+          "file": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+          "sizeGb": 14.29
+        },
+        {
+          "file": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+          "sizeGb": 1.23
+        },
+        {
+          "file": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "sizeGb": 6.74
+        },
+        {
+          "file": "wan_2.1_vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sizeGb": 0.25
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-VideoHelperSuite",
+          "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+        }
+      ],
+      "vramGb": 24,
+      "license": "Apache-2.0 (Wan 2.2 I2V A14B, lightx2v 4-step LoRA, bilibili Index-AniSora V3.2; Kijai's AniSora extraction states no licence of its own)",
+      "validated": true,
+      "notes": "One Wan 2.2 FLF2V pass per pair of neighbouring keyframes, all sharing one set of loaders: the high-noise expert with AniSora 3.2 (strength 1) and the low-noise expert with the lightx2v 4-step LoRA (strength 1), ModelSamplingSD3 shift 5 on both, KSamplerAdvanced 4 steps at CFG 1, euler / simple, high 0-2 with leftover noise, low 2-end; umt5 fp8, Wan 2.1 VAE, Wan's standard negative words. Each pass has its own length (4n + 1, 17-81 frames), words and seed. VHS_SelectEveryNthImage keeps every Nth frame (1-4) counted back from the next keyframe (skip_first_images = ((length - 2) mod N) + 1), so each pose is on screen and no joint shows a frame twice; keyframe 1 (ImageFromBatch of pass 1) goes in front; BatchImagesNode joins them in order and CreateVideo plays them at 24 fps (snappier, the passes are made at 16 fps) or 16 fps (true time). About 24 GB of VRAM at 720p; RAM for the decoded frames grows with the total length.",
+      "expand": "keyframes"
+    },
+    {
       "id": "wan22-fun-camera-14b",
       "title": "Wan 2.2 14B Fun Camera Control (image to video)",
       "capability": "camera-motion",

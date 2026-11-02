@@ -597,6 +597,11 @@ export interface ModelRoute {
 export type Badge = "new" | "top" | "fast" | "audio" | "4k" | "hd" | "pro" | "open" | "uncensored" | "beta" | "30s";
 
 export interface ModelOptions {
+  /**
+   * Keyframe animation (Fuobe Animation): its keyframes run with per-gap timing (params.extra.inbetween: frames, every Nth
+   * frame, words; the playback rate), src/lib/inbetween.ts. The film is as long as its gaps, not params.duration.
+   */
+  inbetween?: true;
   aspectRatios?: string[];
   resolutions?: string[];
   durations?: number[];
