@@ -18,6 +18,9 @@ import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
+import { ExactOrbitControls } from "@/components/exact-orbit-controls";
+import { useFlyAround } from "@/components/fly-around-run";
+import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
@@ -344,6 +347,12 @@ export function Composer({ docked }: { docked: boolean }) {
   const takesLook = !!model?.options.looks;
   const preset: Preset | undefined = draft.presetId && !takesLook ? catalog.getPreset(draft.presetId) : config.preset;
   const lockedModel = preset?.type === "app";
+  // Fuobe DoP's orbit moves (N7-7): the Exact switch films the orbit by its numbers through /api/fly-around.
+  const exactId = preset?.type === "motion" && takesExact(preset.id) ? preset.id : undefined;
+  const [exactBy, setExactBy] = useState<{ id: string; orbit: ExactOrbit } | null>(null);
+  const exact = exactId && exactBy?.id === exactId ? exactBy.orbit : null;
+  const exactImage = draft.slots.image?.ref;
+  const fly = useFlyAround(exact ? { engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature } : null);
   const presetLoading = !!draft.presetId && !takesLook && !preset && !catalog.complete;
   // The models the viewer's catalog has (the studio's slice, or the full catalog once it's loaded), and the ones this
   // viewer can run now: offered in Settings → Models & licences, and a key for its provider when it's an account's paid run.
@@ -709,6 +718,15 @@ export function Composer({ docked }: { docked: boolean }) {
   // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here).
   const submit = (skip?: unknown) => {
     const skipGpu = skip === true;
+    if (exact) {
+      // An exact orbit: the still filmed along the orbit's numbers (Fly around), priced in its panel.
+      const stop = !exactImage ? "Add a start frame to film an exact orbit" : fly.preview.data?.blocker;
+      if (stop) return void toast(stop, { id: "composer-blocker" });
+      if (fly.run.isPending) return;
+      toast.dismiss("composer-blocker");
+      fly.run.mutate({ engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature });
+      return;
+    }
     if (keyToAdd && model && !create.isPending) return openAddKey(keyToAdd, model.id);
     if (!blocker && gpuSetup && !skipGpu && !create.isPending) return openGpuFix();
     if (blocker || create.isPending || signature.lock.isPending) {
@@ -1460,6 +1478,16 @@ export function Composer({ docked }: { docked: boolean }) {
           />
           <span className="contents max-sm:hidden">{styleChips}</span>
         </div>
+        {exactId && (
+          <ExactOrbitControls
+            className="mx-1 mb-1.5"
+            engine={engine}
+            value={exact}
+            defaults={exactDefaults(exactId)}
+            onChange={(orbit) => setExactBy(orbit ? { id: exactId, orbit } : null)}
+            footer={exact ? <span>{fly.preview.data?.blocker && exactImage ? fly.preview.data.blocker : fly.price}</span> : undefined}
+          />
+        )}
         {hostedHere && viewerInfo?.gpu.connected && (
           <button
             type="button"

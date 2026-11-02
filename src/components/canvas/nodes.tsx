@@ -74,6 +74,7 @@ import { offered } from "@/lib/model-access";
 import { dualEngine, onEngine } from "@/lib/catalog/engines";
 import {
   CANVAS_TEXT_MAX,
+  cameraPathOf,
   CONCAT_LIMITS,
   CONCAT_MODELS,
   CONCAT_RATIOS,
@@ -118,6 +119,9 @@ import { keyCombo } from "@/lib/keys";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
 import { BOARD_NODE_TYPES, type BoardType } from "./board";
+import { ExactOrbitControls } from "@/components/exact-orbit-controls";
+import { PATH_PRESETS } from "@/lib/camera-path";
+import { exactDefaults } from "@/lib/exact-orbit";
 import { NodeIcon, PORT_COLOR, useEditorActions, useEditorGlobals, useEditorSelector, useNodeResults, useNodeView, type EditorSnapshot, type NodeResults } from "./canvas-context";
 
 /** A node on the board: a graph node, or a group, comment pin or drawing (./board.tsx). */
@@ -1183,6 +1187,46 @@ const PromptNode = memo(function PromptNode({ id, type, data, selected }: NodePr
   );
 }, sameNodeProps);
 
+/** "Exact orbit" in the Camera path node's move list: the orbit set by its numbers. */
+const EXACT_PICK = "exact";
+
+/** Camera path (N7-7): a preset move, or an exact orbit by its numbers, for Fly around nodes to follow. */
+const CameraPathNode = memo(function CameraPathNode({ id, type, data, selected }: NodeProps<FlowNode>) {
+  const actions = useEditorActions();
+  const { readOnly } = useEditorGlobals();
+  const pick = data.orbit ? EXACT_PICK : (data.pathPreset ?? "orbit_360");
+  const { keys, label } = cameraPathOf(data.orbit ? { data } : { data: { pathPreset: pick } });
+  return (
+    <NodeShell id={id} type={type as CanvasNodeType} data={data} selected={!!selected} out="path" width={300}>
+      <div className={cn("grid gap-2 p-3", NO_DRAG)}>
+        <Select
+          value={pick}
+          disabled={readOnly}
+          onValueChange={(v) => actions.update(id, v === EXACT_PICK ? { orbit: data.orbit ?? exactDefaults("motion-360-orbit"), pathPreset: undefined, keys: undefined } : { pathPreset: v, orbit: undefined, keys: undefined })}
+        >
+          <SelectTrigger size="sm" className="w-full text-[13px]" aria-label={`Move of ${data.label || "Camera path"}`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PATH_PRESETS.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+            <SelectItem value={EXACT_PICK}>Exact orbit…</SelectItem>
+          </SelectContent>
+        </Select>
+        {data.orbit ? (
+          <ExactOrbitControls compact value={data.orbit} defaults={exactDefaults("motion-360-orbit")} onChange={(orbit) => actions.update(id, orbit ? { orbit } : { orbit: undefined, pathPreset: "orbit_360" })} className="border-0 bg-muted/50 p-2.5" />
+        ) : (
+          <p className="text-[12px] text-muted-foreground">{PATH_PRESETS.find((p) => p.id === pick)?.description ?? label}</p>
+        )}
+        <p className="text-[11.5px] text-subtle-foreground">{keys.length} keyframes</p>
+      </div>
+    </NodeShell>
+  );
+}, sameNodeProps);
+
 const KIND_OF: Partial<Record<CanvasNodeType, "image" | "video" | "audio">> = { "image-input": "image", "video-input": "video", "audio-input": "audio" };
 
 function LibraryGrid({ kind, onPick }: { kind: MediaKind; onPick: (url: string, name?: string) => void }) {
@@ -1772,6 +1816,8 @@ export const NODE_TYPES = {
   translate: GeneratorNode,
   concat: GeneratorNode,
   restore: GeneratorNode,
+  "fly-around": GeneratorNode,
+  "camera-path": CameraPathNode,
   table: TableNode,
   output: OutputNode,
   note: NoteNode,

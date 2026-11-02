@@ -1335,7 +1335,8 @@ async function advanceDependents(): Promise<void> {
       // depth step hands on a demo render.
       for (let i = 0; i < slots.length; i++) {
         if (slots[i].render !== "path") continue;
-        const photo = request.inputs?.images?.[0];
+        // The still, once the other slots are in (it can come from an earlier step too: a Canvas node's picture).
+        const photo = withChainInputs({ ...request, chain: slots }, values as string[]).inputs?.images?.[0];
         const keys = request.params?.cameraPath ?? [];
         if (deps[i]!.provider === "mock" || !photo) values[i] = placeholderFor(slots[i]);
         else {

@@ -199,3 +199,152 @@ describe("/api/fly-around", () => {
     }
   });
 });
+
+describe("Cinema's Director: an orbit move with the Exact switch", () => {
+  const still = "/api/files/uploads/still.png";
+  const base = (engine: "cloud" | "open", over: Record<string, unknown> = {}) => ({ engine, mode: "video" as const, action: "generate" as const, prompt: "She smiles", settings: {}, moves: ["drone-orbit", "slow-zoom-in"], images: [still], ...over });
+
+  it("films the numbers on both engines, the other moves stay words", async () => {
+    const { planCinema } = await import("@/lib/catalog/cinema");
+    const exactOrbit = { degrees: 180, direction: "cw" as const, tilt: 10, pulse: 0 };
+    const cloud = planCinema(base("cloud", { exact: exactOrbit }), { cloudAllowed: true });
+    expect(cloud.blocker).toBeUndefined();
+    expect(cloud.steps.map((s) => s.request.modelId)).toEqual(["minimax-h3-max-camera"]);
+    expect(cloud.steps[0].request.params?.cameraPath).toEqual(exact.exactOrbitKeys(exactOrbit));
+    expect(cloud.steps[0].request.prompt).toMatch(/She smiles/);
+    expect(cloud.notes[0]).toBe("Drone Orbit follows your numbers exactly: 180° clockwise · tilt 10°");
+    const open = planCinema(base("open", { exact: exactOrbit }), { cloudAllowed: true });
+    expect(open.steps.map((s) => [s.key, s.request.modelId, s.after])).toEqual([
+      ["depth", "oss-scene-moge", undefined],
+      ["main", "oss-uni3c-path", ["depth"]],
+    ]);
+    expect(open.costUsd).toBe(0);
+  });
+
+  it("keeps the LoRA's or the prompt's orbit with the switch off, and asks for a start frame with it on", async () => {
+    const { planCinema } = await import("@/lib/catalog/cinema");
+    const loose = planCinema(base("cloud"), { cloudAllowed: true });
+    expect(loose.steps[0].request.modelId).not.toBe("minimax-h3-max-camera");
+    expect(planCinema(base("cloud", { exact: { degrees: 90, direction: "ccw" }, images: [] }), { cloudAllowed: true }).blocker).toBe("Add a start frame to film an exact orbit");
+    // A move that isn't an orbit ignores the numbers.
+    expect(planCinema(base("cloud", { moves: ["dolly-in"], exact: { degrees: 90, direction: "ccw" } }), { cloudAllowed: true }).steps[0].request.modelId).not.toBe("minimax-h3-max-camera");
+  });
+});
+
+describe("Image to 3D: Film it photoreal", () => {
+  it("films the photo round the model: the model's render on your GPU, H3 Max's keyframes in the cloud", async () => {
+    const m3d = await import("@/lib/av/model3d");
+    const open = m3d.photorealBody({ photo: "/api/files/uploads/mug.png" }, "open", "/api/files/uploads/orbit.webm")!;
+    expect(open).toMatchObject({ engine: "open", image: "/api/files/uploads/mug.png", render: "/api/files/uploads/orbit.webm", feature: m3d.MODEL3D_FILM_FEATURE, orbit: m3d.PHOTOREAL_ORBIT });
+    const plan = fly.planFlyAround(open);
+    expect(plan.steps.map((s) => s.request.modelId)).toEqual(["oss-uni3c-path"]);
+    const cloud = m3d.photorealBody({ photo: "/api/files/uploads/mug.png" }, "cloud", "/api/files/uploads/orbit.webm")!;
+    expect(cloud).not.toHaveProperty("render");
+    expect(fly.planFlyAround(cloud).steps[0].request.modelId).toBe("minimax-h3-max-camera");
+    expect(m3d.photorealBody({}, "cloud")).toBeNull();
+    expect(m3d.photorealBody({}, "cloud", undefined, "/api/files/outputs/drawn.png")!.image).toBe("/api/files/outputs/drawn.png");
+    // The model turns the other way to the camera: a full turn over the 81 frames, starting at the front.
+    expect(m3d.photorealAngle(0)).toBe(0);
+    expect(m3d.photorealAngle(PATH_FRAMES - 1)).toBeCloseTo(-2 * Math.PI, 5);
+  });
+});
+
+describe("Canvas: the Camera path and Fly around nodes", () => {
+  const node = (id: string, type: string, x: number, y: number, data: Record<string, unknown> = {}) => ({ id, type, position: { x, y }, data }) as never;
+  const edge = (source: string, target: string, targetHandle: string) => ({ id: `${source}>${target}:${targetHandle}`, source, sourceHandle: "out", target, targetHandle });
+
+  it("has the node types, ports and outputs", async () => {
+    const c = await import("@/lib/catalog/canvas");
+    expect(c.NODE_SPECS["camera-path"].group).toBe("Inputs");
+    expect(c.NODE_SPECS["fly-around"]).toMatchObject({ group: "Generate", ops: ["camera-path"] });
+    expect(c.isGenerator({ type: "fly-around" })).toBe(true);
+    expect(c.isGenerator({ type: "camera-path" })).toBe(false);
+    expect(c.inputPorts({ type: "fly-around", data: {} }).map((p) => [p.id, p.type, p.multiple])).toEqual([
+      ["prompt", "text", true],
+      ["images", "image", true],
+      ["path", "path", false],
+    ]);
+    const g = { nodes: [], edges: [] };
+    expect(c.outputType(g, node("p", "camera-path", 0, 0))).toBe("path");
+    expect(c.outputType(g, node("f", "fly-around", 0, 0))).toBe("video");
+    expect(c.acceptsType("preview", "path")).toBe(false);
+    expect(c.defaultModelForNode({ type: "fly-around", data: {} }, "open")?.id).toBe("oss-uni3c-path");
+    expect(c.defaultModelForNode({ type: "fly-around", data: {} }, "cloud")?.id).toBe("minimax-h3-max-camera");
+    expect(c.paletteItems().some((p) => p.id === "camera-path")).toBe(true);
+    expect(c.cameraPathOf({ data: { orbit: { degrees: 90, direction: "cw", tilt: 0, pulse: 0 } } }).keys.at(-1)!.azimuth).toBe(-90);
+  });
+
+  it("compiles a still, a view and a path into the engine's steps, a generated still chained in", async () => {
+    const c = await import("@/lib/catalog/canvas");
+    const graph = (modelId: string, still: Record<string, unknown>) => ({
+      nodes: [
+        still.type === "model" ? node("img", "model", 0, 0, { modelId: "nano-banana-pro", mediaKind: "image" }) : node("img", "image-input", 0, 0, { url: "/api/files/uploads/still.png" }),
+        node("view", "image-input", 0, 100, { url: "/api/files/uploads/back.png" }),
+        node("path", "camera-path", 0, 200, { orbit: { degrees: 180, direction: "ccw", tilt: 0, pulse: 0 } }),
+        node("fly", "fly-around", 300, 0, { modelId }),
+      ],
+      edges: [edge("img", "fly", "images"), edge("view", "fly", "images"), edge("path", "fly", "path")],
+    });
+    const cloud = c.describeNode(graph("minimax-h3-max-camera", {}) as never, graph("minimax-h3-max-camera", {}).nodes[3] as never);
+    expect(cloud.error).toBeUndefined();
+    expect(cloud.steps!.map((s) => [s.request.modelId, s.request.op])).toEqual([["minimax-h3-max", "ref2v"]]);
+    expect(cloud.steps![0].request.inputs?.images).toEqual(["/api/files/uploads/still.png", "/api/files/uploads/back.png"]);
+    const g = graph("oss-uni3c-path", { type: "model" });
+    const open = c.describeNode(g as never, g.nodes[3] as never);
+    expect(open.error).toBeUndefined();
+    expect(open.deps).toEqual(["img"]);
+    expect(open.costUsd).toBe(0);
+    const [depth, main] = open.steps!;
+    expect(depth).toMatchObject({ key: "depth", request: { modelId: "oss-scene-moge", chain: [{ slot: "images", position: "first" }] }, from: [{ node: "img" }] });
+    expect(main).toMatchObject({ key: "main", request: { modelId: "oss-uni3c-path", chain: [{ slot: "images", position: "first" }, { slot: "video", render: "path" }] }, from: [{ node: "img" }, { step: "depth" }] });
+    expect(depth.request.feature).toBe(c.CANVAS_STEP_FEATURE);
+    // Nothing on the path: said on the node.
+    const bare = { ...g, edges: g.edges.filter((e) => e.targetHandle !== "path") };
+    expect(c.describeNode(bare as never, g.nodes[3] as never).error).toBe("Connect a Camera path");
+  });
+});
+
+describe("Assist / MCP: fly_around", () => {
+  it("takes a still and an orbit's numbers or a preset, and plans the engine's steps", async () => {
+    const tools = await import("@/server/assist/studio-tools");
+    const tool = tools.STUDIO_TOOLS.find((t) => t.name === "fly_around")!;
+    expect(tool).toBeDefined();
+    expect(tools.FlyAroundToolInput.safeParse({ image: "/api/files/uploads/a.png", degrees: 720 }).success).toBe(false);
+    expect(tools.FlyAroundToolInput.safeParse({ image: "/api/files/uploads/a.png", preset: "orbit_90_cw" }).success).toBe(true);
+    expect(tools.FlyAroundToolInput.safeParse({ image: "/api/files/uploads/a.png", preset: "spin" }).success).toBe(false);
+    const ctx = { engine: "open" } as never;
+    const open = tools.fallbackSteps.flyAround({ image: "/api/files/uploads/a.png", degrees: 90, direction: "cw" }, ctx);
+    expect(open.map((s) => [s.key, s.request.modelId, s.after])).toEqual([
+      ["depth", "oss-scene-moge", undefined],
+      ["main", "oss-uni3c-path", ["depth"]],
+    ]);
+    const cloud = tools.fallbackSteps.flyAround({ image: "/api/files/uploads/a.png", preset: "orbit_tilt_20" }, { engine: "cloud" } as never);
+    expect(cloud[0].request).toMatchObject({ modelId: "minimax-h3-max-camera", op: "camera-path" });
+  });
+});
+
+describe("the GPU pre-flight board", () => {
+  it("lists exact orbits on the depth and Uni3C graphs", async () => {
+    const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
+    const row = STUDIO_ROWS.find((r) => r.href === "/motions")!;
+    expect(row.label).toBe("Exact orbits and Fly around");
+    const t = studioTool(row)!;
+    expect(t.workflows).toEqual(expect.arrayContaining(["scene-mesh-moge", "wan21-i2v-uni3c-path"]));
+  });
+});
+
+describe("an account's path render reads only its own files", () => {
+  it("refuses the owner's still and depth inside an account's run, and renders the account's own", async () => {
+    const auth = await import("@/server/auth");
+    const { runAsTenant } = await import("@/server/tenant");
+    const { RefError } = await import("@/server/storage");
+    const a = auth.createAccount("fly-tenant@example.com", "long enough").id;
+    const owners = scene();
+    const keys = exact.exactOrbitKeys({ degrees: 60, direction: "ccw" });
+    await runAsTenant({ kind: "account", id: a }, async () => {
+      await expect(pathScene({ ...owners, keys })).rejects.toBeInstanceOf(RefError);
+      const mine = scene();
+      expect((await pathScene({ ...mine, keys })).count).toBe(PATH_FRAMES);
+    });
+  });
+});

@@ -43,8 +43,11 @@ export const FlyAroundSchema = z.object({
   prompt: z.string().max(1500).optional(),
   duration: z.number().min(1).max(15).optional(),
   resolution: z.string().max(10).optional(),
-  /** Where the run is filed: Fuobe DoP's move, Image to 3D or Canvas (default "fly-around"). */
-  feature: z.enum(["fly-around", "motion", "model3d", "canvas", "assist"]).optional(),
+  /** Where the run is filed: the studio's feed it starts from (default "fly-around"). */
+  feature: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,39}$/)
+    .optional(),
   title: z.string().max(80).optional(),
   seed: z.number().int().min(0).max(4_294_967_295).optional(),
   requestId: z.string().max(80).optional(),

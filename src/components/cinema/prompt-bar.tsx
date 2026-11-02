@@ -70,6 +70,8 @@ import { modKey } from "@/lib/keys";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { MoveChips, MovePicker, prefetchMoves } from "./camera-moves";
+import { ExactOrbitControls } from "@/components/exact-orbit-controls";
+import { exactDefaults, takesExact } from "@/lib/exact-orbit";
 import { CameraChip, EmotionChip, FilmSetupChip, LightingChip, PaletteChip } from "./director-panel";
 import { directorPicks, draftToInput, type BarAction, type CinemaDraft, type RefItem } from "./draft";
 import { useCinemaGenerate } from "./hooks";
@@ -681,6 +683,11 @@ export function PromptBar(props: PromptBarProps) {
       </div>
 
       {video && <MoveChips moves={draft.moves} onChange={(moves) => setDraft({ moves })} />}
+      {video && action === "generate" && takesExact(draft.moves[0]) && (
+        <div className="px-2 pb-1.5">
+          <ExactOrbitControls compact engine={engine} value={draft.exact ?? null} defaults={exactDefaults(draft.moves[0])} onChange={(exact) => setDraft({ exact })} />
+        </div>
+      )}
 
       <PromptInput ref={promptRef} value={draft.prompt} onChange={onPrompt} onSubmit={() => void submit()} placeholder={placeholder} elements={elements} />
 

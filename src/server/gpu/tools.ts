@@ -1,4 +1,5 @@
 import "server-only";
+import { FLY_MODELS } from "@/lib/catalog/fly-around";
 import { DUB_STEP_MODELS } from "@/lib/av/dub";
 import { SPLIT_MODEL } from "@/lib/av/split";
 import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
@@ -185,6 +186,17 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/character-swap", label: "Character swap", group: "Video", workflows: [STUDIO_WORKFLOWS.mask, STUDIO_WORKFLOWS.segment] },
   // Cinema's 3D scene films a still along a keyframed camera path (N7-5).
   { href: "/cinema", label: "Fly path", group: "Video", steps: [{ modelId: PATH_MODELS.open, op: "camera-path" }] },
+  // Exact orbits (N7-7): Fuobe DoP's and Cinema's orbit moves by their numbers, Canvas's Fly around and Assist's fly_around:
+  // MoGe 2 measures the still's depth, the server renders the path, Uni3C films along it.
+  {
+    href: "/motions",
+    label: "Exact orbits and Fly around",
+    group: "Video",
+    steps: [
+      { modelId: FLY_MODELS.depth, op: "scene-3d" },
+      { modelId: FLY_MODELS.open, op: "camera-path" },
+    ],
+  },
   // Cinema's Blockout to film on your GPU: the first frame from the references, the depth cut into windows, each window
   // rendered by the blockout graph and handed over on its last frame, then joined. An upload without a depth pass (the
   // usual Blender render) runs the restyle graph instead, which reads the depth with Depth Anything 3. The projects list

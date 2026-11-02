@@ -10,6 +10,8 @@ import { ANGLES_2511_LORA } from "./open-tools";
 import { composeShots, estimateCost, planGeneration, routesFor } from "./plan";
 import { soulRecipe } from "./soul";
 import { planTurnaround, type TurnaroundInput } from "./turnaround";
+import { planFlyAround } from "./fly-around";
+import { exactDefaults, exactSummary, normalizeExact, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { CAST_LOOK } from "./soul-cards";
 import type { Engine, GenerationRequest, GenParams, LoraRef, ModelDef, Operation } from "./types";
 
@@ -217,6 +219,11 @@ export interface CinemaGenerateInput {
   prompt: string;
   /** # camera moves, in order. */
   moves?: string[];
+  /**
+   * The first move as an exact orbit (build plan N7-7): an orbit move (drone-orbit, arc-left, arc-right, bullet-time) with
+   * the Exact switch on follows these numbers instead of a LoRA's or the prompt's idea of an orbit.
+   */
+  exact?: Partial<ExactOrbit>;
   settings: DirectorSettings;
   brief?: string;
   /** Reference images (the first one is the start frame). @elements add theirs on the server. */
@@ -1479,7 +1486,27 @@ function clipModel(model: ModelDef, input: CinemaGenerateInput, notes: string[])
   return instead;
 }
 
+/**
+ * An exact orbit (build plan N7-7): the first move, an orbit with the Exact switch on, filmed from the start frame along
+ * the orbit's numbers as Fly around plans it (src/lib/catalog/fly-around.ts): H3 Max camera-controls on the cloud; on your
+ * GPU, MoGe 2's depth, the server's render of the path and Uni3C. The other moves and the Director's words stay words.
+ */
+function planExactVideo(input: CinemaGenerateInput): CinemaPlan | null {
+  const moves = (input.moves ?? []).filter((m) => moveBySlug(m));
+  if (!input.exact || !takesExact(moves[0])) return null;
+  const orbit = normalizeExact(input.exact, exactDefaults(moves[0]));
+  const image = input.images?.[0];
+  const compiled = compileDirector({ prompt: input.prompt, settings: input.settings, moves: moves.slice(1), brief: input.brief, mode: "video", target: "prompt" });
+  const plan = planFlyAround({ engine: input.engine, image, orbit, prompt: compiled.prompt, duration: input.duration, resolution: input.resolution, feature: "cinema" });
+  const notes = [`${moveBySlug(moves[0])!.name} follows your numbers exactly: ${exactSummary(orbit)}`, ...plan.notes];
+  if ((input.images?.length ?? 0) > 1) notes.push("An exact orbit films from the first image alone");
+  const blocker = !image ? "Add a start frame to film an exact orbit" : plan.blocker;
+  return finish(plan.model, plan.steps, notes, blocker);
+}
+
 function planVideo(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
+  const exact = planExactVideo(input);
+  if (exact) return exact;
   const notes: string[] = [];
   const engine = input.engine;
   const open = engine === "open";

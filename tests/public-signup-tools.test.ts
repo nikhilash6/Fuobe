@@ -28,6 +28,7 @@ const { encodePng } = await import("@/server/png");
 const { createElement } = await import("@/server/elements");
 const turnaround = await import("@/app/api/turnaround/route");
 const turnaroundEstimate = await import("@/app/api/turnaround/estimate/route");
+const flyAround = await import("@/app/api/fly-around/route");
 const audioTools = await import("@/app/api/audio-tools/route");
 const { STUDIO_ROWS, studioOthers, studioTool, toolFor } = await import("@/server/gpu/tools");
 const { loadIndex } = await import("@/server/gpu/index-file");
@@ -166,6 +167,35 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     const owner = auth.createSession().value;
     for (const p of ["/api/turnaround", "/api/turnaround/estimate", "/api/audio-tools", "/api/audio-tools/export?offset=0"]) expect(passed(proxy(req(p, { method: "POST", cookie: owner }))), p).toBe(true);
+  });
+});
+
+describe("Fly around (N7-7) under the sign-up rules", () => {
+  it("opens its price check to guests and accounts, and answers its run with own-gpu-tool", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    expect(access.isPriceCheck("POST", "/api/fly-around", "?preview=1")).toBe(true);
+    expect(access.isPriceCheck("POST", "/api/fly-around", "")).toBe(false);
+    const a = newAccount();
+    auth.setAccountGpu(a.id, { url: "https://gpu.example" });
+    const cookie = auth.createSession(a.id).value;
+    for (const c of [undefined, cookie]) {
+      expect(passed(proxy(req("/api/fly-around?preview=1", { method: "POST", cookie: c })))).toBe(true);
+      const r = proxy(req("/api/fly-around", { method: "POST", cookie: c }));
+      expect(r.status).toBe(403);
+      expect((await r.json()).code).toBe("own-gpu-tool");
+    }
+    expect(passed(proxy(req("/api/fly-around", { method: "POST", cookie: auth.createSession().value })))).toBe(true);
+  });
+
+  it("prices a visitor's fly-around for its own GPU, never a demo", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    const image = png("fly.png");
+    const account = auth.createSession(newAccount().id).value;
+    for (const cookie of [undefined, account]) {
+      const r = await flyAround.POST(call("/api/fly-around?preview=1", { engine: "open", image, orbit: { degrees: 90, direction: "cw" } }, cookie));
+      expect(r.status).toBe(200);
+      expect(await r.json()).toMatchObject({ engine: "open", demo: false, costUsd: 0, steps: 2 });
+    }
   });
 });
 

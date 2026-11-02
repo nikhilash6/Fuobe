@@ -1,4 +1,6 @@
 import "server-only";
+import { MAX_KEYS } from "@/lib/camera-path";
+import { CameraKeySchema, ExactOrbitSchema } from "./fly-around";
 import fs from "node:fs";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -103,6 +105,8 @@ const NODE_TYPES = [
   "translate",
   "concat",
   "table",
+  "camera-path",
+  "fly-around",
   "output",
   "note",
 ] as const satisfies readonly CanvasNodeType[];
@@ -169,6 +173,11 @@ const NodeData = z.object({
   rows: z.array(z.array(z.string().max(TABLE_LIMITS.cell)).max(TABLE_LIMITS.columns)).max(TABLE_LIMITS.rows * 2).optional(),
   // Translate (video) on the open engine: the dub it started in Translate & dub.
   dubId: z.string().max(40).optional(),
+  // Camera path (N7-7): a preset, an exact orbit or keys; Fly around: the clip's length.
+  pathPreset: z.string().max(40).optional(),
+  orbit: ExactOrbitSchema.optional(),
+  keys: z.array(CameraKeySchema).min(1).max(MAX_KEYS).optional(),
+  duration: z.number().min(1).max(15).optional(),
 });
 
 const Num = z.number().finite();

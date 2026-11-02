@@ -19,6 +19,7 @@ import { useCreateGeneration, useEngine, useGenerations, useHydrated, useLikelyV
 import {
   MAX_3D_PROMPT,
   MODEL3D_FEATURE,
+  MODEL3D_FILM_FEATURE,
   MODEL3D_MODES,
   MODELS_3D,
   RIG_MODEL,
@@ -129,7 +130,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const create = useCreateGeneration();
-  const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d"], limit: 24 });
+  const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d", MODEL3D_FILM_FEATURE], limit: 24 });
   const [mode, setMode] = useState<Model3dMode>("image");
   const router = useRouter();
   // A mode picked here goes in the URL (?mode=), so a reload or a shared link opens it again (UrlModel reads it).
@@ -373,5 +374,23 @@ function ResultCard({ g, info, cloudAllowed }: { g: Generation; info: Record<str
   const create = useCreateGeneration();
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
+  if (g.kind === "video") return <FilmCard g={g} />;
   return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} />;
+}
+
+/** A photoreal orbit filmed from a model ("Film it photoreal"): the clip, to watch and download. */
+function FilmCard({ g }: { g: Generation }) {
+  const video = g.outputs.find((o) => o.kind === "video");
+  if (!video) return null;
+  return (
+    <article className="overflow-hidden rounded-2xl border bg-card">
+      <video src={video.url} controls playsInline preload="metadata" className="aspect-[4/3] w-full bg-muted object-contain" aria-label="Photoreal orbit" />
+      <div className="flex items-center justify-between gap-2 p-3">
+        <p className="min-w-0 truncate text-[13px] font-medium">Photoreal orbit</p>
+        <a href={video.url} download="photoreal orbit.mp4" className="shrink-0 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          Download
+        </a>
+      </div>
+    </article>
+  );
 }
