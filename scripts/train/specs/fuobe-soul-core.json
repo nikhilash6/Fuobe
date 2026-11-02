@@ -31,7 +31,7 @@
       }
     },
     "aiToolkit": {
-      "arch": "zimage"
+      "arch": "zimage:turbo"
     }
   },
   "target": {
@@ -39,5 +39,5 @@
     "strength": 0.6,
     "hfRepo": "fuobe/fuobe-soul-core"
   },
-  "notes": "Replaces the AWPortrait-Z + Lenovo pair in Soul's core slot once it wins the evaluation (scripts/eval). fal trains on Z-Image base: whether a base-trained LoRA behaves the same on Z-Image Turbo (Soul's model) is unverified; compare it with the AI-Toolkit Turbo run on the first evaluation."
+  "notes": "Replaces the AWPortrait-Z + Lenovo pair in Soul's core slot once it wins the evaluation (scripts/eval). fal trains on Z-Image base: whether a base-trained LoRA behaves the same on Z-Image Turbo (Soul's model) is unverified; AI-Toolkit trains on Turbo with the training adapter, so the first evaluation compares the two routes' files on Soul."
 }

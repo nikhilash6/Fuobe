@@ -64,43 +64,60 @@ node scripts/train/kit.mjs check fuobe-cctv --dataset ~/datasets/fuobe-cctv
 ```
 
 The check fails when the log has fewer or more files than the spec allows, when an entry is incomplete, when a file is in
-the folder but not in the log (or the other way round), when a file changed after it was logged (its SHA256), or when a
-file has no caption. A job does not start while any of these fails.
+the folder but not in the log (or the other way round), when a file changed after it was logged (its SHA256), when a
+file's caption is missing, empty or without the trigger, or when the folder holds anything else (another kind of file,
+such as a `.mkv` clip or a still in a clip dataset, which the trainer would read too, or a sub-folder). A job does not
+start while any of these fails.
 
 ## 2. Make the job
 
 ```bash
-node scripts/train/kit.mjs job fuobe-cctv --dataset ~/datasets/fuobe-cctv --zip-url https://…/fuobe-cctv.zip
+node scripts/train/kit.mjs job fuobe-cctv --dataset ~/datasets/fuobe-cctv
+# upload .train/fuobe-cctv/fuobe-cctv.dataset.zip, then:
+node scripts/train/kit.mjs job fuobe-cctv --dataset ~/datasets/fuobe-cctv --zip-url https://…/fuobe-cctv.dataset.zip
 ```
 
-This writes two files to `.train/fuobe-cctv/`, which git ignores:
+This writes these files to `.train/fuobe-cctv/`, which git ignores:
 
 - `fuobe-cctv.aitk.json`: the AI-Toolkit job for your own GPU (free). Run it with `python run.py <file>` in an
   [ostris/ai-toolkit](https://github.com/ostris/ai-toolkit) checkout. Z-Image Turbo trains with ostris's training
-  adapter v2; Z-Image base and Wan 2.2 I2V 14B use AI-Toolkit's own defaults for those models (4-bit Wan with its
+  adapter v2 (every Z-Image spec trains on Turbo here); Z-Image base and Wan 2.2 I2V 14B use AI-Toolkit's own defaults for those models (4-bit Wan with its
   accuracy recovery adapter, both experts). Wan 2.2 14B needs a 24 GB card.
-- `fuobe-cctv.fal.json`: the request for the fal trainer, with only the fields that trainer's schema has
-  (`trainers.generated.ts`, from the research). Zip the same folder, upload it, and pass its URL as `--zip-url`. fal
-  bills per step. `kit.mjs list` shows the price.
+- `fuobe-cctv.dataset.zip`: exactly the checked files (the logged images or clips and their captions), for the fal
+  trainer. Upload it anywhere fal can read and pass its URL as `--zip-url`.
+- `fuobe-cctv.fal.json` (with `--zip-url`): the request for the fal trainer, with only the fields that trainer's schema
+  has (`trainers.generated.ts`, from the research), and the zip's SHA256. The kit downloads the URL first and writes
+  the request only when it is the zip it built, byte for byte. fal bills per step. `kit.mjs list` shows the price.
 
 The kit does not submit anything: that takes a GPU or a fal key, and a person deciding to spend it.
 
 Notes to check on the first run:
 - fal's `fal-ai/z-image-trainer` trains on Z-Image base. Whether a base-trained LoRA behaves the same on Z-Image Turbo
-  (the model Soul runs on) is unverified, so compare it with the AI-Toolkit Turbo run.
+  (the model Soul runs on) is unverified, so compare it with the AI-Toolkit run, which trains on Turbo.
 - fal's Wan 2.2 I2V trainer returns one file. Whether loading it on both experts works as intended is unverified.
 
 ## 3. Publish the file
 
 Trained files go to Fuobe's Hugging Face organisation (`fuobe` by default; set `--org` or `FUOBE_HF_ORG` to change it),
-one model repo per LoRA, with the public half of the data-licence log next to the file. The public half says a release
-exists but leaves out its reference.
+one model repo per LoRA, with the public half of the data-licence log next to the file. The public half keeps each
+file's hash, source, licence and date, and says a release exists, but leaves out the release reference, the proof and
+the author (receipts, contracts, call sheets, people's names). A CC0 or public-domain original keeps its public page and
+author as a credit.
 
 ```bash
-node scripts/train/kit.mjs publish fuobe-cctv --file output/fuobe-cctv/fuobe-cctv.safetensors          # dry run
-HF_TOKEN=… node scripts/train/kit.mjs publish fuobe-cctv --file … --upload --write-research            # publish
+node scripts/train/kit.mjs publish fuobe-cctv --file output/fuobe-cctv/fuobe-cctv.safetensors --route ai-toolkit   # dry run
+HF_TOKEN=… node scripts/train/kit.mjs publish fuobe-cctv --file … --route ai-toolkit --upload --write-research     # publish
 pnpm gen:catalog
 ```
+
+`--route` says which trainer made the file (`fal` or `ai-toolkit`). The model card's `base_model` is the Hugging Face
+repo that route trained on: `Tongyi-MAI/Z-Image` (fal's `z-image-trainer`), `Tongyi-MAI/Z-Image-Turbo` (fal's Turbo
+trainer, AI-Toolkit's `zimage:turbo`) or `Wan-AI/Wan2.2-I2V-A14B`.
+
+The licence is recorded, not assumed. Data that is all Fuobe's own, CC0 or public domain defaults to Apache-2.0 (the
+base models' licence), outputs may be sold and hosts may run it. With any `licensed` file in the log, say all three:
+`--licence <spdx id or name> --commercial yes|no --hosted-ok yes|no`, as the stock licence allows. Either way the
+snapshot names the data's sources and licences, and that is what Settings → Models & licences shows.
 
 A dry run uploads nothing. It prints what would be uploaded and the `trained` block for the research entry. `--upload`
 needs a write token and the `hf` command (`pip install huggingface_hub`). It uploads the file, `data-licence-log.json`

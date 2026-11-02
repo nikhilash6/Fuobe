@@ -18,7 +18,7 @@ a default that uses a non-commercial LoRA, or sends one licensed for the user's 
 printed as a licence note, never a failure.
 
 Fuobe's own LoRAs (research fuobeTrainedLoras, §6; the training kit in scripts/train/): until a trained file exists
-each one is a "planned" entry (PLANNED_LORAS) that no preset may use. Once scripts/train/publish.mjs has published the
+each one is a "planned" entry (PLANNED_LORAS) that no preset may use. Once `scripts/train/kit.mjs publish` has published the
 file and its data-licence log, the entry's `trained` block (pinned URL, SHA256, size, licence) moves it into the library.
 
 Fails (exit 1) when an entry's data is wrong:
@@ -232,7 +232,7 @@ for raw in DATA.get("fuobeTrainedLoras") or []:
     group = raw.get("group") or "look"
     trained = raw.get("trained")
     if trained:
-        # Published (scripts/train/publish.mjs): an ordinary library entry, pinned and with its licence snapshot.
+        # Published (scripts/train/kit.mjs publish): an ordinary library entry, pinned and with its licence snapshot.
         add(entry({"name": raw.get("name") or key, "base": raw["base"], **trained}, key, group, spare=key not in used))
         continue
     planned.append({

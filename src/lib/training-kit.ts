@@ -226,6 +226,17 @@ export interface DatasetFile {
   sha256: string;
 }
 
+/**
+ * The dataset folder as the kit read it: every file in it other than a caption (whatever its extension, since a
+ * trainer reads more kinds than the spec's media), each caption's text by name, and anything else in it (a folder, a
+ * link), which the check refuses.
+ */
+export interface DatasetFolder {
+  files: DatasetFile[];
+  captions: Record<string, string>;
+  other?: string[];
+}
+
 /** What is wrong with one item of a log (empty when it is complete). */
 export function itemProblems(item: DataLogItem, media?: TrainingSpec["media"]): string[] {
   const out: string[] = [];
@@ -253,9 +264,10 @@ export function itemProblems(item: DataLogItem, media?: TrainingSpec["media"]): 
 
 /**
  * What stops a job from starting: the log's own gaps, its size against the spec, and, given the dataset folder, any
- * file missing from the log, logged but not there, or changed since it was logged, and any file without a caption.
+ * file missing from the log, logged but not there, or changed since it was logged, anything in the folder that is not
+ * logged media or a caption, and any file whose caption is missing, empty or without the trigger.
  */
-export function dataLogProblems(log: DataLog, spec: Pick<TrainingSpec, "id" | "media" | "dataset">, folder?: { files: DatasetFile[]; captions: string[] }): string[] {
+export function dataLogProblems(log: DataLog, spec: Pick<TrainingSpec, "id" | "media" | "dataset"> & { trigger?: string }, folder?: DatasetFolder): string[] {
   const out: string[] = [];
   if (log.lora !== spec.id) out.push(`the log is for ${log.lora}, not ${spec.id}`);
   const n = log.items?.length ?? 0;
@@ -269,25 +281,138 @@ export function dataLogProblems(log: DataLog, spec: Pick<TrainingSpec, "id" | "m
   if (folder) {
     const logged = new Map((log.items ?? []).map((i) => [i.file, i]));
     const present = new Map(folder.files.map((f) => [f.name, f]));
+    const kind = spec.media === "image" ? "an image" : "a clip";
+    for (const name of folder.other ?? []) out.push(`${name} is a folder or a link: the dataset folder holds only logged files and their captions`);
     for (const f of folder.files) {
       const item = logged.get(f.name);
+      if (!MEDIA[spec.media].test(f.name)) {
+        // A trainer reads more than the spec's media (AI-Toolkit takes .mkv clips, and a still as a one-frame clip).
+        out.push(`${f.name} is not ${kind} the spec trains on: the dataset folder holds only logged files and their captions`);
+        continue;
+      }
       if (!item) out.push(`${f.name} is in the dataset but not in the log`);
       else if (item.sha256 !== f.sha256) out.push(`${f.name} changed since it was logged (SHA256 differs)`);
-      const stem = f.name.replace(/\.[^.]+$/, "");
-      if (!folder.captions.includes(`${stem}.txt`)) out.push(`${f.name} has no caption (${stem}.txt)`);
+      const caption = `${f.name.replace(/\.[^.]+$/, "")}.txt`;
+      const text = folder.captions[caption];
+      if (text === undefined) out.push(`${f.name} has no caption (${caption})`);
+      else if (!text.trim()) out.push(`${caption} is empty`);
+      else if (spec.trigger && !new RegExp(`\\b${spec.trigger}\\b`).test(text)) out.push(`${caption} does not have the trigger ${spec.trigger}`);
     }
     for (const name of logged.keys()) if (!present.has(name)) out.push(`${name} is logged but not in the dataset`);
   }
   return out;
 }
 
-/** The half of a log that is published next to the file: no release references, just that they exist. */
+/**
+ * The files a trainer is given: the logged media and their captions, by name. The kit zips exactly these for the
+ * hosted trainer, so the fal route trains on what the check passed.
+ */
+export function datasetZipNames(log: DataLog): string[] {
+  return (log.items ?? []).flatMap((i) => [i.file, `${i.file.replace(/\.[^.]+$/, "")}.txt`]).sort();
+}
+
+/**
+ * The half of a log that is published next to the file. Each item keeps its file, hash, source, licence, date and
+ * whether people appear (and that a release is on file). Proof and author stay private (receipts, contracts, call
+ * sheets, people's names), except for a CC0 or public-domain original, whose public page and author are credited.
+ */
 export function publicLog(log: DataLog) {
   return {
     lora: log.lora,
     version: log.version,
     reviewedAt: log.reviewedAt,
-    items: log.items.map(({ consent, ...item }) => ({ ...item, ...(item.people && { consent: consent ? "signed release covering AI training, on file" : "missing" }) })),
+    items: log.items.map((i) => {
+      const open = (i.source === "cc0" || i.source === "public-domain") && /^https:\/\//.test(i.proof ?? "");
+      return {
+        file: i.file,
+        sha256: i.sha256,
+        source: i.source,
+        licence: i.licence,
+        date: i.date,
+        ...(i.source === "licensed" && { aiTraining: i.aiTraining === true }),
+        ...(open ? { original: i.proof, author: i.author } : { proof: "on file" }),
+        people: i.people,
+        ...(i.people && { consent: i.consent ? "signed release covering AI training, on file" : "missing" }),
+      };
+    }),
+  };
+}
+
+// ── Publishing ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The route a trained file came from. */
+export type TrainingRoute = "fal" | "ai-toolkit";
+
+/**
+ * The Hugging Face repo each trainer trains on (read on the Hub 2026-11-02: all three Apache-2.0). fal's z-image-trainer
+ * and AI-Toolkit's zimage arch train on Z-Image base, the Turbo trainer and zimage:turbo on Z-Image Turbo.
+ */
+const TRAINED_ON: Record<string, string> = {
+  "fal-ai/z-image-trainer": "Tongyi-MAI/Z-Image",
+  "fal-ai/z-image-turbo-trainer-v2": "Tongyi-MAI/Z-Image-Turbo",
+  "fal-ai/wan-22-trainer/i2v-a14b": "Wan-AI/Wan2.2-I2V-A14B",
+  zimage: "Tongyi-MAI/Z-Image",
+  "zimage:turbo": "Tongyi-MAI/Z-Image-Turbo",
+  wan22_14b_i2v: "Wan-AI/Wan2.2-I2V-A14B",
+};
+
+/** The model card's base_model: the Hub id of the model the route trained on (not the library's base name). */
+export function hfBaseModel(spec: TrainingSpec, route: TrainingRoute): string {
+  const key = route === "fal" ? spec.routes.fal.trainer : spec.routes.aiToolkit.arch;
+  const id = TRAINED_ON[key];
+  if (!id) throw new Error(`${spec.id}: no Hugging Face base model known for ${key}`);
+  return id;
+}
+
+/** What the operator says about the trained file's licence (kit.mjs publish --licence, --commercial, --hosted-ok). */
+export interface LicenceChoice {
+  /** An SPDX id in lower case, as the Hub takes it (apache-2.0), or a name for a licence of its own. */
+  licence?: string;
+  commercial?: boolean;
+  hostedOk?: boolean;
+}
+
+/** The trained file's licence snapshot (what Settings → Models & licences shows) and the model card's licence. */
+export interface TrainedLicence {
+  licence: string;
+  commercial: boolean;
+  hostedOk: boolean;
+  /** The card's `license` (an SPDX id, or "other" with licenseName). */
+  card: { license: string; licenseName?: string };
+}
+
+const HUB_LICENCES = new Set(["apache-2.0", "mit", "cc0-1.0", "cc-by-4.0", "cc-by-sa-4.0", "cc-by-nc-4.0", "cc-by-nc-sa-4.0", "openrail++"]);
+
+/**
+ * The trained file's licence, from its data-licence log. Data that is all Fuobe's own, CC0 or public domain defaults to
+ * Apache-2.0 (the base models' own licence), commercial and hostable; the operator may say otherwise. A dataset with
+ * licensed items has no default: the stock licence can limit what the trained file may do, so the operator states the
+ * licence, commercial use and hosting. The snapshot names the data's licences either way.
+ */
+export function trainedLicence(log: DataLog, choice: LicenceChoice = {}): { snapshot?: TrainedLicence; problems: string[] } {
+  const items = log.items ?? [];
+  const licensed = items.filter((i) => i.source === "licensed");
+  const data = [...new Set(items.map((i) => i.licence.trim()))].sort();
+  const sources = [...new Set(items.map((i) => i.source))].sort();
+  const problems: string[] = [];
+  if (licensed.length) {
+    const what = `${licensed.length} licensed file(s) (${[...new Set(licensed.map((i) => i.licence.trim()))].join("; ")})`;
+    if (!choice.licence) problems.push(`${what}: say the trained file's licence (--licence)`);
+    if (choice.commercial === undefined) problems.push(`${what}: say whether outputs may be sold (--commercial yes|no)`);
+    if (choice.hostedOk === undefined) problems.push(`${what}: say whether hosts may run it (--hosted-ok yes|no)`);
+  }
+  if (problems.length) return { problems };
+  const spdx = (choice.licence ?? "apache-2.0").trim();
+  const known = HUB_LICENCES.has(spdx.toLowerCase());
+  const name = spdx.toLowerCase() === "apache-2.0" ? "Apache-2.0" : spdx;
+  return {
+    problems,
+    snapshot: {
+      licence: `${name} (Fuobe-trained; data: ${sources.join(", ")}; ${data.join("; ")}; data-licence log)`,
+      commercial: choice.commercial ?? true,
+      hostedOk: choice.hostedOk ?? true,
+      card: known ? { license: spdx.toLowerCase() } : { license: "other", licenseName: spdx.toLowerCase().replace(/[^a-z0-9.-]+/g, "-") },
+    },
   };
 }
 

@@ -6,9 +6,11 @@
  *   node scripts/train/kit.mjs list                                   every spec, its log and its fal price
  *   node scripts/train/kit.mjs check <id>|--all [--dataset <dir>]     the spec and its data-licence log (against the files)
  *   node scripts/train/kit.mjs job <id> --dataset <dir> [--zip-url <url>] [--out <dir>]
- *                                                                     the AI-Toolkit config and the fal request, once the log passes
+ *                                                                     the AI-Toolkit config, the dataset zip and the fal request,
+ *                                                                     once the log passes (--zip-url: where that zip was uploaded)
  *   node scripts/train/kit.mjs motions                                the motion library's clips and licences
- *   node scripts/train/kit.mjs publish <id> --file <lora.safetensors> [--org fuobe] [--upload] [--write-research]
+ *   node scripts/train/kit.mjs publish <id> --file <lora.safetensors> --route fal|ai-toolkit [--org fuobe]
+ *                                     [--licence <spdx>] [--commercial yes|no] [--hosted-ok yes|no] [--upload] [--write-research]
  *
  * See scripts/train/README.md.
  */
@@ -57,22 +59,27 @@ function fail(msg) {
   process.exit(1);
 }
 
-/** The dataset folder as the checker sees it: media files with their hashes, and the caption files. */
-function readDataset(dir, media) {
+/**
+ * The dataset folder as the checker sees it: every file but the captions, with its hash (whatever its extension: a
+ * trainer reads more kinds than the spec's media), each caption's text, and anything that is not a plain file.
+ */
+function readDataset(dir) {
   if (!dir) return undefined;
   if (!fs.existsSync(dir)) fail(`no dataset folder ${dir}`);
-  const ext = media === "image" ? /\.(jpe?g|png|webp)$/i : /\.(mp4|mov|webm)$/i;
-  const names = fs.readdirSync(dir).sort();
-  return {
-    files: names.filter((n) => ext.test(n)).map((n) => ({ name: n, sha256: sha256(path.join(dir, n)) })),
-    captions: names.filter((n) => n.endsWith(".txt")),
-  };
+  const folder = { files: [], captions: {}, other: [] };
+  for (const e of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const p = path.join(dir, e.name);
+    if (!e.isFile()) folder.other.push(e.name);
+    else if (e.name.endsWith(".txt")) folder.captions[e.name] = fs.readFileSync(p, "utf8");
+    else folder.files.push({ name: e.name, sha256: sha256(p) });
+  }
+  return folder;
 }
 
 function problemsOf(id, datasetDir) {
   const spec = loadSpec(id);
   const out = kit.specProblems(spec).map((p) => `spec: ${p}`);
-  out.push(...kit.dataLogProblems(loadLog(id), spec, readDataset(datasetDir, spec.media)).map((p) => `data-licence log: ${p}`));
+  out.push(...kit.dataLogProblems(loadLog(id), spec, readDataset(datasetDir)).map((p) => `data-licence log: ${p}`));
   return { spec, problems: out };
 }
 
@@ -114,12 +121,28 @@ if (cmd === "list") {
   fs.mkdirSync(out, { recursive: true });
   const aitk = kit.aiToolkitConfig(spec, path.resolve(dataset), path.join(out, "output"));
   fs.writeFileSync(path.join(out, `${id}.aitk.json`), JSON.stringify(aitk, null, 2) + "\n");
+  // The hosted trainer gets exactly the checked files: the logged media and their captions, zipped here.
+  const zipFile = path.join(out, `${id}.dataset.zip`);
+  fs.rmSync(zipFile, { force: true });
+  execFileSync("python3", ["-I", "-m", "zipfile", "-c", zipFile, ...kit.datasetZipNames(loadLog(id))], { cwd: path.resolve(dataset), stdio: "pipe" });
+  const zipSha = sha256(zipFile);
   const zip = opt("--zip-url");
-  if (zip) fs.writeFileSync(path.join(out, `${id}.fal.json`), JSON.stringify({ endpoint: spec.routes.fal.trainer, input: kit.falTrainingPayload(spec, zip) }, null, 2) + "\n");
+  if (zip) {
+    // The request names a zip only once the uploaded one is this one, byte for byte.
+    const res = await fetch(zip).catch((e) => fail(`could not download ${zip}: ${e.message}`));
+    if (!res.ok) fail(`could not download ${zip}: HTTP ${res.status}`);
+    const got = crypto.createHash("sha256").update(Buffer.from(await res.arrayBuffer())).digest("hex");
+    if (got !== zipSha) fail(`${zip} is not ${path.basename(zipFile)} (SHA256 ${got}, expected ${zipSha}): upload the zip the kit built.`);
+    fs.writeFileSync(path.join(out, `${id}.fal.json`), JSON.stringify({ endpoint: spec.routes.fal.trainer, input: kit.falTrainingPayload(spec, zip), datasetZip: { file: path.basename(zipFile), sha256: zipSha } }, null, 2) + "\n");
+  }
   console.log(`${id}: the data-licence log passes.`);
   console.log(`  Your GPU (free):  python run.py ${path.join(out, `${id}.aitk.json`)}   (in an ostris/ai-toolkit checkout)`);
-  console.log(zip ? `  fal (≈ $${kit.specCostUsd(spec)?.toFixed(2)}):  submit ${path.join(out, `${id}.fal.json`)} to ${spec.routes.fal.trainer}` : `  fal: zip the dataset (001.jpg + 001.txt pairs), upload it, and pass --zip-url for the request`);
-  console.log(`  Not run here. Then: kit.mjs publish ${id} --file <the trained .safetensors>`);
+  console.log(
+    zip
+      ? `  fal (≈ $${kit.specCostUsd(spec)?.toFixed(2)}):  submit ${path.join(out, `${id}.fal.json`)} to ${spec.routes.fal.trainer}`
+      : `  fal: upload ${zipFile} (SHA256 ${zipSha}) and run this again with --zip-url <its URL> for the request`,
+  );
+  console.log(`  Not run here. Then: kit.mjs publish ${id} --file <the trained .safetensors> --route fal|ai-toolkit`);
 } else if (cmd === "motions") {
   const research = readJson(RESEARCH);
   const row = research.motionsEffects.find((m) => m.status === "motion-library");
@@ -132,7 +155,9 @@ if (cmd === "list") {
 } else if (cmd === "publish") {
   const id = args[1];
   const file = opt("--file");
-  if (!id || !file) fail("usage: kit.mjs publish <id> --file <lora.safetensors> [--org fuobe] [--upload] [--write-research]");
+  const route = opt("--route");
+  if (!id || !file || !["fal", "ai-toolkit"].includes(route))
+    fail("usage: kit.mjs publish <id> --file <lora.safetensors> --route fal|ai-toolkit [--org fuobe] [--licence <spdx>] [--commercial yes|no] [--hosted-ok yes|no] [--upload] [--write-research]");
   if (!fs.existsSync(file) || !file.endsWith(".safetensors")) fail(`${file} is not a .safetensors file`);
   const spec = loadSpec(id);
   const log = loadLog(id);
@@ -141,6 +166,18 @@ if (cmd === "list") {
     report(id, logProblems.map((p) => `data-licence log: ${p}`));
     fail("\nA file is published only with a complete data-licence log.");
   }
+  const yesNo = (name) => {
+    const v = opt(name);
+    if (v === undefined) return undefined;
+    if (v !== "yes" && v !== "no") fail(`${name} takes yes or no`);
+    return v === "yes";
+  };
+  const { snapshot, problems: licenceProblems } = kit.trainedLicence(log, { licence: opt("--licence"), commercial: yesNo("--commercial"), hostedOk: yesNo("--hosted-ok") });
+  if (!snapshot) {
+    report(id, licenceProblems.map((p) => `licence: ${p}`));
+    fail("\nThe trained file's licence is recorded, not assumed.");
+  }
+  const baseModel = kit.hfBaseModel(spec, route);
   const org = opt("--org") ?? process.env.FUOBE_HF_ORG ?? spec.target.hfRepo.split("/")[0];
   const repo = `${org}/${id}`;
   const hash = sha256(file);
@@ -150,7 +187,25 @@ if (cmd === "list") {
   fs.writeFileSync(path.join(stage, "data-licence-log.json"), JSON.stringify(kit.publicLog(log), null, 2) + "\n");
   fs.writeFileSync(
     path.join(stage, "README.md"),
-    `---\nlicense: apache-2.0\nbase_model: ${spec.base}\ntags: [lora, fuobe]\n---\n\n# ${spec.name}\n\nA LoRA Fuobe trained on its own or licensed data (${log.items.length} ${spec.media === "image" ? "images" : "clips"}). Every file's source, licence and release is in data-licence-log.json.\n\n- Trigger: \`${spec.trigger}\`\n- Strength: ${spec.target.strength}\n- File: ${spec.target.file} (SHA256 ${hash})\n`,
+    [
+      "---",
+      `license: ${snapshot.card.license}`,
+      ...(snapshot.card.licenseName ? [`license_name: ${snapshot.card.licenseName}`] : []),
+      `base_model: ${baseModel}`,
+      "base_model_relation: adapter",
+      "tags: [lora, fuobe]",
+      "---",
+      "",
+      `# ${spec.name}`,
+      "",
+      `A LoRA Fuobe trained on its own or licensed data (${log.items.length} ${spec.media === "image" ? "images" : "clips"}) on ${baseModel}. Every file's source, licence and release is in data-licence-log.json.`,
+      "",
+      `- Trigger: \`${spec.trigger}\``,
+      `- Strength: ${spec.target.strength}`,
+      `- Licence: ${snapshot.licence}; outputs may be sold: ${snapshot.commercial ? "yes" : "no"}; hosts may run it: ${snapshot.hostedOk ? "yes" : "no"}`,
+      `- File: ${spec.target.file} (SHA256 ${hash})`,
+      "",
+    ].join("\n"),
   );
   const trained = (revision) => ({
     file: spec.target.file,
@@ -160,15 +215,15 @@ if (cmd === "list") {
     trigger: spec.trigger,
     ...(spec.target.loraTarget && { target: spec.target.loraTarget }),
     download: "direct",
-    licence: "Apache-2.0 (Fuobe's own data, data-licence log)",
-    commercial: true,
-    hostedOk: true,
+    licence: snapshot.licence,
+    commercial: snapshot.commercial,
+    hostedOk: snapshot.hostedOk,
     checked: new Date().toISOString().slice(0, 10),
     revision,
     sha256: hash,
     sizeBytes: size,
   });
-  console.log(`${id} → https://huggingface.co/${repo}\n  ${spec.target.file} (${size} bytes, SHA256 ${hash}), data-licence-log.json, README.md\n  staged in ${stage}`);
+  console.log(`${id} → https://huggingface.co/${repo} (trained on ${baseModel}, ${route})\n  ${spec.target.file} (${size} bytes, SHA256 ${hash}), data-licence-log.json, README.md\n  staged in ${stage}`);
   if (!flag("--upload")) {
     console.log(`\nDry run: nothing uploaded. Add --upload (with HF_TOKEN set and the hf command installed) to publish.`);
     console.log(`The research entry's trained block will be:\n${JSON.stringify(trained("<the commit the upload makes>"), null, 1)}`);
@@ -192,5 +247,5 @@ if (cmd === "list") {
     console.log(`Wrote the trained block to docs/research/fuobe-originals-recipes-5.json. Now run: pnpm gen:catalog`);
   } else console.log(`Add this as fuobeTrainedLoras[${id}].trained in the research, then run pnpm gen:catalog:\n${JSON.stringify(block, null, 1)}`);
 } else {
-  fail("usage: kit.mjs list | check <id>|--all [--dataset <dir>] | job <id> --dataset <dir> [--zip-url <url>] [--out <dir>] | motions | publish <id> --file <f> [--upload] [--write-research]");
+  fail("usage: kit.mjs list | check <id>|--all [--dataset <dir>] | job <id> --dataset <dir> [--zip-url <url>] [--out <dir>] | motions | publish <id> --file <f> --route fal|ai-toolkit [--upload] [--write-research]");
 }
