@@ -62,6 +62,7 @@ describe("where it applies, and its default", () => {
     expect(voiceFirstDefault({ inputs: { audio: AUDIO } }, "transcribe")).toBe(false);
     expect(voiceFirstDefault({ inputs: { video: VIDEO, audio: AUDIO } }, "lipsync")).toBe(true);
     expect(voiceFirstDefault({ inputs: { images: ["/api/files/a.png"], audio: AUDIO } }, "avatar")).toBe(false);
+    expect(voiceFirstDefault({ inputs: { video: VIDEO, audio: AUDIO } }, "avatar")).toBe(true);
   });
 
   it("puts the music and effects back only after a lip re-sync on your GPU of a clip with sound", () => {

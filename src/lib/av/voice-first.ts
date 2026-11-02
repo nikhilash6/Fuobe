@@ -62,14 +62,14 @@ export function voiceSource(req: Pick<GenerationRequest, "inputs">, op: Operatio
 }
 
 /**
- * The switch's default: on when the speech comes with a picture (a video to transcribe, a clip to re-sync), off for an
- * audio upload, which is usually speech alone.
+ * The switch's default: on when the speech comes with a picture (a video to transcribe, a clip in Lipsync), off for an
+ * audio upload with a portrait, or a recording to transcribe, which is usually speech alone.
  */
 export function voiceFirstDefault(req: Pick<GenerationRequest, "inputs">, op: Operation | undefined): boolean {
   const src = voiceSource(req, op);
   if (!src) return false;
   if (op === "transcribe") return src.slot === "video";
-  return op === "lipsync" && !!req.inputs?.video;
+  return !!req.inputs?.video;
 }
 
 /** Whether a run puts the clip's music and effects back after the lip sync (open engine, a clip with sound). */
