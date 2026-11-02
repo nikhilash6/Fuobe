@@ -71,6 +71,8 @@ export const SETTINGS = {
   comfyToken: { key: "comfyui.token", env: "COMFYUI_TOKEN", secret: true },
   /** A second ComfyUI for workflows whose node packs can't share the main install (LatentSync 1.6, ThinkSound; scripts/comfy/README.md). */
   comfyIsolatedUrl: { key: "comfyui.isolatedUrl", env: "COMFYUI_ISOLATED_URL" },
+  /** The WorldCast worker on the owner's GPU (docs/workers/worldcast.md): an HTTP service outside ComfyUI, usually port 8190. */
+  worldcastUrl: { key: "worldcast.url", env: "WORLDCAST_URL" },
   /**
    * Where the owner's ComfyUI runs: on this server (its address above), or on the computer the owner uses, reached
    * through the owner's own Fuobe tab (a studio on a server, a ComfyUI at home: src/server/computer).

@@ -21,6 +21,7 @@ import { onEngine } from "./engines";
 import { FRAMES_MODELS, chainGapProblem, chainTiming, frameTimes } from "./keyframes";
 import { ANGLES_2511_LORA } from "./open-tools";
 import { estimateCost, planGeneration } from "./plan";
+import { WORLDCAST_AFTER, WORLDCAST_MODELS, WORLDCAST_SECONDS, worldcastFallback, worldcastNote, worldcastSteps } from "./worldcast-plan";
 import type { ChainSlot, Engine, Generation, GenerationRequest, GenParams, ModelDef } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -56,34 +57,8 @@ export function pathAzimuth(side: TurnSide): number {
   return -viewAzimuth(side) + 0;
 }
 
-/**
- * WorldCast's convention (N7-9; new-models-7.md §3.4, §3.11): its 1–4 anchor photos are named front, right_side, back and
- * left_side, with each one's azimuth in body_views_meta.json. The names are WHERE THE CAMERA STANDS, not the body's own sides:
- * the demo case's aligned cameras (no_padding_black/anchors_aligned_camera_info.json) put right_side at +x of the first camera
- * (moved round to the camera's own right, 91.79°) and left_side at −x (266.91°, `left_sign` −1: reached turning the other
- * way, −93°), and its "right_side" crop shows the boy facing the lens because the first frame shows him in profile. So
- * WorldCast's azimuth is the camera-path library's (+ = moved round to the right), and a person's own right side, seen from
- * the camera moved round to its LEFT (pathAzimuth −90°), is WorldCast's left_side. Convert in worldcastAnchor and nowhere
- * else; a swapped left and right silently hurts identity.
- */
-export const WORLDCAST = {
-  anchor: { front: "front", right: "left_side", back: "back", left: "right_side" } as const satisfies Record<TurnSide, string>,
-  /** The demo case's azimuths (demo_case/A360-031__portrait/body_views_vggt/body_views_meta.json). */
-  demoAzimuth: { front: 0, right_side: 91.79, back: 171.39, left_side: 266.91 },
-  leftSign: -1 as const,
-};
-
-export type WorldcastView = (typeof WORLDCAST.anchor)[TurnSide];
-
-/**
- * A side as a WorldCast anchor: its name, the azimuth to write for it (0–360, + = the camera moved round to its right) and
- * the signed one (left_side by `left_sign`: −90°), which is also where camera-path keyPose puts its camera.
- */
-export function worldcastAnchor(side: TurnSide): { name: WorldcastView; azimuth: number; signed: number } {
-  const name = WORLDCAST.anchor[side];
-  const azimuth = (((pathAzimuth(side) % 360) + 360) % 360) + 0;
-  return { name, azimuth, signed: name === "left_side" ? WORLDCAST.leftSign * (360 - azimuth) : azimuth };
-}
+// WorldCast's names for the sides (N7-9) live with its cases: src/lib/worldcast.ts.
+export { WORLDCAST, worldcastAnchor, type WorldcastView } from "@/lib/worldcast";
 
 /**
  * The Angles app's horizontal_angle for a side. The Multiple-Angles LoRA calls 90° the "right side view", read here as the
@@ -118,7 +93,7 @@ export const QMA_STILL_ANGLES: readonly number[] = [1, 2, 3, 4, 5, 6, 7].map((i)
 // ---------------------------------------------------------------------------
 // Routes
 
-export type TurnRoute = "frames" | "references" | "keyframes" | "camera" | "stills";
+export type TurnRoute = "worldcast" | "frames" | "references" | "keyframes" | "camera" | "stills";
 
 export interface TurnRouteInfo {
   engine: Engine;
@@ -133,6 +108,16 @@ export interface TurnRouteInfo {
 
 /** The routes, the open engine's first, then the cloud's in the order they are offered. */
 export const TURN_ROUTES: Record<TurnRoute, TurnRouteInfo> = {
+  // N7-9: WorldCast on the studio's WorldCast worker, offered when it answers (TurnaroundContext.worldcast).
+  worldcast: {
+    engine: "open",
+    modelId: WORLDCAST_MODELS.film,
+    name: "WorldCast",
+    detail: "WorldCast films an exact orbit from the front view; the back and sides follow your views",
+    durations: [],
+    duration: WORLDCAST_SECONDS,
+    resolution: "480 × 832",
+  },
   frames: {
     engine: "open",
     modelId: FRAMES_MODELS.open.id,
@@ -182,7 +167,7 @@ export const TURN_ROUTES: Record<TurnRoute, TurnRouteInfo> = {
   },
 };
 
-export const ROUTES_ON: Record<Engine, TurnRoute[]> = { open: ["frames", "stills"], cloud: ["references", "keyframes", "camera"] };
+export const ROUTES_ON: Record<Engine, TurnRoute[]> = { open: ["worldcast", "frames", "stills"], cloud: ["references", "keyframes", "camera"] };
 
 /** How the missing sides are drawn on your GPU: the Angles app's Multiple-Angles route (the default), or QMA · 96 views. */
 export type TurnFill = "angles" | "qma";
@@ -343,6 +328,11 @@ export interface TurnaroundInput {
 export interface TurnaroundContext {
   /** Whether this install offers a model (Settings → Models & licences); every model by default. */
   has?: (id: string) => boolean;
+  /**
+   * The studio's WorldCast worker answers (N7-9): the WorldCast route is offered and is the GPU's default. False: it doesn't,
+   * and Frames says so. Undefined: nothing is said (a visitor, or WorldCast is off).
+   */
+  worldcast?: boolean;
 }
 
 export interface TurnStep {
@@ -394,7 +384,7 @@ const offered = (ctx: TurnaroundContext) => (id: string) => (ctx.has ? ctx.has(i
  */
 export function defaultRoute(engine: Engine, input: Pick<TurnaroundInput, "views" | "sheet">, routes: TurnRoute[] = ROUTES_ON[engine]): TurnRoute {
   const own = TURN_SIDES.filter((s) => input.views?.[s]).length;
-  const want: TurnRoute = engine === "open" ? "frames" : own >= 2 || input.sheet ? "references" : "camera";
+  const want: TurnRoute = engine === "open" ? (routes.includes("worldcast") ? "worldcast" : "frames") : own >= 2 || input.sheet ? "references" : "camera";
   return routes.includes(want) ? want : (routes[0] ?? want);
 }
 
@@ -448,7 +438,7 @@ type Source = { url: string } | { key: string };
 export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = {}): TurnaroundPlan {
   const { engine } = input;
   const has = offered(ctx);
-  const routes = ROUTES_ON[engine].filter((r) => has(TURN_ROUTES[r].modelId));
+  const routes = ROUTES_ON[engine].filter((r) => has(TURN_ROUTES[r].modelId) && (r !== "worldcast" || ctx.worldcast === true));
   const route = input.route && routes.includes(input.route) ? input.route : defaultRoute(engine, input, routes);
   const info = TURN_ROUTES[route];
   const model = getModel(info.modelId)!;
@@ -460,7 +450,8 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
   const camera = route === "camera";
   const stills = route === "stills";
   const frontFromSheet = !views.front && !!sheet;
-  const fill = camera || stills ? false : (input.fill ?? !(route === "references" && sheet));
+  // WorldCast takes the views there are (one to four): drawn sides only when asked, since a drawn side may drift.
+  const fill = camera || stills ? false : (input.fill ?? !((route === "references" && sheet) || route === "worldcast"));
   const byQma = engine === "open" && input.fillWith === "qma" && has(QMA_MODEL);
   const fills = fill && (views.front || frontFromSheet) ? TURN_SIDES.filter((s) => s !== "front" && !views[s]) : [];
   const duration = turnDuration(route, input.duration);
@@ -628,6 +619,21 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
     notes.push(
       `${model.name} takes ${list.length === 1 ? "the front view" : `the ${list.length} pictures`} as references, starts and ends on the front, and turns the camera from the words: identity holds, the path is loose`,
     );
+  } else if (route === "worldcast") {
+    // The front view is the first frame and an anchor (as WorldCast's demo case); every side with a picture is an anchor.
+    const path = input.path && presetKeys(input.path) ? input.path : DEFAULT_PATH;
+    const front = sourceOf("front");
+    const anchors = TURN_SIDES.flatMap((side) => {
+      const src = sourceOf(side);
+      return src ? [{ side, src }] : [];
+    });
+    frames = anchors.map((a) => ({ side: a.side, from: fromOf(a.src, a.side), ...("url" in a.src && { url: a.src.url }) }));
+    const ws = worldcastSteps({ feature, stepFeature, title, still: front, anchors, keys: presetKeys(path)!, prompt: cameraWords(path, input.prompt), seed: input.seed });
+    for (const st of ws) {
+      if (st.key === "main") main = st;
+      else steps.push(st);
+    }
+    notes.push(worldcastNote(anchors.length), WORLDCAST_AFTER);
   } else {
     const path = input.path && presetKeys(input.path) ? input.path : DEFAULT_PATH;
     const keys: CameraKey[] = presetKeys(path)!;
@@ -659,7 +665,9 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
         ? qmaStillName(Number(k.slice(6)))
         : `${SIDE_NAMES[k.slice(5) as TurnSide]} (${byQma ? "QMA" : "Angles"})`;
   const total = steps.length + (main ? 1 : 0);
-  steps.forEach((s, i) => (s.request.step = { label: stepLabel(s.key), index: i, of: total }));
+  steps.forEach((s, i) => (s.request.step = { label: s.request.step?.label ?? stepLabel(s.key), index: i, of: total }));
+  if (main && route === "worldcast") main.request.step = { label: main.request.step?.label ?? "Film", index: total - 1, of: total };
+  if (engine === "open" && route === "frames" && ctx.worldcast === false) notes.push(worldcastFallback("Frames"));
   if (main) steps.push(main);
 
   // Prices at list (or launch) rates; free on the open engine.

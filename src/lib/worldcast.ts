@@ -16,7 +16,40 @@
  */
 
 import { cropFov, keyPose, type FramePoses, type Mat3, type Mat4 } from "./camera-path";
-import { worldcastAnchor, type TurnSide, type WorldcastView } from "./catalog/turnaround";
+import type { TurnSide } from "./catalog/turnaround";
+
+/**
+ * WorldCast's convention (N7-9; new-models-7.md §3.4, §3.11): its 1–4 anchor photos are named front, right_side, back and
+ * left_side, with each one's azimuth in body_views_meta.json. The names are WHERE THE CAMERA STANDS, not the body's own sides:
+ * the demo case's aligned cameras (no_padding_black/anchors_aligned_camera_info.json) put right_side at +x of the first camera
+ * (moved round to the camera's own right, 91.79°) and left_side at −x (266.91°, `left_sign` −1: reached turning the other
+ * way, −93°), and its "right_side" crop shows the boy facing the lens because the first frame shows him in profile. So
+ * WorldCast's azimuth is the camera-path library's (+ = moved round to the right), and a person's own right side, seen from
+ * the camera moved round to its LEFT (pathAzimuth −90°), is WorldCast's left_side. Convert in worldcastAnchor and nowhere
+ * else; a swapped left and right silently hurts identity.
+ */
+/** Where the camera stands round the person to see each of their sides (turnaround.ts viewAzimuth). */
+const PERSON_AZIMUTH: Record<TurnSide, number> = { front: 0, right: 90, back: 180, left: 270 };
+
+export const WORLDCAST = {
+  anchor: { front: "front", right: "left_side", back: "back", left: "right_side" } as const satisfies Record<TurnSide, string>,
+  /** The demo case's azimuths (demo_case/A360-031__portrait/body_views_vggt/body_views_meta.json). */
+  demoAzimuth: { front: 0, right_side: 91.79, back: 171.39, left_side: 266.91 },
+  leftSign: -1 as const,
+};
+
+export type WorldcastView = (typeof WORLDCAST.anchor)[TurnSide];
+
+/**
+ * A side as a WorldCast anchor: its name, the azimuth to write for it (0–360, + = the camera moved round to its right) and
+ * the signed one (left_side by `left_sign`: −90°), which is also where camera-path keyPose puts its camera.
+ */
+export function worldcastAnchor(side: TurnSide): { name: WorldcastView; azimuth: number; signed: number } {
+  const name = WORLDCAST.anchor[side];
+  // The camera-path azimuth that sees this side (turnaround.ts pathAzimuth: −viewAzimuth), as 0–360.
+  const azimuth = (360 - PERSON_AZIMUTH[side]) % 360;
+  return { name, azimuth, signed: name === "left_side" ? WORLDCAST.leftSign * (360 - azimuth) : azimuth };
+}
 
 /** What the released checkpoint was trained on and the demo runs with (demo.py): fixed, except the seed and the prompt. */
 export const WORLDCAST_RUN = { frames: 81, fps: 15, width: 480, height: 832, steps: 50, cfg: 5, shift: 2, maxAnchors: 4 } as const;

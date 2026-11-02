@@ -12,7 +12,7 @@ export const PROVIDER_SETTINGS = {
   fal: ["falKey"],
   replicate: ["replicateToken"],
   // comfyWhere "server": a server address tested while ComfyUI runs on the owner's computer is tested as a server.
-  comfyui: ["comfyUrl", "comfyToken", "comfyIsolatedUrl", "comfyWhere"],
+  comfyui: ["comfyUrl", "comfyToken", "comfyIsolatedUrl", "comfyWhere", "worldcastUrl"],
   // Claude, and the local model servers of Settings → AI helper (Ollama, LM Studio, Unsloth Studio, any OpenAI-compatible one).
   llm: [
     "anthropicKey",
@@ -133,6 +133,8 @@ export function settingProblem(name: string, raw: string): string | null {
       return addressProblem(v, DEFAULT_COMFY_URL);
     case "comfyIsolatedUrl":
       return addressProblem(v, "http://127.0.0.1:8189");
+    case "worldcastUrl":
+      return addressProblem(v, "http://127.0.0.1:8190");
     case "ollamaUrl":
       return addressProblem(v, "http://127.0.0.1:11434");
     case "lmstudioUrl":

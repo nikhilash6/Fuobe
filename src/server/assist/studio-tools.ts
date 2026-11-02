@@ -1,4 +1,5 @@
 import "server-only";
+import { worldcastContext } from "../worldcast-on";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { PlannedJob } from "@/lib/assist";
@@ -850,7 +851,7 @@ function flyAroundSteps(i: FlyAroundToolInput, ctx: ToolContext): PipelineStep[]
     prompt: i.prompt,
     duration: i.duration,
     feature: "fly-around",
-  });
+  }, { worldcast: worldcastContext() });
   if (plan.blocker) throw new Error(plan.blocker);
   return plan.steps.map((s) => ({ key: s.key, request: s.request, ...(s.after?.length && { after: s.after }) }));
 }

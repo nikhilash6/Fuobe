@@ -286,7 +286,8 @@ export interface FocusPoint {
 }
 
 /** "llm" runs text steps (translate, write) on the configured LLM (Claude or a local model) inside the server. */
-export type ProviderId = "fal" | "replicate" | "openai" | "google" | "comfyui" | "mock" | "local" | "llm";
+/** "worldcast" is the WorldCast worker on the owner's GPU, outside ComfyUI (build plan N7-9; docs/workers/worldcast.md). */
+export type ProviderId = "fal" | "replicate" | "openai" | "google" | "comfyui" | "mock" | "local" | "llm" | "worldcast";
 
 /** Duration encodings differ between APIs ("5" vs 5 vs "5s"). */
 export interface DurationField {

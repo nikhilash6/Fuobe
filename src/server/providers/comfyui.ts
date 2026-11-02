@@ -105,6 +105,7 @@ import {
   type TaskRow,
 } from "../computer/tasks";
 import { OWNER_BOOST_MS, poolFields, poolWaitMs, poolWaitWords } from "../computer/pool";
+import { worldcastBase, worldcastHealth } from "../worldcast";
 
 export const WORKFLOW_DIR = path.join(process.cwd(), "workflows", "comfyui");
 
@@ -2424,6 +2425,12 @@ export const comfyProvider: ProviderAdapter = {
   },
 
   async test(opts) {
+    // The WorldCast worker's address (Settings → Open-source engine, beside the isolated worker): that worker answers.
+    if (opts?.focus === "worldcastUrl") {
+      const h = await worldcastHealth(10_000);
+      if (h.ok) globalThis.__fuobeWorldcast = { base: worldcastBase(), at: Date.now(), ok: true, depth: h.depth ?? [] };
+      return { ok: h.ok, detail: h.detail };
+    }
     // On someone's computer: what its tab last said about it.
     const computer = computerScope();
     if (computer) {
