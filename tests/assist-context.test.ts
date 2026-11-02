@@ -375,6 +375,10 @@ describe("studio tools", () => {
     add_captions: [{ video }, { video, translate_to: "Spanish" }],
     restore_video: [{ video }, { video, prompt: "a harbour in the 1930s, natural colour", reference: image }],
     remove_person: [{ video, who: "the man in the grey shirt" }, { video, who: "the woman on the left", start: 0, end: 1, mask_grow: 9 }],
+    fly_around: [
+      { image, degrees: 180, direction: "cw", tilt: 10, pulse: true },
+      { image, preset: "orbit_90_ccw", views: [image], duration: 8 },
+    ],
     blockout_film: [
       { video, seconds: 8, beats: [{ start: 0, label: "Arrival", words: "She walks in." }] },
       { video, seconds: 40, beats: [{ start: 0, label: "Arrival" }, { start: 20, label: "Lights out" }], references: [{ url: image, role: "character", name: "Mara" }], model: "minimax-h3-max-3d", sounds: ["Footsteps"] },

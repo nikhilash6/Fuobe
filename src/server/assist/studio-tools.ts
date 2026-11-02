@@ -12,6 +12,8 @@ import { SHORTS_MODELS } from "@/lib/catalog/shorts";
 import type { ChainSlot, Engine, GenerationRequest, Operation } from "@/lib/catalog/types";
 import { TOOL_MODELS } from "@/lib/layers";
 import { planCinema } from "@/lib/catalog/cinema";
+import { FLY_VIEWS_MAX, planFlyAround } from "@/lib/catalog/fly-around";
+import { PATH_PRESETS } from "@/lib/camera-path";
 import { createPipeline, type PipelineStep } from "../chains";
 import { getEraser, planRemoval, REMOVE, removalTitle } from "@/lib/catalog/remove-object";
 import { blockoutFromFile, cinemaContext } from "../cinema-generate";
@@ -817,7 +819,70 @@ const blockoutFilm = defineTool({
   },
 });
 
-export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, removePerson, blockoutFilm];
+// ---------------------------------------------------------------------------
+// Fly around (build plan N7-7): a still filmed along an exact camera path
+
+export const FlyAroundToolInput = z.object({
+  image: ref.describe("The still to film: the clip's first frame (a character, a product, a scene)."),
+  views: z.array(ref).max(FLY_VIEWS_MAX).optional().describe("Cloud only: other pictures of the same subject from other sides; MiniMax H3 Max takes them as references (the path then goes in words)."),
+  preset: z
+    .enum(PATH_PRESETS.map((p) => p.id) as [string, ...string[]])
+    .optional()
+    .describe(`A ready move: ${PATH_PRESETS.map((p) => `${p.id} (${p.name})`).join(", ")}. Leave it out to give the orbit's numbers instead.`),
+  degrees: z.number().min(30).max(360).optional().describe("An exact orbit: how far round the subject, 30–360° (default 360)."),
+  direction: z.enum(["cw", "ccw"]).optional().describe("An exact orbit's direction seen from above: cw moves the camera round to the left, ccw to the right (default ccw)."),
+  tilt: z.number().min(0).max(20).optional().describe("An exact orbit's height tilt, 0–20°: the ring rises over the first half turn and dips below eye level over the second."),
+  pulse: z.boolean().optional().describe("An exact orbit moves 25% in and out twice on the way round."),
+  prompt: z.string().max(1500).optional().describe("Motion words: what the subject does while the camera moves (the camera's own move is set by the path)."),
+  duration: z.number().min(1).max(15).optional().describe("Cloud only: seconds (default 5). Your GPU always films about 5 s."),
+});
+export type FlyAroundToolInput = z.infer<typeof FlyAroundToolInput>;
+
+/** The fly-around's steps as a pipeline in the Library (src/lib/catalog/fly-around.ts). */
+function flyAroundSteps(i: FlyAroundToolInput, ctx: ToolContext): PipelineStep[] {
+  const engine = engineOf(ctx);
+  const exact = !i.preset || i.degrees !== undefined || i.direction !== undefined || i.tilt !== undefined || i.pulse !== undefined;
+  const plan = planFlyAround({
+    engine,
+    image: i.image,
+    views: i.views,
+    ...(exact ? { orbit: { degrees: i.degrees ?? 360, direction: i.direction ?? "ccw", tilt: i.tilt ?? 0, pulse: i.pulse ? 0.25 : 0 } } : { preset: i.preset }),
+    prompt: i.prompt,
+    duration: i.duration,
+    feature: "fly-around",
+  });
+  if (plan.blocker) throw new Error(plan.blocker);
+  return plan.steps.map((s) => ({ key: s.key, request: s.request, ...(s.after?.length && { after: s.after }) }));
+}
+
+const flyAround = defineTool({
+  name: "fly_around",
+  description:
+    "Film a still along an exact camera path: an orbit set by numbers (degrees, direction seen from above, a height tilt, a radius pulse) or a ready move (Orbit 360°, arcs, a tilted ring, a figure of eight, dollies, trucks) — Fuobe's Fly around. " +
+    "In the cloud MiniMax H3 Max camera controls follows the path as keyframes from the still (5 s at 768P is $0.40 at list price); with other views of the subject, MiniMax H3 Max takes them as references and the path goes in words. " +
+    "On your GPU MoGe 2 measures the still's depth, the studio renders the path through it, and Wan 2.1 with Uni3C films the still along that render: free, about 5 s, a large GPU (about 48 GB). Gated by the same approval card as generate.",
+  schema: FlyAroundToolInput,
+  gated: true,
+  title: (i) => (i.preset ? `Fly around: ${PATH_PRESETS.find((p) => p.id === i.preset)?.name ?? i.preset}` : `Fly around: ${i.degrees ?? 360}°`),
+  plan: (i, ctx) => {
+    try {
+      return planSteps("fly_around", flyAroundSteps(i, ctx));
+    } catch (e) {
+      return [{ tool: "fly_around", modelId: "fly-around", modelName: "Fly around", kind: "video", op: "camera-path", prompt: "Fly around", count: 0, costUsd: 0, demo: false, atomic: true, error: (e as Error).message }];
+    }
+  },
+  async run(i, ctx) {
+    let steps: PipelineStep[];
+    try {
+      steps = flyAroundSteps(i, ctx);
+    } catch (e) {
+      return { content: JSON.stringify({ error: (e as Error).message }), isError: true };
+    }
+    return startPipeline("Fly around", steps, "Fly around");
+  },
+});
+
+export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, removePerson, blockoutFilm, flyAround];
 
 /** For tests: the fallback pipelines, as they would be created. */
-export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests, blockout: blockoutSteps };
+export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests, blockout: blockoutSteps, flyAround: flyAroundSteps };

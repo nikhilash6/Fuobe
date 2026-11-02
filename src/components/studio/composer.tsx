@@ -19,7 +19,10 @@ import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
-import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useStatus } from "@/lib/api";
+import { ExactOrbitControls } from "@/components/exact-orbit-controls";
+import { useFlyAround } from "@/components/fly-around-run";
+import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
+import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
@@ -362,6 +365,14 @@ export function Composer({ docked }: { docked: boolean }) {
   const takesLook = !!model?.options.looks;
   const preset: Preset | undefined = draft.presetId && !takesLook ? catalog.getPreset(draft.presetId) : config.preset;
   const lockedModel = preset?.type === "app";
+  // Fuobe DoP's orbit moves (N7-7): the Exact switch films the orbit by its numbers through /api/fly-around.
+  // It starts with a 3D depth step and runs on the studio's own GPU: the owner's for now.
+  const owner = useIsOwner();
+  const exactId = owner && preset?.type === "motion" && takesExact(preset.id) ? preset.id : undefined;
+  const [exactBy, setExactBy] = useState<{ id: string; orbit: ExactOrbit } | null>(null);
+  const exact = exactId && exactBy?.id === exactId ? exactBy.orbit : null;
+  const exactImage = draft.slots.image?.ref;
+  const fly = useFlyAround(exact ? { engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature } : null);
   const presetLoading = !!draft.presetId && !takesLook && !preset && !catalog.complete;
   // The models the viewer's catalog has (the studio's slice, or the full catalog once it's loaded), and the ones this
   // viewer can run now: offered in Settings → Models & licences, and a key for its provider when it's an account's paid run.
@@ -752,6 +763,15 @@ export function Composer({ docked }: { docked: boolean }) {
   // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here).
   const submit = (skip?: unknown) => {
     const skipGpu = skip === true;
+    if (exact) {
+      // An exact orbit: the still filmed along the orbit's numbers (Fly around), priced in its panel.
+      const stop = !exactImage ? "Add a start frame to film an exact orbit" : fly.preview.data?.blocker;
+      if (stop) return void toast(stop, { id: "composer-blocker" });
+      if (fly.run.isPending) return;
+      toast.dismiss("composer-blocker");
+      fly.run.mutate({ engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature });
+      return;
+    }
     if (keyToAdd && model && !create.isPending) return openAddKey(keyToAdd, model.id);
     if (!blocker && gpuSetup && !skipGpu && !create.isPending) return openGpuFix();
     if (blocker || create.isPending || signature.lock.isPending) {
@@ -897,7 +917,9 @@ export function Composer({ docked }: { docked: boolean }) {
   const missingKey = needsKey(model, status)?.[0];
   const ownPayerText = payer && cost ? ` · ${billedTo(payer)}` : missingKey ? ` · ${addKeyLabel(missingKey).toLowerCase()}` : "";
   // On this studio's GPUs: the quote's words (none from the server: free, as the open engine always is).
-  const costText = poolPrice ? (priceUnavailable ? "Price unavailable" : hostedQuote?.text || ownCostText) : ownCostText;
+  // An exact orbit runs as a fly-around: its own price (N7-7).
+  const exactPrice = exact ? fly.price : "";
+  const costText = exactPrice || (poolPrice ? (priceUnavailable ? "Price unavailable" : hostedQuote?.text || ownCostText) : ownCostText);
   const payerText = poolPrice ? "" : ownPayerText;
 
   // Attachments: only when something is attached, a required slot is still empty, or none of a "one of these" group is filled (U8).
@@ -1350,6 +1372,18 @@ export function Composer({ docked }: { docked: boolean }) {
         />
       )}
 
+      {/* Fuobe DoP's orbit moves: the Exact switch and its numbers (N7-7). */}
+      {exactId && !collapsed && (
+        <ExactOrbitControls
+          className="mx-2 mb-2"
+          engine={engine}
+          value={exact}
+          defaults={exactDefaults(exactId)}
+          onChange={(orbit) => setExactBy(orbit ? { id: exactId, orbit } : null)}
+          footer={exact && exactImage && fly.preview.data?.blocker ? <span>{fly.preview.data.blocker}</span> : undefined}
+        />
+      )}
+
       {model && effectiveOp === "dialogue" && <DialogueEditor model={model} lines={p.dialogue ?? defaultLines(model)} onChange={(dialogue) => setP({ dialogue })} />}
 
       {model?.options.multiShot && p.shots && <ShotsEditor model={model} shots={p.shots} onChange={(shots) => setP({ shots })} />}
@@ -1560,7 +1594,7 @@ export function Composer({ docked }: { docked: boolean }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums">
-                <span className="sm:hidden">{poolPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
+                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
                 <span className="hidden sm:inline">
                   {costText}
                   {payerText}

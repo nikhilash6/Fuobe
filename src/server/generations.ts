@@ -84,6 +84,7 @@ import { offeredLoras, offeredRoutes, requireOffered } from "./model-access";
 import { llmBackends, llmLabel, llmMissing, llmUsesClaude, probeLocal } from "./providers/llm";
 import type { PollContext, PollResult, ProviderAdapter, RemoteOutput } from "./providers/types";
 import { mediaFacts } from "./media-facts";
+import { renderPathVideo } from "./path-render";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
@@ -1067,6 +1068,8 @@ const SOUNDTRACK_SLOTS = new Set<ChainSlot["slot"]>(["audio", "audio2"]);
 export function pickOutput(outputs: OutputFile[], s: ChainSlot): OutputFile | undefined {
   // A mask: the output made as one (meta.role "mask": a painted window's last tracked frame), else a mask video, else a still.
   if (s.slot === "mask") return outputs.find((o) => o.meta?.role === "mask") ?? outputs.find((o) => o.kind === "video") ?? outputs.find((o) => o.kind === "image");
+  // A path render (ChainSlot.render "path") is drawn from the depth picture the scene step made (MoGe 2: a GLB and a depth PNG).
+  if (s.render === "path") return outputs.find((o) => o.kind === "image");
   const ofKind = outputs.filter((o) => o.kind === SLOT_KIND[s.slot]);
   if (s.index !== undefined) {
     if (!ofKind.length) return undefined;
@@ -1353,7 +1356,7 @@ async function advanceDependents(): Promise<void> {
       const values = await asRun(() => Promise.all(outputs.map((o, i) => chainValue(pickOutput(o, slots[i]), slots[i], r.op))));
       const missing = values.findIndex((u) => !u);
       if (missing >= 0) {
-        fail(`${earlier} has no ${slotNoun(slots[missing])} to use`);
+        fail(`${earlier} has no ${slots[missing].render ? "depth picture" : slotNoun(slots[missing])} to use`);
         continue;
       }
       // Routing reads cached reachability: make sure it's fresh for local engines. An Original counts with the routes of
@@ -1375,6 +1378,19 @@ async function advanceDependents(): Promise<void> {
         if (!back && Date.now() - first! < COMFY_WAIT.ms) continue;
       }
       comfyWaits().delete(r.id);
+      // A camera path drawn through the still's depth on this server (Uni3C's guide where no browser drew one); a demo
+      // depth step hands on a demo render. Only once ComfyUI answers: a sweep that waits for it renders nothing.
+      for (let i = 0; i < slots.length; i++) {
+        if (slots[i].render !== "path") continue;
+        // The still, once the other slots are in (it can come from an earlier step too: a Canvas node's picture).
+        const photo = withChainInputs({ ...request, chain: slots }, values as string[]).inputs?.images?.[0];
+        const keys = request.params?.cameraPath ?? [];
+        if (deps[i]!.provider === "mock" || !photo) values[i] = placeholderFor(slots[i]);
+        else {
+          update(r.id, { message: "Rendering the camera path" });
+          values[i] = await asRun(() => renderPathVideo({ photo, depth: values[i]!, keys }, r.id));
+        }
+      }
       if (model?.routes.some((x) => x.provider === "llm")) await probeLocal();
       // Filled with the slots that have an input; stored with its whole chain (and what was skipped) for a retry.
       const filled = withChainInputs({ ...request, chain: slots }, values as string[]);

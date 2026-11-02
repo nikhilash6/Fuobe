@@ -1,4 +1,6 @@
 import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/catalog/types";
+import { PATH_FRAMES, keyAt } from "@/lib/camera-path";
+import { exactOrbitKeys, type ExactOrbit } from "@/lib/exact-orbit";
 
 /**
  * Image to 3D / Product spin: the modes (from an image, from several images, from text, pick an object, a splat),
@@ -10,6 +12,8 @@ import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/ca
 export const MODEL3D_FEATURE = "image-to-3d";
 /** The helper steps of a chain (the open text-to-3D still): kept out of the page's results and the Library. */
 export const MODEL3D_STEP_FEATURE = "image-to-3d-step";
+/** "Film it photoreal" (N7-7): the photoreal orbits, listed with the models they were filmed from. */
+export const MODEL3D_FILM_FEATURE = "image-to-3d-film";
 
 export type Model3dMode = "image" | "multi" | "text" | "objects" | "splat";
 
@@ -324,6 +328,34 @@ export function animateSpinHref(v: Model3dView, turntable?: string): string | nu
   if (clip) return `/video-edit?${new URLSearchParams({ video: clip, prompt: "Turn this product turntable into a premium commercial shot: studio lighting, soft reflections, a clean seamless backdrop; keep the product and its rotation exactly" })}`;
   if (v.photo) return `/video?${new URLSearchParams({ image: v.photo, prompt: SPIN_PROMPT })}`;
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Film it photoreal (build plan N7-7): a photoreal orbit whose geometry matches the 3D model
+
+/** The orbit "Film it photoreal" films: one level turn round the model, counter-clockwise seen from above. */
+export const PHOTOREAL_ORBIT: ExactOrbit = { degrees: 360, direction: "ccw", tilt: 0, pulse: 0 };
+
+/**
+ * The model's turntable angle (radians) for frame i of the path render: the camera moving round to the right is the
+ * model turning the other way under a still camera. One constant to flip if a GPU run shows the film turning against
+ * its render.
+ */
+export const PHOTOREAL_TURN_SIGN: 1 | -1 = -1;
+export function photorealAngle(i: number, frames = PATH_FRAMES): number {
+  const k = keyAt(exactOrbitKeys(PHOTOREAL_ORBIT), frames > 1 ? i / (frames - 1) : 0);
+  return (PHOTOREAL_TURN_SIGN * k.azimuth * Math.PI) / 180 + 0;
+}
+
+/**
+ * "Film it photoreal": the photo the model was made from, filmed going round it. Cloud: H3 Max camera-controls from the
+ * photo along the orbit. Open: Wan 2.1 + Uni3C from the photo, guided by the model recorded along the same orbit
+ * (`render`; the browser records the GLB, a splat hands its own orbit video). Null when there's no photo to start from.
+ */
+export function photorealBody(v: Pick<Model3dView, "photo" | "poster">, engine: Engine, render?: string, still?: string) {
+  const image = v.photo ?? still;
+  if (!image) return null;
+  return { engine, image, orbit: PHOTOREAL_ORBIT, feature: MODEL3D_FILM_FEATURE, title: "Photoreal orbit", ...(engine === "open" && render && { render }) };
 }
 
 // ---------------------------------------------------------------------------
