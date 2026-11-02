@@ -8,6 +8,8 @@ import {
   CHARACTER_GPU,
   CHARACTER_LIMITS,
   CHARACTER_SWAP,
+  characterFinish,
+  h3Canvas,
   characterLicenceLine,
   cutWarning,
   h3Windows,
@@ -18,6 +20,7 @@ import {
   type CharacterOptions,
 } from "@/lib/catalog/character-swap";
 import { ACCESS_PLACE } from "@/lib/model-access";
+import { openCapNote, SHARPEN_COPY, SHARPEN_SIGMA_RANGE } from "@/lib/catalog/sharpen";
 import {
   chooseMaker,
   cutsInPart,
@@ -116,6 +119,8 @@ const character = z.object({
   useMask: z.boolean().optional(),
   windowFrames: z.number().int().min(22).max(362).optional(),
   historyFrames: z.number().int().min(0).max(341).optional(),
+  /** 1080p / 2K / 4K on your GPU: the regenerate's start noise (an evaluation knob; the page doesn't set it). */
+  sharpenSigma: z.number().min(SHARPEN_SIGMA_RANGE.min).max(SHARPEN_SIGMA_RANGE.max).optional(),
 });
 
 /** The body of /api/genjutsu (and /estimate). */
@@ -124,7 +129,7 @@ export const GenjutsuBodySchema = z.object({
   mode: z.enum(["motion", "character", "swap", "restyle", "insert"]),
   modelId: z.string().max(80).optional(),
   tier: z.enum(["standard", "high"]).optional(),
-  quality: z.enum(["480p", "720p", "768p", "1080p"]).optional(),
+  quality: z.enum(["480p", "720p", "768p", "1080p", "2K", "4K"]).optional(),
   target: z.enum(["type", "click", "paint"]).optional(),
   subject: z.string().max(300).optional(),
   prompt: z.string().max(GENJUTSU.maxPromptChars).optional(),
@@ -294,6 +299,19 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
       notes.push(`${am.label} first puts your character into the part's first frame${m.engine === "cloud" && n > 1 ? " (one per piece)" : ""}; if that fails the swap runs without it`);
     } else if (!m.h3.anchor) notes.push(`${name} runs without an anchor frame`);
     if (m.engine === "cloud") notes.push("On fal, H3 has no mask: who to swap is said in words, and the whole frame is regenerated around them");
+    // 1080p / 2K / 4K (sharpen.ts): what each engine does with the 768p swap.
+    const finish = characterFinish(qualityFor(m, body.quality ?? CHARACTER_SWAP.defaultQuality));
+    if (finish && m.engine === "cloud") {
+      notes.push(`${finish} is made from the 768p swap: the whole frame is redrawn at the higher size`);
+      // Pieces are joined by fal's merge-videos, at up to 2048 px a side: only a single piece keeps its 4K.
+      if (finish === "4K" && n > 1) notes.push(SHARPEN_COPY.joinCloud4k);
+    }
+    if (finish && m.engine === "open") {
+      notes.push("The 768p swap is redrawn by Open-H3 Regenerate and only your character is put back over your clip: the background and the sound stay as filmed. Faces can change slightly");
+      const canvas = source.width && source.height ? h3Canvas(source.width, source.height, CHARACTER_SWAP.defaultQuality) : undefined;
+      const capped = openCapNote(source, finish, canvas);
+      if (capped) notes.push(capped);
+    }
     if (m.engine === "open" && c.who === "index" && !body.points?.length) notes.push("Person numbers follow SAM 3.1's detections, the one it is surest of first — not left to right");
     if (m.engine === "open" && !m.h3.maskSwitch && c.useMask === false) notes.push(`${name} always regenerates only the person: its graph has no switch for the whole frame`);
     const warn = cutWarning(cutsInPart(body.cuts, range));

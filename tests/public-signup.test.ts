@@ -240,6 +240,8 @@ describe("accounts never run on the owner's keys or GPU", () => {
       // Restore & colourise: its run and its prompt writer.
       "/api/restore",
       "/api/restore/prompt",
+      // Character Swap Studio's Sharpen: a studio job, like its assembly.
+      "/api/swap-studio/projects/p1/sharpen",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);

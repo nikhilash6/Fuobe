@@ -11,6 +11,8 @@ import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
 import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, REGEN_OFFERED, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { COMPOSITE_MODEL } from "@/lib/catalog/sharpen";
+import { ORIGINALS, SHARPEN_TOOLS } from "@/lib/catalog/genjutsu";
 import { libraryEntry, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
 import { ANGLES_2511_LORA } from "@/lib/catalog/open-tools";
 import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
@@ -254,6 +256,28 @@ export const STUDIO_ROWS: StudioRowDef[] = [
           steps: [
             { modelId: REGEN_MODEL, op: "upscale-video" as const },
             { modelId: REGEN_JOIN, op: "concat" as const },
+          ],
+        } satisfies StudioRowDef,
+      ]
+    : []),
+  // The Character swap at 1080p / 2K / 4K (Genjutsu, and Sharpen in Character Swap Studio's Finish): the 768p swap, the
+  // person's mask (SAM 3.1 on H3 Relay's graph), the part at 24 fps, the swap regenerated, only the character composited
+  // over the footage, the windows joined and the part's sound put back. It regenerates with Open-H3 Regenerate, so it is
+  // listed only while that is offered (REGEN_OFFERED).
+  ...(REGEN_OFFERED
+    ? [
+        {
+          href: "/genjutsu?mode=character",
+          label: "Character swap in 2K",
+          group: "Video tools",
+          steps: [
+            { modelId: ORIGINALS.character, op: "video-swap" as const },
+            { modelId: SHARPEN_TOOLS.mask, op: "bg-remove-video" as const },
+            { modelId: SHARPEN_TOOLS.fit, op: "trim" as const },
+            { modelId: REGEN_MODEL, op: "upscale-video" as const },
+            { modelId: COMPOSITE_MODEL, op: "composite" as const },
+            { modelId: REGEN_JOIN, op: "concat" as const },
+            { modelId: SHARPEN_TOOLS.mux, op: "mux" as const },
           ],
         } satisfies StudioRowDef,
       ]

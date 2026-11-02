@@ -8,6 +8,7 @@ import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEA
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
 import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_OFFERED, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
+import { COMPOSITE_MODEL, COMPOSITE_WORKFLOW } from "./sharpen";
 import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
@@ -1146,6 +1147,19 @@ const open: ModelDef[] = [
     tagline: "Who to swap in a shot: SAM 3.1 finds them on any frame (words, largest / leftmost / rightmost / #n, or clicks) and follows them; corrections splice into the mask",
     routes: [comfy("bg-remove-video", "video-mask-h3-relay", "a black-and-white mask video at H3's canvas size, 24 fps")],
     options: { keepsNamed: true, matteOutputs: ["matte"] },
+    hidden: true,
+  }),
+  // Character swap in 2K: only the swapped character goes back over the footage, from the 768p swap and its
+  // regenerate, through the person's mask (src/lib/catalog/sharpen.ts). Run by Character Swap Studio and Genjutsu.
+  o({
+    id: COMPOSITE_MODEL,
+    name: "Character over the footage",
+    vendor: "ComfyUI",
+    family: "utility",
+    kind: "video",
+    tagline: "Puts only the swapped character back over the original footage, with its own sound · CPU",
+    routes: [comfy("composite", COMPOSITE_WORKFLOW, "the swap, then its regenerate, each through the person's mask (grown, feathered); a few seconds a pass")],
+    options: {},
     hidden: true,
   }),
   o({

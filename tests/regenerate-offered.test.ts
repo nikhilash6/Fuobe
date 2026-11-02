@@ -7,6 +7,10 @@ import { getModel } from "@/lib/catalog";
 import { paletteItems } from "@/lib/catalog/canvas";
 import { nextSteps, outputActions } from "@/lib/output-actions";
 import { HUB_MODES } from "@/lib/hubs";
+import { CHARACTER_QUALITIES } from "@/lib/catalog/character-swap";
+import { MAKERS } from "@/lib/catalog/genjutsu";
+import { OPEN_SHARPEN_OFF, sharpenOffered, sharpenOptions } from "@/lib/catalog/sharpen";
+import { STUDIO_ROWS } from "@/server/gpu/tools";
 
 // Regenerate · creative is switched off until it has run on a card that fits it; Restore & colourise and Remove
 // dialogue run on a self-hosted Fuobe only, so a guest or an account is never sent to them.
@@ -51,6 +55,19 @@ describe("Regenerate while it is switched off", () => {
     expect(VIDEO_UPSCALE_STUDIO.finishChoices).toBeUndefined();
     expect(getModel("oss-h3-regenerate")?.hidden).toBe(true);
     expect(paletteItems("both").map((p) => p.id)).not.toContain("upscale-regenerate");
+  });
+
+  it("leaves the Character swap's 1080p / 2K / 4K on your GPU out, and keeps the cloud's 2K / 4K", () => {
+    expect(CHARACTER_QUALITIES.open).toEqual(["480p", "768p"]);
+    expect(CHARACTER_QUALITIES.cloud).toEqual(["480p", "768p", "2K", "4K"]);
+    for (const m of MAKERS.filter((m) => m.h3 && m.engine === "open")) expect(m.qualities).toEqual(["480p", "768p"]);
+    expect(sharpenOffered("open")).toBe(false);
+    expect(sharpenOffered("cloud")).toBe(true);
+    const film = { width: 1920, height: 1080 };
+    expect(sharpenOptions("open", film).every((o) => !o.available && o.reason === OPEN_SHARPEN_OFF)).toBe(true);
+    expect(sharpenOptions("cloud", film).find((o) => o.tier === "2K")?.available).toBe(true);
+    expect(STUDIO_ROWS.map((r) => r.label)).not.toContain("Character swap in 2K");
+    expect(STUDIO_ROWS.map((r) => r.label)).not.toContain("Regenerate in 2K");
   });
 
   it("is not offered on a clip or an upload", () => {
