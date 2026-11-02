@@ -7,11 +7,16 @@ import { AUK_SETTINGS, SPEECH_CROSSFADE, stitchPlan, type AukQuality, type Speec
  * AudioMerge trims off), AuK's loader and one window. This rebuilds the windows and the stitch from
  * src/lib/speech-edit.ts's stitchPlan: each window is cut from the original, edited by AuK (one AuKGenerateEdit each, one
  * shared engine), and crossfaded back over the original's first and last SPEECH_CROSSFADE seconds of the window. Only
- * core audio nodes besides AuK's (TrimAudioDuration, AudioMerge, AudioConcat, SplitAudioChannels, EmptyAudio).
+ * core audio nodes besides AuK's (TrimAudioDuration, AudioMerge, AudioConcat, AudioAdjustVolume, SplitAudioChannels,
+ * EmptyAudio).
  *
  * Clicks: AudioMerge resamples the lower-rate side of a merge, and a resampled piece tapers at its edges. So the
  * recording and each edit are brought to one rate first (each merged with silence at the other's rate: AuK speaks at
  * 24 kHz), and a seam is a + (b − a) × fade-in, which uses only the curve that starts at 0 and whose end is cut away.
+ * AudioMerge also divides any result that peaks above 1.0 by its peak, and b − a on loud speech easily does (the two
+ * sides aren't in phase): a seam rescaled that way no longer ends where the edit's middle starts. So all the stitching
+ * runs HEADROOM_DB lower (AudioAdjustVolume, an exact gain), each window goes to AuK at its own level, and the result is
+ * brought back up once at the end: untouched parts come out as they went in.
  */
 
 const ids = (wf: ComfyWorkflow, type: string) => Object.keys(wf).filter((id) => wf[id].class_type === type);
@@ -24,6 +29,8 @@ const REST = 100000;
 export const AUK_RATE = 24000;
 /** The flat tail after the ramp: longer than the resampler's reach, trimmed off by AudioMerge. */
 export const FADE_TAIL = 0.05;
+/** How far below its level the stitching runs: room for a seam's difference of two full-scale signals and more. */
+export const HEADROOM_DB = 12;
 
 /**
  * The fade-in curve as a 16-bit stereo PCM WAV at 8 kHz: a linear ramp from 0 to 1 over `seconds`, then FADE_TAIL
@@ -93,11 +100,15 @@ export function expandSpeechEditWorkflow(wf: ComfyWorkflow, windows: SpeechWindo
   const mix = (id: string, a: string, b: unknown, method: string) => add(id, { class_type: wf[merge].class_type, inputs: { ...wf[merge].inputs, audio1: [a, 0], audio2: b, merge_method: method } });
   const join = (id: string, a: string, b: string) => add(id, { class_type: wf[concat].class_type, inputs: { ...wf[concat].inputs, audio1: [a, 0], audio2: [b, 0], direction: "after" } });
 
-  // The recording at max(its rate, AuK's): silence at 24 kHz added.
-  const src = mix("src", source, [empty, 0], "add");
+  const gain = (id: string, from: string, db: number) => add(id, { class_type: "AudioAdjustVolume", inputs: { audio: [from, 0], volume: db } });
+
+  // The recording HEADROOM_DB down, at max(its rate, AuK's): silence at 24 kHz added.
+  const src = mix("src", gain("src_low", source, -HEADROOM_DB), [empty, 0], "add");
   const edits = windows.map((w, k) => {
     const n = k + 1;
-    const input = cut(`w${n}_cut`, src, w.start, w.end - w.start);
+    const piece = cut(`w${n}_cut`, src, w.start, w.end - w.start);
+    // AuK hears the window at the recording's own level.
+    const input = gain(`w${n}_in`, piece, HEADROOM_DB);
     const auk = add(`w${n}_auk`, {
       class_type: wf[gen].class_type,
       inputs: {
@@ -114,8 +125,8 @@ export function expandSpeechEditWorkflow(wf: ComfyWorkflow, windows: SpeechWindo
       },
       _meta: { title: w.label.slice(0, 80) },
     });
-    // The edit at the recording's rate: silence cut from the window (window − window) added.
-    return mix(`w${n}_edit`, auk, [mix(`w${n}_zero`, input, [input, 0], "subtract"), 0], "add");
+    // The edit HEADROOM_DB down, at the recording's rate: silence cut from the window (window − window) added.
+    return mix(`w${n}_edit`, gain(`w${n}_low`, auk, -HEADROOM_DB), [mix(`w${n}_zero`, piece, [piece, 0], "subtract"), 0], "add");
   });
 
   let acc: string | undefined;
@@ -133,7 +144,7 @@ export function expandSpeechEditWorkflow(wf: ComfyWorkflow, windows: SpeechWindo
       append(mix(`${tag}_seam`, a, [mix(`${tag}_ramp`, mix(`${tag}_diff`, b, [a, 0], "subtract"), fadeIn, "multiply"), 0], "add"));
     }
   });
-  out[save].inputs.audio = [acc!, 0];
+  out[save].inputs.audio = [gain("out", acc!, HEADROOM_DB), 0];
   return out;
 }
 

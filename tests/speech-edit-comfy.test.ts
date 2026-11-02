@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { expandSpeechEditWorkflow, FADE_TAIL, speechFadeWav } from "@/lib/av/speech-edit-graph";
+import { expandSpeechEditWorkflow, FADE_TAIL, HEADROOM_DB, speechFadeWav } from "@/lib/av/speech-edit-graph";
 import type { ComfyWorkflow } from "@/lib/comfy";
 import { editedLength, type SpeechWindow } from "@/lib/speech-edit";
 
@@ -94,7 +94,23 @@ describe("the windows' rebuild", () => {
     // Every link points at a node that exists, and the save gets the whole chain.
     for (const n of Object.values(wf)) for (const v of Object.values(n.inputs)) if (Array.isArray(v) && typeof v[0] === "string") expect(wf[v[0]], `${v[0]}`).toBeTruthy();
     const save = Object.values(wf).find((n) => n.class_type === "SaveAudio")!;
-    expect(wf[(save.inputs.audio as [string, number])[0]].class_type).toBe("AudioConcat");
+    // The stitch runs HEADROOM_DB down (AudioMerge rescales anything over 1.0) and is brought back up once before the save.
+    const out = wf[(save.inputs.audio as [string, number])[0]];
+    expect(out).toMatchObject({ class_type: "AudioAdjustVolume", inputs: { volume: HEADROOM_DB } });
+    expect(wf[(out.inputs.audio as [string, number])[0]].class_type).toBe("AudioConcat");
+    const gains = Object.entries(wf).filter(([, n]) => n.class_type === "AudioAdjustVolume");
+    expect(wf.src_low.inputs.volume).toBe(-HEADROOM_DB);
+    // AuK hears each window at the recording's level, and its edit goes back down before the seams.
+    for (const k of [1, 2]) {
+      expect(wf[`w${k}_in`].inputs).toMatchObject({ volume: HEADROOM_DB, audio: [`w${k}_cut`, 0] });
+      expect(wf[`w${k}_auk`].inputs.input_audio).toEqual([`w${k}_in`, 0]);
+      expect(wf[`w${k}_low`].inputs).toMatchObject({ volume: -HEADROOM_DB, audio: [`w${k}_auk`, 0] });
+    }
+    // Down and up in pairs: the net gain is 0 dB.
+    expect(gains).toHaveLength(2 + 2 * windows.length);
+    expect(gains.reduce((t, [, n]) => t + Number(n.inputs.volume), 0)).toBe(0);
+    // Every node is one the server knows (core audio nodes, AuK's checked against its node list).
+    for (const n of Object.values(wf)) expect(subset[n.class_type], n.class_type).toBeTruthy();
     // The pieces' lengths add up to the edited recording's length: the original's untouched parts plus each new window.
     const trims = Object.entries(wf).filter(([id, n]) => n.class_type === "TrimAudioDuration" && /^p\d+_(orig|edit)$/.test(id));
     const seams = Object.keys(wf).filter((id) => /_seam$/.test(id)).length;
