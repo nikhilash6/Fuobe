@@ -17,6 +17,7 @@ const { REACH } = await import("@/server/providers/reach");
 const gens = await import("@/server/generations");
 const { db } = await import("@/server/db");
 const { saveFile } = await import("@/server/storage");
+const { exactOrbitKeys } = await import("@/lib/exact-orbit");
 
 const RAM = 16 * 2 ** 30;
 /** A stand-in ComfyUI: /system_stats answers `status` after `delay` ms (a busy CPU server answers late, but takes the connection). */
@@ -228,6 +229,31 @@ describe("a chain step after real ComfyUI steps", () => {
     const done = await launched(g.id);
     expect(done.provider).toBe("comfyui");
     expect(done.error ?? "").not.toMatch(/needs ComfyUI to continue/);
+  });
+
+  it("draws a server camera path only once ComfyUI answers, never on a sweep that waits for it", async () => {
+    status = 503;
+    missed();
+    // A depth step that ran on ComfyUI hands on a picture this server can't read: drawing the path would fail the step.
+    const still = saveFile({ data: Buffer.from("not really a still"), contentType: "image/png", source: "generation" }).url;
+    const g = gens.createGenerations(
+      {
+        feature: "canvas",
+        modelId: "oss-uni3c-path",
+        op: "camera-path",
+        prompt: "The camera flies around the subject",
+        inputs: { images: [still] },
+        chain: [{ slot: "video", render: "path" }],
+        params: { numOutputs: 1, cameraPath: exactOrbitKeys({ degrees: 90, direction: "cw" }) },
+      },
+      { dependsOn: ranOnComfy("image") },
+    )[0];
+    await until(() => gens.getGeneration(g.id)!.message === "Waits for ComfyUI to answer");
+    await new Promise((r) => setTimeout(r, 3500));
+    const x = gens.getGeneration(g.id)!;
+    expect(x.status).toBe("queued");
+    expect(x.message).toBe("Waits for ComfyUI to answer");
+    await gens.cancelGeneration(g.id);
   });
 
   it("doesn't wait for ComfyUI when the step runs on the cloud (an Original on its cloud engine)", async () => {

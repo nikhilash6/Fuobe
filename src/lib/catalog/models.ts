@@ -4,6 +4,7 @@ import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { QWEN21_DECODER, QWEN21_GPU, QWEN21_SPEED } from "@/lib/qwen21-speed";
 import { QMA_AZIMUTHS, QMA_AZIMUTH_LABELS, QMA_DISTANCES, QMA_DISTANCE_LABELS, QMA_DISTANCE_ZOOM, QMA_ELEVATIONS, QMA_ELEVATION_DEGREES, QMA_ELEVATION_LABELS, QMA_MODEL, QMA_PARAMS } from "@/lib/qma";
+import { H3_DECODER, H3_FAST_DECODE_OFFERED, H3_GPU_TIER } from "@/lib/gpu/h3-tier";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
@@ -59,6 +60,8 @@ const RESTORE_LORA = (() => {
 })();
 /** Fuobe Try-On's LoRA (research adapterLoras): xocialize's try-on LoRA for FLUX.2 [klein] 4B, Apache-2.0. */
 const TRYON_LORA = loraEntry("tryon-klein-4b");
+/** Fuobe Animation's LoRA: bilibili's AniSora 3.2 on Wan 2.2's high-noise expert (Apache-2.0; Kijai's rank-64 extraction). */
+const ANISORA_LORA = loraEntry("anisora-3-2-i2v-high");
 /** akhaliq's Next-Scene LoRA for Qwen-Image 2.1: the 2.1 next-scene graph loads it, and its switch in Models & licences holds the model. */
 const NEXT_SCENE_21_LORA = loraEntry("qwen21-next-scene");
 /** gribbliest's QMA camera-angles LoRA for Qwen-Image 2.1: the QMA graph loads it, and its switch in Models & licences holds the model. */
@@ -631,6 +634,10 @@ const open: ModelDef[] = [
           default: "fast",
           labels: { fast: "Fast · 8 steps", best: "Best · 20 steps, about 2.3x longer" },
         },
+        // On a card under 32 GB the run picks FastH3 V2 or Trim by itself (src/server/h3-gpu.ts); this picks one on any card.
+        H3_GPU_TIER,
+        // Options → Decoder (Fast decode, Sol-H3-VAE) joins here once a ComfyUI with its loader (#17411) has validated it: see H3_DECODER.
+        ...(H3_FAST_DECODE_OFFERED ? [H3_DECODER] : []),
       ],
     },
     defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },
@@ -669,6 +676,37 @@ const open: ModelDef[] = [
     routes: [comfy("t2v", "wan22-t2v-14b"), comfy("i2v", "wan22-i2v-14b"), comfy("flf2v", "wan22-flf2v-14b"), KEYFRAME_FILM],
     options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [3, 5, 7], resolutions: ["480p", "720p"], seed: true, negativePrompt: true, endFrame: true },
     defaults: { aspectRatio: "16:9", duration: 5, resolution: "480p" },
+  }),
+  // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu): FastVideo's FastH3 V2 and FastH3 Trim, which MiniMax H3's GPU tier picks
+  // (Auto on a smaller card, or asked for: src/server/h3-gpu.ts). Listed for their licence, their switch in Models & licences
+  // and the pre-flight's readiness; never in a picker. The speeds and the 8 GB figure are FastVideo's measurements.
+  o({
+    id: "oss-minimax-h3-fast",
+    name: "MiniMax H3 · FastH3 V2",
+    vendor: "FastVideo",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "MiniMax H3 in 8 steps on a 16 GB GPU, from words, a start frame, or start and end frames · MiniMax H3 Community License",
+    routes: [
+      comfy("t2v", "minimax-h3-fast-t2v", "FastH3 V2, 8 steps"),
+      comfy("i2v", "minimax-h3-fast-i2v", "FastH3 V2, 8 steps; the clip takes the start frame's shape"),
+      comfy("flf2v", "minimax-h3-fast-flf2v", "FastH3 V2, 8 steps; the clip takes the start frame's shape"),
+    ],
+    options: { aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"], durations: [3, 5, 10, 15], resolutions: ["768p"], seed: true, endFrame: true, audio: "always", promptFormat: "minimax-h3" },
+    defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },
+    hidden: true,
+  }),
+  o({
+    id: "oss-minimax-h3-trim",
+    name: "MiniMax H3 · FastH3 Trim",
+    vendor: "FastVideo",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "MiniMax H3 from words on an 8-12 GB GPU: experimental, below FastH3 V2 in quality · MiniMax H3 Community License",
+    routes: [comfy("t2v", "minimax-h3-trim-t2v", "FastH3 Trim, 8 steps, experimental")],
+    options: { aspectRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"], durations: [3, 5, 10, 15], resolutions: ["768p"], seed: true, audio: "always", promptFormat: "minimax-h3" },
+    defaults: { aspectRatio: "16:9", duration: 5, resolution: "768p" },
+    hidden: true,
   }),
   o({
     id: "oss-wan22-5b",
@@ -1126,6 +1164,19 @@ const open: ModelDef[] = [
     routes: [comfy("remove-object", "video-person-remove-h3-relay", "H3 Relay Person Removal: the person painted green, 22-frame windows with 18 of history from the clean first frame (image), 12 steps, silent")],
     options: { seed: true, maxImages: 1 },
   }),
+  // Its mask first (o/person-remover-plus): the removal graph's own SAM 3.1 chain on the part's first seconds, the person
+  // filled green exactly as H3 will see them. Run by Remove object's "Preview the mask", not the composer.
+  o({
+    id: "oss-h3-removal-mask",
+    name: "SAM 3.1 green mask · H3 Person Removal",
+    vendor: "Meta × Akatz Labs",
+    family: "sam",
+    kind: "video",
+    tagline: "Who H3 Person Removal will take out: SAM 3.1 finds them, the mask is grown and filled green over the first seconds",
+    routes: [comfy("bg-remove-video", "video-person-remove-h3-mask", "SAM 3.1 detect + track, threshold 0.5, grown maskGrow px, filled green: the removal's own mask")],
+    options: {},
+    hidden: true,
+  }),
   // Character Swap Studio (/character-swap, o/h3-studio): Akatz Labs' workbench for whole clips. A segment is one H3 Relay
   // pass (its approved mask, anchor and the previous take's lossless master as history); a mask is SAM 3.1 on any frame
   // of a shot, spliced into the version it corrects. Both run through the studio, not the composer.
@@ -1321,8 +1372,34 @@ const open: ModelDef[] = [
     kind: "audio",
     tagline: "Open music generation with lyrics",
     routes: [comfy("music", "music-ace-step-15")],
-    options: { durations: [30, 60, 120, 180], seed: true },
+    options: { durations: [30, 60, 120, 180], seed: true, lyrics: {} },
     defaults: { duration: 60 },
+  }),
+  // Full songs on core nodes (nm10-music3, research #10 §6.6). MiniMax Music 3 is the same model the cloud runs as
+  // minimax-music-3 (fal hosts it); YuE2 is open-engine only (neither fal nor Replicate hosts it), and covers a song you add.
+  o({
+    id: "oss-minimax-music-3",
+    name: "MiniMax Music 3",
+    vendor: "MiniMax",
+    family: "minimax-music",
+    kind: "audio",
+    tagline: "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
+    badges: ["new", "top"],
+    routes: [comfy("music", "music-minimax-3", "int8 DiT and text encoder, 30 steps; songs over 2 minutes decode in tiles")],
+    options: { durations: [30, 60, 120, 180, 240, 300], seed: true, lyrics: {} },
+    defaults: { duration: 120 },
+  }),
+  o({
+    id: "oss-yue2",
+    name: "YuE2",
+    vendor: "Multimodal Art Projection",
+    family: "yue",
+    kind: "audio",
+    tagline: "Songs sung from your lyrics, or a cover of a song you add with a new style and words",
+    badges: ["new"],
+    routes: [comfy("music", "music-yue2-song", "plans the melody and chords, then sings; with a song added, SheetSage2 reads its melody for the cover")],
+    options: { durations: [60, 120, 180, 240, 300], seed: true, lyrics: { required: true }, cover: true },
+    defaults: { duration: 120 },
   }),
   // Utilities used by chained jobs (multi-shot, storyboard films, extend) and the Video tools page.
   o({
@@ -1666,6 +1743,26 @@ const open: ModelDef[] = [
       ],
     },
   }),
+  // DBS graph C (docs/research/dbs-separation-7.md §4.4): the split mixed back into one track at set levels (params.extra
+  // voiceDb, musicDb, effectsDb; whole dB, -100 = gone). Clean up dialogue (src/lib/av/clean-dialogue.ts) runs on it: the
+  // dialogue alone, or with the music and effects quietly under it.
+  o({
+    id: "oss-dbs-remix",
+    name: "DBS remix (dialogue, music, effects at set levels)",
+    vendor: "Open source",
+    family: "dbs",
+    kind: "audio",
+    tagline: "Takes the music and effects out from under the dialogue, or keeps them quietly · 23 MB · CPU or GPU · Apache-2.0",
+    badges: ["new"],
+    routes: [comfy("separate-audio", "soundtrack-remix-dbs", "one FLAC: the dialogue with the music and effects at the levels asked for + a speed report; ComfyUI-DBS")],
+    options: {
+      promptless: true,
+      controls: [
+        { param: "separationModel", label: "Model", values: ["DBS-BSRNN-DnR", "DBS-TIGER-DnR"], labels: { "DBS-BSRNN-DnR": "Fast (DBS-BSRNN)", "DBS-TIGER-DnR": "Best (DBS-TIGER)" } },
+        { param: "channels", label: "Channels", values: ["mono", "each channel"], default: "mono", labels: { mono: "Mono", "each channel": "Stereo (about twice as long)" } },
+      ],
+    },
+  }),
   // NVIDIA NemotronLabs RE-USE (universal speech enhancement) on Fuobe's own ComfyUI-RE-USE pack (comfy-nodes/, no mamba-ssm):
   // noise, echo, clipping, codec damage and phone-band audio fixed, the main speaker kept. Open engine only: nothing like it is
   // hosted on fal or Replicate. params.extra.background "keep" runs voice-clean-bed-reuse (DBS keeps the music and effects;
@@ -1948,6 +2045,26 @@ const open: ModelDef[] = [
       seed: true,
       maxImages: 1,
       sliders: [{ param: "numGaussians", label: "Gaussians", min: 32768, max: 1048576, step: 32768, default: 262144 }],
+    },
+  }),
+  // idol-1 (docs/research/idol-9.md): Speridlabs' Idol, TripoSplat's architecture retrained, on the same core nodes. Its cloud twin
+  // is "idol-3d" (fal speridlabs/idol, cloud-models.generated.ts).
+  o({
+    id: "oss-idol",
+    name: "Idol 3D",
+    vendor: "Speridlabs",
+    family: "idol",
+    kind: "model3d",
+    tagline: "A Gaussian splat (.spz) of one object from one picture, plus an orbit video · TripoSplat's architecture, retrained · 8 GB GPU · Apache-2.0 · Built with DINOv3",
+    badges: ["new"],
+    routes: [comfy("splat", "image-to-splat-idol", "Idol on the TripoSplat core nodes → .spz + a 3 s orbit")],
+    options: {
+      seed: true,
+      maxImages: 1,
+      sliders: [
+        { param: "numGaussians", label: "Gaussians", min: 32768, max: 1048576, step: 32768, default: 262144 },
+        { param: "steps", label: "Steps", min: 10, max: 50, step: 1, default: 50 },
+      ],
     },
   }),
   // Round 4 (r4/cinema-3d): Cinema Studio's "Create 3D scene". The mesh is in the photo's own camera space
@@ -2252,6 +2369,37 @@ const originals: ModelDef[] = [
     }),
     // Sound in the cloud only (fal's generate_audio): the open LTX-2.3 graphs decode no audio, so no toggle there.
     engineOptions: { open: { audio: false } },
+  },
+  // Fuobe Animation (package inbetweening): keyframe in-betweening. On your GPU one graph makes every gap between 2-10
+  // keyframes on one set of Wan 2.2 loaders (AniSora 3.2 high, lightx2v 4-step low), keeps every Nth frame per gap and plays
+  // the film at 24 or 16 fps (src/lib/av/inbetween-graph.ts); in the cloud one hosted Wan 2.2 clip per gap with AniSora on
+  // the high-noise expert, every frame at 16 fps, joined (createKeyframeFilm). Timing: src/lib/inbetween.ts.
+  {
+    ...original({
+      id: "fuobe-animation",
+      open: [comfy("keyframes", "wan22-inbetween-anisora", "every gap on one set of loaders: AniSora 3.2 + lightx2v 4 steps, every Nth frame, one video")],
+      tagline: "Keyframes in, the in-betweens drawn, one finished animation · Wan 2.2 + AniSora free on your GPU (24 GB), or hosted on fal",
+      options: {
+        inbetween: true,
+        aspectRatios: ["auto", ...VID_AR],
+        resolutions: ["480p", "720p"],
+        seed: true,
+        negativePrompt: true,
+        maxImages: 10,
+        promptOptional: true,
+        ...(ANISORA_LORA && { loras: [loraRef(ANISORA_LORA)] }),
+      },
+    }),
+    // One clip per gap, joined, in the cloud: a chain like the open Frames film's (src/server/chains.ts createKeyframeFilm).
+    routes: [
+      comfy("keyframes", "wan22-inbetween-anisora", "every gap on one set of loaders: AniSora 3.2 + lightx2v 4 steps, every Nth frame, one video"),
+      ...(ORIGINAL_HALVES.get("fuobe-animation")?.routes ?? []),
+      { op: "keyframes", provider: "fal", endpoint: "fal-ai/wan/v2.2-a14b/image-to-video", chained: true, note: "one hosted clip per gap with AniSora, joined" },
+    ],
+    engineDefaults: { open: { resolution: "720p" } },
+    // The GPU graph needs two keyframes; in the cloud each gap's clip runs on its own (a start and an end frame).
+    engineOptions: { open: { requires: { images: 2, msg: "Add at least two keyframes: the in-betweens go between them" } } },
+    engineNote: "In the cloud every frame is kept and the animation plays at 16 fps; speeds ×2–×4 and 24 fps playback run on your GPU",
   },
   // Fuobe Cinema (O6): Cinema Studio 4.0's Original (src/lib/catalog/cinema.ts compiles the Director into the prompt and
   // turns a camera move into a camera LoRA, a Fun Camera pose or LTX-2.3's camera_lora). On the user's GPU it is Wan 2.2

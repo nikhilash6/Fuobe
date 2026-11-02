@@ -37,6 +37,7 @@ import { lookCard } from "@/lib/catalog/soul-cards";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
 import { BOARD_TITLES_KEY, boardTitle, filmReady, rememberTitle } from "@/lib/storyboard-board";
+import { animateHref, MAX_KEYS } from "@/lib/inbetween";
 import { cn } from "@/lib/utils";
 import { ratioValue } from "@/lib/format";
 import { responseError, toastError } from "@/lib/refusals";
@@ -382,7 +383,31 @@ function Board({
             · {modelName(first, names)} · {timeAgo(first.createdAt)}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 flex-wrap items-center gap-1">
+          {frames.length > 1 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {ready ? (
+                  <Button asChild variant="ghost" size="sm" className="whitespace-nowrap">
+                    <Link href={animateHref(frames.map((f) => f.outputs[0]?.url).filter((u): u is string => !!u), idea)} data-animate-panels>
+                      <Sparkles /> Animate these panels
+                    </Link>
+                  </Button>
+                ) : (
+                  <span tabIndex={0} className="inline-flex rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <Button variant="ghost" size="sm" disabled className="whitespace-nowrap">
+                      <Sparkles /> Animate these panels
+                    </Button>
+                  </span>
+                )}
+              </TooltipTrigger>
+              <TooltipContent>
+                {ready
+                  ? `The panels become keyframes${frames.length > MAX_KEYS ? ` (the first ${MAX_KEYS})` : ""}, and the motion between them is drawn in an animation style`
+                  : `Ready when all ${frames.length} frames are done`}
+              </TooltipContent>
+            </Tooltip>
+          )}
           {!film.length && frames.length > 1 && first.batchId && (
             <Tooltip>
               <TooltipTrigger asChild>

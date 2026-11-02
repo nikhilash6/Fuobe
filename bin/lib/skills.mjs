@@ -110,3 +110,177 @@ export function packSkill(dir) {
   walk("");
   return { zip: zipFiles(files), files: files.map((f) => f.name.slice(folder.length + 1)), skipped };
 }
+
+// ---------------------------------------------------------------------------
+// Running a skill that runs by itself (its recipe): `fuobe skills params | estimate | run | export`
+
+/** A skill input that takes a file. */
+export const isFileInput = (p) => p.type === "image" || p.type === "video" || p.type === "audio";
+
+/**
+ * `-p key=value` for a skill's inputs. Every value stays text, as the Run form sends it (the server reads a number from
+ * its digits); `key=` leaves the input to its default. A key given twice is a mistake, not the last one winning.
+ * @param {string[]} pairs
+ * @returns {Record<string, string>}
+ */
+export function skillValues(pairs) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const pair of pairs) {
+    const eq = pair.indexOf("=");
+    if (eq <= 0) throw new UsageError(`-p takes input=value, not “${pair}” (fuobe skills params <name> lists the inputs)`, "skills");
+    const key = pair.slice(0, eq).trim();
+    if (key in out) throw new UsageError(`-p ${key} is given twice`, "skills");
+    out[key] = pair.slice(eq + 1);
+  }
+  return out;
+}
+
+/**
+ * Rows of a CSV or TSV text (a spreadsheet's paste is tab-separated): quotes, doubled quotes, line breaks inside quotes,
+ * a byte-order mark. Read the way Fuobe reads a pasted table (csvCells in src/lib/recipe.ts), with each row's first line.
+ * @param {string} text
+ * @returns {{ cells: string[], line: number }[]}
+ */
+export function csvCells(text) {
+  const src = text.replace(/^﻿/, "");
+  const first = src.split(/\r?\n/, 1)[0] ?? "";
+  const sep = first.includes("\t") && !first.includes(",") ? "\t" : first.includes(";") && !first.includes(",") && !first.includes("\t") ? ";" : ",";
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  let line = 1;
+  let start = 1;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (quoted) {
+      if (c === '"' && src[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (c === '"') quoted = false;
+      else {
+        if (c === "\n") line++;
+        cell += c;
+      }
+      continue;
+    }
+    if (c === '"' && !cell.trim()) {
+      quoted = true;
+      cell = "";
+    } else if (c === sep) {
+      row.push(cell);
+      cell = "";
+    } else if (c === "\n" || c === "\r") {
+      if (c === "\r" && src[i + 1] === "\n") i++;
+      row.push(cell);
+      rows.push({ cells: row, line: start });
+      row = [];
+      cell = "";
+      line++;
+      start = line;
+    } else cell += c;
+  }
+  if (cell || row.length) {
+    row.push(cell);
+    rows.push({ cells: row, line: start });
+  }
+  return rows.map((r) => ({ ...r, cells: r.cells.map((x) => x.trim()) })).filter((r) => r.cells.some((c) => c));
+}
+
+const norm = (s) => s.toLowerCase().replace(/[\s_-]+/g, " ").trim();
+
+/** The input each header cell names (by its id or its label, as Fuobe matches them), or null. */
+export function headerInputs(header, params) {
+  const byName = new Map();
+  for (const p of params) {
+    byName.set(norm(p.id), p.id);
+    byName.set(norm(p.label), p.id);
+  }
+  return header.map((h) => byName.get(norm(h)) ?? null);
+}
+
+const quote = (s) => (/[",\n\r]/.test(s) || s !== s.trim() ? `"${s.replace(/"/g, '""')}"` : s);
+
+/**
+ * Rows written back as CSV for the server, and the line each row starts on there (a cell with a line break takes more
+ * than one), so its answers ("Row 3: …") can name the row's line in the person's own file.
+ * @param {string[][]} rows header first
+ */
+export function toCsv(rows) {
+  const lines = [];
+  let line = 1;
+  const text = rows
+    .map((r) => {
+      lines.push(line);
+      const out = r.map(quote).join(",");
+      line += out.split("\n").length;
+      return out;
+    })
+    .join("\n");
+  return { text: `${text}\n`, lines };
+}
+
+/** $12.40: a skill's price before it runs, to the cent. */
+export const exactCost = (usd) => (usd === 0 ? "free" : usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`);
+
+const TYPE_WORDS = { image: "image", video: "video", audio: "audio", text: "text", number: "number", choice: "choice", element: "@element" };
+
+/**
+ * A skill's inputs as a table: id, type, needed or its default, and what it takes.
+ * @param {{ name: string, title: string, recipe: { params: any[] }, engines: string[], ready: string[], line?: string }} view GET /api/assist/skills/<name>/recipe
+ */
+export function paramsTable(view) {
+  return view.recipe.params.map((p) => {
+    const needed = p.required && p.default === undefined ? "needed" : p.default !== undefined ? `default ${p.default}` : "optional";
+    const what = [
+      p.label,
+      p.type === "choice" ? (p.options ?? []).join(" | ") : null,
+      p.type === "number" && (p.min !== undefined || p.max !== undefined) ? `${p.min ?? "…"}–${p.max ?? "…"}` : null,
+      p.type === "text" && p.max ? `up to ${p.max} characters` : null,
+      isFileInput(p) ? "a file, an https:// link or a /api/files/… URL" : null,
+      p.example !== undefined && p.example !== null && p.example !== "" && !isFileInput(p) ? `e.g. ${p.example}` : null,
+    ].filter(Boolean);
+    return [p.id, TYPE_WORDS[p.type] ?? p.type, needed, what.join(" · ")];
+  });
+}
+
+const ENGINE_WORDS = { cloud: "the cloud", open: "your GPU (open source)" };
+
+/** "on the cloud", "on your GPU (open source)". */
+export const engineWords = (engine) => ENGINE_WORDS[engine] ?? engine;
+
+/**
+ * A skill's price in words: the steps of one run, then the total. With `rows` (a --rows file), a row's problem names
+ * its line in that file (`lineOf`).
+ * @param {any} est POST /api/assist/skills/<name>/estimate
+ * @param {string} title
+ * @param {{ rows?: boolean, lineOf?: (line: number) => number }} [o]
+ */
+export function estimateLines(est, title, { rows = false, lineOf = (l) => l } = {}) {
+  const runs = est.runs.length;
+  const out = [`${title} on ${engineWords(est.engine)}: ${est.jobs.length} step${est.jobs.length === 1 ? "" : "s"}${runs > 1 ? " a run" : ""}`];
+  for (const [i, j] of est.jobs.entries()) {
+    const price = j.demo ? "demo, free" : j.costUsd === null ? "price varies" : exactCost(j.costUsd);
+    out.push(`  ${i + 1}. ${j.modelName}${j.note ? ` · ${j.note}` : ""}${j.count > 1 ? ` · ${j.count} outputs` : ""} · ${price}${j.error ? ` — ${j.error}` : ""}`);
+  }
+  out.push(...estimateProblems(est, { rows, lineOf }, false));
+  if (est.runnable) out.push(priceWords(est, runs));
+  return out;
+}
+
+/** What stops a skill's run, row by row (`jobs`: a step's own problem too, when nothing else says why). */
+export function estimateProblems(est, { rows = false, lineOf = (l) => l } = {}, jobs = true) {
+  const out = [...est.errors];
+  for (const r of est.runs) for (const e of r.errors) out.push(rows ? `Row ${lineOf(r.line)}: ${e}` : e);
+  if (jobs && !out.length) for (const j of est.jobs) if (j.error) out.push(`${j.modelName}: ${j.error}`);
+  return out;
+}
+
+/** "20 runs · $12.40 in all", "Free on your GPU", "A demo: free". */
+export function priceWords(est, runs) {
+  if (est.demo) return `${runs > 1 ? `${runs} runs · ` : ""}a demo (nothing connected), free`;
+  if (est.total === null) return `${runs > 1 ? `${runs} runs · ` : ""}some prices vary`;
+  if (est.total === 0) return `${runs > 1 ? `${runs} runs · ` : ""}free`;
+  return runs > 1 ? `${runs} runs · ${exactCost(est.total)} in all` : `about ${exactCost(est.total)}`;
+}

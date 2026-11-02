@@ -89,7 +89,7 @@ M = []
 def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=None, defaults=None, options=None, fixed=None, hidden=False,
           sliders=None, controls=None, api_defaults=None, formats=None, ranged_durations=False, fit_values=False, fps_targets=None, upscale_tiers=None,
           frame_step=None, original=False, sizes=None, keep_shape=False, licence=None, frame_fps=None, frame_multiple=None,
-          exact_size=False, tier_size=None):
+          exact_size=False, tier_size=None, prompt_max=False):
     """sliders / controls: [(field, label)] read from each route's research inputs (dotted = nested field; a slider's
     third item is its step, when the generic one is too coarse):
     numeric fields with minimum/maximum become sliders, enums become composer controls; both travel as params.extra.
@@ -119,6 +119,8 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
     tier_size: the endpoint whose price names resolution tiers ("$0.009 at 1K … $0.036 at 4K": fal's FLUX 3 Klein): the size goes
     as one {width, height} object, the aspect ratio's shape on the tier's square (FieldMap.size.bases), on a 16 px grid within
     the limits the field's description states ("256 to 4096 pixels"); the tiers become the resolutions.
+    prompt_max: the prompt field's maxLength goes to FieldMap.promptMax, so a longer prompt is refused before a paid call (Vidu Q4's
+    5,000 characters, Meshy retexture's 600).
     A route's options dict may also set max_images (FieldMap.maxImages), note, loraEndpoint (the same model with LoRAs:
     FieldMap.loras comes from its research record) and pin (a Replicate model run by version: the research's version)."""
     M.append(dict(id=id, name=name, vendor=vendor, family=family, kind=kind, tagline=tagline, routes=routes,
@@ -126,7 +128,7 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
                   sliders=sliders or [], controls=controls or [], api_defaults=api_defaults or {}, formats=formats or {},
                   ranged_durations=ranged_durations, fit_values=fit_values, fps_targets=fps_targets or [], upscale_tiers=upscale_tiers or [],
                   frame_step=frame_step, original=original, sizes=sizes, keep_shape=keep_shape, licence=licence, frame_fps=frame_fps,
-                  frame_multiple=frame_multiple, exact_size=exact_size, tier_size=tier_size))
+                  frame_multiple=frame_multiple, exact_size=exact_size, tier_size=tier_size, prompt_max=prompt_max))
 
 
 # ----- Image
@@ -595,6 +597,82 @@ model("minimax-h3-max-3d", "MiniMax H3 Max 3D to video", "MiniMax", "hailuo", "v
       [("v2v", "minimax/h3-max/3d-to-video")], hidden=True, defaults={"resolution": "768P"},
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request; + $0.10 for each reference it draws when given none (up to 2)",
                {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16}, "minSeconds": 5, "perRequest": 0.5, "generatedRefs": {"usd": 0.1, "count": 2}}))
+# ----- Hosted catch-up (package nm10-hosted-catchup; research new-models-10.json endpointRecords, read 2026-11-02 with
+# scripts/fetch-hosted-schemas.py --catchup). Closed models on fal and Replicate: cloud only; the open engine keeps its own tools.
+H3_RES = {"480P": 0.05, "768P": 0.08, "1080P": 0.16, "2K": 0.32}
+# H3 Max lip sync: a portrait (0.4-2.5 wide) and 5 s to 15 min of audio; the video is as long as the audio, billed per second by
+# resolution and 1.2 times over for a video over 15 s (fal's page: 30 s at 768P costs $2.88).
+model("minimax-h3-max-lipsync", "MiniMax H3 Max Lip Sync · up to 15 min", "MiniMax", "hailuo", "video",
+      "A portrait speaks your audio: 5 seconds to 15 minutes, as long as the voice, 480P to 2K",
+      [("avatar", "minimax/h3-max/lip-sync/image-to-video")], badges=["new"], defaults={"resolution": "768P"},
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16, 2K $0.32; 1.2× for audio over 15 s", {"byResolution": H3_RES, "longFactor": {"over": 15, "factor": 1.2}}))
+# H3 Max relight: the clip (up to 15 s, resampled to 24 fps) relit to match a lit sphere, which Fuobe draws in the browser from a
+# light preset (ModelOptions.lightSphere). The result keeps the clip's shape ("adaptive") and is billed on its length.
+model("minimax-h3-max-relight", "MiniMax H3 Max Relight", "MiniMax", "hailuo", "video",
+      "Real footage relit to a light you pick — direction, colour and softness — up to 15 s",
+      [("relight-video", "minimax/h3-max/relight", "fal", {"drop": ["aspectRatio"]})], badges=["new"], defaults={"resolution": "768P"},
+      fixed={"aspect_ratio": "adaptive"}, options={"lightSphere": True, "promptOptional": True},
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16, 2K $0.32; billed on the clip's length", {"byResolution": H3_RES}))
+# H3 Max insert: a new scene of `duration` seconds generated between params.startTime and params.endTime (resume_time) of the clip;
+# only the new scene is billed (references past fal's first 4,096 tokens add $0.02 per 1,000, not counted here).
+model("minimax-h3-max-insert", "MiniMax H3 Max Insert a moment", "MiniMax", "hailuo", "video",
+      "A new 5–13 s moment generated inside your clip, between two points you mark",
+      [("insert-moment", "minimax/h3-max/insert-video")], badges=["new"], defaults={"resolution": "768p", "duration": 5}, ranged_durations=True,
+      options={"promptOptional": True}, prompt_max=True,
+      pricing=("second", 0.06, "768p; 480p $0.05; only the new moment is billed; references past the first 4,096 tokens add $0.02 per 1,000",
+               {"byResolution": {"480p": 0.05, "768p": 0.06}}))
+# H3 Max looks: words or a first frame to a 5-15 s clip in the look, with sound. Generation, not a restyle of a clip.
+for _slug, _id, _name, _tag in (("16bit-pixel", "pixel", "16-bit Pixel", "16-bit pixel art in motion"),
+                                ("hand-drawn", "hand-drawn", "Hand-drawn", "a hand-drawn animation"),
+                                ("low-poly", "low-poly", "Low Poly", "low-poly 3D"),
+                                ("retro-toon-70s", "retro-toon", "Retro Toon 70s", "a 1970s cartoon"),
+                                ("vhs", "vhs", "VHS", "a worn VHS tape, with the tape damage you pick")):
+    _ep = f"minimax/h3-max/styles/{_slug}"
+    model(f"minimax-h3-max-look-{_id}", f"MiniMax H3 Max · {_name} look", "MiniMax", "hailuo", "video",
+          f"A new 5–15 s clip with sound, made as {_tag}, from words or a first frame (it doesn't restyle a clip)",
+          [("t2v", _ep), ("i2v", _ep)], badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5}, ranged_durations=True,
+          controls=[("damage_level", "Tape wear")] if _slug == "vhs" else None,
+          pricing=("second", 0.08, "768p, sound included"))
+# H3 Max Turbo: words, a start frame or start and end frames, 1-15 s with sound. fal's November rate runs to 2026-11-15 (30% off),
+# then the list rates. Its reference and extend routes are billed differently, so they are models of their own.
+model("minimax-h3-max-turbo", "MiniMax H3 Max Turbo", "MiniMax", "hailuo", "video",
+      "Fast, cheap H3 Max with sound — drafts and quick takes from words or frames, 1–15 s",
+      [("t2v", "minimax/h3-max-turbo/text-to-video"), ("i2v", "minimax/h3-max-turbo/image-to-video", "fal", "+flf2v")],
+      badges=["new", "fast", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
+      pricing=("second", 0.04, "768P; 480P $0.025, 1080P $0.08 — $0.028 (480P $0.0175, 1080P $0.056) until 2026-11-15",
+               {"byResolution": {"480P": 0.025, "768P": 0.04, "1080P": 0.08},
+                "promo": {"until": "2026-11-15", "usd": 0.028, "byResolution": {"480P": 0.0175, "768P": 0.028, "1080P": 0.056}}}))
+model("minimax-h3-max-turbo-refs", "MiniMax H3 Max Turbo · references", "MiniMax", "hailuo", "video",
+      "Turbo with up to 12 references — pictures, clips and sound together (Image 1, Video 1, Audio 1 in the prompt)",
+      [("ref2v", "minimax/h3-max-turbo/reference-to-video")], badges=["new", "audio"], fit_values=True, options={"maxReferences": 12},
+      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16; references past the first 4,096 tokens add $0.016 per 1,000",
+               {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16}}))
+# The extend keeps the clip's shape (its aspect ratio left out: fal's "auto") and bills only the seconds added.
+model("minimax-h3-max-turbo-extend", "MiniMax H3 Max Turbo · extend", "MiniMax", "hailuo", "video",
+      "Continue a 1.6–60 s clip with up to 15 s more, sound and all; only the new seconds are billed",
+      [("extend", "minimax/h3-max-turbo/extend-video", "fal", {"drop": ["aspectRatio"]})], badges=["new", "audio"],
+      defaults={"duration": 5, "resolution": "768P"}, ranged_durations=True,
+      pricing=("second", 0.04, "768P; 480P $0.025, 1080P $0.08, 2K $0.16; only the new seconds", {"byResolution": {"480P": 0.025, "768P": 0.04, "1080P": 0.08, "2K": 0.16}}))
+# One Replicate model takes every input; each route sends only its own (a start frame is never also a reference picture).
+# HighSpeed's ratio is "adaptive" from a frame (its schema: "adaptive for image-to-video"); Lite ignores the ratio then.
+def H3_REPLICATE_ROUTES(ep, adaptive=False):
+    refs = ["images", "video", "audio"]
+    frame = {"drop": ["aspectRatio"], "fixed": {"ratio": "adaptive"}} if adaptive else {}
+    return [("t2v", ep, "replicate", {"drop": ["image", "endImage", *refs]}), ("i2v", ep, "replicate", {**frame, "drop": ["endImage", *refs, *frame.get("drop", [])]}),
+            ("flf2v", ep, "replicate", {**frame, "drop": [*refs, *frame.get("drop", [])]}), ("ref2v", ep, "replicate", {"drop": ["image", "endImage"]})]
+
+
+# Replicate's H3 Lite (480P / 768P) and HighSpeed (one rate): words, a first frame, first and last frames, or references, 4-15 s.
+model("minimax-h3-lite", "MiniMax H3 Lite", "MiniMax", "hailuo", "video",
+      "The lightest H3 with sound: words, frames or references, 4–15 s at 480P or 768P",
+      H3_REPLICATE_ROUTES("minimax/h3-lite"),
+      badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, fit_values=True, options={"maxImages": 9},
+      pricing=("second", 0.04, "768P; 480P $0.025", {"byResolution": {"480P": 0.025, "768P": 0.04}}))
+model("minimax-h3-highspeed", "MiniMax H3 HighSpeed", "MiniMax", "hailuo", "video",
+      "H3 tuned for speed, with sound: words, frames or references, 4–15 s",
+      H3_REPLICATE_ROUTES("minimax/h3-highspeed", adaptive=True),
+      badges=["new", "audio", "fast"], defaults={"aspectRatio": "16:9", "duration": 5}, fit_values=True, options={"maxImages": 9}, pricing=("second", 0.06))
 model("hailuo-2-3", "MiniMax Hailuo 2.3", "MiniMax", "hailuo", "video", "Expressive characters and dynamic action",
       [("t2v", "fal-ai/minimax/hailuo-2.3/pro/text-to-video"), ("i2v", "fal-ai/minimax/hailuo-2.3/pro/image-to-video")],
       pricing=("video", 0.49), defaults={"duration": 6}, fixed={"prompt_optimizer": True})
@@ -652,6 +730,18 @@ model("fuobe-dop-ltx", "Fuobe DoP · LTX", "Fuobe Original", "fuobe-dop", "video
       original=True, api_defaults={"enable_prompt_expansion": False},
       pricing=("second", 0.036, "$0.001605 per megapixel of video: about $0.18 for 5 s at 720p ($0.20 with LoRAs)", {"withLoras": 0.04}),
       options={"durations": [3, 5]}, defaults={"aspectRatio": "auto", "duration": 5, "generateAudio": False}, frame_step=8)
+# ----- Fuobe Animation (package inbetweening): keyframe in-betweening's cloud half. fal's Wan 2.2 A14B image-to-video
+# takes an end frame, 17–161 frames and LoRAs per expert (schema read 2026-11-02): one hosted clip per gap with AniSora
+# 3.2 on the high-noise expert (models.ts sends it, options.loras), joined. fal makes every frame and plays it as made
+# (16 fps, interpolation off): the every-Nth speeds and 24 fps playback are the GPU graph's (src/lib/inbetween.ts).
+ANIMATION_FAL = {"interpolator_model": "none", "frames_per_second": 16}
+model("fuobe-animation", "Fuobe Animation", "Fuobe Original", "fuobe-animation", "video",
+      "Keyframes in, the in-betweens drawn, one finished animation, with timing per gap: Wan 2.2 + AniSora",
+      [("i2v", "fal-ai/wan/v2.2-a14b/image-to-video", "fal", {"loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora", "fixed": ANIMATION_FAL, "flf2v": True})],
+      original=True,
+      pricing=("second", 0.08, "720p on fal; 580p $0.06/s, 480p $0.04/s; with LoRAs $0.10/s, per gap's clip",
+               {"byResolution": {"720p": 0.08, "580p": 0.06, "480p": 0.04}, "withLoras": 0.1}),
+      defaults={"aspectRatio": "auto", "duration": 5, "resolution": "720p"}, frame_step=4, fit_values=True)
 # ----- Originals (O6): Fuobe Cinema's cloud half, Cinema Studio's Director on LTX-2.3 22B (research §8 cinema-studio →
 # studios[cinema-studio].original). Prompt expansion off so the compiled Director prompt is what runs; sound follows the
 # toggle; up to 481 frames at 24 fps (20 s; Cinema adds the rest with one extend); exact sizes per tier in multiples of
@@ -842,6 +932,13 @@ model("pixverse-v6", "PixVerse V6", "PixVerse", "pixverse", "video", "Stylized s
 model("vidu-q3", "Vidu Q3", "Shengshu", "vidu", "video", "Anime-friendly video with references",
       [("t2v", "fal-ai/vidu/q3/text-to-video"), ("i2v", "fal-ai/vidu/q3/image-to-video"), ("ref2v", "fal-ai/vidu/q3/reference-to-video/mix")],
       defaults={"aspectRatio": "16:9"})
+# Vidu Q4 on fal (package nm10-hosted-catchup): a start frame, or up to 12 reference pictures and 3 voice clips (mp3, 3-12 s) with
+# sound on request, 3-16 s up to 4K. Vidu's own API takes more references than fal's schema exposes; Fuobe sends what fal takes.
+model("vidu-q4", "Vidu Q4", "Shengshu", "vidu", "video", "Vidu's newest: a start frame or up to 12 references and 3 voices, 3–16 s, up to 4K",
+      [("i2v", "fal-ai/vidu/q4/image-to-video"), ("ref2v", "fal-ai/vidu/q4/reference-to-video")], badges=["new", "4k", "audio"], ranged_durations=True,
+      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, options={"maxImages": 12, "referenceAudio": "mp3"}, prompt_max=True, fit_values=True,
+      pricing=("second", 0.0665, "720p; 540p $0.0315, 1080p $0.084, 2K $0.133, 4K $0.273; sound costs nothing extra",
+               {"byResolution": {"540p": 0.0315, "720p": 0.0665, "1080p": 0.084, "2K": 0.133, "4K": 0.273}}))
 model("luma-ray-3-2", "Luma Ray 3.2", "Luma", "luma", "video", "HDR, physically convincing motion",
       [("t2v", "luma/agent/ray/v3.2/text-to-video"), ("i2v", "luma/agent/ray/v3.2/image-to-video"), ("v2v", "luma/agent/ray/v3.2/video-to-video"),
        ("reframe", "luma/agent/ray/v3.2/reframe")],
@@ -1011,10 +1108,58 @@ model("minimax-music-2-5", "MiniMax Music 2.5", "MiniMax", "minimax-music", "aud
       [("music", "fal-ai/minimax-music/v2.5")], fixed={"lyrics_optimizer": True})
 model("stable-audio-3-music", "Stable Audio 3 Music", "Stability AI", "stable-audio", "audio", "Quick loops and beds up to 2 minutes",
       [("music", "fal-ai/stable-audio-3/small/music/text-to-audio")], badges=["fast"], defaults={"duration": 30}, options={"durations": [10, 30, 60, 120]})
-model("mureka-song", "Mureka 9.5", "Mureka", "mureka", "audio", "Full songs with vocals in many genres",
-      [("music", "mureka/api/generate/song")], pricing=("request", 0.75, "prompt-to-song on mureka-9.5; with lyrics $0.225"),
-      # Its vocal gender only applies to lyrics-to-song, which Fuobe doesn't send yet.
-      controls=[("model", "Version")])
+# Full songs (nm10-music3, research #10 endpointRecords): lyrics go in params.extra.lyrics with Fuobe's section tags
+# (src/lib/lyrics.ts); FieldMap.lyrics sends them in the API's own field. Mureka 9.5 moved from the versioned route
+# (mureka/api/generate/song, whose fal catalog entry lost its metadata) to its own; a past run's Version (params.extra.model)
+# is no field there, so it's left out (a saved run on another version moves to the model that runs it: replaced.ts
+# murekaVersion). Mureka prices a song by whether lyrics come with it (Pricing.withLyrics). Its songs sing words: an
+# instrumental is its own model (ModelOptions.lyrics.instrumentalModel).
+model("mureka-song", "Mureka 9.5", "Mureka", "mureka", "audio", "Full songs with vocals in many genres, 2 to 5 minutes",
+      [("music", "mureka/v9.5/generate/song", "fal", {"ignore": ["model"]})],
+      pricing=("request", 0.50, "a song from a prompt; with your lyrics $0.15", {"withLyrics": 0.15}),
+      defaults={"duration": 180}, options={"durations": [120, 180, 240, 300], "lyrics": {"instrumentalModel": "mureka-9-5-instrumental"}})
+model("mureka-9", "Mureka 9", "Mureka", "mureka", "audio", "Songs with vocals at a lower price, sung from your lyrics or written for you",
+      [("music", "mureka/v9/generate/song")], badges=["new"], pricing=("request", 0.30, "a song from a prompt; with your lyrics $0.045", {"withLyrics": 0.045}),
+      options={"lyrics": {"instrumentalModel": "mureka-9-instrumental"}})
+model("mureka-9-5-instrumental", "Mureka 9.5 Instrumental", "Mureka", "mureka", "audio", "Mureka's newest instrumental tracks and beds, no vocals",
+      [("music", "mureka/v9.5/generate/instrumental")], badges=["new"], pricing=("request", 0.15))
+model("mureka-9-instrumental", "Mureka 9 Instrumental", "Mureka", "mureka", "audio", "Instrumental tracks and beds, no vocals",
+      [("music", "mureka/v9/generate/instrumental")], badges=["new"], pricing=("request", 0.045))
+# Mureka's earlier versions stay on the versioned route (fal serves 7.6, O2 and 8 there; 9 and 9.5 have routes of their own).
+# Its duration is a 9.5 field only, and its Version is always sent (the route's own default is 9.5). With lyrics 7.6 costs
+# $0.03, O2 and 8 $0.045; from a prompt all three $0.30.
+model("mureka-8", "Mureka 8", "Mureka", "mureka", "audio", "Mureka's earlier versions (8, O2, 7.6), for songs made with them",
+      [("music", "mureka/api/generate/song", "fal", {"drop": ["duration"]})],
+      pricing=("request", 0.30, "a song from a prompt; with your lyrics $0.045 ($0.03 on 7.6)", {"withLyrics": 0.045}),
+      options={"controls": [{"param": "model", "label": "Version", "values": ["mureka-8", "mureka-o2", "mureka-7.6"], "default": "mureka-8",
+                             "labels": {"mureka-8": "Mureka 8", "mureka-o2": "Mureka O2", "mureka-7.6": "Mureka 7.6"}}],
+               "lyrics": {"instrumentalModel": "mureka-9-instrumental"}},
+      api_defaults={"model": "mureka-8"})
+# MiniMax Music 3 is the open model the open engine runs too (oss-minimax-music-3): the same weights, hosted. Its lyrics are
+# required: a run with none asks for an instrumental.
+model("minimax-music-3", "MiniMax Music 3 · both engines", "MiniMax", "minimax-music", "audio", "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
+      [("music", "minimax/music-3")], badges=["new", "top"], defaults={"duration": 120}, options={"durations": [30, 60, 120, 180, 240, 300], "seed": True},
+      api_defaults={"lyrics": "[instrumental]"},
+      licence={"licence": "MiniMax-Music3 Community License", "commercial": True,
+               "note": "MIT-style grant with notice and an Acceptable Use Policy; commercial products show \"MiniMax-Music3\" in their interface; "
+                       "above US$20M yearly revenue needs MiniMax's written authorisation. The Comfy-Org repack is tagged Apache-2.0.", "checked": "2026-11-01"})
+# Its seed only goes with a composition plan (its schema says so), which Fuobe doesn't send: a prompt and a length.
+model("elevenlabs-music-2-5", "ElevenLabs Music v2.5", "ElevenLabs", "elevenlabs", "audio", "Studio-quality songs and scores up to 10 minutes",
+      [("music", "elevenlabs/music/v2.5", "fal", {"drop": ["seed"]})], badges=["new"], pricing=("minute", 0.6, "billed per started minute", {"roundUp": True}),
+      defaults={"duration": 60}, options={"durations": [15, 30, 60, 120, 180, 300, 600]})
+# Mureka's song tools (Audio → Extend & remix, and a music result's Extend, Remix and Stems): the song is one of Mureka's own
+# (params.extra.songId, kept on its results) or a file sent first through Mureka's files/upload ($0.01, Pricing.uploadUsd).
+model("mureka-extend", "Mureka Extend", "Mureka", "mureka", "audio", "Makes a song longer with new lyrics, after its end or before its start",
+      [("song-extend", "mureka/v8/song/extend")], badges=["new"], pricing=("request", 0.004, "plus $0.01 to send a song Mureka didn't make", {"uploadUsd": 0.01}),
+      controls=[("extend_type", "Where", {"tail": "After the end", "head": "Before the start"})])
+model("mureka-remix", "Mureka Remix", "Mureka", "mureka", "audio", "A new arrangement of a song in the style you describe, with its lyrics",
+      [("song-remix", "mureka/v8/song/remix")], badges=["new"], pricing=("request", 0.20, "plus $0.01 to send a song Mureka didn't make", {"uploadUsd": 0.01}))
+# Its stems come back as a zip (zip_url): the fal provider opens it and keeps each track as a result of its own.
+model("mureka-stems", "Mureka Stems", "Mureka", "mureka", "audio", "A song split into its vocal and instrument tracks",
+      [("song-stems", "mureka/api/song/stem")], badges=["new"], pricing=("request", 0.20, "audio-separation-3, the default"))
+# "Negative prompting is not supported by Lyria 3.5" (its schema): no negative prompt.
+model("lyria-3-5", "Lyria 3.5", "Google", "lyria", "audio", "Google DeepMind's newest music model: full songs from words or a picture",
+      [("music", "google/lyria-3.5", "fal", {"drop": ["negativePrompt"]})], badges=["new"])
 model("stable-audio-2-5", "Stable Audio 2.5", "Stability AI", "stable-audio", "audio", "Sound design and music beds up to 3 minutes",
       [("sfx", "fal-ai/stable-audio-25/text-to-audio"), ("music", "fal-ai/stable-audio-25/text-to-audio"),
        ("sfx", "stability-ai/stable-audio-2.5", "replicate"), ("music", "stability-ai/stable-audio-2.5", "replicate")],
@@ -1101,6 +1246,18 @@ model("extract-soundtrack", "Extract soundtrack", "fal", "utility", "audio", "A 
       [("separate-audio", "fal-ai/workflow-utilities/extract-audio")], pricing=("second", 0.0002, "billed by compute time"), hidden=True)
 model("elevenlabs-voice-isolation", "ElevenLabs Voice Isolation", "ElevenLabs", "elevenlabs", "audio", "Clean speech from a video or recording — music and noise removed",
       [("separate-audio", "fal-ai/elevenlabs/audio-isolation")], pricing=("minute", 0.1))
+# Clean up dialogue in the cloud (DBS D5, docs/research/dbs-separation-7.md §6): hosted speech cleaners under their own
+# names (DBS isn't hosted, and the owner hasn't allowed SAM Audio in its place). VEED Clean Audio takes a video's file too
+# (its audio_url reads the soundtrack) and bills whole minutes of input, at least one; FLAC keeps its 48 kHz output
+# lossless. DeepFilterNet 3 takes audio only (a video's soundtrack goes in through extract-soundtrack).
+model("veed-clean-audio", "VEED Clean Audio", "VEED", "veed", "audio", "Removes background noise from speech and levels it, keeping quiet and distant words",
+      [("enhance-voice", "veed/clean-audio", "fal", {"keys": {"video": "audio_url"}})], fixed={"output_format": "flac"},
+      sliders=[("strength", "Strength", 0.01)],
+      pricing=("minute", 0.0125, "per minute of input, rounded up to whole minutes, at least 1", {"roundUp": True}))
+DFN_REC = EPS[("fal", "fal-ai/deepfilternet3")]
+model("deepfilternet3", "DeepFilterNet 3", "DeepFilterNet", "deepfilternet", "audio", "Open-source speech denoiser: steady noise, hiss and hum out of a voice",
+      [("enhance-voice", "fal-ai/deepfilternet3")], fixed={"audio_format": "flac"}, pricing=("second", 0.001, "per second of audio"),
+      licence={"licence": "MIT OR Apache-2.0", "commercial": True, "note": DFN_REC["license"], "checked": DFN_REC["checked"]})
 
 # ----- Image to 3D (research part 3; product spins, 3D blocking)
 model("hunyuan-3d-3-1-pro", "Hunyuan3D 3.1 Pro", "Tencent Hunyuan", "hunyuan-3d", "model3d", "Textured, game-ready 3D models from a product photo",
@@ -1255,6 +1412,15 @@ model("florence-2-ocr", "Florence-2 OCR", "Microsoft", "florence", "text", "Ever
 # ----- 3D: splats, objects in place, text to 3D, multi-view and rigging
 model("triposplat", "TripoSplat", "Tripo", "tripo", "model3d", "A Gaussian splat of the subject in one photo (background removed)",
       [("splat", "tripo3d/triposplat")], badges=["new"], fixed={"output_format": "ply"}, sliders=[("num_gaussians", "Gaussians")])
+# Idol 3D (package idol-1; research #10 §5, idol-9.md): Speridlabs' Idol, hosted on fal since 2026-10-30. Its own label, never
+# TripoSplat's. The splat is a .ply (model_mesh); model_glb, a point-cloud preview of the splat's centres, rides along in meta.formats.
+# image_type "real" is Idol's looser photo crop; the page sends it with its Best / Quick look steps and Gaussians as params.extra.
+IDOL_FAL = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == "speridlabs/idol")
+model("idol-3d", "Idol 3D", "Speridlabs", "idol", "model3d", "A Gaussian splat (.ply) of one object from one picture · TripoSplat's architecture, retrained",
+      [("splat", "speridlabs/idol")], badges=["new"], sliders=[("num_gaussians", "Gaussians", 32768), ("num_inference_steps", "Steps")],
+      controls=[("image_type", "Picture", {"synthetic": "A render or generated image", "real": "A photo"})],
+      licence={"licence": "Apache-2.0", "commercial": True,
+               "note": f"{IDOL_FAL['license']}. fal's safety checker reads the input image", "checked": IDOL_FAL["fetched"]})
 # Its prompt defaults to "car" at the API, so Fuobe always asks for one.
 model("sam-3d-objects", "SAM 3D Objects", "Meta", "sam", "model3d", "The objects you name, rebuilt in 3D where they stand in the photo",
       # export_textured_glb defaults to false (a grey mesh): the viewer shows the textured one.
@@ -1268,6 +1434,20 @@ model("meshy-7-1-multi", "Meshy 7.1 Multi-view", "Meshy", "meshy", "model3d", "O
       controls=[("topology", "Topology")], options={"minImages": 2})
 model("meshy-rigging", "Meshy Rigging", "Meshy", "meshy", "model3d", "Rig a humanoid GLB with a skeleton, walk and run cycles, or an animation preset",
       [("rig-3d", "fal-ai/meshy/rigging")], badges=["new"], pricing=("request", 0.2, "+$0.12 with an animation preset", {"animationUsd": 0.12}))
+# Retexture a 3D model (package nm10-hosted-catchup): Meshy 7 or 6 paints new textures on a GLB from words or a style picture (the
+# picture wins when both go). $0.30 a model at 2K or 4K textures, $0.45 at 8K.
+for _v in ("7", "6"):
+    model(f"meshy-{_v}-retexture", f"Meshy {_v} Retexture", "Meshy", "meshy", "model3d", "New textures on a 3D model, from words or a style picture",
+          [("retexture-3d", f"meshy/v{_v}/retexture")], badges=["new"], prompt_max=True, controls=[("texture_resolution", "Texture size")],
+          options={"promptOptional": True}, fixed={"enable_pbr": True},
+          pricing=("request", 0.3, "2K or 4K textures; 8K $0.45; realistic surface detail included", {"factors": [{"param": "texture_resolution", "values": {"8k": 1.5}}]}))
+# Tripo P2: Tripo's production tier. $1.10 a model with fast or standard textures, $1.20 detailed, $1.30 extreme ($1.00 untextured).
+# Its "fast" textures need texture version v3.5-20260815 (fal's schema), the newest, which every quality takes: it always goes.
+model("tripo-p2", "Tripo P2", "Tripo", "tripo", "model3d", "Tripo's production tier: detailed 3D models with realistic textures",
+      [("image-to-3d", "tripo3d/p2/image-to-3d")], badges=["new", "pro"], controls=[("texture_quality", "Texture")],
+      fixed={"texture_version": "v3.5-20260815"},
+      pricing=("request", 1.1, "standard textures; detailed $1.20, extreme $1.30",
+               {"factors": [{"param": "texture_quality", "values": {"detailed": 1.2 / 1.1, "extreme": 1.3 / 1.1}}]}))
 # Cinema Studio's "Create 3D scene" on the cloud (part 4 §8): a depth map of the whole frame, which the browser
 # turns into a point cloud with the photo's colours. So scene-3d answers with an image on this model.
 model("marigold-depth", "Marigold V2 Depth", "Marigold", "marigold", "image", "A depth map of the whole frame, for the 3D scene your browser builds",
@@ -1507,7 +1687,7 @@ def map_fields(fmap):
             out += lora_field_names(v)
         elif k == "size":
             out += [v["key"]] if v.get("key") else [v["width"], v["height"]]
-        elif k in ("seedRange", "maskFormat", "ranges", "ignore", "maxImages", "omitEmptyPrompt"):
+        elif k in ("seedRange", "maskFormat", "ranges", "ignore", "maxImages", "omitEmptyPrompt", "promptMax"):
             continue
         elif isinstance(v, str):
             out.append(v)
@@ -1676,7 +1856,7 @@ def part4_slots(op, kf, inputs, m, opts, fmap):
         if url and frames:
             fmap["frames"] = {"key": kf["frames"], "url": url, "frames": frames}
             opts["maxImages"] = max(opts.get("maxImages", 1), num((inputs.get(kf["frames"]) or {}).get("maxItems")) or 1)
-    if op == "rig-3d":
+    if op in ("rig-3d", "retexture-3d"):
         if "model3d" in kf:
             fmap["model3d"] = kf["model3d"]
         if "animation" in kf:
@@ -2126,9 +2306,41 @@ def build_route(op, ep, provider, m, opts, ropts=None):
                 fmap["duration"]["suffix"] = "s"
             lo, hi = num(spec.get("minimum")), num(spec.get("maximum"))
             if m.get("ranged_durations") and lo is not None and hi is not None:
-                opts["durations"] = union(opts.get("durations", []), [v for v in NICE_DURATIONS if lo <= v <= hi] or [lo])
+                picks = [v for v in NICE_DURATIONS if lo <= v <= hi] or [lo]
+                # The longest whole second the API takes is always one of them (Vidu Q4's 16 s, H3 Max insert's 13 s).
+                if hi == int(hi) and hi not in picks and hi <= max(NICE_DURATIONS):
+                    picks.append(int(hi))
+                opts["durations"] = union(opts.get("durations", []), picks)
         if key.endswith("_ms"):
             fmap["duration"]["multiplier"] = 1000
+    # Song lyrics (params.extra.lyrics, nm10-music3): the API's lyrics field and the most characters it takes, or after the
+    # prompt for an API that reads them there (Lyria 3.5); the composer's lyrics editor follows ModelOptions.lyrics.
+    if op in ("music", "song-extend", "song-remix") and "lyrics" in kf and (inputs.get(kf["lyrics"]) or {}).get("type") == "string":
+        spec = inputs.get(kf["lyrics"]) or {}
+        most = num(spec.get("maxLength"))
+        # An API with an instrumental switch (MiniMax Music 2.5's is_instrumental) gets it for lyrics that are only
+        # [Instrumental], with its own lyrics writer (lyrics_optimizer) off.
+        fmap["lyrics"] = {"key": kf["lyrics"], **({"max": most} if most else {}),
+                          **({"instrumental": kf["instrumental"]} if kf.get("instrumental") in inputs else {}),
+                          **({"autoLyrics": kf["autoLyrics"]} if kf.get("autoLyrics") in inputs else {})}
+        # Required by the API with no fallback of Fuobe's (MiniMax Music 3 asks for an instrumental when there are none).
+        needed = spec.get("required") and kf["lyrics"] not in (m.get("api_defaults") or {})
+        opts["lyrics"] = {**({"max": most} if most else {}), **({"required": True} if needed else {})}
+    # A song tool's source (Mureka): its own song by id, else the file sent first through the provider's files/upload with
+    # the purpose the id field names ("Audio ID returned by /files/upload with purpose='audio'").
+    if op in ("song-extend", "song-remix") and "songId" in kf and "uploadId" in kf:
+        purpose = re.search(r"purpose='([\w-]+)'", (inputs.get(kf["uploadId"]) or {}).get("desc") or "")
+        upload = next((ep2 for (p2, ep2) in EPS if p2 == provider and ep2.startswith(ep.split("/")[0] + "/") and ep2.endswith("/files/upload")), None)
+        if purpose and upload:
+            fmap["songSource"] = {"songId": kf["songId"], "uploadId": kf["uploadId"], "upload": {"endpoint": upload, "purpose": purpose.group(1)}}
+        else:
+            warn(f"{m['id']}: {ep} has no upload route or purpose for its song")
+    if "extendAt" in kf:
+        fmap["startTime"] = {"key": kf["extendAt"], "type": "number", "multiplier": 1000}
+    elif op == "music" and "lyricsInPrompt" in kf:
+        most = num((inputs.get(kf["lyricsInPrompt"]) or {}).get("maxLength"))
+        fmap["lyrics"] = {"inPrompt": True, **({"max": most} if most else {})}
+        opts["lyrics"] = {"inPrompt": True, **({"max": most} if most else {})}
     part4_ranges(op, inputs, fmap)
     # Text-to-speech etc. carry the prompt in "text".
     if ropts.get("fixed"):
@@ -2179,6 +2391,10 @@ def build_route(op, ep, provider, m, opts, ropts=None):
             fmap.setdefault("defaults", {})[k] = spec["default"]
         else:
             warn(f"{m['id']}: {ep} requires {k}, which no field of this route fills")
+    if m.get("prompt_max"):
+        pspec = inputs.get((fmap.get("prompt") or "prompt").split(".")[0]) if fmap.get("prompt") is not False else None
+        if pspec and num(pspec.get("maxLength")):
+            fmap["promptMax"] = int(num(pspec["maxLength"]))
     if "numOutputs" in fmap:
         mx = num((inputs.get(fmap["numOutputs"]) or {}).get("maximum")) or 4
         opts["maxOutputs"] = max(opts.get("maxOutputs", 1), min(4, mx))
@@ -2193,6 +2409,9 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # Inpaint routes say what the mask's paint means (edit routes get theirs when the inpaint route is derived).
     if op == "inpaint" and "mask" in fmap and mask_format(ep):
         fmap["maskFormat"] = mask_format(ep)
+    # Fields a past request may carry that this endpoint has no use for (Mureka 9.5's old Version).
+    if ropts.get("ignore"):
+        fmap["ignore"] = list(ropts["ignore"])
     route = {"op": op, "provider": provider, "endpoint": f"{ep}:{version}" if ropts.get("pin") else ep, "map": fmap}
     if ropts.get("note"):
         route["note"] = ropts["note"]
@@ -2264,7 +2483,8 @@ for m in M:
     # No route sends a prompt (try-on, 3D, transcription): planning and the composer don't ask for one.
     if all(r["map"].get("prompt") is False for r in routes):
         opts["promptless"] = True
-    opts.update(m["options"])
+    # The lyrics options read from the schema (max, required) keep what the model adds to them (its instrumental model).
+    opts.update({k: ({**opts[k], **v} if k == "lyrics" and isinstance(opts.get(k), dict) else v) for k, v in m["options"].items()})
     # A model-wide control or slider goes only to the routes whose schema has its field (Ideogram Vector's
     # quality is a text-to-vector setting; image-to-vector has none).
     offered = [c["param"] for c in opts.get("controls", [])] + [x["param"] for x in opts.get("sliders", [])]
@@ -2272,7 +2492,7 @@ for m in M:
         inputs = (EPS.get((route["provider"], route["endpoint"])) or {}).get("inputs") or {}
         missing = [x for x in offered if x.split(".")[0] not in inputs]
         if missing:
-            route["map"] = {**route["map"], "ignore": missing}
+            route["map"] = {**route["map"], "ignore": union(route["map"].get("ignore", []), missing)}
     pricing = None
     if m["pricing"]:
         u, usd, *rest = m["pricing"]

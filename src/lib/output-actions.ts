@@ -14,6 +14,8 @@ import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
 import { canRerender, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
+import { isInstrumental, lyricsOf, songFormat, STEMS_FORMATS } from "./lyrics";
+import { CLEAN_DIALOGUE_FEATURE, cleanDialogueHref } from "./av/clean-dialogue";
 
 export type OutputActionId =
   | "animate"
@@ -32,9 +34,14 @@ export type OutputActionId =
   | "genjutsu"
   | "voice-change"
   | "loop-audio"
+  | "extend-song"
+  | "remix-song"
+  | "song-stems"
   | "split-soundtrack"
   | "remove-dialogue"
+  | "remove-person"
   | "clean-voice"
+  | "clean-dialogue"
   | "copy-text"
   | "view-3d"
   | "download"
@@ -143,8 +150,12 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("add-sound", "Add sound", `/audio/video?video=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?video=${q(o.url)}`);
       link("remove-dialogue", "Remove dialogue", `/video-tools/remove-dialogue?video=${q(o.url)}`);
+      // H3 Person Removal (o/person-remover-plus): Video tools → Remove a person with the clip in.
+      link("remove-person", "Remove a person", `/video-tools/remove-person?video=${q(o.url)}`);
       // Clean up voice on a video's soundtrack: results that carry sound, and uploads (a clip from a phone or a call).
       if (g.feature === "upload" || (g.op && SOUNDED_VIDEO_OPS.has(g.op))) link("clean-voice", "Clean up voice", `/audio/clean?video=${q(o.url)}`);
+      // Clean up dialogue (Split soundtrack's preset): the music and effects out from under the speech, or a cloud cleaner.
+      if ((g.feature === "upload" || (g.op && SOUNDED_VIDEO_OPS.has(g.op))) && g.feature !== CLEAN_DIALOGUE_FEATURE) link("clean-dialogue", "Clean up dialogue", cleanDialogueHref("video", o.url));
       // A Fuobe DoP colour-grade effect: the clip opens in Color grading with its grade picked (one click to export).
       const dopGrade = gradeOf(o);
       link("grade", dopGrade ? `Apply the ${dopGrade.name} grade` : "Color grade", `/color-grade?video=${q(o.url)}${dopGrade ? `&preset=${q(dopGrade.id)}` : ""}`);
@@ -156,9 +167,25 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       out.push(file, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });
       link("voice-change", "Change voice", `/audio/voice-change?audio=${q(o.url)}`);
       link("loop-audio", "Loop / extend", `/audio/loop?audio=${q(o.url)}`);
+      // A song's cloud tools (Mureka, Audio → Extend & remix): any song, one of Mureka's own by its id. Not on an install
+      // that runs open models only. Remix only where there are vocals to keep (with the song's lyrics, which it needs whole),
+      // Stems only on an MP3 or M4A song (what Mureka separates).
+      if (g.op && SONG_OPS.has(g.op) && ctx.engineMode !== "open") {
+        const song = typeof o.meta?.songId === "string" ? `&song=${q(o.meta.songId)}` : "";
+        link("extend-song", "Extend song", `/audio/song?model=mureka-extend&audio=${q(o.url)}${song}`);
+        if (!instrumentalSong(g)) {
+          // The whole song's words: an extension's run holds only its new part's.
+          const words = g.op === "song-extend" ? "" : lyricsOf(g.request?.params?.extra);
+          const lyrics = words && q(words).length <= HANDOVER_LYRICS_MAX ? `&lyrics=${q(words)}` : "";
+          link("remix-song", "Remix", `/audio/song?model=mureka-remix&audio=${q(o.url)}${song}${lyrics}`);
+        }
+        const format = songFormat(o.contentType, o.url);
+        if (!format || STEMS_FORMATS.includes(format)) link("song-stems", "Stems", `/audio/song?model=mureka-stems&audio=${q(o.url)}`);
+      }
       link("split-soundtrack", "Split soundtrack", `/audio/split?audio=${q(o.url)}`);
       // Not on music or sound effects (it keeps only a voice), nor on a voice it already cleaned.
       if (g.op !== "music" && g.op !== "sfx" && g.feature !== CLEAN_FEATURE) link("clean-voice", "Clean up voice", `/audio/clean?audio=${q(o.url)}`);
+      if (g.op !== "music" && g.op !== "sfx" && g.feature !== CLEAN_DIALOGUE_FEATURE) link("clean-dialogue", "Clean up dialogue", cleanDialogueHref("audio", o.url));
       break;
     case "text":
       out.push({ id: "copy-text", label: "Copy", placement: "primary" }, file, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });
@@ -202,6 +229,26 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   return out;
 }
 
+/** Results that are songs: made, extended or remixed. */
+const SONG_OPS = new Set<Generation["op"]>(["music", "song-extend", "song-remix"]);
+
+/** Music models that make instrumentals only, and those that make one when they're given no words to sing. */
+const INSTRUMENTAL_MODELS = new Set(["mureka-9-instrumental", "mureka-9-5-instrumental", "sonilo-music", "stable-audio-3-music", "stable-audio-2-5"]);
+const INSTRUMENTAL_WITHOUT_WORDS = new Set(["minimax-music-3", "oss-minimax-music-3", "oss-ace-step"]);
+
+/** A song with no vocals: an instrumental model's, one whose lyrics are only [Instrumental], or a model's own with no words. */
+export function instrumentalSong(g: Pick<Generation, "modelId" | "op" | "request">): boolean {
+  if (INSTRUMENTAL_MODELS.has(g.modelId)) return true;
+  // An extension's lyrics are its new part's only: the song it extends may sing.
+  if (g.op === "song-extend") return false;
+  const words = lyricsOf(g.request?.params?.extra);
+  if (words) return isInstrumental(words);
+  return g.op === "music" && INSTRUMENTAL_WITHOUT_WORDS.has(g.modelId);
+}
+
+/** The most of a song's lyrics a Remix link carries (encoded): longer ones are written again in the editor. */
+const HANDOVER_LYRICS_MAX = 6000;
+
 /** The hand-offs offered as next steps under a fresh result, best first (UX-18). */
 const NEXT_STEPS: Partial<Record<OutputFile["kind"], OutputActionId[]>> = {
   image: ["animate", "upscale", "edit"],
@@ -238,7 +285,14 @@ export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<Actio
     const at = ids.indexOf("upscale");
     return at < 0 ? [...regen, ...ids] : [...ids.slice(0, at + 1), ...regen, ...ids.slice(at + 1)];
   };
-  const order: OutputActionId[] = o.kind === "video" ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(withRegen(video) ?? [])] : (NEXT_STEPS[o.kind] ?? []);
+  // A song: its song tools first (where they're offered), then Split soundtrack.
+  const song: OutputActionId[] = ["extend-song", "remix-song", "song-stems", "split-soundtrack"];
+  const order: OutputActionId[] =
+    o.kind === "video"
+      ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(withRegen(video) ?? [])]
+      : o.kind === "audio" && g.op && SONG_OPS.has(g.op) && all.some((a) => a.id === "extend-song")
+        ? song
+        : (NEXT_STEPS[o.kind] ?? []);
   return order
     .map((id) => all.find((a) => a.id === id && a.href))
     .filter((a): a is OutputAction => !!a)
