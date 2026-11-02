@@ -102,14 +102,19 @@ for (const width of [1440, 390]) {
       check(`${tag}: Frames opens with the 3 handed-over keyframes`, (await s.locator('button[aria-label^="Frame "][aria-label$=": replace"]').count()) === 3);
       check(`${tag}: Animation style is on`, (await s.getByRole("switch").first().getAttribute("aria-checked")) === "true");
       check(`${tag}: a timing chip per gap`, (await s.locator("[data-gap-chip]").count()) === 2);
+      check(`${tag}: the last keyframe is the end frame`, (await s.locator('button[aria-label^="Frame 3, end frame"]').count()) === 1);
       const before = await s.locator("[data-animation-length]").innerText();
       await s.locator("[data-gap-chip]").first().click();
       const pop = page.getByRole("dialog").last();
       await pop.waitFor();
       await pop.getByRole("radio", { name: "×3" }).click();
       await pop.getByRole("button", { name: "More frames" }).click();
-      await pop.getByPlaceholder("she jumps and lands").fill("he leaps");
+      // Typed key by key, as a person types: the spaces stay.
+      const words = pop.getByPlaceholder("she jumps and lands");
+      await words.click();
+      await words.pressSequentially("he leaps high", { delay: 20 });
       await page.waitForTimeout(300);
+      check(`${tag}: a gap's words keep their spaces as typed`, (await words.inputValue()) === "he leaps high", await words.inputValue());
       const chip = await s.locator("[data-gap-chip]").first().innerText();
       check(`${tag}: the chip shows the gap's frames and speed`, /\d+ f · ×3/.test(chip.replace(/\s+/g, " ")), chip.replace(/\s+/g, " "));
       await shoot(page, `frames-gap-${width}-${scheme}.png`);

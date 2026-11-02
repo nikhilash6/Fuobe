@@ -143,7 +143,7 @@ export function FramesStrip({
             )}
             <FrameTile
               index={i}
-              role={animation ? (i === 0 ? "Start frame" : "Middle frame") : frameRole(i, frames.length, f.at)}
+              role={animation ? (i === 0 ? "Start frame" : i === frames.length - 1 ? "End frame" : "Middle frame") : frameRole(i, frames.length, f.at)}
               value={f.value}
               time={times[i] ?? 0}
               onChange={(v) => onFrame(i, v)}

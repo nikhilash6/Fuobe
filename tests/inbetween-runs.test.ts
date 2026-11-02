@@ -97,4 +97,11 @@ describe("Fuobe Animation runs", () => {
     expect(g.request.params?.extra).toMatchObject({ inbetween: { gaps: [{ frames: 21, speed: 2, prompt: "it yawns" }, { frames: 17, speed: 1 }] }, stillMouth: true });
     expect(g.request.params?.keyframeTimes).toEqual([0, 10 / 24, 26 / 24].map((t) => Math.round(t * 1000) / 1000));
   });
+
+  it("plays a generate job at the asked rate when it gives no gaps", () => {
+    const job = { model_id: "fuobe-animation", prompt: "a cat stretches", images: frames(2), playback_fps: 16 };
+    const plan = tools.planFor("generate", { summary: "Animate", jobs: [job] }, { engine: "open" });
+    expect(plan.error).toBeUndefined();
+    expect(plan.jobs[0].error).toBeUndefined();
+  });
 });

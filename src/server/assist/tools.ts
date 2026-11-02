@@ -366,7 +366,7 @@ function asRequest(j: JobInput): GenerationRequest {
       ...(shots && { shots }),
       ...(j.keyframe_times?.length && { keyframeTimes: j.keyframe_times }),
       ...((j.system || animation) && { extra: { ...(j.system && { system: j.system }), ...animation } }),
-      ...(animation?.inbetween && !j.keyframe_times?.length && { keyframeTimes: keyTimes({ ...animation.inbetween, fps: animation.inbetween.fps ?? (j.engine === "cloud" ? 16 : 24) }) }),
+      ...(animation?.inbetween?.gaps && !j.keyframe_times?.length && { keyframeTimes: keyTimes({ ...animation.inbetween, fps: animation.inbetween.fps ?? (j.engine === "cloud" ? 16 : 24) }) }),
     },
   };
 }
@@ -375,12 +375,15 @@ function asRequest(j: JobInput): GenerationRequest {
 function animationOf(j: JobInput): { inbetween?: InbetweenTiming; stillMouth?: true } | undefined {
   if (!j.gaps?.length && !j.playback_fps && !j.still_mouth) return undefined;
   // Without a rate the engine's own plays it (24 fps on the GPU, 16 in the cloud: src/lib/inbetween.ts requestTiming).
+  // A rate with no gaps rides alone: the gaps then come from the keyframe times at that rate.
   const inbetween = j.gaps?.length
     ? ({
         gaps: j.gaps.map((g) => ({ frames: g.frames, speed: (g.speed ?? 1) as Speed, ...(g.words?.trim() && { prompt: g.words.trim() }) })),
         ...(j.playback_fps && { fps: j.playback_fps as PlaybackFps }),
       } as InbetweenTiming)
-    : undefined;
+    : j.playback_fps
+      ? ({ fps: j.playback_fps as PlaybackFps } as InbetweenTiming)
+      : undefined;
   return { ...(inbetween && { inbetween }), ...(j.still_mouth && { stillMouth: true as const }) };
 }
 

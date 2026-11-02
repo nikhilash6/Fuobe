@@ -135,7 +135,8 @@ export function timingFor(keys: number, given: Partial<InbetweenTiming> | undefi
   const gaps = Array.from({ length: Math.max(0, keys - 1) }, (_, i) => {
     const g = given?.gaps?.[i] ?? DEFAULT_GAP;
     const speed = can.speeds.includes(g.speed) ? g.speed : 1;
-    return { frames: snapGapFrames(g.frames), speed, ...(g.prompt?.trim() && { prompt: g.prompt.trim() }) };
+    // The words as typed (a trailing space is the next word coming); requests trim them (requestTiming, gapPrompt).
+    return { frames: snapGapFrames(g.frames), speed, ...(g.prompt?.trim() && { prompt: g.prompt }) };
   });
   return { gaps, fps };
 }
@@ -210,9 +211,12 @@ export function requestTiming(extra: Record<string, unknown> | undefined, keys: 
       ...(typeof (g as GapTiming)?.prompt === "string" && (g as GapTiming).prompt!.trim() && { prompt: (g as GapTiming).prompt!.trim().slice(0, 500) }),
     }));
     t = { gaps, fps: Number(raw.fps ?? ENGINE_TIMING[engine].rates[0]) as PlaybackFps };
-  } else if (times && times.length === keys && keys >= MIN_KEYS) {
-    t = timingFromTimes(times, { engine });
-  } else t = timingFor(keys, undefined, engine);
+  } else {
+    // A playback rate alone (no gaps): the gaps come from the times (or the default), played at that rate.
+    const fps = raw && typeof raw === "object" && raw.fps !== undefined ? (Number(raw.fps) as PlaybackFps) : undefined;
+    t = times && times.length === keys && keys >= MIN_KEYS ? timingFromTimes(times, { engine, fps }) : timingFor(keys, { fps }, engine);
+    if (fps !== undefined) t = { ...t, fps };
+  }
   const problem = timingProblem(t, keys, engine);
   if (problem) throw new Error(problem);
   return t;

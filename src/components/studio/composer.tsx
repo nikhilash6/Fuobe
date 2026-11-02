@@ -12,7 +12,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToday } from "@/hooks/use-today";
 import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
-import type { Engine, GenerationRequest, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
+import type { Engine, GenerationRequest, GenParams, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
 import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
@@ -155,6 +155,17 @@ interface FramesContext {
   animation?: { timing: InbetweenTiming };
 }
 
+/**
+ * The draft's keyframe-animation settings (params.extra.inbetween, stillMouth) go only with an animation: after Animation
+ * is turned off or another model is picked they stay in the draft (to come back to) but are not sent to that model.
+ */
+function withoutAnimation(params: GenParams, animating: boolean): GenParams {
+  const extra = params.extra;
+  if (animating || !extra || !("inbetween" in extra || "stillMouth" in extra)) return params;
+  const { inbetween: _i, stillMouth: _s, ...rest } = extra;
+  return { ...params, extra: Object.keys(rest).length ? rest : undefined };
+}
+
 function buildRequest(
   feature: string,
   draft: Pick<Draft, "slots" | "refs" | "presetId" | "modelId" | "prompt" | "negativePrompt" | "params" | "presetOptions" | "presetStrength" | "mix" | "frames" | "layout">,
@@ -173,7 +184,7 @@ function buildRequest(
   let images = [s.image, s.image2, s.image3].filter((x): x is SlotValue => !!x?.ref).map((x) => x.ref).concat(refKind === "image" ? refs : []);
   const videos = refKind === "video" ? refs : [];
   let endImage = s.endImage?.ref || undefined;
-  let params = draft.params;
+  let params = withoutAnimation(draft.params, !!(draft.frames && frames?.animation));
   let pinned = op;
   // Frames mode: the stills in order at their times (or the first and last as start and end frame), at the strip's length.
   if (draft.frames && frames) {

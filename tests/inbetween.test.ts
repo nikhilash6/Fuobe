@@ -85,7 +85,11 @@ describe("in-between timing", () => {
 
   it("fits saved timing to the keyframes and the engine", () => {
     const t = timingFor(4, { gaps: [{ frames: 30, speed: 3, prompt: "  jumps " }], fps: 16 });
-    expect(t.gaps).toEqual([{ frames: 29, speed: 3, prompt: "jumps" }, { frames: 33, speed: 1 }, { frames: 33, speed: 1 }]);
+    // The words stay as typed (the box keeps its spaces); a request trims them.
+    expect(t.gaps).toEqual([{ frames: 29, speed: 3, prompt: "  jumps " }, { frames: 33, speed: 1 }, { frames: 33, speed: 1 }]);
+    expect(timingFor(2, { gaps: [{ frames: 33, speed: 1, prompt: "she " }] }).gaps[0].prompt).toBe("she ");
+    expect(timingFor(2, { gaps: [{ frames: 33, speed: 1, prompt: "   " }] }).gaps[0].prompt).toBeUndefined();
+    expect(requestTiming({ inbetween: t }, 4, undefined, "open").gaps[0].prompt).toBe("jumps");
     expect(timingFor(3, { gaps: [{ frames: 21, speed: 4 }], fps: 24 }, "cloud")).toEqual({ gaps: [{ frames: 21, speed: 1 }, { frames: 33, speed: 1 }], fps: 16 });
   });
 
@@ -103,6 +107,10 @@ describe("in-between timing", () => {
     expect(requestTiming({}, 3, [0, 1, 2], "open").gaps.map((g) => g.frames)).toEqual([25, 25]);
     expect(requestTiming(undefined, 2, undefined, "cloud")).toEqual({ gaps: [{ frames: 33, speed: 1 }], fps: 16 });
     expect(() => requestTiming({ inbetween: { gaps: [{ frames: 17, speed: 9 }], fps: 24 } }, 2, undefined, "open")).toThrow(/×1 to ×4/);
+    // A playback rate alone: the gaps from the times, played at that rate (and refused where the engine can't).
+    expect(requestTiming({ inbetween: { fps: 16 } }, 3, [0, 1, 2], "open")).toEqual({ gaps: [{ frames: 17, speed: 1 }, { frames: 17, speed: 1 }], fps: 16 });
+    expect(requestTiming({ inbetween: { fps: 16 } }, 2, undefined, "open").fps).toBe(16);
+    expect(() => requestTiming({ inbetween: { fps: 24 } }, 2, undefined, "cloud")).toThrow(/16 fps/);
   });
 
   it("writes each gap's words", () => {
