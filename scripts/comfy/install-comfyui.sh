@@ -132,6 +132,50 @@ if [ "${OPEN_H3_REGEN:-0}" = "1" ]; then
   done
 fi
 
+# Hi3D 1.0 mesh refinement (Image to 3D's "Refine detail", the mesh-refine-hi3d workflow; docs/research/hi3d-refine.json):
+# T8star's Comfyui-Hi3d-T8 (MIT code; the Hi3D code it vendors and the weights are under the Hi3D Open License 1.0, which
+# asks for "Powered by Hi3D 1.0" wherever its results show). Opt-in: HI3D=1. It needs an NVIDIA GPU of compute capability
+# 8.0+ (RTX 30 series / A-series or newer) and CUDA 12: its requirements.txt pins spconv-cu126 2.3.8 and triton, and keeps
+# ComfyUI's own torch. There is no CPU path. The weights (10.66 GB: Hi3D 7.73 GB, DINOv2-L 1.22 GB, CLIP ViT-L/14 1.71 GB)
+# go into models/Hi3D/{hi3d,dino,clip}/ at pinned revisions, each checked with sha256sum -c; HI3D_WEIGHTS=0 skips them.
+HI3D_REF="${HI3D_REF:-73848490976e6a9b0c735ce02984c03866a495e7}"   # v0.5.1, 2026-10-26
+if [ "${HI3D:-0}" = "1" ]; then
+  dest="$COMFYUI_DIR/custom_nodes/Comfyui-Hi3d-T8"
+  if [ -d "$dest/.git" ] || git clone -q https://github.com/T8mars/Comfyui-Hi3d-T8 "$dest"; then
+    git -C "$dest" fetch -q --depth 1 origin "$HI3D_REF" 2>/dev/null || true
+    git -C "$dest" checkout -q "$HI3D_REF" 2>/dev/null || echo "warn: could not pin Comfyui-Hi3d-T8 to $HI3D_REF"
+    uv pip install --python "$PY" -r "$dest/requirements.txt" || echo "warn: Comfyui-Hi3d-T8's requirements did not install (it needs an NVIDIA GPU with CUDA 12)"
+  else
+    echo "warn: could not fetch Comfyui-Hi3d-T8"
+  fi
+  if [ "${HI3D_WEIGHTS:-1}" = "1" ]; then
+    HI3D_DIR="$COMFYUI_DIR/models/Hi3D"
+    for spec in "hi3d hi3d-official/Hi3Dv1.0 d502e938cbedc6e87aba8884614c5ca6d177a4b6 model_index.json scheduler/scheduler_config.json vae/config.json vae/model.safetensors transformer_512/config.json transformer_512/model.safetensors transformer_1024/config.json transformer_1024/model.safetensors" \
+                "dino facebook/dinov2-large 47b73eefe95e8d44ec3623f8890bd894b6ea2d6c config.json model.safetensors" \
+                "clip openai/clip-vit-large-patch14 32bd64288804d66eefd0ccbe215aa642df71cc41 config.json model.safetensors"; do
+      read -r sub repo rev files <<<"$spec"
+      for f in $files; do
+        [ -s "$HI3D_DIR/$sub/$f" ] && continue
+        mkdir -p "$(dirname "$HI3D_DIR/$sub/$f")"
+        if curl -fsSL --retry 3 -o "$HI3D_DIR/$sub/$f.part" "https://huggingface.co/$repo/resolve/$rev/$f"; then
+          mv "$HI3D_DIR/$sub/$f.part" "$HI3D_DIR/$sub/$f"
+        else
+          rm -f "$HI3D_DIR/$sub/$f.part"
+          echo "warn: could not download $repo/$f at $rev"
+        fi
+      done
+    done
+    (cd "$HI3D_DIR" && sha256sum -c --quiet <<'SHA'
+8ba88311dccf23463c6e10dd0d3bd5e0c5c35d1608c6f466413b6428b5ad8e56  hi3d/transformer_512/model.safetensors
+a2ca5e44dde51cacecd59b42fceeb5f14e75d55e6dd047337752c4e6f281008c  hi3d/transformer_1024/model.safetensors
+605d207c77f8db0b33c567a5861252f0090cf3c3604dfda1cfee09e8f0b53f3e  hi3d/vae/model.safetensors
+399fba97a95f22c36834418bc69373364a99af3a1153da1c0fb31db567c92e23  dino/model.safetensors
+a2bf730a0c7debf160f7a6b50b3aaf3703e7e88ac73de7a314903141db026dcb  clip/model.safetensors
+SHA
+    ) || echo "warn: a Hi3D weight file is missing or failed its SHA-256 check (delete it from models/Hi3D and re-run)"
+  fi
+fi
+
 # Fuobe's live edit nodes (fuobe_live.py, one file Fuobe ships, MIT): Live edit's loader, cached reference encode,
 # crop, paste-back and socket save. Written from the copy in this checkout (src/lib/comfy-live-nodes.ts).
 if command -v node >/dev/null 2>&1; then

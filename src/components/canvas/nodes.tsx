@@ -16,6 +16,7 @@ import {
   ImagePlus,
   Library,
   Loader2,
+  Maximize2,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -95,6 +96,10 @@ import {
   nodeOps,
   OPEN_DUB_HINT,
   OUT,
+  edgeStem,
+  outputPorts,
+  stemOutput,
+  type OutputPortDef,
   TABLE_LIMITS,
   tableRows,
   outputType,
@@ -114,6 +119,7 @@ import {
 } from "@/lib/catalog/canvas";
 import { OPERATION_LABELS, type Engine, type MediaKind, type ModelDef, type OutputFile } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
+import { stemLabel, type StemId } from "@/lib/av/split";
 import { dubResult, languageStage, type DubSessionView, type DubStage } from "@/lib/av/dub";
 import { DUB_LANGUAGES, supportsTarget } from "@/lib/av/languages";
 import { matchSpokenLanguage, spokenLanguageName, spokenLanguageOptions } from "@/lib/speech-languages";
@@ -182,6 +188,50 @@ function OutPort({ type }: { type: PortType }) {
   );
 }
 
+/**
+ * Split soundtrack's outputs: one row per stem, each with its own handle on the right, and the stem to play once the
+ * node has run. A handle the node can't fill here is greyed out, with why.
+ */
+function StemPorts({ ports, outputs, onOpen }: { ports: OutputPortDef[]; outputs: OutputFile[]; onOpen: (index: number) => void }) {
+  return (
+    <div className="border-b py-1" role="list" aria-label="Stems">
+      {ports.map((p) => {
+        const o = stemOutput(outputs, p.stem);
+        return (
+          <div key={p.id} role="listitem" className="relative flex min-h-8 items-center gap-2 pr-3.5 pl-3 text-[11px]" title={p.disabled}>
+            <span className={cn("w-24 shrink-0 font-medium", p.disabled ? "text-subtle-foreground" : o ? "text-foreground" : "text-muted-foreground")}>{p.label}</span>
+            {o ? (
+              <>
+                <audio src={o.url} controls preload="none" aria-label={`${p.label} stem`} className={cn("h-7 w-full min-w-0 flex-1", NO_DRAG)} />
+                <button
+                  onClick={() => onOpen(outputs.indexOf(o))}
+                  className={cn("grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground", NO_DRAG)}
+                  aria-label={`Open ${p.label.toLowerCase()} stem`}
+                  title="Open"
+                >
+                  <Maximize2 className="size-3.5" />
+                </button>
+              </>
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-right text-subtle-foreground">{p.disabled ? "Not available here" : ""}</span>
+            )}
+            <Handle
+              type="source"
+              position={Position.Right}
+              id={p.id}
+              isConnectable={!p.disabled}
+              className={cn("canvas-handle canvas-handle-out", p.disabled && "opacity-40")}
+              style={{ "--port": PORT_COLOR[p.type] } as React.CSSProperties}
+              aria-label={`${p.label} output (${PORT_TYPE_LABEL[p.type]})`}
+              title={p.disabled ?? `${p.label} out — drag to connect`}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Menus: the ⋯ button and right-click show the same items (keyboard users get Rename, Connect and Disconnect)
 
@@ -225,14 +275,21 @@ function portLabel(n: CanvasNode | undefined, handle: string | null | undefined)
 function ConnectItems({ id, kit }: { id: string; kit: MenuKit }) {
   const actions = useEditorActions();
   const graph = actions.getGraph();
+  const { mode } = useEditorGlobals();
   const options: { key: string; label: string; c: Connection }[] = [];
-  for (const t of [...graph.nodes].sort(byBoardPosition)) {
-    if (t.id === id || t.type === "note") continue;
-    const handles = t.type === "output" ? [PREVIEW_IN] : inputPorts(t).map((p) => p.id);
-    for (const h of handles) {
-      const c: Connection = { source: id, sourceHandle: OUT, target: t.id, targetHandle: h };
-      if (graph.edges.some((e) => e.source === id && e.target === t.id && e.targetHandle === h) || connectionError(graph, c)) continue;
-      options.push({ key: `${t.id}:${h}`, label: `${nodeLabel(t)} · ${portLabel(t, h)}`, c });
+  const self = graph.nodes.find((n) => n.id === id);
+  // Split soundtrack offers each of its stems ("Music → Mux · Audio"); every other node its one output.
+  const outs = self ? outputPorts(graph, self, mode).filter((p) => !p.disabled) : [];
+  const many = outs.length > 1;
+  for (const out of outs) {
+    for (const t of [...graph.nodes].sort(byBoardPosition)) {
+      if (t.id === id || t.type === "note") continue;
+      const handles = t.type === "output" ? [PREVIEW_IN] : inputPorts(t).map((p) => p.id);
+      for (const h of handles) {
+        const c: Connection = { source: id, sourceHandle: out.id, target: t.id, targetHandle: h };
+        if (graph.edges.some((e) => e.source === id && (e.sourceHandle ?? OUT) === out.id && e.target === t.id && e.targetHandle === h) || connectionError(graph, c, mode)) continue;
+        options.push({ key: `${out.id}:${t.id}:${h}`, label: `${many ? `${out.label} → ` : ""}${nodeLabel(t)} · ${portLabel(t, h)}`, c });
+      }
     }
   }
   if (!options.length) return <kit.Item disabled>Nothing on the board takes this output</kit.Item>;
@@ -385,6 +442,7 @@ function NodeShell({
   data,
   selected,
   out,
+  outsInBody,
   badge,
   menu = [],
   footer,
@@ -397,6 +455,8 @@ function NodeShell({
   data: CanvasNodeData;
   selected: boolean;
   out?: PortType | null;
+  /** The output handles are drawn in the body (Split soundtrack's stems), not in the header. */
+  outsInBody?: boolean;
   badge?: React.ReactNode;
   menu?: MenuItem[];
   footer?: React.ReactNode;
@@ -451,7 +511,7 @@ function NodeShell({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {out && <OutPort type={out} />}
+            {out && !outsInBody && <OutPort type={out} />}
           </div>
           {children}
           {footer}
@@ -687,6 +747,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
   const model = useMemo(() => nodeModel(node, g.mode), [node, g.mode]);
   const ports = useMemo(() => inputPorts(node), [node]);
   const out = outputType(EMPTY_GRAPH, node);
+  const stems = useMemo(() => (type === "split-soundtrack" ? outputPorts(EMPTY_GRAPH, node, g.mode) : null), [type, node, g.mode]);
   const r = v.results;
   const ops = useMemo(() => nodeOps(node, model), [node, model]);
   const auto = type === "model" && ops.length > 1;
@@ -707,7 +768,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
 
   // Handles change with the model and op: tell React Flow to re-measure them (React Flow measures new nodes itself).
   const updateInternals = useUpdateNodeInternals();
-  const portKey = `${ports.map((p) => p.id).join(",")}|${out}`;
+  const portKey = `${ports.map((p) => p.id).join(",")}|${out}|${stems?.map((p) => `${p.id}${p.disabled ? "-" : ""}`).join(",") ?? ""}`;
   const measuredKey = useRef(portKey);
   useEffect(() => {
     if (measuredKey.current === portKey) return;
@@ -743,7 +804,12 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
         ]),
     ...(running ? [{ label: "Cancel", icon: Square, onSelect: () => actions.cancel(id) }] : []),
     { label: data.pinned ? "Unpin result" : "Pin result", icon: data.pinned ? PinOff : Pin, onSelect: () => actions.update(id, { pinned: !data.pinned }), separatorBefore: !data.pinned },
-    ...(r.outputs.some((x) => ["image", "video", "audio"].includes(x.o.kind)) ? [{ label: "Use result as an input", icon: ImagePlus, onSelect: () => actions.toInput(id) }] : []),
+    // Split soundtrack: one item per stem it made ("Use music as an input").
+    ...(stems
+      ? stems.flatMap((p) => (p.stem && stemOutput(r.outputs.map((x) => x.o), p.stem) ? [{ label: `Use ${p.label.toLowerCase()} as an input`, icon: ImagePlus, onSelect: () => actions.toInput(id, p.stem) }] : []))
+      : r.outputs.some((x) => ["image", "video", "audio"].includes(x.o.kind))
+        ? [{ label: "Use result as an input", icon: ImagePlus, onSelect: () => actions.toInput(id) }]
+        : []),
     ...(r.outputs.length
       ? [
           {
@@ -789,6 +855,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
       data={data}
       selected={!!selected}
       out={out}
+      outsInBody={!!stems}
       menu={menu}
       tone={running ? "running" : r.state === "failed" ? "failed" : undefined}
       badge={
@@ -832,6 +899,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
       }
     >
       {ports.length > 0 && <div className="border-b py-1">{ports.map((p) => <InPort key={p.id} port={p} count={v.counts[p.id] ?? 0} />)}</div>}
+      {stems && <StemPorts ports={stems} outputs={r.state === "succeeded" ? r.outputs.map((x) => x.o) : []} onOpen={(i) => actions.open(id, i)} />}
       <div className="space-y-2 p-3">
         {variants && (
           <div className={cn("inline-grid h-7 grid-cols-2 rounded-full bg-muted p-0.5 text-[12px] font-medium", NO_DRAG)} role="radiogroup" aria-label={`${variants[0]} or ${variants[1]}`}>
@@ -889,7 +957,8 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
             <Table className="size-3.5 shrink-0" /> Runs once per table row: {v.rows === 1 ? "1 run" : `${v.rows} runs`}
           </p>
         )}
-        <Results id={id} r={r} />
+        {/* Split soundtrack plays its stems on their own rows, by their handles. */}
+        {!(stems && r.state === "succeeded") && <Results id={id} r={r} />}
         {error && r.state !== "failed" && (
           <p className={cn("flex items-start gap-1.5 text-[12px] leading-snug", v.runError ? "text-destructive" : "text-warning")}>
             <AlertCircle className="mt-px size-3.5 shrink-0" />
@@ -1629,18 +1698,21 @@ const CloneVoiceNode = memo(function CloneVoiceNode({ id, data, selected }: Node
 // ---------------------------------------------------------------------------
 // Output preview and notes
 
-type Source = Pick<CanvasNode, "id" | "type" | "data">;
+/** A node feeding an Output node, with the stem it hands on (an edge from a Split soundtrack handle). */
+type Source = Pick<CanvasNode, "id" | "type" | "data"> & { key: string; stem?: StemId };
 
-const sameSources = (a: Source[], b: Source[]) => a.length === b.length && a.every((s, i) => s.id === b[i].id && s.type === b[i].type && s.data === b[i].data);
+const sameSources = (a: Source[], b: Source[]) => a.length === b.length && a.every((s, i) => s.key === b[i].key && s.type === b[i].type && s.data === b[i].data);
 
 /** What feeds an Output node, top to bottom. */
 const selectSources = (s: EditorSnapshot, id: string): Source[] =>
   s.graph.edges
     .filter((e) => e.target === id)
-    .map((e) => s.byId.get(e.source))
-    .filter((n): n is CanvasNode => !!n)
-    .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
-    .map((n) => ({ id: n.id, type: n.type, data: n.data }));
+    .flatMap((e) => {
+      const n = s.byId.get(e.source);
+      return n ? [{ n, stem: edgeStem(n, e.sourceHandle) }] : [];
+    })
+    .sort((a, b) => a.n.position.y - b.n.position.y || a.n.position.x - b.n.position.x)
+    .map(({ n, stem }) => ({ id: n.id, key: stem ? `${n.id}:${stem}` : n.id, type: n.type, data: n.data, ...(stem && { stem }) }));
 
 /** The saved width (templates set one), not React Flow's measured width (that would feed back). */
 const selectWidth = (s: EditorSnapshot, id: string) => s.byId.get(id)?.width;
@@ -1661,9 +1733,12 @@ const OutputNode = memo(function OutputNode({ id, type, data, selected }: NodePr
         ) : (
           <div className={cn("grid gap-2", sources.length > 2 && w >= 540 ? "grid-cols-3" : sources.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
             {sources.map((s) => (
-              <figure key={s.id} className="min-w-0 space-y-1">
+              <figure key={s.key} className="min-w-0 space-y-1">
                 <SourcePreview node={s} />
-                <figcaption className="truncate text-[11px] text-muted-foreground">{nodeLabel(s)}</figcaption>
+                <figcaption className="truncate text-[11px] text-muted-foreground">
+                  {nodeLabel(s)}
+                  {s.stem ? ` · ${stemLabel(s.stem)}` : ""}
+                </figcaption>
               </figure>
             ))}
           </div>
@@ -1677,7 +1752,12 @@ function SourcePreview({ node }: { node: Source }) {
   const actions = useEditorActions();
   const r = useNodeResults(node.id);
   if (isGenerator(node)) {
-    if (r.outputs.length) return <OutputThumb o={r.outputs[0].o} onOpen={() => actions.open(node.id, 0)} large />;
+    // A Split soundtrack stem: that one of its outputs.
+    if (node.stem) {
+      const o = r.state === "succeeded" ? stemOutput(r.outputs.map((x) => x.o), node.stem) : undefined;
+      if (o) return <OutputThumb o={o} onOpen={() => actions.open(node.id, r.outputs.findIndex((x) => x.o === o))} large />;
+      if (r.state === "succeeded") return <div className="grid h-20 place-items-center rounded-lg bg-muted text-[11px] text-muted-foreground">No {stemLabel(node.stem).toLowerCase()} in this result</div>;
+    } else if (r.outputs.length) return <OutputThumb o={r.outputs[0].o} onOpen={() => actions.open(node.id, 0)} large />;
     if (r.state !== "idle") return <Results id={node.id} r={r} compact />;
     return <div className="grid h-20 place-items-center rounded-lg bg-muted text-[11px] text-muted-foreground">Not run yet</div>;
   }
@@ -1979,6 +2059,7 @@ export const NODE_TYPES = {
   tts: GeneratorNode,
   "voice-change": GeneratorNode,
   "clean-voice": GeneratorNode,
+  "split-soundtrack": GeneratorNode,
   "clone-voice": CloneVoiceNode,
   translate: GeneratorNode,
   concat: GeneratorNode,

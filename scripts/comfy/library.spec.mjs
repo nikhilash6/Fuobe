@@ -123,6 +123,10 @@
 //   voiceDescription*                     (the voice in words: params.voiceDescription, op voice-design)
 //   voiceTranscript*                      (what the voice sample says: params.voiceTranscript, or a saved voice's line)
 //   device*                               (VoxCPM2's device combo: the server's first torch device, cuda | mps | cpu)
+// Keys added with Hi3D mesh refinement (hi3d-refine). * = the provider fills it:
+//   model3d*                              (Hi3DLoadMesh: the coarse GLB, uploaded like any input: inputs.model3d)
+//   meshResolution                        (Hi3DRefine resolution 512 | 1024 | 1536: params.extra.meshResolution)
+//   cpuOffload                            (Hi3DModelLoader sequential CPU offload, on by default)
 // Entry field requiredModels: files a loader reads by a name with no extension (DBSLoader's model folder), listed in the
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
@@ -197,6 +201,10 @@ export const CUSTOM_NODE_REPOS = {
   // Clean up voice (NVIDIA RE-USE): Fuobe's own pack, in this repository (comfy-nodes/ComfyUI-RE-USE), pinned at the commit
   // that last changed it (tests/reuse-pack-pin.test.ts checks it). install-comfyui.sh copies it from the checkout.
   'ComfyUI-RE-USE': 'https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE',
+  // Hi3D 1.0 mesh refinement (hi3d-refine, docs/research/hi3d-refine.json): T8star's nodes (MIT code, vendored Hi3D code under
+  // the Hi3D Open License 1.0), v0.5.1. Opt-in in install-comfyui.sh (HI3D=1): it needs an Ampere-or-newer NVIDIA GPU and
+  // CUDA kernels (spconv, triton), so it is not on the validation server (mesh-refine-hi3d lists it with `packs`).
+  'Comfyui-Hi3d-T8': 'https://github.com/T8mars/Comfyui-Hi3d-T8/tree/73848490976e6a9b0c735ce02984c03866a495e7',
   // Live edit: Fuobe's own node file (src/lib/comfy-live-nodes.ts), shipped with Fuobe rather than cloned from a repo.
   'fuobe-live': 'https://github.com/workingprototype/Fuobe',
   // nm10-qwen21-fast: Qwen-Image 2.1 on a 16 GB card: recoilme's Zen Image Edit nodes (Qwen3.5-0.8B encoder + fusion adapter),
@@ -224,6 +232,7 @@ export const PACK_CLASSES = {
   // MiniMax H3 video. The turbo classes need naming here: a ComfyUI with comfyui-workflow-encrypt reports that pack as their module.
   'ComfyUI-MiniMax-H3-Turbo': /^MiniMaxH3Turbo(LoRA|Sampler)$/,
   'plaguekind-nodes': /^H3(SLAAttention|AdaLNLoRAFix)$/,
+  'Comfyui-Hi3d-T8': /^Hi3D(ModelLoader|LoadMesh|Refine)$/,
   'ComfyUI-Open-H3-Regenerate': /^OpenH3(Regen(Lora|Sigmas|PrepareDraft|Upscale|RefineLatent|FastVAEDecode|Finish)|SaveRefinedLatent|LoadRefinedLatent|VideoToPrompt)$/,
   Comfyui_Minimax_h3_latent_Upscaler: /^(MinimaxH3LatentUpscaler(3D|Node2D)|MMH3(TemporalSplitParamsV10|SpatialSplitParamsV10|SplitUpscale))$/,
   'ComfyUI-RE-USE': /^REUSE(Loader|Enhance)$/,
@@ -425,6 +434,21 @@ export const KNOWN_MODELS = {
   'DBS-BSRNN-DnR/config.json': { folder: 'dbs', url: 'https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/config.json' },
   'DBS-TIGER-DnR/model.safetensors': { folder: 'dbs', url: 'https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/model.safetensors' },
   'DBS-TIGER-DnR/config.json': { folder: 'dbs', url: 'https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/config.json' },
+  // Hi3D 1.0 (hi3d-refine): T8's Hi3DModelLoader reads models/Hi3D/{hi3d,dino,clip}/ (the official layout, plus the two image
+  // encoders Hi3D loads on first use), so the keys are paths under that folder. Pinned revisions; the same files (identical SHA-256)
+  // as t8star/Hi3d-Comfy at 6ae7235d. install-comfyui.sh (HI3D=1) downloads them.
+  'hi3d/model_index.json': { folder: 'Hi3D', url: 'https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/model_index.json' },
+  'hi3d/scheduler/scheduler_config.json': { folder: 'Hi3D', url: 'https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/scheduler/scheduler_config.json' },
+  'hi3d/vae/config.json': { folder: 'Hi3D', url: 'https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/vae/config.json' },
+  'hi3d/vae/model.safetensors': { folder: 'Hi3D', url: 'https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/vae/model.safetensors' },
+  'hi3d/transformer_512/config.json': { folder: 'Hi3D', url: 'https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_512/config.json' },
+  'hi3d/transformer_512/model.safetensors': { folder: 'Hi3D', url: 'https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_512/model.safetensors' },
+  'hi3d/transformer_1024/config.json': { folder: 'Hi3D', url: 'https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_1024/config.json' },
+  'hi3d/transformer_1024/model.safetensors': { folder: 'Hi3D', url: 'https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_1024/model.safetensors' },
+  'dino/config.json': { folder: 'Hi3D', url: 'https://huggingface.co/facebook/dinov2-large/resolve/47b73eefe95e8d44ec3623f8890bd894b6ea2d6c/config.json' },
+  'dino/model.safetensors': { folder: 'Hi3D', url: 'https://huggingface.co/facebook/dinov2-large/resolve/47b73eefe95e8d44ec3623f8890bd894b6ea2d6c/model.safetensors' },
+  'clip/config.json': { folder: 'Hi3D', url: 'https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/config.json' },
+  'clip/model.safetensors': { folder: 'Hi3D', url: 'https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/model.safetensors' },
   // RE-USE (Clean up voice): the NemotronLabs repositories only (OpenMDW-1.1; the older nvidia/RE-USE is non-commercial), at
   // pinned revisions, named so both fit in models/reuse. install-comfyui.sh checks the SHA-256.
   'NemotronLabs-RE-USE.safetensors': { folder: 'reuse', url: 'https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/resolve/31f82f2efad1095034492f236e8dac9239ba713b/model.safetensors' },
@@ -4103,6 +4127,36 @@ export const SPEC = [
     vramGb: 10,
     license: 'Tencent Hunyuan 3D 2.1 Community License (territory EXCLUDES the EU, UK and South Korea)',
     notes: 'Template 3d_hunyuan3d-v2.1. Shape only (no Hunyuan3D-Paint in the native nodes): clay previews or a separate texture step. Feed a background-removed image (bg-remove-birefnet).',
+  },
+  {
+    id: 'mesh-refine-hi3d',
+    title: 'Refine a 3D model\'s geometry from its photo (Hi3D 1.0, 512 / 1024 / 1536; geometry-only GLB)',
+    capability: 'refine-3d',
+    handBuilt: 'hand-built/mesh-refine-hi3d.json',
+    packs: ['Comfyui-Hi3d-T8'],
+    requiredModels: [
+      'hi3d/model_index.json', 'hi3d/scheduler/scheduler_config.json', 'hi3d/vae/config.json', 'hi3d/vae/model.safetensors',
+      'hi3d/transformer_512/config.json', 'hi3d/transformer_512/model.safetensors', 'hi3d/transformer_1024/config.json', 'hi3d/transformer_1024/model.safetensors',
+      'dino/config.json', 'dino/model.safetensors', 'clip/config.json', 'clip/model.safetensors',
+    ],
+    bindings: {
+      image: [b('2', 'image')], model3d: [b('5', 'mesh_file')], meshResolution: [b('6', 'resolution')], steps: [b('6', 'steps')], seed: [b('6', 'seed')],
+      cpuOffload: [b('1', 'cpu_offload')],
+    },
+    outputs: [{ node: '7', kind: 'model3d' }],
+    vramGb: 24,
+    license:
+      'Hi3D Open License Agreement 1.0 (Hi3D v1.0 weights and vendored code by OCEANO HK HOLDING LIMITED: commercial use permitted; above 200,000 monthly active users or USD 1,000,000 monthly revenue, ' +
+      'notify the licensor and apply for a separate licence within 60 days; the app must show "Powered by Hi3D 1.0" linking to http://hi3d.ai/); T8star\'s ComfyUI nodes MIT; ' +
+      'DINOv2-L Apache-2.0, CLIP ViT-L/14 MIT (OpenAI); BiRefNet MIT',
+    notes:
+      'Hi3D v1.0 (Sparc3D\'s refinement stage; docs/research/hi3d-refine.json) through T8star\'s Comfyui-Hi3d-T8 0.5.1: LoadImage -> core BiRefNet RemoveBackground -> InvertMask (Hi3D reads mask 1 as transparent, so the subject stays and the background goes) ' +
+      '-> Hi3DRefine with the coarse GLB (Hi3DLoadMesh reads it from ComfyUI\'s input folder, where Fuobe uploads it) and Hi3DModelLoader (models/Hi3D with hi3d/, dino/, clip/; sequential CPU offload on, SDPA attention, which needs no flash-attn build) ' +
+      '-> SaveGLB. Resolution 512 runs one pass (transformer_512), 1024 two and 1536 three (transformer_1024), 25 scheduler steps each. Output: geometry only (no texture, material or vertex colour), ' +
+      'recentred at unit radius, not guaranteed watertight; the Fuobe server finishes it like any image-to-3D GLB (web GLB + CPU turntable). Needs Linux or Windows with an NVIDIA GPU of compute capability 8.0+ ' +
+      'and CUDA 12 (official stack: CUDA 12.0-12.5, torch 2.5.0+cu124, flash-attn 2.7.4.post1, spconv-cu120 2.3.6; the pack keeps ComfyUI\'s torch and pins spconv-cu126 2.3.8, with an SDPA attention option). ' +
+      'No CPU path. 1536 is validated upstream only on a 96 GB H20; the pack\'s author ran 512-1536 on a 24 GB laptop RTX 5090 with offload (vramGb is an estimate). Not yet run end to end through Fuobe. ' +
+      'Weights: 7.73 GB Hi3D + 1.22 GB DINOv2-L + 1.71 GB CLIP ViT-L/14 at pinned revisions.',
   },
   {
     id: 'tryon-flux2-klein-4b',
