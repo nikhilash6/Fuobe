@@ -112,7 +112,7 @@ describe("search by what you want to make", () => {
   it("still matches every word of a name first: “video tools”, “video”, “upscale video”", () => {
     expect(labels("video tools")[0]).toBe("Video tools");
     expect(labels("video")[0]).toBe("Video");
-    expect(labels("upscale video")[0]).toBe("Video");
+    expect(labels("upscale video")[0]).toBe("Upscale video");
     expect(searchNav("upscale video", OWNER).best[0].hint).toBe("Upscale");
     expect(labels("settings")[0]).toBe("Settings");
     expect(labels("library")[0]).toBe("All creations");

@@ -237,6 +237,9 @@ function kindBonus(e: SearchEntry): number {
     case "library":
     case "action":
       return 8;
+    case "area":
+      // An overview loses close calls to the page it lists ("studios" finds a studio first, the overview next).
+      return 5;
   }
   return e.kind === "page" ? 8 : e.kind === "setting" ? 4 : 0;
 }
@@ -320,10 +323,17 @@ export function searchNav(query: string, entries: SearchEntry[], opts: { intents
   // Letters-in-order guesses next to a real match are noise; what an intent names always stays.
   // With an intent to go by, the faintest guesses go too ("real estate" is not "Sign up free").
   const floor = Math.max(top * (top >= REAL_MATCH ? KEEP_FROM_REAL_MATCH : KEEP_FROM_BEST), fired.length ? 20 : 0);
+  const hrefs = new Set<string>();
   const hits = scored
     .filter((x) => x.boost > 0 || x.text + x.bonus >= floor)
     .map((x) => toHit(x.e, Math.max(x.text, x.boost) + 0.1 * Math.min(x.text, x.boost) + x.bonus))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    // One hit per address: a page listed twice (Any Angle, a tool of Create and an app) shows once, as its best match.
+    .filter((h) => {
+      if (hrefs.has(h.href)) return false;
+      hrefs.add(h.href);
+      return true;
+    });
 
   // Only real matches are "best" (and so what Enter opens): a word that merely appears in a name is listed by kind.
   // A single long word that matches nothing as written is a typo ("cinma"), and its guess is the match.
@@ -357,6 +367,7 @@ const HIT_KIND: Record<NavKind, HitKind> = {
   create: "page",
   presets: "page",
   library: "page",
+  area: "page",
   studio: "studio",
   tool: "tool",
   settings: "setting",

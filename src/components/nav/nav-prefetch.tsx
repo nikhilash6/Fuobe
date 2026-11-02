@@ -14,7 +14,9 @@ import { entriesFor, type ViewerKind } from "@/lib/nav-model";
 /** A panel whose routes load when it opens: the launcher (and the Studios sheet), Create, More. */
 export type NavPanel = "studios" | "create" | "more";
 
-const MORE_IDS = ["apps", "motions", "effects", "canvas", "assist"];
+const MORE_IDS = ["apps", "motions", "effects", "canvas", "assist", "area-motions"];
+/** Each panel's "See all": its area page loads with the panel's rows. */
+const AREA_OF: Record<NavPanel, string> = { studios: "area-studios", create: "area-create", more: "area-motions" };
 
 /**
  * The routes one tap in a panel leads to (`panel`), or in all of them with the library's (no `panel`): on the site, once
@@ -23,13 +25,15 @@ const MORE_IDS = ["apps", "motions", "effects", "canvas", "assist"];
 export function prefetchHrefs(kind: ViewerKind | undefined, panel?: NavPanel): string[] {
   const hrefs = entriesFor(kind)
     .filter((e) =>
-      panel === "studios"
-        ? !!e.group
-        : panel === "create"
-          ? e.kind === "create"
-          : panel === "more"
-            ? MORE_IDS.includes(e.id)
-            : !!e.group || e.kind === "create" || e.kind === "library",
+      panel && e.id === AREA_OF[panel]
+        ? true
+        : panel === "studios"
+          ? !!e.group
+          : panel === "create"
+            ? e.kind === "create"
+            : panel === "more"
+              ? MORE_IDS.includes(e.id)
+              : !!e.group || e.kind === "create" || e.kind === "library" || e.kind === "area",
     )
     .map((e) => e.href)
     .filter((h) => h.startsWith("/") && !h.includes("#"));

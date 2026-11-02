@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AreaBackLink } from "@/components/areas/area-page";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { PresetGallery } from "@/components/preset-gallery";
 import { MOTIONS } from "@/lib/catalog";
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <PageShell>
+      <AreaBackLink id="motions" />
       <PageHeader
         title="Camera motions"
         description="Pick a camera move, add a start frame, and Fuobe DoP films it."

@@ -1,16 +1,17 @@
 "use client";
 
-import { ChevronDown, Plus } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useId } from "react";
 import { IntentLink } from "@/components/intent-link";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { navActive, NEW_CREATION_HREF } from "@/lib/nav";
-import { entry, visibleTo, type NavEntry, type ViewerKind } from "@/lib/nav-model";
+import { area } from "@/lib/nav-areas";
+import { CREATE_COLUMNS, entry, visibleTo, type NavEntry, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
+import { BarSplitMenu } from "./bar-split";
 import { NavIcon } from "./cover-thumb";
-import { warmNav } from "./nav-prefetch";
 import { useViewerKind } from "./nav-ui";
 
 /*
@@ -26,11 +27,8 @@ import { useViewerKind } from "./nav-ui";
 export const NAV_MENU_ITEM =
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-[current]:shadow-[inset_3px_0_0_var(--brand-text)]";
 
-/** The two columns, in order. Storyboard plans a film, so it sits with Make (its card is in the launcher's Film column). */
-export const CREATE_COLUMNS = [
-  { label: "Make", ids: ["image", "video", "assist", "canvas", "storyboard"] },
-  { label: "Edit a picture", ids: ["edit", "live-edit", "inpaint", "layers", "color-grade"] },
-] as const;
+/** The two columns, in order: kept in the navigation model, so the /create page (a server component) reads them too. */
+export { CREATE_COLUMNS };
 
 /** The Create columns this viewer may see. */
 export function createColumns(kind: ViewerKind | undefined): { label: string; entries: NavEntry[] }[] {
@@ -84,16 +82,23 @@ export function CreateList({ variant, onNavigate }: { variant: "menu" | "sheet";
           ))}
         </div>
         <DropdownMenuSeparator className="my-1.5" />
-        <DropdownMenuItem asChild className={cn("h-10 gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium", NAV_MENU_ITEM)}>
-          <IntentLink href={NEW_CREATION_HREF} eager>
-            <Plus aria-hidden className="size-4 text-brand-text" />
-            New creation
-            <span className="ml-auto text-[12px] font-normal text-muted-foreground [@media(hover:none)]:hidden">A fresh composer on Home</span>
-            <Kbd aria-hidden className="[@media(hover:none)]:hidden">
-              ↵
-            </Kbd>
-          </IntentLink>
-        </DropdownMenuItem>
+        <div className="grid grid-cols-2 gap-x-1">
+          <DropdownMenuItem asChild className={cn("h-10 gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium", NAV_MENU_ITEM)}>
+            <IntentLink href={NEW_CREATION_HREF} eager>
+              <Plus aria-hidden className="size-4 text-brand-text" />
+              New creation
+              <Kbd aria-hidden className="ml-auto [@media(hover:none)]:hidden">
+                ↵
+              </Kbd>
+            </IntentLink>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className={cn("group/all h-10 gap-2 rounded-lg px-2.5 text-[13.5px] font-medium text-brand-text", NAV_MENU_ITEM)}>
+            <IntentLink href={CREATE_AREA_HREF} aria-current={pathname === CREATE_AREA_HREF ? "page" : undefined} aria-label="See all of Create">
+              See all
+              <ArrowRight aria-hidden className="size-4 motion-safe:transition-transform group-hover/all:translate-x-0.5" />
+            </IntentLink>
+          </DropdownMenuItem>
+        </div>
       </>
     );
   const follow = (e: React.MouseEvent) => {
@@ -146,17 +151,26 @@ export function CreateList({ variant, onNavigate }: { variant: "menu" | "sheet";
   );
 }
 
-/** The bar's Create menu. `className`: the bar's item look for the trigger; `active`: a Create page is open. */
-export function CreateMenu({ className, active }: { className?: string; active?: boolean }) {
+/** Create's own page: everything it holds, with covers ("See all" in the menu and on the phone's sheet). */
+export const CREATE_AREA_HREF = area("create").href;
+
+/**
+ * The bar's Create item: its name goes to /create, its chevron (or ArrowDown, or resting on it with a mouse) opens the
+ * menu. `active`: a Create page is open; `current`: /create itself; `onTap`: the name was clicked.
+ */
+export function CreateMenu({ active, current, onTap }: { active?: boolean; current?: boolean; onTap?: (href: string) => void }) {
   return (
-    <DropdownMenu modal={false} onOpenChange={(o) => o && warmNav("create")}>
-      <DropdownMenuTrigger className={className} data-active={active || undefined}>
-        Create
-        <ChevronDown aria-hidden className="size-3.5 text-muted-foreground motion-safe:transition-transform group-data-[state=open]/bar-item:rotate-180" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={8} collisionPadding={12} className="w-[520px] max-w-[calc(100vw-24px)] p-1.5">
-        <CreateList variant="menu" />
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <BarSplitMenu
+      href={CREATE_AREA_HREF}
+      label="Create"
+      name="Create menu"
+      active={active}
+      current={current}
+      panel="create"
+      onTap={onTap}
+      contentClassName="w-[520px] max-w-[calc(100vw-24px)] p-1.5"
+    >
+      <CreateList variant="menu" />
+    </BarSplitMenu>
   );
 }

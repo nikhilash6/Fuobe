@@ -3,7 +3,8 @@
 import { usePathname } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Dialog as SheetPrimitive } from "radix-ui";
-import { Search, XIcon } from "lucide-react";
+import { ArrowRight, Search, XIcon } from "lucide-react";
+import { IntentLink } from "@/components/intent-link";
 import { AccountSections } from "@/components/nav/account-menu";
 import { CreateList } from "@/components/nav/create-menu";
 import { PHONE_QUERY, useNavUi, type NavSheet } from "@/components/nav/nav-ui";
@@ -11,9 +12,13 @@ import { useSearchPalette } from "@/components/nav/search-context";
 import { ComputerNoteBlock } from "@/components/nav/status-chips";
 import { StudiosSheet } from "@/components/nav/studios-sheet";
 import { warmNav } from "@/components/nav/nav-prefetch";
+import { area } from "@/lib/nav-areas";
 import { cn } from "@/lib/utils";
 
 const TITLES: Record<NavSheet, string> = { studios: "Studios", create: "Create", you: "You" };
+
+/** "See all" in a sheet's header: the area's own page, with covers and lines. */
+const SEE_ALL: Partial<Record<NavSheet, string>> = { studios: area("studios").href, create: area("create").href };
 
 /** A drag down this far on the sheet's top (handle and title) closes it, in px. */
 const SWIPE_CLOSE = 56;
@@ -172,20 +177,32 @@ export function PhoneSheets() {
               <span aria-hidden className="mx-auto h-1 w-10 rounded-full bg-border-strong" />
               <div className="flex items-center gap-3 pr-2 pl-4">
                 <SheetPrimitive.Title className="font-heading text-[28px] leading-none font-normal text-foreground">{TITLES[shown]}</SheetPrimitive.Title>
+                {SEE_ALL[shown] && (
+                  // A link in the sheet: following it closes the sheet (onClickCapture above).
+                  <IntentLink
+                    href={SEE_ALL[shown]}
+                    aria-label={`See all ${TITLES[shown].toLowerCase()}`}
+                    className="group/all ml-auto inline-flex h-11 items-center gap-1 rounded-full px-3 text-[13px] font-medium text-brand-text outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    See all
+                    <ArrowRight aria-hidden className="size-4" />
+                  </IntentLink>
+                )}
                 {shown === "studios" && (
                   // In a full-screen studio Search is in the sheet's shortcuts instead.
                   <button
                     type="button"
                     onClick={openSearch}
-                    className="ml-auto inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-brand-text outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring [html[data-fullscreen-studio]_&]:invisible"
+                    aria-label="Search everything"
+                    className="grid size-11 shrink-0 place-items-center rounded-full text-brand-text outline-none [-webkit-tap-highlight-color:transparent] hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring [html[data-fullscreen-studio]_&]:hidden"
                   >
-                    <Search className="size-4" aria-hidden /> Search everything
+                    <Search className="size-[18px]" aria-hidden />
                   </button>
                 )}
                 <SheetPrimitive.Close
                   className={cn(
                     "grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                    shown !== "studios" && "ml-auto",
+                    !SEE_ALL[shown] && "ml-auto",
                   )}
                 >
                   <XIcon className="size-5" aria-hidden />
