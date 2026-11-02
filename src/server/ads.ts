@@ -183,8 +183,11 @@ export function visualRequest(
 ): GenerationRequest {
   const modelId = drawn ? drawnWordsModel(engine, asked) : adVisualModel(engine, asked);
   const model = getModel(modelId);
-  // A model that draws from words alone (MOSS-Image, Ideogram 4.5) describes the product instead of copying the photo.
+  // A model that draws from words alone (MOSS-Image) describes the product instead of copying the photo; one that
+  // edits (Ideogram 4.5, FLUX.3) keeps the photo.
   const hero = drawn && model && !supportsOp(model, "edit") ? undefined : product?.images[0];
+  // A drawn ad's logo is the brand's own, sent after the photo to a model that takes more than one; else no logo box.
+  const logo = drawn && hero && model && (model.options.maxImages ?? 1) > 1 && brand.logo && !/\.svg(\?|$)/i.test(brand.logo) ? brand.logo : undefined;
   const aspect = model?.options.aspectRatios?.includes("4:5") ? "4:5" : model?.options.aspectRatios?.includes("3:4") ? "3:4" : undefined;
   const visual = c.visual.replace(/[.\s]+$/, "");
   const layout =
@@ -195,6 +198,7 @@ export function visualRequest(
           content: drawn ? { headline: c.headline, body: c.body || undefined, cta: c.cta || undefined, brand: brand.name } : { headline: c.headline },
           brand,
           mode: drawn ? "words" : "clear",
+          logo: !!logo,
           product: product ? `${product.name}: ${visual}` : visual,
           caption: "",
           meta: ["advertising", drawn ? "social media ad" : "photography"],
@@ -208,14 +212,15 @@ export function visualRequest(
     op: hero ? "edit" : "t2i",
     prompt: [
       `${drawn ? "A finished social media ad" : "Advertising photograph"}: ${visual}`,
-      hero && "Keep the product exactly as in the reference photo: shape, label, logo, text and colours",
+      hero && `Keep the product exactly as in the ${logo ? "first " : ""}reference photo: shape, label, logo, text and colours`,
+      logo && "The last reference image is the brand's logo: place it as it is, in its box",
       brandLine(brand),
       !drawn && NO_TEXT,
     ]
       .filter(Boolean)
       .join(". ")
       .concat("."),
-    inputs: hero ? { images: [hero] } : undefined,
+    inputs: hero ? { images: logo ? [hero, logo] : [hero] } : undefined,
     params: { aspectRatio: aspect, numOutputs: 1, ...(layout && { extra: { [LAYOUT_PARAM]: layout } }) },
     title: c.headline,
     batchTitle: `${brand.name} · ads`,

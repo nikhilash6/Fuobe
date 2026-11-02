@@ -98,6 +98,9 @@ const colourWords = (c: string) => (/^#[0-9a-f]{6}$/i.test(c) ? `colour ${c}` : 
 
 const sentence = (s: string) => s.trim().replace(/[.\s]+$/, "");
 
+/** The logo box's caption: the logo itself goes to the model as its last reference image (adDraft's `logo`). */
+export const LOGO_CAPTION = "The brand's logo, exactly as in the last reference image, small and crisp";
+
 /** An ad plan as a layout draft (see the file comment for the two modes). */
 export function adPlanDraft(plan: AdPlan, o: AdDraftOptions): LayoutDraft {
   const W = plan.w;
@@ -119,7 +122,7 @@ export function adPlanDraft(plan: AdPlan, o: AdDraftOptions): LayoutDraft {
     if (plan.logo)
       items.push({
         label: "object",
-        caption: "The brand's logo, small and crisp",
+        caption: LOGO_CAPTION,
         box: boxOf(plan.logo, W, H),
       });
     const text = (b: TextBox | undefined, what: string) => {
@@ -188,11 +191,16 @@ export interface AdDraftInput {
   product: string;
   caption: string;
   meta?: string[];
+  /**
+   * The brand's logo goes to the model as its last reference image: plan its place. Without it there is no logo box,
+   * so a model that draws from words alone doesn't make up a mark in the brand's name.
+   */
+  logo?: boolean;
 }
 
 /**
  * The layout for an ad or a Marketing Studio picture: planned as the browser would set it (planAd, with the brand's
- * colours and fonts and the logo's place when there is one), then turned into a draft. The draft keeps the shape
+ * colours and fonts, and the logo's place when the logo goes to the model), then turned into a draft. The draft keeps the shape
  * asked for, so the server compiles it at the size the model renders (src/lib/catalog/plan.ts planLayout).
  */
 export function adDraft(i: AdDraftInput): LayoutDraft {
@@ -203,7 +211,7 @@ export function adDraft(i: AdDraftInput): LayoutDraft {
     content: i.content,
     theme: themeFrom(i.brand),
     image: { w, h },
-    logo: i.brand?.logo ? { w: 3, h: 1 } : null,
+    logo: i.logo && i.brand?.logo ? { w: 3, h: 1 } : null,
     measure: roughMeasure,
   });
   const draft = adPlanDraft(plan, {

@@ -568,6 +568,12 @@ export const ATTRIBUTIONS: Attribution[] = [
     url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE",
     note: "Trained in part on WSJ (LDC) and an internal NVIDIA set (model card). The older nvidia/RE-USE repository is non-commercial (NSCLv1); Fuobe uses only the NemotronLabs repositories.",
   },
+  {
+    for: "The Layout Poster skill and Plan layout",
+    text: "Adapted from MOSS-Image's prompt-enhancer skill and its layout reference (commit 2b46b1e), copyright OpenMOSS",
+    licence: "Apache-2.0",
+    url: "https://github.com/OpenMOSS/MOSS-Image",
+  },
 ];
 
 /** The parts of a LoRA's licence snapshot the class needs (src/lib/catalog/types.ts LoraLicence). */

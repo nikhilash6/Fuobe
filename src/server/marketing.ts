@@ -342,6 +342,10 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
       op = "edit";
     }
     if (op === "t2i") images = [];
+    // Words drawn by the model: the brand's own logo goes after the photos to a model with room for it, so the layout's
+    // logo box is the real logo (a model that draws from words alone gets no logo box: it would make one up).
+    const drawnLogo = drawn && op === "edit" && images.length > 0 && images.length < max ? rasterLogo(brand) : undefined;
+    if (drawnLogo) images = [...images, drawnLogo];
     const headline = input.headline?.trim() || (tpl?.headline ? fill(tpl.headline, product, brand) : "");
     const cta = input.cta?.trim() || (tpl?.cta ? fill(tpl.cta, product, brand) : "");
     const person = input.avatar ? "the person from the reference photo (same face, hair, skin tone and build)" : "a natural-looking model who suits the product";
@@ -359,6 +363,7 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
       scene,
       productLine(product),
       hasProduct && op === "edit" && KEEP_PRODUCT,
+      drawnLogo && "The last reference image is the brand's logo: place it as it is, in its box",
       input.reference && "Use the last reference photo for the setting and light",
       prompt,
       // Drawn words come from the layout's text boxes, in their places.
@@ -381,6 +386,7 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
             content: { headline, cta: cta || undefined },
             brand,
             mode: "words",
+            logo: !!drawnLogo,
             product: product ? `${product.name}${product.description ? `, ${product.description.replace(/\s+/g, " ").trim().slice(0, 160)}` : ""}` : scene || prompt || "The subject of the picture",
             caption: "",
             meta: [f.id === "poster" ? "poster" : "advertising", "graphic design"],

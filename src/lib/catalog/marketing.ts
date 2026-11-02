@@ -988,7 +988,7 @@ export const DRAWN_WORDS_MODELS: Record<Engine, ModelChoice[]> = {
   open: [{ id: "oss-moss-image", name: "MOSS-Image", note: "MOSS-Image on your GPU · draws your words in place, free" }],
   cloud: [
     { id: "moss-image", name: "MOSS-Image", note: "MOSS-Image, hosted on fal · draws your words in place" },
-    { id: "ideogram-4-5", name: "Ideogram 4.5", note: "Draws the exact text in place" },
+    { id: "ideogram-4-5", name: "Ideogram 4.5", note: "Draws the exact text in place and keeps your product photo" },
     { id: "flux-3", name: "FLUX.3", note: "Draws the text in place and keeps your product photo" },
   ],
 };

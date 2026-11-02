@@ -14,7 +14,7 @@ const { getModel, getPreset } = await import("@/lib/catalog");
 const { planGeneration } = await import("@/lib/catalog/plan");
 const { describeNode, cleanGraph } = await import("@/lib/catalog/canvas");
 const { compileMoss, validateLayout, readsBoxes } = await import("@/lib/layout-prompt");
-const { adDraft, adPlanDraft, fillLayout, layoutPlaceholders, productRect, roughMeasure } = await import("@/lib/layout-surfaces");
+const { adDraft, adPlanDraft, fillLayout, layoutPlaceholders, LOGO_CAPTION, productRect, roughMeasure } = await import("@/lib/layout-surfaces");
 const { planAd, themeFrom } = await import("@/components/ads/layout");
 const { DRAWN_WORDS_MODELS, drawnWordsModel, formatModels, FORMATS, wordsOnTop, MARKETING_IMAGE_MODEL } = await import("@/lib/catalog/marketing");
 const { planByRules, readPlanned } = await import("@/lib/layout-plan");
@@ -24,6 +24,7 @@ const ads = await import("@/server/ads");
 const { planLayoutFromWords } = await import("@/server/layout-plan");
 const skills = await import("@/server/skills");
 const canvasServer = await import("@/server/canvas");
+const tools = await import("@/server/assist/tools");
 
 import type { CanvasEdge, CanvasGraph, CanvasNode } from "@/lib/catalog/canvas";
 import type { BrandKit, Product } from "@/lib/catalog/marketing";
@@ -81,7 +82,7 @@ describe("an ad plan as a layout (AdPlan → draft)", () => {
     const d = adPlanDraft(plan, { mode: "words", product: "Autumn Soy Candle in amber glass", caption: "A finished social ad" });
     const texts = d.items.filter((i) => i.label === "text").map((i) => i.text?.replace(/\n/g, " "));
     expect(texts).toEqual(["Autumn Glow", "Hand-poured soy, cedar and clove.", "Shop now"]);
-    expect(d.items.find((i) => i.caption === "The brand's logo, small and crisp")?.label).toBe("object");
+    expect(d.items.find((i) => i.caption === LOGO_CAPTION)?.label).toBe("object");
     const prod = d.items.find((i) => i.caption.startsWith("Autumn Soy Candle"))!;
     expect(prod.label).toBe("object");
     // The product stays out of the words' space, and every box is inside the picture.
@@ -272,7 +273,14 @@ describe("Marketing Studio: Words drawn by the model", () => {
     expect(moss.steps[0].request).toMatchObject({ modelId: "moss-image", op: "t2i" });
     expect((moss.steps[0].request.params?.extra?.layout as LayoutDraft).items.some((i) => i.text === "Autumn Glow")).toBe(true);
     const flux = mk.planMarketing({ engine: "cloud", format: "ads", templateId: "ad-hero-headline", modelId: "flux-3", drawnWords: true }, ctx);
-    expect(flux.steps[0].request).toMatchObject({ modelId: "flux-3", op: "edit", inputs: { images: [product.images[0]] } });
+    expect(flux.steps[0].request).toMatchObject({ modelId: "flux-3", op: "edit", inputs: { images: [product.images[0], brand.logo] } });
+    expect((flux.steps[0].request.params?.extra?.layout as LayoutDraft).items.filter((i) => i.caption === LOGO_CAPTION)).toHaveLength(1);
+    // MOSS-Image can't take the logo: no logo box for it to make one up in.
+    expect((moss.steps[0].request.params?.extra?.layout as LayoutDraft).items.some((i) => /logo/i.test(i.caption))).toBe(false);
+    // Ideogram 4.5 edits: it keeps the product photo and takes the logo too.
+    const ideo = mk.planMarketing({ engine: "cloud", format: "ads", templateId: "ad-hero-headline", modelId: "ideogram-4-5", drawnWords: true }, ctx);
+    expect(ideo.steps[0].request).toMatchObject({ modelId: "ideogram-4-5", op: "edit", inputs: { images: [product.images[0], brand.logo] } });
+    expect(ideo.notes.join(" ")).not.toMatch(/draws your product from its name/);
     // The estimate prices the drawing model.
     const est = mk.estimateMarketing({ engine: "cloud", format: "ads", templateId: "ad-hero-headline", drawnWords: true, productImages: product.images });
     expect(est.steps?.[0]?.modelId ?? JSON.stringify(est)).toMatch(/moss-image/);
@@ -288,11 +296,31 @@ describe("Ads Studio: drawn ads and the keep-clear layout", () => {
     expect(open).toMatchObject({ modelId: "oss-moss-image", op: "t2i", params: { aspectRatio: "4:5" } });
     expect(open.prompt).not.toMatch(/No text, letters/);
     const layout = open.params?.extra?.layout as LayoutDraft;
-    expect(layout.items.filter((i) => i.label === "text").map((i) => i.text?.replace(/\n/g, " "))).toEqual(["Autumn Glow", "Hand-poured soy.", "Shop now"]);
-    expect(layout.items.some((i) => i.caption === "The brand's logo, small and crisp")).toBe(true);
+    expect(layout.items.filter((i) => i.label === "text").map((i) => i.text?.replace(/\n/g, " "))).toEqual([brand.name.toUpperCase(), "Autumn Glow", "Hand-poured soy.", "Shop now"]);
+    // MOSS-Image draws from words alone: it can't take the logo, so the brand's name is drawn in its place, not a made-up logo.
+    expect(layout.items.some((i) => /logo/i.test(i.caption))).toBe(false);
     const cloud = ads.visualRequest(concept, product, brand, "cloud", "ideogram-4-5", true);
     expect(cloud.modelId).toBe("ideogram-4-5");
     expect(planGeneration(cloud, getModel, getPreset).layout?.format).toBe("ideogram");
+  });
+
+  it("a model that takes references keeps the product photo and gets the brand's own logo for its logo box", () => {
+    for (const id of ["ideogram-4-5", "flux-3"]) {
+      const r = ads.visualRequest(concept, product, brand, "cloud", id, true);
+      expect(r, id).toMatchObject({ modelId: id, op: "edit", inputs: { images: [product.images[0], brand.logo] } });
+      expect((r.params?.extra?.layout as LayoutDraft).items.filter((i) => i.caption === LOGO_CAPTION), id).toHaveLength(1);
+      expect(r.prompt, id).toMatch(/last reference image is the brand's logo/);
+    }
+    // No logo in the kit (or an SVG one): no logo box, the photo alone.
+    for (const logo of [undefined, "/api/files/logo.svg"]) {
+      const r = ads.visualRequest(concept, product, { ...brand, logo } as BrandKit, "cloud", "flux-3", true);
+      expect(r.inputs?.images).toEqual([product.images[0]]);
+      expect((r.params?.extra?.layout as LayoutDraft).items.some((i) => /logo/i.test(i.caption))).toBe(false);
+    }
+    // Without a product photo there is nothing to edit: drawn from words, no logo.
+    const bare = ads.visualRequest(concept, null, brand, "cloud", "ideogram-4-5", true);
+    expect(bare).toMatchObject({ op: "t2i", inputs: undefined });
+    expect((bare.params?.extra?.layout as LayoutDraft).items.some((i) => /logo/i.test(i.caption))).toBe(false);
   });
 
   it("without it: the visual alone, and a keep-clear layout only for a model that reads boxes", () => {
@@ -375,5 +403,32 @@ describe("Plan layout and the Layout Poster skill", () => {
     // The draft in its reference example is one the planner reads and validateLayout passes.
     const example = /```json\n([\s\S]+?)```/.exec(fs.readFileSync(path.join(process.cwd(), "skills/layout-poster/references/layout.md"), "utf8"))![1];
     expect(readPlanned(example, 768, 1024)?.items).toHaveLength(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("Assist: a generate job's layout", () => {
+  const pixel = (n: number) => ({
+    width: 896,
+    height: 1152,
+    bbox_coord_space: "abs",
+    bbox_format: "xyxy",
+    summary: { caption: "A sale poster", meta: ["poster"], canvas: "single" },
+    items: Array.from({ length: n }, (_, i) => ({ label: "text", caption: "Bold words", text: `Line ${i + 1}`, bbox: [16, 16 + (i % 60) * 16, 400, 30 + (i % 60) * 16] })),
+  });
+
+  it("runs in the nearest shape the model lists, and keeps at most 64 boxes", () => {
+    for (const id of ["flux-3", "ideogram-4-5"]) {
+      const r = tools.asRequest({ model_id: id, prompt: "A poster", layout: pixel(3) } as Parameters<typeof tools.asRequest>[0]);
+      const listed = getModel(id)!.options.aspectRatios!;
+      expect(listed, id).not.toContain("7:9");
+      expect(listed, id).toContain(r.params?.aspectRatio);
+      expect((r.params?.extra?.layout as LayoutDraft).aspect).toBe("7:9");
+    }
+    // An aspect the job names wins.
+    expect(tools.asRequest({ model_id: "flux-3", prompt: "x", layout: pixel(1), aspect_ratio: "1:1" } as Parameters<typeof tools.asRequest>[0]).params?.aspectRatio).toBe("1:1");
+    const many = tools.asRequest({ model_id: "flux-3", prompt: "x", layout: pixel(80) } as Parameters<typeof tools.asRequest>[0]);
+    expect((many.params?.extra?.layout as LayoutDraft).items).toHaveLength(64);
   });
 });

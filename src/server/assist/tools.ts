@@ -22,6 +22,8 @@ import { engineMode } from "../settings";
 import { readRef } from "../storage";
 import { katanaTool } from "../katana";
 import { createStoryboard, estimateStoryboard } from "../storyboard";
+import { nearestAspect } from "../marketing";
+import { LAYOUT_NODE_LIMITS } from "@/lib/catalog/canvas";
 import { CONTEXT_TOOLS } from "./context-tools";
 import { defineTool, type JobPlace, type ResultContent, type ToolContext, type ToolDef, type ToolOutcome } from "./define";
 // Fills STUDIO_ROUTES with the studio modules (Layers, Shorts, dub, Faceless, Ads, Captions).
@@ -329,7 +331,7 @@ function toRequest(job: JobInput, engine?: "cloud" | "open"): GenerationRequest 
 }
 
 /** A job as the request it names, before a retired model or operation is moved (toRequest). */
-function asRequest(j: JobInput): GenerationRequest {
+export function asRequest(j: JobInput): GenerationRequest {
   const inputs = {
     ...(j.images?.length && { images: j.images }),
     ...(j.end_image && { endImage: j.end_image }),
@@ -340,7 +342,10 @@ function asRequest(j: JobInput): GenerationRequest {
   };
   const shots = j.shots && j.shots > 1 ? shotList(getModel(currentModelId(j.model_id)), j.shots) : undefined;
   // A layout draft (the layout-poster skill): read on its own canvas, compiled by the plan for the model it runs on.
-  const layout = j.layout ? parseLayout(j.layout)?.draft : undefined;
+  // Up to 64 boxes (as a Canvas Layout node); its own shape becomes the run's only as the nearest one the model lists.
+  const parsed = j.layout ? parseLayout(j.layout)?.draft : undefined;
+  const layout = parsed && { ...parsed, items: parsed.items.slice(0, LAYOUT_NODE_LIMITS.boxes) };
+  const layoutAspect = layout?.aspect && nearestAspect(layout.aspect, getModel(currentModelId(j.model_id))?.options.aspectRatios);
   const extra = { ...(j.system && { system: j.system }), ...(layout && { [LAYOUT_PARAM]: layout }) };
   return {
     feature: "assist",
@@ -351,7 +356,7 @@ function asRequest(j: JobInput): GenerationRequest {
     negativePrompt: j.negative_prompt,
     inputs: Object.keys(inputs).length ? inputs : undefined,
     params: {
-      aspectRatio: j.aspect_ratio ?? layout?.aspect,
+      aspectRatio: j.aspect_ratio ?? layoutAspect,
       resolution: j.resolution,
       duration: shots ? undefined : j.duration,
       numOutputs: j.outputs ? Math.max(1, Math.min(4, j.outputs)) : undefined,
