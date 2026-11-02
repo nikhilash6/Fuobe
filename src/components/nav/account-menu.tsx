@@ -1,15 +1,13 @@
 "use client";
 
-import { Cpu, Heart, LogIn, LogOut, Moon, Scale, Settings2, Sun, UserPlus, UserRound } from "lucide-react";
+import { Cpu, LogIn, LogOut, Moon, Settings2, Sun, UserPlus, UserRound } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Suspense } from "react";
 import { PlaceholdersOnChip } from "@/components/demo-mode";
-import { GitHubMark } from "@/components/github-mark";
 import { IntentLink } from "@/components/intent-link";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { signInHref, signOut, useEngineMode, useViewer } from "@/lib/api";
-import { FUOBE_REPO } from "@/lib/connections";
 import type { ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
 import { NAV_MENU_ITEM } from "./create-menu";
@@ -19,12 +17,12 @@ import { avatarDot, OwnerStatus, usePlaceholdersOn, useShownStatus, VisitorGpu }
 
 /*
  * The account menu (the avatar at the bar's right end) and the phone's You sheet: who is signed in, the GPU and its
- * status as the sidebar's footer said it, how much of Fuobe this browser has explored, then Settings, the theme and the
- * source. What each viewer sees:
- *   guest   Sign up free, Log in · Your GPU (sign up first) · explore · theme, GitHub
- *   account Signed in as <email> · balance or their own GPU · explore · Settings, Your GPU, theme, GitHub · Sign out
- *   owner   Your setup · cloud models, ComfyUI, mode, the owner's GPU, Placeholders on · explore · Settings, Models &
- *           licences, theme, GitHub
+ * status as the sidebar's footer said it, how much of Fuobe this browser has explored, then Settings and the theme.
+ * Thanks & licences, the owner's Models & licences and the source on GitHub are in Settings → About. What each viewer
+ * sees:
+ *   guest   Sign up free, Log in · Your GPU (sign up first) · explore · Settings, theme
+ *   account Signed in as <email> · balance or their own GPU · explore · Settings, Your GPU, theme · Sign out
+ *   owner   Your setup · cloud models, ComfyUI, mode, the owner's GPU, Placeholders on · explore · Settings, theme
  * The owner's status words exist only in the owner's branch: a guest's or an account's menu never says them.
  */
 
@@ -164,12 +162,8 @@ function ThemeToggle({ variant }: { variant: Variant }) {
 }
 
 /** One link of the Links section, as a menu item or a sheet row. */
-function LinkRow({ variant, href, external, children }: { variant: Variant; href: string; external?: boolean; children: React.ReactNode }) {
-  const link = external ? (
-    <a href={href} target="_blank" rel="noreferrer" className={variant === "sheet" ? SHEET_ROW : undefined}>
-      {children}
-    </a>
-  ) : (
+function LinkRow({ variant, href, children }: { variant: Variant; href: string; children: React.ReactNode }) {
+  const link = (
     <IntentLink href={href} className={variant === "sheet" ? SHEET_ROW : undefined}>
       {children}
     </IntentLink>
@@ -186,7 +180,8 @@ function LinkRow({ variant, href, external, children }: { variant: Variant; href
 function Links({ kind, variant }: { kind: ViewerKind | undefined; variant: Variant }) {
   return (
     <>
-      {kind && kind !== "guest" && (
+      {/* Everyone's: a guest's Settings offers a GPU of its own and About (Thanks & licences, the source on GitHub). */}
+      {kind && (
         <LinkRow variant={variant} href="/settings">
           <Settings2 aria-hidden /> Settings
         </LinkRow>
@@ -196,18 +191,7 @@ function Links({ kind, variant }: { kind: ViewerKind | undefined; variant: Varia
           <Cpu aria-hidden /> Your GPU
         </LinkRow>
       )}
-      {kind === "owner" && (
-        <LinkRow variant={variant} href="/settings/models">
-          <Scale aria-hidden /> Models &amp; licences
-        </LinkRow>
-      )}
-      <LinkRow variant={variant} href="/settings/licences">
-        <Heart aria-hidden /> Thanks &amp; licences
-      </LinkRow>
       <ThemeToggle variant={variant} />
-      <LinkRow variant={variant} href={FUOBE_REPO} external>
-        <GitHubMark /> Source on GitHub
-      </LinkRow>
     </>
   );
 }

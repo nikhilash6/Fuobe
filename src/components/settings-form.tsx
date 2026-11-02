@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, Cloud, Cpu, ExternalLink, Heart, Info, Layers, Link2, Loader2, RefreshCw, Scale } from "lucide-react";
+import { CheckCircle2, CircleAlert, Cloud, Cpu, ExternalLink, Info, Layers, Link2, Loader2, RefreshCw, Scale } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import { PLACEHOLDER_SETTING, placeholdersOn } from "@/lib/demo-mode";
 import { AccountsChip } from "@/components/accounts-admin";
 import { ConnectField, useSettings, type PublicSetting } from "@/components/connect-field";
 import { GetStarted } from "@/components/get-started";
+import { AboutLinks } from "@/components/owner-settings";
 import { LlmProviderSettings } from "@/components/llm-provider-settings";
 import { LoraSettings } from "@/components/lora-settings";
 import { useStatus, type StatusInfo } from "@/lib/api";
@@ -765,10 +766,8 @@ export function SettingsForm({ prices }: { prices?: string }) {
         </Link>
       </Section>
 
-      <Section id="about" title="About" description="The open models, LoRAs and code Fuobe is built on, who made them, and their licences.">
-        <Link href="/settings/licences" className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors hover:bg-accent">
-          <Heart className="size-4 text-muted-foreground" /> Thanks &amp; licences
-        </Link>
+      <Section id="about" title="About" description="The open models, LoRAs and code Fuobe is built on, who made them and their licences, and Fuobe's own source code.">
+        <AboutLinks owner />
       </Section>
     </div>
   );

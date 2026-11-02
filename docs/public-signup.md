@@ -259,8 +259,9 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   (`viewer`), with the open engine and no Demo mode. It says nothing about the studio's own
   ComfyUI, providers, keys or local AI servers. The account menu (the top bar's right end; the You
   tab on a phone) shows **Your GPU · Connect** (a guest signs up first), or the account's ComfyUI as
-  online or offline with its GPU and VRAM. An account's menu also shows its email, Settings, Your
-  GPU (`/connect`) and Sign out.
+  online or offline with its GPU and VRAM, then Settings and the light or dark switch. An
+  account's menu also shows its email, Your GPU (`/connect`) and Sign out. Thanks & licences and
+  the source on GitHub are in Settings → About, for guests and accounts too.
   `GET /api/models` lists the open-source models for a visitor, and the studios price a visitor's
   run as it would go on its own GPU. The studio's own settings page isn't shown to visitors.
 

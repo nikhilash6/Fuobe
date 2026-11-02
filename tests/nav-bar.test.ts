@@ -268,6 +268,9 @@ describe("the bar's shell", () => {
 
 describe("the account menu's sections (as the phone's You sheet shows them)", () => {
   const sheet = () => render(createElement(AccountSections, { variant: "sheet" }));
+  /** Rows that live in Settings → About, not in the menu, for every viewer. */
+  const IN_ABOUT = ["Thanks & licences", "Models & licences", "Source on GitHub"];
+  const inAbout = (html: string) => IN_ABOUT.filter((w) => words(html).replaceAll("&amp;", "&").includes(w));
 
   it("shows a guest how to sign up and their own GPU, nothing of the install", () => {
     state.hydrated = true;
@@ -279,10 +282,11 @@ describe("the account menu's sections (as the phone's You sheet shows them)", ()
     expect(hrefs(html)).toContain("/login?signup=1&next=%2Fimage");
     expect(hrefs(html)).toContain("/login?signup=1&next=%2Fconnect");
     expect(words(html)).toContain("Your GPU");
-    expect(words(html)).toContain("Source on GitHub");
-    // Thanks & licences is everyone's to read.
-    expect(hrefs(html)).toContain("/settings/licences");
-    for (const w of [...OWNER_WORDS, "Settings", "Sign out"]) expect(words(html), w).not.toContain(w.replace("&amp;", "&"));
+    // Settings (its About has Thanks & licences and the source) and the theme.
+    expect(hrefs(html)).toContain("/settings");
+    expect(words(html)).toContain("Dark mode");
+    expect(inAbout(html)).toEqual([]);
+    for (const w of [...OWNER_WORDS, "Sign out"]) expect(words(html), w).not.toContain(w.replace("&amp;", "&"));
   });
 
   it("shows an account its email, its own GPU, Settings and Sign out, nothing of the install", () => {
@@ -291,8 +295,9 @@ describe("the account menu's sections (as the phone's You sheet shows them)", ()
     state.status = install({ viewer: { kind: "account", gpu: { connected: false } } });
     const html = sheet();
     expect(words(html)).toContain("ana@example.com");
-    for (const w of ["Settings", "Your GPU", "Sign out", "Source on GitHub"]) expect(words(html), w).toContain(w);
-    expect(hrefs(html)).toEqual(expect.arrayContaining(["/settings", "/connect", "/settings/licences"]));
+    for (const w of ["Settings", "Your GPU", "Dark mode", "Sign out"]) expect(words(html), w).toContain(w);
+    expect(hrefs(html)).toEqual(expect.arrayContaining(["/settings", "/connect"]));
+    expect(inAbout(html)).toEqual([]);
     for (const w of OWNER_WORDS) expect(words(html), w).not.toContain(w.replace("&amp;", "&"));
   });
 
@@ -309,8 +314,10 @@ describe("the account menu's sections (as the phone's You sheet shows them)", ()
     state.viewer = OWNER;
     state.status = install({ providers: { fal: { label: "fal.ai", configured: true }, comfyui: { label: "ComfyUI", configured: false } } });
     const html = sheet();
-    for (const w of ["Your setup", "Cloud models", "connected", "ComfyUI", "offline", "Placeholders on", "Models & licences", "Settings"]) expect(words(html).replaceAll("&amp;", "&"), w).toContain(w);
+    for (const w of ["Your setup", "Cloud models", "connected", "ComfyUI", "offline", "Placeholders on", "Settings", "Dark mode"]) expect(words(html).replaceAll("&amp;", "&"), w).toContain(w);
     expect(words(html)).not.toContain("Sign out");
+    // Models & licences is in Settings (its own section, and a link in About).
+    expect(inAbout(html)).toEqual([]);
     state.mode = "open";
     expect(words(sheet())).toContain("Open source only");
     expect(words(sheet())).not.toContain("Cloud models");
@@ -320,7 +327,8 @@ describe("the account menu's sections (as the phone's You sheet shows them)", ()
     state.status = install();
     const html = sheet();
     for (const w of [...OWNER_WORDS, "Sign out", "Settings", "Sign up"]) expect(words(html), w).not.toContain(w.replace("&amp;", "&"));
-    expect(words(html)).toContain("Source on GitHub");
+    expect(words(html)).toContain("Dark mode");
+    expect(inAbout(html)).toEqual([]);
   });
 });
 

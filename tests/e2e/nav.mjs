@@ -488,6 +488,54 @@ try {
     await ctx.close();
   }
 
+  // 10b. The menu and the You sheet keep Settings and the theme; Thanks & licences, Models & licences and the source on
+  // GitHub are in Settings → About (Models & licences for the owner only).
+  for (const who of ["guest", "owner", ...(publicSignup ? ["account"] : [])]) {
+    const ctx = await as(who);
+    const p = await page(ctx);
+    await openRoute(p, `${app}/image`);
+    const bar = p.locator("[data-top-bar]");
+    const openMenu = () => (who === "guest" ? bar.getByRole("button", { name: "Menu", exact: true }) : bar.getByRole("button", { name: who === "owner" ? /^Account and settings/ : /^Account: / })).click();
+    await openMenu();
+    const menu = p.getByRole("menu");
+    await menu.getByRole("menuitem", { name: /^Settings$/ }).waitFor();
+    const rows = (await menu.getByRole("menuitem").allInnerTexts()).map((t) => t.trim());
+    const moved = rows.filter((t) => /Thanks & licences|Models & licences|Source on GitHub/.test(t));
+    check(moved.length === 0 && rows.some((t) => /^(Light|Dark) mode$/.test(t)), `${who}: the menu has Settings and the theme, and no licence or GitHub rows`, rows.join(" | "));
+    const theme = menu.getByRole("menuitem", { name: /^(Light|Dark) mode$/ });
+    const before = await p.evaluate(() => document.documentElement.classList.contains("dark"));
+    await theme.click();
+    await p.waitForTimeout(200);
+    const after = await p.evaluate(() => document.documentElement.classList.contains("dark"));
+    check(after !== before, `${who}: the menu's theme row still switches the theme`);
+    await theme.click();
+    await p.keyboard.press("Escape");
+    await menu.getByRole("menuitem", { name: /^Settings$/ }).waitFor({ state: "detached" }).catch(() => {});
+    await openMenu();
+    await p.getByRole("menu").getByRole("menuitem", { name: /^Settings$/ }).click();
+    await p.waitForURL((u) => new URL(u).pathname === "/settings", { timeout: 20_000 });
+    const about = p.locator("#about");
+    await about.waitFor({ timeout: 15_000 });
+    const links = await about.getByRole("link").evaluateAll((els) => els.map((e) => [e.textContent.trim(), e.getAttribute("href"), e.getAttribute("target")]));
+    const has = (name, href) => links.some(([t, h]) => t.includes(name) && h === href);
+    check(has("Thanks & licences", "/settings/licences"), `${who}: Settings → About links to Thanks & licences`, JSON.stringify(links));
+    check(links.some(([t, h, target]) => t.includes("Source on GitHub") && /^https:\/\/github\.com\//.test(h) && target === "_blank"), `${who}: Settings → About links to the source on GitHub (new tab)`);
+    check(has("Models & licences", "/settings/models") === (who === "owner"), `${who}: Settings → About links to Models & licences ${who === "owner" ? "" : "only for the owner"}`.trim());
+    const phone = await browser.newContext({ ...PHONE, storageState: await ctx.storageState() });
+    const q = await phone.newPage();
+    await openRoute(q, `${app}/image`);
+    await q.locator("[data-phone-tabs]").getByRole("button", { name: "You" }).tap();
+    const sheet = q.locator("#phone-sheet");
+    await sheet.waitFor({ state: "visible" });
+    const sheetText = await sheet.innerText();
+    check(
+      /Settings/.test(sheetText) && /(Light|Dark) mode/.test(sheetText) && !/Thanks & licences|Models & licences|Source on GitHub/.test(sheetText),
+      `${who}: the You sheet has Settings and the theme, and no licence or GitHub rows`,
+    );
+    await phone.close();
+    await ctx.close();
+  }
+
   // 11. Reduced motion: no transitions on the launcher, sheets and band.
   {
     const ctx = await as("guest", DESKTOP, { reducedMotion: "reduce" });

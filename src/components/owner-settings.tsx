@@ -1,15 +1,17 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff, Heart, KeyRound, Loader2, LogOut, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Heart, KeyRound, Loader2, LogOut, Scale, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import { GitHubMark } from "@/components/github-mark";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { announceAuthChange, leaveNotice, rememberViewer, signInHref, signOut, useHydrated, useViewer } from "@/lib/api";
+import { FUOBE_REPO } from "@/lib/connections";
 import { cn } from "@/lib/utils";
 
 /** Settings' line under its title: what this viewer finds on the page. Nothing until the viewer is known (as below). */
@@ -61,7 +63,29 @@ export function OwnerSettings({ children }: { children: React.ReactNode }) {
 
 const linkCard = "inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors hover:bg-accent";
 
-/** About: Thanks & licences, which everyone may read (the owner finds it in the settings form). */
+/**
+ * About's links: Thanks & licences and the source on GitHub for everyone, and the owner's Models & licences (its
+ * switches; also its own section of the settings form).
+ */
+export function AboutLinks({ owner }: { owner?: boolean }) {
+  return (
+    <div className="flex flex-wrap content-start gap-2">
+      <Link href="/settings/licences" className={linkCard}>
+        <Heart className="size-4 text-muted-foreground" /> Thanks &amp; licences
+      </Link>
+      {owner && (
+        <Link href="/settings/models" className={linkCard}>
+          <Scale className="size-4 text-muted-foreground" /> Models &amp; licences
+        </Link>
+      )}
+      <a href={FUOBE_REPO} target="_blank" rel="noreferrer" className={linkCard}>
+        <GitHubMark className="size-4 text-muted-foreground" /> Source on GitHub
+      </a>
+    </div>
+  );
+}
+
+/** About, which everyone may read (the owner finds it in the settings form). */
 function Licences() {
   return (
     <section id="about" aria-labelledby="about-title" className="grid grid-cols-[minmax(0,1fr)] gap-4 py-8 md:grid-cols-[260px_minmax(0,1fr)]">
@@ -69,13 +93,9 @@ function Licences() {
         <h2 id="about-title" className="text-[15px] font-semibold">
           About
         </h2>
-        <p className="mt-1 text-[13px] text-muted-foreground">The open models, LoRAs and code Fuobe is built on, who made them, and their licences.</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">The open models, LoRAs and code Fuobe is built on, who made them and their licences, and Fuobe&rsquo;s own source code.</p>
       </div>
-      <div className="flex flex-wrap content-start gap-2">
-        <Link href="/settings/licences" className={linkCard}>
-          <Heart className="size-4 text-muted-foreground" /> Thanks &amp; licences
-        </Link>
-      </div>
+      <AboutLinks />
     </section>
   );
 }
