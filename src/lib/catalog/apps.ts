@@ -1,3 +1,4 @@
+import { QMA_MODEL } from "@/lib/qma";
 import { ANGLES_2511_LORA } from "./open-tools";
 import { CAST_LOOK } from "./soul-cards";
 import type { InputSlot, Preset, PresetOption, PresetRoute } from "./types";
@@ -71,6 +72,7 @@ type AppSpec = {
   placeholder?: string;
   cloud?: Partial<PresetRoute> | null;
   open?: Partial<PresetRoute> | null;
+  openAlso?: PresetRoute[];
   badges?: Preset["badges"];
   parity?: string;
   tool?: Preset["tool"];
@@ -101,6 +103,7 @@ function app(a: AppSpec): Preset {
     promptPlaceholder: a.placeholder,
     cloud: cloud as PresetRoute | null,
     open: open as PresetRoute | null,
+    ...(a.openAlso?.length && { openAlso: a.openAlso }),
     parity: a.parity,
     ...(a.tool && { tool: a.tool }),
   };
@@ -320,6 +323,9 @@ export const APPS: Preset[] = [
       loras: [ANGLES_2511_LORA],
       promptTemplate: "<sks> {option:angle} {option:height} {option:distance}. {prompt}",
     },
+    // QMA · 96 views: Qwen-Image 2.1 with the QMA LoRA, on your GPU only (fal's Qwen-Image 2.1 takes no LoRAs).
+    // The choices' angles (horizontal_angle, vertical_angle, zoom) become its words in the plan, the note after them.
+    openAlso: [{ modelId: QMA_MODEL, op: "edit", promptTemplate: "{prompt}" }],
   }),
   app({
     name: "Fuobe Angles",

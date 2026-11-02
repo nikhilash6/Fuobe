@@ -19,6 +19,7 @@ import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { STUDIO_WORKFLOWS } from "@/lib/catalog/swap-studio-plan";
 import { FILL_MODELS } from "@/lib/catalog/turnaround";
+import { QMA_MODEL } from "@/lib/qma";
 import type { LoraRef, ModelDef, Operation } from "@/lib/catalog/types";
 import type { LoraNeed } from "@/lib/gpu/readiness";
 import { basename } from "@/lib/gpu/requirements";
@@ -216,6 +217,9 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: FILL_MODELS.open, op: "edit", loras: [ANGLES_2511_LORA] },
     ],
   },
+  // Turnaround stills · 8 views: the character from all 8 sides at eye level, drawn by QMA · 96 views (the
+  // turnaround dialog's Stills route; its graph loads the QMA LoRA itself). It also draws a film's missing sides when picked.
+  { href: "/character-sheet?stills=1", label: "Turnaround stills · 8 views", group: "Images", steps: [{ modelId: QMA_MODEL, op: "edit" }] },
   { href: "/audio", label: "Voice", group: "Audio", config: S.AUDIO_STUDIO },
   { href: "/audio/dialogue", label: "Dialogue", group: "Audio", config: S.DIALOGUE_STUDIO },
   { href: "/audio/voice-change", label: "Voice change", group: "Audio", config: S.VOICE_CHANGE_STUDIO },

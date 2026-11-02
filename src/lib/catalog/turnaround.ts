@@ -15,6 +15,7 @@
  */
 import { DEFAULT_MOTION, PATH_PRESETS, presetKeys, type CameraKey } from "@/lib/camera-path";
 import { poseWords } from "@/lib/scene3d";
+import { QMA_AZIMUTH_LABELS, QMA_MODEL, qmaAzimuth } from "@/lib/qma";
 import { getModel, getPreset } from "./index";
 import { onEngine } from "./engines";
 import { FRAMES_MODELS, chainGapProblem, chainTiming, frameTimes } from "./keyframes";
@@ -85,10 +86,30 @@ export function anglesHorizontal(side: TurnSide): number {
   return (((viewAzimuth(side) * ANGLES_SIDE_SIGN) % 360) + 360) % 360;
 }
 
+/**
+ * QMA's horizontal_angle for a side. QMA turns the ORIGINAL CAMERA (its card: "right side view" = the camera swings 90° to its
+ * own right round the subject), and a camera that swings to its right sees the person's LEFT side: their right side is QMA's
+ * 270° ("left side view"), their back 180°.
+ */
+export function qmaHorizontal(side: TurnSide): number {
+  return (360 - viewAzimuth(side)) % 360;
+}
+
+/**
+ * A still's name by the person's own side (Character Sheet's way), for QMA's camera angle `horizontal`: the camera at 90°
+ * (QMA's "right side view") shows the person's left side. The camera's words stay in the prompt only.
+ */
+export function qmaStillName(horizontal: number): string {
+  return QMA_AZIMUTH_LABELS[qmaAzimuth(360 - horizontal)];
+}
+
+/** The still set's camera angles, going round the person to their right: front right, right side, … front left. */
+export const QMA_STILL_ANGLES: readonly number[] = [1, 2, 3, 4, 5, 6, 7].map((i) => (360 - i * 45) % 360);
+
 // ---------------------------------------------------------------------------
 // Routes
 
-export type TurnRoute = "frames" | "references" | "keyframes" | "camera";
+export type TurnRoute = "frames" | "references" | "keyframes" | "camera" | "stills";
 
 export interface TurnRouteInfo {
   engine: Engine;
@@ -139,9 +160,24 @@ export const TURN_ROUTES: Record<TurnRoute, TurnRouteInfo> = {
     duration: 5,
     resolution: "768P",
   },
+  // Turnaround stills · 8 views: QMA · 96 views draws the person from all 8 sides at eye level, one batch of
+  // pictures and no film. Your GPU only: fal's Qwen-Image 2.1 takes no LoRAs.
+  stills: {
+    engine: "open",
+    modelId: QMA_MODEL,
+    name: "Stills · 8 views",
+    detail: "QMA · 96 views draws the character from all 8 sides at eye level: eight pictures, no video",
+    durations: [],
+    duration: 0,
+    resolution: "",
+  },
 };
 
-export const ROUTES_ON: Record<Engine, TurnRoute[]> = { open: ["frames"], cloud: ["references", "keyframes", "camera"] };
+export const ROUTES_ON: Record<Engine, TurnRoute[]> = { open: ["frames", "stills"], cloud: ["references", "keyframes", "camera"] };
+
+/** How the missing sides are drawn on your GPU: the Angles app's Multiple-Angles route (the default), or QMA · 96 views. */
+export type TurnFill = "angles" | "qma";
+export const FILL_NAMES: Record<TurnFill, string> = { angles: "Multiple Angles", qma: "QMA · 96 views" };
 
 /** The Angles app's routes, which draw a missing side from the front view (on your GPU the Multiple-Angles LoRA's base). */
 export const FILL_MODELS: Record<Engine, string> = { cloud: "qwen-multiple-angles", open: "oss-qwen-edit" };
@@ -278,6 +314,8 @@ export interface TurnaroundInput {
   route?: TurnRoute;
   /** Draw the sides nobody has a picture of with the Angles app first (default on, except References with a sheet). */
   fill?: boolean;
+  /** What draws them on your GPU: the Angles app's route (default) or QMA · 96 views. */
+  fillWith?: TurnFill;
   /** The camera route's path (TURN_PATHS; any N7-5 preset id is taken). */
   path?: string;
   duration?: number;
@@ -359,6 +397,7 @@ export function routeOfModel(engine: Engine, modelId: string | undefined): TurnR
 /** The duration a route takes: the one asked for when offered, else the nearest it offers. */
 export function turnDuration(route: TurnRoute, asked?: number): number {
   const { durations, duration } = TURN_ROUTES[route];
+  if (!durations.length) return duration;
   const want = asked ?? duration;
   return durations.reduce((best, d) => (Math.abs(d - want) < Math.abs(best - want) ? d : best), durations[0]);
 }
@@ -410,8 +449,10 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
   for (const s of TURN_SIDES) if (input.views?.[s]) views[s] = input.views[s];
   const sheet = input.sheet || undefined;
   const camera = route === "camera";
+  const stills = route === "stills";
   const frontFromSheet = !views.front && !!sheet;
-  const fill = camera ? false : (input.fill ?? !(route === "references" && sheet));
+  const fill = camera || stills ? false : (input.fill ?? !(route === "references" && sheet));
+  const byQma = engine === "open" && input.fillWith === "qma" && has(QMA_MODEL);
   const fills = fill && (views.front || frontFromSheet) ? TURN_SIDES.filter((s) => s !== "front" && !views[s]) : [];
   const duration = turnDuration(route, input.duration);
   const aspectRatio = input.aspectRatio ?? "9:16";
@@ -435,11 +476,13 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
     notes.push(`${m.name} draws a front view from the sheet first`);
   }
   // The missing sides, drawn from the front view by the Angles app's route.
-  const fillModel = getModel(FILL_MODELS[engine])!;
+  const fillModel = getModel(byQma ? QMA_MODEL : FILL_MODELS[engine])!;
   for (const side of fills) {
     const horizontal = anglesHorizontal(side);
-    const request: GenerationRequest =
-      engine === "cloud"
+    const request: GenerationRequest = byQma
+      ? // QMA turns the camera, so the person's own side is the other way round (qmaHorizontal); its words come from the pose.
+        { feature: stepFeature, modelId: fillModel.id, op: "edit", prompt: FILL_KEEP, params: { numOutputs: 1, extra: { horizontal_angle: qmaHorizontal(side), vertical_angle: 0, zoom: 5 } } }
+      : engine === "cloud"
         ? { feature: stepFeature, modelId: fillModel.id, op: "edit", prompt: FILL_KEEP, params: { numOutputs: 1, extra: { horizontal_angle: horizontal, vertical_angle: 0, zoom: 5 } } }
         : {
             feature: stepFeature,
@@ -455,7 +498,7 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
   if (fills.length) {
     const list = fills.map((s) => SIDE_NAMES[s].toLowerCase());
     const said = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0];
-    notes.push(`The Angles app (${fillModel.name} with the Multiple-Angles LoRA) draws the ${said} from the front view first`);
+    notes.push(byQma ? `${fillModel.name} draws the ${said} from the front view first, on your GPU` : `The Angles app (${fillModel.name} with the Multiple-Angles LoRA) draws the ${said} from the front view first`);
   }
 
   const sourceOf = (side: TurnSide): Source | undefined =>
@@ -481,7 +524,26 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
   let main: TurnStep | undefined;
   let blocker: string | undefined = views.front || frontFromSheet ? undefined : NEEDS_FRONT;
 
-  if (route === "frames" || route === "keyframes") {
+  if (stills) {
+    // Eight eye-level pictures round the person, each drawn from the front view; the front's own picture stays the first.
+    const src = sourceOf("front");
+    const turns = QMA_STILL_ANGLES;
+    frames = src ? [{ side: "front", from: fromOf(src, "front"), ...("url" in src && { url: src.url }) }] : [];
+    for (const h of turns) {
+      const request: GenerationRequest = {
+        feature,
+        modelId: model.id,
+        op: "edit",
+        prompt: withWords(FILL_KEEP, input.prompt),
+        title: `${title.replace(/^Turnaround/, "Turnaround stills")} · ${qmaStillName(h)}`,
+        params: { numOutputs: 1, extra: { horizontal_angle: h, vertical_angle: 0, zoom: 5 }, ...seed },
+      };
+      const key = `still-${h}`;
+      if (src && "key" in src) steps.push({ key, request: { ...request, chain: [{ slot: "images" }] }, after: [src.key] });
+      else steps.push({ key, request: { ...request, ...(src && { inputs: { images: [src.url] } }) } });
+    }
+    notes.push(`${model.name} draws the character from ${turns.length} more sides at eye level, each from the front view, on your GPU: ${turns.length + 1} pictures with the front`);
+  } else if (route === "frames" || route === "keyframes") {
     const list = TURN_FRAMES.flatMap((f) => {
       const src = sourceOf(f.side);
       return src ? [{ ...f, src }] : [];
@@ -581,8 +643,15 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
     if (TURN_SIDES.some((s) => s !== "front" && views[s]) || sheet) notes.push("Your other views aren't used on this route: References or Keyframes keep them");
   }
   // The pictures drawn first are numbered steps of the run, before the film (whose own clips the keyframe film numbers).
-  steps.forEach((s, i) => (s.request.step = { label: s.key === "front" ? "Front view from the sheet" : `${SIDE_NAMES[s.key.slice(5) as TurnSide]} (Angles)`, index: i, of: steps.length + 1 }));
-  steps.push(main);
+  const stepLabel = (k: string) =>
+    k === "front"
+      ? "Front view from the sheet"
+      : k.startsWith("still-")
+        ? qmaStillName(Number(k.slice(6)))
+        : `${SIDE_NAMES[k.slice(5) as TurnSide]} (${byQma ? "QMA" : "Angles"})`;
+  const total = steps.length + (main ? 1 : 0);
+  steps.forEach((s, i) => (s.request.step = { label: stepLabel(s.key), index: i, of: total }));
+  if (main) steps.push(main);
 
   // Prices at list (or launch) rates; free on the open engine.
   let cost: number | null = 0;
