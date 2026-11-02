@@ -44,6 +44,7 @@ import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
+import { expandH3References, h3ReferenceProblem } from "@/lib/h3-references";
 import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
@@ -1296,7 +1297,9 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // MiniMax H3 stretches the start frame to the canvas with no crop: a clip from a still (or the orbit of one) always takes the
   // still's shape, so an aspect ratio left over from a text draft can't distort it.
   const h3 = isH3Graph(manifest.id);
-  const aspectRatio = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || b.image) ? "auto" : followClip && !input.aspectRatio ? "auto" : input.aspectRatio;
+  // References (Pika H3 Flex Ref2VA) are not frames: the aspect ratio asked for holds ("auto" takes Image 1's shape).
+  const asFrames = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || (!!b.image && manifest.expand !== "references"));
+  const aspectRatio = asFrames || (h3 && ctx.op === "avatar") ? "auto" : followClip && !input.aspectRatio ? "auto" : input.aspectRatio;
   if (b.width || b.height) {
     const multiple = Number(manifest.limits?.dimensionMultiple ?? 16);
     // With motion paths the frame keeps the start image's shape, so the paths need no cropping;
@@ -1348,7 +1351,10 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     (ctx.op === "lipsync" || ctx.op === "avatar") && b.frames && !span
       ? (ctx.op === "avatar" && input.sourceDuration && input.sourceDuration > 0 ? input.sourceDuration : ctx.media?.(String(values.audio ?? ""))?.duration)
       : undefined;
-  if (voiceLength) {
+  if (voiceLength && h3) {
+    // H3 makes the clip with its own sound, on its 17n + 5 grid: as long as the voice, 5-15 s (the reference limits say why not).
+    values.frames = h3Frames(Math.min(15, Math.max(5, voiceLength)));
+  } else if (voiceLength) {
     const step = Number(d.frameStep ?? 4);
     const frames = Math.ceil((voiceLength * fps) / step) * step + 1;
     const cap = Number(manifest.limits?.maxFrames ?? 0);
@@ -1698,6 +1704,19 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       }
     }
   }
+  // MiniMax H3 with references (Pika H3 Flex Ref2VA): Pika's limits, checked on the uploads' headers before the run; the
+  // graph's Image 1 loader is taken out by expandH3References when there is no image.
+  // A talking clip from a voice (Lipsync & avatars, Fuobe Speak) is one image and the voice as its audio reference.
+  const refAudios = ctx.op === "avatar" ? [input.audio].filter((a): a is string => !!a) : audios;
+  if (manifest.expand === "references") {
+    const length = (n: string) => {
+      const m = ctx.media?.(n);
+      return m?.videoDuration ?? m?.duration;
+    };
+    const problem = h3ReferenceProblem({ images: images.length, videos: clips.map(length), audios: refAudios.map(length) });
+    if (problem) throw new ProviderError(problem);
+    if (!images.length) left.push("image");
+  }
   // The Character swap without an anchor frame: its loader and fit are taken out after binding.
   if (dropAnchor) left.push("image2");
   for (const [k, prev] of REFERENCE_SLOTS.slice(1).map((slot, i) => [slot, REFERENCE_SLOTS[i]] as const)) {
@@ -1799,6 +1818,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   try {
     if (manifest.expand === "videos" && clips.length > 2) wf = expandVideoJoinWorkflow(wf, clips);
     if (manifest.expand === "audios" && audios.length > 2) wf = expandAudioJoinWorkflow(wf, audios);
+    if (manifest.expand === "references") wf = expandH3References(wf, { images, videos: clips, audios: refAudios, videoSound: clips.map((n) => ctx.media?.(n)?.hasAudio) });
   } catch (e) {
     throw new ProviderError((e as Error).message);
   }

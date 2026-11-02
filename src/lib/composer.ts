@@ -540,15 +540,20 @@ export function placeAttachment<T extends Attachment>(
  * replaced it meanwhile, nothing changes: a finished upload never brings a removed item back.
  */
 export function replaceAttachment<T extends Attachment>(
-  state: { slots: Partial<Record<InputSlot["key"], T | null>>; refs: T[]; frames?: FrameAttachment<T>[] },
+  state: { slots: Partial<Record<InputSlot["key"], T | null>>; refs: T[]; frames?: FrameAttachment<T>[]; refClips?: T[]; refAudios?: T[] },
   id: string,
   v: T | null,
-): { slots?: Partial<Record<InputSlot["key"], T | null>>; refs?: T[]; frames?: FrameAttachment<T>[] } | null {
+): { slots?: Partial<Record<InputSlot["key"], T | null>>; refs?: T[]; frames?: FrameAttachment<T>[]; refClips?: T[]; refAudios?: T[] } | null {
   for (const [k, s] of Object.entries(state.slots) as [InputSlot["key"], T | null][]) {
     if (s?.id === id) return { slots: { ...state.slots, [k]: v ? { ...v, id } : null } };
   }
   if (state.refs.some((r) => r.id === id)) {
     return { refs: v ? state.refs.map((r) => (r.id === id ? { ...v, id } : r)) : state.refs.filter((r) => r.id !== id) };
+  }
+  // References mode's clips and voice or music clips (Pika H3 Flex) keep their order.
+  for (const list of ["refClips", "refAudios"] as const) {
+    const items = state[list];
+    if (items?.some((r) => r.id === id)) return { [list]: v ? items.map((r) => (r.id === id ? { ...v, id } : r)) : items.filter((r) => r.id !== id) };
   }
   // A frame keeps its place in the clip when its upload finishes; a failed one leaves the strip.
   const f = state.frames?.findIndex((x) => x.value.id === id) ?? -1;

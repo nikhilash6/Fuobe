@@ -27,6 +27,16 @@ export const H3_BEST_GRAPH: Record<string, string> = {
   "minimax-h3-flf2v": "minimax-h3-flf2v-hq",
 };
 
+/**
+ * MiniMax H3's Quality control: "flex" runs Pika H3 Flex (Pika's post-trained adapter, 6 steps, no other speed LoRA). Its
+ * references mode is a route of its own (ref2v: minimax-h3-flex-ref2va), whatever the quality.
+ */
+export const H3_FLEX_GRAPH: Record<string, string> = {
+  "minimax-h3-t2v": "minimax-h3-flex-t2v",
+  "minimax-h3-i2v": "minimax-h3-flex-i2v",
+  "minimax-h3-flf2v": "minimax-h3-flex-flf2v",
+};
+
 /** MiniMax H3's 360-degree orbit of a still (params.extra.orbit): the Orbit LoRA graph, with the still as first and last frame. */
 export const H3_ORBIT_GRAPH: Record<string, string> = { "minimax-h3-i2v": "minimax-h3-orbit" };
 
@@ -68,11 +78,13 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   if (shot && r.extra.productShot === true && r.images === 1 && r.has(shot)) endpoint = shot;
   // Qwen-Image 2.1: Options → Speed's graph, or the small encoder's when Options → GPU says Small (src/lib/qwen21-speed.ts).
   endpoint = qwen21Graph(endpoint, r.extra, r.has);
-  // MiniMax H3: an orbit runs the Orbit LoRA graph (whatever the quality), else Best runs the 20-step graph.
+  // MiniMax H3: an orbit runs the Orbit LoRA graph (whatever the quality), else Best runs the 20-step graph and Pika Flex
+  // its 6-step graph.
   const orbit = H3_ORBIT_GRAPH[endpoint];
   const best = H3_BEST_GRAPH[endpoint];
   if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
+  else if (H3_FLEX_GRAPH[endpoint] && r.extra.quality === "flex" && r.has(H3_FLEX_GRAPH[endpoint])) endpoint = H3_FLEX_GRAPH[endpoint];
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
   return endpoint;

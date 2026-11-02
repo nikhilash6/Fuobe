@@ -26,7 +26,8 @@ import { finishSteps, mosaicPixels, unionMasks } from "@/lib/soul-post";
 import { ANGLES_ORIGINAL, MOSAIC_SCALE } from "@/lib/catalog/open-tools";
 import { computeDimensions } from "@/lib/comfy";
 import { captionFromWords, parseCaption } from "@/lib/ideogram-caption";
-import { h3Frames, h3Prompt } from "@/lib/h3-prompt";
+import { h3Frames, h3Prompt, inH3Layout } from "@/lib/h3-prompt";
+import { h3ReferenceTags, h3TalkPrompt } from "@/lib/h3-references";
 import {
   CHAIN_LIST_SLACK,
   LAST_FRAME_CHAIN,
@@ -74,6 +75,7 @@ import { missingFilesMessage, type MissingFiles } from "@/lib/missing-files";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { graphLoras as h3GraphLoras } from "@/lib/catalog/character-swap";
+import { pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
 import { restoreGraphLoras } from "@/lib/restore-graph";
 import { ensureLorasOnComfy, prepareCloudLoras, withoutUnreachableCivitai } from "./loras";
 import { ACCESS_PLACE } from "@/lib/model-access";
@@ -810,7 +812,12 @@ function prepare(original: GenerationRequest) {
 }
 
 /** The LoRA files a graph loads itself (not injected), so a run downloads the ones ComfyUI lacks before it starts. */
-const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined) => [...h3GraphLoras(endpoint, extra), ...restoreGraphLoras(endpoint, extra), ...regenerateGraphLoras(endpoint)];
+const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined) => [
+  ...h3GraphLoras(endpoint, extra),
+  ...restoreGraphLoras(endpoint, extra),
+  ...regenerateGraphLoras(endpoint),
+  ...pikaFlexGraphLoras(endpoint, extra),
+];
 
 /** Operations whose clip length is the duration picked (made, or added by extend), not an input video's. */
 const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "extend", "keyframes"]);
@@ -1695,6 +1702,20 @@ async function submitNow(
     const orbit = h3Op === "i2v" && plan.params.extra?.orbit === true;
     if (plan.model.options.promptFormat === "minimax-h3" && h3Op && prompt && !orbit) {
       const wrapped = h3Prompt(prompt, h3Op, h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape, plan.sound?.music);
+      if (wrapped !== prompt) {
+        prompt = wrapped;
+        update(id, { prompt });
+      }
+    }
+    // H3 with references (Pika H3 Flex Ref2VA): the studio's names (Image 1, Clip 1, Voice 1) become H3's tags (<Picture 1>,
+    // <Video 1>, <Audio 1>) in the same layout, with no alignment line (src/lib/h3-references.ts).
+    // Talk from a voice clip (avatar on H3): the portrait speaks the voice clip, with the words saying how.
+    if (plan.model.options.promptFormat === "minimax-h3" && plan.op === "avatar" && !inH3Layout(prompt ?? "")) {
+      const wrapped = h3Prompt(h3TalkPrompt(prompt ?? ""), "t2v", h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape ?? "Only the voice of <Audio 1>, clear and close.", plan.sound?.music);
+      prompt = wrapped;
+      update(id, { prompt });
+    } else if (plan.model.options.promptFormat === "minimax-h3" && plan.op === "ref2v" && prompt) {
+      const wrapped = h3Prompt(h3ReferenceTags(prompt), "t2v", h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape, plan.sound?.music);
       if (wrapped !== prompt) {
         prompt = wrapped;
         update(id, { prompt });

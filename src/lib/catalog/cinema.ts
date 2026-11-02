@@ -1,6 +1,7 @@
 import { BLOCKOUT, H3_INTENT_MAX, OPEN_FPS, beatsIn, blockoutFramePrompt, compileBlockoutPrompt, depthWindows, normalizeBeats, splitShots, windowsSeconds, type Beat, type BlockoutRef } from "@/lib/blockout";
 import { DEFAULT_MOTION, PATH_FPS, PATH_FRAMES, normalizeKeys, toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { APERTURE, LENS, anglesNote, poseWords, recomposePrompt, type ScenePose } from "@/lib/scene3d";
+import { H3_REFERENCE_LIMITS } from "@/lib/h3-references";
 import { getModel, getPreset } from "./index";
 import { lengthRange, PLANNED_DURATIONS, plannedDurations } from "./clip-lengths";
 import { DOP_MODEL, LTX25_HOSTED } from "./dop";
@@ -1278,11 +1279,15 @@ const CLIP_WORDS: Record<ClipKey, string> = { videos: "reference videos", audios
 
 /**
  * Whether `model` sends reference clips of this kind for `op`: every one of its routes for the
- * operation has a field for inputs.videos / inputs.audios (so whichever provider runs it, they go).
+ * operation has a field for inputs.videos / inputs.audios (so whichever provider runs it, they go), or is a ComfyUI graph
+ * of a model whose options say how many it takes.
  */
 export function takesClips(model: ModelDef, op: Operation, key: ClipKey): boolean {
   const routes = routesFor(model, op);
-  return routes.length > 0 && routes.every((r) => !!(r.map as Record<string, unknown> | undefined)?.[key]);
+  // A ComfyUI graph has no field map: the model's own limit says it takes them (MiniMax H3's references on your GPU).
+  const o = model.options as { maxVideos?: number; maxAudios?: number };
+  const comfyTakes = (key === "videos" ? o.maxVideos : o.maxAudios) ?? 0;
+  return routes.length > 0 && routes.every((r) => (r.provider === "comfyui" ? comfyTakes > 0 : !!(r.map as Record<string, unknown> | undefined)?.[key]));
 }
 
 /** The most clips of a kind the model takes (the catalog's maxVideos / maxAudios, else the studio's limit). */
@@ -1539,7 +1544,10 @@ function planVideo(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
     }
   }
 
-  const max = open ? 1 : (model.options.maxImages ?? 1);
+  // On your GPU a still is the start frame, unless the model has a references mode of its own (MiniMax H3: Pika H3 Flex
+  // Ref2VA), where @Elements and several images go in as references.
+  const openRefs = open && routesFor(model, "ref2v").length > 0 && (model.options.maxImages ?? 1) > 1;
+  const max = open && !openRefs ? 1 : (model.options.maxImages ?? 1);
   if (images.length > max) {
     notes.push(max === 1 ? `${model.name} uses the first image as the start frame` : `${model.name} takes up to ${max} reference images`);
     images = images.slice(0, max);
@@ -1547,7 +1555,13 @@ function planVideo(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
   // Reference clips go to reference-to-video when the model's routes take them; otherwise a note says they're left out.
   const others = CINEMA_MODELS.video[engine].flatMap((id) => modelOn(id, engine) ?? []);
   const clips = clipInputs(model, "ref2v", input, notes, others);
-  const withClips = !!(clips.videos?.length || clips.audios?.length);
+  const withClips = !!(clips.videos?.length || clips.audios?.length) || (openRefs && images.length > 1);
+  // Pika H3 Flex takes 12 references in all: images give way to the clips.
+  const room = openRefs ? H3_REFERENCE_LIMITS.total - (clips.videos?.length ?? 0) - (clips.audios?.length ?? 0) : Infinity;
+  if (images.length > room) {
+    notes.push(`${model.name} takes ${H3_REFERENCE_LIMITS.total} references in all, so the first ${room} images go with the clips`);
+    images = images.slice(0, room);
+  }
   if (withClips && images.length === 1) notes.push("With reference clips, the image is a reference rather than the start frame");
 
   const blocker = !input.prompt.trim() && !images.length ? "Describe your scene first" : undefined;

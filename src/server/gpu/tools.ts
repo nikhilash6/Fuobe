@@ -11,6 +11,7 @@ import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
 import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
 import { libraryEntry, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
 import { ANGLES_2511_LORA } from "@/lib/catalog/open-tools";
 import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
@@ -92,7 +93,10 @@ export function modelTool(modelId: string, op: string): Tool | null {
   if (!routes.length) return null;
   const workflows = [...new Set(routes.filter((r) => r.provider === "comfyui").flatMap((r) => expand(r.endpoint)))];
   // With the LoRAs a graph loads itself (Open-H3 Regenerate's refiner LoRA, which a run downloads).
-  const loras = [...(m.options.loras ?? []), ...routes.flatMap((r) => (r.provider === "comfyui" ? regenerateGraphLoras(r.endpoint) : []))].map(loraNeed);
+  const loras = [
+    ...(m.options.loras ?? []),
+    ...routes.flatMap((r) => (r.provider === "comfyui" ? [...regenerateGraphLoras(r.endpoint), ...pikaFlexGraphLoras(r.endpoint, {})] : [])),
+  ].map(loraNeed);
   return {
     ref: `model:${modelId}#${op}`,
     name: m.name,
@@ -156,6 +160,8 @@ export interface StudioRowDef {
    * and LoRAs together, with the LoRAs a step adds itself (the turnaround's Angles LoRA). The first names the tool.
    */
   steps?: { modelId: string; op: Operation; loras?: LoraRef[] }[];
+  /** Operations of the open default that have a row of their own (MiniMax H3's references: the Ref2VA partition). */
+  skipOps?: Operation[];
 }
 
 /** The board's rows (src/lib/hubs.ts names the hub modes): each studio's open default. */
@@ -176,7 +182,10 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     ],
   },
   { href: "/upscale", label: "Upscale", group: "Images", config: S.UPSCALE_STUDIO },
-  { href: "/video", label: "Video", group: "Video", config: S.VIDEO_STUDIO },
+  // MiniMax H3's references (Pika H3 Flex Ref2VA) need the Ref2VA partition and Pika's adapter: a row of their own, so the
+  // Video row stays what text, image and frame clips need.
+  { href: "/video", label: "Video", group: "Video", config: S.VIDEO_STUDIO, skipOps: ["ref2v"] },
+  { href: "/video?model=oss-minimax-h3", label: "Video from references", group: "Video", steps: [{ modelId: "oss-minimax-h3", op: "ref2v" }] },
   { href: "/motion-control", label: "Motion control", group: "Video", config: S.MOTION_CONTROL_STUDIO },
   { href: "/video-edit", label: "Edit video", group: "Video", config: S.VIDEO_EDIT_STUDIO },
   { href: "/extend", label: "Extend", group: "Video", config: S.EXTEND_STUDIO },
@@ -311,7 +320,7 @@ export function studioTool(row: StudioRowDef): Tool | null {
   if (!c || !id) return null;
   const m = openModel(getModel(id));
   if (!m) return null;
-  const ops = modelOps(m).filter((op) => c.ops.includes(op));
+  const ops = modelOps(m).filter((op) => c.ops.includes(op) && !row.skipOps?.includes(op));
   const parts = (ops.length ? ops : modelOps(m)).map((op) => modelTool(id, op)).filter((t): t is Tool => !!t);
   if (!parts.length) return null;
   return {
