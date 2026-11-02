@@ -10,6 +10,7 @@ import {
   Expand,
   ImagePlus,
   Keyboard,
+  Layers,
   Loader2,
   MoreHorizontal,
   Redo2,
@@ -35,19 +36,21 @@ import { postFile } from "@/lib/upload";
 import type { LiveEvent } from "@/lib/live/frames";
 import { aspectOf, AutoSize, isAspect, keepAuto, KEEP_LADDER, LIVE_LADDER, type Aspect, type KeepRes, type LiveSize } from "@/lib/live/sizes";
 import { pictureExt, pngSize } from "@/lib/live/names";
-import { restoreStack, StepStack, type Method, type Step } from "@/lib/live/steps";
-import { completedWords, endsWord, MAX_LIVE_TEXT, normalize } from "@/lib/live/text";
+import { DEFAULT_METHOD, restoreStack, StepStack, type Method, type Step } from "@/lib/live/steps";
+import { changeCount, completedWords, dropLastChange, endsWord, MAX_LIVE_TEXT, nextChange, normalize } from "@/lib/live/text";
 import { cn } from "@/lib/utils";
 import { keyOf, type LiveFacts, type LiveTransport, type RenderOut, type RenderReq, type TransportStatus } from "./live-transport";
 import { idbDel, idbGet, idbPrune, idbPut } from "./live-store";
 
 /**
- * Live edit: change a picture as you type. The text box drives throwaway live frames (small WebP, a few hundred
- * milliseconds each); a pause renders the text on screen at full quality (the settled frame); Keep (Enter, the Keep
- * button, or a click on a Try) stores that exact picture as a lossless master and the next change builds on it. Typing
- * never keeps anything by itself. Undo and redo move through the kept steps; hold C to compare with the step before
- * (Shift+C: the original); B paints a region to change. Two shells: the full-screen app (/live-edit) and a panel in
- * the Edit studio.
+ * Live edit: change a picture as you type. One prompt keeps growing, and every frame renders the whole of it on the
+ * same picture (the original, or the picture the person started fresh from), with one seed for the session, so the
+ * picture stays steady while the words change. The text box drives throwaway live frames (small WebP); a pause renders
+ * the text on screen at full quality (the settled frame). Enter ends a change (", ") and Undo drops the newest one.
+ * Start fresh stores the picture on screen as a lossless master, makes it the new start and clears the words (Undo
+ * brings them back). Hold C to compare with the picture before the words (Shift+C: the original); B paints a region
+ * to change. The owner's lab switch (?lab=1) brings back stacking, where Enter keeps each change as a step. Two
+ * shells: the full-screen app (/live-edit) and a panel in the Edit studio.
  */
 
 export interface LiveEditorProps {
@@ -61,7 +64,7 @@ export interface LiveEditorProps {
   from?: string;
   /** The owner may save to the Library; an account downloads instead. */
   canSave: boolean;
-  /** The owner's lab: the stacking method can be switched (hybrid, chain, compose). */
+  /** The owner's lab: the method can be switched (compose, or stacking: hybrid, chain). */
   lab?: boolean;
   /** Embedded: hand the kept picture to the Edit studio. */
   onUse?: (url: string) => void;
@@ -74,6 +77,8 @@ const IDLE_MS = 250;
 const SETTLE_MS = 1200;
 const CACHE_SIZE = 120;
 const MAX_TRIES = 6;
+/** Compose: from this many changes in one prompt, the editor suggests a fresh start. */
+const LONG_PROMPT_CHANGES = 12;
 
 interface Shown {
   url: string;
@@ -196,7 +201,11 @@ export function LiveEditor(props: LiveEditorProps) {
   const [liveChoice, setLiveChoice] = useState<"auto" | LiveSize>("auto");
   const [keepChoice, setKeepChoice] = useState<"auto" | KeepRes>("auto");
   const [aspect, setAspect] = useState<Aspect>("3:4");
-  const [method, setMethod] = useState<Method>("hybrid");
+  const [method, setMethod] = useState<Method>(DEFAULT_METHOD);
+  /** One growing prompt on the start picture (everyone); the others stack kept steps (the owner's lab). */
+  const compose = method === "compose";
+  /** What Undo took off the end of the words, for Redo (while the words are still what Undo left). */
+  const [textRedo, setTextRedo] = useState<{ text: string; was: string }[]>([]);
   const auto = useRef(new AutoSize(512));
   const [liveSize, setLiveSize] = useState<LiveSize>(512);
   const sizeShown: LiveSize = liveChoice === "auto" ? liveSize : liveChoice;
@@ -209,7 +218,7 @@ export function LiveEditor(props: LiveEditorProps) {
   const anySize = useRef(new Map<string, string>());
   const idle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [busy, setBusy] = useState<{ what: "rendering" | "warming" | "keeping" | "adding"; since: number; progress?: number } | null>(null);
+  const [busy, setBusy] = useState<{ what: "rendering" | "warming" | "keeping" | "saving" | "adding"; since: number; progress?: number } | null>(null);
   const [lastMs, setLastMs] = useState<number | null>(null);
   const [keptFlash, setKeptFlash] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -240,7 +249,7 @@ export function LiveEditor(props: LiveEditorProps) {
   const urlOf = (s: Step | null): string | null => (s ? (urls[s.master.name] ?? s.master.url ?? null) : null);
 
   const persist = useCallback(() => {
-    save(persistKey, { v: 1, stack: stack.current.toJSON(), seed: seedRef.current, keepChoice, liveChoice, aspect });
+    save(persistKey, { v: 1, stack: stack.current.toJSON(), seed: seedRef.current, keepChoice, liveChoice, aspect, text: textRef.current });
   }, [persistKey, keepChoice, liveChoice, aspect]);
 
   const showMaster = useCallback(
@@ -286,7 +295,7 @@ export function LiveEditor(props: LiveEditorProps) {
     void transport.render(req, onEvent).then(() => setBusy((b) => (b?.what === "warming" ? null : b)));
   };
   /** The newest handlers, for effects and timers. */
-  const latest = useRef({ warm, render: (() => {}) as (slot: "live" | "settle", t: string, o?: { urgent?: boolean }) => void, schedule: (() => {}) as (t: string, typed?: string) => void, addFile: (async () => {}) as (f: File) => Promise<void> });
+  const latest = useRef({ warm, render: (() => {}) as (slot: "live" | "settle", t: string, o?: { urgent?: boolean }) => void, schedule: (() => {}) as (t: string, typed?: string, whole?: boolean) => void, addFile: (async () => {}) as (f: File) => Promise<void> });
 
   useEffect(() => {
     let alive = true;
@@ -303,13 +312,18 @@ export function LiveEditor(props: LiveEditorProps) {
       // Masters this browser kept for steps no saved session refers to any more go.
       void idbPrune(idbInUse());
       // A stored session for this picture comes back as it was.
-      const stored = load<{ stack: unknown; seed: number; keepChoice?: "auto" | KeepRes; liveChoice?: "auto" | LiveSize; aspect?: string }>(storageKey(props.image));
+      const stored = load<{ stack: unknown; seed: number; keepChoice?: "auto" | KeepRes; liveChoice?: "auto" | LiveSize; aspect?: string; text?: unknown }>(storageKey(props.image));
       const restored = stored ? restoreStack(stored.stack) : new StepStack();
       seedRef.current = stored?.seed ?? r.seed;
       setSeed(seedRef.current);
       if (stored?.keepChoice) setKeepChoice(stored.keepChoice);
       if (stored?.liveChoice) setLiveChoice(stored.liveChoice);
       if (stored?.aspect && isAspect(stored.aspect)) setAspect(stored.aspect);
+      // The words come back with the picture (a link's own text wins).
+      if (!props.text && typeof stored?.text === "string" && stored.text) {
+        textRef.current = stored.text.slice(0, MAX_LIVE_TEXT);
+        setText(textRef.current);
+      }
       try {
         if (!restored.empty) {
           stack.current = restored;
@@ -342,7 +356,7 @@ export function LiveEditor(props: LiveEditorProps) {
 
   useEffect(() => {
     if (phase.s === "ready") persist();
-  }, [view, phase.s, persist]);
+  }, [view, text, phase.s, persist]);
 
   // The tab in view: renders pause while it is hidden.
   useEffect(() => {
@@ -364,13 +378,12 @@ export function LiveEditor(props: LiveEditorProps) {
 
   const reqFor = (slot: RenderReq["slot"], t: string, o: { urgent?: boolean; seed?: number } = {}): RenderReq => {
     const s = stack.current;
-    const base = s.base(method)?.name;
+    const base = s.base()?.name;
     return {
       seq: ++seq.current,
       slot,
       urgent: o.urgent,
       text: t,
-      ...(method === "compose" && { compose: s.composePrompt(normalize(t)) }),
       seed: o.seed ?? seedRef.current,
       size: sizeNow(),
       keepRes,
@@ -471,7 +484,7 @@ export function LiveEditor(props: LiveEditorProps) {
         }
         setLastMs(out.ms);
         // A frame for a base that is no longer the head doesn't show.
-        if (baseAtStart !== stack.current.base(method)?.name) return;
+        if (baseAtStart !== stack.current.base()?.name) return;
         present(c, req.seq, key);
       });
   };
@@ -484,21 +497,24 @@ export function LiveEditor(props: LiveEditorProps) {
     else if (wasOther.current && status.online && phase.s === "ready") {
       wasOther.current = false;
       latest.current.warm(stack.current.head?.master.name);
-      latest.current.render("live", textRef.current, { urgent: true });
+      // The words render again, settle included (a settle the pause dropped would never come back otherwise).
+      if (normalize(textRef.current)) latest.current.schedule(textRef.current, undefined, true);
     }
   }, [status.running, status.online, phase.s]);
 
-  // Coming back from a pause (live switched on, the tab in view again, the connection back): the newest text renders.
+  // Coming back from a pause (live switched on, the tab in view again, the connection back): the newest text renders,
+  // and settles.
   useEffect(() => {
-    if (!paused && phase.s === "ready" && normalize(textRef.current)) latest.current.render("live", textRef.current, { urgent: true });
+    if (!paused && phase.s === "ready" && normalize(textRef.current)) latest.current.schedule(textRef.current, undefined, true);
   }, [paused, phase.s]);
 
-  const schedule = (t: string, typed?: string) => {
+  const schedule = (t: string, typed?: string, whole = false) => {
       clearTimeout(idle.current);
       clearTimeout(settle.current);
-      // A word boundary, a line break or a paste: the words so far render at once.
-      if (typed === undefined || (typed.length === 1 && endsWord(typed)) || typed.length > 1) {
-        const words = typed && typed.length > 1 ? t : completedWords(t);
+      // A word boundary, a line break or a paste: the words so far render at once (all of them, for a paste, an undo
+      // or a redo).
+      if (whole || typed === undefined || (typed.length === 1 && endsWord(typed)) || typed.length > 1) {
+        const words = whole || (typed && typed.length > 1) ? t : completedWords(t);
         if (normalize(words)) render("live", words);
       }
       // A pause: the exact text, urgently.
@@ -507,7 +523,8 @@ export function LiveEditor(props: LiveEditorProps) {
       settle.current = setTimeout(() => normalize(t) && latest.current.render("settle", t), SETTLE_MS);
   };
 
-  const onType = (next: string, typed?: string) => {
+  /** New words in the box: they render (whole: all of them at once). */
+  const applyText = (next: string, typed?: string, whole = false) => {
     const t = next.slice(0, MAX_LIVE_TEXT);
     setText(t);
     textRef.current = t;
@@ -518,7 +535,12 @@ export function LiveEditor(props: LiveEditorProps) {
       showMaster(stack.current.head);
       return;
     }
-    schedule(t, typed);
+    schedule(t, typed, whole);
+  };
+
+  const onType = (next: string, typed?: string) => {
+    if (textRedo.length) setTextRedo([]);
+    applyText(next, typed);
   };
 
   // A starting text from the link renders once ready.
@@ -557,24 +579,14 @@ export function LiveEditor(props: LiveEditorProps) {
   /** A keep is running (a ref: two Enters in one tick must not both start one). */
   const keepingRef = useRef(false);
 
-  const keep = async (choice?: { text: string; seed: number }, download = false) => {
-      if (keepingRef.current || phase.s !== "ready") return;
-      const t = choice?.text ?? textRef.current;
-      if (!normalize(t)) return;
-      const keepSeed = choice?.seed ?? seedRef.current;
-      keepingRef.current = true;
-      // The step joins the head it started from (undo, redo and a new picture wait until the keep is done).
-      const parent = stack.current.head?.id ?? null;
-      setKeeping(true);
-      clearTimeout(idle.current);
-      clearTimeout(settle.current);
-      setBusy({ what: "keeping", since: performance.now() });
-      try {
+  /**
+   * The full-quality picture of this text as a lossless master: the server's file (or this browser's copy, when the
+   * account's space is full), staged in ComfyUI under its name. Null when the render didn't come back.
+   */
+  const makeMaster = async (t: string, keepSeed: number) => {
         const req = reqFor("keep", t, { seed: keepSeed });
         const settledKey = keyOf({ ...req, slot: "settle" });
         const held = cache.current.get(settledKey);
-        // Stale live renders of the old base stop now.
-        transport.cancel((_, slot) => slot === "live" || slot === "settle");
         let out: RenderOut;
         if (held && transport.kind === "computer") {
           // What you saw is what you keep: the settled picture, as it is.
@@ -583,7 +595,7 @@ export function LiveEditor(props: LiveEditorProps) {
           const res = await transport.render(req, onEvent);
           if (!res.ok) {
             if ("error" in res) failed(res.error, res.code);
-            return;
+            return null;
           }
           out = res.out;
         }
@@ -614,32 +626,57 @@ export function LiveEditor(props: LiveEditorProps) {
         }
         where.url = url;
         where.idb = idb;
+        return { req, out, size, name, url, idb, local, blobUrl };
+  };
+
+  /**
+   * Keep the picture of this text. Compose: a fresh start (the picture on screen becomes the new start). The lab's
+   * stacking: a new step. The words clear either way; Undo brings them back.
+   */
+  const keep = async (choice?: { text: string; seed: number }, download = false) => {
+      if (keepingRef.current || phase.s !== "ready") return;
+      const t = choice?.text ?? textRef.current;
+      if (!normalize(t)) return;
+      const keepSeed = choice?.seed ?? seedRef.current;
+      keepingRef.current = true;
+      // The step joins the head it started from (undo, redo and a new picture wait until the keep is done).
+      const parent = stack.current.head?.id ?? null;
+      setKeeping(true);
+      clearTimeout(idle.current);
+      clearTimeout(settle.current);
+      setBusy({ what: "keeping", since: performance.now() });
+      try {
+        // Stale live renders of the old base stop now.
+        transport.cancel((_, slot) => slot === "live" || slot === "settle");
+        const m = await makeMaster(t, keepSeed);
+        if (!m) return;
         const step = stack.current.keep({
           text: t,
           norm: normalize(t),
           seed: keepSeed,
           method,
-          keepRes: req.keepRes,
+          keepRes: m.req.keepRes,
           ...(mask && { mask: { name: mask.name } }),
-          master: { name, w: size.w, h: size.h, sha256: out.sha256, format: "png", ...(url && { url }), ...(idb && { idb }) },
-          ms: out.ms,
-          ...(local && { local: true }),
+          master: { name: m.name, w: m.size.w, h: m.size.h, sha256: m.out.sha256, format: "png", ...(m.url && { url: m.url }), ...(m.idb && { idb: m.idb }) },
+          ms: m.out.ms,
+          ...(m.local && { local: true }),
         }, parent);
         bump();
         releaseBlobs();
         setText("");
         textRef.current = "";
+        setTextRedo([]);
         setTries([]);
         setMask(null);
         showMaster(step);
         setKeptFlash(true);
         setTimeout(() => setKeptFlash(false), 1000);
-        if (download) downloadUrl(blobUrl, `live-edit-${step.id}.png`);
-        if (local) toast.message("Kept in this browser only", { description: "Your files are full, so this step stays here. Download it to keep it." });
+        if (download) downloadUrl(m.blobUrl, `live-edit-${step.id}.png`);
+        if (m.local) toast.message("Kept in this browser only", { description: "Your files are full, so this picture stays here. Download it to keep it." });
         // Once, on a touch screen: how to compare.
         if (load<boolean>(HOLD_HINT) === null && window.matchMedia?.("(pointer: coarse)").matches) {
           save(HOLD_HINT, true);
-          toast.message("Press and hold the picture to see the step before", { description: "The … menu compares with the original too." });
+          toast.message(compose ? "Press and hold the picture to see it before the words" : "Press and hold the picture to see the step before", { description: "The … menu compares with the original too." });
         }
       } catch (e) {
         toast.error((e as Error).message);
@@ -653,16 +690,65 @@ export function LiveEditor(props: LiveEditorProps) {
   const move = async (to: "undo" | "redo" | string) => {
       if (keepingRef.current) return;
       const s = stack.current;
+      const from = s.path();
       const step = to === "undo" ? s.undo() : to === "redo" ? s.redo() : s.jump(to);
       if (!step) return;
       transport.cancel((_, slot) => slot === "live" || slot === "settle");
       setTries([]);
+      setTextRedo([]);
       bump();
+      if (compose) {
+        // Back to an earlier start: the words that led on from it come back, with their seed. Forward: a clean box.
+        const at = from.findIndex((x) => x.id === step.id);
+        const next = at >= 0 && at < from.length - 1 ? from[at + 1] : null;
+        textRef.current = next?.text ?? "";
+        setText(textRef.current);
+        if (next) {
+          seedRef.current = next.seed;
+          setSeed(next.seed);
+        }
+      }
       showMaster(step);
       try {
         await ensureStaged(step);
       } catch {}
-      if (normalize(textRef.current)) render("live", textRef.current, { urgent: true });
+      if (normalize(textRef.current)) {
+        if (compose) schedule(textRef.current, undefined, true);
+        else render("live", textRef.current, { urgent: true });
+      }
+  };
+
+  /** Undo: compose takes the newest change off the words first, then goes back past a fresh start. */
+  const undo = () => {
+    const t = textRef.current;
+    if (compose && normalize(t)) {
+      const left = dropLastChange(t);
+      setTextRedo((r) => [...r, { text: left, was: t }]);
+      applyText(left, undefined, true);
+      return;
+    }
+    void move("undo");
+  };
+  const textRedoTop = textRedo.at(-1);
+  const canTextRedo = compose && !!textRedoTop && textRedoTop.text === text;
+  const redo = () => {
+    if (canTextRedo && textRedoTop) {
+      setTextRedo((r) => r.slice(0, -1));
+      applyText(textRedoTop.was, undefined, true);
+      return;
+    }
+    void move("redo");
+  };
+
+  /** A click on a try. Compose: a try is a moment of the session, and the click goes back to its words (and seed). The lab: keep it. */
+  const onTry = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const t = tries.find((x) => x.key === e.currentTarget.dataset.try);
+    if (!t) return;
+    if (!compose) return void keep({ text: t.text, seed: t.seed });
+    seedRef.current = t.seed;
+    setSeed(t.seed);
+    if (textRedo.length) setTextRedo([]);
+    applyText(t.text, undefined, true);
   };
 
   /** Live off stops what is rendering for the text; on again, the newest text renders. */
@@ -750,19 +836,79 @@ export function LiveEditor(props: LiveEditorProps) {
   // Saving and downloading
 
   const current = shown?.url ?? urlOf(head);
-  const download = () => current && downloadUrl(current, `live-edit-${head?.id ?? "frame"}.${shown?.kind === "live" ? "webp" : "png"}`);
+
+  /** Compose: the full-quality picture of the words on screen (the settled frame, rendered now if it isn't there yet). */
+  const settledNow = async (): Promise<Cached | null> => {
+    const t = textRef.current;
+    const req = reqFor("settle", t);
+    const key = keyOf(req);
+    const had = cache.current.get(key);
+    if (had) return had;
+    setBusy((b) => b ?? { what: "rendering", since: performance.now() });
+    const res = await transport.render(req, onEvent);
+    setBusy((b) => (b?.what === "rendering" && !inflight.current.size ? null : b));
+    if (!res.ok) {
+      if ("error" in res) failed(res.error, res.code);
+      return null;
+    }
+    const c: Cached = { url: URL.createObjectURL(new Blob([res.out.data as BlobPart], { type: res.out.type })), out: res.out, kind: "settled", seed: req.seed, text: t };
+    remember(key, c);
+    present(c, req.seq, key);
+    return c;
+  };
+
+  const download = async () => {
+    if (compose && normalize(textRef.current)) {
+      const c = await settledNow();
+      if (c) downloadUrl(c.url, `live-edit-${head?.id ?? "frame"}.png`);
+      return;
+    }
+    if (current) downloadUrl(current, `live-edit-${head?.id ?? "frame"}.${shown?.kind === "live" ? "webp" : "png"}`);
+  };
+
+  /** What Save and Use hand on: compose with words, the picture on screen as a new master (the words stay); else the kept head. */
+  const canHandOn = compose ? !!normalize(text) || view.path.length > 1 : !!head?.master.url && view.path.length > 1;
+  const handOn = async (): Promise<string | null> => {
+    const h = stack.current.head;
+    if (!(compose && normalize(textRef.current))) return h?.master.url ?? null;
+    if (keepingRef.current || phase.s !== "ready") return null;
+    keepingRef.current = true;
+    setKeeping(true);
+    setBusy({ what: "saving", since: performance.now() });
+    try {
+      const m = await makeMaster(textRef.current, seedRef.current);
+      if (m && !m.url) toast.error("Your files are full, so this picture can't be handed on. Download it instead.");
+      return m?.url ?? null;
+    } catch (e) {
+      toast.error((e as Error).message);
+      return null;
+    } finally {
+      keepingRef.current = false;
+      setKeeping(false);
+      setBusy(null);
+    }
+  };
+  const sendToEdit = async () => {
+    const url = await handOn();
+    if (url) props.onUse?.(url);
+  };
   const saveToLibrary = async () => {
     const s = stack.current;
-    const h = s.head;
-    if (!h?.master.url) return toast.error("Keep a change first");
+    const open = compose && normalize(textRef.current) ? textRef.current : "";
+    const seedNow = seedRef.current;
+    const url = await handOn();
+    if (!url) return open ? undefined : toast.error("Make a change first");
+    const steps = [...s.path().filter((x) => x.text).map((x) => ({ text: x.text, seed: x.seed })), ...(open ? [{ text: open, seed: seedNow }] : [])];
     const res = await fetch("/api/live/save", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ master: h.master.url, ...(s.original?.master.url && s.original.parent === null && s.original.text === "" && { original: s.original.master.url }), steps: s.path().filter((x) => x.text).map((x) => ({ text: x.text, seed: x.seed })), ...(props.from && { from: props.from }) }),
+      body: JSON.stringify({ master: url, ...(s.original?.master.url && s.original.parent === null && s.original.text === "" && { original: s.original.master.url }), steps, ...(props.from && { from: props.from }) }),
     });
     if (res.ok) toast.success("Saved to your Library");
     else toast.error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't save");
   };
+
+  const canKeep = !!normalize(text) && phase.s === "ready" && !keeping;
 
   // ---------------------------------------------------------------------------
   // Keys
@@ -776,10 +922,10 @@ export function LiveEditor(props: LiveEditorProps) {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && (e.key === "z" || e.key === "Z") && !e.shiftKey && (!inBox || !textRef.current)) {
         e.preventDefault();
-        void move("undo");
+        undo();
       } else if (mod && (((e.key === "z" || e.key === "Z") && e.shiftKey) || e.key === "y") && (!inBox || !textRef.current)) {
         e.preventDefault();
-        void move("redo");
+        redo();
       }
       if (inBox || mod || e.altKey) return;
       const k = e.key;
@@ -790,7 +936,8 @@ export function LiveEditor(props: LiveEditorProps) {
       else if (k === "l" || k === "L") toggleLive();
       else if (k === "c" || k === "C") setHold(e.shiftKey ? "orig" : "prev");
       else if ((k === "b" || k === "B") && hasPicture) setBrushOpen(true);
-      else if (k === "d" || k === "D") download();
+      else if (k === "d" || k === "D") void download();
+      else if ((k === "f" || k === "F") && compose && canKeep) void keep();
       else if ((k === "s" || k === "S") && props.canSave) void saveToLibrary();
       else if (k === "?") setKeysOpen(true);
       else if (k === "ArrowLeft" || k === "ArrowRight") {
@@ -819,9 +966,12 @@ export function LiveEditor(props: LiveEditorProps) {
   const path = view.path;
   const previous = view.previous;
   const original = view.original;
-  const heldUrl = hold === "orig" ? urlOf(original) : hold === "prev" ? urlOf(previous ?? original) : null;
+  /** "Before": with words in the box (compose), the picture they change; otherwise the step before. */
+  const before = compose && normalize(text) ? head : (previous ?? original);
+  const heldUrl = hold === "orig" ? urlOf(original) : hold === "prev" ? urlOf(before) : null;
   const stageUrl = heldUrl ?? current;
-  const canKeep = !!normalize(text) && phase.s === "ready" && !keeping;
+  /** A very long prompt: a late change can lose out to the earlier ones, and the box nears its limit. */
+  const longPrompt = changeCount(text) >= LONG_PROMPT_CHANGES || text.length > MAX_LIVE_TEXT - 60;
   const link = transport.kind === "link";
 
   const pill = (() => {
@@ -830,11 +980,12 @@ export function LiveEditor(props: LiveEditorProps) {
     if (phase.s === "error") return { tone: "warn", text: "Not available" };
     if (!status.online) return { tone: "wait", text: "Reconnecting…" };
     if (status.running === "other") return { tone: "warn", text: "Paused: GPU busy" };
-    if (busy?.what === "keeping") return { tone: "busy", text: "Keeping…" };
+    if (busy?.what === "keeping") return { tone: "busy", text: compose ? "Starting fresh…" : "Keeping…" };
+    if (busy?.what === "saving") return { tone: "busy", text: "Getting it ready…" };
     if (busy?.what === "warming") return { tone: "busy", text: "Warming up (about 20 s)" };
     if (busy?.what === "adding") return { tone: "busy", text: "Adding the picture…" };
     if (!liveOn) return { tone: "off", text: "Live off" };
-    if (keptFlash) return { tone: "ok", text: "Kept ✓" };
+    if (keptFlash) return { tone: "ok", text: compose ? "Fresh start ✓" : "Kept ✓" };
     const label = link ? "Live (slower over a link)" : "Live";
     // A kept picture's size is on its badge; the pill tells the live size and time only for live and settled frames.
     if (!shown || shown.kind === "master") return { tone: busy ? "busy" : "ok", text: label };
@@ -878,10 +1029,10 @@ export function LiveEditor(props: LiveEditorProps) {
         </h1>
         <StatusPill tone={pill.tone} text={pill.text} detail={pill.detail} progress={busy?.progress} />
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
-          <ToolButton label="Undo" keys="Ctrl+Z" onClick={() => void move("undo")} disabled={!view.canUndo}>
+          <ToolButton label={compose && normalize(text) ? "Undo the last change" : "Undo"} keys="Ctrl+Z" onClick={() => undo()} disabled={!(compose && normalize(text)) && !view.canUndo}>
             <Undo2 />
           </ToolButton>
-          <ToolButton label="Redo" keys="Ctrl+Shift+Z" onClick={() => void move("redo")} disabled={!view.canRedo}>
+          <ToolButton label="Redo" keys="Ctrl+Shift+Z" onClick={() => redo()} disabled={!canTextRedo && !view.canRedo}>
             <Redo2 />
           </ToolButton>
           <ToolButton label="Compare" keys="hold C" onClick={() => setCompareOpen(true)} disabled={!previous && !original} className="max-sm:hidden">
@@ -906,6 +1057,7 @@ export function LiveEditor(props: LiveEditorProps) {
             hasPicture={hasPicture}
             seed={seed}
             lab={props.lab}
+            compose={compose}
             method={method}
             setMethod={setMethod}
             onKeys={() => setKeysOpen(true)}
@@ -916,12 +1068,12 @@ export function LiveEditor(props: LiveEditorProps) {
               compare: previous || original ? () => setCompareOpen(true) : undefined,
               liveOn,
               toggleLive,
-              download: current ? download : undefined,
-              save: !embedded && props.canSave && head?.master.url && path.length > 1 ? () => void saveToLibrary() : undefined,
+              download: current ? () => void download() : undefined,
+              save: !embedded && props.canSave && canHandOn ? () => void saveToLibrary() : undefined,
               fullScreen: embedded ? `/live-edit${image ? `?image=${encodeURIComponent(image)}&from=edit` : "?from=edit"}` : undefined,
             }}
           />
-          <ToolButton label="Download" keys="D" onClick={download} disabled={!current} className="max-sm:hidden">
+          <ToolButton label="Download" keys="D" onClick={() => void download()} disabled={!current} className="max-sm:hidden">
             <Download />
           </ToolButton>
           {embedded ? (
@@ -936,7 +1088,7 @@ export function LiveEditor(props: LiveEditorProps) {
                 </TooltipTrigger>
                 <TooltipContent>Full screen</TooltipContent>
               </Tooltip>
-              <Button size="sm" onClick={() => head?.master.url && props.onUse?.(head.master.url)} disabled={!head?.master.url || path.length < 2} className="ml-1 max-sm:px-2.5">
+              <Button size="sm" onClick={() => void sendToEdit()} disabled={!canHandOn || keeping} className="ml-1 max-sm:px-2.5">
                 <span className="max-sm:hidden">Use in Edit</span>
                 <span className="sm:hidden">Use</span>
               </Button>
@@ -947,7 +1099,7 @@ export function LiveEditor(props: LiveEditorProps) {
               )}
             </>
           ) : props.canSave ? (
-            <Button size="sm" variant="secondary" onClick={() => void saveToLibrary()} disabled={!head?.master.url || path.length < 2} className="ml-1 max-sm:hidden">
+            <Button size="sm" variant="secondary" onClick={() => void saveToLibrary()} disabled={!canHandOn || keeping} className="ml-1 max-sm:hidden">
               <Save className="size-4" />
               Save
             </Button>
@@ -957,21 +1109,30 @@ export function LiveEditor(props: LiveEditorProps) {
 
       {/* Stage */}
       <div className={cn("relative mx-3 min-h-0 flex-1 overflow-hidden rounded-2xl bg-media sm:mx-4", dragging && "ring-2 ring-primary")} data-live-stage onPointerDown={(e) => e.pointerType !== "mouse" && setHold("prev")} onPointerUp={() => setHold(null)} onPointerLeave={() => setHold(null)}>
-        {setupPanel ?? errorPanel ?? (stageUrl ? <StageImage src={stageUrl} alt={hold ? "The picture before this change" : "Your picture"} /> : <EmptyStage busy={busy?.what === "adding"} onBrowse={() => fileInput.current?.click()} />)}
+        {setupPanel ?? errorPanel ?? (stageUrl ? <StageImage src={stageUrl} alt={hold ? "The picture before this change" : "Your picture"} /> : <EmptyStage busy={busy?.what === "adding"} compose={compose} onBrowse={() => fileInput.current?.click()} />)}
         {mask && !hold && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={mask.preview} alt="" className="pointer-events-none absolute inset-0 size-full object-contain opacity-35 mix-blend-screen" />
         )}
         {stageUrl && phase.s === "ready" && (
           <span className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white tabular-nums backdrop-blur" data-live-badge>
-            {hold ? (hold === "orig" ? "Original" : "Before") : shown?.kind === "master" ? `${shown.w}×${shown.h} · kept ✓` : shown?.kind === "settled" ? `${shown.w}×${shown.h} · ready to keep` : `${sizeShown} · live`}
+            {hold
+              ? hold === "orig"
+                ? "Original"
+                : "Before"
+              : shown?.kind === "master"
+                ? `${shown.w}×${shown.h} · ${compose ? (head?.parent ? "fresh start" : "original") : "kept ✓"}`
+                : shown?.kind === "settled"
+                  ? `${shown.w}×${shown.h} · ${compose ? "full quality" : "ready to keep"}`
+                  : `${sizeShown} · live`}
           </span>
         )}
       </div>
 
       {/* Steps, the box, tries */}
       <div className={cn("shrink-0 px-3 pt-2 sm:px-4", embedded ? "pb-3" : "pb-[max(12px,env(safe-area-inset-bottom))]")}>
-        <StepTrail path={path} all={view.all} headId={head?.id} onJump={(id) => void move(id)} urlOf={urlOf} />
+        {/* Compose shows its starts only once there is a fresh start to go back to. */}
+        {(!compose || path.length > 1) && <StepTrail path={path} all={view.all} headId={head?.id} onJump={(id) => void move(id)} urlOf={urlOf} />}
         <div className="mt-2 flex items-end gap-2">
           <div className="relative min-w-0 flex-1 rounded-2xl border bg-card shadow-soft focus-within:border-primary/60 focus-within:ring-3 focus-within:ring-ring/25">
             <textarea
@@ -979,7 +1140,7 @@ export function LiveEditor(props: LiveEditorProps) {
               value={text}
               rows={1}
               maxLength={MAX_LIVE_TEXT}
-              placeholder={hasPicture ? (head?.parent ? "Type the next change…" : "Type a change…") : "Describe a picture, or drop one here…"}
+              placeholder={hasPicture ? (compose ? "Type a change, then keep adding…" : head?.parent ? "Type the next change…" : "Type a change…") : "Describe a picture, or drop one here…"}
               aria-label="Type a change"
               className="block max-h-28 min-h-11 w-full resize-none bg-transparent px-3.5 py-3 text-[15px] leading-5 outline-none placeholder:text-muted-foreground [field-sizing:content]"
               onChange={(e) => {
@@ -987,7 +1148,13 @@ export function LiveEditor(props: LiveEditorProps) {
                 onType(e.target.value, native.data ?? (native.inputType === "insertLineBreak" ? "\n" : native.inputType === "insertFromPaste" ? e.target.value : undefined));
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                if (e.key === "Enter" && compose && !e.nativeEvent.isComposing) {
+                  // Enter ends this change and starts the next (Ctrl+Enter: download the picture).
+                  e.preventDefault();
+                  if (e.metaKey || e.ctrlKey) return void download();
+                  const next = nextChange(textRef.current);
+                  if (next !== textRef.current) onType(next, ", ");
+                } else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   void keep(undefined, e.metaKey || e.ctrlKey);
                 } else if (e.key === "Escape") box.current?.blur();
@@ -995,25 +1162,45 @@ export function LiveEditor(props: LiveEditorProps) {
               disabled={phase.s !== "ready"}
             />
           </div>
-          <Button size="lg" className={cn("h-11 shrink-0 rounded-2xl px-4", keptFlash && "bg-success hover:bg-success")} onClick={() => void keep()} disabled={!canKeep} data-live-keep>
-            {keeping ? <Loader2 className="size-4 animate-spin" /> : keptFlash ? <Check className="size-4" /> : <CornerDownLeft className="size-4" />}
-            {keptFlash ? "Kept" : "Keep"}
-          </Button>
+          {compose ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="lg" variant="secondary" className={cn("h-11 shrink-0 rounded-2xl px-4 max-sm:w-11 max-sm:px-0", keptFlash && "bg-success text-white hover:bg-success")} onClick={() => void keep()} disabled={!canKeep} aria-label="Start fresh from this picture" data-live-keep>
+                  {keeping ? <Loader2 className="size-4 animate-spin" /> : keptFlash ? <Check className="size-4" /> : <Layers className="size-4" />}
+                  <span className="max-sm:hidden">Start fresh</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-64">Start fresh from this picture: it becomes the new original and the words clear. Undo brings them back.</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button size="lg" className={cn("h-11 shrink-0 rounded-2xl px-4", keptFlash && "bg-success hover:bg-success")} onClick={() => void keep()} disabled={!canKeep} data-live-keep>
+              {keeping ? <Loader2 className="size-4 animate-spin" /> : keptFlash ? <Check className="size-4" /> : <CornerDownLeft className="size-4" />}
+              {keptFlash ? "Kept" : "Keep"}
+            </Button>
+          )}
         </div>
         {(tries.length > 0 || hasPicture) && (
           // The row keeps its height from the start, so the picture doesn't move when the first try comes in.
           <div className="mt-2 flex h-[46px] items-center gap-1.5 overflow-x-auto pb-0.5" data-live-tries={tries.length > 0 ? "" : undefined}>
-            <span className="shrink-0 text-[11.5px] font-medium text-muted-foreground">Tries</span>
-            {tries.length === 0 && <span className="truncate text-[11.5px] text-subtle-foreground">Pause while typing and each take lands here. Click one to keep it.</span>}
+            <span className="shrink-0 text-[11.5px] font-medium text-muted-foreground">{compose ? "Takes" : "Tries"}</span>
+            {tries.length === 0 && (
+              <span className="truncate text-[11.5px] text-subtle-foreground">{compose ? "Each pause lands here. Tap one to go back to it." : "Pause while typing and each take lands here. Click one to keep it."}</span>
+            )}
             {tries.map((t) => (
               <Tooltip key={t.key}>
                 <TooltipTrigger asChild>
-                  <button type="button" onClick={() => void keep({ text: t.text, seed: t.seed })} className={cn("relative size-11 shrink-0 overflow-hidden rounded-lg ring-1 ring-border hover:ring-2 hover:ring-primary", shown?.key === t.key && "ring-2 ring-primary")} aria-label={`Keep this try (seed ${t.seed})`}>
+                  <button
+                    type="button"
+                    onClick={onTry}
+                    data-try={t.key}
+                    className={cn("relative size-11 shrink-0 overflow-hidden rounded-lg ring-1 ring-border hover:ring-2 hover:ring-primary", shown?.key === t.key && "ring-2 ring-primary")}
+                    aria-label={compose ? `Go back to: ${t.text}` : `Keep this try (seed ${t.seed})`}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={t.url} alt="" className="size-full object-cover" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>Keep this one</TooltipContent>
+                <TooltipContent className="max-w-64">{compose ? t.text : "Keep this one"}</TooltipContent>
               </Tooltip>
             ))}
             {tries.length > 0 && (
@@ -1022,6 +1209,14 @@ export function LiveEditor(props: LiveEditorProps) {
               </span>
             )}
           </div>
+        )}
+        {compose && longPrompt && phase.s === "ready" && (
+          <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground" data-live-long>
+            <span className="min-w-0 flex-1 truncate">A long prompt: a new change may not show.</span>
+            <button type="button" onClick={() => void keep()} disabled={!canKeep} className="shrink-0 font-medium text-brand-text hover:underline disabled:opacity-50">
+              Start fresh from this picture
+            </button>
+          </p>
         )}
         {facts?.highvram === false && highvramHint && phase.s === "ready" && (
           <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground" data-live-highvram>
@@ -1051,8 +1246,17 @@ export function LiveEditor(props: LiveEditorProps) {
       {current && (head || shown) && (
         <SketchEditor open={brushOpen} onOpenChange={setBrushOpen} image={urlOf(head) ?? current} mode="mask" onDone={(r) => void onBrushDone(r)} />
       )}
-      <CompareDialog open={compareOpen} onOpenChange={setCompareOpen} after={current} before={compareWith === "prev" ? urlOf(previous ?? original) : urlOf(original)} which={compareWith} setWhich={setCompareWith} />
-      <KeysDialog open={keysOpen} onOpenChange={setKeysOpen} canSave={props.canSave} />
+      <CompareDialog
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+        after={current}
+        before={compareWith === "prev" ? urlOf(before) : urlOf(original)}
+        which={compareWith}
+        setWhich={setCompareWith}
+        prevLabel={compose && normalize(text) ? "Before the words" : "With the step before"}
+        same={before?.id === original?.id}
+      />
+      <KeysDialog open={keysOpen} onOpenChange={setKeysOpen} canSave={props.canSave} compose={compose} />
     </div>
   );
 }
@@ -1135,13 +1339,13 @@ function StageImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function EmptyStage({ busy, onBrowse }: { busy: boolean; onBrowse: () => void }) {
+function EmptyStage({ busy, compose, onBrowse }: { busy: boolean; compose: boolean; onBrowse: () => void }) {
   return (
     <div className="absolute inset-0 grid place-items-center p-6 text-center text-white">
       <div className="max-w-sm">
         <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-white/10">{busy ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}</span>
         <p className="mt-4 font-heading text-[24px] leading-tight">Drop a picture, paste one, or start typing to make one</p>
-        <p className="mt-2 text-[13px] text-white/65">Each change shows up as you type. Press Enter to keep it, then type the next.</p>
+        <p className="mt-2 text-[13px] text-white/65">{compose ? "The picture follows as you type. Keep adding to the words: every change lands on your picture." : "Each change shows up as you type. Press Enter to keep it, then type the next."}</p>
         <Button variant="secondary" className="mt-5" onClick={onBrowse}>
           <Upload className="size-4" />
           Add a picture
@@ -1192,6 +1396,7 @@ function Settings(p: {
   hasPicture: boolean;
   seed: number;
   lab?: boolean;
+  compose: boolean;
   method: Method;
   setMethod: (m: Method) => void;
   onKeys: () => void;
@@ -1297,11 +1502,13 @@ function Settings(p: {
         {p.lab && (
           <div className={row}>
             <span>Method</span>
-            {seg<Method>(p.method, [{ v: "hybrid", label: "Hybrid" }, { v: "chain", label: "Chain" }, { v: "compose", label: "Compose" }], p.setMethod)}
+            {seg<Method>(p.method, [{ v: "compose", label: "Compose" }, { v: "hybrid", label: "Hybrid" }, { v: "chain", label: "Chain" }], p.setMethod)}
           </div>
         )}
         <p className="mt-2 border-t pt-2 text-[12px] text-muted-foreground">
-          Kept steps are lossless masters at full size: unchanged parts of the picture stay exactly as they were, however many changes you stack.
+          {p.compose
+            ? "Every frame renders all your words on the same picture, so nothing blurs however long they get. Start fresh makes the picture on screen the new original."
+            : "Kept steps are lossless masters at full size: unchanged parts of the picture stay exactly as they were, however many changes you stack."}
         </p>
         <button type="button" onClick={p.onKeys} className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-brand-text hover:underline">
           <Keyboard className="size-3.5" />
@@ -1312,7 +1519,26 @@ function Settings(p: {
   );
 }
 
-function CompareDialog({ open, onOpenChange, before, after, which, setWhich }: { open: boolean; onOpenChange: (o: boolean) => void; before: string | null; after: string | null; which: "prev" | "orig"; setWhich: (w: "prev" | "orig") => void }) {
+function CompareDialog({
+  open,
+  onOpenChange,
+  before,
+  after,
+  which,
+  setWhich,
+  prevLabel,
+  same,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  before: string | null;
+  after: string | null;
+  which: "prev" | "orig";
+  setWhich: (w: "prev" | "orig") => void;
+  prevLabel: string;
+  /** "Before" is the original: one choice, so no switch. */
+  same: boolean;
+}) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[min(96vw,1100px)] max-w-none sm:max-w-none">
@@ -1320,18 +1546,38 @@ function CompareDialog({ open, onOpenChange, before, after, which, setWhich }: {
           <DialogTitle>Compare</DialogTitle>
           <DialogDescription>Drag across the picture, or use the arrow keys.</DialogDescription>
         </DialogHeader>
-        <div className="flex gap-1 self-start rounded-lg bg-muted p-0.5 text-[12.5px]">
-          {(["prev", "orig"] as const).map((w) => (
-            <button key={w} type="button" onClick={() => setWhich(w)} className={cn("h-7 rounded-md px-2.5", which === w ? "bg-background font-medium shadow-soft" : "text-muted-foreground")}>
-              {w === "prev" ? "With the step before" : "With the original"}
-            </button>
-          ))}
-        </div>
+        {!same && (
+          <div className="flex gap-1 self-start rounded-lg bg-muted p-0.5 text-[12.5px]">
+            {(["prev", "orig"] as const).map((w) => (
+              <button key={w} type="button" onClick={() => setWhich(w)} className={cn("h-7 rounded-md px-2.5", which === w ? "bg-background font-medium shadow-soft" : "text-muted-foreground")}>
+                {w === "prev" ? prevLabel : "With the original"}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="grid max-h-[72vh] place-items-center overflow-hidden rounded-xl bg-media">{before && after ? <CompareSlider before={before} after={after} /> : <p className="p-10 text-white/70">Keep a change to compare.</p>}</div>
       </DialogContent>
     </Dialog>
   );
 }
+
+const COMPOSE_KEYS: [string, string][] = [
+  ["/", "Type a change (Esc leaves the box)"],
+  ["Enter", "End this change and type the next"],
+  ["Ctrl+Enter", "Download the picture"],
+  ["Ctrl+Z", "Undo the last change (in the box: when it is empty)"],
+  ["Ctrl+Shift+Z", "Redo"],
+  ["F", "Start fresh from this picture"],
+  ["R", "Shuffle: another take of the words"],
+  ["L", "Live on or off"],
+  ["C (hold)", "Compare with the picture before the words"],
+  ["Shift+C (hold)", "Compare with the original"],
+  ["B", "Paint a region to change"],
+  ["D", "Download"],
+  ["S", "Save to your Library"],
+  ["← →", "Step through your fresh starts"],
+  ["?", "These shortcuts"],
+];
 
 const KEYS: [string, string][] = [
   ["/", "Type a change (Esc leaves the box)"],
@@ -1350,7 +1596,7 @@ const KEYS: [string, string][] = [
   ["?", "These shortcuts"],
 ];
 
-function KeysDialog({ open, onOpenChange, canSave }: { open: boolean; onOpenChange: (o: boolean) => void; canSave: boolean }) {
+function KeysDialog({ open, onOpenChange, canSave, compose }: { open: boolean; onOpenChange: (o: boolean) => void; canSave: boolean; compose: boolean }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -1359,7 +1605,7 @@ function KeysDialog({ open, onOpenChange, canSave }: { open: boolean; onOpenChan
           <DialogDescription>Outside the text box, unless it says otherwise.</DialogDescription>
         </DialogHeader>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px]">
-          {KEYS.filter(([k]) => canSave || k !== "S").map(([k, v]) => (
+          {(compose ? COMPOSE_KEYS : KEYS).filter(([k]) => canSave || k !== "S").map(([k, v]) => (
             <div key={k} className="contents">
               <dt>
                 <Kbd>{k}</Kbd>

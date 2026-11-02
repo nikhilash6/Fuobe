@@ -1,16 +1,22 @@
 /**
- * Live edit's kept steps (pure). A step is one change the person chose to keep, with its own lossless master. The
+ * Live edit's kept steps (pure). A step is a picture the person chose to keep, with its own lossless master. The
  * stack is a tree: Undo moves to the parent, Redo to the newest child, and a Keep after an Undo starts a new branch
- * (the old one stays). Every render's base is a master or the original, never a live frame:
+ * (the old one stays). Every render's base is a master or the original, never a live frame.
  *
- * 1. the base of a render is the head's master (hybrid, chain) or the original (compose);
+ * Methods: "compose" (everyone) renders the whole text box on the head's picture, so one prompt keeps growing and
+ * every frame comes from the same picture; a keep is a fresh start (the picture on screen becomes the new start and
+ * the box clears). "hybrid" and "chain" (an owner's lab switch) keep each change as a step and clear the box after it.
+ *
+ * 1. the base of a render is the head's master;
  * 2. every kept master is a PNG at least as large as its base (for text to image, 1024 or more on the long side);
  * 3. no name used as a base was ever a live frame's bytes;
  * 4. a kept master is the settled picture that was on screen, byte for byte, when Keep came after the settle.
  */
 
-export type Method = "hybrid" | "chain" | "compose";
-export const METHODS: readonly Method[] = ["hybrid", "chain", "compose"];
+export type Method = "compose" | "hybrid" | "chain";
+export const METHODS: readonly Method[] = ["compose", "hybrid", "chain"];
+/** What everyone gets. */
+export const DEFAULT_METHOD: Method = "compose";
 
 export interface Master {
   /** A Fuobe file URL (/api/files/…), when the server keeps it. */
@@ -65,7 +71,7 @@ export class StepStack {
 
   /** Start from a picture (step 0, the original: its bytes as they came, JPEG allowed). */
   static from(original: Master, at = Date.now()): StepStack {
-    return new StepStack({ steps: [{ id: "s0", parent: null, text: "", norm: "", seed: 0, method: "hybrid", keepRes: 0, master: original, ms: 0, at }], head: "s0" });
+    return new StepStack({ steps: [{ id: "s0", parent: null, text: "", norm: "", seed: 0, method: DEFAULT_METHOD, keepRes: 0, master: original, ms: 0, at }], head: "s0" });
   }
 
   get empty(): boolean {
@@ -102,15 +108,10 @@ export class StepStack {
   }
 
   /** What the next render edits (invariant 1): null for text to image. */
-  base(method: Method): Master | null {
-    const m = method === "compose" ? this.original?.master : this.head?.master;
+  base(): Master | null {
+    const m = this.head?.master;
     if (m && this.liveShas.has(m.sha256)) throw new StepError("A live frame can't be a base");
     return m ?? null;
-  }
-
-  /** compose: the kept texts on the path, then the live text, as one instruction. */
-  composePrompt(live: string): string {
-    return [...this.path().map((s) => s.norm).filter(Boolean), live].filter(Boolean).join(". ");
   }
 
   /** A live frame was shown: its bytes may never become a base (invariant 3). */
@@ -132,7 +133,7 @@ export class StepStack {
     if (parent !== undefined && (base?.id ?? null) !== parent) throw new StepError("The picture changed while keeping. Keep again.");
     if (base && s.master.format !== "png") throw new StepError("A kept master must be a PNG");
     if (this.liveShas.has(s.master.sha256)) throw new StepError("A live frame can't be kept as a master");
-    if (base && s.method !== "compose" && s.master.w * s.master.h < base.master.w * base.master.h) throw new StepError("A kept master can't be smaller than its base");
+    if (base && s.master.w * s.master.h < base.master.w * base.master.h) throw new StepError("A kept master can't be smaller than its base");
     if (!base && Math.max(s.master.w, s.master.h) < 1024) throw new StepError("A first picture is kept at 1024 or more");
     const step: Step = { ...s, id: `s${++this.n}`, parent: base?.id ?? null, at: s.at ?? Date.now(), master: { ...s.master } };
     this.steps.push(step);

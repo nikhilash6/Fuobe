@@ -31,7 +31,7 @@ export const LIVE_SIGMAS = "1.0, 0.5, 0.0";
 /** The node that sends the picture. */
 export const LIVE_OUTPUT = "90";
 
-/** The longest prompt a graph may carry (compose joins the kept texts). */
+/** The longest prompt a graph may carry. */
 export const MAX_GRAPH_PROMPT = 2000;
 
 export const PACK_LIVE_CLASSES = ["LoadImageFuobeLive", "CropFuobeLive", "Qwen21ReferenceFuobeLive", "Qwen21EncodeFuobeLive", "PasteBackFuobeLive", "SaveImageFuobeLive"] as const;

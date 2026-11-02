@@ -3,7 +3,7 @@
  * step stack with its no-degradation invariants (src/lib/live).
  */
 import { describe, expect, it } from "vitest";
-import { completedWords, normalize, renderKey } from "@/lib/live/text";
+import { changeCount, completedWords, dropLastChange, nextChange, normalize, renderKey } from "@/lib/live/text";
 import { aspectOf, AutoSize, editSize, keepAuto, sizeFor, ASPECT_NAMES } from "@/lib/live/sizes";
 import { inputName, LIVE_INPUT, pictureExt, pngSize } from "@/lib/live/names";
 import { eventFrame, FrameError, FrameReader, imageFrame } from "@/lib/live/frames";
@@ -24,6 +24,21 @@ describe("text", () => {
     expect(completedWords("add gold ")).toBe("add gold ");
     expect(completedWords("add")).toBe("");
     expect(completedWords("add gold,")).toBe("add gold,");
+  });
+  it("one growing prompt: Enter ends a change, Undo drops the newest, and the changes are counted", () => {
+    expect(nextChange("evening makeup")).toBe("evening makeup, ");
+    expect(nextChange("evening makeup,")).toBe("evening makeup, ");
+    expect(nextChange("evening makeup.  ")).toBe("evening makeup. ");
+    expect(nextChange("   ")).toBe("   ");
+    expect(dropLastChange("evening makeup, deep red lips, hair down")).toBe("evening makeup, deep red lips, ");
+    expect(dropLastChange("evening makeup, deep red lips, ")).toBe("evening makeup, ");
+    expect(dropLastChange("evening makeup. hair down")).toBe("evening makeup. ");
+    expect(dropLastChange("evening makeup")).toBe("");
+    // What Undo leaves renders as the words before it: the trailing ", " changes nothing.
+    expect(normalize(dropLastChange("a, b, c"))).toBe("a, b");
+    expect(changeCount("a, b; c. d\ne")).toBe(5);
+    expect(changeCount("a, , b,")).toBe(2);
+    expect(changeCount("")).toBe(0);
   });
   it("render keys are stable over no-op changes and differ on real ones", () => {
     const k = (text: string, o: Partial<Parameters<typeof renderKey>[0]> = {}) => renderKey({ base: "b", text, seed: 7, size: 512, ...o });
@@ -126,18 +141,17 @@ describe("frames", () => {
 
 describe("steps", () => {
   const master = (n: number, o: Partial<Master> = {}): Master => ({ name: `fuobe_lv${String(n).padStart(20, "0")}.png`, w: 1536, h: 2048, sha256: `sha${n}`, format: "png", ...o });
-  const keep = (s: StepStack, n: number, text = `edit ${n}`, o: Partial<Master> = {}) => s.keep({ text, norm: text, seed: n, method: "hybrid", keepRes: 1536, master: master(n, o), ms: 900 });
+  const keep = (s: StepStack, n: number, text = `edit ${n}`, o: Partial<Master> = {}) => s.keep({ text, norm: text, seed: n, method: "compose", keepRes: 1536, master: master(n, o), ms: 900 });
 
-  it("keeps, undoes, redoes and branches, and picks the base per method", () => {
+  it("keeps, undoes, redoes and branches; every render's base is the head's picture", () => {
     const s = StepStack.from(master(0, { format: "jpg" }));
+    expect(s.base()?.sha256).toBe("sha0");
     keep(s, 1);
     keep(s, 2);
     expect(s.path().map((x) => x.text)).toEqual(["", "edit 1", "edit 2"]);
-    expect(s.base("hybrid")?.sha256).toBe("sha2");
-    expect(s.base("chain")?.sha256).toBe("sha2");
-    expect(s.base("compose")?.sha256).toBe("sha0");
-    expect(s.composePrompt("live")).toBe("edit 1. edit 2. live");
+    expect(s.base()?.sha256).toBe("sha2");
     expect(s.undo()?.text).toBe("edit 1");
+    expect(s.base()?.sha256).toBe("sha1");
     expect(s.canRedo()).toBe(true);
     expect(s.redo()?.text).toBe("edit 2");
     s.undo();
@@ -176,7 +190,7 @@ describe("steps", () => {
 
   it("text to image starts empty and keeps a first picture of 1024 or more", () => {
     const s = new StepStack();
-    expect(s.base("hybrid")).toBeNull();
+    expect(s.base()).toBeNull();
     expect(() => keep(s, 1, "x", { w: 512, h: 512 })).toThrow(/1024/);
     keep(s, 1, "a portrait", { w: 1024, h: 1024 });
     expect(s.original?.text).toBe("a portrait");

@@ -4,18 +4,18 @@ import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { DemoTrail } from "@/components/live/live-demo";
+import { ChangeCount } from "@/components/live/live-demo";
 import {
   type Box,
   cameraFor,
-  CHIP_MAX,
+  changesWord,
+  countChanges,
   type Demo,
   type DemoStep,
   demoEnds,
   demoProblems,
   frameOrder,
   framePath,
-  KEEP_PULSE_MS,
   LIVE_DEMO,
   LIVE_DEMO_V,
   LOOP_MAX_MS,
@@ -24,7 +24,6 @@ import {
   stepMs,
   SWEEP_MS,
   sweepPath,
-  trailWindow,
   typeDelays,
   viewBefore,
   ZOOM_MAX,
@@ -33,8 +32,8 @@ import {
 
 /*
  * The recorded live edit session (public/previews/live-edit/demo.json) and its player (src/lib/live/demo.ts,
- * src/components/live/live-demo.tsx): the file plays, every frame is there, one round stays short, and a long session
- * keeps its trail readable.
+ * src/components/live/live-demo.tsx): the file plays, every frame is there, one round stays short, and the session is
+ * one prompt that keeps growing.
  */
 
 const PUBLIC = path.join(__dirname, "..", "public");
@@ -43,9 +42,9 @@ const shippedText = fs.readFileSync(path.join(PUBLIC, LIVE_DEMO), "utf8").replac
 const shipped = JSON.parse(shippedText) as Demo;
 
 /**
- * An eleven-step session in the shape of the shipped one: the camera moves in on the changed area, partial live frames
- * arrive while typing, the camera pulls back out as the settled one arrives, then the keep. The two big changes keep
- * the whole picture.
+ * An eleven-change session in the shape of the shipped one: the camera moves in on the changed area, the words go on
+ * the end of the one prompt, partial live frames arrive while typing, the camera pulls back out as the settled one
+ * arrives, then the count goes up. The two big changes keep the whole picture.
  */
 const LABELS = ["Red lips", "Hair down", "Gold hoops", "Velvet gown", "Diamond choker", "Red rose", "Fur stole", "Ballroom", "Spotlight", "Soft smile", "Cinematic grade"];
 function longSession(): Demo {
@@ -59,12 +58,12 @@ function longSession(): Demo {
     const box: Box | null = label === "Ballroom" || label === "Spotlight" ? null : [0.4, 0.3, 0.6, 0.6];
     if (box) script.push({ type: "zoom", box, ms: 200 });
     script.push(
-      { type: "type", text: label.toLowerCase(), ms: early ? 700 : 450 },
+      { type: "type", text: `${i ? ", " : ""}${label.toLowerCase()}`, ms: early ? 700 : 450 },
       { type: "frame", frame: `s${i + 1}a`, live: true, ms: early ? 600 : 540 },
-      { type: "type", text: " please", ms: early ? 500 : 300 },
+      { type: "type", text: " now", ms: early ? 500 : 300 },
     );
     if (box) script.push({ type: "zoom", box: null, ms: 0 });
-    script.push({ type: "frame", frame: `s${i + 1}`, ms: early ? 700 : 560 }, { type: "keep", label, ms: early ? 900 : 700 });
+    script.push({ type: "frame", frame: `s${i + 1}`, ms: early ? 700 : 560 }, { type: "change", ms: early ? 900 : 700 });
   });
   script.push({ type: "compare", ms: 3400 }, { type: "pause", ms: 1200 });
   return { v: 2, size: [960, 720], frames, script };
@@ -76,14 +75,20 @@ describe("the shipped demo", () => {
     expect(loopMs(shipped)).toBeLessThanOrEqual(LOOP_MAX_MS);
   });
 
-  it("is one session of eleven kept steps, each settled picture shown before its keep", () => {
-    const keeps = shipped.script.flatMap((s, i) => (s.type === "keep" ? [i] : []));
-    expect(keeps).toHaveLength(11);
-    for (const [k, i] of keeps.entries()) {
+  it("is one prompt of eleven changes, each settled picture shown before the count goes up", () => {
+    const changes = shipped.script.flatMap((s, i) => (s.type === "change" ? [i] : []));
+    expect(changes).toHaveLength(11);
+    expect(countChanges(shipped)).toBe(11);
+    for (const [k, i] of changes.entries()) {
       const prev = shipped.script[i - 1];
       expect(prev).toMatchObject({ type: "frame", frame: `s${k + 1}` });
       expect(prev.type === "frame" && prev.live).toBeFalsy();
+      // Every change after the first goes on the end of the same words.
+      const next = shipped.script.slice(i + 1).find((s) => s.type === "type");
+      if (next?.type === "type") expect(next.text.startsWith(", ")).toBe(true);
     }
+    // The words at the end are the whole prompt: every change is still in it (a change may hold a comma of its own).
+    expect(viewBefore(shipped, shipped.script.length).typed.split(", ").length).toBeGreaterThanOrEqual(11);
     expect(shipped.script.at(-2)?.type).toBe("compare");
     expect(Object.keys(shipped.frames)[0]).toBe("s0");
     for (const id of Object.keys(shipped.frames)) expect(id).not.toMatch(/^\d+$/);
@@ -118,7 +123,7 @@ describe("the shipped demo", () => {
         if (s.box) expect(cameraFor(s.box).s).toBeGreaterThan(1);
         if (s.box) zoomed++;
       }
-      if (s.type === "keep" || s.type === "compare" || (s.type === "frame" && !s.live)) expect(zoom).toBeNull();
+      if (s.type === "change" || s.type === "compare" || (s.type === "frame" && !s.live)) expect(zoom).toBeNull();
     }
     expect(zoomed).toBeGreaterThanOrEqual(4);
   });
@@ -139,7 +144,7 @@ describe("the shipped demo", () => {
     for (const s of shipped.script) if (s.type === "frame" && s.live) expect(s.ms).toBeGreaterThanOrEqual(SWEEP_MS);
   });
 
-  it("shows no timings: the pill says Live or Kept, nothing more", () => {
+  it("shows no timings: the pill says Live, nothing more", () => {
     expect(shippedText).not.toMatch(/Ms"\s*:/);
   });
 });
@@ -154,10 +159,6 @@ describe("timing", () => {
 
   it("never types faster than a person can read", () => {
     expect(Math.min(...typeDelays("a very long instruction typed in no time at all", 100))).toBeGreaterThanOrEqual(28);
-  });
-
-  it("holds a keep for at least its pulse", () => {
-    expect(stepMs({ type: "keep", label: "x", ms: 100 })).toBe(KEEP_PULSE_MS);
   });
 });
 
@@ -176,34 +177,32 @@ describe("an eleven-step session", () => {
     expect(demoEnds(d)).toEqual({ before: "s0", after: "s11" });
   });
 
-  it("picks up where it paused, with the kept steps and the typed text", () => {
-    const keep7 = d.script.findIndex((s) => s.type === "keep" && s.label === LABELS[6]);
-    const v = viewBefore(d, keep7 + 2);
-    expect(v.steps).toEqual(LABELS.slice(0, 7));
+  it("picks up where it paused, with the count and the words so far", () => {
+    const change7 = d.script.flatMap((s, i) => (s.type === "change" ? [i] : []))[6];
+    const v = viewBefore(d, change7 + 2);
+    expect(v.changes).toBe(7);
     expect(v.frame).toBe("s7");
-    expect(v.typed).toBe(LABELS[7].toLowerCase());
-    expect(v.pill).toBe("Kept ✓");
+    // The words are never cleared: all seven changes, then the eighth being typed.
+    expect(v.typed).toBe(`${LABELS.slice(0, 7).map((l) => `${l.toLowerCase()} now`).join(", ")}, ${LABELS[7].toLowerCase()}`);
     expect(v.zoom).toBeNull();
     // The picture is there at once, not faded in from the dark behind it.
     expect(v).toMatchObject({ fade: 0, sweep: false, under: null });
-    const mid = viewBefore(d, keep7 + 3);
-    expect(mid).toMatchObject({ frame: "s8a", pill: "Live" });
-    const keep2 = d.script.findIndex((s) => s.type === "keep" && s.label === LABELS[1]);
-    expect(viewBefore(d, keep2 + 4)).toMatchObject({ frame: "s3a", zoom: [0.4, 0.3, 0.6, 0.6] });
-    expect(viewBefore(d, keep2).zoom).toBeNull();
+    expect(viewBefore(d, change7 + 3)).toMatchObject({ frame: "s8a", changes: 7 });
+    const change2 = d.script.flatMap((s, i) => (s.type === "change" ? [i] : []))[1];
+    expect(viewBefore(d, change2 + 4)).toMatchObject({ frame: "s3a", zoom: [0.4, 0.3, 0.6, 0.6] });
+    expect(viewBefore(d, change2).zoom).toBeNull();
   });
 
-  it("shows the count on the small card after a keep", () => {
-    expect(pillText({ pill: "Live", steps: [] })).toEqual({ main: "Live", count: null });
-    expect(pillText({ pill: "Kept ✓", steps: LABELS.slice(0, 7) }, true).count).toBe("7");
-    expect(pillText({ pill: "Kept ✓", steps: LABELS.slice(0, 7) }).count).toBeNull();
+  it("shows the count on the small card once there are two changes", () => {
+    expect(pillText({ changes: 0 })).toEqual({ main: "Live", count: null });
+    expect(pillText({ changes: 1 }, true).count).toBeNull();
+    expect(pillText({ changes: 7 }, true).count).toBe("7");
+    expect(pillText({ changes: 7 }).count).toBeNull();
   });
 
-  it("refuses chip labels too long for a phone, keeps too short for the pulse, and a round over the limit", () => {
-    const bad: Demo = { ...d, script: d.script.map((s) => (s.type === "keep" ? { ...s, label: "x".repeat(CHIP_MAX + 1), ms: 200 } : s)) };
-    const p = demoProblems(bad);
-    expect(p.some((x) => x.includes("label"))).toBe(true);
-    expect(p.some((x) => x.includes(`${KEEP_PULSE_MS} ms`))).toBe(true);
+  it("refuses an unknown step and a round over the limit", () => {
+    const odd = { ...d, script: [...d.script, { type: "keep", label: "x", ms: 800 }] } as unknown as Demo;
+    expect(demoProblems(odd).some((x) => x.includes("unknown step"))).toBe(true);
     const slow: Demo = { ...d, script: [...d.script, { type: "pause", ms: LOOP_MAX_MS }] };
     expect(demoProblems(slow).some((x) => x.startsWith("one round"))).toBe(true);
   });
@@ -272,47 +271,17 @@ describe("the camera", () => {
   });
 });
 
-describe("the trail", () => {
-  it("folds older steps into a count and keeps the newest", () => {
-    expect(trailWindow(LABELS.slice(0, 7), 1)).toEqual({ hidden: 6, shown: [{ n: 7, label: "Fur stole" }] });
-    expect(trailWindow(LABELS.slice(0, 7), 3).hidden).toBe(4);
-    expect(trailWindow(LABELS.slice(0, 2), 3)).toEqual({ hidden: 0, shown: [{ n: 1, label: "Red lips" }, { n: 2, label: "Hair down" }] });
+describe("the change count", () => {
+  it("says how many changes the one prompt holds, and nothing before the first", () => {
+    expect(changesWord(1)).toBe("1 change");
+    const html = renderToStaticMarkup(createElement(ChangeCount, { changes: 7 }));
+    expect(html).toContain(">7 changes<");
+    expect(html).toContain(">One prompt<");
+    expect(html).toContain('data-live-count="7"');
+    expect(renderToStaticMarkup(createElement(ChangeCount, { changes: 0 }))).toBe("");
   });
 
-  it("renders Original, the folded count for each width, and at most three chips, the newest lit", () => {
-    const html = renderToStaticMarkup(createElement(DemoTrail, { steps: LABELS }));
-    expect(html).toContain(">Original<");
-    expect(html.match(/data-live-chip="/g)).toHaveLength(3);
-    expect(html).toContain('data-live-chip="11"');
-    expect(html).not.toContain('data-live-chip="8"');
-    expect(html).toContain('data-live-more="10"');
-    expect(html).toContain('data-live-more="8"');
-    expect(html.match(/data-newest="true"/g)).toHaveLength(1);
-    expect(html).toMatch(/data-live-chip="11"[^>]*aria-current="step"|aria-current="step"[^>]*data-live-chip="11"/);
-    // Phones see only the newest chip and the count of the rest.
-    expect(html).toMatch(/class="contents @max-md:hidden"><span[^>]*>›<\/span><span[^>]*data-live-chip="10"/);
-  });
-
-  it("lets Original step aside on narrow players once earlier steps fold into a count", () => {
-    const folded = renderToStaticMarkup(createElement(DemoTrail, { steps: LABELS }));
-    expect(folded).toMatch(/<span class="[^"]*@max-md:hidden[^"]*"[^>]*data-live-original/);
-    // The narrow count then leads the trail, with no separator before it.
-    expect(folded).toMatch(/class="contents @md:hidden"><span[^>]*data-live-more="10"/);
-    const first = renderToStaticMarkup(createElement(DemoTrail, { steps: LABELS.slice(0, 1) }));
-    expect(first).toMatch(/data-live-original/);
-    expect(first).not.toMatch(/<span class="[^"]*@max-md:hidden[^"]*"[^>]*data-live-original/);
-  });
-
-  it("has no wide count before a fourth step while the narrow one folds the earlier ones; nothing before the first keep", () => {
-    const html = renderToStaticMarkup(createElement(DemoTrail, { steps: LABELS.slice(0, 3) }));
-    expect(html).toContain('data-live-more="2"');
-    expect(html).not.toContain('data-live-more="0"');
-    expect(html.match(/data-live-chip="/g)).toHaveLength(3);
-    expect(renderToStaticMarkup(createElement(DemoTrail, { steps: [] }))).toBe("");
-  });
-
-  it("keeps every chip on one line, cut short rather than wrapped", () => {
-    const html = renderToStaticMarkup(createElement(DemoTrail, { steps: LABELS }));
-    for (const chip of html.match(/<span class="[^"]*"[^>]*data-live-chip="\d+"/g) ?? []) expect(chip).toMatch(/truncate/);
+  it("steps aside while the compare plays", () => {
+    expect(renderToStaticMarkup(createElement(ChangeCount, { changes: 3, hidden: true }))).toMatch(/opacity-0/);
   });
 });
