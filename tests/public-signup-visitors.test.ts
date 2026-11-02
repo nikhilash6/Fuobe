@@ -102,6 +102,9 @@ describe("Assist is the owner's", () => {
     ["POST", "/api/assist/skills/draft/name"],
     ["PATCH", "/api/assist/skills/ad-multiplier"],
     ["POST", "/api/assist/skills/product-photoshoot/run"],
+    // A skill's Suggest a fix (W6) and a schedule that runs a skill (W4).
+    ["POST", "/api/assist/skills/product-photoshoot/fixes"],
+    ["PATCH", "/api/assist/schedules/s1"],
     ["POST", "/api/assist/memory"],
     ["POST", "/api/assist/memory/import"],
     ["POST", "/api/assist/projects"],
@@ -211,5 +214,22 @@ describe("an account's own Library", () => {
     expect((await bulk({ action: "trash", ids: ["own-1"] }, account)).status).toBe(403);
     // A guest that reached the route anyway.
     expect((await bulk({ action: "pin", ids: ["owner-1"] })).status).toBe(401);
+  });
+});
+
+describe("skills in use (W6, W7) are the owner's", () => {
+  it("gives a guest and an account no suggestions, and refuses the rest of a skill's runs", async () => {
+    for (const cookie of [undefined, account, gpuAccount]) {
+      const who = cookie ? "account" : "guest";
+      const list = proxy(req("/api/skill-suggestions", { cookie }));
+      expect(list.status, who).toBe(200);
+      expect(await list.json(), who).toEqual({ items: [] });
+      // Dismissing one changes the owner's settings.
+      expect(passed(proxy(req("/api/skill-suggestions", { method: "POST", cookie }))), who).toBe(false);
+      // A skill's run history, its fixes and its steps' progress are the owner's runs.
+      for (const p of ["/api/assist/skills/product-photoshoot/history", "/api/assist/skills/product-photoshoot/fixes"]) expect(passed(proxy(req(p, { cookie }))), `${p} ${who}`).toBe(false);
+    }
+    for (const p of ["/api/skill-suggestions", "/api/assist/skills/product-photoshoot/history", "/api/assist/skills/product-photoshoot/fixes"]) expect(passed(proxy(req(p, { cookie: owner }))), p).toBe(true);
+    expect(passed(proxy(req("/api/skill-suggestions", { method: "POST", cookie: owner })))).toBe(true);
   });
 });

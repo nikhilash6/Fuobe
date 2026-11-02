@@ -93,7 +93,9 @@ async function pool(items, n, fn) {
  */
 export const routeResult = (answer, how) => {
   const stitch = Array.isArray(answer?.stitches) ? answer.stitches.at(-1) : undefined;
-  const items = answer?.items ?? (stitch ? (answer.segments ?? []).flatMap((s) => (s.takes ?? []).map((t) => ({ id: t.look }))) : []);
+  // A skill's run (POST /api/assist/skills/<name>/run, from pnpm eval:from-skill): every row's generations.
+  const runs = Array.isArray(answer?.runs) ? answer.runs.flatMap((r) => (r.ids ?? []).map((id) => ({ id }))) : null;
+  const items = answer?.items ?? runs ?? (stitch ? (answer.segments ?? []).flatMap((s) => (s.takes ?? []).map((t) => ({ id: t.look }))) : []);
   const final = answer?.final ?? (stitch?.final ? { id: stitch.final } : items.at(-1));
   if (how === "all") return items.length ? items : [final].filter(Boolean);
   if (how === "last") return [items.at(-1) ?? final].filter(Boolean);

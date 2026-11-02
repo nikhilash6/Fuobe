@@ -795,6 +795,26 @@ export const ADMIN_TABLES = `CREATE TABLE IF NOT EXISTS admin_tokens (
   );
   CREATE INDEX IF NOT EXISTS admin_audit_at ON admin_audit(at);`;
 
+/**
+ * Skills (src/server/recipes.ts, src/server/skill-runs.ts): a run of a skill whose steps wait for each other across
+ * studios keeps each step's state here, so the sweep that starts the waiting steps picks up again after a restart.
+ * `values_json`: the run's input values (file links); `state_json`: each step's status, generation ids, studio link and
+ * why it failed. Made here rather than as a numbered migration (other branches add those at the same time, and a
+ * migration is known by its place in the list). Safe to run on every start.
+ */
+export const SKILL_TABLES = `CREATE TABLE IF NOT EXISTS skill_runs (
+    id TEXT PRIMARY KEY,
+    skill TEXT NOT NULL,
+    engine TEXT NOT NULL,
+    status TEXT NOT NULL,
+    values_json TEXT NOT NULL,
+    state_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS skill_runs_skill ON skill_runs(skill, created_at DESC);
+  CREATE INDEX IF NOT EXISTS skill_runs_status ON skill_runs(status);`;
+
 /** Columns the optional services added to existing tables: [table, column, type]. */
 const HOOK_COLUMNS: [string, string, string][] = [
   // 1: never served to the account (its output check hasn't said "show").
@@ -885,6 +905,8 @@ function open(): Database.Database {
   }
   // Admin tokens and the admin API's log.
   db.exec(ADMIN_TABLES);
+  // Skills: the runs that wait across studios.
+  db.exec(SKILL_TABLES);
   // A billing hold's rows are found through this index (only rows that have one are in it).
   try {
     db.exec("CREATE INDEX IF NOT EXISTS generations_hold ON generations(json_extract(request_json, '$.hold')) WHERE json_extract(request_json, '$.hold') IS NOT NULL");

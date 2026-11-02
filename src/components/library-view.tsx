@@ -7,6 +7,7 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { toast } from "sonner";
 import { AssetCard, cardRatio, type CardApi } from "@/components/library/asset-card";
 import { FilterBar, filterFields, filtersFor, hasFilters, NO_FILTERS, type Filters } from "@/components/library/filters";
+import { SkillSuggestions } from "@/components/skills/skill-suggestions";
 import { FolderDialog, FolderHeader, FolderStrip, MoveMenuItems } from "@/components/library/folders";
 import { ReviewMenuItems } from "@/components/library/review";
 import { UploadDeleteProvider } from "@/components/library/upload-delete";
@@ -687,6 +688,8 @@ function Inner() {
       {!uploadsTab && !sharedTab && !missingFolder && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <FilterBar value={filters} onChange={setFilters} facets={facets.data} subfolders={!!folder?.folders} scoped={!!folderId || tab.id !== "all" || !!dq} trash={trash} />
+          {/* A chain made again and again, offered as a skill (All only; the owner's own runs). */}
+          {tab.id === "all" && !folderId && !dq && <SkillSuggestions />}
           {trash && (
             <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
               <span>Items stay here for {TRASH_DAYS} days.</span>

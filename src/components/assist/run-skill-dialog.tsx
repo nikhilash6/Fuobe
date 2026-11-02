@@ -32,20 +32,20 @@ import { SkillIcon } from "./skill-icon";
  * Run a skill with new inputs (package W1): a form made from its recipe's inputs, priced live before it runs, one
  * run or many from a pasted CSV, on an engine where the recipe was checked. No LLM: the server compiles the recipe.
  */
-export function RunSkillDialog({ name, onClose, examples, intro }: { name: string | null; onClose: () => void; examples?: boolean; intro?: string }) {
+export function RunSkillDialog({ name, onClose, examples, intro, csv }: { name: string | null; onClose: () => void; examples?: boolean; intro?: string; csv?: string }) {
   return (
     <Dialog open={!!name} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex max-h-[min(94svh,900px)] flex-col gap-0 overflow-hidden p-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:rounded-none max-sm:ring-0 sm:max-w-[680px]">
-        {name && <RunForm key={name} name={name} onClose={onClose} examples={examples} intro={intro} />}
+        {name && <RunForm key={name} name={name} onClose={onClose} examples={examples} intro={intro} csv={csv} />}
       </DialogContent>
     </Dialog>
   );
 }
 
 /** `examples`: the form starts filled with the values the skill was made from (a skill just made: "Try it with new inputs"). */
-function RunForm({ name, onClose, examples, intro }: { name: string; onClose: () => void; examples?: boolean; intro?: string }) {
+function RunForm({ name, onClose, examples, intro, csv }: { name: string; onClose: () => void; examples?: boolean; intro?: string; csv?: string }) {
   const view = useRecipe(name);
-  if (view.data) return <Loaded view={view.data} onClose={onClose} examples={examples} intro={intro} />;
+  if (view.data) return <Loaded view={view.data} onClose={onClose} examples={examples} intro={intro} csv={csv} />;
   return (
     <div className="space-y-3 p-6">
       <DialogTitle className="sr-only">Run a skill</DialogTitle>
@@ -82,20 +82,21 @@ function priceLine(e: RecipeEstimate | undefined, runs: number): string {
   return runs > 1 ? `${formatCost(e.total)} for ${runs} runs ${where}` : `${formatCost(e.total)} ${where}`;
 }
 
-function Loaded({ view, onClose, examples, intro }: { view: RecipeView; onClose: () => void; examples?: boolean; intro?: string }) {
+function Loaded({ view, onClose, examples, intro, csv: rowsCsv }: { view: RecipeView; onClose: () => void; examples?: boolean; intro?: string; csv?: string }) {
   const { recipe, name } = view;
   const actions = useRecipeActions();
   const skillActions = useSkillActions();
   const qc = useQueryClient();
   const router = useRouter();
-  const [tab, setTab] = useState<"one" | "many">("one");
+  // Rows handed over (a canvas's Table): the Many tab, filled.
+  const [tab, setTab] = useState<"one" | "many">(rowsCsv ? "many" : "one");
   const [values, setValues] = useState<Record<string, string | number | undefined>>(() =>
     Object.fromEntries(recipe.params.map((p) => [p.id, examples && !isMediaType(p.type) && p.example !== undefined && p.example !== null ? p.example : p.default])),
   );
   const [slots, setSlots] = useState<Record<string, SlotValue | null>>(() =>
     examples ? Object.fromEntries(recipe.params.flatMap((p) => (isMediaType(p.type) && typeof p.example === "string" && p.example ? [[p.id, { ref: p.example, preview: p.example, kind: p.type }]] : []))) : {},
   );
-  const [csv, setCsv] = useState("");
+  const [csv, setCsv] = useState(rowsCsv ?? "");
   const [engine, setEngine] = useState<Engine>(view.ready[0] ?? view.engines[0] ?? "cloud");
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState<"run" | "check" | "on" | null>(null);
@@ -175,9 +176,17 @@ function Loaded({ view, onClose, examples, intro }: { view: RecipeView; onClose:
       const href = started[0]?.href ?? "/library";
       const studio = href.startsWith("/library") ? "Library" : href.startsWith("/video-tools/captions") ? "Captions" : "the studio";
       const title = failed.length ? `Started ${started.length} of ${r.runs.length} runs` : started.length > 1 ? `Started ${started.length} runs` : "Started the run";
+      // A run in stages: its steps start one after another; the toast opens the skill, where each step's progress shows.
+      const staged = started.find((x) => x.skillRun);
       (failed.length ? toast.warning : toast.success)(title, {
-        description: failed.length ? failed[0].error : r.demo ? "A demo run — no provider connected" : `${view.title}: same steps, new take`,
-        action: { label: `Open in ${studio}`, onClick: () => router.push(href) },
+        description: failed.length
+          ? failed[0].error
+          : staged?.waiting?.length
+            ? `${staged.waiting.join(", ")} start${staged.waiting.length === 1 ? "s" : ""} when the step before is done`
+            : r.demo
+              ? "A demo run — no provider connected"
+              : `${view.title}: same steps, new take`,
+        action: staged ? { label: "See its steps", onClick: () => router.push(`/assist/skills?skill=${encodeURIComponent(name)}`) } : { label: `Open in ${studio}`, onClick: () => router.push(href) },
       });
       onClose();
     } catch (e) {

@@ -244,21 +244,21 @@ export interface DraftCheckResult {
 }
 
 /** What a skill is drafted from: results picked in the Library (W2), or an Assist chat whose plans ran (W3). */
-export type DraftSource = { generations: string[] } | { thread: string };
+export type DraftSource = { generations: string[] } | { thread: string } | { canvas: string; page?: string };
 
-const sourceKey = (s: DraftSource) => ("thread" in s ? `chat:${s.thread}` : s.generations.join(","));
+const sourceKey = (s: DraftSource) => ("thread" in s ? `chat:${s.thread}` : "canvas" in s ? `canvas:${s.canvas}:${s.page ?? ""}` : s.generations.join(","));
 
 /** The draft of a skill from picked results or a chat: its steps rebuilt, every input Fixed, and what it couldn't use. */
 export function useSkillDraft(source: DraftSource) {
   return useQuery({
     queryKey: ["skill-draft", sourceKey(source)],
-    enabled: "thread" in source || source.generations.length > 0,
+    enabled: !("generations" in source) || source.generations.length > 0,
     retry: false,
     // Read once while the review is open, and dropped when it closes: opened again, it is drafted again (a name saved
     // since is taken, a result trashed since is gone).
     staleTime: Infinity,
     gcTime: 0,
-    queryFn: () => recipeCall<{ draft: SkillDraft | null; refusals: DraftRefusal[] }>("/api/assist/skills/draft", source),
+    queryFn: () => recipeCall<{ draft: SkillDraft | null; refusals: DraftRefusal[]; rows?: Record<string, string>[] }>("/api/assist/skills/draft", source),
   });
 }
 

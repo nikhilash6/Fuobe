@@ -7,13 +7,18 @@ import { planRunnable, totalCost, type PlannedJob } from "@/lib/assist";
 import { getModel } from "@/lib/catalog";
 import { dualEngine } from "@/lib/catalog/engines";
 import { currentModelId, replacedBy } from "@/lib/catalog/replaced";
-import type { Engine, Generation, GenerationRequest, MediaKind } from "@/lib/catalog/types";
+import type { ChainSlot, Engine, Generation, GenerationRequest, MediaKind } from "@/lib/catalog/types";
 import { probeMedia, type MediaInfo } from "@/lib/media-probe";
 import {
   checkOutputs,
   checkValues,
   compile,
   exampleValues,
+  fieldKind,
+  stepRefs,
+  type CompiledStep,
+  type GenerateStep,
+  type RecipeStep,
   isMediaRef,
   isMediaType,
   parseRecipe,
@@ -48,6 +53,8 @@ import { isOffered, modelLicence } from "./model-access";
 import { GenerationRequestSchema } from "./request-schema";
 import { engineMode } from "./settings";
 import { createSkill, deleteSkill, getSkill, setSkillFile, skillFile, SkillError } from "./skills";
+import { beginSkillRun, stagedDryRun } from "./skill-runs";
+import { runAsDemo } from "./demo-scope";
 import { absolutePath, readRef, saveFile } from "./storage";
 
 /**
@@ -109,9 +116,27 @@ function serverProblems(recipe: Recipe): string[] {
   return out;
 }
 
+/** What a studio tool's step makes, for a later step that takes its result (W7). */
+const TOOL_KINDS: Record<string, MediaKind> = {
+  dub_video: "video",
+  add_captions: "video",
+  restore_video: "video",
+  restyle_footage: "video",
+  faceless_episode: "video",
+  blockout_film: "video",
+  katana: "video",
+  split_layers: "image",
+  create_ads: "image",
+};
+
+/** What each step makes (its model's kind, or its studio's), so a step reference is checked against its field. */
+function stepKinds(recipe: Recipe): Record<string, MediaKind | undefined> {
+  return Object.fromEntries(recipe.steps.map((s) => [s.key, s.kind === "tool" ? TOOL_KINDS[s.tool] : getModel(currentModelId(s.request.modelId))?.kind]));
+}
+
 /** Everything that keeps a recipe from being saved: its shape (recipeProblems), then the catalog and the API's limits. */
 export function allProblems(recipe: Recipe): string[] {
-  const own = recipeProblems(recipe);
+  const own = recipeProblems(recipe, { kinds: stepKinds(recipe) });
   return own.length ? own : serverProblems(recipe);
 }
 
@@ -163,6 +188,37 @@ function noEngine(recipe: Recipe): string {
 // ---------------------------------------------------------------------------
 // Compiling one run
 
+/** One generate step as the API takes it (shape and limits checked), an Original put on the run's engine. */
+export function apiStep(s: CompiledStep, engine: Engine): CompiledStep {
+  const { skill: stamp, demo, batchTitle, step, chain, ...asked } = s.request;
+  const parsed = GenerationRequestSchema.safeParse(asked);
+  if (!parsed.success) throw new SkillError(`Step “${s.key}”: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`, 422);
+  const req = parsed.data as GenerationRequest;
+  const m = getModel(currentModelId(req.modelId));
+  const slots = s.chain ?? chain;
+  return {
+    ...s,
+    ...(slots && { chain: slots }),
+    request: { ...req, ...(m && dualEngine(m) && !req.engine && { engine }), batchTitle, skill: stamp, ...(step && { step }), ...(demo && { demo }) },
+  };
+}
+
+/**
+ * A run in stages with a stand-in for each step reference (W7): a file of the kind its field takes (a link to price
+ * with; a real small file when the run will read it, `files`), or a few words in a prompt. What a check and a price use.
+ */
+export function withStandIns<T>(v: T, files = false, path: (string | number)[] = []): T {
+  if (typeof v === "string") {
+    if (!stepRefs(v).size) return v;
+    const kind = fieldKind(path);
+    if (kind === "image" || kind === "video" || kind === "audio") return (files ? standIn(kind) : PRICE_STAND_IN[kind]) as T;
+    return v.replace(/\{\{\s*steps\.[^}]+\}\}/g, "the earlier step's words") as T;
+  }
+  if (Array.isArray(v)) return v.map((x, i) => withStandIns(x, files, [...path, i])) as T;
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, withStandIns(x, files, [...path, k])])) as T;
+  return v;
+}
+
 /** Validate and compile one run: each filled request as the API takes it, an Original put on the run's engine. */
 function compileRun(skill: { name: string; title: string }, recipe: Recipe, values: RecipeValues, engine: Engine, o: { run: string; demo?: boolean }): Compiled {
   const c = compile(recipe, values, { skill: skill.name, run: o.run, title: skill.title, demo: o.demo });
@@ -171,22 +227,30 @@ function compileRun(skill: { name: string; title: string }, recipe: Recipe, valu
     if (error) throw new SkillError(`Step “${c.key}”: ${error.replace(/^Invalid input: /, "")}`, 422);
     return c;
   }
-  return {
-    ...c,
-    steps: c.steps.map((s) => {
-      const { skill: stamp, demo, batchTitle, step, chain, ...asked } = s.request;
-      const parsed = GenerationRequestSchema.safeParse(asked);
-      if (!parsed.success) throw new SkillError(`Step “${s.key}”: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`, 422);
-      const req = parsed.data as GenerationRequest;
-      const m = getModel(currentModelId(req.modelId));
-      const slots = s.chain ?? chain;
-      return {
-        ...s,
-        ...(slots && { chain: slots }),
-        request: { ...req, ...(m && dualEngine(m) && !req.engine && { engine }), batchTitle, skill: stamp, ...(step && { step }), ...(demo && { demo }) },
-      };
-    }),
-  };
+  if (c.kind === "staged") {
+    // Each step is checked with stand-ins for the results it waits for; the run keeps the references.
+    for (const s of c.steps) {
+      if (s.kind === "tool") {
+        const error = validateInput(s.tool, withStandIns(s.input));
+        if (error) throw new SkillError(`Step “${s.key}”: ${error.replace(/^Invalid input: /, "")}`, 422);
+      } else apiStep({ key: s.key, request: withStandIns(s.request) as GenerationRequest, ...(s.chain && { chain: s.chain as ChainSlot[] }) }, engine);
+    }
+    return c;
+  }
+  return { ...c, steps: c.steps.map((s) => apiStep(s, engine)) };
+}
+
+/**
+ * A run in stages as parts that start on their own (W7): each studio step alone, and generate steps joined by `after`
+ * as one createPipeline. A part waits for the steps its members take results from.
+ */
+export function stagedParts(steps: RecipeStep[]): { id: string; keys: string[]; waits: string[] }[] {
+  const parent = new Map(steps.map((s) => [s.key, s.key]));
+  const root = (k: string): string => (parent.get(k) === k ? k : root(parent.get(k)!));
+  for (const s of steps) if (s.kind === "generate") for (const a of typeof s.after === "string" ? [s.after] : (s.after ?? [])) if (parent.has(a)) parent.set(root(s.key), root(a));
+  const parts = new Map<string, string[]>();
+  for (const s of steps) parts.set(root(s.key), [...(parts.get(root(s.key)) ?? []), s.key]);
+  return [...parts.entries()].map(([id, keys]) => ({ id, keys, waits: [...new Set(steps.filter((s) => keys.includes(s.key)).flatMap((s) => [...stepRefs(s.kind === "tool" ? s.input : s.request)]))].filter((k) => !keys.includes(k)) }));
 }
 
 interface RunPlan {
@@ -204,8 +268,44 @@ interface RunPlan {
  */
 export const onlyConnect = (errors: string[]): boolean => errors.length > 0 && errors.every((e) => /^Connect\b/.test(e));
 
+/** Units priced by the input's length or size (a step reference's stand-in has neither, so its price is a guess). */
+const SIZED_UNITS = new Set(["second", "minute", "megapixel"]);
+
+/** A job of a part that waits for earlier results, marked `estimate` when its price depends on those results' length or size. */
+function guessed(j: PlannedJob, fixedLength: boolean): PlannedJob {
+  const unit = getModel(j.modelId)?.pricing?.unit;
+  if (!unit || !SIZED_UNITS.has(unit) || (fixedLength && unit !== "megapixel")) return j;
+  return { ...j, estimate: true };
+}
+
 /** Price one compiled run the way it would start (planSteps / planFor), with what stops it. */
 function planRun(c: Compiled, engine: Engine): RunPlan {
+  if (c.kind === "staged") {
+    // Each part priced on its own, with stand-ins for the results it waits for; studio steps open in their studios.
+    const jobs: PlannedJob[] = [];
+    const errors: string[] = [];
+    let place: RecipePlace | undefined;
+    let connect = true;
+    for (const part of stagedParts(c.steps)) {
+      const members = c.steps.filter((s) => part.keys.includes(s.key));
+      const tool = members.find((s) => s.kind === "tool");
+      if (tool && tool.kind === "tool") {
+        const sub = planRun({ kind: "tool", key: tool.key, tool: tool.tool, input: withStandIns(tool.input), checks: {} }, engine);
+        jobs.push(...sub.jobs.map((j) => ({ ...(part.waits.length ? guessed(j, false) : j), note: tool.label ?? j.note })));
+        errors.push(...sub.errors);
+        connect &&= !sub.errors.length || onlyConnect(sub.errors);
+        place ??= sub.place;
+        continue;
+      }
+      const sub = planRun({ kind: "pipeline", checks: {}, steps: members.map((s) => apiStep({ key: s.key, request: withStandIns((s as GenerateStep).request) as GenerationRequest, ...((s as GenerateStep).after !== undefined && { after: (s as GenerateStep).after }), ...((s as GenerateStep).chain && { chain: (s as GenerateStep).chain as ChainSlot[] }) }, engine)) }, engine);
+      // A step that sets its own length (params.duration) is priced for it; one that takes it from an earlier result is a guess.
+      const fixed = (i: number) => (members[i] as GenerateStep | undefined)?.request.params?.duration !== undefined;
+      jobs.push(...(part.waits.length ? sub.jobs.map((j, i) => guessed(j, fixed(i))) : sub.jobs));
+      errors.push(...sub.errors);
+      connect &&= !sub.errors.length || !!sub.connectOnly;
+    }
+    return { jobs, total: totalCost(jobs), errors: [...new Set(errors)], ...(place && { place }), connectOnly: errors.length > 0 && connect };
+  }
   if (c.kind === "tool") {
     const p = planFor(c.tool, c.input, { engine });
     const errors = [...(p.error ? [p.error] : []), ...p.jobs.filter((j) => j.error).map((j) => `${j.note ?? j.modelName}: ${j.error}`)];
@@ -220,7 +320,9 @@ function planRun(c: Compiled, engine: Engine): RunPlan {
 
 /** The run with every request on the demo provider: valid and priced the same whether or not a provider is connected. */
 function asDemo(c: Compiled): Compiled {
-  return c.kind === "tool" ? c : { ...c, steps: c.steps.map((s) => ({ ...s, request: { ...s.request, demo: true } })) };
+  if (c.kind === "tool") return c;
+  if (c.kind === "staged") return { ...c, steps: c.steps.map((s) => (s.kind === "generate" ? { ...s, request: { ...s.request, demo: true } } : s)) };
+  return { ...c, steps: c.steps.map((s) => ({ ...s, request: { ...s.request, demo: true } })) };
 }
 
 /**
@@ -231,8 +333,24 @@ function asDemo(c: Compiled): Compiled {
 function planCheck(c: Compiled, engine: Engine): RunPlan & { notes: string[] } {
   const plan = planRun(c, engine);
   if (!plan.errors.length || c.kind === "tool" || !plan.connectOnly) return { ...plan, notes: [] };
-  const demo = planRun(asDemo(c), engine);
+  // A run in stages: its studio steps are planned as demos too (runAsDemo), as its dry run runs them.
+  const demo = c.kind === "staged" ? runAsDemo(() => planRun(asDemo(c), engine)) : planRun(asDemo(c), engine);
   return demo.errors.length ? { ...plan, notes: [] } : { ...demo, notes: [...new Set(plan.jobs.flatMap((j) => (j.error ? [j.error] : [])))] };
+}
+
+/**
+ * Each generate step of a recipe priced on an engine with the check's values (the examples, or stand-ins): its model,
+ * operation, kind and price, as a run would plan it. Null for a tool recipe or one that doesn't compile.
+ */
+export function stepPlans(recipe: Recipe, engine: Engine): { key: string; job: PlannedJob }[] | null {
+  try {
+    const c = compileRun({ name: "check", title: "Check" }, recipe, valuesForCheck(recipe), engine, { run: "check" });
+    if (c.kind !== "pipeline") return null;
+    const plan = planCheck(c, engine);
+    return c.steps.map((s, i) => ({ key: s.key, job: plan.jobs[i] }));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -244,10 +362,19 @@ function planHash(compiled: Compiled, engine: Engine): string {
   const parts =
     c.kind === "tool"
       ? planFor(c.tool, c.input, { engine }).jobs.map((j) => [j.modelId, j.op, getModel(j.modelId)?.pricing ?? null])
-      : c.steps.map((s) => {
-          const p = previewChained({ ...s.request, ...(s.chain && { chain: s.chain }) }, asList(s.after).length);
-          return [p.model.id, p.op, p.route.provider, p.route.endpoint, p.model.pricing ?? null];
-        });
+      : c.kind === "staged"
+        ? c.steps.map((s) =>
+            s.kind === "tool"
+              ? [s.tool, ...planFor(s.tool, withStandIns(s.input), { engine }).jobs.map((j) => [j.modelId, j.op, getModel(j.modelId)?.pricing ?? null])]
+              : (() => {
+                  const p = previewChained({ ...(withStandIns(s.request) as GenerationRequest), ...(s.chain && { chain: s.chain as ChainSlot[] }) }, asList(s.after).length);
+                  return [p.model.id, p.op, p.route.provider, p.route.endpoint, p.model.pricing ?? null];
+                })(),
+          )
+        : c.steps.map((s) => {
+            const p = previewChained({ ...s.request, ...(s.chain && { chain: s.chain }) }, asList(s.after).length);
+            return [p.model.id, p.op, p.route.provider, p.route.endpoint, p.model.pricing ?? null];
+          });
   return `sha256:${crypto.createHash("sha256").update(JSON.stringify(parts)).digest("hex")}`;
 }
 
@@ -259,7 +386,7 @@ declare global {
 }
 
 /** A small real file of a kind, saved once as a hidden (derived) asset: the dry run's providers read their inputs. */
-function standIn(kind: "image" | "video" | "audio"): string {
+export function standIn(kind: "image" | "video" | "audio"): string {
   const cache = (globalThis.__fuobeStandIns ??= new Map());
   const known = cache.get(kind);
   if (known && fs.existsSync(absolutePath(decodeURIComponent(known.slice("/api/files/".length))))) return known;
@@ -504,10 +631,21 @@ export async function runRecipe(name: string, input: RunInput, asked?: Engine): 
     const c = compileRun(skill, recipe, r.values!, engine, { run });
     const plan = planRun(c, engine);
     if (plan.errors.length) throw new RecipeError(plan.errors.map((e) => `${rows.length > 1 ? `Row ${r.line}: ` : ""}${e}`));
-    return { run, c };
+    return { run, c, values: r.values! };
   });
   const runs: RecipeRun[] = [];
   let demo = true;
+  if (compiled[0].c.kind === "staged") {
+    // A run in stages: each row's steps start as the ones they wait for finish (src/server/skill-runs.ts).
+    for (const { run, c, values } of compiled) {
+      if (c.kind !== "staged") continue;
+      const started = await beginSkillRun({ id: run, skill: skill.name, title: skill.title, engine, values, steps: c.steps });
+      demo &&= started.ids.every((id) => getGeneration(id)?.provider === "mock");
+      runs.push({ batchId: run, ids: started.ids, ...(started.href && { href: started.href }), skillRun: run, waiting: started.waiting, ...(started.error && { error: started.error }) });
+    }
+    if (!runs.some((r) => !r.error)) throw new SkillError(runs[0]?.error ?? "Nothing could start", 422);
+    return { engine, runs, demo };
+  }
   if (compiled[0].c.kind === "tool") {
     for (const { run, c } of compiled) {
       if (c.kind !== "tool") continue;
@@ -591,6 +729,9 @@ const REAL_RUN_MS = 15 * 60_000;
 /** The free dry run: one run on the demo provider, its rows hidden (skill-check) and moved to the Trash at the end. */
 async function dryRun(skill: { name: string; title: string }, recipe: Recipe, engine: Engine): Promise<NonNullable<EngineCheck["dryRun"]>> {
   const c = compileRun(skill, recipe, valuesForCheck(recipe, true), engine, { run: nanoid(10), demo: true });
+  // A run in stages: its studio steps run as demos (runAsDemo), each when the steps before are done; then every record a
+  // studio made for it (a dub session, a Layers project…) is deleted and its rows go to the Trash.
+  if (c.kind === "staged") return stagedDryRun(skill, c.steps, engine, valuesForCheck(recipe, true), DRY_RUN_MS);
   // A studio step would make a record the user sees (a demo dub, a Layers project): its plan is its check in W1.
   if (c.kind === "tool") return { ok: true, problems: [], skipped: `A studio step (${c.tool}) is checked by its plan only` };
   const p = createPipeline(c.steps, { batchId: nanoid(10) });
@@ -667,6 +808,8 @@ async function realRun(skill: { name: string; title: string }, recipe: Recipe, e
   const helpers: string[] = [];
   let made: Generation[];
   let byKey: Record<string, string> = {};
+  // A run in stages is checked by its plan and its dry run; a real test of one isn't offered yet.
+  if (c.kind === "staged") return { ok: true, problems: [], notes: ["A real test of a skill whose steps wait across studios isn't offered yet: its plan and its dry run check it"], demo: false };
   if (c.kind === "tool") {
     const out = await executeTool(c.tool, c.input, { engine });
     if (out.isError) return { ok: false, problems: [typeof out.content === "string" ? out.content : "The tool couldn't start"], notes, demo: false };

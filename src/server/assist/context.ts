@@ -5,6 +5,7 @@ import type { Engine } from "@/lib/catalog/types";
 import { recipeMarkdown } from "@/lib/recipe";
 import { db } from "../db";
 import { engineMode } from "../settings";
+import { rankSkills } from "../skill-usage";
 import { enabledSkills, getSkill, skillRecipe } from "../skills";
 import { memoriesFor } from "./memory";
 import { getProject } from "./projects";
@@ -151,7 +152,8 @@ export function chatFacts(c: ChatInfo, now = new Date()): ContextFact[] {
     if (chars > MEMORY_CHARS) break;
     facts.push({ section: "memory", key: m.id, text: line });
   }
-  const available = skillsFor(project?.id ?? null);
+  // The skills people run most, and most lately, first: past SKILL_INDEX the rest are left to list_skills.
+  const available = rankSkills(skillsFor(project?.id ?? null));
   for (const s of available.slice(0, SKILL_INDEX)) {
     // A skill with a recipe runs by itself: said first, so a long description can't cut it off.
     const runs = s.recipe ? runsByItself(s.name) : "";

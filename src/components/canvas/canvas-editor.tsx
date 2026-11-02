@@ -26,7 +26,7 @@ import {
   type OnNodeDrag,
   type Viewport,
 } from "@xyflow/react";
-import { ChevronDown, ChevronLeft, Check, Cloud, Cpu, LayoutGrid, List, Loader2, Play, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
+import { BookmarkPlus, ChevronDown, ChevronLeft, Check, Cloud, Cpu, LayoutGrid, List, Loader2, Play, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -115,6 +115,7 @@ import { NODE_TYPES, type FlowNode } from "./nodes";
 import { AddMenu, DRAG_TYPE, Palette, PaletteToggle } from "./palette";
 import { BoardToolbar, PAGE_PANEL_ID, PageTabs, pageTabId, TOOL_KEYS, type DragShape, type PageOps, type Tool } from "./toolbar";
 import { saveCanvas, useCanvasView, useRunCanvas, type CanvasView } from "./use-canvas";
+import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
 
 const GRID: [number, number] = [16, 16];
 const snap = (p: { x: number; y: number }) => ({ x: Math.round(p.x / GRID[0]) * GRID[0], y: Math.round(p.y / GRID[1]) * GRID[1] });
@@ -406,6 +407,12 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     },
     [id, qc, docOf],
   );
+  // ---- Save as skill (W5): the board saved first, so the skill is made from what's on screen.
+  const skillBuilder = useSkillBuilder();
+  const saveAsSkill = useCallback(async () => {
+    await save();
+    skillBuilder?.openCanvas(id, latest.current.pageId);
+  }, [id, save, skillBuilder]);
   useEffect(() => {
     if (rev === 0) return;
     const t = setTimeout(() => void save(), 700);
@@ -1238,12 +1245,14 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     switchEngine: typeof switchEngine;
     rename: typeof rename;
     addAtCenter: typeof addAtCenter;
+    saveAsSkill: typeof saveAsSkill;
   } | null>(null);
   useLayoutEffect(() => {
-    uiHandlers.current = { run, runSelection, switchEngine, rename, addAtCenter };
+    uiHandlers.current = { run, runSelection, switchEngine, rename, addAtCenter, saveAsSkill };
   });
   const ui = useMemo<HeaderUi>(
     () => ({
+      saveAsSkill: () => void uiHandlers.current!.saveAsSkill(),
       run: (targets, force) => uiHandlers.current!.run(targets, force),
       runSelected: (force) => uiHandlers.current!.runSelection(force),
       switchEngine: (e) => uiHandlers.current!.switchEngine(e),
@@ -1481,6 +1490,8 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
 // the board doesn't re-render its menus and tooltips.
 
 interface HeaderUi {
+  /** The review screen for a skill made from this page of the canvas (W5), once the board is saved. */
+  saveAsSkill: () => void;
   run: (targets?: string[], force?: boolean) => void;
   runSelected: (force?: boolean) => void;
   switchEngine: (e: Engine) => void;
@@ -1596,6 +1607,10 @@ const EditorHeader = memo(function EditorHeader({
               </DropdownMenuItem>
               <DropdownMenuItem disabled={mode === "open"} onSelect={() => ui.switchEngine("cloud")}>
                 <Cloud /> Switch all to cloud
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => ui.saveAsSkill()}>
+                <BookmarkPlus /> Save as skill…
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

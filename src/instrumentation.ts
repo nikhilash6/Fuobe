@@ -23,6 +23,9 @@ export async function register() {
   // Assist's scheduled tasks: a 30 s sweep starts the runs that are due (a run missed while the server was off happens once, a few seconds after boot).
   const { ensureScheduleRunner } = await import("./server/assist/schedules");
   ensureScheduleRunner({ soon: true });
+  // Skills whose steps wait across studios: each waiting step starts when the step it takes a result from is done.
+  const { ensureSkillRunRunner } = await import("./server/skill-runs");
+  ensureSkillRunRunner();
   // Character Swap Studio: takes queued behind the segments they continue from launch (or stop) when those finish.
   const { ensureSwapStudioRunner } = await import("./server/swap-studio");
   ensureSwapStudioRunner();

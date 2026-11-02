@@ -98,6 +98,7 @@ import { accountSend } from "./account-send";
 import { stamped, stampOf, withRunStamp } from "./run-stamp";
 import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
 import { sweepBilling } from "./billing-outbox";
+import { inDemoScope } from "./demo-scope";
 import { moderationConfigured } from "./moderation";
 import { holdForCheck, sweepOutputChecks } from "./output-checks";
 import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir, scratchOutputFile } from "./storage";
@@ -415,6 +416,8 @@ export const ASSET_REFS: AssetRef[] = [
   { table: "content_series", cols: ["data_json"], what: "Content Factory series", name: "COALESCE(json_extract(data_json, '$.name'), json_extract(data_json, '$.reference.title'))" },
   // Assist's scheduled tasks: the files the prompt runs with, and the files a skill task's inputs name.
   { table: "assist_schedules", cols: ["attachments_json", "skill_json"], what: "scheduled task", name: "title" },
+  // A skill run that waits across studios: its input values and each step's results.
+  { table: "skill_runs", cols: ["values_json", "state_json"], what: "skill run", name: "skill" },
   // Character Swap Studio: the character picture, each clip and its 24 fps copy, masks, anchors, takes and their masters.
   { table: "swap_projects", cols: ["data_json"], what: "Character Swap project", name: "name" },
   // A user skill's bundled text files: its recipe.json names the files a run starts from (an example, a fixed logo).
@@ -542,8 +545,9 @@ export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef
   const preferred = getSetting("cloudProvider");
   const routes = preferred === "auto" ? candidates : [...candidates].sort((a, b) => Number(b.provider === preferred) - Number(a.provider === preferred));
   const demo = getSetting("demoMode");
-  // A request marked demo (a skill recipe's free dry run) runs on the demo provider whatever Settings says.
-  if (demo === "on" || forceDemo) return { route: routes[0], demo: true };
+  // A request marked demo (a skill recipe's free dry run) runs on the demo provider whatever Settings says, as does
+  // anything a studio starts inside runAsDemo (a skill's dry run of a studio step, src/server/demo-scope.ts).
+  if (demo === "on" || forceDemo || inDemoScope()) return { route: routes[0], demo: true };
   const takes = (r: ModelRoute) => !r.map?.maxImages || images <= r.map.maxImages;
   // A route that carries every LoRA wins (Replicate's Wan 2.2 takes one per expert, fal's takes a Mix), then one
   // that makes the length asked; otherwise the first ready one runs and the plan's notes say what it changes.
@@ -941,7 +945,9 @@ function stampTenant(asked: GenerationRequest, opts: CreateOptions): GenerationR
   return { ...stamped(asked), account: who, engine: accountEngineMode(who) === "open" ? "open" : asked.engine };
 }
 
-export function createGenerations(given: GenerationRequest, opts: CreateOptions = {}): Generation[] {
+export function createGenerations(sent: GenerationRequest, opts: CreateOptions = {}): Generation[] {
+  // Inside a skill's dry run of a studio step every row is a demo row, as the check's own rows are.
+  const given: GenerationRequest = inDemoScope() && !sent.demo ? { ...sent, demo: true } : sent;
   const asked = stampTenant(given, opts);
   // A retired model or operation (a retry, an old script, a saved project) runs on what replaced it, and says so.
   const moved = currentRequest(asked);

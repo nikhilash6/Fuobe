@@ -401,7 +401,8 @@ export function buildRecipe(draft: Pick<SkillDraft, "recipe" | "candidates">, ch
   // The form's order: files first, then elements, words, settings.
   const rank = (p: RecipeParam) => (isMediaType(p.type) ? 0 : p.type === "element" ? 1 : p.type === "text" ? 2 : 3);
   params.push(...[...placed, ...slotParams].sort((a, b) => rank(a) - rank(b)));
-  recipe.params = params;
+  // Inputs the draft already has (a skill drawn as a canvas and saved back) come first.
+  recipe.params = [...draft.recipe.params, ...params];
   if (Object.keys(checks).length) recipe.checks = checks;
   return recipe;
 }

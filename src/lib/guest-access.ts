@@ -55,6 +55,8 @@ const EMPTY_LISTS = [
   "/api/assist/projects",
   "/api/assist/schedules",
   "/api/assist/memory",
+  // Chains the owner made often enough to offer as skills (the owner's runs).
+  "/api/skill-suggestions",
 ];
 
 /** The Library's counts with nothing in it (a guest's). */
@@ -285,7 +287,7 @@ export const CONNECT_GPU_UPLOAD_OPEN_MESSAGE = "Connect your GPU to add your own
 export const CONNECT_GPU_OR_KEY_MESSAGE = CONNECT_GPU_MESSAGE;
 
 /** Install-wide settings, keys and tokens: changes are the owner's (403 for an account). */
-const OWNER_WRITES = new Set(["/api/settings", "/api/settings/models", "/api/loras", "/api/llm", "/api/providers/test", "/api/auth/public"]);
+const OWNER_WRITES = new Set(["/api/settings", "/api/settings/models", "/api/loras", "/api/llm", "/api/providers/test", "/api/auth/public", "/api/skill-suggestions"]);
 /**
  * Owner only, reads included: the password, the API tokens, signing everyone out, the assistant's connectors, the MCP
  * endpoint and the accounts admin.

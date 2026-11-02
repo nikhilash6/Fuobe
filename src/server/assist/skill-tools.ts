@@ -154,9 +154,19 @@ async function runFound(input: RunSkill, ctx: ToolContext, found: { recipe: Reci
     content: JSON.stringify({
       skill: found.name,
       engine: out.engine,
-      runs: out.runs.map((r) => ({ started: r.ids, ...(r.batchId && { batch: r.batchId }), ...(r.href && { href: r.href }), ...(r.error && { error: r.error }) })),
+      runs: out.runs.map((r) => ({
+        started: r.ids,
+        ...(r.batchId && { batch: r.batchId }),
+        ...(r.href && { href: r.href }),
+        ...(r.error && { error: r.error }),
+        ...(r.waiting?.length && { waiting: r.waiting }),
+      })),
       ...(out.demo && { demo: true }),
-      note: href ? "The skill's studio job opens at href; its results appear there and in the Library." : "Each run's steps start by themselves as the ones they wait for finish; results appear in the Library.",
+      note: out.runs.some((r) => r.waiting?.length)
+        ? `Some steps wait for a studio step before them (${[...new Set(out.runs.flatMap((r) => r.waiting ?? []))].join(", ")}): each starts by itself when the step it takes a result from is done. The skill's dialog in Skills shows each step.`
+        : href
+          ? "The skill's studio job opens at href; its results appear there and in the Library."
+          : "Each run's steps start by themselves as the ones they wait for finish; results appear in the Library.",
     }),
     items: ids.length ? [{ id: "", role: "generations", ids }] : undefined,
   };

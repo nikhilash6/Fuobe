@@ -22,6 +22,7 @@ import { timeAgo } from "@/lib/format";
 import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { SkillCanvases } from "./skill-canvases";
 import { Schematic, TemplateCard } from "./template-card";
 import { useCanvasActions, useCanvases } from "./use-canvas";
 
@@ -162,6 +163,7 @@ function ListInner({ templates, intro }: { templates: TemplateCardData[]; intro?
   const router = useRouter();
   const params = useSearchParams();
   const askedTemplates = params.get("tab") === "templates";
+  const askedSkills = params.get("tab") === "skills";
   // A canvas is saved to the studio's library, which is its owner's: a guest or an account can look, not start one.
   // Until the viewer is known to be the owner, the page is a visitor's: only ready boards with their real cover show.
   const owner = useIsOwner();
@@ -179,6 +181,7 @@ function ListInner({ templates, intro }: { templates: TemplateCardData[]; intro?
   const [seeAll, setSeeAll] = useState(false);
   const allTemplates = seeAll || askedTemplates;
   const gallery = useRef<HTMLElement>(null);
+  const skillsRef = useRef<HTMLElement>(null);
   const access = useModelAccess();
   const viewing: Viewing = { visitor: !owner, hasCover: (id) => !!templateCover("canvas", id) };
 
@@ -192,6 +195,11 @@ function ListInner({ templates, intro }: { templates: TemplateCardData[]; intro?
     if (!askedTemplates) return;
     gallery.current?.scrollIntoView({ block: "start" });
   }, [askedTemplates, hasBoards]);
+
+  // ?tab=skills: the skills that run by themselves, scrolled to.
+  useEffect(() => {
+    if (askedSkills && owner && !loadingMine) skillsRef.current?.scrollIntoView({ block: "start" });
+  }, [askedSkills, owner, loadingMine]);
 
   const start = async (key: string, body: Parameters<typeof create>[0]) => {
     setCreating(key);
@@ -333,6 +341,17 @@ function ListInner({ templates, intro }: { templates: TemplateCardData[]; intro?
             </section>
           </div>
         </>
+      )}
+
+      {/* The studio's skills are its owner's: each one that runs by itself opens as a canvas to change visually. */}
+      {owner && !loadingMine && (
+        <section id="skills" ref={skillsRef} aria-labelledby="skills-title" className="mt-12 scroll-mt-20">
+          <h2 id="skills-title" className="font-heading text-[22px] leading-tight">
+            Skills as canvases
+          </h2>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">Open a skill that runs by itself as a canvas, change a model or a link, then save it back as a skill.</p>
+          <SkillCanvases visitor={false} />
+        </section>
       )}
 
       <Dialog open={!!renaming} onOpenChange={(o) => !o && setRenaming(null)}>

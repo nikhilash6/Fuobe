@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ChevronDown, Copy, Download, FileUp, Loader2, MessageSquarePlus, Pencil, Play, Plus, Search, ShieldCheck, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Copy, Download, FileUp, Loader2, MessageSquarePlus, Pencil, Play, Plus, Search, ShieldCheck, Trash2, Upload, Wrench, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useDeferredValue, useId, useRef, useState } from "react";
@@ -35,6 +35,7 @@ import { refusalShown, toastError } from "@/lib/refusals";
 import { radioKeys } from "@/components/studio/radio-keys";
 import { useRecipe, useRecipeActions, useSkill, useSkillActions, useSkills, type RecipeFailure, type SkillForm } from "./hooks";
 import { RunSkillDialog } from "./run-skill-dialog";
+import { FailingLine, FixPanel, SkillHistorySection, useSkillFixes } from "./skill-insights";
 import { RailButton } from "./shell";
 import { SKILL_ICONS, SkillIcon } from "./skill-icon";
 import { AssistVisitorNote } from "./visitor-note";
@@ -283,10 +284,14 @@ function SkillGrid({ list, loading, onOpen, onToggle, empty }: { list: SkillSumm
  * Under a recipe skill's description: where it was checked ("Checked 29 Oct · Cloud ✓ · GPU not checked"), or in amber
  * why it needs a re-check, with Re-check (the plan and the free dry run).
  */
-function RecipeStatus({ skill }: { skill: Skill }) {
+function RecipeStatus({ skill, owner }: { skill: Skill; owner: boolean }) {
   const recipe = useRecipe(skill.name, !!skill.recipe);
   const actions = useRecipeActions();
   const [busy, setBusy] = useState(false);
+  // Suggest a fix (W6): the owner's own skills, when a step keeps failing, was replaced or was switched off.
+  const fixable = owner && skill.source === "user" && !!skill.recipe;
+  const fixes = useSkillFixes(skill.name, fixable);
+  const [fixing, setFixing] = useState(false);
   const v = recipe.data;
   if (!skill.recipe || !v) return null;
   const recheck = Object.values(v.recheck).flat();
@@ -304,16 +309,26 @@ function RecipeStatus({ skill }: { skill: Skill }) {
     }
   };
   const canCheck = skill.source === "user";
+  const canFix = fixable && !!fixes.data?.steps.length;
   return (
-    <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", recheck.length || v.why ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
-      {recheck.length || v.why ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
-      <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a re-check: ${recheck[0]}` : v.line)}</span>
-      {canCheck && !v.why && (recheck.length > 0 || !v.ready.length) && (
-        <Button variant="outline" size="xs" className="h-6 rounded-full px-2 text-[12px]" onClick={() => void recheckNow()} disabled={busy}>
-          {busy && <Loader2 className="animate-spin" />} {v.ready.length ? "Re-check" : "Check it (free)"}
-        </Button>
-      )}
-    </div>
+    <>
+      <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", recheck.length || v.why ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
+        {recheck.length || v.why ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
+        <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a re-check: ${recheck[0]}` : v.line)}</span>
+        {canCheck && !v.why && (recheck.length > 0 || !v.ready.length) && (
+          <Button variant="outline" size="xs" className="h-6 rounded-full px-2 text-[12px]" onClick={() => void recheckNow()} disabled={busy}>
+            {busy && <Loader2 className="animate-spin" />} {v.ready.length ? "Re-check" : "Check it (free)"}
+          </Button>
+        )}
+        {canFix && recheck.length > 0 && !fixing && (
+          <Button variant="outline" size="xs" className="h-6 rounded-full px-2 text-[12px]" onClick={() => setFixing(true)}>
+            <Wrench /> Suggest a fix
+          </Button>
+        )}
+      </div>
+      {canFix && !recheck.length && !fixing && <FailingLine fixes={fixes.data} onFix={() => setFixing(true)} />}
+      {fixing && <FixPanel name={skill.name} onClose={() => setFixing(false)} />}
+    </>
   );
 }
 
@@ -343,7 +358,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
               <div className="min-w-0 flex-1">
                 <DialogTitle className="font-heading text-[24px] leading-tight font-normal">{s.title}</DialogTitle>
                 <DialogDescription className="mt-1">{s.description}</DialogDescription>
-                <RecipeStatus skill={s} />
+                <RecipeStatus skill={s} owner={owner} />
                 <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
                   /{s.name} · {s.source === "builtin" ? "Built-in" : "Yours"}
                   {s.studio && (
@@ -379,6 +394,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
                   </ul>
                 </div>
               )}
+              {owner && s.recipe && <SkillHistorySection name={s.name} />}
             </div>
             <DialogFooter className="mx-0 mb-0 flex-row flex-wrap items-center gap-2 border-t px-5 py-3 sm:justify-between">
               <div className="flex flex-wrap gap-1.5">

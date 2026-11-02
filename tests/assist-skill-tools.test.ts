@@ -212,7 +212,7 @@ describe("draftFromThread", () => {
     expect(draft!.notes.join(" ")).toMatch(/An earlier try of a step was left out/);
   });
 
-  it("refuses a generate result passed into a studio call, as the studio call really answered", async () => {
+  it("makes a generate result passed into a studio call a step reference (a recipe that runs in stages), as the studio call really answered", async () => {
     // A clip made in the chat, then captioned in the chat: both calls run through the agent, approved on their cards.
     const t = await chatRun("open", [
       { id: "toolu_clip", name: "generate", input: { summary: "Clip", jobs: [{ model_id: "kling-3", op: "i2v", prompt: "the lamp turns", images: [photo], duration: 5 }] } },
@@ -221,8 +221,13 @@ describe("draftFromThread", () => {
     await chatRun("open", [{ id: "toolu_caps", name: "add_captions", input: { video: made.outputs[0].url, translate_to: "Spanish" } }], t);
     await settle(threadIds(t));
     const { draft, refusals } = builder.draftFromThread(t);
-    expect(refusals).toEqual([{ id: expect.any(String), title: "Captions in Spanish", reason: builder.STUDIO_WAIT }]);
-    expect(draft!.recipe.steps.map((s) => s.kind)).toEqual(["generate"]);
+    expect(refusals).toEqual([]);
+    expect(draft!.recipe.fuobeRecipe).toBe(2);
+    const [clipStep, caps] = draft!.recipe.steps;
+    expect([clipStep.kind, caps.kind]).toEqual(["generate", "tool"]);
+    expect(caps.kind === "tool" && caps.input).toEqual({ video: `{{steps.${clipStep.key}.output}}`, translate_to: "Spanish" });
+    // The clip's file isn't an input any more: the next run feeds the new clip on.
+    expect(draft!.candidates.some((c) => c.example === made.outputs[0].url)).toBe(false);
   });
 
   /** Each studio tool as it really answers (a studio that opened, Katana's final cut), run through the agent in demo mode. */

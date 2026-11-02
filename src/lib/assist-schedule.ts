@@ -320,10 +320,10 @@ export function withinCap(cap: number | null, spent: number, price: number | nul
 
 /**
  * What a plan would really spend: demo jobs cost nothing and jobs that can't run don't start; null
- * when a job that would run for real has no price.
+ * when a job that would run for real has no price, or only a guessed one (`estimate`).
  */
-export function spendOf(jobs: { costUsd: number | null; demo: boolean; error?: string }[]): number | null {
+export function spendOf(jobs: { costUsd: number | null; demo: boolean; error?: string; estimate?: boolean }[]): number | null {
   const real = jobs.filter((j) => !j.demo && !j.error);
-  if (real.some((j) => j.costUsd === null)) return null;
+  if (real.some((j) => j.costUsd === null || j.estimate)) return null;
   return Math.round(real.reduce((n, j) => n + (j.costUsd ?? 0), 0) * 1000) / 1000;
 }

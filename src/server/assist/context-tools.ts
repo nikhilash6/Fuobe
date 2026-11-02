@@ -3,6 +3,7 @@ import { z } from "zod";
 import { guessCategory, MEMORY_CATEGORIES, MEMORY_MAX_CHARS, toCategory, type MemoryCategory } from "@/lib/assist";
 import { recipeMarkdown } from "@/lib/recipe";
 import { getSkill, skillFile, skillRecipe } from "../skills";
+import { rankSkills } from "../skill-usage";
 import { canUseSkill, skillsFor } from "./context";
 import { defineTool } from "./define";
 import { addMemory, deleteMemory } from "./memory";
@@ -19,12 +20,8 @@ const listSkills = defineTool({
   }),
   async run({ query }, ctx) {
     const projectId = ctx.thread?.projectId ?? null;
-    let list = skillsFor(projectId);
-    if (query?.trim()) {
-      const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-      const scored = list.map((s) => ({ s, n: words.filter((w) => `${s.name} ${s.title} ${s.description} ${s.whenToUse}`.toLowerCase().includes(w)).length }));
-      if (scored.some((x) => x.n)) list = scored.filter((x) => x.n).sort((a, b) => b.n - a.n).map((x) => x.s);
-    }
+    // By the words, then the skills used most and most lately.
+    const list = rankSkills(skillsFor(projectId), { words: query });
     return {
       content: JSON.stringify(
         list.map((s) => {

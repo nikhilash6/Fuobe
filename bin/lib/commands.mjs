@@ -792,10 +792,11 @@ async function skillsRun(ctx, name) {
   const est = await priceSkill(ctx, view, engine, req.body(fileStandIn));
   if (!est.runnable) throw new ApiError(estimateProblems(est, req).join("\n") || `/${view.name} can't run with these values`);
   const runs = est.runs.length;
-  const asks = !v.yes && !v.json;
+  // Only --yes starts a run that costs money without a yes at the prompt; --json alone never spends.
+  const asks = !v.yes;
   const costs = !est.demo && est.total !== 0;
   if (costs && asks) {
-    if (!ctx.io.stdinIsTTY) throw new UsageError(`Running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(est)}: add --yes to run without asking`);
+    if (v.json || !ctx.io.stdinIsTTY) throw new UsageError(`Running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(est)}: add --yes to run without asking`);
     const answer = await ctx.io.ask(runQuestion(est, runs));
     if (!/^y(es)?$/i.test(answer.trim())) {
       ctx.note("Nothing was started.");
@@ -812,7 +813,7 @@ async function skillsRun(ctx, name) {
     if (!real.runnable) throw new ApiError(estimateProblems(real, req).join("\n") || `/${view.name} can't run with these files`);
     if (priceRose(est, real)) {
       const was = costs ? `, not ${costWords(est)}` : "";
-      if (!ctx.io.stdinIsTTY) throw new UsageError(`With your files uploaded, running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(real)}${was}: add --yes to run without asking. Nothing was started.`);
+      if (v.json || !ctx.io.stdinIsTTY) throw new UsageError(`With your files uploaded, running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(real)}${was}: add --yes to run without asking. Nothing was started.`);
       const answer = await ctx.io.ask(`With your files it costs ${costWords(real)}${was}. ${runQuestion(real, runs)}`);
       if (!/^y(es)?$/i.test(answer.trim())) {
         ctx.note("Nothing was started.");

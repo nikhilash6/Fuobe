@@ -466,3 +466,95 @@ describe("the recipe routes", () => {
     expect((await recipeRoute.GET(new Request("http://x"), ctx("nope"))).status).toBe(404);
   });
 });
+
+describe("a skill in use (W6)", () => {
+  const insights = () => import("@/server/skill-insights");
+  const usage = () => import("@/server/skill-usage");
+  const mark = (ids: string[], status: string, error: string | null = null) =>
+    db()
+      .prepare(`UPDATE generations SET status = ?, error = ?, cost_usd = 0.5 WHERE id IN (${ids.map(() => "?").join(", ")})`)
+      .run(status, error, ...ids);
+
+  it("keeps a history of its runs from the stamp each run carries", async () => {
+    makeSkill("history-lamp", lamp());
+    await recipes.verifyRecipe("history-lamp", "plan", "cloud");
+    const a = await recipes.runRecipe("history-lamp", { values: { product: photo, name: "Halo" } }, "cloud");
+    const b = await recipes.runRecipe("history-lamp", { values: { product: photo, name: "Arc" } }, "cloud");
+    mark(a.runs[0].ids, "succeeded");
+    mark(b.runs[0].ids.slice(0, 1), "succeeded");
+    mark(b.runs[0].ids.slice(1), "failed", "The provider said no");
+    const h = (await insights()).skillHistory("history-lamp");
+    expect(h).toMatchObject({ runs: 2, successRate: 0.5, spendUsd: 3, favorites: 0 });
+    expect(h.recent.map((r) => [r.run, r.status, r.steps])).toEqual([
+      [b.runs[0].batchId, "failed", 3],
+      [a.runs[0].batchId, "succeeded", 3],
+    ]);
+    expect(h.recent[0].failed.map((f) => f.model)).toEqual(["nano-banana-pro", "kling-3"]);
+    // Through its route.
+    const route = await import("@/app/api/assist/skills/[name]/history/route");
+    const res = await route.GET(new Request("http://x"), { params: Promise.resolve({ name: "history-lamp" }) } as never);
+    expect(await res.json()).toMatchObject({ runs: 2, waiting: [] });
+  });
+
+  it("suggests a fix for a step that failed in 2 of its last 5 runs: models with the same operation and kind, switched on", async () => {
+    makeSkill("fix-lamp", lamp());
+    await recipes.verifyRecipe("fix-lamp", "plan", "cloud");
+    for (const name of ["One", "Two"]) {
+      const r = await recipes.runRecipe("fix-lamp", { values: { product: photo, name } }, "cloud");
+      mark(r.runs[0].ids.slice(0, 1), "succeeded");
+      mark(r.runs[0].ids.slice(1, 2), "failed", "Timed out");
+      mark(r.runs[0].ids.slice(2), "canceled");
+    }
+    const fixes = (await insights()).fixCandidates("fix-lamp");
+    expect(fixes.steps.map((s) => s.key)).toEqual(["scene"]);
+    const scene = fixes.steps[0];
+    expect(scene.reasons).toEqual(["It failed in 2 of the last 2 runs"]);
+    expect(scene.candidates.length).toBeGreaterThan(1);
+    const { getModel } = await import("@/lib/catalog");
+    const { isOffered } = await import("@/server/model-access");
+    for (const c of scene.candidates) {
+      const m = getModel(c.modelId)!;
+      expect(m.kind, c.modelId).toBe("image");
+      expect(m.routes.map((x) => x.op), c.modelId).toContain("edit");
+      expect(isOffered(c.modelId), c.modelId).toBe(true);
+      expect(c.modelId).not.toBe("nano-banana-pro");
+    }
+    // A model switched off isn't offered.
+    const off = scene.candidates[0].modelId;
+    changeAccess([{ kind: "model", id: off, on: false }]);
+    try {
+      expect((await insights()).fixCandidates("fix-lamp").steps[0].candidates.map((c) => c.modelId)).not.toContain(off);
+    } finally {
+      changeAccess([{ kind: "model", id: off, on: true }]);
+    }
+    // Picking one swaps the step and checks the skill again; anything not offered is refused.
+    const pick = scene.candidates.find((c) => !c.problem)!;
+    await expect((await insights()).applyFix("fix-lamp", "scene", "kling-3")).rejects.toThrow(/Pick one of the models offered/);
+    const done = await (await insights()).applyFix("fix-lamp", "scene", pick.modelId);
+    expect(done).toEqual({ ok: true, problems: [] });
+    const now = recipes.recipeView("fix-lamp");
+    expect(now.recipe.steps[1]).toMatchObject({ request: { modelId: pick.modelId } });
+    expect(now.recipe.verified?.cloud?.dryRun).toBe(today());
+  });
+
+  it("ranks the skills Assist offers by the words, then by how often and how lately they ran", async () => {
+    const { rankSkills } = await usage();
+    const list = [
+      { name: "a", title: "Alpha", description: "posters" },
+      { name: "b", title: "Beta", description: "product posters" },
+      { name: "c", title: "Gamma", description: "videos" },
+    ];
+    const now = Date.now();
+    const used = new Map([
+      ["c", { runs: 5, last: now - 86_400_000 }],
+      ["a", { runs: 1, last: now - 40 * 86_400_000 }],
+    ]);
+    expect(rankSkills(list, { usage: used, now }).map((s) => s.name)).toEqual(["c", "a", "b"]);
+    expect(rankSkills(list, { words: "product posters", usage: used, now }).map((s) => s.name)).toEqual(["b", "a"]);
+    // From the stamps: the skill that ran comes first.
+    const real = (await usage()).skillUsage();
+    expect(real.get("history-lamp")?.runs).toBe(2);
+    const ranked = rankSkills(skills.enabledSkills()).map((s) => s.name);
+    expect(ranked.indexOf("history-lamp")).toBeLessThan(ranked.indexOf("product-photoshoot"));
+  });
+});

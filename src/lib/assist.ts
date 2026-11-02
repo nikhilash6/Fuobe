@@ -30,6 +30,11 @@ export interface PlannedJob {
   note?: string;
   /** One step of a pipeline: it only starts when every step can, so one error blocks the run. */
   atomic?: boolean;
+  /**
+   * The price is a guess: the job is priced by its input's length or size, and that input is an earlier step's result,
+   * which doesn't exist yet. A spending cap can't count on it (spendOf).
+   */
+  estimate?: boolean;
 }
 
 /** Whether an approval card's plan can run: something to run, and no pipeline with a broken step. */

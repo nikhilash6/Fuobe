@@ -28,6 +28,9 @@ import { cn } from "@/lib/utils";
  */
 export function SkillBuilder({ source, onClose }: { source: DraftSource; onClose: () => void }) {
   const [saved, setSaved] = useState<string | null>(null);
+  // A canvas's Table rows wait in the Run form's Many tab (W5).
+  const rows = useSkillDraft(source).data?.rows;
+  const csv = rows?.length ? csvOf(rows) : undefined;
   return (
     <>
       <Dialog open={!saved} onOpenChange={(o) => !o && !saved && onClose()}>
@@ -35,22 +38,40 @@ export function SkillBuilder({ source, onClose }: { source: DraftSource; onClose
           <Loader source={source} onClose={onClose} onSaved={setSaved} />
         </DialogContent>
       </Dialog>
-      {saved && <RunSkillDialog name={saved} examples intro="Try it with new inputs: the form starts with the ones it was made from." onClose={onClose} />}
+      {saved && (
+        <RunSkillDialog
+          name={saved}
+          examples
+          csv={csv}
+          intro={csv ? "Its table's rows are in Many: run them all, or one with new inputs." : "Try it with new inputs: the form starts with the ones it was made from."}
+          onClose={onClose}
+        />
+      )}
     </>
   );
+}
+
+/** Rows of values as a CSV the Run form's Many tab reads (a header of input ids, then one row per run). */
+function csvOf(rows: Record<string, string>[]): string {
+  const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  return [cols.join(","), ...rows.map((r) => cols.map((c) => cell(r[c] ?? "")).join(","))].join("\n");
 }
 
 function Loader({ source, onClose, onSaved }: { source: DraftSource; onClose: () => void; onSaved: (name: string) => void }) {
   const q = useSkillDraft(source);
   const chat = "thread" in source;
-  const count = chat ? 0 : source.generations.length;
+  const canvas = "canvas" in source;
+  const count = "generations" in source ? source.generations.length : 0;
   const header = (
     <DialogHeader className="border-b px-5 pt-5 pb-4 text-left">
-      <DialogTitle className="font-heading text-[24px] leading-tight font-normal">{chat ? "Save as skill" : "Make a skill"}</DialogTitle>
+      <DialogTitle className="font-heading text-[24px] leading-tight font-normal">{chat || canvas ? "Save as skill" : "Make a skill"}</DialogTitle>
       <DialogDescription>
         {chat
           ? "From this chat: Fuobe rebuilds the steps from the plans that ran, so next time it runs them again with new inputs."
-          : `From ${count === 1 ? "this result" : `${count} results`}: Fuobe rebuilds the steps from what you made, so nothing has to be recorded.`}
+          : canvas
+            ? "From this canvas: each model node is a step, so the skill runs the same steps from a form, Assist, the command line or a schedule."
+            : `From ${count === 1 ? "this result" : `${count} results`}: Fuobe rebuilds the steps from what you made, so nothing has to be recorded.`}
       </DialogDescription>
     </DialogHeader>
   );
@@ -65,7 +86,9 @@ function Loader({ source, onClose, onSaved }: { source: DraftSource; onClose: ()
           </p>
         ) : q.data ? (
           <>
-            <p className="text-[14px]">{chat ? "This chat can't become a skill yet:" : q.data.refusals.length === 1 ? "This result can't become a skill yet:" : "None of these results can become a skill yet:"}</p>
+            <p className="text-[14px]">
+              {chat ? "This chat can't become a skill yet:" : canvas ? "This canvas can't become a skill yet:" : q.data.refusals.length === 1 ? "This result can't become a skill yet:" : "None of these results can become a skill yet:"}
+            </p>
             <Refusals list={q.data.refusals} open />
           </>
         ) : (

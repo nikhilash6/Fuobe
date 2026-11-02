@@ -471,12 +471,18 @@ describe("fuobe skills: a skill that runs by itself", () => {
     expect(posts("run")[0].json).toEqual({ values: { product: "/api/files/uploads/2026-10-22/up1.png", name: "Lumen" }, engine: "cloud" });
   });
 
-  it("--rows: one run per row, -p fills the empty cells, files beside the table go up once, and --json skips the question", async () => {
+  it("--rows: one run per row, -p fills the empty cells, files beside the table go up once, and --json --yes skips the question", async () => {
     const dir = path.join(tmp, "products");
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "lamp.png"), PNG);
     fs.writeFileSync(path.join(dir, "rows.csv"), "﻿Product photo,Product name,Notes\nlamp.png,\"Lumen, desk\",first\n\nlamp.png,,second\n");
-    const r = await run(["skills", "run", "weekly-promo", "--rows", "products/rows.csv", "-p", "name=Halo", "--json"]);
+    // --json alone never starts a run that costs money.
+    const unasked = await run(["skills", "run", "weekly-promo", "--rows", "products/rows.csv", "-p", "name=Halo", "--json"]);
+    expect(unasked.code).toBe(2);
+    expect(unasked.stderr).toMatch(/add --yes to run without asking/);
+    expect(posts("run")).toHaveLength(0);
+    seen = [];
+    const r = await run(["skills", "run", "weekly-promo", "--rows", "products/rows.csv", "-p", "name=Halo", "--json", "--yes"]);
     expect(r.code).toBe(0);
     expect(JSON.parse(r.stdout).runs).toHaveLength(2);
     expect(r.stderr).toContain("“Notes” isn't an input of /weekly-promo, so that column is left out.");
