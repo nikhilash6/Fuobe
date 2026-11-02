@@ -13,7 +13,7 @@ process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
 
-const { setSetting } = await import("@/server/settings");
+const { getSetting, setSetting } = await import("@/server/settings");
 const { saveFile } = await import("@/server/storage");
 const tools = await import("@/server/assist/tools");
 const studio = await import("@/server/assist/studio-tools");
@@ -195,6 +195,26 @@ describe("split_soundtrack and remove_dialogue as tools", () => {
     expect(p).toMatchObject({ studio: "Split soundtrack", href: "/audio/split" });
   });
 
+  it("leaves the card's time out until the GPU's device is known, and says where it runs", async () => {
+    const { planAudioTool } = await import("@/server/audio-tools");
+    const body = studio.splitSoundtrackBody({ media: wav("time.wav") }).body;
+    const time = () => studio.soundtrackTime(planAudioTool(body), body);
+    const cache = (globalThis.__fuobeComfyDevice ??= new Map());
+    const url = getSetting("comfyUrl").replace(/\/+$/, "");
+    const before = cache.get(url);
+    try {
+      cache.delete(url);
+      expect(time()).toBeNull();
+      cache.set(url, { type: "cpu", at: Date.now() });
+      expect(time()).toMatch(/ on your computer$/);
+      cache.set(url, { type: "cuda", at: Date.now() });
+      expect(time()).toMatch(/ on your GPU$/);
+    } finally {
+      if (before) cache.set(url, before);
+      else cache.delete(url);
+    }
+  });
+
   it("prices Remove dialogue as the page's two steps (the split, then the stream-copy mux)", () => {
     const video = mp4();
     const p = plan("remove_dialogue", { video, music_db: -18 });
@@ -298,6 +318,32 @@ describe("the offline planner", () => {
     expect(agent.offlineSoundtrack("a cinematic video of a lighthouse, no dialogue")).toBeNull();
     expect(agent.offlinePlan("a cinematic video of a lighthouse, no dialogue", "cloud")?.tool).toBe("generate");
     expect(agent.offlineSoundtrack("a red fox in the snow")).toBeNull();
+  });
+
+  it("leaves other jobs that mention the voice, the music or vocals to their own plans", () => {
+    const v = attached("video", "/api/files/uploads/clip.mp4");
+    const a = attached("audio", "/api/files/uploads/take.wav");
+    const others = [
+      `Remove the background noise from my voice${a}`,
+      `Translate this video to French and keep the voice${v}`,
+      `Dub this video into Spanish but keep the music${v}`,
+      `Extend this video and keep the music${v}`,
+      `Upscale this video, no voice changes${v}`,
+      `Add captions to this video, keep the voice${v}`,
+      `Lip sync this video to the audio, keep the voice${v}`,
+      `Make a music video for this song with no vocals${a}`,
+      `Write a song like this, no vocals${a}`,
+      `Generate a video with this audio, no talking${a}`,
+      `Keep the voice and make it 9:16${v}`,
+    ];
+    for (const m of others) {
+      expect(agent.offlineSoundtrack(m), m).toBeNull();
+      expect(["split_soundtrack", "remove_dialogue"], m).not.toContain(agent.offlinePlan(m, "open")?.tool);
+    }
+    // "keep only …" , "make it just the music" and "turn down the music" are still soundtrack requests.
+    expect(agent.offlinePlan(`keep only the music${a}`, "open")).toMatchObject({ tool: "split_soundtrack", input: { keep: ["music"] } });
+    expect(agent.offlinePlan(`make it just the music${a}`, "open")).toMatchObject({ tool: "split_soundtrack", input: { keep: ["music"] } });
+    expect(agent.offlinePlan(`turn down the music under the dialogue${v}`, "open")).toMatchObject({ tool: "remove_dialogue", input: { music_db: -12 } });
   });
 });
 

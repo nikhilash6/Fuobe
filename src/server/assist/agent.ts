@@ -1227,12 +1227,20 @@ export function offlinePlan(message: string, preferred: Engine, hint?: SkillMeta
 
 const SPEECH = "(?:dialog(?:ue)?s?|talking|speech|speaking|voices?|vocals?|narration|conversation)";
 const REMOVE_SPEECH = new RegExp(`\\b(?:remove|take out|strip|cut out|drop|delete|get rid of|mute|erase|lose|kill)\\b[^.?!]*\\b${SPEECH}\\b|\\bwithout (?:the |any )?${SPEECH}\\b|\\bno ${SPEECH}\\b`);
-const ONLY = "(?:just|only|isolate|extract|keep|pull out|separate)";
+// "keep" alone isn't a soundtrack word ("translate this and keep the voice"); "keep only/just the music" still reads through "only".
+const ONLY = "(?:just|only|isolate|extract|pull out|separate)";
 const ONLY_SPEECH = new RegExp(`\\b${ONLY}\\b(?: the| its)? ${SPEECH}\\b|\\b${SPEECH} only\\b`);
 const ONLY_MUSIC = new RegExp(`\\b${ONLY}\\b(?: the| its)? (?:music|score|song)\\b|\\b(?:music|score) only\\b`);
 const ONLY_EFFECTS = new RegExp(`\\b${ONLY}\\b(?: the| its)? (?:sound effects|effects|sfx|ambience)\\b|\\b(?:sfx|effects) only\\b`);
 const LOWER_MUSIC = /\b(?:lower|turn down|quieter|duck|soften|reduce)\b[^.?!]*\b(?:music|background|score|bed)\b/;
 const SPLIT_WORDS = /\b(?:split|separate|unmix|demix)\b[^.?!]*\b(?:soundtrack|audio|sound|stems?|tracks?)\b|\bstems\b/;
+/**
+ * Another job named in the same request: the soundtrack words then describe that job ("dub this into Spanish but keep the
+ * music", "upscale this, no voice changes", "a music video with no vocals"), so the request goes to its own plan. Noise,
+ * echo, hiss and hum are Clean up voice's job: "remove the background noise from my voice" never drops the voice.
+ */
+const OTHER_JOB =
+  /\b(?:translat\w*|dub\w*|captions?|captioning|subtitles?|lip ?sync\w*|lipsync\w*|extend\w*|upscal\w*|animat\w*|make(?! (?:it|the|this|that) )|makes|making|create|generate|write|compose|record|restyle|noise|noisy|echo|hiss|hum|reverb|denoise|clean ?up|enhance)\b/;
 
 /**
  * A soundtrack request read without an LLM: "remove the dialogue from this video" (remove_dialogue; on an audio file the
@@ -1243,7 +1251,7 @@ const SPLIT_WORDS = /\b(?:split|separate|unmix|demix)\b[^.?!]*\b(?:soundtrack|au
 export function offlineSoundtrack(message: string): { tool: string; input: Record<string, unknown>; say: string } | { say: string } | null {
   const [body, attached = ""] = message.split(/\n\nAttached files[^\n]*\n/);
   const t = body.trim().toLowerCase();
-  if (!t) return null;
+  if (!t || OTHER_JOB.test(t)) return null;
   const remove = REMOVE_SPEECH.test(t);
   const speech = ONLY_SPEECH.test(t);
   const music = ONLY_MUSIC.test(t);
@@ -1253,8 +1261,7 @@ export function offlineSoundtrack(message: string): { tool: string; input: Recor
   if (!remove && !speech && !music && !effects && !lower && !split) return null;
   const media = [...attached.matchAll(/^- (video|audio) \d+: (\S+)$/gm)].map((m) => ({ kind: m[1], url: m[2] })).at(-1);
   if (!media) {
-    // "write a song with no vocals", "a narration with music only": a new piece, not a split.
-    if (/\b(?:make|create|generate|write|compose|record)\b/.test(t)) return null;
+    // "write a song with no vocals" is a new piece (OTHER_JOB); without a file the request must name one to split.
     if (!/\b(?:this|the|my|that|our)\s+(?:video|clip|audio|soundtrack|song|track|recording|file|film|movie|podcast|interview|footage)\b/.test(t)) return null;
     return { say: "Attach the video or audio file (or drop it from your Library) and I'll do that — it runs on your GPU." };
   }

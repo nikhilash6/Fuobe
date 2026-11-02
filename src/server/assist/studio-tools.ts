@@ -24,7 +24,7 @@ import { defineTool, type JobPlace, type ToolContext, type ToolOutcome } from ".
 import { dbsChannelsFor, durationWords, hostPick, KEEP_STEMS, REMIX_MAX_DB, REMIX_MIN_DB, remixWords, SPLIT_MODEL, splitOutcome, splitTime, type KeepStem, type SplitOutcome } from "@/lib/av/split";
 import { LOWER_DEFAULT_DB, LOWER_MAX_DB, LOWER_MIN_DB, removeDialogueTime, type DialogueOutcome } from "@/lib/av/remove-dialogue";
 import { AudioToolBody, planAudioTool, previewAudioTool, runAudioTool, type AudioToolPlan, type AudioToolRequest } from "../audio-tools";
-import { comfyDeviceSeen } from "../providers/comfyui";
+import { comfyDevice, comfyDeviceSeen } from "../providers/comfyui";
 import { contentTypeFor, filesRel, kindFor } from "../storage";
 
 /**
@@ -872,15 +872,22 @@ export function removeDialogueBody(i: RemoveDialogueToolInput): { body: AudioToo
   return { body: parsed.data, outcome };
 }
 
-/** "about 1–2 min on your GPU" for the card, from the GPU's last known device (a CPU when it hasn't said). */
-function soundtrackTime(p: AudioToolPlan, body: AudioToolRequest): string | null {
+/**
+ * "about 1–2 min on your GPU" for the card, from the GPU's last known device. Before the device has been read the card
+ * leaves the time out (a CUDA card and a CPU differ about 80x) and asks the GPU in the background, so the next card has it.
+ */
+export function soundtrackTime(p: AudioToolPlan, body: AudioToolRequest): string | null {
   const seconds = p.split?.duration;
   if (!seconds || (body.tool !== "split" && body.tool !== "remove-dialogue")) return null;
   const device = comfyDeviceSeen();
+  if (!device) {
+    void comfyDevice().catch(() => undefined);
+    return null;
+  }
   const quality = body.quality ?? hostPick(device);
   const mode = dbsChannelsFor(body.tool === "split" && (body.stereo ?? !!body.remix) ? "each channel" : "mono", p.split?.channels);
   const t = (body.tool === "split" ? splitTime : removeDialogueTime)({ seconds, quality, mode, channels: p.split?.channels, device });
-  return `${durationWords(t)} on your GPU`;
+  return `${durationWords(t)} ${device === "cpu" ? "on your computer" : "on your GPU"}`;
 }
 
 /** Price (and time) the call the way the page does; never throws: what's in the way is the card's error. */
