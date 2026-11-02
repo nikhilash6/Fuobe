@@ -895,6 +895,8 @@ function planSoundtrack(tool: string, name: string, kind: "audio" | "video", bui
   }
   const jobs = planSteps(tool, p.steps.map((s) => ({ key: s.key, request: s.request, ...(s.after && { after: s.after }), ...(s.chain && { chain: s.chain }) })));
   const time = jobs.some((j) => j.demo) ? null : soundtrackTime(p, body);
+  // The card's first line says what the whole call does (the steps' own labels are their notes).
+  if (jobs[0]) jobs[0] = { ...jobs[0], prompt: p.summary };
   if (time && jobs[0] && !jobs[0].error) jobs[0] = { ...jobs[0], note: `${jobs[0].note ?? name} · ${time}` };
   return jobs;
 }
