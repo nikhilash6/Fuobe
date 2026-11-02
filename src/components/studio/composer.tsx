@@ -96,6 +96,8 @@ import { LayoutStrip } from "./layout-strip";
 import { loadFullCatalog, useCatalog } from "./catalog";
 import { Chip, chipBase, chipIdle } from "./chip";
 import { MediaSlot, SlotPreview, type SlotValue } from "./media-slot";
+import { InsertRangeChip, LightSphereChip } from "./hosted-chips";
+import { voiceWindowProblem } from "@/lib/catalog/clip-windows";
 import { ControlsChip } from "./model-controls";
 import { ModelPicker } from "./model-picker";
 import { FinishChoices } from "./finish-choices";
@@ -552,7 +554,10 @@ export function Composer({ docked }: { docked: boolean }) {
   }, [unknownPreset, config.preset, presetUrl, setDraft]);
 
   // Single-purpose studios (Extend, Reframe, Edit video…) pin their operation.
-  const studioOp = config.ops.length === 1 && !preset ? config.ops[0] : undefined;
+  // A studio's other tool on the model picked (Edit video's "Insert a moment" on H3 Max insert) takes the pin's place.
+  const pinnedOp = config.ops.length === 1 && !preset ? config.ops[0] : undefined;
+  const studioOp =
+    pinnedOp && model && !model.routes.some((r) => r.op === pinnedOp) ? (model.routes.find((r) => config.pickerOps?.includes(r.op))?.op ?? pinnedOp) : pinnedOp;
   const opts = model?.options ?? {};
   // Try-on names its images: "Person photo", then "Add garment" (instead of "Image" / "Add ref").
   const baseSlots = preset?.inputs ?? config.slots;
@@ -678,6 +683,9 @@ export function Composer({ docked }: { docked: boolean }) {
   // an open tool that holds the whole clip in more RAM than the ComfyUI can spare.
   const clipProblem = config.clipFacts ? clipBlocker(studioOp ?? op, facts, draft.params, model, status?.providers.comfyui?.ramBytes) : null;
   if (clipProblem && !planError) planError = clipProblem;
+  // A voice outside what a hosted talking-avatar model takes (H3 Max lip sync: 5 s to 15 min), as the server would say.
+  const voiceProblem = op === "avatar" && voiceRef && voice?.duration && model ? voiceWindowProblem(model, voice.duration) : null;
+  if (voiceProblem && !planError) planError = voiceProblem;
   // A song Mureka's tools refuse (Stems: MP3 or M4A; Remix: 10 s to 5:50), from its name and header, as the server does.
   const songRef = config.voiceFacts && (op === "song-stems" || op === "song-remix") ? draft.slots.audio?.ref : undefined;
   const songProblem = songRef ? songToolProblem(op!, { format: songFormat(undefined, songRef), seconds: voice?.duration }) : null;
@@ -830,6 +838,13 @@ export function Composer({ docked }: { docked: boolean }) {
       else extra[key] = v;
       return { params: { ...d.params, extra: Object.keys(extra).length ? extra : undefined } };
     });
+  const setLight = useCallback((v: SlotValue | null) => setSlot("image", v), [setSlot]);
+  // A light's sphere leaves the run when another model is picked: it means nothing to a model that reads words.
+  const lightLeft = !opts.lightSphere && !!typed.slots.image?.name?.startsWith("light:");
+  useEffect(() => {
+    if (lightLeft) setSlot("image", null);
+  }, [lightLeft, setSlot]);
+  const setInsertRange = useCallback((startTime: number, endTime: number) => setDraft((d) => ({ params: { ...d.params, startTime, endTime } })), [setDraft]);
   const opNote = op && model ? routesFor(model, op)[0]?.note : undefined;
   // Booleans in, not the model's options object: the React Compiler keeps the memos above.
   const showPrompt = showsPrompt(
@@ -1135,12 +1150,15 @@ export function Composer({ docked }: { docked: boolean }) {
         />
       )}
       {shownControls.length > 0 && <ControlsChip controls={shownControls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} op={effectiveOp} />}
+      {opts.lightSphere && <LightSphereChip value={draft.slots.image} onChange={setLight} />}
+      {effectiveOp === "insert-moment" && <InsertRangeChip clip={facts?.duration} start={p.startTime} resume={p.endTime} onChange={setInsertRange} />}
     </>
   );
   const hasSecondary =
     !!config.frames ||
     !!config.layout ||
-    (!!model && (!!opts.voices?.length || !!opts.voiceClone || !!opts.languages || !!opts.controls || !!opts.looks)) ||
+    (!!model && (!!opts.voices?.length || !!opts.voiceClone || !!opts.languages || !!opts.controls || !!opts.looks || !!opts.lightSphere)) ||
+    effectiveOp === "insert-moment" ||
     !!config.presetPicker ||
     !!config.signature ||
     preset?.type === "motion" ||

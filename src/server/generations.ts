@@ -12,7 +12,7 @@ import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
 import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
-import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, sourceFrames } from "@/lib/catalog/clip-windows";
+import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, insertRangeProblem, portraitShapeProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, withoutTriggers } from "@/lib/catalog/plan";
 import { framedLength, keepMatte, sizeValue } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
@@ -407,8 +407,8 @@ export const ASSET_REFS: AssetRef[] = [
   { table: "katana_jobs", cols: ["data_json"], what: "Katana job", name: "json_extract(data_json, '$.title')" },
   // Content Factory: a series' reference clip and its thumbnail.
   { table: "content_series", cols: ["data_json"], what: "Content Factory series", name: "COALESCE(json_extract(data_json, '$.name'), json_extract(data_json, '$.reference.title'))" },
-  // Assist's scheduled tasks: the files the prompt runs with.
-  { table: "assist_schedules", cols: ["attachments_json"], what: "scheduled task", name: "title" },
+  // Assist's scheduled tasks: the files the prompt runs with, and the files a skill task's inputs name.
+  { table: "assist_schedules", cols: ["attachments_json", "skill_json"], what: "scheduled task", name: "title" },
   // Character Swap Studio: the character picture, each clip and its 24 fps copy, masks, anchors, takes and their masters.
   { table: "swap_projects", cols: ["data_json"], what: "Character Swap project", name: "name" },
   // A user skill's bundled text files: its recipe.json names the files a run starts from (an example, a fixed logo).
@@ -694,6 +694,18 @@ function sizedEdit(plan: ReturnType<typeof planGeneration>, req: GenerationReque
 }
 
 /**
+ * A talking avatar's picture held to the shape the hosted model takes (fal's H3 Max lip sync: 0.4 to 2.5 wide), read from the
+ * file's header before the run is paid for. A picture that isn't a file in Fuobe (or isn't the run's own) goes as it is.
+ */
+function portraitProblem(plan: ReturnType<typeof planGeneration>, req: GenerationRequest): string | null {
+  if (plan.op !== "avatar" || plan.model.engine === "open") return null;
+  const first = req.inputs?.images?.[0];
+  const head = first ? localHead(first) : null;
+  const size = head ? imageSize(head) : null;
+  return size ? portraitShapeProblem(plan.model, size.width, size.height) : null;
+}
+
+/**
  * The elements "@Name" can mention: the owner's. An account's run or a visitor's price check has none, so "@Name" stays
  * words there (an owner's element photo or LoRA never reaches someone else's run).
  */
@@ -714,6 +726,8 @@ function prepare(original: GenerationRequest) {
   const lookup = (id: string) => (model && id === model.id ? model : getModel(id));
   const req = model ? stripMotionPaths(applySketch(applyMentions(worded, model, mentionElements()).request, model).request, model) : worded;
   let plan = sizedEdit(sizedMixedFrame(planGeneration(req, lookup, getPreset), req), req);
+  const portrait = portraitProblem(plan, req);
+  if (portrait) throw new Error(portrait);
   if (mode !== "both" && plan.model.engine !== mode) {
     // An account on the open engine has no key of its own that opens (Your keys), or the studio is open-source only.
     const cloud = mode === "open" && tenantAccount() ? plan.model.routes.map((r) => r.provider).find(isCloudProvider) : undefined;
@@ -1767,6 +1781,21 @@ async function submitNow(
       if ((plan.params.sourceDuration === undefined || byFrames) && clipEditSeconds(plan.model, input, plan.op) !== undefined) {
         update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration, sourceFps: input.sourceFps }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });
       }
+    }
+    // A clip relit, extended or given a new moment, or a voice made into a talking video, held to the hosted model's window once
+    // its header is read (fal's H3 Max relight: up to 15 s; insert and Turbo extend: up to 60 s; lip sync: 5 s to 15 min).
+    if (input.sourceDuration && !req.chain?.length && providerId !== "mock" && plan.model.engine !== "open") {
+      const problem =
+        plan.op === "avatar"
+          ? voiceWindowProblem(plan.model, input.sourceDuration)
+          : plan.op === "relight-video" || plan.op === "extend"
+            ? clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps)
+            : plan.op === "insert-moment"
+              ? (clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps) ?? insertRangeProblem(input.startTime, input.endTime, input.sourceDuration))
+              : null;
+      if (problem) throw new Error(problem);
+      // A relight is billed on the clip's length: priced for it once the header is read (an API call that didn't say).
+      if (plan.op === "relight-video" && plan.params.sourceDuration === undefined) update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration }, 1, plan.op) });
     }
     const edits = plan.op === "v2v" || plan.op === "video-swap" || plan.op === "video-insert";
     // An edit whose route sends no length keeps the clip's own (Kling 4.0's edit, swap and insert), whatever the request

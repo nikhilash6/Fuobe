@@ -102,6 +102,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "split-soundtrack": SlidersVertical,
   "remove-dialogue": MicOff,
   "clean-voice": AudioWaveform,
+  "clean-dialogue": AudioLines,
   "copy-text": Copy,
   "view-3d": Box,
   download: Download,

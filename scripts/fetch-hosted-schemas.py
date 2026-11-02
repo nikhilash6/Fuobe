@@ -24,6 +24,7 @@ Run:  python3 scripts/fetch-hosted-schemas.py
       python3 scripts/fetch-hosted-schemas.py --part4 [endpoint …]                               (PART4's records in paid-model-apis-4.json, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --new10 [endpoint …]                               (FLUX 3 Klein: NEW10's records in new-models-10.json, its trainers; or those named)
       python3 scripts/fetch-hosted-schemas.py --music [endpoint …]                               (full songs: MUSIC10's records in new-models-10.json; or those named)
+      python3 scripts/fetch-hosted-schemas.py --catchup [endpoint …]                             (the hosted catch-up's CATCHUP records in new-models-10.json; or those named)
 
 --part4 re-reads endpoints that research part 4 recorded (docs/research/paid-model-apis-4.json) and refreshes them in
 place: their inputs, the price lines of their llms.txt, their status in fal's catalog (active / playground-only, read
@@ -33,6 +34,8 @@ import datetime
 import json
 import re
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -271,10 +274,56 @@ def music10(ids):
     path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def get(url):
+# Hosted catch-up (build package nm10-hosted-catchup): fal's September-October MiniMax H3 Max tools (lip sync, relight, insert,
+# five looks), H3 Max Turbo, Vidu Q4, Meshy retexture and Tripo P2, and Replicate's H3 Lite and HighSpeed, read with --catchup
+# into docs/research/new-models-10.json endpointRecords (part 4's record shape; gen-cloud-models.py merges them last).
+# Values: (operation, keyFields, vendor, model, notes).
+H3_STYLE = {"prompt": "prompt", "image": "image_url", "duration": "duration", "aspectRatio": "aspect_ratio", "seed": "seed"}
+H3_TURBO = {"prompt": "prompt", "duration": "duration", "resolution": "resolution", "seed": "seed"}
+H3_REPLICATE = {"prompt": "prompt", "image": "first_frame_image", "endImage": "last_frame_image", "images": "reference_image_urls",
+                "video": "reference_video_urls", "audio": "reference_audio_urls", "duration": "duration", "aspectRatio": "ratio"}
+CATCHUP = {
+    "minimax/h3-max/lip-sync/image-to-video": ("avatar", {"image": "image_url", "audio": "audio_url", "resolution": "resolution", "seed": "seed"},
+                                               "MiniMax", "MiniMax H3 Max Lip Sync", "Image (aspect 0.4-2.5) + 5 s to 15 min of audio; the video is as long as the audio. Billed per second, x1.2 over 15 s."),
+    "minimax/h3-max/relight": ("relight-video", {"video": "video_url", "image": "reference_image_url", "resolution": "resolution", "aspectRatio": "aspect_ratio", "seed": "seed"},
+                               "MiniMax", "MiniMax H3 Max Relight", "reference_image_url is a render of a lit sphere showing the target light (Fuobe draws it in the browser from its light presets). Source up to 15 s, resampled to 24 fps and trimmed to 17n+5 frames, at least 56."),
+    "minimax/h3-max/insert-video": ("insert-moment", {"prompt": "prompt", "video": "video_url", "images": "reference_image_urls", "videos": "reference_video_urls",
+                                                      "startTime": "start_time", "endTime": "resume_time", "duration": "duration", "resolution": "resolution", "seed": "seed"},
+                                    "MiniMax", "MiniMax H3 Max Insert Video", "A new scene of `duration` seconds generated between start_time and resume_time of the clip (both within 60 s, start at least 1.625 s); only the new scene is billed."),
+    **{f"minimax/h3-max/styles/{s}": ("t2v+i2v", {**H3_STYLE, **({"damageLevel": "damage_level"} if s == "vhs" else {})}, "MiniMax", f"MiniMax H3 Max {t}",
+                                      "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip.")
+       for s, t in (("16bit-pixel", "16-bit Pixel"), ("hand-drawn", "Hand-drawn"), ("low-poly", "Low Poly"), ("retro-toon-70s", "Retro Toon 70s"), ("vhs", "VHS"))},
+    "minimax/h3-max-turbo/text-to-video": ("t2v", {**H3_TURBO, "aspectRatio": "aspect_ratio"}, "MiniMax", "MiniMax H3 Max Turbo", None),
+    "minimax/h3-max-turbo/image-to-video": ("i2v", {**H3_TURBO, "image": "image_url", "endImage": "end_image_url"}, "MiniMax", "MiniMax H3 Max Turbo", None),
+    "minimax/h3-max-turbo/reference-to-video": ("ref2v", {**H3_TURBO, "aspectRatio": "aspect_ratio", "images": "reference_image_urls", "video": "reference_video_urls",
+                                                          "audio": "reference_audio_urls"}, "MiniMax", "MiniMax H3 Max Turbo",
+                                                "Billed at H3 Max's own rates ($0.05-0.16/s), not Turbo's; references (images, clips, audio) add up to 12 files."),
+    "minimax/h3-max-turbo/extend-video": ("extend", {"prompt": "prompt", "video": "video_url", "audio": "reference_audio_urls", "duration": "duration", "resolution": "resolution",
+                                                     "aspectRatio": "aspect_ratio", "seed": "seed"}, "MiniMax", "MiniMax H3 Max Turbo",
+                                          "Source 1.625-60 s, up to 50 MB; duration is the seconds added, and only they are billed."),
+    "fal-ai/vidu/q4/image-to-video": ("i2v", {"prompt": "prompt", "image": "image_url", "duration": "duration", "resolution": "resolution", "seed": "seed"}, "Shengshu", "Vidu Q4", None),
+    "fal-ai/vidu/q4/reference-to-video": ("ref2v", {"prompt": "prompt", "images": "reference_image_urls", "audios": "reference_audio_urls", "duration": "duration",
+                                                   "aspectRatio": "aspect_ratio", "resolution": "resolution", "generateAudio": "audio", "seed": "seed"}, "Shengshu", "Vidu Q4",
+                                          "fal exposes up to 12 reference images and 3 mp3 voice clips (3-12 s), sound on request; Vidu's own 15 images and 4K references are not all in fal's schema."),
+    "meshy/v7/retexture": ("retexture-3d", {"model3d": "model_url", "prompt": "text_style_prompt", "image": "image_style_url"}, "Meshy", "Meshy 7 Retexture", None),
+    "meshy/v6/retexture": ("retexture-3d", {"model3d": "model_url", "prompt": "text_style_prompt", "image": "image_style_url"}, "Meshy", "Meshy 6 Retexture", None),
+    "tripo3d/p2/image-to-3d": ("image-to-3d", {"image": "image_url"}, "Tripo", "Tripo P2", None),
+    "replicate:minimax/h3-lite": ("t2v+i2v+flf2v+ref2v", {**H3_REPLICATE, "resolution": "resolution"}, "MiniMax", "MiniMax H3 Lite", None),
+    "replicate:minimax/h3-highspeed": ("t2v+i2v+flf2v+ref2v", H3_REPLICATE, "MiniMax", "MiniMax H3 HighSpeed", None),
+}
+
+
+def get(url, tries=5):
     req = urllib.request.Request(url, headers={"User-Agent": "fuobe-research/1.0"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return r.read().decode("utf-8")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        # fal's catalog API answers 429 to a burst of reads: wait and try again.
+        if e.code != 429 or tries <= 1:
+            raise
+        time.sleep(15)
+        return get(url, tries - 1)
 
 
 def resolve(schema, root):
@@ -587,9 +636,45 @@ def new10(ids):
     FILE.write_text(json.dumps(raw, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def catchup(ids):
+    """The hosted catch-up records (CATCHUP) in new-models-10.json endpointRecords: inputs, price lines and catalog status read at
+    the source; only those named in `ids` when it names any, the rest kept as they are."""
+    path = ROOT / "docs/research/new-models-10.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    records = {(e["provider"], e["endpoint"]): e for e in data.get("endpointRecords") or []}
+    for key, (op, kf, vendor, model, notes) in CATCHUP.items():
+        provider, ep = key.split(":", 1) if key.startswith("replicate:") else ("fal", key)
+        if ids and key not in ids and ep not in ids:
+            continue
+        rec = {"family": ep.split("/")[1].split("-v")[0] if provider == "replicate" else ep.split("/")[1], "model": model, "title": model, "vendor": vendor,
+               "operation": op, "provider": provider, "endpoint": ep, "keyFields": kf, "licence": "proprietary paid API", "verified": True, "fetched": TODAY}
+        if provider == "fal":
+            inputs = fal(ep)
+            rec.update({"status": fal_catalog_status(ep), "inputs": inputs, "price": llms_price(ep),
+                        "output": {"retexture-3d": "model_glb.url", "image-to-3d": "model_mesh.url"}.get(op, "video.url"),
+                        "sourceUrl": f"https://fal.ai/models/{ep}", "schemaUrl": f"https://fal.ai/api/openapi/queue/openapi.json?endpoint_id={ep}"})
+        else:
+            inputs, version, created = replicate_latest(ep)
+            rec.update({"status": "active", "inputs": inputs, "version": version, "versionDate": created, "price": replicate_prices(ep), "output": "output",
+                        "sourceUrl": f"https://replicate.com/{ep}", "apiUrl": f"https://api.replicate.com/v1/models/{ep}/predictions"})
+        if notes:
+            rec["notes"] = notes
+        missing = [f for f in kf.values() if f.split(".")[0] not in inputs]
+        if missing:
+            sys.exit(f"{ep}: keyFields {missing} are not inputs")
+        records[(provider, ep)] = rec
+        print(f"{provider}:{ep}: {rec['status']}, {len(inputs)} inputs, {rec['price']}")
+        # Saved after each record, so a refusal part way keeps what was read.
+        data["endpointRecords"] = list(records.values())
+        path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def main():
     if "--music" in sys.argv:
         music10(sys.argv[sys.argv.index("--music") + 1:])
+        return
+    if "--catchup" in sys.argv:
+        catchup(sys.argv[sys.argv.index("--catchup") + 1:])
         return
     if "--new10" in sys.argv:
         new10(sys.argv[sys.argv.index("--new10") + 1:])

@@ -265,7 +265,7 @@ function Loaded({ view, onClose, examples, intro }: { view: RecipeView; onClose:
           <div className="space-y-4">
             {recipe.params.length === 0 && <p className="text-[13px] text-muted-foreground">This skill takes no inputs: it runs the same steps each time.</p>}
             {recipe.params.map((p) => (
-              <Field
+              <RecipeField
                 key={p.id}
                 p={p}
                 value={values[p.id]}
@@ -351,8 +351,8 @@ function Notice({ tone, children, action }: { tone: "warn" | "info"; children: R
   );
 }
 
-/** One input of the form, by its type. */
-function Field({
+/** One input of the form, by its type (the schedule dialog's skill mode uses it too). */
+export function RecipeField({
   p,
   value,
   onChange,

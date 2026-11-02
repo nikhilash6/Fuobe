@@ -1692,6 +1692,26 @@ const open: ModelDef[] = [
       ],
     },
   }),
+  // DBS graph C (docs/research/dbs-separation-7.md §4.4): the split mixed back into one track at set levels (params.extra
+  // voiceDb, musicDb, effectsDb; whole dB, -100 = gone). Clean up dialogue (src/lib/av/clean-dialogue.ts) runs on it: the
+  // dialogue alone, or with the music and effects quietly under it.
+  o({
+    id: "oss-dbs-remix",
+    name: "DBS remix (dialogue, music, effects at set levels)",
+    vendor: "Open source",
+    family: "dbs",
+    kind: "audio",
+    tagline: "Takes the music and effects out from under the dialogue, or keeps them quietly · 23 MB · CPU or GPU · Apache-2.0",
+    badges: ["new"],
+    routes: [comfy("separate-audio", "soundtrack-remix-dbs", "one FLAC: the dialogue with the music and effects at the levels asked for + a speed report; ComfyUI-DBS")],
+    options: {
+      promptless: true,
+      controls: [
+        { param: "separationModel", label: "Model", values: ["DBS-BSRNN-DnR", "DBS-TIGER-DnR"], labels: { "DBS-BSRNN-DnR": "Fast (DBS-BSRNN)", "DBS-TIGER-DnR": "Best (DBS-TIGER)" } },
+        { param: "channels", label: "Channels", values: ["mono", "each channel"], default: "mono", labels: { mono: "Mono", "each channel": "Stereo (about twice as long)" } },
+      ],
+    },
+  }),
   // NVIDIA NemotronLabs RE-USE (universal speech enhancement) on Fuobe's own ComfyUI-RE-USE pack (comfy-nodes/, no mamba-ssm):
   // noise, echo, clipping, codec damage and phone-band audio fixed, the main speaker kept. Open engine only: nothing like it is
   // hosted on fal or Replicate. params.extra.background "keep" runs voice-clean-bed-reuse (DBS keeps the music and effects;

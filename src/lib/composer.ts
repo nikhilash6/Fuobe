@@ -304,7 +304,8 @@ export function clipBlocker(
   model: (Pick<ModelDef, "engine" | "options" | "defaults"> & Partial<Pick<ModelDef, "id" | "name">>) | undefined,
   ramBytes: number | undefined,
 ): string | null {
-  if (op === "v2v" && model?.id && (facts?.duration || facts?.width)) {
+  // (A clip relit, extended or given a new moment on a hosted model with a window of its own: H3 Max relight up to 15 s.)
+  if ((op === "v2v" || op === "relight-video" || op === "insert-moment" || op === "extend") && model?.id && (facts?.duration || facts?.width)) {
     const named = { id: model.id, name: model.name ?? model.id, engine: model.engine };
     return (
       (facts.duration ? clipWindowProblem(named, facts.duration, facts.fps) : null) ??
