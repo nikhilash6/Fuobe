@@ -398,8 +398,8 @@ function prepareSkillRun(task: ScheduleSkill, projectId: string | null): SkillRu
 
 /**
  * What starting a run came to: a new chat (`threadId`, with `done` settling when the agent stops),
- * or none and why — `busy` (the run before is still going), `paused` (its project is gone) or
- * `failed` (the chat couldn't be started) — with the text the Scheduled page shows.
+ * or none and why — `busy` (the run before is still going), `paused` (its project or its skill is gone) or
+ * `failed` (the chat couldn't be started, or a skill task's input isn't there yet) — with the text the Scheduled page shows.
  */
 export type ScheduleStart = { threadId: string; done: Promise<void> } | { threadId: null; done: Promise<void>; reason: "busy" | "paused" | "failed"; message: string };
 
