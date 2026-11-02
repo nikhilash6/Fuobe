@@ -8,6 +8,7 @@ import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEA
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
 import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
+import { COMPOSITE_MODEL, COMPOSITE_WORKFLOW } from "./sharpen";
 import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
@@ -1160,6 +1161,19 @@ const open: ModelDef[] = [
     options: { keepsNamed: true, matteOutputs: ["matte"] },
     hidden: true,
   }),
+  // Character swap in 2K (n7-4): only the swapped character goes back over the footage, from the 768p swap and its
+  // regenerate, through the person's mask (src/lib/catalog/sharpen.ts). Run by Character Swap Studio and Genjutsu.
+  o({
+    id: COMPOSITE_MODEL,
+    name: "Character over the footage",
+    vendor: "ComfyUI",
+    family: "utility",
+    kind: "video",
+    tagline: "Puts only the swapped character back over the original footage, with its own sound · CPU",
+    routes: [comfy("composite", COMPOSITE_WORKFLOW, "the swap, then its regenerate, each through the person's mask (grown, feathered); a few seconds a pass")],
+    options: {},
+    hidden: true,
+  }),
   o({
     id: "oss-qwen-relight",
     name: "Qwen-Image-Edit Relight",
@@ -1228,6 +1242,30 @@ const open: ModelDef[] = [
     tagline: "Expressive zero-shot cloning (commercial use under 100M users)",
     routes: [comfy("tts", "tts-indextts2")],
     options: { voiceClone: true },
+  }),
+  // Design a voice (nm10-voice-design): a new voice from words, then reused by cloning the take picked (src/server/voices.ts).
+  // Qwen3-TTS 1.7B runs the same weights on fal (qwen-3-tts); VoxCPM2 is hosted nowhere, so it runs on your GPU only.
+  o({
+    id: "oss-qwen3-tts",
+    name: "Qwen3-TTS",
+    vendor: "Alibaba Qwen",
+    family: "qwen-tts",
+    kind: "audio",
+    tagline: "Design a voice from a description, or clone one from a short sample, in 10 languages",
+    badges: ["new"],
+    routes: [comfy("voice-design", "tts-qwen3-design"), comfy("tts", "tts-qwen3-clone")],
+    options: { voiceClone: true, seed: true },
+  }),
+  o({
+    id: "oss-voxcpm2",
+    name: "VoxCPM2",
+    vendor: "OpenBMB",
+    family: "voxcpm",
+    kind: "audio",
+    tagline: "Design or clone a voice in studio-quality 48 kHz, in 30 languages",
+    badges: ["new"],
+    routes: [comfy("voice-design", "tts-voxcpm2"), comfy("tts", "tts-voxcpm2-clone")],
+    options: { voiceClone: true, seed: true },
   }),
   o({
     id: "oss-chatterbox-dialogue",

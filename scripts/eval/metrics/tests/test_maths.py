@@ -134,3 +134,20 @@ def test_palette_of_reads_the_request_or_the_lock_route():
     assert palette_of({"request": {"params": {"palette": ["#102030"]}}}).tolist() == [[16, 32, 48]]
     assert palette_of({"request": {"route": "/api/palettes/lock", "body": {"request": {"params": {}}, "colors": ["#FFFFFF"]}}}).tolist() == [[255, 255, 255]]
     assert len(palette_of({"request": {"prompt": "x"}})) == 0
+
+
+def test_background_difference_on_the_outer_ring():
+    src = np.full((3, 20, 20, 3), 100, dtype=np.uint8)
+    out = src.copy()
+    # The middle (the person) changes: the ring doesn't, so the background scores as untouched.
+    out[:, 6:14, 6:14] = 255
+    same = maths.background_difference(out, src)
+    assert same["mae"] == pytest.approx(0.0)
+    assert same["psnr"] == 99.0
+    assert same["frames"] == 3
+    # The whole frame brighter by 51 (0.2): the ring sees it.
+    moved = maths.background_difference(np.clip(src.astype(int) + 51, 0, 255).astype(np.uint8), src)
+    assert moved["mae"] == pytest.approx(0.2, abs=1e-6)
+    assert moved["psnr"] == pytest.approx(10 * math.log10(1 / 0.04), abs=1e-3)
+    assert maths.ring_mask(10, 10, 0.2).sum() == 100 - 36
+    assert maths.background_difference(out[:0], src)["frames"] == 0

@@ -243,6 +243,8 @@ describe("accounts never run on the owner's keys or GPU", () => {
       // Remove a person on H3 (o/person-remover-plus): its mask preview and "Redo from here".
       "/api/remove-object/preview",
       "/api/remove-object/reroll",
+      // Character Swap Studio's Sharpen (n7-4): a studio job, like its assembly.
+      "/api/swap-studio/projects/p1/sharpen",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);

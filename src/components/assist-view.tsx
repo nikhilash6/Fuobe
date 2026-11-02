@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, CalendarClock, Cpu, Loader2, MessageSquarePlus } from "lucide-react";
+import { BookmarkPlus, Bot, CalendarClock, Cpu, Loader2, MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -21,6 +21,7 @@ import { ProjectDot, RailButton } from "@/components/assist/shell";
 import { SkillIcon } from "@/components/assist/skill-icon";
 import { Transcript } from "@/components/assist/transcript";
 import { AssistVisitorNote } from "@/components/assist/visitor-note";
+import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
 import { useAssistActions, useAssistThread, useEngine } from "@/lib/api";
 import { ASSIST_SUGGESTIONS, assistDraft, modeLabel, threadModeChoice, type AssistAvailability, type AssistModeChoice, type AssistProject, type AssistThread, type SkillSummary } from "@/lib/assist";
 import type { Generation } from "@/lib/catalog/types";
@@ -106,6 +107,7 @@ export function AssistView() {
   const projects = useProjects();
   const end = useRef<HTMLDivElement>(null);
   const [scheduling, setScheduling] = useState(false);
+  const builder = useSkillBuilder();
 
   const go = (next: string | null) => router.replace(next ? `/assist?c=${next}` : "/assist", { scroll: false });
   const thread = view.data?.thread;
@@ -172,6 +174,16 @@ export function AssistView() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Run this chat&apos;s request again on a schedule</TooltipContent>
+            </Tooltip>
+          )}
+          {thread && builder && thread.items.some((i) => i.role === "generations" && i.ids.length > 0) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => builder.openChat(thread.id)} aria-label="Save as skill">
+                  <BookmarkPlus /> <span className="hidden lg:inline">Save as skill</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Turn what ran in this chat into a skill you can run again with new inputs</TooltipContent>
             </Tooltip>
           )}
           {id && (
