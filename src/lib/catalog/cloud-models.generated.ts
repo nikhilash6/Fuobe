@@ -14812,6 +14812,86 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "veed-clean-audio",
+    "name": "VEED Clean Audio",
+    "vendor": "VEED",
+    "family": "veed",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Removes background noise from speech and levels it, keeping quiet and distant words",
+    "routes": [
+      {
+        "op": "enhance-voice",
+        "provider": "fal",
+        "endpoint": "veed/clean-audio",
+        "map": {
+          "prompt": false,
+          "video": "audio_url",
+          "audio": "audio_url",
+          "fixed": {
+            "output_format": "flac"
+          }
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "strength",
+          "label": "Strength",
+          "min": 0,
+          "max": 1,
+          "step": 0.01,
+          "default": 0.874
+        }
+      ],
+      "promptless": true
+    },
+    "pricing": {
+      "unit": "minute",
+      "usd": 0.0125,
+      "note": "per minute of input, rounded up to whole minutes, at least 1",
+      "roundUp": true
+    }
+  },
+  {
+    "id": "deepfilternet3",
+    "name": "DeepFilterNet 3",
+    "vendor": "DeepFilterNet",
+    "family": "deepfilternet",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Open-source speech denoiser: steady noise, hiss and hum out of a voice",
+    "routes": [
+      {
+        "op": "enhance-voice",
+        "provider": "fal",
+        "endpoint": "fal-ai/deepfilternet3",
+        "map": {
+          "prompt": false,
+          "audio": "audio_url",
+          "fixed": {
+            "audio_format": "flac"
+          }
+        }
+      }
+    ],
+    "options": {
+      "promptless": true
+    },
+    "licence": {
+      "licence": "MIT OR Apache-2.0",
+      "commercial": true,
+      "note": "MIT OR Apache-2.0 (DeepFilterNet code and the DeepFilterNet3 weights, github.com/Rikorose/DeepFilterNet README, read 2026-11-02); fal hosts it as a paid API",
+      "checked": "2026-11-02"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.001,
+      "note": "per second of audio"
+    }
+  },
+  {
     "id": "hunyuan-3d-3-1-pro",
     "name": "Hunyuan3D 3.1 Pro",
     "vendor": "Tencent Hunyuan",
