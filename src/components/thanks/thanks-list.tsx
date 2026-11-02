@@ -1,25 +1,45 @@
 "use client";
 
 import { ExternalLink, Search, X } from "lucide-react";
-import { memo, useDeferredValue, useMemo, useState } from "react";
-import { searchText, type ThanksGroup, type ThanksRow } from "@/lib/thanks";
+import { memo, useDeferredValue, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { searchText, type ThanksGroup, type ThanksMaker, type ThanksRow } from "@/lib/thanks";
+
+function subscribeHash(cb: () => void) {
+  window.addEventListener("hashchange", cb);
+  return () => window.removeEventListener("hashchange", cb);
+}
+
+const smooth = (): ScrollBehavior => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
 
 /**
  * Thanks & licences' list: a search box, chips that jump to each group, then the groups, one row each (name and maker,
- * what Fuobe uses it for, its licence and any condition). A search keeps the rows that have every word typed.
+ * what Fuobe uses it for, its licence and any condition). A search keeps the rows that have every word typed. A model
+ * maker's card above links to #by-<maker>, which keeps only the rows that run that maker's models until it's cleared.
  */
-export function ThanksList({ groups }: { groups: ThanksGroup[] }) {
+export function ThanksList({ groups, makers = [] }: { groups: ThanksGroup[]; makers?: ThanksMaker[] }) {
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
+  const hash = useSyncExternalStore(subscribeHash, () => location.hash, () => "");
+  const maker = makers.find((m) => `#by-${m.id}` === hash);
+  const by = maker?.id;
+  const clearMaker = () => {
+    history.replaceState(null, "", location.pathname + location.search);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  };
+  // A maker chosen above: bring its rows into view.
+  useEffect(() => {
+    if (by) document.getElementById("thanks-list")?.scrollIntoView({ block: "start", behavior: smooth() });
+  }, [by]);
   const index = useMemo(() => groups.map((g) => ({ ...g, rows: g.rows.map((r) => ({ row: r, text: searchText(r) })) })), [groups]);
   const shown = useMemo(() => {
     const words = deferred.toLowerCase().split(/\s+/).filter(Boolean);
-    return index.map((g) => ({ ...g, rows: words.length ? g.rows.filter((r) => words.every((w) => r.text.includes(w))) : g.rows }));
-  }, [index, deferred]);
+    return index.map((g) => ({ ...g, rows: g.rows.filter((r) => (!by || r.row.makers?.includes(by)) && words.every((w) => r.text.includes(w))) }));
+  }, [index, deferred, by]);
   const any = shown.some((g) => g.rows.length);
 
   return (
     <>
+      <div id="thanks-list" className="scroll-mt-12 md:scroll-mt-[var(--chrome-top)]" />
       <div className="sticky top-12 z-10 -mx-4 border-b bg-background/90 px-4 py-2 backdrop-blur sm:-mx-8 sm:px-8 md:top-chrome">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <label className="relative block min-w-0 lg:w-80 lg:shrink-0">
@@ -55,8 +75,9 @@ export function ThanksList({ groups }: { groups: ThanksGroup[] }) {
                         const to = document.getElementById(`thanks-${g.id}`);
                         if (!to) return;
                         e.preventDefault();
-                        to.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-                        history.replaceState(null, "", `#thanks-${g.id}`);
+                        to.scrollIntoView({ block: "start", behavior: smooth() });
+                        // A maker's filter stays in the address until it is cleared.
+                        if (!by) history.replaceState(null, "", `#thanks-${g.id}`);
                       }}
                       className="inline-flex h-11 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none lg:h-9"
                     >
@@ -68,6 +89,21 @@ export function ThanksList({ groups }: { groups: ThanksGroup[] }) {
             </ul>
           </nav>
         </div>
+        {maker && (
+          <p role="status" className="mt-2 flex flex-wrap items-center gap-x-2 text-[13px]">
+            <span className="text-muted-foreground">
+              Models by <span className="font-medium text-foreground">{maker.name}</span>
+            </span>
+            <button
+              type="button"
+              onClick={clearMaker}
+              className="inline-flex h-11 items-center gap-1 rounded-full px-2 font-medium text-brand-text hover:bg-brand-faint focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none lg:h-8"
+            >
+              <X className="size-3.5" aria-hidden />
+              Show everything
+            </button>
+          </p>
+        )}
       </div>
 
       {shown.map((g) =>

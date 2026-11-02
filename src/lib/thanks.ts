@@ -6,6 +6,9 @@
  *
  * Some licences ask the app to name them ("Built with DINOv3", MiniMax H3's "MiniMax H3"): those rows carry `credits`,
  * and the page names each one at the top, which is where Fuobe meets that condition.
+ *
+ * Above the list, "Built on" thanks the projects Fuobe stands on (ComfyUI first) and the labs and people whose open
+ * models it runs, grouped by maker from the same rows: the files each tool downloads, its name and its vendor.
  */
 import {
   ATTRIBUTIONS,
@@ -45,6 +48,8 @@ export interface ThanksRow {
   condition?: string;
   /** Names its licence asks the app to show ("Built with DINOv3"): this page shows them. */
   credits?: string[];
+  /** The model makers (MAKERS ids) whose weights it runs, for a model or tool row. */
+  makers?: string[];
 }
 
 export interface ThanksGroup {
@@ -53,7 +58,33 @@ export interface ThanksGroup {
   rows: ThanksRow[];
 }
 
+/** A project Fuobe stands on, thanked at the top of the page. */
+export interface ThanksProject {
+  id: string;
+  name: string;
+  maker?: string;
+  url: string;
+  /** What it does for Fuobe, in one plain sentence. */
+  use: string;
+  /** None for a service (Hugging Face hosts the files; each model keeps its own licence). */
+  licence?: ThanksLicence;
+}
+
+/** A lab or person whose open models Fuobe runs. */
+export interface ThanksMaker {
+  id: string;
+  name: string;
+  /** Their model families Fuobe runs, in MAKERS order (the main model first). */
+  models: string[];
+  /** How many model and tool rows below run them. */
+  count: number;
+}
+
 export interface Thanks {
+  /** ComfyUI first, then the services and code the app is built with. */
+  builtOn: ThanksProject[];
+  /** The model makers: premium image and video makers first, then by how many rows run their models. */
+  makers: ThanksMaker[];
   /** Each name a licence asks Fuobe to show, with what carries it. */
   credits: { text: string; names: string[] }[];
   groups: ThanksGroup[];
@@ -97,8 +128,219 @@ export const GROUP_TITLE: Record<ThanksGroupId, string> = {
 const GROUP_ORDER: ThanksGroupId[] = ["image", "video", "audio", "3d", "text", "loras", "packs", "code"];
 
 const FUOBE_REPO = "https://github.com/workingprototype/Fuobe";
-const COMFYUI_REPO = "https://github.com/comfyanonymous/ComfyUI";
 const SPDX = (id: string) => `https://spdx.org/licenses/${id}.html`;
+
+/** ComfyUI: thanked first at the top of the page, and listed under Code and libraries. */
+export const COMFYUI = {
+  name: "ComfyUI",
+  maker: "Comfy Org",
+  url: "https://github.com/Comfy-Org/ComfyUI",
+  licence: { name: "GPL-3.0", url: SPDX("GPL-3.0-only") },
+} as const;
+
+/** Packages the app ships with that Built on thanks by name (only when package.json lists them), with what each does. */
+export const BUILT_ON_PACKAGES: { pkg: string; name: string; maker: string; use: string }[] = [
+  { pkg: "next", name: "Next.js", maker: "Vercel", use: "The framework the app is built with" },
+  { pkg: "react", name: "React", maker: "The React team", use: "Draws every screen" },
+  { pkg: "three", name: "three.js", maker: "mrdoob and contributors", use: "Shows 3D models in your browser" },
+];
+
+interface MakerDef {
+  id: string;
+  name: string;
+  /** A maker of Fuobe's premium image and video models: listed first. */
+  premium?: boolean;
+  /** Its model families, matched in a tool's downloaded file names, its name and its vendor (in lower case). */
+  families: { name: string; re: RegExp }[];
+}
+
+/**
+ * The labs and people behind the open models Fuobe runs. Only makers some row matches are shown, so the page never
+ * thanks a model Fuobe doesn't ship. A model inside another counts too (Qwen-VL reads the prompt for Krea 2).
+ */
+export const MAKERS: MakerDef[] = [
+  {
+    id: "qwen",
+    name: "Qwen team, Alibaba",
+    premium: true,
+    families: [
+      { name: "Qwen-Image", re: /qwen[-_ ]?image|qwen[-_ ]?edit|\bqi_?2\.1/ },
+      { name: "Qwen-VL", re: /qwen_?3_?vl|qwen3-vl|qwen_?2\.5_?vl/ },
+      { name: "Qwen3", re: /qwen_3_4b|qwen3\.5/ },
+      { name: "Qwen3-TTS", re: /qwen3-tts/ },
+      { name: "Qwen3-ASR", re: /qwen3-asr/ },
+    ],
+  },
+  { id: "ideogram", name: "Ideogram", premium: true, families: [{ name: "Ideogram 4", re: /ideogram[-_ ]?4/ }] },
+  {
+    id: "bfl",
+    name: "Black Forest Labs",
+    premium: true,
+    families: [
+      { name: "FLUX 3", re: /flux[-_. ]?3/ },
+      { name: "FLUX.2", re: /flux[-_. ]?2/ },
+      { name: "FLUX.1", re: /flux[-_. ]?1/ },
+    ],
+  },
+  {
+    id: "wan",
+    name: "Wan team, Alibaba",
+    premium: true,
+    families: [
+      { name: "Wan 2.2", re: /wan[-_ ]?2[._]?2/ },
+      { name: "Wan 2.1", re: /wan[-_ ]?2[._]?1/ },
+      { name: "Wan Animate 2", re: /wan[-_ ]?animate/ },
+    ],
+  },
+  { id: "minimax", name: "MiniMax", premium: true, families: [{ name: "MiniMax H3", re: /minimax[-_ ]?h3/ }] },
+  {
+    id: "krea",
+    name: "Krea",
+    premium: true,
+    families: [
+      { name: "Krea 2", re: /krea[-_ ]?2/ },
+      { name: "FLUX.1 Krea", re: /flux[-_. ]?1[-_. ]?krea/ },
+    ],
+  },
+  { id: "tongyi", name: "Tongyi Lab, Alibaba", premium: true, families: [{ name: "Z-Image", re: /\bz[-_ ]?image/ }] },
+  {
+    id: "lightricks",
+    name: "Lightricks",
+    premium: true,
+    families: [
+      { name: "LTX-2.5", re: /ltx[-_ ]?2\.5/ },
+      { name: "LTX-2.3", re: /ltx[-_ ]?2\.3/ },
+      { name: "LTX-2", re: /ltx[-_ ]?2(?![.\d])/ },
+    ],
+  },
+  {
+    id: "tencent",
+    name: "Tencent",
+    premium: true,
+    families: [
+      { name: "HunyuanVideo 1.5", re: /hunyuanvideo[-_ ]?1\.5/ },
+      { name: "HunyuanVideo-Foley", re: /hunyuanvideo[-_ ]?foley/ },
+      { name: "Hunyuan3D 2.1", re: /hunyuan[-_ ]?3d/ },
+      { name: "Pixal3D", re: /pixal3d/ },
+    ],
+  },
+  { id: "bria", name: "Bria", premium: true, families: [{ name: "FIBO 2", re: /fibo[-_ ]?2/ }] },
+  {
+    id: "meta",
+    name: "Meta",
+    families: [
+      { name: "SAM 3", re: /\bsam[-_ ]?3/ },
+      { name: "DINOv3", re: /dino[-_ ]?v3/ },
+      { name: "Llama 3.1", re: /llama/ },
+    ],
+  },
+  {
+    id: "bytedance",
+    name: "ByteDance",
+    families: [
+      { name: "SeedVR2", re: /seedvr2/ },
+      { name: "Depth Anything", re: /depth[-_ ]?anything/ },
+      { name: "USO", re: /\buso\b|uso-flux/ },
+      { name: "LatentSync", re: /latentsync/ },
+    ],
+  },
+  {
+    id: "stability",
+    name: "Stability AI",
+    families: [
+      { name: "Stable Audio", re: /stable[-_ ]?audio/ },
+      { name: "SDXL", re: /\bsdxl|sd_xl/ },
+    ],
+  },
+  { id: "openmoss", name: "OpenMOSS", families: [{ name: "MOSS-Image", re: /moss[-_ ]?image/ }] },
+  { id: "hidream", name: "HiDream.ai", families: [{ name: "HiDream-I1", re: /hidream/ }] },
+  {
+    id: "microsoft",
+    name: "Microsoft",
+    families: [
+      { name: "TRELLIS.2", re: /trellis[-_. ]?2/ },
+      { name: "MoGe 2", re: /\bmoge/ },
+    ],
+  },
+  { id: "vast", name: "VAST (Tripo)", families: [{ name: "TripoSplat", re: /triposplat/ }] },
+  {
+    id: "nvidia",
+    name: "NVIDIA",
+    families: [
+      { name: "Open-H3 Regenerate", re: /open[-_ ]?h3/ },
+      { name: "RE-USE", re: /\bre-use\b|nemotronlabs/ },
+    ],
+  },
+  {
+    id: "google",
+    name: "Google",
+    families: [
+      { name: "umT5", re: /umt5/ },
+      { name: "Gemma", re: /gemma/ },
+      { name: "T5", re: /t5xxl|t5-base/ },
+      { name: "SigLIP", re: /sigclip|siglip/ },
+      { name: "FILM", re: /film_net|\(film\b/ },
+    ],
+  },
+  { id: "mistral", name: "Mistral AI", families: [{ name: "Mistral Small 3", re: /mistral/ }] },
+  {
+    id: "openai",
+    name: "OpenAI",
+    families: [
+      { name: "Whisper", re: /whisper/ },
+      { name: "CLIP", re: /\bclip_l\b|clip_l[_.]/ },
+    ],
+  },
+  { id: "meigen", name: "MeiGen-AI", families: [{ name: "InfiniteTalk", re: /infinite[-_ ]?talk/ }] },
+  { id: "resemble", name: "Resemble AI", families: [{ name: "Chatterbox", re: /chatterbox/ }] },
+  { id: "bilibili", name: "Bilibili", families: [{ name: "IndexTTS-2", re: /indextts/ }] },
+  { id: "openbmb", name: "OpenBMB", families: [{ name: "VoxCPM2", re: /voxcpm/ }] },
+  { id: "ace", name: "ACE Studio and StepFun", families: [{ name: "ACE-Step 1.5", re: /ace[-_ ]?step/ }] },
+  { id: "funaudiollm", name: "FunAudioLLM", families: [{ name: "ThinkSound", re: /thinksound/ }] },
+  { id: "mmaudio", name: "Ho Kei Cheng", families: [{ name: "MMAudio", re: /mmaudio/ }] },
+  { id: "netflix", name: "Netflix", families: [{ name: "VOID", re: /(?:^|[^a-z])void(?:[^a-z]|$)/ }] },
+  { id: "birefnet", name: "Peng Zheng", families: [{ name: "BiRefNet", re: /birefnet/ }] },
+  { id: "esrgan", name: "Xintao Wang", families: [{ name: "Real-ESRGAN", re: /esrgan/ }] },
+  { id: "rife", name: "Zhewei Huang", families: [{ name: "RIFE", re: /\brife\b|rife_v/ }] },
+  { id: "dbs", name: "Kai Li", families: [{ name: "DBS", re: /\bdbs\b|dbs-/ }] },
+  { id: "insightface", name: "InsightFace", families: [{ name: "inswapper", re: /inswapper/ }] },
+];
+
+/** The makers and families a piece of text names (a file name, a row's name or vendor, in lower case). */
+function familiesIn(text: string): [string, string][] {
+  return MAKERS.flatMap((m) => m.families.filter((f) => f.re.test(text)).map((f): [string, string] => [m.id, f.name]));
+}
+
+/** A download's file name and its repository ("comfy-org/qwen-image-2.1"), in lower case. */
+function downloadParts(url: string): { file: string; repo: string } {
+  const clean = url.split("?")[0];
+  let file = clean.split("/").at(-1) ?? "";
+  try {
+    file = decodeURIComponent(file);
+  } catch {
+    // A file name that isn't valid percent-encoding is read as it is.
+  }
+  const repo = /^https:\/\/(?:huggingface\.co|github\.com)\/(?:datasets\/)?([^/]+\/[^/]+)/.exec(clean)?.[1] ?? "";
+  return { file: file.toLowerCase(), repo: repo.toLowerCase() };
+}
+
+/**
+ * The makers whose weights a tool runs, with the family of each, as [maker id, family]: from the files its workflows
+ * download (a file's own name, else its repository's when the name says nothing, like "model.safetensors"), its name
+ * and its vendor.
+ */
+export function makersOf(name: string, by: string, downloads: string[]): [string, string][] {
+  const found = [
+    ...downloads.flatMap((u) => {
+      const { file, repo } = downloadParts(u);
+      const own = familiesIn(file);
+      return own.length ? own : familiesIn(repo);
+    }),
+    ...familiesIn(name.toLowerCase()),
+    ...familiesIn(by.toLowerCase()),
+  ];
+  return [...new Map(found.map((f) => [f.join("|"), f])).values()];
+}
 
 /** A model's kind, or a library workflow's capability, as a group. */
 export function groupOf(kind: string): ThanksGroupId {
@@ -199,6 +441,8 @@ export function buildThanks(input: ThanksInput): Thanks {
   const list = buildLicenceList(input.models, input.workflows);
   const model = new Map(input.models.map((m) => [m.id, m]));
   const workflow = new Map(input.workflows.map((w) => [w.id, w]));
+  // The model makers: how many rows run each of their families.
+  const families = new Map<string, Map<string, number>>();
   for (const r of list.rows) {
     const m = model.get(r.id);
     const wf = workflow.get(r.workflows[0]);
@@ -209,6 +453,14 @@ export function buildThanks(input: ThanksInput): Thanks {
     ].filter(Boolean);
     own.forEach((n) => credit(n, r.name));
     const card = wf?.models?.map((x) => modelCardOf(x.url)).find(Boolean);
+    const downloads = r.workflows.flatMap((id) => workflow.get(id)?.models ?? []).flatMap((x) => (x.url ? [x.url] : []));
+    const made = makersOf(r.name, r.by, downloads);
+    for (const [maker, family] of made) {
+      const counts = families.get(maker) ?? new Map<string, number>();
+      counts.set(family, (counts.get(family) ?? 0) + 1);
+      families.set(maker, counts);
+    }
+    const makers = [...new Set(made.map(([id]) => id))];
     groups.get(groupOf(r.kind))!.push({
       id: `model:${r.id}`,
       name: r.name,
@@ -218,6 +470,7 @@ export function buildThanks(input: ThanksInput): Thanks {
       licences: rowLicences(r.licences, r.links),
       ...(conditions.length && { condition: conditions.join(". ") }),
       ...(own.length && { credits: own }),
+      ...(makers.length && { makers }),
     });
   }
   // Cloud models whose results carry a name too (TRELLIS.2 and TripoSplat on fal encode with DINOv3).
@@ -266,7 +519,7 @@ export function buildThanks(input: ThanksInput): Thanks {
   // Code: Fuobe itself, ComfyUI, the code and data its tools credit, and the packages the app ships with.
   const code = groups.get("code")!;
   code.push({ id: "code:fuobe", name: "Fuobe", url: FUOBE_REPO, use: "This app, open source", licences: [{ name: "MIT", url: `${FUOBE_REPO}/blob/main/LICENSE` }] });
-  code.push({ id: "code:comfyui", name: "ComfyUI", maker: "Comfy Org", url: COMFYUI_REPO, use: "Runs the open models on your GPU", licences: [{ name: "GPL-3.0", url: SPDX("GPL-3.0-only") }] });
+  code.push({ id: "code:comfyui", name: COMFYUI.name, maker: COMFYUI.maker, url: COMFYUI.url, use: "Runs the open models on your GPU", licences: [{ ...COMFYUI.licence }] });
   // The Character swap's workflow (its models, LoRAs and node packs are listed above).
   for (const l of CHARACTER_LICENCES.filter((x) => /workflow/i.test(x.item))) {
     code.push({ id: `code:${l.item}`, name: l.item, maker: ownerOf(l.url), url: l.url, use: "The Character swap's ComfyUI graph", licences: [{ name: l.name, url: l.url }] });
@@ -297,7 +550,35 @@ export function buildThanks(input: ThanksInput): Thanks {
     });
   }
 
+  // Built on: ComfyUI, where the open weights are hosted, the app's frameworks and FFmpeg, each only when Fuobe uses it.
+  const builtOn: ThanksProject[] = [{ id: "comfyui", name: COMFYUI.name, maker: COMFYUI.maker, url: COMFYUI.url, use: "Every open model in Fuobe runs through ComfyUI, on your own GPU.", licence: { ...COMFYUI.licence } }];
+  if (input.workflows.some((w) => w.models?.some((x) => x.url?.startsWith("https://huggingface.co/")))) {
+    builtOn.push({ id: "huggingface", name: "Hugging Face", maker: "Hugging Face", url: "https://huggingface.co", use: "Hosts the open model files Fuobe runs" });
+  }
+  for (const b of BUILT_ON_PACKAGES) {
+    const p = input.packages.find((x) => x.name === b.pkg);
+    if (!p) continue;
+    const url = spdxLink(p.license);
+    builtOn.push({ id: `package:${p.name}`, name: b.name, maker: b.maker, url: p.url ?? `https://www.npmjs.com/package/${p.name}`, use: b.use, licence: { name: p.license || "See its page", ...(url && { url }) } });
+  }
+  // FFmpeg: the cloud joins run on fal's FFmpeg API, and VideoHelperSuite reads and writes video with it in ComfyUI.
+  if (input.models.some((m) => m.routes.some((r) => /ffmpeg/i.test(r.endpoint))) || input.workflows.some((w) => w.packs?.includes("ComfyUI-VideoHelperSuite"))) {
+    builtOn.push({ id: "ffmpeg", name: "FFmpeg", maker: "The FFmpeg developers", url: "https://ffmpeg.org", use: "Joins, encodes and reads video", licence: { name: "LGPL-2.1+", url: "https://ffmpeg.org/legal.html" } });
+  }
+
+  const modelRows = GROUP_ORDER.filter((g) => g !== "loras" && g !== "packs" && g !== "code").flatMap((g) => groups.get(g)!);
+  const makers = MAKERS.flatMap((m) => {
+    const counts = families.get(m.id);
+    if (!counts) return [];
+    const maker: ThanksMaker = { id: m.id, name: m.name, models: m.families.map((f) => f.name).filter((f) => counts.has(f)), count: modelRows.filter((r) => r.makers?.includes(m.id)).length };
+    return [{ maker, premium: !!m.premium }];
+  })
+    .sort((a, b) => Number(b.premium) - Number(a.premium) || b.maker.count - a.maker.count || a.maker.name.localeCompare(b.maker.name))
+    .map((x) => x.maker);
+
   return {
+    builtOn,
+    makers,
     credits: [...credits].map(([text, names]) => ({ text, names })),
     groups: GROUP_ORDER.map((id) => ({ id, title: GROUP_TITLE[id], rows: groups.get(id)! })).filter((g) => g.rows.length),
   };
@@ -312,7 +593,7 @@ export function searchText(r: ThanksRow): string {
 export function packageFacts(pkg: { name?: string; description?: string; license?: unknown; author?: unknown; repository?: unknown; homepage?: unknown }): Omit<ThanksPackage, "name"> {
   const author = typeof pkg.author === "string" ? pkg.author : (pkg.author as { name?: string } | undefined)?.name;
   const repo = typeof pkg.repository === "string" ? pkg.repository : (pkg.repository as { url?: string } | undefined)?.url;
-  const github = repo && /github\.com[/:]([^/]+)\/([^/#.]+)/.exec(repo);
+  const github = repo && /github\.com[/:]([^/]+)\/([^/#]+?)(?:\.git)?(?:[/#]|$)/.exec(repo);
   const shorthand = repo && /^([\w.-]+)\/([\w.-]+)$/.exec(repo);
   const url = github ? `https://github.com/${github[1]}/${github[2]}` : shorthand ? `https://github.com/${shorthand[1]}/${shorthand[2]}` : typeof pkg.homepage === "string" ? pkg.homepage : undefined;
   const maker = author?.replace(/\s*[<(].*$/, "").trim() || (github?.[1] ?? shorthand?.[1]);
