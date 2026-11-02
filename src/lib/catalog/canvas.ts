@@ -12,6 +12,7 @@ import { EXAMPLE_SCENE, EXAMPLE_WORDS, beatsFrom, blockoutFramePrompt, compileBl
 import { getModel, getPreset, MODELS, supportsOp } from "./index";
 import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
+import { isSpeed, keyTimes, timingFor, timingProblem, type GapTiming, type InbetweenTiming } from "@/lib/inbetween";
 import { estimateCost, inferOperation, planGeneration, routesFor, type Plan } from "./plan";
 import { replacedBy, replacementOf } from "./replaced";
 import { REGEN_COPY, REGEN_MODEL } from "./regenerate";
@@ -942,6 +943,9 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
   if (n.type !== "model" && op && !supportsOp(model, op)) return { error: `${model.name} can't do ${OPERATION_LABELS[op].toLowerCase()} — pick another model` };
   if ((op === "translate" || op === "dub") && !n.data.params?.targetLanguage) return { error: op === "dub" ? "Pick a language to dub into" : "Pick a language to translate into" };
   if (n.type === "concat") return concatRequest(graph, n, model);
+  // Keyframe animation: a table wired in is its gaps' timing (one row per gap), not a run per row.
+  const timingTable = model.options.inbetween ? timingTableOf(graph, n) : undefined;
+  if (timingTable) return inbetweenRequest(graph, n, model, timingTable);
   if (!single) {
     const rows = rowsFeeding(graph, n);
     if (rows && "error" in rows) return rows;
@@ -1045,6 +1049,58 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
 }
 
 // ---------------------------------------------------------------------------
+// Keyframe animation on the Canvas: keyframe images into an In-between node (Fuobe Animation), and a table of its gaps
+
+/** The "Keyframes → animation" table's columns: one row per gap between two keyframes. */
+export const TIMING_COLUMNS = ["Frames", "Speed", "Words"];
+
+/** The table wired straight into an In-between node, if any. */
+function timingTableOf(graph: CanvasGraph, n: CanvasNode): CanvasNode | undefined {
+  const nodes = nodeMap(graph);
+  return incoming(graph, n.id)
+    .map((e) => nodes.get(e.source))
+    .find((s): s is CanvasNode => s?.type === "table");
+}
+
+/**
+ * A timing table's rows as gaps: a "Frames" (or "Length") column, a "Speed" column (1–4, "×2" reads as 2) and a "Words"
+ * column, found by name (else in that order). Missing cells take the defaults.
+ */
+export function timingFromTable(t: Pick<CanvasNode, "data">): Partial<InbetweenTiming> {
+  const columns = (t.data.columns ?? []).map((c) => c.trim().toLowerCase());
+  const at = (re: RegExp, fallback: number) => {
+    const i = columns.findIndex((c) => re.test(c));
+    return i >= 0 ? i : fallback < columns.length ? fallback : -1;
+  };
+  const fi = at(/^(frames?|length)/, 0);
+  const si = at(/^(speed|every)/, 1);
+  const wi = at(/^(words?|prompt|action|what)/, 2);
+  const num = (v: string | undefined) => Number(String(v ?? "").replace(/[^\d.]/g, ""));
+  const gaps = tableRows(t).map((r): GapTiming => {
+    const frames = fi >= 0 ? num(r[fi]) : NaN;
+    const speed = si >= 0 ? num(r[si]) : 1;
+    const words = wi >= 0 ? r[wi] : "";
+    return { frames: Number.isFinite(frames) && frames > 0 ? frames : 33, speed: isSpeed(speed) ? speed : 1, ...(words && { prompt: words }) };
+  });
+  return { gaps };
+}
+
+function inbetweenRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, table: CanvasNode): NodeRequest | { error: string } {
+  const without: CanvasGraph = { ...graph, edges: graph.edges.filter((e) => !(e.source === table.id && e.target === n.id)) };
+  const made = buildRequest(without, n, model, true);
+  if ("error" in made) return made;
+  const keys = (made.request.inputs?.images?.length ?? 0) + (made.request.chain?.filter((c) => c.slot === "images").length ?? 0);
+  const asked = timingFromTable(table);
+  if (keys >= 2 && (asked.gaps?.length ?? 0) !== keys - 1) return { error: `${keys} keyframes have ${keys - 1} gaps — give “${nodeLabel(table)}” one row per gap` };
+  const fps = (made.request.params?.extra?.inbetween as Partial<InbetweenTiming> | undefined)?.fps;
+  const timing = timingFor(keys, { ...asked, ...(fps && { fps }) }, model.engine);
+  const problem = keys >= 2 ? timingProblem(timing, keys, model.engine) : null;
+  if (problem) return { error: problem };
+  const params: GenParams = { ...made.request.params, extra: { ...made.request.params?.extra, inbetween: timing }, ...(keys >= 2 && { keyframeTimes: keyTimes(timing) }) };
+  return { ...made, request: { ...made.request, op: "keyframes", params } };
+}
+
+// ---------------------------------------------------------------------------
 // Tables: the node a table feeds runs once per filled row (and so does every node after it, until a Video
 // concatenator joins the rows into one film). "{Column}" in that node's prompt takes the row's cell; otherwise the
 // row's cells, joined, are its connected text.
@@ -1079,6 +1135,8 @@ export function tablesFeeding(graph: CanvasGraph): (n: Pick<CanvasNode, "id" | "
   const feed = (n: Pick<CanvasNode, "id" | "type" | "data">): RowsFeed => {
     if (n.type === "table") return { table: n as CanvasNode, rows: tableRows(n) };
     if (!isGenerator(n) || n.type === "concat" || visiting.has(n.id)) return null;
+    // An In-between node reads its table as timing and makes one film: nothing after it runs per row.
+    if (n.data.modelId && getModel(n.data.modelId)?.options.inbetween) return null;
     const known = memo.get(n.id);
     if (known !== undefined) return known;
     visiting.add(n.id);
@@ -1882,7 +1940,52 @@ const BLOCKOUT_OPEN = tpl(
   ],
 );
 
+/** Keyframes → animation: three keyframes and a table of their two gaps into one In-between node (Fuobe Animation). */
+const keyframesAnimation = tpl(
+      [
+        { id: "key1", type: "image-input", x: 0, y: 0, data: { label: "Keyframe 1" } },
+        { id: "key2", type: "image-input", x: 0, y: ROW, data: { label: "Keyframe 2" } },
+        { id: "key3", type: "image-input", x: 0, y: ROW * 2, data: { label: "Keyframe 3" } },
+        {
+          id: "timing",
+          type: "table",
+          x: COL,
+          y: ROW * 2 + 40,
+          data: { label: "Gaps (frames, speed ×1–×4, words)", columns: TIMING_COLUMNS, rows: [["37", "1", "she turns toward us"], ["17", "3", "she waves"]] },
+        },
+        {
+          id: "animate",
+          type: "model",
+          x: COL * 2,
+          y: ROW - 40,
+          data: { mediaKind: "video", label: "In-between", op: "keyframes", prompt: "A character animation, clean lines", params: { aspectRatio: "16:9", extra: { stillMouth: true } } },
+          models: { cloud: "fuobe-animation", open: "fuobe-animation" },
+        },
+        { id: "out", type: "output", x: COL * 3, y: ROW - 20, data: { label: "Animation" } },
+      ],
+      [
+        ["key1", "animate", "images"],
+        ["key2", "animate", "images"],
+        ["key3", "animate", "images"],
+        ["timing", "animate", "prompt"],
+        ["animate", "out"],
+      ],
+    );
+
 export const CANVAS_TEMPLATES: CanvasTemplate[] = [
+  {
+    id: "keyframes-animation",
+    name: "Keyframes → animation",
+    description: "Your keyframes in, the in-betweens drawn, one animation: a table times each gap",
+    icon: "Sparkles",
+    hue: 320,
+    // Fuobe Animation runs on both engines: the node takes the template's.
+    build: (engine) => {
+      const g = keyframesAnimation(engine);
+      for (const n of g.nodes) if (n.id === "animate") n.data.engine = engine;
+      return g;
+    },
+  },
   {
     id: "image-animate",
     name: "Image → Animate",
