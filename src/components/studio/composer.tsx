@@ -346,7 +346,7 @@ export function Composer({ docked }: { docked: boolean }) {
   const models = useMemo(() => filterModels(catalog.models, { kind: config.kind, ops: pickerOps }), [catalog.models, config.kind, pickerOps]);
   const model: ModelDef | undefined = catalog.getModel(draft.modelId);
   // MiniMax H3 on your GPU has a References mode (Pika H3 Flex): reference clips and voice or music clips beside the images.
-  const refMode = openReferenceMode(model);
+  const refMode = config.ops.includes("ref2v") ? openReferenceMode(model) : null;
   const [refsOpen, setRefsOpen] = useState(false);
   const refClips = refMode ? (draft.refClips ?? []) : [];
   const refAudios = refMode ? (draft.refAudios ?? []) : [];
@@ -376,7 +376,7 @@ export function Composer({ docked }: { docked: boolean }) {
   /** What the request names for its model: the engine (only a model that runs on both, a Fuobe Original), and whether it takes looks. */
   const targetFor = (id: string) => {
     const m = catalog.getModel(id);
-    return { engine: dualEngine(m) ? engine : undefined, looks: !!m?.options.looks, refs: !!openReferenceMode(m) };
+    return { engine: dualEngine(m) ? engine : undefined, looks: !!m?.options.looks, refs: config.ops.includes("ref2v") && !!openReferenceMode(m) };
   };
 
   // A curated moodboard on a model that takes looks is a look: it moves to the Look chip, so the chip shows what
@@ -1401,7 +1401,7 @@ export function Composer({ docked }: { docked: boolean }) {
               className={cn(chipBase, chipIdle, "gap-1.5", refsOpen && "border-foreground/30 text-foreground")}
             >
               <Library className="size-3.5" />
-              References
+              <span className="max-sm:sr-only">References</span>
             </button>
           )}
           {collapsed && showAttachments && attached.length > 0 && (
