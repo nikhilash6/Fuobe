@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { FailedTile, PendingTile } from "@/components/studio/feed";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
@@ -17,6 +18,7 @@ import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useCreateGeneration, useEngine, useGenerations, useHydrated, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
+  IDOL_QUALITIES,
   MAX_3D_PROMPT,
   MODEL3D_FEATURE,
   MODEL3D_MODES,
@@ -25,10 +27,12 @@ import {
   SIDE_LABELS,
   SIDES_HINT,
   VIEW_SIDES,
+  isIdol,
   model3dBlocker,
   model3dFor,
   model3dRequest,
   modeOf,
+  type IdolQuality,
   type Model3dInput,
   type Model3dMode,
   type ViewSide,
@@ -76,6 +80,59 @@ function UrlModel({ onModel, onMode, onRig }: { onModel: (mode: Model3dMode, eng
     else if (MODEL3D_MODES.some((m) => m.id === mode)) onMode(mode as Model3dMode);
   }, [id, mode, onModel, onMode, onRig]);
   return null;
+}
+
+/**
+ * Idol 3D's settings: Best or Quick look (labelled by steps and Gaussians), and "It's a photo", which gives the object
+ * Idol's looser crop.
+ */
+function IdolSettings({ quality, onQuality, photo, onPhoto }: { quality: IdolQuality; onQuality: (q: IdolQuality) => void; photo: boolean; onPhoto: (v: boolean) => void }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const move = (from: number, by: number) => {
+    const i = (from + by + IDOL_QUALITIES.length) % IDOL_QUALITIES.length;
+    onQuality(IDOL_QUALITIES[i].id);
+    refs.current[i]?.focus();
+  };
+  return (
+    <div className="mt-3 space-y-3">
+      <div>
+        <div role="radiogroup" aria-label="Quality" className="grid grid-cols-2 gap-0.5 rounded-full bg-muted p-0.5">
+          {IDOL_QUALITIES.map((q, i) => (
+            <button
+              key={q.id}
+              ref={(el) => {
+                refs.current[i] = el;
+              }}
+              type="button"
+              role="radio"
+              aria-checked={quality === q.id}
+              tabIndex={quality === q.id ? 0 : -1}
+              onClick={() => onQuality(q.id)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                  e.preventDefault();
+                  move(i, 1);
+                } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  move(i, -1);
+                }
+              }}
+              className={cn("h-8 rounded-full px-3 text-[13px] font-medium", quality === q.id ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground")}
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[12px] text-muted-foreground">{IDOL_QUALITIES.find((q) => q.id === quality)?.hint}</p>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <Label htmlFor="m3d-idol-photo" className="text-[13px] font-normal">
+          It&apos;s a photo (looser crop)
+        </Label>
+        <Switch id="m3d-idol-photo" checked={photo} onCheckedChange={onPhoto} />
+      </div>
+    </div>
+  );
 }
 
 /** The five modes as one row of pills (wrapping on a phone); arrow keys move between them. */
@@ -142,6 +199,17 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const hydrated = useHydrated();
   const engineKnown = statusKnown && hydrated;
   const [photo, setPhoto] = useState<SlotValue | null>(null);
+  // Idol 3D (Splat): Best or Quick look, and whether the picture is a photo. A picture uploaded or dropped here is taken
+  // for a photo; one picked from the library (a Fuobe result, usually) for a render or a generated image.
+  const [idolQuality, setIdolQuality] = useState<IdolQuality>("best");
+  const [idolPhoto, setIdolPhoto] = useState(true);
+  const takePhoto = (v: SlotValue | null) => {
+    setPhoto(v);
+    if (v && v.ref !== photo?.ref) {
+      if (v.uploading) setIdolPhoto(true);
+      else if (!photo?.uploading) setIdolPhoto(false);
+    }
+  };
   const [views, setViews] = useState<Partial<Record<ViewSide, SlotValue | null>>>({});
   const [text, setText] = useState("");
   const [object, setObject] = useState("");
@@ -161,7 +229,16 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const wanted = picked[`${mode}:${engine}`];
   const modelId = model3dFor(mode, engine, wanted && choices.some((m) => m.id === wanted) ? wanted : choices[0]?.id);
   const sides = Object.fromEntries(VIEW_SIDES.flatMap((s) => (views[s] ? [[s, views[s]!.ref]] : []))) as Partial<Record<ViewSide, string>>;
-  const input: Model3dInput = { engine, mode, modelId: modelId ?? undefined, photo: photo?.ref, views: sides, prompt: mode === "text" ? text : mode === "objects" ? object : undefined };
+  const idol = mode === "splat" && isIdol(modelId);
+  const input: Model3dInput = {
+    engine,
+    mode,
+    modelId: modelId ?? undefined,
+    photo: photo?.ref,
+    views: sides,
+    prompt: mode === "text" ? text : mode === "objects" ? object : undefined,
+    ...(idol && { quality: idolQuality, photoCrop: idolPhoto }),
+  };
   const uploading = !!photo?.uploading || VIEW_SIDES.some((s) => views[s]?.uploading);
   // A guest or an account reads why the button is off, not a step on an upload that is off too.
   const blocker = visitor ? "Image to 3D isn't available here" : (model3dBlocker(input) ?? (uploading ? "Uploading…" : null));
@@ -255,7 +332,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
               <MediaDrop
                 kind="image"
                 value={photo}
-                onChange={setPhoto}
+                onChange={takePhoto}
                 title={mode === "objects" ? "Add a photo" : "Add a photo of the object"}
                 hint={mode === "objects" ? "A room, a shelf, a street: anything with the object in it" : "One object, plain background, well lit"}
                 compact
@@ -318,6 +395,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {!licence && info[modelId]?.notices.length > 0 && <p className="text-[12px] font-medium">{info[modelId].notices.join(" · ")}</p>}
                 {licence && licence.notices.length > 0 && <p className="text-[12px] text-muted-foreground">{licence.notices.join(" · ")}</p>}
               </div>
+              {idol && <IdolSettings quality={idolQuality} onQuality={setIdolQuality} photo={idolPhoto} onPhoto={setIdolPhoto} />}
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
               </Button>
@@ -325,13 +403,17 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {visitor ? blocker : <>{blocker ? `${blocker} · ` : ""}{preview.isError ? (preview.error as Error).message : (price ?? "Working out the price…")}</>}
               </p>
               <p className="mt-1 text-[12px] text-muted-foreground">
-                {mode === "splat"
+                {idol
                   ? engine === "open"
-                    ? "Cuts the subject out and comes with an orbit video."
-                    : "Cuts the subject out, ready to download."
-                  : engine === "open"
-                    ? "Comes with a turntable video of your model."
-                    : "Download your model, or record a turntable right here."}
+                    ? "Idol cuts the object out, builds the splat and renders an orbit video on your GPU. One object per picture."
+                    : "Idol cuts the object out and builds the splat, ready to download. One object per picture."
+                  : mode === "splat"
+                    ? engine === "open"
+                      ? "Cuts the subject out and comes with an orbit video."
+                      : "Cuts the subject out, ready to download."
+                    : engine === "open"
+                      ? "Comes with a turntable video of your model."
+                      : "Download your model, or record a turntable right here."}
               </p>
             </>
           )}

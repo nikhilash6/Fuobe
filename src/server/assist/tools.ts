@@ -96,7 +96,7 @@ const searchModels = defineTool({
       .string()
       .optional()
       .describe(
-        "Operation id to filter by, e.g. t2i, edit, t2v, i2v, flf2v, ref2v, extend, lipsync, avatar, tts, upscale-image, layers, text-layers, trim, transcribe, captions, mux, separate-audio, translate, write, image-to-3d.",
+        "Operation id to filter by, e.g. t2i, edit, t2v, i2v, flf2v, ref2v, extend, lipsync, avatar, tts, upscale-image, layers, text-layers, trim, transcribe, captions, mux, separate-audio, translate, write, image-to-3d, splat.",
       ),
     query: z.string().optional().describe("Words to match in the model name, vendor or description, e.g. 'kling', 'cheap', 'photoreal'."),
   }),
@@ -257,7 +257,7 @@ const Job = z.object({
     .string()
     .optional()
     .describe(
-      "Operation id (t2i, edit, t2v, i2v, flf2v, ref2v, extend, tts, layers, transcribe, translate, write, trim, captions, mux, separate-audio, image-to-3d…). Usually inferred from the inputs; set it when ambiguous.",
+      "Operation id (t2i, edit, t2v, i2v, flf2v, ref2v, extend, tts, layers, transcribe, translate, write, trim, captions, mux, separate-audio, image-to-3d, splat…). Usually inferred from the inputs; set it when ambiguous.",
     ),
   images: z.array(ref).optional().describe("Input images: the image to edit, the start frame, or references, in order."),
   end_image: ref.optional().describe("End frame (first-and-last-frame video)."),
