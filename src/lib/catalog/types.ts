@@ -693,7 +693,7 @@ export interface ModelOptions {
   /** Remove background keeps only what you name (SAM): words, or points clicked on the first frame, are needed. */
   keepsNamed?: boolean;
   /**
-   * A keyer for footage shot on a green (or blue) screen (CorridorKey, Bria green screen): listed in Video tools → Green
+   * A keyer for footage shot on a green screen (CorridorKey 2.0, Bria green screen): listed in Video tools → Green
    * screen, kept out of Remove background's list.
    */
   greenScreen?: boolean;

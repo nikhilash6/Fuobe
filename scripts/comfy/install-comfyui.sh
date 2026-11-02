@@ -45,10 +45,11 @@ declare -A NODES=(
   # dependencies) and PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel imports triton, installed below).
   [ComfyUI-MiniMax-H3-Turbo]="https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo 77bfa67575b14e3be6214f1747732e540c68b5dd"
   [plaguekind-nodes]="https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes d58d006a4ea32c25c06499f2ff104f0852a045a6"
-  # Green screen (nm10-keying): pixelworldai's CorridorKey wrapper (no LICENSE file; CorridorKey itself is under the Corridor
-  # Key Licence). Read at this commit: its loader pip-installs Corridor's v1 engine from GitHub and downloads the v1.0
-  # weights the first time it runs, never at import.
-  [ComfyUI-CorridorKeyWrapper]="https://github.com/pixelworldai/ComfyUI-CorridorKeyWrapper 7eb44e48c182e81e9dd32024770247d01f1631d3"
+  # Green screen (nm10-keying): hashu786's CorridorKey 2.0 nodes (Corridor Key Licence 2.0, like CorridorKey itself; they
+  # vendor Corridor's CorridorKey 2.0 code unmodified at 485f5e9). Read at this commit: nothing is installed at run time; the
+  # node downloads the 2.0 weights and the three frozen models it builds on (about 5.1 GB, into models/corridorkey2/) the
+  # first time it runs, never at import (CORRIDORKEY2_NO_DOWNLOAD=1 turns that off). Its requirements are in the union below.
+  [ComfyUI-CorridorKey2]="https://github.com/hashu786/ComfyUI-CorridorKey2 d1228b68796786acee92b6497f72a60d70d1a844"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.

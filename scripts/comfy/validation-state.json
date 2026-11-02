@@ -828,10 +828,10 @@
     "at": "2026-10-23T00:12:21.209Z"
   },
   "video-key-corridorkey": {
-    "sha256": "4cf78bd97d1229965b745200c44d987664ef0bb7666655cdf22fbe2381955a25",
+    "sha256": "05971ce7115c793259dc1e6d88bee9a5815c50f7f6d2ba98132433a9dad5a20d",
     "validated": false,
-    "error": "HTTP 400: missing_node_type: Node 'CorridorKey (v1.0 weights, downloaded on first run)' not found. The custom node may not be installed. (Node ID '#4')",
-    "at": "2026-11-02T11:07:46.594Z"
+    "error": "HTTP 400: missing_node_type: Node 'CorridorKey 2.0 (weights downloaded on first run): matte, despilled foreground over black, straight RGBA' not found. The custom node may not be installed. (Node ID '#6')",
+    "at": "2026-11-02T21:14:06.467Z"
   },
   "video-mask-h3-relay": {
     "sha256": "d5a3fc7046010b54ea070f45acc325602ed5ab5dbe403040e4d6591949084c84",

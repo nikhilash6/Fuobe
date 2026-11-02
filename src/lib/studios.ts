@@ -453,14 +453,15 @@ export const VIDEO_MATTE_STUDIO: StudioConfig = {
 };
 
 /**
- * Video tools → Green screen (nm10-keying): footage shot on a green or blue screen, keyed with the spill cleaned off the
- * edges. Its models are the keyers (ModelOptions.greenScreen): CorridorKey on your GPU, Bria's green-screen despill in the
- * cloud. Remove background lists the others.
+ * Video tools → Green screen (nm10-keying): footage shot on a green screen, keyed with the green spill cleaned off the
+ * edges (both keyers despill green only). Its models are the keyers (ModelOptions.greenScreen): CorridorKey 2.0 on your GPU,
+ * Bria's green-screen despill in the cloud. Remove background lists the others.
  */
 export const VIDEO_KEY_STUDIO: StudioConfig = {
   ...VIDEO_MATTE_STUDIO,
   hero: "Key out a green screen",
-  subtitle: "Footage shot on a green or blue screen, keyed clean with the spill taken off hair and edges. Get the cut-out, its mask or the clean foreground.",
+  subtitle:
+    "Footage shot on a green screen, keyed clean with the green spill taken off hair and edges. On your GPU, get the cut-out, its mask or the clean foreground as WebM, ProRes 4444 or EXR; in the cloud, the cut-out as a transparent WebM.",
   placeholder: "",
   greenScreen: true,
   defaultModels: { cloud: "bria-green-screen", open: "oss-video-key-corridorkey" },

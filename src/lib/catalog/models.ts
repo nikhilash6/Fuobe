@@ -1027,24 +1027,24 @@ const open: ModelDef[] = [
     options: { promptless: true, matteOutputs: ["cutout", "matte"], formats: ["webm_alpha", "prores_4444", "exr"] },
     defaults: { format: "webm_alpha" },
   }),
-  // Video tools → Green screen on your GPU (nm10-keying): Corridor Digital's CorridorKey neural keyer on footage shot on a
-  // green or blue screen, in passes so long clips fit. The cut-out, its mask or the clean foreground; WebM, ProRes 4444 with
-  // alpha, or linear EXR frames. It runs the v1.0 weights: no ComfyUI node loads CorridorKey 2.0 yet.
+  // Video tools → Green screen on your GPU (nm10-keying): Corridor Digital's CorridorKey 2.0 neural keyer on footage shot on
+  // a green screen (its despill takes out green), at native resolution, in passes so long clips fit. The cut-out, its mask or
+  // the clean foreground; WebM, ProRes 4444 with alpha, or linear EXR frames. NVIDIA RTX 30-series or newer.
   o({
     id: "oss-video-key-corridorkey",
-    name: "CorridorKey",
+    name: "CorridorKey 2.0",
     vendor: "Corridor Digital",
     family: "corridorkey",
     kind: "video",
     tagline: "Neural green-screen keying: clean hair, motion blur and see-through edges, with the green spill taken out",
     badges: ["new"],
-    routes: [comfy("bg-remove-video", "video-key-corridorkey", "CorridorKey v1.0 weights")],
+    routes: [comfy("bg-remove-video", "video-key-corridorkey", "CorridorKey 2.0")],
     options: {
       promptless: true,
       greenScreen: true,
       matteOutputs: ["cutout", "matte", "foreground"],
       formats: ["webm_alpha", "prores_4444", "exr"],
-      sliders: [{ param: "despill", label: "Spill cleanup", min: 0, max: 3, step: 0.1, default: 1 }],
+      sliders: [{ param: "despill", label: "Spill cleanup", min: 0, max: 1, step: 0.05, default: 0.5 }],
     },
     defaults: { format: "webm_alpha" },
   }),

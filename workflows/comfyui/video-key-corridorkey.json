@@ -22,7 +22,7 @@
   "2": {
     "class_type": "VHS_BatchManager",
     "inputs": {
-      "frames_per_batch": 32
+      "frames_per_batch": 48
     },
     "_meta": {
       "title": "Meta batch: re-queue every framesPerBatch frames (memory stays flat)"
@@ -40,57 +40,24 @@
       "title": "Source frame rate"
     }
   },
-  "4": {
-    "class_type": "LoadCorridorKeyModel",
-    "inputs": {
-      "precision": "auto",
-      "use_refiner": true,
-      "mixed_precision": true
-    },
-    "_meta": {
-      "title": "CorridorKey (v1.0 weights, downloaded on first run)"
-    }
-  },
-  "5": {
-    "class_type": "ChromaKeyPrepass",
-    "inputs": {
-      "image": [
-        "1",
-        0
-      ],
-      "screen_color": "green",
-      "threshold": 0.3,
-      "softness": 0.1,
-      "erode": 2,
-      "blur": 5
-    },
-    "_meta": {
-      "title": "Coarse alpha hint from the screen colour"
-    }
-  },
   "6": {
-    "class_type": "CorridorKeyGreenscreen",
+    "class_type": "CorridorKey2",
     "inputs": {
-      "ck_model": [
-        "4",
-        0
-      ],
       "image": [
         "1",
         0
       ],
-      "alpha_hint": [
-        "5",
-        0
-      ],
-      "despill_strength": 1,
-      "refiner_scale": 1,
-      "auto_despeckle": true,
-      "despeckle_size": 400,
-      "input_is_linear": false
+      "gamma_space": "sRGB",
+      "hint_quality": 0.95,
+      "carry_hint": true,
+      "carry_hint_quality": 0.95,
+      "despill_strength": 0.5,
+      "window": "auto",
+      "low_vram": false,
+      "unload_other_models": true
     },
     "_meta": {
-      "title": "CorridorKey: alpha, despilled foreground, straight RGBA"
+      "title": "CorridorKey 2.0 (weights downloaded on first run): matte, despilled foreground over black, straight RGBA"
     }
   },
   "7": {
@@ -98,7 +65,7 @@
     "inputs": {
       "images": [
         "6",
-        2
+        4
       ],
       "audio": [
         "1",
@@ -132,7 +99,7 @@
     "inputs": {
       "mask": [
         "6",
-        0
+        1
       ]
     },
     "_meta": {}
@@ -171,7 +138,7 @@
     "inputs": {
       "images": [
         "6",
-        2
+        4
       ],
       "filename_prefix": "fuobe/video-key-corridorkey",
       "format": "exr",

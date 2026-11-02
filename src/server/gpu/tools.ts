@@ -277,7 +277,7 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/upscale/hdr", label: "SDR to HDR", group: "Video tools", config: S.SDR_TO_HDR_STUDIO },
   { href: "/upscale/export", label: "Export", group: "Video tools", config: S.VIDEO_EXPORT_STUDIO },
   { href: "/video-tools", label: "Remove background", group: "Video tools", config: S.VIDEO_MATTE_STUDIO },
-  // nm10-keying: CorridorKey on footage shot on a green or blue screen (its own list: ModelOptions.greenScreen).
+  // nm10-keying: CorridorKey 2.0 on footage shot on a green screen (its own list: ModelOptions.greenScreen).
   { href: "/video-tools/green-screen", label: "Green screen", group: "Video tools", config: S.VIDEO_KEY_STUDIO },
   // DBS D2: the split, then the stream-copy mux (one stem in place of the sound, or the voice over the lowered bed).
   {

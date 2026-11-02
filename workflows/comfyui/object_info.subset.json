@@ -3538,90 +3538,6 @@
       "model"
     ]
   },
-  "ChromaKeyPrepass": {
-    "input": {
-      "required": {
-        "image": [
-          "IMAGE"
-        ]
-      },
-      "optional": {
-        "screen_color": [
-          [
-            "green",
-            "blue"
-          ],
-          {
-            "default": "green"
-          }
-        ],
-        "threshold": [
-          "FLOAT",
-          {
-            "default": 0.3,
-            "min": 0,
-            "max": 1,
-            "step": 0.01
-          }
-        ],
-        "softness": [
-          "FLOAT",
-          {
-            "default": 0.1,
-            "min": 0,
-            "max": 0.5,
-            "step": 0.01
-          }
-        ],
-        "erode": [
-          "INT",
-          {
-            "default": 2,
-            "min": 0,
-            "max": 50,
-            "step": 1
-          }
-        ],
-        "blur": [
-          "INT",
-          {
-            "default": 5,
-            "min": 0,
-            "max": 50,
-            "step": 1
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "image"
-      ],
-      "optional": [
-        "screen_color",
-        "threshold",
-        "softness",
-        "erode",
-        "blur"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "MASK"
-    ],
-    "output_is_list": [
-      false
-    ],
-    "output_name": [
-      "alpha_hint"
-    ],
-    "name": "ChromaKeyPrepass",
-    "display_name": "Chroma Key Prepass",
-    "description": "Fast chroma key pre-pass that generates a coarse alpha hint from green/blue screen footage.",
-    "python_module": "custom_nodes.ComfyUI-CorridorKeyWrapper",
-    "category": "CorridorKey",
-    "output_node": false
-  },
   "ClothesSegment": {
     "input": {
       "required": {
@@ -4342,77 +4258,115 @@
       "clear conditioning"
     ]
   },
-  "CorridorKeyGreenscreen": {
+  "CorridorKey2": {
     "input": {
       "required": {
-        "ck_model": [
-          "CK_MODEL"
-        ],
         "image": [
-          "IMAGE"
+          "IMAGE",
+          {}
         ],
-        "alpha_hint": [
-          "MASK"
-        ]
-      },
-      "optional": {
-        "despill_strength": [
+        "gamma_space": [
+          [
+            "sRGB",
+            "Linear"
+          ],
+          {}
+        ],
+        "hint_quality": [
           "FLOAT",
           {
-            "default": 1,
-            "min": 0,
-            "max": 10,
-            "step": 0.1
+            "default": 0.95,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
           }
         ],
-        "refiner_scale": [
-          "FLOAT",
-          {
-            "default": 1,
-            "min": 0,
-            "max": 2,
-            "step": 0.05
-          }
-        ],
-        "auto_despeckle": [
+        "carry_hint": [
           "BOOLEAN",
           {
             "default": true
           }
         ],
-        "despeckle_size": [
-          "INT",
+        "carry_hint_quality": [
+          "FLOAT",
           {
-            "default": 400,
-            "min": 0,
-            "max": 10000,
-            "step": 50
+            "default": 0.95,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
           }
         ],
-        "input_is_linear": [
+        "despill_strength": [
+          "FLOAT",
+          {
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
+          }
+        ],
+        "window": [
+          [
+            "auto",
+            "80/40",
+            "48/24",
+            "24/12",
+            "8/4",
+            "4/2",
+            "2/1",
+            "1/1"
+          ],
+          {
+            "default": "auto"
+          }
+        ],
+        "low_vram": [
           "BOOLEAN",
           {
             "default": false
           }
+        ],
+        "unload_other_models": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
         ]
+      },
+      "optional": {
+        "mask": [
+          "MASK",
+          {}
+        ]
+      },
+      "hidden": {
+        "unique_id": "UNIQUE_ID",
+        "prompt": "PROMPT"
       }
     },
     "input_order": {
       "required": [
-        "ck_model",
         "image",
-        "alpha_hint"
+        "gamma_space",
+        "hint_quality",
+        "carry_hint",
+        "carry_hint_quality",
+        "despill_strength",
+        "window",
+        "low_vram",
+        "unload_other_models"
       ],
       "optional": [
-        "despill_strength",
-        "refiner_scale",
-        "auto_despeckle",
-        "despeckle_size",
-        "input_is_linear"
+        "mask"
+      ],
+      "hidden": [
+        "unique_id",
+        "prompt"
       ]
     },
     "is_input_list": false,
     "output": [
+      "IMAGE",
       "MASK",
       "IMAGE",
       "IMAGE",
@@ -4422,18 +4376,20 @@
       false,
       false,
       false,
+      false,
       false
     ],
     "output_name": [
-      "alpha",
-      "foreground",
-      "processed_rgba",
-      "comp_preview"
+      "fg",
+      "matte",
+      "processed",
+      "QC",
+      "cutout"
     ],
-    "name": "CorridorKeyGreenscreen",
-    "display_name": "CorridorKey Greenscreen",
-    "description": "Neural network greenscreen keying. Produces a clean alpha matte, despilled sRGB foreground, straight sRGB RGBA, and a checkerboard composite preview.",
-    "python_module": "custom_nodes.ComfyUI-CorridorKeyWrapper",
+    "name": "CorridorKey2",
+    "display_name": "CorridorKey 2.0",
+    "description": "CorridorKey 2.0 neural green/blue screen keyer. Works with no hint, a single first-frame hint mask, or one hint mask per frame. Runs at native resolution with temporal Hann windows across the whole batch.",
+    "python_module": "custom_nodes.ComfyUI-CorridorKey2",
     "category": "CorridorKey",
     "output_node": false
   },
@@ -12775,59 +12731,6 @@
     "search_aliases": null,
     "essentials_category": null,
     "has_intermediate_output": false
-  },
-  "LoadCorridorKeyModel": {
-    "input": {
-      "required": {},
-      "optional": {
-        "precision": [
-          [
-            "auto",
-            "fp16",
-            "fp32"
-          ],
-          {
-            "default": "auto"
-          }
-        ],
-        "use_refiner": [
-          "BOOLEAN",
-          {
-            "default": true
-          }
-        ],
-        "mixed_precision": [
-          "BOOLEAN",
-          {
-            "default": true
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [],
-      "optional": [
-        "precision",
-        "use_refiner",
-        "mixed_precision"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "CK_MODEL"
-    ],
-    "output_is_list": [
-      false
-    ],
-    "output_name": [
-      "ck_model"
-    ],
-    "name": "LoadCorridorKeyModel",
-    "display_name": "Load CorridorKey Model",
-    "description": "Load the CorridorKey GreenFormer neural network model for greenscreen keying.",
-    "python_module": "custom_nodes.ComfyUI-CorridorKeyWrapper",
-    "category": "CorridorKey",
-    "output_node": false
   },
   "LoadDA3Model": {
     "input": {
@@ -21869,7 +21772,7 @@
                         "default": 0.7,
                         "min": 0.01,
                         "max": 2,
-                        "step": 0.000001
+                        "step": 1e-06
                       }
                     ],
                     "top_k": [
@@ -26362,7 +26265,7 @@
             "default": 0.5,
             "min": 0,
             "max": 1,
-            "step": 1e-9
+            "step": 1e-09
           }
         ],
         "fy": [
@@ -26372,7 +26275,7 @@
             "default": 0.5,
             "min": 0,
             "max": 1,
-            "step": 1e-9
+            "step": 1e-09
           }
         ],
         "cx": [

@@ -124,8 +124,7 @@
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
 // Keys added with Green screen (nm10-keying). * = the provider fills it:
-//   screenColor                           (ChromaKeyPrepass screen_color: green | blue; params.extra.screenColor)
-//   despill                               (CorridorKeyGreenscreen despill_strength 0-10, 1 = the wrapper's default; params.extra.despill)
+//   despill                               (CorridorKey2 despill_strength 0-1, 0.5 = Corridor's default; params.extra.despill)
 //   format*, profile*                     (the cut-out's VHS_VideoCombine: video/webm + yuva420p, or video/ProRes + 4444 for params.format prores_4444)
 // Keys added with Clean up voice (NVIDIA RE-USE, ComfyUI-RE-USE). * = the provider fills it:
 //   reuseModel*                           (REUSELoader model: the file for params.extra.reuseModel voice | laughter, refused in words when
@@ -206,7 +205,7 @@ export const CUSTOM_NODE_REPOS = {
   // nodes (Apache-2.0). Neither is on the validation server; both download their weights from Hugging Face on first run.
   'ComfyUI-QwenTTS': 'https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293',
   'ComfyUI-VoxCPM2': 'https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f',
-  'ComfyUI-CorridorKeyWrapper': 'https://github.com/pixelworldai/ComfyUI-CorridorKeyWrapper/tree/7eb44e48c182e81e9dd32024770247d01f1631d3',
+  'ComfyUI-CorridorKey2': 'https://github.com/hashu786/ComfyUI-CorridorKey2/tree/d1228b68796786acee92b6497f72a60d70d1a844',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -232,9 +231,9 @@ export const PACK_CLASSES = {
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
   'ComfyUI-QwenTTS': /^AILab_Qwen3TTS(VoiceDesign|VoiceClone|CustomVoice)(_Advanced)?$/,
   'ComfyUI-VoxCPM2': /^VoxCPM2_(TTS|Clone)$/,
-  // Green screen and fine hair (nm10-keying): pixelworldai's CorridorKey wrapper, and ComfyUI-RMBG 3.3.0's new nodes (the
-  // validation server has 3.2.0, so their definitions come from the pack's source at the pinned commit).
-  'ComfyUI-CorridorKeyWrapper': /^(LoadCorridorKeyModel|CorridorKeyGreenscreen|ChromaKeyPrepass|CorridorKeyComposite)$/,
+  // Green screen and fine hair (nm10-keying): hashu786's CorridorKey 2.0 nodes, and ComfyUI-RMBG 3.3.0's new nodes (neither
+  // is on the validation server at these commits, so their definitions come from the packs' source at the pinned commits).
+  'ComfyUI-CorridorKey2': /^CorridorKey2(RenderToDisk)?$/,
   'ComfyUI-RMBG': /^AILab_(VRMBG|FeyNoBg)$/,
 };
 
@@ -2462,14 +2461,13 @@ export const SPEC = [
   },
   {
     id: 'video-key-corridorkey',
-    title: 'Green-screen key: CorridorKey (v1.0 weights) with despill, transparent WebM / ProRes 4444 / EXR, in passes (ComfyUI-CorridorKeyWrapper + VHS)',
+    title: 'Green-screen key: CorridorKey 2.0 with despill, transparent WebM / ProRes 4444 / EXR, in passes (ComfyUI-CorridorKey2 + VHS)',
     capability: 'bg-remove-video',
     handBuilt: 'hand-built/video-key-corridorkey.json',
-    packs: ['ComfyUI-CorridorKeyWrapper', 'ComfyUI-VideoHelperSuite'],
+    packs: ['ComfyUI-CorridorKey2', 'ComfyUI-VideoHelperSuite'],
     bindings: {
       video: [b('1', 'video')],
       framesPerBatch: [b('2', 'frames_per_batch')],
-      screenColor: [b('5', 'screen_color')],
       despill: [b('6', 'despill_strength')],
       format: [b('7', 'format')],
       profile: [b('7', 'profile')],
@@ -2479,24 +2477,24 @@ export const SPEC = [
       { node: '9', kind: 'video', role: 'matte' },
       { node: '11', kind: 'image', role: 'frames' },
     ],
-    defaults: { framesPerBatch: 32, screenColor: 'green', despill: 1, format: 'video/webm', profile: '4444' },
+    defaults: { framesPerBatch: 48, despill: 0.5, format: 'video/webm', profile: '4444' },
     limits: { maxWidth: 3840, maxHeight: 2160 },
+    // Corridor: 4 GB up to 1440p and 6 GB for 4K (the node picks a smaller temporal window and its low-VRAM path on a
+    // smaller card); about 6 GB at 1080p in the wrapper's own notes. NVIDIA RTX 30-series or newer (bf16).
     vramGb: 6,
-    license: 'CorridorKey v1.0 weights: Corridor Key Licence 1.0 (CC BY-NC-SA 4.0 with added terms: free for any lawful use including commercial projects, and what you make is yours; it may NOT be offered as a paid API or inference service, nor repackaged or sold; a commercial software package needs a written agreement with Corridor Digital); its Hugging Face repo is tagged CC BY-NC-SA 4.0, the licence the added terms build on. The wrapper has no LICENSE file.',
+    license: 'CorridorKey 2.0 weights: Corridor Key Licence 2.0 (CC BY-NC-SA 4.0 with added terms: free for any lawful use including commercial projects, and what you make is yours; it may NOT be offered as a paid API or inference service, nor resold or repackaged; derivatives stay under the same licence; a commercial software package needs a written agreement with Corridor Digital; organisations above US$20M revenue need a seat per user). The frozen models it builds on keep their own licences: NVIDIA C-RADIOv4-SO400M (NVIDIA Open Model License), Microsoft MoGe-2 ViT-B (MIT), Google DeepMind RVM small (CC-BY 4.0). The ComfyUI nodes (hashu786/ComfyUI-CorridorKey2) are under the same Corridor Key Licence 2.0.',
     autoDownloads: [
-      'LoadCorridorKeyModel downloads CorridorKey_v1.0.pth (0.40 GB, nikopueringer/CorridorKey_v1.0) into models/corridorkey/ as CorridorKey.pth on first run',
-      'LoadCorridorKeyModel pip-installs Corridor\'s v1 engine (corridorkey @ git+https://github.com/nikopueringer/CorridorKey.git) the first time it loads, when it is missing',
+      'CorridorKey2 downloads about 5.1 GB into models/corridorkey2/ on first run: corridorkey_v2.safetensors (2.66 GB) and foundation_stats.safetensors from nikopueringer/CorridorKey2.0 (its main revision, cf44a8db when checked), NVIDIA C-RADIOv4-SO400M @ c0457f5d (1.72 GB), Microsoft MoGe-2 ViT-B @ ca5f0e07 (0.42 GB) and Google DeepMind RVM small (0.27 GB, md5-checked)',
     ],
     notes:
-      'VHS_LoadVideo decodes framesPerBatch frames per pass (VHS_BatchManager, 32 by default) and the three VHS_VideoCombine encodes stay open across passes, so memory stays flat on a long clip. ' +
-      'ChromaKeyPrepass makes a coarse alpha hint from the screen colour (screenColor green | blue; threshold 0.3, softness 0.1, erode 2, blur 5), then CorridorKeyGreenscreen (despill 1.0, refiner on, ' +
-      'auto-despeckle 400 px, input sRGB) gives the alpha, the despilled sRGB foreground and the straight RGBA. ' +
-      'Roles: node 7 cutout (the RGBA as a transparent WebM, VP9 yuva420p, with the clip\'s sound; params.format prores_4444 switches it to video/ProRes profile 4444, which VHS writes as yuva444p10le with alpha), ' +
-      'node 9 matte (the alpha as an H.264 MP4), node 11 frames (the RGBA as half-float OpenEXR, input sRGB -> scene-linear, one file a frame). ' +
-      'params.matteOutput keeps cutout or matte; "foreground" keeps node 7 fed from the keyer\'s despilled foreground (output 1) as H.264 with sound instead. ' +
-      'Node 11 stays only for params.format exr, with the cut-out as its preview, and Fuobe zips the frames onto it. ' +
-      'CorridorKey 2.0 (nikopueringer/CorridorKey2.0, corridorkey_v2.safetensors 2.66 GB, cf44a8db) runs only in Corridor\'s own engine: no ComfyUI wrapper loads it yet (checked 2026-11-02), so this graph runs v1.0 and 2.0 waits for a wrapper. ' +
-      'NVIDIA RTX 30-series or newer; Corridor gives 4 GB up to 1440p and 6 GB for 4K for 2.0. The wrapper\'s classes are recorded from its source at the pinned commit.',
+      'VHS_LoadVideo decodes framesPerBatch frames per pass (VHS_BatchManager, 48 by default) and the three VHS_VideoCombine encodes stay open across passes, so memory stays flat on a long clip. ' +
+      'CorridorKey2 (hashu786/ComfyUI-CorridorKey2, which vendors Corridor\'s CorridorKey 2.0 code unmodified at 485f5e9) keys each pass as one clip at native resolution, with overlapping temporal Hann windows ' +
+      '(window auto: the largest that fits the free VRAM) and no hint, so the model picks the subject; despill 0.5 (Corridor\'s default), input sRGB. Each pass starts its temporal context afresh. ' +
+      'Only the outputs a node reads are computed. Roles: node 7 cutout (output 4, the despilled straight RGBA, as a transparent WebM, VP9 yuva420p, with the clip\'s sound; params.format prores_4444 switches it to ' +
+      'video/ProRes profile 4444, which VHS writes as yuva444p10le with alpha), node 9 matte (output 1 as an H.264 MP4), node 11 frames (the RGBA as half-float OpenEXR, input sRGB -> scene-linear, one file a frame, in every pass). ' +
+      'params.matteOutput keeps cutout or matte; "foreground" feeds node 7 the despilled foreground premultiplied over black (output 2) as H.264 with sound instead. ' +
+      'Node 11 stays only for params.format exr, with the cut-out as its preview, and Fuobe zips every pass\'s frames onto it. ' +
+      'Corridor\'s despill takes out green spill: the key is for green screens. NVIDIA CUDA only (RTX 30-series or newer). The node\'s class is recorded from its source at the pinned commit.',
   },
   {
     id: 'video-depth-da3',

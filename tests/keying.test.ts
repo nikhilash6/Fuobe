@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { GenInput, GenParams, Generation, Operation } from "@/lib/catalog/types";
 
 /**
- * Green screen and fine hair (nm10-keying): the CorridorKey key, Bria VRMBG 3.0 and FeyNoBg graphs (their packs pinned,
+ * Green screen and fine hair (nm10-keying): the CorridorKey 2.0 key, Bria VRMBG 3.0 and FeyNoBg graphs (their packs pinned,
  * their classes checked against the packs' source), the key's passes and formats, the Green screen mode's own model list,
  * the two Bria routes on fal, the guided cut-out in Layers and the mask's way on to ProRes or EXR.
  */
@@ -35,11 +35,11 @@ const { modelHref } = await import("@/lib/palette-index");
 const { TOOL_MODELS } = await import("@/lib/layers");
 const { outputActions } = await import("@/lib/output-actions");
 const { settingsShape } = await import("@/lib/composer");
-const { licenceTerms } = await import("@/lib/licences");
+const { licenceInfo, licenceTerms, NODE_PACKS, workflowLicence } = await import("@/lib/licences");
 const { keyFormatValues } = await import("@/lib/av/keying");
 
 const GRAPHS = {
-  "video-key-corridorkey": { capability: "bg-remove-video", packs: ["ComfyUI-CorridorKeyWrapper", "ComfyUI-VideoHelperSuite"], roles: ["cutout", "matte", "frames"] },
+  "video-key-corridorkey": { capability: "bg-remove-video", packs: ["ComfyUI-CorridorKey2", "ComfyUI-VideoHelperSuite"], roles: ["cutout", "matte", "frames"] },
   "video-matte-vrmbg3": { capability: "bg-remove-video", packs: ["ComfyUI-RMBG", "ComfyUI-VideoHelperSuite"], roles: ["cutout", "matte", "frames"] },
   "image-matte-feynobg": { capability: "bg-remove", packs: ["ComfyUI-RMBG"], roles: [] },
 } as const;
@@ -86,9 +86,12 @@ describe("the keying graphs in the library", () => {
 
   it("pins ComfyUI-RMBG at 3.3.0 and records where each new class comes from", () => {
     expect(packs["ComfyUI-RMBG"].commit).toBe("a66a5e641a54988d80ed6aad18946081c85f309e");
-    expect(packs["ComfyUI-CorridorKeyWrapper"]).toMatchObject({ repo: "https://github.com/pixelworldai/ComfyUI-CorridorKeyWrapper", commit: "7eb44e48c182e81e9dd32024770247d01f1631d3" });
+    expect(packs["ComfyUI-CorridorKey2"]).toMatchObject({ repo: "https://github.com/hashu786/ComfyUI-CorridorKey2", commit: "d1228b68796786acee92b6497f72a60d70d1a844" });
     for (const c of ["AILab_VRMBG", "AILab_FeyNoBg"]) expect(subset[c]?.python_module).toBe("custom_nodes.ComfyUI-RMBG");
-    for (const c of ["LoadCorridorKeyModel", "ChromaKeyPrepass", "CorridorKeyGreenscreen"]) expect(subset[c]?.python_module).toBe("custom_nodes.ComfyUI-CorridorKeyWrapper");
+    expect(subset.CorridorKey2?.python_module).toBe("custom_nodes.ComfyUI-CorridorKey2");
+    // CorridorKey 2.0, not the v1.0 wrapper's classes: the matte, the despilled foreground over black and the straight RGBA.
+    expect(subset.CorridorKey2?.output).toEqual(["IMAGE", "MASK", "IMAGE", "IMAGE", "IMAGE"]);
+    for (const c of ["LoadCorridorKeyModel", "ChromaKeyPrepass", "CorridorKeyGreenscreen"]) expect(subset[c]).toBeUndefined();
   });
 
   it("states each model's licence and download plainly: CorridorKey's paid-API rule, VRMBG's gate, FeyNoBg unknown", () => {
@@ -100,7 +103,12 @@ describe("the keying graphs in the library", () => {
     const vrmbg = manifest.workflows.find((x) => x.id === "video-matte-vrmbg3")!;
     expect(vrmbg.models).toEqual([expect.objectContaining({ file: "VRMBG-3.0/model.safetensors", folder: "RMBG", gated: true })]);
     expect(requirements.workflows["video-matte-vrmbg3"].files).toEqual(["RMBG/VRMBG-3.0/model.safetensors"]);
-    expect(requirements.workflows["video-key-corridorkey"].firstRun.join(" ")).toMatch(/CorridorKey_v1\.0\.pth/);
+    expect(requirements.workflows["video-key-corridorkey"].firstRun.join(" ")).toMatch(/corridorkey_v2\.safetensors \(2\.66 GB\)/);
+    // As Settings → Models & licences shows them: CorridorKey's own licence by name, FeyNoBg as not recorded.
+    expect(licenceInfo(workflowLicence({ id: "video-key-corridorkey", license: lic("video-key-corridorkey") }))).toMatchObject({ name: "Corridor Key Licence 2.0", class: "conditions", url: expect.stringContaining("nikopueringer/CorridorKey2.0") });
+    expect(licenceInfo(workflowLicence({ id: "image-matte-feynobg", license: lic("image-matte-feynobg") }))).toMatchObject({ name: "Not recorded", class: "unknown" });
+    expect(licenceInfo("CC BY-NC-SA 4.0 (weights: NON-COMMERCIAL)")).toMatchObject({ name: "CC BY-NC-SA 4.0", class: "non-commercial" });
+    expect(NODE_PACKS.find((p) => p.name === "ComfyUI-CorridorKey2")?.licence).toMatchObject({ name: "Corridor Key Licence 2.0", class: "conditions" });
     expect(requirements.workflows["image-matte-feynobg"].firstRun.join(" ")).toMatch(/FeyNobg\.safetensors/);
   });
 });
@@ -115,7 +123,7 @@ describe("the green-screen key on your GPU", () => {
     expect(batched.sort()).toEqual(["1", "7", "9"]);
     const prepared = await prepareWorkflow("video-key-corridorkey", { video: "/clip.mp4", matteOutput: "cutout" } as GenInput, ctx("bg-remove-video"));
     expect(prepared.meta.metaBatch).toBe(true);
-    expect(prepared.workflow["2"].inputs.frames_per_batch).toBe(32);
+    expect(prepared.workflow["2"].inputs.frames_per_batch).toBe(48);
   });
 
   it("keeps the output asked for, and writes the cut-out as WebM, ProRes 4444 with alpha or EXR frames", async () => {
@@ -128,13 +136,12 @@ describe("the green-screen key on your GPU", () => {
     const exr = await prepare("video-key-corridorkey", { matteOutput: "cutout", format: "exr" });
     expect(Object.keys(exr).filter((k) => ["7", "9", "11"].includes(k)).sort()).toEqual(["11", "7"]);
     expect(exr["11"].inputs).toMatchObject({ format: "exr", "format.bit_depth": "16-bit float", "format.input_color_space": "sRGB" });
-    // The clean foreground leaves through the cut-out's encoder: the keyer's despilled colours as H.264 with the sound.
-    const fg = await prepare("video-key-corridorkey", { matteOutput: "foreground", extra: { despill: 2, screenColor: "blue" } });
+    // The clean foreground leaves through the cut-out's encoder: the keyer's despilled colours over black as H.264 with the sound.
+    const fg = await prepare("video-key-corridorkey", { matteOutput: "foreground", extra: { despill: 0.8 } });
     expect(Object.keys(fg).filter((k) => ["7", "9", "11"].includes(k))).toEqual(["7"]);
-    expect(fg["7"].inputs).toMatchObject({ images: ["6", 1], format: "video/h264-mp4", pix_fmt: "yuv420p", audio: ["1", 2] });
+    expect(fg["7"].inputs).toMatchObject({ images: ["6", 2], format: "video/h264-mp4", pix_fmt: "yuv420p", audio: ["1", 2] });
     await expect(prepare("video-matte-vrmbg3", { matteOutput: "foreground" })).rejects.toThrow(/doesn't make a clean foreground/);
-    expect(fg["6"].inputs.despill_strength).toBe(2);
-    expect(fg["5"].inputs.screen_color).toBe("blue");
+    expect(fg["6"]).toMatchObject({ class_type: "CorridorKey2", inputs: { despill_strength: 0.8, gamma_space: "sRGB", window: "auto" } });
     // ProRes and EXR carry the cut-out with its alpha, not the mask.
     await expect(prepare("video-key-corridorkey", { matteOutput: "matte", format: "prores_4444" })).rejects.toThrow(/ProRes 4444 is for the cut-out/);
     // Without a format the EXR frames are never written.

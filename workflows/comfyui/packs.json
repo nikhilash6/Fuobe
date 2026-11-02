@@ -297,13 +297,13 @@
     "subdir": null,
     "folders": []
   },
-  "ComfyUI-CorridorKeyWrapper": {
-    "repo": "https://github.com/pixelworldai/ComfyUI-CorridorKeyWrapper",
-    "commit": "7eb44e48c182e81e9dd32024770247d01f1631d3",
+  "ComfyUI-CorridorKey2": {
+    "repo": "https://github.com/hashu786/ComfyUI-CorridorKey2",
+    "commit": "d1228b68796786acee92b6497f72a60d70d1a844",
     "registry": null,
     "requirementsTxt": true,
     "isolated": false,
     "subdir": null,
-    "folders": ["corridorkey"]
+    "folders": ["corridorkey2"]
   }
 }

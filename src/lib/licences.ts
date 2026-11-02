@@ -278,8 +278,10 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /FLUX \[dev\] Non-Commercial License/, name: "FLUX [dev] Non-Commercial License", class: "non-commercial", url: "https://huggingface.co/black-forest-labs/FLUX.2-dev" },
   { re: /Ideogram Non-Commercial Model Agreement/, name: "Ideogram Non-Commercial Model Agreement", class: "non-commercial", url: "https://huggingface.co/ideogram-ai/ideogram-4-fp8/blob/main/LICENSE.md" },
   { re: /inswapper/, name: "InsightFace inswapper (research only)", class: "research", url: "https://github.com/deepinsight/insightface" },
-  { re: /CC-BY-NC-SA-4\.0/, name: "CC BY-NC-SA 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-SA-4.0") },
-  { re: /CC[- ]BY[- ]NC(?:[- ]4\.0)?\b/, name: "CC BY-NC 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-4.0") },
+  // Corridor's CC BY-NC-SA 4.0 variant that allows commercial projects (no paid API, no resale): before the CC entries.
+  { re: /Corridor Key Licence 2\.0/, name: "Corridor Key Licence 2.0", class: "conditions", url: "https://github.com/nikopueringer/CorridorKey2.0/blob/485f5e9ab759ead6138cc990776184b59d6ea971/LICENSE" },
+  { re: /CC[- ]BY[- ]NC[- ]SA[- ]4\.0/, name: "CC BY-NC-SA 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-SA-4.0") },
+  { re: /CC[- ]BY[- ]NC(?![- ]SA)(?:[- ]4\.0)?\b/, name: "CC BY-NC 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-4.0") },
   { re: /Qwen Research License/, name: "Qwen Research License", class: "non-commercial", url: "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE" },
   { re: /Tencent Hunyuan 3D 2\.1 Community License/, name: "Tencent Hunyuan 3D 2.1 Community License", class: "regions" },
   { re: /Tencent Hunyuan Community License/, name: "Tencent Hunyuan Community License", class: "regions" },
@@ -319,20 +321,28 @@ export function modelCardOf(url: string | undefined): string | undefined {
  * the model downloads it covers (the largest first): their Hugging Face page is the link when the licence
  * has no page of its own.
  */
+/** A text that records its weights' licence as not stated anywhere: "<model> weights: unknown (…)". */
+const UNSTATED = /^[^:;(]+\bweights: unknown\b/i;
+
 export function licenceInfo(text: string, cards: string[] = []): LicenceInfo {
   const terms = licenceTerms(text);
   const card = cards.map(modelCardOf).find(Boolean);
   if (text === UNKNOWN_LICENCE) return { name: "Not recorded", class: "unknown", note: text, ...(card && { url: card }) };
   if (terms.noWeights) return { name: "No model weights", class: "commercial", url: COMFYUI_REPO, note: `${text.replace(/^n\/a \((.*)\)$/, "$1")}: ComfyUI's own nodes (GPL-3.0) or FFmpeg` };
+  // Weights whose licence the research found nowhere ("FeyNoBg weights: unknown (no card, no tag, no LICENSE)").
+  const unstated = UNSTATED.test(text);
   const cls: LicenceClass = terms.flags.includes("non-commercial")
     ? /research (?:use )?only/i.test(text)
       ? "research"
       : "non-commercial"
     : terms.flags.includes("territory")
       ? "regions"
-      : terms.flags.includes("conditions")
-        ? "conditions"
-        : "commercial";
+      : unstated
+        ? "unknown"
+        : terms.flags.includes("conditions")
+          ? "conditions"
+          : "commercial";
+  if (cls === "unknown") return { name: "Not recorded", class: cls, note: text, ...(card && { url: card }) };
   const found = KNOWN.filter((k) => k.re.test(text));
   const named = found.find((k) => k.class === cls) ?? found[0];
   const name = named?.name ?? text.split(/[(;:]/)[0].trim();
@@ -474,8 +484,12 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "VoxCPM2 text to speech (voice design) and voice clone nodes; Apache-2.0 code. The VoxCPM2 weights it downloads are Apache-2.0",
   }),
-  // Green screen (nm10-keying), pinned in workflows/comfyui/packs.json: the repository has no LICENSE file at the pinned commit.
-  pack("ComfyUI-CorridorKeyWrapper", "https://github.com/pixelworldai/ComfyUI-CorridorKeyWrapper/tree/7eb44e48c182e81e9dd32024770247d01f1631d3", NO_FILE("; the CorridorKey weights it downloads are under the Corridor Key Licence: free for any project, commercial ones included, but never as a paid API or inference service")),
+  // Green screen (nm10-keying), pinned in workflows/comfyui/packs.json: its LICENSE is Corridor's own, word for word.
+  pack("ComfyUI-CorridorKey2", "https://github.com/hashu786/ComfyUI-CorridorKey2/tree/d1228b68796786acee92b6497f72a60d70d1a844", {
+    name: "Corridor Key Licence 2.0",
+    class: "conditions",
+    note: "CorridorKey 2.0 nodes, with Corridor's CorridorKey 2.0 code inside unmodified; the code and the weights it downloads are under the Corridor Key Licence 2.0: free for any project, commercial ones included, but never resold or offered as a paid API or inference service. The frozen models it downloads keep their own licences (NVIDIA Open Model License, MIT, CC-BY 4.0)",
+  }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
     ...GPL,

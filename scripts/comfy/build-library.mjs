@@ -168,8 +168,8 @@ export const BINDING_KEYS = new Set([
   'device',
   // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
-  // nm10-keying: the green-screen key's screen colour and despill strength
-  'screenColor', 'despill',
+  // nm10-keying: the green-screen key's despill strength
+  'despill',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.
