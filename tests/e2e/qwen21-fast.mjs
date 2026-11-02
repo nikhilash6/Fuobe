@@ -116,13 +116,13 @@ try {
         check(`${tag} ${studio}: Speed offers ${op === "edit" ? "Turbo for edits" : "no Turbo for new pictures"}`, JSON.stringify(speeds) === JSON.stringify(want), speeds.join(" | "));
         const gpu = page.getByRole("combobox", { name: "GPU" });
         const gpus = await listOf(page, gpu);
-        check(`${tag} ${studio}: GPU says the small one reads English prompts only`, gpus.includes("Small GPU (16 GB) · Full speed, English prompts only") && gpus[0] === "Auto", gpus.join(" | "));
+        check(`${tag} ${studio}: GPU says the small one reads English prompts only`, gpus.includes("16 GB · English prompts only") && gpus[0] === "Auto", gpus.join(" | "));
         const decoder = page.getByRole("combobox", { name: "Decoder" });
         check(`${tag} ${studio}: Decoder starts on Standard`, /Auto · Standard/.test(flat(await decoder.innerText())), flat(await decoder.innerText()));
         // Small picked: the composer says what it can't do.
         await gpu.focus();
         await page.keyboard.press("Enter");
-        await page.getByRole("listbox").last().getByRole("option", { name: /^Small GPU/ }).click();
+        await page.getByRole("listbox").last().getByRole("option", { name: /^16 GB/ }).click();
         await page.waitForTimeout(400);
         const note = page.getByText("Small GPU: English prompts only, and numbers on signs can come out wrong");
         check(`${tag} ${studio}: Small picked, the composer says English prompts only`, (await note.count()) > 0);

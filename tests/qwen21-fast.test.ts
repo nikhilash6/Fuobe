@@ -312,7 +312,7 @@ describe("Options → Speed, GPU and Decoder", () => {
     expect(Q.qwen21Note(controls, { gpu: "small" }, "inpaint")).toBeUndefined();
     expect(Q.qwen21Note(controls, {}, "t2i")).toBeUndefined();
     expect(Q.qwen21Note(getModel("oss-qwen-image-21-turbo")!.options.controls, { gpu: "small" }, "edit")).toBeUndefined();
-    expect(Q.QWEN21_GPU.labels?.small).toMatch(/Full speed, English prompts only/);
+    expect(Q.QWEN21_GPU.labels?.small).toMatch(/^16 GB · English prompts only$/);
     expect(getModel("oss-qwen-image-21")!.tagline).toMatch(/English prompts only on a 16 GB GPU/);
   });
 

@@ -91,7 +91,7 @@ export const QWEN21_GPU: Control = {
   param: GPU_PARAM,
   label: "GPU",
   values: ["large", "small"],
-  labels: { large: "20 GB or more", small: "Small GPU (16 GB) · Full speed, English prompts only" },
+  labels: { large: "20 GB or more", small: "16 GB · English prompts only" },
   ops: { large: ["t2i", "edit", "inpaint", "outpaint"], small: ["t2i", "edit"] },
 };
 
