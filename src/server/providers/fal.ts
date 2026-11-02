@@ -4,6 +4,7 @@ import { loraEndpointFor, routeLoraField } from "@/lib/catalog/loras";
 import { buildPayload, extractOutputs, noOutputsError } from "@/lib/catalog/payload";
 import { accountKeyError, balanceRefusal, cloudKey, missingKeyError, originOf, redactKey, standIn } from "../provider-keys";
 import { tenant } from "../tenant";
+import type { FieldMap } from "@/lib/catalog/types";
 import { ProviderError, type ProviderAdapter } from "./types";
 
 /**
@@ -87,6 +88,33 @@ function fileName(name: string | undefined): string | undefined {
   return base && /^[\w.\-()[\] ]{1,200}\.[A-Za-z0-9]{1,12}$/.test(base) && !base.startsWith(".") ? base : undefined;
 }
 
+/** How long the clone step of a two-step voice may take (it is a few seconds of work on fal). */
+const CLONE_WAIT_MS = 3 * 60 * 1000;
+
+/**
+ * Step 1 of a two-step voice (FieldMap.cloneFirst): the sample (and what it says) to the clone endpoint, waited for on its
+ * queue, and the URL of the file it returns (Qwen3-TTS's speaker_embedding safetensors).
+ */
+export async function cloneVoice(cf: NonNullable<FieldMap["cloneFirst"]>, audio: string, transcript?: string, waitMs = CLONE_WAIT_MS): Promise<string> {
+  const body = { [cf.audio]: audio, ...(cf.text && transcript?.trim() && { [cf.text]: transcript.trim() }) };
+  const job = (await falFetch(`${falQueue()}/${cf.endpoint}`, { method: "POST", body: JSON.stringify(body) })) as { status_url: string; response_url: string };
+  const until = Date.now() + waitMs;
+  for (let wait = 500; ; wait = Math.min(wait * 1.5, 3000)) {
+    const st = (await falFetch(job.status_url)) as { status?: string; error?: string };
+    if (st.status === "COMPLETED") {
+      if (st.error) throw new ProviderError(`Couldn't clone the voice: ${st.error}`);
+      break;
+    }
+    if (Date.now() + wait > until) throw new ProviderError("Cloning the voice took too long. Try again.");
+    await new Promise((r) => setTimeout(r, wait));
+  }
+  const result = (await falFetch(job.response_url)) as Record<string, unknown>;
+  const file = result?.[cf.output] as { url?: unknown } | string | undefined;
+  const url = typeof file === "string" ? file : typeof file?.url === "string" ? file.url : undefined;
+  if (!url) throw new ProviderError("Couldn't clone the voice: the sample gave no voice back. Try a longer, cleaner sample.");
+  return url;
+}
+
 export const falProvider: ProviderAdapter = {
   id: "fal",
   label: "fal.ai",
@@ -111,6 +139,14 @@ export const falProvider: ProviderAdapter = {
   },
 
   async submit({ route, input }) {
+    // A voice sample the endpoint can't take is cloned first (Qwen3-TTS: clone-voice makes an embedding file, which the
+    // text-to-speech call speaks with). A saved voice that already has its file skips the clone (src/server/voices.ts).
+    const cf = route.map?.cloneFirst;
+    let embedding: string | undefined;
+    if (cf && input.voiceAudio && !input.voiceEmbedding) {
+      embedding = await cloneVoice(cf, input.voiceAudio, input.voiceTranscript);
+      input = { ...input, voiceEmbedding: embedding };
+    }
     // LoRAs (trained identities, a recipe's looks and motions) go in the route's LoRA field (FieldMap.loras:
     // `transformer` per file on Wan 2.2, `weight_name`, at most the API's maximum) and switch to its LoRA endpoint.
     const map = { ...route.map, loras: routeLoraField(route) };
@@ -127,7 +163,7 @@ export const falProvider: ProviderAdapter = {
     })) as { request_id: string; status_url: string; response_url: string; cancel_url: string };
     return {
       externalId: res.request_id,
-      meta: { statusUrl: res.status_url, responseUrl: res.response_url, cancelUrl: res.cancel_url },
+      meta: { statusUrl: res.status_url, responseUrl: res.response_url, cancelUrl: res.cancel_url, ...(embedding && { voiceEmbedding: embedding }) },
       payload,
     };
   },

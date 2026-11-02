@@ -20,14 +20,37 @@ import {
   WHO_INDEX_LABEL,
   WHO_LABELS,
   WINDOW_CHOICES,
+  CHARACTER_QUALITIES,
+  characterFinish,
+  characterQuality,
+  type CharacterChoice,
   type CharacterOptions,
-  type CharacterQuality,
   type SwapLora,
   type SwapSpeech,
   type SwapWho,
 } from "@/lib/catalog/character-swap";
 import type { GenjutsuTarget, Maker } from "@/lib/catalog/genjutsu";
+import { cloudSharpenUsd, OPEN_TIER_OFF, SHARPEN_COPY, type SharpenTier } from "@/lib/catalog/sharpen";
 import type { Engine } from "@/lib/catalog/types";
+
+/** The Quality field's short hint: H3's own sizes in words, a finishing size's price (cloud) or "Free · your GPU". */
+export function qualityShort(engine: Engine, q: CharacterChoice): string {
+  const finish = characterFinish(q);
+  if (!finish) return q === "480p" ? "Faster and cheaper" : "H3's native top";
+  return engine === "open" ? "Free · your GPU" : `$${(cloudSharpenUsd(finish, 5) ?? 0).toFixed(2)} for 5 s`;
+}
+
+/** What a quality does, in a line: H3's own sizes, or a finishing size with its price (cloud) or GPU time (open). */
+export function qualityHint(engine: Engine, q: CharacterChoice): string {
+  const finish = characterFinish(q);
+  if (!finish) return qualityShort(engine, q);
+  if (engine === "open") return `${SHARPEN_COPY.hintOpen} Free on your GPU, about 3 min more per 5 s on a 72 GB GPU. ${SHARPEN_COPY.joinOpen}`;
+  const usd = (s: number) => `$${(cloudSharpenUsd(finish, s) ?? 0).toFixed(2)}`;
+  return `${SHARPEN_COPY.hint} ${usd(5)} for 5 s, ${usd(15)} for 15 s.`;
+}
+
+/** Why a quality can't be picked on this engine (your GPU's 4K: it joins the clip at up to 2048 px a side), or null. */
+export const qualityOff = (engine: Engine, q: CharacterChoice): string | null => (engine === "open" ? (OPEN_TIER_OFF[q as SharpenTier] ?? null) : null);
 
 /** A helper the panel offers (Describe my character, the clip's words): its action, whether it's running or can run. */
 export interface PanelHelper {
@@ -62,8 +85,8 @@ export function CharacterControls({
   target?: GenjutsuTarget;
   value: CharacterOptions;
   onChange: (v: CharacterOptions) => void;
-  quality: CharacterQuality;
-  onQuality: (q: CharacterQuality) => void;
+  quality: CharacterChoice;
+  onQuality: (q: CharacterChoice) => void;
   seed: string;
   onSeed: (s: string) => void;
   seedProblem?: string | null;
@@ -74,6 +97,11 @@ export function CharacterControls({
 }) {
   const set = (patch: Partial<CharacterOptions>) => onChange({ ...value, ...patch });
   const h3 = !!maker?.h3;
+  // Each engine's sizes (the cloud has no 1080p); a size the other engine offered shows as the swap's own.
+  const offered = (maker?.qualities as CharacterChoice[] | undefined) ?? CHARACTER_QUALITIES[engine];
+  // A size this engine can't make worth it (your GPU's 4K) shows as the largest below it that it can.
+  const shown: CharacterChoice = !offered.includes(quality) ? characterQuality(quality) : qualityOff(engine, quality) ? ([...offered].reverse().find((q) => q !== quality && !qualityOff(engine, q) && characterFinish(q)) ?? "768p") : quality;
+  const offReasons = offered.flatMap((q) => (qualityOff(engine, q) ? [{ q, reason: qualityOff(engine, q)! }] : []));
   const open = engine === "open";
   const anchors = ANCHOR_MODELS[engine];
   const who: SwapWho = value.who ?? "largest";
@@ -129,8 +157,20 @@ export function CharacterControls({
       )}
 
       {h3 && (
-        <Field label="Quality" hint={quality === "480p" ? "Faster and cheaper" : "H3's native top"}>
-          <Segmented label="Quality" value={quality} onChange={onQuality} options={CHARACTER_SWAP.qualities.map((q) => ({ value: q, label: q }))} />
+        <Field label="Quality" hint={qualityShort(engine, shown)}>
+          <Segmented
+            label="Quality"
+            value={shown}
+            onChange={onQuality}
+            describedBy={offReasons.length ? "character-quality-off" : undefined}
+            options={offered.map((q) => ({ value: q, label: q, disabled: !!qualityOff(engine, q), title: qualityOff(engine, q) ?? undefined }))}
+          />
+          {characterFinish(shown) && <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{qualityHint(engine, shown)}</p>}
+          {offReasons.length > 0 && (
+            <p id="character-quality-off" className="text-[12px] leading-snug text-pretty text-muted-foreground">
+              {offReasons.map((o) => `${o.q}: ${o.reason}.`).join(" ")}
+            </p>
+          )}
         </Field>
       )}
 

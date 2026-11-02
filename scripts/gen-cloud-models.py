@@ -89,7 +89,7 @@ M = []
 def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=None, defaults=None, options=None, fixed=None, hidden=False,
           sliders=None, controls=None, api_defaults=None, formats=None, ranged_durations=False, fit_values=False, fps_targets=None, upscale_tiers=None,
           frame_step=None, original=False, sizes=None, keep_shape=False, licence=None, frame_fps=None, frame_multiple=None,
-          exact_size=False, tier_size=None):
+          exact_size=False, tier_size=None, prompt_max=False):
     """sliders / controls: [(field, label)] read from each route's research inputs (dotted = nested field; a slider's
     third item is its step, when the generic one is too coarse):
     numeric fields with minimum/maximum become sliders, enums become composer controls; both travel as params.extra.
@@ -119,6 +119,8 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
     tier_size: the endpoint whose price names resolution tiers ("$0.009 at 1K … $0.036 at 4K": fal's FLUX 3 Klein): the size goes
     as one {width, height} object, the aspect ratio's shape on the tier's square (FieldMap.size.bases), on a 16 px grid within
     the limits the field's description states ("256 to 4096 pixels"); the tiers become the resolutions.
+    prompt_max: the prompt field's maxLength goes to FieldMap.promptMax, so a longer prompt is refused before a paid call (Vidu Q4's
+    5,000 characters, Meshy retexture's 600).
     A route's options dict may also set max_images (FieldMap.maxImages), note, loraEndpoint (the same model with LoRAs:
     FieldMap.loras comes from its research record) and pin (a Replicate model run by version: the research's version)."""
     M.append(dict(id=id, name=name, vendor=vendor, family=family, kind=kind, tagline=tagline, routes=routes,
@@ -126,7 +128,7 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
                   sliders=sliders or [], controls=controls or [], api_defaults=api_defaults or {}, formats=formats or {},
                   ranged_durations=ranged_durations, fit_values=fit_values, fps_targets=fps_targets or [], upscale_tiers=upscale_tiers or [],
                   frame_step=frame_step, original=original, sizes=sizes, keep_shape=keep_shape, licence=licence, frame_fps=frame_fps,
-                  frame_multiple=frame_multiple, exact_size=exact_size, tier_size=tier_size))
+                  frame_multiple=frame_multiple, exact_size=exact_size, tier_size=tier_size, prompt_max=prompt_max))
 
 
 # ----- Image
@@ -595,6 +597,82 @@ model("minimax-h3-max-3d", "MiniMax H3 Max 3D to video", "MiniMax", "hailuo", "v
       [("v2v", "minimax/h3-max/3d-to-video")], hidden=True, defaults={"resolution": "768P"},
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request; + $0.10 for each reference it draws when given none (up to 2)",
                {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16}, "minSeconds": 5, "perRequest": 0.5, "generatedRefs": {"usd": 0.1, "count": 2}}))
+# ----- Hosted catch-up (package nm10-hosted-catchup; research new-models-10.json endpointRecords, read 2026-11-02 with
+# scripts/fetch-hosted-schemas.py --catchup). Closed models on fal and Replicate: cloud only; the open engine keeps its own tools.
+H3_RES = {"480P": 0.05, "768P": 0.08, "1080P": 0.16, "2K": 0.32}
+# H3 Max lip sync: a portrait (0.4-2.5 wide) and 5 s to 15 min of audio; the video is as long as the audio, billed per second by
+# resolution and 1.2 times over for a video over 15 s (fal's page: 30 s at 768P costs $2.88).
+model("minimax-h3-max-lipsync", "MiniMax H3 Max Lip Sync · up to 15 min", "MiniMax", "hailuo", "video",
+      "A portrait speaks your audio: 5 seconds to 15 minutes, as long as the voice, 480P to 2K",
+      [("avatar", "minimax/h3-max/lip-sync/image-to-video")], badges=["new"], defaults={"resolution": "768P"},
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16, 2K $0.32; 1.2× for audio over 15 s", {"byResolution": H3_RES, "longFactor": {"over": 15, "factor": 1.2}}))
+# H3 Max relight: the clip (up to 15 s, resampled to 24 fps) relit to match a lit sphere, which Fuobe draws in the browser from a
+# light preset (ModelOptions.lightSphere). The result keeps the clip's shape ("adaptive") and is billed on its length.
+model("minimax-h3-max-relight", "MiniMax H3 Max Relight", "MiniMax", "hailuo", "video",
+      "Real footage relit to a light you pick — direction, colour and softness — up to 15 s",
+      [("relight-video", "minimax/h3-max/relight", "fal", {"drop": ["aspectRatio"]})], badges=["new"], defaults={"resolution": "768P"},
+      fixed={"aspect_ratio": "adaptive"}, options={"lightSphere": True, "promptOptional": True},
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16, 2K $0.32; billed on the clip's length", {"byResolution": H3_RES}))
+# H3 Max insert: a new scene of `duration` seconds generated between params.startTime and params.endTime (resume_time) of the clip;
+# only the new scene is billed (references past fal's first 4,096 tokens add $0.02 per 1,000, not counted here).
+model("minimax-h3-max-insert", "MiniMax H3 Max Insert a moment", "MiniMax", "hailuo", "video",
+      "A new 5–13 s moment generated inside your clip, between two points you mark",
+      [("insert-moment", "minimax/h3-max/insert-video")], badges=["new"], defaults={"resolution": "768p", "duration": 5}, ranged_durations=True,
+      options={"promptOptional": True}, prompt_max=True,
+      pricing=("second", 0.06, "768p; 480p $0.05; only the new moment is billed; references past the first 4,096 tokens add $0.02 per 1,000",
+               {"byResolution": {"480p": 0.05, "768p": 0.06}}))
+# H3 Max looks: words or a first frame to a 5-15 s clip in the look, with sound. Generation, not a restyle of a clip.
+for _slug, _id, _name, _tag in (("16bit-pixel", "pixel", "16-bit Pixel", "16-bit pixel art in motion"),
+                                ("hand-drawn", "hand-drawn", "Hand-drawn", "a hand-drawn animation"),
+                                ("low-poly", "low-poly", "Low Poly", "low-poly 3D"),
+                                ("retro-toon-70s", "retro-toon", "Retro Toon 70s", "a 1970s cartoon"),
+                                ("vhs", "vhs", "VHS", "a worn VHS tape, with the tape damage you pick")):
+    _ep = f"minimax/h3-max/styles/{_slug}"
+    model(f"minimax-h3-max-look-{_id}", f"MiniMax H3 Max · {_name} look", "MiniMax", "hailuo", "video",
+          f"A new 5–15 s clip with sound, made as {_tag}, from words or a first frame (it doesn't restyle a clip)",
+          [("t2v", _ep), ("i2v", _ep)], badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5}, ranged_durations=True,
+          controls=[("damage_level", "Tape wear")] if _slug == "vhs" else None,
+          pricing=("second", 0.08, "768p, sound included"))
+# H3 Max Turbo: words, a start frame or start and end frames, 1-15 s with sound. fal's November rate runs to 2026-11-15 (30% off),
+# then the list rates. Its reference and extend routes are billed differently, so they are models of their own.
+model("minimax-h3-max-turbo", "MiniMax H3 Max Turbo", "MiniMax", "hailuo", "video",
+      "Fast, cheap H3 Max with sound — drafts and quick takes from words or frames, 1–15 s",
+      [("t2v", "minimax/h3-max-turbo/text-to-video"), ("i2v", "minimax/h3-max-turbo/image-to-video", "fal", "+flf2v")],
+      badges=["new", "fast", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
+      pricing=("second", 0.04, "768P; 480P $0.025, 1080P $0.08 — $0.028 (480P $0.0175, 1080P $0.056) until 2026-11-15",
+               {"byResolution": {"480P": 0.025, "768P": 0.04, "1080P": 0.08},
+                "promo": {"until": "2026-11-15", "usd": 0.028, "byResolution": {"480P": 0.0175, "768P": 0.028, "1080P": 0.056}}}))
+model("minimax-h3-max-turbo-refs", "MiniMax H3 Max Turbo · references", "MiniMax", "hailuo", "video",
+      "Turbo with up to 12 references — pictures, clips and sound together (Image 1, Video 1, Audio 1 in the prompt)",
+      [("ref2v", "minimax/h3-max-turbo/reference-to-video")], badges=["new", "audio"], fit_values=True, options={"maxReferences": 12},
+      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16; references past the first 4,096 tokens add $0.016 per 1,000",
+               {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16}}))
+# The extend keeps the clip's shape (its aspect ratio left out: fal's "auto") and bills only the seconds added.
+model("minimax-h3-max-turbo-extend", "MiniMax H3 Max Turbo · extend", "MiniMax", "hailuo", "video",
+      "Continue a 1.6–60 s clip with up to 15 s more, sound and all; only the new seconds are billed",
+      [("extend", "minimax/h3-max-turbo/extend-video", "fal", {"drop": ["aspectRatio"]})], badges=["new", "audio"],
+      defaults={"duration": 5, "resolution": "768P"}, ranged_durations=True,
+      pricing=("second", 0.04, "768P; 480P $0.025, 1080P $0.08, 2K $0.16; only the new seconds", {"byResolution": {"480P": 0.025, "768P": 0.04, "1080P": 0.08, "2K": 0.16}}))
+# One Replicate model takes every input; each route sends only its own (a start frame is never also a reference picture).
+# HighSpeed's ratio is "adaptive" from a frame (its schema: "adaptive for image-to-video"); Lite ignores the ratio then.
+def H3_REPLICATE_ROUTES(ep, adaptive=False):
+    refs = ["images", "video", "audio"]
+    frame = {"drop": ["aspectRatio"], "fixed": {"ratio": "adaptive"}} if adaptive else {}
+    return [("t2v", ep, "replicate", {"drop": ["image", "endImage", *refs]}), ("i2v", ep, "replicate", {**frame, "drop": ["endImage", *refs, *frame.get("drop", [])]}),
+            ("flf2v", ep, "replicate", {**frame, "drop": [*refs, *frame.get("drop", [])]}), ("ref2v", ep, "replicate", {"drop": ["image", "endImage"]})]
+
+
+# Replicate's H3 Lite (480P / 768P) and HighSpeed (one rate): words, a first frame, first and last frames, or references, 4-15 s.
+model("minimax-h3-lite", "MiniMax H3 Lite", "MiniMax", "hailuo", "video",
+      "The lightest H3 with sound: words, frames or references, 4–15 s at 480P or 768P",
+      H3_REPLICATE_ROUTES("minimax/h3-lite"),
+      badges=["new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, fit_values=True, options={"maxImages": 9},
+      pricing=("second", 0.04, "768P; 480P $0.025", {"byResolution": {"480P": 0.025, "768P": 0.04}}))
+model("minimax-h3-highspeed", "MiniMax H3 HighSpeed", "MiniMax", "hailuo", "video",
+      "H3 tuned for speed, with sound: words, frames or references, 4–15 s",
+      H3_REPLICATE_ROUTES("minimax/h3-highspeed", adaptive=True),
+      badges=["new", "audio", "fast"], defaults={"aspectRatio": "16:9", "duration": 5}, fit_values=True, options={"maxImages": 9}, pricing=("second", 0.06))
 model("hailuo-2-3", "MiniMax Hailuo 2.3", "MiniMax", "hailuo", "video", "Expressive characters and dynamic action",
       [("t2v", "fal-ai/minimax/hailuo-2.3/pro/text-to-video"), ("i2v", "fal-ai/minimax/hailuo-2.3/pro/image-to-video")],
       pricing=("video", 0.49), defaults={"duration": 6}, fixed={"prompt_optimizer": True})
@@ -842,6 +920,13 @@ model("pixverse-v6", "PixVerse V6", "PixVerse", "pixverse", "video", "Stylized s
 model("vidu-q3", "Vidu Q3", "Shengshu", "vidu", "video", "Anime-friendly video with references",
       [("t2v", "fal-ai/vidu/q3/text-to-video"), ("i2v", "fal-ai/vidu/q3/image-to-video"), ("ref2v", "fal-ai/vidu/q3/reference-to-video/mix")],
       defaults={"aspectRatio": "16:9"})
+# Vidu Q4 on fal (package nm10-hosted-catchup): a start frame, or up to 12 reference pictures and 3 voice clips (mp3, 3-12 s) with
+# sound on request, 3-16 s up to 4K. Vidu's own API takes more references than fal's schema exposes; Fuobe sends what fal takes.
+model("vidu-q4", "Vidu Q4", "Shengshu", "vidu", "video", "Vidu's newest: a start frame or up to 12 references and 3 voices, 3–16 s, up to 4K",
+      [("i2v", "fal-ai/vidu/q4/image-to-video"), ("ref2v", "fal-ai/vidu/q4/reference-to-video")], badges=["new", "4k", "audio"], ranged_durations=True,
+      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, options={"maxImages": 12, "referenceAudio": "mp3"}, prompt_max=True, fit_values=True,
+      pricing=("second", 0.0665, "720p; 540p $0.0315, 1080p $0.084, 2K $0.133, 4K $0.273; sound costs nothing extra",
+               {"byResolution": {"540p": 0.0315, "720p": 0.0665, "1080p": 0.084, "2K": 0.133, "4K": 0.273}}))
 model("luma-ray-3-2", "Luma Ray 3.2", "Luma", "luma", "video", "HDR, physically convincing motion",
       [("t2v", "luma/agent/ray/v3.2/text-to-video"), ("i2v", "luma/agent/ray/v3.2/image-to-video"), ("v2v", "luma/agent/ray/v3.2/video-to-video"),
        ("reframe", "luma/agent/ray/v3.2/reframe")],
@@ -1101,6 +1186,18 @@ model("extract-soundtrack", "Extract soundtrack", "fal", "utility", "audio", "A 
       [("separate-audio", "fal-ai/workflow-utilities/extract-audio")], pricing=("second", 0.0002, "billed by compute time"), hidden=True)
 model("elevenlabs-voice-isolation", "ElevenLabs Voice Isolation", "ElevenLabs", "elevenlabs", "audio", "Clean speech from a video or recording — music and noise removed",
       [("separate-audio", "fal-ai/elevenlabs/audio-isolation")], pricing=("minute", 0.1))
+# Clean up dialogue in the cloud (DBS D5, docs/research/dbs-separation-7.md §6): hosted speech cleaners under their own
+# names (DBS isn't hosted, and the owner hasn't allowed SAM Audio in its place). VEED Clean Audio takes a video's file too
+# (its audio_url reads the soundtrack) and bills whole minutes of input, at least one; FLAC keeps its 48 kHz output
+# lossless. DeepFilterNet 3 takes audio only (a video's soundtrack goes in through extract-soundtrack).
+model("veed-clean-audio", "VEED Clean Audio", "VEED", "veed", "audio", "Removes background noise from speech and levels it, keeping quiet and distant words",
+      [("enhance-voice", "veed/clean-audio", "fal", {"keys": {"video": "audio_url"}})], fixed={"output_format": "flac"},
+      sliders=[("strength", "Strength", 0.01)],
+      pricing=("minute", 0.0125, "per minute of input, rounded up to whole minutes, at least 1", {"roundUp": True}))
+DFN_REC = EPS[("fal", "fal-ai/deepfilternet3")]
+model("deepfilternet3", "DeepFilterNet 3", "DeepFilterNet", "deepfilternet", "audio", "Open-source speech denoiser: steady noise, hiss and hum out of a voice",
+      [("enhance-voice", "fal-ai/deepfilternet3")], fixed={"audio_format": "flac"}, pricing=("second", 0.001, "per second of audio"),
+      licence={"licence": "MIT OR Apache-2.0", "commercial": True, "note": DFN_REC["license"], "checked": DFN_REC["checked"]})
 
 # ----- Image to 3D (research part 3; product spins, 3D blocking)
 model("hunyuan-3d-3-1-pro", "Hunyuan3D 3.1 Pro", "Tencent Hunyuan", "hunyuan-3d", "model3d", "Textured, game-ready 3D models from a product photo",
@@ -1268,6 +1365,20 @@ model("meshy-7-1-multi", "Meshy 7.1 Multi-view", "Meshy", "meshy", "model3d", "O
       controls=[("topology", "Topology")], options={"minImages": 2})
 model("meshy-rigging", "Meshy Rigging", "Meshy", "meshy", "model3d", "Rig a humanoid GLB with a skeleton, walk and run cycles, or an animation preset",
       [("rig-3d", "fal-ai/meshy/rigging")], badges=["new"], pricing=("request", 0.2, "+$0.12 with an animation preset", {"animationUsd": 0.12}))
+# Retexture a 3D model (package nm10-hosted-catchup): Meshy 7 or 6 paints new textures on a GLB from words or a style picture (the
+# picture wins when both go). $0.30 a model at 2K or 4K textures, $0.45 at 8K.
+for _v in ("7", "6"):
+    model(f"meshy-{_v}-retexture", f"Meshy {_v} Retexture", "Meshy", "meshy", "model3d", "New textures on a 3D model, from words or a style picture",
+          [("retexture-3d", f"meshy/v{_v}/retexture")], badges=["new"], prompt_max=True, controls=[("texture_resolution", "Texture size")],
+          options={"promptOptional": True}, fixed={"enable_pbr": True},
+          pricing=("request", 0.3, "2K or 4K textures; 8K $0.45; realistic surface detail included", {"factors": [{"param": "texture_resolution", "values": {"8k": 1.5}}]}))
+# Tripo P2: Tripo's production tier. $1.10 a model with fast or standard textures, $1.20 detailed, $1.30 extreme ($1.00 untextured).
+# Its "fast" textures need texture version v3.5-20260815 (fal's schema), the newest, which every quality takes: it always goes.
+model("tripo-p2", "Tripo P2", "Tripo", "tripo", "model3d", "Tripo's production tier: detailed 3D models with realistic textures",
+      [("image-to-3d", "tripo3d/p2/image-to-3d")], badges=["new", "pro"], controls=[("texture_quality", "Texture")],
+      fixed={"texture_version": "v3.5-20260815"},
+      pricing=("request", 1.1, "standard textures; detailed $1.20, extreme $1.30",
+               {"factors": [{"param": "texture_quality", "values": {"detailed": 1.2 / 1.1, "extreme": 1.3 / 1.1}}]}))
 # Cinema Studio's "Create 3D scene" on the cloud (part 4 §8): a depth map of the whole frame, which the browser
 # turns into a point cloud with the photo's colours. So scene-3d answers with an image on this model.
 model("marigold-depth", "Marigold V2 Depth", "Marigold", "marigold", "image", "A depth map of the whole frame, for the 3D scene your browser builds",
@@ -1364,6 +1475,15 @@ model("bria-expand", "Bria Expand", "Bria", "bria", "image", "Extend a picture t
 # ----- New speech models
 model("heygen-voice-turbo", "HeyGen Voice Turbo", "HeyGen", "heygen", "audio", "24 voices or an instant clone of yours, in 39 languages, for almost nothing",
       [("tts", "heygen/heygen-voice/turbo")], badges=["new", "fast"], pricing=("request", 0.004, "per 1k chars"))
+# Qwen3-TTS 1.7B on fal (nm10-voice-design; research new-models-10.json endpointRecords, read 2026-11-02): a voice made from
+# words, nine premade voices, and a clone in two steps (clone-voice turns the sample into an embedding file, text-to-speech
+# speaks with it; a saved voice keeps the file: src/server/voices.ts). The same model runs on your GPU (oss-qwen3-tts).
+# max_new_tokens is 200 codec tokens by default (12 Hz: about 16 s of speech): 4096 lets a long line finish.
+model("qwen-3-tts", "Qwen3-TTS (hosted)", "Alibaba Qwen", "qwen-tts", "audio", "Design a voice from a description, or clone one, in 10 languages",
+      [("voice-design", "fal-ai/qwen-3-tts/voice-design/1.7b"),
+       ("tts", "fal-ai/qwen-3-tts/text-to-speech/1.7b", "fal", {"cloneFirst": {"endpoint": "fal-ai/qwen-3-tts/clone-voice/1.7b", "output": "speaker_embedding"}})],
+      badges=["new"], pricing=("request", 0.09, "per 1k chars; cloning a sample adds $0.0008 per minute of it"),
+      defaults={"voice": "Vivian"}, api_defaults={"max_new_tokens": 4096}, controls=[("language", "Language")])
 model("gemini-3-8-flash-tts", "Gemini 3.8 Flash TTS", "Google", "gemini-tts", "audio", "30 Gemini voices with inline <laugh> and <sigh>",
       [("tts", "google/gemini-3.8-flash-tts")], badges=["new"], pricing=("request", 0.045, "per 1k chars"))
 
@@ -1498,7 +1618,7 @@ def map_fields(fmap):
             out += lora_field_names(v)
         elif k == "size":
             out += [v["key"]] if v.get("key") else [v["width"], v["height"]]
-        elif k in ("seedRange", "maskFormat", "ranges", "ignore", "maxImages", "omitEmptyPrompt"):
+        elif k in ("seedRange", "maskFormat", "ranges", "ignore", "maxImages", "omitEmptyPrompt", "promptMax"):
             continue
         elif isinstance(v, str):
             out.append(v)
@@ -1667,7 +1787,7 @@ def part4_slots(op, kf, inputs, m, opts, fmap):
         if url and frames:
             fmap["frames"] = {"key": kf["frames"], "url": url, "frames": frames}
             opts["maxImages"] = max(opts.get("maxImages", 1), num((inputs.get(kf["frames"]) or {}).get("maxItems")) or 1)
-    if op == "rig-3d":
+    if op in ("rig-3d", "retexture-3d"):
         if "model3d" in kf:
             fmap["model3d"] = kf["model3d"]
         if "animation" in kf:
@@ -1807,6 +1927,21 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         opts["voiceClone"] = True
     if "voice" in kf and "[]" not in kf["voice"]:
         fmap["voice"] = kf["voice"]
+    # Voice design and cloning (Qwen3-TTS, nm10-voice-design): the voice in words, what the sample says, a cloned voice's file.
+    for k in ("voiceDescription", "voiceTranscript", "voiceEmbedding"):
+        if k in kf and kf[k].split(".")[0] in inputs:
+            fmap[k] = kf[k]
+    # A sample the endpoint can't take is cloned first by a sibling endpoint (fal's clone-voice), whose result file goes in
+    # voiceEmbedding (FieldMap.cloneFirst; src/server/providers/fal.ts): the route takes samples.
+    cf = ropts.get("cloneFirst")
+    if cf:
+        ce = EPS.get((provider, cf["endpoint"]))
+        ckf = (ce or {}).get("keyFields") or {}
+        if not ce or "referenceVoice" not in ckf or "voiceEmbedding" not in fmap:
+            warn(f"{m['id']}: {cf['endpoint']} can't clone for {ep}")
+        else:
+            fmap["cloneFirst"] = {"endpoint": cf["endpoint"], "audio": ckf["referenceVoice"], **({"text": ckf["voiceTranscript"]} if "voiceTranscript" in ckf else {}), "output": cf["output"]}
+            opts["voiceClone"] = True
     if "voice" in kf and "elevenlabs" in ep:
         opts["voices"] = ELEVEN_VOICES
     elif "voice" in kf and "voices" not in opts and voice_list(spec_at(inputs, kf["voice"])):
@@ -2102,7 +2237,11 @@ def build_route(op, ep, provider, m, opts, ropts=None):
                 fmap["duration"]["suffix"] = "s"
             lo, hi = num(spec.get("minimum")), num(spec.get("maximum"))
             if m.get("ranged_durations") and lo is not None and hi is not None:
-                opts["durations"] = union(opts.get("durations", []), [v for v in NICE_DURATIONS if lo <= v <= hi] or [lo])
+                picks = [v for v in NICE_DURATIONS if lo <= v <= hi] or [lo]
+                # The longest whole second the API takes is always one of them (Vidu Q4's 16 s, H3 Max insert's 13 s).
+                if hi == int(hi) and hi not in picks and hi <= max(NICE_DURATIONS):
+                    picks.append(int(hi))
+                opts["durations"] = union(opts.get("durations", []), picks)
         if key.endswith("_ms"):
             fmap["duration"]["multiplier"] = 1000
     part4_ranges(op, inputs, fmap)
@@ -2155,6 +2294,10 @@ def build_route(op, ep, provider, m, opts, ropts=None):
             fmap.setdefault("defaults", {})[k] = spec["default"]
         else:
             warn(f"{m['id']}: {ep} requires {k}, which no field of this route fills")
+    if m.get("prompt_max"):
+        pspec = inputs.get((fmap.get("prompt") or "prompt").split(".")[0]) if fmap.get("prompt") is not False else None
+        if pspec and num(pspec.get("maxLength")):
+            fmap["promptMax"] = int(num(pspec["maxLength"]))
     if "numOutputs" in fmap:
         mx = num((inputs.get(fmap["numOutputs"]) or {}).get("maximum")) or 4
         opts["maxOutputs"] = max(opts.get("maxOutputs", 1), min(4, mx))

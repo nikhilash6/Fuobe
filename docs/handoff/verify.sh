@@ -26,7 +26,7 @@ stop_port() { local port=$1; for i in 1 2 3 4 5; do fuser -k -n tcp "$port" >/de
 wait_up() { for i in $(seq 1 90); do curl -sf -o /dev/null "$1" && return 0; sleep 2; done; return 1; }
 
 # Browser checks against the demo server, in this order (they share one data folder). Add new tests/e2e scripts here.
-DEMO_CHECKS="shell no-horizontal-scroll composer-flows library-flows cinema-scene cinema-shortcuts notifications clipboard layers assist-flows canvas-smoke canvas-board canvas-open-dub dop-flows cinema-original genjutsu-original character-swap-studio mixed-shorts-original marketing-originals open-tools popcorn-evolution skills-run skills-builder fixes-5 split-soundtrack moss-image cinema-path turnaround"
+DEMO_CHECKS="shell no-horizontal-scroll composer-flows library-flows cinema-scene cinema-shortcuts notifications clipboard layers assist-flows canvas-smoke canvas-board canvas-open-dub dop-flows cinema-original genjutsu-original character-swap-studio mixed-shorts-original marketing-originals open-tools popcorn-evolution skills-run skills-builder schedule-skill fixes-5 split-soundtrack moss-image cinema-path turnaround"
 
 git -C "$REPO" worktree remove --force "$WT" 2>/dev/null
 step worktree git -C "$REPO" worktree add --detach "$WT" "$BRANCH" || exit 1

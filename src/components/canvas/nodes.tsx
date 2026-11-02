@@ -31,8 +31,10 @@ import {
   Volume2,
   VolumeX,
   Table,
+  LayoutDashboard,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -117,6 +119,11 @@ import { matchSpokenLanguage, spokenLanguageName, spokenLanguageOptions } from "
 import { keyCombo } from "@/lib/keys";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
+import { KIND_COLOR } from "@/lib/layout-edit";
+import { readLayout, readsBoxes, type LayoutDraft } from "@/lib/layout-prompt";
+import { layoutCanvas } from "@/lib/catalog/plan";
+import { getModel } from "@/lib/catalog";
+import type { EditorCanvas } from "@/components/studio/layout-editor";
 import { BOARD_NODE_TYPES, type BoardType } from "./board";
 import { NodeIcon, PORT_COLOR, useEditorActions, useEditorGlobals, useEditorSelector, useNodeResults, useNodeView, type EditorSnapshot, type NodeResults } from "./canvas-context";
 
@@ -1754,6 +1761,157 @@ const TableNode = memo(function TableNode({ id, data, selected }: NodeProps<Flow
   );
 }, sameNodeProps);
 
+// ---------------------------------------------------------------------------
+// Layout: boxes for a headline, a product, a price; the image model it feeds draws each in its place
+
+const LayoutEditor = dynamic(() => import("@/components/studio/layout-editor").then((m) => m.LayoutEditor));
+
+const LAYOUT_ASPECTS = ["1:1", "4:5", "3:4", "2:3", "9:16", "16:9", "3:2", "4:3"];
+const EMPTY_LAYOUT: LayoutDraft = { summary: { caption: "", meta: [], canvas: "single" }, items: [], aspect: "1:1" };
+
+/** The first model a node feeds ("node id|model id|aspect ratio"), so the editor draws on the shape that model renders. */
+const downstreamOf = (s: EditorSnapshot, id: string): string => {
+  for (const e of s.graph.edges) {
+    if (e.source !== id) continue;
+    const t = s.byId.get(e.target);
+    if (t?.data.modelId) return `${t.id}|${t.data.modelId}|${t.data.params?.aspectRatio ?? getModel(t.data.modelId)?.defaults?.aspectRatio ?? ""}`;
+  }
+  return "";
+};
+
+/** A canvas of that shape, 1024 px on its longer side in steps of 16 (no image model to ask). */
+function plainCanvas(aspect: string | undefined): EditorCanvas {
+  const r = ratioNum(aspect);
+  const r16 = (v: number) => Math.max(16, Math.round(v / 16) * 16);
+  const width = r >= 1 ? 1024 : r16(1024 * r);
+  const height = r >= 1 ? r16(1024 / r) : 1024;
+  return { width, height, asked: { width, height }, exact: false };
+}
+
+const ratioNum = (aspect: string | undefined) => {
+  const [a, b] = (aspect ?? "1:1").split(":").map(Number);
+  return a > 0 && b > 0 ? a / b : 1;
+};
+
+/** What a Layout node's card and its row in the Nodes list need: the draft, the model it feeds and the shape. */
+function useLayoutNode(id: string, data: CanvasNodeData) {
+  const draft = readLayout(data.layout) ?? EMPTY_LAYOUT;
+  const feeds = useEditorSelector(downstreamOf, id);
+  const [target, modelId, auto] = feeds.split("|");
+  const found = modelId ? getModel(modelId) : undefined;
+  const texts = draft.items.filter((it) => it.label === "text").length;
+  // The picture's shape is the model's (its node's aspect ratio): a square canvas when the model leaves it to "auto".
+  const nodeAspect = auto === "auto" ? "1:1" : auto;
+  return {
+    draft,
+    found,
+    target,
+    model: found?.kind === "image" ? found : undefined,
+    aspect: nodeAspect || draft.aspect || "1:1",
+    summary: draft.items.length ? `${draft.items.length} box${draft.items.length === 1 ? "" : "es"}${texts ? ` · ${texts} with words` : ""}` : "No boxes yet",
+  };
+}
+
+/** The Layout editor for a node (Image studio's editor), sized as the model it feeds renders. */
+function LayoutNodeEditor({ id, data, open, onOpenChange }: { id: string; data: CanvasNodeData; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const actions = useEditorActions();
+  const { draft, model, aspect, target } = useLayoutNode(id, data);
+  const params = useEditorSelector((s, key) => (key ? s.byId.get(key)?.data.params : undefined), target ?? "");
+  if (!open) return null;
+  const aspects = model?.options.aspectRatios?.filter((a) => a !== "auto") ?? LAYOUT_ASPECTS;
+  const canvasFor = (a: string | undefined): EditorCanvas => (model ? layoutCanvas(model, { ...(a && { aspectRatio: a }) }, "t2i") : plainCanvas(a));
+  return (
+    <LayoutEditor
+      open={open}
+      onOpenChange={onOpenChange}
+      layout={draft}
+      caption={draft.summary.caption}
+      aspect={aspect}
+      aspects={aspects}
+      canvasFor={canvasFor}
+      model={model}
+      onDone={(r) => {
+        actions.update(id, { layout: { ...r.layout, summary: { ...r.layout.summary, caption: r.caption.trim() }, ...(r.aspect && { aspect: r.aspect }) } });
+        // A new shape picked in the editor is the picture's: the model it feeds renders it.
+        if (target && model && r.aspect && r.aspect !== aspect) actions.update(target, { params: { ...params, aspectRatio: r.aspect } });
+      }}
+    />
+  );
+}
+
+/** Phones edit in the Nodes list (the board is read-only there): the Layout node's row, with Edit layout. */
+export function LayoutNodeRow({ id, data, className }: { id: string; data: CanvasNodeData; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const { summary, aspect } = useLayoutNode(id, data);
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <p className="min-w-0 truncate text-[13px] text-muted-foreground">
+        {aspect} · {summary}
+      </p>
+      <button type="button" className={className} onClick={() => setOpen(true)}>
+        <LayoutDashboard className="size-3.5" /> Edit layout
+      </button>
+      <LayoutNodeEditor id={id} data={data} open={open} onOpenChange={setOpen} />
+    </div>
+  );
+}
+
+const LayoutNode = memo(function LayoutNode({ id, data, selected }: NodeProps<FlowNode>) {
+  const { readOnly } = useEditorGlobals();
+  const [open, setOpen] = useState(false);
+  const { draft, found, aspect, summary } = useLayoutNode(id, data);
+  return (
+    <>
+      <NodeShell id={id} type="layout" data={data} selected={!!selected} out="text" width={260}>
+        <div className="space-y-2 p-3">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            disabled={readOnly}
+            aria-label={`Edit layout: ${summary}`}
+            className={cn("relative mx-auto block w-full overflow-hidden rounded-md border border-dashed border-border-strong bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none", NO_DRAG)}
+            style={{ aspectRatio: `${ratioNum(aspect)}`, maxWidth: `calc(12rem * ${ratioNum(aspect)})` }}
+          >
+            {draft.items.map((it, i) => (
+              <span
+                key={i}
+                aria-hidden
+                className="absolute overflow-hidden rounded-[2px] border px-0.5 text-left text-[8px] leading-tight text-foreground/80"
+                style={{
+                  left: `${it.box[0] * 100}%`,
+                  top: `${it.box[1] * 100}%`,
+                  width: `${(it.box[2] - it.box[0]) * 100}%`,
+                  height: `${(it.box[3] - it.box[1]) * 100}%`,
+                  borderColor: it.color ?? KIND_COLOR[it.label],
+                  background: `color-mix(in oklab, ${it.color ?? KIND_COLOR[it.label]} 14%, transparent)`,
+                }}
+              >
+                {it.label === "text" ? it.text : ""}
+              </span>
+            ))}
+            {!draft.items.length && <span className="absolute inset-0 grid place-items-center p-2 text-center text-[12px] text-muted-foreground">Draw boxes for a headline, a product, a price</span>}
+          </button>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[12px] text-muted-foreground">
+              {aspect} · {summary}
+            </span>
+            {!readOnly && (
+              <button type="button" className={chip} onClick={() => setOpen(true)}>
+                <LayoutDashboard className="size-3" /> Edit layout
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            {found && !readsBoxes(found) ? "This model reads the layout as words, not exact positions." : "Wire it into an image model's Prompt. With a table, {Column} in a box's words fills row by row."}
+          </p>
+        </div>
+      </NodeShell>
+      {/* Beside the card, not in it: the card's menus and clicks stay out of the editor. */}
+      <LayoutNodeEditor id={id} data={data} open={open} onOpenChange={setOpen} />
+    </>
+  );
+}, sameNodeProps);
+
 export const NODE_TYPES = {
   prompt: PromptNode,
   "image-input": MediaInputNode,
@@ -1773,6 +1931,7 @@ export const NODE_TYPES = {
   concat: GeneratorNode,
   restore: GeneratorNode,
   table: TableNode,
+  layout: LayoutNode,
   output: OutputNode,
   note: NoteNode,
   ...BOARD_NODE_TYPES,

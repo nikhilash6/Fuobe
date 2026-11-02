@@ -433,6 +433,10 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
   // Voices, dialogue and dubbing.
   if (map.voice && input.voice) setPath(out, map.voice, input.voice);
   if (map.voiceAudio && input.voiceAudio) out[map.voiceAudio] = input.voiceAudio;
+  // Voice design and cloning (Qwen3-TTS): the voice in words, what the sample says, a saved voice's embedding.
+  if (map.voiceDescription && input.voiceDescription?.trim()) out[map.voiceDescription] = input.voiceDescription.trim();
+  if (map.voiceTranscript && input.voiceTranscript?.trim()) out[map.voiceTranscript] = input.voiceTranscript.trim();
+  if (map.voiceEmbedding && input.voiceEmbedding) out[map.voiceEmbedding] = input.voiceEmbedding;
   if (map.dialogue && input.dialogue?.length) {
     const d = map.dialogue;
     out[d.key] = input.dialogue.map((l) => ({ [d.text]: l.text, [d.voice]: l.voice ?? input.voice }));
@@ -1008,6 +1012,7 @@ export function extractOutputs(response: unknown, op?: Operation): ExtractedOutp
       break;
     case "image-to-3d":
     case "text-to-3d":
+    case "retexture-3d":
       out = model3dOutputs(response);
       break;
     case "scene-3d":

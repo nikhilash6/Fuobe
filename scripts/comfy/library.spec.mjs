@@ -116,6 +116,10 @@
 // Keys added with MOSS-Image (docs/research/new-models-7.md §4.6). Model settings (params.extra; MOSS-Image's Quality control writes them):
 //   sampler, scheduler                    (KSampler sampler_name / scheduler)
 //   unet                                  (UNETLoader file: the Fast tier's drop-in 8-step DMD file, listed in optionalModels)
+// Keys added with Design a voice (nm10-voice-design). * = the provider fills it:
+//   voiceDescription*                     (the voice in words: params.voiceDescription, op voice-design)
+//   voiceTranscript*                      (what the voice sample says: params.voiceTranscript, or a saved voice's line)
+//   device*                               (VoxCPM2's device combo: the server's first torch device, cuda | mps | cpu)
 // Entry field requiredModels: files a loader reads by a name with no extension (DBSLoader's model folder), listed in the
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
@@ -126,6 +130,8 @@
 //                                          "auto" = the host's pick: the source's rate on CUDA, at most 24 kHz on a CPU, 16 kHz past 2 minutes)
 //   roomToneDb, level, bedDb              (REUSEEnhance room_tone_db (-60 = off), level match input | -16 LUFS | off, bed_db)
 //   channels*                             (REUSEEnhance channels, and DBSSeparate's in the bed graph: the DBS rules)
+// Keys added with Clean up dialogue (DBS D5, docs/research/dbs-separation-7.md §4.4 graph C), params.extra:
+//   voiceDb, musicDb, effectsDb          (AudioAdjustVolume volume on the speech, music and sfx stems: whole dB, -100..100, 0 = as is)
 // Keys added with the owner's SOTA image families (2026-10-31), model controls (params.extra):
 //   preset                                (Ideogram 4's sampling preset by name: Quality | Default | Turbo, the graph's own table)
 // Keys added with Open-H3 Regenerate (n7-3, docs/research/new-models-7.md §2.6). * = the provider fills it:
@@ -194,6 +200,10 @@ export const CUSTOM_NODE_REPOS = {
   // Apache-2.0 code, release v2 (adapter_v12). Not on the validation server (needs transformers >= 5.17; the pinned
   // ComfyUI's venv has 5.22.1).
   'zen-image-edit-comfyui': 'https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d',
+  // nm10-voice-design: Design a voice. 1038lab's Qwen3-TTS nodes (GPL-3.0 code, Apache-2.0 weights) and Saganaki22's VoxCPM2
+  // nodes (Apache-2.0). Neither is on the validation server; both download their weights from Hugging Face on first run.
+  'ComfyUI-QwenTTS': 'https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293',
+  'ComfyUI-VoxCPM2': 'https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -217,6 +227,8 @@ export const PACK_CLASSES = {
   // Live edit's nodes (fuobe_live.py), which Fuobe writes into custom_nodes itself.
   'fuobe-live': /FuobeLive$/,
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
+  'ComfyUI-QwenTTS': /^AILab_Qwen3TTS(VoiceDesign|VoiceClone|CustomVoice)(_Advanced)?$/,
+  'ComfyUI-VoxCPM2': /^VoxCPM2_(TTS|Clone)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -392,6 +404,8 @@ export const KNOWN_MODELS = {
   'Qwen-Image-2.1-Lightning-4steps.safetensors': { folder: 'loras', url: 'https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/6b0a1176327c01522a44276c5da67331a025b6fc/pytorch_lora_weights.safetensors' },
   'p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/PrunaAI/P-Q-Image-2.1-Comfy/resolve/aa7dcecb1767e220e31a55706e33fd057c9a3fca/p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors' },
   'Qwen-Image-2.1-Next-Scene-step2500.safetensors': { folder: 'loras', url: 'https://huggingface.co/akhaliq/Qwen-Image-2.1-Next-Scene-LoRA/resolve/67ce88cd413fe177758af5d91e25eb3a334aa06f/next_scene_step2500.safetensors' },
+  // qma-angles: gribbliest's QMA camera-angles LoRA for Qwen-Image 2.1 (96 views), pinned to 13007eec.
+  'qwen-image-2.1-qma-camera-angles.safetensors': { folder: 'loras', url: 'https://huggingface.co/gribbliest/qwen-image-2.1-qma-camera-angles/resolve/13007eec2648c09529e930164c2ccc9c8c12428c/qwen-image-2.1-qma-camera-angles.safetensors' },
   // Zen Image Edit's fusion adapter (nm10-qwen21-fast): a GitHub release asset of recoilme/zen-image-edit-comfyui (release v2,
   // sha256 and size in model-pins.json), kept in models/text_encoders; the loader is given its full path at run time.
   'adapter_v12.safetensors': { folder: 'text_encoders', url: 'https://github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors' },
@@ -1954,6 +1968,101 @@ export const SPEC = [
       'run install-comfyui.sh with INDEXTTS_RUNTIME=1, ideally in a separate worker. Emotion from a second clip or a vector (IndexTTS2EmotionVector / IndexTTS2EmotionFromText) is not wired.',
   },
   {
+    id: 'tts-qwen3-design',
+    title: 'Qwen3-TTS 1.7B voice design (a new voice from a description)',
+    capability: 'voice-design',
+    handBuilt: 'hand-built/tts-qwen3-design.json',
+    packs: ['ComfyUI-QwenTTS'],
+    bindings: {
+      prompt: [b('1', 'text')],
+      voiceDescription: [b('1', 'instruct')],
+      seed: [b('1', 'seed')],
+    },
+    outputs: [{ node: '2', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'Qwen3-TTS weights Apache-2.0 (Qwen); ComfyUI-QwenTTS code GPL-3.0',
+    autoDownloads: [
+      'ComfyUI-QwenTTS downloads Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign (whole repository at its current revision; 5ecdb67327fd37bb2e042aab12ff7391903235d3 when this was written: model.safetensors 3.83 GB + speech_tokenizer 0.68 GB) into models/tts/Qwen3-TTS/Qwen3-TTS-12Hz-1.7B-VoiceDesign on first run (models/TTS/Qwen3-TTS when no tts folder is registered: ComfyUI-VoxCPM2 registers models/tts)',
+    ],
+    notes:
+      'AILab_Qwen3TTSVoiceDesign_Advanced(text = the line, instruct = the voice in words, model_size 1.7B, language Auto, do_sample true so each seed is a different take: ' +
+      'top_p 1.0, top_k 50, temperature 0.9, repetition_penalty 1.05 as fal sends; max_new_tokens 4096 = about 5 minutes at 12 Hz; unload_models false keeps it loaded for the next take). ' +
+      'The Basic node samples greedily (do_sample false): every take would be the same. 10 languages (Auto, Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, Russian, Italian). ' +
+      'Install the pack with its requirements.txt (transformers >= 4.57, torch >= 2.9.1). A designed voice is reused by cloning the chosen take (tts-qwen3-clone with the take and its line as reference_text). Output MP3 V0.',
+  },
+  {
+    id: 'tts-qwen3-clone',
+    title: 'Qwen3-TTS 1.7B voice clone (a short sample, optionally its transcript)',
+    capability: 'tts',
+    handBuilt: 'hand-built/tts-qwen3-clone.json',
+    packs: ['ComfyUI-QwenTTS'],
+    bindings: {
+      prompt: [b('2', 'target_text')],
+      audio: [b('1', 'audio')],
+      voiceTranscript: [b('2', 'reference_text')],
+      seed: [b('2', 'seed')],
+    },
+    outputs: [{ node: '3', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'Qwen3-TTS weights Apache-2.0 (Qwen); ComfyUI-QwenTTS code GPL-3.0',
+    autoDownloads: [
+      'ComfyUI-QwenTTS downloads Qwen/Qwen3-TTS-12Hz-1.7B-Base (whole repository at its current revision; fd4b254389122332181a7c3db7f27e918eec64e3 when this was written: model.safetensors 3.86 GB + speech_tokenizer 0.68 GB) into models/tts/Qwen3-TTS/Qwen3-TTS-12Hz-1.7B-Base on first run (models/TTS/Qwen3-TTS when no tts folder is registered: ComfyUI-VoxCPM2 registers models/tts)',
+    ],
+    notes:
+      'AILab_Qwen3TTSVoiceClone_Advanced(target_text = the line, reference_audio = the voice sample, reference_text = what the sample says (a closer clone), ' +
+      'x_vector_only false with a transcript; the pack refuses an empty reference_text otherwise, so without one the provider turns x_vector_only on (a timbre-only clone), model_size 1.7B, do_sample true, the same sampling as the design graph). A saved voice from Design a voice passes its take and the take\'s line. Output MP3 V0. Get consent for cloned voices.',
+  },
+  {
+    id: 'tts-voxcpm2',
+    title: 'VoxCPM2 TTS with voice design (48 kHz, 30 languages)',
+    capability: 'voice-design',
+    handBuilt: 'hand-built/tts-voxcpm2.json',
+    packs: ['ComfyUI-VoxCPM2'],
+    bindings: {
+      prompt: [b('1', 'text')],
+      voiceDescription: [b('1', 'voice_description')],
+      seed: [b('1', 'seed')],
+      device: [b('1', 'device')],
+    },
+    outputs: [{ node: '2', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'VoxCPM2 weights Apache-2.0 (OpenBMB); ComfyUI-VoxCPM2 code Apache-2.0',
+    autoDownloads: [
+      'ComfyUI-VoxCPM2 downloads openbmb/VoxCPM2 (whole repository; 32279effe8c19989596f05d353d1447f51d9e915 when this was written: model.safetensors 4.58 GB, audiovae.pth 0.38 GB) into models/tts/VoxCPM/VoxCPM2 on first run',
+    ],
+    notes:
+      'VoxCPM2_TTS(voice_description = the voice in words, wrapped in parentheses before the text by the node; text = the line; model VoxCPM2, lora None, cfg 2.0, 10 timesteps, max_tokens 4096, normalize_text true, dtype auto, device cuda). ' +
+      'device is a combo of what the GPU has (cuda, mps, cpu): bound to the server\'s first torch device (/system_stats), cuda when it can\'t say. 48 kHz output, 30 languages. ' +
+      'The pack also trains LoRAs (VoxCPM_LoraTrainer) and loads them (lora_name): not wired yet. Install the pack with its requirements.txt (voxcpm, funasr, modelscope).',
+  },
+  {
+    id: 'tts-voxcpm2-clone',
+    title: 'VoxCPM2 voice clone (controllable from a clip, ultimate with its transcript; 48 kHz)',
+    capability: 'tts',
+    handBuilt: 'hand-built/tts-voxcpm2-clone.json',
+    packs: ['ComfyUI-VoxCPM2'],
+    bindings: {
+      prompt: [b('2', 'text')],
+      audio: [b('1', 'audio')],
+      voiceTranscript: [b('2', 'prompt_text')],
+      seed: [b('2', 'seed')],
+      device: [b('2', 'device')],
+    },
+    outputs: [{ node: '3', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'VoxCPM2 weights Apache-2.0 (OpenBMB); ComfyUI-VoxCPM2 code Apache-2.0',
+    autoDownloads: [
+      'ComfyUI-VoxCPM2 downloads openbmb/VoxCPM2 (whole repository; 32279effe8c19989596f05d353d1447f51d9e915 when this was written: model.safetensors 4.58 GB, audiovae.pth 0.38 GB) into models/tts/VoxCPM/VoxCPM2 on first run',
+    ],
+    notes:
+      'VoxCPM2_Clone(reference_audio = the voice sample, at most 50 s; prompt_text = what it says: given, the closest ("ultimate") clone, empty, the "controllable" clone; text = the line; ' +
+      'the same model settings as tts-voxcpm2, denoiser and ASR off, 3 retries on a babbling or silent take). A saved voice from Design a voice passes its take and the take\'s line, so it is cloned the ultimate way. Output MP3 V0. Get consent for cloned voices.',
+  },
+  {
     id: 'tts-dialogue-chatterbox',
     title: 'Chatterbox Dialogue (2 speakers, voice clone)',
     capability: 'dialogue',
@@ -2765,6 +2874,28 @@ export const SPEC = [
       'Trained at 512 px on Sintel and Tears of Steel frame pairs: strongest on filmic scenes and establishing shots, static portraits are out of scope (card). ' +
       'storyboard-qwen-edit-2509-next-scene stays the classic choice on your GPU, and the cloud keeps Qwen-Image-Edit 2509 + its next-scene LoRA on fal (Qwen-Image 2.1 is not hosted).' + QWEN21_CLEAN_NOTE,
   },
+  // ---- qma-angles: QMA camera angles (96 views) on Qwen-Image 2.1 ------------------------------------------------------
+  {
+    id: 'qwen-image-21-qma',
+    title: 'QMA Camera Angles (Qwen-Image 2.1 + the QMA LoRA, 96 views)',
+    capability: 'edit',
+    handBuilt: 'hand-built/qwen-image-21-qma.json',
+    bindings: {
+      prompt: [b('30', 'prompt')], image: [b('10', 'image')], seed: [b('32', 'seed')], steps: [b('32', 'steps')], cfg: [b('32', 'cfg')],
+      megapixels: [b('20', 'megapixels')], loraStrength: [b('60', 'strength_model')], vae: [b('3', 'vae_name')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    limits: { maxWidth: 2048, maxHeight: 2048 },
+    vramGb: 20,
+    optionalModels: [QWEN21_CLEAN_VAE],
+    license: `${QWEN21_LICENCE}; QMA Camera Angles LoRA by gribbliest @ 13007eec: Apache-2.0 on its card (no LICENSE file), an adapter of Qwen-Image 2.1, so non-commercial through its base${QWEN21_CLEAN_LICENCE}`,
+    notes:
+      'Re-shoots a picture from one of 96 cameras: the qwen-image-21-edit graph with gribbliest/qwen-image-2.1-qma-camera-angles @ 13007eec (rank 64, 319 MB) at strength 1.0 and the card\'s settings: ' +
+      'the source scaled to about 1 MP (ImageScaleToTotalPixels, lanczos, 32 px steps; megapixels 0.6 = the card\'s 768 px preview), one reference on TextEncodeQwenImage21 (resolution 0, its latent), ' +
+      'QwenImage21Cache, KSampler 30 steps, CFG 3 (the card; the encoder\'s empty negative), euler, simple. ' +
+      'Prompt: "<qma> {azimuth} {elevation} {distance}" then any edit words; Fuobe writes it from the run\'s camera (horizontal_angle / vertical_angle / zoom, snapped to the nearest view). ' +
+      'Directions are the original camera\'s: "right side view" = the camera swings 90° to its own right. Open engine only: fal\'s Qwen-Image 2.1 takes no LoRAs.' + QWEN21_CLEAN_NOTE,
+  },
   {
     id: 'qwen-image-21-t2i-small',
     title: 'Qwen-Image 2.1 Text to Image on a 16 GB GPU (Zen Image Edit: Qwen3.5-0.8B encoder + fusion adapter)',
@@ -3416,6 +3547,37 @@ export const SPEC = [
       'Voice + background add up to the source, except on a loud master where AudioMerge had to lower the background to fit under full scale (FLAC holds no more). ' +
       'Voice is first, so a chain without a stem takes the dialogue. Trained on synthetic English mixes (DnR v2): dialogue separates well (15-16 dB), music against effects less so (5.7-7.8 dB). ' +
       'Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved (recorded as information).',
+  },
+  // DBS graph C (docs/research/dbs-separation-7.md §4.4): one remix of the split at set levels, for a server-side mix (Clean up
+  // dialogue: the dialogue with the music and effects under it, or alone). Same pack and weights as graph A.
+  {
+    id: 'soundtrack-remix-dbs',
+    title: 'Remix a soundtrack: dialogue, music and effects at set levels (DBS, ComfyUI-DBS)',
+    capability: 'separate-audio',
+    handBuilt: 'hand-built/soundtrack-remix-dbs.json',
+    packs: ['ComfyUI-DBS'],
+    requiredModels: ['DBS-BSRNN-DnR/model.safetensors', 'DBS-BSRNN-DnR/config.json', 'DBS-TIGER-DnR/model.safetensors', 'DBS-TIGER-DnR/config.json'],
+    bindings: {
+      audio: [b('1', 'audio')],
+      separationModel: [b('2', 'model')],
+      channels: [b('3', 'channels')],
+      voiceDb: [b('4', 'volume')],
+      musicDb: [b('5', 'volume')],
+      effectsDb: [b('6', 'volume')],
+    },
+    outputs: [
+      { node: '9', kind: 'audio', stem: 'voice' },
+      { node: '10', kind: 'text', role: 'report' },
+    ],
+    defaults: { separationModel: 'DBS-BSRNN-DnR', channels: 'mono', voiceDb: 0, musicDb: -18, effectsDb: -18 },
+    vramGb: 0,
+    license: 'DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)',
+    notes:
+      'CPU OK, about 1.7 GiB on CUDA. Graph A\'s split (LoadAudio reads a video\'s soundtrack too), then AudioAdjustVolume on the speech (voiceDb), music (musicDb) and sfx (effectsDb) stems ' +
+      '(whole dB, -100..100; -100 leaves a stem at 1e-5, below 16-bit FLAC\'s floor) and AudioMerge add twice, saved as one FLAC with the input\'s length, starting at 0, so it goes back on a picture with video-mux-audio-replace. ' +
+      'AudioMerge scales the whole mix down when it peaks over 1.0 (a crude limiter). channels mono gives a mono mix; each channel keeps stereo at twice the time. ' +
+      'A source with more than 2 channels is split in mono (ComfyUI saves mono or stereo only). The output is tagged as the voice stem (the cleaned dialogue), so a chain takes it. ' +
+      'DBS removes music and sound effects, not steady noise: hiss and hum stay with the dialogue or the effects (unmeasured, §11).',
   },
   // Clean up voice (NVIDIA NemotronLabs RE-USE, universal speech enhancement): Fuobe's own ComfyUI-RE-USE pack (no mamba-ssm).
   // Not on the validation server: checked statically there (core nodes) and run through the pack's own tests.
@@ -4619,6 +4781,41 @@ export const SPEC = [
       'rdh\'s "Decode Saved Latent" graph) and decoded by the fast H3 VAE decoder (tiled H3 VAE fallback). Finish trims the padding, crops 1088 -> 1080 and 2176 -> 2160 and cuts the draft\'s own sound to ' +
       'length, which CreateVideo muxes back at 24 fps. Measured by the pack\'s author: about 3 min per 5 s at 2K on a 72 GB RTX PRO 5000 (9.5 min with dense attention); 22 s on a B200 (NVIDIA); ' +
       'a community run reached about 1080p on 32 GB with a lossy LoRA. The packs were tested by their author on ComfyUI 0.42.0.',
+  },
+  // ---- Character swap in 2K (package n7-4-character-swap-2k; docs/research/new-models-7.md §2.10 rows 4-5): only the swapped
+  // character comes from the regenerate, over the original footage, with the footage's own sound.
+  {
+    id: 'video-composite-mask',
+    title: 'Put only the swapped character back over the original footage: the 768p swap, then the regenerated one, each through the approved mask (grown, feathered), with the footage\'s sound (core nodes, no model)',
+    capability: 'composite',
+    handBuilt: 'hand-built/video-composite-mask.json',
+    bindings: {
+      video: [b('source', 'file')], video2: [b('regen', 'file')], video3: [b('take', 'file')], mask: [b('mask', 'file')],
+      startTime: [b('source_slice', 'start_time')], windowStart: [b('regen_slice', 'start_time')], takeStart: [b('take_slice', 'start_time')], maskStart: [b('mask_slice', 'start_time')],
+      duration: [b('source_slice', 'duration'), b('regen_slice', 'duration'), b('take_slice', 'duration'), b('mask_slice', 'duration')],
+      canvasWidth: [b('take_scaled', 'width'), b('take_mask_img', 'width')], canvasHeight: [b('take_scaled', 'height'), b('take_mask_img', 'height')],
+      takeX: [b('base', 'x')], takeY: [b('base', 'y')],
+      regionWidth: [b('regen_mask_img', 'width')], regionHeight: [b('regen_mask_img', 'height')],
+      regenWidth: [b('regen_scaled', 'width'), b('regen_trim', 'width')], regenHeight: [b('regen_scaled', 'height'), b('regen_trim', 'height')],
+      trimX: [b('regen_trim', 'x')], trimY: [b('regen_trim', 'y')],
+      regenX: [b('composite', 'x')], regenY: [b('composite', 'y')],
+      maskGrow: [b('take_grow', 'expand'), b('regen_grow', 'expand')],
+      feather: [b('take_feather', 'left'), b('take_feather', 'top'), b('take_feather', 'right'), b('take_feather', 'bottom'), b('regen_feather', 'left'), b('regen_feather', 'top'), b('regen_feather', 'right'), b('regen_feather', 'bottom')],
+      filenamePrefix: [b('save', 'filename_prefix')],
+    },
+    outputs: [{ node: 'save', kind: 'video' }],
+    defaults: { startTime: 0, windowStart: 0, takeStart: 0, maskStart: 0, duration: 3, canvasWidth: 320, canvasHeight: 180, takeX: 0, takeY: 0, regionWidth: 316, regionHeight: 180, regenWidth: 316, regenHeight: 179, trimX: 0, trimY: 0, regenX: 2, regenY: 0, maskGrow: 8, feather: 12 },
+    vramGb: 0,
+    license: 'n/a (no model; ComfyUI core)',
+    notes:
+      'Character Swap Studio\'s Sharpen and Genjutsu\'s Character swap at 1080p / 2K / 4K on your GPU: a swap was redrawn by video-regenerate-h3, and only the character goes back over the footage, so the background and the sound stay as filmed. ' +
+      'video = the footage at 24 fps and the film\'s size (the studio\'s 24 fps copy, or Genjutsu\'s part fitted by video-fit-clip), video3 = the 768p swap (H3\'s canvas), video2 = its regenerate, mask = the approved whole-shot mask from video-mask-h3-relay (H3\'s canvas, white = the person). ' +
+      'Each LoadVideo goes through a Video Slice of the same duration (one composite window of at most 3 s, because every stream is decoded as float32, about 25 MB a frame at 1080p) from its own start (startTime, takeStart, windowStart, maskStart). ' +
+      'Two layers, each through the mask scaled to it, grown (maskGrow) and feathered (feather): first the swap stretched back over the region of the footage its canvas covers (canvasWidth x canvasHeight at takeX, takeY), ' +
+      'then the regenerate over the centre region its 16:9 / 9:16 draft kept (regionWidth x regionHeight; the mask is centre-cropped to it), less the rows its finish trims at 1080p and 4K (1080 of 1088, 2160 of 2176; the columns for a tall clip): ' +
+      'the regenerate is laid over regenWidth x regenHeight at regenX, regenY and the mask cut to the same rows (CropMask at trimX, trimY), so a character reaching past that region keeps the 768p swap there rather than the original person. ' +
+      'Fuobe works the regions out from the film\'s size and H3\'s canvas. CreateVideo takes the footage\'s own sound and rate (a silent clip stays silent). ' +
+      'Run end to end on ComfyUI 0.41.0 (CPU): a 320x180 24 fps clip with sound, a 224x128 swap, a 384x216 regenerate and a 224x128 box mask, a 1.5 s window from 0.5 s: 36 frames and 1.5 s of AAC, the regenerate only inside the feathered box; the same with a silent clip gives video only.',
   },
   {
     id: 'video-sdr-to-hdr-exr',

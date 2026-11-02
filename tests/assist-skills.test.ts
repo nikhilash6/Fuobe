@@ -254,11 +254,11 @@ describe("context updates", () => {
 });
 
 describe("skills on the server", () => {
-  it("loads every built-in from skills/: 20, valid, unique, each with when-to-use and an icon", () => {
+  it("loads every built-in from skills/: 21, valid, unique, each with when-to-use and an icon", () => {
     const list = skills.listSkills();
     const builtin = list.filter((s) => s.source === "builtin");
-    expect(builtin).toHaveLength(20);
-    expect(new Set(builtin.map((s) => s.name)).size).toBe(20);
+    expect(builtin).toHaveLength(21);
+    expect(new Set(builtin.map((s) => s.name)).size).toBe(21);
     for (const s of builtin) {
       expect(s.whenToUse, s.name).not.toBe("");
       expect(s.icon, s.name).toBeTruthy();

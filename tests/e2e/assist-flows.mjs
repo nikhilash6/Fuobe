@@ -9,7 +9,12 @@
 // 4. A skill uploaded as a .zip shows up in My skills, opens, and can be deleted.
 // 5. Free / Smart / Manual: the mode picker offers Manual's models and effort.
 // 6. At 390 px the Assist sidebar opens as a sheet and the page doesn't scroll sideways.
-import { DESKTOP, launch, openRoute, PHONE } from "./_browser.mjs";
+// 7. Save as skill (W3): a chat whose plan ran (a picture from an attached photo) is saved from the header with the
+//    photo as the input that varies; then `/name` plus a new photo in a new chat shows one card that runs it. At 390 px
+//    the header keeps Save as skill and its review fits the screen.
+import fs from "node:fs";
+import path from "node:path";
+import { DESKTOP, launch, openRoute, PHONE, root } from "./_browser.mjs";
 
 const args = process.argv.slice(2);
 const app = (args.find((a) => !a.startsWith("--")) ?? "http://localhost:3000").replace(/\/$/, "");
@@ -171,7 +176,86 @@ await step("mode picker offers Manual with models and effort", async () => {
   await page.keyboard.press("Escape");
 });
 
+async function upload(file, type, name) {
+  const form = new FormData();
+  form.append("file", new Blob([fs.readFileSync(path.join(root, file))], { type }), name);
+  const res = await fetch(`${app}/api/uploads`, { method: "POST", body: form });
+  if (!res.ok) throw new Error(`upload failed: ${res.status}`);
+  return (await res.json()).url;
+}
+
+let savedChat = null;
+const savedSkill = `e2e-chat-skill-${scheme}-${Date.now().toString(36)}`;
+await step("save a chat as a skill, then /skill plus an attachment runs it on one card", async () => {
+  const photo = await upload("public/samples/grade-sample.jpg", "image/jpeg", "lamp.jpg");
+  // A chat whose plan ran: a picture made from the attached photo, approved on its card.
+  const res = await fetch(`${app}/api/assist`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "Put this desk lamp on a travertine plinth, soft window light", attachments: [photo], engine: "cloud", autoApprove: false }),
+  });
+  savedChat = (await res.json()).id;
+  await openRoute(page, `${app}/assist?c=${savedChat}`);
+  await page.getByRole("button", { name: /^Run/ }).click({ timeout: 30_000 });
+  await page.getByRole("button", { name: /^Open / }).first().waitFor({ timeout: 60_000 });
+  // Every take finished (a step still running can't be saved yet).
+  for (const until = Date.now() + 60_000; Date.now() < until; await page.waitForTimeout(500)) {
+    const v = await (await fetch(`${app}/api/assist/${savedChat}`)).json();
+    if (v.generations?.length && v.generations.every((g) => ["succeeded", "failed", "canceled"].includes(g.status))) break;
+  }
+  // Save as skill from the header: the steps that ran, the photo switched to Varies, checked for free, saved.
+  await page.getByRole("button", { name: "Save as skill" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("heading", { name: "Save as skill" }).waitFor({ timeout: 15_000 });
+  await dialog.getByText("What changes next time").waitFor({ timeout: 30_000 });
+  await dialog.getByRole("radiogroup", { name: /^Image: fixed or varies/ }).getByRole("radio", { name: "Varies" }).click();
+  await page.locator("#sb-name").fill(savedSkill);
+  await shot(page, "flow-save-skill");
+  await dialog.getByRole("button", { name: "Check it" }).click();
+  await dialog.getByText(/^It runs on /).waitFor({ timeout: 60_000 });
+  await dialog.getByRole("button", { name: "Save skill" }).click();
+  await page.getByRole("dialog").getByText(/Try it with new inputs/).waitFor({ timeout: 30_000 });
+  await page.keyboard.press("Escape");
+  const view = await (await fetch(`${app}/api/assist/skills/${savedSkill}/recipe`)).json();
+  if (view?.recipe?.source?.from !== "assist" || view.recipe.params.length !== 1) throw new Error(`saved recipe: ${JSON.stringify(view?.recipe?.source)} ${view?.recipe?.params?.length} inputs`);
+  // A new chat: /name and a new photo → one card titled by the skill → Run.
+  await openRoute(page, `${app}/assist`, { settleMs: 2000 });
+  const box = page.getByRole("textbox", { name: "Message" });
+  await box.click();
+  // The whole name typed: the skill's chip shows above the words (its menu has nothing left to offer).
+  await box.type(`/${savedSkill} `);
+  await page.getByRole("button", { name: `Don't use ${view.title}` }).waitFor({ timeout: 10_000 });
+  await page.locator('input[type="file"][accept^="image/"]').setInputFiles(path.join(root, "public/samples/grade-sample.jpg"));
+  // Sent once the photo has uploaded (its preview switches to the stored file).
+  await page.locator('img[src^="/api/files/"]').first().waitFor({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Send" }).click();
+  await page.waitForURL(/\/assist\?c=/, { timeout: 20_000 });
+  await page.getByText(/^I'll run your .+ skill with your image/).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: /^Run/ }).waitFor({ timeout: 30_000 });
+  await shot(page, "flow-run-skill-card");
+  await page.getByRole("button", { name: /^Run/ }).click();
+  await page.getByText(/On it — the results will appear here/).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: /^Open / }).first().waitFor({ timeout: 60_000 });
+  await shot(page, "flow-run-skill-results");
+});
+
 await ctx.close();
+
+await step("phone: Save as skill stays in the header and its review fits", async () => {
+  if (!savedChat) throw new Error("no chat to save");
+  const phone = await browser.newContext({ ...PHONE, colorScheme: scheme });
+  const p = await phone.newPage();
+  p.on("pageerror", (e) => errors.push(e.message));
+  await openRoute(p, `${app}/assist?c=${savedChat}`);
+  await p.getByRole("button", { name: "Save as skill" }).click();
+  await p.getByRole("dialog").getByText("What changes next time").waitFor({ timeout: 30_000 });
+  await p.waitForTimeout(400);
+  const wide = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (wide > 0) throw new Error(`the review is ${wide}px too wide`);
+  await shot(p, "flow-phone-save-skill");
+  await phone.close();
+  await fetch(`${app}/api/assist/skills/${savedSkill}`, { method: "DELETE" });
+});
 
 await step("phone: the sidebar opens as a sheet; no sideways scroll", async () => {
   const phone = await browser.newContext({ ...PHONE, colorScheme: scheme });

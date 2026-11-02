@@ -237,6 +237,417 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "AILab_Qwen3TTSVoiceClone_Advanced": {
+    "input": {
+      "required": {
+        "target_text": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "Hello, this is a cloned voice.",
+            "tooltip": "Text to speak"
+          }
+        ],
+        "model_size": [
+          "COMBO",
+          {
+            "default": "1.7B",
+            "multiselect": false,
+            "options": [
+              "0.6B",
+              "1.7B"
+            ]
+          }
+        ],
+        "device": [
+          "COMBO",
+          {
+            "default": "auto",
+            "multiselect": false,
+            "options": [
+              "auto",
+              "cuda",
+              "mps",
+              "cpu"
+            ]
+          }
+        ],
+        "precision": [
+          "COMBO",
+          {
+            "default": "bf16",
+            "multiselect": false,
+            "options": [
+              "bf16",
+              "fp16",
+              "fp32"
+            ]
+          }
+        ],
+        "language": [
+          "COMBO",
+          {
+            "default": "Auto",
+            "multiselect": false,
+            "options": [
+              "Auto",
+              "Chinese",
+              "English",
+              "Japanese",
+              "Korean",
+              "French",
+              "German",
+              "Spanish",
+              "Portuguese",
+              "Russian",
+              "Italian"
+            ]
+          }
+        ]
+      },
+      "optional": {
+        "reference_audio": [
+          "AUDIO",
+          {
+            "tooltip": "Reference audio for cloning (not needed if voice is provided)"
+          }
+        ],
+        "reference_text": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "",
+            "tooltip": "Transcript of reference audio"
+          }
+        ],
+        "x_vector_only": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Skip ref_text by using speaker embedding only"
+          }
+        ],
+        "voice": [
+          "VOICE",
+          {}
+        ],
+        "max_new_tokens": [
+          "INT",
+          {
+            "default": 2048,
+            "min": 256,
+            "max": 4096,
+            "step": 256
+          }
+        ],
+        "do_sample": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ],
+        "top_p": [
+          "FLOAT",
+          {
+            "default": 0.9,
+            "min": 0,
+            "max": 1,
+            "step": 0.05
+          }
+        ],
+        "top_k": [
+          "INT",
+          {
+            "default": 50,
+            "min": 0,
+            "max": 200,
+            "step": 1
+          }
+        ],
+        "temperature": [
+          "FLOAT",
+          {
+            "default": 0.9,
+            "min": 0.1,
+            "max": 2,
+            "step": 0.05
+          }
+        ],
+        "repetition_penalty": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": 0.5,
+            "max": 2,
+            "step": 0.05
+          }
+        ],
+        "attention": [
+          "COMBO",
+          {
+            "default": "auto",
+            "multiselect": false,
+            "options": [
+              "auto",
+              "sage_attn",
+              "flash_attn",
+              "sdpa",
+              "eager"
+            ]
+          }
+        ],
+        "unload_models": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": -1,
+            "min": -1,
+            "max": 18446744073709552000
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "target_text",
+        "model_size",
+        "device",
+        "precision",
+        "language"
+      ],
+      "optional": [
+        "reference_audio",
+        "reference_text",
+        "x_vector_only",
+        "voice",
+        "max_new_tokens",
+        "do_sample",
+        "top_p",
+        "top_k",
+        "temperature",
+        "repetition_penalty",
+        "attention",
+        "unload_models",
+        "seed"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "AUDIO"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "audio"
+    ],
+    "name": "AILab_Qwen3TTSVoiceClone_Advanced",
+    "display_name": "Voice Clone (QwenTTS) Advanced",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-QwenTTS",
+    "category": "🧪AILab/🎙️QwenTTS",
+    "output_node": false
+  },
+  "AILab_Qwen3TTSVoiceDesign_Advanced": {
+    "input": {
+      "required": {
+        "text": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "Hello from Qwen3-TTS VoiceDesign.",
+            "tooltip": "Text to synthesize"
+          }
+        ],
+        "instruct": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "A warm, gentle female voice.",
+            "tooltip": "Voice description"
+          }
+        ],
+        "model_size": [
+          "COMBO",
+          {
+            "default": "1.7B",
+            "multiselect": false,
+            "options": [
+              "1.7B"
+            ]
+          }
+        ],
+        "device": [
+          "COMBO",
+          {
+            "default": "auto",
+            "multiselect": false,
+            "options": [
+              "auto",
+              "cuda",
+              "mps",
+              "cpu"
+            ]
+          }
+        ],
+        "precision": [
+          "COMBO",
+          {
+            "default": "bf16",
+            "multiselect": false,
+            "options": [
+              "bf16",
+              "fp16",
+              "fp32"
+            ]
+          }
+        ],
+        "language": [
+          "COMBO",
+          {
+            "default": "Auto",
+            "multiselect": false,
+            "options": [
+              "Auto",
+              "Chinese",
+              "English",
+              "Japanese",
+              "Korean",
+              "French",
+              "German",
+              "Spanish",
+              "Portuguese",
+              "Russian",
+              "Italian"
+            ]
+          }
+        ]
+      },
+      "optional": {
+        "max_new_tokens": [
+          "INT",
+          {
+            "default": 2048,
+            "min": 256,
+            "max": 4096,
+            "step": 256
+          }
+        ],
+        "do_sample": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ],
+        "top_p": [
+          "FLOAT",
+          {
+            "default": 0.9,
+            "min": 0,
+            "max": 1,
+            "step": 0.05
+          }
+        ],
+        "top_k": [
+          "INT",
+          {
+            "default": 50,
+            "min": 0,
+            "max": 200,
+            "step": 1
+          }
+        ],
+        "temperature": [
+          "FLOAT",
+          {
+            "default": 0.9,
+            "min": 0.1,
+            "max": 2,
+            "step": 0.05
+          }
+        ],
+        "repetition_penalty": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": 0.5,
+            "max": 2,
+            "step": 0.05
+          }
+        ],
+        "attention": [
+          "COMBO",
+          {
+            "default": "auto",
+            "multiselect": false,
+            "options": [
+              "auto",
+              "sage_attn",
+              "flash_attn",
+              "sdpa",
+              "eager"
+            ]
+          }
+        ],
+        "unload_models": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": -1,
+            "min": -1,
+            "max": 18446744073709552000
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "text",
+        "instruct",
+        "model_size",
+        "device",
+        "precision",
+        "language"
+      ],
+      "optional": [
+        "max_new_tokens",
+        "do_sample",
+        "top_p",
+        "top_k",
+        "temperature",
+        "repetition_penalty",
+        "attention",
+        "unload_models",
+        "seed"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "AUDIO"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "audio"
+    ],
+    "name": "AILab_Qwen3TTSVoiceDesign_Advanced",
+    "display_name": "Voice Design (QwenTTS) Advanced",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-QwenTTS",
+    "category": "🧪AILab/🎙️QwenTTS",
+    "output_node": false
+  },
   "AUSBOSS_NODES_CropForInpaint": {
     "input": {
       "required": {
@@ -4088,6 +4499,93 @@
     "essentials_category": "Video Tools",
     "has_intermediate_output": false
   },
+  "CropMask": {
+    "input": {
+      "required": {
+        "mask": [
+          "MASK",
+          {}
+        ],
+        "x": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "y": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "width": [
+          "INT",
+          {
+            "default": 512,
+            "min": 1,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 512,
+            "min": 1,
+            "max": 16384,
+            "step": 1
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "mask",
+        "x",
+        "y",
+        "width",
+        "height"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MASK"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "CropMask",
+    "display_name": "Crop Mask",
+    "description": "",
+    "python_module": "comfy_extras.nodes_mask",
+    "category": "image/mask",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "cut mask",
+      "extract mask region",
+      "mask slice"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "CustomCombo": {
     "input": {
       "required": {
@@ -6269,6 +6767,93 @@
     "output_node": false,
     "has_intermediate_output": false,
     "search_aliases": []
+  },
+  "FeatherMask": {
+    "input": {
+      "required": {
+        "mask": [
+          "MASK",
+          {}
+        ],
+        "left": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "top": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "right": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "bottom": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "mask",
+        "left",
+        "top",
+        "right",
+        "bottom"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MASK"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "FeatherMask",
+    "display_name": "Feather Mask",
+    "description": "",
+    "python_module": "comfy_extras.nodes_mask",
+    "category": "image/mask",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "soft edge mask",
+      "blur mask edges",
+      "gradient mask edge"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
   },
   "Flux2Scheduler": {
     "input": {
@@ -24350,6 +24935,362 @@
     "output_node": false,
     "has_intermediate_output": false,
     "search_aliases": []
+  },
+  "VoxCPM2_Clone": {
+    "input": {
+      "required": {
+        "model_name": [
+          "COMBO",
+          {
+            "default": "VoxCPM2",
+            "multiselect": false,
+            "options": [
+              "VoxCPM2",
+              "VoxCPM1.5",
+              "VoxCPM-0.5B"
+            ]
+          }
+        ],
+        "lora_name": [
+          "COMBO",
+          {
+            "default": "None",
+            "multiselect": false,
+            "options": [
+              "None"
+            ]
+          }
+        ],
+        "voice_description": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ],
+        "text": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "This is a cloned voice generated by VoxCPM."
+          }
+        ],
+        "reference_audio": [
+          "AUDIO",
+          {}
+        ],
+        "prompt_text": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "cfg_value": [
+          "FLOAT",
+          {
+            "default": 2,
+            "min": 1,
+            "max": 10,
+            "step": 0.1
+          }
+        ],
+        "inference_timesteps": [
+          "INT",
+          {
+            "default": 10,
+            "min": 1,
+            "max": 100,
+            "step": 1
+          }
+        ],
+        "max_tokens": [
+          "INT",
+          {
+            "default": 4096,
+            "min": 64,
+            "max": 8192
+          }
+        ],
+        "normalize_text": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "label_on": "Normalize",
+            "label_off": "Raw"
+          }
+        ],
+        "enable_denoiser": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 42,
+            "min": -1,
+            "max": 18446744073709552000
+          }
+        ],
+        "force_offload": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ],
+        "dtype": [
+          "COMBO",
+          {
+            "default": "auto",
+            "multiselect": false,
+            "options": [
+              "auto",
+              "bf16",
+              "fp16"
+            ]
+          }
+        ],
+        "device": [
+          "COMBO",
+          {
+            "default": "cuda",
+            "multiselect": false,
+            "options": [
+              "cuda",
+              "mps",
+              "cpu"
+            ]
+          }
+        ],
+        "enable_asr": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ],
+        "retry_max_attempts": [
+          "INT",
+          {
+            "default": 3,
+            "min": 0,
+            "max": 10,
+            "step": 1
+          }
+        ],
+        "retry_threshold": [
+          "FLOAT",
+          {
+            "default": 6,
+            "min": 2,
+            "max": 20,
+            "step": 0.1
+          }
+        ],
+        "torch_compile": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "model_name",
+        "lora_name",
+        "voice_description",
+        "text",
+        "reference_audio",
+        "prompt_text",
+        "cfg_value",
+        "inference_timesteps",
+        "max_tokens",
+        "normalize_text",
+        "enable_denoiser",
+        "seed",
+        "force_offload",
+        "dtype",
+        "device",
+        "enable_asr",
+        "retry_max_attempts",
+        "retry_threshold",
+        "torch_compile"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "AUDIO"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "Cloned Audio"
+    ],
+    "name": "VoxCPM2_Clone",
+    "display_name": "VoxCPM Voice Clone",
+    "description": "Clone a voice using any VoxCPM model. VoxCPM2: controllable (reference audio only) or ultimate (reference + transcript). V1 models: transcript required.",
+    "python_module": "custom_nodes.ComfyUI-VoxCPM2",
+    "category": "audio/tts",
+    "output_node": true
+  },
+  "VoxCPM2_TTS": {
+    "input": {
+      "required": {
+        "model_name": [
+          "COMBO",
+          {
+            "default": "VoxCPM2",
+            "multiselect": false,
+            "options": [
+              "VoxCPM2",
+              "VoxCPM1.5",
+              "VoxCPM-0.5B"
+            ]
+          }
+        ],
+        "lora_name": [
+          "COMBO",
+          {
+            "default": "None",
+            "multiselect": false,
+            "options": [
+              "None"
+            ]
+          }
+        ],
+        "voice_description": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ],
+        "text": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "Hello, welcome to VoxCPM!"
+          }
+        ],
+        "cfg_value": [
+          "FLOAT",
+          {
+            "default": 2,
+            "min": 1,
+            "max": 10,
+            "step": 0.1
+          }
+        ],
+        "inference_timesteps": [
+          "INT",
+          {
+            "default": 10,
+            "min": 1,
+            "max": 100,
+            "step": 1
+          }
+        ],
+        "max_tokens": [
+          "INT",
+          {
+            "default": 4096,
+            "min": 64,
+            "max": 8192
+          }
+        ],
+        "normalize_text": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "label_on": "Normalize",
+            "label_off": "Raw"
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 42,
+            "min": -1,
+            "max": 18446744073709552000
+          }
+        ],
+        "force_offload": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ],
+        "dtype": [
+          "COMBO",
+          {
+            "default": "auto",
+            "multiselect": false,
+            "options": [
+              "auto",
+              "bf16",
+              "fp16"
+            ]
+          }
+        ],
+        "device": [
+          "COMBO",
+          {
+            "default": "cuda",
+            "multiselect": false,
+            "options": [
+              "cuda",
+              "mps",
+              "cpu"
+            ]
+          }
+        ],
+        "torch_compile": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "model_name",
+        "lora_name",
+        "voice_description",
+        "text",
+        "cfg_value",
+        "inference_timesteps",
+        "max_tokens",
+        "normalize_text",
+        "seed",
+        "force_offload",
+        "dtype",
+        "device",
+        "torch_compile"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "AUDIO"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "Generated Audio"
+    ],
+    "name": "VoxCPM2_TTS",
+    "display_name": "VoxCPM TTS",
+    "description": "Generate speech with any VoxCPM model. Supports voice design via parenthetical descriptions like '(gentle female voice)Hello world'.",
+    "python_module": "custom_nodes.ComfyUI-VoxCPM2",
+    "category": "audio/tts",
+    "output_node": true
   },
   "VoxelToMesh": {
     "input": {

@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { parseSkillMd, SKILL_LIMITS, SKILL_NAME_RE, toSkillMd, type Skill, type SkillMeta, type SkillSummary } from "@/lib/assist";
-import { parseRecipe, RECIPE_FILE, stripChecks, stripExamples, type Recipe } from "@/lib/recipe";
+import { NESTED_SKILL, parseRecipe, RECIPE_FILE, runsASkill, stripChecks, stripExamples, type Recipe } from "@/lib/recipe";
 import { unzip, ZipError } from "./assist/unzip";
 import { db } from "./db";
 import { zip } from "./zip";
@@ -196,6 +196,7 @@ export function setSkillFile(name: string, file: string, content: string | null)
   if (!cur) throw new SkillError("No such skill", 404);
   if (cur.source === "builtin") throw new SkillError("Built-in skills can't be changed — Duplicate it first, then change your copy", 403);
   if (!safeFilePath(file)) throw new SkillError(`“${file}” isn't a file name a skill can carry (a text file such as notes.md or recipe.json)`);
+  if (file === RECIPE_FILE && content !== null && runsASkill(content)) throw new SkillError(`Check recipe.json: ${NESTED_SKILL}`, 422);
   const r = db().prepare("SELECT files_json FROM skills WHERE name = ?").get(name) as { files_json: string };
   const files = (JSON.parse(r.files_json) as StoredFile[]).filter((f) => f.path !== file);
   if (content !== null) files.push({ path: file, content });
@@ -298,9 +299,25 @@ export function updateSkill(name: string, patch: Partial<SkillInput>): Skill {
 
 /**
  * Keep the skill lists of projects and chats in step with a rename (`to`) or a delete (`to` null):
- * a project whose only skill went away would otherwise have no skills at all.
+ * a project whose only skill went away would otherwise have no skills at all. A scheduled task that runs the skill
+ * follows a rename; a delete pauses it with the reason, as a deleted project does.
  */
 function renameSkillRefs(from: string, to: string | null): void {
+  const tasks = db()
+    .prepare("SELECT id, prompt, skill_json FROM assist_schedules WHERE skill_json IS NOT NULL AND (CASE WHEN json_valid(skill_json) THEN json_extract(skill_json, '$.name') END) = ?")
+    .all(from) as { id: string; prompt: string; skill_json: string }[];
+  for (const t of tasks) {
+    if (to) {
+      // The task's prompt is its skill in words ("/name Input: value · …"): it names the skill as it's called now.
+      const prompt = t.prompt === `/${from}` || t.prompt.startsWith(`/${from} `) ? `/${to}${t.prompt.slice(from.length + 1)}` : t.prompt;
+      db().prepare("UPDATE assist_schedules SET skill_json = ?, prompt = ? WHERE id = ?").run(JSON.stringify({ ...JSON.parse(t.skill_json), name: to }), prompt, t.id);
+    } else {
+      // The last result becomes the reason (not the last run's chat, which the page would read instead).
+      db()
+        .prepare("UPDATE assist_schedules SET paused = 1, last_thread_id = NULL, last_status = 'failed', last_text = 'Paused: its skill was deleted', updated_at = ? WHERE id = ?")
+        .run(Date.now(), t.id);
+    }
+  }
   const like = `%${JSON.stringify(from)}%`;
   for (const [table, key] of [
     ["assist_projects", "id"],
@@ -400,6 +417,7 @@ export function importSkill(file: { name: string; data: Buffer }, opts: { replac
         continue;
       }
       bytes += e.data.length;
+      if (rel === RECIPE_FILE && runsASkill(e.data.toString("utf8"))) throw new SkillError(`Check recipe.json and try again: ${NESTED_SKILL}.`);
       files.push({ path: rel, content: rel === RECIPE_FILE ? unverified(e.data.toString("utf8")) : e.data.toString("utf8") });
     }
   } else {

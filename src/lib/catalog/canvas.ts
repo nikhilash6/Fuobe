@@ -9,12 +9,15 @@
  */
 import type { CanvasComment, CanvasGroup, CanvasPage, CanvasShape } from "./canvas-board";
 import { EXAMPLE_SCENE, EXAMPLE_WORDS, beatsFrom, blockoutFramePrompt, compileBlockoutPrompt, type BlockoutRef } from "@/lib/blockout";
+import { QMA_MODEL } from "@/lib/qma";
 import { getModel, getPreset, MODELS, supportsOp } from "./index";
 import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
 import { estimateCost, inferOperation, planGeneration, routesFor, type Plan } from "./plan";
 import { replacedBy, replacementOf } from "./replaced";
 import { REGEN_COPY, REGEN_MODEL } from "./regenerate";
+import { compileWords, LAYOUT_PARAM, readLayout, type LayoutDraft } from "@/lib/layout-prompt";
+import { fillLayout, layoutPlaceholders } from "@/lib/layout-surfaces";
 import {
   OPERATION_LABELS,
   OPERATION_OUTPUT,
@@ -62,6 +65,7 @@ export type CanvasNodeType =
   | "concat"
   | "restore"
   | "table"
+  | "layout"
   | "output"
   | "note";
 
@@ -111,6 +115,8 @@ export interface CanvasNodeData {
   rows?: string[][];
   /** Translate (video) on the open engine: the Translate & dub session it started (its result comes back from there). */
   dubId?: string;
+  /** Layout: its boxes, one row per box (src/lib/layout-prompt.ts), drawn in the Layout editor. */
+  layout?: LayoutDraft;
 }
 
 export interface CanvasNode {
@@ -242,6 +248,7 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   concat: { type: "concat", label: "Assemble film", group: "Utilities", icon: "Film", ops: ["concat"], description: "Up to 50 clips in one film: trim and mute each, pick the frame" },
   restore: { type: "restore", label: "Restore & colourise", group: "Utilities", icon: "Palette", ops: ["restore-video"], description: "Old or black-and-white footage, cleaned and in colour" },
   table: { type: "table", label: "Table", group: "Inputs", icon: "Table", description: "Rows of words: what it feeds runs once per row" },
+  layout: { type: "layout", label: "Layout", group: "Inputs", icon: "LayoutDashboard", description: "Boxes for a headline, a product, a price: the image model draws each in its place" },
   output: { type: "output", label: "Output", group: "Output", icon: "MonitorPlay", description: "Preview what's connected, side by side" },
   note: { type: "note", label: "Sticky note", group: "Output", icon: "StickyNote", description: "A note on the board (not run)" },
 };
@@ -295,6 +302,7 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("concat"), id: "concat", keywords: "concatenate join merge stitch edit trim mute film assemble" },
   { ...pick("restore"), id: "restore", keywords: "restore colourise colorize archive old footage black and white film scan vhs" },
   { ...pick("table"), id: "table", data: { columns: ["Subject"], rows: [[""], [""], [""]] }, keywords: "rows batch spreadsheet list variations csv grid" },
+  { ...pick("layout"), id: "layout", data: { layout: { summary: { caption: "", meta: [], canvas: "single" }, items: [], aspect: "1:1" } }, keywords: "layout boxes poster text placement composition headline price moss" },
   { ...pick("output"), id: "output", keywords: "preview compare result" },
   { ...pick("note"), id: "note", keywords: "comment annotation" },
 ];
@@ -347,12 +355,16 @@ export function nodeLabel(n: Pick<CanvasNode, "type" | "data">): string {
 
 /**
  * Ops the canvas can't feed (masks, browser-only tools, multi-speaker scripts, draft finishing, and
- * inputs it has no port for: a 3D model to rig, a list of audio clips to join).
+ * inputs it has no port for: a 3D model to rig or retexture, a list of audio clips to join, the two points of an
+ * inserted moment).
  */
-const UNSUPPORTED_OPS = new Set<Operation>(["grade", "inpaint", "finalize", "dialogue", "rig-3d", "audio-join"]);
+const UNSUPPORTED_OPS = new Set<Operation>(["grade", "inpaint", "finalize", "dialogue", "rig-3d", "retexture-3d", "audio-join", "composite", "insert-moment"]);
 
-/** Models that only run on a painted mask or clicked points (VACE inpaint, Bria's point eraser): the canvas has neither. */
-const needsMarks = (m: ModelDef) => !!(m.options.requires?.mask || m.options.requires?.points);
+/**
+ * Models that only run on a painted mask or clicked points (VACE inpaint, Bria's point eraser), or on a light picked on a
+ * sphere (H3 Max relight): the canvas has none of these.
+ */
+const needsMarks = (m: ModelDef) => !!(m.options.requires?.mask || m.options.requires?.points || m.options.lightSphere);
 
 /** Preferred defaults; anything missing falls back to the first catalog model for that op and engine. */
 const PREFERRED: Partial<Record<Operation, Partial<Record<Engine, string>>>> = {
@@ -440,6 +452,9 @@ export function defaultModelForNode(n: Pick<CanvasNode, "type" | "data">, engine
     const kind = n.data.mediaKind ?? "image";
     return defaultModelFor(n.data.op ?? KIND_OP[kind], engine) ?? MODELS.find((m) => m.engine === engine && !m.hidden && m.kind === kind);
   }
+  // Clean up voice is RE-USE, on your GPU only: the hosted cleaners (VEED, DeepFilterNet 3: Clean up dialogue's cloud
+  // engine) share its op but are other tools, so the node doesn't take one of them on the cloud.
+  if (n.type === "clean-voice" && engine === "cloud") return undefined;
   const op = nodeOps(n)[0];
   // The Upscale node's Regenerate choice starts on Open-H3 Regenerate (on the cloud the entry is disabled: paletteItems).
   const fixed = n.data.modelId === REGEN_MODEL ? getModel(REGEN_MODEL) : undefined;
@@ -471,7 +486,10 @@ export function modelChoices(n: Pick<CanvasNode, "type" | "data">): ModelDef[] {
   }
   if (n.type === "concat") return Object.values(CONCAT_MODELS).flatMap((id) => getModel(id) ?? []);
   const ops = nodeOps(n);
-  return MODELS.filter((m) => ops.some((op) => supportsOp(m, op)) && (!m.hidden || ops.includes("frame")) && !needsMarks(m));
+  // Clean up voice offers only what runs on your GPU (RE-USE): the hosted cleaners share its op but are Clean up
+  // dialogue's cloud engine (defaultModelForNode).
+  const own = (m: ModelDef) => n.type !== "clean-voice" || runsOn(m, "open");
+  return MODELS.filter((m) => ops.some((op) => supportsOp(m, op)) && (!m.hidden || ops.includes("frame")) && !needsMarks(m) && own(m));
 }
 
 // ---------------------------------------------------------------------------
@@ -608,7 +626,7 @@ const toPortType = (k: MediaKind | undefined): PortType | null => (k === "image"
 
 /** The type of a node's output handle (null = no output handle). */
 export function outputType(_graph: CanvasGraph, n: CanvasNode): PortType | null {
-  if (n.type === "prompt" || n.type === "table") return "text";
+  if (n.type === "prompt" || n.type === "table" || n.type === "layout") return "text";
   if (n.type === "clone-voice") return "voice";
   if (n.type === "element") return "element";
   if (MEDIA_INPUT_TYPE[n.type]) return MEDIA_INPUT_TYPE[n.type]!;
@@ -763,6 +781,7 @@ export function singleInput(graph: CanvasGraph, target: string, targetHandle?: s
 
 type Source =
   | { kind: "text"; text: string }
+  | { kind: "layout"; draft: LayoutDraft }
   | { kind: "media"; url: string }
   | { kind: "element"; handle: string }
   | { kind: "node"; nodeId: string };
@@ -857,6 +876,11 @@ function sourceOf(graph: CanvasGraph, s: CanvasNode): Source | { error: string }
   if (s.type === "table") {
     const first = tableRows(s)[0];
     return first ? { kind: "text", text: rowText(first) } : { error: `Fill in a row of “${nodeLabel(s)}”` };
+  }
+  // A layout goes in whole: the request carries it and the plan compiles it for the model at the size it renders.
+  if (s.type === "layout") {
+    const draft = readLayout(s.data.layout);
+    return draft?.items.length ? { kind: "layout", draft } : { error: `Draw a box in “${nodeLabel(s)}”: Edit layout` };
   }
   if (s.type === "clone-voice") {
     // A sample wired in wins over the node's own file (a recording, a generated voice).
@@ -954,6 +978,7 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
   const deps: string[] = [];
   const texts: string[] = [];
   const handles: string[] = [];
+  const layouts: LayoutDraft[] = [];
   let generatedText = 0;
 
   for (const port of ports) {
@@ -973,6 +998,7 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
     if (port.id === "prompt") {
       for (const src of list) {
         if (src.kind === "text" && src.text) texts.push(src.text);
+        if (src.kind === "layout") layouts.push(src.draft);
         if (src.kind === "node") {
           generatedText++;
           chain.push({ slot: "prompt" });
@@ -1011,6 +1037,11 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
     }
   }
   if (generatedText > 1) return { error: "Connect one generated text at a time — join the others into one text model" };
+  if (layouts.length > 1) return { error: "Connect one layout at a time" };
+  // A picture model takes the layout itself (params.extra.layout: planLayout compiles it for that model at the size it
+  // renders, prompt rewriting off); anything else reads it as sentences.
+  const layout = layouts[0] && model.kind === "image" ? layouts[0] : undefined;
+  if (layouts[0] && !layout) texts.push(compileWords(layouts[0]));
   // A voice wired into a model that only speaks preset voices: say which ones clone.
   if (!model.options.voiceClone && graph.edges.some((e) => e.target === n.id && e.targetHandle === "voice")) {
     const cloners = MODELS.filter((m) => !m.hidden && m.options.voiceClone && op && supportsOp(m, op) && m.engine === model.engine).map((m) => m.name);
@@ -1030,6 +1061,8 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
 
   const params: GenParams = { ...n.data.params };
   for (const k of Object.keys(params) as (keyof GenParams)[]) if (params[k] === undefined || params[k] === "") delete params[k];
+  // The node's aspect ratio is the picture's (the Layout editor draws on it and sets it), so the boxes land where drawn.
+  if (layout) params.extra = { ...params.extra, [LAYOUT_PARAM]: layout };
   const request: GenerationRequest = {
     feature: "canvas",
     modelId: model.id,
@@ -1050,6 +1083,9 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
 // row's cells, joined, are its connected text.
 
 export const TABLE_LIMITS = { rows: 50, columns: 8, cell: 2000, column: 40 } as const;
+
+/** A Layout node holds up to this many boxes. */
+export const LAYOUT_NODE_LIMITS = { boxes: 64 } as const;
 
 /** A table's filled rows (a row with at least one cell written), each with one cell per column. */
 export function tableRows(t: Pick<CanvasNode, "data">): string[][] {
@@ -1123,7 +1159,10 @@ function rowRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, b: { tab
   const columns = (b.table.data.columns ?? []).map((c) => c.trim());
   const own = n.data.prompt ?? "";
   const direct = graph.edges.some((e) => e.source === b.table.id && e.target === n.id);
-  const named = direct && columns.some((c) => c && own.includes(`{${c}}`));
+  // Layouts wired into this node: "{Column}" in their words fills from each row too (one layout, a batch of posters).
+  const layoutIds = graph.edges.filter((e) => e.target === n.id && e.targetHandle === "prompt" && nodes.get(e.source)?.type === "layout").map((e) => e.source);
+  const layoutNames = new Set(layoutIds.flatMap((id) => layoutPlaceholders(readLayout(nodes.get(id)!.data.layout) ?? { summary: { caption: "", meta: [], canvas: "single" }, items: [] })));
+  const named = direct && columns.some((c) => c && (own.includes(`{${c}}`) || layoutNames.has(c)));
   const feeds = tablesFeeding(graph);
   const perRow = (id: string) => {
     const r = feeds(nodes.get(id)!);
@@ -1135,7 +1174,12 @@ function rowRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, b: { tab
     const prompt = named ? columns.reduce((p, c, j) => (c ? p.replaceAll(`{${c}}`, cells[j]) : p), own) : own;
     const rowGraph: CanvasGraph = {
       ...graph,
-      nodes: graph.nodes.map((x) => (x.id === b.table.id ? { ...x, type: "prompt" as const, data: { text: named ? "" : rowText(cells) } } : x.id === n.id ? { ...x, data: { ...x.data, prompt } } : x)),
+      nodes: graph.nodes.map((x) => {
+        if (x.id === b.table.id) return { ...x, type: "prompt" as const, data: { text: named ? "" : rowText(cells) } };
+        if (x.id === n.id) return { ...x, data: { ...x.data, prompt } };
+        const d = direct && layoutIds.includes(x.id) ? readLayout(x.data.layout) : null;
+        return d ? { ...x, data: { ...x.data, layout: fillLayout(d, columns, cells) } } : x;
+      }),
     };
     const r = buildRequest(rowGraph, rowGraph.nodes.find((x) => x.id === n.id)!, model, true);
     if ("error" in r) return { error: `Row ${i + 1}: ${r.error}` };
@@ -1773,10 +1817,12 @@ export interface CanvasTemplate {
   hue: number;
   /** The picker's section ("Effects 2.0 chains"); none: the workflows. */
   group?: string;
-  build: (engine: Engine) => CanvasGraph;
+  /** `offered`: whether the install offers a model (Settings → Models & licences); a node falls back when it doesn't. */
+  build: (engine: Engine, offered?: (id: string) => boolean) => CanvasGraph;
 }
 
-type ModelPair = { cloud: string; open: string };
+/** A node's model on each engine; `fallback`, the model it takes on an engine whose own isn't offered (without `on`). */
+type ModelPair = { cloud: string; open: string; fallback?: Partial<Record<Engine, string>> };
 
 interface TplNode {
   id: string;
@@ -1785,19 +1831,25 @@ interface TplNode {
   y: number;
   data?: CanvasNodeData;
   models?: ModelPair;
+  /** What changes on one engine (the product angles' QMA · 96 views on your GPU: its pose). */
+  on?: Partial<Record<Engine, CanvasNodeData>>;
   width?: number;
 }
 
-function tpl(nodes: TplNode[], edges: [string, string, string?][]): (engine: Engine) => CanvasGraph {
-  return (engine) => {
+function tpl(nodes: TplNode[], edges: [string, string, string?][]): (engine: Engine, offered?: (id: string) => boolean) => CanvasGraph {
+  return (engine, offered) => {
     const graph: CanvasGraph = {
-      nodes: nodes.map((t) => ({
-        id: t.id,
-        type: t.type,
-        position: { x: t.x, y: t.y },
-        data: { ...t.data, ...(t.models && { modelId: t.models[engine] }) },
-        ...(t.width && { width: t.width }),
-      })),
+      nodes: nodes.map((t) => {
+        const own = t.models?.[engine];
+        const fallback = own && offered && !offered(own) ? t.models?.fallback?.[engine] : undefined;
+        return {
+          id: t.id,
+          type: t.type,
+          position: { x: t.x, y: t.y },
+          data: { ...t.data, ...(!fallback && t.on?.[engine]), ...(own && { modelId: fallback ?? own }) },
+          ...(t.width && { width: t.width }),
+        };
+      }),
       edges: [],
     };
     graph.edges = edges.map(([source, target, handle], i) => ({
@@ -1912,9 +1964,11 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     build: tpl(
       [
         { id: "product", type: "image-input", x: 0, y: ROW, data: { label: "Product photo" } },
-        { id: "front", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "Front ¾ angle", op: "edit", prompt: "The same product from a three-quarter front angle on a seamless studio background, soft key light, sharp details" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
-        { id: "side", type: "model", x: COL, y: ROW, data: { mediaKind: "image", label: "Side profile", op: "edit", prompt: "The same product in a clean side profile on a seamless studio background, rim light, sharp details" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
-        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        // On your GPU the three angles are QMA · 96 views (qma-angles): the camera itself turns (its pose in params.extra) and
+        // the words follow its camera words, so a board switched to the cloud keeps each angle. Without QMA offered: Qwen-Image 2.1.
+        { id: "front", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "Front ¾ angle", op: "edit", prompt: "The same product from a three-quarter front angle on a seamless studio background, soft key light, sharp details" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL, fallback: { open: "oss-qwen-image-21" } }, on: { open: { params: { extra: { horizontal_angle: 45, vertical_angle: 30, zoom: 5 } } } } },
+        { id: "side", type: "model", x: COL, y: ROW, data: { mediaKind: "image", label: "Side profile", op: "edit", prompt: "The same product in a clean side profile on a seamless studio background, rim light, sharp details" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL, fallback: { open: "oss-qwen-image-21" } }, on: { open: { params: { extra: { horizontal_angle: 90, vertical_angle: 0, zoom: 5 } } } } },
+        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL, fallback: { open: "oss-qwen-image-21" } }, on: { open: { params: { extra: { horizontal_angle: 0, vertical_angle: 60, zoom: 5 } } } } },
         { id: "video", type: "model", x: COL * 2, y: ROW - 40, data: { mediaKind: "video", label: "Ad clip", op: "ref2v", prompt: "A premium product commercial: the camera orbits the product from the reference angles, studio lighting, slow and smooth", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "seedance-2-5", open: "oss-wan-vace" } },
         { id: "out", type: "output", x: COL * 3, y: ROW, data: { label: "Ad" } },
       ],

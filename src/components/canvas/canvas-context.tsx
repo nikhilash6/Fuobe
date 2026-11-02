@@ -19,6 +19,7 @@ import {
   Gem,
   ImageIcon,
   Languages,
+  LayoutDashboard,
   MessageSquareText,
   Mic2,
   MonitorPlay,
@@ -57,6 +58,7 @@ import type { EngineMode } from "@/lib/api";
 
 export const ICONS: Record<string, LucideIcon> = {
   Type,
+  LayoutDashboard,
   ImageIcon,
   Film,
   AudioLines,

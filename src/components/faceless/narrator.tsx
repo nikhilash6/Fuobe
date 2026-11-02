@@ -15,6 +15,7 @@ import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { voicePreview, waitFor } from "./hooks";
+import { voiceOrigin } from "@/lib/voice-design";
 
 /** One shared player, so starting a sample stops the one before. */
 const player = { audio: null as HTMLAudioElement | null, owner: "" };
@@ -163,7 +164,7 @@ export function NarratorList({ engine, voices, value, onChange }: { engine: Engi
         <p className="px-1 pb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{engine === "open" ? "Narrator to clone" : "Your own voice"}</p>
         {engine === "open" && <p className="px-1 pb-2 text-[12px] text-muted-foreground">Open-source narration clones a voice: pick a saved voice, or record or upload 10–60 s of clean speech.</p>}
         <div className="space-y-0.5">
-          {saved.map((e) => row(`saved:${e.id}`, { kind: "sample", url: e.references[0], name: e.name }, e.name, e.description ?? "Saved voice", async () => e.references[0]))}
+          {saved.map((e) => row(`saved:${e.id}`, { kind: "sample", url: e.references[0], name: e.name }, e.name, voiceOrigin(e.voice) ?? e.description ?? "Saved voice", async () => e.references[0]))}
           {own && row(`own:${own.url}`, own, own.name ?? "Your recording", "Recorded or uploaded", async () => own.url)}
         </div>
         <div className="flex flex-wrap items-center gap-1.5 px-1 pt-2">
