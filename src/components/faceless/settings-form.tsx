@@ -143,8 +143,12 @@ function MusicClipPicker({ engine, value, onChange }: { engine: Engine; value?: 
     let live = true;
     void clipSeconds(ref).then((n) => {
       if (!live) return;
-      if (n === null) return setProblem("Couldn't read this clip's length — try an MP4");
-      if (n < MUSIC_CLIP_MIN_SECONDS) return setProblem(`Pick a clip of ${MUSIC_CLIP_MIN_SECONDS} s or more`);
+      // A clip that can't be used leaves no bed behind it (never the clip it replaced).
+      if (n === null || n < MUSIC_CLIP_MIN_SECONDS) {
+        setProblem(n === null ? "Couldn't read this clip's length — try an MP4" : `Pick a clip of ${MUSIC_CLIP_MIN_SECONDS} s or more`);
+        onChange(undefined);
+        return;
+      }
       setProblem(null);
       onChange({ url: ref, ...(slot?.name ? { name: slot.name } : {}), duration: Math.round(n * 1000) / 1000 });
     });
@@ -165,7 +169,8 @@ function MusicClipPicker({ engine, value, onChange }: { engine: Engine; value?: 
           onChange={(v) => {
             setSlot(v);
             setProblem(null);
-            if (!v) onChange(undefined);
+            // Emptied, or a new clip on its way: the old bed goes until the new one's length is read.
+            if (!v || v.uploading || v.ref !== value?.url) onChange(undefined);
           }}
         />
       )}
