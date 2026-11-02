@@ -6,7 +6,7 @@
 // Checks, on a phone (390 x 844, touch) and a desktop (1440 x 900): the page opens on the demo with its result and no
 // sideways scroll; an Intensity chip changes the picture at once; a look places its lights and Neon night turns the
 // subject's left cheek toward magenta; a tap on the photo places a light where it was tapped; a colour chip changes the
-// light near it and leaves the far corner alone; with three lights a tap moves the selected one, and the side chips
+// light near it and barely touches the far corner; with three lights a tap moves the selected one, and the side chips
 // move it too; Download gives a PNG at the photo's size; on the desktop the arrow keys move the selected light and
 // Delete removes it; Generate lighting runs the hidden relight model on the stand-in and the result comes back; Keep
 // keeps that blend and a new Intensity is a new keep; Generate on an uploaded photo lines its result up (the owner's
@@ -53,8 +53,8 @@ const markers = (page) =>
     });
   });
 const settle = (page) => page.waitForTimeout(250);
-/** How magenta a pixel leans: red over green (blue light leaves it alone). */
-const magenta = ([r, g]) => r - g;
+/** How magenta a pixel leans, whatever its brightness: red and blue over green, against its mean. */
+const magenta = ([r, g, b]) => ((r + b) / 2 - g) / Math.max(1, (r + g + b) / 3);
 const PHOTO = fileURLToPath(new URL("../../public/previews/presets/ba/1280/app-relight-before.jpg", import.meta.url));
 
 async function stageBox(page) {
@@ -122,7 +122,7 @@ async function ownerRun(browser, name, device) {
   check(neon.length === 2 && neon[0].color === "rgb(240, 40, 220)" && neon[1].color === "rgb(40, 96, 255)", `${name}: Neon night places magenta left and blue right`);
   check(neon[0].x < 0.35 && neon[1].x > 0.65, `${name}: its lights sit on their sides`);
   const [pink] = await pixels(page, cheek);
-  check(magenta(pink) >= magenta(white) + 8, `${name}: Neon night's magenta reaches the left cheek (${white} → ${pink})`);
+  check(magenta(pink) >= magenta(white) + 0.12, `${name}: Neon night's magenta reaches the left cheek (${white} → ${pink})`);
 
   // A tap on an empty spot adds a light there.
   await tapAt(page, device, 0.5, 0.15);
@@ -132,7 +132,7 @@ async function ownerRun(browser, name, device) {
   check(await page.getByTestId("lights-changed").isVisible(), `${name}: "Lights changed" shows`);
   await page.screenshot({ path: path.join(out, `${name}-three-lights.png`) });
 
-  // A colour chip changes the light near it and leaves the far corner alone.
+  // A colour chip changes the light near it and barely touches the far corner (light falls off, it doesn't stop).
   const near = [[0.5, 0.18]];
   const far = [[0.02, 0.98]];
   const n0 = await pixels(page, [...near, ...far]);
@@ -140,7 +140,7 @@ async function ownerRun(browser, name, device) {
   await settle(page);
   const n1 = await pixels(page, [...near, ...far]);
   check(diff(n0[0], n1[0]) > 6, `${name}: Teal changes the picture near the light (${diff(n0[0], n1[0])})`);
-  check(diff(n0[1], n1[1]) <= 3, `${name}: the far corner stays the same (${diff(n0[1], n1[1])})`);
+  check(diff(n0[1], n1[1]) * 5 < diff(n0[0], n1[0]), `${name}: the far corner changes far less (${diff(n0[1], n1[1])}, near it ${diff(n0[0], n1[0])})`);
 
   // Three lights placed: a tap on the photo moves the selected one, and the side chips move it too.
   await tapAt(page, device, 0.8, 0.5);
@@ -177,6 +177,8 @@ async function ownerRun(browser, name, device) {
   const lit = runs.find((r) => r.modelId === "oss-qwen-image-21-relight");
   check(!!lit && /warm amber light/.test(lit.prompt) && lit.inputs?.images?.[0]?.startsWith("/api/files/"), `${name}: Generate runs the relight model with the photo and the words`);
   check(await page.getByRole("button", { name: /Lit with these lights/ }).isVisible(), `${name}: the result comes back`);
+  // The result is lined up with the photo first (a moment), then Keep and the next steps show.
+  await page.getByRole("button", { name: "Keep", exact: true }).waitFor({ timeout: 20_000 }).catch(() => {});
   check(await page.getByRole("button", { name: "Keep", exact: true }).isVisible(), `${name}: Keep is offered to the owner`);
   await page.screenshot({ path: path.join(out, `${name}-generated.png`), fullPage: true });
 

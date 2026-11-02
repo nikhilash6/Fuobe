@@ -174,7 +174,7 @@ void main() {
 /** The gap between the subject's edge and a light, per distance band, in picture heights. */
 const GAP: Record<Distance, number> = { close: 0.1, mid: 0.35, far: 0.8 };
 /** How far each light reaches, as a share of its distance to the subject's centre (harder light falls off sooner). */
-const REACH: Record<Softness, number> = { hard: 0.9, soft: 1.1, diffuse: 1.3 };
+const REACH: Record<Softness, number> = { hard: 1.3, soft: 1.6, diffuse: 1.9 };
 const WRAP: Record<Softness, number> = { hard: 0, soft: 0.35, diffuse: 0.7 };
 /** How far in front of the subject a light sits, as a share of its distance (about 40° off the camera's axis). */
 const LIFT = 0.8;
@@ -192,7 +192,7 @@ export interface Subject {
 }
 
 /** Without a scene read: a subject a little above the middle, as most portraits frame one. */
-export const FLAT_SUBJECT: Subject = { x: 0.5, y: 0.45, r: 0.22 };
+export const FLAT_SUBJECT: Subject = { x: 0.5, y: 0.4, r: 0.24 };
 
 export interface SceneInfo {
   /** A depth map and matte are loaded. */
@@ -267,7 +267,7 @@ export function packLight(l: Light, aspect: number, subjectDepth: number, subjec
   const dy = mark[1] - cy;
   const k = reach / Math.max(Math.hypot(dx, dy), NEAR);
   const z0 = clamp(subjectDepth, 0, 1) * Z;
-  const power = clamp(strengthValueOf(l) * 1.5, 0, 2);
+  const power = clamp(strengthValueOf(l) * 2, 0, 2);
   const [r, g, b] = hexToRgb(l.color).map(srgbToLinear);
   return {
     pos: [cx + dx * k, cy + dy * k, l.behind ? z0 - 0.25 : z0 + reach * LIFT],
