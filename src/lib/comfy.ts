@@ -587,7 +587,13 @@ export function bypassNode(wf: ComfyWorkflow, nodeId: string, input: string, kee
  * Graphs that run a prompt helper before the model (FLUX 3 Image Klein's: BFL's upsampler, a TextGenerate whose caption the
  * text encoder reads). Options → Prompt helper "off" (params.extra.promptHelper) or a layout of boxes takes it out.
  */
-export const PROMPT_HELPER_GRAPHS: ReadonlySet<string> = new Set(["flux3-klein-t2i", "flux3-klein-edit", "flux3-klein-base-t2i-lora"]);
+export const PROMPT_HELPER_GRAPHS: ReadonlySet<string> = new Set(["flux3-klein-t2i", "flux3-klein-edit", "flux3-klein-base-t2i-lora", "kandinsky6-t2av", "kandinsky6-i2av"]);
+
+/**
+ * Prompt helper graphs whose helper runs only when asked ("on"): Kandinsky 6.0's (Kandinsky6BeautifyPrompt on a 19 GB Qwen3.5
+ * 9B file), off by default on both engines as on fal.
+ */
+export const PROMPT_HELPER_OPT_IN: ReadonlySet<string> = new Set(["kandinsky6-t2av", "kandinsky6-i2av"]);
 
 /** params.extra.promptHelper: "on" (the graph's default) or "off". */
 export const PROMPT_HELPER_PARAM = "promptHelper";
@@ -598,14 +604,21 @@ export const PROMPT_HELPER_PARAM = "promptHelper";
  * with dropUnused. Unchanged when no encoder reads a TextGenerate.
  */
 export function skipPromptHelper(wf: ComfyWorkflow, keep: string[] = []): ComfyWorkflow {
-  const readers = Object.values(wf).filter((n) => n.class_type === "CLIPTextEncode" && isLinkValue(n.inputs.text) && wf[n.inputs.text[0]]?.class_type === "TextGenerate");
+  const reads = (n: ComfyWorkflow[string], input: string, helper: string) => isLinkValue(n.inputs[input]) && wf[(n.inputs[input] as [string, number])[0]]?.class_type === helper;
+  const readers = Object.values(wf).filter((n) => (n.class_type === "CLIPTextEncode" && reads(n, "text", "TextGenerate")) || (n.class_type === "Kandinsky6TextEncode" && reads(n, "video_caption", "Kandinsky6BeautifyPrompt")));
   if (!readers.length) return wf;
   const out = cloneWorkflow(wf);
+  const own = (v: unknown) => (isLinkValue(v) ? [...v] : String(v ?? ""));
   for (const n of Object.values(out)) {
     const t = n.inputs.text;
-    if (n.class_type !== "CLIPTextEncode" || !isLinkValue(t) || out[t[0]]?.class_type !== "TextGenerate") continue;
-    const words = out[t[0]].inputs.prompt;
-    n.inputs.text = isLinkValue(words) ? [...words] : String(words ?? "");
+    if (n.class_type === "CLIPTextEncode" && isLinkValue(t) && out[t[0]]?.class_type === "TextGenerate") n.inputs.text = own(out[t[0]].inputs.prompt);
+    // Kandinsky 6.0: the encoder reads the captions the helper was given (its video and audio captions, outputs 0 and 1).
+    if (n.class_type !== "Kandinsky6TextEncode") continue;
+    for (const [input, slot] of [["video_caption", 0], ["audio_caption", 1]] as const) {
+      const v = n.inputs[input];
+      if (!isLinkValue(v) || out[v[0]]?.class_type !== "Kandinsky6BeautifyPrompt" || v[1] !== slot) continue;
+      n.inputs[input] = own(out[v[0]].inputs[input]);
+    }
   }
   return dropUnused(out, keep);
 }

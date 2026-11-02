@@ -296,5 +296,23 @@
     "isolated": false,
     "subdir": null,
     "folders": []
+  },
+  "kandinsky6": {
+    "repo": "https://github.com/kandinskylab/kandinsky-6",
+    "commit": "7ceeefad7fb625011f7db602c43893a989f19c15",
+    "registry": { "id": "kandinsky6", "version": "1.0.2" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": "comfyui",
+    "folders": ["audio_vae"]
+  },
+  "kandinsky6-sr": {
+    "repo": "https://github.com/kandinskylab/kandinsky-6-sr",
+    "commit": "b15e2aac526519c51f59dfec2b848355bb8902de",
+    "registry": { "id": "kandinsky6-sr", "version": "0.1.2" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": "comfyui",
+    "folders": []
   }
 }

@@ -127,6 +127,30 @@ if [ "${OPEN_H3_REGEN:-0}" = "1" ]; then
   done
 fi
 
+# Kandinsky 6.0 (nm10-kandinsky6): Kandinsky Lab's own packs, each the comfyui/ folder of its repository (the Comfy Registry's
+# kandinsky6 1.0.2 and kandinsky6-sr 0.1.2), pinned at the commits Fuobe's graphs follow: kandinsky6 (MIT; text / image to
+# video with sound, ComfyUI 0.38+) and kandinsky6-sr (Apache-2.0; the VSR upscaler). Their requirements (einops,
+# huggingface-hub, librosa, loguru, omegaconf, pydantic, pyyaml, safetensors) are in the union below. Neither downloads
+# anything when it loads (their "Download models" button does, when clicked). K6_PACKS=0 leaves them out.
+K6_REF="${K6_REF:-7ceeefad7fb625011f7db602c43893a989f19c15}"        # kandinskylab/kandinsky-6, 2026-10-25
+K6_SR_REF="${K6_SR_REF:-b15e2aac526519c51f59dfec2b848355bb8902de}"  # kandinskylab/kandinsky-6-sr, 2026-10-20
+if [ "${K6_PACKS:-1}" = "1" ]; then
+  for pack in "kandinsky6 https://github.com/kandinskylab/kandinsky-6 $K6_REF" "kandinsky6-sr https://github.com/kandinskylab/kandinsky-6-sr $K6_SR_REF"; do
+    read -r name url ref <<<"$pack"
+    [ -d "$COMFYUI_DIR/custom_nodes/$name" ] && continue
+    k6tmp="$(mktemp -d)"
+    if git clone -q --filter=blob:none --no-checkout "$url" "$k6tmp/repo" \
+      && git -C "$k6tmp/repo" sparse-checkout set --no-cone /comfyui/ \
+      && git -C "$k6tmp/repo" checkout -q "$ref" \
+      && cp -r "$k6tmp/repo/comfyui" "$COMFYUI_DIR/custom_nodes/$name"; then
+      :
+    else
+      echo "warn: could not fetch $name at $ref"
+    fi
+    rm -rf "$k6tmp"
+  done
+fi
+
 # Fuobe's live edit nodes (fuobe_live.py, one file Fuobe ships, MIT): Live edit's loader, cached reference encode,
 # crop, paste-back and socket save. Written from the copy in this checkout (src/lib/comfy-live-nodes.ts).
 if command -v node >/dev/null 2>&1; then
@@ -162,6 +186,8 @@ fi
 # ComfyUI-QwenASR: do NOT install its requirements.txt (nagisa/DyNet38 have no cp313 wheels and are unused on the
 # Hugging Face path); transformers>=5.13 from ComfyUI's requirements is all it needs.
 uv pip install --python "$PY" loguru
+# kandinsky6 / kandinsky6-sr (above): pydantic and pyyaml besides what the union has.
+if [ "${K6_PACKS:-1}" = "1" ]; then uv pip install --python "$PY" "pydantic>=2.11.0" "pyyaml>=6.0.2" "safetensors>=0.8.0" || echo "warn: the Kandinsky packs' requirements failed to install"; fi
 # ComfyUI-ToSVG imports vtracer (MIT), potracer and PyMuPDF (AGPL-3.0, used only by its SVG-to-image node) at load time.
 uv pip install --python "$PY" "vtracer==0.6.15" "potracer==0.0.4" "PyMuPDF==1.26.5"
 # ComfyUI-LTXVideo (Restore & colourise): its requirements.txt at the pinned commit. colour-science, diffusers, einops,

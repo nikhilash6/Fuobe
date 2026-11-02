@@ -257,6 +257,18 @@
     "error": null,
     "at": "2026-10-16T20:57:26.862Z"
   },
+  "kandinsky6-i2av": {
+    "sha256": "2ba5f947197fdb84a241373b7a8bb4985d022aaac54bd1d6e704d8703f88fc44",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Audio VAE (MMAudio 44 kHz) + BigVGAN vocoder' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T11:05:12.479Z"
+  },
+  "kandinsky6-t2av": {
+    "sha256": "db4b91fec291482b63dd051c95410cf0d213695ca8c68bb577e99a0137a43230",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Audio VAE (MMAudio 44 kHz) + BigVGAN vocoder' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T11:05:12.444Z"
+  },
   "kenburns-still": {
     "sha256": "34c5bdc4b0a425d82b5971ca31eae697da6b7363ea48b30dfe055d7a8573976d",
     "validated": true,
@@ -904,6 +916,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-23T00:12:16.143Z"
+  },
+  "video-upscale-kandinsky6-vsr": {
+    "sha256": "2ed6d22b03034fb762043da81e7ed6489973d9e56e45fa921a268c4b780dafe3",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Kandinsky VSR VAE' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T11:05:12.503Z"
   },
   "voice-change-chatterbox": {
     "sha256": "ad8b9d59f8cb4632f2859db6a0ee2e8b6114263a9507f144554cd827ceea3f0c",
