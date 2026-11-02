@@ -113,6 +113,16 @@ def references_of(job: dict) -> tuple[dict[str, pathlib.Path], dict]:
     return stems, meta
 
 
+def remix_levels(job: dict) -> dict | None:
+    """The levels a Clean up dialogue job asked for (graph C's voiceDb, musicDb, effectsDb), or None for a split."""
+    extra = ((job.get("request") or {}).get("params") or {}).get("extra") or {}
+    if "musicDb" not in extra and "effectsDb" not in extra:
+        return None
+    music, effects = float(extra.get("musicDb", -100)), float(extra.get("effectsDb", -100))
+    # The suite sets music and effects together; when they differ, the bed is scored at the louder one.
+    return {"voiceDb": float(extra.get("voiceDb", 0)), "musicDb": music, "effectsDb": effects, "bedDb": max(music, effects)}
+
+
 def input_file(job: dict) -> pathlib.Path | None:
     ins = job.get("inputs") or {}
     for k in ("audio", "video"):
@@ -385,6 +395,9 @@ class Scorer:
                 notes.append(f"stems shifted {lag} samples to line up with the input")
         if mix is not None and "voice" in got and "background" in got:
             res["mixError"] = sep.mixture_error([got["voice"], got["background"]], mix)["db"]
+            scale = sep.bed_scale(got["background"], got["voice"], mix)
+            if scale is not None:
+                res["bedScale"] = scale
         for name in ("voice", "music", "effects", "background"):
             if name in got and name in refs:
                 ref = audio_channels(refs[name], sr)
@@ -393,6 +406,20 @@ class Scorer:
                 res[f"{name}SiSdr"] = round(sep.si_sdr(got[name], ref), 2)
                 if name in ("voice", "background"):
                     res[f"{name}Sdr"] = round(sep.sdr(got[name], ref), 2)
+        # Clean up dialogue (graph C): one file, the dialogue with the music and effects at the levels asked for. It is
+        # scored against what was asked (the voice plus the known bed at that level) and for where the bed landed.
+        remix = remix_levels(job)
+        if remix is not None and "voice" in got and "voice" in refs and "background" in refs:
+            vref, bref = audio_channels(refs["voice"], sr), audio_channels(refs["background"], sr)
+            if vref is not None and bref is not None:
+                want = sep.mono(vref) * 10 ** (remix["voiceDb"] / 20) + sep.mono(bref) * 10 ** (remix["bedDb"] / 20)
+                res["remixSiSdr"] = round(sep.si_sdr(got["voice"], want), 2)
+                gains = sep.remix_gains(got["voice"], vref, bref)
+                if gains["bed"] is not None:
+                    res["bedLevel"] = gains["bed"]
+                res["bedPeak"] = round(sep.peak_db(got["voice"]), 2)
+                res["_remix"] = {**remix, "gains": gains}
+                notes.append(f"one file (the dialogue with music and effects at {remix['bedDb']:g} dB): voiceSiSdr is against the voice alone, remixSiSdr against the voice plus the known bed at that level, bedLevel the bed's gain in it")
         if "background" in got and "background" in refs:
             ref = audio_channels(refs["background"], sr)
             lv = sep.bed_level(got["background"], ref)
@@ -433,18 +460,25 @@ class Scorer:
         if transcript:
             res["werTranscript"] = round(sep.wer(text, transcript)["wer"], 4)
         stems = audio_outputs(self.run_dir, job)
-        asr = self.asr()
-        if "voice" in stems:
-            a = audio_track(stems["voice"])
-            if a is not None:
-                hyp = asr.text(a)
-                res["wer"] = round(sep.wer(text, hyp)["wer"], 4)
-                res["_heard"] = hyp
         src = input_file(job)
-        if src is not None:
-            a = audio_track(src)
-            if a is not None:
-                res["werInput"] = round(sep.wer(text, asr.text(a))["wer"], 4)
+        voice = audio_track(stems["voice"]) if "voice" in stems else None
+        heard = audio_track(src) if src is not None else None
+        if voice is None and heard is None:
+            return res
+        # Whisper is optional (pnpm eval:setup --asr): without it the job's own transcript is still scored.
+        try:
+            asr = self.asr()
+        except Missing as e:
+            # Recorded under its own name so the family keeps running for the jobs that have a transcript.
+            self.skipped.setdefault("wer (Whisper)", str(e))
+            res["_note"] = f"wer and werInput skipped: {e}"
+            return res
+        if voice is not None:
+            hyp = asr.text(voice)
+            res["wer"] = round(sep.wer(text, hyp)["wer"], 4)
+            res["_heard"] = hyp
+        if heard is not None:
+            res["werInput"] = round(sep.wer(text, asr.text(heard))["wer"], 4)
         return res
 
 

@@ -13,8 +13,8 @@ FAMILIES = {
     "palette": ["paletteFit", "paletteCover"],
     # Soundtrack separation against the case's known stems (scripts/eval/fixtures/make-separation.py).
     "separation": [
-        "voiceSiSdr", "musicSiSdr", "effectsSiSdr", "backgroundSiSdr", "voiceSdr", "backgroundSdr",
-        "mixError", "bedLevel", "bedPeak", "stereoCorrGap", "noiseInVoice", "speedX",
+        "voiceSiSdr", "remixSiSdr", "musicSiSdr", "effectsSiSdr", "backgroundSiSdr", "voiceSdr", "backgroundSdr",
+        "mixError", "bedLevel", "bedPeak", "bedScale", "stereoCorrGap", "noiseInVoice", "speedX",
     ],
     # Word error rate of the voice stem (Whisper), of the input as it is (the same ASR without separating first), and of
     # the job's own transcript when its graph transcribes (Qwen3-ASR in the dub's first step).
@@ -47,6 +47,8 @@ METRICS = {
     "mixError": {"label": "Stems vs input", "better": "lower", "unit": "dB under the input (voice + bed)"},
     "bedLevel": {"label": "Bed level vs reference", "better": "none", "unit": "dB (0 = same; AudioMerge's peak scaling shows negative)"},
     "bedPeak": {"label": "Bed peak", "better": "none", "unit": "dBFS"},
+    "remixSiSdr": {"label": "Clean dialogue SI-SDR", "better": "higher", "unit": "dB against the voice + the known bed at the level asked"},
+    "bedScale": {"label": "Bed scaling", "better": "none", "unit": "dB, the bed against input − voice (0 = as subtracted; AudioMerge's peak scaling shows negative)"},
     "stereoCorrGap": {"label": "Bed stereo gap", "better": "lower", "unit": "|L/R correlation − the reference bed's|"},
     "noiseInVoice": {"label": "Noise left in the dialogue", "better": "lower", "unit": "share of the known hum or hiss"},
     "speedX": {"label": "Speed", "better": "higher", "unit": "x real time (all passes)"},

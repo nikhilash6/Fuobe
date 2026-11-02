@@ -134,6 +134,36 @@ def bed_level(est, ref) -> dict:
     return {"delta": round(rms_db(e) - rms_db(r), 2), "peak": round(peak_db(e), 2), "peakRef": round(peak_db(r), 2)}
 
 
+def bed_scale(bed, voice, mix) -> float | None:
+    """How a bed made as "the input minus the speech" was scaled, in dB: the least-squares gain of the bed against
+    mix − voice (a mono voice taken from every channel, as AudioMerge broadcasts it). 0 = as subtracted; AudioMerge
+    divides the whole result by its peak when that is over full scale, which shows as −(the overshoot in dB)."""
+    b, v, m = as_channels(bed), as_channels(voice), as_channels(mix)
+    if v.shape[0] == 1 and m.shape[0] > 1:
+        v = np.repeat(v, m.shape[0], axis=0)
+    elif m.shape[0] == 1 and v.shape[0] > 1:
+        v = v.mean(axis=0, keepdims=True)
+    v, m = crop(v, m)
+    unscaled = m - v
+    e, u = crop(*match_channels(b, unscaled))
+    den = float(np.sum(u * u))
+    if den <= EPS:
+        return None
+    g = float(np.sum(e * u)) / den
+    return round(20.0 * math.log10(g), 3) if g > 0 else None
+
+
+def remix_gains(out, voice, bed) -> dict:
+    """A remix (the dialogue with the music and effects mixed back under it, Clean up dialogue) against its known
+    parts: the least-squares gains of the voice and the bed in it, solved together on the mono mean, as dB (0 = as in
+    the input). The model's own errors are uncorrelated with the parts, so a bed asked at −18 dB reads about −18."""
+    o, v, b = crop(mono(out)[None, :], mono(voice)[None, :], mono(bed)[None, :])
+    a = np.stack([v[0], b[0]], axis=1)
+    (gv, gb), *_ = np.linalg.lstsq(a, o[0], rcond=None)
+    db = lambda g: round(20.0 * math.log10(g), 2) if g > 1e-6 else None  # noqa: E731
+    return {"voice": db(float(gv)), "bed": db(float(gb))}
+
+
 def stereo(x) -> dict:
     """Left/right correlation (1 = mono, 0 = unrelated, −1 = out of phase) and width (side over mid energy, dB) of a
     2-channel signal; a mono one says so."""
