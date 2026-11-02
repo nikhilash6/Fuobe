@@ -1,12 +1,32 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useId } from "react";
+import { Suspense, useId } from "react";
 import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 
 /** The covers are their own chunk, as in the studios (studio-page.tsx): only a page that shows the row loads them. */
 const ShowcaseTile = dynamic(() => import("@/components/home/showcase-tile").then((m) => m.ShowcaseTile));
+
+/**
+ * The row's tiles while their chunk loads (a page reached by a tap, whose covers weren't loaded yet): the same grid of
+ * empty covers, so the rest of the page draws at once instead of waiting for the row, and nothing moves when it lands.
+ */
+export function ExampleTilesSuspense({ count, children }: { count: number; children: React.ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div aria-hidden className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: count }, (_, i) => (
+            <div key={i} className={cn("aspect-[4/3] rounded-xl bg-muted", i >= 4 && "max-sm:hidden md:max-lg:hidden")} />
+          ))}
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
 
 /** A tile's width: half a phone, else a quarter of the row (1000 px at most). */
 const SIZES = "(min-width: 640px) 240px, 50vw";

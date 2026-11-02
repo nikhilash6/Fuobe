@@ -41,6 +41,7 @@ import { ComposerBridgeCtx, useComposerBridge, type ComposerBridge } from "./att
 import { CatalogProvider, useCatalog } from "./catalog";
 import { Composer } from "./composer";
 import { EngineSwitch } from "./engine-switch";
+import { ExampleTilesSuspense } from "./example-row";
 import { HubHeaderExtras, useInHub } from "./hub-chrome";
 import { Feed } from "./feed";
 import type { SlotValue } from "./media-slot";
@@ -380,7 +381,9 @@ function StudioExamples({ row }: { row: StudioExampleRow }) {
       <h2 id={heading} className="mb-2 text-center text-[12.5px] font-medium text-muted-foreground">
         {row.heading}
       </h2>
-      <ExampleTiles tiles={row.tiles} />
+      <ExampleTilesSuspense count={row.tiles.length}>
+        <ExampleTiles tiles={row.tiles} />
+      </ExampleTilesSuspense>
     </section>
   );
 }
