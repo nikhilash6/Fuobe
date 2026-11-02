@@ -1,116 +1,126 @@
 {
-  "key": "n7-8-layouts-everywhere",
-  "impl": {
-    "branch": "o/n7-8-layouts-everywhere",
-    "summary": "N7-8 built on top of N7-1/N7-2 (already on the base: src/lib/layout-prompt.ts with layoutCompilerFor/validateLayout/parseLayout, planLayout in src/lib/catalog/plan.ts that compiles params.extra.layout at the exact render size with expansion off, the Layout editor, oss-moss-image and fal moss-image in the catalog). New: a Canvas Layout node (Inputs group, text output) whose draft rides into the downstream image model as params.extra.layout so the plan compiles it per model at its render size, with Table {Column} substitution row by row; a shared AdPlan→layout mapping (src/lib/layout-surfaces.ts: 'words' and 'keep clear' modes); Marketing Studio's 'Words drawn by the model' option (open: oss-moss-image; cloud: moss-image, ideogram-4-5, flux-3); Ads Studio's same option (drawn ads shown/downloaded whole in 4:5, as baked ads are) plus a keep-clear layout for a box-reading visual model (FLUX.3 added as a cloud ad visual choice); Plan layout in the Layout editor (POST /api/layout/plan: the install's AI helper writes a MOSS pixel draft, readPlanned/validateLayout check it, rules fallback); skills/layout-poster (adapted from OpenMOSS's Apache-2.0 prompt-enhancer skill, notice kept); Assist/MCP generate jobs take a 'layout' draft.",
-    "built": [
-      "src/lib/layout-surfaces.ts: roughMeasure, copyRects, productRect, adPlanDraft (words / clear), adDraft (planAd with brand theme and logo place), layoutPlaceholders, fillLayout",
-      "src/lib/catalog/canvas.ts: CanvasNodeType 'layout', CanvasNodeData.layout, NODE_SPECS + palette entry, outputType text, sourceOf {kind:'layout'}, buildRequest puts the draft in params.extra.layout for image models (compileWords text for others; one layout at a time; 'Draw a box' error), rowRequest fills {Column} in wired layouts, LAYOUT_NODE_LIMITS",
-      "src/server/canvas.ts: 'layout' node type and a LayoutData zod (readLayout, 64 boxes, clamped strings)",
-      "src/components/canvas/nodes.tsx: LayoutNode card (mini box preview, Edit layout opening N7-2's LayoutEditor sized by layoutCanvas of the model it feeds; a new shape in the editor sets the downstream node's aspect ratio), LayoutNodeRow for the Nodes list (phones: the board is read-only there); canvas-context icon; node-list row",
-      "src/components/studio/layout-editor.tsx: Plan layout button + hint (hidden for visitors), 'nokey' + key stopPropagation so Canvas shortcuts don't fire under the dialog",
-      "src/lib/layout-plan.ts (LAYOUT_PLAN_SYSTEM adapted with notice, planRequest, readPlanned, planByRules), src/server/layout-plan.ts, src/app/api/layout/plan/route.ts",
-      "src/lib/catalog/marketing.ts: wordsOnTop(engine, model, drawn), DRAWN_WORDS_MODELS, DRAWN_WORDS_LABEL/HINT, drawnWordsModel, formatModels(..., drawn); FLUX.3 as a cloud AD_VISUAL_MODELS choice",
-      "src/server/marketing.ts: MarketingBody.drawnWords; planMarketing builds the format's copy layout (overlayLayout: frame for posters, overlay otherwise) and sends it, no textLine, no overlay; notes say lettering is the model's and (t2i models) the product is drawn from its description",
-      "src/server/ads.ts: BatchBody.drawnWords, visualRequest(..., drawn) with the AdPlan layout instead of NO_TEXT, keep-clear layout for box-reading visual models, CreativeMeta.route 'drawn' (shown as baked, ratio 4:5), retry keeps it, estimate prices the drawing model",
-      "UI: Marketing Studio 'Words on the image' panel switch + hint; Ads Studio New ads switch + hint + copy for the 4:5 drawn format",
-      "src/server/assist/tools.ts: generate jobs accept 'layout' (pixel draft or Fuobe draft, parsed with parseLayout into params.extra.layout; aspect from the draft when none is given)",
-      "skills/layout-poster/SKILL.md and references/layout.md (Apache-2.0 notice, source commit 2b46b1e0)",
-      "tests/layouts-everywhere.test.ts (18 tests), tests/e2e/layouts-everywhere.mjs (browser checks)"
-    ],
-    "tests": "Verified: tests/layouts-everywhere.test.ts 18/18 (sourceOf/planLayout per downstream model and size: oss-moss-image at 3:4 vs 16:9, fal moss-image with expansion off, flux-3 → flux3, ideogram-4-5 → ideogram, nano-banana-pro → words; text model reads sentences; one-layout and empty-layout errors; table substitution 2 rows; AdPlan → draft mapping words/clear/panel; wordsOnTop with the option on both engines; Marketing drawn runs open/cloud/FLUX.3 with product photo and planGeneration compiles them; Ads drawn on both engines + keep-clear with FLUX.3; planner rules and LLM answer pass validateLayout, fallback to rules; skill picked up by the loader with its reference). Related suites green: canvas*, marketing*, originals-marketing, layout*, moss-image, assist*, flux3-klein, mcp*, skills*, hosted*, request-body*, catalog*, account*, public-signup + public-signup-tools (591 + 216 + 55 tests). Updated existing tests: originals-marketing (AD_VISUAL_MODELS now ends with flux-3), marketing-api (flux-3 is now offered; 'not offered' uses recraft-4-1), skills-spec and assist-skills (21 built-in skills), public-signup(-tools) (/api/layout/plan is own-gpu-tool for guests and accounts). Browser (demo mode, port 3457): node tests/e2e/layouts-everywhere.mjs all passed at 1440 and 390 px, light and dark — Canvas Layout node and editor (mouse drag at 1440, CDP touch drag at 390 via the Nodes list), Plan layout (rules: 4 boxes, '30% OFF'), Done back on the card, keyboard focus to Edit layout and Plan layout, Marketing switch + hint + MOSS-Image in Settings, Ads switch + hint + 'Placeholder · free' price, no sideways scroll, no console errors; aspect change in the editor updates the downstream node (checked by a one-off script). Full suite and pnpm build not run (stage rules). No ComfyUI needed (no new graph).",
-    "left": [
-      "How well MOSS-Image / Ideogram 4.5 / FLUX.3 draw the copy in place is unverified (no GPU, no fal key); use demo mode and the eval harness later.",
-      "The LLM path of Plan layout was tested with a stubbed answer only; no local model or Claude key here. Core TextGenerate on the MOSS encoder is not used (as the brief says).",
-      "Drawn Marketing/Ads runs on MOSS-Image and Ideogram 4.5 are text-to-image: the product photo isn't a reference there (the run says so); FLUX.3 keeps it in the cloud. No open-engine drawn model takes the photo (oss-flux3-klein reads layouts and edits, but the brief named MOSS only).",
-      "Ads keep-clear layout is live only for a visual model that reads boxes (FLUX.3, added as a cloud choice); the open engine's Fuobe Marketing Image doesn't read boxes. It is planned for the 4:5 overlay; the 1:1 and 9:16 composites crop the visual and use their own layouts.",
-      "A Layout node fed into several models draws on the first one's shape; the editor's aspect change updates only that node."
-    ],
-    "docsNotes": "STATUS/ARCHITECTURE not edited (the brief didn't ask). For the docs pass: Canvas has a Layout node (Inputs; text output; the draft goes into the image model's request as params.extra.layout and the plan compiles it per model at its size; Table {Column} placeholders in its words fill row by row; phones edit it from the Nodes list). Marketing Studio formats with words (Ads, Poster, Marketplace) and Ads Studio have 'Words drawn by the model' (off by default: words set on top keep exact fonts): open engine MOSS-Image; cloud MOSS-Image on fal, Ideogram 4.5 or FLUX.3; drawn ads come in 4:5 only. Ads Studio adds FLUX.3 as a cloud picture model with a keep-clear layout. The Layout editor has Plan layout (POST /api/layout/plan, owner only: own-gpu-tool for visitors; AI helper first, Fuobe's rules otherwise). New built-in Assist skill layout-poster (21 built-ins now; Apache-2.0, adapted from OpenMOSS's prompt-enhancer skill; credit it in CREDITS.md). Assist/MCP generate jobs accept a 'layout' draft. Brief out of date: line numbers in canvas.ts/marketing.ts/ads.ts/layout.ts were shifted (wordsOnTop at L978, planAd L246 unchanged, NO_TEXT/visualRequest L150-152 matched), and src/server/canvas.ts has its own NODE_TYPES list that needed 'layout' (the brief didn't name it). The server's canvas NODE_TYPES list doesn't include 'restore' (pre-existing, not touched).",
-    "blocked": ""
-  },
-  "review": {
-    "findings": [
-      {
-        "severity": "medium",
-        "file": "src/lib/layout-surfaces.ts",
-        "line": 124,
-        "title": "Drawn ads and drawn Marketing pictures put a logo box in the layout but never send the logo",
-        "detail": "adDraft plans the logo's place whenever the brand has a logo (logo: i.brand?.logo ? {w:3,h:1}), and adPlanDraft turns it into an object item captioned \"The brand's logo, small and crisp\". The logo image never reaches the model. src/server/marketing.ts now leaves the logo reference out when drawn (the refs line has `!onTop && !drawn && ... brand.logo`). src/server/ads.ts visualRequest sends only the product photo, and none at all for MOSS-Image. So every drawn ad or poster asks MOSS-Image, Ideogram 4.5 or FLUX.3 to make up a logo in the brand's logo place. Verified with a probe: visualRequest(..., 'flux-3', drawn=true) gives inputs.images = [product photo] only, and the layout items are object:'Candle…' | object:\"The brand's logo, small and crisp\" | text:Glow | text:Warm nights | text:Shop. The compiled FLUX.3 prompt names <obj_2> The brand's logo. moss-image gets the same box with no inputs at all. Fix options: drop the logo item for models that can't take references (or draw the brand name as text there), and pass brand.logo as a reference to models that take several images (FLUX.3 maxImages 10, Ideogram reference_image_urls). The brief listed the logo area as an object item, but without the real logo it becomes an invented mark on the brand's ad.",
-        "verified": "temporary probe test running visualRequest and planGeneration (removed afterwards)"
-      },
-      {
-        "severity": "low",
-        "file": "src/server/ads.ts",
-        "line": 187,
-        "title": "Ideogram 4.5 drawn ads edit the product photo, which the report and UI notes say doesn't happen",
-        "detail": "`hero = drawn && !supportsOp(model,'edit') ? undefined : product.images[0]`. Ideogram 4.5 supports edit, so a drawn ad on Ideogram runs op=edit on ideogram/v4.5/edit. buildPayload then sets both image_url (the image to edit) and reference_image_urls to the product photo. The drawn ad is therefore an edit of the product photo. Its output is portrait_4_3 (3:4, since the 4:5 map value is portrait_4_3), and it is letterboxed in the 4:5 'drawn' format. This contradicts the implementer's 'left' note (MOSS-Image / Ideogram 4.5 drawn runs are text-to-image), and the option notes imply only FLUX.3 keeps the photo. The same applies in Marketing, where Ideogram gets op edit with the product photo. Decide which behaviour is intended, then align the code, the notes and the tests: none of the tests covers drawn + Ideogram + product.",
-        "verified": "probe: ideogram-4-5 drawn → op 'edit', aspect 4:5, layout format ideogram; payload.ts L362-363 maps images to both image_url and reference_image_urls"
-      },
-      {
-        "severity": "low",
-        "file": "src/server/assist/tools.ts",
-        "line": 354,
-        "title": "An Assist layout's own aspect is sent as the run's aspect ratio without checking that the model offers it",
-        "detail": "aspectRatio: j.aspect_ratio ?? layout?.aspect. parseLayout derives the aspect from the pixel width/height, and the skill only asks for multiples of 16. A draft of 896×1152 gives '7:9', which planGeneration passes through unchanged for flux-3 (whose fal aspect_ratio enum has no 7:9) and for ideogram-4-5 (whose image_size map has no 7:9). The job then fails at the provider or quietly falls back to a square. Snap to the nearest ratio the model lists, or leave aspect unset when the ratio isn't listed. Assist jobs also don't cap the number of layout items (Canvas caps them at 64).",
-        "verified": "probe: parseLayout({width:896,height:1152,...}).draft.aspect === '7:9'; planGeneration for flux-3 / ideogram-4-5 kept aspectRatio '7:9'"
-      },
-      {
-        "severity": "low",
-        "file": "src/server/ads.ts",
-        "line": 191,
-        "title": "The keep-clear layout is always planned as a 4:5 overlay, whatever layout the creative uses",
-        "detail": "For a box-reading visual model (FLUX.3) the keep-clear draft is adDraft({layout:'overlay', ratio: 4:5}). The creative is then shown in its own layout (r.layout: band, frame, panel…) and cropped to 1:1 and 9:16, so the product may not be kept out of the words' space there. The implementer acknowledged this in 'left'. Fine as a first step, but the feature only fully works for the 4:5 overlay.",
-        "verified": "code read"
-      },
-      {
-        "severity": "low",
-        "file": "CREDITS.md",
-        "line": 55,
-        "title": "The OpenMOSS prompt-enhancer adaptation (skills/layout-poster, LAYOUT_PLAN_SYSTEM) is not credited in CREDITS.md yet",
-        "detail": "The Apache-2.0 notice is kept in skills/layout-poster/SKILL.md, references/layout.md and src/lib/layout-plan.ts, but CREDITS.md only lists the MOSS-Image model. The implementer deferred this to the docs pass. Make sure that pass adds it.",
-        "verified": "grep CREDITS.md"
-      }
-    ],
-    "checks": [
-      "Read the review prompt and main rules; reviewed git diff claude/fuobe-parity-4...o/n7-8-layouts-everywhere (26 files) with the surrounding code (plan.ts planLayout/layoutCanvas, payload.ts buildPayload, ads render.ts baked path, guest-access.ts)",
-      "vitest: tests/layouts-everywhere, public-signup, public-signup-tools, marketing-api, originals-marketing, skills-spec, assist-skills: 7 files, 176/176 passed",
-      "tsc --noEmit (after next typegen, 7 GB heap): clean",
-      "Probes (temporary test files, removed; worktree left clean): drawn ads plan on ideogram-4-5 (edit), flux-3 (edit), moss-image and oss-moss-image (t2i, MOSS canvas 912x1152); logo box present without a logo input; non-drawn Fuobe Marketing Image has no layout; Assist layout aspect 7:9 passes through",
-      "Public sign-up: /api/layout/plan answers 403 own-gpu-tool to guests and accounts (tests); no new file-reading run path (Layout node, Assist layout and drawn runs add no inputs beyond existing product photos); /api/ads/estimate and the marketing estimate keep their existing ESTIMATES path; no new models, LoRAs, node packs or ComfyUI graphs (no licence, pre-flight or requirements change needed); FLUX.3 as an ad visual is an existing hosted catalog model; no Higgsfield API or media",
-      "Plan layout route on a demo dev server (port 3462, own data dir): rules fallback works; an invalid width falls back to 1024; an empty body gives 400 with plain copy",
-      "Browser: node tests/e2e/layouts-everywhere.mjs against FUOBE_DEMO_MODE=on dev server at 1440/390 px, light/dark: all passed (Layout node and editor, touch drag at 390, Plan layout, keyboard focus, Marketing and Ads switch and hint, price, no sideways scroll, no console errors). Server stopped with fuser, .next deleted",
-      "Skill: skills/layout-poster keeps the Apache-2.0 notice and the source commit 2b46b1e0 (matches /home/user/ext/moss-image/repo HEAD)"
-    ],
-    "verdict": "changes-requested: no blocking regressions; tests, typecheck and browser checks pass. Fix the invented-logo box in drawn ads and posters (medium) before merge. The Ideogram edit/notes mismatch and the Assist aspect snapping are small follow-ups."
-  },
-  "fix": {
-    "applied": [
-      "MEDIUM (logo box with no logo): confirmed. adDraft now takes a `logo` flag and plans a logo box only when the brand's raster logo is actually sent to the model. Ads visualRequest sends [product photo, logo] to a drawn model that takes more than one image (FLUX.3, Ideogram 4.5). The prompt says the last reference is the logo, and the box caption is LOGO_CAPTION. MOSS-Image (words only) and runs without a product photo or with an SVG logo get no logo box: planAd then puts the brand name as text in that place. Marketing does the same (drawnLogo is added after the photos when the model has room and op is edit).",
-      "LOW (Ideogram edits the photo): confirmed. I kept the edit behaviour, since keeping the real product is the better result. I fixed the ads.ts comment and changed the Ideogram 4.5 drawn-words note to 'Draws the exact text in place and keeps your product photo'. Marketing's 'draws your product from its description' note was already conditional on t2i, so it was right. Added tests for drawn + Ideogram + product (op edit, photo + logo) in Ads and Marketing.",
-      "LOW (Assist aspect): confirmed. A layout's own aspect is now snapped to the nearest ratio the model lists (nearestAspect from server/marketing), and the job's own aspect_ratio still wins. Assist layouts are capped at LAYOUT_NODE_LIMITS.boxes (64). asRequest is exported for the test.",
-      "LOW (CREDITS): added an ATTRIBUTIONS entry in src/lib/licences.ts (Apache-2.0, OpenMOSS MOSS-Image prompt-enhancer, commit 2b46b1e) and the matching line in CREDITS.md. scripts/credits.mjs fails on the base (ERR_IMPORT_ATTRIBUTE_MISSING on preset-recipe-book.json), so I wrote the line by hand in the generator's exact format."
-    ],
-    "rejected": [
-      "LOW (keep-clear layout is always planned as a 4:5 overlay): not changed. The visual is made once and then cropped to 1:1 and 9:16 with their own layouts, so one keep-clear plan can only match one format. The implementer listed this as a known first step. It stays in 'left'."
-    ],
-    "checks": [
-      "tests/layouts-everywhere.test.ts: 20/20, with 2 new tests (logo reference and box per model, no logo box for MOSS or SVG or no logo, Ideogram drawn edit; Assist aspect snapping and the 64-box cap). Existing assertions were updated: MOSS drawn ads now draw the brand name as text instead of a logo box.",
-      "pnpm typecheck (after npx next typegen): exit 0",
-      "pnpm lint: exit 0 (1 warning already on the base, in scripts/comfy/library.spec.mjs)",
-      "Targeted vitest, 41 files (ads, marketing*, assist*, mcp, layout*, canvas*, licences, comfy-dbs, comfy-reuse, moss-image, skills-spec, public-signup*, flux3-klein, price-check-reads, account-uploads): 755/756 passed. The 1 failure is tests/comfy-reuse 'records the pack (MIT, adapted NVIDIA code)', a known failure already on main (rule 8).",
-      "Full suite: an earlier full run was cut off by the usage limit. Before it stopped, its only failure was split-soundtrack 'has no cloud route', also a known failure from main. I did not run it again in full; I ran the targeted set above instead.",
-      "No browser re-check: the UI changes are one note string. .next deleted and git status clean."
-    ],
-    "finalSummary": "Committed b1ddfc90 on o/n7-8-layouts-everywhere. Open engine: Canvas Layout node, Marketing and Ads 'Words drawn by the model' on MOSS-Image (from words alone; the brand name is drawn where the logo would go, so no logo is made up), Plan layout and the layout-poster skill. All are built and tested in unit tests and the earlier browser checks. How well the model draws needs a GPU. Cloud engine: MOSS-Image on fal (words only), Ideogram 4.5 and FLUX.3 (edit the product photo and now get the brand's real logo for its box). Built and tested at the request and plan level; real output needs a fal key. Assist and MCP layouts now run in a shape the model lists, with at most 64 boxes. Public sign-up is unchanged from the review: /api/layout/plan answers 403 own-gpu-tool to guests and accounts. Drawn runs add only the brand kit's logo as an input, which is the owner's own kit already used by Marketing's non-drawn partner runs. Accounts can't reach Ads or Marketing cloud runs. No new file-reading path for accounts.",
-    "left": [
-      "How well MOSS-Image, Ideogram 4.5 and FLUX.3 draw the copy and place the logo is unverified (no GPU, no fal key).",
-      "Ideogram 4.5 maps 4:5 to portrait_4_3 (3:4), so a drawn Ideogram ad is laid out at 4:5 but rendered at 3:4 and letterboxed. A later fix could pick an aspect Ideogram maps exactly.",
-      "The keep-clear layout is planned only for the 4:5 overlay (see rejected).",
-      "scripts/credits.mjs fails on the base (JSON import attribute). CREDITS.md was edited by hand to match the generator's format.",
-      "The full vitest suite was not completed in one run (cut off by the usage limit). Only the targeted related suites were run after the fixes.",
-      "Earlier notes still apply: the LLM path of Plan layout is tested with a stubbed answer only, and a Layout node feeding several models draws on the first model's shape."
-    ],
-    "blocked": ""
-  }
+ "key": "n7-8-layouts-everywhere",
+ "impl": {
+  "branch": "o/n7-8-layouts-everywhere",
+  "summary": "N7-8 built on top of N7-1/N7-2 (already on the base: src/lib/layout-prompt.ts with layoutCompilerFor/validateLayout/parseLayout, planLayout in src/lib/catalog/plan.ts that compiles params.extra.layout at the exact render size with expansion off, the Layout editor, oss-moss-image and fal moss-image in the catalog). New: a Canvas Layout node (Inputs group, text output) whose draft rides into the downstream image model as params.extra.layout so the plan compiles it per model at its render size, with Table {Column} substitution row by row; a shared AdPlan→layout mapping (src/lib/layout-surfaces.ts: 'words' and 'keep clear' modes); Marketing Studio's 'Words drawn by the model' option (open: oss-moss-image; cloud: moss-image, ideogram-4-5, flux-3); Ads Studio's same option (drawn ads shown/downloaded whole in 4:5, as baked ads are) plus a keep-clear layout for a box-reading visual model (FLUX.3 added as a cloud ad visual choice); Plan layout in the Layout editor (POST /api/layout/plan: the install's AI helper writes a MOSS pixel draft, readPlanned/validateLayout check it, rules fallback); skills/layout-poster (adapted from OpenMOSS's Apache-2.0 prompt-enhancer skill, notice kept); Assist/MCP generate jobs take a 'layout' draft.",
+  "built": [
+   "src/lib/layout-surfaces.ts: roughMeasure, copyRects, productRect, adPlanDraft (words / clear), adDraft (planAd with brand theme and logo place), layoutPlaceholders, fillLayout",
+   "src/lib/catalog/canvas.ts: CanvasNodeType 'layout', CanvasNodeData.layout, NODE_SPECS + palette entry, outputType text, sourceOf {kind:'layout'}, buildRequest puts the draft in params.extra.layout for image models (compileWords text for others; one layout at a time; 'Draw a box' error), rowRequest fills {Column} in wired layouts, LAYOUT_NODE_LIMITS",
+   "src/server/canvas.ts: 'layout' node type and a LayoutData zod (readLayout, 64 boxes, clamped strings)",
+   "src/components/canvas/nodes.tsx: LayoutNode card (mini box preview, Edit layout opening N7-2's LayoutEditor sized by layoutCanvas of the model it feeds; a new shape in the editor sets the downstream node's aspect ratio), LayoutNodeRow for the Nodes list (phones: the board is read-only there); canvas-context icon; node-list row",
+   "src/components/studio/layout-editor.tsx: Plan layout button + hint (hidden for visitors), 'nokey' + key stopPropagation so Canvas shortcuts don't fire under the dialog",
+   "src/lib/layout-plan.ts (LAYOUT_PLAN_SYSTEM adapted with notice, planRequest, readPlanned, planByRules), src/server/layout-plan.ts, src/app/api/layout/plan/route.ts",
+   "src/lib/catalog/marketing.ts: wordsOnTop(engine, model, drawn), DRAWN_WORDS_MODELS, DRAWN_WORDS_LABEL/HINT, drawnWordsModel, formatModels(..., drawn); FLUX.3 as a cloud AD_VISUAL_MODELS choice",
+   "src/server/marketing.ts: MarketingBody.drawnWords; planMarketing builds the format's copy layout (overlayLayout: frame for posters, overlay otherwise) and sends it, no textLine, no overlay; notes say lettering is the model's and (t2i models) the product is drawn from its description",
+   "src/server/ads.ts: BatchBody.drawnWords, visualRequest(..., drawn) with the AdPlan layout instead of NO_TEXT, keep-clear layout for box-reading visual models, CreativeMeta.route 'drawn' (shown as baked, ratio 4:5), retry keeps it, estimate prices the drawing model",
+   "UI: Marketing Studio 'Words on the image' panel switch + hint; Ads Studio New ads switch + hint + copy for the 4:5 drawn format",
+   "src/server/assist/tools.ts: generate jobs accept 'layout' (pixel draft or Fuobe draft, parsed with parseLayout into params.extra.layout; aspect from the draft when none is given)",
+   "skills/layout-poster/SKILL.md and references/layout.md (Apache-2.0 notice, source commit 2b46b1e0)",
+   "tests/layouts-everywhere.test.ts (18 tests), tests/e2e/layouts-everywhere.mjs (browser checks)"
+  ],
+  "tests": "Verified: tests/layouts-everywhere.test.ts 18/18 (sourceOf/planLayout per downstream model and size: oss-moss-image at 3:4 vs 16:9, fal moss-image with expansion off, flux-3 → flux3, ideogram-4-5 → ideogram, nano-banana-pro → words; text model reads sentences; one-layout and empty-layout errors; table substitution 2 rows; AdPlan → draft mapping words/clear/panel; wordsOnTop with the option on both engines; Marketing drawn runs open/cloud/FLUX.3 with product photo and planGeneration compiles them; Ads drawn on both engines + keep-clear with FLUX.3; planner rules and LLM answer pass validateLayout, fallback to rules; skill picked up by the loader with its reference). Related suites green: canvas*, marketing*, originals-marketing, layout*, moss-image, assist*, flux3-klein, mcp*, skills*, hosted*, request-body*, catalog*, account*, public-signup + public-signup-tools (591 + 216 + 55 tests). Updated existing tests: originals-marketing (AD_VISUAL_MODELS now ends with flux-3), marketing-api (flux-3 is now offered; 'not offered' uses recraft-4-1), skills-spec and assist-skills (21 built-in skills), public-signup(-tools) (/api/layout/plan is own-gpu-tool for guests and accounts). Browser (demo mode, port 3457): node tests/e2e/layouts-everywhere.mjs all passed at 1440 and 390 px, light and dark — Canvas Layout node and editor (mouse drag at 1440, CDP touch drag at 390 via the Nodes list), Plan layout (rules: 4 boxes, '30% OFF'), Done back on the card, keyboard focus to Edit layout and Plan layout, Marketing switch + hint + MOSS-Image in Settings, Ads switch + hint + 'Placeholder · free' price, no sideways scroll, no console errors; aspect change in the editor updates the downstream node (checked by a one-off script). Full suite and pnpm build not run (stage rules). No ComfyUI needed (no new graph).",
+  "left": [
+   "How well MOSS-Image / Ideogram 4.5 / FLUX.3 draw the copy in place is unverified (no GPU, no fal key); use demo mode and the eval harness later.",
+   "The LLM path of Plan layout was tested with a stubbed answer only; no local model or Claude key here. Core TextGenerate on the MOSS encoder is not used (as the brief says).",
+   "Drawn Marketing/Ads runs on MOSS-Image and Ideogram 4.5 are text-to-image: the product photo isn't a reference there (the run says so); FLUX.3 keeps it in the cloud. No open-engine drawn model takes the photo (oss-flux3-klein reads layouts and edits, but the brief named MOSS only).",
+   "Ads keep-clear layout is live only for a visual model that reads boxes (FLUX.3, added as a cloud choice); the open engine's Fuobe Marketing Image doesn't read boxes. It is planned for the 4:5 overlay; the 1:1 and 9:16 composites crop the visual and use their own layouts.",
+   "A Layout node fed into several models draws on the first one's shape; the editor's aspect change updates only that node."
+  ],
+  "docsNotes": "STATUS/ARCHITECTURE not edited (the brief didn't ask). For the docs pass: Canvas has a Layout node (Inputs; text output; the draft goes into the image model's request as params.extra.layout and the plan compiles it per model at its size; Table {Column} placeholders in its words fill row by row; phones edit it from the Nodes list). Marketing Studio formats with words (Ads, Poster, Marketplace) and Ads Studio have 'Words drawn by the model' (off by default: words set on top keep exact fonts): open engine MOSS-Image; cloud MOSS-Image on fal, Ideogram 4.5 or FLUX.3; drawn ads come in 4:5 only. Ads Studio adds FLUX.3 as a cloud picture model with a keep-clear layout. The Layout editor has Plan layout (POST /api/layout/plan, owner only: own-gpu-tool for visitors; AI helper first, Fuobe's rules otherwise). New built-in Assist skill layout-poster (21 built-ins now; Apache-2.0, adapted from OpenMOSS's prompt-enhancer skill; credit it in CREDITS.md). Assist/MCP generate jobs accept a 'layout' draft. Brief out of date: line numbers in canvas.ts/marketing.ts/ads.ts/layout.ts were shifted (wordsOnTop at L978, planAd L246 unchanged, NO_TEXT/visualRequest L150-152 matched), and src/server/canvas.ts has its own NODE_TYPES list that needed 'layout' (the brief didn't name it). The server's canvas NODE_TYPES list doesn't include 'restore' (pre-existing, not touched).",
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "medium",
+    "file": "src/lib/layout-surfaces.ts",
+    "line": 124,
+    "title": "Drawn ads and drawn Marketing pictures put a logo box in the layout but never send the logo",
+    "detail": "adDraft plans the logo's place whenever the brand has a logo (logo: i.brand?.logo ? {w:3,h:1}), and adPlanDraft turns it into an object item captioned \"The brand's logo, small and crisp\". The logo image never reaches the model. src/server/marketing.ts now leaves the logo reference out when drawn (the refs line has `!onTop && !drawn && ... brand.logo`). src/server/ads.ts visualRequest sends only the product photo, and none at all for MOSS-Image. So every drawn ad or poster asks MOSS-Image, Ideogram 4.5 or FLUX.3 to make up a logo in the brand's logo place. Verified with a probe: visualRequest(..., 'flux-3', drawn=true) gives inputs.images = [product photo] only, and the layout items are object:'Candle…' | object:\"The brand's logo, small and crisp\" | text:Glow | text:Warm nights | text:Shop. The compiled FLUX.3 prompt names <obj_2> The brand's logo. moss-image gets the same box with no inputs at all. Fix options: drop the logo item for models that can't take references (or draw the brand name as text there), and pass brand.logo as a reference to models that take several images (FLUX.3 maxImages 10, Ideogram reference_image_urls). The brief listed the logo area as an object item, but without the real logo it becomes an invented mark on the brand's ad.",
+    "verified": "temporary probe test running visualRequest and planGeneration (removed afterwards)"
+   },
+   {
+    "severity": "low",
+    "file": "src/server/ads.ts",
+    "line": 187,
+    "title": "Ideogram 4.5 drawn ads edit the product photo, which the report and UI notes say doesn't happen",
+    "detail": "`hero = drawn && !supportsOp(model,'edit') ? undefined : product.images[0]`. Ideogram 4.5 supports edit, so a drawn ad on Ideogram runs op=edit on ideogram/v4.5/edit. buildPayload then sets both image_url (the image to edit) and reference_image_urls to the product photo. The drawn ad is therefore an edit of the product photo. Its output is portrait_4_3 (3:4, since the 4:5 map value is portrait_4_3), and it is letterboxed in the 4:5 'drawn' format. This contradicts the implementer's 'left' note (MOSS-Image / Ideogram 4.5 drawn runs are text-to-image), and the option notes imply only FLUX.3 keeps the photo. The same applies in Marketing, where Ideogram gets op edit with the product photo. Decide which behaviour is intended, then align the code, the notes and the tests: none of the tests covers drawn + Ideogram + product.",
+    "verified": "probe: ideogram-4-5 drawn → op 'edit', aspect 4:5, layout format ideogram; payload.ts L362-363 maps images to both image_url and reference_image_urls"
+   },
+   {
+    "severity": "low",
+    "file": "src/server/assist/tools.ts",
+    "line": 354,
+    "title": "An Assist layout's own aspect is sent as the run's aspect ratio without checking that the model offers it",
+    "detail": "aspectRatio: j.aspect_ratio ?? layout?.aspect. parseLayout derives the aspect from the pixel width/height, and the skill only asks for multiples of 16. A draft of 896×1152 gives '7:9', which planGeneration passes through unchanged for flux-3 (whose fal aspect_ratio enum has no 7:9) and for ideogram-4-5 (whose image_size map has no 7:9). The job then fails at the provider or quietly falls back to a square. Snap to the nearest ratio the model lists, or leave aspect unset when the ratio isn't listed. Assist jobs also don't cap the number of layout items (Canvas caps them at 64).",
+    "verified": "probe: parseLayout({width:896,height:1152,...}).draft.aspect === '7:9'; planGeneration for flux-3 / ideogram-4-5 kept aspectRatio '7:9'"
+   },
+   {
+    "severity": "low",
+    "file": "src/server/ads.ts",
+    "line": 191,
+    "title": "The keep-clear layout is always planned as a 4:5 overlay, whatever layout the creative uses",
+    "detail": "For a box-reading visual model (FLUX.3) the keep-clear draft is adDraft({layout:'overlay', ratio: 4:5}). The creative is then shown in its own layout (r.layout: band, frame, panel…) and cropped to 1:1 and 9:16, so the product may not be kept out of the words' space there. The implementer acknowledged this in 'left'. Fine as a first step, but the feature only fully works for the 4:5 overlay.",
+    "verified": "code read"
+   },
+   {
+    "severity": "low",
+    "file": "CREDITS.md",
+    "line": 55,
+    "title": "The OpenMOSS prompt-enhancer adaptation (skills/layout-poster, LAYOUT_PLAN_SYSTEM) is not credited in CREDITS.md yet",
+    "detail": "The Apache-2.0 notice is kept in skills/layout-poster/SKILL.md, references/layout.md and src/lib/layout-plan.ts, but CREDITS.md only lists the MOSS-Image model. The implementer deferred this to the docs pass. Make sure that pass adds it.",
+    "verified": "grep CREDITS.md"
+   }
+  ],
+  "checks": [
+   "Read the review prompt and main rules; reviewed git diff claude/fuobe-parity-4...o/n7-8-layouts-everywhere (26 files) with the surrounding code (plan.ts planLayout/layoutCanvas, payload.ts buildPayload, ads render.ts baked path, guest-access.ts)",
+   "vitest: tests/layouts-everywhere, public-signup, public-signup-tools, marketing-api, originals-marketing, skills-spec, assist-skills: 7 files, 176/176 passed",
+   "tsc --noEmit (after next typegen, 7 GB heap): clean",
+   "Probes (temporary test files, removed; worktree left clean): drawn ads plan on ideogram-4-5 (edit), flux-3 (edit), moss-image and oss-moss-image (t2i, MOSS canvas 912x1152); logo box present without a logo input; non-drawn Fuobe Marketing Image has no layout; Assist layout aspect 7:9 passes through",
+   "Public sign-up: /api/layout/plan answers 403 own-gpu-tool to guests and accounts (tests); no new file-reading run path (Layout node, Assist layout and drawn runs add no inputs beyond existing product photos); /api/ads/estimate and the marketing estimate keep their existing ESTIMATES path; no new models, LoRAs, node packs or ComfyUI graphs (no licence, pre-flight or requirements change needed); FLUX.3 as an ad visual is an existing hosted catalog model; no Higgsfield API or media",
+   "Plan layout route on a demo dev server (port 3462, own data dir): rules fallback works; an invalid width falls back to 1024; an empty body gives 400 with plain copy",
+   "Browser: node tests/e2e/layouts-everywhere.mjs against FUOBE_DEMO_MODE=on dev server at 1440/390 px, light/dark: all passed (Layout node and editor, touch drag at 390, Plan layout, keyboard focus, Marketing and Ads switch and hint, price, no sideways scroll, no console errors). Server stopped with fuser, .next deleted",
+   "Skill: skills/layout-poster keeps the Apache-2.0 notice and the source commit 2b46b1e0 (matches /home/user/ext/moss-image/repo HEAD)"
+  ],
+  "verdict": "changes-requested: no blocking regressions; tests, typecheck and browser checks pass. Fix the invented-logo box in drawn ads and posters (medium) before merge. The Ideogram edit/notes mismatch and the Assist aspect snapping are small follow-ups."
+ },
+ "fix": {
+  "applied": [
+   "MEDIUM (logo box with no logo): confirmed. adDraft now takes a `logo` flag and plans a logo box only when the brand's raster logo is actually sent to the model. Ads visualRequest sends [product photo, logo] to a drawn model that takes more than one image (FLUX.3, Ideogram 4.5). The prompt says the last reference is the logo, and the box caption is LOGO_CAPTION. MOSS-Image (words only) and runs without a product photo or with an SVG logo get no logo box: planAd then puts the brand name as text in that place. Marketing does the same (drawnLogo is added after the photos when the model has room and op is edit).",
+   "LOW (Ideogram edits the photo): confirmed. I kept the edit behaviour, since keeping the real product is the better result. I fixed the ads.ts comment and changed the Ideogram 4.5 drawn-words note to 'Draws the exact text in place and keeps your product photo'. Marketing's 'draws your product from its description' note was already conditional on t2i, so it was right. Added tests for drawn + Ideogram + product (op edit, photo + logo) in Ads and Marketing.",
+   "LOW (Assist aspect): confirmed. A layout's own aspect is now snapped to the nearest ratio the model lists (nearestAspect from server/marketing), and the job's own aspect_ratio still wins. Assist layouts are capped at LAYOUT_NODE_LIMITS.boxes (64). asRequest is exported for the test.",
+   "LOW (CREDITS): added an ATTRIBUTIONS entry in src/lib/licences.ts (Apache-2.0, OpenMOSS MOSS-Image prompt-enhancer, commit 2b46b1e) and the matching line in CREDITS.md. scripts/credits.mjs fails on the base (ERR_IMPORT_ATTRIBUTE_MISSING on preset-recipe-book.json), so I wrote the line by hand in the generator's exact format."
+  ],
+  "rejected": [
+   "LOW (keep-clear layout is always planned as a 4:5 overlay): not changed. The visual is made once and then cropped to 1:1 and 9:16 with their own layouts, so one keep-clear plan can only match one format. The implementer listed this as a known first step. It stays in 'left'."
+  ],
+  "checks": [
+   "tests/layouts-everywhere.test.ts: 20/20, with 2 new tests (logo reference and box per model, no logo box for MOSS or SVG or no logo, Ideogram drawn edit; Assist aspect snapping and the 64-box cap). Existing assertions were updated: MOSS drawn ads now draw the brand name as text instead of a logo box.",
+   "pnpm typecheck (after npx next typegen): exit 0",
+   "pnpm lint: exit 0 (1 warning already on the base, in scripts/comfy/library.spec.mjs)",
+   "Targeted vitest, 41 files (ads, marketing*, assist*, mcp, layout*, canvas*, licences, comfy-dbs, comfy-reuse, moss-image, skills-spec, public-signup*, flux3-klein, price-check-reads, account-uploads): 755/756 passed. The 1 failure is tests/comfy-reuse 'records the pack (MIT, adapted NVIDIA code)', a known failure already on main (rule 8).",
+   "Full suite: an earlier full run was cut off by the usage limit. Before it stopped, its only failure was split-soundtrack 'has no cloud route', also a known failure from main. I did not run it again in full; I ran the targeted set above instead.",
+   "No browser re-check: the UI changes are one note string. .next deleted and git status clean."
+  ],
+  "finalSummary": "Committed b1ddfc90 on o/n7-8-layouts-everywhere. Open engine: Canvas Layout node, Marketing and Ads 'Words drawn by the model' on MOSS-Image (from words alone; the brand name is drawn where the logo would go, so no logo is made up), Plan layout and the layout-poster skill. All are built and tested in unit tests and the earlier browser checks. How well the model draws needs a GPU. Cloud engine: MOSS-Image on fal (words only), Ideogram 4.5 and FLUX.3 (edit the product photo and now get the brand's real logo for its box). Built and tested at the request and plan level; real output needs a fal key. Assist and MCP layouts now run in a shape the model lists, with at most 64 boxes. Public sign-up is unchanged from the review: /api/layout/plan answers 403 own-gpu-tool to guests and accounts. Drawn runs add only the brand kit's logo as an input, which is the owner's own kit already used by Marketing's non-drawn partner runs. Accounts can't reach Ads or Marketing cloud runs. No new file-reading path for accounts.",
+  "left": [
+   "How well MOSS-Image, Ideogram 4.5 and FLUX.3 draw the copy and place the logo is unverified (no GPU, no fal key).",
+   "Ideogram 4.5 maps 4:5 to portrait_4_3 (3:4), so a drawn Ideogram ad is laid out at 4:5 but rendered at 3:4 and letterboxed. A later fix could pick an aspect Ideogram maps exactly.",
+   "The keep-clear layout is planned only for the 4:5 overlay (see rejected).",
+   "scripts/credits.mjs fails on the base (JSON import attribute). CREDITS.md was edited by hand to match the generator's format.",
+   "The full vitest suite was not completed in one run (cut off by the usage limit). Only the targeted related suites were run after the fixes.",
+   "Earlier notes still apply: the LLM path of Plan layout is tested with a stubbed answer only, and a Layout node feeding several models draws on the first model's shape."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/n7-8-layouts-everywhere"
+  ],
+  "notMerged": [],
+  "conflicts": "tests/public-signup.test.ts list: kept both",
+  "checks": "batch of 4 (n7-8, dbs-d5, hosted-catchup, w2s-w4): typecheck 0, lint 0, vitest 5159 passed, 6 failed (main known)",
+  "pushed": true,
+  "head": "85be87db"
+ }
 }

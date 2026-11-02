@@ -1,0 +1,201 @@
+{
+ "key": "n7-4-character-swap-2k",
+ "impl": {
+  "branch": "o/n7-4-character-swap-2k",
+  "summary": "Character swaps can now be made sharper than H3's 768p on both engines, without touching the background or the sound. On your GPU, the 768p swap is redrawn by Open-H3 Regenerate (start sigma 0.8, the take's words and seed). The size is capped at what the footage is joined at. Then a new core-node graph, video-composite-mask, puts only the character back over the original footage, with the footage's own sound. On the cloud, fal's MiniMax H3 is asked for 2K or 4K: the same hosted model at a size it offers, never a stand-in. Character Swap Studio: Assemble → Finish now has a runnable 'Sharpen to 1080p / 2K / 4K' card. It has a size picker, a price or GPU time, and Run. Each chosen take gets a sharper version beside it in Takes & review, to compare and pick with 'Use the 2K version'. The assembly uses that version once it is picked. Beside it, 'Clean backplate + alpha · Not available' is shown to the owner only. Genjutsu's Character swap: Quality offers 480p, 768p, 2K and 4K on the cloud ($0.81 for 5 s at 2K), and adds 1080p on your GPU (free, about 3 min more per 5 s on a 72 GB GPU).",
+  "built": [
+   "Graph video-composite-mask (hand-built, core nodes only), with a library.spec entry and new binding keys (takeStart, maskStart, takeX/Y, regionWidth/Height, regionX/Y, feather). It loads the footage, the 768p swap, the regenerate and the approved whole-shot mask, each through a Video Slice of the same window. It composites two layers, each through the mask (ImageToMask red → GrowMask → FeatherMask): first the swap over the part of the footage its H3 canvas covers, then the regenerate over the centre its 16:9 / 9:16 draft kept. So a character reaching past the regenerate's crop keeps the 768p swap there, not the original person. CreateVideo takes the footage's own sound and rate. The graph is validated on the CPU ComfyUI (node validate-workflows.mjs video-composite-mask --shared, validated:true). It was also run end to end there: a 320x180 clip with sound, a 1.5 s window from 0.5 s, gave 36 frames, 1.5 s of AAC and the regenerate only inside the feathered mask; a silent clip gave video only. The manifest header and object_info.subset.json were restored to the base's (only FeatherMask was added), and requirements.json was rebuilt (192 workflows, 219,492 B). No new packs or model files.",
+   "Pure module src/lib/catalog/sharpen.ts. It holds the tiers (1080p/2K/4K → the regenerate's 1080p/1440p/2160p), the per-engine film size (≤2048 px a side; the cloud matches cloudFilmSize) and sharpenOptions/sharpenTierFor. Your GPU never makes a size above the film's shorter edge; the cloud offers 2K/4K only, and 4K is off where the join is ≤2048 px, with the reason shown. It also holds the join note, cloud prices (SWAP_PER_SECOND; 5 s at 2K = $0.81, 15 s = $2.44, 4K $1.00 / $3.00), GPU time, compositeGeometry, maskEdge, frameWindows (regenerate ≤360 frames, composite ≤3 s), sharpenPrompt (the take's words without H3 tags, plus the description), the copy, and sharpenSteps: regenerate → composites → oss-join-encoded.",
+   "A new hidden model oss-composite-mask on a new Operation 'composite' (labels, output kind, input needs, promptless, and not offered on Canvas).",
+   "character-swap.ts: CHARACTER_SWAP.finishes, CharacterChoice, characterFinish, CHARACTER_QUALITIES per engine, and falResolution now returns 2K/4K (1080p → 768P: fal has no 1080P). The optional CharacterOptions.sharpenSigma is an evaluation knob that the page never sets.",
+   "genjutsu.ts: the Character swap makers offer the per-engine qualities, and qualityFor keeps a finishing size. The open plan for 1080p/2K/4K is: frame/anchor → swap at 768p (now a step) → SAM 3.1 mask of the part (oss-h3-person-mask) → the part at 24 fps and the film's size (oss-fit-clip) → regenerate (sigma 0.8, capped) → composites → join → the part's sound muxed back (oss-mux). A clip below 1080p is refused in words. The cloud plan asks fal's H3 for resolution 2K/4K in the same pieces. The server's schema takes 2K/4K and sharpenSigma, and the estimate's notes say what each engine does and when a size is capped. The setup codes keep 2K/4K.",
+   "Character Swap Studio, data and plan: SwapTake.finish (TakeFinish: asked, made, genId, stepIds, use), usedFinish, chosenTakes, FINISH_UNAVAILABLE (re-added) and planTakeFinish. Your GPU regenerates the take's own video and composites it over the 24 fps copy through the mask the take was made with (or the approved mask). The cloud uses frozenTakePlan with the new resolution override: the same words, LoRA, references, seed and boundary frame, at 2K/4K. assemblyTakes counts a picked version, so 'Assemble again' is offered.",
+   "Server (src/server/swap-studio.ts) and route POST /api/swap-studio/projects/[id]/sharpen {clipId, tier}. It checks and prices every take first (no demo/real mix, models switched off refused), skips takes that already have a live version at that size, and records each version. Other changes: the take edit can set finishUse (refused unless the version succeeded); the stop route takes kind 'finish'; the estimate has sharpen[clipId] = {takes, seconds, costUsd per size}; the assembly uses the picked version; projectGenIds includes the versions. Fixed a base bug on the way: a silent clip's cloud assembly failed with 'Unknown asset silence:N' because the silence WAV was never written. It is now written with silenceWriter, as Genjutsu and Canvas do.",
+   "UI. stage-review.tsx: a Finish panel with the Sharpen card (per-engine copy, the size picker with the reason on each disabled size, the price or GPU time, the takes and seconds, the join note, Run and Stop, 'n of m ready'). Run rests once every take has its version. The backplate card is shown to the owner only (useIsOwner). Takes & review shows the version beside its take, with 'Use the 2K version' / 'Use the take instead', and Compare lists the versions. The assembly chips say '· 2K'. hooks.ts: useSharpen. Genjutsu's character-panel: per-engine Quality, a short field hint ('$0.81 for 5 s' / 'Free · your GPU'), and a full line underneath that wraps.",
+   "GPU pre-flight: a STUDIO_ROWS row 'Character swap in 2K' (/genjutsu?mode=character) covering the regenerate, the composite, the join and the refiner LoRA.",
+   "Evaluation: a new metric family 'background' (bgDiff / bgPsnr: the output against the source on the frame's outer ring, aligned in time), wired through maths.py, media.py, score.py, registry.py, metric-info.mjs, schema.mjs and a regenerated case.schema.json, with a pytest. New suite scripts/eval/cases/character-2k.json: the 768p baseline, 2K on your GPU at sigma 0.7, 0.8 and 0.909, and the cloud at 2K, scored on identity, background and temporal. Its 'decides' rule chooses the default sigma from a GPU run.",
+   "Research correction appended to new-models-7.md §5.5 (N7-4)."
+  ],
+  "tests": "Full Vitest after merging the moved base (54e3340a): 311 files, 4937 passed, 3 skipped, 6 failed (--maxWorkers=2, FUOBE_ACCOUNT_DISK_FREE_GB=1). The 6 failures are exactly the known main ones: comfy-reuse, dop-originals, preset-featured, soul-runs ×2 and split-soundtrack. One failure of mine came up in an earlier run (public notes in comfy-library-notes) and is fixed. tsc and lint are clean (one existing warning, WAN_NEG_EN). New tests/character-swap-2k.test.ts (23 tests): quality mapping (480p/768p unchanged; 1080p/2K/4K add the finish steps); falResolution for every quality; the price table and catalog prices; the short and long hints; per-engine options and caps with the 2048 px join note; geometry and windows; the Genjutsu plans (open 2K steps and chains, the 4K square → 2K, a 20 s part in two regenerate windows, a silent clip, below 1080p refused, the sigma knob, cloud 2K and the fal payload); the Swap Studio finish plan per take (open regenerate → composites → join with the source and mask starts, no mask refused; cloud re-queue at 2K); the assembly using a picked version; FINISH_UNAVAILABLE on the page; the pre-flight row; the graph's bindings through prepareWorkflow. New tests/swap-studio-sharpen.test.ts (4 tests, demo mode through the API): a cloud project's take sharpened at 2K (4K asked → 2K made, 1080p refused, priced first, a second request refused); the version picked, and the assembly using it at 1920x1080; Stop; guests and accounts get own-gpu-tool on the sharpen route and Genjutsu's run while the estimate stays open; and accountInputProblem on a composite's videos and mask. Also a pytest for background_difference. Browser: tests/e2e/character-swap-2k.mjs passed all 141 checks against pnpm dev in demo mode, at 1440 and 390 px in light and dark, run twice. It covers both Finish cards, the size picker by keyboard and by touch, the price and GPU time, a real Sharpen run with the 2K version picked and unpicked in Takes & review, a GPU project's card, and Genjutsu's Quality on both engines with the wrapping price line. No sideways scroll anywhere. An end-to-end Genjutsu open 2K run in demo mode went through all 10 steps with the right inputs in each slot. The dev server is stopped and .next is deleted.",
+  "left": [
+   "Not verifiable here: any GPU run of the regenerate inside the chain, whether sigma 0.8 keeps the swapped face, how the mask edge looks at 1080p/2K, and the regenerate's exact framing (stretch vs crop of its 1344x768 draft; the composite assumes a stretch, about 0.4 % off if rdh crops). Also not verifiable: any fal call at 2K/4K. Run `pnpm eval:run --suite character-2k --engine open` on a GPU ComfyUI with OPEN_H3_REGEN=1 and H3_RELAY=1 to decide the default sigma.",
+   "Your GPU joins the film at most 2048 px a side, so 1080p or 16:9 clips sharpen at 1080p. 2K applies only when the film's shorter edge is at least 1440, as with square clips. 4K never applies until the fit graph's 2048 px limit is raised.",
+   "On the cloud, 4K is off in Sharpen because merge-videos joins at most 2048 px. Genjutsu's cloud still offers 4K: a single piece with sound skips that join.",
+   "Composite memory: about 12 GB of RAM per 3 s window at 1080p (four float32 streams). Not measured on a GPU box.",
+   "Pre-existing browser-check failures, not mine: tests/e2e/genjutsu-original.mjs looks for 'H3 Relay' text, which main's copy polish (157e5ba2) removed from the Relay maker's note. tests/e2e/character-swap-studio.mjs can't find the projects page's 'Name the project' field."
+  ],
+  "docsNotes": [
+   "Brief out of date: there was no Finish panel or FINISH_UNAVAILABLE on the base. Main's copy polish (157e5ba2, 2026-11-01) removed both. I re-added FINISH_UNAVAILABLE in plain words, and the backplate card is shown to the owner only so visitors don't see a not-available card. The line numbers in the brief (L247-248, L1356, L27/L160/L172, L403-411) were stale; the code was found by name.",
+   "The brief's 'take's 16-bit FFV1 master' holds only the last frames (masterKeep), so the regenerate reads the take's video. fal has no 1080P (480P/768P/2K/4K, checked against fal's llms.txt for minimax/h3/reference-to-video/lora, 2026-11-01). The 'keep (snap to 32)' draft size was already replaced by the preset in n7-3. These corrections are recorded in new-models-7.md §5.5.",
+   "STATUS.md: Character swap in 2K (n7-4) is built and browser-checked, not GPU-run. Genjutsu offers 1080p/2K/4K on your GPU (regenerate + mask composite) and 2K/4K on fal's H3. Character Swap Studio has Sharpen in Assemble → Finish, with sharper versions compared and picked in Takes & review. Also: the new eval suite character-2k and the 'background' metric.",
+   "ARCHITECTURE.md: src/lib/catalog/sharpen.ts (pure: tiers, caps, geometry, windows, steps), the composite graph and the 'composite' operation, SwapTake.finish / usedFinish / planTakeFinish, POST /api/swap-studio/projects/[id]/sharpen, the estimate's sharpen field, and the eval metric family 'background'.",
+   "PR note: the cloud assembly of a silent clip now writes its silence WAV (it failed before with 'Unknown asset silence:N')."
+  ],
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "medium",
+    "title": "Running sharper versions are not protected and cannot be stopped once replaced or their take is gone",
+    "where": "src/server/swap-studio.ts sharpenClip/finishLive; src/lib/catalog/swap-studio-edit.ts (take remove L317, shotBusy L148); stopJob kind 'finish'",
+    "detail": "shotBusy and the take-removal guard only look at t.genId, never t.finish.genId. So a take, a clip or a shot layout can be removed or changed while its Sharpen pipeline (regenerate + composites + join, minutes of GPU per 5 s) is still running. Also, sharpenClip at another size (finishLive is false when the tier differs, e.g. 1080p and then 2K on a square clip) overwrites t.finish without cancelling the old one. In every case the old generations keep running, they drop out of projectGenIds, and Stop (kind 'finish') can no longer reach them.",
+    "verified": "Traced: removeTake/shotBusy ignore finish; sharpenClip's made.set replaces t.finish with no cancelGeneration.",
+    "fix": "Count t.finish as active in shotBusy and in the take-removal check, and cancel the old finish's stepIds/genId before replacing it (or refuse while it is live)."
+   },
+   {
+    "severity": "low-medium",
+    "title": "The size cap compares the tier to the film's short edge, not to the area the regenerate is laid into",
+    "where": "src/lib/catalog/sharpen.ts sharpenOptions/defaultSharpenTier",
+    "detail": "The regenerate keeps a 1.75 centre crop of H3's canvas (rdh Prepare Draft cover-crops to 1344x768), and the composite scales it into that region. For a 1440x1440 film the region is 1440x822, and for 2048x1536 it is 2048x1170. Yet 2K is offered there, and is the default, because the film's short edge is at least 1440. 2K costs more GPU time than 1080p and gives no extra pixels in the film. On these shapes the character outside the 1.75 centre also keeps the 768p swap.",
+    "verified": "Computed with the branch's geometry against rdh's cover_crop_box at 9b686c5 (scratchpad geo.mjs).",
+    "fix": "Gate and default the tiers by the region's shorter side (compositeGeometry(film, canvas).region), or at least default to 1080p when the region is shorter than 1440."
+   },
+   {
+    "severity": "low-medium",
+    "title": "Genjutsu's GPU note gives the wrong size and reason; your GPU offers 4K but can never make it",
+    "where": "src/server/genjutsu.ts notesFor; src/components/genjutsu/character-panel.tsx qualityHint; CHARACTER_QUALITIES.open",
+    "detail": "The note is built from the film size (at most 2048 px), so a 3840x2160 clip reads 'Your clip is 2048×1152, so it is sharpened at 1080p (never above the clip's own size)'. Both the size and the reason are wrong: the limit is the 2048 px join. The GPU picker offers 4K, which FILM_MAX makes impossible, and the hint '2K and 4K redraw the 768p swap at the higher size … never above your clip's own size' promises sizes that every 16:9 clip silently drops to 1080p.",
+    "verified": "Traced filmSize → sharpenTierFor → the note text.",
+    "fix": "Name the clip's real size and 'joined at up to 2048 px'. Hide 4K on your GPU, or show it disabled with that reason, until the fit limit rises."
+   },
+   {
+    "severity": "low",
+    "title": "The pre-flight row 'Character swap in 2K' leaves out graphs that Genjutsu's GPU 2K run needs",
+    "where": "src/server/gpu/tools.ts STUDIO_ROWS (/genjutsu?mode=character)",
+    "detail": "The row checks the regenerate, the composite and the join. Genjutsu's GPU plan also runs the swap graph itself, oss-h3-person-mask (video-mask-h3-relay, which needs the h3-relay pack, a pack the 'Fuobe Character swap' maker doesn't otherwise need), oss-fit-clip and oss-mux. The board can show the row as ready while the run fails at the mask step because H3 Relay nodes are missing.",
+    "verified": "Compared the row's steps with openFinish's steps (genjutsu.ts).",
+    "fix": "Add { oss-h3-person-mask, bg-remove-video }, { oss-fit-clip, trim }, { oss-mux, mux } and the open Character swap model to the row."
+   },
+   {
+    "severity": "low",
+    "title": "At 1080p the regenerate is about 0.4% out of line vertically (rdh trims 1088 → 1080 rows)",
+    "where": "src/lib/catalog/sharpen.ts compositeGeometry; scripts/comfy/hand-built/video-composite-mask.json regen_scaled",
+    "detail": "Pinned rdh 9b686c5: Prepare Draft cover-crops (centre) to 1344x768, and LBH's TARGET_DIMENSIONS stretches the latent to 1920x1088, 2560x1440 or 3840x2176 by trilinear interpolation. The graph's OpenH3RegenFinish (crop 'auto') then keeps the centre 1080 of 1088 rows. The composite stretches those 1080 rows over the whole region, so at the region's top and bottom the redrawn character sits up to about 4 px off from the 768p swap and the mask (1920x1080 film: region 1842x1052, about 3.9 px). 1080p is the only GPU tier for 16:9 clips. The grow (8 px) and feather (13 px) mostly hide it. The implementer's 'stretch vs crop' question is settled: it is a crop then a stretch, which the code models correctly, apart from this row trim.",
+    "verified": "Read rdh __init__.py/regen_core.py and the LBH upscaler at their pins (as data). A CPU composite with the branch's geometry placed a known box within 1 px.",
+    "fix": "For 1080p/4K, lay the regenerate over regionHeight×1088/1080 (or regionWidth for portrait), centred on the region."
+   },
+   {
+    "severity": "low",
+    "title": "The new browser check still filters the ViewerRowPlaceholder hydration error",
+    "where": "tests/e2e/character-swap-2k.mjs L88",
+    "detail": "page.on('pageerror') drops /Hydration failed[\\s\\S]*ViewerRowPlaceholder/. Rule 9 of main-rules.md: that error is fixed on the base and browser checks must no longer filter 'Hydration failed'. The check also never listens to console errors, which is where React reports most hydration errors.",
+    "verified": "Read the file.",
+    "fix": "Remove the filter and record console 'error' messages as failures."
+   },
+   {
+    "severity": "low",
+    "title": "Genjutsu cloud 4K for a part over 15 s is joined at no more than 2048 px, and nothing says so",
+    "where": "src/lib/catalog/genjutsu.ts planCharacterSwap (cloud) → joinWithSound; src/server/genjutsu.ts notes",
+    "detail": "With more than one piece, the 4K pieces go through fal merge-videos (512–2048 px), and the note says the whole frame is drawn at 4K. Only a single piece skips the join, as the implementer said.",
+    "verified": "Traced joinWithSound: n=1 skips the join, n>1 does not.",
+    "fix": "Add a 'joined at up to 2048 px' note when n>1 at 4K, or offer 2K only for those parts."
+   },
+   {
+    "severity": "low",
+    "title": "The composite's input needs don't match the graph",
+    "where": "src/lib/catalog/plan.ts NEEDS.composite",
+    "detail": "NEEDS asks for { videos: 2 } and no mask, but video-composite-mask binds video, video2, video3 and mask. A direct POST /api/generations to the hidden model with fewer inputs reaches ComfyUI with placeholder file names instead of being refused in words.",
+    "verified": "Compared NEEDS with the library.spec bindings.",
+    "fix": "Require videos: 3 and a mask."
+   },
+   {
+    "severity": "low",
+    "title": "Why a size is disabled can't be read by keyboard, touch or screen reader",
+    "where": "src/components/swap-studio/stage-review.tsx FinishPanel → shorts/ui Segmented",
+    "detail": "The reason ('Joined at 1920×1080, so 2K adds nothing…', 'The cloud makes 2K or 4K') is only in the title attribute of a disabled button. A disabled button can't take focus, and a title doesn't show on touch. The report says 'the reason on each disabled size', but at 390 px and by keyboard nobody can see it.",
+    "verified": "Read Segmented (disabled + title only).",
+    "fix": "Show the reason for the disabled sizes as visible text under the picker, or link it with aria-describedby."
+   },
+   {
+    "severity": "low",
+    "title": "Sharpen card copy doesn't match what runs",
+    "where": "src/lib/catalog/sharpen.ts SHARPEN_COPY.card; stage-review.tsx chosen line",
+    "detail": "On your GPU the card always says 'Redraws each chosen take at 2K', even where 1080p is the only size (every 16:9 clip). The takes line says 'MiniMax H3 regenerate', but the model is Open-H3 Regenerate. The card text is the brief's, so this is a copy follow-up.",
+    "verified": "Read the copy and sharpenOptions for a 1920x1080 film.",
+    "fix": "Use the picked tier in the card text, and name the model 'Open-H3 Regenerate (for MiniMax H3)'."
+   },
+   {
+    "severity": "info",
+    "title": "The owner-only FINISH_UNAVAILABLE card goes back on a removal main made on purpose",
+    "where": "src/lib/catalog/swap-studio.ts FINISH_UNAVAILABLE; stage-review.tsx",
+    "detail": "Main's copy polish 157e5ba2 deleted both the FINISH_UNAVAILABLE constant and its Not-available panel, along with its long research text. The brief (written before that) asked to keep the card. The implementer brought it back in plain words, shown only to the owner (useIsOwner). That fits rule 5, since owner-only views may show status, and visitors never see it. Still, it reverses a main change, so the owner should confirm it or it should be dropped. It is not a blocker. The only test that guards it is a source-text regex.",
+    "verified": "git show 157e5ba2 -- stage-review.tsx swap-studio.ts."
+   },
+   {
+    "severity": "info",
+    "title": "Public sign-up is fine, but the route isn't in tests/public-signup.test.ts",
+    "where": "src/proxy.ts L185/L246; tests/swap-studio-sharpen.test.ts",
+    "detail": "POST /api/swap-studio/projects/[id]/sharpen is not a price check, a library change or ownGpuRun, so guests and accounts get 403 own-gpu-tool (the test covers this). The body is JSON {clipId, tier}, so no size limit is at stake. The swap-studio estimate isn't open to visitors, and Genjutsu's estimate (2K/4K) goes through priceAs. An account's composite inputs (videos, mask) are checked by accountInputProblem (tested). The brief asks for a row in tests/public-signup.test.ts, but there is none, and no sibling swap-studio route has one either."
+   },
+   {
+    "severity": "info",
+    "title": "filmSize duplicates normalizedSize and cloudFilmSize",
+    "where": "src/lib/catalog/sharpen.ts filmSize vs swap-studio.ts normalizedSize/cloudFilmSize",
+    "detail": "The logic is identical, so the two copies can drift apart later. The server plans with normalizedSize, while the page and sharpenClip use filmSize."
+   }
+  ],
+  "checks": [
+   "Diff read in full against claude/fuobe-parity-4 (39 files). The worktree is clean; nothing was edited or committed.",
+   "fal source (minimax/h3/reference-to-video/lora llms.txt, 2026-11-01): $0.0625/s at 480p, $0.075/s at 768p, $0.1625/s at 2K and $0.20/s at 4K. The enum is 480P/768P/2K/4K (no 1080P), duration 5–15 s, and seed is an input. The branch's figures match: $0.81 for 5 s, $2.44 for 15 s, 4K $1.00/$3.00.",
+   "Pinned rdh pack 9b686c5 (fetched read-only as data): Prepare Draft cover-scales bilinearly and crops the centre to 1344x768 (turned for a tall clip). The LBH upscaler at 40316cf stretches with TARGET_DIMENSIONS (trilinear). OpenH3RegenFinish's 'auto' crop trims 1088→1080 and 2176→2160. compositeGeometry matches the rdh crop within 1–2 px for 16:9, 9:16, square, 4:3, 21:9 and 4K inputs, apart from the 1080p row trim.",
+   "video-composite-mask was run on the CPU ComfyUI 0.41.0 with the branch's graph and production-style geometry: a 384x216 film with sound, a 272x148 canvas swap, a 448x252 regenerate with rdh-style framing, a box mask, and a 1 s window from 0.5 s. The output was 384x216, 24 frames, 1.0 s of video and audio. The regenerated box landed at x 212–267, y 60–143, against x 211.8–268.3, y 60.2–144.5 expected. Test files rvn74-* were left in ComfyUI's input folder and output/rvn74; no packs were installed and nothing was restarted.",
+   "Full Vitest (--maxWorkers=2, FUOBE_ACCOUNT_DISK_FREE_GB=1): 311 files, 4937 passed, 3 skipped, 6 failed. The failures are exactly the known main ones: comfy-reuse, dop-originals, preset-featured, soul-runs ×2 and split-soundtrack.",
+   "tsc --noEmit: clean apart from Next's generated LayoutProps/PageProps/RouteContext types, which are missing only because .next was deleted.",
+   "The two browser-check failures are confirmed as pre-existing on the base, by reading the code (the dev server was not started). genjutsu-original.mjs L138/L159 match /H3 Relay/, but on the base the Relay maker is labelled 'H3 Character Swap · Relay 2.0' and 157e5ba2 removed 'H3 Relay' from its note. character-swap-studio.mjs L63 looks for the placeholder /Name the project/, but the base's home.tsx L79 says 'Project name, e.g. Rain scene', and this branch doesn't touch home.tsx.",
+   "Public sign-up: traced in the proxy (own-gpu-tool for guests and accounts), plus priceAs on the Genjutsu estimate, accountInputProblem on the composite's inputs, and the hosted-runs path (clip inputs stay on the account's GPU).",
+   "Owner rules: the cloud uses fal's own MiniMax H3 at 2K/4K, the same hosted model with no stand-in. The GPU keeps every capability. The composite's licence is recorded as core n/a. No new packs, model files, LoRA files or Higgsfield material. requirements.json is 219,492 B, within the 256 KB budget."
+  ],
+  "verdict": "approve-with-fixes: nothing blocks. Fix before merge: the sharper versions that keep running unguarded and unstoppable (medium), the tier cap and default on square and 4:3 clips, Genjutsu's wrong size note and the 4K offer on your GPU, the pre-flight row's missing mask, fit and mux steps, and the hydration filter in the browser check. The rest are low-severity polish. The owner should confirm whether the backplate card should come back."
+ },
+ "fix": {
+  "applied": [
+   "1 (medium) Running sharper versions protected: finishBusy (swap-studio-edit.ts) counts a take's finish steps and result as busy in shotBusy and in take removal, so removing the take ('Its sharper version is still being made — stop it in Assemble first'), the clip, or changing the shot's layout is refused while it runs. sharpenClip is now async and cancels the old finish's live generations before replacing it at another size. On the page, Sharpen rests while any version is being made, and Stop reaches it whatever size is picked. Tests: unit (shotBusy, take and clip removal with a running finish) and an API test on your GPU in demo mode (2048 square: 1080p, then 2K mid-run cancels the 1080p steps; the 2K regenerate at 1440p; Stop; then the take can go).",
+   "2 (low-medium) Tiers gated and defaulted by the composite region's shorter side (sharpenOptions/sharpenTierFor/defaultSharpenTier take H3's canvas; redrawnRegion). 1080p is the base size. A larger size is offered when the redrawn part's shorter side is above the next smaller size. The default is the largest size the part holds in full, which is 1080p for every clip under the 2048 px join. Examples: 1920×1080 gives part 1842×1052, so 2K is off. 1440² gives 1440×822, so 2K is off. 2048×1536 and a 4K square give 2048×1170, so 2K can be picked but 1080p is the default. The page, the server's Sharpen and estimate, and Genjutsu's plan all pass the canvas.",
+   "3 (low-medium) Genjutsu's GPU note (openCapNote) names the clip's real size, the 2048 px join and the part redrawn. Example: 'Your clip is 3840×2160, joined at 2048×1152 (up to 2048 px a side), and your character is redrawn in a 1964×1122 part of it, so it is sharpened at 2K'. GPU 4K is disabled in the Quality picker, with its reason shown as text and linked by aria-describedby (OPEN_TIER_OFF: 'Your GPU joins the clip at up to 2048 px a side, so 4K adds nothing over 2K'). The studio asks 2K in its place. The GPU hint now says '1080p and 2K redraw … Your GPU joins the clip at up to 2048 px a side, so 2K needs a clip larger than 1080p.' Tested through /api/genjutsu/estimate.",
+   "4 (low) The pre-flight row 'Character swap in 2K' now covers the open Character swap model (fuobe-character-swap video-swap), oss-h3-person-mask (bg-remove-video, H3 Relay's graph), oss-fit-clip (trim), the regenerate, the composite, the join and oss-mux. genjutsu.ts exports SHARPEN_TOOLS. The test checks that the row's steps equal the open 2K plan's models (anchor steps aside) and that video-mask-h3-relay is in its workflows.",
+   "5 (low) 1088→1080 row trim modelled: compositeGeometry(film, canvas, tier) returns regen and trim. At 1080p and 4K the regenerate covers the centre 1080/1088 (2160/2176) of the region's height (its width for a tall clip). The graph gained a core CropMask (regen_trim). The regenerate is scaled to regenWidth×regenHeight and placed at regenX/regenY, and the region's mask is cut to the same rows at trimX/trimY. New binding keys: regenWidth/Height/X/Y and trimX/Y; regionX/Y dropped. Rebuilt with build-library, validated on the CPU ComfyUI (validated: true). object_info.subset.json gains only CropMask, and the manifest header was kept. The finding's suggested factor (×1088/1080) is inverted: the kept rows cover region×1080/1088. A CPU run proved this: rdh-style 1920×1080 frames with marker bars at rows 40–59 and 1020–1039 came out at exactly 40–59 and 1020–1039 with the new geometry, and at 36–55 and 1024–1043 (4 px off) with the old. The test files were removed from ComfyUI's input and output folders.",
+   "6 (low) tests/e2e/character-swap-2k.mjs no longer filters the hydration error. Every page error and every console error now fails the check.",
+   "Polish: Genjutsu cloud 4K for a part over 15 s says 'A part over 15 s is made in pieces, and the pieces are joined at up to 2048 px a side'. A single piece and 2K don't (tested).",
+   "Polish: composite NEEDS = { videos: 3, mask: true }. Confirming it found a real bug: applySketch (sketch.ts) dropped inputs.mask for the composite model ('can't use a mask'), so every composite run lost the person's mask. 'composite' now joins the video ops that read their mask themselves. Tested with applySketch and missingInputs, and through the API (Sharpen on your GPU prices and runs).",
+   "Polish: why a size is disabled is shown as visible text under Sharpen's sizes ('2K: …', '4K: …'), and the radiogroup links it through aria-describedby (new describedBy prop on shorts/ui Segmented). The same goes for Genjutsu's GPU 4K. The text shows while takes are still missing, unless it repeats the warning.",
+   "Polish: the card copy names the picked tier: SHARPEN_COPY.card(tier) 'Redraws each chosen take at 1080p with Open-H3 Regenerate, …', and cardCloud(tier). The takes line says 'Open-H3 Regenerate at 1080p' on your GPU and 'MiniMax H3 at 2K' on the cloud.",
+   "Owner-only 'Clean backplate + alpha · Not available' card and FINISH_UNAVAILABLE removed again (main's 157e5ba2 wins). Finish is Sharpen alone. The test now checks that no backplate or Not available text is on the page.",
+   "Info: filmSize duplication. swap-studio.ts normalizedSize and cloudFilmSize now delegate to sharpen.ts filmSize (one copy of the rule, tested).",
+   "Info/brief: POST /api/swap-studio/projects/[id]/sharpen added to tests/public-signup.test.ts (own-gpu-tool for an account).",
+   "Stale browser checks fixed and run: genjutsu-original.mjs matches the base's maker label 'H3 Character Swap · Relay 2.0' (126 ok). character-swap-studio.mjs uses the placeholder 'Project name, e.g. Rain scene' (57 ok).",
+   "Base merged twice (fdad177c, then 41819feb). The requirements.json conflict was rebuilt, not hand-merged."
+  ],
+  "rejected": [
+   "Brief's 'FINISH_UNAVAILABLE still shown for the backplate card': dropped per the main-session call (main removed it on purpose in 157e5ba2).",
+   "Finding 5's exact fix (lay the regenerate over regionHeight×1088/1080): inverted. Applied the measured direction (×1080/1088) instead, verified on the CPU ComfyUI.",
+   "Strict tier gating (a size only when the redrawn part is at least that size): not used. Under the 2048 px join the part is at most 2048×1170, so strict gating would turn off GPU 2K for every clip. Instead 2K is offered where it adds detail over 1080p (part taller than 1080), and 1080p stays the default. Only 4K is off on your GPU, with its reason."
+  ],
+  "checks": [
+   "Final, on the branch after merging origin/claude/fuobe-parity-4 at 41819feb (HEAD fbc5c39a): pnpm install, npx next typegen, pnpm typecheck (exit 0) and pnpm lint (exit 0; 1 existing warning, WAN_NEG_EN). FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: 313 files, 5004 passed, 3 skipped, 6 failed. The 6 are exactly main's known failures: comfy-reuse, dop-originals, preset-featured, soul-runs ×2 and split-soundtrack.",
+   "An earlier full run, before that merge, also had a 5 s timeout in tests/preset-covers.test.ts while the machine was busy (ComfyUI restart, dev server). It passed alone and passed in the final full run. These changes don't touch preset covers.",
+   "tests/character-swap-2k.test.ts: 28 tests. tests/swap-studio-sharpen.test.ts: 7 tests (adds the GPU replace/cancel flow and Genjutsu notes). tests/public-signup.test.ts and tests/swap-studio-edit.test.ts pass.",
+   "Browser, pnpm dev in demo mode (FUOBE_DEMO_MODE=on, ComfyUI and Ollama unreachable, fresh data folder): tests/e2e/character-swap-2k.mjs passed all 161 checks at 1440 and 390 px in light and dark, with no page or console errors. That includes the visible reasons for each disabled size, GPU 2K and 4K off with their reasons, the card naming 1080p and Open-H3 Regenerate, Genjutsu GPU 4K off with its reason, a real cloud Sharpen run with the 2K version picked and unpicked, and no sideways scroll. tests/e2e/genjutsu-original.mjs: all checks passed (126). tests/e2e/character-swap-studio.mjs: all ok (57). Screenshots looked over (Assemble on your GPU at 1440 light, Genjutsu's Quality at 390 dark).",
+   "ComfyUI CPU 0.41.0: node scripts/comfy/validate-workflows.mjs video-composite-mask --shared, validated. An end-to-end run of the new graph checked placement at 1080p (exact; the old geometry was 4 px off).",
+   "The dev server is stopped, .next deleted, git status clean, and the branch pushed (origin/o/n7-4-character-swap-2k = fbc5c39a)."
+  ],
+  "finalSummary": "Character swap in 2K after the fixes. Your GPU (open engine): Genjutsu's Character swap offers 1080p and 2K. 4K shows but is turned off with its reason, since your GPU joins the clip at up to 2048 px a side. Character Swap Studio's Assemble → Finish has Sharpen. The 768p swap is redrawn by Open-H3 Regenerate (sigma 0.8, the take's words and seed). Then video-composite-mask puts only your character back over the footage through the person's mask, now actually passed to the graph (it was dropped before). The regenerate is laid over the exact rows its finish keeps, and the footage's own sound stays. Sizes are offered and defaulted by the part of the frame the character is redrawn in, so 1080p is the default; 2K can be picked where that part is taller than 1080. A running sharper version keeps its take and shot layout. Sharpen at another size stops the old version first, and Stop reaches it. The pre-flight row lists every graph the GPU run needs. Built and checked on the CPU ComfyUI (graph validated and placement measured), by unit and demo API tests and in the browser. Not run on a GPU. Cloud: fal's own MiniMax H3 at 2K/4K (same hosted model, no stand-in). Swap Studio offers 2K (4K is off because the join is at most 2048 px). Genjutsu offers 2K and 4K, priced ($0.81 for 5 s at 2K); for 4K over 15 s it says the pieces are joined at up to 2048 px. Built and demo-checked; no fal call made. Public sign-up: guests and accounts get own-gpu-tool on the Sharpen route and on Genjutsu's run, and the price checks stay open. An account's composite inputs are checked by accountInputProblem. No backplate card for anyone (main's removal stands).",
+  "left": [
+   "GPU-only questions remain: whether sigma 0.8 keeps the swapped face, how the mask edge looks at 1080p/2K, and the composite's RAM per 3 s window. Run `pnpm eval:run --suite character-2k --engine open` on a GPU ComfyUI. No fal 2K/4K call was made.",
+   "GPU 4K stays off until the fit graph's 2048 px limit rises (OPEN_TIER_OFF is computed from FILM_MAX, so it lifts by itself).",
+   "tests/e2e/character-swap-2k.mjs is not in docs/handoff/verify.sh DEMO_CHECKS (it needs FUOBE_DEMO_MODE=on; verify.sh's demo server sets no demo mode). The main session may add both.",
+   "docs/ARCHITECTURE.md on the base still mentions FINISH_UNAVAILABLE in the Character Swap Studio row; the docs pass should drop it and add Sharpen. Docs notes for STATUS.md/ARCHITECTURE.md also need: the region-based tiers, the composite's CropMask trim and its new binding keys, and that a composite keeps its mask (sketch.ts)."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/n7-4-character-swap-2k"
+  ],
+  "notMerged": [],
+  "conflicts": "workflows/comfyui/requirements.json: took ours, rebuilt (209 workflows)",
+  "checks": "typecheck 0, lint 0, vitest 5032 passed, 3 skipped, 7 failed: main's 6 known plus tests/preset-covers.test.ts timing out under load (passes alone 11/11, twice)",
+  "pushed": true,
+  "head": "cb1d3b3a"
+ }
+}

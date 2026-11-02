@@ -10,6 +10,7 @@ import { wholeClipProblem, wholeClipTool } from "./av/video-finish";
 import { clipFpsProblem, clipSizeProblem, clipWindowProblem } from "./catalog/clip-windows";
 import { clipBilling } from "./catalog/plan";
 import { addFrameAt, frameTimes, framesInputs, removeFrameAt, spread, type FrameSupport } from "./catalog/keyframes";
+import { keyTimes, totalSeconds, type InbetweenTiming } from "./inbetween";
 import { FACE_MOSAIC_MODELS } from "./catalog/open-tools";
 import { pricingOn, type PriceClock } from "./catalog/promo";
 import { soulPostStep } from "./catalog/soul";
@@ -28,7 +29,9 @@ export const SINGLE_TAKE = new Set<Operation>([
   "bg-remove", "bg-remove-video", "depth-video", "concat", "color-match", "frame", "sdr-to-hdr", "export-video",
 ]);
 
-export const durationLabel = (v: number) => (v >= 1000 ? `${Math.round(v / 1000)}s` : `${v}s`);
+/** A length as it reads on a chip: seconds up to a minute ("10s"), minutes and seconds after it ("2:00", "4:30": a song). */
+export const durationLabel = (v: number) =>
+  v >= 1000 ? `${Math.round(v / 1000)}s` : v >= 60 ? `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, "0")}` : `${v}s`;
 
 export interface SettingsShape {
   /** Show the aspect-ratio control (the model offers several and the operation isn't framed by an input). */
@@ -593,8 +596,19 @@ export function enterFrames<T extends Attachment>(slots: Partial<Record<InputSlo
  */
 export function framesRequest(
   frames: FrameAttachment[],
-  ctx: { support: FrameSupport; duration: number; chained: boolean },
+  ctx: { support: FrameSupport; duration: number; chained: boolean; animation?: { timing: InbetweenTiming } },
 ): { op?: "keyframes"; images: string[]; endImage?: string; params: Pick<GenParams, "duration" | "keyframeTimes" | "shots" | "multiShot" | "numOutputs"> } {
+  // Keyframe animation (Fuobe Animation): the keyframes sit where their gaps' timing puts them, and the film is as long as the gaps.
+  if (ctx.animation) {
+    const times = keyTimes(ctx.animation.timing);
+    const refs = frames.map((f) => f.value.ref).filter((r): r is string => !!r);
+    const whole = refs.length === frames.length;
+    return {
+      op: "keyframes",
+      images: refs,
+      params: { duration: Math.max(1, Math.ceil(totalSeconds(ctx.animation.timing))), keyframeTimes: whole ? times : undefined, shots: undefined, multiShot: undefined, numOutputs: 1 },
+    };
+  }
   const times = frameTimes(frames.map((f) => f.at), ctx.duration);
   const kept = frames.map((f, i) => ({ ref: f.value.ref, time: times[i] })).filter((f) => !!f.ref);
   const sent = framesInputs(kept.map((f) => f.ref), kept.map((f) => f.time), ctx.support);
@@ -772,7 +786,13 @@ export function acceptedKinds(slots: InputSlot[], multiRef?: { kind?: MediaKind 
 // Hand-off params ("/video?image=…") arriving after the first paint
 
 /** The URL params a studio prefills its draft from; anything else in the query is ignored. */
-export const HANDOFF_PARAMS = ["image", "ref", "video", "audio", "prompt", "preset", "model", "format", "resolution"] as const;
+export const HANDOFF_PARAMS = ["image", "ref", "video", "audio", "prompt", "preset", "model", "format", "resolution", "frames"] as const;
+
+/** Most frames a hand-off opens Frames mode with ("/video?frames=a,b,c": Storyboard's panels, a Character Sheet's poses). */
+export const HANDOFF_FRAMES = 10;
+/** The stills a "frames" hand-off names, in order (file URLs, comma-separated). */
+export const handoffFrames = (v: string | null | undefined): string[] =>
+  (v ?? "").split(",").map((x) => x.trim()).filter((x) => /^(\/api\/files\/|https:\/\/)/.test(x)).slice(0, HANDOFF_FRAMES);
 
 /** A stable key for the hand-off part of a query string ("" when there's none). */
 export function handoffKey(search: string | URLSearchParams | null | undefined): string {
@@ -796,6 +816,8 @@ export interface DraftShape {
   presetOptions: Record<string, string>;
   presetStrength?: number;
   mix?: { presetId: string; strength: number };
+  /** Frames mode's stills (Video studio). */
+  frames?: FrameAttachment[];
 }
 
 const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -1039,6 +1061,9 @@ export function mergeHandoff<D extends DraftShape>(base: D, current: D, next: D)
   if (slotsChanged) patch.slots = slots as D["slots"];
   const refsUntouched = current.refs === base.refs || (current.refs.length === base.refs.length && current.refs.every((r, i) => sameAttachment(r, base.refs[i])));
   if (refsUntouched && (next.refs.length || current.refs.length)) patch.refs = next.refs as D["refs"];
+  // Frames handed over (Storyboard's "Animate these panels") open Frames mode, unless the strip was changed already.
+  const framesKey = (d: D) => d.frames?.map((f) => f.value.ref);
+  if (next.frames?.length && same(framesKey(current), framesKey(base))) patch.frames = next.frames as D["frames"];
   const preset = (d: D) => [d.presetId, d.presetOptions, d.presetStrength, d.mix];
   if (same(preset(current), preset(base)) && !same(preset(current), preset(next))) {
     patch.presetId = next.presetId;

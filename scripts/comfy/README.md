@@ -165,6 +165,7 @@ node validate-workflows.mjs <ids> wan21-vace-14b-ref2v --shared
 | `video-append-endcard` | concat | ad + end card, ad picture stream-copied, ad sound kept | yes: bit-identical ad frames, silence from 2.00 s; foreign H.264 fails (known limit) |
 | `scene-mesh-moge` | scene-3d | whole-scene textured GLB + depth PNG (MoGe 2) | research only (42 s on CPU) |
 | `image-to-splat-triposplat` | splat | subject Gaussian splat (`.spz`) + orbit MP4 (TripoSplat) | no |
+| `image-to-splat-idol` | splat | one object as a Gaussian splat (`.spz`) + orbit MP4 (Idol 3D on the TripoSplat core nodes; Best / Quick look, looser photo crop) | no |
 | `reference-brief-gemma4` | write | reference clip's frames + sound → JSON style brief (Gemma 4 E4B) | no |
 
 - **Changes from the research graphs** (each also in the entry's notes): the painted / insert masks are read from the

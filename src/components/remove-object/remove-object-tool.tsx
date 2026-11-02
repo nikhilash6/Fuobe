@@ -1,11 +1,12 @@
 "use client";
 
-import { Brush, Cloud, Download, Eraser as EraserIcon, Eye, Loader2, RotateCcw, Sparkles, Type, Undo2 } from "lucide-react";
+import { Brush, Cloud, Cpu, Dices, Download, Eraser as EraserIcon, Eye, Loader2, RotateCcw, Sparkles, Type, Undo2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
@@ -26,6 +27,8 @@ import {
   REMOVE,
   REMOVE_EXAMPLES,
   REMOVE_MODES,
+  rerollProblem,
+  reviewOfOutput,
   type Eraser,
   type RemoveMode,
 } from "@/lib/catalog/remove-object";
@@ -52,6 +55,8 @@ interface PreviewOf {
   id: string;
   exact: boolean;
   eraser: string;
+  /** H3 Person Removal's green mask. */
+  green?: boolean;
 }
 
 interface Run {
@@ -70,7 +75,14 @@ interface Run {
  * result with a before / after wipe. Long clips are cut into pieces or windows, erased and joined with their
  * own sound (src/lib/catalog/remove-object.ts).
  */
-export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
+/** The open eraser "Remove a person" picks: H3 Person Removal (MiniMax H3 with Akatz Labs' Person Remover). */
+export const PERSON_ERASER = "oss-h3-person-remove";
+
+const noSubscribe = () => () => {};
+/** ?person=1: a result's "Remove a person" link. */
+const personInUrl = () => new URLSearchParams(window.location.search).get("person") === "1";
+
+export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactNode; person?: boolean }) {
   const [engine, setEngine, engineMode] = useEngine();
   // Removing an object doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front,
   // and the upload, the mask preview and Remove are off, instead of a run the server refuses.
@@ -84,7 +96,11 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const [mode, setMode] = useState<RemoveMode>("type");
   const [prompt, setPrompt] = useState("");
   const [effects, setEffects] = useState(false);
+  // "Remove a person" (its own Video tools tab, or ?person=1 from a result's menu): H3 Person Removal on your GPU.
+  const personLinked = useSyncExternalStore(noSubscribe, personInUrl, () => false);
+  const personAsked = person || personLinked;
   const [picked, setPicked] = useState<Record<string, string>>({});
+  const [maskGrow, setMaskGrow] = useState<number>(REMOVE.maskGrow.default);
   const [points, setPoints] = useState<PixelPoint[]>([]);
   const [pointLabel, setPointLabel] = useState<"positive" | "negative">("positive");
   const [paint, setPaint] = useState<Paint | null>(null);
@@ -97,19 +113,36 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const runGuard = useSubmitGuard();
   const previewGuard = useSubmitGuard();
   const history = useGenerations({ features: [REMOVE.feature], limit: 24 });
+  // Earlier H3 person removals whose windows can still be redone (the step that made them carries the review).
+  const reviewable = useGenerations({ features: [REMOVE.feature, REMOVE.stepFeature], models: [PERSON_ERASER], statuses: ["succeeded"], limit: 12 });
+  const earlier = (reviewable.data ?? []).filter((g) => !run?.ids.includes(g.id) && reviewOfOutput(g.outputs.find((o) => o.kind === "video")?.meta));
+
+  // Hand-off: /video-tools/remove-object?video=/api/files/… (a result's menu in the Library, the feed or Cinema).
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const video = q.get("video");
+    if (video?.startsWith("/api/files/")) source.adopt(video, video.split("/").pop());
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const duration = clipDuration(clip);
   const size = clipSize(clip);
   const choiceKey = `${engine}:${mode}`;
   // Erasers switched off in Settings → Models & licences leave the list, and the pick falls back to one that is on.
   const isOn = (id: string) => offered(access, id, engine);
-  const choice = chooseEraser({ engine, mode, effects: mode === "type" && effects, modelId: picked[choiceKey], offered: isOn });
+  const choice = chooseEraser({ engine, mode, effects: mode === "type" && effects, modelId: picked[choiceKey] ?? (personAsked && choiceKey === "open:type" ? PERSON_ERASER : undefined), offered: isOn });
   const eraser: Eraser | null = "eraser" in choice ? choice.eraser : null;
   const options = keepOffered(
     erasersFor(engine, mode).filter((e) => !e.effects),
     (e) => isOn(e.id),
   );
   const everyone = !!eraser?.everyone;
+  const h3 = !!eraser?.cleanFrame;
+  // Removing a person with H3 runs on your GPU only (nothing hosted fills the person green for it): said on the cloud.
+  const personOnCloud = personAsked && engine === "cloud";
+  // H3 Person Removal switched off in Settings → Models & licences: said, so the fallback isn't a surprise.
+  const personOff = personAsked && engine === "open" && mode === "type" && !isOn(PERSON_ERASER);
 
   // The selection's first frame, grabbed by the browser: what points and paint are made on.
   const startAt = range ? Math.round(range.startTime * 100) / 100 : null;
@@ -182,6 +215,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
           ...(mode === "click" ? { points } : {}),
           ...(mode === "paint" && paint ? { mask: paint.mask } : {}),
           ...(mode !== "type" && frame ? { frame: { width: frame.width, height: frame.height } } : {}),
+          ...(h3 ? { maskGrow } : {}),
           source: { url: clip.url!, name: clip.name, duration, fps: clip.info?.fps, width: size.width, height: size.height, hasAudio: clip.info?.hasAudio },
           range: { start: range.startTime, end: range.endTime },
         }
@@ -231,7 +265,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const canPreview = !!body && est?.previewUsd != null;
   const makePreview = () => {
     if (visitor || !body || !canPreview || !est) return;
-    const of = { exact: est.previewExact, eraser: est.modelName };
+    const of = { exact: est.previewExact, eraser: est.modelName, green: est.previewGreen };
     void previewGuard(JSON.stringify(body), (requestId) => actions.preview.mutateAsync({ ...body, requestId }))
       .then((g) => g && setPreviewOf({ id: g.id, ...of }))
       .catch((e: Error) => toastError(e));
@@ -242,8 +276,12 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
     <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
       {!clip && (
         <ToolHero
-          title="Remove anything from a video"
-          subtitle={`Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays${visitor ? "." : ", free on your own ComfyUI."}`}
+          title={personAsked ? "Remove a person from a video" : "Remove anything from a video"}
+          subtitle={
+            personAsked
+              ? `Name who goes, check their green mask, and the scene is rebuilt behind them — redo any part that comes out weak${visitor ? "." : ", free on your own ComfyUI."}`
+              : `Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays${visitor ? "." : ", free on your own ComfyUI."}`
+          }
         >
           {visitor && <SelfHostNote className="mt-3 max-w-xl">Remove object isn&apos;t available here.</SelfHostNote>}
         </ToolHero>
@@ -323,7 +361,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
                   )}
                   <p className="mt-2 text-[12px] text-muted-foreground">{frameHint(mode, engine, points.length, !!paint)}</p>
                   {/* Said for the eraser picked now (the preview itself is SAM's, whichever eraser runs). */}
-                  {preview && previewOf && <MaskPreview g={preview} exact={est?.previewExact ?? previewOf.exact} eraser={est?.modelName ?? previewOf.eraser} />}
+                  {preview && previewOf && <MaskPreview g={preview} exact={est?.previewExact ?? previewOf.exact} eraser={est?.modelName ?? previewOf.eraser} green={previewOf.green} />}
                 </Panel>
               </div>
             </div>
@@ -442,11 +480,53 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
                 </p>
               )}
 
+              {personOnCloud && (
+                <div className="space-y-2 rounded-xl bg-muted/60 p-3 text-[13px]" role="status">
+                  <p className="flex gap-1.5">
+                    <Cpu className="mt-0.5 size-3.5 shrink-0" />
+                    <span>
+                      Removing a person with MiniMax H3 runs on your GPU (open source): the person is filled green and the scene rebuilt behind them. In the cloud, Kling O3 Omni or Bria erase who you name, and LTX
+                      Clean Plate removes everyone.
+                    </span>
+                  </p>
+                  {engineMode === "both" && (
+                    <Button size="sm" variant="outline" className="rounded-full" onClick={() => setEngine("open")}>
+                      <Cpu className="size-3.5" /> Use your GPU
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {personOff && (
+                <p className="flex gap-1.5 rounded-xl bg-muted/60 p-3 text-[13px]" role="status">
+                  <Cpu className="mt-0.5 size-3.5 shrink-0" />
+                  <span>Person removal with MiniMax H3 is turned off here{eraser ? `, so ${eraser.label} is used instead` : ""}.</span>
+                </p>
+              )}
+
+              {h3 && (
+                <Field label="Mask expansion" htmlFor="remove-grow" hint={`${REMOVE.maskGrow.min}–${REMOVE.maskGrow.max} px`}>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="remove-grow"
+                      type="number"
+                      inputMode="numeric"
+                      min={REMOVE.maskGrow.min}
+                      max={REMOVE.maskGrow.max}
+                      value={maskGrow}
+                      onChange={(e) => setMaskGrow(Math.max(REMOVE.maskGrow.min, Math.min(REMOVE.maskGrow.max, Math.round(Number(e.target.value) || 0))))}
+                      className="h-9 w-24"
+                    />
+                    <span className="text-[12px] leading-snug text-muted-foreground">Grow it if a hand, hair or shadow shows outside the green; more makes H3 invent more background.</span>
+                  </div>
+                </Field>
+              )}
+
               <div className="space-y-3 border-t pt-3">
                 {body && est?.previewUsd != null && (
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" className="rounded-full" onClick={makePreview} disabled={actions.preview.isPending || (preview && (preview.status === "queued" || preview.status === "running")) || visitor}>
-                      {actions.preview.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Eye className="size-3.5" />} Preview the mask
+                      {actions.preview.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Eye className="size-3.5" />} {est.previewGreen ? "Check the green mask" : "Preview the mask"}
                     </Button>
                     <span className="min-w-0 text-[12px] leading-snug text-muted-foreground">
                       first {REMOVE.previewSeconds} s · {est.demo ? "demo" : engine === "open" ? (visitor ? "not available here" : "free") : costText({ costUsd: est.previewUsd, demo: false }, "cloud")}
@@ -492,7 +572,27 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
         )}
       </div>
 
-      {run && <RunPanel run={run} onAgain={start} />}
+      {run && <RunPanel run={run} onAgain={start} onRedo={(r) => setRun({ ...run, final: r.final.id, ids: r.items.map((g) => g.id) })} />}
+
+      {earlier.length > 0 && (
+        <section className="mt-10" aria-labelledby="earlier-windows">
+          <h3 id="earlier-windows" className="mb-1 font-heading text-[22px]">
+            Redo a window
+          </h3>
+          <p className="mb-3 text-[13px] text-muted-foreground">Your earlier person removals, window by window. Open one to redo a weak part.</p>
+          <div className="space-y-2">
+            {earlier.map((g) => (
+              <details key={g.id} className="group rounded-xl border px-3 py-2">
+                <summary className="cursor-pointer truncate text-[13px] font-medium">{g.request.batchTitle ?? g.request.title ?? "Remove a person"}</summary>
+                <WindowReview
+                  g={g}
+                  onRedo={(r) => setRun({ final: r.final.id, ids: r.items.map((x) => x.id), before: g.request.inputs?.video ?? g.outputs.find((o) => o.kind === "video")?.url ?? "", start: 0 })}
+                />
+              </details>
+            ))}
+          </div>
+        </section>
+      )}
 
       {(history.data?.length ?? 0) > 0 && (
         <section className="mt-10" aria-labelledby="removals">
@@ -555,12 +655,16 @@ function EraserList({ options, value, onChange }: { options: Eraser[]; value: st
  * The mask preview: SAM 3.1's mask video (cloud) or the SAM 3 matte (open), white = what goes. When the eraser finds
  * the object itself (Kling O3 edit, Bria by name, Bria's own clicks), it's only SAM 3.1's reading of what you said.
  */
-function MaskPreview({ g, exact, eraser }: { g: Generation; exact: boolean; eraser: string }) {
+function MaskPreview({ g, exact, eraser, green }: { g: Generation; exact: boolean; eraser: string; green?: boolean }) {
   const out = g.outputs.find((o) => o.kind === "video");
   return (
     <div className="mt-3 rounded-xl border p-2.5">
       <p className="mb-2 text-[12px] font-medium">
-        {exact ? (
+        {green ? (
+          <>
+            Green mask <span className="font-normal text-muted-foreground">· green is what H3 rebuilds — keep every part of the person covered</span>
+          </>
+        ) : exact ? (
           <>
             Mask preview <span className="font-normal text-muted-foreground">· white is what goes</span>
           </>
@@ -590,8 +694,8 @@ function MaskPreview({ g, exact, eraser }: { g: Generation; exact: boolean; eras
   );
 }
 
-/** What a removal's steps are doing, then the result with a before / after wipe. */
-function RunPanel({ run, onAgain }: { run: Run; onAgain: () => void }) {
+/** What a removal's steps are doing, then the result with a before / after wipe (and, for H3, each window to redo). */
+function RunPanel({ run, onAgain, onRedo }: { run: Run; onAgain: () => void; onRedo: (r: { final: Generation; items: Generation[] }) => void }) {
   const list = useGenerationList(run.ids).data;
   const byId = useMemo(() => new Map((list ?? []).map((g) => [g.id, g])), [list]);
   const final = byId.get(run.final);
@@ -620,7 +724,10 @@ function RunPanel({ run, onAgain }: { run: Run; onAgain: () => void }) {
         }
       >
         {out ? (
-          <VideoCompare before={run.before} after={out.url} start={run.start} ratio={run.ratio} />
+          <>
+            <VideoCompare before={run.before} after={out.url} start={run.start} ratio={run.ratio} />
+            {(list ?? []).map((g) => (reviewOfOutput(g.outputs.find((o) => o.kind === "video")?.meta) ? <WindowReview key={g.id} g={g} onRedo={onRedo} /> : null))}
+          </>
         ) : (
           <div className="space-y-3">
             <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress * 100)} aria-label="Progress">
@@ -634,5 +741,74 @@ function RunPanel({ run, onAgain }: { run: Run; onAgain: () => void }) {
         )}
       </Panel>
     </section>
+  );
+}
+
+/**
+ * H3 Person Removal's windows (H3 Relay's Review Windows): each 22-frame window's preview, and "Redo from here" with a
+ * new seed — every window before it comes back exactly, the ones after it continue from the new one.
+ */
+function WindowReview({ g, onRedo }: { g: Generation; onRedo: (r: { final: Generation; items: Generation[] }) => void }) {
+  const review = reviewOfOutput(g.outputs.find((o) => o.kind === "video")?.meta)!;
+  const actions = useRemovalActions();
+  const guard = useSubmitGuard();
+  const [busy, setBusy] = useState<number | null>(null);
+  const redo = (index: number) => {
+    // A new seed for the window: the server draws one.
+    const body = { id: g.id, window: index };
+    setBusy(index);
+    void guard(`${g.id}:${index}`, (requestId) => actions.reroll.mutateAsync({ ...body, requestId }))
+      .then((r) => {
+        if (!r) return;
+        onRedo(r);
+        toast(`Redoing from window ${index + 1}`, { description: "The windows before it stay exactly as they are." });
+      })
+      .catch((e: Error) => toastError(e))
+      .finally(() => setBusy(null));
+  };
+  const fps = 24;
+  const why = (index: number) => rerollProblem(review, index);
+  return (
+    <div className="mt-4 space-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="text-[13px] font-medium">Windows</h4>
+        <p className="text-[12px] text-muted-foreground">A weak part? Redo it with a new seed — every window before it is kept.</p>
+      </div>
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {review.windows.map((w) => {
+          const video = w.video ? review.links[w.video] : undefined;
+          const poster = w.poster ? review.links[w.poster] : undefined;
+          const from = (w.start / fps).toFixed(1);
+          return (
+            <li key={w.index} className="min-w-0 rounded-xl border p-2">
+              {video && /^\/api\/files\//.test(video) ? (
+                <video src={video} poster={poster} muted loop playsInline controls className="aspect-video w-full rounded-lg bg-media object-cover" />
+              ) : poster && /^(\/api\/files\/|data:)/.test(poster) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={poster} alt={`Window ${w.index + 1}`} className="aspect-video w-full rounded-lg bg-media object-cover" />
+              ) : (
+                <div className="grid aspect-video w-full place-items-center rounded-lg bg-muted text-[12px] text-muted-foreground">No preview</div>
+              )}
+              <div className="mt-1.5 flex items-center justify-between gap-1">
+                <span className="min-w-0 truncate text-[12px] text-muted-foreground">
+                  {w.index + 1} · {from} s{w.reused ? " · kept" : ""}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 shrink-0 rounded-full px-2 text-[12px]"
+                  disabled={busy !== null || !!why(w.index)}
+                  title={why(w.index) ?? undefined}
+                  onClick={() => redo(w.index)}
+                  aria-label={`Redo from here, window ${w.index + 1}`}
+                >
+                  {busy === w.index ? <Loader2 className="size-3 animate-spin" /> : <Dices className="size-3" />} Redo from here
+                </Button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

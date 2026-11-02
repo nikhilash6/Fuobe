@@ -334,12 +334,14 @@ export function extensionOf(o: Pick<OutputFile, "url" | "kind">): string {
 
 export function downloadName(
   g: Pick<Generation, "id" | "prompt" | "modelId" | "request" | "op" | "presetName" | "modelName">,
-  o: Pick<OutputFile, "url" | "kind">,
+  o: Pick<OutputFile, "url" | "kind" | "meta">,
   i: number,
   ext = extensionOf(o),
 ): string {
   const base = userTitle(g).slice(0, 40).replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") || "fuobe";
-  return `${base}-${g.id.slice(0, 6)}${i ? `-${i + 1}` : ""}.${ext}`;
+  // A stem (a song's vocals, drums…) is named for its track rather than its place in the list.
+  const stem = typeof o.meta?.stem === "string" ? o.meta.stem.toLowerCase().replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) : "";
+  return `${base}-${g.id.slice(0, 6)}${stem ? `-${stem}` : i ? `-${i + 1}` : ""}.${ext}`;
 }
 
 export const downloadHref = (url: string, name: string) => `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(name)}`;
