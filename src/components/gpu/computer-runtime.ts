@@ -8,7 +8,7 @@
 import { COMPUTER_KICK_EVENT } from "@/lib/api";
 import { beatEvery, ComputerRunner, tileJob, type LocalJob, type RunnerView } from "@/lib/computer-runner";
 import { loopbackFetch } from "@/lib/gpu/browser-check";
-import { pickLook, portsToLook } from "@/lib/local-comfy";
+import { lookStrength, pickLook, portsToLook } from "@/lib/local-comfy";
 import { lookOn } from "./use-local-comfy";
 
 export { COMPUTER_KICK_EVENT };
@@ -176,8 +176,9 @@ async function hold(signal: AbortSignal, publish: (v: RunnerView) => void, o: Ru
       origin: window.location.origin,
       find: async (except) => {
         const looks = await Promise.all(portsToLook().filter((p) => p !== except).map((p) => lookOn(p)));
+        // Only ComfyUI, or something on its usual port: another app answering elsewhere is no place to run.
         const best = pickLook(looks);
-        return best.state === "none" ? null : { port: best.port, host: best.host };
+        return best.state === "none" || lookStrength(best) < 2 ? null : { port: best.port, host: best.host };
       },
       moved: (port, host) => rememberComfy(port, host),
     },

@@ -15,7 +15,7 @@ import { isConnectAnswer } from "@/lib/fuobe-connect";
 import { corsFlag, fixFor, guessInstall, installFromStats, platformOf, startFile, START_FILE_NAME, type ComfyInstall } from "@/lib/comfy-install";
 import { checkThisComputer, loopbackFetch, sendCheck } from "@/lib/gpu/browser-check";
 import { deviceLabel } from "@/lib/gpu/readiness";
-import { localBase, statsFacts, typedPort, type SystemStats } from "@/lib/local-comfy";
+import { COMFY_PORT, DESKTOP_PORT, localBase, statsFacts, typedPort, type SystemStats } from "@/lib/local-comfy";
 import { madeNoun } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import { computerState, rememberComfy, rememberedComfy, restartComputerRunner, store, stored } from "./computer-runtime";
@@ -157,40 +157,180 @@ export function GuardFix({ port, install = installOf(port) }: { port: number; in
   );
 }
 
+/** The line about a port the person picked: Fuobe is looking there, nothing answers there now, or another app does. */
+function PickedNote({ checking, missed, notComfy }: { checking?: number | null; missed?: number; notComfy?: number }) {
+  if (checking != null)
+    return (
+      <p role="status" className="flex items-center gap-2 text-[12px] text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" /> Checking port {checking}…
+      </p>
+    );
+  if (missed !== undefined)
+    return (
+      <p role="status" className="text-[12px] text-muted-foreground">
+        Nothing answers on port {missed} right now. Is ComfyUI still running there?
+      </p>
+    );
+  if (notComfy !== undefined)
+    return (
+      <p role="status" className="text-[12px] text-muted-foreground">
+        Another app answers on port {notComfy}, not ComfyUI.
+      </p>
+    );
+  return null;
+}
+
+/**
+ * The other ports where something answers, behind a quiet disclosure: each can be picked ("Use port 8189"), which looks
+ * there at once. While it looks, and when it isn't ComfyUI's there now, a line says so (never silence). `shown`: the
+ * port the card is about, whose own line is said next to it instead.
+ */
+function OtherPorts({
+  others,
+  onChoose,
+  checking,
+  missed,
+  notComfy,
+  shown,
+}: {
+  others: number[];
+  onChoose: (port: number) => void;
+  checking?: number | null;
+  missed?: number;
+  notComfy?: number;
+  shown?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const mine = (p: number | null | undefined) => (p == null || p === shown ? undefined : p);
+  return (
+    <div data-other-ports className="space-y-1.5">
+      {others.length > 0 && (
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground">
+          <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} /> Other ports ({others.length})
+        </button>
+      )}
+      {open && others.length > 0 && (
+        <ul className="space-y-1 rounded-xl border p-2">
+          {others.map((p) => (
+            <li key={p} className="flex items-center justify-between gap-2 text-[12px]">
+              <span className="text-muted-foreground">Something answers on port {p}</span>
+              <Button size="sm" variant="ghost" className="h-7" disabled={checking === p} onClick={() => onChoose(p)}>
+                {checking === p && <Loader2 className="animate-spin" />} Use port {p}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <PickedNote checking={mine(checking)} missed={mine(missed)} notComfy={mine(notComfy)} />
+    </div>
+  );
+}
+
+/** What the card says about the port shown, and why this page can't use it yet. */
+function settingWords(port: number, o: { back: boolean; again?: boolean }): { heading: string; why: string } {
+  const trust = "ComfyUI only answers the websites it's told to trust, so this page can't use it yet. One step lets Fuobe in:";
+  if (o.back) return { heading: "ComfyUI is back, but it still doesn't let this page in.", why: "Did ComfyUI restart after the install? Fuobe Connect starts with ComfyUI." };
+  if (o.again) return { heading: "ComfyUI is running, but Fuobe can't use it this time.", why: trust };
+  if (port === COMFY_PORT) return { heading: `Something is running on port ${port}, ComfyUI's usual port.`, why: trust };
+  if (rememberedComfy()?.port === port) return { heading: `Something is running on port ${port}, where your ComfyUI was before.`, why: trust };
+  if (port === DESKTOP_PORT) return { heading: `Something is running on port ${port}, ComfyUI Desktop's usual port.`, why: trust };
+  // A port the person picked or typed: it may be another app.
+  return { heading: `Something answers on port ${port}.`, why: "Fuobe can't read this port yet. If it's ComfyUI, one step lets Fuobe in:" };
+}
+
+/**
+ * Something answers on a port that may be ComfyUI's, but this page can't read it. Shown only when nothing better
+ * answers: no ComfyUI on its usual port, and another app may be what answers here.
+ */
+function WeakCandidate({ port, onCheck, onChoose, checking }: { port: number; onCheck: () => void; onChoose?: (port: number) => void; checking?: number | null }) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-[15px] font-medium">No ComfyUI found on port {COMFY_PORT}, its usual port.</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">Something answers on port {port}, but Fuobe can&apos;t tell if it&apos;s ComfyUI. Start ComfyUI, then check again.</p>
+      </div>
+      <Button className="h-11 sm:h-9" onClick={onCheck}>
+        <RefreshCw /> Check again
+      </Button>
+      {onChoose &&
+        (checking === port ? (
+          <PickedNote checking={port} />
+        ) : (
+          <p className="text-[12px] text-muted-foreground">
+            <button type="button" onClick={() => onChoose(port)} className="underline underline-offset-4 hover:text-foreground">
+              Port {port} is my ComfyUI
+            </button>
+          </p>
+        ))}
+    </div>
+  );
+}
+
 /**
  * ComfyUI answers, but this page can't use it yet: the one step is Fuobe Connect (it lets this studio in, and keeps every
  * other website out), and Fuobe connects by itself once ComfyUI restarts with it. The start setting with Fuobe's guard
  * (the way before Fuobe Connect) is under Advanced. `back`: ComfyUI restarted, still not usable. `again`: it was usable
- * before (started the usual way this time). `others`: more ports where something answers.
+ * before (started the usual way this time). `weak`: maybe not ComfyUI (another port, nothing on 8188). `chosen`: the
+ * person picked this port. `others`: more ports where something answers, under "Other ports". `onCheck`: Check again.
  */
-export function SettingFix({ port, back, again, others, onChoose }: { port: number; back: boolean; again?: boolean; others?: number[]; onChoose?: (port: number) => void }) {
+export function SettingFix({
+  port,
+  back,
+  again,
+  weak,
+  others,
+  missed,
+  notComfy,
+  checking,
+  onChoose,
+  onCheck,
+}: {
+  port: number;
+  back: boolean;
+  again?: boolean;
+  weak?: boolean;
+  others?: number[];
+  missed?: number;
+  notComfy?: number;
+  checking?: number | null;
+  onChoose?: (port: number) => void;
+  onCheck?: () => void;
+}) {
   const [advanced, setAdvanced] = useState(false);
-  // ComfyUI's usual port, or the one it was found on before, is surely ComfyUI; another app may answer on another one
-  // (8000 is a common default).
-  const known = port === 8188 || rememberedComfy()?.port === port;
-  const heading = back
-    ? "ComfyUI is back, but Fuobe can't use it yet."
-    : again
-      ? "ComfyUI is running, but Fuobe can't use it this time."
-      : known
-        ? "Found ComfyUI. One step to use it here:"
-        : `Something answers on port ${port}. If it's ComfyUI, one step to use it here:`;
+  const asWeak = !!weak && !!onCheck && !back;
+  const otherPorts = onChoose && (!!others?.length || missed !== undefined || notComfy !== undefined || checking != null) && (
+    <OtherPorts others={others ?? []} onChoose={onChoose} checking={checking} missed={missed} notComfy={notComfy} shown={asWeak ? port : undefined} />
+  );
+  if (asWeak)
+    return (
+      <div className="space-y-3">
+        <WeakCandidate port={port} onCheck={onCheck} onChoose={onChoose} checking={checking} />
+        {otherPorts}
+      </div>
+    );
+  const { heading, why } = settingWords(port, { back, again });
   return (
     <div className="space-y-3">
-      <p className="text-[15px] font-medium">{heading}</p>
-      {back && <p className="text-[12px] text-muted-foreground">Did ComfyUI restart after the install? Fuobe Connect starts with ComfyUI.</p>}
-      {!!others?.length && onChoose && (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
-          Something answers on {others.length === 1 ? `port ${others[0]}` : `ports ${others.join(", ")}`} too. Is ComfyUI there?
-          {others.map((p) => (
-            <button key={p} type="button" onClick={() => onChoose(p)} className="font-medium text-brand-text underline-offset-4 hover:underline">
-              Use port {p}
-            </button>
-          ))}
+      <div>
+        <p className="text-[15px] font-medium">{heading}</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">{why}</p>
+      </div>
+      <InstallConnect />
+      {!advanced && (
+        <p className="text-[12px] text-muted-foreground">
+          Or start ComfyUI with one setting instead.{" "}
+          <button type="button" onClick={() => setAdvanced(true)} className="underline underline-offset-4 hover:text-foreground">
+            Show the setting
+          </button>
         </p>
       )}
-      <InstallConnect />
-      <Watching>Fuobe connects by itself when ComfyUI is back.</Watching>
+      <Watching>Fuobe connects by itself once ComfyUI lets this page in.</Watching>
+      {onCheck && (
+        <Button size="sm" variant="secondary" onClick={onCheck}>
+          <RefreshCw /> Check again
+        </Button>
+      )}
+      {otherPorts}
       <div>
         <button type="button" onClick={() => setAdvanced((v) => !v)} aria-expanded={advanced} className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground">
           <ChevronDown className={cn("size-3.5 transition-transform", advanced && "rotate-180")} /> Advanced: a start setting instead
@@ -284,7 +424,7 @@ function FlagFix({ port, back, again }: { port: number; back: boolean; again?: b
   );
 }
 
-function OtherPort({ onLook, missed }: { onLook: (port: number, host: string) => void; missed?: number }) {
+function OtherPort({ onLook, missed, notComfy }: { onLook: (port: number, host: string) => void; missed?: number; notComfy?: number }) {
   const [typed, setTyped] = useState(String(rememberedComfy()?.port ?? 8188));
   const [bad, setBad] = useState(false);
   const go = () => {
@@ -302,7 +442,8 @@ function OtherPort({ onLook, missed }: { onLook: (port: number, host: string) =>
         </Button>
       </div>
       {bad && <p className="text-[12px] text-destructive">Enter the port ComfyUI shows, like 8188.</p>}
-      {!bad && missed && <p className="text-[12px] text-muted-foreground">Nothing answered on port {missed}.</p>}
+      {!bad && missed !== undefined && <p role="status" className="text-[12px] text-muted-foreground">Nothing answered on port {missed}.</p>}
+      {!bad && notComfy !== undefined && <p role="status" className="text-[12px] text-muted-foreground">Another app answers on port {notComfy}, not ComfyUI.</p>}
     </div>
   );
 }
@@ -457,7 +598,7 @@ const guardAt = async (port: number, host: string): Promise<Guarded> => {
 /** The whole flow, from "Find my ComfyUI" to connected. */
 export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLook, again, doneWords, lookNow, waitForTap }: ThisComputerProps) {
   const qc = useQueryClient();
-  const { state, look, choose, perm } = useLocalComfy(true, { auto: !waitForTap });
+  const { state, look, choose, checking, perm } = useLocalComfy(true, { auto: !waitForTap });
   const [done, setDone] = useState<Connected | null>(null);
   const [error, setError] = useState<string | null>(null);
   const connecting = useRef<string | null>(null);
@@ -519,7 +660,7 @@ export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLo
   if (done) return <Celebration c={done} fromRun={fromRun} kind={kind} onStart={onStart} onNotNow={onNotNow} doneWords={doneWords} />;
   return (
     <div className="space-y-3 text-[13px]">
-      <Screen state={state} look={look} choose={choose} again={again} asks={perm !== "granted"} />
+      <Screen state={state} look={look} choose={choose} checking={checking} again={again} asks={perm !== "granted"} />
       {error && <p className="text-[12px] text-destructive">{error}</p>}
     </div>
   );
@@ -541,7 +682,7 @@ function WaitingScreen({ port, since, onLook }: { port: number; since: number; o
           <p>Still waiting. Is ComfyUI&apos;s window open? It says &ldquo;To see the GUI go to: http://127.0.0.1:{port}&rdquo; when it&apos;s ready.</p>
           <p>Check that the address is exactly {origin()}, with nothing after it.</p>
           <Button size="sm" variant="secondary" onClick={onLook}>
-            <RefreshCw /> Look again
+            <RefreshCw /> Check again
           </Button>
         </div>
       )}
@@ -550,8 +691,23 @@ function WaitingScreen({ port, since, onLook }: { port: number; since: number; o
 }
 
 /** `asks`: the browser may still ask to let Fuobe reach apps on this computer (its question is explained). */
-function Screen({ state, look, choose, again, asks }: { state: Finder; look: ReturnType<typeof useLocalComfy>["look"]; choose: (port: number) => void; again?: boolean; asks: boolean }) {
+function Screen({
+  state,
+  look,
+  choose,
+  checking,
+  again,
+  asks,
+}: {
+  state: Finder;
+  look: ReturnType<typeof useLocalComfy>["look"];
+  choose: (port: number) => void;
+  checking: number | null;
+  again?: boolean;
+  asks: boolean;
+}) {
   const lookAt = (port: number, host: string) => void look({ ports: [{ port, host }] });
+  const checkAgain = () => void look();
   switch (state.s) {
     case "unsupported":
       return (
@@ -588,18 +744,35 @@ function Screen({ state, look, choose, again, asks }: { state: Finder; look: Ret
         </p>
       );
     case "needs-setting":
-      return <SettingFix key={state.port} port={state.port} back={state.back} again={again} others={state.others} onChoose={choose} />;
+      return (
+        <SettingFix
+          key={state.port}
+          port={state.port}
+          back={state.back}
+          again={again}
+          weak={state.weak}
+          others={state.others}
+          missed={state.missed}
+          notComfy={state.notComfy}
+          checking={checking}
+          onChoose={choose}
+          onCheck={checkAgain}
+        />
+      );
     case "waiting":
-      return <WaitingScreen port={state.port} since={state.since} onLook={() => lookAt(state.port, "127.0.0.1")} />;
+      return <WaitingScreen port={state.port} since={state.since} onLook={checkAgain} />;
     case "none":
       return (
         <div className="space-y-3">
           <div>
-            <p className="text-[15px] font-medium">Start ComfyUI, then Fuobe finds it.</p>
-            <p className="mt-1 text-muted-foreground">No ComfyUI is answering on this computer.</p>
+            <p className="text-[15px] font-medium">No ComfyUI found on this computer.</p>
+            <p className="mt-1 text-muted-foreground">Start ComfyUI, then check again.</p>
           </div>
-          <Watching>Fuobe looks again by itself every few seconds.</Watching>
-          <OtherPort onLook={lookAt} missed={state.missed} />
+          <Button className="h-11 sm:h-9" onClick={checkAgain}>
+            <RefreshCw /> Check again
+          </Button>
+          <Watching>Fuobe also looks for it by itself every few seconds.</Watching>
+          <OtherPort onLook={lookAt} missed={state.missed} notComfy={state.notComfy} />
           <p className="text-[12px] text-muted-foreground">
             Don&apos;t have ComfyUI?{" "}
             <a href="https://www.comfy.org/download" target="_blank" rel="noreferrer" className="text-brand-text underline-offset-4 hover:underline">

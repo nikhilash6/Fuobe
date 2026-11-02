@@ -157,7 +157,7 @@ try {
     check("no error toast on top of the dialog", (await page.locator("[data-sonner-toast]").filter({ hasText: "Free accounts run" }).count()) === 0);
     await page.screenshot({ path: path.join(shots, "1-choose.png") });
     // The link, the second choice, fits inside the dialog.
-    const linkToggle = dialog.getByRole("button", { name: /Run from anywhere with a link/ });
+    const linkToggle = dialog.getByRole("button", { name: /Keep it running with this tab closed/ });
     await linkToggle.click();
     const field = await until(() => dialog.locator("input").first().boundingBox(), 10_000);
     const box = await dialog.boundingBox();
@@ -165,7 +165,7 @@ try {
     await page.screenshot({ path: path.join(shots, "1b-link.png") });
     await linkToggle.click();
     await dialog.getByRole("button", { name: "Find my ComfyUI" }).click();
-    await dialog.getByText("Found ComfyUI. One step to use it here:").waitFor({ timeout: 20_000 });
+    await dialog.getByText(`Something is running on port ${FAKE_PORT}, where your ComfyUI was before.`).waitFor({ timeout: 20_000 });
     check("ComfyUI that this page can't use yet: one step, Fuobe Connect from ComfyUI-Manager", await dialog.getByText("Install Fuobe Connect in ComfyUI-Manager").isVisible());
     check("the step names the Manager's search term and a git address to copy", (await dialog.getByLabel("the search term").first().textContent()) === "Fuobe Connect" && /git clone https:\/\//.test((await dialog.getByLabel("the git command", { exact: true }).textContent()) ?? ""));
     check("the start setting and the guard are not shown until Advanced is opened", !(await dialog.getByRole("button", { name: "Download start file" }).isVisible()) && !(await dialog.getByText("--enable-cors-header").first().isVisible()));

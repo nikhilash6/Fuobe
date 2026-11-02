@@ -163,6 +163,7 @@ function ComputerStatus({ gpu, onDisconnect, other, look = true }: { gpu: Comput
     setFixPort(null);
     const l = await lookOn(p);
     if (l.state === "none") return setNote(`Nothing answered on port ${p}.`);
+    if (l.state === "other") return setNote(`Another app answers on port ${p}, not ComfyUI.`);
     // The tab that runs the jobs goes there; it needs the setting first, the fix shows here.
     rememberComfy(p);
     restartComputerRunner();
