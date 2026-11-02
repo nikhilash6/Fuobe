@@ -374,7 +374,7 @@ const NOT_FOUND = "We can't find that removal.";
 /** The step that puts the sound back on a removal step's video, if the removal had one. */
 function soundStepAfter(g: Generation): Generation | null {
   const rows = db()
-    .prepare("SELECT id FROM generations WHERE batch_id IS ? AND deleted_at IS NULL AND (depends_on = ? OR depends_on LIKE ?) ORDER BY created_at")
+    .prepare("SELECT id FROM generations WHERE batch_id IS ? AND (depends_on = ? OR depends_on LIKE ?) ORDER BY created_at")
     .all(g.batchId, g.id, `%"${g.id}"%`) as { id: string }[];
   for (const r of rows) {
     const next = getGeneration(r.id);
@@ -407,7 +407,8 @@ export async function createRemovalReroll(body: RerollBody): Promise<{ final: Ge
   for (const k of ["asked", "chainFilled", "chainSkipped", "notice", "chain"]) delete req[k];
   const masterSeed = Number(review.seed);
   const mux = soundStepAfter(erase);
-  const title = `${erase.request.batchTitle ?? erase.request.title ?? "Remove a person"} · from window ${body.window + 1}`;
+  const was = (erase.request.batchTitle ?? erase.request.title ?? "Remove a person").replace(/ · from window \d+$/, "");
+  const title = `${was} · from window ${body.window + 1}`;
   const steps: PlanStep[] = [
     {
       key: "erase0",
