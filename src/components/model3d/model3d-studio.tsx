@@ -86,9 +86,22 @@ function UrlModel({ onModel, onMode, onRig }: { onModel: (mode: Model3dMode, eng
 
 /**
  * Idol 3D's settings: Best or Quick look (labelled by steps and Gaussians), and "It's a photo", which gives the object
- * Idol's looser crop.
+ * Idol's looser crop. On your GPU, Advanced → "Trim spikes" also drops the thin spikes at the edges (fal has no such
+ * setting, so the cloud doesn't offer it).
  */
-function IdolSettings({ quality, onQuality, photo, onPhoto }: { quality: IdolQuality; onQuality: (q: IdolQuality) => void; photo: boolean; onPhoto: (v: boolean) => void }) {
+function IdolSettings({
+  quality,
+  onQuality,
+  photo,
+  onPhoto,
+  trim,
+}: {
+  quality: IdolQuality;
+  onQuality: (q: IdolQuality) => void;
+  photo: boolean;
+  onPhoto: (v: boolean) => void;
+  trim?: { on: boolean; onChange: (v: boolean) => void };
+}) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const move = (from: number, by: number) => {
     const i = (from + by + IDOL_QUALITIES.length) % IDOL_QUALITIES.length;
@@ -133,6 +146,24 @@ function IdolSettings({ quality, onQuality, photo, onPhoto }: { quality: IdolQua
         </Label>
         <Switch id="m3d-idol-photo" checked={photo} onCheckedChange={onPhoto} />
       </div>
+      {trim && (
+        <details className="group rounded-xl border px-3 py-2 [&_summary::-webkit-details-marker]:hidden">
+          <summary className="cursor-pointer list-none text-[13px] font-medium outline-none select-none focus-visible:ring-2 focus-visible:ring-ring">
+            Advanced <span className="text-[12px] font-normal text-muted-foreground">· {trim.on ? "trimming spikes" : "edges"}</span>
+          </summary>
+          <div className="flex items-center justify-between gap-3 pt-3">
+            <div className="min-w-0">
+              <Label htmlFor="m3d-idol-trim" className="text-[13px] font-normal">
+                Trim spikes
+              </Label>
+              <p id="m3d-idol-trim-hint" className="mt-0.5 text-[12px] text-muted-foreground">
+                Drops the thin, needle-like bits around the edges of the 3D file.
+              </p>
+            </div>
+            <Switch id="m3d-idol-trim" aria-describedby="m3d-idol-trim-hint" checked={trim.on} onCheckedChange={trim.onChange} />
+          </div>
+        </details>
+      )}
     </div>
   );
 }
@@ -206,6 +237,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   // picked from the library, is taken for a photo; a result made here for a render or a generated image.
   const [idolQualities, setIdolQualities] = useState<Record<string, IdolQuality>>({});
   const [idolPhoto, setIdolPhoto] = useState(true);
+  // Idol 3D on your GPU: Advanced → Trim spikes (the open graph's max_scale; the cloud has no such setting).
+  const [idolTrim, setIdolTrim] = useState(false);
   // The last value the drop gave (an upload reports twice: uploading, then done, from one closure).
   const lastPhoto = useRef<SlotValue | null>(null);
   const takePhoto = (v: SlotValue | null) => {
@@ -244,7 +277,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
     photo: photo?.ref,
     views: sides,
     prompt: mode === "text" ? text : mode === "objects" ? object : undefined,
-    ...(idol && { quality: idolQuality, photoCrop: idolPhoto }),
+    ...(idol && { quality: idolQuality, photoCrop: idolPhoto, ...(engine === "open" && { trimSpikes: idolTrim }) }),
   };
   const uploading = !!photo?.uploading || VIEW_SIDES.some((s) => views[s]?.uploading);
   // A guest or an account reads why the button is off, not a step on an upload that is off too.
@@ -402,7 +435,15 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {!licence && info[modelId]?.notices.length > 0 && <p className="text-[12px] font-medium">{info[modelId].notices.join(" · ")}</p>}
                 {licence && licence.notices.length > 0 && <p className="text-[12px] text-muted-foreground">{licence.notices.join(" · ")}</p>}
               </div>
-              {idol && <IdolSettings quality={idolQuality} onQuality={setIdolQuality} photo={idolPhoto} onPhoto={setIdolPhoto} />}
+              {idol && (
+                <IdolSettings
+                  quality={idolQuality}
+                  onQuality={setIdolQuality}
+                  photo={idolPhoto}
+                  onPhoto={setIdolPhoto}
+                  trim={engine === "open" ? { on: idolTrim, onChange: setIdolTrim } : undefined}
+                />
+              )}
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
               </Button>

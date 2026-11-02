@@ -4915,10 +4915,9 @@ export const SPEC = [
       'IdolPreprocessImage 88:110 replaces TripoSplatPreprocessImage 88:2 and the core photo crop 88:101-104 (cropMode synthetic = Idol\'s 1.2 crop, real = its 1.7 photo crop; ' +
       'the mask is Fuobe\'s cut-out switch 88:35, BiRefNet or the picture\'s alpha; erode 1, 1024 px). ' +
       'IdolPruneSplat 88:111 after the decoder drops the near-transparent Gaussians (minOpacity 0.05; maxScale 0 = off, 0.05 = "Trim spikes", the needle-shaped ones at the silhouette): ' +
-      'the saved file and the orbit video both get the pruned splat. Its count goes to a PreviewAny (94, role report: meta.kept on the splat; the first item of a batch). ' +
+      'the saved file and the orbit video both get the pruned splat. Its count of the Gaussians kept goes to a PreviewAny (94, role report; the first item of a batch), which the result card shows. ' +
       'IdolCamera 88:112 reads the camera Idol predicted from the KSampler\'s latent; RenderSplat 88:113 renders the pruned splat from it (1 frame, 1024 px, black) and SaveImage 93 keeps it ' +
       '(role preview: the card\'s poster, what the model saw). The pack has no Python dependencies; ComfyUI v0.23.0 or later (Fuobe runs 0.41.0). ' +
-      'Not on the validation server: its classes are expected through PACK_CLASSES, so a /prompt check with the pack installed is still to be done. ' +
       'Same weights, sampler presets and VRAM listing as image-to-splat-idol.',
   },
   {

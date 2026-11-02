@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { uploadFile, useEngine, useHydrated } from "@/lib/api";
+import { uploadFile, useEngine, useHydrated, useIsOwner } from "@/lib/api";
 import { animateSpinHref, animationName, model3dView, photorealAngle, photorealBody, stillOf, type Model3dView } from "@/lib/av/model3d";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { useFlyAround } from "@/components/fly-around-run";
@@ -57,6 +57,7 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
   // "View in 3D" unmounts itself: focus moves to the viewer once it's there.
   const focusViewer = useRef(false);
   const hydrated = useHydrated();
+  const owner = useIsOwner();
   const canRecord = hydrated && !!recordableType();
   const clips = rigClips(g, view);
   const [clipKey, setClipKey] = useState("main");
@@ -315,6 +316,11 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
           <p className="text-[12px] text-muted-foreground">
             Fuobe doesn&apos;t draw splats yet: {clip ? "the turntable shows it turning" : "the picture is what the model saw"}. Open the .{view.splat.format} in a Gaussian-splat viewer (SuperSplat, for one) to look around it.
           </p>
+        )}
+        {/* Idol 3D on your GPU: how clean the file is. Only the owner reads how to make it cleaner (it's their ComfyUI). */}
+        {view.clean?.cleaned && <p className="text-[12px] font-medium">{view.clean.text}</p>}
+        {view.clean && !view.clean.cleaned && owner && (
+          <p className="text-[12px] text-muted-foreground">Not cleaned: install ComfyUI-Idol on your ComfyUI for cleaner splat files.</p>
         )}
         <div className="flex flex-wrap gap-1.5">
           {view.splat ? (
