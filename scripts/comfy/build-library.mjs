@@ -162,6 +162,8 @@ export const BINDING_KEYS = new Set([
   'invertDepth',
   // Design a voice (nm10-voice-design): the voice in words, and what a voice sample says (Qwen3-TTS / VoxCPM2 clones)
   'voiceDescription', 'voiceTranscript',
+  // VoxCPM2's device combo (cuda | mps | cpu): the server's first torch device
+  'device',
   // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
 ]);

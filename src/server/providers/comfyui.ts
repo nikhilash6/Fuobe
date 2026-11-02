@@ -1245,6 +1245,11 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // Design a voice (Qwen3-TTS, VoxCPM2): the voice in words; a clone reads what its sample says (VoxCPM2's "ultimate" clone).
   if (ctx.op === "voice-design") values.voiceDescription = input.voiceDescription?.trim();
   if (ctx.op === "tts" && b.voiceTranscript && input.voiceTranscript?.trim()) values.voiceTranscript = input.voiceTranscript.trim();
+  // VoxCPM2's device combo lists what the GPU has (cuda, mps, cpu): the server's first torch device, else the graph's cuda.
+  if (b.device && extra.device === undefined) {
+    const dev = await ctx.device?.();
+    if (dev === "cuda" || dev === "mps" || dev === "cpu") values.device = dev;
+  }
   // A join of audio clips takes them in order: the graph binds the first two, expandAudioJoinWorkflow the rest.
   const audios = input.audios ?? [];
   if (manifest.expand === "audios" && audios.length) {

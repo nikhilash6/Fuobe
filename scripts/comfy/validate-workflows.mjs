@@ -89,6 +89,7 @@ function sampleValue(key, entry, uploads) {
     case 'invertDepth': return true;
     case 'voiceDescription': return 'A warm, gravelly narrator in his sixties, unhurried.';
     case 'voiceTranscript': return 'Hello, this is the voice reference.';
+    case 'device': return 'cpu';
     case 'video': case 'video2': case 'video3': case 'video4': return uploads.mp4;
     case 'audio': case 'audio2': return uploads.wav;
     case 'tracks': {

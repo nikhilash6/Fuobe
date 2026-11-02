@@ -119,6 +119,7 @@
 // Keys added with Design a voice (nm10-voice-design). * = the provider fills it:
 //   voiceDescription*                     (the voice in words: params.voiceDescription, op voice-design)
 //   voiceTranscript*                      (what the voice sample says: params.voiceTranscript, or a saved voice's line)
+//   device*                               (VoxCPM2's device combo: the server's first torch device, cuda | mps | cpu)
 // Entry field requiredModels: files a loader reads by a name with no extension (DBSLoader's model folder), listed in the
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
@@ -2019,6 +2020,7 @@ export const SPEC = [
       prompt: [b('1', 'text')],
       voiceDescription: [b('1', 'voice_description')],
       seed: [b('1', 'seed')],
+      device: [b('1', 'device')],
     },
     outputs: [{ node: '2', kind: 'audio' }],
     limits: { maxDurationSec: 300 },
@@ -2029,7 +2031,7 @@ export const SPEC = [
     ],
     notes:
       'VoxCPM2_TTS(voice_description = the voice in words, wrapped in parentheses before the text by the node; text = the line; model VoxCPM2, lora None, cfg 2.0, 10 timesteps, max_tokens 4096, normalize_text true, dtype auto, device cuda). ' +
-      'device is a combo of what the GPU has (cuda, mps, cpu): cuda in this graph, so a Mac or CPU ComfyUI needs the graph edited. 48 kHz output, 30 languages. ' +
+      'device is a combo of what the GPU has (cuda, mps, cpu): bound to the server\'s first torch device (/system_stats), cuda when it can\'t say. 48 kHz output, 30 languages. ' +
       'The pack also trains LoRAs (VoxCPM_LoraTrainer) and loads them (lora_name): not wired yet. Install the pack with its requirements.txt (voxcpm, funasr, modelscope).',
   },
   {
@@ -2043,6 +2045,7 @@ export const SPEC = [
       audio: [b('1', 'audio')],
       voiceTranscript: [b('2', 'prompt_text')],
       seed: [b('2', 'seed')],
+      device: [b('2', 'device')],
     },
     outputs: [{ node: '3', kind: 'audio' }],
     limits: { maxDurationSec: 300 },

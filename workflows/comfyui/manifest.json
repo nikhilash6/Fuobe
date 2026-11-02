@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-02T01:15:52.508Z",
+  "generatedAt": "2026-11-02T01:24:28.192Z",
   "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
   "comfyuiVersion": "0.41.0",
   "workflowTemplatesVersion": "0.11.86",
@@ -7135,6 +7135,12 @@
             "input": "seed"
           }
         ],
+        "device": [
+          {
+            "node": "1",
+            "input": "device"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "2",
@@ -7162,7 +7168,7 @@
       "vramGb": 8,
       "license": "VoxCPM2 weights Apache-2.0 (OpenBMB); ComfyUI-VoxCPM2 code Apache-2.0",
       "validated": false,
-      "notes": "VoxCPM2_TTS(voice_description = the voice in words, wrapped in parentheses before the text by the node; text = the line; model VoxCPM2, lora None, cfg 2.0, 10 timesteps, max_tokens 4096, normalize_text true, dtype auto, device cuda). device is a combo of what the GPU has (cuda, mps, cpu): cuda in this graph, so a Mac or CPU ComfyUI needs the graph edited. 48 kHz output, 30 languages. The pack also trains LoRAs (VoxCPM_LoraTrainer) and loads them (lora_name): not wired yet. Install the pack with its requirements.txt (voxcpm, funasr, modelscope).",
+      "notes": "VoxCPM2_TTS(voice_description = the voice in words, wrapped in parentheses before the text by the node; text = the line; model VoxCPM2, lora None, cfg 2.0, 10 timesteps, max_tokens 4096, normalize_text true, dtype auto, device cuda). device is a combo of what the GPU has (cuda, mps, cpu): bound to the server's first torch device (/system_stats), cuda when it can't say. 48 kHz output, 30 languages. The pack also trains LoRAs (VoxCPM_LoraTrainer) and loads them (lora_name): not wired yet. Install the pack with its requirements.txt (voxcpm, funasr, modelscope).",
       "autoDownloads": [
         "ComfyUI-VoxCPM2 downloads openbmb/VoxCPM2 (whole repository; 32279effe8c19989596f05d353d1447f51d9e915 when this was written: model.safetensors 4.58 GB, audiovae.pth 0.38 GB) into models/tts/VoxCPM/VoxCPM2 on first run"
       ],
@@ -7197,6 +7203,12 @@
           {
             "node": "2",
             "input": "seed"
+          }
+        ],
+        "device": [
+          {
+            "node": "2",
+            "input": "device"
           }
         ],
         "filenamePrefix": [
