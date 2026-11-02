@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-02T01:24:28.192Z",
+  "generatedAt": "2026-11-02T10:31:10.934Z",
   "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
   "comfyuiVersion": "0.41.0",
   "workflowTemplatesVersion": "0.11.86",
@@ -6738,7 +6738,7 @@
       "customNodes": [],
       "vramGb": 8,
       "validated": true,
-      "notes": "Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers (\"[Instrumental]\" or empty for instrumental). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4)."
+      "notes": "Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers; \"[Instrumental]\" when there are no words (in place of the template sample lyrics). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4)."
     },
     {
       "id": "music-minimax-3",

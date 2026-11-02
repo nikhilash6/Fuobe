@@ -86,6 +86,13 @@ describe("the song graphs", () => {
     await expect(prepare("music-minimax-3", { prompt: "x", duration: 330 })).rejects.toThrow("This model writes songs up to 5 minutes on your GPU: pick a shorter length");
   });
 
+  it("ACE-Step: a song with no words is an instrumental, never the template's sample lyrics", async () => {
+    const plain = await prepare("music-ace-step-15", { prompt: "lo-fi beat", extra: {} });
+    expect(plain.workflow["94"].inputs.lyrics).toBe("[Instrumental]");
+    const sung = await prepare("music-ace-step-15", { prompt: "lo-fi beat", extra: { lyrics: "[Verse]\nnew words" } });
+    expect(sung.workflow["94"].inputs.lyrics).toBe("[Verse]\nnew words");
+  });
+
   it("YuE2: the style and lyrics plan the song; a song added is covered from its melody", async () => {
     const { workflow: prompt } = await prepare("music-yue2-song", { prompt: "English, warm female vocal, pop", duration: 120, seed: 9, extra: { lyrics: "[Verse]\nla la" } });
     expect(prompt["2"].inputs).toMatchObject({ style: "English, warm female vocal, pop", lyrics: "[Verse]\nla la", seed: 9, mode: "full" });

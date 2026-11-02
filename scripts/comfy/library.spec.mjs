@@ -1880,6 +1880,8 @@ export const SPEC = [
       { op: 'set', node: '94', input: 'bpm', value: 120 },
       { op: 'set', node: '94', input: 'duration', value: 60 },
       { op: 'set', node: '98', input: 'seconds', value: 60 },
+      // nm10-music3: a song with no words is an instrumental (the template's sample lyrics are never sung).
+      { op: 'set', node: '94', input: 'lyrics', value: '[Instrumental]' },
     ],
     bindings: {
       tags: [b('94', 'tags')],
@@ -1892,7 +1894,7 @@ export const SPEC = [
     outputs: [{ node: '106', kind: 'audio' }],
     limits: { maxDurationSec: 240 },
     vramGb: 8,
-    notes: 'Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers ("[Instrumental]" or empty for instrumental). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4).',
+    notes: 'Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers; "[Instrumental]" when there are no words (in place of the template sample lyrics). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4).',
   },
   // nm10-music3 (research #10 §6.6): full songs on core nodes. MiniMax Music 3 from the template audio_minimax_music_3
   // (Comfy-Org's int8 DiT in place of its fp16 one, as the template's own note offers for low VRAM; its Tiled decode switch
