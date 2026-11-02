@@ -66,9 +66,26 @@ export function planByRules(words: string, width: number, height: number): Layou
   const quoted = QUOTED.exec(said)?.[1]?.trim();
   const offer = OFFER.exec(said)?.[1]?.trim();
   const whom = FOR_WHOM.exec(said)?.[1]?.replace(STOP, "").trim();
-  const headline = quoted ?? (offer ? offer.toUpperCase() : whom ? title(whom) : title(said.split(/[,.;:!?]/)[0].split(" ").slice(0, 5).join(" ")));
+  const headline =
+    quoted ??
+    (offer
+      ? offer.toUpperCase()
+      : whom
+        ? title(whom)
+        : title(
+            said
+              .split(/[,.;:!?]/)[0]
+              .split(" ")
+              .slice(0, 5)
+              .join(" "),
+          ));
   const second = quoted && offer ? offer.toUpperCase() : !quoted && offer && whom ? title(whom) : "";
-  const subject = said.replace(QUOTED, "").replace(OFFER, "").replace(/[,\s]+$/, "").trim() || said;
+  const subject =
+    said
+      .replace(QUOTED, "")
+      .replace(OFFER, "")
+      .replace(/[,\s]+$/, "")
+      .trim() || said;
   const wide = width > height * 1.2;
   const items: LayoutItem[] = wide
     ? [

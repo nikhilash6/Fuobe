@@ -14,7 +14,12 @@ export interface PlannedLayout {
   by: "llm" | "rules";
 }
 
-export async function planLayoutFromWords(words: string, width: number, height: number, ask: (system: string, user: string) => Promise<string | null> = (s, u) => llmText(s, u, { json: "object" })): Promise<PlannedLayout> {
+export async function planLayoutFromWords(
+  words: string,
+  width: number,
+  height: number,
+  ask: (system: string, user: string) => Promise<string | null> = (s, u) => llmText(s, u, { json: "object" }),
+): Promise<PlannedLayout> {
   if (llmTextBackend()) {
     const planned = readPlanned(await ask(LAYOUT_PLAN_SYSTEM, planRequest(words, width, height)).catch(() => null), width, height);
     if (planned) return { layout: planned, by: "llm" };
