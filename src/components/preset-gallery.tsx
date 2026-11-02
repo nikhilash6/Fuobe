@@ -267,25 +267,23 @@ export function PresetGallery({
   const locked = mode === "both" ? undefined : mode;
   const runsOn: RunsOn = locked ?? runsOnChoice;
   const query = useDeferredValue(q.trim().toLowerCase());
-  // The tapped category is marked in the next frame; the grid follows in a render that doesn't hold that frame up.
-  const listCat = useDeferredValue(cat);
 
   const index = useMemo(() => presets.map((p) => [p, searchText(p)] as const), [presets]);
   const cats = useMemo(() => ["All", ...categories], [categories]);
   const list = useMemo(
     () =>
       index
-        .filter(([p, text]) => (listCat === "All" || p.category === listCat) && (!query || matchesSearch(text, query)) && (runsOn === "all" || p[runsOn]))
+        .filter(([p, text]) => (cat === "All" || p.category === cat) && (!query || matchesSearch(text, query)) && (runsOn === "all" || p[runsOn]))
         .map(([p]) => p),
-    [index, listCat, query, runsOn],
+    [index, cat, query, runsOn],
   );
   // Cards render a page at a time; a new filter starts from the first page again.
-  const { shown, hasMore, moreFrom, sentinel, left } = useProgressive(list.length, `${listCat}|${query}|${runsOn}`, FIRST_PAGE, PAGE);
+  const { shown, hasMore, moreFrom, sentinel, left } = useProgressive(list.length, `${cat}|${query}|${runsOn}`, FIRST_PAGE, PAGE);
   const grid = useRef<HTMLDivElement>(null);
 
   const strip = useFadeEdges<HTMLDivElement>();
-  const stale = q.trim().toLowerCase() !== query || cat !== listCat;
-  const lead = (leading ?? []).filter((c) => listCat === "All" && runsOn !== "cloud" && (!query || matchesSearch(`${c.title} ${c.line} ${c.words ?? ""}`.toLowerCase(), query)));
+  const stale = q.trim().toLowerCase() !== query;
+  const lead = (leading ?? []).filter((c) => cat === "All" && runsOn !== "cloud" && (!query || matchesSearch(`${c.title} ${c.line} ${c.words ?? ""}`.toLowerCase(), query)));
   // One fetch of the viewer's chips (the GPU pre-flight); each card gets one string.
   const badges = useGpuBadges().data;
   const viewer = useViewer().data;
