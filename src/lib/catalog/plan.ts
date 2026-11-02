@@ -60,6 +60,7 @@ export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op
   }
   if (model.kind === "model3d") {
     if (req.inputs?.model3d && has("rig-3d")) return "rig-3d";
+    if (req.inputs?.model3d && has("refine-3d")) return "refine-3d";
     if (imgs && has("image-to-3d")) return "image-to-3d";
     if (!imgs && has("text-to-3d")) return "text-to-3d";
   }
@@ -238,7 +239,7 @@ const PROMPTLESS = new Set<Operation>([
   // av-tools: the dub voice track (clips placed on the video's timeline)
   "timeline",
   // round 4: tools that work from their inputs (removing an object needs a prompt only on models that read one)
-  "sdr-to-hdr", "export-video", "ocr", "still-motion", "audio-loop", "audio-join", "scene-3d", "splat", "rig-3d", "extract-frames", "images-to-video", "overlay", "composite",
+  "sdr-to-hdr", "export-video", "ocr", "still-motion", "audio-loop", "audio-join", "scene-3d", "splat", "rig-3d", "refine-3d", "extract-frames", "images-to-video", "overlay", "composite",
   // round 5 (O11): the face mosaic names the faces itself ("face")
   "face-mosaic",
   // archive-restore: the scene's words help (period, place, light) but a run without them gets a neutral one
@@ -789,6 +790,7 @@ const NEEDS: Partial<
   "scene-3d": { images: 1, msg: "Add the image to build the scene from" },
   splat: { images: 1, msg: "Add a photo of the subject" },
   "rig-3d": { model3d: true, msg: "Add the 3D model to rig" },
+  "refine-3d": { model3d: true, images: 1, msg: "Add the 3D model to refine and the photo it was made from" },
   "extract-frames": { video: true, msg: "Add the video to take frames from" },
   "images-to-video": { images: 1, msg: "Add the images, in order" },
   overlay: { images: 2, msg: "Add the picture and the overlay to put on it" },

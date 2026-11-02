@@ -1,5 +1,6 @@
 import "server-only";
 import { DUB_STEP_MODELS } from "@/lib/av/dub";
+import { HI3D_MODEL } from "@/lib/av/hi3d";
 import { SPLIT_MODEL } from "@/lib/av/split";
 import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { CLEAN_MODEL } from "@/lib/av/clean-voice";
@@ -178,6 +179,16 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     ],
   },
   { href: "/upscale", label: "Upscale", group: "Images", config: S.UPSCALE_STUDIO },
+  // hi3d-refine: Image to 3D with "Refine detail · Hi3D 1.0": the default open model, then Hi3D's refine of its mesh.
+  {
+    href: "/image-to-3d",
+    label: "Image to 3D, refined",
+    group: "Images",
+    steps: [
+      { modelId: "oss-pixal3d", op: "image-to-3d" },
+      { modelId: HI3D_MODEL, op: "refine-3d" },
+    ],
+  },
   { href: "/video", label: "Video", group: "Video", config: S.VIDEO_STUDIO },
   { href: "/motion-control", label: "Motion control", group: "Video", config: S.MOTION_CONTROL_STUDIO },
   { href: "/video-edit", label: "Edit video", group: "Video", config: S.VIDEO_EDIT_STUDIO },

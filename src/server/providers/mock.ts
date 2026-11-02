@@ -322,6 +322,9 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
       return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", splat: true } }];
     case "rig-3d":
       return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", rigged: true } }];
+    // Hi3D's refine: the demo mesh, geometry only as the real one is.
+    case "refine-3d":
+      return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", refined: true, geometryOnly: true } }];
     case "ocr":
       return [demoOcr(brief)];
     // As many frames as were asked for (max_frames), 4 without a count.

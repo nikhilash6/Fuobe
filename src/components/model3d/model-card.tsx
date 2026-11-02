@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Clapperboard, Download, ImageIcon, Loader2, Pause, PersonStanding, Play, Rotate3d, Sparkles, Video } from "lucide-react";
+import { Box, Clapperboard, Download, ImageIcon, Loader2, Pause, PersonStanding, Play, Printer, Rotate3d, Sparkles, Video, Wand2 } from "lucide-react";
 import Link from "next/link";
 import { createElement, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,9 @@ import { toastError } from "@/lib/refusals";
 import { loadModelViewer, TURNTABLE_BACKDROP, useViewerSrc, viewerLook } from "./model-viewer";
 import type { Model3dInfo } from "./model3d-studio";
 import { RigDialog } from "./rig-dialog";
+import { PrintDialog } from "./print-dialog";
+import { PoweredByHi3d, RefineDialog } from "./refine-option";
+import { HI3D_NOTICE, canRefine, isRefined } from "@/lib/av/hi3d";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { recordableType, recordTurntable } from "./turntable";
 
@@ -37,7 +40,7 @@ function rigClips(g: Generation, view: Model3dView): { key: string; label: strin
  * plays its animation). A splat shows its orbit video or picture with the file to download. Then the turntable,
  * Animate the spin and Rig & animate.
  */
-export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean }) {
+export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed?: boolean }) {
   const view = model3dView(g);
   // "preview": the turntable or the still (a splat with an orbit video: the video). "3d": the viewer (a splat: its picture).
   const [show, setShow] = useState<"preview" | "3d">("preview");
@@ -49,6 +52,8 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
   const [recording, setRecording] = useState<number | null>(null);
   const [recorded, setRecorded] = useState<{ url: string; saved?: string } | null>(null);
   const [rigging, setRigging] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const pendingRecord = useRef(false);
   // "View in 3D" unmounts itself: focus moves to the viewer once it's there.
   const focusViewer = useRef(false);
@@ -144,7 +149,12 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
     setShow("3d");
   };
   const spin = view.rigged ? null : animateSpinHref(view, recorded?.saved);
-  const notices = info[g.modelId]?.notices ?? [];
+  // Hi3D's results: geometry only, and "Powered by Hi3D 1.0" (linked, as its licence asks) instead of the plain notice.
+  const refined = isRefined(g);
+  const notices = (info[g.modelId]?.notices ?? []).filter((n) => !(refined && n === HI3D_NOTICE));
+  // "Refine this mesh": a finished mesh (not a splat or a rig) with the photo, or the drawn still, it was made from.
+  const refineFrom = view.photo ?? drawn;
+  const refinable = canRefine({ glb: view.glb, photo: refineFrom, splat: view.splat, rigged: view.rigged, refined, openAllowed: refineAllowed }) && g.op !== "splat";
   // A rigged result rigs its source model again with another animation.
   const rigSource = view.rigged ? (g.request.inputs?.model3d ?? view.glb) : view.glb;
   // The radio buttons in the corner: the preview and the 3D view, a rig's clips, or a splat's video and picture.
@@ -326,6 +336,16 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
               <PersonStanding className="size-3.5" /> {view.rigged ? "Another animation" : "Rig & animate"}
             </Button>
           )}
+          {refinable && (
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setRefining(true)}>
+              <Wand2 className="size-3.5" /> Refine this mesh
+            </Button>
+          )}
+          {view.glb && !view.splat && g.op !== "splat" && !view.rigged && (
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setPrinting(true)}>
+              <Printer className="size-3.5" /> Print-ready
+            </Button>
+          )}
           {spin && (
             <Button asChild size="sm" className="rounded-full">
               <Link href={spin} prefetch={false}>
@@ -334,8 +354,21 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
             </Button>
           )}
         </div>
-        {notices.length > 0 && <p className="text-[11px] text-muted-foreground">{notices.join(" · ")}</p>}
+        {refined && <p className="text-[12px] text-muted-foreground">Geometry only: no colour or texture. Set its real size in Print-ready.</p>}
+        {(notices.length > 0 || refined) && (
+          <p className="text-[11px] text-muted-foreground">
+            {notices.join(" · ")}
+            {refined && (
+              <>
+                {notices.length > 0 && " · "}
+                <PoweredByHi3d />
+              </>
+            )}
+          </p>
+        )}
       </div>
+      {refinable && refining && view.glb && refineFrom && <RefineDialog glb={view.glb} photo={refineFrom} open={refining} onOpenChange={setRefining} feature={g.feature} />}
+      {printing && view.glb && <PrintDialog glb={view.glb} name={name} open={printing} onOpenChange={setPrinting} refined={refined} />}
       {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} />}
     </article>
   );
