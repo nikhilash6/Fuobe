@@ -73,6 +73,7 @@
 //   peakNits                              (SDR to HDR: target peak white)
 //   resolutionLevel, fovX, decimation     (MoGe: inference detail 0-9, horizontal field of view in degrees (0 = estimate), mesh decimation)
 //   cutout, numGaussians, splatFormat     (TripoSplat: BiRefNet cut-out on/off, number of Gaussians, ply | ksplat | spz)
+//   photoCrop                             (Idol 3D, idol-9 §5.5: true = the looser photo crop, a core-node branch after TripoSplatPreprocessImage)
 //   orbitFrames                           (TripoSplat orbit preview length in frames)
 //   frameWidth                            (reference brief: width the clip's frames are scaled to, px)
 // Keys added with round 4 (engine seams):
@@ -360,6 +361,14 @@ export const KNOWN_MODELS = {
   'dino_v3_vit_h.safetensors': { folder: 'clip_vision', url: 'https://huggingface.co/VAST-AI/TripoSplat/resolve/main/clip_vision/dino_v3_vit_h.safetensors' },
   'triposplat_vae_decoder_fp16.safetensors': { folder: 'vae', url: 'https://huggingface.co/VAST-AI/TripoSplat/resolve/main/vae/triposplat_vae_decoder_fp16.safetensors' },
   'triposplat_fp16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/VAST-AI/TripoSplat/resolve/main/diffusion_models/triposplat_fp16.safetensors' },
+  // idol-1 (docs/research/idol-9.md §4.1): Speridlabs' Idol for the core TripoSplat nodes. A third-party conversion (ComfyUI-Idol
+  // scripts/convert.py at 4d3a4f6) of speridlabs/idol @ 2731c229 (Apache-2.0): pos_pe dropped (ComfyUI recomputes it), cast to fp16,
+  // the two decoders merged under octree./gs., and spot-checked as faithful on 10 tensor prefixes (idol-9 §3, §4.1). Pinned to
+  // nynxz/Idol @ c718f2b1: idol_fp16 741,107,210 B, sha256 cf452146f78e23a0d34be8f9f79bcde642b9a40ef493046c8e9d5f79096f6dd0;
+  // idol_decoder_fp16 576,148,658 B, sha256 c511d99eb668ec4b06d883cb6e43770bc35e3864e16e7058e8d6211ba5c509aa. dino_v3_vit_h,
+  // flux2-vae and birefnet are shared with TripoSplat, so 1.32 GB is new.
+  'idol_fp16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/diffusion_models/idol_fp16.safetensors' },
+  'idol_decoder_fp16.safetensors': { folder: 'vae', url: 'https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/vae/idol_decoder_fp16.safetensors' },
   // round 4 (r4/video-finish): the chunked SeedVR2 graph is hand-built, so its files are named here (same files as the template).
   'seedvr2_3b_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_3b_int8_convrot.safetensors' },
   'seedvr2_ema_vae_fp16.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/vae/seedvr2_ema_vae_fp16.safetensors' },
@@ -4430,6 +4439,35 @@ export const SPEC = [
       'cutout is true by default (manifest defaults). ' +
       'numGaussians up to 1,048,576 (262,144 by default); seed drives both the sampler and the decoder. RenderSplat also takes a look_at camera, so a view picked in the browser can be rendered on the server. ' +
       '3.78 GB of weights (TripoSplat 0.74, DINOv3 ViT-H 1.68, TripoSplat VAE decoder 0.58, FLUX.2 VAE 0.34, BiRefNet 0.44).',
+  },
+  {
+    // idol-1 (docs/research/idol-9.md §5.5): Speridlabs' Idol, TripoSplat's architecture retrained, on the same core nodes.
+    id: 'image-to-splat-idol',
+    title: 'Image to a Gaussian splat of one object (Idol on the TripoSplat core nodes) + an orbit video',
+    capability: 'splat',
+    handBuilt: 'hand-built/image-to-splat-idol.json',
+    bindings: {
+      image: [b('99', 'image')], cutout: [b('88:35', 'switch')], numGaussians: [b('88:55', 'num_gaussians')], steps: [b('88:6', 'steps')], cfg: [b('88:6', 'cfg')],
+      sampler: [b('88:6', 'sampler_name')], photoCrop: [b('88:104', 'switch')],
+      seed: [b('88:6', 'seed'), b('88:55', 'seed')], splatFormat: [b('92', 'format')], orbitFrames: [b('75', 'frames')],
+    },
+    outputs: [{ node: '51', kind: 'model3d', role: 'splat' }, { node: '42', kind: 'video', role: 'turntable' }],
+    defaults: { splatFormat: 'spz', cutout: true, photoCrop: false },
+    limits: { maxGaussians: 1048576 },
+    vramGb: 8,
+    license:
+      'Apache-2.0 (speridlabs/idol weights; the ComfyUI files are nynxz/Idol\'s conversion, Apache-2.0); Idol is VAST-AI-Research\'s TripoSplat architecture (MIT, code and weights); ' +
+      'the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; ' +
+      'the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT',
+    notes:
+      'Idol 3D (Speridlabs): one object from one picture -> a Gaussian splat (role splat) + a 75-frame orbit video (role turntable). A copy of image-to-splat-triposplat with the same node ids. ' +
+      'Reference settings (idol-sdk sampler.py L43-70): 50 Euler steps, simple schedule; Idol\'s CFG weight 3 in its (1+w)cond - w*uncond form is ComfyUI cfg 4.0, and its rescale_t 3 is TripoSplat\'s built-in shift 3 (comfy/supported_models.py), so no ModelSamplingSD3. ' +
+      'Quick look (set by the page as params.extra): 20 dpmpp_2m steps, cfg 4, 65,536 Gaussians, the ComfyUI-Idol README\'s "faster trade-off" and "fast preview"; quality unmeasured. ' +
+      'Photo crop (photoCrop, default false): TripoSplatPreprocessImage is Idol\'s "synthetic" 1.2 crop; scaled to 720 and centred on a black 1024 canvas (88:101-103) the object spans 600 px, where Idol\'s "real" 1.7 crop gives 602 px. ' +
+      'ComfySwitchNode 88:104 picks it; its inputs are lazy, so the branch not taken does not run. Not yet compared with IdolPreprocessImage "real". ' +
+      'About half the Gaussians are near-transparent: RenderSplat thresholds 0.05; the saved file is not pruned without the ComfyUI-Idol pack. ' +
+      '1.32 GB of new weights (idol_fp16 0.74, idol_decoder_fp16 0.58) plus the shared 2.46 GB (DINOv3 ViT-H 1.68, FLUX.2 VAE 0.34, BiRefNet 0.44). ' +
+      'VRAM: vendor peak 7.2 GB in the SDK; unmeasured in ComfyUI. Validated by /prompt only.',
   },
   {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).
