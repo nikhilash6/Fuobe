@@ -195,8 +195,38 @@ else `skills/`, `.agents/skills/`, `.claude/skills/` and the folders right under
 levels), else any `SKILL.md` a few levels down; skills marked `metadata.internal: true` are left out
 unless named with `--skill`. Each skill is uploaded as a zip with its text files (binaries and
 dot-files are left out, and listed). Git sources need `git`. A skill's `recipe.json` (a skill that runs
-by itself; see `skills/README.md`) goes up with it but starts unchecked: check it in **Assist → Skills**
-before you run it. The CLI has no command to run a skill yet.
+by itself; see `skills/README.md`) goes up with it but starts unchecked: `skills run` checks it for free
+before its first run, or check it in **Assist → Skills**.
+
+#### Running a skill that runs by itself
+
+A skill with a recipe runs its saved steps with new inputs, with no AI model planning them: priced
+first, the same steps every time.
+
+```bash
+fuobe skills params weekly-promo                    # its inputs: id, type, needed or default, what it takes
+fuobe skills estimate weekly-promo -p product=lamp.png -p name="Lumen desk lamp"
+fuobe skills run weekly-promo -p product=lamp.png -p name="Lumen desk lamp" --wait
+fuobe skills run weekly-promo --rows products.csv --engine cloud --out renders/
+fuobe skills export weekly-promo --out weekly-promo.zip   # SKILL.md and its files, to add elsewhere
+```
+
+- `-p input=value` gives one input (repeat it; `fuobe skills params` lists the ids). A file input takes a
+  local file, an `https://` link or a `/api/files/…` URL. Local files are uploaded only when it runs:
+  `estimate` prices with stand-ins, as `fuobe estimate` does.
+- `--rows rows.csv` runs it once per row (up to 50; `-` reads the table from stdin). The first row names
+  the inputs by id or label, as the **Many** tab of the Run dialog reads it; a spreadsheet's paste (tabs)
+  works too. A file path in a cell is read from the table's folder, and each file goes up once. `-p` fills
+  what the rows leave empty. A row that doesn't fit is named by its line, and then nothing starts.
+- `run` prices the whole batch first and asks `Run 20 for $12.40? [y/N]` when it costs money. `--yes`
+  starts it without asking; so does `--json` (for scripts). Without a terminal to ask on, it stops and
+  says to add `--yes`. Free runs (your GPU, or a demo) start without asking.
+- `--engine open|cloud` picks where it runs, among the engines its steps run on (by default: where it
+  was checked). A skill not yet checked on that engine gets its free plan check first.
+- `--wait` and `--out <dir>` wait for the results and save them, as `fuobe generate` does; without them,
+  `run` prints the ids to pass to `fuobe wait` or `fuobe download`.
+- `export` saves the skill as a zip (`SKILL.md`, `recipe.json` and its other files); `--examples` keeps
+  the values it was made with, which are left out by default.
 
 ### `fuobe tools`, `fuobe tool` — the MCP tools
 
@@ -317,6 +347,8 @@ retired runs on the model that replaced it, and the answer gives that `modelId` 
 `GET /api/generations[/<id>]`,
 `POST /api/generations/<id>/cancel`, `POST /api/uploads` (multipart `file`), `GET /api/files/…`,
 `GET /api/status`, `GET|PATCH /api/assist/skills[/<name>]`, `POST /api/assist/skills/upload`
-(`?replace=1`) and `POST /api/mcp` (JSON-RPC). Every call carries `Authorization: Bearer <token>`
+(`?replace=1`), a skill's `GET …/recipe`, `POST …/estimate`, `…/run` and `…/verify` (`{level: "plan"}`)
+and `GET …/download?format=zip` under `/api/assist/skills/<name>` (estimate and run take `values`, or
+`csv`, and `engine`), and `POST /api/mcp` (JSON-RPC). Every call carries `Authorization: Bearer <token>`
 when there is one, and only to the Fuobe server (never to a link elsewhere, and the saved token only
 to the server it was saved for).

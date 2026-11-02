@@ -5,11 +5,27 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { keyValue, UsageError } from "./args.mjs";
-import { defaultModel, fileInputs, generationRequest, localFiles, voiceSampleProblem, withInputHint } from "./build.mjs";
+import { defaultModel, fileInputs, generationRequest, isRemoteRef, localFiles, voiceSampleProblem, withInputHint } from "./build.mjs";
 import { ApiError } from "./client.mjs";
 import { configPath, normalizeUrl, readConfig, removeConfig, writeConfig } from "./config.mjs";
 import { clip, countOutputs, formatCost, formatDuration, previewText, statusText, table, TERMINAL, timeAgo } from "./format.mjs";
-import { findSkillDirs, packSkill, parseSource, skillHead } from "./skills.mjs";
+import {
+  csvCells,
+  engineWords,
+  estimateLines,
+  estimateProblems,
+  exactCost,
+  findSkillDirs,
+  headerInputs,
+  isFileInput,
+  packSkill,
+  paramsTable,
+  parseSource,
+  priceWords,
+  skillHead,
+  skillValues,
+  toCsv,
+} from "./skills.mjs";
 
 /** Exit codes: 0 done, 1 failed (a generation failed, the server said no), 2 usage, 3 still running at --timeout, 130 stopped with Ctrl+C. */
 export const EXIT = { ok: 0, failed: 1, usage: 2, timeout: 3, interrupted: 130 };
@@ -622,6 +638,187 @@ async function skillsAdd(ctx, source) {
   return results.some((r) => r.ok) ? EXIT.ok : EXIT.failed;
 }
 
+// ---------------------------------------------------------------------------
+// skills that run by themselves (a recipe): params, estimate, run, export
+
+/** A skill's recipe as the server reads it: its inputs, the engines its steps run on, and where its check passed. */
+const recipeOf = (ctx, name) => ctx.client.request("GET", `/api/assist/skills/${enc(name)}/recipe`);
+
+/** --engine, else where the skill was checked, else the first engine its steps run on. */
+function skillEngine(ctx, view) {
+  const want = ctx.values.engine;
+  if (want && !view.engines.includes(want)) {
+    throw new UsageError(view.engines.length ? `/${view.name} runs on ${view.engines.map(engineWords).join(" or ")} only: leave out --engine` : `/${view.name} can't run on this server as it is`, "skills");
+  }
+  return want ?? view.ready[0] ?? view.engines[0];
+}
+
+/** A stand-in URL for a local file while pricing (nothing is uploaded until it runs), as estimate's are. */
+const fileStandIn = (abs) => `/api/files/uploads/estimate/${path.basename(abs).replace(/[^\w.-]+/g, "_")}`;
+
+/**
+ * What a skills estimate or run sends, before its local files are uploaded: the -p values, or the --rows table with
+ * the -p values filling what its rows leave empty. `files` are the local files it names (a -p path is read from here,
+ * a cell's from the table's folder); `body(url)` swaps each for `url(path)`: a stand-in to price, its upload to run.
+ */
+async function skillRequest(ctx, view) {
+  const v = ctx.values;
+  const params = view.recipe.params;
+  const byId = new Map(params.map((p) => [p.id, p]));
+  const given = skillValues(v.param ?? []);
+  const unknown = Object.keys(given).filter((k) => !byId.has(k));
+  if (unknown.length) {
+    throw new UsageError(`/${view.name} has no input ${unknown.map((k) => `“${k}”`).join(", ")}. It takes ${params.map((p) => p.id).join(", ") || "none"} (fuobe skills params ${view.name}).`, "skills");
+  }
+  const files = new Set();
+  /** A file input's value: a link stays as it is; a local path is checked now and kept as an absolute path. */
+  const fileRef = (ref, dir) => {
+    if (!ref || isRemoteRef(ref)) return ref;
+    const abs = checkFile(ctx, path.resolve(dir, ref));
+    files.add(abs);
+    return abs;
+  };
+  const isFile = (id) => !!id && isFileInput(byId.get(id));
+  const swap = (cell, url) => (files.has(cell) ? url(cell) : cell);
+  for (const [id, ref] of Object.entries(given)) if (isFile(id)) given[id] = fileRef(ref, ctx.io.cwd);
+  if (!v.rows) {
+    return {
+      rows: false,
+      files: [...files],
+      lineOf: (l) => l,
+      body: (url) => ({ values: Object.fromEntries(Object.entries(given).map(([id, val]) => [id, isFile(id) ? swap(val, url) : val])) }),
+    };
+  }
+  const text = v.rows === "-" ? await ctx.io.readStdin() : fs.readFileSync(checkFile(ctx, v.rows), "utf8");
+  const dir = v.rows === "-" ? ctx.io.cwd : path.dirname(path.resolve(ctx.io.cwd, v.rows));
+  const all = csvCells(text);
+  if (all.length < 2) throw new UsageError(`${v.rows === "-" ? "The table" : v.rows} needs a header row naming the inputs (${params.map((p) => p.id).join(", ")}), then one row per run`, "skills");
+  const [head, ...rest] = all;
+  const header = [...head.cells];
+  const columns = headerInputs(header, params);
+  header.forEach((h, i) => {
+    if (!columns[i] && h) ctx.note(`“${h}” isn't an input of /${view.name}, so that column is left out.`);
+  });
+  const rows = rest.map((r) => header.map((_, i) => r.cells[i] ?? ""));
+  // -p fills what the rows leave empty: a column of its own when the table has none.
+  for (const [id, val] of Object.entries(given)) {
+    let col = columns.indexOf(id);
+    if (col === -1) {
+      header.push(id);
+      columns.push(id);
+      col = header.length - 1;
+      for (const r of rows) r.push("");
+    }
+    for (const r of rows) if (!r[col]) r[col] = val;
+  }
+  for (const r of rows) columns.forEach((id, i) => isFile(id) && (r[i] = fileRef(r[i], dir)));
+  let sent = [];
+  return {
+    rows: true,
+    files: [...files],
+    // A row's line in the table sent, back to its line in the person's file.
+    lineOf: (l) => {
+      const k = sent.indexOf(l);
+      return k > 0 ? rest[k - 1].line : l;
+    },
+    body: (url) => {
+      const csv = toCsv([header, ...rows.map((r) => r.map((c, i) => (isFile(columns[i]) ? swap(c, url) : c)))]);
+      sent = csv.lines;
+      return { csv: csv.text };
+    },
+  };
+}
+
+/** A skill not checked on this engine gets its free plan check first (it prices every step; nothing runs). */
+async function checkSkill(ctx, view, engine) {
+  if (!ctx.values.json) ctx.note(`Checking /${view.name} on ${engineWords(engine)} first (free: it prices each step, nothing runs)…`);
+  const r = await ctx.client.request("POST", `/api/assist/skills/${enc(view.name)}/verify`, { json: { level: "plan", engine } });
+  if (r.ok) return;
+  const why = r.engines.flatMap((e) => e.plan.errors)[0];
+  throw new ApiError(`/${view.name} doesn't run on ${engineWords(engine)} as it is${why ? `: ${why}` : ""}. Check it in Assist → Skills.`);
+}
+
+const priceSkill = (ctx, view, engine, body) => ctx.client.request("POST", `/api/assist/skills/${enc(view.name)}/estimate`, { json: { ...body, engine } });
+
+async function skillsParams(ctx, name) {
+  const view = await recipeOf(ctx, name);
+  const params = view.recipe.params;
+  if (ctx.values.json) return ctx.json({ name: view.name, title: view.title, engines: view.engines, ready: view.ready, params });
+  ctx.print(`${view.title} (/${view.name}) · runs on ${view.engines.map(engineWords).join(" or ") || "nothing on this server as it is"}`);
+  if (params.length) ctx.print(table(["INPUT", "TYPE", "", "WHAT IT TAKES"], paramsTable(view), ctx.io.columns));
+  else ctx.print("It takes no inputs: it runs the same steps each time.");
+  const sample = { image: "photo.png", video: "clip.mp4", audio: "voice.wav" };
+  const needed = params.filter((p) => p.required && p.default === undefined).map((p) => `-p ${p.id}=${sample[p.type] ?? (p.type === "choice" ? p.options?.[0] : p.type === "number" ? (p.min ?? 1) : p.type === "element" ? "@handle" : '"…"')}`);
+  ctx.note(`Run it: fuobe skills run ${view.name}${needed.length ? ` ${needed.join(" ")}` : ""}. Many at once: --rows rows.csv, a header row naming the inputs and one run per row.`);
+  return EXIT.ok;
+}
+
+async function skillsEstimate(ctx, name) {
+  const view = await recipeOf(ctx, name);
+  const engine = skillEngine(ctx, view);
+  const req = await skillRequest(ctx, view);
+  const est = await priceSkill(ctx, view, engine, req.body(fileStandIn));
+  if (ctx.values.json) {
+    ctx.json(est);
+    return est.runnable ? EXIT.ok : EXIT.failed;
+  }
+  for (const line of estimateLines(est, view.title, { rows: req.rows, lineOf: req.lineOf })) ctx.print(line);
+  if (est.runnable && !view.ready.includes(engine)) ctx.note(`Not checked on ${engineWords(engine)} yet: fuobe skills run checks it first, for free.`);
+  return est.runnable ? EXIT.ok : EXIT.failed;
+}
+
+async function skillsRun(ctx, name) {
+  const v = ctx.values;
+  const view = await recipeOf(ctx, name);
+  const engine = skillEngine(ctx, view);
+  const req = await skillRequest(ctx, view);
+  // Priced with stand-ins first, so a bad value fails before anything is checked, uploaded or spent.
+  const est = await priceSkill(ctx, view, engine, req.body(fileStandIn));
+  if (!est.runnable) throw new ApiError(estimateProblems(est, req).join("\n") || `/${view.name} can't run with these values`);
+  const runs = est.runs.length;
+  const costs = !est.demo && est.total !== 0;
+  if (costs && !v.yes && !v.json) {
+    const price = est.total === null ? "(some prices vary)" : `for ${exactCost(est.total)}`;
+    if (!ctx.io.stdinIsTTY) throw new UsageError(`Running ${runs === 1 ? "it" : `these ${runs}`} costs ${est.total === null ? "an amount that varies" : exactCost(est.total)}: add --yes to run without asking`);
+    const answer = await ctx.io.ask(`Run ${runs} ${price}? [y/N] `);
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      ctx.note("Nothing was started.");
+      return EXIT.failed;
+    }
+  } else if (!v.json) ctx.note(`${view.title} on ${engineWords(engine)}: ${priceWords(est, runs)}.`);
+  if (!view.ready.includes(engine)) await checkSkill(ctx, view, engine);
+  const uploaded = new Map();
+  for (const f of req.files) uploaded.set(f, await uploadFile(ctx, f));
+  const out = await ctx.client.request("POST", `/api/assist/skills/${enc(view.name)}/run`, { json: { ...req.body((f) => uploaded.get(f)), engine } });
+  const ids = out.runs.flatMap((r) => r.ids);
+  const started = out.runs.filter((r) => !r.error).length;
+  const demo = out.demo ? " (a demo: nothing connected, free)" : "";
+  for (const [i, r] of out.runs.entries()) if (r.error && !v.json) ctx.note(`Run ${i + 1} didn't start: ${r.error}`);
+  const studio = out.runs.find((r) => r.href && !r.href.startsWith("/library"))?.href;
+  if (v.wait || v.out) {
+    if (!v.json) ctx.note(`Started ${started === 1 ? view.title : `${started} runs of ${view.title}`}${demo}.${studio ? ` It opens in ${absolute(ctx, studio)}` : ""}`);
+    return finish(ctx, ids, { download: !!v.out });
+  }
+  if (v.json) return ctx.json(out);
+  ctx.print(`Started ${started === 1 ? view.title : `${started} runs of ${view.title}`} on ${engineWords(out.engine)}${demo}: ${ids.join(" ")}`);
+  if (studio) ctx.print(`It opens in ${absolute(ctx, studio)}`);
+  if (ids.length) ctx.print(`Wait for ${ids.length === 1 ? "it" : "them"}: fuobe wait ${ids.join(" ")}   Save ${ids.length === 1 ? "it" : "them"}: fuobe download ${ids.join(" ")} --out .`);
+  return started === out.runs.length ? EXIT.ok : EXIT.failed;
+}
+
+async function skillsExport(ctx, name) {
+  const v = ctx.values;
+  const file = `${name.replace(/[^\w.-]+/g, "_")}.zip`;
+  let dest = path.resolve(ctx.io.cwd, v.out ?? file);
+  if (fs.statSync(dest, { throwIfNoEntry: false })?.isDirectory()) dest = path.join(dest, file);
+  const bytes = await ctx.client.download(`/api/assist/skills/${enc(name)}/download?format=zip${v.examples ? "&examples=1" : ""}`, dest);
+  if (v.json) return ctx.json({ name, path: dest, bytes, examples: !!v.examples });
+  const shown = path.relative(ctx.io.cwd, dest) || dest;
+  ctx.print(`Saved ${shown} (${megabytes(bytes)}): SKILL.md and its files${v.examples ? ", with the values it was made with" : ""}.`);
+  ctx.note(`Add it to another Fuobe with: fuobe skills add ${shown}`);
+  return EXIT.ok;
+}
+
 async function skills(ctx) {
   const [sub, ...rest] = ctx.positionals;
   const arg = (what) => {
@@ -640,8 +837,16 @@ async function skills(ctx) {
       return skillsToggle(ctx, arg("a skill name"), true);
     case "disable":
       return skillsToggle(ctx, arg("a skill name"), false);
+    case "params":
+      return skillsParams(ctx, arg("a skill name"));
+    case "estimate":
+      return skillsEstimate(ctx, arg("a skill name"));
+    case "run":
+      return skillsRun(ctx, arg("a skill name"));
+    case "export":
+      return skillsExport(ctx, arg("a skill name"));
     default:
-      throw new UsageError(`Unknown skills command “${sub}”: use list, show, add, enable or disable`, "skills");
+      throw new UsageError(`Unknown skills command “${sub}”: use list, show, add, enable, disable, params, estimate, run or export`, "skills");
   }
 }
 
@@ -862,11 +1067,20 @@ export const COMMANDS = {
     run: upload,
   },
   skills: {
-    summary: "List, read, add, switch on or off Assist skills",
-    usage: "fuobe skills [list | show <name> | add <source> | enable <name> | disable <name>]",
+    summary: "List, read, add, switch on or off, and run Assist skills",
+    usage:
+      "fuobe skills [list | show <name> | add <source> | enable <name> | disable <name> | params <name> | estimate <name> -p input=value… | run <name> -p input=value… [--rows rows.csv] | export <name>]",
     options: {
       skill: { type: "string", multiple: true, value: "name", describe: "add: only these skills from a folder or repository" },
       replace: { type: "boolean", describe: "add: overwrite your own skill of the same name" },
+      param: { type: "string", short: "p", multiple: true, value: "input=value", describe: "estimate, run: a value for one of the skill's inputs (a local file is uploaded when it runs)" },
+      rows: { type: "string", value: "file.csv", describe: "estimate, run: one run per row (a header row names the inputs; - reads stdin; -p fills empty cells)" },
+      engine: { type: "string", choices: ["open", "cloud"], describe: "estimate, run: where it runs (default: where it was checked)" },
+      yes: { type: "boolean", short: "y", describe: "run: start without asking, whatever it costs" },
+      wait: { type: "boolean", short: "w", describe: "run: wait until it's done and print the results" },
+      out: { type: "string", short: "o", value: "dir|file", describe: "run: wait, then save the outputs here; export: the .zip to write" },
+      examples: { type: "boolean", describe: "export: keep the values the skill was made with" },
+      ...WAIT_OPTIONS,
     },
     examples: [
       "fuobe skills list",
@@ -874,6 +1088,10 @@ export const COMMANDS = {
       "fuobe skills add owner/repo --skill launch-video",
       "fuobe skills add https://github.com/owner/repo/tree/main/skills/launch-video",
       "fuobe skills disable katana",
+      "fuobe skills params weekly-promo",
+      'fuobe skills run weekly-promo -p product=lamp.png -p name="Lumen desk lamp" --wait',
+      "fuobe skills run weekly-promo --rows products.csv --engine cloud --out renders/",
+      "fuobe skills export weekly-promo --out weekly-promo.zip",
     ],
     run: skills,
   },

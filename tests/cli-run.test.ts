@@ -48,6 +48,21 @@ const generation = (status: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
+const PROMO = {
+  name: "weekly-promo",
+  title: "Weekly promo",
+  engines: ["cloud"],
+  ready: [],
+  recipe: {
+    params: [
+      { id: "product", label: "Product photo", type: "image", required: true },
+      { id: "name", label: "Product name", type: "text", required: true, max: 200, example: "Lumen desk lamp" },
+      { id: "aspect", label: "Shape", type: "choice", options: ["1:1", "9:16"], default: "1:1" },
+    ],
+  },
+};
+const job = { tool: "skill", modelId: "nano-banana-pro", modelName: "Nano Banana Pro", kind: "image", op: "edit", note: "Edit", prompt: "", count: 1, costUsd: 0.62, demo: false };
+
 async function body(req: http.IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const c of req) chunks.push(c as Buffer);
@@ -114,6 +129,23 @@ beforeAll(async () => {
       const md = entries.find((e) => e.name.endsWith("/SKILL.md"))!.data.toString();
       const name = /name:\s*(\S+)/.exec(md)![1];
       return send(201, { skill: { name, title: name }, skipped: [], replaced: false });
+    }
+    // A skill that runs by itself (W4): its recipe, a price per row, a run per row, and its zip.
+    const skill = /^\/api\/assist\/skills\/weekly-promo\/(recipe|verify|estimate|run|download)$/.exec(url.pathname)?.[1];
+    if (skill === "recipe") return send(200, PROMO);
+    if (skill === "verify") return send(200, { ok: true, engines: [{ engine: "cloud", plan: { ok: true, errors: [] } }] });
+    if (skill === "estimate" || skill === "run") {
+      const b = s.json as { values?: Record<string, string>; csv?: string; engine?: string };
+      // The CSV the CLI sent, read as the server would: header first, one run per line.
+      const rows = b.csv ? b.csv.trim().split("\n").slice(1).map((l, i) => ({ line: i + 2, name: l.split(",")[1] ?? "" })) : [{ line: 1, name: b.values?.name ?? "" }];
+      if (skill === "run") return send(201, { engine: b.engine ?? "cloud", demo: false, runs: rows.map((_, i) => ({ batchId: `b${i}`, ids: i ? [`gen${i + 1}`] : ["gen1"], href: "/library" })) });
+      const runs = rows.map((r) => ({ line: r.line, jobs: [job], total: r.name === "bad" ? null : 0.62, errors: r.name === "bad" ? ["Product name: at most 200 characters"] : [] }));
+      const ok = runs.every((r) => !r.errors.length);
+      return send(200, { engine: b.engine ?? "cloud", runs, jobs: [job], total: ok ? Math.round(0.62 * runs.length * 100) / 100 : null, demo: false, runnable: ok, errors: [] });
+    }
+    if (skill === "download") {
+      res.writeHead(200, { "content-type": "application/zip" });
+      return res.end(Buffer.from(`zip${url.search}`));
     }
     send(404, { error: "Not found" });
   });
@@ -380,5 +412,123 @@ describe("fuobe CLI against a Fuobe server", () => {
     const mcp = await run(["mcp"], { FUOBE_TOKEN: undefined });
     expect(mcp.stdout.trim()).toBe(`claude mcp add --transport http fuobe ${base}/api/mcp`);
     expect(seen).toHaveLength(0);
+  });
+});
+
+describe("fuobe skills: a skill that runs by itself (W4)", () => {
+  const posts = (what: string) => seen.filter((s) => s.method === "POST" && s.path === `/api/assist/skills/weekly-promo/${what}`);
+
+  it("params lists the inputs; estimate prices with stand-ins and uploads nothing", async () => {
+    const p = await run(["skills", "params", "weekly-promo"]);
+    expect(p.code).toBe(0);
+    expect(p.stdout).toMatch(/^Weekly promo \(\/weekly-promo\) · runs on the cloud$/m);
+    expect(p.stdout).toMatch(/^product\s+image\s+needed\s+Product photo · a file, an https:\/\/ link or a \/api\/files\/… URL$/m);
+    expect(p.stdout).toMatch(/^name\s+text\s+needed\s+Product name · up to 200 characters · e\.g\. Lumen desk lamp$/m);
+    expect(p.stdout).toMatch(/^aspect\s+choice\s+default 1:1\s+Shape · 1:1 \| 9:16$/m);
+    expect(p.stderr).toContain("Run it: fuobe skills run weekly-promo -p product=photo.png -p name=\"…\"");
+    fs.writeFileSync(path.join(tmp, "my lamp.png"), PNG);
+    const e = await run(["skills", "estimate", "weekly-promo", "-p", "product=my lamp.png", "-p", "name=Lumen=Desk"]);
+    expect(e.code).toBe(0);
+    expect(e.stdout).toBe("Weekly promo on the cloud: 1 step\n  1. Nano Banana Pro · Edit · $0.62\nabout $0.62\n");
+    expect(seen.some((s) => s.path === "/api/uploads")).toBe(false);
+    // A value keeps everything after the first "=", and a file is a stand-in with a name the server takes.
+    expect(posts("estimate")[0].json).toEqual({ values: { product: "/api/files/uploads/estimate/my_lamp.png", name: "Lumen=Desk" }, engine: "cloud" });
+    const bad = await run(["skills", "estimate", "weekly-promo", "-p", "colour=red"]);
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toMatch(/^\/weekly-promo has no input “colour”\. It takes product, name, aspect \(fuobe skills params weekly-promo\)\./);
+    const engine = await run(["skills", "estimate", "weekly-promo", "--engine", "open"]);
+    expect(engine.code).toBe(2);
+    expect(engine.stderr).toMatch(/^\/weekly-promo runs on the cloud only: leave out --engine/);
+  });
+
+  it("run won't spend without a yes; with --yes it checks the skill, uploads the file, runs, waits and saves", async () => {
+    fs.writeFileSync(path.join(tmp, "lamp.png"), PNG);
+    const asked = await run(["skills", "run", "weekly-promo", "-p", "product=lamp.png", "-p", "name=Lumen"]);
+    expect(asked.code).toBe(2);
+    expect(asked.stderr.trim()).toBe("Running it costs $0.62: add --yes to run without asking");
+    expect(seen.some((s) => s.path === "/api/uploads" || s.path.endsWith("/run") || s.path.endsWith("/verify"))).toBe(false);
+    seen = [];
+    const r = await run(["skills", "run", "weekly-promo", "-p", "product=lamp.png", "-p", "name=Lumen", "--yes", "--out", "promo", "--interval", "0.2"]);
+    expect(r.code).toBe(0);
+    expect(r.stderr).toContain("Checking /weekly-promo on the cloud first (free: it prices each step, nothing runs)…");
+    expect(r.stdout).toMatch(/^Saved promo\/gen1\.png \(1 KB\)$/m);
+    // Priced with a stand-in, checked, then the file went up once and the run used its URL.
+    expect(seen.filter((s) => s.method === "POST").map((s) => s.path)).toEqual([
+      "/api/assist/skills/weekly-promo/estimate",
+      "/api/assist/skills/weekly-promo/verify",
+      "/api/uploads",
+      "/api/assist/skills/weekly-promo/run",
+    ]);
+    expect(posts("verify")[0].json).toEqual({ level: "plan", engine: "cloud" });
+    expect(posts("run")[0].json).toEqual({ values: { product: "/api/files/uploads/2026-10-22/up1.png", name: "Lumen" }, engine: "cloud" });
+  });
+
+  it("--rows: one run per row, -p fills the empty cells, files beside the table go up once, and --json skips the question", async () => {
+    const dir = path.join(tmp, "products");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "lamp.png"), PNG);
+    fs.writeFileSync(path.join(dir, "rows.csv"), "﻿Product photo,Product name,Notes\nlamp.png,\"Lumen, desk\",first\n\nlamp.png,,second\n");
+    const r = await run(["skills", "run", "weekly-promo", "--rows", "products/rows.csv", "-p", "name=Halo", "--json"]);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.stdout).runs).toHaveLength(2);
+    expect(r.stderr).toContain("“Notes” isn't an input of /weekly-promo, so that column is left out.");
+    expect(seen.filter((s) => s.path === "/api/uploads")).toHaveLength(1);
+    const up = "/api/files/uploads/2026-10-22/up1.png";
+    expect(posts("estimate")[0].json).toEqual({ csv: 'Product photo,Product name,Notes\n/api/files/uploads/estimate/lamp.png,"Lumen, desk",first\n/api/files/uploads/estimate/lamp.png,Halo,second\n', engine: "cloud" });
+    expect(posts("run")[0].json).toEqual({ csv: `Product photo,Product name,Notes\n${up},"Lumen, desk",first\n${up},Halo,second\n`, engine: "cloud" });
+  });
+
+  it("a row that doesn't fit is named by its line in the file, and nothing starts", async () => {
+    fs.writeFileSync(path.join(tmp, "bad.csv"), "product,name\nhttps://cdn.test/a.png,Lumen\n\nhttps://cdn.test/b.png,bad\n");
+    const est = await run(["skills", "estimate", "weekly-promo", "--rows", "bad.csv"]);
+    expect(est.code).toBe(1);
+    expect(est.stdout).toContain("Row 4: Product name: at most 200 characters");
+    const r = await run(["skills", "run", "weekly-promo", "--rows", "bad.csv", "--yes"]);
+    expect(r.code).toBe(1);
+    expect(r.stderr.trim()).toBe("Row 4: Product name: at most 200 characters");
+    expect(seen.some((s) => s.path.endsWith("/run") || s.path === "/api/uploads")).toBe(false);
+  });
+
+  it("asks on a terminal: no starts nothing, yes runs", async () => {
+    const { main } = await import("../bin/lib/cli.mjs");
+    const out: string[] = [];
+    const questions: string[] = [];
+    let answer = "n";
+    const io = {
+      stdout: { write: (t: string) => out.push(t) },
+      stderr: { write: (t: string) => out.push(t) },
+      env: { FUOBE_URL: base, FUOBE_TOKEN: TOKEN, FUOBE_CONFIG: path.join(tmp, "config.json") },
+      cwd: tmp,
+      home: tmp,
+      fetch: globalThis.fetch,
+      columns: 100,
+      stdinIsTTY: true,
+      stderrIsTTY: false,
+      now: () => Date.now(),
+      sleep: (ms: number) => new Promise((r) => setTimeout(r, ms)),
+      onInterrupt: () => () => {},
+      ask: async (q: string) => (questions.push(q), answer),
+      readStdin: async () => "",
+    };
+    fs.writeFileSync(path.join(tmp, "two.csv"), "product,name\nhttps://cdn.test/a.png,Lumen\nhttps://cdn.test/b.png,Halo\n");
+    expect(await main(["skills", "run", "weekly-promo", "--rows", "two.csv"], io)).toBe(1);
+    expect(questions).toEqual(["Run 2 for $1.24? [y/N] "]);
+    expect(out.join("")).toContain("Nothing was started.");
+    expect(seen.some((s) => s.path.endsWith("/run"))).toBe(false);
+    answer = "y";
+    expect(await main(["skills", "run", "weekly-promo", "--rows", "two.csv"], io)).toBe(0);
+    expect(out.join("")).toContain("Started 2 runs of Weekly promo on the cloud: gen1 gen2");
+    expect(out.join("")).toContain("Wait for them: fuobe wait gen1 gen2");
+  });
+
+  it("export saves the skill as a zip, with its examples when asked", async () => {
+    const r = await run(["skills", "export", "weekly-promo", "--examples"]);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toMatch(/^Saved weekly-promo\.zip \(1 KB\): SKILL\.md and its files, with the values it was made with\.$/m);
+    expect(fs.readFileSync(path.join(tmp, "weekly-promo.zip"), "utf8")).toBe("zip?format=zip&examples=1");
+    fs.mkdirSync(path.join(tmp, "exports"), { recursive: true });
+    const into = await run(["skills", "export", "weekly-promo", "--out", "exports", "--json"]);
+    expect(JSON.parse(into.stdout)).toMatchObject({ name: "weekly-promo", path: path.join(tmp, "exports", "weekly-promo.zip"), examples: false });
+    expect(fs.readFileSync(path.join(tmp, "exports", "weekly-promo.zip"), "utf8")).toBe("zip?format=zip");
   });
 });
