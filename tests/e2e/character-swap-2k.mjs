@@ -1,10 +1,11 @@
 // Browser check of Character swap in 2K (n7-4-character-swap-2k).
 // Usage: node tests/e2e/character-swap-2k.mjs [appUrl] [outDir]   (the app in demo mode: no keys, no ComfyUI)
 // At 1440 px and 390 px, light and dark: Character Swap Studio's Assemble → Finish with "Sharpen to 1080p / 2K / 4K"
-// (the sizes picked by keyboard and by touch, the price or GPU time, Run) beside "Clean backplate + alpha" (not
-// available), on a cloud project with a chosen take and on a project on your GPU; a run on the cloud makes a 2K version
-// that Takes & review shows beside the take with "Use the 2K version"; Genjutsu's Character swap Quality with 2K and 4K
-// and their prices (the cloud) or GPU time (your GPU, with 1080p). No sideways scroll anywhere. Screenshots go to outDir.
+// (the sizes picked by keyboard and by touch, why a size can't be picked as text on the page, the price or GPU time, Run),
+// on a cloud project with a chosen take and on a project on your GPU; a run on the cloud makes a 2K version that Takes &
+// review shows beside the take with "Use the 2K version"; Genjutsu's Character swap Quality with 2K and 4K and their
+// prices (the cloud) or GPU time (your GPU, with 1080p, and 4K turned off with the reason). No sideways scroll anywhere,
+// no page error and no console error. Screenshots go to outDir.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -85,7 +86,9 @@ try {
       const ctx = await browser.newContext({ ...device, colorScheme: theme });
       await ctx.route((u) => u.origin !== new URL(app).origin && /^https?:$/.test(u.protocol), (rt) => rt.abort());
       const page = await ctx.newPage();
-      page.on("pageerror", (e) => !/Hydration failed[\s\S]*ViewerRowPlaceholder/.test(e.message) && failures.push(`${label} page error: ${e.message.split("\n")[0]}`));
+      page.on("pageerror", (e) => failures.push(`${label} page error: ${e.message.split("\n")[0]}`));
+      // React reports hydration errors on the console: every console error fails the check.
+      page.on("console", (m) => m.type() === "error" && failures.push(`${label} console error: ${m.text().split("\n")[0]}`));
       const touch = !!device.hasTouch;
       const press = (loc) => (touch ? loc.tap() : loc.click());
 
@@ -95,18 +98,18 @@ try {
       const sharpenTitle = page.getByRole("heading", { name: "Sharpen to 1080p / 2K / 4K" });
       await sharpenTitle.waitFor({ timeout: 60_000 });
       check(await sharpenTitle.isVisible(), `${label} cloud: the Sharpen card`);
-      // The owner's card (it waits for who is looking).
-      const backplate = page.getByRole("heading", { name: "Clean backplate + alpha" });
-      await backplate.waitFor({ timeout: 30_000 }).catch(() => undefined);
-      check(await backplate.isVisible(), `${label} cloud: Clean backplate + alpha beside it`);
       await page.getByText(/1 chosen take/).waitFor({ timeout: 30_000 }).catch(() => undefined);
-      check((await page.getByText("Not available", { exact: false }).count()) > 0, `${label} cloud: the backplate card says Not available`);
+      check((await page.getByRole("heading", { name: /backplate/i }).count()) === 0 && (await page.getByText("Not available", { exact: false }).count()) === 0, `${label} cloud: Finish is Sharpen alone`);
       const sizes = page.getByRole("radiogroup", { name: "Sharpen to" });
       const r = (n) => sizes.getByRole("radio", { name: n, exact: true });
       check(await r("1080p").isDisabled(), `${label} cloud: 1080p is off (fal makes 2K or 4K)`);
       check((await r("2K").getAttribute("aria-checked")) === "true", `${label} cloud: 2K is picked`);
       check(await r("4K").isDisabled(), `${label} cloud: 4K is off (the film is joined at 1920×1080)`);
-      check((await r("4K").getAttribute("title"))?.includes("Joined at 1920×1080") ?? false, `${label} cloud: 4K says why`);
+      // Why, as text on the page that the size group points to (a turned-off size can't take focus or show a tooltip on touch).
+      const why = await sizes.getAttribute("aria-describedby");
+      const whyText = why ? await page.locator(`[id="${why}"]`).innerText() : "";
+      check(/4K: Joined at 1920×1080, so 4K adds nothing to the film/.test(whyText) && (await page.locator(`[id="${why}"]`).isVisible()), `${label} cloud: 4K says why, on the page`);
+      check(/1080p: The cloud makes 2K or 4K/.test(whyText), `${label} cloud: 1080p says why, on the page`);
       await page.waitForFunction(() => /Placeholder · free|≈ \$/.test(document.body.innerText), null, { timeout: 30_000 }).catch(() => undefined);
       const body = await page.evaluate(() => document.body.innerText);
       check(/Makes each chosen take again at 2K on MiniMax H3/.test(body), `${label} cloud: the cloud's copy (a new render, the whole frame)`);
@@ -153,9 +156,14 @@ try {
       await page.getByRole("heading", { name: "Sharpen to 1080p / 2K / 4K" }).waitFor({ timeout: 60_000 });
       const og = page.getByRole("radiogroup", { name: "Sharpen to" });
       check((await og.getByRole("radio", { name: "1080p", exact: true }).getAttribute("aria-checked")) === "true", `${label} GPU: 1080p is picked`);
-      check(await og.getByRole("radio", { name: "2K", exact: true }).isDisabled(), `${label} GPU: 2K is off (never above the footage)`);
+      check(await og.getByRole("radio", { name: "2K", exact: true }).isDisabled(), `${label} GPU: 2K is off (the part redrawn is below 1440)`);
+      check(await og.getByRole("radio", { name: "4K", exact: true }).isDisabled(), `${label} GPU: 4K is off (joined at up to 2048 px)`);
+      const ogWhy = await og.getAttribute("aria-describedby");
+      const ogText = ogWhy ? await page.locator(`[id="${ogWhy}"]`).innerText() : "";
+      check(/2K: Your character is redrawn in a 1842×1052 part of the frame/.test(ogText), `${label} GPU: 2K says why, on the page`);
+      check(/4K: Your GPU joins the clip at up to 2048 px a side, so 4K adds nothing over 2K/.test(ogText), `${label} GPU: 4K says why, on the page`);
       const ob = await page.evaluate(() => document.body.innerText);
-      check(/Redraws each chosen take at 2K, then puts only your character back over the original footage/.test(ob), `${label} GPU: the card's copy`);
+      check(/Redraws each chosen take at 1080p with Open-H3 Regenerate, then puts only your character back over the original footage/.test(ob), `${label} GPU: the card names the size picked and the model`);
       check(/Free on your GPU · about \d+ min on a 72 GB GPU|Placeholder · free/.test(ob), `${label} GPU: free, with the GPU time`);
       check(/Choose a take for every swapped segment first/.test(ob), `${label} GPU: says what's missing before it can run`);
       check(await page.getByRole("button", { name: /^Sharpen to 1080p/ }).isDisabled(), `${label} GPU: Run waits for the takes`);
@@ -191,7 +199,12 @@ try {
           await press(q.getByRole("radio", { name: "4K", exact: true }));
           await page.waitForTimeout(300);
           check(/\$1\.00 for 5 s, \$3\.00 for 15 s/.test(await page.evaluate(() => document.body.innerText)), `${label} Genjutsu cloud: 4K's price`);
-        } else check(/1080p, 2K and 4K redraw the 768p swap at the higher size\. Free on your GPU, about 3 min more per 5 s/.test(g), `${label} Genjutsu GPU: free, with the GPU time`);
+        } else {
+          check(/1080p and 2K redraw the 768p swap at the higher size\. Free on your GPU, about 3 min more per 5 s on a 72 GB GPU\. Your GPU joins the clip at up to 2048 px a side/.test(g), `${label} Genjutsu GPU: free, with the GPU time and the 2048 px join`);
+          check(await q.getByRole("radio", { name: "4K", exact: true }).isDisabled(), `${label} Genjutsu GPU: 4K is off`);
+          const qWhy = await q.getAttribute("aria-describedby");
+          check(!!qWhy && /4K: Your GPU joins the clip at up to 2048 px a side, so 4K adds nothing over 2K/.test(await page.locator(`[id="${qWhy}"]`).innerText()), `${label} Genjutsu GPU: 4K says why, on the page`);
+        }
         await noSideScroll(page, `${label} Genjutsu ${engine}`);
         await page.screenshot({ path: path.join(out, `genjutsu-${engine}-${dname}-${theme}.png`), fullPage: true });
       }

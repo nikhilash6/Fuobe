@@ -172,7 +172,7 @@ function FinishPanel({ id, project, clip, gens, estimate }: Pick<StageProps, "id
   const join = joinNote(film);
   const shownTier = tier ?? (engine === "cloud" ? "2K" : "1080p");
   // Why a size can't be picked, said under the picker (a turned-off button can't take focus or show a tooltip on touch).
-  const off = problem ? [] : options.filter((o) => !o.available && o.reason);
+  const off = options.filter((o) => !o.available && o.reason && o.reason !== problem);
   const offId = `sharpen-off-${clip.id}`;
   return (
     <Panel title="Finish">
