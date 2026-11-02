@@ -73,6 +73,9 @@ export const GenerationRequestSchema = z.object({
       draft: z.boolean().optional(),
       draftId: z.string().max(8192).optional(),
       voice: z.string().max(200).optional(),
+      // Design a voice: the voice in words; what a voice sample says (a closer clone).
+      voiceDescription: z.string().max(1000).optional(),
+      voiceTranscript: z.string().max(2000).optional(),
       dialogue: z.array(z.object({ text: z.string().max(5000), voice: z.string().max(200).optional() })).max(200).optional(),
       targetLanguage: z.string().max(80).optional(),
       startTime: z.number().min(0).max(36_000).optional(),

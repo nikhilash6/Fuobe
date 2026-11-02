@@ -87,7 +87,9 @@ export type Operation =
   // N7-5
   | "camera-path" // image + params.cameraPath (+ inputs.video: the open engine's render along the path) → the camera following the path
   // archive-restore
-  | "restore-video"; // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
+  | "restore-video" // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
+  // nm10-voice-design
+  | "voice-design"; // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
 
 export const OPERATION_LABELS: Record<Operation, string> = {
   t2i: "Text to image",
@@ -117,6 +119,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   finalize: "Final render",
   dialogue: "Dialogue",
   "voice-change": "Voice change",
+  "voice-design": "Design a voice",
   dub: "Translate & dub",
   "bg-remove-video": "Video background removal",
   "depth-video": "Video depth map",
@@ -188,6 +191,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   finalize: "video",
   dialogue: "audio",
   "voice-change": "audio",
+  "voice-design": "audio",
   dub: "video",
   "bg-remove-video": "video",
   "depth-video": "video",
@@ -320,6 +324,17 @@ export interface FieldMap {
   voice?: string;
   /** Reference clip to clone a voice from (zero-shot TTS) or to convert into (voice change). */
   voiceAudio?: string;
+  /** Words that describe the voice (voice design: fal's Qwen3-TTS `prompt`). */
+  voiceDescription?: string;
+  /** What the voice sample says (Qwen3-TTS `reference_text`): a closer clone. */
+  voiceTranscript?: string;
+  /** A cloned voice as a file (Qwen3-TTS `speaker_voice_embedding_file_url`): GenInput.voiceEmbedding. */
+  voiceEmbedding?: string;
+  /**
+   * A voice sample this API can't take directly is cloned first (fal's Qwen3-TTS: clone-voice, then text-to-speech with the
+   * embedding it returns): the endpoint, its audio field, its transcript field and the field of the file it returns.
+   */
+  cloneFirst?: { endpoint: string; audio: string; text?: string; output: string };
   /** Multi-speaker lines: an array of {text, voice}. */
   dialogue?: { key: string; text: string; voice: string };
   /** Language to translate into (dubbing). */
@@ -824,6 +839,10 @@ export interface GenParams {
   enhancePrompt?: boolean;
   /** Premade voice (TTS, voice change). */
   voice?: string;
+  /** Voice design: the voice in words ("a warm, gravelly 60-year-old narrator"). */
+  voiceDescription?: string;
+  /** What the voice sample says: a closer clone (VoxCPM2's "ultimate" cloning, Qwen3-TTS's reference text). */
+  voiceTranscript?: string;
   /** Dialogue lines, each with its own voice. */
   dialogue?: { text: string; voice?: string }[];
   /** Dubbing target language. */
@@ -1174,6 +1193,8 @@ export interface GenInput extends GenParams {
   audio2?: string;
   voiceAudio?: string;
   voiceAudio2?: string;
+  /** A saved voice's cloned embedding (fal's Qwen3-TTS), so the sample isn't cloned again (src/server/voices.ts). */
+  voiceEmbedding?: string;
   videos?: string[];
   audios?: string[];
   model3d?: string;

@@ -116,6 +116,10 @@
 // Keys added with MOSS-Image (docs/research/new-models-7.md §4.6). Model settings (params.extra; MOSS-Image's Quality control writes them):
 //   sampler, scheduler                    (KSampler sampler_name / scheduler)
 //   unet                                  (UNETLoader file: the Fast tier's drop-in 8-step DMD file, listed in optionalModels)
+// Keys added with Design a voice (nm10-voice-design). * = the provider fills it:
+//   voiceDescription*                     (the voice in words: params.voiceDescription, op voice-design)
+//   voiceTranscript*                      (what the voice sample says: params.voiceTranscript, or a saved voice's line)
+//   device*                               (VoxCPM2's device combo: the server's first torch device, cuda | mps | cpu)
 // Entry field requiredModels: files a loader reads by a name with no extension (DBSLoader's model folder), listed in the
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
@@ -194,6 +198,10 @@ export const CUSTOM_NODE_REPOS = {
   // Apache-2.0 code, release v2 (adapter_v12). Not on the validation server (needs transformers >= 5.17; the pinned
   // ComfyUI's venv has 5.22.1).
   'zen-image-edit-comfyui': 'https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d',
+  // nm10-voice-design: Design a voice. 1038lab's Qwen3-TTS nodes (GPL-3.0 code, Apache-2.0 weights) and Saganaki22's VoxCPM2
+  // nodes (Apache-2.0). Neither is on the validation server; both download their weights from Hugging Face on first run.
+  'ComfyUI-QwenTTS': 'https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293',
+  'ComfyUI-VoxCPM2': 'https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -217,6 +225,8 @@ export const PACK_CLASSES = {
   // Live edit's nodes (fuobe_live.py), which Fuobe writes into custom_nodes itself.
   'fuobe-live': /FuobeLive$/,
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
+  'ComfyUI-QwenTTS': /^AILab_Qwen3TTS(VoiceDesign|VoiceClone|CustomVoice)(_Advanced)?$/,
+  'ComfyUI-VoxCPM2': /^VoxCPM2_(TTS|Clone)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -1954,6 +1964,101 @@ export const SPEC = [
       'IndexTTS2Simple(audio = speaker reference, text, emotion_control_weight 1.0, use_fp16 true). No seed input. Best for emotion/timing control (dubbing). ' +
       'Validated with the pack registered (it imports only numpy at load time); its runtime stack (pynini, WeTextProcessing, modelscope, descript-audiotools, ...) is NOT installed by default - ' +
       'run install-comfyui.sh with INDEXTTS_RUNTIME=1, ideally in a separate worker. Emotion from a second clip or a vector (IndexTTS2EmotionVector / IndexTTS2EmotionFromText) is not wired.',
+  },
+  {
+    id: 'tts-qwen3-design',
+    title: 'Qwen3-TTS 1.7B voice design (a new voice from a description)',
+    capability: 'voice-design',
+    handBuilt: 'hand-built/tts-qwen3-design.json',
+    packs: ['ComfyUI-QwenTTS'],
+    bindings: {
+      prompt: [b('1', 'text')],
+      voiceDescription: [b('1', 'instruct')],
+      seed: [b('1', 'seed')],
+    },
+    outputs: [{ node: '2', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'Qwen3-TTS weights Apache-2.0 (Qwen); ComfyUI-QwenTTS code GPL-3.0',
+    autoDownloads: [
+      'ComfyUI-QwenTTS downloads Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign (whole repository at its current revision; 5ecdb67327fd37bb2e042aab12ff7391903235d3 when this was written: model.safetensors 3.83 GB + speech_tokenizer 0.68 GB) into models/tts/Qwen3-TTS/Qwen3-TTS-12Hz-1.7B-VoiceDesign on first run (models/TTS/Qwen3-TTS when no tts folder is registered: ComfyUI-VoxCPM2 registers models/tts)',
+    ],
+    notes:
+      'AILab_Qwen3TTSVoiceDesign_Advanced(text = the line, instruct = the voice in words, model_size 1.7B, language Auto, do_sample true so each seed is a different take: ' +
+      'top_p 1.0, top_k 50, temperature 0.9, repetition_penalty 1.05 as fal sends; max_new_tokens 4096 = about 5 minutes at 12 Hz; unload_models false keeps it loaded for the next take). ' +
+      'The Basic node samples greedily (do_sample false): every take would be the same. 10 languages (Auto, Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, Russian, Italian). ' +
+      'Install the pack with its requirements.txt (transformers >= 4.57, torch >= 2.9.1). A designed voice is reused by cloning the chosen take (tts-qwen3-clone with the take and its line as reference_text). Output MP3 V0.',
+  },
+  {
+    id: 'tts-qwen3-clone',
+    title: 'Qwen3-TTS 1.7B voice clone (a short sample, optionally its transcript)',
+    capability: 'tts',
+    handBuilt: 'hand-built/tts-qwen3-clone.json',
+    packs: ['ComfyUI-QwenTTS'],
+    bindings: {
+      prompt: [b('2', 'target_text')],
+      audio: [b('1', 'audio')],
+      voiceTranscript: [b('2', 'reference_text')],
+      seed: [b('2', 'seed')],
+    },
+    outputs: [{ node: '3', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'Qwen3-TTS weights Apache-2.0 (Qwen); ComfyUI-QwenTTS code GPL-3.0',
+    autoDownloads: [
+      'ComfyUI-QwenTTS downloads Qwen/Qwen3-TTS-12Hz-1.7B-Base (whole repository at its current revision; fd4b254389122332181a7c3db7f27e918eec64e3 when this was written: model.safetensors 3.86 GB + speech_tokenizer 0.68 GB) into models/tts/Qwen3-TTS/Qwen3-TTS-12Hz-1.7B-Base on first run (models/TTS/Qwen3-TTS when no tts folder is registered: ComfyUI-VoxCPM2 registers models/tts)',
+    ],
+    notes:
+      'AILab_Qwen3TTSVoiceClone_Advanced(target_text = the line, reference_audio = the voice sample, reference_text = what the sample says (a closer clone), ' +
+      'x_vector_only false with a transcript; the pack refuses an empty reference_text otherwise, so without one the provider turns x_vector_only on (a timbre-only clone), model_size 1.7B, do_sample true, the same sampling as the design graph). A saved voice from Design a voice passes its take and the take\'s line. Output MP3 V0. Get consent for cloned voices.',
+  },
+  {
+    id: 'tts-voxcpm2',
+    title: 'VoxCPM2 TTS with voice design (48 kHz, 30 languages)',
+    capability: 'voice-design',
+    handBuilt: 'hand-built/tts-voxcpm2.json',
+    packs: ['ComfyUI-VoxCPM2'],
+    bindings: {
+      prompt: [b('1', 'text')],
+      voiceDescription: [b('1', 'voice_description')],
+      seed: [b('1', 'seed')],
+      device: [b('1', 'device')],
+    },
+    outputs: [{ node: '2', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'VoxCPM2 weights Apache-2.0 (OpenBMB); ComfyUI-VoxCPM2 code Apache-2.0',
+    autoDownloads: [
+      'ComfyUI-VoxCPM2 downloads openbmb/VoxCPM2 (whole repository; 32279effe8c19989596f05d353d1447f51d9e915 when this was written: model.safetensors 4.58 GB, audiovae.pth 0.38 GB) into models/tts/VoxCPM/VoxCPM2 on first run',
+    ],
+    notes:
+      'VoxCPM2_TTS(voice_description = the voice in words, wrapped in parentheses before the text by the node; text = the line; model VoxCPM2, lora None, cfg 2.0, 10 timesteps, max_tokens 4096, normalize_text true, dtype auto, device cuda). ' +
+      'device is a combo of what the GPU has (cuda, mps, cpu): bound to the server\'s first torch device (/system_stats), cuda when it can\'t say. 48 kHz output, 30 languages. ' +
+      'The pack also trains LoRAs (VoxCPM_LoraTrainer) and loads them (lora_name): not wired yet. Install the pack with its requirements.txt (voxcpm, funasr, modelscope).',
+  },
+  {
+    id: 'tts-voxcpm2-clone',
+    title: 'VoxCPM2 voice clone (controllable from a clip, ultimate with its transcript; 48 kHz)',
+    capability: 'tts',
+    handBuilt: 'hand-built/tts-voxcpm2-clone.json',
+    packs: ['ComfyUI-VoxCPM2'],
+    bindings: {
+      prompt: [b('2', 'text')],
+      audio: [b('1', 'audio')],
+      voiceTranscript: [b('2', 'prompt_text')],
+      seed: [b('2', 'seed')],
+      device: [b('2', 'device')],
+    },
+    outputs: [{ node: '3', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'VoxCPM2 weights Apache-2.0 (OpenBMB); ComfyUI-VoxCPM2 code Apache-2.0',
+    autoDownloads: [
+      'ComfyUI-VoxCPM2 downloads openbmb/VoxCPM2 (whole repository; 32279effe8c19989596f05d353d1447f51d9e915 when this was written: model.safetensors 4.58 GB, audiovae.pth 0.38 GB) into models/tts/VoxCPM/VoxCPM2 on first run',
+    ],
+    notes:
+      'VoxCPM2_Clone(reference_audio = the voice sample, at most 50 s; prompt_text = what it says: given, the closest ("ultimate") clone, empty, the "controllable" clone; text = the line; ' +
+      'the same model settings as tts-voxcpm2, denoiser and ASR off, 3 retries on a babbling or silent take). A saved voice from Design a voice passes its take and the take\'s line, so it is cloned the ultimate way. Output MP3 V0. Get consent for cloned voices.',
   },
   {
     id: 'tts-dialogue-chatterbox',

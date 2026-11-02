@@ -1247,6 +1247,30 @@ const open: ModelDef[] = [
     routes: [comfy("tts", "tts-indextts2")],
     options: { voiceClone: true },
   }),
+  // Design a voice (nm10-voice-design): a new voice from words, then reused by cloning the take picked (src/server/voices.ts).
+  // Qwen3-TTS 1.7B runs the same weights on fal (qwen-3-tts); VoxCPM2 is hosted nowhere, so it runs on your GPU only.
+  o({
+    id: "oss-qwen3-tts",
+    name: "Qwen3-TTS",
+    vendor: "Alibaba Qwen",
+    family: "qwen-tts",
+    kind: "audio",
+    tagline: "Design a voice from a description, or clone one from a short sample, in 10 languages",
+    badges: ["new"],
+    routes: [comfy("voice-design", "tts-qwen3-design"), comfy("tts", "tts-qwen3-clone")],
+    options: { voiceClone: true, seed: true },
+  }),
+  o({
+    id: "oss-voxcpm2",
+    name: "VoxCPM2",
+    vendor: "OpenBMB",
+    family: "voxcpm",
+    kind: "audio",
+    tagline: "Design or clone a voice in studio-quality 48 kHz, in 30 languages",
+    badges: ["new"],
+    routes: [comfy("voice-design", "tts-voxcpm2"), comfy("tts", "tts-voxcpm2-clone")],
+    options: { voiceClone: true, seed: true },
+  }),
   o({
     id: "oss-chatterbox-dialogue",
     name: "Chatterbox Dialogue",
