@@ -53,13 +53,15 @@ export function GuestPrompt() {
   const [look, setLook] = useState(false);
   // The owner's refused run (Demo mode off, nothing connected): what would run it. A GPU when not said.
   const [needs, setNeeds] = useState<ConnectNeeds>("gpu");
+  // Opened by a tool only a GPU runs: no key offers on this card.
+  const [gpuOnly, setGpuOnly] = useState(false);
   const close = useCallback(() => {
     setOpen(false);
     setRetry(null);
   }, []);
   const viewer = useStatus().data?.viewer;
   // A studio that runs open-source models only takes no keys: its cards offer the GPU alone.
-  const keysAllowed = viewer?.kind !== "account" || viewer.paidAllowed !== false;
+  const keysAllowed = (viewer?.kind !== "account" || viewer.paidAllowed !== false) && !gpuOnly;
   const qc = useQueryClient();
   // Who this page was for, for the refusal that comes when that sign-in ended elsewhere: "owner", "account", or null.
   const who = useViewer().data;
@@ -111,6 +113,7 @@ export function GuestPrompt() {
       setAction(d.action ?? "connect");
       setLook(!!d.look);
       setNeeds(d.needs ?? "gpu");
+      setGpuOnly(!!d.gpuOnly);
     };
     window.addEventListener(GUEST_PROMPT_EVENT, guest);
     window.addEventListener(CONNECT_GPU_EVENT, gpu);
@@ -157,12 +160,12 @@ export function GuestPrompt() {
                   )}
                 </DialogDescription>
                 {/* Paid models run on the account's own key instead (Your keys), when the studio allows them. */}
-                {viewer?.kind === "account" && viewer.paidAllowed !== false && !!viewer.keys?.length && (
+                {viewer?.kind === "account" && keysAllowed && !!viewer.keys?.length && (
                   <p className="text-[13px] text-muted-foreground">{`Or switch to Cloud to use your ${viewer.keys.map((k) => CLOUD_KEY[k].label).join(" or ")} key.`}</p>
                 )}
               </DialogHeader>
               {/* No key yet: "Add a key" opens here, over the studio (this card makes room). */}
-              <KeyInstead onOpen={close} />
+              {keysAllowed && <KeyInstead onOpen={close} />}
               {!keyOnly && <ConnectChoice fromRun={!!retry} kind={retry?.kind} reason={reason} look={look} onStart={start} onNotNow={() => setRetry(null)} />}
               {/* The owner's refused run a fal.ai or Replicate key would run: the key right here, and the run starts once it's saved. */}
               {ownerRun && needs !== "gpu" && <OwnerKey alone={keyOnly} onConnected={start} />}

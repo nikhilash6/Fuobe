@@ -159,6 +159,7 @@
 //   boxes*                                (QWMDetect boxes_json: the marks the visitor kept, params.extra.boxes, checked and rebuilt
 //                                          by src/lib/watermark.ts: pixels, 1-32 boxes clamped to the picture, known types only)
 //   detectMode*                           (QWMDetect mode: manual_boxes with boxes, manual_mask on the brush graph, else auto_qwen)
+//   detectExpand*                         (QWMDetect expand: 0 for the kept marks, whose boxes carry the scan's margin; 20 in auto_qwen)
 //   maxSize*                              (here QWMPrepare max_side on both passes: 1024; 1536 past 3000 px; 768 on a GPU under 16 GB)
 // Output role "quality": a node's JSON verdict on the run (QWMFinal), folded into the image outputs' meta.quality.
 
@@ -2858,6 +2859,7 @@ export const SPEC = [
       seed: [b('12', 'seed'), b('30', 'seed')],
       detectMode: [b('3', 'mode')],
       boxes: [b('3', 'boxes_json')],
+      detectExpand: [b('3', 'expand')],
       maxSize: [b('5', 'max_side'), b('28', 'max_side')],
     },
     outputs: [{ node: '33', kind: 'image' }, { node: '38', kind: 'text', role: 'quality' }],
@@ -2866,12 +2868,13 @@ export const SPEC = [
     license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Qwen3-VL 8B Apache-2.0; SAM ViT-B (segment-anything) Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
     notes:
       'The pack\'s main workflow (qwen21_watermark.api.json, plain settings) with the int8 UNET (qwen_image_2.1_int8_convrot, as Live edit) and without its ' +
-      'debug save and preview nodes. QWMDetect (manual_boxes with the kept boxes, auto_qwen for API callers) -> QWMRefineMask (a rectangle for text, logos, ' +
+      'debug save and preview nodes. QWMDetect (manual_boxes with the kept boxes and no extra margin, since the scan\'s boxes carry it; auto_qwen with ' +
+      'expand 20 for API callers) -> QWMRefineMask (a rectangle for text, logos, ' +
       'blocks and mosaics, a SAM ViT-B outline for stickers) -> QWMPrepare (context 96, max side maxSize, OpenCV pre-fill) -> Qwen-Image 2.1 edit, 20 steps, ' +
       'cfg 1 -> QWMComposite (feather 6, align, colour match) -> QWMResidualDetect (Qwen3-VL looks for leftovers inside the first mask) -> one more pass ' +
       'when it finds some -> QWMFinal keeps the better pass and raises when any pixel outside the mask changed. Outputs: the picture (SaveImage, PNG) and ' +
       'the quality report (PreviewAny, role quality: folded into the picture\'s meta, never a result of its own). Seeds are random per run. ' +
-      'The structure settings (denoise 0.65 / 0.55, context 384, no pre-fill) are the pack\'s alternative for faces; the GPU test decides between them.',
+      'The structure settings (denoise 0.65 / 0.55, context 384, no pre-fill) are the pack\'s alternative for faces.',
   },
   {
     id: 'image-watermark-remove-qwen21-brush',

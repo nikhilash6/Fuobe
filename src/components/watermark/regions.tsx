@@ -1,12 +1,14 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { useRef } from "react";
-import { regionAt, type Region } from "@/lib/watermark";
+import { useEffect, useRef, useState } from "react";
+import { pickRegion, type Region } from "@/lib/watermark";
 import { cn } from "@/lib/utils";
 
 /** The finger's reach: small marks are hit within this many CSS pixels of their outline. */
 const REACH_PX = 22;
+/** A chip sits this many CSS pixels above its outline; nearer the top than that, it goes inside the outline. */
+const CHIP_PX = 26;
 
 const pct = (n: number, of: number) => `${(n / of) * 100}%`;
 
@@ -37,13 +39,23 @@ export function RegionsView({
   children?: React.ReactNode;
 }) {
   const box = useRef<HTMLDivElement>(null);
+  // The picture's height on screen: a chip that wouldn't fit above its outline goes inside it.
+  const [shownHeight, setShownHeight] = useState(0);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setShownHeight(el.clientHeight));
+    ro.observe(el);
+    setShownHeight(el.clientHeight);
+    return () => ro.disconnect();
+  }, []);
   const tap = (e: React.MouseEvent) => {
     if (!onToggle || !box.current) return;
     const r = box.current.getBoundingClientRect();
     if (!r.width || !r.height) return;
     const x = ((e.clientX - r.left) / r.width) * width;
     const y = ((e.clientY - r.top) / r.height) * height;
-    const hit = regionAt(regions, x, y, (REACH_PX / r.width) * width);
+    const hit = pickRegion(regions, x, y, (REACH_PX / r.width) * width);
     if (hit) onToggle(hit.id);
   };
   return (
@@ -58,7 +70,7 @@ export function RegionsView({
       <img src={src} alt="Your photo" draggable={false} className={cn("absolute inset-0 block size-full object-contain transition-opacity duration-300", dim && "opacity-55")} />
       {regions.map((g) => {
         const [x0, y0, x1, y1] = g.box;
-        const atTop = y0 / height < 0.06;
+        const atTop = shownHeight ? (y0 / height) * shownHeight < CHIP_PX : y0 / height < 0.12;
         return (
           <div
             key={g.id}

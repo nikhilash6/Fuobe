@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation, GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, Manifest, ManifestWorkflow } from "@/lib/comfy";
 
@@ -65,7 +65,7 @@ const REPORT = JSON.stringify({
   coordinate_space: "pixels",
   image_size: [1000, 800],
   boxes: [
-    { label: "stock site URL text", bbox: [80, 560, 920, 700], source_bbox: [120, 590, 880, 670], overlay_type: "translucent_text_logo", confidence: 0.93 },
+    { label: "stock site URL text", bbox: [80, 560, 920, 700], source_bbox: [120, 590, 880, 670], overlay_type: "translucent_text_logo", confidence: 0.93, background: "sandy beach\u0000 and sky" },
     { label: "round brand mark", bbox: [760, 40, 980, 220], source_bbox: [790, 60, 950, 200], overlay_type: "text_logo", confidence: 0.81 },
     { label: "pasted cartoon", bbox: [10, 10, 200, 260], source_bbox: [30, 30, 180, 240], overlay_type: "irregular_sticker", confidence: 0.9 },
   ],
@@ -136,9 +136,10 @@ describe("4. the manifest entries", () => {
       expect(e.outputs).toEqual([{ node: "33", kind: "image" }, { node: "38", kind: "text", role: "quality" }]);
       expect(e.limits).toMatchObject({ maxWidth: 4096, maxHeight: 4096 });
     }
-    expect(entry(REMOVE).bindings).toMatchObject({ detectMode: [{ node: "3", input: "mode" }], boxes: [{ node: "3", input: "boxes_json" }] });
+    expect(entry(REMOVE).bindings).toMatchObject({ detectMode: [{ node: "3", input: "mode" }], boxes: [{ node: "3", input: "boxes_json" }], detectExpand: [{ node: "3", input: "expand" }] });
     expect(entry(BRUSH).bindings.mask).toEqual([{ node: "50", input: "image" }]);
     expect(entry(BRUSH).bindings.boxes).toBeUndefined();
+    expect(entry(BRUSH).bindings.detectExpand).toBeUndefined();
   });
 
   it("names the pack and uses Live edit's Qwen files plus SAM ViT-B", () => {
@@ -185,7 +186,16 @@ describe("6. requirements and pins", () => {
       expect(shell).toContain("-m pip install segment-anything==1.0");
       expect(shell).not.toContain("requirements.txt");
       expect(shell).toContain(`checkout ${PIN}`);
+      // The SAM file the pack reads by its own path comes with it, from its pinned link, kept only when its checksum matches.
+      expect(shell).toContain(`"${SAM_URL}"`);
     }
+    const target = '"$COMFY/models/sams/sam_vit_b_01ec64.pth"';
+    expect(c.bash).toContain(`[ -s ${target} ] || curl -L --fail -o ${target} "${SAM_URL}"`);
+    expect(c.bash).toContain(`printf '%s  %s\\n' ${SAM_SHA} ${target} | sha256sum -c - || rm -f ${target}`);
+    expect(c.powershell).toContain(`.Hash -ne "${SAM_SHA.toUpperCase()}") { Remove-Item -Force`);
+    // Other packs' files a listing can't see but that have no checksum (DBS configs) aren't fetched this way.
+    const dbs = commandsFor([{ kind: "pack-install", pack: "ComfyUI-DBS" }], { inv, idx: requirements });
+    expect(dbs.bash).not.toContain("sha256sum");
   });
 });
 
@@ -220,6 +230,29 @@ describe("8. how the provider fills the removal", () => {
     expect(wf["1"].inputs.image).toBe("a.png");
     expect(wf["3"].inputs.mode).toBe("manual_boxes");
     expect(JSON.parse(String(wf["3"].inputs.boxes_json))).toEqual({ coordinate_space: "pixels", boxes: [{ bbox: [0, 20, 1200, 120], overlay_type: "unknown", label: "caption" }] });
+    // The kept boxes carry the scan's margin already: no second one.
+    expect(wf["3"].inputs.expand).toBe(0);
+  });
+
+  it("kept marks keep the scan's words for what is around them, for the repair", async () => {
+    const withBg = JSON.stringify({ boxes: [{ bbox: [10, 20, 300, 120], overlay_type: "text_logo", label: "caption", background: "knit wool" }] });
+    const { wf } = await prepare(REMOVE, { images: ["a.png"], extra: { boxes: withBg } });
+    expect(JSON.parse(String(wf["3"].inputs.boxes_json)).boxes[0].background).toBe("knit wool");
+  });
+
+  it("never takes the picture, the brush, the seeds or the file name from the request's extras", async () => {
+    const { wf } = await prepare(REMOVE, { images: ["a.png"], extra: { boxes, image: "elsewhere.png", seed: 802146, filenamePrefix: "../x", mask: "m.png" } }, { media: { "a.png": { width: 800, height: 600 }, "elsewhere.png": { width: 9000, height: 9000 } } });
+    expect(wf["1"].inputs.image).toBe("a.png");
+    expect(wf["12"].inputs.seed).not.toBe(802146);
+    expect(wf["33"].inputs.filename_prefix).not.toBe("../x");
+    expect(wf["3"].inputs.mode).toBe("manual_boxes");
+    const scan = (await prepare(SCAN, { images: ["a.png"], extra: { image: "elsewhere.png" } }, { media: { "a.png": { width: 800, height: 600 } } })).wf;
+    expect(scan["1"].inputs.image).toBe("a.png");
+  });
+
+  it("refuses a brush painted on another size of the picture, in words", async () => {
+    await expect(prepare(REMOVE, { images: ["a.png"], mask: "m.png" }, { media: { "a.png": { width: 1200, height: 800 }, "m.png": { width: 600, height: 400 } } })).rejects.toThrow(W.COPY.brushAgain);
+    expect((await prepare(REMOVE, { images: ["a.png"], mask: "m.png" }, { media: { "a.png": { width: 1200, height: 800 }, "m.png": { width: 1200, height: 800 } } })).id).toBe(BRUSH);
   });
 
   it("a brush: manual_mask on the brush graph, the mask on its loader", async () => {
@@ -228,8 +261,10 @@ describe("8. how the provider fills the removal", () => {
     expect(wf["50"].inputs.image).toBe("m.png");
   });
 
-  it("no marks from an API caller: the pack finds them itself", async () => {
-    expect((await prepare(REMOVE, { images: ["a.png"] })).wf["3"].inputs.mode).toBe("auto_qwen");
+  it("no marks from an API caller: the pack finds them itself, with the scan's margin", async () => {
+    const { wf } = await prepare(REMOVE, { images: ["a.png"], extra: { detectExpand: 0 } });
+    expect(wf["3"].inputs.mode).toBe("auto_qwen");
+    expect(wf["3"].inputs.expand).toBe(W.SCAN_EXPAND);
   });
 
   it("the repair size follows the picture and the GPU, never the request", async () => {
@@ -241,6 +276,9 @@ describe("8. how the provider fills the removal", () => {
     expect((await size({ width: 4000, height: 3000 }))["5"].inputs.max_side).toBe(1536);
     expect((await size({ width: 4000, height: 3000 }, 12 * 2 ** 30))["28"].inputs.max_side).toBe(768);
     expect(W.maxSideFor(1000, 1000, 32 * 2 ** 30)).toBe(1024);
+    // A 16 GB card reports a little under 16 GiB: it still gets the full size.
+    expect(W.maxSideFor(1000, 1000, 17_170_432_000)).toBe(1024);
+    expect(W.maxSideFor(1000, 1000, 12 * 2 ** 30)).toBe(768);
   });
 
   it("refuses a picture over 4096 px in words", async () => {
@@ -268,6 +306,10 @@ describe("9. the kept marks' checks", () => {
     expect(r.boxes[0].label).toHaveLength(80);
     expect(r.boxes[0].label.startsWith("x y")).toBe(true);
     expect(Object.keys(r.boxes[0]).sort()).toEqual(["bbox", "label", "overlay_type", "source_bbox"]);
+    const bg = JSON.parse(check({ boxes: [{ bbox: [0, 0, 5, 5], background: `wet\u0007 asphalt${"!".repeat(200)}` }] }).json).boxes[0];
+    expect(Object.keys(bg).sort()).toEqual(["background", "bbox", "label", "overlay_type"]);
+    expect(bg.background).toHaveLength(80);
+    expect(bg.background.startsWith("wet asphalt")).toBe(true);
   });
 
   it("is checked when the run is planned: a 400 in words, and a brushed run drops the boxes", () => {
@@ -291,6 +333,12 @@ describe("10. the scan report, read into regions", () => {
     ]);
     expect(s.regions[0].box).toEqual([120, 590, 880, 670]);
     expect(s.regions[0].repair).toEqual([80, 560, 920, 700]);
+    expect(s.regions[0].background).toBe("sandy beach and sky");
+    expect(s.regions[1].background).toBe("");
+    // A less sure mark comes back tight: it gets the scan's margin for its kind (20 px plus 12 % for a block).
+    expect(s.regions[3].box).toEqual([410, 310, 510, 350]);
+    expect(s.regions[3].repair).toEqual([378, 285, 542, 375]);
+    expect(W.padBox([0, 0, 100, 40], "translucent_text_logo", 110, 1000)).toEqual([0, 0, 110, 74]);
     expect(W.parseScanReport("not json")).toBeNull();
     expect(W.parseScanReport(JSON.stringify({ coordinate_space: "xyxy_1000", image_size: [10, 10], boxes: [] }))).toBeNull();
     expect(W.parseScanReport(JSON.stringify({ coordinate_space: "pixels", image_size: [10, 10], boxes: [] }))!.regions).toEqual([]);
@@ -314,13 +362,29 @@ describe("10. the scan report, read into regions", () => {
     const overlapping = [...regions, { ...regions[0], id: "big", box: [0, 0, 1000, 800] as [number, number, number, number] }];
     expect(W.regionAt(overlapping, 800, 100)?.chip).toBe("Logo");
     expect(W.foundLine(3)).toBe("Found 3. Tap any you want to keep.");
+    expect(W.foundLine(3, 3)).toBe("Found 3. Tap any you want to keep.");
+    expect(W.foundLine(1, 0)).toBe("Found 1. Tap it to remove it.");
+    expect(W.foundLine(3, 0)).toBe("Found 3. Tap the ones to remove.");
+    expect(W.foundLine(3, 1)).toBe("Found 3. Tap a mark to keep or remove it.");
     expect(W.removeLabel(3)).toBe("Remove 3");
     expect(W.removeLabel(0)).toBe("Everything is kept");
     const sent = JSON.parse(W.keptBoxesJson(regions.map((r) => (r.chip === "Logo" ? { ...r, on: false } : r))));
     expect(sent.coordinate_space).toBe("pixels");
     expect(sent.boxes.map((b: { overlay_type: string }) => b.overlay_type)).toEqual(["translucent_text_logo", "irregular_sticker"]);
-    expect(sent.boxes[0]).toMatchObject({ bbox: [80, 560, 920, 700], source_bbox: [120, 590, 880, 670] });
+    expect(sent.boxes[0]).toMatchObject({ bbox: [80, 560, 920, 700], source_bbox: [120, 590, 880, 670], background: "sandy beach and sky" });
+    expect(sent.boxes[1]).not.toHaveProperty("background");
     expect(() => W.checkWatermarkBoxes(W.keptBoxesJson(regions))).not.toThrow();
+  });
+
+  it("a tap inside a big mark never flips the small one beside it", () => {
+    const at = (id: string, box: [number, number, number, number]) => ({ ...W.parseScanReport(REPORT)!.regions[0], id, box });
+    const caption = at("caption", [100, 500, 900, 600]);
+    const logo = at("logo", [910, 500, 990, 600]);
+    // Shown 358 px wide, the 22 px reach is about 61 picture pixels.
+    expect(W.pickRegion([caption, logo], 895, 550, 61)?.id).toBe("caption");
+    expect(W.pickRegion([caption, logo], 905, 550, 61)?.id).toBe("logo");
+    expect(W.pickRegion([caption, logo], 50, 550, 61)?.id).toBe("caption");
+    expect(W.pickRegion([caption, logo], 500, 100, 61)).toBeNull();
   });
 });
 
@@ -406,13 +470,85 @@ describe("15. the demo", () => {
     const r = await settled(removal.id);
     expect(r.status).toBe("succeeded");
     expect(r.outputs[0].kind).toBe("image");
+    // The result keeps how it was asked: the marks removed, as checked, and the way they were found.
+    const kept = r.outputs[0].meta?.watermark as { mode: string; marks: { bbox: number[]; overlay_type: string }[] };
+    expect(kept.mode).toBe("manual_boxes");
+    expect(kept.marks.map((m) => m.overlay_type)).toEqual(parsed.regions.filter((x) => x.on).map((x) => x.type));
+  });
+});
+
+describe("17. what a failed run says, and the download's name", () => {
+  it("shows the app's own words, nothing on a cancel, and never a node's raw error to a visitor", () => {
+    const raw = "QWMDetect: 手动遮罩尺寸必须与原图相同。";
+    expect(W.visitorError({ status: "canceled", error: null }, false, W.COPY.retry)).toBeNull();
+    expect(W.visitorError({ status: "failed", error: W.COPY.rejected }, false, W.COPY.retry)).toBe(W.COPY.rejected);
+    expect(W.visitorError({ status: "failed", error: "Pick up to 32 marks at a time" }, false, W.COPY.retry)).toBe("Pick up to 32 marks at a time");
+    expect(W.visitorError({ status: "failed", error: raw }, false, W.COPY.retry)).toBe(W.COPY.retry);
+    expect(W.visitorError({ status: "failed", error: null }, false, W.COPY.scanFailed)).toBe(W.COPY.scanFailed);
+    expect(W.visitorError({ status: "failed", error: raw }, true, W.COPY.retry)).toBe(raw);
+    // The page renders a run's error only through visitorError.
+    const page = read("src/components/watermark/watermark-tool.tsx");
+    expect(page).not.toMatch(/\b[gs]\?\.error\b/);
+    expect(page).not.toMatch(/\{\s*[gs]\.error\s*\}/);
+  });
+
+  it("names the download after the picture, safely, with the result's own extension", () => {
+    expect(W.cleanFileName("catwalk.jpg", "/api/files/out/a.png")).toBe("catwalk-clean.png");
+    expect(W.cleanFileName("My photo · final (2).jpeg", "/api/files/out/a.jpg?x=1")).toBe("My-photo-final-2-clean.jpg");
+    expect(W.cleanFileName("", "/api/files/out/a.webp")).toBe("photo-clean.webp");
+    expect(W.cleanFileName("../../etc", "data:")).toBe("etc-clean.png");
+  });
+
+  it("a removal whose repair was refused fails in words and keeps nothing; a scan with no readable report fails too", { timeout: 60_000 }, async () => {
+    ensureRunner();
+    const poll = mockProvider.poll.bind(mockProvider);
+    const spy = vi.spyOn(mockProvider, "poll").mockImplementation(async (ctx) => {
+      const res = await poll(ctx);
+      if (res.state !== "succeeded") return res;
+      return {
+        ...res,
+        outputs: res.outputs.map((o) => ((o as { kind?: string }).kind === "image" ? { ...o, meta: { ...(o as { meta?: object }).meta, quality: { status: "rejected_first_pass" } } } : { ...o, text: "not a report" })),
+      };
+    });
+    try {
+      const picture = saveFile({ data: png(64, 48), contentType: "image/png", source: "upload" });
+      const [scan] = createGenerations({ feature: W.WATERMARK_SCAN_FEATURE, modelId: "oss-watermark-scan", op: "watermark-scan", inputs: { images: [picture.url] } });
+      const s = await settled(scan.id);
+      expect([s.status, s.error, s.outputs.length]).toEqual(["failed", W.COPY.scanFailed, 0]);
+      const boxes = JSON.stringify({ boxes: [{ bbox: [2, 2, 30, 20], overlay_type: "text_logo", label: "caption" }] });
+      const [removal] = createGenerations({ feature: W.WATERMARK_FEATURE, presetId: "app-watermark-remover", modelId: "oss-watermark-remover", op: "watermark-remove", inputs: { images: [picture.url] }, params: { extra: { boxes } } });
+      const r = await settled(removal.id);
+      expect([r.status, r.error, r.outputs.length]).toEqual(["failed", W.COPY.rejected, 0]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
 describe("16. visitor words", () => {
   it("never name models, masks, nodes, graphs or internal status", () => {
     const BANNED = /\b(model|mask|node|graph|LoRA|SAM|Qwen|seed|confidence|review|needs_review|VLM)\b/i;
-    const visitor = [W.COPY.name, W.COPY.tagline, W.COPY.hero, W.COPY.subline, ...W.COPY.details, W.COPY.scanning, W.COPY.removing, W.COPY.empty, W.COPY.rejected, W.COPY.tooBig, W.COPY.noneKept, W.COPY.hint];
+    const visitor = [
+      W.COPY.name,
+      W.COPY.tagline,
+      W.COPY.hero,
+      W.COPY.subline,
+      ...W.COPY.details,
+      W.COPY.scanning,
+      W.COPY.removing,
+      W.COPY.empty,
+      W.COPY.rejected,
+      W.COPY.tooBig,
+      W.COPY.noneKept,
+      W.COPY.hint,
+      W.COPY.retry,
+      W.COPY.scanFailed,
+      W.COPY.scanUnreadable,
+      W.COPY.brushAgain,
+      W.COPY.connectGpu,
+      W.COPY.sizeLine,
+      ...[3, 1, 0].map((on) => W.foundLine(3, on)),
+    ];
     for (const s of visitor) expect(s, s).not.toMatch(BANNED);
     const app = APPS.find((a) => a.id === "app-watermark-remover")!;
     for (const s of [app.name, app.description, app.parity ?? ""]) expect(s, s).not.toMatch(BANNED);
@@ -424,7 +560,10 @@ describe("16. visitor words", () => {
         .replace(/\{owner && quality[\s\S]*?<\/p>\s*\)\}/, "");
       const texts = [...src.matchAll(/>([^<>{}]+)</g)].map((m) => m[1].trim()).filter(Boolean);
       const quoted = [...src.matchAll(/"([A-Z][^"]{3,})"/g)].map((m) => m[1]);
-      for (const t of [...texts, ...quoted]) expect(t, `${f}: ${t}`).not.toMatch(BANNED);
+      // Template strings and aria labels too (the run's own errors are filtered by group 17).
+      const templated = [...src.matchAll(/`([^`]*[A-Za-z]{3,}[^`]*)`/g)].map((m) => m[1]).filter((t) => !/^[\w-]+(\/|\?|=)|^\$\{|^(min|calc)\(|className|bg-|text-|\bpx\b/.test(t));
+      const labels = [...src.matchAll(/aria-label=\{?[`"]([^`"]+)[`"]/g)].map((m) => m[1]);
+      for (const t of [...texts, ...quoted, ...templated, ...labels]) expect(t, `${f}: ${t}`).not.toMatch(BANNED);
     }
   });
 });

@@ -190,8 +190,8 @@ export const BINDING_KEYS = new Set([
   'maskBlur', 'pasteBack',
   // Photo to 3D (Idol): SplatToMesh's grid and the turn that faces the subject's front
   'meshDetail', 'frontYaw',
-  // Watermark Remover (ComfyUI-Qwen-Watermark): the kept marks and how the pack finds what to repair
-  'boxes', 'detectMode',
+  // Watermark Remover (ComfyUI-Qwen-Watermark): the kept marks, how the pack finds what to repair and how far past each mark
+  'boxes', 'detectMode', 'detectExpand',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

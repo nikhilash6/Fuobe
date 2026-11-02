@@ -26,6 +26,21 @@ export const MAX_LABEL = 80;
 export const MAX_SIDE = 4096;
 /** Marks the scan was less sure of are shown off (kept) at first. */
 export const SURE = 0.65;
+/**
+ * The scan's own margin around a mark (the scan graph's QWMDetect: expand 20, padding 0.35, capped per kind as the pack
+ * caps it). The sure marks come back with it; the less sure ones come back tight and get it here.
+ */
+export const SCAN_EXPAND = 20;
+const PAD: Record<(typeof OVERLAY_TYPES)[number], number> = {
+  text_logo: 0.12,
+  translucent_text_logo: 0.35,
+  rectangle: 0.12,
+  mosaic: 0.12,
+  irregular_sticker: 0.25,
+  unknown: 0.25,
+};
+/** A GPU with less memory than this repairs at 768 px (a "16 GB" card reports a little under 16 GiB). */
+export const SMALL_GPU_BYTES = 15 * 2 ** 30;
 
 /** Visitor words. */
 export const COPY = {
@@ -46,7 +61,41 @@ export const COPY = {
   tooBig: "Use a picture up to 4096 pixels on its longest side.",
   noneKept: "Pick at least one mark to remove",
   hint: "Tap to compare. Hold to see the original.",
+  /** A run that failed for a reason with no plain words of its own. */
+  retry: "That didn't work this time. Try again, or brush just the mark.",
+  scanFailed: "The scan didn't finish. Try again.",
+  scanUnreadable: "We couldn't finish checking this photo. Try again.",
+  brushAgain: "Brush on the picture again, then try again.",
+  connectGpu: "Connect your GPU, then try again.",
+  sizeLine: "JPG, PNG or WebP, up to 4096 pixels on the longest side.",
 } as const;
+
+/** The app's own words a failed run may carry: shown as they are. Anything else (a node's own error) never reaches a visitor. */
+const PLAIN_ERRORS = new Set<string>([COPY.rejected, COPY.tooBig, COPY.noneKept, COPY.scanFailed, COPY.scanUnreadable, COPY.brushAgain, COPY.connectGpu]);
+const PLAIN_CHECKS = /^(Pick up to \d+ marks at a time|The marks to remove couldn't be read\. Scan the picture again\.)$/;
+
+/**
+ * What a failed or stopped run says on the page: nothing for a cancel, the app's own words as they are, the raw error to
+ * the owner only, else `fallback`.
+ */
+export function visitorError(run: { status?: string; error?: string | null } | null | undefined, owner: boolean, fallback: string): string | null {
+  if (!run || run.status === "canceled") return null;
+  const e = run.error?.trim();
+  if (e && (PLAIN_ERRORS.has(e) || PLAIN_CHECKS.test(e) || owner)) return e;
+  return fallback;
+}
+
+/** The download's file name: "catwalk-clean.png" (the picture's own name, made safe, and the result's own extension). */
+export function cleanFileName(name: string, url: string): string {
+  const ext = (/\.(png|jpe?g|webp)(?:[?#]|$)/i.exec(url)?.[1] ?? "png").toLowerCase().replace("jpeg", "jpg");
+  const base =
+    name
+      .replace(/\.[a-z0-9]{2,4}$/i, "")
+      .replace(/[^A-Za-z0-9_]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "photo";
+  return `${base}-clean.${ext}`;
+}
 
 const TEXT_WORDS = /text|caption|word|letter|url|www|@|©|date|signature/i;
 
@@ -77,6 +126,8 @@ export interface Region {
   repair: Box;
   /** On at first (the scan was sure of it); a less sure mark starts kept. */
   on: boolean;
+  /** The material around the mark in the scan's words ("fabric", "skin"…): the repair's hint. Empty when it said none. */
+  background: string;
 }
 
 export interface ScanResult {
@@ -96,9 +147,17 @@ function ordered(b: Box, width: number, height: number): Box | null {
   return x1 > x0 && y1 > y0 ? [Math.floor(x0), Math.floor(y0), Math.ceil(x1), Math.ceil(y1)] : null;
 }
 
+/** A tight box with the scan's margin for its kind (the pack's parse_boxes, adaptive padding), inside the picture. */
+export function padBox(b: Box, type: OverlayType, width: number, height: number): Box {
+  const ex = Math.ceil(SCAN_EXPAND + (b[2] - b[0]) * PAD[type]);
+  const ey = Math.ceil(SCAN_EXPAND + (b[3] - b[1]) * PAD[type]);
+  return [Math.max(0, b[0] - ex), Math.max(0, b[1] - ey), Math.min(width, b[2] + ex), Math.min(height, b[3] + ey)];
+}
+
 /**
  * The scan's report (QWMDetect's JSON, pixels) as regions: the sure marks first and on, the less sure ones (rejected_boxes)
- * after them and off. Null when the words aren't a report.
+ * after them and off. The sure marks' boxes already carry the scan's margin; the less sure ones come back tight and get the
+ * same margin here. Null when the words aren't a report.
  */
 export function parseScanReport(text: string | undefined | null): ScanResult | null {
   if (!text) return null;
@@ -118,14 +177,15 @@ export function parseScanReport(text: string | undefined | null): ScanResult | n
     if (!Array.isArray(list)) return;
     for (const item of list) {
       if (!item || typeof item !== "object") continue;
-      const it = item as { bbox?: unknown; source_bbox?: unknown; overlay_type?: unknown; label?: unknown; confidence?: unknown };
-      const repair = box4(it.bbox) && ordered(box4(it.bbox)!, width, height);
-      if (!repair) continue;
-      const tight = (box4(it.source_bbox) && ordered(box4(it.source_bbox)!, width, height)) || repair;
+      const it = item as { bbox?: unknown; source_bbox?: unknown; overlay_type?: unknown; label?: unknown; confidence?: unknown; background?: unknown };
+      const given = box4(it.bbox) && ordered(box4(it.bbox)!, width, height);
+      if (!given) continue;
       const type = normalizeType(it.overlay_type);
+      const tight = (box4(it.source_bbox) && ordered(box4(it.source_bbox)!, width, height)) || given;
+      const repair = on ? given : padBox(tight, type, width, height);
       const label = cleanLabel(it.label);
       const sure = on && (!finite(it.confidence) || it.confidence >= SURE);
-      regions.push({ id: `r${regions.length + 1}`, type, label, chip: chipFor(type, label), box: tight, repair, on: sure });
+      regions.push({ id: `r${regions.length + 1}`, type, label, chip: chipFor(type, label), box: tight, repair, on: sure, background: cleanLabel(it.background) });
     }
   };
   take(d.boxes, true);
@@ -149,9 +209,19 @@ export function regionAt(regions: Region[], x: number, y: number, margin = 0): R
   return best;
 }
 
-/** The header over the regions: "Found 3. Tap any you want to keep." */
-export function foundLine(count: number): string {
-  return count === 1 ? "Found 1. Tap it if you want to keep it." : `Found ${count}. Tap any you want to keep.`;
+/**
+ * A tap at (x, y) in pixels: a mark the finger is inside wins (the smallest one), else the nearest small mark within
+ * `margin` of it. A tap inside a big caption never flips the small logo beside it.
+ */
+export function pickRegion(regions: Region[], x: number, y: number, margin: number): Region | null {
+  return regionAt(regions, x, y, 0) ?? regionAt(regions, x, y, margin);
+}
+
+/** The header over the regions, as the marks stand: "Found 3. Tap any you want to keep." */
+export function foundLine(count: number, on = count): string {
+  if (on >= count) return count === 1 ? "Found 1. Tap it if you want to keep it." : `Found ${count}. Tap any you want to keep.`;
+  if (on <= 0) return count === 1 ? "Found 1. Tap it to remove it." : `Found ${count}. Tap the ones to remove.`;
+  return `Found ${count}. Tap a mark to keep or remove it.`;
 }
 
 /** The main button: "Remove 3", or "Everything is kept" when every mark is kept. */
@@ -163,7 +233,7 @@ export function removeLabel(on: number): string {
 export function keptBoxesJson(regions: Region[]): string {
   const boxes = regions
     .filter((r) => r.on)
-    .map((r) => ({ bbox: r.repair, source_bbox: r.box, overlay_type: r.type, label: r.label }));
+    .map((r) => ({ bbox: r.repair, source_bbox: r.box, overlay_type: r.type, label: r.label, ...(r.background && { background: r.background }) }));
   return JSON.stringify({ coordinate_space: "pixels", boxes });
 }
 
@@ -177,8 +247,8 @@ function cleanLabel(v: unknown): string {
 
 /**
  * The kept marks as they may reach the graph: JSON, 1–32 boxes of 4 finite numbers, clamped to the picture (its size when
- * known, else 16384 px), each with an area, a known type (else "unknown"), a label of at most 80 characters with no control
- * characters, in pixels. Rebuilt from scratch: nothing the client sent passes through as it was. Throws in words.
+ * known, else 16384 px), each with an area, a known type (else "unknown"), a label and a background hint of at most 80
+ * characters with no control characters, in pixels. Rebuilt from scratch: nothing the client sent passes through as it was. Throws in words.
  */
 export function checkWatermarkBoxes(raw: unknown, size?: { width?: number; height?: number }): { json: string; count: number } {
   let doc: unknown = raw;
@@ -194,24 +264,25 @@ export function checkWatermarkBoxes(raw: unknown, size?: { width?: number; heigh
   if (list.length > MAX_BOXES) throw new Error(`Pick up to ${MAX_BOXES} marks at a time`);
   const width = size?.width && size.width > 0 ? size.width : 16384;
   const height = size?.height && size.height > 0 ? size.height : 16384;
-  const boxes: { bbox: Box; source_bbox?: Box; overlay_type: OverlayType; label: string }[] = [];
+  const boxes: { bbox: Box; source_bbox?: Box; overlay_type: OverlayType; label: string; background?: string }[] = [];
   for (const item of list) {
     if (!item || typeof item !== "object") continue;
-    const it = item as { bbox?: unknown; source_bbox?: unknown; overlay_type?: unknown; label?: unknown };
+    const it = item as { bbox?: unknown; source_bbox?: unknown; overlay_type?: unknown; label?: unknown; background?: unknown };
     const b = box4(it.bbox);
     const bbox = b && ordered(b, width, height);
     if (!bbox) continue;
     const s = box4(it.source_bbox);
     const source = s && ordered(s, width, height);
-    boxes.push({ bbox, ...(source && { source_bbox: source }), overlay_type: normalizeType(it.overlay_type), label: cleanLabel(it.label) || "watermark" });
+    const bg = cleanLabel(it.background);
+    boxes.push({ bbox, ...(source && { source_bbox: source }), overlay_type: normalizeType(it.overlay_type), label: cleanLabel(it.label) || "watermark", ...(bg && { background: bg }) });
   }
   if (!boxes.length) throw Object.assign(new Error(COPY.noneKept), { status: 400 });
   return { json: JSON.stringify({ coordinate_space: "pixels", boxes }), count: boxes.length };
 }
 
-/** The longest side the repair works at: 1024; 1536 for a picture past 3000 px; 768 on a GPU with under 16 GB. */
+/** The longest side the repair works at: 1024; 1536 for a picture past 3000 px; 768 on a GPU smaller than a 16 GB card. */
 export function maxSideFor(width?: number, height?: number, vramBytes?: number): number {
-  if (vramBytes && vramBytes > 0 && vramBytes < 16 * 2 ** 30) return 768;
+  if (vramBytes && vramBytes > 0 && vramBytes < SMALL_GPU_BYTES) return 768;
   if (Math.max(width ?? 0, height ?? 0) > 3000) return 1536;
   return 1024;
 }

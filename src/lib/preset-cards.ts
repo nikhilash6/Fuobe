@@ -285,7 +285,8 @@ export function motionMove(p: Pick<Preset, "id" | "name" | "category">): CameraM
 function keywordFx(n: string): PreviewFx | null {
   if (has(n, "firework", "confetti", "glitter", "fairies", "northern lights", "spark") || word(n, "rain", "money")) return "sparkle";
   if (has(n, "fire", "flame", "lava", "burn", "inferno", "volcano")) return "fire";
-  if (has(n, "water", "flood", "splash", "ocean", "aquarium", "bubble", "jelly", "dolphin") || word(n, "pool", "fish")) return "water";
+  // "Watermark" names a mark on a photo, not water.
+  if ((has(n, "water", "flood", "splash", "ocean", "aquarium", "bubble", "jelly", "dolphin") || word(n, "pool", "fish")) && !has(n, "watermark")) return "water";
   if (has(n, "freez", "frozen", "snow") || word(n, "ice")) return "ice";
   if (has(n, "air bending", "storm", "tornado", "smoke") || word(n, "wind", "air", "sand", "gas")) return "wind";
   if (has(n, "thunder", "lightning", "plasma", "atomic")) return "lightning";
@@ -384,7 +385,7 @@ export function previewScene(p: Pick<Preset, "type" | "name" | "category"> & { i
   }
   if (c === "commercial") return "product";
   if (has(n, "car", "building", "street", "city", "train", "helicopter", "road", "giant", "colossus", "concert", "tiny planet")) return "city";
-  if (has(n, "fish", "ocean", "flood", "water", "sand", "earth", "nature", "garden", "northern", "timelapse", "planet")) return "landscape";
+  if (has(n, "fish", "ocean", "flood", "water", "sand", "earth", "nature", "garden", "northern", "timelapse", "planet") && !has(n, "watermark")) return "landscape";
   if (has(n, "head", "face", "eyes", "body", "hair", "skin", "tears", "mask")) return "portrait";
   if (["destruction", "scale"].includes(c)) return pick(p.id, ["city", "landscape", "portrait"] as const);
   if (["elements", "nature", "color grade", "transitions"].includes(c)) return pick(p.id, ["landscape", "city", "portrait"] as const);

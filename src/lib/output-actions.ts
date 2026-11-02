@@ -17,7 +17,7 @@ import { CLEAN_FEATURE } from "./av/clean-voice";
 import { anyAngleHref } from "./catalog/any-angle";
 import { isInstrumental, lyricsOf, songFormat, STEMS_FORMATS } from "./lyrics";
 import { CLEAN_DIALOGUE_FEATURE, cleanDialogueHref } from "./av/clean-dialogue";
-import { WATERMARK_APP_ID, WATERMARK_FEATURE } from "./watermark";
+import { MAX_SIDE as MAX_WATERMARK_SIDE, WATERMARK_APP_ID, WATERMARK_FEATURE } from "./watermark";
 
 export type OutputActionId =
   | "animate"
@@ -156,8 +156,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("upscale", "Upscale", `/upscale?image=${q(o.url)}`);
       // Any Angle: the same photo from another camera (its 3D view is built once per photo).
       link("new-angle", "New angle", anyAngleHref(o.url));
-      // The Watermark Remover's own results go back through its brush instead.
-      if (g.feature !== WATERMARK_FEATURE) link("remove-watermark", "Remove watermark", `/apps/${WATERMARK_APP_ID}?image=${q(o.url)}`);
+      // The Watermark Remover's own results go back through its brush instead; a picture known to be past its size limit isn't offered.
+      if (g.feature !== WATERMARK_FEATURE && !(Math.max(o.width ?? 0, o.height ?? 0, Number(o.meta?.width) || 0, Number(o.meta?.height) || 0) > MAX_WATERMARK_SIDE)) link("remove-watermark", "Remove watermark", `/apps/${WATERMARK_APP_ID}?image=${q(o.url)}`);
       link("reference", "Use as reference", `/image?ref=${q(o.url)}`);
       link("grade", "Color grade", `/color-grade?image=${q(o.url)}`);
       link("layers", "Open in Layers", layersHref(g, o.url));
@@ -265,7 +265,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   if (ctx.reuse) out.push({ id: "reuse", label: "Reuse settings", placement: "menu" });
   // The steps behind a finished result, as a skill that runs again with new inputs (src/components/skills).
   if (g.status === "succeeded") out.push({ id: "make-skill", label: "Make a skill from this…", placement: "menu" });
-  if (g.prompt) out.push({ id: "copy-prompt", label: "Copy prompt", placement: "menu" });
+  // The Watermark Remover's prompt is its own fixed instruction, not the visitor's words: nothing to copy.
+  if (g.prompt && g.feature !== WATERMARK_FEATURE) out.push({ id: "copy-prompt", label: "Copy prompt", placement: "menu" });
   // A read-only link (src/lib/share.ts): finished results whose files Fuobe keeps.
   if (g.status === "succeeded" && g.outputs.some((x) => storedPath(x.url))) out.push({ id: "share", label: "Share link…", placement: "menu" });
   // Library: pinned results stay at the top of their view; the review status is a sub-menu of its own.

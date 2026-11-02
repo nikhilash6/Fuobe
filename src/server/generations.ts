@@ -12,7 +12,7 @@ import { withSignatureWords } from "@/lib/catalog/palettes";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
 import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
-import { COPY as WATERMARK_COPY, rejectedRepair, type WatermarkQuality } from "@/lib/watermark";
+import { checkWatermarkBoxes, COPY as WATERMARK_COPY, parseScanReport, rejectedRepair, type WatermarkQuality } from "@/lib/watermark";
 import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
 import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, insertRangeProblem, portraitShapeProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
@@ -2202,6 +2202,24 @@ async function pollOne(r: Row): Promise<void> {
   if (r.op === "watermark-remove" && (res.outputs as RichOutput[]).some((o) => rejectedRepair(o.meta?.quality as WatermarkQuality | undefined))) {
     update(r.id, { status: "failed", error: WATERMARK_COPY.rejected, completed_at: Date.now(), message: null });
     return;
+  }
+  // A Watermark Remover scan with no report the page can read fails in words (never a page that waits for marks forever).
+  if (r.op === "watermark-scan" && !(res.outputs as RichOutput[]).some((o) => parseScanReport(o.text))) {
+    update(r.id, { status: "failed", error: WATERMARK_COPY.scanFailed, completed_at: Date.now(), message: null });
+    return;
+  }
+  // A Watermark Remover result keeps how it was asked, next to the repair's verdict: the marks removed (as checked) and how.
+  if (r.op === "watermark-remove") {
+    const req = JSON.parse(r.request_json) as GenerationRequest;
+    const asked = req.params?.extra?.boxes;
+    const mode = req.inputs?.mask ? "manual_mask" : asked !== undefined ? "manual_boxes" : "auto_qwen";
+    let marks: unknown[] | undefined;
+    try {
+      marks = mode === "manual_boxes" ? (JSON.parse(checkWatermarkBoxes(asked).json) as { boxes: unknown[] }).boxes : undefined;
+    } catch {
+      marks = undefined;
+    }
+    res = { ...res, outputs: (res.outputs as RichOutput[]).map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, watermark: { mode, ...(marks && { marks }) } } } : o)) };
   }
   // Mark first so a slow download isn't polled twice.
   update(r.id, { status: "running", progress: 0.99, message: "Saving results" });

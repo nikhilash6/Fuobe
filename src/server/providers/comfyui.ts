@@ -45,7 +45,7 @@ import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { MOTION_GRAPHS, motionTransferPrompt, neutralPrompt, WORDS_NEEDED } from "@/lib/comfy-prompts";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
-import { checkWatermarkBoxes, COPY as WATERMARK_COPY, MAX_SIDE as MAX_WATERMARK_SIDE, maxSideFor, qualityOf } from "@/lib/watermark";
+import { checkWatermarkBoxes, COPY as WATERMARK_COPY, MAX_SIDE as MAX_WATERMARK_SIDE, maxSideFor, qualityOf, SCAN_EXPAND as WATERMARK_SCAN_EXPAND } from "@/lib/watermark";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -1740,13 +1740,18 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   const sourceChannels = b.channels || b.separationModel ? (ctx.media?.(String(values.audio ?? ""))?.channels ?? (Number(extra.sourceChannels) || undefined)) : undefined;
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
-  // Options → Prompt helper (FLUX 3 Image Klein) and a layout's draft (kept for Reuse): read here, never bound.
-  // Watermark Remover: the marks kept (checked and rebuilt again, clamped to this picture), how QWMDetect finds what to repair,
-  // and the size the repair works at (the picture's size and the GPU's memory). Never what the request says for these.
+  // Watermark Remover: the marks kept (checked and rebuilt again, clamped to this picture), how QWMDetect finds what to repair
+  // and how far past each mark, and the size the repair works at (the picture's size and the GPU's memory). Never what the
+  // request says for these, nor for the picture, the brush, the seeds or the file names already bound.
   if (manifest.capability === "watermark-remove") {
     const still = ctx.media?.(String(values.image ?? ""));
     if (still?.width && still.height && Math.max(still.width, still.height) > MAX_WATERMARK_SIDE) throw new ProviderError(WATERMARK_COPY.tooBig, 400);
     const brushed = !!b.mask;
+    // A brush painted on another size of the picture can't line up with it (QWMDetect refuses it): said in words up front.
+    const painted = brushed ? ctx.media?.(String(values.mask ?? "")) : undefined;
+    if (painted?.width && painted.height && still?.width && still.height && (painted.width !== still.width || painted.height !== still.height)) {
+      throw new ProviderError(WATERMARK_COPY.brushAgain, 400);
+    }
     if (!brushed && extra.boxes !== undefined) {
       try {
         values.boxes = checkWatermarkBoxes(extra.boxes, { width: still?.width, height: still?.height }).json;
@@ -1755,13 +1760,17 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       }
       values.detectMode = "manual_boxes";
     } else if (b.detectMode) values.detectMode = brushed ? "manual_mask" : "auto_qwen";
+    // The kept marks already carry the scan's margin; marks the pack finds itself (an API caller's run) get it here.
+    if (b.detectExpand) values.detectExpand = values.detectMode === "manual_boxes" ? 0 : WATERMARK_SCAN_EXPAND;
     if (b.maxSize) values.maxSize = maxSideFor(still?.width, still?.height, await ctx.vram?.().catch(() => undefined));
-    for (const k of ["boxes", "detectMode", "maxSize"]) delete extra[k];
+    for (const k of ["boxes", "detectMode", "detectExpand", "maxSize", "image", "mask", "seed", "filenamePrefix"]) delete extra[k];
   }
   if (manifest.capability === "watermark-scan") {
     const still = ctx.media?.(String(values.image ?? ""));
     if (still?.width && still.height && Math.max(still.width, still.height) > MAX_WATERMARK_SIDE) throw new ProviderError(WATERMARK_COPY.tooBig, 400);
+    for (const k of ["image", "filenamePrefix"]) delete extra[k];
   }
+  // Options → Prompt helper (FLUX 3 Image Klein) and a layout's draft (kept for Reuse): read here, never bound.
   const helper = extra[PROMPT_HELPER_PARAM];
   const laidOut = carriesBoxes(extra);
   delete extra[PROMPT_HELPER_PARAM];

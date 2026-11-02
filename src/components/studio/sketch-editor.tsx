@@ -129,6 +129,8 @@ export function SketchEditor(props: {
   mode: SketchMode;
   /** Strokes of the drawing being touched up (empty for a new one). */
   initialStrokes?: Stroke[];
+  /** The dialog's own words for one tool (its title, the line under it and the done button); the defaults otherwise. */
+  words?: SketchWords;
   onDone: (r: SketchResult) => void;
 }) {
   // The canvas answers Escape first: it closes an open note instead of the whole editor.
@@ -154,11 +156,18 @@ export function SketchEditor(props: {
   );
 }
 
+export interface SketchWords {
+  title: string;
+  hint: string;
+  done: string;
+}
+
 function SketchCanvas({
   onOpenChange,
   image,
   mode,
   initialStrokes,
+  words,
   onDone,
   escapeRef,
 }: {
@@ -166,6 +175,7 @@ function SketchCanvas({
   image: string;
   mode: SketchMode;
   initialStrokes?: Stroke[];
+  words?: SketchWords;
   onDone: (r: SketchResult) => void;
   escapeRef: React.RefObject<() => boolean>;
 }) {
@@ -437,11 +447,12 @@ function SketchCanvas({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{mode === "mask" ? "Paint what should change" : "Draw your edit"}</DialogTitle>
+        <DialogTitle>{words?.title ?? (mode === "mask" ? "Paint what should change" : "Draw your edit")}</DialogTitle>
         <DialogDescription>
-          {mode === "mask"
-            ? "Brush over the area to replace. Everything you don't paint stays as it is."
-            : "Sketch arrows, shapes or write short notes — the model follows them and removes the marks."}
+          {words?.hint ??
+            (mode === "mask"
+              ? "Brush over the area to replace. Everything you don't paint stays as it is."
+              : "Sketch arrows, shapes or write short notes — the model follows them and removes the marks.")}
         </DialogDescription>
       </DialogHeader>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -525,11 +536,11 @@ function SketchCanvas({
       </div>
       <DialogFooter className="items-center">
         <p className="mr-auto hidden text-[12px] text-muted-foreground sm:block">[ ] brush size · {keyCombo("Z", { mod })} undo · {keyCombo("Z", { mod, shift: true })} redo{mode === "draw" ? " · T note" : ""}</p>
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>
+        <Button variant="ghost" className="min-h-11 sm:min-h-9" onClick={() => onOpenChange(false)}>
           Cancel
         </Button>
-        <Button onClick={save} disabled={!hasPaint || saving}>
-          {saving && <Loader2 className="animate-spin" />} {mode === "mask" ? "Use this mask" : "Use this drawing"}
+        <Button className="min-h-11 sm:min-h-9" onClick={save} disabled={!hasPaint || saving}>
+          {saving && <Loader2 className="animate-spin" />} {words?.done ?? (mode === "mask" ? "Use this mask" : "Use this drawing")}
         </Button>
       </DialogFooter>
     </>

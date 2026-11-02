@@ -51,7 +51,7 @@ declare -A NODES=(
   # Watermark Remover (image-watermark-*): overflowofedge's Qwen watermark nodes (MIT), read at this commit (no network,
   # subprocess, eval or file writes). Its requirements.txt is NOT installed: it asks for opencv-contrib-python-headless,
   # which next to opencv-python can leave cv2 broken; core cv2 has every function it uses, and segment-anything is in the
-  # union below. Its SAM ViT-B file goes in models/sams (SAM_WEIGHTS block at the end).
+  # union below. Its SAM ViT-B file goes in models/sams (the SAM ViT-B block near the end).
   [ComfyUI-Qwen-Watermark]="https://github.com/overflowofedge/ComfyUI-Qwen-Watermark eef829d34d6e9d0d2ae0c1386fab7371a864cf34"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
@@ -294,8 +294,6 @@ SHA
 fi
 # --- end ComfyUI-RE-USE
 
-echo "ComfyUI installed in $COMFYUI_DIR. Start it with: $SCRIPT_DIR/start-comfyui.sh"
-
 # --- SAM ViT-B (image-watermark-remove-qwen21: sticker outlines), 375 MB (Meta's file, from a pinned Hugging Face mirror), into models/sams, checked with
 # sha256sum -c before it is kept (a .pth can run code when it loads). Only with REAL_MODELS=1 (validation needs no weights).
 if [ "${REAL_MODELS:-0}" = "1" ]; then
@@ -311,3 +309,6 @@ if [ "${REAL_MODELS:-0}" = "1" ]; then
     fi
   fi
 fi
+# --- end SAM ViT-B
+
+echo "ComfyUI installed in $COMFYUI_DIR. Start it with: $SCRIPT_DIR/start-comfyui.sh"

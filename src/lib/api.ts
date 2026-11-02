@@ -1312,6 +1312,8 @@ export interface ConnectGpuDetail extends RefusalDetail {
   reason?: "setting" | "find" | "browser";
   look?: boolean;
   needs?: ConnectNeeds;
+  /** A tool only a GPU runs (no fal.ai or Replicate key can): the card offers the GPU alone, to accounts too. */
+  gpuOnly?: boolean;
 }
 export type ConnectNeeds = "gpu" | "key" | "any";
 const asNeeds = (v: string | null): ConnectNeeds | undefined => (v === "gpu" || v === "key" || v === "any" ? v : undefined);
@@ -1355,18 +1357,20 @@ export function askToSignUp(action: RefusalAction = "upload"): void {
  * for nothing. A guest gets "Create a free account", an account with neither its own GPU nor its own key "Connect your
  * GPU or add a key". The function returns true when it asked (the chooser stays shut, the file stays out), and false
  * for anyone the upload takes, and while who is looking isn't known yet (the server's refusal opens the same card).
+ * `action` "run" asks the same way before a run of a picture already on the site (a GPU-only tool's hand-off).
  */
-export function useAskBeforeUpload(): () => boolean {
+export function useAskBeforeUpload({ gpuOnly = false }: { gpuOnly?: boolean } = {}): (action?: RefusalAction) => boolean {
   const guest = useIsGuest();
   const seen = useStatus().data?.viewer;
   // With hosted runs on, an account adds pictures for runs on this studio's GPUs: the upload says if a kind isn't taken.
-  const nowhere = seen?.kind === "account" && !seen.gpu.connected && !seen.keys?.length && !seen.hosted;
-  return useCallback(() => {
-    if (guest) askToSignUp("upload");
-    else if (nowhere) window.dispatchEvent(new CustomEvent<RefusalDetail>(CONNECT_GPU_EVENT, { detail: { action: "upload" } }));
+  // A GPU-only tool (gpuOnly) asks for the GPU even when the account has a key: no key runs it.
+  const nowhere = seen?.kind === "account" && !seen.gpu.connected && (gpuOnly || !seen.keys?.length) && !seen.hosted;
+  return useCallback((action: RefusalAction = "upload") => {
+    if (guest) askToSignUp(action);
+    else if (nowhere) window.dispatchEvent(new CustomEvent<ConnectGpuDetail>(CONNECT_GPU_EVENT, { detail: { action, ...(gpuOnly && { gpuOnly }) } }));
     else return false;
     return true;
-  }, [guest, nowhere]);
+  }, [guest, nowhere, gpuOnly]);
 }
 
 /**
