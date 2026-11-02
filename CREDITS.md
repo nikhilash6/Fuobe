@@ -13,6 +13,7 @@ Some licences ask the app that runs their model to say so.
 - **MiniMax H3**: Fuobe Character swap, MiniMax H3, H3 Character Swap · Relay 2.0, H3 Person Removal · Relay 2.0, H3 Character Swap · studio segment, MiniMax H3 Text to Video + Audio (20 steps), MiniMax H3 Image to Video + Audio (20 steps), MiniMax H3 Start + End Frame to Video + Audio (20 steps), MiniMax H3 360-degree orbit of a still + Audio (Orbit LoRA, 28 steps)
 - **Built with Llama**: HiDream-I1 Dev
 - **Built with DINOv3**: Pixal3D, TRELLIS.2, TRELLIS.2 Multi-view, Qwen-Image 2.1 → TRELLIS.2, TripoSplat
+- **Powered by Hi3D 1.0**: Hi3D 1.0
 
 ## Attributions
 
@@ -153,6 +154,7 @@ Some licences ask the app that runs their model to say so.
 | Qwen-Image 2.1 → TRELLIS.2 | Alibaba Qwen × Microsoft | 3D | [MIT (TRELLIS.2 weights, DINOv3-NAF / TRELLIS VAEs as repackaged by Comfy-Org, BiRefNet); the dino_v3_L_naf image encoder is DINOv3 ViT-L under the DINOv3 License (royalty-free, commercial use allowed; the app must show a "Built with DINOv3" notice)](https://huggingface.co/Comfy-Org/TRELLIS.2) | Conditions apply |
 | TripoSplat | Tripo (VAST) | 3D | [MIT (VAST-AI/TripoSplat weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT](https://huggingface.co/VAST-AI/TripoSplat) | Conditions apply |
 | MoGe 2 scene | Microsoft | 3D | [MIT (microsoft/MoGe 2 and 3, Comfy-Org/MoGe repack)](https://spdx.org/licenses/MIT.html) |  |
+| Hi3D 1.0 | Hi3D (Sparc3D) | 3D | [Hi3D Open License Agreement 1.0 (Hi3D v1.0 weights and vendored code by OCEANO HK HOLDING LIMITED: commercial use permitted; above 200,000 monthly active users or USD 1,000,000 monthly revenue, notify the licensor and apply for a separate licence within 60 days; the app must show "Powered by Hi3D 1.0" linking to http://hi3d.ai/); T8star's ComfyUI nodes MIT; DINOv2-L Apache-2.0, CLIP ViT-L/14 MIT (OpenAI); BiRefNet MIT](https://huggingface.co/hi3d-official/Hi3Dv1.0/blob/d502e938cbedc6e87aba8884614c5ca6d177a4b6/LICENSE) | Conditions apply |
 | Wan 2.1 + Uni3C path | Alibaba (Wan, DAMO Uni3C) | Video | [Apache-2.0 (Wan 2.1 I2V 14B; Uni3C, alibaba-damo-academy/Uni3C — Kijai's repack repo carries no licence field)](https://spdx.org/licenses/Apache-2.0.html) |  |
 | FLUX.2 [klein] Try-On | Black Forest Labs × xocialize | Image | [Apache-2.0 (FLUX.2 [klein] 4B, try-on LoRA by xocialize); segformer_b2_clothes MIT; ComfyUI-RMBG code GPL-3.0](https://spdx.org/licenses/Apache-2.0.html) |  |
 | Qwen-Image-Edit Product Shot | Alibaba Qwen × dx8152 | Image | [Apache-2.0 (Qwen-Image-Edit-2509, White_to_Scene and Lightning LoRAs); BiRefNet MIT](https://spdx.org/licenses/Apache-2.0.html) |  |
@@ -210,6 +212,7 @@ The custom nodes Fuobe's workflows install, with their licences.
 | [ComfyUI-Krea2-Ostris-Edit](https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit) | [MIT](https://spdx.org/licenses/MIT.html) | Ostris' Krea 2 edit nodes (Krea 2 Inpaint); MIT code. The inpaint LoRA it runs is under the Krea 2 Community License |
 | [ComfyUI-MiniMax-H3-Turbo](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo/tree/77bfa67575b14e3be6214f1747732e540c68b5dd) | [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) | larryvrh's turbo LoRA loader and sampler for MiniMax H3 (8 steps); Apache-2.0 code, and the turbo v4 LoRA is Apache-2.0. The MiniMax H3 weights it runs leave out the US, the EU, the UK and South Korea |
 | [plaguekind-nodes](https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes/tree/d58d006a4ea32c25c06499f2ff104f0852a045a6) | [MIT](https://spdx.org/licenses/MIT.html) | PlagueKind's H3 SLA attention (needs Triton) and AdaLN LoRA fix for MiniMax H3; MIT code |
+| [Comfyui-Hi3d-T8](https://github.com/T8mars/Comfyui-Hi3d-T8/tree/73848490976e6a9b0c735ce02984c03866a495e7) | [MIT](https://spdx.org/licenses/MIT.html) | T8star's Hi3D nodes (model loader, mesh loader, refine); MIT code. The Hi3D code it vendors and the Hi3D weights are under the Hi3D Open License Agreement 1.0: commercial use, a separate licence above 200,000 monthly users or US$1M monthly revenue, and "Powered by Hi3D 1.0" shown with its results |
 
 ## Elsewhere
 
