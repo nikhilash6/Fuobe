@@ -666,6 +666,7 @@ function SimpleTool({
   verb,
   failedTitle,
   children,
+  afterModel,
   settings,
   prompt,
   disabled,
@@ -675,6 +676,8 @@ function SimpleTool({
   verb: string;
   failedTitle: string;
   children?: React.ReactNode;
+  /** Fields that belong to the model picked (Bria guided cut-out's words): below the model select, so they appear under it. */
+  afterModel?: React.ReactNode;
   settings?: LayerJobInput["settings"];
   prompt?: string;
   disabled?: boolean;
@@ -693,6 +696,7 @@ function SimpleTool({
       <Scope node={node} />
       {children}
       <ModelSelect tool={tool} value={modelId} onChange={setModelId} />
+      {afterModel}
       <JobState job={job} failedTitle={failedTitle} onRetry={run} />
       <RunRow cost={costLabel(model, isDemo(model))} busy={busy} disabled={disabled || !model || (!!job && isRunning(job))} onClick={run}>
         {verb}
@@ -707,13 +711,21 @@ function RemoveBgTool() {
   const [guide, setGuide] = useState("");
   const guided = !!picker.model?.guided;
   return (
-    <SimpleTool tool="bg-remove" verb="Remove background" failedTitle="Failed to load image. Please try again." picker={picker} prompt={guided ? guide.trim() || undefined : undefined}>
+    <SimpleTool
+      tool="bg-remove"
+      verb="Remove background"
+      failedTitle="Failed to load image. Please try again."
+      picker={picker}
+      prompt={guided ? guide.trim() || undefined : undefined}
+      afterModel={
+        guided && (
+          <Field label="What to keep or drop (optional)" htmlFor="cutout-guide">
+            <Input id="cutout-guide" value={guide} onChange={(e) => setGuide(e.target.value)} maxLength={300} placeholder="e.g. “keep the shadow” or “without the hand”" className="h-9" />
+          </Field>
+        )
+      }
+    >
       <HowItWorks>Remove background finds the main subject of your image and cuts everything else away, giving you the subject on a transparent background.</HowItWorks>
-      {guided && (
-        <Field label="What to keep or drop (optional)" htmlFor="cutout-guide">
-          <Input id="cutout-guide" value={guide} onChange={(e) => setGuide(e.target.value)} maxLength={300} placeholder="e.g. “keep the shadow” or “without the hand”" className="h-9" />
-        </Field>
-      )}
     </SimpleTool>
   );
 }
