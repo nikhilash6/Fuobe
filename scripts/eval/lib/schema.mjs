@@ -5,7 +5,7 @@
 import { z } from "zod";
 
 export const ENGINES = /** @type {const} */ (["demo", "open", "cloud"]);
-export const METRICS = /** @type {const} */ (["clip", "aesthetic", "style", "identity", "temporal", "lipsync", "continuity", "palette"]);
+export const METRICS = /** @type {const} */ (["clip", "aesthetic", "style", "identity", "temporal", "lipsync", "continuity", "palette", "separation", "wer"]);
 
 const Slug = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "lower-case letters, digits and dashes");
 const CaseId = z.string().max(120).regex(/^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/, "lower-case words joined by - . _ and /");

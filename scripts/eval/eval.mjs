@@ -100,7 +100,7 @@ pnpm eval:covers --versions [--dry-run] [--public-dir public] [--manifest …]
   history: "pnpm eval:history [--suite soul] [--case soul/v1-general] [--limit 20]",
   validate: "pnpm eval:validate [suite files…]   checks every case file and that the generated suites match the research",
   trash: "pnpm eval:trash <runId> [--dry-run]   moves the run's generations to that Fuobe's Trash (its results here stay)",
-  setup: "pnpm eval:setup [--identity] [--download [--dinov2] [--scrfd]] [--torch-backend cpu|auto|cu128…]   the metrics venv (needs uv)",
+  setup: "pnpm eval:setup [--identity] [--asr] [--download [--dinov2] [--scrfd]] [--torch-backend cpu|auto|cu128…]   the metrics venv (needs uv); --asr adds Whisper for the separation suite's word error rate",
 };
 
 function usage() {
@@ -557,7 +557,7 @@ function coversFromMastersCmd(v, ctx) {
 }
 
 async function setup(args, ctx) {
-  const { values: v } = parse(args, { identity: { type: "boolean" }, dinov2: { type: "boolean" }, scrfd: { type: "boolean" }, download: { type: "boolean" }, "torch-backend": { type: "string" } });
+  const { values: v } = parse(args, { identity: { type: "boolean" }, asr: { type: "boolean" }, dinov2: { type: "boolean" }, scrfd: { type: "boolean" }, download: { type: "boolean" }, "torch-backend": { type: "string" } });
   if (v.help) return ctx.print(HELP.setup), 0;
   const step = (cmd, a, opts = {}) => {
     ctx.note(`$ ${cmd} ${a.join(" ")}`);
@@ -569,7 +569,8 @@ async function setup(args, ctx) {
   if (!fs.existsSync(path.join(METRICS_DIR, py))) step("uv", ["venv", ".venv", "--python", ">=3.11"]);
   step("uv", ["pip", "install", "--python", py, "-r", "requirements.txt", "--torch-backend", v["torch-backend"] ?? "cpu"]);
   if (v.identity) step("uv", ["pip", "install", "--python", py, "-r", "requirements-identity.txt"]);
-  if (v.download) step(py, ["-m", "fuobe_metrics.download", ...(v.identity ? ["--identity"] : []), ...(v.dinov2 ? ["--dinov2"] : []), ...(v.scrfd ? ["--scrfd"] : [])]);
+  if (v.asr) step("uv", ["pip", "install", "--python", py, "-r", "requirements-asr.txt", "--torch-backend", v["torch-backend"] ?? "cpu"]);
+  if (v.download) step(py, ["-m", "fuobe_metrics.download", ...(v.identity ? ["--identity"] : []), ...(v.asr ? ["--asr"] : []), ...(v.dinov2 ? ["--dinov2"] : []), ...(v.scrfd ? ["--scrfd"] : [])]);
   ctx.print(`Metrics ready in ${path.join(METRICS_DIR, ".venv")}${v.download ? "" : " (weights download on first use, or run pnpm eval:setup --download)"}.`);
   return 0;
 }
