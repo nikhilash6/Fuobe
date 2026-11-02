@@ -25,9 +25,11 @@ export interface CanvasView {
 
 const active = (g: Generation) => g.status === "queued" || g.status === "running";
 
-export function useCanvases() {
+/** The owner's canvases; `enabled: false` (a visitor, who has none) asks for nothing. */
+export function useCanvases({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ["canvases"],
+    enabled,
     queryFn: async () => (await json<{ items: CanvasSummary[] }>(await fetch("/api/canvases"))).items,
   });
 }

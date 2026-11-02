@@ -5,7 +5,7 @@
 // hosted on fal (Wan 2.2 Fun VACE, no LTX-2.3), 480p / 580p / 720p, and says in one line what stays on the GPU; the open
 // engine says "on your GPU". Storyboard: the cloud board runs on Fuobe's open recipe with Nano Banana Pro a partner choice, the look chip
 // starts at "No look", a look is picked, the board's price is shown, a board in that look is made. Canvas: the
-// Effects 2.0 chains have their own section and one opens as a canvas with the edit and the effect. Nothing scrolls
+// effect films have their own section and one opens as a canvas with the edit and the effect. Nothing scrolls
 // sideways. Usage: node tests/e2e/popcorn-evolution.mjs [appUrl] [--shots <dir>]. Exits 1 on a failed check.
 import fs from "node:fs";
 import path from "node:path";
@@ -158,12 +158,12 @@ try {
       check(`${tag}: a board in the look is made (demo)`, board && /Fuobe Soul/.test(await text()));
       check(`${tag}: no sideways scroll (Storyboard with a board)`, (await sideways()) <= 1, `${await sideways()} px`);
 
-      // ---- Canvas: Effects 2.0 chains
+      // ---- Canvas: effect films
       await page.goto(`${app}/canvas?tab=templates`, { waitUntil: "load", timeout: 180_000 });
-      const section = page.getByRole("heading", { name: "Effects 2.0 chains" });
+      const section = page.getByRole("heading", { name: "Effect films" });
       await section.waitFor({ timeout: 120_000 });
       const cards = await page.locator("section", { has: section }).getByRole("button", { name: "Use template" }).count();
-      check(`${tag}: the Effects 2.0 chains have their own section`, cards >= 10, `${cards} cards`);
+      check(`${tag}: the effect films have their own section`, cards >= 10, `${cards} cards`);
       check(`${tag}: the chain cards name their models`, /Qwen-Image-Edit 2511 \(hosted\) · Fuobe DoP/.test(await text()));
       check(`${tag}: no sideways scroll (templates)`, (await sideways()) <= 1, `${await sideways()} px`);
       await shot("canvas-templates");

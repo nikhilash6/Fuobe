@@ -1,41 +1,5 @@
 "use client";
 
-import {
-  AtSign,
-  AudioLines,
-  AudioWaveform,
-  Building2,
-  Castle,
-  Clapperboard,
-  Columns3,
-  Combine,
-  Dog,
-  Eraser,
-  Feather,
-  Film,
-  Fish,
-  Frame,
-  GalleryHorizontal,
-  Gem,
-  ImageIcon,
-  Languages,
-  MessageSquareText,
-  Mic2,
-  MonitorPlay,
-  Package,
-  Palette,
-  Sparkles,
-  Star,
-  StickyNote,
-  Swords,
-  Table,
-  Type,
-  UserRound,
-  Waves,
-  ZoomIn,
-  type LucideIcon,
-  Box,
-} from "lucide-react";
 import { createContext, useContext, useMemo, useSyncExternalStore } from "react";
 import {
   describeNode,
@@ -55,49 +19,7 @@ import {
 import type { Engine, Generation, GenerationStatus, ModelDef, Operation, OutputFile } from "@/lib/catalog/types";
 import type { EngineMode } from "@/lib/api";
 
-export const ICONS: Record<string, LucideIcon> = {
-  Type,
-  ImageIcon,
-  Film,
-  AudioLines,
-  AtSign,
-  Sparkles,
-  Combine,
-  Frame,
-  ZoomIn,
-  Eraser,
-  Mic2,
-  MonitorPlay,
-  StickyNote,
-  Clapperboard,
-  MessageSquareText,
-  Package,
-  GalleryHorizontal,
-  Columns3,
-  AudioWaveform,
-  UserRound,
-  Languages,
-  Table,
-  // Blockout to film
-  Box,
-  // Effects 2.0 chains (src/lib/catalog/canvas.ts EFFECT_CHAINS)
-  Swords,
-  Feather,
-  Gem,
-  Palette,
-  Castle,
-  Waves,
-  Star,
-  Building2,
-  Fish,
-  Dog,
-};
-
-/** A node type's or template's icon, by lucide name. */
-export function NodeIcon({ name, className }: { name: string; className?: string }) {
-  const Icon: LucideIcon = ICONS[name] ?? Sparkles;
-  return <Icon className={className} />;
-}
+export { ICONS, NodeIcon } from "./node-icon";
 
 /** Edge and handle colours per port type (the app's chart tokens, so both themes work). */
 export const PORT_COLOR: Record<PortType, string> = {

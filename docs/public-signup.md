@@ -69,6 +69,8 @@ An account is signed in, but it sees the owner's studio as a guest does:
   So does Split soundtrack's **Export mix** (`POST /api/audio-tools/export`), which saves into the
   owner's Library, with or without a GPU. Accounts have their own uploads and runs (below), but no
   projects yet.
+  Canvas shows its ready boards to guests and accounts as read-only pages (`/canvas/start/<id>`):
+  what goes in, the steps and what comes out. Only the owner makes boards.
 - **Settings, keys and tokens are the owner's.** Changing settings or model switches, the password,
   API tokens, Public sign-up, LoRA downloads, Assist connectors and the MCP endpoint answer 403 for
   an account.

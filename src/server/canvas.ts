@@ -52,6 +52,7 @@ import { createGenerations, getGeneration } from "./generations";
 import { silentWav } from "./marketing";
 import { engineMode } from "./settings";
 import { absolutePath, saveFile } from "./storage";
+import { fillSamples } from "./canvas-samples";
 
 /**
  * Canvas boards (Higgsfield Canvas): the pages the user edits (each a graph, with its groups, comments and
@@ -378,7 +379,8 @@ export function createCanvas(input: CreateCanvasInput = {}): Canvas {
   // A locked install only ever gets the variant it can run.
   const mode = engineMode();
   const engine: Engine = mode === "both" ? (input.engine ?? "cloud") : mode;
-  const graph = template ? template.build(engine, (id) => isOffered(id, engine)) : (input.graph ?? EMPTY_GRAPH);
+  // A ready board starts with its sample files in place, so it runs as it is.
+  const graph = template ? fillSamples(template.build(engine, (id) => isOffered(id, engine)), template.samples) : (input.graph ?? EMPTY_GRAPH);
   const pages = !template && input.pages?.length ? input.pages : [{ id: FIRST_PAGE_ID, name: pageName(0), graph: cleanGraph(graph) }];
   const now = Date.now();
   const row: Row = {
