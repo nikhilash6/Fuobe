@@ -87,7 +87,11 @@ export type Operation =
   // N7-5
   | "camera-path" // image + params.cameraPath (+ inputs.video: the open engine's render along the path) → the camera following the path
   // archive-restore
-  | "restore-video"; // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
+  | "restore-video" // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
+  // nm10-music3: a song's cloud tools (Mureka). The song is inputs.audio, or one of Mureka's own (params.extra.songId)
+  | "song-extend" // song + lyrics for the new part (+ params.startTime: where it begins; params.extra.extend_type tail | head) → the song, longer
+  | "song-remix" // song + a style (prompt) + the whole song's lyrics → a new arrangement of it
+  | "song-stems"; // song → its vocal and instrument tracks (meta.stem), one file each
 
 export const OPERATION_LABELS: Record<Operation, string> = {
   t2i: "Text to image",
@@ -158,6 +162,9 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   "face-mosaic": "Pixelate faces",
   "camera-path": "Fly path",
   "restore-video": "Restore & colourise",
+  "song-extend": "Extend a song",
+  "song-remix": "Remix a song",
+  "song-stems": "Song stems",
 };
 
 export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
@@ -230,6 +237,9 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   "face-mosaic": "image",
   "camera-path": "video",
   "restore-video": "video",
+  "song-extend": "audio",
+  "song-remix": "audio",
+  "song-stems": "audio",
 };
 
 /**
@@ -512,6 +522,12 @@ export interface FieldMap {
    */
   lyrics?: { key?: string; inPrompt?: true; max?: number };
   /**
+   * A song tool's source song (Mureka extend / remix): one of the provider's own songs by id (params.extra.songId, kept on a
+   * result as meta.songId) in `songId`, else the song file (inputs.audio) sent first to `upload` (Mureka's files/upload with
+   * its `purpose`), whose id goes in `uploadId`.
+   */
+  songSource?: { songId: string; uploadId: string; upload: { endpoint: string; purpose: string } };
+  /**
    * An upscaler that takes a factor, not a size (Topaz, FLUX Upscale): params.resolution ("1080p", "4K",
    * "Original" = 1) becomes target ÷ the clip's shorter edge (GenInput.sourceSize), kept within min–max.
    * Nothing is sent when the clip's size is unknown (the API's default factor applies).
@@ -739,6 +755,8 @@ export interface Pricing {
   roundUp?: true;
   /** The price per request when the run brings its own lyrics (params.extra.lyrics): Mureka bills a song from lyrics less than one it writes. */
   withLyrics?: number;
+  /** What sending the song first costs when it isn't one of the provider's own (params.extra.songId): Mureka's files/upload, $0.01. */
+  uploadUsd?: number;
   /** What an animation preset adds to a run (params.animation: Meshy rigging +$0.12). */
   animationUsd?: number;
   /**

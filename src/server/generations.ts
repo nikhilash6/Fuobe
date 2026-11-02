@@ -1708,7 +1708,7 @@ async function submitNow(
       endImage: await prep(req.inputs?.endImage),
       mask: await prepMask(req.inputs?.mask),
       video: await prepVideo(req.inputs?.video),
-      audio: await (plan.op === "avatar" ? prepVoice : prep)(req.inputs?.audio),
+      audio: await (plan.op === "avatar" || plan.op === "song-extend" ? prepVoice : prep)(req.inputs?.audio),
       audio2: await prep(req.inputs?.audio2),
       voiceAudio: await prep(req.inputs?.voiceAudio),
       voiceAudio2: await prep(req.inputs?.voiceAudio2),
@@ -1721,6 +1721,12 @@ async function submitNow(
     };
     // What the caller said about the clip's length wins; the header fills the rest.
     Object.assign(input, { ...source, ...(plan.params.sourceDuration !== undefined && { sourceDuration: plan.params.sourceDuration }) });
+    // Extending a song (Mureka): the new part starts at its end (or, before its start, at 0) unless the run says where.
+    if (plan.op === "song-extend" && input.startTime === undefined) {
+      const head = input.extra?.extend_type === "head";
+      if (!head && !(input.sourceDuration && input.sourceDuration > 0)) throw new Error("The song's length couldn't be read: add it again as an MP3, WAV or M4A file");
+      input.startTime = head ? 0 : input.sourceDuration;
+    }
     // A talking avatar renders as long as its voice: priced for it once its header is read (an API call that didn't say).
     if (plan.op === "avatar" && plan.params.sourceDuration === undefined && input.sourceDuration && providerId !== "mock" && plan.model.engine !== "open") {
       update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });

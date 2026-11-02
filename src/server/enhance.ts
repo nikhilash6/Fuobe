@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { MediaKind, Operation } from "@/lib/catalog/types";
 import { writeCaption } from "@/lib/ideogram-caption";
+import { normalizeLyrics } from "@/lib/lyrics";
 import { activeLocal, aiHelper, chatLocal, type JsonSpec } from "./llm";
 import { engineMode, getSetting } from "./settings";
 import { tenant } from "./tenant";
@@ -180,6 +181,29 @@ export async function enhanceSoulWords(words: string): Promise<string> {
   if (!w || w.split(/\s+/).length >= 60) return words;
   const out = (await llmText(SOUL_SYSTEM, w))?.trim().replace(/^["“]|["”]$/g, "").replace(/[.\s]+$/, "");
   return out && out.length > w.length ? out : words;
+}
+
+/** Audio → Music's "Write the lyrics" (nm10-music3): words to sing, tagged by section as every Fuobe music model reads them. */
+const LYRICS_SYSTEM = `You write lyrics for a song generation model. Answer with the lyrics only: no title, no notes, no quotes, no code fence.
+Rules:
+- Put each section tag on a line of its own, in square brackets: [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Outro]; [Instrumental] or [Solo] for a part with no singing. The words of a section go on the lines under its tag.
+- A common shape is Verse, Chorus, Verse, Chorus, Bridge, Chorus; repeat the chorus word for word.
+- Short, singable lines of 5 to 10 words that rhyme or half-rhyme. Concrete images over abstractions.
+- Only the words to be sung: no stage directions, no instruments, no chord names.
+- Keep the description's language, subject, mood and any words it quotes.`;
+
+/**
+ * Lyrics for a song described in `idea`, about as long as `seconds` of music and at most `max` characters, from whichever
+ * LLM the install allows (Claude or a local model); null when none answers. Tags are normalized (src/lib/lyrics.ts).
+ */
+export async function writeLyrics(idea: string, o: { seconds?: number; max?: number } = {}): Promise<string | null> {
+  const seconds = o.seconds && o.seconds > 0 ? Math.min(600, o.seconds) : 120;
+  const sections = seconds <= 45 ? "one verse and one chorus" : seconds <= 100 ? "a verse, a chorus, a second verse and the chorus again" : "a full song (two or three verses, the chorus after each, a bridge)";
+  const room = o.max ? ` Stay under ${Math.floor(o.max * 0.9)} characters.` : "";
+  const text = await llmText(LYRICS_SYSTEM, `Write lyrics for this song, about ${Math.round(seconds / 60 * 10) / 10} minutes long: ${sections}.${room}\n\n${idea.trim()}`);
+  const words = normalizeLyrics(text?.replace(/^```\w*\n?|```$/g, ""));
+  if (!words) return null;
+  return o.max && words.length > o.max ? normalizeLyrics(words.slice(0, words.lastIndexOf("\n", o.max))) : words;
 }
 
 export async function enhancePrompt(prompt: string, kind: MediaKind, op: Operation): Promise<string> {

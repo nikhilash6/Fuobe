@@ -4,6 +4,7 @@ import { loraEndpointFor, routeLoraField } from "@/lib/catalog/loras";
 import { buildPayload, extractOutputs, noOutputsError } from "@/lib/catalog/payload";
 import { accountKeyError, balanceRefusal, cloudKey, missingKeyError, originOf, redactKey, standIn } from "../provider-keys";
 import { tenant } from "../tenant";
+import { unzip } from "../unzip";
 import { ProviderError, type ProviderAdapter } from "./types";
 
 /**
@@ -20,6 +21,8 @@ import { ProviderError, type ProviderAdapter } from "./types";
  */
 const QUEUE = "https://queue.fal.run";
 const REST = "https://rest.fal.ai";
+/** fal.ai's synchronous runs: a song tool's song sent first through the provider's files/upload (Mureka's), which answers at once. */
+const RUN = "https://fal.run";
 
 /** fal.ai's queue: the real one, or a stand-in on this machine in tests and `next dev` (provider-keys.ts standIn). */
 export const falQueue = () => standIn("fal") ?? QUEUE;
@@ -27,8 +30,38 @@ export const falQueue = () => standIn("fal") ?? QUEUE;
 /** Where a fal.ai key may go: the queue and the REST API (storage uploads), or the stand-in. */
 function keyOrigin(url: string): boolean {
   const o = originOf(url);
-  return o === QUEUE || o === REST || (!!o && o === standIn("fal"));
+  return o === QUEUE || o === REST || o === RUN || (!!o && o === standIn("fal"));
 }
+
+/** A synchronous fal.ai run: the real one, or the stand-in in tests and `next dev`. */
+const falRun = () => standIn("fal") ?? RUN;
+
+/**
+ * A song tool's song that isn't one of the provider's own, sent first through its files/upload (FieldMap.songSource: Mureka's,
+ * $0.01, priced as Pricing.uploadUsd): the id the tool then takes.
+ */
+async function uploadSong(upload: { endpoint: string; purpose: string }, fileUrl: string): Promise<string> {
+  const res = (await falFetch(`${falRun()}/${upload.endpoint}`, { method: "POST", body: JSON.stringify({ file_url: fileUrl, purpose: upload.purpose }) })) as { id?: unknown };
+  if (typeof res?.id !== "string" || !res.id) throw new ProviderError("The song couldn't be sent to Mureka: try again");
+  return res.id;
+}
+
+/** The stems a song tool answers with in one zip (Mureka's zip_url), one result each, named by their file (meta.stem). */
+async function stemsFromZip(zipUrl: string): Promise<{ url: string; kind: "audio"; contentType: string; meta: { stem: string } }[]> {
+  const res = await fetch(zipUrl);
+  if (!res.ok) throw new Error(`The stems couldn't be downloaded (${res.status})`);
+  const files = unzip(Buffer.from(await res.arrayBuffer())).filter((f) => AUDIO_FILE.test(f.name));
+  if (!files.length) throw new Error("The stems archive held no audio");
+  return files.map((f) => {
+    const ext = AUDIO_FILE.exec(f.name)![1].toLowerCase();
+    const contentType = AUDIO_TYPES[ext] ?? "audio/mpeg";
+    const stem = f.name.split("/").pop()!.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().toLowerCase();
+    return { url: `data:${contentType};base64,${f.data.toString("base64")}`, kind: "audio" as const, contentType, meta: { stem } };
+  });
+}
+
+const AUDIO_FILE = /\.(mp3|wav|flac|m4a|ogg)$/i;
+const AUDIO_TYPES: Record<string, string> = { mp3: "audio/mpeg", wav: "audio/wav", flac: "audio/flac", m4a: "audio/mp4", ogg: "audio/ogg" };
 
 function key(): string {
   return cloudKey("fal");
@@ -115,6 +148,12 @@ export const falProvider: ProviderAdapter = {
     // `transformer` per file on Wan 2.2, `weight_name`, at most the API's maximum) and switch to its LoRA endpoint.
     const map = { ...route.map, loras: routeLoraField(route) };
     const payload = buildPayload(map, input);
+    // A song tool's song that isn't one of the provider's own goes up first (Mureka's files/upload).
+    const song = map.songSource;
+    if (song && payload[song.songId] === undefined) {
+      if (!input.audio) throw new ProviderError("Add the song");
+      payload[song.uploadId] = await uploadSong(song.upload, input.audio);
+    }
     let endpoint: string;
     try {
       endpoint = loraEndpointFor({ ...route, map }, input.loras);
@@ -151,6 +190,9 @@ export const falProvider: ProviderAdapter = {
       if (status.error) return { state: "failed", error: status.error };
       try {
         const result = await falFetch(meta.responseUrl as string);
+        // A song's stems come back as one zip (Mureka): each track becomes a result of its own.
+        const zipUrl = route?.op === "song-stems" ? (result as { zip_url?: unknown })?.zip_url : undefined;
+        if (typeof zipUrl === "string" && zipUrl) return { state: "succeeded", outputs: await stemsFromZip(zipUrl) };
         // Layers, text blocks, transcripts, 3D models and stems keep their structure (OutputFile.meta / text).
         const outputs = extractOutputs(result, route?.op);
         if (!outputs.length) return { state: "failed", error: noOutputsError(result) };

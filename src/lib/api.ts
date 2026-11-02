@@ -934,6 +934,19 @@ export async function enhance(prompt: string, kind: MediaKind, op: string): Prom
   ).prompt;
 }
 
+/** Audio → Music's "Write the lyrics": tagged lyrics for the song `idea` describes (the install's AI helper writes them). */
+export async function writeLyrics(idea: string, o: { seconds?: number; max?: number } = {}): Promise<string> {
+  return (
+    await json<{ lyrics: string }>(
+      await fetch("/api/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: idea, target: "lyrics", ...o }),
+      }),
+    )
+  ).lyrics;
+}
+
 // ---------------------------------------------------------------------------
 // Engine preference (Cloud vs Open source), shared across tabs via localStorage.
 // Settings → Engine mode can lock the install to one engine; then the toggle is disabled.

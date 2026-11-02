@@ -1035,6 +1035,16 @@ model("minimax-music-3", "MiniMax Music 3 · both engines", "MiniMax", "minimax-
 model("elevenlabs-music-2-5", "ElevenLabs Music v2.5", "ElevenLabs", "elevenlabs", "audio", "Studio-quality songs and scores up to 10 minutes",
       [("music", "elevenlabs/music/v2.5", "fal", {"drop": ["seed"]})], badges=["new"], pricing=("minute", 0.6, "billed per started minute", {"roundUp": True}),
       defaults={"duration": 60}, options={"durations": [15, 30, 60, 120, 180, 300, 600]})
+# Mureka's song tools (Audio → Extend & remix, and a music result's Extend, Remix and Stems): the song is one of Mureka's own
+# (params.extra.songId, kept on its results) or a file sent first through Mureka's files/upload ($0.01, Pricing.uploadUsd).
+model("mureka-extend", "Mureka Extend", "Mureka", "mureka", "audio", "Makes a song longer with new lyrics, after its end or before its start",
+      [("song-extend", "mureka/v8/song/extend")], badges=["new"], pricing=("request", 0.004, "plus $0.01 to send a song Mureka didn't make", {"uploadUsd": 0.01}),
+      controls=[("extend_type", "Where", {"tail": "After the end", "head": "Before the start"})])
+model("mureka-remix", "Mureka Remix", "Mureka", "mureka", "audio", "A new arrangement of a song in the style you describe, with its lyrics",
+      [("song-remix", "mureka/v8/song/remix")], badges=["new"], pricing=("request", 0.20, "plus $0.01 to send a song Mureka didn't make", {"uploadUsd": 0.01}))
+# Its stems come back as a zip (zip_url): the fal provider opens it and keeps each track as a result of its own.
+model("mureka-stems", "Mureka Stems", "Mureka", "mureka", "audio", "A song split into its vocal and instrument tracks",
+      [("song-stems", "mureka/api/song/stem")], badges=["new"], pricing=("request", 0.20, "audio-separation-3, the default"))
 # "Negative prompting is not supported by Lyria 3.5" (its schema): no negative prompt.
 model("lyria-3-5", "Lyria 3.5", "Google", "lyria", "audio", "Google DeepMind's newest music model: full songs from words or a picture",
       [("music", "google/lyria-3.5", "fal", {"drop": ["negativePrompt"]})], badges=["new"])
@@ -2130,10 +2140,22 @@ def build_route(op, ep, provider, m, opts, ropts=None):
             fmap["duration"]["multiplier"] = 1000
     # Song lyrics (params.extra.lyrics, nm10-music3): the API's lyrics field and the most characters it takes, or after the
     # prompt for an API that reads them there (Lyria 3.5); the composer's lyrics editor follows ModelOptions.lyrics.
-    if op == "music" and "lyrics" in kf and (inputs.get(kf["lyrics"]) or {}).get("type") == "string":
-        most = num((inputs.get(kf["lyrics"]) or {}).get("maxLength"))
+    if op in ("music", "song-extend", "song-remix") and "lyrics" in kf and (inputs.get(kf["lyrics"]) or {}).get("type") == "string":
+        spec = inputs.get(kf["lyrics"]) or {}
+        most = num(spec.get("maxLength"))
         fmap["lyrics"] = {"key": kf["lyrics"], **({"max": most} if most else {})}
-        opts["lyrics"] = {**({"max": most} if most else {})}
+        opts["lyrics"] = {**({"max": most} if most else {}), **({"required": True} if spec.get("required") else {})}
+    # A song tool's source (Mureka): its own song by id, else the file sent first through the provider's files/upload with
+    # the purpose the id field names ("Audio ID returned by /files/upload with purpose='audio'").
+    if op in ("song-extend", "song-remix") and "songId" in kf and "uploadId" in kf:
+        purpose = re.search(r"purpose='([\w-]+)'", (inputs.get(kf["uploadId"]) or {}).get("desc") or "")
+        upload = next((ep2 for (p2, ep2) in EPS if p2 == provider and ep2.startswith(ep.split("/")[0] + "/") and ep2.endswith("/files/upload")), None)
+        if purpose and upload:
+            fmap["songSource"] = {"songId": kf["songId"], "uploadId": kf["uploadId"], "upload": {"endpoint": upload, "purpose": purpose.group(1)}}
+        else:
+            warn(f"{m['id']}: {ep} has no upload route or purpose for its song")
+    if "extendAt" in kf:
+        fmap["startTime"] = {"key": kf["extendAt"], "type": "number", "multiplier": 1000}
     elif op == "music" and "lyricsInPrompt" in kf:
         most = num((inputs.get(kf["lyricsInPrompt"]) or {}).get("maxLength"))
         fmap["lyrics"] = {"inPrompt": True, **({"max": most} if most else {})}

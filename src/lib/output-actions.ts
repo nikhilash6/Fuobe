@@ -32,6 +32,9 @@ export type OutputActionId =
   | "genjutsu"
   | "voice-change"
   | "loop-audio"
+  | "extend-song"
+  | "remix-song"
+  | "song-stems"
   | "split-soundtrack"
   | "remove-dialogue"
   | "clean-voice"
@@ -156,6 +159,14 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       out.push(file, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });
       link("voice-change", "Change voice", `/audio/voice-change?audio=${q(o.url)}`);
       link("loop-audio", "Loop / extend", `/audio/loop?audio=${q(o.url)}`);
+      // A song's cloud tools (Mureka, Audio → Extend & remix): any song, one of Mureka's own by its id. Not on an install
+      // that runs open models only.
+      if (g.op && SONG_OPS.has(g.op) && ctx.engineMode !== "open") {
+        const song = typeof o.meta?.songId === "string" ? `&song=${q(o.meta.songId)}` : "";
+        link("extend-song", "Extend song", `/audio/song?model=mureka-extend&audio=${q(o.url)}${song}`);
+        link("remix-song", "Remix", `/audio/song?model=mureka-remix&audio=${q(o.url)}${song}`);
+        link("song-stems", "Stems", `/audio/song?model=mureka-stems&audio=${q(o.url)}`);
+      }
       link("split-soundtrack", "Split soundtrack", `/audio/split?audio=${q(o.url)}`);
       // Not on music or sound effects (it keeps only a voice), nor on a voice it already cleaned.
       if (g.op !== "music" && g.op !== "sfx" && g.feature !== CLEAN_FEATURE) link("clean-voice", "Clean up voice", `/audio/clean?audio=${q(o.url)}`);
@@ -201,6 +212,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   out.push({ id: "delete", label: "Delete", placement: "menu", destructive: true });
   return out;
 }
+
+/** Results that are songs: made, extended or remixed. */
+const SONG_OPS = new Set<Generation["op"]>(["music", "song-extend", "song-remix"]);
 
 /** The hand-offs offered as next steps under a fresh result, best first (UX-18). */
 const NEXT_STEPS: Partial<Record<OutputFile["kind"], OutputActionId[]>> = {

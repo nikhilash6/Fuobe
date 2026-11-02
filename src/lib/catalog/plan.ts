@@ -244,6 +244,8 @@ const PROMPTLESS = new Set<Operation>([
   "face-mosaic",
   // archive-restore: the scene's words help (period, place, light) but a run without them gets a neutral one
   "restore-video",
+  // nm10-music3: extending a song takes its lyrics, its stems nothing
+  "song-extend", "song-stems",
 ]);
 
 /**
@@ -501,9 +503,18 @@ export function planGeneration(
       params = { ...params, extra: Object.keys(rest).length ? rest : undefined };
     }
   }
-  if (op === "music" && model.options.lyrics?.required && isInstrumental(lyricsOf(params.extra))) {
-    throw new Error(`${model.name} sings your lyrics: write them first, with [Verse] and [Chorus] on lines of their own`);
+  // A model that needs words to sing: a song from lyrics (YuE2), the lyrics of a song's new part or of its remix (Mureka).
+  const sung = lyricsOf(params.extra);
+  if (model.options.lyrics?.required && (!sung || (op === "music" && isInstrumental(sung)))) {
+    throw new Error(
+      op === "song-extend"
+        ? "Write the lyrics of the new part"
+        : op === "song-remix"
+          ? "Write the remix's lyrics: the whole song, with [Verse] and [Chorus] on lines of their own"
+          : `${model.name} sings your lyrics: write them first, with [Verse] and [Chorus] on lines of their own`,
+    );
   }
+  if (op === "song-remix" && !prompt) throw new Error("Describe the remix: its genre, mood and instruments");
   if (op === "music" && req.inputs?.audio && !model.options.cover) throw new Error(`${model.name} makes a new song: remove the song you added, or pick YuE2 to cover it`);
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
@@ -800,6 +811,9 @@ const NEEDS: Partial<
   "sdr-to-hdr": { video: true, msg: "Add the video to convert" },
   "face-mosaic": { images: 1, msg: "Add the picture whose faces to pixelate" },
   "restore-video": { video: true, msg: "Add the archive clip to restore" },
+  "song-extend": { audio: true, msg: "Add the song to extend" },
+  "song-remix": { audio: true, msg: "Add the song to remix" },
+  "song-stems": { audio: true, msg: "Add the song to split into stems" },
   "export-video": { video: true, msg: "Add the video to export" },
   ocr: { images: 1, msg: "Add the image to read" },
   "still-motion": { images: 1, msg: "Add the still to move over" },
@@ -1093,6 +1107,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   if (params.generateAudio === false && model.options.audio === true && p.note?.includes("audio-off-half")) per /= 2;
   if (p.animationUsd && params.animation !== undefined && params.animation !== "") per += p.animationUsd;
   if (p.perRequest) per += p.perRequest;
+  // A song tool's song goes up first unless it is one of the provider's own (Mureka's files/upload).
+  if (p.uploadUsd && typeof params.extra?.songId !== "string") per += p.uploadUsd;
   if (p.generatedRefs && params.drawnRefs) per += p.generatedRefs.usd * Math.min(params.drawnRefs, p.generatedRefs.count);
   return Math.round(per * jobs * 1000) / 1000;
 }

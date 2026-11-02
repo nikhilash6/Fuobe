@@ -12796,7 +12796,9 @@ export const CLOUD_MODELS: ModelDef[] = [
     ],
     "options": {
       "seed": true,
-      "lyrics": {},
+      "lyrics": {
+        "required": true
+      },
       "durations": [
         30,
         60,
@@ -12868,6 +12870,149 @@ export const CLOUD_MODELS: ModelDef[] = [
       "usd": 0.6,
       "note": "billed per started minute",
       "roundUp": true
+    }
+  },
+  {
+    "id": "mureka-extend",
+    "name": "Mureka Extend",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Makes a song longer with new lyrics, after its end or before its start",
+    "routes": [
+      {
+        "op": "song-extend",
+        "provider": "fal",
+        "endpoint": "mureka/v8/song/extend",
+        "map": {
+          "prompt": false,
+          "lyrics": {
+            "key": "lyrics",
+            "max": 3000
+          },
+          "songSource": {
+            "songId": "song_id",
+            "uploadId": "upload_audio_id",
+            "upload": {
+              "endpoint": "mureka/api/files/upload",
+              "purpose": "audio"
+            }
+          },
+          "startTime": {
+            "key": "extend_at",
+            "type": "number",
+            "multiplier": 1000
+          }
+        }
+      }
+    ],
+    "options": {
+      "controls": [
+        {
+          "param": "extend_type",
+          "label": "Where",
+          "values": [
+            "tail",
+            "head"
+          ],
+          "default": "tail",
+          "labels": {
+            "tail": "After the end",
+            "head": "Before the start"
+          }
+        }
+      ],
+      "lyrics": {
+        "max": 3000,
+        "required": true
+      },
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.004,
+      "note": "plus $0.01 to send a song Mureka didn't make",
+      "uploadUsd": 0.01
+    }
+  },
+  {
+    "id": "mureka-remix",
+    "name": "Mureka Remix",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "A new arrangement of a song in the style you describe, with its lyrics",
+    "routes": [
+      {
+        "op": "song-remix",
+        "provider": "fal",
+        "endpoint": "mureka/v8/song/remix",
+        "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          },
+          "songSource": {
+            "songId": "song_id",
+            "uploadId": "upload_audio_id",
+            "upload": {
+              "endpoint": "mureka/api/files/upload",
+              "purpose": "remix"
+            }
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "max": 5000,
+        "required": true
+      }
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.2,
+      "note": "plus $0.01 to send a song Mureka didn't make",
+      "uploadUsd": 0.01
+    }
+  },
+  {
+    "id": "mureka-stems",
+    "name": "Mureka Stems",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "A song split into its vocal and instrument tracks",
+    "routes": [
+      {
+        "op": "song-stems",
+        "provider": "fal",
+        "endpoint": "mureka/api/song/stem",
+        "map": {
+          "prompt": false,
+          "audio": "audio_url"
+        }
+      }
+    ],
+    "options": {
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.2,
+      "note": "audio-separation-3, the default"
     }
   },
   {

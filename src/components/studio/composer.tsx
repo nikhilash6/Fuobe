@@ -12,7 +12,9 @@ import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToday } from "@/hooks/use-today";
 import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
-import type { Engine, GenerationRequest, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
+import type { Engine, GenerationRequest, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
+import { LYRICS_PARAM } from "@/lib/lyrics";
+import { SONG_ID_PARAM } from "@/lib/catalog/payload";
 import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
@@ -103,6 +105,7 @@ import { ELEMENT_ICONS, PromptInput, type PromptInputHandle } from "./prompt-inp
 import { radioKeys, radioTab } from "./radio-keys";
 import { SettingsChip } from "./settings-panel";
 import { ShotsEditor } from "./shots-editor";
+import { LyricsEditor } from "./lyrics-editor";
 import { SketchTools } from "./sketch-tools";
 import { RECENT_MODELS, useStoredList } from "./stored-list";
 import { usePresetUrl, useStartRequest, useStudio, type Draft } from "./studio-context";
@@ -224,6 +227,23 @@ function useRecipeMade(preset: Preset | undefined, engine: Engine, recipeModel: 
     };
   }, [key, preset, engine, made]);
   return !!key && !!made[key];
+}
+
+/** Operations whose models sing lyrics (the lyrics editor): a song, and a song extended or remixed. */
+const SUNG_OPS = new Set<Operation>(["music", "song-extend", "song-remix"]);
+
+/**
+ * Audio → Music: the lyrics go to a model that sings them (params.extra.lyrics), and a song to cover only to a model that
+ * covers one (the slot is hidden for the others, so a song left there from YuE2 is never sent to them).
+ */
+function songDraft<D extends Pick<Draft, "lyrics" | "params" | "slots" | "song">>(d: D, model: ModelDef | undefined, slots: InputSlot[]): D {
+  let out = d;
+  if (d.lyrics?.trim() && model?.options.lyrics) out = { ...out, params: { ...out.params, extra: { ...out.params.extra, [LYRICS_PARAM]: d.lyrics } } };
+  // One of Mureka's own songs, still the one attached: its tools take it by id (no upload).
+  if (d.song && d.slots.audio?.ref === d.song.url && model?.family === "mureka") out = { ...out, params: { ...out.params, extra: { ...out.params.extra, [SONG_ID_PARAM]: d.song.id } } };
+  const hidden = slots.filter((s) => s.cover && !model?.options.cover && out.slots[s.key]).map((s) => s.key);
+  if (hidden.length) out = { ...out, slots: Object.fromEntries(Object.entries(out.slots).filter(([k]) => !hidden.includes(k as InputSlot["key"]))) };
+  return out;
 }
 
 /** Leaving a model that takes looks (Fuobe Soul) for one that doesn't: the look (its presetId) doesn't come along. */
@@ -538,7 +558,8 @@ export function Composer({ docked }: { docked: boolean }) {
     () => namedImageSlots(baseSlots, model?.options.imageLabels, config.multiRef?.label, draft.refs.length),
     [baseSlots, model?.options.imageLabels, config.multiRef?.label, draft.refs.length],
   );
-  const slots = named.slots;
+  // A song to cover (Audio → Music) shows only for a model that covers one (YuE2).
+  const slots = useMemo(() => named.slots.filter((s) => !s.cover || !!model?.options.cover), [named.slots, model?.options.cover]);
   const hasCleanVoice = slots.some((s) => s.cleanVoice && s.accept === "audio");
   // Clips: ComfyUI joins 4 at a time. Images: what the model takes beyond the fixed image slots, for the operation the run
   // will be (a painted mask makes it an inpaint, which Qwen-Image 2.1 runs on the picture alone).
@@ -572,7 +593,8 @@ export function Composer({ docked }: { docked: boolean }) {
 
   // A picked palette / moodboard routes the request (and can move it to another model) before anything else.
   const signature = useSignature(!!config.signature, draft.signature);
-  const prepare = (d: typeof draft) => {
+  const prepare = (draftIn: typeof draft) => {
+    const d = songDraft(draftIn, catalog.getModel(draftIn.modelId), config.slots);
     const signed = signature.apply(buildRequest(config.feature, d, studioOp, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(d.modelId)));
     // Planned with the signature's sentences in the prompt (as the server runs it); sent with them apart.
     const raw = signed.worded;
@@ -727,7 +749,9 @@ export function Composer({ docked }: { docked: boolean }) {
     setRecent((r) => pushRecent(r, draft.modelId));
     // The server resolves @mentions and drawings itself; only pin the operation when there are none.
     // No "Queued" toast: the new card (and the "1 generating ↑" pill when it's off-screen) says it.
-    const sent = signature.apply(buildRequest(config.feature, draft, resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)));
+    const sent = signature.apply(
+      buildRequest(config.feature, songDraft(draft, model, config.slots), resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)),
+    );
     // Open palette lock: the images are recoloured to the palette by a chained step (POST /api/palettes/lock).
     if (sent.lock) return signature.lock.mutate({ request: sent.request, colors: sent.lock.colors }, { onError: (e) => toastError(e) });
     // If the server's pre-flight stops it (409 gpu-setup), the guided fix that opens can try again, or run it anyway.
@@ -1264,6 +1288,10 @@ export function Composer({ docked }: { docked: boolean }) {
           collapsed={collapsed}
           elementsNote={elementsNote(model)}
         />
+      )}
+
+      {model?.options.lyrics && effectiveOp && SUNG_OPS.has(effectiveOp) && !collapsed && (
+        <LyricsEditor model={model} value={draft.lyrics ?? ""} onChange={(lyrics) => setDraft({ lyrics })} idea={draft.prompt} seconds={p.duration ?? model.defaults?.duration} />
       )}
 
       {model && effectiveOp === "dialogue" && <DialogueEditor model={model} lines={p.dialogue ?? defaultLines(model)} onChange={(dialogue) => setP({ dialogue })} />}

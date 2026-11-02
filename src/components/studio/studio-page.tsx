@@ -1,5 +1,6 @@
 "use client";
 
+import { LYRICS_PARAM } from "@/lib/lyrics";
 import { ArrowRight, ArrowUp, Loader2, Upload, Zap } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -135,6 +136,8 @@ function initialDraft(
   }
   if (sp.get("video")) slots.video = slot(sp.get("video"));
   if (sp.get("audio")) slots.audio = slot(sp.get("audio"));
+  // A Mureka song handed over (a music result's Extend, Remix or Stems): its id goes with it.
+  const song = sp.get("audio") && sp.get("song") ? { id: sp.get("song")!, url: sp.get("audio")! } : undefined;
   // A voice sample handed over (Clean up voice → "Use as a voice sample"): the voice a cloning model speaks with.
   if (sp.get("voice")) slots.voiceAudio = slot(sp.get("voice"));
   // An output format handed over in the link (Export → "ProRes in the cloud"), when the model writes it.
@@ -150,6 +153,7 @@ function initialDraft(
     refs,
     presetId: sp.get("preset") ?? config.preset?.id,
     presetOptions: {},
+    ...(song && { song }),
   };
 }
 
@@ -182,6 +186,13 @@ function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id:
   // A spoken language stored as a name (Assist's "Spanish") or a locale comes back as the model's own code.
   const languages = getModel(r.modelId)?.options.sourceLanguages;
   if (languages?.length && params.sourceLanguage) params.sourceLanguage = matchSpokenLanguage(params.sourceLanguage, languages) ?? params.sourceLanguage;
+  // A song's lyrics come back in the lyrics editor.
+  const lyrics = typeof params.extra?.[LYRICS_PARAM] === "string" ? (params.extra[LYRICS_PARAM] as string) : undefined;
+  if (lyrics !== undefined) {
+    const rest = { ...params.extra };
+    delete rest[LYRICS_PARAM];
+    params.extra = Object.keys(rest).length ? rest : undefined;
+  }
   // A layout run comes back in Layout mode (studios that have it): its boxes in the editor, the prompt as their caption.
   const laid = config.layout ? withoutLayout(params) : { params, layout: undefined };
   return {
@@ -198,6 +209,7 @@ function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id:
     presetStrength: r.presetStrength,
     mix: r.mix,
     signature: signed?.signature,
+    lyrics,
   };
 }
 
