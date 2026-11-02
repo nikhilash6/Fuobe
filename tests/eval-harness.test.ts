@@ -349,10 +349,26 @@ describe("the runner on the demo provider", () => {
     type Plan = { jobs: { case: string; variant: string; model: string; skip?: string }[] };
     const dry = async (args: string[]) => JSON.parse((await cli(["run", ...args, "--dry-run", "--json"])).stdout) as Plan;
     setSetting("falKey", "fal-test-key");
+    // Group swap, Scene edit, From picture and Finish run on your GPU only: on the cloud their jobs say so and skip.
+    const cloud = (p: Plan) => {
+      const gpu = p.jobs.filter((j) => j.skip === "runs on open only");
+      expect(gpu.map((j) => j.case)).toEqual([
+        "genjutsu/group",
+        "genjutsu/group-one-by-one",
+        "genjutsu/scene-change",
+        "genjutsu/scene-remove",
+        "genjutsu/scene-background",
+        "genjutsu/picture",
+        "genjutsu/picture-golden-halo",
+        "genjutsu/fix-faces",
+        "genjutsu/fix-colours",
+      ]);
+      return p.jobs.filter((j) => !gpu.includes(j));
+    };
     try {
       // With fal connected, each mode runs its own partner on fal.
       const g = await dry(["--suite", "genjutsu", "--engine", "cloud", "--variants", "partner", "--allow-fixtures"]);
-      expect(g.jobs.map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
+      expect(cloud(g).map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
         ["genjutsu/move", "kling-motion-control", null],
         // A case with no partner of its own runs its own models (the -lite tiers, the Original without its first frame).
         ["genjutsu/move-lite", "fuobe-genjutsu-motion-lite", null],
@@ -366,7 +382,7 @@ describe("the runner on the demo provider", () => {
       ]);
       // The Originals on the cloud: their hosted open halves on fal.
       const o = await dry(["--suite", "genjutsu", "--engine", "cloud", "--variants", "original", "--allow-fixtures"]);
-      expect(o.jobs.map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
+      expect(cloud(o).map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
         ["genjutsu/move", "fuobe-genjutsu-motion", null],
         ["genjutsu/move-lite", "fuobe-genjutsu-motion-lite", null],
         ["genjutsu/character", "fuobe-character-swap", null],

@@ -304,7 +304,7 @@ describe("licences, as information", () => {
     expect(entry.notes).toMatch(/NC variants included; whether that reaches the weights or their outputs is unresolved/);
     // Still information: the workflow's licence row reads Apache-2.0, nothing is flagged or hidden for it.
     expect(licenceInfo(workflowLicence(entry)).class).toBe("commercial");
-    expect(ATTRIBUTIONS.filter((a) => a.licence === "MIT").map((a) => a.text)).toEqual([
+    expect(ATTRIBUTIONS.filter((a) => a.licence === "MIT" && a.for === "Dialogue, music and effects separation").map((a) => a.text)).toEqual([
       "BS-RoFormer, copyright (c) 2023 Phil Wang",
       "Music-Source-Separation-Training, copyright (c) 2024 Roman Solovyev (ZFTurbo)",
       "TIGER / Look2Hear, copyright (c) 2026 Kai Li",

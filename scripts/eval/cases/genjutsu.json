@@ -333,6 +333,321 @@
           "requestId": "{{requestId}}"
         }
       }
+    },
+    {
+      "id": "genjutsu/group",
+      "title": "Group swap: two characters, each taking over the person named",
+      "engines": ["open"],
+      "models": {
+        "open": ["oss-h3-group-swap"]
+      },
+      "inputs": {
+        "video": "local/genjutsu/duo.mp4",
+        "images": ["local/genjutsu/character.png", "local/genjutsu/character2.png"]
+      },
+      "metrics": ["temporal", "identity", "clip"],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "modelId": "{{modelId}}",
+          "source": "{{source:inputs.video}}",
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}",
+          "mode": "character",
+          "references": ["{{inputs.images.0}}", "{{inputs.images.1}}"],
+          "range": {
+            "start": 0,
+            "end": 6
+          },
+          "quality": "720p",
+          "character": {
+            "people": [
+              {
+                "role": "the person on the left"
+              },
+              {
+                "role": "the person on the right"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "genjutsu/group-one-by-one",
+      "title": "Group swap, one by one: a pass for each person",
+      "engines": ["open"],
+      "models": {
+        "open": ["oss-h3-group-swap"]
+      },
+      "inputs": {
+        "video": "local/genjutsu/duo.mp4",
+        "images": ["local/genjutsu/character.png", "local/genjutsu/character2.png"]
+      },
+      "metrics": ["temporal", "identity", "clip"],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "modelId": "{{modelId}}",
+          "source": "{{source:inputs.video}}",
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}",
+          "mode": "character",
+          "references": ["{{inputs.images.0}}", "{{inputs.images.1}}"],
+          "range": {
+            "start": 0,
+            "end": 6
+          },
+          "quality": "720p",
+          "character": {
+            "people": [
+              {
+                "role": "the person on the left"
+              },
+              {
+                "role": "the person on the right"
+              }
+            ],
+            "onePerPerson": true
+          }
+        }
+      }
+    },
+    {
+      "id": "genjutsu/scene-change",
+      "title": "Scene edit: the coat becomes a crimson velvet tailored blazer",
+      "engines": ["open"],
+      "models": {
+        "open": ["oss-h3-scene-edit"]
+      },
+      "inputs": {
+        "video": "local/genjutsu/street.mp4",
+        "images": ["local/genjutsu/object.png"]
+      },
+      "metrics": ["temporal", "clip"],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "modelId": "{{modelId}}",
+          "source": "{{source:inputs.video}}",
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}",
+          "mode": "swap",
+          "target": "type",
+          "references": ["{{inputs.images.0}}"],
+          "range": {
+            "start": 0,
+            "end": 6
+          },
+          "quality": "720p",
+          "object": {
+            "action": "change",
+            "target": "coat",
+            "becomes": "a crimson velvet tailored blazer"
+          }
+        }
+      }
+    },
+    {
+      "id": "genjutsu/scene-remove",
+      "title": "Scene edit: the handbag is removed and the boulevard continues",
+      "engines": ["open"],
+      "models": {
+        "open": ["oss-h3-scene-edit"]
+      },
+      "inputs": {
+        "video": "local/genjutsu/street.mp4"
+      },
+      "metrics": ["temporal", "clip"],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "modelId": "{{modelId}}",
+          "source": "{{source:inputs.video}}",
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}",
+          "mode": "swap",
+          "target": "type",
+          "range": {
+            "start": 0,
+            "end": 6
+          },
+          "quality": "720p",
+          "object": {
+            "action": "remove",
+            "target": "handbag"
+          }
+        }
+      }
+    },
+    {
+      "id": "genjutsu/scene-background",
+      "title": "Scene edit: the people on an Amalfi cliff terrace at golden hour",
+      "engines": ["open"],
+      "models": {
+        "open": ["oss-h3-scene-edit"]
+      },
+      "inputs": {
+        "video": "local/genjutsu/dance.mp4"
+      },
+      "metrics": ["temporal", "clip"],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "modelId": "{{modelId}}",
+          "source": "{{source:inputs.video}}",
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}",
+          "mode": "swap",
+          "target": "type",
+          "range": {
+            "start": 0,
+            "end": 6
+          },
+          "quality": "720p",
+          "object": {
+            "action": "background",
+            "target": "the people",
+            "becomes": "an Amalfi cliff terrace at golden hour, the sea below"
+          }
+        }
+      }
+    },
+    {
+      "id": "genjutsu/picture",
+      "title": "From picture: the character in the clip's first-frame pose, in the picture's setting (the first frame)",
+      "engines": ["open"],
+      "models": {
+        "open": ["oss-from-picture"]
+      },
+      "inputs": {
+        "video": "local/genjutsu/dance.mp4",
+        "images": ["local/genjutsu/character.png"]
+      },
+      "metrics": ["clip"],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "modelId": "{{modelId}}",
+          "source": "{{source:inputs.video}}",
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}",
+          "mode": "picture",
+          "references": ["{{inputs.images.0}}"],
+          "range": {
+            "start": 0,
+            "end": 6
+          },
+          "picture": {
+            "stage": "frame"
+          }
+        }
+      }
+    },
+    {
+      "id": "genjutsu/picture-golden-halo",
+      "title": "From picture with the Golden halo light (the first frame)",
+      "engines": ["open"],
+      "models": {
+        "open": ["oss-from-picture"]
+      },
+      "inputs": {
+        "video": "local/genjutsu/dance.mp4",
+        "images": ["local/genjutsu/character.png"]
+      },
+      "metrics": ["clip"],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "modelId": "{{modelId}}",
+          "source": "{{source:inputs.video}}",
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}",
+          "mode": "picture",
+          "references": ["{{inputs.images.0}}"],
+          "range": {
+            "start": 0,
+            "end": 6
+          },
+          "picture": {
+            "stage": "frame",
+            "light": {
+              "look": "golden-halo"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "genjutsu/fix-faces",
+      "title": "Fix faces: small faces redrawn to match the character photo",
+      "engines": ["open"],
+      "models": {
+        "open": ["oss-h3-fix-faces"]
+      },
+      "inputs": {
+        "video": "local/genjutsu/duo.mp4",
+        "images": ["local/genjutsu/character.png"]
+      },
+      "metrics": ["temporal", "identity", "clip"],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "modelId": "{{modelId}}",
+          "source": "{{source:inputs.video}}",
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}",
+          "mode": "finish",
+          "references": ["{{inputs.images.0}}"],
+          "range": {
+            "start": 0,
+            "end": 6
+          },
+          "finish": {
+            "tool": "faces",
+            "faceStyle": "mouth"
+          }
+        }
+      }
+    },
+    {
+      "id": "genjutsu/fix-colours",
+      "title": "Fix colours: the soft film finish",
+      "engines": ["open"],
+      "models": {
+        "open": ["oss-fix-colours"]
+      },
+      "inputs": {
+        "video": "local/genjutsu/person.mp4"
+      },
+      "metrics": ["temporal"],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "modelId": "{{modelId}}",
+          "source": "{{source:inputs.video}}",
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}",
+          "mode": "finish",
+          "range": {
+            "start": 0,
+            "end": 6
+          },
+          "finish": {
+            "tool": "colours",
+            "finish": "soft"
+          }
+        }
+      }
     }
   ]
 }

@@ -37,9 +37,10 @@ describe("the 390 px sweep visits dynamic routes", () => {
     for (const p of patterns) expect(byPattern[p]?.length, p).toBeGreaterThan(0);
     expect(urls.filter((u) => /\[/.test(u))).toEqual([]);
     expect(urls).toEqual(expect.arrayContaining(["/cinema/c1", "/cinema/does-not-exist", "/canvas/v1", "/canvas/does-not-exist", "/assist/projects/p1", "/apps/does-not-exist"]));
-    // Dialogs a query opens: a skill's Run form.
-    expect(querySamples({ recipeSkill: "lamp" })).toEqual(["/assist/skills?run=lamp", "/assist/skills?run=does-not-exist"]);
-    expect(querySamples()).toEqual(["/assist/skills?run=does-not-exist"]);
+    // Dialogs and tabs a query opens: a skill's Run form, Genjutsu's From picture and Finish tabs.
+    const genjutsu = ["/genjutsu?mode=picture", "/genjutsu?mode=finish"];
+    expect(querySamples({ recipeSkill: "lamp" })).toEqual(["/assist/skills?run=lamp", "/assist/skills?run=does-not-exist", ...genjutsu]);
+    expect(querySamples()).toEqual(["/assist/skills?run=does-not-exist", ...genjutsu]);
   });
 
   it("gives a route added later (another branch's /faceless/[id]/[episode]) a not-found sample by itself", () => {

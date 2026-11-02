@@ -74,5 +74,6 @@ export function dynamicSamples(root, ids = {}) {
  * /assist/skills?run=…); an unknown one is visited too (the form says so in the dialog).
  */
 export function querySamples(ids = {}) {
-  return [ids.recipeSkill && `/assist/skills?run=${ids.recipeSkill}`, "/assist/skills?run=does-not-exist"].filter(Boolean);
+  // Genjutsu's From picture and Finish tabs (a visitor lands on Motion transfer until they open).
+  return [ids.recipeSkill && `/assist/skills?run=${ids.recipeSkill}`, "/assist/skills?run=does-not-exist", "/genjutsu?mode=picture", "/genjutsu?mode=finish"].filter(Boolean);
 }

@@ -78,7 +78,9 @@ describe("Genjutsu: which model runs", () => {
     expect(sources("cloud", "insert", "type")).toMatchObject({ "kling-o3": "partner", "kling-4": "partner" });
     expect(sources("cloud", "swap", "paint")).toEqual({ [ORIGINALS.swapLite]: "original", "wan-22-vace-inpaint": "open" });
     expect(sources("cloud", "restyle")).toEqual({ [ORIGINALS.restyle]: "original", "gemini-omni-flash": "partner", "kling-o3-4k-edit": "partner", "happy-horse-video-edit": "partner" });
-    expect(sources("open", "character", "type")).toEqual({ [ORIGINALS.character]: "original", "oss-h3-character-swap-relay": "open" });
+    expect(sources("open", "character", "type")).toEqual({ [ORIGINALS.character]: "original", "oss-h3-character-swap-relay": "open", "oss-h3-group-swap": "open" });
+    // A visitor before Group swap has opened: as before.
+    expect(Object.keys(Object.fromEntries(makersFor("open", "character", "type", () => false).map((m) => [m.id, m.source])))).toEqual([ORIGINALS.character, "oss-h3-character-swap-relay"]);
     // A picked partner runs.
     expect(chooseMaker({ engine: "cloud", mode: "character", modelId: "h3-max-recast" })).toMatchObject({ maker: { id: "h3-max-recast" } });
   });
@@ -103,19 +105,23 @@ describe("Genjutsu: which model runs", () => {
   it("refuses in words what an engine can't do", () => {
     expect(chooseMaker({ engine: "cloud", mode: "character", target: "click" })).toEqual({ problem: CLOUD_CLICK_PROBLEM });
     expect(chooseMaker({ engine: "open", mode: "character", target: "click" })).toMatchObject({ maker: { id: ORIGINALS.character, engine: "open" } });
-    expect(chooseMaker({ engine: "open", mode: "swap", target: "paint" })).toEqual({ problem: expect.stringMatching(/name what to swap/) });
+    // Painting on your GPU is Scene edit's (the owner, or once it has opened); before that, words only.
+    expect(chooseMaker({ engine: "open", mode: "swap", target: "paint", open: () => false })).toEqual({ problem: expect.stringMatching(/name what to swap/) });
+    expect(chooseMaker({ engine: "open", mode: "swap", target: "paint" })).toMatchObject({ maker: { id: "oss-h3-scene-edit" } });
     expect(chooseMaker({ engine: "open", mode: "insert", target: "type" })).toEqual({ problem: expect.stringMatching(/paint where it goes/) });
     expect(chooseMaker({ engine: "cloud", mode: "character", target: "paint" })).toEqual({ problem: expect.stringMatching(/doesn't take paint/) });
   });
 
   it("every maker is a catalog model that does its mode's operation on its engine", () => {
-    const ops = { motion: "motion-transfer", character: "video-swap", swap: "video-swap", insert: "video-insert", restyle: "v2v" } as const;
+    const ops = { motion: "motion-transfer", character: "video-swap", swap: "video-swap", insert: "video-insert", restyle: "v2v", picture: "picture-video", finish: "tone-video" } as const;
+    const opOf = (m: Maker, mode: keyof typeof ops) =>
+      m.group ? "group-swap" : m.actions ? "scene-edit" : m.review ? "picture-video" : m.tool === "faces" ? "face-fix-video" : m.tool === "colours" ? "tone-video" : ops[mode];
     for (const m of MAKERS) {
       const model = getModel(m.id);
       expect(model, m.id).toBeDefined();
       expect(model!.engines ?? [model!.engine], m.id).toContain(m.engine);
       const providers = m.engine === "open" ? ["comfyui"] : ["fal", "replicate"];
-      for (const mode of m.modes) expect(model!.routes.some((r) => r.op === ops[mode] && providers.includes(r.provider)), `${m.id} ${m.engine} ${mode}`).toBe(true);
+      for (const mode of m.modes) expect(model!.routes.some((r) => r.op === opOf(m, mode) && providers.includes(r.provider)), `${m.id} ${m.engine} ${mode}`).toBe(true);
     }
     // The Originals are one model on both engines.
     for (const id of Object.values(ORIGINALS)) expect(getModel(id)?.engines).toEqual(["open", "cloud"]);

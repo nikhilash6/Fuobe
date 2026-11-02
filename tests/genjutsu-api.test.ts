@@ -182,7 +182,8 @@ describe("Genjutsu: estimates", () => {
     };
     expect(await say(body({ references: [], source: { url: clip, ...src } }))).toBe("Add a picture of your character");
     expect(await say(body({ source: { url: clip, ...src }, range: { start: 0, end: 3 } }))).toMatch(/between 4 and 30 seconds/);
-    expect(await say(body({ mode: "swap", target: "paint", engine: "open", source: { url: clip, ...src } }))).toMatch(/name what to swap/);
+    // Painting on your GPU is Scene edit's (the owner sees it before it opens to everyone).
+    expect(await say(body({ mode: "swap", target: "paint", engine: "open", source: { url: clip, ...src } }))).toBe("Paint over what changes");
     expect(await say(body({ mode: "swap", modelId: "kling-o3", source: { url: clip, ...src, duration: 10 }, range: { start: 0, end: 10 } }))).toMatch(/Say what to swap/);
     expect(await say(body({ mode: "restyle", references: [], source: { url: clip, ...src } }))).toBe("Pick a look");
     // Character swap: a part of 5–15 s, a click only on the open engine.
