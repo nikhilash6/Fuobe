@@ -43,7 +43,7 @@ import { PromptInput, ELEMENT_ICONS, type PromptInputHandle } from "@/components
 import { ShotsEditor } from "@/components/studio/shots-editor";
 import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { uploadFile, useAssets, useModelAccess, useStatus } from "@/lib/api";
+import { uploadFile, useAssets, useIsOwner, useModelAccess, useStatus } from "@/lib/api";
 import { offered } from "@/lib/model-access";
 import { getModel } from "@/lib/catalog";
 import {
@@ -70,8 +70,10 @@ import { modKey } from "@/lib/keys";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { MoveChips, MovePicker, prefetchMoves } from "./camera-moves";
+import { ExactOrbitControls } from "@/components/exact-orbit-controls";
+import { exactDefaults, takesExact } from "@/lib/exact-orbit";
 import { CameraChip, EmotionChip, FilmSetupChip, LightingChip, PaletteChip } from "./director-panel";
-import { directorPicks, draftToInput, type BarAction, type CinemaDraft, type RefItem } from "./draft";
+import { directorPicks, draftToInput, withMoves, type BarAction, type CinemaDraft, type RefItem } from "./draft";
 import { useCinemaGenerate } from "./hooks";
 import { firstFrame, mediaDuration } from "./media";
 import { formatUsd } from "./money";
@@ -384,6 +386,8 @@ export function PromptBar(props: PromptBarProps) {
   // Reference clips make the take reference-to-video: the first image is then a reference, not the start frame.
   const refMode = plan.steps.find((s) => s.key === "main")?.request.op === "ref2v";
   const video = draft.mode === "video";
+  // Exact orbits start with a 3D depth step and run on the studio's own GPU: the owner's for now.
+  const owner = useIsOwner();
   const action = input.action;
   const busy = generate.isPending || preparing;
   // The take's length: the main clip, plus what an extend adds (Fuobe Cinema past 20 s in the cloud).
@@ -680,7 +684,12 @@ export function PromptBar(props: PromptBarProps) {
         {!draft.refs.length && <span className="hidden text-[12px] text-muted-foreground sm:inline">Start frame, references, clips or audio — or @ a character</span>}
       </div>
 
-      {video && <MoveChips moves={draft.moves} onChange={(moves) => setDraft({ moves })} />}
+      {video && <MoveChips moves={draft.moves} onChange={(moves) => setDraft(withMoves(draft, moves))} />}
+      {video && owner && action === "generate" && takesExact(draft.moves[0]) && (
+        <div className="px-2 pb-1.5">
+          <ExactOrbitControls compact engine={engine} value={draft.exact ?? null} defaults={exactDefaults(draft.moves[0])} onChange={(exact) => setDraft({ exact })} />
+        </div>
+      )}
 
       <PromptInput ref={promptRef} value={draft.prompt} onChange={onPrompt} onSubmit={() => void submit()} placeholder={placeholder} elements={elements} />
 
@@ -839,7 +848,7 @@ export function PromptBar(props: PromptBarProps) {
               }}
               engine={engine}
               selected={draft.moves}
-              onPick={(slug) => setDraft((d) => ({ moves: [...d.moves, slug] }))}
+              onPick={(slug) => setDraft((d) => withMoves(d, [...d.moves, slug]))}
             />
           )}
 

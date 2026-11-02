@@ -40,7 +40,7 @@
         0
       ],
       "vae": [
-        "119",
+        "136",
         0
       ]
     },
@@ -200,6 +200,15 @@
     "_meta": {
       "title": "⚡ TURBO SAMPLER",
       "aux_id": "Larryvrh/ComfyUI-MiniMax-H3-Turbo"
+    }
+  },
+  "136": {
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "🟪 H3 VIDEO DECODER (Fast decode: Sol-H3-VAE)"
     }
   },
   "174": {
