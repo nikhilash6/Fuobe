@@ -93,7 +93,9 @@ export type Operation =
   | "insert-moment" // video + params.startTime / params.endTime (+ prompt, reference images and clips, params.duration: the new scene's length) → the clip with a new scene between them
   | "retexture-3d" // 3D model (inputs.model3d) + prompt or a style image → the same model with new textures
   // nm10-voice-design
-  | "voice-design"; // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  | "voice-design" // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  // nm10-speech-edit
+  | "speech-edit"; // audio or video (its soundtrack) + params.extra.speechWindows (src/lib/speech-edit.ts) → the recording with those parts changed (AuK)
 
 export const OPERATION_LABELS: Record<Operation, string> = {
   t2i: "Text to image",
@@ -124,6 +126,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   dialogue: "Dialogue",
   "voice-change": "Voice change",
   "voice-design": "Design a voice",
+  "speech-edit": "Edit speech",
   dub: "Translate & dub",
   "bg-remove-video": "Video background removal",
   "depth-video": "Video depth map",
@@ -199,6 +202,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   dialogue: "audio",
   "voice-change": "audio",
   "voice-design": "audio",
+  "speech-edit": "audio",
   dub: "video",
   "bg-remove-video": "video",
   "depth-video": "video",

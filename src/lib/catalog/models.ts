@@ -1285,6 +1285,19 @@ const open: ModelDef[] = [
     routes: [comfy("voice-design", "tts-voxcpm2"), comfy("tts", "tts-voxcpm2-clone")],
     options: { voiceClone: true, seed: true },
   }),
+  // Edit speech (nm10-speech-edit): Tencent AuK (MIT) changes words, pitch, pace, emotion and noise in a recording, and
+  // speaks a line in a voice. Hosted on neither fal nor Replicate, so it runs on your GPU only (src/lib/speech-edit.ts).
+  o({
+    id: "oss-auk",
+    name: "AuK",
+    vendor: "Tencent",
+    family: "auk",
+    kind: "audio",
+    tagline: "Change what was said in a recording, or how it was said: words, pitch, pace, emotion, noise",
+    badges: ["new"],
+    routes: [comfy("speech-edit", "speech-edit-auk", "every edit window in one job"), comfy("tts", "speech-tts-auk")],
+    options: { voiceClone: true, seed: true },
+  }),
   o({
     id: "oss-chatterbox-dialogue",
     name: "Chatterbox Dialogue",

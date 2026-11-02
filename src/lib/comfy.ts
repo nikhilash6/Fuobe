@@ -114,9 +114,10 @@ export interface ManifestWorkflow {
   /**
    * The provider rewrites the graph before submitting ("captions": one segment per caption cue;
    * "timeline": one loader per audio clip, each placed at its start time; "videos" / "audios": one loader
-   * per clip of a join, src/lib/av/joins.ts).
+   * per clip of a join, src/lib/av/joins.ts; "speech": every Edit speech window of params.extra.speechWindows,
+   * src/lib/av/speech-edit-graph.ts).
    */
-  expand?: "captions" | "timeline" | "videos" | "audios";
+  expand?: "captions" | "timeline" | "videos" | "audios" | "speech";
   validated: boolean;
   /** What ComfyUI answered when it last refused this graph. */
   validationError?: string;

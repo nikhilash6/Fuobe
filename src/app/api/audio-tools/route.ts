@@ -15,7 +15,7 @@ const MESSAGES: Record<string, string> = {
 
 /**
  * Audio → Loop / extend, Join, Split soundtrack (and its Clean up dialogue) and Clean up voice (and a split's mix put back on its video), and Video
- * tools → Remove dialogue: start a run; `?preview=1` only plans and prices it.
+ * tools → Remove dialogue, and Audio → Edit speech: start a run; `?preview=1` only plans and prices it.
  */
 async function post(request: Request) {
   const raw: unknown = await request.json().catch(() => null);
@@ -31,7 +31,13 @@ async function post(request: Request) {
           ? "Add the video to take the dialogue out of"
           : (tool === "clean" || tool === "clean-dialogue") && path === "media"
             ? "Add the audio or video to clean"
-            : (MESSAGES[path] ?? "Check the settings");
+            : tool === "speech-edit"
+              ? path === "media"
+                ? "Add the recording to edit"
+                : path.startsWith("cues") || path.startsWith("edited")
+                  ? "Transcribe the recording first, then edit its lines"
+                  : "Pick one of the offered settings for the effect"
+              : (MESSAGES[path] ?? "Check the settings");
     return Response.json({ error: msg }, { status: 400 });
   }
   const preview = new URL(request.url).searchParams.get("preview") === "1";
