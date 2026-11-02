@@ -17,6 +17,7 @@ export const TEMPLATE_COVERS: Record<string, TemplateCoverEntry> = {
   "canvas/effect-chain-pearl-earring": {"poster":"/previews/presets/peak/effect-pearl-earring.jpg?v=dbbf9f2f","video":"/previews/presets/effect-pearl-earring.mp4?v=b73f4ae9","at":2.3542},
   "canvas/effect-chain-skatedog": {"poster":"/previews/presets/peak/effect-skatedog.jpg?v=90062c7b","video":"/previews/presets/effect-skatedog.mp4?v=af3f7f5c","at":3.5625},
   "canvas/effect-chain-superstar": {"poster":"/previews/presets/peak/effect-superstar.jpg?v=8eb5e622","video":"/previews/presets/effect-superstar.mp4?v=c0066397","at":3.5625},
+  "content-factory/what-if": "9eab5dcb",
   "marketing/m2-paper-parade": "a21bc137",
   "marketing/m2-sticker-pop": "eb15d9a1",
   "marketing/mk-clean-listing": "875102cc",
