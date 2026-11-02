@@ -6,6 +6,7 @@ const Body = z.object({
   modelId: z.string().min(1),
   op: z.enum(["grade", "relight"]),
   prompt: z.string().max(2000),
+  title: z.string().max(200).optional(),
   inputs: z.object({ images: z.array(z.string()).max(1).optional(), video: z.string().optional() }),
   params: z.object({ extra: z.record(z.string(), z.unknown()).optional() }).optional(),
   output: z.object({ url: z.string().startsWith("/api/files/").max(500), kind: z.enum(["image", "video"]), contentType: z.string().optional() }),

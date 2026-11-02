@@ -1,6 +1,6 @@
 "use client";
 
-import { FRAGMENT, uniforms, VERTEX, type StageState } from "@/lib/relight/shader";
+import { FRAGMENT, LOW_SHORT, uniforms, VERTEX, type StageState } from "@/lib/relight/shader";
 
 export type Pic = HTMLImageElement | HTMLCanvasElement | ImageBitmap;
 
@@ -22,8 +22,36 @@ export function picSize(p: Pic): [number, number] {
   return sizeOf(p);
 }
 
-const UNITS = { uPhoto: 0, uDepth: 1, uMatte: 2, uRelit: 3 } as const;
+/**
+ * A low-passed copy with LOW_SHORT pixels on its short side: halved (each halving averages 2 × 2 pixels) while the
+ * short side is at least twice that, then scaled the rest of the way. Its size follows the picture's shape only, so
+ * the preview and a full-size export blur alike.
+ */
+export function lowPass(p: Pic, short = LOW_SHORT): Pic {
+  let [w, h] = sizeOf(p);
+  let src: Pic = p;
+  const step = (nw: number, nh: number) => {
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, nw);
+    c.height = Math.max(1, nh);
+    const ctx = c.getContext("2d")!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "low";
+    ctx.drawImage(src, 0, 0, c.width, c.height);
+    src = c;
+    [w, h] = [c.width, c.height];
+  };
+  while (Math.min(w, h) >= short * 2) step(Math.round(w / 2), Math.round(h / 2));
+  const s = short / Math.min(w, h);
+  if (s < 1) step(Math.round(w * s), Math.round(h * s));
+  return src;
+}
+
+const UNITS = { uPhoto: 0, uDepth: 1, uMatte: 2, uRelit: 3, uPhotoLo: 4, uRelitLo: 5 } as const;
 type Unit = keyof typeof UNITS;
+/** The pictures a caller sets; the photo and the relit picture each bring their low-passed copy. */
+type Input = "uPhoto" | "uDepth" | "uMatte" | "uRelit";
+const LOW: Partial<Record<Input, Unit>> = { uPhoto: "uPhotoLo", uRelit: "uRelitLo" };
 
 /**
  * One WebGL context that draws the Relight stage (src/lib/relight/shader.ts): the photo, its scene read, the relit
@@ -83,19 +111,33 @@ export class RelightRenderer {
     return this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE) as number;
   }
 
+  /** The largest side this context can draw into and read back: its texture, render buffer and viewport limits. */
+  get maxDraw(): number {
+    const gl = this.gl;
+    const view = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as ArrayLike<number> | null;
+    const buffer = (gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number) || this.maxSize;
+    return Math.min(this.maxSize, buffer, view?.[0] ?? this.maxSize, view?.[1] ?? this.maxSize);
+  }
+
   private u(name: string) {
     if (!this.loc.has(name)) this.loc.set(name, this.gl.getUniformLocation(this.prog, name));
     return this.loc.get(name)!;
   }
 
-  set(unit: Unit, p: Pic | null) {
+  set(unit: Input, p: Pic | null) {
+    this.upload(unit, p);
+    const low = LOW[unit];
+    if (low) this.upload(low, p && lowPass(p));
+    if (unit === "uPhoto" && p) this.size = sizeOf(p);
+    if (unit === "uDepth") this.depthSize = p ? sizeOf(p) : [1, 1];
+  }
+
+  private upload(unit: Unit, p: Pic | null) {
     const gl = this.gl;
     gl.activeTexture(gl.TEXTURE0 + UNITS[unit]);
     gl.bindTexture(gl.TEXTURE_2D, this.tex[unit]);
     if (p) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, p);
     else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array(3));
-    if (unit === "uPhoto" && p) this.size = sizeOf(p);
-    if (unit === "uDepth") this.depthSize = p ? sizeOf(p) : [1, 1];
   }
 
   /** Draw at `width` × `height` (the canvas takes that size). */
@@ -112,6 +154,7 @@ export class RelightRenderer {
     for (const [k, v] of Object.entries(u.vec2)) gl.uniform2f(this.u(k), v[0], v[1]);
     for (const [k, v] of Object.entries(u.vec4)) gl.uniform4f(this.u(k), v[0], v[1], v[2], v[3]);
     gl.uniform3fv(this.u("uPos[0]") ?? this.u("uPos"), u.arrays.uPos);
+    gl.uniform2fv(this.u("uMark[0]") ?? this.u("uMark"), u.arrays.uMark);
     gl.uniform3fv(this.u("uColor[0]") ?? this.u("uColor"), u.arrays.uColor);
     gl.uniform4fv(this.u("uParams[0]") ?? this.u("uParams"), u.arrays.uParams);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -18,12 +18,16 @@ import {
   HEIGHTS,
   LOOKS,
   MAX_LIGHTS,
+  SIDE_LABELS,
+  SIDES,
+  sideOf,
   SOFTNESS_LABELS,
   SOFTNESSES,
   STRENGTH_LABELS,
   STRENGTHS,
   strengthFromValue,
   strengthValueOf,
+  xForSide,
   yForHeight,
   type Light,
   type LookId,
@@ -152,12 +156,12 @@ export function LightPanel({
                     type="button"
                     className={cn(
                       "inline-flex h-11 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9",
-                      chipOf(l.color) ? "border-border" : "border-foreground bg-foreground text-background",
+                      chipOf(l.color) ? "border-border" : "border-foreground",
                     )}
                   >
+                    {/* A colour off the chips (a look's own, or picked here) shows as this chip's swatch. */}
                     <span aria-hidden className="size-3.5 rounded-full border border-black/15" style={{ background: chipOf(l.color) ? "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" : l.color }} />
                     Custom
-                    {!chipOf(l.color) && <Check className="size-3.5" />}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[min(92vw,280px)] p-3" collisionPadding={12}>
@@ -165,6 +169,9 @@ export function LightPanel({
                 </PopoverContent>
               </Popover>
             </div>
+          </Field>
+          <Field label="Side">
+            <Chips label="Side" value={sideOf(l.x)} options={SIDES.map((s) => ({ value: s, label: SIDE_LABELS[s] }))} onChange={(s) => onChange({ ...l, x: xForSide(l.x, s) })} />
           </Field>
           <Field label="Height">
             <Chips label="Height" value={l.height} options={HEIGHTS.map((h) => ({ value: h, label: HEIGHT_LABELS[h] }))} onChange={(h) => onChange({ ...l, height: h, y: yForHeight(l.y, h) })} />

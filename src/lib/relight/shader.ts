@@ -4,9 +4,12 @@
  *
  * Before Generate (mode 0) it paints the placed lights onto the photo in linear light: a lights-only estimate
  * (the photo's own texture times ambient plus each light's falloff, wrapped diffuse and rim) mixed with the photo by
- * Intensity. With a scene read, surfaces face where the depth map says and "behind" lights rim the cut-out's edge;
- * without one, a soft guess from the photo's shading. After Generate (mode 1) it blends the original with the relit
- * picture, lined up by the alignment fit: a plain mix, or light transfer (the original's detail, the new light).
+ * Intensity. A light's marker says the direction it comes from: it sits that way round the subject, at a gap its
+ * distance band sets, so even a light placed at the frame's edge reaches the subject. With a scene read, surfaces
+ * face where the depth map says and "behind" lights rim the cut-out's edge; without one, a soft guess from the photo's
+ * shading. After Generate (mode 1) it blends the original with the relit picture, lined up by the alignment fit: a
+ * plain mix, or light transfer (the original's detail, the new light), its ratio read from low-passed copies of both
+ * pictures (uPhotoLo, uRelitLo) so strong contours leave no echo.
  */
 import { hexToRgb, MAX_LIGHTS, srgbToLinear, strengthValueOf, type Distance, type Light, type Softness } from "./lights";
 import type { BlendMode } from "./engine";
@@ -23,9 +26,11 @@ export const FRAGMENT = `
 precision highp float;
 varying vec2 vUv;
 uniform sampler2D uPhoto;
+uniform sampler2D uPhotoLo;
 uniform sampler2D uDepth;
 uniform sampler2D uMatte;
 uniform sampler2D uRelit;
+uniform sampler2D uRelitLo;
 uniform float uAspect;
 uniform vec2 uTexel;
 uniform vec2 uDepthTexel;
@@ -41,44 +46,50 @@ uniform float uBlur;
 uniform vec4 uAlign;
 uniform int uCount;
 uniform vec3 uPos[${MAX_LIGHTS}];
+uniform vec2 uMark[${MAX_LIGHTS}];
 uniform vec3 uColor[${MAX_LIGHTS}];
 uniform vec4 uParams[${MAX_LIGHTS}];
 
 const float Z = 0.6;
 
 vec3 toLin(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
-vec3 toSrgb(vec3 c) { c = max(c, 0.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+vec3 toSrgb(vec3 c) { c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 vec3 knee(vec3 c) {
   float k = 0.8;
   vec3 over = max(c - k, 0.0);
   return min(c, vec3(k)) + (1.0 - k) * (1.0 - exp(-over / (1.0 - k)));
 }
+vec2 aligned(vec2 uv) { return vec2(uAlign.x * uv.x + uAlign.y, uAlign.z * uv.y + uAlign.w); }
 vec3 photo(vec2 uv) { return toLin(texture2D(uPhoto, uv).rgb); }
-vec3 relit(vec2 uv) { return toLin(texture2D(uRelit, vec2(uAlign.x * uv.x + uAlign.y, uAlign.z * uv.y + uAlign.w)).rgb); }
+vec3 photoLo(vec2 uv) { return toLin(texture2D(uPhotoLo, uv).rgb); }
+vec3 relit(vec2 uv) { return toLin(texture2D(uRelit, aligned(uv)).rgb); }
+vec3 relitLo(vec2 uv) { return toLin(texture2D(uRelitLo, aligned(uv)).rgb); }
 float depthAt(vec2 uv) { return texture2D(uDepth, uv).r; }
 float matteAt(vec2 uv) { return texture2D(uMatte, uv).r; }
 
+// About a Gaussian of uBlur: nine taps over the low-passed copy, so no tap skips detail between them.
 vec3 blurPhoto(vec2 uv) {
   vec2 r = vec2(uBlur / uAspect, uBlur);
-  vec3 s = photo(uv) * 0.25;
-  s += (photo(uv + vec2(r.x, 0.0)) + photo(uv - vec2(r.x, 0.0)) + photo(uv + vec2(0.0, r.y)) + photo(uv - vec2(0.0, r.y))) * 0.125;
-  s += (photo(uv + r) + photo(uv - r) + photo(uv + vec2(r.x, -r.y)) + photo(uv - vec2(r.x, -r.y))) * 0.0625;
+  vec3 s = photoLo(uv) * 0.25;
+  s += (photoLo(uv + vec2(r.x, 0.0)) + photoLo(uv - vec2(r.x, 0.0)) + photoLo(uv + vec2(0.0, r.y)) + photoLo(uv - vec2(0.0, r.y))) * 0.125;
+  s += (photoLo(uv + r) + photoLo(uv - r) + photoLo(uv + vec2(r.x, -r.y)) + photoLo(uv - vec2(r.x, -r.y))) * 0.0625;
   return s;
 }
 vec3 blurRelit(vec2 uv) {
   vec2 r = vec2(uBlur / uAspect, uBlur);
-  vec3 s = relit(uv) * 0.25;
-  s += (relit(uv + vec2(r.x, 0.0)) + relit(uv - vec2(r.x, 0.0)) + relit(uv + vec2(0.0, r.y)) + relit(uv - vec2(0.0, r.y))) * 0.125;
-  s += (relit(uv + r) + relit(uv - r) + relit(uv + vec2(r.x, -r.y)) + relit(uv - vec2(r.x, -r.y))) * 0.0625;
+  vec3 s = relitLo(uv) * 0.25;
+  s += (relitLo(uv + vec2(r.x, 0.0)) + relitLo(uv - vec2(r.x, 0.0)) + relitLo(uv + vec2(0.0, r.y)) + relitLo(uv - vec2(0.0, r.y))) * 0.125;
+  s += (relitLo(uv + r) + relitLo(uv - r) + relitLo(uv + vec2(r.x, -r.y)) + relitLo(uv - vec2(r.x, -r.y))) * 0.0625;
   return s;
 }
 
+// Each light's glow, where it was placed on the photo.
 vec3 glow(vec3 base, vec2 p) {
   vec3 o = base;
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
     if (i >= uCount) break;
-    vec2 d = p - uPos[i].xy;
+    vec2 d = p - uMark[i];
     float h = exp(-dot(d, d) / 0.0036) * 0.55 + exp(-dot(d, d) / 0.04) * 0.18;
     vec3 c = toSrgb(uColor[i]) * h;
     o = 1.0 - (1.0 - o) * (1.0 - clamp(c, 0.0, 1.0));
@@ -93,6 +104,7 @@ void main() {
   vec2 p = vec2(uv.x * uAspect, uv.y);
   vec3 outc;
   if (uMode > 0.5) {
+    // The result: at Intensity 0 the photo, and (plain) at 100 % the relit picture, untouched.
     float t = uIntensity;
     if (uBlend > 0.5) {
       vec3 ratio = clamp(blurRelit(uv) / max(blurPhoto(uv), vec3(0.004)), 0.0, 8.0);
@@ -103,12 +115,11 @@ void main() {
   } else {
     // The photo's own texture: its colour over its local brightness, so skin and fabric keep their detail.
     vec2 r = vec2(uBlur / uAspect, uBlur) * 1.5;
-    float lc = luma(P);
-    float l1 = luma(photo(uv + vec2(r.x, 0.0)));
-    float l2 = luma(photo(uv - vec2(r.x, 0.0)));
-    float l3 = luma(photo(uv + vec2(0.0, r.y)));
-    float l4 = luma(photo(uv - vec2(0.0, r.y)));
-    float lb = (lc * 2.0 + l1 + l2 + l3 + l4) / 6.0;
+    float lb = luma(photoLo(uv));
+    float l1 = luma(photoLo(uv + vec2(r.x, 0.0)));
+    float l2 = luma(photoLo(uv - vec2(r.x, 0.0)));
+    float l3 = luma(photoLo(uv + vec2(0.0, r.y)));
+    float l4 = luma(photoLo(uv - vec2(0.0, r.y)));
     vec3 albedo = P * pow(0.25 / (lb + 0.05), 0.5);
     float d = uHasScene > 0.5 ? depthAt(uv) : 0.5;
     vec3 N;
@@ -130,14 +141,14 @@ void main() {
     for (int i = 0; i < ${MAX_LIGHTS}; i++) {
       if (i >= uCount) break;
       vec3 Ld = uPos[i] - S;
-      float radius = uParams[i].y;
-      float fall = exp(-dot(Ld.xy, Ld.xy) / (radius * radius));
+      float r2 = uParams[i].y * uParams[i].y;
+      float fall = 1.0 / (1.0 + dot(Ld.xy, Ld.xy) / r2);
       vec3 L = normalize(Ld);
       float w = uParams[i].z;
       float diffuse = clamp((dot(N, L) + w) / (1.0 + w), 0.0, 1.0);
       float k;
       if (uParams[i].w > 0.5) {
-        float fallRim = exp(-dot(Ld.xy, Ld.xy) / (radius * radius * 2.5));
+        float fallRim = 1.0 / (1.0 + dot(Ld.xy, Ld.xy) / (r2 * 2.5));
         if (uHasScene > 0.5) {
           vec2 outward = length(gm) > 1e-4 ? -normalize(gm) : vec2(0.0);
           float facing = 0.4 + 0.6 * clamp(dot(outward, normalize(Ld.xy + vec2(1e-5))), 0.0, 1.0);
@@ -147,34 +158,49 @@ void main() {
         }
       } else {
         // The far wall stays darker than the subject when the light is close: off the subject, falloff counts its depth too.
-        float fall3 = exp(-dot(Ld, Ld) / (radius * radius));
+        float fall3 = 1.0 / (1.0 + dot(Ld, Ld) / r2);
         k = mix(fall3, fall, m) * diffuse;
       }
       C += uColor[i] * uParams[i].x * k;
     }
-    vec3 lit = albedo * (uAmbient + C);
-    outc = mix(P, lit, uIntensity);
+    // The highlight knee is the preview's own (its lights can overshoot); a result is never compressed.
+    outc = mix(P, knee(albedo * (uAmbient + C)), uIntensity);
   }
-  vec3 o = toSrgb(knee(outc));
+  vec3 o = toSrgb(outc);
   if (uGlow > 0.5) o = glow(o, p);
   gl_FragColor = vec4(o, 1.0);
 }`;
 
-/** How far each distance band reaches, in picture heights. */
-const RADIUS: Record<Distance, number> = { close: 0.28, mid: 0.5, far: 0.95 };
-/** Toward the camera from the subject; behind lights sit behind it. */
-const Z_OFFSET: Record<Distance, number> = { close: 0.15, mid: 0.4, far: 1.0 };
-const SOFT_VALUE: Record<Softness, number> = { hard: 0, soft: 0.5, diffuse: 1 };
+/** The gap between the subject's edge and a light, per distance band, in picture heights. */
+const GAP: Record<Distance, number> = { close: 0.1, mid: 0.35, far: 0.8 };
+/** How far each light reaches, as a share of its distance to the subject's centre (harder light falls off sooner). */
+const REACH: Record<Softness, number> = { hard: 0.9, soft: 1.1, diffuse: 1.3 };
 const WRAP: Record<Softness, number> = { hard: 0, soft: 0.35, diffuse: 0.7 };
+/** How far in front of the subject a light sits, as a share of its distance (about 40° off the camera's axis). */
+const LIFT = 0.8;
+/** Closer than this to the subject's centre (picture heights), a marker brings its light round to the front. */
+const NEAR = 0.12;
 const Z = 0.6;
 
 const clamp = (v: number, lo: number, hi: number) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo);
+
+/** Where the subject is: its centre (x 0 left … 1 right, y 0 top … 1 bottom) and its radius in picture heights. */
+export interface Subject {
+  x: number;
+  y: number;
+  r: number;
+}
+
+/** Without a scene read: a subject a little above the middle, as most portraits frame one. */
+export const FLAT_SUBJECT: Subject = { x: 0.5, y: 0.45, r: 0.22 };
 
 export interface SceneInfo {
   /** A depth map and matte are loaded. */
   hasScene: boolean;
   /** The subject's median depth (0 far … 1 near); 0.5 without a scene. */
   subjectDepth: number;
+  /** Where the matte says the subject is (FLAT_SUBJECT without one). */
+  subject?: Subject;
 }
 
 /** Where the relit picture's pixels sit: relit uv = (sx·x + tx, sy·y + ty), in uv units. Identity = no shift. */
@@ -212,36 +238,73 @@ export interface Uniforms {
   ints: Record<string, number>;
   vec2: Record<string, [number, number]>;
   vec4: Record<string, [number, number, number, number]>;
-  arrays: { uPos: number[]; uColor: number[]; uParams: number[] };
+  arrays: { uPos: number[]; uMark: number[]; uColor: number[]; uParams: number[] };
 }
 
-/** One light's packed values: position (x·aspect, 1−y, z), linear colour × nothing, and power, radius, wrap, behind. */
-export function packLight(l: Light, aspect: number, subjectDepth: number) {
+export interface PackedLight {
+  /** Where the light is, in the shader's units: x·aspect, y from the top, z toward the camera. */
+  pos: [number, number, number];
+  /** Where its marker sits on the photo (its glow), same units. */
+  mark: [number, number];
+  /** Linear colour. */
+  color: [number, number, number];
+  /** Power, reach, wrap, behind. */
+  params: [number, number, number, number];
+}
+
+/**
+ * One light's packed values. Its marker is a direction from the subject: the light sits that way round it, the gap
+ * set by its distance band (a behind light just behind the outline), raised toward the camera.
+ */
+export function packLight(l: Light, aspect: number, subjectDepth: number, subject: Subject = FLAT_SUBJECT): PackedLight {
   const a = clamp(aspect, 0.1, 10);
-  const soft = SOFT_VALUE[l.softness] ?? 0.5;
-  const radius = clamp(RADIUS[l.distance] * (0.7 + 0.6 * soft), 0.05, 2);
-  const z = clamp(subjectDepth, 0, 1) * Z + (l.behind ? -0.25 : Z_OFFSET[l.distance]);
+  const cx = clamp(subject.x, 0, 1) * a;
+  const cy = clamp(subject.y, 0, 1);
+  const mark: [number, number] = [clamp(l.x, 0, 1) * a, 1 - clamp(l.y, 0, 1)];
+  const gap = (GAP[l.distance] ?? GAP.mid) * (l.behind ? 0.25 : 1);
+  const reach = clamp(subject.r, 0.05, 1) + gap;
+  const dx = mark[0] - cx;
+  const dy = mark[1] - cy;
+  const k = reach / Math.max(Math.hypot(dx, dy), NEAR);
+  const z0 = clamp(subjectDepth, 0, 1) * Z;
   const power = clamp(strengthValueOf(l) * 1.5, 0, 2);
   const [r, g, b] = hexToRgb(l.color).map(srgbToLinear);
   return {
-    pos: [clamp(l.x, 0, 1) * a, 1 - clamp(l.y, 0, 1), z] as [number, number, number],
-    color: [r, g, b] as [number, number, number],
-    params: [power, radius, WRAP[l.softness] ?? 0.35, l.behind ? 1 : 0] as [number, number, number, number],
+    pos: [cx + dx * k, cy + dy * k, l.behind ? z0 - 0.25 : z0 + reach * LIFT],
+    mark,
+    color: [r, g, b],
+    params: [power, clamp(reach * (REACH[l.softness] ?? REACH.soft), 0.05, 2), WRAP[l.softness] ?? WRAP.soft, l.behind ? 1 : 0],
   };
+}
+
+/**
+ * A front light's share of its power at a point, as the preview's GLSL works it out (falloff × wrapped diffuse, on the
+ * subject): the tests' reference. `at` and `normal` in the shader's units.
+ */
+export function reachAt(p: PackedLight, at: readonly [number, number, number], normal: readonly [number, number, number] = [0, 0, 1]): number {
+  const d = [p.pos[0] - at[0], p.pos[1] - at[1], p.pos[2] - at[2]];
+  const fall = 1 / (1 + (d[0] ** 2 + d[1] ** 2) / p.params[1] ** 2);
+  const len = Math.hypot(d[0], d[1], d[2]) || 1;
+  const w = p.params[2];
+  const diffuse = clamp(((normal[0] * d[0] + normal[1] * d[1] + normal[2] * d[2]) / len + w) / (1 + w), 0, 1);
+  return fall * diffuse;
 }
 
 /** Every uniform for one draw, clamped; at most MAX_LIGHTS lights are packed. */
 export function uniforms(s: StageState): Uniforms {
   const aspect = clamp(s.aspect, 0.1, 10);
   const subject = s.scene.hasScene ? clamp(s.scene.subjectDepth, 0, 1) : 0.5;
+  const where = (s.scene.hasScene && s.scene.subject) || FLAT_SUBJECT;
   const lights = s.lights.slice(0, MAX_LIGHTS);
   const pos: number[] = [];
+  const mark: number[] = [];
   const color: number[] = [];
   const params: number[] = [];
   for (let i = 0; i < MAX_LIGHTS; i++) {
     const l = lights[i];
-    const p = l ? packLight(l, aspect, subject) : { pos: [0, 0, 0], color: [0, 0, 0], params: [0, 1, 0, 0] };
+    const p = l ? packLight(l, aspect, subject, where) : { pos: [0, 0, 0], mark: [0, 0], color: [0, 0, 0], params: [0, 1, 0, 0] };
     pos.push(...p.pos);
+    mark.push(...p.mark);
     color.push(...p.color);
     params.push(...p.params);
   }
@@ -267,7 +330,7 @@ export function uniforms(s: StageState): Uniforms {
       uDepthTexel: [1 / Math.max(1, s.depthWidth ?? 512), 1 / Math.max(1, s.depthHeight ?? 512)],
     },
     vec4: { uAlign: [clamp(fit.sx, 0.8, 1.25), clamp(fit.tx, -0.25, 0.25), clamp(fit.sy, 0.8, 1.25), clamp(fit.ty, -0.25, 0.25)] },
-    arrays: { uPos: pos, uColor: color, uParams: params },
+    arrays: { uPos: pos, uMark: mark, uColor: color, uParams: params },
   };
 }
 
@@ -289,3 +352,27 @@ export function subjectDepthOf(depth: ArrayLike<number>, matte: ArrayLike<number
   }
   return 0.5;
 }
+
+/**
+ * Where the subject is, from its matte (w × h, one value per pixel, 0..255): the cut-out's centre and the radius of a
+ * disc of its area, in picture heights. `aspect` is the picture's (a matte read back at another shape keeps it).
+ * Null when the cut-out is too small to say.
+ */
+export function subjectOf(matte: ArrayLike<number>, w: number, h: number, aspect = w / h): Subject | null {
+  let sx = 0;
+  let sy = 0;
+  let n = 0;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      if (matte[y * w + x] < 128) continue;
+      sx += x + 0.5;
+      sy += y + 0.5;
+      n++;
+    }
+  if (n < w * h * 0.01) return null;
+  const area = (n / (w * h)) * aspect;
+  return { x: sx / n / w, y: sy / n / h, r: clamp(Math.sqrt(area / Math.PI), 0.08, 0.6) };
+}
+
+/** The low-passed copy's short side, in pixels: one texel is about the light-transfer blur (σ 1.2 % of the short side). */
+export const LOW_SHORT = 80;

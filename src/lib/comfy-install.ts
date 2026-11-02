@@ -45,7 +45,7 @@ export function nodeInstall(node: { name: string; repo: string }): string {
   // One node file in a Hugging Face model repo, at a commit (Viggle's viggle_turbo.py): downloaded as the package's
   // __init__.py, never cloned (the repo holds gigabytes of weights).
   const file = hfNodeFile(node.repo);
-  if (file) return `mkdir -p "$COMFYUI/custom_nodes/${node.name}" && wget -c -O "$COMFYUI/custom_nodes/${node.name}/__init__.py" "${node.repo}"`;
+  if (file) return `mkdir -p "$COMFYUI/custom_nodes/${node.name}" && wget -q -O "$COMFYUI/custom_nodes/${node.name}/__init__.py" "${node.repo}"`;
   const pin = pinnedRepo(node.repo);
   if (!pin) return `git -C "$COMFYUI/custom_nodes" clone ${node.repo}`;
   const dest = `"$COMFYUI/custom_nodes/${node.name}"`;

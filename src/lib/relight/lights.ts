@@ -63,6 +63,16 @@ export function sideOf(x: number): Side {
   return x < 0.35 ? "left" : x > 0.65 ? "right" : "front";
 }
 
+export const SIDES: readonly Side[] = ["left", "front", "right"];
+export const SIDE_LABELS: Record<Side, string> = { left: "Left", front: "Front", right: "Right" };
+/** Where a side's marker sits when its chip moves it (0 left … 1 right). */
+export const SIDE_CENTER: Record<Side, number> = { left: 0.15, front: 0.5, right: 0.85 };
+
+/** The marker's x for a side chip: kept when it is on that side already, else the side's centre. */
+export function xForSide(x: number, side: Side): number {
+  return sideOf(x) === side ? x : SIDE_CENTER[side];
+}
+
 /** The strength as a number (0..1): the slider's value, else the chip's. */
 export function strengthValueOf(l: Pick<Light, "strength" | "strengthValue">): number {
   if (typeof l.strengthValue === "number" && Number.isFinite(l.strengthValue)) return clamp01(l.strengthValue);
@@ -214,9 +224,13 @@ export function getLook(id: string | undefined | null): Look | undefined {
   return LOOKS.find((l) => l.id === id);
 }
 
-/** The look an old run's "Lighting" option picked (Reuse of a run from before the tool). */
-export function lookFromLegacy(label: string | undefined | null): Look | undefined {
-  if (!label) return undefined;
+/**
+ * The look an old run's "Lighting" option picked (Reuse of a run from before the tool). A run stores the option's
+ * value; with the option's choices it is read back through its label.
+ */
+export function lookFromLegacy(v: string | undefined | null, choices: readonly { value: string; label: string; prompt?: string }[] = []): Look | undefined {
+  if (!v) return undefined;
+  const label = choices.find((c) => c.value === v || c.label === v || c.prompt === v)?.label ?? v;
   const t = label.trim().toLowerCase();
   return LOOKS.find((l) => l.legacy?.toLowerCase() === t || l.label.toLowerCase() === t);
 }
@@ -387,9 +401,12 @@ export function seedFor(photoKey: string): number {
   return (h >>> 0) % 2147483647;
 }
 
-/** What a result is cached by: the words, the engine variant, the seed and the guide. */
-export function resultKey(o: { prompt: string; variant: string; seed: number; guide?: boolean }): string {
-  return `${o.variant}|${o.seed}|${o.guide ? 1 : 0}|${o.prompt}`;
+/**
+ * What a result is matched by: the words, the engine variant and the guide. Not the seed: the same rig on the same
+ * photo finds its earlier result whichever session made it.
+ */
+export function resultKey(o: { prompt: string; variant: string; guide?: boolean }): string {
+  return `${o.variant}|${o.guide ? 1 : 0}|${o.prompt}`;
 }
 
 /** What a run stores in params.extra.relight (Reuse and Retry put the rig back). */

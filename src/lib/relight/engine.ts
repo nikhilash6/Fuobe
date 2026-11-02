@@ -7,13 +7,15 @@
  * recorded as a local result.
  */
 import type { GenerationRequest } from "../catalog/types";
-import { MAX_LIGHTS, promptFor, type Light, type LookId, type RelightExtra, type SoftnessWording } from "./lights";
+import { getLook, MAX_LIGHTS, promptFor, relightExtraOf, type Light, type LookId, type RelightExtra, type SoftnessWording } from "./lights";
 
 export const RELIGHT_PRESET = "app-relight";
 /** Its own feature, not the app preset: a preset run would put the app's old words in front of the lights' own. */
 export const RELIGHT_FEATURE = "relight";
 /** Generate lighting: Qwen-Image 2.1 + the 6-step speed LoRA, the photo plus the words. */
 export const RELIGHT_MODEL = "oss-qwen-image-21-relight";
+/** Its workflow: the tool opens to everyone once this one has passed its check (src/server/relight.ts). */
+export const RELIGHT_WORKFLOW = "qwen-image-21-relight";
 /** The scene read: depth (near = bright) and the subject's matte. */
 export const RELIGHT_SCENE_MODEL = "oss-relight-scene";
 /** Its runs are steps: the Library leaves them out (HELPER_SUFFIX). */
@@ -55,6 +57,24 @@ export interface RelightRun {
   look?: LookId;
   promptOverride?: string | null;
   seed: number;
+}
+
+/** What the Library calls a result: the look, else how many lights lit it. */
+export function relightTitle(lights: readonly Light[], look?: LookId): string {
+  const named = look && getLook(look);
+  if (named) return `Relight · ${named.label}`;
+  const n = Math.max(1, Math.min(MAX_LIGHTS, lights.length));
+  return `Relight · ${n} light${n > 1 ? "s" : ""}`;
+}
+
+/**
+ * The title the server gives a Generate lighting run (the API takes no title from a client): its look, else its lights,
+ * so the Library and "Your lit photos" show that rather than the long prompt.
+ */
+export function relightRunTitle(req: Pick<GenerationRequest, "modelId" | "params">): string | undefined {
+  if (req.modelId !== RELIGHT_MODEL) return undefined;
+  const ex = relightExtraOf(req.params?.extra);
+  return ex ? relightTitle(ex.lights, ex.look) : undefined;
 }
 
 /** The run for Generate lighting. */

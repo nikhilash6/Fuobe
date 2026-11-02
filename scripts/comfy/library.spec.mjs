@@ -191,7 +191,7 @@ export const CUSTOM_NODE_REPOS = {
   // Live edit: Fuobe's own node file (src/lib/comfy-live-nodes.ts), shipped with Fuobe rather than cloned from a repo.
   'fuobe-live': 'https://github.com/workingprototype/Fuobe',
   // Relight (qwen-image-21-relight): Viggle's speed-LoRA loader and step schedule, one file in the model repo itself
-  // (comfyui/viggle_turbo.py), at the revision checked against the installed copy (only a tooltip differs). The address
+  // (comfyui/viggle_turbo.py), pinned at a revision. The address
   // is the file: it is downloaded as custom_nodes/viggle_turbo/__init__.py, never cloned (the repo holds the weights).
   // Qwen Research License (a Qwen-Image 2.1 derivative). Not on the validation server: the entry lists it with `packs`.
   viggle_turbo: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/comfyui/viggle_turbo.py',
@@ -229,7 +229,7 @@ export const KNOWN_MODELS = {
   // name of its own), pinned at the revision whose file was measured.
   'Qwen-Image-2.1-DMD2-2steps.safetensors': { folder: 'loras', url: 'https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights.safetensors' },
   // Relight: Viggle's 6-step speed LoRA for Qwen-Image 2.1 (v0.2.1, rank 256, alpha 256; the r128 cut for smaller GPUs),
-  // pinned at the revision whose files were hash-checked on the GPU box (r256 2a0148f5…, r128 bafb91d0…).
+  // pinned at a revision (file hashes r256 2a0148f5…, r128 bafb91d0…).
   'Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors': { folder: 'loras', url: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors' },
   'Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors': { folder: 'loras', url: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors' },
   'ltx-2.3-22b-distilled-fp8.safetensors': { folder: 'checkpoints', url: 'https://huggingface.co/Lightricks/LTX-2.3-fp8/resolve/main/ltx-2.3-22b-distilled-fp8.safetensors' },

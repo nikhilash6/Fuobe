@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -12,9 +13,9 @@ import { parseIndex } from "@/lib/gpu/requirements";
 import type { RequirementIndex } from "@/lib/gpu/types";
 import { outputActions } from "@/lib/output-actions";
 import { alignFit, mapPx, WORK } from "@/lib/relight/align";
-import { blendPlain, blendTransfer } from "@/lib/relight/blend";
+import { blendPlain, blendTransfer, linearToSrgb8 } from "@/lib/relight/blend";
 import { DEFAULT_DEMO, RELIGHT_DEMOS } from "@/lib/relight/demo";
-import { RELIGHT_MODEL, RELIGHT_SCENE_FEATURE, RELIGHT_SCENE_MODEL, RELIGHT_SETTINGS, relightRequest, sceneRequest } from "@/lib/relight/engine";
+import { RELIGHT_MODEL, RELIGHT_SCENE_FEATURE, RELIGHT_SCENE_MODEL, RELIGHT_SETTINGS, RELIGHT_WORKFLOW, relightRequest, relightRunTitle, relightTitle, sceneRequest } from "@/lib/relight/engine";
 import { drawGuide } from "@/lib/relight/guide";
 import {
   BAND_CENTER,
@@ -36,17 +37,22 @@ import {
   promptFor,
   relightExtraOf,
   relightPrompt,
+  resultKey,
   sanitizeLights,
   seedFor,
+  SIDE_CENTER,
   sideOf,
   SOFTNESSES,
   srgbToLinear,
   STRENGTHS,
+  xForSide,
   yForHeight,
   type Light,
 } from "@/lib/relight/lights";
-import { FRAGMENT, packLight, subjectDepthOf, uniforms, type StageState } from "@/lib/relight/shader";
+import { FLAT_SUBJECT, FRAGMENT, LOW_SHORT, packLight, reachAt, subjectDepthOf, subjectOf, uniforms, type StageState, type Subject } from "@/lib/relight/shader";
 import { isHelperFeature } from "@/lib/library";
+import { recordLocalGeneration } from "@/server/generations";
+import { relightToolLive } from "@/server/relight";
 
 const NEGATION = /\b(no|not|never|nothing|none|without|don't|do not|doesn't|avoid|remove|removed)\b/i;
 const ROOT = path.join(__dirname, "..");
@@ -129,6 +135,13 @@ describe("placing lights", () => {
     expect(sideOf(0.8)).toBe("right");
   });
 
+  it("moves a light sideways with the side chips, keeping it where it is when it is on that side already", () => {
+    expect(xForSide(0.2, "left")).toBe(0.2);
+    expect(xForSide(0.2, "right")).toBe(SIDE_CENTER.right);
+    expect(xForSide(0.9, "front")).toBe(SIDE_CENTER.front);
+    for (const side of ["left", "front", "right"] as const) expect(sideOf(xForSide(0.5, side))).toBe(side);
+  });
+
   it("adds a light where tapped, up to three", () => {
     let ls: Light[] = [];
     for (const [x, y] of [
@@ -191,7 +204,13 @@ describe("looks", () => {
 
   it("cover every lighting the old Relight app offered, so its runs reopen on a look", () => {
     const old = getPreset("app-relight")!.options!.find((o) => o.key === "light")!;
-    for (const c of old.choices) expect(lookFromLegacy(c.label), c.label).toBeDefined();
+    for (const c of old.choices) {
+      // A run stores the option's value; its label and words read back the same look.
+      expect(lookFromLegacy(c.value, old.choices), c.value).toBeDefined();
+      expect(lookFromLegacy(c.value, old.choices)).toBe(lookFromLegacy(c.label, old.choices));
+      if (c.prompt) expect(lookFromLegacy(c.prompt, old.choices)).toBe(lookFromLegacy(c.label));
+    }
+    expect(lookFromLegacy("warm golden hour sunlight", old.choices)?.id).toBe("golden-hour");
   });
 });
 
@@ -229,14 +248,78 @@ describe("the preview shader's values", () => {
     expect(FRAGMENT).toContain("uniform vec3 uPos[3]");
   });
 
-  it("put the light where it sits on the photo, with a reach that follows distance and softness", () => {
-    const p = packLight(light({ x: 0.25, y: 0.75 }), 2, 0.5);
-    expect(p.pos[0]).toBeCloseTo(0.5);
-    expect(p.pos[1]).toBeCloseTo(0.25);
+  it("read a marker as the direction the light comes from, at a gap its distance sets, with its glow where it was placed", () => {
+    const a = 2;
+    const c = [FLAT_SUBJECT.x * a, FLAT_SUBJECT.y];
+    for (const [x, y] of [
+      [0.25, 0.75],
+      [0.02, 0.5],
+      [0.95, 0.1],
+    ]) {
+      const p = packLight(light({ x, y }), a, 0.5);
+      expect(p.mark[0]).toBeCloseTo(x * a);
+      expect(p.mark[1]).toBeCloseTo(1 - y);
+      const dm = [p.mark[0] - c[0], p.mark[1] - c[1]];
+      const dp = [p.pos[0] - c[0], p.pos[1] - c[1]];
+      // Same direction from the subject…
+      expect(dm[0] * dp[1] - dm[1] * dp[0]).toBeCloseTo(0);
+      expect(dm[0] * dp[0] + dm[1] * dp[1]).toBeGreaterThan(0);
+    }
+    // …at a gap that grows with distance, whatever spot was tapped.
+    const gap = (distance: Light["distance"]) => Math.hypot(packLight(light({ x: 0.02, distance }), a, 0.5).pos[0] - c[0], packLight(light({ x: 0.02, distance }), a, 0.5).pos[1] - c[1]);
+    expect(gap("close")).toBeLessThan(gap("mid"));
+    expect(gap("mid")).toBeLessThan(gap("far"));
+    expect(gap("close")).toBeCloseTo(gap("close"));
     const close = packLight(light({ distance: "close", softness: "hard" }), 1, 0.5).params[1];
     const far = packLight(light({ distance: "far", softness: "diffuse" }), 1, 0.5).params[1];
     expect(far).toBeGreaterThan(close * 3);
     expect(packLight(light({ behind: true }), 1, 0.5).pos[2]).toBeLessThan(packLight(light(), 1, 0.5).pos[2]);
+    // A marker on the subject brings its light round to the front, without a jump.
+    const front = packLight(light({ x: FLAT_SUBJECT.x, y: 1 - FLAT_SUBJECT.y }), a, 0.5);
+    expect(front.pos[0]).toBeCloseTo(c[0]);
+    expect(front.pos[1]).toBeCloseTo(c[1]);
+  });
+
+  it("let every look's lights reach the subject: a quarter of each front light's power at its centre, flat or with a scene read", () => {
+    const subjects: [string, Subject, number][] = [
+      ["flat", FLAT_SUBJECT, 4 / 3],
+      ["off-centre", { x: 0.62, y: 0.38, r: 0.3 }, 4 / 3],
+      ["portrait frame", { x: 0.5, y: 0.5, r: 0.18 }, 3 / 4],
+    ];
+    for (const [name, subject, aspect] of subjects)
+      for (const look of LOOKS)
+        for (const l of lightsOfLook(look)) {
+          if (l.behind) continue;
+          const p = packLight(l, aspect, 0.5, subject);
+          const at: [number, number, number] = [subject.x * aspect, subject.y, 0.5 * 0.6];
+          expect(reachAt(p, at), `${look.id} ${l.id} ${name}`).toBeGreaterThanOrEqual(0.25);
+        }
+    // Neon night: the magenta light lights the subject's left side more than its right, the blue the other way.
+    const [magenta, blue] = lightsOfLook(getLook("neon-night")!).map((l) => packLight(l, 4 / 3, 0.5));
+    const left: [number, number, number] = [(FLAT_SUBJECT.x - 0.1) * (4 / 3), FLAT_SUBJECT.y, 0.3];
+    const right: [number, number, number] = [(FLAT_SUBJECT.x + 0.1) * (4 / 3), FLAT_SUBJECT.y, 0.3];
+    expect(reachAt(magenta, left)).toBeGreaterThan(reachAt(magenta, right));
+    expect(reachAt(blue, right)).toBeGreaterThan(reachAt(blue, left));
+  });
+
+  it("find where the subject is from its cut-out", () => {
+    const w = 40;
+    const h = 30;
+    const matte = new Uint8Array(w * h);
+    for (let y = 5; y < 25; y++) for (let x = 20; x < 30; x++) matte[y * w + x] = 255;
+    const s = subjectOf(matte, w, h)!;
+    expect(s.x).toBeCloseTo(25 / 40);
+    expect(s.y).toBeCloseTo(15 / 30);
+    expect(s.r).toBeCloseTo(Math.sqrt((200 / 1200) * (40 / 30) / Math.PI));
+    expect(subjectOf(new Uint8Array(w * h), w, h)).toBeNull();
+    expect(uniforms(state({ scene: { hasScene: true, subjectDepth: 0.6, subject: s } })).arrays.uPos).not.toEqual(uniforms(state()).arrays.uPos);
+    expect(uniforms(state()).arrays.uMark.slice(0, 2)).toEqual([0.2 * (4 / 3), 1 - 0.55].map((v) => expect.closeTo(v, 6)));
+  });
+
+  it("keep the result untouched: the highlight knee is the preview's own", () => {
+    expect(FRAGMENT).toContain("outc = mix(P, knee(albedo * (uAmbient + C)), uIntensity);");
+    expect(FRAGMENT).toContain("vec3 o = toSrgb(outc);");
+    expect(FRAGMENT).not.toContain("toSrgb(knee(outc))");
   });
 
   it("find the subject's depth from the depth map and its matte", () => {
@@ -307,7 +390,8 @@ describe("lining the relit picture up with the photo", () => {
         expect(Math.abs(mapPx(got.fit, "y", px) - (px - ty) / sy), `y ${ty} at ${px}`).toBeLessThan(0.5);
       }
     }
-  });
+    // Four full fits on 512 px pictures: a few seconds on a busy machine.
+  }, 30_000);
 
   it("gives up on a featureless picture (the blend then uses the pictures as they are)", () => {
     const flat = new Float32Array(WORK * WORK).fill(0.5);
@@ -364,6 +448,148 @@ describe("the Intensity blend", () => {
   });
 });
 
+describe("the light transfer on the GPU", () => {
+  // The shader's maths on the CPU: each picture halved (2 × 2 averages, in sRGB as a canvas does) to LOW_SHORT on its
+  // short side, then nine bilinear taps σ apart (the blur uniform), the ratio of the two blurs times the original.
+  const W = 240;
+  const H = 180;
+  type Img = Float32Array; // sRGB 0..1, 3 per pixel
+  const halve = (a: Img, w: number, h: number): [Img, number, number] => {
+    const nw = Math.round(w / 2);
+    const nh = Math.round(h / 2);
+    const out = new Float32Array(nw * nh * 3);
+    for (let y = 0; y < nh; y++)
+      for (let x = 0; x < nw; x++)
+        for (let c = 0; c < 3; c++) {
+          let s = 0;
+          for (const [dx, dy] of [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [1, 1],
+          ])
+            s += a[(Math.min(h - 1, y * 2 + dy) * w + Math.min(w - 1, x * 2 + dx)) * 3 + c];
+          out[(y * nw + x) * 3 + c] = s / 4;
+        }
+    return [out, nw, nh];
+  };
+  const resize = (a: Img, w: number, h: number, nw: number, nh: number): Img => {
+    const out = new Float32Array(nw * nh * 3);
+    for (let y = 0; y < nh; y++)
+      for (let x = 0; x < nw; x++) {
+        const v = sample(a, w, h, (x + 0.5) / nw, (y + 0.5) / nh);
+        out.set(v, (y * nw + x) * 3);
+      }
+    return out;
+  };
+  const sample = (a: Img, w: number, h: number, u: number, v: number): [number, number, number] => {
+    const fx = Math.min(w - 1, Math.max(0, u * w - 0.5));
+    const fy = Math.min(h - 1, Math.max(0, v * h - 0.5));
+    const x0 = Math.floor(fx);
+    const y0 = Math.floor(fy);
+    const x1 = Math.min(w - 1, x0 + 1);
+    const y1 = Math.min(h - 1, y0 + 1);
+    const tx = fx - x0;
+    const ty = fy - y0;
+    const at = (x: number, y: number, c: number) => a[(y * w + x) * 3 + c];
+    return [0, 1, 2].map((c) => at(x0, y0, c) * (1 - tx) * (1 - ty) + at(x1, y0, c) * tx * (1 - ty) + at(x0, y1, c) * (1 - tx) * ty + at(x1, y1, c) * tx * ty) as [number, number, number];
+  };
+  const low = (a: Img): [Img, number, number] => {
+    let [img, w, h] = [a, W, H];
+    while (Math.min(w, h) >= LOW_SHORT * 2) [img, w, h] = halve(img, w, h);
+    const s = LOW_SHORT / Math.min(w, h);
+    if (s < 1) {
+      const nw = Math.round(w * s);
+      const nh = Math.round(h * s);
+      return [resize(img, w, h, nw, nh), nw, nh];
+    }
+    return [img, w, h];
+  };
+  const toLin = (v: number) => srgbToLinear(v * 255);
+  const shaderTransfer = (o: Img, r: Img, t: number): Uint8ClampedArray => {
+    const [lo, lw, lh] = low(o);
+    const [lr] = low(r);
+    const blurS = (0.012 * Math.min(W, H)) / H;
+    const ry = blurS;
+    const rx = blurS / (W / H);
+    const taps: [number, number, number][] = [
+      [0, 0, 0.25],
+      [rx, 0, 0.125],
+      [-rx, 0, 0.125],
+      [0, ry, 0.125],
+      [0, -ry, 0.125],
+      [rx, ry, 0.0625],
+      [-rx, -ry, 0.0625],
+      [rx, -ry, 0.0625],
+      [-rx, ry, 0.0625],
+    ];
+    const out = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const u = (x + 0.5) / W;
+        const v = (y + 0.5) / H;
+        const bo = [0, 0, 0];
+        const br = [0, 0, 0];
+        for (const [dx, dy, k] of taps) {
+          const so = sample(lo, lw, lh, u + dx, v + dy);
+          const sr = sample(lr, lw, lh, u + dx, v + dy);
+          for (let c = 0; c < 3; c++) {
+            bo[c] += toLin(so[c]) * k;
+            br[c] += toLin(sr[c]) * k;
+          }
+        }
+        for (let c = 0; c < 3; c++) {
+          const ratio = Math.min(8, Math.max(0, br[c] / Math.max(bo[c], 0.004)));
+          out[(y * W + x) * 4 + c] = linearToSrgb8(Math.min(1, toLin(o[(y * W + x) * 3 + c]) * (1 + (ratio - 1) * t)));
+        }
+        out[(y * W + x) * 4 + 3] = 255;
+      }
+    return out;
+  };
+
+  it("matches the CPU reference across a strong contour (a face against the sky), with no echo of the edge", () => {
+    // The original: bright sky left of a dark face with fine texture. The relit picture: the same contour, warmer and
+    // brighter on the face, and its edge a pixel softer (as a generated picture's is).
+    const O = new Float32Array(W * H * 3);
+    const R = new Float32Array(W * H * 3);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const face = x >= W / 2;
+        const grain = ((x * 7 + y * 13) % 5) / 100;
+        O.set(face ? [0.32 + grain, 0.24 + grain, 0.2 + grain] : [0.86, 0.9, 0.95], (y * W + x) * 3);
+        const soft = Math.min(1, Math.max(0, (x - W / 2 + 1.5) / 3));
+        const sky = [0.8, 0.82, 0.9];
+        const lit = [0.62, 0.4, 0.26];
+        R.set(sky.map((s, c) => s * (1 - soft) + lit[c] * soft), (y * W + x) * 3);
+      }
+    const to8 = (a: Img) => {
+      const out = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H; i++) out.set([a[i * 3] * 255, a[i * 3 + 1] * 255, a[i * 3 + 2] * 255, 255], i * 4);
+      return out;
+    };
+    const ref = blendTransfer(to8(O), to8(R), W, H, 0.6);
+    const gpu = shaderTransfer(O, R, 0.6);
+    let sum = 0;
+    let worst = 0;
+    for (let i = 0; i < W * H; i++)
+      for (let c = 0; c < 3; c++) {
+        const d = Math.abs(ref[i * 4 + c] - gpu[i * 4 + c]);
+        sum += d;
+        worst = Math.max(worst, d);
+      }
+    expect(sum / (W * H * 3)).toBeLessThan(1.5);
+    expect(worst).toBeLessThan(24);
+    // Along a row on the face, the light the blend adds (result over original, in linear light) changes smoothly:
+    // no copy of the contour a tap's width away from it.
+    const row = H / 2;
+    const light = (x: number) => srgbToLinear(gpu[(row * W + x) * 4]) / toLin(O[(row * W + x) * 3]);
+    let step = 0;
+    // (The blend's own transition across the contour spans a couple of blurs; past that the light is even.)
+    for (let x = W / 2 + 4 * Math.ceil(0.012 * Math.min(W, H)); x < W - 2; x++) step = Math.max(step, Math.abs(light(x + 1) - light(x)));
+    expect(step).toBeLessThan(0.06);
+  });
+});
+
 describe("the light-guide picture", () => {
   it("is the same pixels for the same rig and photo, and shows each light in its colour", () => {
     const W = 64;
@@ -395,6 +621,19 @@ describe("the runs", () => {
     expect(relightExtraOf(req.params?.extra)).toMatchObject({ lights, look: "neon-night", variant: RELIGHT_SETTINGS.variant, guide: false });
     expect(seedFor("a")).toBe(seedFor("a"));
     expect(seedFor("a")).not.toBe(seedFor("b"));
+    // The Library names it by its look, else by its lights: the server sets it (the API takes no title from a client).
+    expect(req.title).toBeUndefined();
+    expect(relightRunTitle(req)).toBe("Relight · Neon night");
+    expect(relightRunTitle({ ...req, modelId: "oss-qwen-relight" })).toBeUndefined();
+    expect(relightRunTitle({ ...req, params: {} })).toBeUndefined();
+    expect(relightTitle([lights[0]])).toBe("Relight · 1 light");
+    expect(relightTitle(lights)).toBe("Relight · 2 lights");
+  });
+
+  it("a result is found again by its words, whichever seed made it", () => {
+    const k = (seed: number) => resultKey({ prompt: "p", variant: "viggle-6", guide: false, ...({ seed } as object) });
+    expect(k(1)).toBe(k(2));
+    expect(resultKey({ prompt: "p", variant: "viggle-6" })).not.toBe(resultKey({ prompt: "q", variant: "viggle-6" }));
   });
 
   it("the scene read is a helper step the Library leaves out", () => {
@@ -433,6 +672,12 @@ describe("the runs", () => {
     );
     expect(c.bash).not.toContain("git clone");
   });
+
+  it("the browser's own results are recorded only for their own step", () => {
+    const blend = { feature: "relight", modelId: "local-relight", prompt: "p", inputs: { images: ["/api/files/x.png"] }, output: { url: "/api/files/y.png", kind: "image" as const } };
+    expect(() => recordLocalGeneration({ ...blend, op: "grade" })).toThrow("Not a browser tool");
+    expect(() => recordLocalGeneration({ ...blend, modelId: "local-color-grade", op: "relight" })).toThrow("Not a browser tool");
+  });
 });
 
 describe("where Relight lives", () => {
@@ -441,15 +686,33 @@ describe("where Relight lives", () => {
     expect(app).toMatchObject({ tool: "relight", name: "Relight", open: { modelId: "oss-qwen-relight", op: "edit" } });
     expect(app.options?.map((o) => o.key)).toEqual(["light", "dir"]);
     const page = fs.readFileSync(path.join(ROOT, "src/app/(studio)/apps/[id]/page.tsx"), "utf8");
-    expect(page).toMatch(/preset\.tool === "relight"\) return <RelightTool/);
+    expect(page).toMatch(/preset\.tool === "relight"\)\s*return \(\s*<RelightGate live=\{relightToolLive\(\)\}/);
+  });
+
+  it("opens the tool to everyone once its workflow has passed its check, and keeps the composer until then", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-relight-live-"));
+    const write = (validated: boolean) => {
+      const f = path.join(dir, `m-${validated}.json`);
+      fs.writeFileSync(f, JSON.stringify({ workflows: [{ id: RELIGHT_WORKFLOW, validated }, { id: "relight-scene-read", validated: true }] }));
+      return f;
+    };
+    expect(relightToolLive(write(false))).toBe(false);
+    expect(relightToolLive(write(true))).toBe(true);
+    expect(relightToolLive(path.join(dir, "missing.json"))).toBe(false);
+    expect(getModel(RELIGHT_MODEL)?.routes[0].endpoint).toBe(RELIGHT_WORKFLOW);
+    const gate = fs.readFileSync(path.join(ROOT, "src/components/relight/relight-gate.tsx"), "utf8");
+    expect(gate).toContain("return live || owner ? <RelightTool app={app} /> : <>{children}</>;");
   });
 
   it("opens on a demo with its result shipped", () => {
     expect(RELIGHT_DEMOS.length).toBeGreaterThan(0);
     for (const d of RELIGHT_DEMOS) {
-      for (const f of [d.photo, d.relit, d.depth, d.matte].filter(Boolean) as string[]) expect(fs.existsSync(path.join(ROOT, "public", f)), f).toBe(true);
+      for (const f of [d.photo, d.relit, d.depth, d.matte].filter(Boolean) as string[]) expect(fs.existsSync(path.join(ROOT, "public", f.split("?")[0])), f).toBe(true);
       expect(getLook(d.look)).toBeDefined();
     }
+    // The cover pair's content version, as Home's slider uses: a new pair gets new addresses.
+    expect(DEFAULT_DEMO.photo).toMatch(/app-relight-before\.jpg\?v=[0-9a-f]{8}$/);
+    expect(DEFAULT_DEMO.relit).toMatch(/app-relight-after\.jpg\?v=[0-9a-f]{8}$/);
     expect(DEFAULT_DEMO.look).toBe("golden-hour");
   });
 
@@ -476,7 +739,15 @@ describe("the panel", () => {
     const panel = renderToStaticMarkup(
       createElement(LightPanel, { lights: lightsOfLook(getLook("neon-night")!), selected: "l1", onSelect: () => {}, onChange: () => {}, onRemove: () => {}, onAdd: () => {}, fine: false }),
     );
-    for (const label of ["Colour", "Height", "Distance", "Softness", "Strength", "Behind the subject", "Remove light", "Add light", "Custom"]) expect(panel).toContain(label);
+    for (const label of ["Colour", "Side", "Left", "Front", "Right", "Height", "Distance", "Softness", "Strength", "Behind the subject", "Remove light", "Add light", "Custom"]) expect(panel).toContain(label);
+    // Neon night's left light: the Left chip is on.
+    expect(panel).toMatch(/role="radiogroup" aria-label="Side".*?aria-checked="true"[^>]*>Left</);
+    // A look's own colour (off the chips) shows on the Custom chip without marking it picked.
+    const candle = renderToStaticMarkup(
+      createElement(LightPanel, { lights: lightsOfLook(getLook("candlelight")!), selected: "l1", onSelect: () => {}, onChange: () => {}, onRemove: () => {}, onAdd: () => {}, fine: false }),
+    );
+    expect(candle).toContain("background:#ffa040");
+    expect(candle).not.toContain("bg-foreground text-background\">Custom");
     expect(panel).toContain("h-11");
     expect(panel).not.toMatch(/Viggle|Qwen|LoRA|seed|steps/i);
   });
@@ -487,7 +758,7 @@ describe("Workflows → Copy install commands for Relight", () => {
     const { hfNodeFile, nodeInstall } = await import("@/lib/comfy-install");
     const url = "https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/comfyui/viggle_turbo.py";
     expect(hfNodeFile(url)).toEqual({ repo: "https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo", ref: "009a44a895ef85f7e643c80fdca9543795248867", file: "comfyui/viggle_turbo.py" });
-    expect(nodeInstall({ name: "viggle_turbo", repo: url })).toBe(`mkdir -p "$COMFYUI/custom_nodes/viggle_turbo" && wget -c -O "$COMFYUI/custom_nodes/viggle_turbo/__init__.py" "${url}"`);
+    expect(nodeInstall({ name: "viggle_turbo", repo: url })).toBe(`mkdir -p "$COMFYUI/custom_nodes/viggle_turbo" && wget -q -O "$COMFYUI/custom_nodes/viggle_turbo/__init__.py" "${url}"`);
     expect(hfNodeFile("https://huggingface.co/Viggle/x/resolve/main/a.py")).toBeUndefined();
   });
 });

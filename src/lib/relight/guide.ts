@@ -36,8 +36,9 @@ export function drawGuide(photo: Rgba, w: number, h: number, lights: readonly Li
       let b = srgbToLinear(photo[i + 2]) * DARKEN;
       const edge = matte ? edgeAt(x, y) : 0;
       for (const { l, p, lin, power } of packed) {
-        const dx = px - p.pos[0];
-        const dy = py - p.pos[1];
+        // Drawn where the light was placed on the photo.
+        const dx = px - p.mark[0];
+        const dy = py - p.mark[1];
         const d2 = dx * dx + dy * dy;
         const radius = p.params[1];
         let k: number;

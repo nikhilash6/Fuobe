@@ -16,7 +16,8 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { askToSignUp, uploadFile, useCreateGeneration, useGenerations, useHydrated, useIsAccount, useIsGuest, useIsOwner, useStatus } from "@/lib/api";
-import type { Generation } from "@/lib/catalog/types";
+import { getPreset } from "@/lib/catalog";
+import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { DEFAULT_DEMO, type RelightDemo } from "@/lib/relight/demo";
 import {
   INTENSITY_CHIPS,
@@ -24,9 +25,11 @@ import {
   RELIGHT_BLEND_MODEL,
   RELIGHT_MAX_SIDE,
   RELIGHT_MODEL,
+  RELIGHT_PRESET,
   RELIGHT_SCENE_FEATURE,
   RELIGHT_SETTINGS,
   relightRequest,
+  relightTitle,
   sceneRequest,
   type BlendMode,
 } from "@/lib/relight/engine";
@@ -48,7 +51,7 @@ import {
   type LookId,
 } from "@/lib/relight/lights";
 import type { AlignFit } from "@/lib/relight/shader";
-import { subjectDepthOf } from "@/lib/relight/shader";
+import { subjectDepthOf, subjectOf } from "@/lib/relight/shader";
 import { responseError, toastError } from "@/lib/refusals";
 import { alignPictures } from "./align-client";
 import { Chips, LightPanel, LooksRow } from "./relight-panel";
@@ -62,13 +65,13 @@ import { RelightStage, type StageScene } from "./relight-stage";
  */
 
 export const HERO = "Light your photo like a set.";
-export const SUB = "Tap to place a light, pick its colour and feel, then generate the real thing. Blend it in as softly or boldly as you like.";
+export const SUB = "Place a light, pick its colour and feel, then generate the real thing. Blend it in as softly or boldly as you like.";
 const GUEST_LINE = "Create a free account to light your own photos.";
 const NO_GPU_LINE = "Connect your GPU to generate the lighting.";
 const HINT_KEY = "fuobe:relight-intensity-hint";
 
 interface Photo {
-  /** What results are cached by (and the seed comes from). */
+  /** What results are matched by (and the first seed comes from). */
   key: string;
   /** What the stage shows. */
   url: string;
@@ -85,16 +88,18 @@ interface Result {
   pic?: Pic;
   fit?: AlignFit | null;
   genId?: string;
-  /** Kept to the Library already (its file). */
-  kept?: string;
+  /** Kept already: its file, and the Intensity and blend it was kept at (another blend is a new keep). */
+  kept?: { url: string; at: string };
   tiles?: number;
 }
 
 const demoPhoto = (d: RelightDemo): Photo => ({ key: d.photo, url: d.photo, serverUrl: null, demo: d, name: d.alt });
 /** The key a demo's shipped result is cached under: its photo and the look it was made with. */
 const demoKey = (d: RelightDemo) =>
-  `${d.photo}#${resultKey({ prompt: promptFor(lightsOfLook(getLook(d.look)!), null, RELIGHT_SETTINGS.softness), variant: RELIGHT_SETTINGS.variant, seed: seedFor(d.photo), guide: RELIGHT_SETTINGS.guide })}`;
+  `${d.photo}#${resultKey({ prompt: promptFor(lightsOfLook(getLook(d.look)!), null, RELIGHT_SETTINGS.softness), variant: RELIGHT_SETTINGS.variant, guide: RELIGHT_SETTINGS.guide })}`;
 
+/** The look an old Relight run picked with its "Lighting" option (it stored the option's value). */
+const legacyLook = (v: string | undefined) => lookFromLegacy(v, getPreset(RELIGHT_PRESET)?.options?.find((o) => o.key === "light")?.choices);
 
 function useFinePointer(): boolean {
   const [fine, setFine] = useState(false);
@@ -141,6 +146,8 @@ export function RelightTool({ app }: { app?: { name: string; description: string
   const canRun = owner || (account && gpu);
   const fine = useFinePointer();
   const create = useCreateGeneration();
+  // The scene read goes through its own mutation, so a Generate sent at the same moment keeps its callbacks.
+  const createScene = useCreateGeneration();
 
   const [photo, setPhoto] = useState<Photo>(() => demoPhoto(DEFAULT_DEMO));
   const [loaded, setLoaded] = useState<{ url: string; pic: HTMLImageElement } | null>(null);
@@ -163,15 +170,20 @@ export function RelightTool({ app }: { app?: { name: string; description: string
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [took, setTook] = useState<number | null>(null);
   const [saving, setSaving] = useState<"keep" | "download" | null>(null);
+  // The seed a run of this photo used before (from ?gen=), so later runs keep it.
+  const [adopted, setAdopted] = useState<{ key: string; seed: number } | null>(null);
+  // The photo the viewer did something with (Generate, a light or a look): its scene read may start.
+  const [sceneWanted, setSceneWanted] = useState<string | null>(null);
   const sceneAsked = useRef(new Set<string>());
+  const objectUrl = useRef<string | null>(null);
+  const moveHinted = useRef(false);
   const inputId = useId();
   const promptId = useId();
   const glowId = useId();
 
-  const seed = useMemo(() => seedFor(photo.key), [photo.key]);
   const look: LookId | null = useMemo(() => LOOKS.find((l) => isLook(lights, l))?.id ?? null, [lights]);
   const prompt = promptFor(lights, override, RELIGHT_SETTINGS.softness);
-  const key = `${photo.key}#${resultKey({ prompt, variant: RELIGHT_SETTINGS.variant, seed, guide: RELIGHT_SETTINGS.guide })}`;
+  const key = `${photo.key}#${resultKey({ prompt, variant: RELIGHT_SETTINGS.variant, guide: RELIGHT_SETTINGS.guide })}`;
   const img = loaded?.url === photo.url ? loaded.pic : null;
   const showing = relit?.key === key ? relit : null;
   const glow = glowAsked ?? !showing;
@@ -192,20 +204,29 @@ export function RelightTool({ app }: { app?: { name: string; description: string
   const g = run.data;
   // Earlier runs on this photo (this session or before) and the one just made: their results come back without a run.
   const earlier = useGenerations({ models: [RELIGHT_MODEL], statuses: ["succeeded"], limit: 30 });
-  const fromRuns = useMemo(() => {
+  const { fromRuns, runSeed } = useMemo(() => {
     const m = new Map<string, Result>();
-    if (!photo.serverUrl) return m;
+    let newest: number | undefined;
+    if (!photo.serverUrl) return { fromRuns: m, runSeed: newest };
     for (const r of [...(g?.status === "succeeded" ? [g] : []), ...(earlier.data ?? [])]) {
       const out = imageOut(r);
       const ex = relightExtraOf(r.request?.params?.extra);
       if (!out || !ex || firstImage(r) !== photo.serverUrl || !r.request.prompt) continue;
-      const k = `${photo.key}#${resultKey({ prompt: r.request.prompt, variant: ex.variant, seed: ex.seed, guide: ex.guide })}`;
+      newest ??= ex.seed;
+      const k = `${photo.key}#${resultKey({ prompt: r.request.prompt, variant: ex.variant, guide: ex.guide })}`;
       if (!m.has(k)) m.set(k, { url: out, genId: r.id });
     }
-    return m;
+    return { fromRuns: m, runSeed: newest };
   }, [g, earlier.data, photo.serverUrl, photo.key]);
+  // Later runs of a photo keep the seed its earlier runs used; a new photo's first comes from the photo.
+  const seed = adopted?.key === photo.key ? adopted.seed : (runSeed ?? seedFor(photo.key));
   const current = results.get(key) ?? fromRuns.get(key);
+  const demoResult = photo.demo ? demoKey(photo.demo) : null;
   const anyResult = useMemo(() => [...results.keys(), ...fromRuns.keys()].some((k) => k.startsWith(`${photo.key}#`)), [results, fromRuns, photo.key]);
+  // A result this viewer made on this photo (the demo's shipped one is not theirs).
+  const made = useMemo(() => fromRuns.size > 0 || [...results.keys()].some((k) => k.startsWith(`${photo.key}#`) && k !== demoResult), [results, fromRuns, photo.key, demoResult]);
+  const blendAt = `${intensity}|${blend}`;
+  const keptNow = current?.kept?.at === blendAt ? current.kept.url : null;
 
   // The result for these lights, when there is one: loaded and lined up once, then instant.
   useEffect(() => {
@@ -217,7 +238,8 @@ export function RelightTool({ app }: { app?: { name: string; description: string
       if (!pic) pic = await loadPic(current.url);
       if (fitOf === undefined) {
         setAligning(true);
-        const a = photo.demo ? null : await alignPictures(img, pic).catch(() => null);
+        // The demo's shipped result is lined up already; anything generated is lined up here.
+        const a = current.url === photo.demo?.relit ? null : await alignPictures(img, pic).catch(() => null);
         fitOf = a?.fit ?? null;
         setResults((m) => new Map(m).set(key, { ...current, pic, fit: fitOf, tiles: a?.tiles }));
         setAligning(false);
@@ -229,7 +251,7 @@ export function RelightTool({ app }: { app?: { name: string; description: string
     return () => {
       live = false;
     };
-  }, [current, img, key, photo.demo]);
+  }, [current, img, key, photo.demo?.relit]);
 
   // The run finished: what follows it, once (its result comes in through fromRuns).
   useEffect(() => {
@@ -253,7 +275,8 @@ export function RelightTool({ app }: { app?: { name: string; description: string
     }
   }, [g, runId, startedAt]);
 
-  // The scene read: once per stored photo, on the viewer's own GPU (or the studio's for its owner).
+  // The scene read: once per stored photo, on the viewer's own GPU (or the studio's for its owner), after the viewer
+  // first does something with it. Nothing is queued just for opening a photo.
   const scenes = useGenerations({ features: [RELIGHT_SCENE_FEATURE], statuses: ["succeeded"], limit: 30, steps: true }, {});
   const sceneRun = useGeneration(sceneId);
   const sceneGen = useMemo(() => {
@@ -262,16 +285,17 @@ export function RelightTool({ app }: { app?: { name: string; description: string
   }, [sceneRun.data, scenes.data, photo.serverUrl]);
   useEffect(() => {
     const url = photo.serverUrl;
-    if (!url || !canRun || sceneGen || !scenes.isFetched || sceneAsked.current.has(url)) return;
+    if (!url || !canRun || sceneGen || !scenes.isFetched || sceneWanted !== photo.key || photo.demo?.depth || sceneAsked.current.has(url)) return;
     sceneAsked.current.add(url);
-    create.mutate(sceneRequest(url), {
+    // A GPU missing its depth or cut-out model fails quietly (the preview stays flat): no set-up dialog for a helper step.
+    createScene.mutate({ ...sceneRequest(url), gpuCheck: "skip" } as GenerationRequest, {
       onSuccess: (items) => setSceneId(items[0]?.id ?? null),
       // The preview stays flat: nothing to say to the visitor.
       onError: () => {},
     });
-    // create is stable enough; a new photo or viewer asks again.
+    // createScene is stable enough; a new photo or viewer asks again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photo.serverUrl, canRun, sceneGen, scenes.isFetched]);
+  }, [photo.serverUrl, photo.key, photo.demo?.depth, canRun, sceneGen, scenes.isFetched, sceneWanted]);
   const sceneUrls = useMemo(() => {
     if (photo.demo?.depth && photo.demo.matte) return { depth: photo.demo.depth, matte: photo.demo.matte };
     const depth = roleOut(sceneGen, "depth");
@@ -288,7 +312,7 @@ export function RelightTool({ app }: { app?: { name: string; description: string
         if (!live) return;
         const d = greyOf(depth, 128, 128);
         const m = greyOf(matte, 128, 128);
-        setSceneLoaded({ key: sceneKey, scene: { depth, matte, subjectDepth: subjectDepthOf(d, m) } });
+        setSceneLoaded({ key: sceneKey, scene: { depth, matte, subjectDepth: subjectDepthOf(d, m), subject: subjectOf(m, 128, 128, picSize(matte)[0] / picSize(matte)[1]) } });
       })
       .catch(() => {});
     return () => {
@@ -301,32 +325,60 @@ export function RelightTool({ app }: { app?: { name: string; description: string
     const q = new URLSearchParams(window.location.search);
     const url = q.get("image");
     const gen = q.get("gen");
+    const named = (u: string) => {
+      try {
+        return decodeURIComponent(u.split("/").pop() ?? "") || "Photo";
+      } catch {
+        return "Photo";
+      }
+    };
     if (url?.startsWith("/api/files/")) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- the address is read once after hydration
-      setPhoto({ key: url, url, serverUrl: url, name: decodeURIComponent(url.split("/").pop() ?? "Photo") });
+      setPhoto({ key: url, url, serverUrl: url, name: named(url) });
     }
     if (gen && /^[\w-]{4,40}$/.test(gen)) {
       fetch(`/api/generations/${gen}`)
         .then((r) => (r.ok ? (r.json() as Promise<Generation>) : null))
         .then((prev) => {
+          const ex = relightExtraOf(prev?.request?.params?.extra);
           // A run of this tool (its lights), or of the Relight app before it (its look).
-          if (!prev || (prev.presetId !== "app-relight" && !relightExtraOf(prev.request?.params?.extra))) return;
-          const ex = relightExtraOf(prev.request?.params?.extra);
-          const old = lookFromLegacy(prev.request?.presetOptions?.light);
+          if (!prev || (prev.presetId !== RELIGHT_PRESET && !ex)) return;
+          // A result of this tool opens on the photo it lit (its result comes back from the runs), not on the lit picture.
+          const ours = prev.modelId === RELIGHT_MODEL || prev.modelId === RELIGHT_BLEND_MODEL;
+          const orig = ours ? firstImage(prev) : undefined;
+          const photoKey = orig?.startsWith("/api/files/") ? orig : url;
+          if (orig?.startsWith("/api/files/")) setPhoto({ key: orig, url: orig, serverUrl: orig, name: named(orig) });
+          const old = legacyLook(prev.request?.presetOptions?.light);
           const ls = ex?.lights ?? (old ? lightsOfLook(old) : null);
           if (ls?.length) {
             setLights(ls);
             setSelected(ls[0].id);
           }
           if (ex?.typed && prev.request.prompt) setOverride(prev.request.prompt);
+          if (ex && photoKey) setAdopted({ key: photoKey, seed: ex.seed });
+          // A kept blend: its Intensity and blend too.
+          const raw = (prev.request?.params?.extra as { relight?: { intensity?: unknown; blend?: unknown } } | undefined)?.relight;
+          if (prev.modelId === RELIGHT_BLEND_MODEL && raw) {
+            if (typeof raw.intensity === "number" && Number.isFinite(raw.intensity)) setIntensity(Math.min(1, Math.max(0, raw.intensity)));
+            if (raw.blend === "mix" || raw.blend === "transfer") setBlend(raw.blend);
+          }
         })
         .catch(() => {});
     }
   }, []);
 
+  // A photo brought from this device: its address is let go when another replaces it, and on leaving the page.
+  useEffect(
+    () => () => {
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    },
+    [],
+  );
+
   const changeLights = (next: Light[]) => {
     setLights(next);
     setShowIntensityHint(false);
+    setSceneWanted(photo.key);
   };
   const updateLight = (l: Light) => changeLights(lights.map((x) => (x.id === l.id ? l : x)));
   const removeLight = (id: string) => {
@@ -335,11 +387,21 @@ export function RelightTool({ app }: { app?: { name: string; description: string
     setSelected(next[0]?.id ?? null);
   };
   const addAt = (x: number, y: number) => {
-    // An empty spot gets a new light (a tap on a light selects it: the stage handles that).
+    // An empty spot gets a new light (a tap on a light selects it: the stage handles that). With three placed, the
+    // selected light moves there.
     const l = lightAt(lights, x, y);
-    if (!l) return void toast("Up to 3 lights. Tap one to move or change it.");
-    changeLights([...lights, l]);
-    setSelected(l.id);
+    if (l) {
+      changeLights([...lights, l]);
+      setSelected(l.id);
+      return;
+    }
+    const sel = lights.find((o) => o.id === selected);
+    if (!sel) return void toast("Up to 3 lights. Pick one, then tap the photo to move it.");
+    updateLight(moveLight(sel, x, y));
+    if (!moveHinted.current) {
+      moveHinted.current = true;
+      toast("Up to 3 lights. Tap the photo to move the selected one.");
+    }
   };
   const addDefault = () => {
     const l = defaultLight(lights);
@@ -360,14 +422,23 @@ export function RelightTool({ app }: { app?: { name: string; description: string
     if (!f) return;
     if (!f.type.startsWith("image/")) return void toast("Pick a photo (PNG, JPEG or WebP)");
     const url = URL.createObjectURL(f);
+    let pic: HTMLImageElement;
+    try {
+      pic = await loadPic(url);
+    } catch {
+      URL.revokeObjectURL(url);
+      return void toast("That photo didn't open. Pick a PNG, JPEG or WebP.");
+    }
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    objectUrl.current = url;
     const p: Photo = { key: `file:${f.name}:${f.size}:${f.lastModified}`, url, serverUrl: null, file: f, name: f.name, uploading: canRun };
+    setLoaded({ url, pic });
     setPhoto(p);
     setRelit(null);
     setRunId(null);
     if (!lights.length) addDefaultFor();
     if (!canRun) return;
     try {
-      const pic = await loadPic(url);
       const asset = await uploadFile(await smallerFile(f, pic));
       setPhoto((cur) => (cur.key === p.key ? { ...cur, serverUrl: asset.url, uploading: false } : cur));
     } catch (e) {
@@ -419,6 +490,7 @@ export function RelightTool({ app }: { app?: { name: string; description: string
     }
     if (current) return;
     setHint(null);
+    setSceneWanted(photo.key);
     try {
       const url = await ensureServerPhoto();
       const guide = await guideFile();
@@ -436,38 +508,48 @@ export function RelightTool({ app }: { app?: { name: string; description: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lights, guest, account, gpu, current, look, override, seed, photo, img, scene]);
 
-  /** The blend at the photo's full size, as a PNG. */
+  /**
+   * The blend at the photo's size, as a PNG: as large as this browser can draw and read back (phones cap a canvas at
+   * about 16 MP), else a step smaller.
+   */
   const renderFull = async (): Promise<Blob> => {
     if (!img || !showing) throw new Error("Nothing to save yet");
     const c = document.createElement("canvas");
     const r = new RelightRenderer(c);
     try {
       const [w, h] = picSize(img);
-      const s = Math.min(1, r.maxSize / Math.max(w, h));
-      const W = Math.round(w * s);
-      const H = Math.round(h * s);
-      r.set("uPhoto", fit(img, r.maxSize));
+      const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+      const cap = Math.min(r.maxDraw, coarse ? 4096 : 8192);
+      let s = Math.min(1, cap / Math.max(w, h), Math.sqrt(16e6 / (w * h)));
       r.set("uRelit", showing.pic);
       if (scene) {
         r.set("uDepth", scene.depth);
         r.set("uMatte", scene.matte);
       }
-      r.draw(
-        {
-          lights,
-          intensity,
-          aspect: w / h,
-          scene: { hasScene: !!scene, subjectDepth: scene?.subjectDepth ?? 0.5 },
-          mode: "result",
-          blend,
-          glow: false,
-          original: false,
-          align: showing.fit ?? undefined,
-          ambient: RELIGHT_SETTINGS.ambient,
-        },
-        W,
-        H,
-      );
+      for (let attempt = 0; ; attempt++) {
+        const W = Math.max(1, Math.round(w * s));
+        const H = Math.max(1, Math.round(h * s));
+        r.set("uPhoto", fit(img, Math.max(W, H)));
+        r.draw(
+          {
+            lights,
+            intensity,
+            aspect: w / h,
+            scene: { hasScene: !!scene, subjectDepth: scene?.subjectDepth ?? 0.5, subject: scene?.subject ?? undefined },
+            mode: "result",
+            blend,
+            glow: false,
+            original: false,
+            align: showing.fit ?? undefined,
+            ambient: RELIGHT_SETTINGS.ambient,
+          },
+          W,
+          H,
+        );
+        // A browser that gave a smaller drawing buffer than asked would crop: draw again a step smaller.
+        if ((r.gl.drawingBufferWidth === W && r.gl.drawingBufferHeight === H) || attempt >= 3) break;
+        s *= 0.75;
+      }
       const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
       if (!blob) throw new Error("Couldn't make the picture");
       return blob;
@@ -488,12 +570,15 @@ export function RelightTool({ app }: { app?: { name: string; description: string
   };
   /** Keeps the blend: the owner's Library (a local result), an account's own uploads. Returns its file. */
   const keep = async (): Promise<string | null> => {
-    if (current?.kept) return current.kept;
+    if (keptNow) return keptNow;
+    const at = blendAt;
     setSaving("keep");
     try {
       const file = new File([await renderFull()], `relight-${stamp()}.png`, { type: "image/png" });
       const asset = await uploadFile(file);
       if (owner) {
+        // Its input is the photo it lit (stored first when it is the sample), so Relight on it opens that photo.
+        const original = await ensureServerPhoto();
         const res = await fetch("/api/generations/local", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -502,15 +587,16 @@ export function RelightTool({ app }: { app?: { name: string; description: string
             modelId: RELIGHT_BLEND_MODEL,
             op: "relight",
             prompt: promptFor(lights, override, RELIGHT_SETTINGS.softness),
-            inputs: { images: [photo.serverUrl ?? asset.url] },
+            title: relightTitle(lights, look ?? undefined),
+            inputs: { images: [original] },
             params: { extra: { relight: { lights, ...(look && { look }), seed, variant: RELIGHT_SETTINGS.variant, intensity, blend, ...(current?.genId && { parent: current.genId }) } } },
             output: { url: asset.url, kind: "image", contentType: "image/png" },
           }),
         });
         if (!res.ok) throw responseError(res, ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't save");
       }
-      setResults((m) => (current ? new Map(m).set(key, { ...current, kept: asset.url }) : m));
-      toast.success("Saved to your Library");
+      setResults((m) => (current ? new Map(m).set(key, { ...current, kept: { url: asset.url, at } }) : m));
+      toast.success(owner ? "Saved to your Library" : "Saved to your uploads");
       return asset.url;
     } catch (e) {
       toastError(e);
@@ -529,6 +615,8 @@ export function RelightTool({ app }: { app?: { name: string; description: string
   const line = busy ? "Lighting your photo…" : aligning ? "Lining it up…" : sceneBusy ? "Reading the scene…" : photo.uploading ? "Uploading…" : null;
   const keeper = owner || (account && gpu);
   const changed = anyResult && !current;
+  // "Again" only once this viewer has generated on this photo.
+  const again = made ? "Generate again" : "Generate";
   const [pw, ph] = img ? picSize(img) : [photo.demo?.width ?? 4, photo.demo?.height ?? 3];
 
   return (
@@ -579,7 +667,7 @@ export function RelightTool({ app }: { app?: { name: string; description: string
               onAddDefault={addDefault}
               onGenerate={() => void generate()}
               onOpenLight={() => document.getElementById("relight-light-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" })}
-              onPainted={(ms) => setPainted(ms)}
+              onPainted={owner ? setPainted : undefined}
             />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
@@ -589,7 +677,7 @@ export function RelightTool({ app }: { app?: { name: string; description: string
               <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-faint px-2.5 py-1 text-[12px] font-medium text-brand-text" data-testid="lights-changed">
                 Lights changed
                 <button type="button" className="underline underline-offset-2" onClick={() => void generate()} disabled={busy}>
-                  Generate again
+                  {again}
                 </button>
               </span>
             )}
@@ -657,7 +745,6 @@ export function RelightTool({ app }: { app?: { name: string; description: string
                 />
               </div>
               <LooksRow look={look} onLook={pickLook} />
-              {!look && lights.length > 0 && <p className="-mt-2 text-[12px] text-muted-foreground">Your lights</p>}
             </div>
           </Panel>
 
@@ -720,7 +807,7 @@ export function RelightTool({ app }: { app?: { name: string; description: string
           <div className="space-y-2">
             <Button size="lg" className="h-12 w-full rounded-full" onClick={() => void generate()} disabled={busy || !lights.length || photo.uploading}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : current ? <Check className="size-4" /> : <Sparkles className="size-4" />}
-              {busy ? "Lighting your photo…" : current ? "Lit with these lights" : changed ? "Generate again" : "Generate lighting"}
+              {busy ? "Lighting your photo…" : current ? "Lit with these lights" : changed && made ? "Generate again" : "Generate lighting"}
             </Button>
             {hint && (
               <p className="text-center text-[12px] text-muted-foreground" role="status">
@@ -733,9 +820,9 @@ export function RelightTool({ app }: { app?: { name: string; description: string
             <Panel title="Your lit photo">
               <div className="flex flex-wrap gap-2">
                 {keeper && (
-                  <Button className="h-11 rounded-full sm:h-9" onClick={() => void keep()} disabled={!!saving || !!current?.kept}>
-                    {saving === "keep" ? <Loader2 className="size-3.5 animate-spin" /> : current?.kept ? <Check className="size-3.5" /> : <Save className="size-3.5" />}
-                    {current?.kept ? "Kept" : "Keep"}
+                  <Button className="h-11 rounded-full sm:h-9" onClick={() => void keep()} disabled={!!saving || !!keptNow}>
+                    {saving === "keep" ? <Loader2 className="size-3.5 animate-spin" /> : keptNow ? <Check className="size-3.5" /> : <Save className="size-3.5" />}
+                    {keptNow ? "Kept" : "Keep"}
                   </Button>
                 )}
                 <Button variant="outline" className="h-11 rounded-full sm:h-9" onClick={() => void download()} disabled={!!saving}>

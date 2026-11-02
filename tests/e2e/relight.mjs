@@ -1,15 +1,21 @@
 // Browser check of Relight (the app's own tool: tap to place lights, a live preview, Generate lighting, Intensity).
 // Usage: node tests/e2e/relight.mjs [appUrl] [outDir] [--guest guestAppUrl]
-//   appUrl: the app signed in as the owner, its ComfyUI a stand-in (tests/helpers/fake-comfy-runner.ts --output image).
+//   appUrl: the app signed in as the owner, its ComfyUI a stand-in (tests/helpers/fake-comfy-runner.ts --output image
+//   --echo: a result is the photo it was made from, so it lines up).
 //   --guest: the same build with public sign-up on, seen signed out.
 // Checks, on a phone (390 x 844, touch) and a desktop (1440 x 900): the page opens on the demo with its result and no
-// sideways scroll; an Intensity chip changes the picture at once; a tap on the photo places a light where it was tapped;
-// a colour chip changes the light near it and leaves the far corner alone; a look places its lights; Download gives a
-// PNG at the photo's size; on the desktop the arrow keys move the selected light and Delete removes it; Generate
-// lighting runs the hidden relight model on the stand-in and the result comes back. With --guest: a guest uses the demo,
-// places a light, and Generate asks them to create an account (no error toast). A page error fails the run.
+// sideways scroll; an Intensity chip changes the picture at once; a look places its lights and Neon night turns the
+// subject's left cheek toward magenta; a tap on the photo places a light where it was tapped; a colour chip changes the
+// light near it and leaves the far corner alone; with three lights a tap moves the selected one, and the side chips
+// move it too; Download gives a PNG at the photo's size; on the desktop the arrow keys move the selected light and
+// Delete removes it; Generate lighting runs the hidden relight model on the stand-in and the result comes back; Keep
+// keeps that blend and a new Intensity is a new keep; Generate on an uploaded photo lines its result up (the owner's
+// line counts the tiles). With --guest: until the tool is open to everyone a guest gets the app's composer; once it
+// is, a guest uses the demo, places a light, and Generate asks them to create an account (no error toast). A page
+// error fails the run.
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { DESKTOP, PHONE, launch, openRoute } from "./_browser.mjs";
 
 const argv = process.argv.slice(2);
@@ -47,6 +53,9 @@ const markers = (page) =>
     });
   });
 const settle = (page) => page.waitForTimeout(250);
+/** How magenta a pixel leans: red over green (blue light leaves it alone). */
+const magenta = ([r, g]) => r - g;
+const PHOTO = fileURLToPath(new URL("../../public/previews/presets/ba/1280/app-relight-before.jpg", import.meta.url));
 
 async function stageBox(page) {
   const s = page.locator('[data-testid="relight-stage"]');
@@ -102,12 +111,18 @@ async function ownerRun(browser, name, device) {
   const png = fs.readFileSync(file);
   check(png.subarray(1, 4).toString() === "PNG" && png.readUInt32BE(16) === 1280 && png.readUInt32BE(20) === 960, `${name}: Download gives a 1280 x 960 PNG`);
 
-  // A look places its lights.
+  // A look places its lights, and they reach the subject: Neon night turns the left cheek toward magenta.
+  const cheek = [[0.535, 0.29]];
+  await page.getByRole("radiogroup", { name: "Looks" }).getByRole("radio", { name: "Studio softbox" }).click();
+  await settle(page);
+  const [white] = await pixels(page, cheek);
   await page.getByRole("radiogroup", { name: "Looks" }).getByRole("radio", { name: "Neon night" }).click();
   await settle(page);
   const neon = await markers(page);
   check(neon.length === 2 && neon[0].color === "rgb(240, 40, 220)" && neon[1].color === "rgb(40, 96, 255)", `${name}: Neon night places magenta left and blue right`);
   check(neon[0].x < 0.35 && neon[1].x > 0.65, `${name}: its lights sit on their sides`);
+  const [pink] = await pixels(page, cheek);
+  check(magenta(pink) >= magenta(white) + 8, `${name}: Neon night's magenta reaches the left cheek (${white} → ${pink})`);
 
   // A tap on an empty spot adds a light there.
   await tapAt(page, device, 0.5, 0.15);
@@ -126,6 +141,15 @@ async function ownerRun(browser, name, device) {
   const n1 = await pixels(page, [...near, ...far]);
   check(diff(n0[0], n1[0]) > 6, `${name}: Teal changes the picture near the light (${diff(n0[0], n1[0])})`);
   check(diff(n0[1], n1[1]) <= 3, `${name}: the far corner stays the same (${diff(n0[1], n1[1])})`);
+
+  // Three lights placed: a tap on the photo moves the selected one, and the side chips move it too.
+  await tapAt(page, device, 0.8, 0.5);
+  const moved = await markers(page);
+  check(moved.length === 3 && Math.abs(moved[2].x - 0.8) < 0.02 && Math.abs(moved[2].y - 0.5) < 0.02, `${name}: with three lights a tap moves the selected one (${moved[2] ? `${moved[2].x.toFixed(3)}, ${moved[2].y.toFixed(3)}` : "none"})`);
+  await page.getByRole("radiogroup", { name: "Side" }).getByRole("radio", { name: "Left" }).click();
+  await settle(page);
+  const left = (await markers(page))[2];
+  check(Math.abs(left.x - 0.15) < 0.02 && Math.abs(left.y - 0.5) < 0.02, `${name}: the Left chip moves it to the left (${left.x.toFixed(3)})`);
 
   if (!device.hasTouch) {
     // Desktop extras: the arrow keys move the selected light, Delete removes it.
@@ -155,6 +179,25 @@ async function ownerRun(browser, name, device) {
   check(await page.getByRole("button", { name: /Lit with these lights/ }).isVisible(), `${name}: the result comes back`);
   check(await page.getByRole("button", { name: "Keep", exact: true }).isVisible(), `${name}: Keep is offered to the owner`);
   await page.screenshot({ path: path.join(out, `${name}-generated.png`), fullPage: true });
+
+  // Keep: kept at this Intensity; another Intensity is another keep.
+  await page.getByRole("button", { name: "Keep", exact: true }).click();
+  await page.getByRole("button", { name: "Kept", exact: true }).waitFor({ timeout: 20_000 }).catch(() => {});
+  check(await page.getByRole("button", { name: "Kept", exact: true }).isDisabled(), `${name}: Keep keeps the blend`);
+  await page.getByRole("radiogroup", { name: "Intensity" }).getByRole("radio", { name: "100 %" }).click();
+  await settle(page);
+  check(await page.getByRole("button", { name: "Keep", exact: true }).isEnabled(), `${name}: another Intensity can be kept too`);
+
+  // An uploaded photo: its result is lined up with it (the owner's line counts the tiles).
+  await page.locator('input[type="file"]').first().setInputFiles(PHOTO);
+  await page.getByRole("button", { name: /Generate lighting/ }).last().waitFor({ timeout: 20_000 }).catch(() => {});
+  await page.waitForFunction(() => !document.body.innerText.includes("Uploading…"), null, { timeout: 30_000 }).catch(() => {});
+  await page.getByRole("button", { name: /Generate lighting|Generate again/ }).last().click();
+  await page.getByRole("button", { name: /Lit with these lights/ }).waitFor({ timeout: 60_000 }).catch(() => {});
+  await page.getByTestId("relight-owner-status").filter({ hasText: /tiles/ }).waitFor({ timeout: 20_000 }).catch(() => {});
+  const line = await page.getByTestId("relight-owner-status").innerText();
+  check(/\d+ tiles/.test(line), `${name}: a result on an uploaded photo is lined up (${line.trim()})`);
+  await page.screenshot({ path: path.join(out, `${name}-uploaded.png`), fullPage: false });
   await ctx.close();
 }
 
@@ -163,8 +206,17 @@ async function guestRun(browser, name, device) {
   const page = await ctx.newPage();
   page.on("pageerror", (e) => check(false, `${name}: no page error (${String(e.message).slice(0, 160)})`));
   await openRoute(page, `${guestApp}/apps/app-relight`);
+  await page.waitForTimeout(2500);
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  check(over <= 0, `${name}: no horizontal scroll (${over}px)`);
+  if (!(await page.locator('[data-testid="relight-stage"]').count())) {
+    // The tool isn't open to everyone yet: a guest gets the app's composer, as before.
+    check(await page.getByText("Relight", { exact: true }).first().isVisible(), `${name}: a guest gets the Relight app's composer`);
+    await page.screenshot({ path: path.join(out, `${name}-composer.png`) });
+    await ctx.close();
+    return;
+  }
   await page.locator('[data-testid="relight-stage"] canvas').waitFor();
-  await page.waitForTimeout(1500);
   check(await page.getByRole("button", { name: /Lit with these lights/ }).isVisible(), `${name}: a guest sees the demo's result`);
   const before = await pixels(page, [[0.4, 0.4]]);
   await page.getByRole("radiogroup", { name: "Intensity" }).getByRole("radio", { name: "35 %" }).click();
@@ -172,6 +224,7 @@ async function guestRun(browser, name, device) {
   check(diff(before[0], (await pixels(page, [[0.4, 0.4]]))[0]) > 2, `${name}: Intensity works for a guest`);
   await tapAt(page, device, 0.5, 0.12);
   check((await markers(page)).length === 3, `${name}: a guest places a light`);
+  check(await page.getByTestId("lights-changed").getByRole("button", { name: "Generate", exact: true }).isVisible(), `${name}: a guest who hasn't generated is offered Generate, not Generate again`);
   await page.getByRole("button", { name: /Generate again|Generate lighting/ }).last().click();
   const prompt = page.getByText("Create a free account to run this");
   await prompt.waitFor({ timeout: 10_000 }).catch(() => {});

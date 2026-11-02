@@ -1,0 +1,1120 @@
+{
+ "$schema": "./case.schema.json",
+ "suite": "relight-placement",
+ "title": "Relight · where a placed light lands",
+ "description": "The Relight tool's Generate lighting on the same 12 portraits (local/relight/<id>.png): one white and one teal light at each of the 9 side x height spots, written by src/lib/relight/lights.ts. Light placement is measured from the aligned results with the tool's own maths (src/lib/relight/align.ts); identity, CLIP and aesthetic as in the relight suite. The tool's engine only.",
+ "original": "oss-qwen-image-21-relight",
+ "kind": "image",
+ "decides": "Whether the words alone put the light where it was placed, or the light-guide picture is needed (RELIGHT_SETTINGS.guide).",
+ "targets": {
+  "open": {
+   "models": [
+    "oss-qwen-image-21-relight"
+   ]
+  },
+  "demo": {
+   "models": [
+    "oss-qwen-image-21-relight"
+   ]
+  }
+ },
+ "defaults": {
+  "seeds": [
+   1001
+  ],
+  "metrics": [
+   "identity",
+   "clip",
+   "aesthetic"
+  ],
+  "timeoutSeconds": 1800,
+  "candidate": "viggle"
+ },
+ "variants": {
+  "viggle": {
+   "description": "Generate lighting as the tool runs it: Viggle 6-step r256, the photo and the words only"
+  }
+ },
+ "cases": [
+  {
+   "id": "relight/studio",
+   "title": "Studio portrait, soft even light",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/studio.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/studio.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/street-dusk",
+   "title": "Street at dusk",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/street-dusk.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/street-dusk.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/interior",
+   "title": "Interior, window light",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/interior.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/interior.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/beach",
+   "title": "Beach, bright overcast",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/beach.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/beach.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/full-body",
+   "title": "Full-body fashion shot",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/full-body.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/full-body.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/close-up",
+   "title": "Beauty close-up",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/close-up.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/close-up.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/editorial-dark",
+   "title": "Editorial portrait, deeper skin tone",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/editorial-dark.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/editorial-dark.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/editorial-light",
+   "title": "Editorial portrait, lighter skin tone",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/editorial-light.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/editorial-light.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/dancer",
+   "title": "Dancer in motion",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/dancer.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/dancer.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/headwrap",
+   "title": "Portrait in a headwrap",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/headwrap.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/headwrap.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/dark-portrait",
+   "title": "Low-key portrait",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/dark-portrait.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/dark-portrait.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  },
+  {
+   "id": "relight/western",
+   "title": "Western costume portrait",
+   "op": "edit",
+   "inputs": {
+    "images": [
+     "local/relight/western.png"
+    ]
+   },
+   "demoInputs": {
+    "images": [
+     "fixtures/start-frame.png"
+    ]
+   },
+   "references": "local/relight/western.png",
+   "prompts": [
+    {
+     "id": "white-left-low",
+     "text": "Relight the photo with a strong clean white light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-face",
+     "text": "Relight the photo with a strong clean white light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-left-high",
+     "text": "Relight the photo with a strong clean white light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-low",
+     "text": "Relight the photo with a strong clean white light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-face",
+     "text": "Relight the photo with a strong clean white light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-front-high",
+     "text": "Relight the photo with a strong clean white light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-low",
+     "text": "Relight the photo with a strong clean white light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-face",
+     "text": "Relight the photo with a strong clean white light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "white-right-high",
+     "text": "Relight the photo with a strong clean white light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-low",
+     "text": "Relight the photo with a strong teal light coming from the left, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-face",
+     "text": "Relight the photo with a strong teal light coming from the left, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-left-high",
+     "text": "Relight the photo with a strong teal light coming from the left, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-low",
+     "text": "Relight the photo with a strong teal light coming from the front, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-face",
+     "text": "Relight the photo with a strong teal light coming from the front, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-front-high",
+     "text": "Relight the photo with a strong teal light coming from the front, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-low",
+     "text": "Relight the photo with a strong teal light coming from the right, below, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-face",
+     "text": "Relight the photo with a strong teal light coming from the right, at face height, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    },
+    {
+     "id": "teal-right-high",
+     "text": "Relight the photo with a strong teal light coming from the right, high above, at a medium distance. The scene is in darkness, lit only by these lights, with soft light and smooth shadow edges. Keep the person's identity, face, expression, pose, hair, clothing and the background exactly the same; only the lighting and the colour of the light falling on the scene change."
+    }
+   ]
+  }
+ ]
+}

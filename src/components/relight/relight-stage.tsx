@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MAX_LIGHTS, type Light } from "@/lib/relight/lights";
 import type { BlendMode } from "@/lib/relight/engine";
-import type { AlignFit } from "@/lib/relight/shader";
+import type { AlignFit, Subject } from "@/lib/relight/shader";
 import { cn } from "@/lib/utils";
 import { fit, picSize, RelightRenderer, type Pic } from "./relight-renderer";
 
@@ -11,6 +11,8 @@ export interface StageScene {
   depth: Pic;
   matte: Pic;
   subjectDepth: number;
+  /** Where the cut-out says the subject is (null: too small to say). */
+  subject: Subject | null;
 }
 
 export interface StageProps {
@@ -53,7 +55,7 @@ function previewMax(): number {
 
 /**
  * The photo with its lights: the WebGL preview (or the blended result), a marker per light, tap to place or select,
- * press and hold to see the original. Drag and the keyboard are desktop extras.
+ * press and hold to see the original. Dragging a light and the keyboard are extras: the chips and taps do it all.
  */
 export function RelightStage(p: StageProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -63,7 +65,7 @@ export function RelightStage(p: StageProps) {
   const [original, setOriginal] = useState(false);
   const [cssSize, setCssSize] = useState<[number, number]>([0, 0]);
   const press = useRef<{ x: number; y: number; timer: number; held: boolean; moved: boolean } | null>(null);
-  const drag = useRef<{ id: string; pointer: number; moved: boolean; wasSelected: boolean } | null>(null);
+  const drag = useRef<{ id: string; pointer: number; x: number; y: number; moved: boolean; wasSelected: boolean } | null>(null);
   const latest = useRef(p);
   useEffect(() => {
     latest.current = p;
@@ -134,7 +136,7 @@ export function RelightStage(p: StageProps) {
           lights: p.lights,
           intensity: p.intensity,
           aspect,
-          scene: { hasScene: !!p.scene, subjectDepth: p.scene?.subjectDepth ?? 0.5 },
+          scene: { hasScene: !!p.scene, subjectDepth: p.scene?.subjectDepth ?? 0.5, subject: p.scene?.subject ?? undefined },
           mode: p.relit ? "result" : "preview",
           blend: p.blend,
           glow: p.glow,
@@ -171,6 +173,8 @@ export function RelightStage(p: StageProps) {
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (d && d.pointer === e.pointerId) {
+      // A finger wobbles: a light moves once the press travels a few pixels, so a tap still selects it.
+      if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) <= MOVE_PX) return;
       d.moved = true;
       const s = spot(e.clientX, e.clientY);
       latest.current.onMove(d.id, s.x, s.y);
@@ -203,13 +207,9 @@ export function RelightStage(p: StageProps) {
     e.stopPropagation();
     const wasSelected = p.selected === l.id;
     p.onSelect(l.id);
-    // Drag is for a mouse or a pen; on touch a light is moved by tapping where it goes or with its chips.
-    if (e.pointerType !== "touch") {
-      box.current?.setPointerCapture(e.pointerId);
-      drag.current = { id: l.id, pointer: e.pointerId, moved: false, wasSelected };
-    } else if (wasSelected) {
-      p.onOpenLight(l.id);
-    }
+    // A light can be dragged with a finger too; the side and height chips and a tap where it goes move it as well.
+    box.current?.setPointerCapture(e.pointerId);
+    drag.current = { id: l.id, pointer: e.pointerId, x: e.clientX, y: e.clientY, moved: false, wasSelected };
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -286,7 +286,7 @@ export function RelightStage(p: StageProps) {
                 // Keyboard activation (pointer taps are handled on pointer down).
                 if (e.detail === 0) p.onSelect(l.id);
               }}
-              className="absolute grid size-11 -translate-x-1/2 -translate-y-1/2 cursor-grab place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+              className="absolute grid size-11 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
               style={{ left: `${l.x * 100}%`, top: `${(1 - l.y) * 100}%` }}
             >
               <span
