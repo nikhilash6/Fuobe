@@ -253,6 +253,9 @@ describe("the GPU pre-flight", () => {
     try {
       expect(await gate({}, { gpuTier: "standard" })).toEqual({ ok: true });
       expect(await gate({ vae: T.SOL_VAE }, { gpuTier: "standard" })).toMatchObject({ ok: true, warning: expect.stringMatching(/1 more thing/) });
+      // Options → Decoder as the composer sends it: the option's value, which the model's control turns into Sol's file.
+      expect(await gate({ decoder: "fast" }, { gpuTier: "standard" })).toMatchObject({ ok: true, warning: expect.stringMatching(/1 more thing/) });
+      expect(await gate({ decoder: "standard" }, { gpuTier: "standard" })).toEqual({ ok: true });
     } finally {
       dropSnapshots("install");
     }

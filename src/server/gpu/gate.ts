@@ -1,12 +1,14 @@
 import "server-only";
 import crypto from "node:crypto";
+import { getModel } from "@/lib/catalog";
+import { controlSets } from "@/lib/catalog/plan";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { fixPlan } from "@/lib/gpu/plan";
 import { CLEAN_VAE, DECODER_PARAM, GPU_PARAM } from "@/lib/qwen21-speed";
 import { H3_TIER_PARAM, H3_UNET_PARAM, withTierFile } from "@/lib/gpu/h3-tier";
 import { deviceLabel, needTargets, toolReadiness } from "@/lib/gpu/readiness";
 import type { FileKey, FixPlan, ToolReadiness, ToolRef } from "@/lib/gpu/types";
-import type { GenerationRequest } from "@/lib/catalog/types";
+import type { GenerationRequest, GenParams } from "@/lib/catalog/types";
 import { authEnabled, crossSite, hostAllowed, validToken } from "../auth";
 import { loadIndex, preflightOn } from "./index-file";
 import { contextFor } from "./readiness-service";
@@ -43,6 +45,13 @@ const sha256 = (s: string) => crypto.createHash("sha256").update(s).digest("hex"
 /** Needs that stop a run (a licence comes with its download; VRAM is never a need). */
 const blocks = (r: ToolReadiness) => r.state === "unsupported" || r.needs.some((n) => n.kind !== "hf-licence");
 
+/** The decoder file a run's options pick (Options → Decoder through the model's own control sets), or one the request names. */
+export function pickedDecoder(modelId: string, extra: Record<string, unknown>): unknown {
+  const model = getModel(modelId);
+  const decoded = model ? controlSets(model, { extra } as GenParams).extra : undefined;
+  return decoded?.vae ?? (extra[DECODER_PARAM] === "clean" ? CLEAN_VAE : extra.vae);
+}
+
 export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateResult> {
   if (!preflightOn() || g.skip || g.route.provider !== "comfyui" || t.kind === "none") return { ok: true };
   let idx = loadIndex();
@@ -64,8 +73,9 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
   });
   if (!has(id)) return { ok: true };
   // A decoder an option picks (Qwen-Image 2.1's "Clean" Texture-Fix VAE, MiniMax H3's Fast decode) is an optional file of the
-  // graph: this run needs it.
-  const picked = extra[DECODER_PARAM] === "clean" ? CLEAN_VAE : extra.vae;
+  // graph: this run needs it. The request carries the option's value ({ decoder: "clean" }); the model's control turns it into
+  // the file the run loads, as the plan does (controlSets), so the gate checks the same file.
+  const picked = pickedDecoder(g.modelId, extra);
   const vae: FileKey | undefined = typeof picked === "string" ? `vae/${picked}` : undefined;
   if (vae && idx.files[vae] && idx.workflows[id].optional.includes(vae) && !idx.workflows[id].files.includes(vae)) {
     idx = { ...idx, workflows: { ...idx.workflows, [id]: { ...idx.workflows[id], files: [...idx.workflows[id].files, vae] } } };
