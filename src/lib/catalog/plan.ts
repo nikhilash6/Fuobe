@@ -11,7 +11,7 @@ import type {
   PresetEndStep,
   PresetRoute,
 } from "./types";
-import { billedClipSeconds, editClipsProblem, sourceSeconds } from "./clip-windows";
+import { billedClipSeconds, editClipsProblem, insertRangeProblem, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
 import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
@@ -244,6 +244,8 @@ const PROMPTLESS = new Set<Operation>([
   "face-mosaic",
   // archive-restore: the scene's words help (period, place, light) but a run without them gets a neutral one
   "restore-video",
+  // nm10-hosted-catchup: an inserted moment can be left to the model; a retexture takes words or a style picture
+  "insert-moment", "retexture-3d",
 ]);
 
 /**
@@ -489,6 +491,8 @@ export function planGeneration(
   if (model.options.promptFormat === "minimax-h3" && op === "i2v" && params.extra?.orbit === true && req.params?.duration === undefined && params.duration === model.defaults?.duration) {
     params = { ...params, duration: 3 };
   }
+  const hosted = hostedInputProblem(model, op, prompt, params, req);
+  if (hosted) throw new Error(hosted);
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");
@@ -793,6 +797,8 @@ const NEEDS: Partial<
   "scene-3d": { images: 1, msg: "Add the image to build the scene from" },
   splat: { images: 1, msg: "Add a photo of the subject" },
   "rig-3d": { model3d: true, msg: "Add the 3D model to rig" },
+  "retexture-3d": { model3d: true, msg: "Add the 3D model to retexture" },
+  "insert-moment": { video: true, msg: "Add the clip to insert a moment into" },
   "extract-frames": { video: true, msg: "Add the video to take frames from" },
   "images-to-video": { images: 1, msg: "Add the images, in order" },
   overlay: { images: 2, msg: "Add the picture and the overlay to put on it" },
@@ -869,6 +875,58 @@ function extraImages(model: ModelDef, op: Operation, req: Pick<GenerationRequest
   return `${model.name} takes up to ${max} image${max === 1 ? "" : "s"} for this — remove the others`;
 }
 
+/**
+ * What a hosted endpoint would refuse after it's paid for, caught first in Fuobe's words: a prompt over the API's own limit
+ * (FieldMap.promptMax: Vidu Q4 5,000 characters), a moment inserted outside the clip's first 60 s (H3 Max insert), a relight
+ * without its lit sphere, a retexture with neither words nor a style picture.
+ */
+export function hostedInputProblem(model: Pick<ModelDef, "name" | "routes" | "options">, op: Operation, prompt: string, params: GenParams, req: Pick<GenerationRequest, "inputs">): string | null {
+  const max = Math.min(...model.routes.filter((r) => r.op === op && r.map?.promptMax).map((r) => r.map!.promptMax!));
+  if (Number.isFinite(max) && prompt.length > max) {
+    return `${model.name} takes up to ${max.toLocaleString("en-US")} characters of prompt, and this one has ${prompt.length.toLocaleString("en-US")}: shorten it`;
+  }
+  const refs = referenceProblem(model, op, req);
+  if (refs) return refs;
+  if (op === "insert-moment") return insertRangeProblem(params.startTime, params.endTime, params.sourceDuration);
+  if (op === "relight-video" && model.options.lightSphere && !req.inputs?.images?.length) return `Pick a light: ${model.name} matches the light on a sphere you choose`;
+  if (op === "retexture-3d" && !prompt.trim() && !req.inputs?.images?.length) return "Describe the new look, or add a style picture";
+  return null;
+}
+
+/** Ops whose image, clip and sound lists are references (a join's clip list has its own limit: audio-join). */
+const REFERENCE_OPS = new Set<Operation>(["ref2v", "insert-moment", "extend"]);
+const plural = (n: number, [one, many]: readonly [string, string]) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Reference lists past what the endpoint's lists take (their schema's maxItems, or the count its description gives: H3 Max insert
+ * 9 pictures and 3 clips, Vidu Q4 12 pictures and 3 voices), past a total across the lists (ModelOptions.maxReferences: H3 Max
+ * Turbo's 12 files), or a voice in a format the endpoint doesn't read (ModelOptions.referenceAudio: Vidu Q4's mp3). Only lists a
+ * route of `op` sends whole, so a start frame or an element's pictures are never counted; needs the routes' field maps.
+ */
+function referenceProblem(model: Pick<ModelDef, "name" | "routes" | "options">, op: Operation, req: Pick<GenerationRequest, "inputs">): string | null {
+  if (!REFERENCE_OPS.has(op)) return null;
+  const routes = model.routes.filter((r) => r.op === op);
+  if (!routes.length || routes.some((r) => !r.map || r.map.elements || r.map.image)) return null;
+  const sends = (k: "images" | "videos" | "audios") => routes.every((r) => !!r.map![k]);
+  const i = req.inputs ?? {};
+  const counts = { images: sends("images") ? (i.images?.length ?? 0) : 0, videos: sends("videos") ? (i.videos?.length ?? 0) : 0, audios: sends("audios") ? (i.audios?.length ?? 0) : 0 };
+  const limits = { images: imageLimit(model, op), videos: model.options.maxVideos, audios: model.options.maxAudios };
+  const words = { images: ["picture", "pictures"], videos: ["clip", "clips"], audios: ["sound clip", "sound clips"] } as const;
+  for (const k of ["images", "videos", "audios"] as const) {
+    const most = limits[k];
+    if (most !== undefined && counts[k] > most) return `${model.name} takes up to ${plural(most, words[k])} as references, and this run has ${counts[k]}: remove ${counts[k] - most}`;
+  }
+  const total = counts.images + counts.videos + counts.audios;
+  const cap = model.options.maxReferences;
+  if (cap !== undefined && total > cap) return `${model.name} takes up to ${cap} references in all — pictures, clips and sound together — and this run has ${total}: remove ${total - cap}`;
+  const format = model.options.referenceAudio;
+  if (format && counts.audios) {
+    const ext = (u: string) => (u.startsWith("data:") ? (/^data:audio\/(mpeg|mp3)[;,]/i.test(u) ? "mp3" : "other") : /\.([a-z0-9]{2,5})(?:[?#]|$)/i.exec(u)?.[1]?.toLowerCase());
+    if (i.audios!.some((u) => { const e = ext(u); return e !== undefined && e !== format; })) return `${model.name} takes ${format.toUpperCase()} voice clips only: convert the others to ${format.toUpperCase()} first`;
+  }
+  return null;
+}
+
 /** Models that need several images (try-on: the person, then the garment). */
 function missingImages(model: ModelDef, req: Pick<GenerationRequest, "inputs">): string | null {
   const min = model.options.minImages ?? 0;
@@ -882,7 +940,7 @@ function missingImages(model: ModelDef, req: Pick<GenerationRequest, "inputs">):
  * price counts the clip's seconds (params.sourceDuration) when the caller knows them, and slow motion bills
  * the whole stretched result.
  */
-const CLIP_LENGTH_OPS = new Set<Operation>(["upscale-video", "interpolate", "sdr-to-hdr", "export-video", "restore-video"]);
+const CLIP_LENGTH_OPS = new Set<Operation>(["upscale-video", "interpolate", "sdr-to-hdr", "export-video", "restore-video", "relight-video"]);
 /** Sound tools billed on the recording's length (per second or per minute of audio). */
 const AUDIO_LENGTH_OPS = new Set<Operation>(["enhance-voice"]);
 
@@ -1067,6 +1125,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
     const mp = p.videoMegapixel ? videoMegapixels(model, params, seconds) : undefined;
     const rate = p.videoMegapixel && (withLoras && p.videoMegapixel.withLoras !== undefined ? p.videoMegapixel.withLoras : p.videoMegapixel.usd);
     per = mp !== undefined && rate ? Math.ceil(mp - 1e-9) * rate : usd * seconds;
+    // A long result billed at a higher rate throughout (fal's H3 Max lip sync: 1.2× over 15 s).
+    if (p.longFactor && seconds > p.longFactor.over + 1e-9) per *= p.longFactor.factor;
   }
   if (p.unit === "minute") {
     // A sound tool (Clean up dialogue's VEED, a voice split) bills the clip's length when the caller knows it.

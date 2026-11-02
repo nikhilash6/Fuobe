@@ -324,6 +324,9 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
       return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", splat: true } }];
     case "rig-3d":
       return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", rigged: true } }];
+    // A retexture comes back as the demo mesh (a real one is the same model with its new textures).
+    case "retexture-3d":
+      return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", retextured: true } }];
     case "ocr":
       return [demoOcr(brief)];
     // As many frames as were asked for (max_frames), 4 without a count.
@@ -354,6 +357,7 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
         ...(meta.master ? [{ url: `sample:${sampleClip(ar)}`, kind: "video" as const, contentType: "video/mp4", meta: { role: "master", demo: true } }] : []),
       ];
     case "video-insert":
+    case "insert-moment":
     case "restore-video":
     case "keyframes":
     case "still-motion":

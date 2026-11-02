@@ -35,6 +35,7 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
       { id: "trellis-2", note: "Detailed geometry · ≈ $0.30" },
       { id: "tripo-h3-1", note: "Clean topology, PBR · ≈ $0.30" },
       { id: "meshy-7-1", note: "Textured, optional rigging · ≈ $1.20" },
+      { id: "tripo-p2", note: "Production tier, realistic textures · ≈ $1.10" },
     ],
     open: [
       { id: "oss-pixal3d", note: "Most faithful to your photo, with a turntable video" },
@@ -357,4 +358,29 @@ export function animationId(v: unknown): number | null {
 export function rigRequest(o: { glb: string; animation?: number | null }): GenerationRequest {
   const animation = o.animation === undefined || o.animation === null ? null : animationId(o.animation);
   return { feature: MODEL3D_FEATURE, modelId: RIG_MODEL, op: "rig-3d", inputs: { model3d: o.glb }, ...(animation !== null && { params: { animation } }) };
+}
+
+// ---------------------------------------------------------------------------
+// Retexture (Meshy 7 or 6 on fal; cloud only): new textures on a finished model, from words or a style picture.
+
+/** The retexture models, the default first. */
+export const RETEXTURE_MODELS = [
+  { id: "meshy-7-retexture", label: "Meshy 7" },
+  { id: "meshy-6-retexture", label: "Meshy 6" },
+] as const;
+export type RetextureModel = (typeof RETEXTURE_MODELS)[number]["id"];
+/** Meshy's style prompt: "Maximum 600 characters". */
+export const RETEXTURE_PROMPT_MAX = 600;
+export const RETEXTURE_SIZES = ["2k", "4k", "8k"] as const;
+
+/** Retexture a finished model: the words, or a style picture (which wins when both go), at a texture size. */
+export function retextureRequest(o: { glb: string; prompt?: string; style?: string; model?: RetextureModel; size?: (typeof RETEXTURE_SIZES)[number] }): GenerationRequest {
+  return {
+    feature: MODEL3D_FEATURE,
+    modelId: o.model ?? RETEXTURE_MODELS[0].id,
+    op: "retexture-3d",
+    prompt: (o.prompt ?? "").trim().slice(0, RETEXTURE_PROMPT_MAX),
+    inputs: { model3d: o.glb, ...(o.style && { images: [o.style] }) },
+    ...(o.size && o.size !== "2k" && { params: { extra: { texture_resolution: o.size } } }),
+  };
 }

@@ -298,6 +298,17 @@ function ActivePresetHeader() {
 }
 
 /**
+ * The line under the hero. It follows the picked model: a relight that matches a light picked on a sphere (H3 Max relight)
+ * takes no words, so it says to pick a light.
+ */
+function StudioSubtitle({ text }: { text: string }) {
+  const { draft } = useStudio();
+  const catalog = useCatalog();
+  const sphere = !!catalog.getModel(draft.modelId)?.options.lightSphere;
+  return <p className="mt-2 max-w-xl text-[13px] text-muted-foreground">{sphere ? "Pick a light — its direction, colour and softness — and the shot is relit to match." : text}</p>;
+}
+
+/**
  * Example prompts under the hero. Its own component: it follows the picked model (a model that
  * takes no prompt, like FASHN try-on, gets none), so it re-renders with the draft, not the page.
  */
@@ -520,7 +531,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
         ) : (
           <div className="flex flex-col items-center pt-6 text-center sm:pt-[16vh]">
             <h2 className="font-heading text-display text-balance">{config.hero}</h2>
-            {config.subtitle && <p className="mt-2 max-w-xl text-[13px] text-muted-foreground">{config.subtitle}</p>}
+            {config.subtitle && <StudioSubtitle text={config.subtitle} />}
             {config.related && (
               <Link href={config.related.href} className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                 {config.related.label}
