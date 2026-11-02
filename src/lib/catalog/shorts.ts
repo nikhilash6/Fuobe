@@ -198,6 +198,11 @@ export function getShortsPreset(id: string): ShortsPreset | undefined {
   return SHORTS_PRESETS.find((p) => p.id === id);
 }
 
+/** Looks with a real cover lead; the rest keep their catalog order after them. */
+export function coveredFirst<T extends Pick<ShortsPreset, "id">>(list: readonly T[]): T[] {
+  return [...list].sort((a, b) => Number(!templateCover("shorts", a.id)) - Number(!templateCover("shorts", b.id)));
+}
+
 /** A look's card preview: its real cover when it has one (templateCover: the restyled frame, and its reveal), else drawn. */
 export function shortsPreview(p: Pick<ShortsPreset, "id" | "scene" | "fx">): PresetPreview {
   const cover = templateCover("shorts", p.id);

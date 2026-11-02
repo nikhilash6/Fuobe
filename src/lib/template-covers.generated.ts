@@ -38,5 +38,17 @@ export const TEMPLATE_COVERS: Record<string, TemplateCoverEntry> = {
   "mixed-media/mixed-sketch": {"poster":"/previews/presets/peak/effect-sketch.jpg?v=24e23540","video":"/previews/presets/effect-sketch.mp4?v=4e4bc4c0","at":2.4375},
   "mixed-media/mixed-toxic": {"poster":"/previews/presets/peak/effect-toxic.jpg?v=146b540c","video":"/previews/presets/effect-toxic.mp4?v=f160fa6a","at":3.3542},
   "mixed-media/mixed-tracking": {"poster":"/previews/presets/peak/effect-tracking.jpg?v=820420f2","video":"/previews/presets/effect-tracking.mp4?v=b0482bde","at":3.5208},
-  "mixed-media/mixed-windows": {"poster":"/previews/presets/peak/effect-windows.jpg?v=6566b7b2","video":"/previews/presets/effect-windows.mp4?v=ddb89362","at":3.0208}
+  "mixed-media/mixed-windows": {"poster":"/previews/presets/peak/effect-windows.jpg?v=6566b7b2","video":"/previews/presets/effect-windows.mp4?v=ddb89362","at":3.0208},
+  "shorts/shorts-balloon-type": {"poster":"/previews/templates/shorts/shorts-balloon-type.jpg?v=b18c41f3","video":"/previews/templates/shorts/shorts-balloon-type.mp4?v=4ff57efd","at":3.542},
+  "shorts/shorts-bold-caption": {"poster":"/previews/templates/shorts/shorts-bold-caption.jpg?v=190afd6a","video":"/previews/templates/shorts/shorts-bold-caption.mp4?v=4222f06b","at":3.542},
+  "shorts/shorts-comic-pop": {"poster":"/previews/templates/shorts/shorts-comic-pop.jpg?v=aec69bca","video":"/previews/templates/shorts/shorts-comic-pop.mp4?v=302e2639","at":3.542},
+  "shorts/shorts-heart-pop": {"poster":"/previews/templates/shorts/shorts-heart-pop.jpg?v=89ee979c","video":"/previews/templates/shorts/shorts-heart-pop.mp4?v=e19bedc9","at":3.542},
+  "shorts/shorts-marker-scribble": {"poster":"/previews/templates/shorts/shorts-marker-scribble.jpg?v=d8d2d121","video":"/previews/templates/shorts/shorts-marker-scribble.mp4?v=9f8c804e","at":3.542},
+  "shorts/shorts-pencil-sketch": {"poster":"/previews/templates/shorts/shorts-pencil-sketch.jpg?v=a092b4f0","video":"/previews/templates/shorts/shorts-pencil-sketch.mp4?v=f71c362d","at":3.542},
+  "shorts/shorts-pink-pop": {"poster":"/previews/templates/shorts/shorts-pink-pop.jpg?v=5f154f00","video":"/previews/templates/shorts/shorts-pink-pop.mp4?v=2f824754","at":3.542},
+  "shorts/shorts-pink-scribble": {"poster":"/previews/templates/shorts/shorts-pink-scribble.jpg?v=4f77dfae","video":"/previews/templates/shorts/shorts-pink-scribble.mp4?v=7c250777","at":3.542},
+  "shorts/shorts-polka-pop": {"poster":"/previews/templates/shorts/shorts-polka-pop.jpg?v=0241d97e","video":"/previews/templates/shorts/shorts-polka-pop.mp4?v=c549ac20","at":3.542},
+  "shorts/shorts-sticker-type": {"poster":"/previews/templates/shorts/shorts-sticker-type.jpg?v=79228a50","video":"/previews/templates/shorts/shorts-sticker-type.mp4?v=f6e5f887","at":3.542},
+  "shorts/shorts-warm-glow": {"poster":"/previews/templates/shorts/shorts-warm-glow.jpg?v=42c2f340","video":"/previews/templates/shorts/shorts-warm-glow.mp4?v=2a87f762","at":3.542},
+  "shorts/shorts-yellow-frame": {"poster":"/previews/templates/shorts/shorts-yellow-frame.jpg?v=e224b12c","video":"/previews/templates/shorts/shorts-yellow-frame.mp4?v=854f4c90","at":3.542}
 };

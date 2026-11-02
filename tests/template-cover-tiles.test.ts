@@ -37,7 +37,7 @@ const { PresetTile } = await import("@/components/content-factory/parts");
 const { StyleArt } = await import("@/components/faceless/style-art");
 const { TEMPLATES } = await import("@/lib/catalog/marketing");
 const { FASHION, PACKS } = await import("@/lib/catalog/packs");
-const { SHORTS_PRESETS, shortsPreview } = await import("@/lib/catalog/shorts");
+const { coveredFirst, SHORTS_PRESETS, shortsPreview } = await import("@/lib/catalog/shorts");
 const { MIXED_PRESETS, mixedPreview } = await import("@/lib/catalog/mixed-media");
 const { CANVAS_TEMPLATES, outline } = await import("@/lib/catalog/canvas");
 const { PRESETS } = await import("@/lib/catalog/content-factory");
@@ -133,6 +133,12 @@ describe("Shorts and Mixed Media looks", () => {
     expect(look(p, shorts.id)).toContain('class="pv"');
     const mixed = by(MIXED_PRESETS, "mixed-noir");
     expect(mixedPreview(mixed)).toEqual({ poster: expect.stringMatching(/^\/samples\/previews\//), scene: mixed.scene, fx: mixed.fx });
+  });
+
+  it("list the Shorts looks with a cover first, the rest in catalog order", () => {
+    const ids = coveredFirst(SHORTS_PRESETS).map((p) => p.id);
+    expect(ids[0]).toBe("shorts-warm-glow");
+    expect(ids.slice(1)).toEqual(SHORTS_PRESETS.map((p) => p.id).filter((id) => id !== "shorts-warm-glow"));
   });
 });
 

@@ -10,7 +10,7 @@ import { fileToList, MediaSlot, type SlotValue } from "@/components/studio/media
 import { LookCard } from "@/components/shorts/preset-card";
 import { tabKeys } from "@/components/shorts/ui";
 import { GENJUTSU, type GenjutsuLook } from "@/lib/catalog/genjutsu";
-import { SHORTS_PRESETS, shortsPreview } from "@/lib/catalog/shorts";
+import { coveredFirst, SHORTS_PRESETS, shortsPreview } from "@/lib/catalog/shorts";
 import { SOUL_LOOK_CARDS } from "@/lib/catalog/soul-cards";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +46,7 @@ export function LookPicker({
     { id: "custom", label: "Your own" },
   ];
   const words_ = q.trim().toLowerCase();
-  const presets = useMemo(() => (words_ ? SHORTS_PRESETS.filter((p) => `${p.name} ${p.category} ${p.description}`.toLowerCase().includes(words_)) : SHORTS_PRESETS), [words_]);
+  const presets = useMemo(() => coveredFirst(words_ ? SHORTS_PRESETS.filter((p) => `${p.name} ${p.category} ${p.description}`.toLowerCase().includes(words_)) : SHORTS_PRESETS), [words_]);
   const souls = useMemo(() => (words_ ? SOUL_LOOK_CARDS.filter((l) => `${l.name} ${l.description} ${l.categories.join(" ")}`.toLowerCase().includes(words_)) : SOUL_LOOK_CARDS), [words_]);
   return (
     <div className="space-y-3">
