@@ -77,6 +77,7 @@ import {
   nodeLabel,
   OPEN_DUB_HINT,
   OUT,
+  outputPorts,
   outputType,
   paletteItems,
   planCanvas,
@@ -598,9 +599,9 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
         const g = toGraph([...latest.current.nodes, node], latest.current.edges);
         const c: Connection =
           connect.from === "source"
-            ? { source: connect.nodeId, sourceHandle: OUT, target: node.id, targetHandle: item.type === "output" ? PREVIEW_IN : (inputPorts(toGraph([node], []).nodes[0]).find((p) => acceptsType(p, connect.type))?.id ?? null) }
+            ? { source: connect.nodeId, sourceHandle: connect.handleId ?? OUT, target: node.id, targetHandle: item.type === "output" ? PREVIEW_IN : (inputPorts(toGraph([node], []).nodes[0]).find((p) => acceptsType(p, connect.type))?.id ?? null) }
             : { source: node.id, sourceHandle: OUT, target: connect.nodeId, targetHandle: connect.handleId };
-        if (c.targetHandle && !connectionError(g, c)) {
+        if (c.targetHandle && !connectionError(g, c, mode)) {
           setEdges((es) => [...(singleInput(g, c.target, c.targetHandle) ? es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle)) : es), { id: newId("e"), ...c }]);
         }
       }
@@ -652,17 +653,17 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     },
     [touch],
   );
-  const isValidConnection = useCallback((c: Connection | Edge) => !connectionError(toGraph(latest.current.nodes, latest.current.edges), c), []);
+  const isValidConnection = useCallback((c: Connection | Edge) => !connectionError(toGraph(latest.current.nodes, latest.current.edges), c, mode), [mode]);
   const onConnect = useCallback(
     (c: Connection) => {
       const g = toGraph(latest.current.nodes, latest.current.edges);
-      const err = connectionError(g, c);
+      const err = connectionError(g, c, mode);
       if (err) return void toast.error(err);
       // A single input (start frame, video, audio…) takes the new edge instead of the old one.
       setEdges((es) => [...(singleInput(g, c.target, c.targetHandle) ? es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle)) : es), { id: newId("e"), ...c }]);
       touch();
     },
-    [touch],
+    [touch, mode],
   );
   const disconnect = useCallback(
     (edgeId: string) => {
@@ -692,11 +693,12 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
       const from = g.nodes.find((n) => n.id === state.fromNode!.id);
       if (!from) return;
       const fromSource = state.fromHandle?.type === "source";
-      const type = fromSource ? outputType(g, from) : inputPorts(from).find((p) => p.id === state.fromHandle?.id)?.type;
+      // A Split soundtrack stem (or any node's OUT): the type of the handle the drag started from.
+      const type = fromSource ? outputPorts(g, from, mode).find((p) => p.id === (state.fromHandle?.id ?? OUT) && !p.disabled)?.type : inputPorts(from).find((p) => p.id === state.fromHandle?.id)?.type;
       if (!type) return;
       openMenuAt(pt.clientX, pt.clientY, { nodeId: from.id, handleId: state.fromHandle?.id ?? null, from: fromSource ? "source" : "target", type });
     },
-    [openMenuAt],
+    [openMenuAt, mode],
   );
 
   const palette = useMemo(() => paletteItems(mode, engine), [mode, engine]);
@@ -788,8 +790,10 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
       ...ns.map((n) => ({ ...n, selected: false })),
       { id: nid, type, position: snap({ x: src.position.x, y: src.position.y + (src.measured?.height ?? 360) + 48 }), data: { url: file.url, label: file.label ?? `From ${nodeLabel(toGraph([src], []).nodes[0])}` }, selected: true },
     ]);
-    const moved = takeOver ? latest.current.edges.filter((e) => e.source === nodeId).length : 0;
-    if (moved) setEdges((es) => es.map((e) => (e.source === nodeId ? { ...e, id: newId("e"), source: nid, sourceHandle: OUT } : e)));
+    // Split soundtrack hands its first file (the dialogue) over: only its Dialogue connections move.
+    const moves = (e: Edge) => e.source === nodeId && (src.type !== "split-soundtrack" || (e.sourceHandle ?? OUT) === OUT);
+    const moved = takeOver ? latest.current.edges.filter(moves).length : 0;
+    if (moved) setEdges((es) => es.map((e) => (moves(e) ? { ...e, id: newId("e"), source: nid, sourceHandle: OUT } : e)));
     touch();
     toast(moved ? `Added as an input, connected where “${nodeLabel(toGraph([src], []).nodes[0])}” was` : "Added as an input — connect it anywhere");
   };
