@@ -42,6 +42,8 @@ export interface ToolDef<S extends z.ZodType> {
   gated?: boolean;
   strict?: boolean;
   run: (input: z.infer<S>, ctx: ToolContext) => Promise<ToolOutcome>;
+  /** For gated tools: what the arguments need beyond their shape (a skill's inputs), checked before a card is shown. */
+  check?: (input: z.infer<S>, ctx: ToolContext) => string | null;
   /** For gated tools: what the run would do, priced. */
   plan?: (input: z.infer<S>, ctx: ToolContext) => PlannedJob[];
   /** The approval card's heading for this call (default: its summary field, else the tool's name). */
