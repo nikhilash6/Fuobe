@@ -448,6 +448,9 @@ export function defaultModelForNode(n: Pick<CanvasNode, "type" | "data">, engine
     const kind = n.data.mediaKind ?? "image";
     return defaultModelFor(n.data.op ?? KIND_OP[kind], engine) ?? MODELS.find((m) => m.engine === engine && !m.hidden && m.kind === kind);
   }
+  // Clean up voice is RE-USE, on your GPU only: the hosted cleaners (VEED, DeepFilterNet 3: Clean up dialogue's cloud
+  // engine) share its op but are other tools, so the node doesn't take one of them on the cloud.
+  if (n.type === "clean-voice" && engine === "cloud") return undefined;
   const op = nodeOps(n)[0];
   // The Upscale node's Regenerate choice starts on Open-H3 Regenerate (on the cloud the entry is disabled: paletteItems).
   const fixed = n.data.modelId === REGEN_MODEL ? getModel(REGEN_MODEL) : undefined;
@@ -479,7 +482,10 @@ export function modelChoices(n: Pick<CanvasNode, "type" | "data">): ModelDef[] {
   }
   if (n.type === "concat") return Object.values(CONCAT_MODELS).flatMap((id) => getModel(id) ?? []);
   const ops = nodeOps(n);
-  return MODELS.filter((m) => ops.some((op) => supportsOp(m, op)) && (!m.hidden || ops.includes("frame")) && !needsMarks(m));
+  // Clean up voice offers only what runs on your GPU (RE-USE): the hosted cleaners share its op but are Clean up
+  // dialogue's cloud engine (defaultModelForNode).
+  const own = (m: ModelDef) => n.type !== "clean-voice" || runsOn(m, "open");
+  return MODELS.filter((m) => ops.some((op) => supportsOp(m, op)) && (!m.hidden || ops.includes("frame")) && !needsMarks(m) && own(m));
 }
 
 // ---------------------------------------------------------------------------

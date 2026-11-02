@@ -1101,6 +1101,18 @@ model("extract-soundtrack", "Extract soundtrack", "fal", "utility", "audio", "A 
       [("separate-audio", "fal-ai/workflow-utilities/extract-audio")], pricing=("second", 0.0002, "billed by compute time"), hidden=True)
 model("elevenlabs-voice-isolation", "ElevenLabs Voice Isolation", "ElevenLabs", "elevenlabs", "audio", "Clean speech from a video or recording — music and noise removed",
       [("separate-audio", "fal-ai/elevenlabs/audio-isolation")], pricing=("minute", 0.1))
+# Clean up dialogue in the cloud (DBS D5, docs/research/dbs-separation-7.md §6): hosted speech cleaners under their own
+# names (DBS isn't hosted, and the owner hasn't allowed SAM Audio in its place). VEED Clean Audio takes a video's file too
+# (its audio_url reads the soundtrack) and bills whole minutes of input, at least one; FLAC keeps its 48 kHz output
+# lossless. DeepFilterNet 3 takes audio only (a video's soundtrack goes in through extract-soundtrack).
+model("veed-clean-audio", "VEED Clean Audio", "VEED", "veed", "audio", "Removes background noise from speech and levels it, keeping quiet and distant words",
+      [("enhance-voice", "veed/clean-audio", "fal", {"keys": {"video": "audio_url"}})], fixed={"output_format": "flac"},
+      sliders=[("strength", "Strength", 0.01)],
+      pricing=("minute", 0.0125, "per minute of input, rounded up to whole minutes, at least 1", {"roundUp": True}))
+DFN_REC = EPS[("fal", "fal-ai/deepfilternet3")]
+model("deepfilternet3", "DeepFilterNet 3", "DeepFilterNet", "deepfilternet", "audio", "Open-source speech denoiser: steady noise, hiss and hum out of a voice",
+      [("enhance-voice", "fal-ai/deepfilternet3")], fixed={"audio_format": "flac"}, pricing=("second", 0.001, "per second of audio"),
+      licence={"licence": "MIT OR Apache-2.0", "commercial": True, "note": DFN_REC["license"], "checked": DFN_REC["checked"]})
 
 # ----- Image to 3D (research part 3; product spins, 3D blocking)
 model("hunyuan-3d-3-1-pro", "Hunyuan3D 3.1 Pro", "Tencent Hunyuan", "hunyuan-3d", "model3d", "Textured, game-ready 3D models from a product photo",

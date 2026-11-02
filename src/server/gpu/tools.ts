@@ -1,6 +1,7 @@
 import "server-only";
 import { DUB_STEP_MODELS } from "@/lib/av/dub";
 import { SPLIT_MODEL } from "@/lib/av/split";
+import { CLEAN_DIALOGUE_PRESET, OPEN_MODEL as CLEAN_DIALOGUE_MODEL, OPEN_MUX_MODEL as CLEAN_DIALOGUE_MUX } from "@/lib/av/clean-dialogue";
 import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { CLEAN_MODEL } from "@/lib/av/clean-voice";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
@@ -228,6 +229,16 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/audio/transcribe", label: "Transcribe", group: "Audio", config: S.TRANSCRIBE_STUDIO },
   // DBS soundtrack separation (D1): dialogue, music and effects.
   { href: "/audio/split", label: "Split soundtrack", group: "Audio", steps: [{ modelId: SPLIT_MODEL, op: "separate-audio" }] },
+  // Clean up dialogue (DBS D5, Split soundtrack's preset): graph C's remix, and the stream-copy mux for a video.
+  {
+    href: `/audio/split?preset=${CLEAN_DIALOGUE_PRESET}`,
+    label: "Clean up dialogue",
+    group: "Audio",
+    steps: [
+      { modelId: CLEAN_DIALOGUE_MODEL, op: "separate-audio" },
+      { modelId: CLEAN_DIALOGUE_MUX, op: "mux" },
+    ],
+  },
   // Clean up voice (NVIDIA RE-USE on ComfyUI-RE-USE).
   { href: "/audio/clean", label: "Clean up voice", group: "Audio", steps: [{ modelId: CLEAN_MODEL, op: "enhance-voice" }] },
   // Translate & dub on the open engine: the voice split with its transcript (the default split, MelBand RoFormer; DBS

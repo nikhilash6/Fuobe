@@ -883,6 +883,8 @@ function missingImages(model: ModelDef, req: Pick<GenerationRequest, "inputs">):
  * the whole stretched result.
  */
 const CLIP_LENGTH_OPS = new Set<Operation>(["upscale-video", "interpolate", "sdr-to-hdr", "export-video", "restore-video"]);
+/** Sound tools billed on the recording's length (per second or per minute of audio). */
+const AUDIO_LENGTH_OPS = new Set<Operation>(["enhance-voice"]);
 
 /**
  * The seconds a clip edit that keeps the clip's length is billed for (Happy Horse, Runway Aleph, Lucy Edit, Kling O3 4K
@@ -1043,6 +1045,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   const clip = op && CLIP_LENGTH_OPS.has(op) && params.sourceDuration && params.sourceDuration > 0 ? params.sourceDuration * (op === "interpolate" ? Math.max(1, params.slowdown ?? 1) : 1) : undefined;
   // A talking avatar is as long as its voice (params.sourceDuration: the voice's header, read by the studio or the server).
   const voice = op === "avatar" && params.sourceDuration && params.sourceDuration > 0 ? avatarSeconds(model, params.sourceDuration, params.fps) : undefined;
+  // A voice cleaned (DeepFilterNet 3, VEED) is billed on the recording's length (params.sourceDuration: its header).
+  const audioClip = op && AUDIO_LENGTH_OPS.has(op) && params.sourceDuration && params.sourceDuration > 0 ? params.sourceDuration : undefined;
   if (p.unit === "image") per = usd * n;
   // Per image by tier, but per megapixel with LoRAs (fal's FLUX 3 Klein /lora): the route's size in megapixels.
   if (withLoras && p.withLorasPerMegapixel !== undefined) per = p.withLorasPerMegapixel * (routeMegapixels(model, params, op) ?? sentMegapixels(params) ?? 1) * n;
@@ -1058,13 +1062,19 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   if (clipped) per = clipped.rate * clipped.billed;
   else if (p.unit === "second") {
     // A length the caller set wins (Shorts, Mixed Media and Genjutsu say the seconds they bill); then a clip edit's clip.
-    const asked = clip ?? voice ?? params.duration ?? clipEditSeconds(model, params, op) ?? model.defaults?.duration ?? 5;
+    const asked = clip ?? voice ?? params.duration ?? clipEditSeconds(model, params, op) ?? audioClip ?? model.defaults?.duration ?? 5;
     const seconds = p.minSeconds ? Math.max(p.minSeconds, Math.ceil(asked - 1e-9)) : asked;
     const mp = p.videoMegapixel ? videoMegapixels(model, params, seconds) : undefined;
     const rate = p.videoMegapixel && (withLoras && p.videoMegapixel.withLoras !== undefined ? p.videoMegapixel.withLoras : p.videoMegapixel.usd);
     per = mp !== undefined && rate ? Math.ceil(mp - 1e-9) * rate : usd * seconds;
   }
-  if (p.unit === "minute") per = (usd * (voice ?? params.duration ?? 60)) / 60;
+  if (p.unit === "minute") {
+    // A sound tool (Clean up dialogue's VEED, a voice split) bills the clip's length when the caller knows it.
+    const heard = (op === "separate-audio" || audioClip) && params.sourceDuration && params.sourceDuration > 0 ? params.sourceDuration : undefined;
+    const minutes = (voice ?? params.duration ?? heard ?? 60) / 60;
+    // Whole minutes of input, at least one (VEED Clean Audio: whole seconds, then up to the next full minute).
+    per = usd * (p.roundUp ? Math.max(1, Math.ceil(Math.round(minutes * 60) / 60 - 1e-9)) : minutes);
+  }
   // Settings that change the price (60 fps, a Pro tier, a cheaper model).
   for (const f of p.factors ?? []) {
     const v = f.param === "targetFps" ? (params.targetFps ?? model.defaults?.targetFps) : (params.extra?.[f.param] ?? model.options.controls?.find((c) => c.param === f.param)?.default);
