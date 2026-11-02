@@ -15,6 +15,7 @@ import { billedClipSeconds, editClipsProblem, sourceSeconds } from "./clip-windo
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
 import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
+import { qmaRunPrompt } from "@/lib/qma";
 import { askedSize, clipWords, numFramesValue, sizeValue } from "./payload";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
 import { computeDimensions, fitCanvas } from "@/lib/comfy";
@@ -399,6 +400,9 @@ export function planGeneration(
       prompt = "";
     }
   }
+  // QMA camera angles: the run's pose (the Angles app's choices, the model's Angle / Height / Distance, Cinema's camera) becomes
+  // the LoRA's own words, nearest of its 96 views, the user's words after them (src/lib/qma.ts).
+  if (model.options.promptFormat === "qma") prompt = qmaRunPrompt(prompt, params.extra);
   // The words a model takes when none are given (Fuobe Try-On: its LoRA's own instruction).
   if (!prompt && model.options.defaultPrompt) prompt = model.options.defaultPrompt;
   // A recipe's own LoRAs (Fuobe Try-On's try-on LoRA) go on every run, first (an API's LoRA cap leaves out yours

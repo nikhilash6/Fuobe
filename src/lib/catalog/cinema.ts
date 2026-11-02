@@ -6,6 +6,7 @@ import { lengthRange, PLANNED_DURATIONS, plannedDurations } from "./clip-lengths
 import { DOP_MODEL, LTX25_HOSTED } from "./dop";
 import { dualEngine, onEngine } from "./engines";
 import { localOnly, needsToken, triggerOf } from "./loras";
+import { QMA_MODEL, qmaLabel, qmaView } from "@/lib/qma";
 import { ANGLES_2511_LORA } from "./open-tools";
 import { composeShots, estimateCost, planGeneration, routesFor } from "./plan";
 import { soulRecipe } from "./soul";
@@ -1756,6 +1757,19 @@ function planLocationView(input: CinemaGenerateInput): CinemaPlan {
       inputs,
       params: { numOutputs: 1, extra: { horizontal_angle: view.pose.horizontal, vertical_angle: view.pose.vertical, zoom: view.pose.zoom } },
     };
+  } else if (input.modelId === QMA_MODEL && getModel(QMA_MODEL)) {
+    // QMA · 96 views (qma-angles): Qwen-Image 2.1 with the QMA LoRA moves the camera to the view's pose (its nearest of 96).
+    model = getModel(QMA_MODEL)!;
+    request = {
+      feature: "cinema-location",
+      modelId: model.id,
+      op: "edit",
+      prompt: withBrief(input.brief, `${LOCATION_KEEP}${tidy(input.prompt) ? `. ${tidy(input.prompt)}` : ""}.`),
+      inputs,
+      params: { numOutputs: 1, extra: { horizontal_angle: view.pose.horizontal, vertical_angle: view.pose.vertical, zoom: view.pose.zoom } },
+    };
+    notes.push(`${model.name} moves the camera for the ${view.name.toLowerCase()} view (${qmaLabel(qmaView(view.pose)).toLowerCase()}), on your GPU`);
+    return finish(model, [{ key: "main", request }], notes, src ? undefined : "Pick the location image to re-angle");
   } else {
     model = editModel("open");
     const loras = [ANGLES_2511_LORA];
@@ -2001,7 +2015,7 @@ export const SCENE_MODELS: Record<Engine, string> = { cloud: "marigold-depth", o
  * What re-renders a captured view. The first is the default. On your GPU that stays Qwen-Image-Edit 2511, which runs it
  * with the Multiple-Angles LoRA trained on it; Qwen-Image 2.1 is the choice after it, with plain words.
  */
-export const RECOMPOSE_MODELS: Record<Engine, string[]> = { cloud: ["nano-banana-pro", "qwen-multiple-angles"], open: ["oss-qwen-edit", "oss-qwen-image-21"] };
+export const RECOMPOSE_MODELS: Record<Engine, string[]> = { cloud: ["nano-banana-pro", "qwen-multiple-angles"], open: ["oss-qwen-edit", "oss-qwen-image-21", QMA_MODEL] };
 /** The open scene mesh skips every other pixel: about a quarter of the triangles, light enough for a phone. */
 export const SCENE_DECIMATION = 2;
 
@@ -2044,7 +2058,12 @@ function planRecompose(input: CinemaGenerateInput): CinemaPlan {
   const pose = cap?.pose ?? REFERENCE_POSE;
   const params = fitParams(model, { ...input, batch: 1, resolution: input.resolution ?? "1K" }, notes, "image");
   let request: GenerationRequest;
-  if (model.id === "qwen-multiple-angles") {
+  if (model.id === QMA_MODEL) {
+    // QMA · 96 views re-shoots the still itself from the flown camera, snapped to the nearest of its 96 views (on your GPU).
+    params.extra = { ...params.extra, horizontal_angle: pose.horizontal, vertical_angle: pose.vertical, zoom: pose.zoom };
+    request = { feature: "cinema-recompose", modelId: model.id, op: "edit", prompt: tidy(input.prompt), inputs: src ? { images: [src] } : undefined, params };
+    notes.push(`${model.name} re-shoots the still from the nearest of its 96 views to where you flew (${qmaLabel(qmaView(pose)).toLowerCase()}) — the capture itself isn't sent`);
+  } else if (model.id === "qwen-multiple-angles") {
     params.extra = { horizontal_angle: pose.horizontal, vertical_angle: pose.vertical, zoom: pose.zoom };
     request = { feature: "cinema-recompose", modelId: model.id, op: "edit", prompt: anglesNote(lens, aperture, input.prompt), inputs: src ? { images: [src] } : undefined, params };
     notes.push(`${model.name} re-shoots the still from the angles you flew to (${Math.round(pose.horizontal)}° round, ${Math.round(pose.vertical)}° up, zoom ${pose.zoom}) — the capture itself isn't sent`);
