@@ -177,6 +177,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   },
   { href: "/upscale", label: "Upscale", group: "Images", config: S.UPSCALE_STUDIO },
   { href: "/video", label: "Video", group: "Video", config: S.VIDEO_STUDIO },
+  // Keyframe animation (Fuobe Animation): Frames mode's Animation style, every gap in one graph on Wan 2.2 with AniSora.
+  { href: "/video?model=fuobe-animation", label: "Keyframe animation", group: "Video", steps: [{ modelId: "fuobe-animation", op: "keyframes" }] },
   { href: "/motion-control", label: "Motion control", group: "Video", config: S.MOTION_CONTROL_STUDIO },
   { href: "/video-edit", label: "Edit video", group: "Video", config: S.VIDEO_EDIT_STUDIO },
   { href: "/extend", label: "Extend", group: "Video", config: S.EXTEND_STUDIO },
