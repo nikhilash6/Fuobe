@@ -786,7 +786,15 @@ export function useElement(id: string) {
 export function useSaveElement() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { id?: string; name: string; kind?: ElementKind; description?: string | null; references: string[] }) => {
+    mutationFn: async (body: {
+      id?: string;
+      name: string;
+      kind?: ElementKind;
+      description?: string | null;
+      references: string[];
+      /** Design a voice: the model that made the take, its words and its line (the server keeps the rest). */
+      voice?: { modelId: string; description?: string; transcript?: string };
+    }) => {
       const { id, ...rest } = body;
       return json<StudioElement>(
         await fetch(id ? `/api/elements/${id}` : "/api/elements", {
