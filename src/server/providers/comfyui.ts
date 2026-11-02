@@ -82,7 +82,7 @@ import { outsideTenant, runAsTenant, tenantAccount } from "../tenant";
 import { ask, checkReach, reachSync, sharedCheck, type Reach } from "./reach";
 import { ProviderError, type PollResult, type ProviderAdapter, type RemoteOutput } from "./types";
 import { isOutOfMemory } from "@/lib/gpu/fix-codes";
-import { makingWords, queueWords, RELAY_TIMES, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
+import { makingWords, META_BATCH_HISTORY, queueWords, RELAY_TIMES, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
 import type { GenerationFix } from "@/lib/catalog/types";
 import {
   checkClocks,
@@ -1935,6 +1935,30 @@ const executionError = (entry: HistoryEntry) => entry.status?.messages?.find(([t
 const promptHasPrefix = (prompt: unknown, prefix: string) =>
   !!prompt && typeof prompt === "object" && Object.values(prompt as ComfyWorkflow).some((n) => n?.inputs?.filename_prefix === prefix);
 
+/** An EXR export's per-frame files (bundleFrames zips them); everything else is a finished result. */
+const isFrame = (o: ComfyOutput) => o.meta?.role === "frames";
+
+/**
+ * A meta-batch pass's place in its job. ComfyUI numbers the first pass as queued (0 or more); VHS re-queues each later
+ * pass under the negated, growing server count (-k, -k-1, …), so a later pass has a more negative number.
+ */
+const passOrder = (e: { prompt?: unknown[] }) => {
+  const n = Number(e.prompt?.[0] ?? 0);
+  return n >= 0 ? 0 : -n;
+};
+
+/**
+ * A meta-batch job's results from its passes (in any order): the clips the last pass saved (only the last pass saves
+ * a video), then every pass's EXR frames in pass order (a frame saver writes in each pass). Empty while no pass saved a
+ * finished result. `collect` reads one pass's files.
+ */
+export function metaBatchResults<E extends { prompt?: unknown[] }>(passes: E[], collect: (e: E) => ComfyOutput[]): ComfyOutput[] {
+  const files = [...passes].sort((a, c) => passOrder(a) - passOrder(c)).map(collect);
+  const last = files.findLastIndex((f) => f.some((o) => !isFrame(o)));
+  if (last < 0) return [];
+  return [...files[last].filter((o) => !isFrame(o)), ...files.flatMap((f) => f.filter(isFrame))];
+}
+
 /**
  * VHS meta-batching re-queues the prompt (new prompt ids) until every frame is done; only the last pass
  * saves the video. Follow the passes by their shared filename prefix.
@@ -1942,18 +1966,16 @@ const promptHasPrefix = (prompt: unknown, prefix: string) =>
 async function followMetaBatch(prefix: string, manifest: ManifestWorkflow | undefined, worker: ComfyWorker): Promise<ComfyOutput[] | "running" | { error: string } | null> {
   const queue = await comfyJson<{ queue_running?: unknown[][]; queue_pending?: unknown[][] }>("/queue", worker);
   if ([...(queue.queue_running ?? []), ...(queue.queue_pending ?? [])].some((q) => promptHasPrefix(q[2], prefix))) return "running";
-  const hist = await comfyJson<Record<string, HistoryEntry>>("/history?max_items=64", worker);
-  const passes = Object.values(hist)
-    .filter((e) => promptHasPrefix(e.prompt?.[2], prefix))
-    .sort((a, c) => Number(c.prompt?.[0] ?? 0) - Number(a.prompt?.[0] ?? 0));
+  const read = async (n: number) => Object.values(await comfyJson<Record<string, HistoryEntry>>(`/history?max_items=${n}`, worker)).filter((e) => promptHasPrefix(e.prompt?.[2], prefix));
+  const collect = (e: HistoryEntry) => collectOutputs(e, manifest, baseUrl(worker), authHeaders(worker));
+  let passes = await read(64);
+  // Frames in each pass: every pass is needed, so look further back.
+  if (passes.some((e) => collect(e).some(isFrame))) passes = await read(META_BATCH_HISTORY);
   // A pass that failed (out of memory, a node exception) ends the job: say why instead of "no output".
   const failed = passes.find((e) => e.status?.status_str === "error");
   if (failed) return { error: explainExecutionError(executionError(failed), manifest) };
-  for (const e of passes) {
-    const files = collectOutputs(e, manifest, baseUrl(worker), authHeaders(worker));
-    if (files.length) return files;
-  }
-  return null;
+  const files = metaBatchResults(passes, collect);
+  return files.length ? files : null;
 }
 
 /** Upload a file to a worker's input folder; returns the name LoadImage / LoadAudio / LoadVideo take there. */
@@ -2048,19 +2070,18 @@ export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_b
   try {
     manifest = t.workflow_id ? getWorkflow(t.workflow_id).manifest : undefined;
   } catch {}
-  const list = (passes ? [...entries].sort((a, c) => Number(c.prompt?.[0] ?? 0) - Number(a.prompt?.[0] ?? 0)) : entries.slice(0, 1)) as HistoryEntry[];
+  const list = (passes ? entries : entries.slice(0, 1)) as HistoryEntry[];
   // A pass that failed (out of memory, a node exception) ends the job: say why instead of "no output".
   const failed = list.find((e) => e?.status?.status_str === "error");
   if (failed) {
     const interrupted = failed.status?.messages?.some(([type]) => type === "execution_interrupted");
     return { error: interrupted ? RELAY_WORDS.stopped : explainExecutionError(executionError(failed), manifest) };
   }
-  let outputs: ComfyOutput[] = [];
-  for (const e of list) {
-    outputs = collectOutputs(e, manifest, `relay:${t.id}`);
-    if (outputs.length) break;
-  }
-  if (!outputs.length) return t.meta_batch && !passes && t.prefix ? { follow: t.prefix } : { error: "This run finished without a result. Press Retry." };
+  const collect = (e: HistoryEntry) => collectOutputs(e, manifest, `relay:${t.id}`);
+  let outputs: ComfyOutput[] = passes ? metaBatchResults(list, collect) : list[0] ? collect(list[0]) : [];
+  // A meta-batch's first pass may have saved only its EXR frames: the clip comes with the last pass.
+  if (t.meta_batch && !passes && t.prefix && !outputs.some((o) => !isFrame(o))) return { follow: t.prefix };
+  if (!outputs.length) return { error: "This run finished without a result. Press Retry." };
   const account = tenantAccount();
   let budget = Infinity;
   if (account) {
@@ -2266,7 +2287,8 @@ export const comfyProvider: ProviderAdapter = {
         return { state: "failed" as const, error: explainExecutionError(executionError(entry), manifest) };
       }
       let outputs = collectOutputs(entry, manifest, baseUrl(worker), authHeaders(worker));
-      if (!outputs.length && meta.metaBatch && typeof meta.prefix === "string") {
+      // A meta-batch's first pass may have saved only its EXR frames: the clip comes with the last pass.
+      if (meta.metaBatch && typeof meta.prefix === "string" && !outputs.some((o) => !isFrame(o))) {
         const next = await followMetaBatch(meta.prefix, manifest, worker);
         if (next === "running") return { state: "running" as const, message: "Rendering the next batch of frames" };
         if (next && "error" in next) {
