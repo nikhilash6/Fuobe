@@ -15,9 +15,10 @@ const covers = (await import("../scripts/eval/lib/covers.mjs")) as unknown as {
   withVersions: (entries: Record<string, Entry>, publicDir: string) => Record<string, Entry>;
   versionCovers: (opts: { publicDir?: string; manifest?: string; dryRun?: boolean }) => { entries: number; urls: number; changed: number; thumbs: string[]; unversioned: string[] };
   seamless: (frames: Buffer[], fade: number) => Buffer[];
+  dissolveBack: (frames: Buffer[], fade: number) => Buffer[];
   loopsAlready: (frames: Buffer[], luma: number) => boolean;
 };
-const { coversFromMasters, loopsAlready, readManifest, seamless, versionCovers, withVersions, writeManifest } = covers;
+const { coversFromMasters, dissolveBack, loopsAlready, readManifest, seamless, versionCovers, withVersions, writeManifest } = covers;
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-covers-masters-"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -159,6 +160,49 @@ describe("covers from masters", () => {
     expect(fs.readdirSync(dop, { recursive: true, encoding: "utf8" }).filter((f) => /\.(jpg|mp4)$/.test(f))).toEqual([]);
     expect(fs.existsSync(path.join(out, "thumbs", "effect-thunder-god.jpg"))).toBe(true);
   });
+
+  it.runIf(hasFfmpeg)('keeps a clip\'s whole length where its meta.json says {"length": "full"}, and only there', () => {
+    const masters = path.join(dir, "masters-full");
+    const pub = path.join(dir, "public-full");
+    const out = path.join(pub, "previews", "presets");
+    const manifest = path.join(dir, "full-manifest.ts");
+    // A 5.2 s clip: the sample twice over, cut.
+    const long = path.join(dir, "long.mp4");
+    spawnSync("ffmpeg", ["-v", "error", "-y", "-stream_loop", "1", "-i", path.join(SAMPLES, "demo-portrait.mp4"), "-t", "5.2", "-an", long]);
+    master(masters, "effect-canvas", { "clip.mp4": long });
+    fs.writeFileSync(path.join(masters, "effect-canvas", "meta.json"), JSON.stringify({ length: "full" }));
+    master(masters, "effect-set-on-fire", { "clip.mp4": long });
+    // A still keeps no length: the option is for clips.
+    master(masters, "app-headshot-generator", { "start.png": still() });
+    fs.writeFileSync(path.join(masters, "app-headshot-generator", "meta.json"), JSON.stringify({ length: "full" }));
+
+    const r = coversFromMasters(masters, { ...PROVENANCE, publicDir: pub, manifest });
+    expect(r.covers.map((c) => [c.key, (c as Cover & { length?: string }).length])).toEqual([
+      ["app-headshot-generator", undefined],
+      ["effect-canvas", "full"],
+      ["effect-set-on-fire", undefined],
+    ]);
+    const seconds = (f: string) => Number(spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path.join(out, f)], { encoding: "utf8" }).stdout);
+    const frames = (f: string) => Number(spawnSync("ffprobe", ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", path.join(out, f)], { encoding: "utf8" }).stdout);
+    // The usual cover: the first 4 s (96 frames at 24 fps). The full one: all 5.2 s (124 or 125 frames), plus the 6 of
+    // the dissolve back to its first frame added after its end.
+    expect(frames("effect-set-on-fire.mp4")).toBe(96);
+    expect(seconds("effect-set-on-fire.mp4")).toBeLessThanOrEqual(4.1);
+    expect(frames("effect-canvas.mp4")).toBeGreaterThanOrEqual(130);
+    expect(frames("effect-canvas.mp4")).toBeLessThanOrEqual(131);
+    expect(seconds("effect-canvas.mp4")).toBeGreaterThan(5.3);
+    // The manifest entry is a clip cover like any other: the length is the file's.
+    expect(readManifest(manifest)["effect-canvas"]).toEqual({ poster: versioned("/previews/presets/effect-canvas.jpg"), video: versioned("/previews/presets/effect-canvas.mp4"), run: "comfyui-previews-test", engine: "comfyui", model: "minimax-h3", variant: "lean-json" });
+
+    // Run again: kept. A meta.json changed after the cover makes it again, now at 4 s.
+    expect(coversFromMasters(masters, { ...PROVENANCE, publicDir: pub, manifest }).covers.every((c) => c.kept)).toBe(true);
+    fs.writeFileSync(path.join(masters, "effect-canvas", "meta.json"), JSON.stringify({}));
+    const later = new Date(Date.now() + 5_000);
+    fs.utimesSync(path.join(masters, "effect-canvas", "meta.json"), later, later);
+    const again = coversFromMasters(masters, { ...PROVENANCE, publicDir: pub, manifest });
+    expect(again.covers.filter((c) => !c.kept).map((c) => c.key)).toEqual(["effect-canvas"]);
+    expect(frames("effect-canvas.mp4")).toBe(96);
+  }, 30_000);
 
   it("reads a missing manifest as empty, and stops at one it can't read rather than write over it", () => {
     expect(readManifest(path.join(dir, "no-such-manifest.ts"))).toEqual({});
@@ -330,5 +374,18 @@ describe("covers from masters", () => {
     const orbit = [100, 100, 100, 110, 120, 130, 140, 130, 120, 110, 100, 100, 100].map((v) => Buffer.alloc(8, v));
     expect(loopsAlready(orbit, 8)).toBe(true);
     expect(loopsAlready(frames, 2)).toBe(false);
+  });
+
+  it("keeps every frame of a clip whose end matters, and dissolves from its last frame back to its first after it", () => {
+    const frames = Array.from({ length: 20 }, (_, i) => Buffer.from([i * 10, i * 10]));
+    const out = dissolveBack(frames, 4);
+    expect(out).toHaveLength(24);
+    // Every frame as it was, the first and the last too.
+    expect(out.slice(0, 20)).toEqual(frames);
+    // Then four frames from the last (190) towards the first (0): the loop back to the first is a step like theirs.
+    expect(out.slice(20).map((b) => b[0])).toEqual([152, 114, 76, 38]);
+    const steps = out.map((b, i) => Math.abs(b[0] - out[(i + 1) % out.length][0]));
+    expect(Math.max(...steps)).toBe(38);
+    expect(dissolveBack(frames, 0)).toBe(frames);
   });
 });

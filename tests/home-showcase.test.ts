@@ -28,6 +28,7 @@ import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { onPeak, thumbOf } from "@/lib/preset-cards";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
+import { mp4Seconds } from "./helpers/mp4-length";
 
 // homeShowcase() is kept with "use cache" and cacheLife, which only a Next render reads.
 vi.mock("next/cache", () => ({ cacheLife: () => {} }));
@@ -58,6 +59,11 @@ const rows = [...HOME_EFFECTS, ...HOME_MOTIONS, ...HOME_REVEALS];
 const homeIds = [...HOME_WALL.map((t) => t.id), ...rows.map((r) => r.id), ...HOME_BEFORE_AFTER.map((p) => p.id), ...studioIds];
 /** Effects whose first frame is the strong one, so their card rests on the poster as the camera motions' do (none now). */
 const ON_POSTER: string[] = [];
+/** The frames at a clip cover's end crossfaded into its first ones (LOOP_FADE at 24 fps, scripts/eval/lib/covers.mjs). */
+const LOOP_FADE_SECONDS = 6 / 24;
+
+/** A cover clip's length (s). */
+const clipSeconds = (url: string) => mp4Seconds(path.join(root, "public", url.split("?")[0]));
 
 describe("Home's showcase", () => {
   it("names real presets, each with its cover and, where the slot plays one, its clip", () => {
@@ -126,13 +132,15 @@ describe("Home's showcase", () => {
     const files = (dir: string) => fs.readdirSync(dir).filter((f) => f.endsWith(".jpg")).map((f) => f.replace(/\.jpg$/, "")).sort();
     expect(files(peakDir)).toEqual(Object.keys(PRESET_PEAKS).sort());
     expect(files(path.join(peakDir, "thumbs"))).toEqual(Object.keys(PRESET_PEAKS).sort());
-    // A peak sits in its clip's last second; its loop comes back to within the clip's first one and a half.
+    // A peak sits past the clip's still opening and before its closing crossfade, however long the clip is (4 s, or
+    // its whole length where its cover keeps it); its loop comes back to a point before the peak.
     for (const [id, { at, from }] of Object.entries(PRESET_PEAKS)) {
       expect(PRESET_PREVIEWS[id]?.video, id).toBeDefined();
-      expect(at, id).toBeGreaterThan(2.5);
-      expect(at, id).toBeLessThan(4);
+      const length = clipSeconds(PRESET_PREVIEWS[id].video!);
+      expect(at, id).toBeGreaterThan(1);
+      expect(at, id).toBeLessThan(length - LOOP_FADE_SECONDS);
       expect(from, id).toBeGreaterThan(0);
-      expect(from, id).toBeLessThan(1.5);
+      expect(from, id).toBeLessThanOrEqual(at);
     }
     // The preset header rests on the same frame (onPeak), and a preset without one keeps its poster.
     const effect = home.wall.find((t) => t.id === "effect-outfit-switch")!.card;
