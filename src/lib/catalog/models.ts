@@ -3,6 +3,7 @@ import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { QWEN21_DECODER, QWEN21_GPU, QWEN21_SPEED } from "@/lib/qwen21-speed";
+import { H3_DECODER, H3_GPU_TIER } from "@/lib/gpu/h3-tier";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
@@ -627,6 +628,9 @@ const open: ModelDef[] = [
           default: "fast",
           labels: { fast: "Fast · 8 steps", best: "Best · 20 steps, about 2.3x longer" },
         },
+        // On a card under 32 GB the run picks FastH3 V2 or Trim by itself (src/server/h3-gpu.ts); this picks one on any card.
+        H3_GPU_TIER,
+        H3_DECODER,
       ],
     },
     defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },
@@ -665,6 +669,37 @@ const open: ModelDef[] = [
     routes: [comfy("t2v", "wan22-t2v-14b"), comfy("i2v", "wan22-i2v-14b"), comfy("flf2v", "wan22-flf2v-14b"), KEYFRAME_FILM],
     options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [3, 5, 7], resolutions: ["480p", "720p"], seed: true, negativePrompt: true, endFrame: true },
     defaults: { aspectRatio: "16:9", duration: 5, resolution: "480p" },
+  }),
+  // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu): FastVideo's FastH3 V2 and FastH3 Trim, which MiniMax H3's GPU tier picks
+  // (Auto on a smaller card, or asked for: src/server/h3-gpu.ts). Listed for their licence, their switch in Models & licences
+  // and the pre-flight's readiness; never in a picker. The speeds and the 8 GB figure are FastVideo's measurements.
+  o({
+    id: "oss-minimax-h3-fast",
+    name: "MiniMax H3 · FastH3 V2",
+    vendor: "FastVideo",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "MiniMax H3 in 8 steps on a 16 GB GPU, from words, a start frame, or start and end frames · MiniMax H3 Community License",
+    routes: [
+      comfy("t2v", "minimax-h3-fast-t2v", "FastH3 V2, 8 steps"),
+      comfy("i2v", "minimax-h3-fast-i2v", "FastH3 V2, 8 steps; the clip takes the start frame's shape"),
+      comfy("flf2v", "minimax-h3-fast-flf2v", "FastH3 V2, 8 steps; the clip takes the start frame's shape"),
+    ],
+    options: { aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"], durations: [3, 5, 10, 15], resolutions: ["768p"], seed: true, endFrame: true, audio: "always", promptFormat: "minimax-h3" },
+    defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },
+    hidden: true,
+  }),
+  o({
+    id: "oss-minimax-h3-trim",
+    name: "MiniMax H3 · FastH3 Trim",
+    vendor: "FastVideo",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "MiniMax H3 from words on an 8-12 GB GPU: experimental, below FastH3 V2 in quality · MiniMax H3 Community License",
+    routes: [comfy("t2v", "minimax-h3-trim-t2v", "FastH3 Trim, 8 steps, experimental")],
+    options: { aspectRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"], durations: [3, 5, 10, 15], resolutions: ["768p"], seed: true, audio: "always", promptFormat: "minimax-h3" },
+    defaults: { aspectRatio: "16:9", duration: 5, resolution: "768p" },
+    hidden: true,
   }),
   o({
     id: "oss-wan22-5b",

@@ -1,4 +1,6 @@
 import type { ModelOptions } from "@/lib/catalog/types";
+import { gpuVramGb } from "./readiness";
+import type { FileKey, GpuInventory, RequirementIndex } from "./types";
 
 /**
  * MiniMax H3 on 8-31 GB graphics cards (research #10 §6.4, package nm10-h3-any-gpu). Pure: which H3 build a GPU runs, from
@@ -60,6 +62,9 @@ export interface H3TierChoice {
   /** Why a smaller build isn't picked (too little memory, an older card), in plain words. */
   reason?: string;
 }
+
+/** The hidden models whose switch, licence and pre-flight row each smaller build has (src/lib/catalog/models.ts). */
+export const H3_TIER_MODEL: Record<Exclude<H3Tier, "standard">, string> = { fast: "oss-minimax-h3-fast", trim: "oss-minimax-h3-trim" };
 
 /** Options → GPU tier's param (params.extra). Unset is Auto. */
 export const H3_TIER_PARAM = "gpuTier";
@@ -187,16 +192,6 @@ export function tierGraphFor(endpoint: string, tier: H3Tier | undefined, has: (i
   return g && has(g) ? g : undefined;
 }
 
-/**
- * The graph a MiniMax H3 run takes for its tier (params.extra.gpuTier as the plan decided it: src/server/h3-gpu.ts). An orbit
- * keeps the Orbit LoRA graph (Standard only); a smaller tier wins over Quality's Best (Best's 20 steps load the full model).
- */
-export function h3TierGraph(endpoint: string, extra: Record<string, unknown>, has: (id: string) => boolean): string {
-  if (extra.orbit === true) return endpoint;
-  const tier = extra[H3_TIER_PARAM];
-  return tierGraphFor(endpoint, tier === "fast" || tier === "trim" ? tier : undefined, has) ?? endpoint;
-}
-
 /** What a smaller tier changes, as the run's notes and the composer say it. */
 export const TIER_NOTES: Record<Exclude<H3Tier, "standard">, string> = {
   fast: "FastH3 V2: an 8-step build of MiniMax H3 for 16-31 GB GPUs. A start frame is followed less closely than on the full model",
@@ -219,9 +214,108 @@ export const H3_GPU_TIER: NonNullable<ModelOptions["controls"]>[number] = {
   ops: { standard: ["t2v", "i2v", "flf2v"], fast: ["t2v", "i2v", "flf2v"], trim: ["t2v"] },
 };
 
-/** The composer's note under MiniMax H3's options when a smaller tier is picked for an operation that has it. */
-export function h3TierNote(extra: Record<string, unknown> | undefined, op: string | undefined): string | undefined {
-  const tier = extra?.[H3_TIER_PARAM];
+/** Sol-H3-VAE as Comfy-Org repacked it (int8 ConvRot, 1.99 GB): the full graphs' optional decoder. */
+export const SOL_VAE = "minimax_h3_sol_vae_int8_convrot.safetensors";
+
+/**
+ * Options → Decoder: Fast decode swaps in Sol-H3-VAE, NVIDIA's 24-layer whole-clip decoder distilled from H3's (its card: a 5 s
+ * 768p clip decodes in 5.0 s instead of 12.5 s on an RTX 5090). Off by default; the full model only (it needs ComfyUI from
+ * 2026-10-28 on, and its memory grows with the clip).
+ */
+export const H3_DECODER: NonNullable<ModelOptions["controls"]>[number] = {
+  param: "decoder",
+  label: "Decoder",
+  values: ["standard", "fast"],
+  default: "standard",
+  labels: { standard: "Standard", fast: "Fast decode · 32 GB GPU" },
+  sets: { standard: {}, fast: { vae: SOL_VAE } },
+};
+
+/** Fast decode picked with a smaller tier: the FastH3 graphs keep the standard decoder. */
+export const TIER_DECODER_NOTE = "Fast decode needs a 32 GB GPU: this run uses the standard decoder";
+
+/** What Auto runs on the card the GPU check read, as the composer says it (no file formats: visitors read it). */
+export const AUTO_TIER_NOTES: Record<Exclude<H3Tier, "standard">, string> = {
+  fast: "On your GPU this runs as FastH3 V2, an 8-step build for 16-31 GB cards. A start frame is followed less closely than on the full model",
+  trim: "On your GPU this runs as FastH3 Trim, an experimental 8-step build for smaller cards: text to video only",
+};
+
+/**
+ * The composer's note under MiniMax H3's options: what a smaller tier changes when one is picked for an operation that has it,
+ * else (Auto) what the card the GPU check read runs (`auto`: BadgeMap.h3Tier).
+ */
+export function h3TierNote(extra: Record<string, unknown> | undefined, op: string | undefined, auto?: "fast" | "trim"): string | undefined {
+  const picked = extra?.[H3_TIER_PARAM];
+  if (picked === undefined && auto && op && H3_GPU_TIER.ops?.[auto]?.includes(op)) {
+    return [AUTO_TIER_NOTES[auto], ...(extra?.quality === "best" ? [TIER_BEST_NOTE] : []), ...(extra?.decoder === "fast" ? [TIER_DECODER_NOTE] : [])].join(". ");
+  }
+  const tier = picked;
   if ((tier !== "fast" && tier !== "trim") || !op || !H3_GPU_TIER.ops?.[tier]?.includes(op)) return undefined;
-  return extra?.quality === "best" ? `${TIER_NOTES[tier]}. ${TIER_BEST_NOTE}` : TIER_NOTES[tier];
+  return [TIER_NOTES[tier], ...(extra?.quality === "best" ? [TIER_BEST_NOTE] : []), ...(extra?.decoder === "fast" ? [TIER_DECODER_NOTE] : [])].join(". ");
+}
+
+// ---------------------------------------------------------------------------
+// The GPU pre-flight: the graph and file a card runs
+
+/** What a GPU check read about its first card, as the chooser takes it. */
+export function deviceOf(inv: GpuInventory | undefined): H3Device {
+  const d = inv?.devices[0];
+  return { vramGb: inv ? gpuVramGb(inv) : undefined, name: d?.name, type: d?.type, torch: inv?.comfy?.torch };
+}
+
+/**
+ * The index with a FastH3 graph needing `unet` in place of its default diffusion file (the card's NVFP4 or fp8 build), so the
+ * pre-flight checks and downloads the file the run loads. Unchanged when the file isn't one of the graph's optional files.
+ */
+export function withTierFile(idx: RequirementIndex, graph: string, unet: string | undefined): RequirementIndex {
+  const w = idx.workflows[graph];
+  const key: FileKey = `diffusion_models/${unet}`;
+  if (!w || !unet || !w.optional.includes(key) || w.files.includes(key)) return idx;
+  const files = [...w.files.filter((f) => !/^diffusion_models\/fastvideo_fasth3_/.test(f)), key].sort();
+  return { ...idx, workflows: { ...idx.workflows, [graph]: { ...w, files, optional: w.optional.filter((f) => f !== key) } } };
+}
+
+/**
+ * A tool's graphs on this card: each Standard H3 graph that has a graph for the card's tier runs that one, with the card's file.
+ * `studio`: a studio row drops the H3 graphs the tier has none for (Trim's start-frame modes), so the row shows what the card
+ * can run; a single model operation keeps them (it then needs a bigger GPU). `allowed`: the tier's switch in Models & licences.
+ */
+export function tierOnCard(
+  workflows: string[],
+  inv: GpuInventory,
+  idx: RequirementIndex,
+  opts: { studio?: boolean; allowed?: (tier: Exclude<H3Tier, "standard">) => boolean } = {},
+): { workflows: string[]; idx: RequirementIndex; choice?: H3TierChoice } {
+  if (!workflows.some((w) => H3_TIER_GRAPH[w])) return { workflows, idx };
+  const choice = chooseH3Tier(deviceOf(inv));
+  if (choice.tier === "standard") return { workflows, idx, choice };
+  if (opts.allowed && !opts.allowed(choice.tier)) return { workflows, idx };
+  let out = idx;
+  const graphs: string[] = [];
+  for (const w of workflows) {
+    const g = H3_TIER_GRAPH[w] ? tierGraphFor(w, choice.tier, (id) => !!idx.workflows[id]) : undefined;
+    if (g) {
+      out = withTierFile(out, g, choice.unet);
+      graphs.push(g);
+    } else if (!(opts.studio && H3_TIER_GRAPH[w])) graphs.push(w);
+  }
+  return graphs.length ? { workflows: [...new Set(graphs)], idx: out, choice } : { workflows, idx };
+}
+
+/** MiniMax H3's reference graphs (Character swap, the person remover on H3 Relay): no smaller build of H3 Ref2VA exists yet. */
+export const REF2VA_H3 = /^video-(character-swap-h3|person-remove-h3)/;
+
+/** What the pre-flight board says next to a row (src/server/gpu/readiness-service.ts): the build this card runs, or why none. */
+export function tierRowNote(workflows: string[], choice: H3TierChoice | undefined, inv: GpuInventory): { label: string; note?: string } | undefined {
+  if (choice && choice.tier !== "standard") {
+    const textOnly = choice.tier === "trim" ? "text to video only" : undefined;
+    const offload = choice.offload ? "part of it waits in system memory" : undefined;
+    const note = [textOnly, offload].filter(Boolean).join("; ");
+    return { label: choice.label, ...(note && { note: note[0].toUpperCase() + note.slice(1) }) };
+  }
+  const gb = gpuVramGb(inv);
+  if (typeof gb === "number" && gb < H3_STANDARD_GB && workflows.some((w) => REF2VA_H3.test(w))) {
+    return { label: "Standard", note: "Needs the full MiniMax H3 (32 GB): there's no smaller build for swaps and removals yet" };
+  }
+  return undefined;
 }

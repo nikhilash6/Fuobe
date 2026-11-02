@@ -3,8 +3,9 @@ import crypto from "node:crypto";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { fixPlan } from "@/lib/gpu/plan";
 import { CLEAN_VAE, DECODER_PARAM, GPU_PARAM } from "@/lib/qwen21-speed";
+import { H3_TIER_PARAM, H3_UNET_PARAM, withTierFile } from "@/lib/gpu/h3-tier";
 import { deviceLabel, needTargets, toolReadiness } from "@/lib/gpu/readiness";
-import type { FixPlan, ToolReadiness, ToolRef } from "@/lib/gpu/types";
+import type { FileKey, FixPlan, ToolReadiness, ToolRef } from "@/lib/gpu/types";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { authEnabled, crossSite, hostAllowed, validToken } from "../auth";
 import { loadIndex, preflightOn } from "./index-file";
@@ -29,6 +30,8 @@ export interface GateInput {
   modelId: string;
   /** Qwen-Image 2.1's Options → GPU as the run's plan decided it (previewGeneration's gpu): the graph checked is the one it runs. */
   gpu?: string;
+  /** MiniMax H3's tier and the card's file as the run's plan decided them (previewGeneration's h3): the graph and file checked are the ones it runs. */
+  h3?: { gpuTier: string; unet?: string };
   skip?: boolean;
   actor: string;
 }
@@ -45,7 +48,11 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
   let idx = loadIndex();
   const req = g.request;
   const has = (id: string) => !!idx.workflows[id];
-  const extra: Record<string, unknown> = { ...req.params?.extra, ...(g.gpu && { [GPU_PARAM]: g.gpu }) };
+  const extra: Record<string, unknown> = {
+    ...req.params?.extra,
+    ...(g.gpu && { [GPU_PARAM]: g.gpu }),
+    ...(g.h3 && { [H3_TIER_PARAM]: g.h3.gpuTier, ...(g.h3.unet && { [H3_UNET_PARAM]: g.h3.unet }) }),
+  };
   const id = resolveWorkflowId(g.route.endpoint, {
     op: g.op,
     clips: req.inputs?.videos?.length ?? 0,
@@ -56,11 +63,16 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
     has,
   });
   if (!has(id)) return { ok: true };
-  // Qwen-Image 2.1's Options → Decoder "Clean" loads the Texture-Fix VAE, an optional file of the graph: this run needs it.
-  const vae = `vae/${CLEAN_VAE}`;
-  if ((extra[DECODER_PARAM] === "clean" || extra.vae === CLEAN_VAE) && idx.files[vae] && !idx.workflows[id].files.includes(vae)) {
+  // A decoder an option picks (Qwen-Image 2.1's "Clean" Texture-Fix VAE, MiniMax H3's Fast decode) is an optional file of the
+  // graph: this run needs it.
+  const picked = extra[DECODER_PARAM] === "clean" ? CLEAN_VAE : extra.vae;
+  const vae: FileKey | undefined = typeof picked === "string" ? `vae/${picked}` : undefined;
+  if (vae && idx.files[vae] && idx.workflows[id].optional.includes(vae) && !idx.workflows[id].files.includes(vae)) {
     idx = { ...idx, workflows: { ...idx.workflows, [id]: { ...idx.workflows[id], files: [...idx.workflows[id].files, vae] } } };
   }
+  // MiniMax H3's FastH3 graphs load the card's own file (NVFP4 on Blackwell, fp8 without CUDA 13): that file is needed instead.
+  const unet = extra[H3_UNET_PARAM];
+  idx = withTierFile(idx, id, typeof unet === "string" ? unet : undefined);
   // The preset's route on the run's model (the one its preview was made with, or its own): its LoRAs are checked too.
   const preset = req.presetId ? presetTool(req.presetId, { modelId: g.modelId }) : null;
   const model = modelTool(g.modelId, g.op);

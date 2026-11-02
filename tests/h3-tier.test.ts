@@ -6,7 +6,6 @@ import {
   cuda13,
   gpuArch,
   h3TierFor,
-  h3TierGraph,
   h3TierNote,
   tierChoice,
   tierGraphFor,
@@ -154,17 +153,15 @@ describe("the graph each tier runs", () => {
     expect(tierOfGraph("minimax-h3-t2v")).toBeUndefined();
   });
 
-  it("an orbit keeps its Orbit LoRA graph; a smaller tier wins over Best", () => {
-    expect(h3TierGraph("minimax-h3-i2v", { gpuTier: "fast", orbit: true }, all)).toBe("minimax-h3-i2v");
-    expect(h3TierGraph("minimax-h3-t2v", { gpuTier: "trim", quality: "best" }, all)).toBe("minimax-h3-trim-t2v");
-    expect(h3TierGraph("minimax-h3-t2v", { gpuTier: "standard" }, all)).toBe("minimax-h3-t2v");
-    expect(h3TierGraph("minimax-h3-t2v", {}, all)).toBe("minimax-h3-t2v");
-  });
-
   it("the composer's note says what a smaller tier changes", () => {
     expect(h3TierNote({ gpuTier: "trim" }, "t2v")).toMatch(/experimental/);
     expect(h3TierNote({ gpuTier: "trim" }, "i2v")).toBeUndefined();
     expect(h3TierNote({ gpuTier: "fast", quality: "best" }, "i2v")).toMatch(/Best needs a 32 GB GPU/);
     expect(h3TierNote({}, "t2v")).toBeUndefined();
+    expect(h3TierNote({ gpuTier: "trim", decoder: "fast" }, "t2v")).toMatch(/Fast decode needs a 32 GB GPU/);
+    // Auto: what the card the GPU check read runs, in plain words.
+    expect(h3TierNote({}, "i2v", "fast")).toMatch(/^On your GPU this runs as FastH3 V2/);
+    expect(h3TierNote({}, "i2v", "trim")).toBeUndefined();
+    expect(h3TierNote({ gpuTier: "standard" }, "t2v", "trim")).toBeUndefined();
   });
 });

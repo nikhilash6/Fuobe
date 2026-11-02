@@ -5,6 +5,8 @@ import { fixPlan } from "@/lib/gpu/plan";
 import { badgeOf, deviceLabel, needTargets, rankOf, shortGpu, summaryOf, toolReadiness, type ReadinessContext } from "@/lib/gpu/readiness";
 import type { BadgeMap, FixPlan, GpuInventory, GpuProblem, ReadinessReport, RequirementIndex, StudioRow, ToolReadiness, ToolRef } from "@/lib/gpu/types";
 import { vramGb } from "@/lib/gpu/requirements";
+import { chooseH3Tier, deviceOf, tierOnCard, tierRowNote, H3_TIER_MODEL } from "@/lib/gpu/h3-tier";
+import { isOffered } from "../model-access";
 import { getSetting } from "../settings";
 import { loadIndex } from "./index-file";
 import { probe, readSnapshot, saveViews, checkWait, type Snapshot } from "./snapshots";
@@ -21,11 +23,20 @@ export function contextFor(t: ReadTarget): ReadinessContext {
   return { account: t.kind === "account" || (t.kind === "computer" && t.key !== "install"), computer: t.kind === "computer", isolatedUrl: t.kind === "install" && !!getSetting("comfyIsolatedUrl") };
 }
 
+/**
+ * MiniMax H3's graphs as this card runs them (src/lib/gpu/h3-tier.ts): FastH3 V2 or Trim, with the card's file, when the card is
+ * under 32 GB and that build is switched on in Models & licences. A studio row keeps only the modes the build has.
+ */
+export function onCard(tool: Tool, inv: GpuInventory, idx: RequirementIndex) {
+  return tierOnCard(tool.workflows, inv, idx, { studio: tool.ref.startsWith("studio:"), allowed: (tier) => isOffered(H3_TIER_MODEL[tier], "open") });
+}
+
 export function readinessOf(tool: Tool, inv: GpuInventory, idx: RequirementIndex, ctx: ReadinessContext): ToolReadiness {
   if (tool.local) {
     return { ref: tool.ref, name: tool.name, state: inv.reachable ? "ready" : "unknown", needs: [], have: [], downloadBytes: 0, vram: { needGb: 0, fit: "any" }, firstRun: [], unvalidated: false, unobservable: [] };
   }
-  return toolReadiness(tool.ref, tool.name, tool.workflows, tool.loras, inv, idx, { ...ctx, kind: tool.kind }, tool.cloud);
+  const card = inv.reachable ? onCard(tool, inv, idx) : { workflows: tool.workflows, idx };
+  return toolReadiness(tool.ref, tool.name, card.workflows, tool.loras, inv, card.idx, { ...ctx, kind: tool.kind }, tool.cloud);
 }
 
 interface Views {
@@ -44,12 +55,15 @@ export function buildViews(inv: GpuInventory, idx: RequirementIndex, ctx: Readin
       .filter((o) => o.state === "ready" || o.state === "almost")
       .sort((a, b) => rankOf(b.state) - rankOf(a.state))
       .slice(0, 4);
-    studios.push({ href: row.href, label: row.label, group: row.group, tool: { ...t, needs: t.needs.slice(0, 12), have: [] }, others });
+    const tier = tierRowNote(tool.workflows, onCard(tool, inv, idx).choice, inv);
+    studios.push({ href: row.href, label: row.label, group: row.group, tool: { ...t, needs: t.needs.slice(0, 12), have: [] }, others, ...(tier && { gpuTier: tier }) });
   }
   const badges: BadgeMap = { connected: true, checkedAt: inv.checkedAt, models: {}, presets: {} };
   const summary = summaryOf(inv, idx);
   if (summary.gpu) badges.gpu = shortGpu(summary.gpu);
   if (summary.vramGb) badges.vramGb = summary.vramGb;
+  const h3 = chooseH3Tier(deviceOf(inv)).tier;
+  if (h3 !== "standard" && isOffered(H3_TIER_MODEL[h3], "open")) badges.h3Tier = h3;
   for (const tool of openModelTools()) {
     const b = badgeOf(readinessOf(tool, inv, idx, ctx));
     if (b) badges.models[tool.ref.slice("model:".length)] = b;
