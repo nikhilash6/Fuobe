@@ -1373,6 +1373,15 @@ model("bria-expand", "Bria Expand", "Bria", "bria", "image", "Extend a picture t
 # ----- New speech models
 model("heygen-voice-turbo", "HeyGen Voice Turbo", "HeyGen", "heygen", "audio", "24 voices or an instant clone of yours, in 39 languages, for almost nothing",
       [("tts", "heygen/heygen-voice/turbo")], badges=["new", "fast"], pricing=("request", 0.004, "per 1k chars"))
+# Qwen3-TTS 1.7B on fal (nm10-voice-design; research new-models-10.json endpointRecords, read 2026-11-02): a voice made from
+# words, nine premade voices, and a clone in two steps (clone-voice turns the sample into an embedding file, text-to-speech
+# speaks with it; a saved voice keeps the file: src/server/voices.ts). The same model runs on your GPU (oss-qwen3-tts).
+# max_new_tokens is 200 codec tokens by default (12 Hz: about 16 s of speech): 4096 lets a long line finish.
+model("qwen-3-tts", "Qwen3-TTS (hosted)", "Alibaba Qwen", "qwen-tts", "audio", "Design a voice from a description, or clone one, in 10 languages",
+      [("voice-design", "fal-ai/qwen-3-tts/voice-design/1.7b"),
+       ("tts", "fal-ai/qwen-3-tts/text-to-speech/1.7b", "fal", {"cloneFirst": {"endpoint": "fal-ai/qwen-3-tts/clone-voice/1.7b", "output": "speaker_embedding"}})],
+      badges=["new"], pricing=("request", 0.09, "per 1k chars; cloning a sample adds $0.0008 per minute of it"),
+      defaults={"voice": "Vivian"}, api_defaults={"max_new_tokens": 4096}, controls=[("language", "Language")])
 model("gemini-3-8-flash-tts", "Gemini 3.8 Flash TTS", "Google", "gemini-tts", "audio", "30 Gemini voices with inline <laugh> and <sigh>",
       [("tts", "google/gemini-3.8-flash-tts")], badges=["new"], pricing=("request", 0.045, "per 1k chars"))
 
@@ -1816,6 +1825,21 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         opts["voiceClone"] = True
     if "voice" in kf and "[]" not in kf["voice"]:
         fmap["voice"] = kf["voice"]
+    # Voice design and cloning (Qwen3-TTS, nm10-voice-design): the voice in words, what the sample says, a cloned voice's file.
+    for k in ("voiceDescription", "voiceTranscript", "voiceEmbedding"):
+        if k in kf and kf[k].split(".")[0] in inputs:
+            fmap[k] = kf[k]
+    # A sample the endpoint can't take is cloned first by a sibling endpoint (fal's clone-voice), whose result file goes in
+    # voiceEmbedding (FieldMap.cloneFirst; src/server/providers/fal.ts): the route takes samples.
+    cf = ropts.get("cloneFirst")
+    if cf:
+        ce = EPS.get((provider, cf["endpoint"]))
+        ckf = (ce or {}).get("keyFields") or {}
+        if not ce or "referenceVoice" not in ckf or "voiceEmbedding" not in fmap:
+            warn(f"{m['id']}: {cf['endpoint']} can't clone for {ep}")
+        else:
+            fmap["cloneFirst"] = {"endpoint": cf["endpoint"], "audio": ckf["referenceVoice"], **({"text": ckf["voiceTranscript"]} if "voiceTranscript" in ckf else {}), "output": cf["output"]}
+            opts["voiceClone"] = True
     if "voice" in kf and "elevenlabs" in ep:
         opts["voices"] = ELEVEN_VOICES
     elif "voice" in kf and "voices" not in opts and voice_list(spec_at(inputs, kf["voice"])):

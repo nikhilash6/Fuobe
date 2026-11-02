@@ -804,11 +804,17 @@
      "endpoint": "fal-ai/qwen-3-tts/text-to-speech/1.7b"
     }
    ],
-   "comfy": "custom: 1038lab/ComfyUI-QwenTTS and others",
+   "comfy": "custom: 1038lab/ComfyUI-QwenTTS @ d8122a8b (GPL-3.0 code; Voice Design and Voice Clone nodes; the pack downloads the weights into models/TTS/Qwen3-TTS/<repo name>)",
    "released": "2026-01 (older, not in Fuobe)",
    "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "builtBy": "nm10-voice-design",
+   "revisions": {
+    "Qwen/Qwen3-TTS-12Hz-1.7B-Base": "fd4b254389122332181a7c3db7f27e918eec64e3",
+    "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice": "0c0e3051f131929182e2c023b9537f8b1c68adfe"
+   }
   },
   {
    "name": "VoxCPM2",
@@ -816,11 +822,12 @@
    "licence": "Apache-2.0",
    "vram": "~8 GB",
    "hosted": [],
-   "comfy": "custom: Saganaki22/ComfyUI-VoxCPM2, RunningHub ComfyUI_RH_VoxCPM",
+   "comfy": "custom: Saganaki22/ComfyUI-VoxCPM2 @ 0e52a6cd (Apache-2.0; VoxCPM2_TTS with voice_description, VoxCPM2_Clone: controllable without a transcript, ultimate with prompt_text; reference up to 50 s; weights downloaded into models/tts/VoxCPM/VoxCPM2)",
    "released": "2026-04-03 (older, trending)",
    "url": "https://huggingface.co/openbmb/VoxCPM2",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "builtBy": "nm10-voice-design"
   },
   {
    "name": "Fish Audio Drama 3",
@@ -832,7 +839,8 @@
    "released": "2026-10-01 weights; 2026-10-13 partner node",
    "url": "https://huggingface.co/fishaudio/drama-3",
    "inFuobe": false,
-   "confirmed": true
+   "confirmed": true,
+   "consideredNotBuilt": "nm10-voice-design (2026-11-02): no local ComfyUI node (only the Fish Audio API partner node) and not hosted on fal or Replicate; running it locally needs an SGLang-Omni worker (35B MoE, about 40 GB). Left for a later package."
   },
   {
    "name": "VEED Dubbing / Dubbing Pro",
@@ -3561,6 +3569,380 @@
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/edit-image",
    "capability": "edit",
    "fetched": "2026-11-01"
+  },
+  {
+   "family": "qwen-tts",
+   "vendor": "Alibaba Qwen",
+   "provider": "fal",
+   "status": "active",
+   "verified": true,
+   "checked": "2026-11-02",
+   "model": "Qwen3-TTS voice design",
+   "title": "Qwen 3 TTS - Voice Design [1.7B]",
+   "operation": "voice-design",
+   "endpoint": "fal-ai/qwen-3-tts/voice-design/1.7b",
+   "falCategory": "text-to-speech",
+   "keyFields": {
+    "prompt": "text",
+    "voiceDescription": "prompt"
+   },
+   "inputs": {
+    "subtalker_temperature": {
+     "nullable": true,
+     "minimum": 0,
+     "maximum": 1,
+     "type": "number",
+     "required": false,
+     "default": 0.9,
+     "desc": "Temperature for sub-talker sampling."
+    },
+    "temperature": {
+     "nullable": true,
+     "maximum": 1,
+     "type": "number",
+     "required": false,
+     "default": 0.9,
+     "desc": "Sampling temperature; higher => more random."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    },
+    "max_new_tokens": {
+     "nullable": true,
+     "minimum": 1,
+     "maximum": 8192,
+     "type": "integer",
+     "required": false,
+     "default": 200,
+     "desc": "Maximum number of new codec tokens to generate."
+    },
+    "top_k": {
+     "nullable": true,
+     "minimum": 0,
+     "type": "integer",
+     "required": false,
+     "default": 50,
+     "desc": "Top-k sampling parameter."
+    },
+    "text": {
+     "type": "string",
+     "required": true,
+     "desc": "The text to be converted to speech.",
+     "examples": [
+      "It's in the top drawer... wait, it's empty? No way, that's impossible! I'm sure I put it there!"
+     ]
+    },
+    "language": {
+     "type": "enum",
+     "values": [
+      "Auto",
+      "English",
+      "Chinese",
+      "Spanish",
+      "French",
+      "German",
+      "Italian",
+      "Japanese",
+      "Korean",
+      "Portuguese",
+      "Russian"
+     ],
+     "required": false,
+     "default": "Auto",
+     "desc": "The language of the voice to be designed.",
+     "examples": [
+      "English"
+     ]
+    },
+    "top_p": {
+     "nullable": true,
+     "minimum": 0,
+     "maximum": 1,
+     "type": "number",
+     "required": false,
+     "default": 1,
+     "desc": "Top-p sampling parameter."
+    },
+    "subtalker_top_k": {
+     "nullable": true,
+     "minimum": 0,
+     "type": "integer",
+     "required": false,
+     "default": 50,
+     "desc": "Top-k for sub-talker sampling."
+    },
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "Optional prompt to guide the style of the generated speech.",
+     "examples": [
+      "Speak in an incredulous tone, but with a hint of panic beginning to creep into your voice."
+     ]
+    },
+    "subtalker_dosample": {
+     "nullable": true,
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Sampling switch for the sub-talker."
+    },
+    "repetition_penalty": {
+     "nullable": true,
+     "minimum": 0,
+     "type": "number",
+     "required": false,
+     "default": 1.05,
+     "desc": "Penalty to reduce repeated tokens/codes."
+    },
+    "subtalker_top_p": {
+     "nullable": true,
+     "minimum": 0,
+     "maximum": 1,
+     "type": "number",
+     "required": false,
+     "default": 1,
+     "desc": "Top-p for sub-talker sampling."
+    }
+   },
+   "output": "audio (AudioFile)",
+   "price": "$0.09 per 1000 characters",
+   "notes": "prompt describes the voice, text is the line spoken. Returns audio only: no reusable voice id, so a designed voice is reused by cloning the chosen take (clone-voice, then text-to-speech with the embedding). max_new_tokens defaults to 200 codec tokens (12 Hz: about 16 s); Fuobe sends 4096.",
+   "sourceUrl": "https://fal.ai/models/fal-ai/qwen-3-tts/voice-design/1.7b/api",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/qwen-3-tts/voice-design/1.7b"
+  },
+  {
+   "family": "qwen-tts",
+   "vendor": "Alibaba Qwen",
+   "provider": "fal",
+   "status": "active",
+   "verified": true,
+   "checked": "2026-11-02",
+   "model": "Qwen3-TTS clone",
+   "title": "Qwen 3 TTS - Clone Voice [1.7B]",
+   "operation": "voice-clone",
+   "endpoint": "fal-ai/qwen-3-tts/clone-voice/1.7b",
+   "falCategory": "audio-to-audio",
+   "keyFields": {
+    "referenceVoice": "audio_url",
+    "voiceTranscript": "reference_text"
+   },
+   "inputs": {
+    "audio_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL to the reference audio file used for voice cloning. Must be at most 300 seconds (5 minutes) long; a short clip of clean speech is sufficient.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_inputs/qwen3-tts/clone_in.mp3"
+     ]
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    },
+    "reference_text": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional reference text that was used when creating the speaker embedding. Providing this can improve synthesis quality when using a cloned voice.",
+     "examples": [
+      "Okay. Yeah. I resent you. I love you. I respect you. But you know what? You blew it! And it is all thanks to you."
+     ]
+    }
+   },
+   "output": "speaker_embedding (File, safetensors)",
+   "price": "$0.0008 per minutes",
+   "notes": "Step 1 of a clone: audio_url (up to 5 minutes) -> speaker_embedding, a safetensors file. Step 2 is text-to-speech/1.7b with speaker_voice_embedding_file_url.",
+   "sourceUrl": "https://fal.ai/models/fal-ai/qwen-3-tts/clone-voice/1.7b/api",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/qwen-3-tts/clone-voice/1.7b"
+  },
+  {
+   "family": "qwen-tts",
+   "vendor": "Alibaba Qwen",
+   "provider": "fal",
+   "status": "active",
+   "verified": true,
+   "checked": "2026-11-02",
+   "model": "Qwen3-TTS",
+   "title": "Qwen 3 TTS - Text to Speech [1.7B]",
+   "operation": "tts",
+   "endpoint": "fal-ai/qwen-3-tts/text-to-speech/1.7b",
+   "falCategory": "text-to-speech",
+   "keyFields": {
+    "prompt": "text",
+    "voice": "voice",
+    "voiceEmbedding": "speaker_voice_embedding_file_url",
+    "voiceTranscript": "reference_text"
+   },
+   "inputs": {
+    "subtalker_temperature": {
+     "nullable": true,
+     "minimum": 0,
+     "maximum": 1,
+     "type": "number",
+     "required": false,
+     "default": 0.9,
+     "desc": "Temperature for sub-talker sampling."
+    },
+    "top_k": {
+     "nullable": true,
+     "minimum": 0,
+     "type": "integer",
+     "required": false,
+     "default": 50,
+     "desc": "Top-k sampling parameter."
+    },
+    "subtalker_top_k": {
+     "nullable": true,
+     "minimum": 0,
+     "type": "integer",
+     "required": false,
+     "default": 50,
+     "desc": "Top-k for sub-talker sampling."
+    },
+    "top_p": {
+     "nullable": true,
+     "minimum": 0,
+     "maximum": 1,
+     "type": "number",
+     "required": false,
+     "default": 1,
+     "desc": "Top-p sampling parameter."
+    },
+    "reference_text": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional reference text that was used when creating the speaker embedding. Providing this can improve synthesis quality when using a cloned voice.",
+     "examples": [
+      "Okay. Yeah. I resent you. I love you. I respect you. But you know what? You blew it! And it is all thanks to you."
+     ]
+    },
+    "subtalker_top_p": {
+     "nullable": true,
+     "minimum": 0,
+     "maximum": 1,
+     "type": "number",
+     "required": false,
+     "default": 1,
+     "desc": "Top-p for sub-talker sampling."
+    },
+    "temperature": {
+     "nullable": true,
+     "maximum": 1,
+     "type": "number",
+     "required": false,
+     "default": 0.9,
+     "desc": "Sampling temperature; higher => more random."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    },
+    "subtalker_dosample": {
+     "nullable": true,
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Sampling switch for the sub-talker."
+    },
+    "voice": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "Vivian",
+      "Serena",
+      "Uncle_Fu",
+      "Dylan",
+      "Eric",
+      "Ryan",
+      "Aiden",
+      "Ono_Anna",
+      "Sohee"
+     ],
+     "required": false,
+     "desc": "The voice to be used for speech synthesis, will be ignored if a speaker embedding is provided. Check out the **[documentation](https://github.com/QwenLM/Qwen3-TTS/tree/main?tab=readme-ov-file#custom-voice-generate)** for each voice's details and which language they primarily support.",
+     "examples": [
+      "Vivian"
+     ]
+    },
+    "text": {
+     "type": "string",
+     "required": true,
+     "desc": "The text to be converted to speech.",
+     "examples": [
+      "I am solving the equation: x = [-b ± √(b²-4ac)] / 2a? Nobody can — it's a disaster (◍•͈⌔•͈◍), very sad!"
+     ]
+    },
+    "language": {
+     "type": "enum",
+     "values": [
+      "Auto",
+      "English",
+      "Chinese",
+      "Spanish",
+      "French",
+      "German",
+      "Italian",
+      "Japanese",
+      "Korean",
+      "Portuguese",
+      "Russian"
+     ],
+     "required": false,
+     "default": "Auto",
+     "desc": "The language of the voice.",
+     "examples": [
+      "English"
+     ]
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional prompt to guide the style of the generated speech. This prompt will be ignored if a speaker embedding is provided.",
+     "examples": [
+      "Very happy."
+     ]
+    },
+    "speaker_voice_embedding_file_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "URL to a speaker embedding file in safetensors format, from `fal-ai/qwen-3-tts/clone-voice` endpoint. If provided, the TTS model will use the cloned voice for synthesis instead of the predefined voices.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_outputs/qwen3-tts/clone_out.safetensors"
+     ]
+    },
+    "max_new_tokens": {
+     "nullable": true,
+     "minimum": 1,
+     "maximum": 8192,
+     "type": "integer",
+     "required": false,
+     "default": 200,
+     "desc": "Maximum number of new codec tokens to generate."
+    },
+    "repetition_penalty": {
+     "nullable": true,
+     "minimum": 0,
+     "type": "number",
+     "required": false,
+     "default": 1.05,
+     "desc": "Penalty to reduce repeated tokens/codes."
+    }
+   },
+   "output": "audio (AudioFile)",
+   "price": "$0.09 per 1000 characters",
+   "notes": "Nine premade voices (voice enum) or a cloned voice (speaker_voice_embedding_file_url from clone-voice; voice is then ignored). Its own prompt field is a style hint for a premade voice, not a voice design.",
+   "sourceUrl": "https://fal.ai/models/fal-ai/qwen-3-tts/text-to-speech/1.7b/api",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/qwen-3-tts/text-to-speech/1.7b"
   },
   {
    "family": "idol",

@@ -25,6 +25,7 @@ import { CONTEXT_TOOLS } from "./context-tools";
 import { defineTool, type JobPlace, type ResultContent, type ToolContext, type ToolDef, type ToolOutcome } from "./define";
 // Fills STUDIO_ROUTES with the studio modules (Layers, Shorts, dub, Faceless, Ads, Captions).
 import "./studio-routes";
+import { SKILL_TOOLS } from "./skill-tools";
 import { STUDIO_TOOLS } from "./studio-tools";
 
 export type { ToolContext, ToolOutcome };
@@ -546,8 +547,9 @@ const storyboard = defineTool({
 export const TOOLS: ToolDef<any>[] = [searchModels, listElementsTool, listRecent, checkGenerations, generate, storyboard, defineTool(katanaTool)];
 export const getTool = (name: string) => TOOLS.find((t) => t.name === name);
 
-// Skills, memory and project sources; then whole studios (layers, restyle, dub, faceless, ads, captions).
-TOOLS.push(...CONTEXT_TOOLS, ...STUDIO_TOOLS);
+// Skills, memory and project sources; then whole studios (layers, restyle, dub, faceless, ads, captions); then saved
+// skills that run by themselves (run_skill).
+TOOLS.push(...CONTEXT_TOOLS, ...STUDIO_TOOLS, ...SKILL_TOOLS);
 
 /** The approval card's heading for one gated call. */
 export function cardTitle(name: string, input: unknown): string {
@@ -567,10 +569,11 @@ export function apiSchema(schema: z.ZodType): Anthropic.Beta.BetaTool.InputSchem
     if (!node || typeof node !== "object") return node;
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(node)) {
-      if (["$schema", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "maxItems", "minItems", "multipleOf"].includes(k)) continue;
+      if (["$schema", "propertyNames", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "maxItems", "minItems", "multipleOf"].includes(k)) continue;
       out[k] = k === "properties" ? Object.fromEntries(Object.entries(v as object).map(([p, s]) => [p, walk(s)])) : walk(v);
     }
-    if (out.type === "object") out.additionalProperties = false;
+    // A map (a skill's values by input id) says what its values are; every other object is closed.
+    if (out.type === "object" && (out.additionalProperties === undefined || out.additionalProperties === true || out.properties)) out.additionalProperties = false;
     return out;
   };
   return walk(json) as Anthropic.Beta.BetaTool.InputSchema;
@@ -587,12 +590,13 @@ export function apiTools(): Anthropic.Beta.BetaTool[] {
 
 const describeIssues = (issues: { path: PropertyKey[]; message: string }[]) => `Invalid input: ${issues.map((i) => `${i.path.map(String).join(".")} ${i.message}`).join("; ")}`;
 
-/** The error a tool call's arguments would get, or null when they're valid. */
-export function validateInput(name: string, input: unknown): string | null {
+/** The error a tool call's arguments would get, or null when they're valid (with a chat's context, its own check too). */
+export function validateInput(name: string, input: unknown, ctx?: ToolContext): string | null {
   const tool = getTool(name);
   if (!tool) return `Unknown tool ${name}`;
   const parsed = tool.schema.safeParse(input);
-  return parsed.success ? null : describeIssues(parsed.error.issues);
+  if (!parsed.success) return describeIssues(parsed.error.issues);
+  return ctx && tool.check ? tool.check(parsed.data, ctx) : null;
 }
 
 /**

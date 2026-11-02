@@ -569,6 +569,30 @@
     "error": null,
     "at": "2026-10-16T23:33:13.039Z"
   },
+  "tts-qwen3-clone": {
+    "sha256": "9613c595d07d199f313dcb2f062de2536b1632c213c9935e33d0095aefe31b74",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Qwen3-TTS voice clone' not found. The custom node may not be installed. (Node ID '#2')",
+    "at": "2026-11-02T01:16:37.000Z"
+  },
+  "tts-qwen3-design": {
+    "sha256": "5c70e3e4903dd5706aed8017ffdf87f202f3fb540630a33bc52709c6ac04f68c",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Qwen3-TTS voice design' not found. The custom node may not be installed. (Node ID '#1')",
+    "at": "2026-11-02T01:16:36.988Z"
+  },
+  "tts-voxcpm2": {
+    "sha256": "ae059a0a1545f70fc206a7b2d4b1c92b6af3f9c512e3f2af22827dc554267189",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'VoxCPM2 TTS (voice design)' not found. The custom node may not be installed. (Node ID '#1')",
+    "at": "2026-11-02T01:16:37.016Z"
+  },
+  "tts-voxcpm2-clone": {
+    "sha256": "4bc6acef46ce4db396ab36471a94971126bab73cc3fda4d5cf99ce0339c0d4c9",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'VoxCPM2 voice clone' not found. The custom node may not be installed. (Node ID '#2')",
+    "at": "2026-11-02T01:16:37.030Z"
+  },
   "upscale-image-esrgan": {
     "sha256": "e26aac88303d6b46d78b1adbf43d1b3d6b07c88650c94e6309ec4971e6e22ef9",
     "validated": true,

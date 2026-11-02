@@ -36,6 +36,7 @@ import { isLegacySoulId, SOUL_ID_PHOTOS } from "@/lib/catalog/training";
 import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { voiceOrigin } from "@/lib/voice-design";
 
 const TIPS: Record<ElementKind, string> = {
   character: `3+ clear photos of one person (${SOUL_ID_PHOTOS.recommended}+ to train a Soul ID, up to ${SOUL_ID_PHOTOS.max}): different angles, at least one full-body, no sunglasses, filters or group shots.`,
@@ -204,7 +205,18 @@ function ElementForm({ onOpenChange, element, defaultKind = "character", onSaved
           {kind !== "voice" && photos.length > 0 && <span className="tabular-nums"> · {photos.length}/{MAX_PHOTOS}</span>}
         </p>
         {kind === "voice" ? (
-          <VoiceSample value={photos[0]} onChange={(v) => setPhotos(v ? [{ ...v, id: nanoid(6) }] : [])} />
+          <>
+            <VoiceSample value={photos[0]} onChange={(v) => setPhotos(v ? [{ ...v, id: nanoid(6) }] : [])} />
+            {!photos[0] && (
+              <p className="text-[12px] text-muted-foreground">
+                No recording?{" "}
+                <Link href="/audio/design" className="font-medium text-brand-text underline underline-offset-2">
+                  Design a voice
+                </Link>{" "}
+                from a description instead.
+              </p>
+            )}
+          </>
         ) : (
           <PhotoGrid photos={photos} setPhotos={setPhotos} />
         )}
@@ -326,6 +338,7 @@ function ElementCard({ el }: { el: StudioElement }) {
         <div className="min-w-0">
           <p className="truncate font-medium">{el.name}</p>
           <HandleCopy handle={el.handle} />
+          {el.kind === "voice" && el.voice && <p className="truncate text-[11px] text-muted-foreground" title={el.voice.description}>{voiceOrigin(el.voice)}</p>}
         </div>
         <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground">
           <Icon className="size-3" /> {elementKindInfo(el.kind).label}
