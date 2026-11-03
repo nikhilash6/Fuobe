@@ -52,6 +52,8 @@ import { toastError } from "@/lib/refusals";
 import { priceLine, useRunPreview } from "./hooks";
 import { ModelCard } from "./model-card";
 import { RefineOption } from "./refine-option";
+import { OtherSides, useOtherSidesOffered } from "./other-sides";
+import { IDOL_VIEWS_NOTE, canMakeOtherSides, fillOtherSides } from "@/lib/av/idol-views";
 import { HI3D_MODEL, withRefine, type Hi3dResolution } from "@/lib/av/hi3d";
 
 /**
@@ -361,6 +363,18 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const licence = modelId ? info[modelId]?.licence : undefined;
   const items = (results.data ?? []).filter((g) => g.feature !== "image-to-3d-step");
   const setSide = (s: ViewSide) => (v: SlotValue | null) => setViews((cur) => ({ ...cur, [s]: v }));
+  // From several images on your GPU, with only the front in: Idol 3D makes the other three sides from it (idol-8).
+  const sidesOffered = useOtherSidesOffered();
+  const front = views.front;
+  const [sidesBusy, setSidesBusy] = useState(false);
+  const otherSides = mode === "multi" && engine === "open" && sidesOffered && !!front && !front.uploading && (sidesBusy || canMakeOtherSides(views));
+  // The views it made, so the note about them stays while they're in the slots.
+  const [madeSides, setMadeSides] = useState<string[]>([]);
+  const takeSides = useCallback((made: Partial<Record<ViewSide, string>>) => {
+    setMadeSides((cur) => [...cur, ...Object.values(made).filter((u): u is string => !!u)]);
+    setViews((cur) => fillOtherSides(cur, made, (url) => ({ ref: url, preview: url, kind: "image", source: "generation" })));
+  }, []);
+  const showsMade = mode === "multi" && VIEW_SIDES.some((s) => s !== "front" && !!views[s] && madeSides.includes(views[s]!.ref));
   return (
     <ToolShell title="Image to 3D" selfHostedOnly>
       <Suspense fallback={null}>
@@ -405,6 +419,10 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
               The front and at least one more side. Same object, same distance and light in each; a plain background helps.
               {engine === "open" && ` The open model puts each photo on the side you add it to. ${SIDES_HINT}`}
             </p>
+            {otherSides && front && (
+              <OtherSides className="mt-3" photo={front.ref} asPhoto={front.source !== "generation"} label="Make the other sides from the front (Idol 3D)" onMade={takeSides} onBusy={setSidesBusy} />
+            )}
+            {!otherSides && showsMade && <p className="mt-2 text-[12px] text-muted-foreground">Made by Idol 3D: {IDOL_VIEWS_NOTE.charAt(0).toLowerCase() + IDOL_VIEWS_NOTE.slice(1)}</p>}
           </Panel>
         ) : mode === "text" ? (
           <Panel title="Describe the object">

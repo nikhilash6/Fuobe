@@ -2,6 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
+import { IDOL_VIEW_ORDER, idolViewMeta, wantsIdolViews } from "@/lib/av/idol-views";
 import { cueText, parseCues, type Cue } from "@/lib/cues";
 import { H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
 import { HAND_OFF, windowArtifact } from "@/lib/catalog/remove-object";
@@ -324,6 +325,8 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
     // A splat is a real one (scripts/gen-demo-splat.mjs), so the splat viewer opens in demo mode: an .spz with its
     // orbit video on the open engine (as the TripoSplat and Idol 3D graphs write), a .ply on the cloud (fal's).
     case "splat":
+      // Idol 3D's four views of the object (front, left, back, right), as image-to-views-idol returns them.
+      if (meta.idolViews) return IDOL_VIEW_ORDER.map((side, index) => ({ url: svgUri(demoSvg(`${side} view`, "1:1", index)), kind: "image" as const, contentType: "image/svg+xml", meta: { ...idolViewMeta(index), role: "tiles", demo: true } }));
       return meta.openSplat
         ? [
             { url: "sample:demo-splat.spz", kind: "model3d", contentType: "model/x-spz", meta: { demo: true, format: "spz", role: "splat" } },
@@ -447,6 +450,8 @@ export const mockProvider: ProviderAdapter = {
         format: input.format,
         clips: input.audios?.length,
         frames: route.op === "extract-frames" ? input.extra?.max_frames : undefined,
+        // Idol 3D asked for its four views of the object (src/lib/av/idol-views.ts).
+        idolViews: route.op === "splat" && wantsIdolViews(input.extra),
         // Remove background: which file the demo stands for (the cut-out or its alpha mask).
         matteOutput: route.op === "bg-remove-video" ? (input.matteOutput ?? model.options.matteOutputs?.[0] ?? "cutout") : undefined,
         // The painted eraser's second output: the window's last tracked mask (video-inpaint-wan-vace-painted), saved

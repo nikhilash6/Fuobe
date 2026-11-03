@@ -162,6 +162,7 @@ describe("round-4 ComfyUI workflows", () => {
       "video-mask-h3-relay",
       // Idol 3D's clean splats (idol-2): ComfyUI-Idol isn't on the validation server (tests/idol-clean.test.ts).
       "image-to-splat-idol-clean",
+      "image-to-views-idol",
       "video-regenerate-h3",
       "video-h3-t2v-2k",
       "video-regenerate-h3-latent",

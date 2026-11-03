@@ -45,6 +45,7 @@ import { HI3D_PARAM, strictHi3dResolution } from "@/lib/av/hi3d";
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { IDOL_PACK, IDOL_PACK_CLASS, IDOL_WORKFLOWS, idolGraphValues, idolKept } from "@/lib/av/model3d";
+import { IDOL_VIEWS_NEEDS_PACK, IDOL_VIEWS_PARAM, IDOL_VIEWS_WORKFLOW, idolViewMeta } from "@/lib/av/idol-views";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { expandH3References, h3ReferenceProblem } from "@/lib/h3-references";
@@ -590,6 +591,8 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
         if (spec?.role === "splat" && idolSplat) Object.assign(meta, idolSplat);
         // Qwen-Image-Layered saves its layers back to front.
         if (spec?.role === "layers") Object.assign(meta, { z: i, name: i === 0 ? "Background" : `Layer ${i}` });
+        // Idol 3D's four views: one batch, front first, then the object's left, back and right (src/lib/av/idol-views.ts).
+        if (spec?.role === "tiles" && manifest?.id === IDOL_VIEWS_WORKFLOW) Object.assign(meta, idolViewMeta(i));
         if (Object.keys(meta).length) o.meta = meta;
         files.push(o);
       });
@@ -1307,6 +1310,10 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (endpoint === IDOL_WORKFLOWS.core && loadManifest().workflows.some((w) => w.id === IDOL_WORKFLOWS.clean) && (await ctx.idolPack?.().catch(() => undefined)) === true) {
     endpoint = IDOL_WORKFLOWS.clean;
   }
+  // Idol 3D's four views need the pack's camera (IdolCamera): with no pack (or the pack switched off in Settings), say so
+  // instead of a missing-node error. Unknown (someone's computer, a server that didn't answer): their ComfyUI has the last word.
+  if (endpoint === IDOL_VIEWS_WORKFLOW && (await ctx.idolPack?.().catch(() => undefined)) === false) throw new ProviderError(IDOL_VIEWS_NEEDS_PACK, 400);
+  delete extra[IDOL_VIEWS_PARAM];
   delete extra.productShot;
   delete extra[SPEED_PARAM];
   delete extra[GPU_PARAM];
@@ -1886,7 +1893,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     }
   }
   // Idol 3D: "It's a photo" is the clean graph's "real" crop (the core graph's photo switch), then the pack's pruning.
-  if (manifest.id === IDOL_WORKFLOWS.core || manifest.id === IDOL_WORKFLOWS.clean) {
+  if (manifest.id === IDOL_WORKFLOWS.core || manifest.id === IDOL_WORKFLOWS.clean || manifest.id === IDOL_VIEWS_WORKFLOW) {
     Object.assign(values, idolGraphValues(extra, (k) => !!b[k as BindingKey]));
     for (const k of ["cropMode", "photoCrop", "minOpacity", "maxScale"]) delete extra[k];
   }
@@ -2598,7 +2605,7 @@ export const comfyProvider: ProviderAdapter = {
     }
     if (!res.ok || !body.prompt_id) {
       // The pack may have gone since the server said it had it: the next run asks again (and runs the core graph without it).
-      if (manifest.id === IDOL_WORKFLOWS.clean) forgetComfyClass(IDOL_PACK_CLASS, worker);
+      if (manifest.id === IDOL_WORKFLOWS.clean || manifest.id === IDOL_VIEWS_WORKFLOW) forgetComfyClass(IDOL_PACK_CLASS, worker);
       const refusal = promptRefusal(body, res.status, manifest, input.loras ?? [], worker);
       if (!refusal.message && !res.ok && worker === "isolated") throw isolatedAnswer("the prompt", res.status);
       throw Object.assign(new ProviderError(refusal.message ?? `ComfyUI /prompt failed (${res.status})`, res.status), refusal.fix ? { fix: refusal.fix } : {});
