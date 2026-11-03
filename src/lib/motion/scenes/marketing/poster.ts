@@ -310,7 +310,7 @@ export function posterScene(def: PosterDef): Scene {
         // The person's own clip keeps its own picture: no grain or vignette over it (its dim and scrim are the only shade).
         if (built.grain !== false && !clip) layers.push({ role: "grain", nodes: [grain({ w: design.w, h: design.h, seed: recipe.seed, frame: Math.round(t * recipe.fps), dark: ctx.dark, ...(typeof built.grain === "number" && { amount: built.grain }) })] });
         if (built.vignette !== false && !unlit && !clip) layers.push({ role: "finish", nodes: [vignette({ w: design.w, h: design.h, strength: typeof built.vignette === "number" ? built.vignette : 0.14, color: withLightness(pal.ground, 0.08) })] });
-        const fl = flashNode(design.w, design.h, flash);
+        const fl = clip ? null : flashNode(design.w, design.h, flash);
         if (fl) layers.push({ role: "light", nodes: [fl] });
         const cam = home || locked ? { x: 0, y: 0 } : (built.camera?.(tc) ?? { x: 0, y: 0 });
         const camera = { x: cam.x + nudge.x, y: cam.y + nudge.y };
