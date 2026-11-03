@@ -43,6 +43,7 @@ import {
 import { HI3D_PARAM, strictHi3dResolution } from "@/lib/av/hi3d";
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
+import { IDOL_PACK, IDOL_PACK_CLASS, IDOL_WORKFLOWS, idolGraphValues, idolKept } from "@/lib/av/model3d";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { expandH3References, h3ReferenceProblem } from "@/lib/h3-references";
@@ -510,6 +511,11 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
     .filter((o) => o.role === "language")
     .map((o) => textsOf(outputs[o.node])[0]?.trim())
     .find(Boolean);
+  // Idol 3D: the clean graph's count of the Gaussians its prune kept (a PreviewAny "report") goes on the splat; the core
+  // graph's splat says it wasn't pruned.
+  const idolClean = manifest?.id === IDOL_WORKFLOWS.clean;
+  const kept = idolClean ? declared.filter((o) => o.role === "report").map((o) => idolKept(textsOf(outputs[o.node])[0])).find((n) => n !== undefined) : undefined;
+  const idolSplat = idolClean ? { pruned: true, ...(kept !== undefined && { kept }) } : manifest?.id === IDOL_WORKFLOWS.core ? { pruned: false } : undefined;
   // OCR: the size the model saw (a PreviewAny "frame") goes with the lines it read.
   const frame = declared
     .filter((o) => o.role === "frame")
@@ -519,7 +525,7 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
   const pick = (type: string) => {
     for (const nodeId of order) {
       const spec: ManifestOutput | undefined = declared.find((o) => o.node === nodeId);
-      if (spec?.role === "language" || spec?.role === "frame") continue;
+      if (spec?.role === "language" || spec?.role === "frame" || (idolClean && spec?.role === "report")) continue;
       const ui = outputs[nodeId] ?? {};
       const texts = textsOf(ui);
       const found: { key: string; f: HistoryFile }[] = [];
@@ -552,6 +558,7 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
         if (spec?.role) meta.role = spec.role;
         // A splat says what it is (the viewer and the download name go by it): spz, ply or ksplat.
         if (spec?.role === "splat" && ext) meta.format = ext;
+        if (spec?.role === "splat" && idolSplat) Object.assign(meta, idolSplat);
         // Qwen-Image-Layered saves its layers back to front.
         if (spec?.role === "layers") Object.assign(meta, { z: i, name: i === 0 ? "Background" : `Layer ${i}` });
         if (Object.keys(meta).length) o.meta = meta;
@@ -821,6 +828,42 @@ export async function comfyDbsModels(worker: ComfyWorker = "main", maxAgeMs = 10
 }
 
 declare global {
+  /** Whether each ComfyUI address had a node class (GET /object_info/<class>), by address and class, and when. */
+  var __fuobeComfyClasses: Map<string, { has: boolean; at: number }> | undefined;
+}
+
+/**
+ * Whether the connected ComfyUI has a node class (GET /object_info/<class> answers it; a ComfyUI without it answers
+ * {}), kept for a minute; undefined when the server can't say (unreachable: asked again next time), and on someone's
+ * computer, which the server never asks. forgetComfyClass drops the answer (a run refused for a missing node).
+ */
+export async function comfyHasClass(cls: string, worker: ComfyWorker = "main", maxAgeMs = 60_000): Promise<boolean | undefined> {
+  if (computerScope()) return undefined;
+  const url = baseUrl(worker);
+  if (!url) return undefined;
+  const cache = (globalThis.__fuobeComfyClasses ??= new Map());
+  const key = `${url} ${cls}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < maxAgeMs) return hit.has;
+  return oneAsk(`/object_info/${cls} ${url}`, async () => {
+    const info = await comfyJson<unknown>(`/object_info/${encodeURIComponent(cls)}`, worker).catch(() => undefined);
+    if (!info || typeof info !== "object" || Array.isArray(info)) {
+      cache.delete(key);
+      return undefined;
+    }
+    const has = cls in info;
+    cache.set(key, { has, at: Date.now() });
+    return has;
+  });
+}
+
+/** Forget what a ComfyUI said about a node class (comfyHasClass asks again). */
+export function forgetComfyClass(cls: string, worker: ComfyWorker = "main"): void {
+  const url = baseUrl(worker);
+  if (url) globalThis.__fuobeComfyClasses?.delete(`${url} ${cls}`);
+}
+
+declare global {
   /** The RE-USE files each ComfyUI address listed last (GET /models/reuse; null: no reuse folder, so no ComfyUI-RE-USE), and when. */
   var __fuobeComfyReuse: Map<string, { models?: ReuseModel[] | null; at: number }> | undefined;
 }
@@ -1041,6 +1084,8 @@ export interface PrepareContext {
   dbsModels?: () => Promise<DbsModel[] | undefined>;
   /** The RE-USE files on the server's disk (GET /models/reuse): null without ComfyUI-RE-USE, undefined when it can't say. */
   reuseModels?: () => Promise<ReuseModel[] | null | undefined>;
+  /** Whether the server has the ComfyUI-Idol pack (GET /object_info/IdolPruneSplat): Idol 3D then runs its clean graph. */
+  idolPack?: () => Promise<boolean | undefined>;
   /**
    * The route puts the run's one LoRA in the graph's own LoRA slot (ModelRoute.loraSlot: Fuobe Speak's FusioniX on kijai's
    * InfiniteTalk graph, with the settings it goes with). Without it a graph with no model loader refuses a LoRA.
@@ -1209,7 +1254,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // The variant this request runs (one graph per clip count, the single-track soundtrack, EXR frames, a Fun Camera pose,
   // the product shot): src/lib/comfy-variants.ts, which the GPU pre-flight's gate reads too. A LoRA mixed into a pose is
   // injected on its experts as on the plain image-to-video graph.
-  const endpoint = resolveWorkflowId(endpointTemplate, {
+  let endpoint = resolveWorkflowId(endpointTemplate, {
     op: ctx.op,
     clips: clips.length,
     images: input.images?.length ?? 0,
@@ -1219,6 +1264,11 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     extra,
     has: (id) => loadManifest().workflows.some((w) => w.id === id),
   });
+  // Idol 3D: the clean graph (ComfyUI-Idol's crop, the pruned splat, the input-view still) where the server has the pack,
+  // else the core graph, whose saved file isn't pruned (its splat says so: meta.pruned false).
+  if (endpoint === IDOL_WORKFLOWS.core && loadManifest().workflows.some((w) => w.id === IDOL_WORKFLOWS.clean) && (await ctx.idolPack?.().catch(() => undefined)) === true) {
+    endpoint = IDOL_WORKFLOWS.clean;
+  }
   delete extra.productShot;
   delete extra[SPEED_PARAM];
   delete extra[GPU_PARAM];
@@ -1767,6 +1817,11 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     if (own && typeof values.video === "string" && typeof values.image === "string" && typeof values.filenamePrefix === "string") {
       reviewInputs = { video: values.video, image: values.image, prefix: values.filenamePrefix };
     }
+  }
+  // Idol 3D: "It's a photo" is the clean graph's "real" crop (the core graph's photo switch), then the pack's pruning.
+  if (manifest.id === IDOL_WORKFLOWS.core || manifest.id === IDOL_WORKFLOWS.clean) {
+    Object.assign(values, idolGraphValues(extra, (k) => !!b[k as BindingKey]));
+    for (const k of ["cropMode", "photoCrop", "minOpacity", "maxScale"]) delete extra[k];
   }
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
   // SeedVR2's `scale` multiplies the picture before one diffusion pass over all of it, and its graph is made for up to
@@ -2420,6 +2475,8 @@ export const comfyProvider: ProviderAdapter = {
       // Fresh: a model installed a moment ago runs. (On someone's computer, nothing to ask: its ComfyUI has the last word.)
       dbsModels: () => comfyDbsModels(worker, 0),
       reuseModels: () => comfyReuseModels(worker, 0),
+      // The pack switched off in Settings → Models & licences: Idol 3D runs its core graph, as without the pack.
+      idolPack: async () => ((await import("@/server/model-access")).readAccess().packs.includes(IDOL_PACK) ? false : comfyHasClass(IDOL_PACK_CLASS, worker)),
     });
     // On someone's computer: the job waits for their Fuobe tab, which sends exactly this graph under the prompt id minted
     // here. A refusal comes back in its report, and the poll explains it as below.
@@ -2453,6 +2510,8 @@ export const comfyProvider: ProviderAdapter = {
     );
     const body = (await res.json().catch(() => ({}))) as PromptRefusalBody & { prompt_id?: string };
     if (!res.ok || !body.prompt_id) {
+      // The pack may have gone since the server said it had it: the next run asks again (and runs the core graph without it).
+      if (manifest.id === IDOL_WORKFLOWS.clean) forgetComfyClass(IDOL_PACK_CLASS, worker);
       const refusal = promptRefusal(body, res.status, manifest, input.loras ?? [], worker);
       if (!refusal.message && !res.ok && worker === "isolated") throw isolatedAnswer("the prompt", res.status);
       throw Object.assign(new ProviderError(refusal.message ?? `ComfyUI /prompt failed (${res.status})`, res.status), refusal.fix ? { fix: refusal.fix } : {});

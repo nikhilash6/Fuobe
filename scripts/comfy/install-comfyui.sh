@@ -55,6 +55,11 @@ declare -A NODES=(
   # node downloads the 2.0 weights and the three frozen models it builds on (about 5.1 GB, into models/corridorkey2/) the
   # first time it runs, never at import (CORRIDORKEY2_NO_DOWNLOAD=1 turns that off). Its requirements are in the union below.
   [ComfyUI-CorridorKey2]="https://github.com/hashu786/ComfyUI-CorridorKey2 d1228b68796786acee92b6497f72a60d70d1a844"
+  # Idol 3D's clean splats (image-to-splat-idol-clean; docs/research/idol-9.md §5.1-5.2): Nynxz's Idol nodes (Preprocess
+  # Image, Camera, Prune Splat). Apache-2.0, no Python dependencies, no model code (the model runs on the core TripoSplat
+  # nodes). Read at this commit: 3 AI-assisted commits on 2026-10-30, not in the Comfy Registry. It goes in the main
+  # ComfyUI, not the isolated worker. Without it the provider runs image-to-splat-idol on core nodes.
+  [ComfyUI-Idol]="https://github.com/Nynxz/ComfyUI-Idol 4d3a4f671028f0e062d9f004cda1a2dd73360d35"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.

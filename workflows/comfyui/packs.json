@@ -44,6 +44,15 @@
     "subdir": null,
     "folders": ["foley"]
   },
+  "ComfyUI-Idol": {
+    "repo": "https://github.com/Nynxz/ComfyUI-Idol",
+    "commit": "4d3a4f671028f0e062d9f004cda1a2dd73360d35",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
   "ComfyUI-IndexTTS2": {
     "repo": "https://github.com/snicolast/ComfyUI-IndexTTS2",
     "commit": "5b33e02bc0112b8aaf1fc823d5e5a609ca07fc27",

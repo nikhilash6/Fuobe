@@ -76,6 +76,7 @@
 //   resolutionLevel, fovX, decimation     (MoGe: inference detail 0-9, horizontal field of view in degrees (0 = estimate), mesh decimation)
 //   cutout, numGaussians, splatFormat     (TripoSplat: BiRefNet cut-out on/off, number of Gaussians, ply | ksplat | spz)
 //   photoCrop                             (Idol 3D, idol-9 §5.5: true = the looser photo crop, a core-node branch after TripoSplatPreprocessImage)
+//   cropMode, minOpacity, maxScale        (Idol 3D with ComfyUI-Idol, idol-9 §5.6: IdolPreprocessImage synthetic | real; IdolPruneSplat's opacity floor and longest axis, 0 = off)
 //   orbitFrames                           (TripoSplat orbit preview length in frames)
 //   frameWidth                            (reference brief: width the clip's frames are scaled to, px)
 // Keys added with round 4 (engine seams):
@@ -231,6 +232,9 @@ export const CUSTOM_NODE_REPOS = {
   // validation server (the auk package and ~19 GB of weights): its graphs are checked against the node list read from
   // nodes.py at this commit (tests/speech-edit-comfy.test.ts).
   'ComfyUI-AuK': 'https://github.com/Tencent-Hunyuan/AuK/tree/0d40366b1039e37c6cad008ab4713f6ad6d954b7/comfyui/ComfyUI-AuK',
+  // idol-2 (docs/research/idol-9.md §5.1-5.2): Nynxz's Idol nodes (crop modes, predicted camera, splat pruning), Apache-2.0,
+  // no Python dependencies and no model code. Pinned in install-comfyui.sh; not on the validation server.
+  'ComfyUI-Idol': 'https://github.com/Nynxz/ComfyUI-Idol/tree/4d3a4f671028f0e062d9f004cda1a2dd73360d35',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -263,6 +267,7 @@ export const PACK_CLASSES = {
   'ComfyUI-CorridorKey2': /^CorridorKey2(RenderToDisk)?$/,
   'ComfyUI-RMBG': /^AILab_(VRMBG|FeyNoBg)$/,
   'ComfyUI-AuK': /^AuK(ModelLoader|GenerateEdit)$/,
+  'ComfyUI-Idol': /^Idol(PreprocessImage|Camera|PruneSplat)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -5193,6 +5198,44 @@ export const SPEC = [
       'About half the Gaussians are near-transparent: RenderSplat thresholds 0.05; the saved file is not pruned without the ComfyUI-Idol pack. ' +
       '1.32 GB of new weights (idol_fp16 0.74, idol_decoder_fp16 0.58) plus the shared 2.46 GB (DINOv3 ViT-H 1.68, FLUX.2 VAE 0.34, BiRefNet 0.44). ' +
       'VRAM: vendor peak 7.2 GB in the SDK; unmeasured in ComfyUI.',
+  },
+  {
+    // idol-2 (docs/research/idol-9.md §5.6): image-to-splat-idol with the ComfyUI-Idol pack. The provider runs it when the
+    // server has the pack (GET /object_info/IdolPruneSplat) and image-to-splat-idol otherwise.
+    id: 'image-to-splat-idol-clean',
+    title: 'Image to a cleaned Gaussian splat of one object (Idol, ComfyUI-Idol crop and pruning) + an orbit video',
+    capability: 'splat',
+    handBuilt: 'hand-built/image-to-splat-idol-clean.json',
+    packs: ['ComfyUI-Idol'],
+    bindings: {
+      image: [b('99', 'image')], cutout: [b('88:35', 'switch')], numGaussians: [b('88:55', 'num_gaussians')], steps: [b('88:6', 'steps')], cfg: [b('88:6', 'cfg')],
+      sampler: [b('88:6', 'sampler_name')], cropMode: [b('88:110', 'mode')], minOpacity: [b('88:111', 'min_opacity')], maxScale: [b('88:111', 'max_scale')],
+      seed: [b('88:6', 'seed'), b('88:55', 'seed')], splatFormat: [b('92', 'format')], orbitFrames: [b('75', 'frames')],
+    },
+    // The input-view still is the card's poster ("preview": the picture shown for the result); the count of Gaussians the
+    // prune kept is the pack's own report of the run (meta.kept on the splat).
+    outputs: [
+      { node: '51', kind: 'model3d', role: 'splat' },
+      { node: '42', kind: 'video', role: 'turntable' },
+      { node: '93', kind: 'image', role: 'preview' },
+      { node: '94', kind: 'text', role: 'report' },
+    ],
+    defaults: { splatFormat: 'spz', cutout: true, cropMode: 'synthetic', minOpacity: 0.05, maxScale: 0 },
+    limits: { maxGaussians: 1048576 },
+    vramGb: 8,
+    license:
+      'Apache-2.0 (speridlabs/idol weights; the ComfyUI files are nynxz/Idol\'s conversion, Apache-2.0); Idol is VAST-AI-Research\'s TripoSplat architecture (MIT, code and weights); ' +
+      'the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; ' +
+      'the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT; ComfyUI-Idol nodes Apache-2.0',
+    notes:
+      'Idol 3D with the ComfyUI-Idol pack (Nynxz, pinned at 4d3a4f67): image-to-splat-idol with the same node ids, except: ' +
+      'IdolPreprocessImage 88:110 replaces TripoSplatPreprocessImage 88:2 and the core photo crop 88:101-104 (cropMode synthetic = Idol\'s 1.2 crop, real = its 1.7 photo crop; ' +
+      'the mask is Fuobe\'s cut-out switch 88:35, BiRefNet or the picture\'s alpha; erode 1, 1024 px). ' +
+      'IdolPruneSplat 88:111 after the decoder drops the near-transparent Gaussians (minOpacity 0.05; maxScale 0 = off, 0.05 = "Trim spikes", the needle-shaped ones at the silhouette): ' +
+      'the saved file and the orbit video both get the pruned splat. Its count of the Gaussians kept goes to a PreviewAny (94, role report; the first item of a batch), which the result card shows. ' +
+      'IdolCamera 88:112 reads the camera Idol predicted from the KSampler\'s latent; RenderSplat 88:113 renders the pruned splat from it (1 frame, 1024 px, black) and SaveImage 93 keeps it ' +
+      '(role preview: the card\'s poster, what the model saw). The pack has no Python dependencies; ComfyUI v0.23.0 or later (Fuobe runs 0.41.0). ' +
+      'Same weights, sampler presets and VRAM listing as image-to-splat-idol.',
   },
   {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).

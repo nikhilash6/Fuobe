@@ -104,14 +104,66 @@ export const IDOL_QUALITIES: { id: IdolQuality; label: string; hint: string }[] 
 ];
 
 /**
- * Idol 3D's settings for a request: on the open engine the graph's (photoCrop picks the looser crop), on fal the
- * endpoint's own fields. fal takes the steps, the Gaussians and the kind of picture ("real" is Idol's photo crop),
- * but no sampler and no CFG in ComfyUI's form, so its guidance stays fal's default (Idol's reference weight 3).
+ * Idol 3D's two open graphs: the core one (idol-1: TripoSplat's nodes, a core-node photo crop, the saved file not
+ * pruned) and the clean one (idol-2: the ComfyUI-Idol pack's crop, pruning and input-view still), which the server
+ * runs when its ComfyUI has the pack (GET /object_info/IdolPruneSplat).
  */
-export function idolExtra(engine: Engine, quality: IdolQuality = "best", photoCrop = false): Record<string, unknown> {
+export const IDOL_WORKFLOWS = { core: "image-to-splat-idol", clean: "image-to-splat-idol-clean" } as const;
+/** The node pack the clean graph needs (src/lib/licences.ts NODE_PACKS), and the class whose presence says a ComfyUI has it. */
+export const IDOL_PACK = "ComfyUI-Idol";
+export const IDOL_PACK_CLASS = "IdolPruneSplat";
+
+/**
+ * "Trim spikes": IdolPruneSplat's max_scale, the longest axis a Gaussian may have (object units, the object spans
+ * about 1), which drops the needle-shaped ones at the silhouette. 0.05 is the pack's "reasonable start".
+ */
+export const IDOL_TRIM_SPIKES = 0.05;
+
+/**
+ * Idol 3D's settings for a request: on the open engine the graph's (photoCrop picks the looser crop; trimSpikes the
+ * pack's max_scale, used where the pack is installed), on fal the endpoint's own fields. fal takes the steps, the
+ * Gaussians and the kind of picture ("real" is Idol's photo crop), but no sampler, no CFG in ComfyUI's form and no
+ * pruning, so its guidance stays fal's default (Idol's reference weight 3).
+ */
+export function idolExtra(engine: Engine, quality: IdolQuality = "best", photoCrop = false, trimSpikes = false): Record<string, unknown> {
   const p = IDOL_PRESETS[quality] ?? IDOL_PRESETS.best;
-  if (engine === "open") return { ...p, photoCrop };
+  if (engine === "open") return { ...p, photoCrop, ...(trimSpikes && { maxScale: IDOL_TRIM_SPIKES }) };
   return { num_inference_steps: p.steps, num_gaussians: p.numGaussians, image_type: photoCrop ? "real" : "synthetic" };
+}
+
+const unit = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : undefined);
+
+/**
+ * An Idol run's crop and pruning in the words of the graph it runs on (`has`: the graph binds that key). The clean graph
+ * takes cropMode ("It's a photo" is Idol's "real" crop, else "synthetic"), minOpacity and maxScale (0-1); the core
+ * graph takes its photoCrop switch (a cropMode of "real" turns it on) and has no pruning. Keys a graph doesn't bind are
+ * left out.
+ */
+export function idolGraphValues(extra: Record<string, unknown>, has: (key: string) => boolean): Record<string, unknown> {
+  const mode = extra.cropMode === "real" || extra.cropMode === "synthetic" ? extra.cropMode : undefined;
+  const photo = typeof extra.photoCrop === "boolean" ? extra.photoCrop : mode ? mode === "real" : undefined;
+  const out: Record<string, unknown> = {};
+  if (has("cropMode")) out.cropMode = mode ?? (photo ? "real" : "synthetic");
+  else if (has("photoCrop") && photo !== undefined) out.photoCrop = photo;
+  for (const k of ["minOpacity", "maxScale"] as const) {
+    const v = unit(extra[k]);
+    if (has(k) && v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+/** What a clean splat's count said (PreviewAny's text): the number of Gaussians the prune kept, else undefined. */
+export function idolKept(text: string | undefined): number | undefined {
+  const t = text?.trim();
+  const n = Number(t);
+  return t && Number.isInteger(n) && n >= 0 ? n : undefined;
+}
+
+/** The result card's line about a splat file: how many Gaussians the clean graph kept, or that it wasn't cleaned. */
+export function idolCleanLine(meta: Record<string, unknown> | undefined): { cleaned: boolean; text: string } | undefined {
+  if (typeof meta?.kept === "number") return { cleaned: true, text: `Cleaned: ${meta.kept.toLocaleString("en-US")} Gaussians kept` };
+  if (meta?.pruned === false) return { cleaned: false, text: "Not cleaned" };
+  return undefined;
 }
 
 /**
@@ -165,6 +217,8 @@ export interface Model3dInput {
   quality?: IdolQuality;
   /** Splat with Idol 3D: the picture is a photo, so the object gets Idol's looser crop. */
   photoCrop?: boolean;
+  /** Splat with Idol 3D on your GPU: also drop the needle-shaped Gaussians (with the ComfyUI-Idol pack). */
+  trimSpikes?: boolean;
 }
 
 /** The model for a mode and engine: the one picked when the mode offers it, else its default (null: none on that engine). */
@@ -218,7 +272,7 @@ export function model3dRequest(i: Model3dInput): GenerationRequest {
       return { ...base, op: "image-to-3d", prompt, inputs: { images } };
     case "splat":
       // Idol 3D gets its Best / Quick look settings and the photo crop; TripoSplat's request is unchanged.
-      return { ...base, op: "splat", inputs: { images }, ...(isIdol(modelId) && { params: { extra: idolExtra(i.engine, i.quality, !!i.photoCrop) } }) };
+      return { ...base, op: "splat", inputs: { images }, ...(isIdol(modelId) && { params: { extra: idolExtra(i.engine, i.quality, !!i.photoCrop, !!i.trimSpikes) } }) };
     default:
       return { ...base, op: "image-to-3d", inputs: { images } };
   }
@@ -256,6 +310,8 @@ export interface Model3dView {
   web?: string;
   /** A Gaussian splat (.ply / .spz / .ksplat), which the page doesn't draw: downloaded, with its turntable or preview shown. */
   splat?: { url: string; format: string };
+  /** Idol 3D on your GPU: the splat file cleaned of its haze (how many Gaussians were kept), or not (no ComfyUI-Idol). */
+  clean?: { cleaned: boolean; text: string };
   /** A rendered turntable that came with the model (the server's render for open 3D models, TripoSplat's orbit on the open engine, demo). */
   turntable?: string;
   /** The server is still rendering the turntable (after the job finished): waiting its turn, or how far (0-1). */
@@ -305,10 +361,12 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   if (listed && typeof listed === "object") for (const [k, v] of Object.entries(listed as Record<string, unknown>)) if (typeof v === "string") formats[k.toLowerCase()] = v;
   const format = splatFormatOf(mesh);
   const splat = mesh && format ? { url: mesh.url, format } : undefined;
+  const clean = splat ? idolCleanLine(meta) : undefined;
   return {
     glb: splat ? undefined : mesh?.url,
     web: mesh && !splat ? viewerGlb(mesh) : undefined,
     splat,
+    ...(clean && { clean }),
     turntable: str(meta.turntable) ?? str(meta.video) ?? video?.url,
     rendering: pending ? { queued: finish.turntable === "queued", progress: typeof finish.turntableProgress === "number" ? finish.turntableProgress : 0 } : undefined,
     material: str(finish.material),
