@@ -68,8 +68,12 @@ const selectedTab = async (p, name) => {
   const tab = p.getByRole("tab", { name, exact: true }).or(p.getByRole("radio", { name, exact: true })).first();
   try {
     await tab.waitFor({ timeout: 15_000 });
-    await p.waitForTimeout(200);
-    return (await tab.getAttribute("aria-selected")) === "true" || (await tab.getAttribute("aria-checked")) === "true";
+    // A page picks its linked tab once it has read the address: give a slow engine up to 3 s.
+    for (let i = 0; i < 15; i++) {
+      await p.waitForTimeout(200);
+      if ((await tab.getAttribute("aria-selected")) === "true" || (await tab.getAttribute("aria-checked")) === "true") return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -263,7 +267,9 @@ try {
     check(f.sub && f.text === "Ad Multiplier", "keys: Down walks its links", JSON.stringify(f));
     await p.keyboard.press("ArrowDown");
     f = await focused(p);
-    check(!f.sub && f.text.startsWith("Mixed Media"), "keys: Down from its last link goes on to the next studio", JSON.stringify(f));
+    // The next studio in the column: its first row (the lead's links come before it).
+    const nextStudio = await panel(p).locator('[data-group="sell"] > ul > li:nth-child(2) > a').evaluate((a) => ({ text: a.textContent.trim(), row: a.getAttribute("data-row") }));
+    check(!f.sub && f.text === nextStudio.text && f.row === nextStudio.row, "keys: Down from its last link goes on to the next studio", `${JSON.stringify(f)} want ${JSON.stringify(nextStudio)}`);
     await p.keyboard.press("ArrowUp");
     check((await focused(p)).text === "Ad Multiplier", "keys: Up comes back to the link");
     await p.keyboard.press("ArrowRight");

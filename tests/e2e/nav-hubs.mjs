@@ -285,8 +285,8 @@ try {
       if (tab === "Studios") {
         const tiles = sheet.locator("ul").first().getByRole("link");
         const seen = await tiles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => r.top >= 0 && r.bottom <= innerHeight));
-        // 33 studio tiles and the See all tile that ends the grid.
-        check(seen.length === 34 && seen.every(Boolean), "phone Studios sheet: all 33 tiles and See all fit 390x844", `${seen.filter(Boolean).length}/${seen.length}`);
+        // 34 studio tiles and the See all tile that ends the grid.
+        check(seen.length === 35 && seen.every(Boolean), "phone Studios sheet: all 34 tiles and See all fit 390x844", `${seen.filter(Boolean).length}/${seen.length}`);
         check((await sheet.getByRole("button", { name: "Search everything" }).count()) === 1, "phone Studios sheet: Search everything is an icon button");
         if (shots) await p.screenshot({ path: path.join(shots, "phone-studios-sheet-390.png") });
       }

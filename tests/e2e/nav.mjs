@@ -181,7 +181,7 @@ try {
         }),
       );
       const scrolls = await panel.evaluate((el) => el.scrollHeight > el.clientHeight + 1);
-      check(seen.length === 33 && seen.every(Boolean) && subs.every(Boolean) && !scrolls, `launcher at ${w}x${h}: all 32 studios, their links and See all on screen, no scrolling`, `${seen.filter(Boolean).length}/${seen.length}, links ${subs.filter(Boolean).length}/${subs.length}`);
+      check(seen.length === 34 && seen.every(Boolean) && subs.every(Boolean) && !scrolls, `launcher at ${w}x${h}: all 33 studios, their links and See all on screen, no scrolling`, `${seen.filter(Boolean).length}/${seen.length}, links ${subs.filter(Boolean).length}/${subs.length}`);
       await p.keyboard.press("Escape");
     }
     await p.setViewportSize(DESKTOP.viewport);
@@ -271,7 +271,7 @@ try {
     await dialog.getByRole("group", { name: "Show the studios for one goal" }).getByRole("button", { name: /^Sell/ }).click();
     await p.waitForTimeout(300);
     const tiles = await dialog.locator('[cmdk-item][data-value^="tile:"]').count();
-    check(tiles === 5, "palette: the Sell chip shows 5 studios", String(tiles));
+    check(tiles === 6, "palette: the Sell chip shows 6 studios", String(tiles));
     await p.keyboard.press("Escape");
     await openRoute(p, `${app}/`);
     await p.keyboard.press("ControlOrMeta+k");
@@ -301,9 +301,9 @@ try {
     await p.waitForTimeout(350);
     const tiles = sheet.locator("ul").first().getByRole("link");
     const seen = await inView(tiles);
-    // 33 tiles (Ads Studio keeps its tile here; the desktop menu lists it under Marketing Studio) and the closing See all.
-    if (size.height >= 844) check(seen.length === 34 && seen.every(Boolean), `${label}: the Studios sheet shows all 33 and See all without scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
-    else check(seen.length === 34, `${label}: the Studios sheet lists all 33 and See all (it scrolls inside at this height)`, String(seen.length));
+    // 34 tiles (Ads Studio keeps its tile here; the desktop menu lists it under Marketing Studio) and the closing See all.
+    if (size.height >= 844) check(seen.length === 35 && seen.every(Boolean), `${label}: the Studios sheet shows all 34 and See all without scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
+    else check(seen.length === 35, `${label}: the Studios sheet lists all 34 and See all (it scrolls inside at this height)`, String(seen.length));
     await sheet.getByRole("button", { name: /^Film/ }).tap();
     check((await sheet.locator("ul").first().getByRole("link").count()) === 9, `${label}: the Film chip shows 8 and See all`);
     if (size.height >= 844) await shot(p, "phone-studios-sheet-film-390");
@@ -452,7 +452,7 @@ try {
     const menu = p.getByRole("menu");
     await menu.waitFor();
     const text = await menu.innerText();
-    check(/\b3 of 28 studios tried/.test(text) && /Next to try:/.test(text), "explore: 3 visited show as “3 of 28 studios tried” with a next one", text.match(/\d+ of \d+ studios tried/)?.[0]);
+    check(/\b3 of 29 studios tried/.test(text) && /Next to try:/.test(text), "explore: 3 visited show as “3 of 29 studios tried” with a next one", text.match(/\d+ of \d+ studios tried/)?.[0]);
     await shot(p, "account-menu-explore-1440");
     await p.keyboard.press("Escape");
     await ctx.close();
