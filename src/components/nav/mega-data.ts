@@ -89,3 +89,14 @@ export function resetMenus() {
   entries.clear();
   changed();
 }
+
+/** A menu's data is here (Studios always is): a hover open waits a moment for it (bar-menus.tsx), never a click. */
+export function menuReady(id: MegaId): boolean {
+  return id === "studios" || entries.get(id)?.state === "ready";
+}
+
+/** At once (not when idle): the data of these menus, unless the browser asks to save data. */
+export function loadMenusNow(ids: readonly FetchedMegaId[]): void {
+  if (saveData()) return;
+  ids.forEach(loadMenu);
+}

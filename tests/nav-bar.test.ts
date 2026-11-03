@@ -270,12 +270,14 @@ describe("the bar's shell", () => {
     expect(html).toContain("<header");
     expect(html).toContain('aria-label="Main"');
     expect(html).toContain('aria-label="Fuobe home"');
-    // The panel is not on the page until warmed, so nothing points at it yet.
-    expect(html).not.toContain(`aria-controls="${LAUNCHER_ID}"`);
+    // Each menu's section is on the page from the first paint (hidden and empty until warmed), so aria-controls
+    // always points at something.
+    expect(html).toContain(`aria-controls="${LAUNCHER_ID}"`);
+    expect(html).toMatch(new RegExp(`<section[^>]*id="${LAUNCHER_ID}"[^>]*hidden`));
     expect(html).toContain('aria-expanded="false"');
-    expect(html).not.toContain(`id="${LAUNCHER_ID}"`);
     expect(html).toContain(`>${studioCount()}<`);
-    for (const h of ["/", "/apps", "/canvas", "/assist", "/library", "/?new=1"]) expect(hrefs(html), h).toContain(h);
+    for (const h of ["/", "/assist", "/library", "/?new=1"]) expect(hrefs(html), h).toContain(h);
+    for (const h of ["/create", "/studios", "/apps", "/motions-and-effects", "/canvas"]) expect(html, h).toContain(`data-href="${h}"`);
     // Search's name is the words it shows (sr-only below lg).
     expect(html).toContain(">Search Fuobe</span>");
     expect(html).not.toContain('aria-label="Search Fuobe"');
@@ -297,8 +299,8 @@ describe("the bar's shell", () => {
     expect(html).toContain('aria-label="Menu"');
     for (const w of OWNER_WORDS) expect(words(html), w).not.toContain(w.replace("&amp;", "&"));
     expect(html).not.toContain("data-dot");
-    // On a studio's page the Studios item is marked (the pill around its name and its chevron).
-    expect(html).toMatch(/<div[^>]*data-bar-split[^>]*data-active="true"[^>]*>\s*<a[^>]*href="\/studios"/);
+    // On a studio's page the Studios item is marked.
+    expect(html).toMatch(/<button[^>]*data-bar-menu="studios"[^>]*data-active="true"/);
   });
 
   it("gives an account its avatar, with a dot only when its own GPU answers", () => {
@@ -426,33 +428,52 @@ describe("the avatar's dot", () => {
   });
 });
 
-describe("split items: the name goes to the area page, the chevron opens the menu", () => {
+describe("menu items: one button each, the area's page inside its menu", () => {
   /** The opening tag of the link to `href` in the bar's markup. */
   const linkTo = (html: string, href: string) => anchors(html).find((a) => a.href === href)?.tag ?? "";
+  /** The opening tag of a menu item's button. */
+  const item = (html: string, id: string) => new RegExp(`<button[^>]*data-bar-menu="${id}"[^>]*>`).exec(html)?.[0] ?? "";
 
-  it("gives Create, Studios, Apps, Motions & effects and Canvas a link to their page and a named chevron, in one pill", () => {
+  it("gives Create, Studios, Apps, Motions & effects, Canvas and More one button each, named by its words", () => {
     const html = render(createElement(TopBar));
-    for (const href of ["/create", "/studios", "/apps", "/motions-and-effects", "/canvas"]) expect(linkTo(html, href), href).not.toBe("");
-    expect(linkTo(html, "/studios")).toContain(`aria-label="Studios, ${studioCount()} studios"`);
-    for (const name of ["Create menu", "Studios menu", "Apps menu", "Motions &amp; effects menu", "Canvas menu"]) expect(html, name).toContain(`aria-label="${name}"`);
-    // The Studios chevron is still the launcher's disclosure button (search hands focus back to it).
-    expect(html).toMatch(/<button[^>]*aria-label="Studios menu"[^>]*aria-expanded="false"[^>]*data-studios-trigger/);
-    expect(count(html, "data-bar-split")).toBe(5);
+    const hubs = [
+      ["create", "/create"],
+      ["studios", "/studios"],
+      ["apps", "/apps"],
+      ["motions", "/motions-and-effects"],
+      ["canvas", "/canvas"],
+    ] as const;
+    for (const [id, href] of hubs) {
+      expect(item(html, id), id).toContain('aria-expanded="false"');
+      expect(item(html, id), id).toMatch(/aria-controls="[^"]+"/);
+      // The area's page is the menu's "See all" (and Ctrl-click on the item): no separate link beside it.
+      expect(item(html, id), id).toContain(`data-href="${href}"`);
+      expect(linkTo(html, href), href).toBe("");
+    }
+    expect(item(html, "more")).toContain('aria-expanded="false"');
+    expect(item(html, "more")).not.toContain("data-href");
+    expect(item(html, "studios")).toContain(`aria-label="Studios, ${studioCount()} studios"`);
+    // The Studios item is still the launcher's disclosure button (search hands focus back to it).
+    expect(item(html, "studios")).toContain("data-studios-trigger");
+    for (const name of ["Create menu", "Studios menu", "Apps menu", "Motions &amp; effects menu", "Canvas menu"]) expect(html, name).not.toContain(`aria-label="${name}"`);
+    expect(html).not.toContain("data-bar-split");
+    expect(html).not.toMatch(/role="menu"|role="menuitem"|aria-haspopup="menu"/);
+    expect(count(html, "data-bar-menu=")).toBe(6);
   });
 
-  it("marks the name on its own page and the pill inside its area, never both items", () => {
+  it("marks the item anywhere in its area, its own page included, and only that item", () => {
     state.path = "/create";
     let html = render(createElement(TopBar));
-    expect(linkTo(html, "/create")).toContain('aria-current="page"');
-    expect(linkTo(html, "/studios")).not.toContain("aria-current");
+    expect(item(html, "create")).toContain('data-active="true"');
+    expect(item(html, "studios")).not.toContain("data-active");
     state.path = "/image";
     html = render(createElement(TopBar));
-    expect(linkTo(html, "/create")).not.toContain("aria-current");
-    expect(html).toMatch(/<div[^>]*data-bar-split[^>]*data-active="true"[^>]*>\s*<a[^>]*href="\/create"/);
+    expect(item(html, "create")).toContain('data-active="true"');
     expect(count(html, 'data-active="true"')).toBe(1);
     state.path = "/canvas";
     html = render(createElement(TopBar));
-    expect(html).not.toMatch(/<div[^>]*data-bar-split[^>]*data-active="true"[^>]*>\s*<a[^>]*href="\/create"/);
+    expect(item(html, "create")).not.toContain("data-active");
+    expect(item(html, "canvas")).toContain('data-active="true"');
   });
 
   it("links the launcher's header to every studio with previews", async () => {

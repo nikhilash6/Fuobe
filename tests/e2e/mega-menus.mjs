@@ -29,10 +29,10 @@ const publicSignup = !!(await fetch(`${app}/api/auth/me`).then((r) => r.json()).
 const OWNER_WORDS = ["No cover yet", "Fuobe DoP", "free on your GPU", "Qwen", "Wan 2", "LTX", "Kling", "ComfyUI"];
 
 const MENUS = {
-  studios: { chevron: "Studios menu", line: /^\d+ studios, grouped by what you want to make$/, groups: 6, seeAll: "/studios", from: 0 },
-  apps: { chevron: "Apps menu", line: /^\d+ apps, grouped by what they change$/, groups: 6, seeAll: "/apps", from: 1280 },
-  motions: { chevron: "Motions & effects menu", line: /^\d+ camera motions and \d+ effects, for any photo$/, groups: 6, seeAll: "/motions-and-effects", from: 1280 },
-  canvas: { chevron: "Canvas menu", line: /^\d+ ready boards that run as they are$/, groups: 2, seeAll: "/canvas", from: 1440 },
+  studios: { line: /^\d+ studios, grouped by what you want to make$/, groups: 6, seeAll: "/studios", from: 0 },
+  apps: { line: /^\d+ apps, grouped by what they change$/, groups: 6, seeAll: "/apps", from: 1280 },
+  motions: { line: /^\d+ camera motions and \d+ effects, for any photo$/, groups: 6, seeAll: "/motions-and-effects", from: 1280 },
+  canvas: { line: /^\d+ ready boards that run as they are$/, groups: 2, seeAll: "/canvas", from: 1440 },
 };
 const SIZES = [
   { width: 1280, height: 720 },
@@ -78,14 +78,16 @@ async function page(ctx) {
   return p;
 }
 const bar = (p) => p.locator("[data-top-bar]");
+/** A menu's item in the bar: one button (bar-menus.tsx). */
+const trig = (p, id) => bar(p).locator(`[data-bar-menu="${id}"]`);
 const panelOf = (p, id) => p.locator(`#${id}-launcher`);
 const pathOf = (p) => new URL(p.url()).pathname;
 const at = (p) => p.evaluate(() => [document.activeElement?.getAttribute("data-col"), document.activeElement?.getAttribute("data-row")].join(","));
 const waitPath = (p, want) => p.waitForURL((u) => new URL(u).pathname === want, { timeout: 20_000 }).then(() => true, () => false);
 
-/** Opens a menu with its chevron and waits for its links and pictures. */
+/** Opens a menu with its item and waits for its links and pictures. */
 async function openMenu(p, id) {
-  await bar(p).getByRole("button", { name: MENUS[id].chevron, exact: true }).click();
+  await trig(p, id).click();
   const panel = panelOf(p, id);
   await panel.waitFor({ state: "visible" });
   // Its first column's first item (the owner's Canvas column comes a moment after the rest).
@@ -123,7 +125,7 @@ const measure = (panel) =>
       // Lines cut with "…" (a row's or a lead's line wider than its box).
       cut: [...el.querySelectorAll("[data-col] span.truncate.text-muted-foreground")].filter((s) => s.checkVisibility() && s.scrollWidth > s.clientWidth + 1).map((s) => s.textContent),
       rowsMax: Math.max(0, ...[...el.querySelectorAll("[data-group] > ul")].map((u) => [...u.querySelectorAll(':scope > li > a[data-row]:not([data-row="0"])')].filter((a) => a.checkVisibility()).length)),
-      lit: document.querySelectorAll("[data-top-bar] [data-bar-split][data-open]").length,
+      lit: document.querySelectorAll("[data-top-bar] [data-bar-menu][data-open]").length,
       panels: [...document.querySelectorAll("[data-mega-panel]")].filter((x) => !x.hidden).length,
     };
   });
@@ -138,7 +140,7 @@ try {
       const label = `${who} ${size.width}x${size.height}`;
       for (const [id, m] of Object.entries(MENUS)) {
         if (size.width < m.from) {
-          check(!(await bar(p).getByRole("button", { name: m.chevron, exact: true }).isVisible()), `${label} ${id}: in More at this width`);
+          check(!(await trig(p, id).isVisible()), `${label} ${id}: in More at this width`);
           continue;
         }
         const panel = await openMenu(p, id);
@@ -161,8 +163,8 @@ try {
         if (shots && who !== "account" && SHOT_WIDTHS.includes(size.width)) await shot(p, `${id}-${size.width}-${who}-light`);
         await p.keyboard.press("Escape");
         await panel.waitFor({ state: "hidden" });
-        const back = await bar(p).getByRole("button", { name: m.chevron, exact: true }).evaluate((b) => b === document.activeElement);
-        check(back, `${label} ${id}: Esc closes it and focus goes back to the chevron`);
+        const back = await trig(p, id).evaluate((b) => b === document.activeElement);
+        check(back, `${label} ${id}: Esc closes it and focus goes back to the item`);
       }
       check(ctx.errors.length === 0, `${label}: no console errors`, ctx.errors.join(" | "));
       await ctx.close();
@@ -195,13 +197,18 @@ try {
     const p = await page(ctx);
     await openRoute(p, `${app}/image`, { settleMs: 300 });
     for (const id of ["apps", "motions", "canvas"]) {
-      const chev = bar(p).getByRole("button", { name: MENUS[id].chevron, exact: true });
-      await chev.focus();
+      const item = trig(p, id);
+      await item.focus();
       await p.keyboard.press("Enter");
       const panel = panelOf(p, id);
       await panel.waitFor({ state: "visible" });
+      check(await item.evaluate((b) => b === document.activeElement), `${id}: Enter on the item opens it, focus stays on the item`);
+      await p.keyboard.press("Enter");
+      await panel.waitFor({ state: "hidden" });
+      await p.keyboard.press("ArrowDown");
+      await panel.waitFor({ state: "visible" });
       await p.waitForFunction(() => document.activeElement?.closest("[data-mega-panel]"), null, { timeout: 10_000 }).catch(() => {});
-      check((await at(p)) === "0,0", `${id}: Enter on the chevron opens it on the first lead`, await at(p));
+      check((await at(p)) === "0,0", `${id}: ArrowDown on the item opens it on the first lead`, await at(p));
       await p.keyboard.press("ArrowRight");
       check((await at(p)) === "1,0", `${id}: Right goes to the next column's first item`, await at(p));
       await p.keyboard.press("ArrowDown");
@@ -234,34 +241,35 @@ try {
       await p.waitForTimeout(150);
       check(!(await panel.isVisible()), `${id}: Tab past its last link closes it`);
     }
-    // ArrowDown on the name opens; Esc gives focus back to the name.
-    for (const [id, name] of [["apps", "Apps"], ["canvas", "Canvas"]]) {
-      const link = bar(p).getByRole("link", { name, exact: true });
-      await link.focus();
+    // ArrowDown on the item opens; Esc gives focus back to the item.
+    for (const id of ["apps", "canvas"]) {
+      const item = trig(p, id);
+      await item.focus();
       await p.keyboard.press("ArrowDown");
       await p.waitForFunction(() => document.activeElement?.closest("[data-mega-panel]"), null, { timeout: 10_000 }).catch(() => {});
-      check((await at(p)) === "0,0", `${id}: ArrowDown on the name opens it on the first lead`);
+      check((await at(p)) === "0,0", `${id}: ArrowDown on the item opens it on the first lead`);
       await p.keyboard.press("Escape");
       await p.waitForTimeout(150);
-      check(await link.evaluate((a) => a === document.activeElement), `${id}: Esc gives focus back to the name`);
+      check(await item.evaluate((a) => a === document.activeElement), `${id}: Esc gives focus back to the item`);
     }
     // One at a time: a grouped menu replaces another, and Create's menu and a grouped menu close each other.
     await openMenu(p, "apps");
     await openMenu(p, "motions");
     check(!(await panelOf(p, "apps").isVisible()) && (await panelOf(p, "motions").isVisible()), "opening Motions & effects closes Apps");
-    await bar(p).getByRole("button", { name: "Create menu", exact: true }).click();
-    await p.getByRole("menu").waitFor({ timeout: 5_000 }).catch(() => {});
-    check(!(await panelOf(p, "motions").isVisible()) && (await p.getByRole("menu").count()) === 1, "opening Create closes Motions & effects");
+    await trig(p, "create").click();
+    await p.locator("#create-menu").waitFor({ timeout: 5_000 }).catch(() => {});
+    await p.waitForTimeout(200);
+    check(!(await panelOf(p, "motions").isVisible()) && (await p.locator("#create-menu").isVisible()), "opening Create closes Motions & effects");
     await p.keyboard.press("Escape");
     await p.waitForTimeout(200);
     // Resting the mouse: every grouped menu opens after a moment (not at once), keeps focus where it was, and closes
     // once the pointer leaves the item and the panel. While one is open, moving onto another item switches at once.
-    for (const [id, name] of [["studios", /^Studios, \d+ studios$/], ["apps", "Apps"], ["canvas", "Canvas"]]) {
+    for (const id of ["studios", "apps", "canvas"]) {
       await p.mouse.move(6, 28);
       await p.waitForTimeout(400);
-      const box = await bar(p).getByRole("link", { name, exact: typeof name === "string" }).boundingBox();
+      const box = await trig(p, id).boundingBox();
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await p.waitForTimeout(120);
+      await p.waitForTimeout(30);
       const early = await panelOf(p, id).isVisible();
       await p.waitForTimeout(500);
       check(!early && (await panelOf(p, id).isVisible()), `resting on ${id} opens its menu after a moment, not at once`);
@@ -271,10 +279,11 @@ try {
     }
     {
       await openMenu(p, "apps");
-      const box = await bar(p).getByRole("link", { name: "Canvas", exact: true }).boundingBox();
+      const box = await trig(p, "canvas").boundingBox();
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await p.waitForTimeout(80);
-      check((await panelOf(p, "canvas").isVisible()) && !(await panelOf(p, "apps").isVisible()), "with Apps open, moving onto Canvas switches to it at once");
+      // (Apps may still be fading out under it for a moment: inert, no longer open.)
+      check((await panelOf(p, "canvas").getAttribute("data-phase")) === "open" && (await panelOf(p, "apps").getAttribute("data-phase")) !== "open", "with Apps open, moving onto Canvas switches to it at once");
       await p.keyboard.press("Escape");
       await p.mouse.move(6, 28);
       await p.waitForTimeout(600);
@@ -282,7 +291,7 @@ try {
     {
       await p.mouse.move(700, 700);
       const focusWas = await p.evaluate(() => document.activeElement?.tagName ?? "");
-      const box = await bar(p).getByRole("link", { name: "Motions & effects", exact: true }).boundingBox();
+      const box = await trig(p, "motions").boundingBox();
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await p.waitForTimeout(700);
       check(await panelOf(p, "motions").isVisible(), "resting on Motions & effects opens its menu");
@@ -295,10 +304,10 @@ try {
       await p.mouse.move(6, 28, { steps: 4 }); // the bar's far left: off the item and the panel
       await p.waitForTimeout(600);
       check(!(await panelOf(p, "motions").isVisible()), "and closes once the pointer leaves it");
-      // A click on its chevron while hover-open keeps it open (pinned), with focus inside.
+      // A click on the item while hover-open keeps it open (pinned).
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await p.waitForTimeout(700);
-      await bar(p).getByRole("button", { name: MENUS.motions.chevron, exact: true }).click();
+      await trig(p, "motions").click();
       await p.mouse.move(700, 800);
       await p.waitForTimeout(600);
       check(await panelOf(p, "motions").isVisible(), "a click pins Motions & effects open after hovering");
@@ -369,8 +378,8 @@ try {
     // Warm, then open: the panel shows within a frame of the click; pictures within budget; nothing moves.
     for (const id of ["apps", "motions", "canvas"]) {
       const since = Date.now();
-      const chev = bar(p).getByRole("button", { name: MENUS[id].chevron, exact: true });
-      await chev.hover();
+      const item = trig(p, id);
+      await item.hover();
       await p.waitForTimeout(1200);
       await p.evaluate(() => (window.__cls = 0));
       const ms = await p.evaluate(async (sel) => {

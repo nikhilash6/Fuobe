@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useHydrated, useViewer } from "@/lib/api";
 import type { NavCover, NavCovers } from "@/lib/nav-covers";
 import type { MegaId } from "@/lib/mega-menus";
+import { barMenus, CLOSED_MENUS, type BarMenuAction, type BarMenuId, type BarMenuState } from "@/lib/bar-intent";
 import { viewerKindOf, type LauncherGroupId, type ViewerKind } from "@/lib/nav-model";
 import { installInputModality } from "./input-modality";
 
@@ -19,9 +20,16 @@ export type NavSheet = "studios" | "create" | "you";
 export const PHONE_QUERY = "(max-width: 767px)";
 
 export interface NavUi {
-  /** The bar's open grouped menu (Studios, Apps, Motions & effects, Canvas): one at a time. */
-  openMenu: MegaId | null;
-  setOpenMenu(v: MegaId | null): void;
+  /** The bar's open menu (Create, Studios, Apps, Motions & effects, Canvas, More): one at a time. */
+  openMenu: BarMenuId | null;
+  /** The whole menu state: how it was opened, the menu it replaced (bar-intent.ts). */
+  menu: BarMenuState;
+  /** Changes it (bar-intent.ts's reducer); returns the new state at once. */
+  menuAct(a: BarMenuAction): BarMenuState;
+  /** The menu state now (for timers and handlers: never a render behind). */
+  menuNow(): BarMenuState;
+  /** Opens a menu pinned (by its own button), or closes the open one (null). */
+  setOpenMenu(v: BarMenuId | null): void;
   /** The column the open menu was opened for (openArea(id, group)): it takes focus first. */
   menuGroup: string | undefined;
   /** Where focus goes back to when the menu closes with Esc: what opened it, when that was not its own button. */
@@ -42,17 +50,31 @@ const NavUiContext = createContext<NavUi | null>(null);
 const CoversContext = createContext<NavCovers>({});
 
 export function NavUiProvider({ covers, children }: { covers: NavCovers; children: React.ReactNode }) {
-  const [menu, setMenu] = useState<{ id: MegaId | null; group?: string }>({ id: null });
+  const [menu, setMenu] = useState<BarMenuState>(CLOSED_MENUS);
+  const menuRef = useRef<BarMenuState>(CLOSED_MENUS);
   const [sheet, setSheetState] = useState<{ sheet: NavSheet | null; family: MegaId; group?: string }>({ sheet: null, family: "studios" });
   const menuReturn = useRef<HTMLElement | null>(null);
   // Which input leads (keyboard or pointer), for the nav states: one highlighted row at a time.
   useEffect(() => installInputModality(), []);
 
-  // Opened or closed by a menu's own button: focus goes back to it. openArea() says otherwise.
-  const setOpenMenu = useCallback((id: MegaId | null) => {
-    menuReturn.current = null;
-    setMenu((m) => (m.id === id && !m.group ? m : { id }));
+  const menuAct = useCallback((a: BarMenuAction) => {
+    const next = barMenus(menuRef.current, a);
+    if (next !== menuRef.current) {
+      menuRef.current = next;
+      setMenu(next);
+    }
+    return next;
   }, []);
+  const menuNow = useCallback(() => menuRef.current, []);
+  // Opened or closed by a menu's own button: focus goes back to it. openArea() says otherwise.
+  const setOpenMenu = useCallback(
+    (id: BarMenuId | null) => {
+      menuReturn.current = null;
+      const now = performance.now();
+      menuAct(id ? { type: "open", id, mode: "pinned", via: "pointer", clicked: true, now } : { type: "close", now });
+    },
+    [menuAct],
+  );
   const menuReturnTo = useCallback(() => menuReturn.current, []);
   const setSheet = useCallback((v: NavSheet | null) => setSheetState((s) => ({ sheet: v, family: v === "studios" && s.sheet === "studios" ? s.family : "studios" })), []);
   const openArea = useCallback((id: MegaId, group?: string) => {
@@ -63,13 +85,16 @@ export function NavUiProvider({ covers, children }: { covers: NavCovers; childre
     }
     const at = typeof document !== "undefined" ? document.activeElement : null;
     menuReturn.current = at instanceof HTMLElement && at !== document.body ? at : null;
-    setMenu({ id, group });
-  }, []);
+    menuAct({ type: "open", id, mode: "pinned", via: "area", group, clicked: true, now: performance.now() });
+  }, [menuAct]);
   const openStudios = useCallback((group?: LauncherGroupId) => openArea("studios", group), [openArea]);
 
   const ui = useMemo<NavUi>(
     () => ({
       openMenu: menu.id,
+      menu,
+      menuAct,
+      menuNow,
       setOpenMenu,
       menuGroup: menu.id ? menu.group : undefined,
       menuReturnTo,
@@ -80,7 +105,7 @@ export function NavUiProvider({ covers, children }: { covers: NavCovers; childre
       openArea,
       openStudios,
     }),
-    [menu, sheet, setOpenMenu, menuReturnTo, setSheet, openArea, openStudios],
+    [menu, sheet, menuAct, menuNow, setOpenMenu, menuReturnTo, setSheet, openArea, openStudios],
   );
 
   return (
@@ -92,6 +117,9 @@ export function NavUiProvider({ covers, children }: { covers: NavCovers; childre
 
 const CLOSED: NavUi = {
   openMenu: null,
+  menu: CLOSED_MENUS,
+  menuAct: () => CLOSED_MENUS,
+  menuNow: () => CLOSED_MENUS,
   setOpenMenu: () => {},
   menuGroup: undefined,
   menuReturnTo: () => null,

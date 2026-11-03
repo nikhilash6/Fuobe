@@ -41,16 +41,24 @@ export function NavMenuItem({ className, onPointerLeave, ...props }: React.Compo
   );
 }
 
-/** "See all" at the foot of a menu: the area's own page, a one-line row in the brand's colour (`name`: for a screen reader). */
-export function SeeAllRow({ href, name, className }: { href: string; name: string; className?: string }) {
+/** A row of a bar card (Create, More): a plain link with the nav's states (the bar's controller moves focus with the mouse). */
+export const CARD_ROW =
+  "nav-row nav-mark-start flex cursor-pointer items-center gap-3 rounded-[10px] px-2.5 text-[13.5px] select-none [&_svg]:pointer-events-none [&_svg]:shrink-0";
+
+/** "See all": the area's own page, a one-line link in the brand's colour (`name`: for a screen reader). */
+export function SeeAllRow({ href, name, className, ...rest }: { href: string; name: string; className?: string } & Omit<React.ComponentProps<typeof IntentLink>, "href">) {
   const pathname = usePathname();
   return (
-    <NavMenuItem asChild className={cn("group/all h-10 gap-2 font-medium text-brand-text", className)}>
-      <IntentLink href={href} aria-current={pathname === href ? "page" : undefined} aria-label={name}>
-        See all
-        <ArrowRight aria-hidden className="size-4 motion-safe:transition-transform group-data-[highlighted]/all:translate-x-0.5" />
-      </IntentLink>
-    </NavMenuItem>
+    <IntentLink
+      href={href}
+      aria-current={pathname === href ? "page" : undefined}
+      aria-label={name}
+      className={cn(CARD_ROW, "group/all h-10 gap-2 font-medium text-brand-text", className)}
+      {...rest}
+    >
+      See all
+      <ArrowRight aria-hidden className="size-4 motion-safe:transition-transform group-hover/all:translate-x-0.5 group-focus-visible/all:translate-x-0.5" />
+    </IntentLink>
   );
 }
 

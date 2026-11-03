@@ -90,13 +90,8 @@ async function openSearch(p) {
 }
 
 async function openStudios(p) {
-  const chev = bar(p).getByRole("button", { name: "Studios menu", exact: true });
-  await chev.click();
-  // A click that met a menu the resting mouse had just opened closes it: open it again from the keyboard.
-  if (!(await panel(p).waitFor({ state: "visible", timeout: 2_000 }).then(() => true, () => false))) {
-    await chev.focus();
-    await p.keyboard.press("Enter");
-  }
+  // A click opens it, or pins it when the resting mouse opened it first: it never closes it.
+  await bar(p).locator('[data-bar-menu="studios"]').click();
   await panel(p).waitFor({ state: "visible" });
   await panel(p).locator('[data-col="0"][data-row="0"]').first().waitFor({ timeout: 10_000 });
   await p.waitForFunction(() => [...document.querySelectorAll("#studios-launcher img")].filter((i) => i.checkVisibility()).every((i) => i.complete), null, { timeout: 10_000 }).catch(() => {});
@@ -250,9 +245,9 @@ try {
     const ctx = await as("guest");
     const p = await page(ctx);
     await openRoute(p, `${app}/image`, { settleMs: 300 });
-    const chev = bar(p).getByRole("button", { name: "Studios menu", exact: true });
+    const chev = bar(p).locator('[data-bar-menu="studios"]');
     await chev.focus();
-    await p.keyboard.press("Enter");
+    await p.keyboard.press("ArrowDown");
     await panel(p).waitFor({ state: "visible" });
     await p.waitForFunction(() => document.activeElement?.closest("[data-mega-panel]"), null, { timeout: 10_000 }).catch(() => {});
     await p.keyboard.press("ArrowRight");
@@ -290,7 +285,7 @@ try {
     // Enter on a link opens its page.
     await p.keyboard.press("Enter");
     check(await waitUrl(p, (u) => u.pathname === "/marketing/click-to-ad"), "Enter on Click to Ad opens /marketing/click-to-ad", p.url());
-    check(!(await panel(p).isVisible()), "the menu closes when a link is followed");
+    check(await panel(p).waitFor({ state: "hidden", timeout: 2_000 }).then(() => true, () => false), "the menu closes when a link is followed");
     await p.waitForTimeout(800);
     // On a studio's feature, its link is the one marked.
     await openRoute(p, `${app}/ads/multiplier`, { settleMs: 300 });
@@ -519,7 +514,7 @@ try {
     const ctx = await as(who);
     const p = await page(ctx);
     await openRoute(p, `${app}/image`, { settleMs: 300 });
-    await bar(p).getByRole("button", { name: "Canvas menu", exact: true }).click();
+    await bar(p).locator('[data-bar-menu="canvas"]').click();
     const cp = p.locator("#canvas-launcher");
     await cp.waitFor({ state: "visible" });
     await cp.locator('[data-col="0"][data-row="0"]').first().waitFor({ timeout: 10_000 });

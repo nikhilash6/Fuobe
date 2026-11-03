@@ -163,13 +163,13 @@ for (const phone of [false, true]) {
     // 1. A page link fades the new page in; Back is instant.
     if (!only || only.includes("route")) {
       await settle(page, "/");
-      const link = phone ? nav().getByRole("link", { name: "Library" }) : nav().getByRole("link", { name: "Apps", exact: true });
+      const link = nav().getByRole("link", { name: "Library" }).first();
       // The pinned bar at the top of a phone's page (the app bar) stays put and opaque through the change.
       if (phone) await page.evaluate(TRACK_TOP);
       const t0 = await now(page);
       const click = Date.now();
       await link.click();
-      await page.waitForURL(phone ? /\/library/ : /\/apps/, { timeout: 15_000 });
+      await page.waitForURL(/\/library/, { timeout: 15_000 });
       const urlMs = Date.now() - click;
       await page.waitForTimeout(900);
       const r = await since(page, t0);
@@ -242,44 +242,45 @@ for (const phone of [false, true]) {
     if (!only || only.includes("menu") || only.includes("sheet")) {
       await settle(page, "/");
       if (!phone) {
-        const btn = page.getByRole("button", { name: "Create menu" }).first();
+        // The bar's menus move by transitions (bar-menus.tsx, motion.css): in over the base token, out over the fast one.
+        const btn = page.locator('[data-top-bar] [data-bar-menu="create"]');
+        const opacityOf = (r, id) => r.anims.find((a) => a.id === id && a.name === "transition:opacity");
         let t0 = await now(page);
         await btn.click();
         await page.waitForTimeout(400);
         let r = await since(page, t0);
-        const open = r.anims.find((a) => a.slot === "dropdown-menu-content" && a.name === "enter");
+        const open = opacityOf(r, "create-menu");
         check(reduce ? !open || open.dur < 1 : !!open && near(open.dur, 200), open ? `menu opens in ${open.dur} ms` : "menu opens at once (no animation)");
         longs.push({ tag, what: "menu open", ms: r.longs.reduce((s, l) => s + l.d, 0) });
         t0 = await now(page);
         await page.keyboard.press("Escape");
         await page.waitForTimeout(400);
         r = await since(page, t0);
-        const close = r.anims.find((a) => a.slot === "dropdown-menu-content" && a.name === "exit");
+        const close = opacityOf(r, "create-menu");
         check(!close || (reduce ? close.dur < 1 : near(close.dur, 120)), `menu closes in ${close?.dur ?? "no"} ms`);
-        // A menu opened by resting on it stays open when its chevron is then clicked (the click pins it).
+        // A menu opened by resting on it stays open when the item is then clicked (the click pins it).
         await page.mouse.move(5, 500);
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(400);
         await btn.hover();
-        await page.waitForTimeout(700);
-        const byHover = await page.locator('[data-slot="dropdown-menu-content"]').count();
-        if (byHover) {
-          await btn.click();
-          await page.waitForTimeout(400);
-          check((await page.locator('[data-slot="dropdown-menu-content"][data-state="open"]').count()) > 0, "menu: opened by hover, a click on its chevron keeps it open");
-          await page.keyboard.press("Escape");
-          await page.waitForTimeout(300);
-        } else console.log("  skip hover-then-click: this menu doesn't open on hover");
+        await page.waitForTimeout(400);
+        check((await page.locator('#create-menu[data-phase="open"]').count()) === 1, "menu: resting on the item opens it");
+        await btn.click();
+        await page.waitForTimeout(400);
+        check((await page.locator('#create-menu[data-phase="open"]').count()) === 1, "menu: opened by hover, a click on the item keeps it open");
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(300);
         await page.mouse.move(5, 500);
-        // The Studios launcher goes at once when it closes (a grouped menu that replaces it never overlaps it).
-        const studios = page.getByRole("button", { name: "Studios menu" }).first();
+        await page.waitForTimeout(400);
+        // The Studios panel leaves quickly (the fast token), and is gone after.
+        const studios = page.locator('[data-top-bar] [data-bar-menu="studios"]');
         await studios.click();
         await page.waitForTimeout(400);
         t0 = await now(page);
         await page.keyboard.press("Escape");
         await page.waitForTimeout(400);
         r = await since(page, t0);
-        const fadeOut = r.anims.some((a) => a.id === "studios-launcher" && a.name.startsWith("transition:opacity"));
-        check(!fadeOut, `launcher closes at once (faded: ${fadeOut})`);
+        const fadeOut = opacityOf(r, "studios-launcher");
+        check(reduce ? !fadeOut || fadeOut.dur < 1 : !!fadeOut && near(fadeOut.dur, 120), `launcher closes over the fast token (${fadeOut?.dur ?? "no"} ms)`);
         check(await page.locator("#studios-launcher").isHidden(), "launcher is gone after it closes");
       } else {
         for (const s of ["Create", "You"]) {

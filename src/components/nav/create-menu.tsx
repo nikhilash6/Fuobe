@@ -4,20 +4,21 @@ import { Plus } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useId } from "react";
 import { IntentLink } from "@/components/intent-link";
-import { DropdownMenuGroup, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { navActive, NEW_CREATION_HREF } from "@/lib/nav";
 import { area } from "@/lib/nav-areas";
 import { CREATE_COLUMNS, entry, visibleTo, type NavEntry, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { BarSplitMenu } from "./bar-split";
+import { BarCardMenu } from "./bar-split";
+import { warmNav } from "./nav-prefetch";
 import { NavIcon } from "./cover-thumb";
 import { useViewerKind } from "./nav-ui";
-import { MENU_HEADING, MENU_ROW_1, MENU_ROW_2, NavMenuItem, ROW_LINE, rowName, SeeAllRow, SHEET_HEADING, SHEET_ROW } from "./nav-row";
+import { CARD_ROW, MENU_HEADING, MENU_ROW_1, MENU_ROW_2, ROW_LINE, rowName, SeeAllRow, SHEET_HEADING, SHEET_ROW } from "./nav-row";
 
 /*
- * Create: the tools that start from words or a picture, in two labelled columns. The bar's Create menu (a menu: arrow
- * keys, typeahead, Esc and focus return come with it) and the phone's Create sheet (a plain list) show the same items.
+ * Create: the tools that start from words or a picture, in two labelled columns. The bar's Create card (links in a
+ * grid: arrow keys move up and down a column and across to the other, Esc gives focus back to the item) and the
+ * phone's Create sheet (a plain list) show the same items.
  * "New creation" (a fresh composer on Home) closes both.
  */
 
@@ -52,47 +53,45 @@ export function CreateList({ variant, onNavigate }: { variant: "menu" | "sheet";
   if (variant === "menu")
     return (
       <>
-        <div className="grid grid-cols-2 gap-x-1.5" data-menu-columns>
+        {/* The area's own page: first in Tab order (the item, then See all, then the rows), at the top right. */}
+        <SeeAllRow href={CREATE_AREA_HREF} name="See all of Create" data-see-all className="absolute top-1.5 right-1.5 h-8" />
+        <div className="grid grid-cols-2 gap-x-1.5">
           {columns.map((c, i) => (
-            <DropdownMenuGroup key={c.label} aria-labelledby={`${ids}-${i}`} data-menu-column={i} className="flex min-w-0 flex-col">
-              <DropdownMenuLabel id={`${ids}-${i}`} className={MENU_HEADING}>
+            <div key={c.label} role="group" aria-labelledby={`${ids}-${i}`} className="flex min-w-0 flex-col">
+              <div id={`${ids}-${i}`} className={MENU_HEADING}>
                 {c.label}
-              </DropdownMenuLabel>
-              {c.entries.map((e) => {
+              </div>
+              {c.entries.map((e, r) => {
                 const on = current(pathname, e.href, CREATE_HREFS);
                 return (
-                  <NavMenuItem key={e.id} asChild className={cn(MENU_ROW_2, "items-start")}>
-                    <IntentLink href={e.href} eager={e.eager} aria-current={on ? "page" : undefined}>
-                      <NavIcon name={e.icon} className="nav-icon mt-px size-4 text-muted-foreground" />
-                      <span className="flex min-w-0 flex-col">
-                        <span className={rowName(on)}>{e.label}</span>
-                        <span className={ROW_LINE}>{e.what}</span>
-                      </span>
-                    </IntentLink>
-                  </NavMenuItem>
+                  <IntentLink
+                    key={e.id}
+                    href={e.href}
+                    eager={e.eager}
+                    aria-current={on ? "page" : undefined}
+                    data-col={i}
+                    data-row={r}
+                    className={cn(CARD_ROW, MENU_ROW_2, "items-start")}
+                  >
+                    <NavIcon name={e.icon} className="nav-icon mt-px size-4 text-muted-foreground" />
+                    <span className="flex min-w-0 flex-col">
+                      <span className={rowName(on)}>{e.label}</span>
+                      <span className={ROW_LINE}>{e.what}</span>
+                    </span>
+                  </IntentLink>
                 );
               })}
-            </DropdownMenuGroup>
+            </div>
           ))}
         </div>
-        <DropdownMenuSeparator className="mx-2.5 my-1.5" />
-        {/* The foot: two rows on the columns' grid (Left and Right move between them too). */}
-        <div className="grid grid-cols-2 gap-x-1.5" data-menu-columns>
-          <DropdownMenuGroup data-menu-column={0} className="flex min-w-0 flex-col">
-            <NavMenuItem asChild className={cn(MENU_ROW_1, "font-medium")}>
-              <IntentLink href={NEW_CREATION_HREF} eager>
-                <Plus aria-hidden className="size-4 text-brand-text" />
-                New creation
-                <Kbd aria-hidden className="ml-auto [@media(hover:none)]:hidden">
-                  ↵
-                </Kbd>
-              </IntentLink>
-            </NavMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuGroup data-menu-column={1} className="flex min-w-0 flex-col">
-            <SeeAllRow href={CREATE_AREA_HREF} name="See all of Create" />
-          </DropdownMenuGroup>
-        </div>
+        <div role="separator" className="mx-2.5 my-1.5 h-px bg-border" />
+        <IntentLink href={NEW_CREATION_HREF} eager data-col={0} data-row={columns[0]?.entries.length ?? 0} className={cn(CARD_ROW, MENU_ROW_1, "w-1/2 font-medium")}>
+          <Plus aria-hidden className="size-4 text-brand-text" />
+          New creation
+          <Kbd aria-hidden className="ml-auto [@media(hover:none)]:hidden">
+            ↵
+          </Kbd>
+        </IntentLink>
       </>
     );
   const follow = (e: React.MouseEvent) => {
@@ -157,42 +156,17 @@ export function columnMove(lengths: readonly number[], at: { col: number; row: n
   return { col, row: Math.min(at.row, len - 1) };
 }
 
-/** Moves the menu's highlight across its columns (Radix's own keys are Up, Down, Home, End and typeahead). */
-function onColumnsKey(e: React.KeyboardEvent<HTMLElement>) {
-  const item = (e.target as HTMLElement).closest<HTMLElement>('[role="menuitem"]');
-  const column = item?.closest<HTMLElement>("[data-menu-column]");
-  const grid = column?.closest<HTMLElement>("[data-menu-columns]");
-  if (!item || !column || !grid) return;
-  const columns = [...grid.querySelectorAll<HTMLElement>(":scope > [data-menu-column]")].map((c) => [...c.querySelectorAll<HTMLElement>('[role="menuitem"]')]);
-  const col = Number(column.dataset.menuColumn);
-  const next = columnMove(
-    columns.map((c) => c.length),
-    { col, row: columns[col]?.indexOf(item) ?? 0 },
-    e.key,
-  );
-  if (!next) return;
-  e.preventDefault();
-  columns[next.col]?.[next.row]?.focus();
-}
+/** Opened: the routes its rows lead to start loading. */
+const warmCreate = () => warmNav("create");
 
 /**
- * The bar's Create item: its name goes to /create, its chevron (or ArrowDown, or resting on it with a mouse) opens the
- * menu. `active`: a Create page is open; `current`: /create itself; `onTap`: the name was clicked.
+ * The bar's Create item: one button that opens the Create card (resting on it with a mouse, a click, a tap, Enter,
+ * Space or ArrowDown). Its page (/create) is the card's first link, "See all". `active`: a Create page is open.
  */
-export function CreateMenu({ active, current, onTap }: { active?: boolean; current?: boolean; onTap?: (href: string) => void }) {
+export function CreateMenu({ active }: { active?: boolean }) {
   return (
-    <BarSplitMenu
-      href={CREATE_AREA_HREF}
-      label="Create"
-      name="Create menu"
-      active={active}
-      current={current}
-      panel="create"
-      onTap={onTap}
-      contentClassName="w-[520px] max-w-[calc(100vw-24px)] p-1.5"
-      onContentKeyDown={onColumnsKey}
-    >
+    <BarCardMenu id="create" href={CREATE_AREA_HREF} label="Create" active={active} onOpen={warmCreate} cardClassName="relative w-[520px] max-w-[calc(100vw-24px)]">
       <CreateList variant="menu" />
-    </BarSplitMenu>
+    </BarCardMenu>
   );
 }
