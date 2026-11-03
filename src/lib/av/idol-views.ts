@@ -103,3 +103,25 @@ export function fillOtherSides<T>(current: Partial<Record<ViewSide, T | null>>, 
 export function elementViews(made: Partial<Record<ViewSide, string>>, have: string[] = []): string[] {
   return OTHER_SIDES.flatMap((s) => (made[s] && !have.includes(made[s]!) ? [made[s]!] : []));
 }
+
+/**
+ * The view run started for each front picture, kept for the tab rather than in the button: the button goes away when the
+ * person switches mode or closes the dialog, and coming back to the same picture picks the run up again instead of
+ * starting (and paying for) a second one. A run belongs to its picture, so a new front never gets the old front's views.
+ */
+const viewRuns = new Map<string, string>();
+
+/** The run making views of this picture, if one was started in this tab and not handed over yet. */
+export function viewRunFor(photo: string): string | undefined {
+  return viewRuns.get(photo);
+}
+
+/** Remembers the run making views of this picture. */
+export function rememberViewRun(photo: string, runId: string): void {
+  viewRuns.set(photo, runId);
+}
+
+/** Forgets the picture's run once its views were handed over (only if it's still that run). */
+export function forgetViewRun(photo: string, runId: string): void {
+  if (viewRuns.get(photo) === runId) viewRuns.delete(photo);
+}

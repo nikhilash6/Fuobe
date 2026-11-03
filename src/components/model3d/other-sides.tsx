@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useCreateGeneration, useEngine, useGenerations, useIsVisitor, useModelAccess } from "@/lib/api";
 import { IDOL_MODELS } from "@/lib/av/model3d";
-import { IDOL_VIEWS_FEATURE, IDOL_VIEWS_NOTE, idolViewsOf, idolViewsRequest } from "@/lib/av/idol-views";
+import { forgetViewRun, IDOL_VIEWS_FEATURE, IDOL_VIEWS_NOTE, idolViewsOf, idolViewsRequest, rememberViewRun, viewRunFor } from "@/lib/av/idol-views";
 import type { ViewSide } from "@/lib/av/model3d";
 import { offered } from "@/lib/model-access";
 import { toastError } from "@/lib/refusals";
@@ -47,7 +47,10 @@ export function OtherSides({
   className?: string;
 }) {
   const create = useCreateGeneration();
-  const [runId, setRunId] = useState<string | null>(null);
+  // The run for this picture lives for the tab (viewRunFor), so it's picked up again if the button comes back mid-run,
+  // and a different front never gets another picture's views.
+  const [, setTick] = useState(0);
+  const runId = viewRunFor(photo) ?? null;
   const list = useGenerations({ features: [IDOL_VIEWS_FEATURE], limit: 20 });
   const run = runId ? list.data?.find((g) => g.id === runId) : undefined;
   const preview = useRunPreview(idolViewsRequest(photo, { asPhoto }));
@@ -62,15 +65,19 @@ export function OtherSides({
     if (!run || run.status !== "succeeded" || handed.current === run.id) return;
     handed.current = run.id;
     made.current(idolViewsOf(run.outputs));
-    setRunId(null);
-  }, [run]);
+    forgetViewRun(photo, run.id);
+    setTick((t) => t + 1);
+  }, [run, photo]);
   const failed = run && (run.status === "failed" || run.status === "canceled") ? run : undefined;
   const working = create.isPending || (!!runId && !failed);
   useEffect(() => onBusy?.(working), [onBusy, working]);
   useEffect(() => () => onBusy?.(false), [onBusy]);
   const start = () =>
     create.mutate(idolViewsRequest(photo, { asPhoto }), {
-      onSuccess: (items) => setRunId(items[0]?.id ?? null),
+      onSuccess: (items) => {
+        if (items[0]?.id) rememberViewRun(photo, items[0].id);
+        setTick((t) => t + 1);
+      },
       onError: (e) => toastError(e),
     });
   return (

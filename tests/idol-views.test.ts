@@ -257,6 +257,19 @@ describe("the request, the slots and the chain into TRELLIS.2 multi-view", () =>
     expect(own.params?.extra).toEqual({ views: ["front", "back"] });
   });
 
+  it("a view run belongs to its front picture for the tab, so the button picks it up again and a new front never gets it", () => {
+    expect(views.viewRunFor("/api/files/front-a.png")).toBeUndefined();
+    views.rememberViewRun("/api/files/front-a.png", "run-1");
+    expect(views.viewRunFor("/api/files/front-a.png")).toBe("run-1");
+    expect(views.viewRunFor("/api/files/front-b.png")).toBeUndefined();
+    // A newer run for the same picture replaces it; an older run's handover doesn't forget the newer one.
+    views.rememberViewRun("/api/files/front-a.png", "run-2");
+    views.forgetViewRun("/api/files/front-a.png", "run-1");
+    expect(views.viewRunFor("/api/files/front-a.png")).toBe("run-2");
+    views.forgetViewRun("/api/files/front-a.png", "run-2");
+    expect(views.viewRunFor("/api/files/front-a.png")).toBeUndefined();
+  });
+
   it("an element gets the left, back and right views it hasn't got yet", () => {
     const made = { front: "v0", left: "v1", back: "v2", right: "v3" };
     expect(views.elementViews(made)).toEqual(["v1", "v2", "v3"]);
