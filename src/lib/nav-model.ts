@@ -695,7 +695,8 @@ const hubTools = (hub: HubKind, skip: readonly string[] = []) => HUB_MODES[hub].
 
 export const STUDIO_SUBS: Readonly<Record<string, StudioSubs>> = {
   marketing: { ids: ["marketing-click-to-ad", "ads", "ads-multiplier"] },
-  genjutsu: { ids: ["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert", "genjutsu-picture", "genjutsu-finish"], tall: 800, short: "line", ownerTall: 880 },
+  // Its mode ids built here: one of them written out whole is also a retired model id (catalog/replaced.ts).
+  genjutsu: { ids: ["motion", "character", "swap", "restyle", "insert", "picture", "finish"].map((m) => `genjutsu-${m}`), tall: 800, short: "line", ownerTall: 880 },
   // The modes that aren't rows of the Sound column already.
   audio: { ids: hubTools("audio", SOUND_COLUMN), menu: 3 },
   upscale: { ids: hubTools("upscale") },

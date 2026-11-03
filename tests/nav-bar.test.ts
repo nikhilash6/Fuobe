@@ -177,7 +177,7 @@ describe("the launcher's columns", () => {
     expect(subs("audio")).toEqual(["Dialogue", "Voice change", "Design a voice", "See all 13"]);
     expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 10"]);
     for (const w of ["Click to Ad", "Ads Studio", "Ad Multiplier", "Motion transfer", "FPS Boost"]) expect(words(html)).toContain(w);
-    // Under a hairline, quieter than a row, with no picture and no line of their own (nav-states.css .nav-subs: 24 px
+    // Under a hairline, quieter than a row, with no picture and no line of their own (nav-subs.css: 24 px
     // names with a mouse, 44 px pills to tap on a touch screen).
     const sub = anchors(html).find((a) => a.tag.includes("data-sub"))!.tag;
     expect(sub).toContain("text-muted-foreground");

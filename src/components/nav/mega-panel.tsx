@@ -97,7 +97,7 @@ function Row({ e, col, row, current, inside, now, className }: { e: MegaItem; co
 
 /**
  * Below the window height a studio's links need, they hide, so the panel never scrolls inside. With a mouse they are
- * 24 px names; on a touch screen pills 44 px to tap (nav-states.css), so they need a taller window there.
+ * 24 px names; on a touch screen pills 44 px to tap (nav-subs.css), so they need a taller window there.
  */
 const HIDE_SHORT: Record<800 | 880 | 960, string> = {
   800: "[@media(max-height:799.98px)]:hidden",
@@ -109,12 +109,12 @@ const HIDE_TOUCH: Record<800 | 880 | 960, string> = {
   880: "[@media(pointer:coarse)_and_(max-height:1099.98px)]:hidden",
   960: "[@media(pointer:coarse)_and_(max-height:1199.98px)]:hidden",
 };
-/** `line`: with a mouse they become one line of names there instead (nav-states.css), so only a touch screen hides them. */
+/** `line`: with a mouse they become one line of names there instead (nav-subs.css), so only a touch screen hides them. */
 const hideBelow = (h: 800 | 880 | 960, line = false) => cn(!line && HIDE_SHORT[h], HIDE_TOUCH[h]);
 
 /**
  * What a studio holds inside (its tabs and modes), as links under its card or row: names only, smaller and quieter
- * than the rows, hung from a hairline under the studio (nav-states.css .nav-subs: with a mouse, two 24 px names to a
+ * than the rows, hung from a hairline under the studio (nav-subs.css: with a mouse, two 24 px names to a
  * row's 48 px, so the columns' rows stay in line; pills on a touch screen; one wrapped line of names below the height a
  * studio with `subsLine` needs). `row`: the first link's place for the arrow keys (they go down from the studio through
  * its links to the next row). `current`: the open page's feature. `under`: links under a row, whose names start where

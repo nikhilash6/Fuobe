@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "./nav-states.css";
+@import "./nav-subs.css";
 @import "./motion.css";
 @import "./tab-row.css";
 
