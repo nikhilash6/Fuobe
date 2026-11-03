@@ -54,7 +54,8 @@ export interface Stroke {
 
 export type Blend = "source-over" | "multiply" | "screen" | "overlay" | "lighter" | "source-atop";
 
-export type ClipShape = { type: "rect"; x: number; y: number; w: number; h: number; r?: number } | { type: "ellipse"; cx: number; cy: number; rx: number; ry: number };
+/** What a group is clipped to: a (rounded) rectangle, an ellipse, or a closed path (path data in design units). */
+export type ClipShape = { type: "rect"; x: number; y: number; w: number; h: number; r?: number } | { type: "ellipse"; cx: number; cy: number; rx: number; ry: number } | { type: "path"; d: string };
 
 export interface GroupNode {
   type: "group";

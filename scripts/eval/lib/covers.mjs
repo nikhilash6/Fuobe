@@ -330,7 +330,8 @@ export function dissolveBack(frames, fade) {
  *
  * With `rest: "end"` (a reveal that ends on its result), the clip keeps its own end (up to REST_CLIP_SECONDS) and
  * is not crossfaded; its poster is its last frame, whose time comes back as `at`: a card shows that frame at rest
- * and starts the clip there, so nothing jumps.
+ * and starts the clip there, so nothing jumps. With `rest` a number of seconds the same holds for the frame at that
+ * time (a clip whose telling moment comes before its end, such as a headline that resolves to a logo).
  *
  * With `length: "full"` (an effect whose end matters), the clip keeps its whole length (up to REST_CLIP_SECONDS)
  * instead of its first CLIP_SECONDS. Every frame shows clean: its loop dissolves from its last frame back to its first
@@ -338,30 +339,34 @@ export function dissolveBack(frames, fade) {
  * @param {string} src
  * @param {"image" | "video"} kind
  * @param {string} destBase
- * @param {{ rest?: "start" | "end", length?: "full" }} [opts]
+ * @param {{ rest?: "start" | "end" | number, length?: "full" }} [opts]
  * @returns {{ poster: string, video?: string, at?: number }}
  */
 export function encode(src, kind, destBase, opts = {}) {
   const fit = (px) => `scale='if(gt(iw,ih),min(${px},iw),-2)':'if(gt(iw,ih),-2,min(${px},ih))'`;
   if (kind === "video") {
     const atEnd = opts.rest === "end";
+    // A clip that rests on a moment of its own (seconds): kept whole, like a reveal, with that frame its poster.
+    const atTime = typeof opts.rest === "number" && opts.rest >= 0 ? opts.rest : null;
+    const whole = atEnd || atTime !== null;
     // How much of the clip its loop keeps: the first CLIP_SECONDS, or all of it (up to REST_CLIP_SECONDS).
     const full = opts.length === "full";
     const keep = full ? REST_CLIP_SECONDS : CLIP_SECONDS;
     // Decoded at CLIP_FPS: what it keeps, plus the frames the crossfade takes back from the start (a reveal or a full
     // clip: all of it, as a full clip's dissolve is added after its end).
-    const seconds = atEnd || full ? REST_CLIP_SECONDS : keep + LOOP_FADE / CLIP_FPS;
+    const seconds = whole || full ? REST_CLIP_SECONDS : keep + LOOP_FADE / CLIP_FPS;
     const y4m = run(["-i", src, "-t", String(seconds), "-an", "-sn", "-dn", "-vf", `${fit(CLIP_PX)},fps=${CLIP_FPS},format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
     const { header, frames, luma } = readY4m(y4m);
     if (frames.length < 2) throw new Error(`${src} has no frames to make a clip of`);
     const cut = frames.slice(0, keep * CLIP_FPS);
     const fade = Math.min(LOOP_FADE, Math.floor(frames.length / 4));
-    const looped = atEnd ? frames : loopsAlready(cut, luma) ? cut : full ? dissolveBack(cut, fade) : seamless(frames, fade);
+    const looped = whole ? frames : loopsAlready(cut, luma) ? cut : full ? dissolveBack(cut, fade) : seamless(frames, fade);
     const stream = (list) => Buffer.concat([Buffer.from(`${header}\n`, "latin1"), ...list.flatMap((fr) => [Buffer.from("FRAME\n"), fr])]);
     run(["-f", "yuv4mpegpipe", "-i", "-", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", "-map_metadata", "-1", "-movflags", "+faststart", `${destBase}.mp4`], stream(looped));
-    if (atEnd) {
-      run(["-f", "yuv4mpegpipe", "-i", "-", "-frames:v", "1", "-vf", "format=yuvj420p", "-q:v", "4", `${destBase}.jpg`], stream([looped.at(-1)]));
-      return { poster: `${destBase}.jpg`, video: `${destBase}.mp4`, at: Math.round(((looped.length - 1) / CLIP_FPS) * 1000) / 1000 };
+    if (whole) {
+      const i = atEnd ? looped.length - 1 : Math.min(looped.length - 1, Math.round(atTime * CLIP_FPS));
+      run(["-f", "yuv4mpegpipe", "-i", "-", "-frames:v", "1", "-vf", "format=yuvj420p", "-q:v", "4", `${destBase}.jpg`], stream([looped[i]]));
+      return { poster: `${destBase}.jpg`, video: `${destBase}.mp4`, at: Math.round((i / CLIP_FPS) * 1000) / 1000 };
     }
     run(["-i", `${destBase}.mp4`, "-frames:v", "1", "-vf", "format=yuvj420p", "-q:v", "4", `${destBase}.jpg`]);
     return { poster: `${destBase}.jpg`, video: `${destBase}.mp4` };

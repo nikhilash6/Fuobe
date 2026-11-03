@@ -72,8 +72,11 @@ function recipeFiles(extra: Record<string, unknown> | undefined): Record<string,
   // (" /api/files/…" is no stored file's path: it is checked, and refused, as written.)
   const logo = r.data.brand.logo;
   if (logo?.includes("/api/files/")) out._logo = logo;
-  if (r.data.media?.product) out._product = r.data.media.product;
-  if (r.data.media?.images?.length) out._media = r.data.media.images;
+  // Fuobe's own sample pictures (/previews/…) are public: only stored files are checked.
+  const stored = (u: string) => u.startsWith("/api/files/");
+  if (r.data.media?.product && stored(r.data.media.product)) out._product = r.data.media.product;
+  const media = (r.data.media?.images ?? []).filter(stored);
+  if (media.length) out._media = media;
   return out;
 }
 

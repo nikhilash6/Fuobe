@@ -68,6 +68,11 @@ export interface TextSpec {
   step?: number;
   /** Letter boxes too (each costs a measurement per letter). */
   letters?: boolean;
+  /**
+   * Even lines: when the shortest line is under this share of the longest (a lone word left on a line), sizes down to
+   * 85 % of the first one that fits are tried for a more even break. Off by default.
+   */
+  even?: number;
 }
 
 /** Scripts written without spaces between words: they may break between the words Intl.Segmenter finds. */
@@ -164,17 +169,21 @@ function greedyCount(a: number, b: number, width: number, w: Width): number {
   return lines;
 }
 
-/** The break of atoms a..b into exactly `n` lines whose widths are closest to each other (least squares). */
+/**
+ * The break of atoms a..b into exactly `n` lines whose widths are closest to each other (least squares), a line of one
+ * lone word costing more when there are words enough to keep each line at two or more.
+ */
 function balancedBreaks(a: number, b: number, n: number, width: number, w: Width): number[] {
   if (n <= 1) return [a];
   const avg = w(a, b) / n;
   const count = b - a + 1;
+  const lone = count >= 2 * n ? (avg * 0.4) ** 2 : 0;
   // cost[l][j]: the best l + 1 lines ending at atom a + j; from[l][j]: where the last of them starts.
   const cost = Array.from({ length: n }, () => new Float64Array(count).fill(Infinity));
   const from = Array.from({ length: n }, () => new Int32Array(count).fill(-1));
   for (let j = 0; j < count; j++) {
     const lw = w(a, a + j);
-    if (lw <= width) cost[0][j] = (lw - avg) ** 2;
+    if (lw <= width) cost[0][j] = (lw - avg) ** 2 + (j === 0 ? lone : 0);
   }
   for (let l = 1; l < n; l++) {
     for (let j = l; j < count; j++) {
@@ -183,7 +192,7 @@ function balancedBreaks(a: number, b: number, n: number, width: number, w: Width
         if (prev === Infinity) continue;
         const lw = w(a + i, a + j);
         if (lw > width) continue;
-        const c = prev + (lw - avg) ** 2;
+        const c = prev + (lw - avg) ** 2 + (i === j ? lone : 0);
         if (c < cost[l][j]) {
           cost[l][j] = c;
           from[l][j] = i;
@@ -299,9 +308,22 @@ export function layoutText(spec: TextSpec, measure: Measure): TextLayout {
   for (;;) {
     const last = size <= spec.min;
     const got = attempt(size, last);
-    if (got) return got;
+    if (got) return spec.even && !got.overflow ? evener(got, spec.even, (s) => attempt(s, false), Math.max(spec.min, size * 0.85), step) : got;
     size = Math.max(spec.min, size * step);
   }
+}
+
+/** How even a layout's lines are: the shortest line's share of the longest (1: a single line). */
+const evenness = (l: TextLayout): number => (l.lines.length < 2 ? 1 : Math.min(...l.lines.map((x) => x.width)) / Math.max(1, l.width));
+
+/** The first size from `got` down to `floor` whose lines are even enough, else the most even one tried (else `got`). */
+function evener(got: TextLayout, even: number, attempt: (size: number) => TextLayout | null, floor: number, step: number): TextLayout {
+  let best = got;
+  for (let size = got.size * step; size >= floor - 1e-9 && evenness(best) < even; size *= step) {
+    const l = attempt(size);
+    if (l && l.lines.length <= got.lines.length && evenness(l) > evenness(best) + 0.05) best = l;
+  }
+  return best;
 }
 
 /** The typed text back from a layout's lines (gap + text), for checks. */

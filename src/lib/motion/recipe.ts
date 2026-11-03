@@ -11,7 +11,11 @@ import { rng } from "./random";
 export const RECIPE_MAX_BYTES = 64 * 1024;
 
 const Hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
-const File = z.string().startsWith("/api/files/").max(500);
+/** A picture the clip is made from: the person's own stored file, or one of Fuobe's own sample pictures. */
+const File = z
+  .string()
+  .max(500)
+  .refine((u) => (u.startsWith("/api/files/") || u.startsWith("/previews/")) && !u.includes(".."), "A stored file or a sample picture");
 
 export const RecipeSchema = z.object({
   v: z.literal(1),

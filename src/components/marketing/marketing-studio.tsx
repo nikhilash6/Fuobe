@@ -13,7 +13,7 @@ import { BrandChip } from "@/components/brand/brand-dialog";
 import { inputCls } from "@/components/brand/fields";
 import { withoutOwnGpu } from "@/lib/catalog/engines";
 import { Switch } from "@/components/ui/switch";
-import { DRAWN_WORDS_HINT, DRAWN_WORDS_LABEL, FORMATS, formatModels, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
+import { DRAWN_WORDS_HINT, DRAWN_WORDS_LABEL, FORMATS, formatModels, isCodeTemplate, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
 import { SelfHostNote } from "@/components/self-host-note";
 import { StarterSection } from "@/components/starters/starter-section";
 import { formatCost } from "@/lib/format";
@@ -22,6 +22,7 @@ import { keepOffered, offered } from "@/lib/model-access";
 import type { StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { addRuns, send, useBrands, useEstimate, useProducts } from "./hooks";
+import { KineticTemplate } from "./kinetic-template";
 import type { MarketingRun } from "@/lib/catalog/marketing";
 import { toastError } from "@/lib/refusals";
 import { templateCover } from "@/lib/template-covers";
@@ -333,6 +334,10 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
   const set = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
   const f = FORMATS[draft.format];
   const template = draft.templateId ? TEMPLATE_INDEX.get(draft.templateId) : undefined;
+  // A template drawn by Kinetic Motion opens its own panel (words, brand, sizes, live preview, Save) instead of the
+  // composer: nothing is generated, so it is open to everyone and asks only on Save.
+  const code = isCodeTemplate(template);
+  const panel = useRef<HTMLDivElement>(null);
   const kind = f.kind;
 
   // The brand kit is remembered between visits (and dropped once it's deleted).
@@ -344,7 +349,8 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
 
   const pickTemplate = (t: MarketingTemplate) => {
     setDraft((d) => withTemplate(d, t));
-    requestAnimationFrame(() => prompt.current?.focus({ preventScroll: true }));
+    if (isCodeTemplate(t)) requestAnimationFrame(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    else requestAnimationFrame(() => prompt.current?.focus({ preventScroll: true }));
   };
 
   const body = useMemo(
@@ -438,9 +444,14 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
             Product shots, motion, UGC presenters, ads, posters and listings — from Fuobe&apos;s templates, on {engine === "open" ? (visitor ? "open-source models" : "your own GPU, free") : "Fuobe Marketing Image or partner models in the cloud"}.
           </p>
         </div>
-        {noProducts && <StarterSection surface="marketing" starters={starters} center compact className="mt-6 mb-4" />}
+        {code && template && (
+          <div ref={panel} className="mt-4 scroll-mt-40">
+            <KineticTemplate key={template.id} template={template} onClose={() => setDraft((d) => withTemplate(d, null, d.format))} kitId={brandId} onKit={pickBrand} />
+          </div>
+        )}
+        {!code && noProducts && <StarterSection surface="marketing" starters={starters} center compact className="mt-6 mb-4" />}
         {/* Under the ready shoots, so it doesn't read as an answer to them. */}
-        {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl text-center">Marketing Studio isn&apos;t available here.</SelfHostNote>}
+        {visitor && !code && <SelfHostNote className="mx-auto mt-3 max-w-xl text-center">Marketing Studio isn&apos;t available here.</SelfHostNote>}
         <div role="tablist" aria-label="View" className="mx-auto mt-4 flex w-fit rounded-full bg-muted p-0.5">
           {(["templates", "generations"] as const).map((t) => (
             <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("h-8 rounded-full px-4 text-[13px] font-medium text-muted-foreground", tab === t && "bg-background text-foreground shadow-soft")}>
@@ -483,8 +494,8 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
         </div>
       </div>
 
-      {/* Docked composer */}
-      <div className="sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-4 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+      {/* Docked composer (a Kinetic template has its own panel) */}
+      <div hidden={code} className="sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-4 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
         <div
           ref={composer}
           data-slim={slim || undefined}

@@ -31,7 +31,10 @@ Every change a guest sends (generate, upload, save a setting, create a project�
 studio shows a "Create a free account to run this" card with **Sign up** and **Log in**. Where
 signing up wouldn't help, a guest gets an account's answer instead: 403 `assist-owner` for Assist,
 and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Shorts, Katana,
-Marketing…). The pages of those tools say so up front and turn off their upload and Generate. Price
+Marketing…). The pages of those tools say so up front and turn off their upload and Generate.
+What is drawn in the browser itself is open to try: Click to Ad's animated end card and Marketing
+Studio's code-drawn templates (Kinetic Motion) take a guest's words and play live (a code-drawn
+template shows no "isn't available" note, as nothing is generated); their Save opens the sign-up card before anything renders. Price
 checks (the estimate routes, and `?preview=1` on the run routes that support it) stay open, so the
 studios can show prices. A guest may send 120 price checks a minute (per visitor behind a trusted
 reverse proxy; see below), and so may each account. A price check reads only the header of a file

@@ -31,6 +31,7 @@ import {
   snapDuration,
   styleById,
   TEMPLATE_INDEX,
+  isCodeTemplate,
   UGC_MODELS,
   wordBudget,
   wordsOnTop,
@@ -295,11 +296,15 @@ export interface PlanContext {
   script?: string;
 }
 
+/** Templates drawn in the browser (exact words in the brand's fonts) never go to a model. */
+export const CODE_TEMPLATE_REFUSAL = "This template is made in your browser: open it in Marketing Studio";
+
 /** Marketing Studio: one run of a template (images) or a pipeline (motion over several shots, UGC). */
 export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan {
   const f = FORMATS[input.format as FormatId];
   const tpl: MarketingTemplate | undefined = input.templateId ? TEMPLATE_INDEX.get(input.templateId) : undefined;
   if (input.templateId && !tpl) throw new PlanError("This preset is no longer available.");
+  if (tpl && isCodeTemplate(tpl)) throw new PlanError(CODE_TEMPLATE_REFUSAL);
   if (tpl && tpl.format !== f.id) throw new PlanError("That template belongs to another format");
   const open = input.engine === "open";
   const product = ctx.product ?? null;
@@ -1250,6 +1255,7 @@ export async function runMarketing(input: MarketingInput): Promise<{ runs: Marke
   const ctx = context(input);
   const f = FORMATS[input.format];
   const tpl = input.templateId ? TEMPLATE_INDEX.get(input.templateId) : undefined;
+  if (tpl && isCodeTemplate(tpl)) throw new PlanError(CODE_TEMPLATE_REFUSAL);
   let script: string | undefined;
   if (f.pipeline === "ugc") {
     const hook = hookById(input.hookId === undefined ? tpl?.hook : input.hookId);

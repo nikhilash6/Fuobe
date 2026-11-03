@@ -81,9 +81,9 @@ export function useEndCardMotion(card: EndCardInput, colors: readonly string[], 
 
 /** Renders a recipe's clip here, in the brand's own fonts (a font that didn't load stops it). */
 export async function renderRecipe(recipe: Recipe, inputs: MotionInputs, o: { formats: ("mp4" | "webm")[]; signal?: AbortSignal; onProgress?: (done: number, total: number) => void }): Promise<RenderResult> {
-  await fontsReady([recipe.brand.fonts.heading, recipe.brand.fonts.body], { strict: true, text: Object.values(recipe.fields).join(" ") });
+  await fontsReady([recipe.brand.fonts.heading, recipe.brand.fonts.body], { strict: true, text: [...Object.values(recipe.fields), recipe.brand.name].join(" ") });
   const scene = await loadScene(recipe.scene);
-  return renderClip(scene, recipe, { sources: inputs.sources, logo: inputs.logo, measure: measureText, formats: o.formats, signal: o.signal, onProgress: (d, n) => o.onProgress?.(d, n) });
+  return renderClip(scene, recipe, { sources: inputs.sources, logo: inputs.logo, images: inputs.images, outlines: inputs.outlines, measure: measureText, formats: o.formats, signal: o.signal, onProgress: (d, n) => o.onProgress?.(d, n) });
 }
 
 /** The words a saved end card is listed and searched by. */

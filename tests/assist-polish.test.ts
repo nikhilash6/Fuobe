@@ -37,10 +37,12 @@ describe("the 390 px sweep visits dynamic routes", () => {
     for (const p of patterns) expect(byPattern[p]?.length, p).toBeGreaterThan(0);
     expect(urls.filter((u) => /\[/.test(u))).toEqual([]);
     expect(urls).toEqual(expect.arrayContaining(["/cinema/c1", "/cinema/does-not-exist", "/canvas/v1", "/canvas/does-not-exist", "/assist/projects/p1", "/apps/does-not-exist"]));
-    // Dialogs and tabs a query opens: a skill's Run form, Genjutsu's From picture and Finish tabs.
+    // Dialogs and tabs a query opens: a skill's Run form, Genjutsu's From picture and Finish tabs, Marketing's
+    // code-drawn templates.
     const genjutsu = ["/genjutsu?mode=picture", "/genjutsu?mode=finish"];
-    expect(querySamples({ recipeSkill: "lamp" })).toEqual(["/assist/skills?run=lamp", "/assist/skills?run=does-not-exist", ...genjutsu]);
-    expect(querySamples()).toEqual(["/assist/skills?run=does-not-exist", ...genjutsu]);
+    const kinetic = ["ms-kinetic-headline", "ms-feature-cards", "m2-line-reveal", "ms-end-card"].map((id) => `/marketing?template=${id}`);
+    expect(querySamples({ recipeSkill: "lamp" })).toEqual(["/assist/skills?run=lamp", "/assist/skills?run=does-not-exist", ...genjutsu, ...kinetic]);
+    expect(querySamples()).toEqual(["/assist/skills?run=does-not-exist", ...genjutsu, ...kinetic]);
   });
 
   it("gives a route added later (another branch's /faceless/[id]/[episode]) a not-found sample by itself", () => {

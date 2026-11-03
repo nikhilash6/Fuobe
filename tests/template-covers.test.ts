@@ -131,10 +131,10 @@ describe("the template covers manifest", () => {
         lines.push(`  ${JSON.stringify(key)}: ${JSON.stringify(gen.slimEntry(key, { poster: e.poster, ...(e.video && { video: e.video }), ...(e.at && { at: e.at }), ...(e.frames && { frames: e.frames }) }))}`);
       }
     }
-    // The studios' tiles (242, with Keyframes → animation, Outfit lookbook and Music video), Fuobe Soul's looks (139),
-    // AI Influencer's types (9), the empty pages' examples (6) and the studios' ready-made starters with a cover of their
-    // own (24).
-    expect(lines).toHaveLength(242 + 139 + 9 + 6 + 24);
+    // The studios' tiles (246, with Keyframes → animation, Outfit lookbook, Music video and Marketing's four code-drawn
+    // templates), Fuobe Soul's looks (139), AI Influencer's types (9), the empty pages' examples (6) and the studios'
+    // ready-made starters with a cover of their own (24).
+    expect(lines).toHaveLength(246 + 139 + 9 + 6 + 24);
     const text = `{\n${lines.join(",\n")}\n}`;
     expect(text.length).toBeLessThan(37_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);
@@ -174,6 +174,7 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     put("marketing/ps-sunlit-plinth", { "still.png": still });
     put("marketing/m2-sticker-pop", { "clip.mp4": SAMPLE_CLIP });
     put("shorts/shorts-warm-glow", { "clip.mp4": SAMPLE_CLIP, "meta.json": '{"rest":"end"}' });
+    put("marketing/ms-kinetic-headline", { "clip.mp4": SAMPLE_CLIP, "meta.json": '{"rest":0.5}' });
     put("photodump/zen", { "still.png": still, "frame-2.png": still, "frame-3.png": still, "frame-4.png": still });
     put("mixed-media/mixed-sketch", { "meta.json": JSON.stringify({ same: sameId }) });
     put("mixed-media/mixed-paper", { "meta.json": JSON.stringify({ same: peakId }) });
@@ -187,6 +188,7 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     const r = run();
     expect(r.covers.map((c) => c.key).sort()).toEqual([
       "marketing/m2-sticker-pop",
+      "marketing/ms-kinetic-headline",
       "marketing/ps-sunlit-plinth",
       "mixed-media/mixed-paper",
       "mixed-media/mixed-sketch",
@@ -202,6 +204,10 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     const reveal = m["shorts/shorts-warm-glow"];
     expect(reveal.at).toBeGreaterThan(1);
     expect(reveal.video).toMatch(VERSIONED);
+    // A clip whose telling moment comes earlier rests on it (the frame nearest that time), kept whole too.
+    const moment = m["marketing/ms-kinetic-headline"];
+    expect(moment.at).toBeCloseTo(0.5, 1);
+    expect(moment.video).toMatch(VERSIONED);
     expect(m["photodump/zen"].frames).toEqual([2, 3, 4].map((k) => `/previews/templates/photodump/zen-${k}.jpg?v=${sha8(out(`photodump/zen-${k}.jpg`), out(`photodump/thumbs/zen-${k}.jpg`))}`));
     expect(m["mixed-media/mixed-sketch"]).toEqual({ poster: PRESET_PREVIEWS[sameId].poster, ...(PRESET_PREVIEWS[sameId].video && { video: PRESET_PREVIEWS[sameId].video }) });
     // A clip with a peak rests on it: the look, not the photo the clip starts from (and the versions stay the peak's own).
@@ -228,11 +234,11 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     expect(fs.existsSync(path.join(publicDir, "previews/templates/photodump/zen-4.jpg"))).toBe(false);
     expect(fs.existsSync(path.join(publicDir, "previews/templates/photodump/thumbs/zen-4.jpg"))).toBe(false);
     // The other tiles stay as they were.
-    expect(Object.keys(m)).toHaveLength(6);
+    expect(Object.keys(m)).toHaveLength(7);
   });
 
   it("versions the manifest from the files as they are (--versions), and finds nothing to do when it's current", () => {
-    expect(gen.versionTemplateCovers({ publicDir, manifest, dryRun: true })).toMatchObject({ entries: 6, changed: 0, thumbs: [], unversioned: [] });
+    expect(gen.versionTemplateCovers({ publicDir, manifest, dryRun: true })).toMatchObject({ entries: 7, changed: 0, thumbs: [], unversioned: [] });
     // A still replaced by hand: its copy is made again first, then both get a new version.
     const poster = path.join(publicDir, "previews/templates/marketing/ps-sunlit-plinth.jpg");
     const was = gen.readTemplateManifest(manifest)["marketing/ps-sunlit-plinth"].poster;

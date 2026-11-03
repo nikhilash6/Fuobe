@@ -4,7 +4,7 @@ import { avcCodec, encodeMp4, encodeVp8, pathVideoType, recordWithMediaRecorder,
 import { listTravel, type DisplayList } from "@/lib/motion/display";
 import type { Measure } from "@/lib/motion/layout";
 import type { Recipe } from "@/lib/motion/recipe";
-import type { LogoInfo, Scene, ScenePlan } from "@/lib/motion/scene";
+import type { LogoInfo, Outline, Scene, ScenePlan } from "@/lib/motion/scene";
 import { exportBitrate, exportSize } from "@/lib/motion/sizes";
 import { frameCount } from "@/lib/motion/time";
 import { drawDisplayList, type Sources } from "./draw";
@@ -25,6 +25,8 @@ export const NO_ENCODER_MESSAGE = "This browser can't make this video. Try Chrom
 export interface RenderOptions {
   sources: Sources;
   logo: LogoInfo | null;
+  images?: Record<string, { w: number; h: number }>;
+  outlines?: Record<string, Outline | null>;
   measure: Measure;
   signal?: AbortSignal;
   /** After each frame: how many are done, of how many, and the frame just drawn. */
@@ -127,7 +129,7 @@ export function drawFrame(plan: ScenePlan, t: number, target: AnyCanvas, scratch
 
 /** Renders the whole clip (see the file's comment). Throws SHORTEN_MESSAGE when a typed field doesn't fit. */
 export async function renderClip(scene: Scene, recipe: Recipe, o: RenderOptions): Promise<RenderResult> {
-  const plan = scene.plan({ recipe, measure: o.measure, logo: o.logo });
+  const plan = scene.plan({ recipe, measure: o.measure, logo: o.logo, images: o.images, outlines: o.outlines });
   if (plan.overflow.length) throw new Error(SHORTEN_MESSAGE);
   const { w, h } = exportSize(recipe.size);
   // H.264 wants even sides.

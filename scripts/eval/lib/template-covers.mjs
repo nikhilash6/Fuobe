@@ -197,7 +197,8 @@ function readMaster(folder) {
  *   clip.mp4         a clip cover (its first 4 s, its first frame the poster), or
  *   still.png        a still cover (also still.jpg / still.webp, or start.png);
  *   frame-2.png …    the tile's other frames, in order, up to frame-6 (a carousel's slides, a contact sheet's cells);
- *   meta.json        { "rest": "end" } for a reveal: the clip is kept to its end and its last frame is the poster,
+ *   meta.json        { "rest": "end" } for a reveal: the clip is kept to its end and its last frame is the poster
+ *                    ({ "rest": 2.4 }: the frame at 2.4 s is, for a clip whose telling moment comes before its end),
  *                    or { "same": "<preset id>" }: the tile shows that preset's cover (no files of its own),
  *                    resting on its clip's peak frame when it has one (presetCoverEntry).
  * The manifest is merged: other tiles' entries stay. A tile whose cover is newer than its masters is kept (force makes
@@ -250,7 +251,7 @@ export function templateCoversFromMasters(dir, opts = {}) {
         continue;
       }
       const src = m.clip ?? m.still;
-      const rest = kind === "video" && m.meta.rest === "end" ? "end" : undefined;
+      const rest = kind !== "video" ? undefined : m.meta.rest === "end" ? "end" : typeof m.meta.rest === "number" && Number.isFinite(m.meta.rest) && m.meta.rest >= 0 ? m.meta.rest : undefined;
       const outDir = path.join(publicDir, "previews", "templates", group);
       const base = path.join(outDir, safeName(id));
       const frameFiles = m.frames.map((_, i) => `${base}-${i + 2}.jpg`);

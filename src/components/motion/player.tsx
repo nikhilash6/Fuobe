@@ -2,13 +2,14 @@
 
 import { Pause, Play, Repeat } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadImage, measureText } from "@/components/ads/render";
+import { measureText } from "@/components/ads/render";
 import type { Recipe } from "@/lib/motion/recipe";
 import { loadScene } from "@/lib/motion/registry";
-import type { LogoInfo, Scene, ScenePlan } from "@/lib/motion/scene";
+import type { LogoInfo, Outline, Scene, ScenePlan } from "@/lib/motion/scene";
 import { previewSize, type SizeSpec } from "@/lib/motion/sizes";
 import { cn } from "@/lib/utils";
-import { drawDisplayList, logoInfoFor, type Sources } from "./draw";
+import { drawDisplayList, type Sources } from "./draw";
+import { loadMotionInputs } from "./inputs";
 import { fontsReady } from "./fonts";
 
 /**
@@ -22,6 +23,9 @@ export interface MotionInputs {
   ready: boolean;
   sources: Sources;
   logo: LogoInfo | null;
+  /** The pictures' sizes and a cut-out's outline, by key ("product"). */
+  images?: Record<string, { w: number; h: number }>;
+  outlines?: Record<string, Outline | null>;
   /** Bumps when the fonts or the logo arrive (the layout is measured again). */
   version: number;
 }
@@ -31,6 +35,7 @@ const EMPTY_SOURCES: Sources = { images: new Map() };
 /** The logo and fonts a recipe needs, loaded (the preview draws with a fallback font until its own arrives). */
 export function useMotionInputs(recipe: Recipe | null): MotionInputs {
   const logoUrl = recipe?.brand.logo || null;
+  const productUrl = recipe?.media?.product || null;
   const heading = recipe?.brand.fonts.heading;
   const body = recipe?.brand.fonts.body;
   const text = recipe ? Object.values(recipe.fields).join(" ") : "";
@@ -38,18 +43,15 @@ export function useMotionInputs(recipe: Recipe | null): MotionInputs {
   useEffect(() => {
     let live = true;
     void (async () => {
-      const img = logoUrl ? await loadImage(logoUrl).catch(() => null) : null;
-      const logo = img && logoUrl ? await logoInfoFor(logoUrl, img).catch(() => null) : null;
+      const loaded = await loadMotionInputs({ logo: logoUrl, product: productUrl });
       await fontsReady([heading, body], { text }).catch(() => undefined);
       if (!live) return;
-      const images = new Map<string, CanvasImageSource>();
-      if (img) images.set("logo", img);
-      setState((s) => ({ ready: true, sources: { images }, logo, version: s.version + 1 }));
+      setState((s) => ({ ready: true, ...loaded, version: s.version + 1 }));
     })();
     return () => {
       live = false;
     };
-  }, [logoUrl, heading, body, text]);
+  }, [logoUrl, productUrl, heading, body, text]);
   return state;
 }
 
@@ -72,7 +74,7 @@ export function usePlan(scene: Scene | null, recipe: Recipe | null, inputs: Moti
   const key = recipe ? JSON.stringify(recipe) : "";
   return useMemo(() => {
     if (!scene || !recipe || !inputs.ready) return null;
-    return scene.plan({ recipe, measure: measureText, logo: inputs.logo });
+    return scene.plan({ recipe, measure: measureText, logo: inputs.logo, images: inputs.images, outlines: inputs.outlines });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, key, inputs.version, inputs.ready]);
 }

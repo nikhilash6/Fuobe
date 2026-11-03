@@ -34,6 +34,8 @@ export interface FeedFilter {
    * out unless this is set, so a list that must see every job (a count of running jobs) sets it.
    */
   steps?: boolean;
+  /** Only clips saved from this Marketing template (code-drawn: its Kinetic Motion recipe names it). */
+  template?: string;
 }
 
 /** Which timestamp a list is ordered (and paged) by: deletedAt in the Trash, pinnedAt in a pinned list, else createdAt. */
@@ -67,6 +69,7 @@ export function filterToSearch(f: FeedFilter, before?: string | number): URLSear
   if (f.pinned !== undefined) qs.set("pinned", f.pinned ? "1" : "0");
   if (f.reviews?.length) qs.set("reviews", f.reviews.join(","));
   if (f.steps) qs.set("steps", "1");
+  if (f.template) qs.set("template", f.template);
   if (before) qs.set("before", String(before));
   qs.set("limit", String(f.limit ?? 80));
   return qs;
@@ -90,9 +93,17 @@ export function matchesFilter(g: Generation, f: FeedFilter): boolean {
   if (f.pinned !== undefined && !!g.pinnedAt !== f.pinned) return false;
   if (f.reviews?.length && !f.reviews.includes(g.review ?? "none")) return false;
   if (!f.steps && !f.features?.length && isHelperFeature(g.feature)) return false;
+  if (f.template && motionTemplateOf(g) !== f.template) return false;
   const q = f.q?.trim().toLowerCase();
   if (q && !`${g.prompt ?? ""}\n${g.request.prompt ?? ""}`.toLowerCase().includes(q)) return false;
   return true;
+}
+
+/** The Marketing template a saved Kinetic clip was made from (its recipe's controls.template). */
+export function motionTemplateOf(g: Pick<Generation, "request">): string | undefined {
+  const extra = (g.request.params as { extra?: { motion?: { controls?: { template?: unknown } } } } | undefined)?.extra;
+  const t = extra?.motion?.controls?.template;
+  return typeof t === "string" ? t : undefined;
 }
 
 const byIdDesc = (a: Generation, b: Generation) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);

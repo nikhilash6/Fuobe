@@ -267,6 +267,8 @@ export interface ListOptions {
   favorites?: boolean;
   status?: string;
   statuses?: string[];
+  /** Only clips saved from this Marketing template (a Kinetic Motion recipe that names it). */
+  template?: string;
   /** Only the Trash, newest deletion first (`before` is then a deletedAt cursor). Otherwise the Trash is left out. */
   trashed?: boolean;
   folderId?: string;
@@ -326,6 +328,7 @@ export function listGenerations(o: ListOptions = {}): Generation[] {
   if (o.favorites) add("g.favorite = 1");
   if (o.status) add("g.status = ?", o.status);
   if (o.statuses?.length) oneOf("g.status", o.statuses);
+  if (o.template) add("json_extract(g.request_json, '$.params.extra.motion.controls.template') = ?", o.template);
   if (o.folderId) add("fi.folder_id = ?", o.folderId);
   if (o.folderIds?.length) oneOf("fi.folder_id", o.folderIds);
   if (o.pinned !== undefined) add(o.pinned ? "g.pinned_at IS NOT NULL" : "g.pinned_at IS NULL");

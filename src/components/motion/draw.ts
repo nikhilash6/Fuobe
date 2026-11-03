@@ -101,6 +101,7 @@ function roundRect(ctx: Ctx | Path2D, x: number, y: number, w: number, h: number
 }
 
 function clipTo(ctx: Ctx, c: ClipShape) {
+  if (c.type === "path") return void ctx.clip(new Path2D(c.d));
   ctx.beginPath();
   if (c.type === "rect") {
     if (c.r) roundRect(ctx, c.x, c.y, c.w, c.h, c.r);

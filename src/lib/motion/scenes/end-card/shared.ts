@@ -40,6 +40,8 @@ export interface TextBlock {
   cx: number;
   y: number;
   color: string;
+  /** Set flush to one side instead of centred: lines start at `left` (a right-to-left line ends at left + width). */
+  flush?: { left: number; width: number };
 }
 
 export interface EndCardRest {
@@ -153,7 +155,11 @@ export function endCardRest(p: { theme: AdTheme; content: EndCardContent; logo: 
 // Text runs
 
 /** Where line `i` of a block is drawn: its left edge and the top of its glyphs (as the still card's drawText). */
-export const lineLeft = (b: TextBlock, i: number) => b.cx - b.layout.lines[i].width / 2;
+export const lineLeft = (b: TextBlock, i: number) => {
+  const w = b.layout.lines[i].width;
+  if (!b.flush) return b.cx - w / 2;
+  return b.layout.dir === "rtl" ? b.flush.left + b.flush.width - w : b.flush.left;
+};
 export const glyphTop = (b: TextBlock, i: number) => b.y + i * b.layout.lineHeight + (b.layout.lineHeight - b.layout.size) / 2;
 
 export interface RunStyle {
@@ -346,9 +352,15 @@ export function endCardScene(variant: EndCardVariant, build: (c: StyleContext) =
       const style = build({ rest, input, second: secondColour(input.recipe.brand.colors, theme.accent) });
       const k = timeScale(input.recipe.duration);
       const lead = (style.lead ?? 0) * k;
-      const tl = timeline(scaleCues(style.cues, k).map((e) => ({ ...e, start: Math.round((e.start - lead) * 1e6) / 1e6 })));
       // The last frame: the poster, the still card, and where the camera comes home.
       const last = (frameCount(input.recipe.duration, input.recipe.fps) - 1) / input.recipe.fps;
+      const cued = scaleCues(style.cues, k).map((e) => ({ ...e, start: e.start - lead }));
+      // On its own (Marketing's Logo End Card, not the tail of an ad) the card's beats spread out until it settles at
+      // about 70 % of its length; each move keeps its own speed.
+      const own = typeof input.recipe.controls?.template === "string";
+      const ends = Math.max(0.3, ...cued.map((e) => e.start + e.dur));
+      const f = own ? Math.max(1, Math.min(2.4, (last * 0.72) / ends)) : 1;
+      const tl = timeline(cued.map((e) => ({ ...e, start: Math.round((e.start > 0 ? e.start * f : e.start) * 1e6) / 1e6 })));
       const settled = Math.min(last, tl.rest);
       const still: DisplayList = { w: design.w, h: design.h, background: theme.accent, nodes: restNodes(rest) };
       const drift = curve("drift");

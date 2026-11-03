@@ -10,7 +10,9 @@ import { input, measure, RASTER_LOGO, recipe, SVG_LOGO } from "./helpers/motion"
 // to the settled card, the settled card to the last frame), every letter, the logo and the pill stay where they were
 // within 1 unit. Checked for every style, size and kind of mark, across every frame and every event's edges.
 
-const scenes: Scene[] = await Promise.all(SCENE_IDS.map(loadScene));
+// The end card's five styles (Marketing's scenes have their own checks: motion-marketing.test.ts).
+const END_CARD_IDS = SCENE_IDS.filter((id) => id.startsWith("end-card/"));
+const scenes: Scene[] = await Promise.all(END_CARD_IDS.map(loadScene));
 const SIZES: SizeSpec[] = ["9:16", "1:1", "16:9", "4:5"];
 
 const apply = (m: Matrix, x: number, y: number): [number, number] => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];

@@ -34,7 +34,22 @@ export interface SceneInput {
   recipe: Recipe;
   measure: Measure;
   logo: LogoInfo | null;
+  /** The pictures' natural sizes by key ("product"). */
   images?: Record<string, { w: number; h: number }>;
+  /** A cut-out picture's outline by key (traced from its transparency; null: it has none, so it gets a frame). */
+  outlines?: Record<string, Outline | null>;
+}
+
+/** A cut-out's outer edge, traced from its transparency (outline.ts), in the traced grid's units. */
+export interface Outline {
+  /** The grid it was traced on (the picture scaled to it). */
+  w: number;
+  h: number;
+  /** A closed smooth path, starting at its lowest point and going round. */
+  d: string;
+  length: number;
+  /** Where the path starts (its lowest point). */
+  start: [number, number];
 }
 
 export interface ScenePlan {

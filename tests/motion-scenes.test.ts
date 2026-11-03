@@ -15,13 +15,15 @@ import { input, measure, RASTER_LOGO, recipe, SVG_LOGO, allNodes } from "./helpe
 // Every registered scene: determinism under any order of seeks, exact spelling, the timing rules, and (for the end
 // card) a rest frame that is the still card's own layout.
 
-const scenes: Scene[] = await Promise.all(SCENE_IDS.map(loadScene));
+// The end card's five styles (Marketing's scenes have their own checks: motion-marketing.test.ts).
+const END_CARD_IDS = SCENE_IDS.filter((id) => id.startsWith("end-card/"));
+const scenes: Scene[] = await Promise.all(END_CARD_IDS.map(loadScene));
 const SIZES: SizeSpec[] = [{ w: 720, h: 1280 }, "9:16", "1:1", "16:9", "4:5"];
 const cp = (...c: number[]) => String.fromCodePoint(...c);
 
 describe("the registry", () => {
   it("has the five end-card styles", () => {
-    expect(SCENE_IDS.sort()).toEqual(END_CARD_VARIANTS.map((v) => `end-card/${v}`).sort());
+    expect(END_CARD_IDS.sort()).toEqual(END_CARD_VARIANTS.map((v) => `end-card/${v}`).sort());
     for (const s of scenes) expect(s.durations).toEqual({ min: 2, max: 3, default: 2.5 });
   });
 });

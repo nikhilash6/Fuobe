@@ -198,7 +198,7 @@ try {
   await page.screenshot({ path: path.join(out, "click-to-ad-endcard-1440.png"), fullPage: false });
 
   // Iris: render, upload, Generate.
-  await page.getByRole("button", { name: /^Iris/ }).first().click();
+  await page.getByRole("group", { name: "End card style" }).getByRole("button", { name: /^Iris/ }).first().click();
   await page.waitForTimeout(800);
   uploads.length = 0;
   const started = Date.now();
@@ -227,7 +227,7 @@ try {
   const styles = ["draw-on", "rise", "iris", "split", "glint"];
   timings.saveMs = {};
   for (const s of styles) {
-    await page.getByRole("button", { name: new RegExp(`^${s === "draw-on" ? "Draw-on" : s[0].toUpperCase() + s.slice(1)}`) }).first().click();
+    await page.getByRole("group", { name: "End card style" }).getByRole("button", { name: new RegExp(`^${s === "draw-on" ? "Draw-on" : s[0].toUpperCase() + s.slice(1)}`) }).first().click();
     await page.waitForTimeout(500);
     uploads.length = 0;
     const t0 = Date.now();

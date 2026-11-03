@@ -332,7 +332,53 @@ export interface MarketingTemplate {
   /** Default on-image headline ("{product}" and "{brand}" fill in). */
   headline?: string;
   cta?: string;
+  /** Drawn by Fuobe Kinetic Motion in the browser (exact words, the brand's fonts and colours), not prompted to a model. */
+  render?: "code";
+  /** The Kinetic Motion scene that draws it (render: "code"). */
+  scene?: string;
+  /** The words the person types for it, in order. */
+  fields?: TemplateField[];
+  /** Its quick choices (2 to 4 groups). */
+  easy?: EasyGroup[];
+  /** It shows a picture: the product (a cut-out traces best), else the logo. */
+  picture?: "product";
+  /** Its length range when it differs from the format's (seconds). */
+  lengths?: { min: number; max: number; default: number };
 }
+
+export interface TemplateField {
+  key: string;
+  label: string;
+  max: number;
+  /** Lines the box offers (1: a single-line field). */
+  lines: number;
+  /** A short tip under the field. */
+  hint?: string;
+}
+
+export interface EasyGroup {
+  id: string;
+  label: string;
+  choices: { id: string; label: string }[];
+  /** The choice picks the scene itself (`<scene family>/<choice id>`), as the end card's styles do. */
+  scene?: string;
+}
+
+/** The sizes a code-drawn template comes in. */
+export const KINETIC_SIZES = ["9:16", "4:5", "1:1", "16:9"] as const;
+
+const PACE: EasyGroup = { id: "pace", label: "Pace", choices: [{ id: "calm", label: "Calm" }, { id: "punchy", label: "Punchy" }] };
+const LOOK: EasyGroup = { id: "look", label: "Look", choices: [{ id: "light", label: "Light" }, { id: "dark", label: "Dark" }, { id: "brand", label: "Brand colour" }] };
+
+/** A code-drawn piece runs 5 to 8 seconds: its beats spread over the length, so a longer one has more to watch. */
+const CODE_LENGTHS = { min: 5, max: 8, default: 5 };
+
+/** A template drawn by code: its scene, the words it takes and its quick choices. */
+const code = (scene: string, fields: TemplateField[], extra: Partial<MarketingTemplate> = {}): Partial<MarketingTemplate> => ({ render: "code", scene, fields, easy: [PACE, LOOK], duration: 5, lengths: CODE_LENGTHS, ...extra });
+const field = (key: string, label: string, max: number, lines = 1, hint?: string): TemplateField => ({ key, label, max, lines, ...(hint && { hint }) });
+
+/** Whether a template is drawn by Kinetic Motion. */
+export const isCodeTemplate = (t: Pick<MarketingTemplate, "render"> | null | undefined): boolean => t?.render === "code";
 
 const t = (id: string, name: string, format: FormatId, look: TemplateLook, prompt: string, extra: Partial<MarketingTemplate> = {}): MarketingTemplate => ({
   id,
@@ -373,9 +419,10 @@ export const TEMPLATES: MarketingTemplate[] = [
   // Motion · 2D
   t("m2-sticker-pop", "Sticker Pop", "motion-2d", { scene: "collage", hue: 330, hue2: 60 }, "Flat 2D animation: the product pops in as a die-cut sticker, bouncy squash and stretch, doodled stars and sparkles burst around it on a flat colour background", { duration: 5 }),
   t("m2-paper-parade", "Paper Parade", "motion-2d", { scene: "collage", hue: 30, hue2: 200 }, "Paper cut-out animation: layered paper shapes slide in like a theatre set and the product rises from behind them, gentle stop-motion jitter", { duration: 5 }),
-  t("m2-line-reveal", "Line-Art Reveal", "motion-2d", { scene: "kinetic", hue: 160, hue2: 160 }, "A single continuous line draws the outline of the product, then the real product fills in inside it, clean minimal background", { duration: 5 }),
+  t("m2-line-reveal", "Line-Art Reveal", "motion-2d", { scene: "kinetic", hue: 160, hue2: 160 }, "A single continuous line draws the outline of the product, then the real product fills in inside it, clean minimal background", code("marketing/line-reveal", [field("headline", "Headline", 60, 2), field("cta", "Call to action", 30)], { picture: "product", aspect: "9:16", easy: [PACE, LOOK, { id: "line", label: "Line", choices: [{ id: "fine", label: "Fine" }, { id: "bold", label: "Bold" }] }] })),
   t("m2-comic-panels", "Comic Panels", "motion-2d", { scene: "split", hue: 50, hue2: 0 }, "Pop-art comic panels flip one after another, each showing the product from a new angle with halftone dots and bold outlines", { duration: 5 }),
-  t("m2-retro-starburst", "Retro Starburst", "motion-2d", { scene: "burst", hue: 25, hue2: 330 }, "A rotating retro starburst background in warm colours while the product spins slowly in the centre, groovy 70s motion graphics", { duration: 5 }),
+  t("m2-retro-starburst", "Retro Starburst", "motion-2d", { scene: "burst", hue: 25, hue2: 330 }, "A rotating retro starburst background in warm colours while the product spins slowly in the centre, groovy 70s motion graphics", code("marketing/starburst", [field("headline", "Headline", 40, 2), field("badge", "Badge", 12, 2)], { picture: "product", aspect: "9:16" })),
+  t("m2-offer-badge", "Offer Badge", "motion-2d", { scene: "badge", hue: 350, hue2: 40 }, "A starburst offer badge pops and turns, the product slides in under it and the call to action follows", code("marketing/offer-badge", [field("offer", "Offer", 14, 2), field("headline", "Headline", 40, 2), field("cta", "Call to action", 24)], { picture: "product", aspect: "9:16" })),
   t("m2-grid-shuffle", "Grid Shuffle", "motion-2d", { scene: "cards", hue: 200, hue2: 280 }, "A Swiss-style grid of colour tiles shuffles and slides; one tile opens to reveal the product, crisp geometric transitions", { duration: 5 }),
 
   // Motion · hypermotion
@@ -396,11 +443,14 @@ export const TEMPLATES: MarketingTemplate[] = [
   t("mm-halftone-collage", "Halftone Collage", "motion-mixed", { scene: "split", hue: 0, hue2: 50 }, "Halftone street-poster collage: cut-out shapes and the product slide in with punchy, rhythmic cuts"),
 
   // Motion · SaaS
-  t("ms-feature-cards", "Feature Cards", "motion-saas", { scene: "cards", hue: 250, hue2: 200 }, "Clean SaaS motion design: rounded feature cards fly in and stack, each one highlighting a benefit, soft gradients and smooth easing", { duration: 5 }),
-  t("ms-kinetic-headline", "Kinetic Headline", "motion-saas", { scene: "kinetic", hue: 210, hue2: 260 }, "Kinetic typography: the product's promise types itself out word by word with confident motion, then resolves to the logo", { duration: 5 }),
+  t("ms-feature-cards", "Feature Cards", "motion-saas", { scene: "cards", hue: 250, hue2: 200 }, "Clean SaaS motion design: rounded feature cards fly in and stack, each one highlighting a benefit, soft gradients and smooth easing", code("marketing/feature-cards", [field("headline", "Headline", 60, 2), field("point1", "First benefit", 60, 2), field("point2", "Second benefit", 60, 2), field("point3", "Third benefit", 60, 2)], { aspect: "4:5" })),
+  t("ms-kinetic-headline", "Kinetic Headline", "motion-saas", { scene: "kinetic", hue: 210, hue2: 260 }, "Kinetic typography: the product's promise types itself out word by word with confident motion, then resolves to the logo", code("marketing/kinetic-headline", [field("headline", "Headline", 90, 3, "Put *stars* round a word to highlight it"), field("cta", "Call to action", 24), field("website", "Web address", 40)], { aspect: "9:16", easy: [PACE, LOOK, { id: "align", label: "Align", choices: [{ id: "centre", label: "Centred" }, { id: "left", label: "Left" }] }] })),
   t("ms-device-float", "Device Float", "motion-saas", { scene: "float", hue: 220, hue2: 170 }, "A laptop and a phone float in a soft gradient space showing the app's interface, the camera drifts slowly between them", { duration: 5 }),
-  t("ms-dashboard-zoom", "Dashboard Zoom", "motion-saas", { scene: "cards", hue: 160, hue2: 220, dark: true }, "The camera pushes into a sleek dark dashboard; charts animate up and a key number counts to its value", { duration: 5 }),
-  t("ms-logo-sting", "Logo Sting", "motion-saas", { scene: "burst", hue: 270, hue2: 210 }, "A short logo sting: geometric shapes converge and click together into the brand mark with a light flare", { duration: 5 }),
+  t("ms-dashboard-zoom", "Dashboard Zoom", "motion-saas", { scene: "cards", hue: 160, hue2: 220, dark: true }, "The camera pushes into a sleek dark dashboard; charts animate up and a key number counts to its value", code("marketing/stat-dashboard", [field("stat", "Key number", 16, 1, "Type it as it should read, e.g. $1,284,000"), field("label", "What it measures", 60, 2)], { aspect: "4:5" })),
+  t("ms-logo-sting", "Logo Sting", "motion-saas", { scene: "burst", hue: 270, hue2: 210 }, "A short logo sting: geometric shapes converge and click together into the brand mark with a light flare", code("marketing/logo-sting", [field("tagline", "Line under the logo", 60, 2)], { aspect: "4:5" })),
+  t("ms-big-number", "Big Number", "motion-saas", { scene: "headline", hue: 230, hue2: 260, dark: true }, "One huge stat fills the frame and counts up to its value, a caption rises under it, and it ends on the logo", code("marketing/big-number", [field("stat", "The number", 12, 1, "Type it as it should read, e.g. 3× or 98%"), field("caption", "Caption", 60, 3)], { aspect: "4:5" })),
+  t("ms-five-star-quote", "Five-Star Quote", "motion-saas", { scene: "stars", hue: 45, hue2: 30 }, "Five stars fill one by one, then a customer's words set line by line with their name", code("marketing/quote", [field("quote", "Quote", 180, 5, "Their words exactly, with your own quotation marks"), field("name", "Name", 48, 2)], { aspect: "4:5" })),
+  t("ms-end-card", "Logo End Card", "motion-saas", { scene: "headline", hue: 160, hue2: 45, dark: true }, "An animated end card: the logo draws on, the line rises and the call-to-action pill pops", code("end-card/draw-on", [field("product", "Line", 60, 2), field("cta", "Call to action", 24), field("website", "Web address", 40)], { aspect: "9:16", duration: 2.5, lengths: { min: 2, max: 3, default: 2.5 }, easy: [{ id: "style", label: "Style", scene: "end-card", choices: [{ id: "draw-on", label: "Draw-on" }, { id: "rise", label: "Rise" }, { id: "iris", label: "Iris" }, { id: "split", label: "Split" }, { id: "glint", label: "Glint" }] }, { id: "mark", label: "Mark", choices: [{ id: "logo", label: "Logo" }, { id: "name", label: "Name" }] }] })),
 
   // UGC · talking head
   t("ugc-honest-review", "Honest Review", "ugc-talking", { scene: "selfie", hue: 25, hue2: 200 }, "A relaxed, honest review straight to the phone camera: what they liked, one small catch and why they'd still buy it again", { setting: "bedroom" }),

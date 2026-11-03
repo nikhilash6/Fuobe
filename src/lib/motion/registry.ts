@@ -10,6 +10,15 @@ const LOADERS: Record<string, () => Promise<{ default: Scene }>> = {
   "end-card/iris": () => import("./scenes/end-card/iris"),
   "end-card/split": () => import("./scenes/end-card/split"),
   "end-card/glint": () => import("./scenes/end-card/glint"),
+  "marketing/kinetic-headline": () => import("./scenes/marketing/kinetic-headline"),
+  "marketing/line-reveal": () => import("./scenes/marketing/line-reveal"),
+  "marketing/logo-sting": () => import("./scenes/marketing/logo-sting"),
+  "marketing/feature-cards": () => import("./scenes/marketing/feature-cards"),
+  "marketing/stat-dashboard": () => import("./scenes/marketing/stat-dashboard"),
+  "marketing/starburst": () => import("./scenes/marketing/starburst"),
+  "marketing/offer-badge": () => import("./scenes/marketing/offer-badge"),
+  "marketing/big-number": () => import("./scenes/marketing/big-number"),
+  "marketing/quote": () => import("./scenes/marketing/quote"),
 };
 
 export const SCENE_IDS = Object.keys(LOADERS);
