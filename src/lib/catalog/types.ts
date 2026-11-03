@@ -95,6 +95,8 @@ export type Operation =
   | "retexture-3d" // 3D model (inputs.model3d) + prompt or a style image → the same model with new textures
   // nm10-voice-design
   | "voice-design" // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  // nm10-speech-edit
+  | "speech-edit" // audio or video (its soundtrack) + params.extra.speechWindows (src/lib/speech-edit.ts) → the recording with those parts changed (AuK)
   // nm10-music3: a song's cloud tools (Mureka). The song is inputs.audio, or one of Mureka's own (params.extra.songId)
   | "song-extend" // song + lyrics for the new part (+ params.startTime: where it begins; params.extra.extend_type tail | head) → the song, longer
   | "song-remix" // song + a style (prompt) + the whole song's lyrics → a new arrangement of it
@@ -129,6 +131,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   dialogue: "Dialogue",
   "voice-change": "Voice change",
   "voice-design": "Design a voice",
+  "speech-edit": "Edit speech",
   dub: "Translate & dub",
   "bg-remove-video": "Video background removal",
   "depth-video": "Video depth map",
@@ -208,6 +211,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   dialogue: "audio",
   "voice-change": "audio",
   "voice-design": "audio",
+  "speech-edit": "audio",
   dub: "video",
   "bg-remove-video": "video",
   "depth-video": "video",
@@ -265,10 +269,13 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
  * The open engine's HDR is also written as 10-bit H.264 in BT.2020 with the HLG or PQ (HDR10) curve
  * (core ComfyUI has no H.265 encoder).
  */
-export type VideoFormat = "h264" | "h265_10bit" | "prores_422_hq" | "prores_4444" | "ffv1" | "exr" | "hlg_10bit" | "pq_10bit";
+export type VideoFormat = "h264" | "h265_10bit" | "prores_422_hq" | "prores_4444" | "ffv1" | "exr" | "hlg_10bit" | "pq_10bit" | "webm_alpha";
 
-/** What Remove background makes: the subject on a transparent background, or its black-and-white alpha mask. */
-export type MatteOutput = "cutout" | "matte";
+/**
+ * What Remove background makes: the subject on a transparent background, or its black-and-white alpha mask. A green-screen
+ * key also makes the clean foreground: the subject's colours with the green spill taken out, for a compositor to use with the mask.
+ */
+export type MatteOutput = "cutout" | "matte" | "foreground";
 
 /** Depth map colour maps, in Higgsfield's order (grayscale first: every depth model draws it). */
 export const COLORMAPS = ["grayscale", "turbo", "inferno", "magma", "viridis"] as const;
@@ -751,6 +758,13 @@ export interface ModelOptions {
   /** Remove background keeps only what you name (SAM): words, or points clicked on the first frame, are needed. */
   keepsNamed?: boolean;
   /**
+   * A keyer for footage shot on a green screen (CorridorKey 2.0, Bria green screen): listed in Video tools → Green
+   * screen, kept out of Remove background's list.
+   */
+  greenScreen?: boolean;
+  /** A cut-out that takes optional words about what to keep or drop (Bria's guided cut-out): the cut-out tools show a box for them. */
+  guided?: boolean;
+  /**
    * Frame rates it can reach (params.targetFps): FPS Boost's 24–120, an upscaler's 24 / 30 / 60. Without a
    * default target (`defaults.targetFps`) the clip's own frame rate is the first choice ("Original").
    */
@@ -1151,7 +1165,15 @@ export interface GenerationRequest {
    * A storyboard frame. `look`: the board's Fuobe Soul look, whose grade and overlay every frame gets after it is made
    * (as meta, like a Soul picture); `crop`: a look board asked for 21:9 is made at 16:9 and cropped after.
    */
-  frame?: { scene: string; index: number; of: number; look?: string; crop?: "21:9" };
+  frame?: {
+    scene: string;
+    index: number;
+    of: number;
+    look?: string;
+    crop?: "21:9";
+    /** A one-sheet board (src/lib/catalog/storyboard.ts planOneSheet): every panel on this one picture, cropped in the browser. */
+    sheet?: { cols: number; rows: number; aspect: string; panels: { scene: string; box: [number, number, number, number] }[] };
+  };
   /** Part of a multi-step job (a shot of a multi-shot film, a step of an extend): shown on its tile. */
   step?: { label: string; index: number; of: number };
   /**

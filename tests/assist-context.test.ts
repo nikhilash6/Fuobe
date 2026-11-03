@@ -383,7 +383,13 @@ describe("studio tools", () => {
       { video, seconds: 8, beats: [{ start: 0, label: "Arrival", words: "She walks in." }] },
       { video, seconds: 40, beats: [{ start: 0, label: "Arrival" }, { start: 20, label: "Lights out" }], references: [{ url: image, role: "character", name: "Mara" }], model: "minimax-h3-max-3d", sounds: ["Footsteps"] },
     ],
+    edit_speech: [
+      { media: video, kind: "video", transcript: [{ start: 0, end: 2.4, text: "We open on Tuesday." }, { start: 3, end: 5, text: "Everyone is welcome." }], changes: [{ line: 0, text: "We open on Thursday." }] },
+      { media: video, kind: "video", transcript: [{ start: 0, end: 2.4, text: "We open on Tuesday." }], effect: { kind: "pitch", semitones: 2 }, range: { start: 0, end: 2.4 } },
+    ],
   };
+  /** Tools that run on your GPU only: "Paid APIs only" refuses them on the card, with the reason. */
+  const OPEN_ONLY = new Set(["edit_speech"]);
 
   it("every studio tool plans without errors on both engines in demo mode", () => {
     expect(Object.keys(SAMPLES).sort()).toEqual(studio.STUDIO_TOOLS.map((t) => t.name).sort());
@@ -394,6 +400,10 @@ describe("studio tools", () => {
           for (const input of inputs)
             for (const engine of ["cloud", "open"] as const) {
               const p = plan(name, input, engine);
+              if (OPEN_ONLY.has(name) && mode === "cloud") {
+                expect(p.jobs.find((j) => j.error)?.error ?? p.error, `${name} ${engine}/${mode}`).toMatch(/runs on your GPU/);
+                continue;
+              }
               // Remove a person runs on your GPU only (MiniMax H3 with the Person Remover LoRA): an install that runs the
               // cloud alone says so on the card.
               if (name === "remove_person" && mode === "cloud") {

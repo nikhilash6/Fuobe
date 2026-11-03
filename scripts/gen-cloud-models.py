@@ -1175,6 +1175,12 @@ model("birefnet-video", "BiRefNet video (hosted)", "ZhengPeng7", "birefnet", "vi
 model("bria-video-bg", "Bria video background removal", "Bria", "bria", "video", "Production-grade video matting with audio kept",
       [("bg-remove-video", "bria/video/background-removal/v3")], pricing=("second", 0.05),
       fixed={"background_color": "Transparent", "output_container_and_codec": "webm_vp9"}, options={"matteOutputs": ["cutout"]})
+# Video tools → Green screen on the cloud (nm10-keying): Bria's chroma key with the green spill pulled out of the edges, a
+# transparent WebM with the sound kept. greenScreen keeps it out of Remove background's list (footage shot on a screen only).
+model("bria-green-screen", "Bria green screen", "Bria", "bria", "video", "Keys green-screen footage onto transparency and cleans the green spill off the edges",
+      [("bg-remove-video", "bria/video/background-removal/green-screen-despill")], badges=["new"], pricing=("second", 0.05),
+      fixed={"output_container_and_codec": "webm_vp9"}, sliders=[("spill_suppression", "Spill cleanup", 0.1)],
+      options={"matteOutputs": ["cutout"], "greenScreen": True})
 model("depth-anything-video-cloud", "Video Depth Anything (hosted)", "ByteDance", "depth-anything", "video", "Stable depth maps for every frame",
       # The colour map follows params.colormap (Higgsfield's Depth Map picker); grayscale unless asked. Side by side
       # puts the original clip next to the map.
@@ -1207,6 +1213,12 @@ model("ideogram-3-text-layers", "Ideogram 3.0 Text Layers", "Ideogram", "ideogra
       [("text-layers", "fal-ai/ideogram/v3/layerize-text")], badges=["new"])
 model("ideogram-remove-bg", "Ideogram Remove Background", "Ideogram", "ideogram", "image", "Clean transparent cut-outs for one cent",
       [("bg-remove", "fal-ai/ideogram/remove-background")], badges=["fast"], pricing=("image", 0.01))
+# Image cut-outs, Guided (nm10-keying): Bria's cut-out of the obvious subject, adjusted by plain words ("keep the shadow",
+# "without the hand"); the words are optional (empty = the plain cut-out). Offered in Layers' Remove background, the Canvas
+# node and the Remove Background app's picker.
+model("bria-guided-cutout", "Bria guided cut-out", "Bria", "bria", "image", "Cut out the subject, then say what to keep or drop: “keep the shadow”, “without the hand”",
+      [("bg-remove", "bria/guided-remove-background")], badges=["new"], pricing=("image", 0.03),
+      options={"promptOptional": True, "guided": True, "promptPlaceholder": "What to keep or drop, e.g. “keep the shadow” or “without the hand”"})
 model("recraft-vectorize", "Recraft Vectorize", "Recraft", "recraft", "image", "Turn any image into a clean, editable SVG",
       [("vectorize", "fal-ai/recraft/vectorize"), ("vectorize", "recraft-ai/recraft-vectorize", "replicate")], badges=["top"])
 model("image2svg", "Image to SVG (VTracer)", "VTracer", "vtracer", "image", "Half-cent tracing for logos, icons and flat art",

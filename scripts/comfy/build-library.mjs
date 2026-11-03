@@ -81,7 +81,9 @@ export const LOADER_FOLDERS = {
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
 // Zen Image Edit's adapter loader reads paths (nm10-qwen21-fast): its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
-const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader']);
+// AuKModelLoader (nm10-speech-edit) reads its checkpoints by path inside the AuK checkout (ckpts/…), not from a ComfyUI
+// models folder: install-comfyui.sh AUK_WEIGHTS=1 downloads them there (the entries' autoDownloads say what and where).
+const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader', 'AuKModelLoader']);
 // Binding keys whose input is a user-supplied model file (not part of "models").
 const USER_MODEL_KEYS = new Set(['lora', 'loraHigh', 'loraLow', 'upscaleModel']);
 const MODEL_EXT = /\.(safetensors|sft|gguf|ckpt|pt|pth|bin|onnx)$/i;
@@ -176,6 +178,10 @@ export const BINDING_KEYS = new Set([
   'device',
   // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
+  // nm10-keying: the green-screen key's despill strength
+  'despill',
+  // nm10-rtx-video: the NVIDIA RTX Video nodes' quality (Super Resolution) or mode (Frame Generation)
+  'rtxQuality',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.
@@ -408,11 +414,12 @@ async function main() {
 
     // ---- custom nodes
     const custom = new Set();
-    for (const n of Object.values(graph)) {
-      const mod = objectInfo[n.class_type]?.python_module || '';
+    // Nodes the app adds per run (spec.runtimeNodes, e.g. the clip loaders of H3's references) count as the graph's own.
+    for (const cls of [...Object.values(graph).map((n) => n.class_type), ...(spec.runtimeNodes || [])]) {
+      const mod = objectInfo[cls]?.python_module || '';
       if (!mod.startsWith('custom_nodes.')) continue;
       try {
-        custom.add(packOfClass(n.class_type, mod, prevSubset[n.class_type]?.python_module));
+        custom.add(packOfClass(cls, mod, prevSubset[cls]?.python_module));
       } catch (e) {
         errs.push(e.message);
       }
@@ -449,8 +456,11 @@ async function main() {
     if (spec.autoDownloads) entry.autoDownloads = spec.autoDownloads;
     // "isolated": the node pack has process-wide side effects; run it on a separate ComfyUI (see README).
     if (spec.worker) entry.worker = spec.worker;
+    // The card the graph's nodes need ("nvidia-rtx", "nvidia-rtx-40"): the GPU pre-flight checks it by the card's name.
+    if (spec.gpu) entry.gpu = spec.gpu;
     // The app rewrites the graph before submitting (e.g. "captions": one segment per caption cue).
     if (spec.expand) entry.expand = spec.expand;
+    if (spec.runtimeNodes) entry.runtimeNodes = spec.runtimeNodes;
     if (!validated && st && st.sha256 === hash && st.error) entry.validationError = st.error;
     if (errs.length) {
       errors.push(...errs.map((e) => `${spec.id}: ${e}`));

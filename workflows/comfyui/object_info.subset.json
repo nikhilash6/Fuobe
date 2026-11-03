@@ -1,4 +1,112 @@
 {
+  "AILab_FeyNoBg": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE",
+          {
+            "tooltip": "Input image batch to remove background from."
+          }
+        ]
+      },
+      "optional": {
+        "mask_blur": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Gaussian blur radius for softening mask edges."
+          }
+        ],
+        "mask_offset": [
+          "INT",
+          {
+            "default": 0,
+            "min": -64,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Expand (positive) or shrink (negative) the mask boundary in pixels."
+          }
+        ],
+        "invert_output": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Invert the output mask."
+          }
+        ],
+        "refine_foreground": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "Sub-pixel foreground boundary refinement for fine hairs and semi-transparent edges."
+          }
+        ],
+        "unload_model": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Unload model weights from VRAM immediately after execution."
+          }
+        ],
+        "background": [
+          [
+            "Alpha",
+            "Color"
+          ],
+          {
+            "default": "Alpha",
+            "tooltip": "Output format: Alpha for transparent cutout, or Color to composite against solid background."
+          }
+        ],
+        "background_color": [
+          "COLORCODE",
+          {
+            "default": "#222222",
+            "tooltip": "Hex background color used when background mode is set to Color."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image"
+      ],
+      "optional": [
+        "mask_blur",
+        "mask_offset",
+        "invert_output",
+        "refine_foreground",
+        "unload_model",
+        "background",
+        "background_color"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "IMAGE",
+      "MASK",
+      "MASK_IMAGE"
+    ],
+    "name": "AILab_FeyNoBg",
+    "display_name": "FeyNoBg (Background Removal)",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-RMBG",
+    "category": "🧪AILab/🧽RMBG",
+    "output_node": false
+  },
   "AILab_Qwen3ASRSubtitle": {
     "input": {
       "required": {
@@ -646,6 +754,114 @@
     "description": "",
     "python_module": "custom_nodes.ComfyUI-QwenTTS",
     "category": "🧪AILab/🎙️QwenTTS",
+    "output_node": false
+  },
+  "AILab_VRMBG": {
+    "input": {
+      "required": {
+        "images": [
+          "IMAGE",
+          {
+            "tooltip": "Batch of consecutive video frames [B, H, W, C] for temporal background removal."
+          }
+        ]
+      },
+      "optional": {
+        "reset_state": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "Reset temporal prior state at the beginning of this batch. Keep True for standalone clips, or False when feeding consecutive chunks."
+          }
+        ],
+        "mask_blur": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Gaussian blur radius for softening mask edges."
+          }
+        ],
+        "mask_offset": [
+          "INT",
+          {
+            "default": 0,
+            "min": -64,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Expand (positive) or shrink (negative) the mask boundary in pixels."
+          }
+        ],
+        "invert_output": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Invert the output mask."
+          }
+        ],
+        "unload_model": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Unload model weights from VRAM immediately after execution."
+          }
+        ],
+        "background": [
+          [
+            "Alpha",
+            "Color"
+          ],
+          {
+            "default": "Alpha",
+            "tooltip": "Output format: Alpha for transparent cutout, or Color to composite against solid background."
+          }
+        ],
+        "background_color": [
+          "COLORCODE",
+          {
+            "default": "#222222",
+            "tooltip": "Hex background color used when background mode is set to Color."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "images"
+      ],
+      "optional": [
+        "reset_state",
+        "mask_blur",
+        "mask_offset",
+        "invert_output",
+        "unload_model",
+        "background",
+        "background_color"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "IMAGE",
+      "MASK",
+      "MASK_IMAGE"
+    ],
+    "name": "AILab_VRMBG",
+    "display_name": "VRMBG (Video Background Removal)",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-RMBG",
+    "category": "🧪AILab/🧽RMBG",
     "output_node": false
   },
   "AUSBOSS_NODES_CropForInpaint": {
@@ -1645,6 +1861,198 @@
     "search_aliases": null,
     "essentials_category": null,
     "has_intermediate_output": false
+  },
+  "AuKGenerateEdit": {
+    "input": {
+      "required": {
+        "engine": [
+          "AUK_ENGINE"
+        ],
+        "instruction": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "Generate speech based on the following description: \"a calm, warm female voice\". The content to speak is: \"Hello, welcome to AuK.\"."
+          }
+        ],
+        "generation_seconds": [
+          "FLOAT",
+          {
+            "default": 0.0,
+            "min": 0.0,
+            "max": 30.0,
+            "step": 0.1
+          }
+        ],
+        "use_prompt_enhancer": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 42,
+            "min": 0,
+            "max": 9223372036854775807
+          }
+        ],
+        "nfe_steps": [
+          "INT",
+          {
+            "default": 32,
+            "min": 4,
+            "max": 64,
+            "step": 1
+          }
+        ],
+        "cfg_strength": [
+          "FLOAT",
+          {
+            "default": 2.0,
+            "min": 0.0,
+            "max": 5.0,
+            "step": 0.1
+          }
+        ],
+        "sway_sampling_coef": [
+          "FLOAT",
+          {
+            "default": -1.0,
+            "min": -1.0,
+            "max": 1.0,
+            "step": 0.1
+          }
+        ]
+      },
+      "optional": {
+        "input_audio": [
+          "AUDIO"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "engine",
+        "instruction",
+        "generation_seconds",
+        "use_prompt_enhancer",
+        "seed",
+        "nfe_steps",
+        "cfg_strength",
+        "sway_sampling_coef"
+      ],
+      "optional": [
+        "input_audio"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "AUDIO",
+      "STRING",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "generated_audio",
+      "enhanced_instruction",
+      "prompt_enhancer_info"
+    ],
+    "name": "AuKGenerateEdit",
+    "display_name": "AuK Generate / Edit",
+    "description": "Run instruction TTS, zero-shot TTS, or speech editing. The source/reference and generated target share one 30-second sequence budget.",
+    "python_module": "custom_nodes.ComfyUI-AuK",
+    "category": "AuK",
+    "output_node": false,
+    "_fuobe_note": "Written from comfyui/ComfyUI-AuK/nodes.py at Tencent-Hunyuan/AuK 0d40366b (the pack is not on the validation server)."
+  },
+  "AuKModelLoader": {
+    "input": {
+      "required": {
+        "checkpoint_path": [
+          "STRING",
+          {
+            "default": "ckpts/AuK/auk_base.safetensors",
+            "multiline": false
+          }
+        ],
+        "config_path": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": false
+          }
+        ],
+        "qwen_path": [
+          "STRING",
+          {
+            "default": "ckpts/Qwen2.5-Omni-3B",
+            "multiline": false
+          }
+        ],
+        "device": [
+          [
+            "cuda:0",
+            "cpu"
+          ],
+          {
+            "default": "cuda:0"
+          }
+        ],
+        "dtype": [
+          [
+            "bf16",
+            "fp16",
+            "fp32"
+          ],
+          {
+            "default": "bf16"
+          }
+        ]
+      },
+      "optional": {
+        "cpu_offload": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "checkpoint_path",
+        "config_path",
+        "qwen_path",
+        "device",
+        "dtype"
+      ],
+      "optional": [
+        "cpu_offload"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "AUK_ENGINE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "engine"
+    ],
+    "name": "AuKModelLoader",
+    "display_name": "AuK Model Loader",
+    "description": "Load AuK or AuK-Flash and reuse the same engine for identical settings. Engines remain cached until ComfyUI exits; changing settings can load another copy.",
+    "python_module": "custom_nodes.ComfyUI-AuK",
+    "category": "AuK",
+    "output_node": false,
+    "_fuobe_note": "Written from comfyui/ComfyUI-AuK/nodes.py at Tencent-Hunyuan/AuK 0d40366b (the pack is not on the validation server); device lists the server's CUDA devices, then cpu."
   },
   "AudioAdjustVolume": {
     "input": {
@@ -4041,6 +4449,141 @@
       "null conditioning",
       "clear conditioning"
     ]
+  },
+  "CorridorKey2": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE",
+          {}
+        ],
+        "gamma_space": [
+          [
+            "sRGB",
+            "Linear"
+          ],
+          {}
+        ],
+        "hint_quality": [
+          "FLOAT",
+          {
+            "default": 0.95,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
+          }
+        ],
+        "carry_hint": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "carry_hint_quality": [
+          "FLOAT",
+          {
+            "default": 0.95,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
+          }
+        ],
+        "despill_strength": [
+          "FLOAT",
+          {
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
+          }
+        ],
+        "window": [
+          [
+            "auto",
+            "80/40",
+            "48/24",
+            "24/12",
+            "8/4",
+            "4/2",
+            "2/1",
+            "1/1"
+          ],
+          {
+            "default": "auto"
+          }
+        ],
+        "low_vram": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ],
+        "unload_other_models": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ]
+      },
+      "optional": {
+        "mask": [
+          "MASK",
+          {}
+        ]
+      },
+      "hidden": {
+        "unique_id": "UNIQUE_ID",
+        "prompt": "PROMPT"
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "gamma_space",
+        "hint_quality",
+        "carry_hint",
+        "carry_hint_quality",
+        "despill_strength",
+        "window",
+        "low_vram",
+        "unload_other_models"
+      ],
+      "optional": [
+        "mask"
+      ],
+      "hidden": [
+        "unique_id",
+        "prompt"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "IMAGE",
+      "IMAGE",
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "fg",
+      "matte",
+      "processed",
+      "QC",
+      "cutout"
+    ],
+    "name": "CorridorKey2",
+    "display_name": "CorridorKey 2.0",
+    "description": "CorridorKey 2.0 neural green/blue screen keyer. Works with no hint, a single first-frame hint mask, or one hint mask per frame. Runs at native resolution with temporal Hann windows across the whole batch.",
+    "python_module": "custom_nodes.ComfyUI-CorridorKey2",
+    "category": "CorridorKey",
+    "output_node": false
   },
   "CreateCameraInfo": {
     "input": {
@@ -16995,6 +17538,9 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "RTXTrueHDR": null,
+  "RTXVideoFrameGeneration": null,
+  "RTXVideoSuperResolution": null,
   "RandomNoise": {
     "input": {
       "required": {

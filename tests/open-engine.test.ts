@@ -131,7 +131,12 @@ describe("round-3 open models", () => {
         for (const wid of ids) {
           const keys = Object.keys(workflowById.get(wid)?.bindings ?? {});
           // A control that stands for several settings (MOSS-Image's Quality) is the settings it writes.
-          const params = [...(m.options.sliders ?? []), ...(m.options.controls ?? [])].flatMap((s) =>
+          // A control offered on some operations only (MiniMax H3's Quality: not on References) binds there only.
+          const offered = (s: object) => {
+            const ops = "ops" in s ? (s.ops as Record<string, string[]> | undefined) : undefined;
+            return !ops || Object.values(ops).some((o) => o.includes(r.op));
+          };
+          const params = [...(m.options.sliders ?? []), ...(m.options.controls ?? [])].filter(offered).flatMap((s) =>
             "sets" in s && s.sets ? [...new Set(Object.values(s.sets).flatMap((v) => Object.keys(v)))] : [s.param],
           );
           for (const p of params) {

@@ -646,6 +646,29 @@ from an example and not rendered yet.
 - **GPU**: 20–24 GB estimates (`vramGb`), none measured here. ComfyUI 0.42.0 or newer: `TextEncodeQwenImage21`,
   `QwenImage21Cache`, `Ideogram4Scheduler`, `DualModelGuider`, `CFGOverride` and `TextEncodeFibo2` came with it.
 
+## NVIDIA RTX Video (nm10-rtx-video)
+
+Three hand-built graphs on Comfy-Org's ComfyUI Nvidia VFX Nodes 0.2.1 (`38d790d`, Apache-2.0, registry
+`comfyui_nvidia_rtx_nodes`) and NVIDIA's `nvidia-vfx` 0.2.0.0 runtime (the RTX Video SDK and its models in one wheel from
+pypi.nvidia.com; NVIDIA Software License Agreement). No model files: nothing downloads at run time.
+
+```bash
+npm run build -- upscale-video-rtx fps-rtx-framegen sdr-to-hdr-rtx
+node validate-workflows.mjs --subset-only upscale-video-rtx fps-rtx-framegen sdr-to-hdr-rtx   # then node build-requirements.mjs
+```
+
+| id | capability | what | validated here |
+|---|---|---|---|
+| `upscale-video-rtx` | upscale-video | `upscale-video-esrgan-chunked`'s VHS meta-batch with `RTXVideoSuperResolution` (scale `min(4, max(1, shortSide / shorter edge))` from `VHS_VideoInfo`, then `ResizeImageMaskNode` to exactly `shortSide`); sound kept. Bindings `video`, `framesPerBatch`, `shortSide`, `rtxQuality` | no: `missing_node_type`. The graph with `ImageScaleBy` in the RTX node's place ran here: 3 s 320x180 25 fps with sound → 1280x720, 75 frames in 5 passes, AAC kept |
+| `fps-rtx-framegen` | interpolate | `interpolate-rife-fps` with `RTXVideoFrameGeneration` (multiplier mode, shot changes detected) in `FrameInterpolate`'s place: N frames (+ the last held once) → N x m + 1. Bindings `video`, `multiplier`, `every`, `slowdown`, `rtxQuality` | no: `missing_node_type` |
+| `sdr-to-hdr-rtx` | sdr-to-hdr | `RTXTrueHDR` (peak `peakNits`, 400-2000) → `CreateVideo` 10-bit with the same `colorSpace` (`HDR` = BT.2020 HLG, `HDR PQ` = PQ) → H.264 High 10 MP4. | no: `missing_node_type`. With `ImageSDRToHDR` in its place: High 10, yuv420p10le, bt2020 / arib-std-b67 (HLG) and smpte2084 (PQ), sound kept |
+
+- `gpu` in the spec (`nvidia-rtx`, frame generation `nvidia-rtx-40`) goes to the manifest and `requirements.json`; the GPU
+  pre-flight shows "Needs an NVIDIA RTX card" when the connected card isn't one.
+- `install-comfyui.sh` clones the pack and installs `nvidia-vfx` only when `nvidia-smi` names an RTX card (`RTX_VIDEO=1`
+  forces it, `RTX_VIDEO=0` skips it), and warns when PyTorch isn't a CUDA 13 (cu130) build, which the pack's README asks for.
+- **Not run on a GPU.** Validate on a ComfyUI with an RTX card: `node validate-workflows.mjs upscale-video-rtx fps-rtx-framegen sdr-to-hdr-rtx`.
+
 ## Adding a workflow
 
 1. Find the template name in `$COMFYUI_DIR/.venv/lib/python3.*/site-packages/comfyui_workflow_templates_json/templates/index.json`
