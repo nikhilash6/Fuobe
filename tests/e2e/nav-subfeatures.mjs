@@ -106,9 +106,19 @@ const measure = (p) =>
     const subs = {};
     for (const ul of el.querySelectorAll("[data-subs]")) {
       if (!ul.checkVisibility()) continue;
-      subs[ul.getAttribute("data-subs")] = [...ul.querySelectorAll("a")].filter((a) => a.checkVisibility()).map((a) => ({ label: a.textContent.trim(), h: a.getBoundingClientRect().height }));
+      subs[ul.getAttribute("data-subs")] = [...ul.querySelectorAll("a")]
+        .filter((a) => a.checkVisibility())
+        .map((a) => {
+          // A pill's touch area past it (::after on a touch screen).
+          const after = getComputedStyle(a, "::after");
+          const reach = after.content !== "none" && after.position === "absolute" ? Math.max(0, -parseFloat(after.top) || 0) + Math.max(0, -parseFloat(after.bottom) || 0) : 0;
+          return { label: a.textContent.trim(), h: a.getBoundingClientRect().height, tap: a.getBoundingClientRect().height + reach, line: getComputedStyle(ul).flexDirection === "row" && !matchMedia("(pointer: coarse)").matches };
+        });
     }
+    // Each list column's rows (studios, not their links): their tops, to see the columns' rows in line.
+    const rows = [...el.querySelectorAll("[data-group] > ul > li:not(:first-child) > a")].filter((a) => a.checkVisibility()).map((a) => a.getBoundingClientRect().top);
     return {
+      rows,
       inner: el.scrollHeight - el.clientHeight,
       offscreen: links.filter((a) => {
         const r = a.getBoundingClientRect();
@@ -123,11 +133,18 @@ const measure = (p) =>
 try {
   // 1. The Studios menu: each viewer, each size: everything on screen, the studios' links where their column has room.
   for (const who of ["guest", "owner", ...(publicSignup ? ["account"] : [])]) {
+    // Window sizes, and the page area common laptops leave inside the browser's own bars (1440x790, 1536x730, 1920x940),
+    // and both sides of the 880 px step.
     for (const size of [
       { width: 1280, height: 720 },
       { width: 1366, height: 768 },
+      { width: 1536, height: 730 },
+      { width: 1440, height: 790 },
       { width: 1280, height: 800 },
+      { width: 1440, height: 879 },
+      { width: 1440, height: 880 },
       { width: 1440, height: 900 },
+      { width: 1920, height: 940 },
       { width: 1920, height: 1080 },
     ]) {
       const label = `${who} ${size.width}x${size.height}`;
@@ -140,19 +157,32 @@ try {
       check(r.inner <= 1 && r.offscreen === 0, `${label}: every studio and link on screen, no scrolling inside`, `inner ${r.inner}, ${r.offscreen}/${r.links} off`);
       check(names("marketing").join(" · ") === "Click to Ad · Ads Studio · Ad Multiplier", `${label}: Marketing Studio lists Click to Ad · Ads Studio · Ad Multiplier`, names("marketing").join(" · "));
       check(names("upscale").join(" · ") === "Image · Video · FPS Boost · SDR to HDR · Export", `${label}: Upscale lists its five tabs`, names("upscale").join(" · "));
-      if (size.height >= 800) {
+      {
+        // Genjutsu's modes at every height: a column of links from 800 px, one wrapped line of names below it. The
+        // owner's own two modes from 880 px (People is the tallest column then).
         const gen = names("genjutsu");
-        // The owner's own two modes from 880 px (People is the tallest column then).
         const want = ["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", ...(who === "owner" && size.height >= 880 ? ["From picture", "Finish"] : [])];
         check(want.every((w) => gen.includes(w)) && gen.length === want.length, `${label}: Genjutsu lists its modes`, gen.join(" · "));
+        const line = (r.subs.genjutsu ?? []).some((s) => s.line);
+        check(line === size.height < 800, `${label}: Genjutsu's modes ${size.height < 800 ? "as one line" : "as a column"}`);
         if (size.height >= 880) check(/^See all \d+$/.test(names("video-tools").at(-1) ?? ""), `${label}: Video tools lists a few, then See all`, names("video-tools").join(" · "));
         else check(!r.subs["video-tools"], `${label}: Video tools keeps its row only (its links from 880 px)`);
-      } else {
-        check(!r.subs.genjutsu && !r.subs["video-tools"], `${label}: full columns keep their rows only (Genjutsu and Video tools links from 800 px)`, Object.keys(r.subs).join(","));
       }
       check((await panel(p).locator('[data-group="sell"] > ul > li > a[href="/ads"]').count()) === 0, `${label}: Ads Studio is under Marketing Studio, not a row of its own`);
       const allSubs = Object.values(r.subs).flat();
-      check(allSubs.every((s) => s.h >= 27.5), `${label}: every link at least 28 px tall`, allSubs.filter((s) => s.h < 27.5).map((s) => `${s.label} ${s.h}`).join(", "));
+      // 24 px with a mouse (two to a row); a name in a line 20 px, its neighbours a dot away.
+      const short = allSubs.filter((s) => s.h < (s.line ? 19.5 : 23.5));
+      check(short.length === 0, `${label}: every link 24 px tall (20 in a line)`, short.map((s) => `${s.label} ${s.h}`).join(", "));
+      // The columns' rows stay in line (from 800 px: below it Genjutsu's line takes what it needs): every row's top is a
+      // whole number of 48 px rows from the first one's.
+      if (size.width >= 1280 && size.height >= 800 && r.rows.length) {
+        const base = Math.min(...r.rows);
+        const off = r.rows.filter((t) => {
+          const m = (((t - base) % 48) + 48) % 48;
+          return m > 2.5 && m < 45.5;
+        });
+        check(off.length === 0, `${label}: the columns' rows stay in line`, off.map(Math.round).join(", "));
+      }
       if (who !== "owner") {
         const said = OWNER_SUBS.filter((w) => allSubs.some((s) => s.label === w));
         check(said.length === 0, `${label}: no link a visitor can't use`, said.join(", "));
@@ -177,19 +207,29 @@ try {
       await ctx.close();
     }
   }
-  {
-    const ctx = await as("guest", { viewport: { width: 1366, height: 1024 }, hasTouch: true, isMobile: false });
-    const p = await page(ctx);
-    await openRoute(p, `${app}/image`, { settleMs: 300 });
-    const coarse = await p.evaluate(() => matchMedia("(pointer: coarse)").matches);
-    if (coarse) {
-      await openStudios(p);
-      const r = await measure(p);
-      const small = Object.values(r.subs).flat().filter((s) => s.h < 43.5);
-      check(small.length === 0, "touch screen at 1366x1024: every link 44 px tall", small.map((s) => `${s.label} ${s.h}`).join(", "));
-      check(r.inner <= 1 && r.offscreen === 0, "touch screen at 1366x1024: still no scrolling inside", `inner ${r.inner}, off ${r.offscreen}`);
-    } else console.log("  touch screen: this engine doesn't report (pointer: coarse) here, skipped");
-    await ctx.close();
+  for (const who of ["guest", "owner"]) {
+    for (const [width, height] of [
+      [1180, 820],
+      [1280, 800],
+      [1366, 1024],
+      [1280, 1100],
+    ]) {
+      const label = `touch screen ${who} ${width}x${height}`;
+      const ctx = await as(who, { viewport: { width, height }, hasTouch: true, isMobile: false });
+      const p = await page(ctx);
+      await openRoute(p, `${app}/image`, { settleMs: 300 });
+      const coarse = await p.evaluate(() => matchMedia("(pointer: coarse)").matches);
+      if (coarse) {
+        await openStudios(p);
+        const r = await measure(p);
+        const small = Object.values(r.subs).flat().filter((s) => s.tap < 43.5);
+        check(small.length === 0, `${label}: every link 44 px to tap`, small.map((s) => `${s.label} ${s.tap}`).join(", "));
+        check(r.inner <= 1 && r.offscreen === 0, `${label}: no scrolling inside`, `inner ${r.inner}, off ${r.offscreen}`);
+        check(!!r.subs.genjutsu === height >= 1024, `${label}: Genjutsu's modes ${height >= 1024 ? "listed" : "left to its page (from 1024 px)"}`);
+        if (shots && who === "guest" && width === 1280) await shot(p, `studios-${width}x${height}-touch-guest`);
+      } else console.log(`  ${label}: this engine doesn't report (pointer: coarse) here, skipped`);
+      await ctx.close();
+    }
   }
   {
     const ctx = await as("guest", { viewport: { width: 1440, height: 900 } }, { reducedMotion: "reduce" });
@@ -251,6 +291,12 @@ try {
     await openStudios(p);
     check((await panel(p).locator('a[data-sub][href="/ads/multiplier"]').getAttribute("aria-current")) === "page", "on Ad Multiplier its link is marked as the page");
     check((await panel(p).locator('[aria-current="page"]').count()) === 1, "and nothing else is");
+    check((await panel(p).locator('a[href="/marketing"]:not([data-sub])').getAttribute("data-active")) === "", "and Marketing Studio shows it holds the page");
+    await p.keyboard.press("Escape");
+    // A feature the menu doesn't link for a visitor still marks its studio (Character Sheet's modes).
+    await openRoute(p, `${app}/character-sheet?mode=cast`, { settleMs: 300 });
+    await openStudios(p);
+    check((await panel(p).locator('a[href="/character-sheet"]:not([data-sub])').getAttribute("data-active")) === "", "on Character Sheet's Build from scratch, Character Sheet is marked");
     // Every link resolves (those the window hides too).
     const hrefs = [...new Set(await panel(p).locator("a[data-sub]").evaluateAll((as_) => as_.map((a) => a.getAttribute("href"))))];
     const bad = [];
@@ -323,9 +369,11 @@ try {
       const body = sheet.locator('[data-sheet-family="studios"]');
       await body.locator("a[href]").first().waitFor({ timeout: 10_000 });
       check((await body.locator("[data-sheet-subs]").count()) === 0, `${label}: All shows tiles only`);
+      check((await body.locator('a[href="/ads"]').count()) === 1, `${label}: All keeps the Ads Studio tile`);
       const chip = (name) => sheet.locator('[role="group"][aria-label="Show the studios for one goal"]').getByRole("button", { name, exact: true });
       for (const [g, studio, want] of [
-        ["Sell", "Marketing Studio", ["Click to Ad", "Ads Studio", "Ad Multiplier"]],
+        // Ads Studio is a tile of Sell (and of All), so not a pill again.
+        ["Sell", "Marketing Studio", ["Click to Ad", "Ad Multiplier"]],
         ["People", "Genjutsu", ["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert"]],
         ["Film", "Video tools", ["Remove background", "Relight", "Captions"]],
         ["Finish", "Upscale", ["Image", "Video", "FPS Boost", "SDR to HDR", "Export"]],
@@ -440,6 +488,13 @@ try {
     check(/Click to Ad/.test(cta[0] ?? ""), `search (${who}): "click to ad" finds Click to Ad first`, cta.slice(0, 3).join(" | "));
     const blockout = await ask("blockout");
     check(blockout.some((t) => /^Blockout|Blockout Cinema|Cinema Studio.*Blockout|Blockout.*Cinema/.test(t)) === (who === "owner"), `search (${who}): Blockout ${who === "owner" ? "found" : "not found"}`, blockout.slice(0, 3).join(" | "));
+    {
+      await ask("genjutsu");
+      const heads = await p.locator("[cmdk-group-heading]").allInnerTexts();
+      const inGen = await p.locator('[cmdk-group]:has([cmdk-group-heading]:text-is("In Genjutsu")) [cmdk-item]').allInnerTexts();
+      const modes = ["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert"];
+      check(heads.some((h) => h.trim().toLowerCase() === "in genjutsu") && modes.every((m) => inGen.some((t) => t.includes(m))), `search (${who}): "genjutsu" lists its modes right after it`, `${heads.join(" | ")} :: ${inGen.join(" | ").replace(/\s+/g, " ")}`);
+    }
     if (who === "guest") {
       await ask("restyle");
       await p.keyboard.press("Enter");

@@ -301,9 +301,9 @@ try {
     await p.waitForTimeout(350);
     const tiles = sheet.locator("ul").first().getByRole("link");
     const seen = await inView(tiles);
-    // 32 tiles (Ads Studio is under Marketing Studio, in the Sell group) and the closing See all.
-    if (size.height >= 844) check(seen.length === 33 && seen.every(Boolean), `${label}: the Studios sheet shows all 32 and See all without scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
-    else check(seen.length === 33, `${label}: the Studios sheet lists all 32 and See all (it scrolls inside at this height)`, String(seen.length));
+    // 33 tiles (Ads Studio keeps its tile here; the desktop menu lists it under Marketing Studio) and the closing See all.
+    if (size.height >= 844) check(seen.length === 34 && seen.every(Boolean), `${label}: the Studios sheet shows all 33 and See all without scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
+    else check(seen.length === 34, `${label}: the Studios sheet lists all 33 and See all (it scrolls inside at this height)`, String(seen.length));
     await sheet.getByRole("button", { name: /^Film/ }).tap();
     check((await sheet.locator("ul").first().getByRole("link").count()) === 9, `${label}: the Film chip shows 8 and See all`);
     if (size.height >= 844) await shot(p, "phone-studios-sheet-film-390");

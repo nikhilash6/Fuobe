@@ -3,7 +3,7 @@
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IntentLink } from "@/components/intent-link";
-import { PILL, PILL_ICON, PILL_TAP } from "@/components/home/pill";
+import { PILL, PILL_ICON, PILL_TAP, SUB_PILL, SUB_ROW, SUB_ROW_NAME } from "@/components/home/pill";
 import { useExplored } from "@/components/nav/explore-tracker";
 import { useViewerKind } from "@/components/nav/nav-ui";
 import { useSearchPalette } from "@/components/nav/search-context";
@@ -241,7 +241,7 @@ const pillOf = (e: NavEntry, tap = true) => {
 /** A studio's feature as a pill in its row on /studios: its tab's name, no icon (the row names the studio). */
 const subPillOf = (e: NavEntry) => (
   <li key={e.id}>
-    <IntentLink href={e.href} className={cn(PILL, PILL_TAP)}>
+    <IntentLink href={e.href} className={SUB_PILL}>
       {subLabel(e)}
     </IntentLink>
   </li>
@@ -290,8 +290,8 @@ export function OwnerSubRow({ parent, ids }: { parent: string; ids: string[] }) 
   const list = ids.map(entry).filter((e): e is NavEntry => !!e && visibleTo(e, kind));
   if (!list.length) return null;
   return (
-    <li className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-4">
-      <p className="shrink-0 pt-1.5 text-[13px] leading-5 font-medium sm:w-40">{p.label}</p>
+    <li className={SUB_ROW}>
+      <p className={SUB_ROW_NAME}>{p.label}</p>
       <ul aria-label={`In ${p.label}`} className="flex flex-wrap gap-x-1.5 gap-y-3">
         {list.map(subPillOf)}
       </ul>

@@ -6,7 +6,7 @@ import { Fragment, lazy, Suspense, useEffect, useId, useRef, useState } from "re
 import { IntentLink } from "@/components/intent-link";
 import { Kbd } from "@/components/ui/kbd";
 import { MEGA_AREAS, ROW_CAPS, studiosMenu, TILE_COLS, type MegaColumn, type MegaId, type MegaItem, type MegaModel } from "@/lib/mega-menus";
-import { isNew, type ViewerKind } from "@/lib/nav-model";
+import { isNew, subParent, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
 import { CoverThumb } from "./cover-thumb";
 import { useMegaMenu } from "./mega-data";
@@ -35,13 +35,14 @@ function NewBadge() {
 }
 
 /** A column's first card: its cover, name and one line. `row` 1 under the owner's New board (Canvas), its cover shorter by that button. */
-export function LeadCard({ e, col, row = 0, current, now }: { e: MegaItem; col: number; row?: number; current: boolean; now: number }) {
+export function LeadCard({ e, col, row = 0, current, inside, now }: { e: MegaItem; col: number; row?: number; current: boolean; inside?: boolean; now: number }) {
   return (
     <IntentLink
       href={e.href}
       data-col={col}
       data-row={row}
       aria-current={current ? "page" : undefined}
+      data-active={inside ? "" : undefined}
       className="nav-row group/lead flex flex-col overflow-hidden rounded-[14px] border bg-card text-card-foreground"
     >
       <CoverThumb
@@ -68,13 +69,14 @@ export function LeadCard({ e, col, row = 0, current, now }: { e: MegaItem; col: 
   );
 }
 
-function Row({ e, col, row, current, now, className }: { e: MegaItem; col: number; row: number; current: boolean; now: number; className?: string }) {
+function Row({ e, col, row, current, inside, now, className }: { e: MegaItem; col: number; row: number; current: boolean; inside?: boolean; now: number; className?: string }) {
   return (
     <IntentLink
       href={e.href}
       data-col={col}
       data-row={row}
       aria-current={current ? "page" : undefined}
+      data-active={inside ? "" : undefined}
       title={e.line ? `${e.label}: ${e.line}` : e.label}
       className={cn("nav-row nav-mark-start -mx-2 flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-1.5 md:max-lg:min-h-10", className)}
     >
@@ -83,38 +85,65 @@ function Row({ e, col, row, current, now, className }: { e: MegaItem; col: numbe
       <CoverThumb id={e.navCover} cover={e.cover} size="row" icon={e.icon} className="max-[1439.98px]:hidden" />
       <span className="flex min-w-0 flex-col">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className={cn("truncate text-[13px] leading-[18px] font-medium max-xl:line-clamp-2 max-xl:whitespace-normal", current && "font-semibold")}>{e.label}</span>
+          <span className={cn("truncate text-[13px] leading-[18px] font-medium max-xl:line-clamp-2 max-xl:whitespace-normal", (current || inside) && "font-semibold")}>{e.label}</span>
           {isNew(e, now) && <NewBadge />}
         </span>
-        <span className="truncate text-[12px] leading-4 text-muted-foreground max-xl:hidden">{e.line}</span>
+        {/* A studio whose links become one line on a short window gives that line its own line's room. */}
+        <span className={cn("truncate text-[12px] leading-4 text-muted-foreground max-xl:hidden", e.subsLine && "[@media(max-height:799.98px)]:hidden")}>{e.line}</span>
       </span>
     </IntentLink>
   );
 }
 
-/** A studio's links hide on a window shorter than they need (the panel never scrolls inside). */
-const SUBS_FROM: Record<800 | 880 | 960, string> = { 800: "[@media(max-height:799.98px)]:hidden", 880: "[@media(max-height:879.98px)]:hidden", 960: "[@media(max-height:959.98px)]:hidden" };
+/**
+ * Below the window height a studio's links need, they hide, so the panel never scrolls inside. With a mouse they are
+ * 24 px names; on a touch screen pills 44 px to tap (nav-states.css), so they need a taller window there.
+ */
+const HIDE_SHORT: Record<800 | 880 | 960, string> = {
+  800: "[@media(max-height:799.98px)]:hidden",
+  880: "[@media(max-height:879.98px)]:hidden",
+  960: "[@media(max-height:959.98px)]:hidden",
+};
+const HIDE_TOUCH: Record<800 | 880 | 960, string> = {
+  800: "[@media(pointer:coarse)_and_(max-height:1023.98px)]:hidden",
+  880: "[@media(pointer:coarse)_and_(max-height:1099.98px)]:hidden",
+  960: "[@media(pointer:coarse)_and_(max-height:1199.98px)]:hidden",
+};
+/** `line`: with a mouse they become one line of names there instead (nav-states.css), so only a touch screen hides them. */
+const hideBelow = (h: 800 | 880 | 960, line = false) => cn(!line && HIDE_SHORT[h], HIDE_TOUCH[h]);
 
 /**
  * What a studio holds inside (its tabs and modes), as links under its card or row: names only, smaller and quieter
- * than the rows, hung from a hairline under the studio. `row`: the first link's place for the arrow keys (they go
- * down from the studio through its links to the next row). `current`: the open page's feature.
+ * than the rows, hung from a hairline under the studio (nav-states.css .nav-subs: with a mouse, two 24 px names to a
+ * row's 48 px, so the columns' rows stay in line; pills on a touch screen; one wrapped line of names below the height a
+ * studio with `subsLine` needs). `row`: the first link's place for the arrow keys (they go down from the studio through
+ * its links to the next row). `current`: the open page's feature. `under`: links under a row, whose names start where
+ * the row's name does.
  */
-function SubLinks({ e, col, row, current, className }: { e: MegaItem; col: number; row: number; current?: string; className?: string }) {
+function SubLinks({ e, col, row, current, under }: { e: MegaItem; col: number; row: number; current?: string; under?: boolean }) {
   if (!e.subs?.length) return null;
+  // An odd number of links ends half a row short: a 24 px pad fills it (the owner's taller-window links come in twos).
+  const odd = e.subs.filter((s) => !s.from).length % 2 === 1;
   return (
-    <ul aria-label={`In ${e.label}`} data-subs={e.id} className={cn("mt-0.5 mb-1 ml-[17px] flex flex-col border-l border-border pl-1 max-[1439.98px]:ml-1.5", e.subsFrom && SUBS_FROM[e.subsFrom], className)}>
+    <ul
+      aria-label={`In ${e.label}`}
+      data-subs={e.id}
+      data-odd={odd ? "" : undefined}
+      data-subs-line={e.subsLine ? "" : undefined}
+      className={cn("nav-subs ml-[17px] border-l border-border pl-1 max-[1439.98px]:ml-1.5", under && "min-[1440px]:pl-[21px]", e.subsFrom && hideBelow(e.subsFrom, e.subsLine))}
+    >
       {e.subs.map((s, i) => (
-        <li key={s.id} className={s.from && SUBS_FROM[s.from]}>
+        <li key={s.id} data-from={s.from ? "" : undefined} className={cn(s.from && hideBelow(s.from))}>
           <IntentLink
             href={s.href}
             data-col={col}
             data-row={row + i}
             data-sub=""
             aria-current={current === s.id ? "page" : undefined}
+            aria-label={s.name}
             title={s.line}
             className={cn(
-              "nav-row nav-mark-start group/sub flex min-h-7 items-center gap-1 rounded-[8px] px-2 text-[12.5px] leading-4 [@media(pointer:coarse)]:min-h-11",
+              "nav-row nav-mark-start group/sub flex items-center gap-1",
               s.more ? "font-medium text-brand-text" : "text-muted-foreground hover:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground",
             )}
           >
@@ -201,6 +230,8 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
   const families = !!model.families?.length;
   const tileColumns = model.columns.filter((c) => c.variant === "tiles").length;
   const places = keyPlaces(model.columns);
+  // On a studio's feature (Genjutsu's Restyle, Upscale's Video), its studio is marked as holding the page too.
+  const holder = current ? subParent(current) : undefined;
 
   const column = (c: MegaColumn, ci: number) => {
     const { col, row: firstRow } = places[ci];
@@ -249,9 +280,11 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
         </div>
       );
     }
+    // A studio listed under another (Ads Studio under Marketing Studio) is one of its links, not a row of its own.
+    const rows = c.rows.filter((e) => !e.under);
     // Places for the arrow keys, top to bottom: the lead (0), its links, then each row and its links.
     let next = 1 + (c.lead?.subs?.length ?? 0);
-    const at = c.rows.map((e) => {
+    const at = rows.map((e) => {
       const r = next;
       next += 1 + (e.subs?.length ?? 0);
       return r;
@@ -262,14 +295,14 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
         <ul aria-labelledby={labelId} className="flex flex-col gap-0.5">
           {c.lead && (
             <li className="pb-1.5">
-              <LeadCard e={c.lead} col={col} current={current === c.lead.id} now={now} />
-              <SubLinks e={c.lead} col={col} row={1} current={current} className="mt-1.5" />
+              <LeadCard e={c.lead} col={col} current={current === c.lead.id} inside={holder === c.lead.id} now={now} />
+              <SubLinks e={c.lead} col={col} row={1} current={current} />
             </li>
           )}
-          {c.rows.map((e, ri) => (
+          {rows.map((e, ri) => (
             <li key={e.id} className={capped ? ROW_HIDE(ri, families) : undefined}>
-              <Row e={e} col={col} row={at[ri]} current={current === e.id} now={now} />
-              <SubLinks e={e} col={col} row={at[ri] + 1} current={current} />
+              <Row e={e} col={col} row={at[ri]} current={current === e.id} inside={holder === e.id} now={now} />
+              <SubLinks e={e} col={col} row={at[ri] + 1} current={current} under />
             </li>
           ))}
         </ul>

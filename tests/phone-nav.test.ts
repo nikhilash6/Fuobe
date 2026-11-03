@@ -22,10 +22,7 @@ import { PhoneTabs } from "@/components/nav/phone-tabs";
 import { StudiosSheet } from "@/components/nav/studios-sheet";
 import { PhoneBar } from "@/components/phone-bar";
 import { navCovers } from "@/lib/nav-covers";
-import { activeEntry, LAUNCHER_GROUPS, launcherEntries as allLauncherEntries, studioCount, subParent, type LauncherGroupId, type ViewerKind } from "@/lib/nav-model";
-
-/** The studios as tiles: every launcher entry but one that is a tab of another's suite (Ads Studio, under Marketing Studio). */
-const launcherEntries = (kind: ViewerKind | undefined, group?: LauncherGroupId) => allLauncherEntries(kind, group).filter((e) => !subParent(e.id));
+import { activeEntry, LAUNCHER_GROUPS, launcherEntries, studioCount } from "@/lib/nav-model";
 
 /*
  * The phone's navigation (below md): the tab bar (Home, Create, Studios, Library, You), the Studios sheet with every
@@ -192,15 +189,16 @@ describe("the Studios sheet", () => {
   // The grid ends on a See all tile (/studios): the family's whole set. A studio's features are pills under it.
   const tiles = (html: string) =>
     [...html.matchAll(/<a [^>]*href="([^"]*)"[^>]*>/g)]
-      .filter((m) => !m[0].includes("tab-pill"))
+      .filter((m) => !m[0].includes("data-sub"))
       .map((m) => m[1].replaceAll("&amp;", "&"))
       .filter((h) => h !== "/" && h !== "/library" && h !== "/studios");
-  const pills = (html: string) => [...html.matchAll(/<a [^>]*class="tab-pill[^>]*>([^<]*)</g)].map((m) => m[1]);
+  const pills = (html: string) => [...html.matchAll(/<a data-sub=""[^>]*>([^<]*)</g)].map((m) => m[1]);
 
-  it("shows every studio, Apps and the Sound modes (33 tiles, 29 studios), in launcher order, each with a real cover", () => {
+  it("shows every studio, Apps and the Sound modes (34 tiles, 29 studios), in launcher order, each with a real cover", () => {
     const html = at("/", () => sheet());
     const all = launcherEntries(undefined);
-    expect(all).toHaveLength(33);
+    // Ads Studio keeps its tile here (the desktop menu lists it under Marketing Studio).
+    expect(all).toHaveLength(34);
     // All is one screen of tiles: a studio's features show under one group only.
     expect(pills(html)).toEqual([]);
     expect(studioCount()).toBe(29);
@@ -237,7 +235,7 @@ describe("the Studios sheet", () => {
   });
 
   it("starts on the group it was opened for", () => {
-    const sizes = { film: 8, social: 6, sell: 5, people: 6, sound: 5, finish: 3 } as const;
+    const sizes = { film: 8, social: 6, sell: 6, people: 6, sound: 5, finish: 3 } as const;
     for (const g of LAUNCHER_GROUPS) {
       const html = at("/", () => sheet({ group: g.id }));
       expect(tiles(html), g.id).toEqual(launcherEntries(undefined, g.id).map((e) => e.href));
@@ -248,7 +246,8 @@ describe("the Studios sheet", () => {
 
   it("lists what a group's studios hold inside as pills under the tiles, by their tabs' names, as a visitor may run them", () => {
     const sell = at("/", () => sheet({ group: "sell" }));
-    expect(pills(sell)).toEqual(["Click to Ad", "Ads Studio", "Ad Multiplier"]);
+    // Ads Studio is a tile of the group already: not a pill again.
+    expect(pills(sell)).toEqual(["Click to Ad", "Ad Multiplier"]);
     expect(words(sell)).toContain("Marketing Studio");
     const people = at("/", () => sheet({ group: "people" }));
     expect(pills(people)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert"]);
@@ -267,6 +266,10 @@ describe("the Studios sheet", () => {
     const html = at("/ads/multiplier", () => sheet({ group: "sell" }));
     expect(tagWith(html, 'href="/ads/multiplier"')).toContain('aria-current="page"');
     expect(tagWith(html, 'href="/marketing"')).toContain('aria-current="page"');
+    // A feature with a tile of its own marks that tile.
+    const ads = at("/ads", () => sheet({ group: "sell" }));
+    expect(tagWith(ads, 'href="/ads"')).toContain('aria-current="page"');
+    expect(tagWith(ads, 'href="/marketing"')).not.toContain('aria-current="page"');
   });
 
   it("marks the studio you are in", () => {

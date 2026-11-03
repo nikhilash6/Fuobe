@@ -1,6 +1,6 @@
 import { ChevronLeft, Plus } from "lucide-react";
 import { DestinationsSection, HomeFooter, SectionHead } from "@/components/home/home-sections";
-import { PILL, PILL_ICON, PILL_TAP } from "@/components/home/pill";
+import { PILL, PILL_ICON, PILL_TAP, SUB_PILL, SUB_ROW, SUB_ROW_NAME } from "@/components/home/pill";
 import { IntentLink } from "@/components/intent-link";
 import { PageShell } from "@/components/page-shell";
 import type { AreaShowcase } from "@/lib/area-showcase";
@@ -108,11 +108,6 @@ export function AreaSections({ sections }: { sections: AreaShowcase["sections"] 
     </div>
   ));
 }
-
-/** A studio's row of features: its name, then its tabs and modes as pills that wrap (44 px to tap). */
-export const SUB_ROW = "flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-4";
-export const SUB_ROW_NAME = "shrink-0 pt-1.5 text-[13px] leading-5 font-medium sm:w-40";
-export const SUB_PILL = cn(PILL, PILL_TAP);
 
 /**
  * What a section's studios hold inside (their tabs and modes), a row per studio under its cards and pills, so each is

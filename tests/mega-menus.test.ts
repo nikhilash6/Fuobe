@@ -162,8 +162,10 @@ describe("Studios as a menu", () => {
     for (const kind of [undefined, "guest", "account", "owner"] as const) {
       const m: MegaModel = studiosMenu(kind);
       expect(m.columns.map((c) => [c.id, c.lead?.id, ...c.rows.map((r) => r.id)])).toEqual(
-        launcherColumns(kind).map((c) => [c.group.id, c.lead.id, ...c.rest.filter((e) => !subParent(e.id)).map((e) => e.id)]),
+        launcherColumns(kind).map((c) => [c.group.id, c.lead.id, ...c.rest.map((e) => e.id)]),
       );
+      // The desktop menu lists Ads Studio under Marketing Studio, not as a row (the phone's sheet keeps its tile).
+      expect(megaItems(m).filter((e) => e.under).map((e) => [e.id, e.under])).toEqual([["ads", subParent("ads")]]);
       const marketing = m.columns.find((c) => c.id === "sell")!.lead!;
       expect(marketing.subs!.map((s) => [s.id, s.href])).toEqual([
         ["marketing-click-to-ad", "/marketing/click-to-ad"],
@@ -171,7 +173,9 @@ describe("Studios as a menu", () => {
         ["ads-multiplier", "/ads/multiplier"],
       ]);
       // A studio's features stay out of the phone's "All" (megaItems: leads and rows).
-      expect(megaItems(m).some((e) => e.id === "ads" || e.id.startsWith("genjutsu-"))).toBe(false);
+      expect(megaItems(m).some((e) => e.id.startsWith("genjutsu-"))).toBe(false);
+      // Built once per kind of viewer.
+      expect(studiosMenu(kind)).toBe(m);
     }
   });
 });

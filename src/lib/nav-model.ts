@@ -685,6 +685,8 @@ export interface StudioSubs {
   menu?: number;
   pick?: readonly string[];
   tall?: 800 | 880 | 960;
+  /** Below `tall`: "line" shows them as one wrapped line of names instead of hiding them (Genjutsu's modes). */
+  short?: "line";
   /** The owner's own features in the list (Genjutsu's From picture and Finish) show from this height. */
   ownerTall?: 880 | 960;
 }
@@ -693,7 +695,7 @@ const hubTools = (hub: HubKind, skip: readonly string[] = []) => HUB_MODES[hub].
 
 export const STUDIO_SUBS: Readonly<Record<string, StudioSubs>> = {
   marketing: { ids: ["marketing-click-to-ad", "ads", "ads-multiplier"] },
-  genjutsu: { ids: ["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert", "genjutsu-picture", "genjutsu-finish"], tall: 800, ownerTall: 880 },
+  genjutsu: { ids: ["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert", "genjutsu-picture", "genjutsu-finish"], tall: 800, short: "line", ownerTall: 880 },
   // The modes that aren't rows of the Sound column already.
   audio: { ids: hubTools("audio", SOUND_COLUMN), menu: 3 },
   upscale: { ids: hubTools("upscale") },

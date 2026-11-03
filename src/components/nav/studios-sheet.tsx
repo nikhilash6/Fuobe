@@ -3,6 +3,7 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { ArrowRight, CircleUserRound, House, Library, RotateCw, Search } from "lucide-react";
+import { SUB_PILL } from "@/components/home/pill";
 import { CoverThumb } from "@/components/nav/cover-thumb";
 import { useNavUi, useViewerKind } from "@/components/nav/nav-ui";
 import { IntentLink } from "@/components/intent-link";
@@ -50,10 +51,12 @@ function Tile({ entry, current }: { entry: MegaItem; current: boolean }) {
 
 /**
  * What the group's studios hold inside (their tabs and modes, every one a viewer may run): under the tiles, a small
- * heading per studio and its features as 44 px pills that wrap. Only for one group (All stays one screen of tiles).
+ * heading per studio and its features as pills that wrap (/studios' own, 44 px to tap). Only for one group (All stays
+ * one screen of tiles). A feature that is a tile here already (Ads Studio) isn't listed again.
  */
 function SheetSubs({ items, kind, current }: { items: MegaItem[]; kind: ViewerKind | undefined; current?: string }) {
-  const groups = items.map((e) => ({ e, subs: studioSubs(e.id, kind, "sheet") })).filter((g) => g.subs.length > 0);
+  const tiles = new Set(items.map((e) => e.id));
+  const groups = items.map((e) => ({ e, subs: studioSubs(e.id, kind, "sheet").filter((s) => !tiles.has(s.id)) })).filter((g) => g.subs.length > 0);
   if (!groups.length) return null;
   return (
     <div data-sheet-subs className="flex flex-col gap-3 border-t pt-3 pb-3">
@@ -62,11 +65,11 @@ function SheetSubs({ items, kind, current }: { items: MegaItem[]; kind: ViewerKi
           <p id={`sheet-subs-${e.id}`} className="text-[11px] leading-4 font-semibold tracking-[.08em] text-brand-text uppercase">
             {e.label}
           </p>
-          {/* 36 px pills whose touch area reaches 4 px past each edge (44 px): rows 8 px apart, so no two overlap. */}
-          <ul aria-labelledby={`sheet-subs-${e.id}`} className="mt-2 flex flex-wrap gap-x-1.5 gap-y-2">
+          {/* 32 px pills whose touch area reaches 6 px past each edge (44 px): rows 12 px apart, so no two overlap. */}
+          <ul aria-labelledby={`sheet-subs-${e.id}`} className="mt-2 flex flex-wrap gap-x-1.5 gap-y-3">
             {subs.map((s) => (
               <li key={s.id}>
-                <IntentLink href={s.href} aria-current={current === s.id ? "page" : undefined} {...onAttr(current === s.id)} title={s.what} className={cn(TAB_PILL, "px-3.5 text-[13px]")}>
+                <IntentLink data-sub="" href={s.href} aria-current={current === s.id ? "page" : undefined} title={s.what} className={SUB_PILL}>
                   {subLabel(s)}
                 </IntentLink>
               </li>
@@ -172,8 +175,6 @@ export function StudiosSheet({ family = "studios", group: initial, onSearch }: {
   useEffect(() => warmMenu(family), [family]);
   // The query too: moving from one preset to another (/video?preset=…) keeps the path.
   const current = megaCurrent(family, pathname, useSearchParams()?.toString() ?? "");
-  // On a studio's feature (Genjutsu's Restyle, Ads Studio), that studio's tile is the one marked.
-  const currentTile = family === "studios" && current ? (subParent(current) ?? current) : current;
   const area = MEGA_AREAS[family];
   // Canvas: its "Start here" column is the desktop's; on a phone the boards are the grid.
   const columns = model?.columns.filter((c) => !(family === "canvas" && c.id === "start")) ?? [];
@@ -181,6 +182,9 @@ export function StudiosSheet({ family = "studios", group: initial, onSearch }: {
   // Canvas' "What's a canvas?" (a finished board's scene, which the sections leave out) opens its All grid.
   const intro = family === "canvas" && !group ? model?.columns.find((c) => c.id === "start")?.lead : undefined;
   const items = model ? [...(intro ? [intro] : []), ...chipItems({ ...model, columns }, group)] : [];
+  // On a studio's feature (Genjutsu's Restyle), that studio's tile is the one marked; a feature with a tile of its own
+  // (Ads Studio) marks that.
+  const currentTile = family === "studios" && current && !items.some((e) => e.id === current) ? (subParent(current) ?? current) : current;
   const families = model?.families;
   const seeAll =
     group && families

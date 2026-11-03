@@ -179,6 +179,24 @@ describe("finding a studio's features", () => {
     expect(top("motion transfer")).toMatchObject({ id: "genjutsu-motion", href: "/genjutsu?mode=motion" });
   });
 
+  it("lists a studio's features right after it when the studio is the best match, in the studio's order", () => {
+    const inside = (kind: ViewerKind | undefined, q: string) => find(kind, q).groups[0];
+    expect(find("guest", "genjutsu").best[0]).toMatchObject({ id: "genjutsu" });
+    expect(inside("guest", "genjutsu")).toMatchObject({ label: "In Genjutsu" });
+    expect(inside("guest", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert"]);
+    expect(inside("owner", "genjutsu").hits.map((h) => h.label)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
+    expect(inside("guest", "character sheet").hits.map((h) => h.label)).toEqual(["From Reference", "Build from scratch", "From a description"]);
+    // Not a tab that is the studio's own page (Upscale's Image), nor one already among the best matches.
+    const upscale = find("guest", "upscale");
+    const listed = [...upscale.best, ...upscale.groups[0].hits].map((h) => h.label);
+    for (const t of ["video", "fps boost", "sdr to hdr", "export"]) expect(listed.some((l) => l.toLowerCase().includes(t)), `${t}: ${listed.join(", ")}`).toBe(true);
+    expect(upscale.groups[0].hits.some((h) => h.href === "/upscale")).toBe(false);
+    expect(new Set(listed).size).toBe(listed.length);
+    // Up to eight, and never a group for something that isn't a studio.
+    expect(inside("guest", "audio").hits.length).toBeLessThanOrEqual(8);
+    expect(find("guest", "restyle").groups.some((g) => g.label.startsWith("In "))).toBe(false);
+  });
+
   it("finds the owner's own only for the owner", () => {
     const hits = (kind: ViewerKind | undefined, q: string) => {
       const r = find(kind, q);

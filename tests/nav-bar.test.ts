@@ -148,14 +148,16 @@ describe("the launcher's columns", () => {
     expect(main).toHaveLength(33);
     expect(new Set(main.map((a) => a.href)).size).toBe(33);
     expect(launcherColumns(undefined).map((c) => 1 + c.rest.length)).toEqual([8, 6, 6, 6, 5, 3]);
-    expect(studiosMenu(undefined).columns.map((c) => 1 + c.rows.length)).toEqual([8, 6, 5, 6, 5, 3]);
+    // Ads Studio stays in the model (the phone's sheet keeps its tile); the desktop menu lists it under Marketing Studio.
+    expect(studiosMenu(undefined).columns.map((c) => 1 + c.rows.filter((e) => !e.under).length)).toEqual([8, 6, 5, 6, 5, 3]);
+    expect(studiosMenu(undefined).columns.flatMap((c) => c.rows.filter((e) => e.under).map((e) => [e.id, e.under]))).toEqual([["ads", "marketing"]]);
     expect(launcherColumns(undefined).map((c) => c.lead.id)).toEqual(["cinema", "shorts", "marketing", "fashion-factory", "audio", "upscale"]);
     expect(html).toContain("grid-cols-6");
     // The arrow keys' places: the lead, its features, then each row and its features, top to bottom.
     for (const [i, c] of studiosMenu(undefined).columns.entries()) {
       const at = (href: string, sub: boolean) => anchors(html).find((a) => a.href === href && a.tag.includes(`data-col="${i}"`) && a.tag.includes("data-sub") === sub)?.tag ?? "";
       let r = 0;
-      for (const e of [c.lead!, ...c.rows]) {
+      for (const e of [c.lead!, ...c.rows.filter((x) => !x.under)]) {
         expect(at(e.href, false), e.id).toContain(`data-col="${i}" data-row="${r++}"`);
         for (const s of e.subs ?? []) expect(at(s.href, true), s.id).toContain(`data-col="${i}" data-row="${r++}"`);
       }
@@ -175,11 +177,13 @@ describe("the launcher's columns", () => {
     expect(subs("audio")).toEqual(["Dialogue", "Voice change", "Design a voice", "See all 13"]);
     expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 10"]);
     for (const w of ["Click to Ad", "Ads Studio", "Ad Multiplier", "Motion transfer", "FPS Boost"]) expect(words(html)).toContain(w);
-    // Under a hairline, quieter than a row, with no picture and no line of their own.
+    // Under a hairline, quieter than a row, with no picture and no line of their own (nav-states.css .nav-subs: 24 px
+    // names with a mouse, 44 px pills to tap on a touch screen).
     const sub = anchors(html).find((a) => a.tag.includes("data-sub"))!.tag;
-    expect(sub).toContain("text-[12.5px]");
-    expect(sub).toContain("min-h-7");
-    expect(sub).toContain("[@media(pointer:coarse)]:min-h-11");
+    expect(sub).toContain("text-muted-foreground");
+    expect(html).toMatch(/<ul[^>]*class="nav-subs /);
+    // A "See all N" says whose.
+    expect(html).toContain('aria-label="See all 13 in Audio"');
   });
 
   it("labels the groups, and every link has its studio's real cover in a box of fixed size", () => {
@@ -204,6 +208,35 @@ describe("the launcher's columns", () => {
     const on = render(createElement(LauncherColumns, { kind: undefined, current: "katana", now: 0 }));
     expect(count(on, 'aria-current="page"')).toBe(1);
     expect(anchors(on).find((a) => a.href === "/katana")?.tag).toContain('aria-current="page"');
+  });
+
+  it("on a studio's feature, marks the feature and shows its studio as holding the page (no second aria-current)", () => {
+    const studio = (html: string, href: string) => anchors(html).find((a) => a.href === href && !a.tag.includes("data-sub"))?.tag ?? "";
+    const restyle = render(createElement(LauncherColumns, { kind: undefined, current: "genjutsu-restyle", now: 0 }));
+    expect(count(restyle, 'aria-current="page"')).toBe(1);
+    expect(anchors(restyle).find((a) => a.href === "/genjutsu?mode=restyle")?.tag).toContain('aria-current="page"');
+    expect(studio(restyle, "/genjutsu")).toContain('data-active=""');
+    expect(studio(restyle, "/genjutsu")).not.toContain("aria-current");
+    // A lead card too (Marketing Studio on Click to Ad), and a feature the menu doesn't link for a visitor (Character
+    // Sheet's modes): its studio is still marked.
+    expect(studio(render(createElement(LauncherColumns, { kind: undefined, current: "marketing-click-to-ad", now: 0 })), "/marketing")).toContain('data-active=""');
+    const cast = render(createElement(LauncherColumns, { kind: undefined, current: "character-sheet-cast", now: 0 }));
+    expect(count(cast, 'aria-current="page"')).toBe(0);
+    expect(studio(cast, "/character-sheet")).toContain('data-active=""');
+    // Nothing is marked as holding a page on a studio's own page.
+    expect(render(createElement(LauncherColumns, { kind: undefined, current: "genjutsu", now: 0 }))).not.toContain("data-active");
+  });
+
+  it("gives Genjutsu's modes one wrapped line on a short window, and pads an odd list to whole rows", () => {
+    const ul = (id: string) => html.match(new RegExp(`<ul[^>]*data-subs="${id}"[^>]*>`))?.[0] ?? "";
+    expect(ul("genjutsu")).toContain("data-subs-line");
+    // With a mouse it never hides (the line takes over); on a touch screen it needs 1024 px.
+    expect(ul("genjutsu")).not.toContain("[@media(max-height:799.98px)]:hidden");
+    expect(ul("genjutsu")).toContain("[@media(pointer:coarse)_and_(max-height:1023.98px)]:hidden");
+    expect(ul("video-tools")).toContain("[@media(max-height:879.98px)]:hidden");
+    expect(ul("video-tools")).not.toContain("data-subs-line");
+    expect(ul("marketing")).toContain("data-odd");
+    expect(ul("audio")).not.toContain("data-odd");
   });
 
   it("shows New badges only until their date", () => {

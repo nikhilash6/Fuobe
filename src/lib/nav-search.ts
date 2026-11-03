@@ -5,7 +5,7 @@
  * perfume ad is a job for Marketing Studio. The word match itself is command-search.ts's (wordScore).
  */
 import { GROUP_LIMIT, KIND_LABELS, normalize, wordScore, type PaletteEntry, type PaletteKind } from "./command-search";
-import { entry as navEntry, THEME_ACTION, type NavEntry, type NavKind } from "./nav-model";
+import { entry as navEntry, STUDIO_SUBS, THEME_ACTION, type NavEntry, type NavKind } from "./nav-model";
 
 export type HitKind = PaletteKind | "studio" | "tool";
 
@@ -23,6 +23,8 @@ export interface SearchEntry extends Omit<PaletteEntry, "kind"> {
   /** A nav icon name. */
   icon?: string;
   popular?: boolean;
+  /** A tool's studio id (a nav entry's parent): a studio found as the best match lists its tools after it. */
+  parent?: string;
 }
 
 export interface NavHit {
@@ -344,6 +346,8 @@ export function searchNav(query: string, entries: SearchEntry[], opts: { intents
     .slice(0, 2)
     .map((h) => ({ ...h, from: KIND_LABELS[h.kind as PaletteKind] }));
   const shown = new Set([...best, ...also].map((h) => h.key));
+  const inside = insideOf(best[0], entries, shown);
+  for (const h of inside?.hits ?? []) shown.add(h.key);
   const byGroup = new Map<string, { kind: string; label: string; limit: number; hits: NavHit[] }>();
   for (const h of hits) {
     if (shown.has(h.key)) continue;
@@ -355,7 +359,46 @@ export function searchNav(query: string, entries: SearchEntry[], opts: { intents
   const groups = [...byGroup.values()]
     .sort((a, b) => b.hits[0].score - a.hits[0].score || GROUP_ORDER.indexOf(a.kind) - GROUP_ORDER.indexOf(b.kind))
     .map(({ kind, label, hits }) => ({ kind, label, hits }));
-  return { best, also, groups };
+  return { best, also, groups: inside ? [inside, ...groups] : groups };
+}
+
+/** How many of a studio's tools its "In <studio>" group lists. */
+export const INSIDE_LIMIT = 8;
+
+/** Each studio's tools in a set of entries (STUDIO_SUBS order first), worked out once per set: the palette keeps its set. */
+const toolsCache = new WeakMap<SearchEntry[], Map<string, SearchEntry[]>>();
+function studioTools(entries: SearchEntry[]): Map<string, SearchEntry[]> {
+  const cached = toolsCache.get(entries);
+  if (cached) return cached;
+  const byId = new Map<string, SearchEntry>();
+  const byParent = new Map<string, SearchEntry[]>();
+  for (const e of entries) {
+    if (!e.key.startsWith("nav:")) continue;
+    if (e.id && !byId.has(e.id)) byId.set(e.id, e);
+    if (e.parent) byParent.set(e.parent, [...(byParent.get(e.parent) ?? []), e]);
+  }
+  const out = new Map<string, SearchEntry[]>();
+  for (const parent of new Set([...Object.keys(STUDIO_SUBS), ...byParent.keys()])) {
+    const listed = (STUDIO_SUBS[parent]?.ids ?? []).map((id) => byId.get(id)).filter((e): e is SearchEntry => !!e);
+    const keys = new Set(listed.map((e) => e.key));
+    out.set(parent, [...listed, ...(byParent.get(parent) ?? []).filter((e) => !keys.has(e.key))]);
+  }
+  toolsCache.set(entries, out);
+  return out;
+}
+
+/**
+ * A studio found as the best match: what it holds inside (its tabs and modes, STUDIO_SUBS order, then its other tools),
+ * as a group right after it ("genjutsu" lists Motion transfer, Character swap…). Not the ones already shown, nor a tab
+ * that is the studio's own page. Undefined for anything else, or a studio with nothing inside.
+ */
+function insideOf(lead: NavHit | undefined, entries: SearchEntry[], shown: ReadonlySet<string>): SearchResult["groups"][number] | undefined {
+  if (lead?.kind !== "studio" || !lead.id) return undefined;
+  const hits = (studioTools(entries).get(lead.id) ?? [])
+    .filter((e) => !shown.has(e.key) && e.href !== lead.href)
+    .slice(0, INSIDE_LIMIT)
+    .map((e) => toHit(e, 0));
+  return hits.length ? { kind: `in-${lead.id}`, label: `In ${lead.label}`, hits } : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -390,6 +433,7 @@ export function navSearchEntry(e: NavEntry): SearchEntry {
     icon: e.icon,
     ...((e.cover ?? parent?.cover) && { cover: e.cover ?? parent?.cover }),
     ...(e.popular && { popular: true }),
+    ...(e.parent && { parent: e.parent }),
   };
 }
 

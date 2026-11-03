@@ -49,6 +49,13 @@ export interface MegaItem {
   subs?: MegaSub[];
   /** The window height its links need (800, 880 or 960 px): below it they hide, so the panel never scrolls. */
   subsFrom?: 800 | 880 | 960;
+  /** Below `subsFrom`, its links show as one wrapped line of names (Genjutsu's modes) instead of hiding. */
+  subsLine?: true;
+  /**
+   * The studio the desktop menu lists it under, as one of its links (Ads Studio under Marketing Studio): the menu leaves
+   * out its own row; the phone's sheet keeps its tile (its All grid is tiles only).
+   */
+  under?: string;
 }
 
 /** A feature inside a studio, as a link under it: its tab's name, its line as the link's title. */
@@ -59,6 +66,8 @@ export interface MegaSub {
   line?: string;
   /** "See all N": the studio's page, where every one of its features is a tab. */
   more?: true;
+  /** Its accessible name, when its label alone doesn't say where it goes ("See all 13 in Audio"). */
+  name?: string;
   /** The window height this one link needs, when it is more than its studio's other links do (the owner's own). */
   from?: 880 | 960;
 }
@@ -172,24 +181,34 @@ export function megaSubs(parent: NavEntry, kind: ViewerKind | undefined): MegaSu
   }));
   // Every tab the studio's page shows this viewer (Audio's rows in the Sound column count too).
   const all = Math.max(studioSubs(parent.id, kind, "list").length, entriesFor(kind).filter((e) => e.kind === "tool" && e.parent === parent.id).length);
-  if (all > shown.length) subs.push({ id: `${parent.id}-all`, href: parent.href, label: `See all ${all}`, line: `Every tool in ${parent.label}`, more: true });
+  if (all > shown.length) subs.push({ id: `${parent.id}-all`, href: parent.href, label: `See all ${all}`, name: `See all ${all} in ${parent.label}`, line: `Every tool in ${parent.label}`, more: true });
   return subs;
 }
 
 const withSubs = (e: NavEntry, kind: ViewerKind | undefined): MegaItem => {
   const subs = megaSubs(e, kind);
-  const from = STUDIO_SUBS[e.id]?.tall;
-  return { ...studioItem(e), ...(subs.length > 0 && { subs, ...(from && { subsFrom: from }) }) };
+  const spec = STUDIO_SUBS[e.id];
+  const under = subParent(e.id);
+  return {
+    ...studioItem(e),
+    ...(subs.length > 0 && { subs, ...(spec?.tall && { subsFrom: spec.tall, ...(spec.short === "line" && { subsLine: true as const }) }) }),
+    ...(under && { under }),
+  };
 };
+
+/** The Studios menu for each kind of viewer, built once: it only reads the navigation model. */
+const studiosMenus = new Map<ViewerKind | undefined, MegaModel>();
 
 /**
  * Studios as a menu: the launcher's columns (launcherColumns) for who is looking, each studio with what it holds inside
  * as links under it (megaSubs). A studio that is a tab of another's suite (Ads Studio, in Marketing Studio's) is one of
- * those links instead of a row of its own.
+ * those links in the desktop menu instead of a row of its own (`under`); the phone's sheet keeps its tile.
  */
 export function studiosMenu(kind: ViewerKind | undefined): MegaModel {
+  const built = studiosMenus.get(kind);
+  if (built) return built;
   const n = studioCount();
-  return {
+  const model: MegaModel = {
     id: "studios",
     count: n,
     countLine: `${n} studios, grouped by what you want to make`,
@@ -199,9 +218,11 @@ export function studiosMenu(kind: ViewerKind | undefined): MegaModel {
       label: c.group.label,
       chip: c.group.chip,
       lead: withSubs(c.lead, kind),
-      rows: c.rest.filter((e) => !subParent(e.id)).map((e) => withSubs(e, kind)),
+      rows: c.rest.map((e) => withSubs(e, kind)),
     })),
   };
+  studiosMenus.set(kind, model);
+  return model;
 }
 
 /** Every item of a menu, leads first in each column, in column order (a phone's "All", a test). */
