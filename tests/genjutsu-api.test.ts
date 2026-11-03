@@ -330,6 +330,18 @@ describe("Genjutsu: runs (demo)", () => {
     expect((await settle(final.id)).status).toBe("succeeded");
   });
 
+  it("Original sound: the cloud refuses a split in words; your GPU splits the clip and puts back the chosen stem", async () => {
+    const cloud = await createRoute.POST(json(body({ sound: { sound: "no-dialogue" } })));
+    expect(cloud.status).toBe(422);
+    expect((await cloud.json()).error).toMatch(/runs on your GPU \(open source\)/);
+    const { final } = await run(body({ engine: "open", mode: "swap", subject: "the skateboard", references: [hero, hero], sound: { sound: "dialogue-only" } }));
+    const rows = batchOf(final.id);
+    expect(rows.filter((r) => r.op === "separate-audio").map((r) => r.model_id)).toEqual(["oss-dbs-separate"]);
+    expect(final).toMatchObject({ modelId: "oss-mux", feature: "genjutsu" });
+    expect(final.request.chain?.at(-1)).toEqual({ slot: "audio", stem: "voice" });
+    expect((await settle(final.id)).status).toBe("succeeded");
+  });
+
   it("cloud swap by paint on one hosted VACE piece: the paint itself, no track", async () => {
     const { final } = await run(body({ mode: "swap", modelId: "wan-22-vace-inpaint", target: "paint", mask, range: { start: 0, end: 12 } }));
     const rows = batchOf(final.id);

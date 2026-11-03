@@ -186,6 +186,20 @@ describe("Episodes", () => {
     expect(notes).toEqual(expect.arrayContaining([expect.stringMatching(/first 2 style references/), expect.stringMatching(/made 4 min long, then looped with a 3-second crossfade/)]));
   });
 
+  it("a clip's soundtrack as the bed: looped when it's shorter than the film, cut when it's longer, and 8 s at least", async () => {
+    const est = (s: EpisodeSettings) => estimateRoute.POST(json("POST", { kind: "faceless", settings: s }));
+    const clip = (duration: number) => ({ ...open, length: 60, musicClip: { url: "/api/files/bed.mp4", name: "bed", duration } });
+    const short = await (await est(clip(20))).json();
+    expect(short.notes).toEqual(expect.arrayContaining([expect.stringMatching(/Your clip's music and effects \(20 s\) loop with a 3-second crossfade/)]));
+    expect(short.notes.join(" ")).not.toMatch(/made .* long/);
+    const long = await (await est(clip(900))).json();
+    expect(long.notes).toEqual(expect.arrayContaining([expect.stringMatching(/Only the first 1 min( \d+ s)? of your clip's sound is used/)]));
+    expect(long.estimate.parts.music ?? 0).toBe(0);
+    const tooShort = await est(clip(5));
+    expect(tooShort.status).toBe(400);
+    expect((await tooShort.json()).error).toMatch(/8 s or more/);
+  });
+
   it(
     "renders end to end in demo mode on both engines (narration timed first, then the scenes), re-runs one scene, undoes it and retries a failure",
     async () => {

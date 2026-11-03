@@ -38,6 +38,8 @@ import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
+import { defaultSound, type SoundChoice } from "@/lib/av/original-sound";
 import { FrameStage, frameFromBlob, type Frame } from "./frame-stage";
 import { useRemovalActions, useRemovalEstimate, type RemovalBody } from "./hooks";
 import { VideoCompare } from "./video-compare";
@@ -96,6 +98,7 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
   const [mode, setMode] = useState<RemoveMode>("type");
   const [prompt, setPrompt] = useState("");
   const [effects, setEffects] = useState(false);
+  const [soundPick, setSoundPick] = useState<SoundChoice | null>(null);
   // "Remove a person" (its own Video tools tab, or ?person=1 from a result's menu): H3 Person Removal on your GPU.
   const personLinked = useSyncExternalStore(noSubscribe, personInUrl, () => false);
   const personAsked = person || personLinked;
@@ -204,6 +207,9 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
   const ready = !!clip?.url && !clip.uploading && !clip.error && !!duration && !!range;
   const marked =
     mode === "type" ? everyone || !!prompt.trim() : mode === "click" ? points.some((p) => p.label !== "negative") : !!paint;
+  // Original sound: a person removed suggests Music & effects only (their speech goes too); a pick of your own stays.
+  const soundSuggested = defaultSound(engine, { personReplaced: !!eraser?.cleanFrame });
+  const sound: SoundChoice = soundPick ?? { sound: soundSuggested };
   const body: RemovalBody | null =
     ready && eraser && marked
       ? {
@@ -218,6 +224,7 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
           ...(h3 ? { maskGrow } : {}),
           source: { url: clip.url!, name: clip.name, duration, fps: clip.info?.fps, width: size.width, height: size.height, hasAudio: clip.info?.hasAudio },
           range: { start: range.startTime, end: range.endTime },
+          ...soundBody(engine, sound),
         }
       : null;
   const estimate = useRemovalEstimate(body);
@@ -480,6 +487,7 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
                 </p>
               )}
 
+              {clip && <OriginalSoundField engine={engine} value={sound} onChange={setSoundPick} hasAudio={clip.info?.hasAudio} suggested={soundSuggested} />}
               {personOnCloud && (
                 <div className="space-y-2 rounded-xl bg-muted/60 p-3 text-[13px]" role="status">
                   <p className="flex gap-1.5">

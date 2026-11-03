@@ -1,4 +1,6 @@
 import "server-only";
+import { originalSoundProblem, separates, soundLine, type SoundChoice } from "@/lib/av/original-sound";
+import { SoundChoiceSchema } from "./shorts-schemas";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import { onEngine } from "@/lib/catalog/engines";
@@ -94,6 +96,8 @@ export interface GenjutsuBody {
   character?: CharacterOptions;
   /** Hard cuts the browser found in the clip (seconds), for the "one continuous shot" warning. */
   cuts?: number[];
+  /** Original sound (unset = Everything). */
+  sound?: SoundChoice;
 }
 
 const fileUrl = z.string().startsWith("/api/files/").max(500);
@@ -151,6 +155,7 @@ export const GenjutsuBodySchema = z.object({
   seed: z.number().int().min(0).max(2 ** 48).optional(),
   character: character.optional(),
   cuts: z.array(seconds).max(200).optional(),
+  sound: SoundChoiceSchema.optional(),
   /** A client nonce for one submit: a repeat gets the first answer (see once()). */
   requestId: z.string().trim().min(8).max(64).optional(),
 });
@@ -208,6 +213,8 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean }): Promise<
   const clicks = (body.points ?? []).filter((p) => p.label !== "negative").length;
   const problem = genjutsuProblem({ mode: body.mode, maker, source, range, references: references.length, target, subject: body.subject, prompt: body.prompt, points: clicks, mask: !!body.mask, look: body.look, seed: body.seed, character: body.character });
   if (problem) throw new ShortsError(problem, 422);
+  const soundProblem = originalSoundProblem(maker.engine, body.sound);
+  if (soundProblem) throw new ShortsError(soundProblem, 422);
   const switched = body.mode === "character" && maker.h3 ? characterSwitches(maker, body.character ?? {}) : { character: body.character, notes: [] };
 
   // Clicks on the first frame, in the clip's pixels; paint is followed from its deepest points (SAM 3.1 on fal).
@@ -222,6 +229,8 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean }): Promise<
   if (tracksPaint) points = opts.probe ? await pointsFromPaint(body.mask!, source, "Paint over what to swap first") : [{ x: 1, y: 1, label: "positive" }];
 
   const notes = [...switched.notes, ...notesFor({ ...body, character: switched.character }, maker, source, range, n, references.length)];
+  const split = separates(maker.engine, body.sound) && source.hasAudio;
+  if (split) notes.push(`Original sound: ${soundLine(body.sound)} — your GPU splits the clip's sound first (free)`);
   const name = (body.source.name ?? "").replace(/\.[a-z0-9]{2,4}$/i, "").trim().slice(0, 40);
   const title = genjutsuTitle({ mode: body.mode, subject: body.subject, look: body.look });
   return {
@@ -244,6 +253,7 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean }): Promise<
       look: body.look,
       ...(body.seed !== undefined ? { seed: body.seed } : {}),
       ...(body.mode === "character" ? { character: switched.character ?? {} } : {}),
+      ...(split && body.sound && { sound: body.sound }),
     },
   };
 }

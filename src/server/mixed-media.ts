@@ -1,4 +1,5 @@
 import "server-only";
+import { originalSoundProblem, separates, soundLine, type SoundChoice } from "@/lib/av/original-sound";
 import { getModel } from "@/lib/catalog";
 import {
   clampFps,
@@ -63,6 +64,8 @@ export interface MixedBody {
   /** Cloud preview: the frame the browser grabbed at the start of the selection. */
   frameUrl?: string;
   seed?: number;
+  /** Original sound (unset = Everything). */
+  sound?: SoundChoice;
 }
 
 /**
@@ -173,6 +176,11 @@ async function planInput(body: MixedBody, opts: { probe: boolean }): Promise<{ i
     reach = { loras: onComfy.loras, notes: [...reach.notes, ...onComfy.notes] };
   }
   if (reach) notes.push(...reach.notes);
+  const soundProblem = originalSoundProblem(body.engine, body.sound);
+  if (soundProblem) throw new ShortsError(soundProblem, 422);
+  // Sound we couldn't read counts as none (below), so no split is planned for it either; unread (an estimate), it's split once read.
+  const split = separates(body.engine, body.sound) && (opts.probe ? info.hasAudio === true : info.hasAudio !== false);
+  if (split) notes.push(`Original sound: ${soundLine(body.sound)} — your GPU splits the clip's sound first (free)`);
   const name = (body.source.name ?? "").replace(/\.[a-z0-9]{2,4}$/i, "").trim().slice(0, 40);
   return {
     frames,
@@ -198,6 +206,7 @@ async function planInput(body: MixedBody, opts: { probe: boolean }): Promise<{ i
       // LTX follows the clip's outlines, like the open engine's canny ControlNet.
       extra: modelId === "ltx-2-3-restyle" ? { preprocessor: "canny" } : undefined,
       ...(body.seed !== undefined ? { seed: body.seed } : {}),
+      ...(split && body.sound && { sound: body.sound }),
     },
   };
 }

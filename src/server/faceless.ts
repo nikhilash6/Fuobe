@@ -4,18 +4,21 @@ import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import {
   AUTO_SECONDS,
+  MUSIC_CLIP_MIN_SECONDS,
   blockCount,
   buildEpisodeGraph,
   CAMERA_WORDS,
   changedKeys,
   channelName,
   defaultSettings,
+  BED_CROSSFADE,
   ENGINE_MODELS,
   estimateGraph,
   EXPLAINER_MAX,
   EXPLAINER_MIN,
   genreInfo,
   getStyle,
+  LOOP_MAX,
   MAX_SCRIPT,
   MAX_SOURCES,
   musicPlan,
@@ -1369,9 +1372,16 @@ function notesFor(settings: EpisodeSettings, seconds: number): { notes?: string[
   const limit = styleRefLimit(settings.engine, getModel);
   if (settings.styleRefs.length > limit) notes.push(`The open-source picture model follows the first ${limit} style references.`);
   if (settings.engine === "open" && settings.styleRefs.length && settings.sourceImages?.length) notes.push("Your style references set the look; the attached images aren't used for the open-source pictures.");
-  if (m.music) {
+  const minutes = (s: number) => `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}`;
+  if (m.music && m.bedClip) {
+    // Your clip's music and effects: cut to the film when it's longer, looped (as buildEpisodeGraph plans) when shorter.
+    const clip = Math.round(m.bedClip.duration);
+    const loop = m.loop && m.bedClip.duration < seconds ? Math.min(LOOP_MAX[m.loop] ?? Infinity, Math.ceil(seconds) + 1) : null;
+    if (loop) notes.push(`Your clip's music and effects (${clip} s) loop with a ${BED_CROSSFADE}-second crossfade to cover the film.`);
+    else if (m.bedClip.duration > Math.ceil(seconds) + 2) notes.push(`Only the first ${minutes(Math.ceil(seconds) + 1)} of your clip's sound is used.`);
+    if (loop && loop < seconds) notes.push(`The music bed goes up to ${minutes(loop)}, so the last ${Math.ceil(seconds - loop)} s play without music.`);
+  } else if (m.music) {
     const plan = musicPlan(getModel(m.music), m.loop ? getModel(m.loop) : undefined, seconds);
-    const minutes = (s: number) => `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}`;
     if (plan.loop?.crossfade) notes.push(`The music is made ${minutes(plan.bed)} long, then looped with a ${plan.loop.crossfade}-second crossfade to cover the film.`);
     else if (plan.loop) notes.push(`The music is made ${minutes(plan.bed)} long and plays again to cover the film.`);
     if (plan.short) notes.push(`The music bed goes up to ${minutes(plan.loop?.duration ?? plan.bed)}, so the last ${plan.short} s play without music.`);
@@ -1530,6 +1540,14 @@ export const SettingsSchema = z.object({
   resolution: z.string().max(10).optional(),
   auto: z.boolean().optional(),
   brief: BriefLookSchema.optional(),
+  /** "Use a clip's soundtrack as the bed" (your GPU): the clip, and its seconds as the browser read them. */
+  musicClip: z
+    .object({
+      url: FileUrl,
+      name: z.string().max(200).optional(),
+      duration: z.number().finite().min(MUSIC_CLIP_MIN_SECONDS, `Pick a clip of ${MUSIC_CLIP_MIN_SECONDS} s or more for the bed`).max(3600),
+    })
+    .optional(),
 });
 
 export const BlockSchema = z.object({

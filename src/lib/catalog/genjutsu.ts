@@ -65,6 +65,7 @@ import { REPLACED_BY } from "./replaced";
 import { soulLook } from "./soul";
 import { filmSize, SHARPEN_COPY, sharpenPrompt, sharpenSteps, sharpenTierFor, type SharpenTier } from "./sharpen";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
+import { originalSoundProblem, separates, type SoundChoice } from "../av/original-sound";
 
 export type GenjutsuMode = "motion" | "character" | "swap" | "restyle" | "insert";
 /** How you say what changes (Object swap and Insert) or who (Character swap): words, clicks on the first frame, or paint on it. */
@@ -1001,6 +1002,8 @@ export interface GenjutsuPlanInput {
   seed?: number;
   /** Character swap's settings. */
   character?: CharacterOptions;
+  /** Original sound: what of the clip's sound goes back (src/lib/av/original-sound.ts; unset = Everything). */
+  sound?: SoundChoice;
 }
 
 export interface GenjutsuPlan {
@@ -1041,6 +1044,8 @@ function pinEngines(steps: PlanStep[], engine: Engine): PlanStep[] {
  * - then the pieces joined and the clip's own sound put back.
  */
 export function planGenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
+  const soundProblem = originalSoundProblem(input.maker.engine, input.sound);
+  if (soundProblem) throw new Error(soundProblem);
   const plan = planSteps(input);
   return { ...plan, steps: pinEngines(plan.steps, input.maker.engine) };
 }
@@ -1059,7 +1064,8 @@ function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {
   const helper = { feature: GENJUTSU.stepFeature, batchTitle: input.title };
   const steps: PlanStep[] = [];
   const op = OP[input.mode];
-  const sound = !!input.source.hasAudio && (n > 1 || !m.keepsSound);
+  // A maker that keeps the clip's sound still gets the chosen stems put back when the sound is split (Original sound).
+  const sound = !!input.source.hasAudio && (n > 1 || !m.keepsSound || separates(m.engine, input.sound));
   const own = (one: boolean) => (one && !sound ? { ...base, title: input.title } : helper);
   const refs = input.references.slice(0, m.refs.max);
   const images = refs.length ? { images: refs } : {};
@@ -1186,10 +1192,10 @@ function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {
       });
     });
     const end = m.window ? pieces[n - 1].end : input.range.end;
-    const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound, end });
+    const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound, end, choice: input.sound });
     return { steps, final, pieces: n, sound, tracked };
   }
-  const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound });
+  const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound, choice: input.sound });
   return { steps, final, pieces: n, sound, tracked: false };
 }
 
@@ -1368,9 +1374,23 @@ function planCharacterSwap(input: GenjutsuPlanInput): GenjutsuPlan {
       },
       ...(anchorOn ? { after: ["anchor"], chain: [anchorSlot()] } : {}),
     });
-    if (!sharpen) return { steps, final: "swap", pieces: 1, sound: false, tracked: false, anchors: anchorOn ? 1 : 0 };
-    const done = sharpen(steps, promptWith(anchorOn));
-    return { steps, final: done.final, pieces: 1, sound: done.sound, tracked: false, anchors: anchorOn ? 1 : 0 };
+    // Original sound other than Everything lays the chosen stems over the picture instead of the clip's own sound.
+    const split = !!input.source.hasAudio && separates("open", input.sound);
+    let picture = "swap";
+    if (sharpen) {
+      // The finish puts the part's whole sound back itself; with a split choice it is left silent and the stems go on below.
+      const finishOf = split ? openFinish({ ...input, source: { ...input.source, hasAudio: false } }, finish!, quality) : sharpen;
+      const done = finishOf(steps, promptWith(anchorOn));
+      if (!split) return { steps, final: done.final, pieces: 1, sound: done.sound, tracked: false, anchors: anchorOn ? 1 : 0 };
+      picture = done.final;
+    }
+    if (split) {
+      const last = steps.find((s) => s.key === picture)!;
+      last.request = { ...last.request, ...helper };
+      const final = joinWithSound(steps, { engine: "open", title: input.title, base, helper, source: input.source, range: input.range, pieces: [picture], sound: true, choice: input.sound });
+      return { steps, final, pieces: 1, sound: true, tracked: false, anchors: anchorOn ? 1 : 0 };
+    }
+    return { steps, final: "swap", pieces: 1, sound: false, tracked: false, anchors: anchorOn ? 1 : 0 };
   }
 
   // Cloud: fal's H3 takes 5–15 s of reference video and whole seconds of output, and needs a swap LoRA.
@@ -1472,6 +1492,7 @@ function planFuobeRestyle(input: GenjutsuPlanInput): GenjutsuPlan {
     maxRefs: m.readsLookImages ?? 0,
     ...(qualityFor(m, input.quality) ? { resolution: qualityFor(m, input.quality) } : {}),
     ...(input.seed !== undefined ? { seed: input.seed } : {}),
+    ...(input.sound && { sound: input.sound }),
   });
   // Only the finished video is a result; the segments are steps (Shorts keeps each take as a result of its own).
   const final = plan.final ?? plan.takes[0].look;
