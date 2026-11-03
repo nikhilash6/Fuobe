@@ -165,6 +165,25 @@ describe("MiniMax H3 at 2K on your GPU", () => {
     expect(gens.createGenerations({ feature: "video", modelId: "oss-minimax-h3", op: "t2v", prompt: "x", params: { resolution: "768p", duration: 5 } })).toHaveLength(1);
   });
 
+  it("drafts a Fast · Pika Flex take on Flex's graph with Pika's adapter, and finishes it from its clip", async () => {
+    const { pikaFlexGraphLoras, PIKA_FLEX_FL2VA } = await import("@/lib/catalog/pika-flex");
+    const asked: GenerationRequest = { feature: "video", modelId: "oss-minimax-h3", op: "t2v", prompt: "A lighthouse in a storm", params: { resolution: "2K", duration: 5, extra: { quality: "flex" } } };
+    const { draft, fromLatent } = R.h3TwoKRequests(asked, "t2v", { keepLatent: true });
+    expect(fromLatent).toBe(false);
+    const extra = draft.params!.extra!;
+    expect(extra).toEqual({ quality: "flex" });
+    const req = { op: "t2v", clips: 0, images: 0, audio2: false, extra, has: () => true };
+    expect(resolveWorkflowId("minimax-h3-t2v", req)).toBe("minimax-h3-flex-t2v");
+    // The run downloads (or an account's GPU is checked for) the adapter the graph loads, never the Turbo 4-step LoRA.
+    expect(pikaFlexGraphLoras("minimax-h3-t2v", extra)).toEqual([PIKA_FLEX_FL2VA]);
+    expect(R.regenerateGraphLoras("minimax-h3-t2v", extra)).toEqual([]);
+    const [f, d] = gens.createGenerations(asked);
+    expect(d.request.params).toMatchObject({ resolution: "768p", extra: { quality: "flex" } });
+    expect(d.request.params?.extra?.latentDraft).toBeUndefined();
+    expect(f.request.params?.extra).toMatchObject({ draftFrom: "h3" });
+    expect(f.request.params?.extra?.latentFrom).toBeUndefined();
+  });
+
   it("offers 2K in Cinema only for MiniMax H3 models, and says how your GPU makes it", () => {
     for (const id of ["minimax-h3", "oss-minimax-h3", "minimax-h3-max"]) expect(videoResolutionsFor(getModel(id)), id).toContain("2K");
     for (const id of ["fuobe-cinema", "kling-4", "seedance-2-5", "oss-ltx25", "oss-wan22-14b", "veo-3-1"]) expect(videoResolutionsFor(getModel(id)), id).toEqual(["480p", "720p", "1080p"]);

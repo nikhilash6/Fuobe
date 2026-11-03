@@ -103,6 +103,7 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   const small = tier === "fast" || tier === "trim" ? tierGraphFor(endpoint, tier, r.has) : undefined;
   const flex = H3_FLEX_GRAPH[endpoint];
   const latentDraft = H3_LATENT_DRAFT_GRAPH[endpoint];
+  // The 2K tier's text-to-video draft that keeps its latent (never a Flex take's: h3TwoKRequests drafts that on Flex's graph).
   if (latentDraft && r.extra.latentDraft === true && r.has(latentDraft)) endpoint = latentDraft;
   else if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
   else if (flex && r.extra.quality === "flex" && r.has(flex)) endpoint = flex;

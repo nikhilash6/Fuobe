@@ -296,11 +296,12 @@ export const H3_TURBO_4STEP_INFO = {
  * words, near the draft (sigma 0.8) with the 768p preset. Text to video drafts on the graph that keeps its latent (unless
  * `keepLatent` is false: its Turbo 4-step LoRA is switched off), and the finish may start from that latent: the server
  * decides when it starts (the draft's latent must be on the ComfyUI the finish runs on). Otherwise, and for a take from a
- * start frame, the finish redraws the draft's clip.
+ * start frame, the finish redraws the draft's clip. Quality → Fast · Pika Flex keeps its own 6-step graph for the draft
+ * (the graph that keeps a latent loads the Turbo 4-step LoRA, not Pika's adapter), so its finish redraws the clip too.
  */
 export function h3TwoKRequests(original: GenerationRequest, op: string, o: { keepLatent?: boolean } = {}): { draft: GenerationRequest; finish: GenerationRequest; fromLatent: boolean } {
-  const fromLatent = op === "t2v" && o.keepLatent !== false;
   const params = original.params ?? {};
+  const fromLatent = op === "t2v" && o.keepLatent !== false && params.extra?.quality !== "flex";
   const draft: GenerationRequest = {
     ...original,
     op: op as GenerationRequest["op"],
