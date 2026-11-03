@@ -119,21 +119,23 @@ describe("its own ComfyUI (check 12)", () => {
 });
 
 describe("cleanup (check 13) and setup", () => {
-  it("after a job, its files leave the worker folder and its history entry goes", async () => {
+  it("after a job, its files leave the worker folder, and its ComfyUI keeps nothing of it: no queue, no prompt, no history", async () => {
     const dir = tempDir("fuobe-worker-clean-");
     const f = { input: path.join(dir, "input"), output: path.join(dir, "output"), temp: path.join(dir, "temp") };
     for (const d of Object.values(f)) fs.mkdirSync(d, { recursive: true });
     fs.writeFileSync(path.join(f.input, "fuobe_abcdefgh12.png"), "x");
+    fs.writeFileSync(path.join(f.input, "fuobe_leftover1234.mp4"), "x");
     fs.mkdirSync(path.join(f.output, "fuobe"));
     fs.writeFileSync(path.join(f.output, "fuobe", "out_00001_.png"), "x");
     fs.writeFileSync(path.join(f.temp, "preview.png"), "x");
     const calls: string[] = [];
-    await cleanJob({ inputs: [{ name: "fuobe_abcdefgh12.png" }], promptId: "p-1" }, f, "http://127.0.0.1:1", (async (url: string, init: RequestInit) => {
+    await cleanJob(f, "http://127.0.0.1:1", (async (url: string, init: RequestInit) => {
       calls.push(`${init.method} ${url} ${init.body}`);
       return new Response("{}");
     }) as typeof fetch);
     expect(Object.values(f).flatMap((d) => fs.readdirSync(d))).toEqual([]);
-    expect(calls).toEqual(['POST http://127.0.0.1:1/history {"delete":["p-1"]}']);
+    // The whole history goes (a meta-batch's passes included), not only the job's own entry.
+    expect(calls).toEqual(['POST http://127.0.0.1:1/queue {"clear":true}', "POST http://127.0.0.1:1/interrupt {}", 'POST http://127.0.0.1:1/history {"clear":true}']);
   });
 
   it("refuses a synced folder", () => {

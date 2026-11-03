@@ -425,8 +425,8 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
       const entry: LocalComfyLog = { method: req.method ?? "GET", path: url.pathname + url.search, at: Date.now(), ...(origin && { origin }) };
       log.push(entry);
-      // The stand-in's own count (never a ComfyUI route) stays readable for a test in another process.
-      if (opts.workerGuard && url.pathname !== "/__fake/stats") {
+      // The stand-in's own routes (never ComfyUI's) stay readable for a test in another process.
+      if (opts.workerGuard && !url.pathname.startsWith("/__fake/")) {
         const deny = () => {
           entry.status = 403;
           res.writeHead(403);
@@ -472,6 +472,11 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       if (req.method === "OPTIONS") return reply(200, "");
       // The stand-in's own count, for a test driving it from another process (never a ComfyUI route).
       if (url.pathname === "/__fake/stats") return reply(200, { posts, uploads: inputs.size, history: history.size, pid: process.pid, running: running?.id ?? null, step: running ? currentStep : null });
+      // An input as it arrived (what a worker sent its ComfyUI).
+      if (url.pathname === "/__fake/input") {
+        const got = inputs.get(url.searchParams.get("name") ?? "");
+        return got ? reply(200, got, "application/octet-stream") : reply(404, { error: "no file" });
+      }
       // ComfyUI's own: unload models and free memory.
       if (url.pathname === "/free" && req.method === "POST") {
         entry.body = JSON.parse(body.toString("utf8") || "{}");

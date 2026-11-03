@@ -36,7 +36,7 @@ const { tabFailureWords } = await import("@/lib/relay");
 let fake: LocalComfy;
 let routes: ComputerRoutes;
 const realFetch = globalThis.fetch;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 beforeAll(async () => {
   fake = await startLocalComfy({ cors: "off", steps: 4, stepMs: 20, latencyMs: 10 });
@@ -364,7 +364,7 @@ describe("results kept until the studio has them", () => {
       },
     };
     const asked: string[] = [];
-    await hold.keep(t, { kind: "finished", entries: [entry] } as HeldResults, async (f) => {
+    await hold.keep(t, { kind: "finished", entries: [entry] } as HeldResults, async (f: { filename: string; subfolder: string; type: string }) => {
       asked.push(`${f.type}/${f.subfolder}/${f.filename}`);
       return new Response(FAKE_PNG);
     });

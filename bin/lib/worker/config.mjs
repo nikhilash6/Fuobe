@@ -14,7 +14,12 @@ export function workerHome(env = process.env, home = os.homedir()) {
 }
 
 export const DEFAULTS = {
-  port: 8190,
+  /** Its ComfyUI's port: none set takes a free one at random at each start (`port` in worker.json pins one). */
+  port: null,
+  /** A job that makes no progress for this many minutes goes back to the line, and a stuck ComfyUI is started again. */
+  stallMin: 10,
+  /** ffmpeg, which makes every clip and sound again before its ComfyUI reads them. None: the worker takes pictures only. */
+  ffmpeg: null,
   /** Another program's VRAM above this pauses the worker. */
   busyVramMb: 1024,
   /** The automatic resume: off unless switched on for this PC (here, or on the studio's Workers page). */

@@ -61,13 +61,18 @@ export function emptyFolders(f) {
   }
 }
 
-/** After a job: its inputs and results leave this PC, its history entry goes, and the temp folder is emptied. */
-export async function cleanJob(task, f, comfyBase, fetchFn = fetch) {
-  for (const i of task.inputs ?? []) if (/^fuobe_[A-Za-z0-9_-]{8,24}\.[a-z0-9]{1,5}$/.test(i.name)) fs.rmSync(path.join(f.input, i.name), { force: true });
-  // Everything in output and temp is this worker's (its own ComfyUI writes only there), and it runs one job at a time.
-  for (const dir of [f.output, f.temp]) {
+/**
+ * After a job, however it ended: nothing of it stays in its ComfyUI (the queue emptied, a running prompt stopped, the
+ * whole history cleared, a meta-batch's passes included), and its inputs and results leave this PC. Everything in these
+ * folders is this worker's (its own ComfyUI writes only there), and it runs one job at a time.
+ */
+export async function cleanJob(f, comfyBase, fetchFn = fetch) {
+  const post = (p, body) => fetchFn(`${comfyBase}${p}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+  await post("/queue", { clear: true });
+  await post("/interrupt", {});
+  await post("/history", { clear: true });
+  for (const dir of [f.input, f.output, f.temp]) {
     if (!fs.existsSync(dir)) continue;
     for (const e of fs.readdirSync(dir)) fs.rmSync(path.join(dir, e), { recursive: true, force: true });
   }
-  await fetchFn(`${comfyBase}/history`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: [task.promptId] }) }).catch(() => null);
 }
