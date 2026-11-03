@@ -1332,7 +1332,10 @@ interface HistoryRow {
   step: string | null;
 }
 
-/** The owner's runs of a skill (its stamp in request_json), newest first; a skill's own dry runs don't count. */
+/**
+ * The owner's runs of a skill (its stamp in request_json), newest first; a skill's own dry runs don't count (a
+ * pipeline's rows are skill-check, a studio step's keep their feature and carry skill.check).
+ */
 function historyRows(name: string, limit = 2000): HistoryRow[] {
   return db()
     .prepare(
@@ -1340,7 +1343,8 @@ function historyRows(name: string, limit = 2000): HistoryRow[] {
               json_extract(g.request_json, '$.modelId') AS model, json_extract(g.request_json, '$.skill.run') AS run,
               json_extract(g.request_json, '$.skill.step') AS step
        FROM generations g
-       WHERE json_extract(g.request_json, '$.skill.name') = ? AND g.feature != ? AND json_extract(g.request_json, '$.account') IS NULL
+       WHERE json_extract(g.request_json, '$.skill.name') = ? AND g.feature != ? AND json_extract(g.request_json, '$.skill.check') IS NULL
+         AND json_extract(g.request_json, '$.account') IS NULL
        ORDER BY g.created_at DESC LIMIT ?`,
     )
     .all(name, SKILL_CHECK_FEATURE, limit) as HistoryRow[];

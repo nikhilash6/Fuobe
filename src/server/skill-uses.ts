@@ -4,7 +4,8 @@ import { db } from "./db";
 
 /**
  * How each saved skill is used, from the skill stamp on the owner's generations (request_json `skill.name`; a skill's
- * own dry runs and an account's runs don't count). Assist ranks its skills index and list_skills by it (rankSkills).
+ * own dry runs, skill-check rows or a studio step's rows stamped skill.check, and an account's runs don't count).
+ * Assist ranks its skills index and list_skills by it (rankSkills).
  */
 
 declare global {
@@ -18,7 +19,8 @@ export function skillUses(now = Date.now()): Map<string, SkillUse> {
   const rows = db()
     .prepare(
       `SELECT json_extract(request_json, '$.skill.name') AS name, COUNT(DISTINCT COALESCE(json_extract(request_json, '$.skill.run'), batch_id, id)) AS runs, MAX(created_at) AS last
-       FROM generations WHERE json_extract(request_json, '$.skill.name') IS NOT NULL AND feature != ? AND json_extract(request_json, '$.account') IS NULL
+       FROM generations WHERE json_extract(request_json, '$.skill.name') IS NOT NULL AND feature != ? AND json_extract(request_json, '$.skill.check') IS NULL
+         AND json_extract(request_json, '$.account') IS NULL
        GROUP BY name`,
     )
     .all(SKILL_CHECK_FEATURE) as { name: string; runs: number; last: number }[];

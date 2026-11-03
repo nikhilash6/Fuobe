@@ -23,6 +23,7 @@ const { executeTool } = await import("@/server/assist/tools");
 const { inDemoScope, outsideDemo, runAsDemo } = await import("@/server/demo-scope");
 const { llmText } = await import("@/server/enhance");
 const lib = await import("@/lib/recipe");
+const uses = await import("@/server/skill-uses");
 const runsRoute = await import("@/app/api/assist/skills/[name]/runs/route");
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -276,9 +277,26 @@ describe("the studio dry run", () => {
       expect(live.n).toBe(0);
       const made = db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.skill.name') = 'spanish-check'").get() as { n: number };
       expect(made.n).toBeGreaterThanOrEqual(3);
+      // Its studio steps' rows keep their studio's feature, so they say they're a check: not a run in the skill's
+      // history (W6) or in its use count (Assist's ranking).
+      expect(recipes.skillHistory("spanish-check")).toMatchObject({ runs: 0, lastRun: null, recent: [] });
+      uses.forgetSkillUses();
+      expect(uses.skillUses().has("spanish-check")).toBe(false);
     } finally {
       setSetting("demoMode", "auto");
     }
+  });
+
+  it("checks a one-studio skill for free without the check counting as one of its runs", async () => {
+    makeSkill("captions-check", { fuobeRecipe: 1, params: [{ id: "video", label: "Clip", type: "video", required: true, example: clip }], steps: [{ key: "captions", kind: "tool", tool: "add_captions", input: { video: "{{video}}" } }] }, "Captions");
+    const check = await recipes.verifyRecipe("captions-check", "demo", "cloud");
+    expect(check.engines[0].dryRun).toEqual({ ok: true, problems: [] });
+    const rows = db().prepare("SELECT feature, json_extract(request_json, '$.skill.check') AS checked FROM generations WHERE json_extract(request_json, '$.skill.name') = 'captions-check'").all() as { feature: string; checked: number }[];
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.feature !== lib.SKILL_CHECK_FEATURE && r.checked === 1)).toBe(true);
+    expect(recipes.skillHistory("captions-check")).toMatchObject({ runs: 0, lastRun: null, recent: [] });
+    uses.forgetSkillUses();
+    expect(uses.skillUses().has("captions-check")).toBe(false);
   });
 
   it("checks a Faceless episode by its plan only: it goes on in Faceless Studio's own steps after its result", async () => {

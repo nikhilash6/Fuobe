@@ -203,8 +203,9 @@ async function startPart(runId: string, skill: string, state: RunState, p: PartS
     p.studio = card?.studio;
     if (state.check) p.records = recordsOf(text, card?.href);
     // The studio's own rows carry the run's stamp, with the step's key (a failure is laid at this step, not at a
-    // generate step on the same model), and the skill's title, as a pipeline's do.
-    stampRequests(p.ids, () => ({ skill: { name: skill, run: runId, step }, batchTitle: state.title.slice(0, 200) }));
+    // generate step on the same model), and the skill's title, as a pipeline's do. A check's rows say so: they keep
+    // their studio's feature, so the skill's history and use tell them from its runs by the stamp.
+    stampRequests(p.ids, () => ({ skill: { name: skill, run: runId, step, ...(state.check && { check: true as const }) }, batchTitle: state.title.slice(0, 200) }));
     p.status = p.ids.length ? "running" : "done";
   } catch (e) {
     p.status = "failed";
