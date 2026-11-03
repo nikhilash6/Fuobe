@@ -45,6 +45,7 @@ import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
+import { expandH3References, h3ReferenceProblem } from "@/lib/h3-references";
 import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
@@ -53,10 +54,14 @@ import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
 import { dbsChannelsFor, dbsModelFor, dbsSurroundBed, installedDbs, surroundSource, type DbsModel } from "@/lib/av/split";
 import { installedReuse, NO_REUSE_PACK, rateFor, reuseFileFor, STRENGTH_DB, type ReuseModel } from "@/lib/av/clean-voice";
 import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins";
+import { aukTtsWorkflow, expandSpeechEditWorkflow, readSpeechWindows, setAukDevice, speechFadeWav } from "@/lib/av/speech-edit-graph";
+import { SpeechEditError, ttsInstruction, ttsLength, type SpeechWindow } from "@/lib/speech-edit";
 import { expandInbetweenWorkflow, type InbetweenPass } from "@/lib/av/inbetween-graph";
 import { gapPrompt, requestTiming, type InbetweenTiming } from "@/lib/inbetween";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
-import { exportValues, framesPerPass, hdrColorSpace, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
+import { RTX_FRAMEGEN_WORKFLOW, RTX_HDR_WORKFLOW, RTX_MISSING } from "@/lib/catalog/rtx-video";
+import { exportValues, framesPerPass, hdrColorSpace, RTX_UPSCALE_WORKFLOW, rtxScale, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
+import { keyFormatValues } from "@/lib/av/keying";
 import { guessKind } from "@/lib/catalog/payload";
 import { loraByFile, needsToken } from "@/lib/catalog/loras";
 import { CHARACTER_SWAP, packResolution, samCoords, swapPrompt, SWAP_LORAS, windowPlan } from "@/lib/catalog/character-swap";
@@ -85,7 +90,7 @@ import { outsideTenant, runAsTenant, tenantAccount } from "../tenant";
 import { ask, checkReach, reachSync, sharedCheck, type Reach } from "./reach";
 import { ProviderError, type PollResult, type ProviderAdapter, type RemoteOutput } from "./types";
 import { isOutOfMemory } from "@/lib/gpu/fix-codes";
-import { makingWords, queueWords, RELAY_TIMES, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
+import { makingWords, META_BATCH_HISTORY, queueWords, RELAY_TIMES, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
 import type { GenerationFix } from "@/lib/catalog/types";
 import {
   checkClocks,
@@ -1150,8 +1155,11 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
     values.shortSide = shortSide;
     if (b.framesPerBatch && extra.framesPerBatch === undefined) {
       const seedvr = /seedvr/i.test(manifest.id);
+      // RTX Video Super Resolution writes the scaled frame itself (1-4x, the graph's own factor), not a fixed 4x one.
+      const rtx = manifest.id === RTX_UPSCALE_WORKFLOW;
+      const modelScale = seedvr ? 0 : rtx ? rtxScale(facts, shortSide) : 4;
       // ESRGAN on a big source (1440p → 2160p: about 0.85 GB a frame): down to one frame a pass, to stay near the budget.
-      values.framesPerBatch = framesPerPass(facts, { shortSide, modelScale: seedvr ? 0 : 4, fourNPlusOne: seedvr, min: seedvr ? 5 : 1, max: seedvr ? 33 : 64, fallback: Number(d.framesPerBatch ?? 16) });
+      values.framesPerBatch = framesPerPass(facts, { shortSide, modelScale, fourNPlusOne: seedvr, min: seedvr ? 5 : 1, max: seedvr ? 33 : 64, fallback: Number(d.framesPerBatch ?? 16) });
     }
   } else if (b.framesPerBatch && manifest.capability === "export-video" && extra.framesPerBatch === undefined) {
     values.framesPerBatch = framesPerPass(facts, { min: 8, max: 256, fallback: Number(d.framesPerBatch ?? 64) });
@@ -1270,7 +1278,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // A voice track on the video's timeline: the clips are the spoken lines (the template binds the first).
   if (ctx.op === "timeline") values.audio = input.audios?.[0] ?? input.audio;
   // Speech workflows read the soundtrack with LoadAudio, which also takes a video upload.
-  if ((ctx.op === "transcribe" || ctx.op === "separate-audio" || ctx.op === "enhance-voice" || ctx.op === "translate") && b.audio && !b.video) values.audio = input.audio ?? input.video ?? clips[0];
+  if ((ctx.op === "transcribe" || ctx.op === "separate-audio" || ctx.op === "enhance-voice" || ctx.op === "translate" || ctx.op === "speech-edit") && b.audio && !b.video) values.audio = input.audio ?? input.video ?? clips[0];
   if (b.language && input.targetLanguage) values.language = input.targetLanguage;
   if (b.sourceLanguage && input.sourceLanguage) {
     const whisper = b.sourceLanguage.some((t) => workflow[t.node]?.class_type === "Apply Whisper");
@@ -1315,7 +1323,9 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // MiniMax H3 stretches the start frame to the canvas with no crop: a clip from a still (or the orbit of one) always takes the
   // still's shape, so an aspect ratio left over from a text draft can't distort it.
   const h3 = isH3Graph(manifest.id);
-  const aspectRatio = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || b.image) ? "auto" : followClip && !input.aspectRatio ? "auto" : input.aspectRatio;
+  // References (Pika H3 Flex Ref2VA) are not frames: the aspect ratio asked for holds ("auto" takes Image 1's shape).
+  const asFrames = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || (!!b.image && manifest.expand !== "references"));
+  const aspectRatio = asFrames || (h3 && ctx.op === "avatar") ? "auto" : followClip && !input.aspectRatio ? "auto" : input.aspectRatio;
   if (b.width || b.height) {
     const multiple = Number(manifest.limits?.dimensionMultiple ?? 16);
     // With motion paths the frame keeps the start image's shape, so the paths need no cropping;
@@ -1367,7 +1377,10 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     (ctx.op === "lipsync" || ctx.op === "avatar") && b.frames && !span
       ? (ctx.op === "avatar" && input.sourceDuration && input.sourceDuration > 0 ? input.sourceDuration : ctx.media?.(String(values.audio ?? ""))?.duration)
       : undefined;
-  if (voiceLength) {
+  if (voiceLength && h3) {
+    // H3 makes the clip with its own sound, on its 17n + 5 grid: as long as the voice, 5-15 s (the reference limits say why not).
+    values.frames = h3Frames(Math.min(15, Math.max(5, voiceLength)));
+  } else if (voiceLength) {
     const step = Number(d.frameStep ?? 4);
     const frames = Math.ceil((voiceLength * fps) / step) * step + 1;
     const cap = Number(manifest.limits?.maxFrames ?? 0);
@@ -1415,6 +1428,19 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   const maxSeconds = Number(manifest.limits?.maxDurationSec ?? 0);
   if (maxSeconds && b.duration && Number(values.duration ?? d.duration ?? 0) > maxSeconds + 0.001) {
     throw new ProviderError(OVER_LIMIT[manifest.capability]?.(maxSeconds) ?? `This workflow makes up to ${maxSeconds} s per job`);
+  }
+  // Edit speech (speech-edit-auk): the edit windows the planner made, crossfaded back on a linear fade-in with a flat tail
+  // (src/lib/av/speech-edit-graph.ts says why; both sides of a seam are the same voice, so equal power would bump the level).
+  let speechWindows: SpeechWindow[] | null = null;
+  const aukQuality = extra.quality === "best" ? "best" : "fast";
+  if (manifest.expand === "speech") {
+    speechWindows = readSpeechWindows(extra.speechWindows);
+    if (!speechWindows) throw new ProviderError("Nothing to change: edit the words, or pick a range and an effect", 400);
+    if (b.fadeCurve && extra.fadeCurve === undefined) extra.fadeCurve = await ctx.upload(Buffer.from(speechFadeWav(Math.max(0.02, Number(input.crossfade ?? d.crossfade ?? 0.12)))), "audio/wav", "speech_fade.wav");
+  }
+  if (Object.values(workflow).some((n) => n.class_type === "AuKModelLoader")) {
+    delete extra.speechWindows;
+    delete extra.quality;
   }
   // Loops and joins with a crossfade: core ComfyUI has no gain ramp, so the curve is a tiny WAV written here
   // (left = fade-in, right = fade-out, exactly the crossfade long). Clips too short for it are refused up front.
@@ -1506,6 +1532,20 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // place of SAM's, the anchor after the boundary, masked generation off. Branches it doesn't use go after binding.
   // Media inputs a studio job leaves out on purpose (their branches go after binding).
   const studioLeft: string[] = [];
+  // AuK's text to speech (speech-tts-auk, nm10-speech-edit): its instruction and length, written here since AuK's Prompt
+  // Enhancer is off. Without a voice sample the loader goes (a voice from its description).
+  let aukTts: { seconds: number; hasVoice: boolean } | null = null;
+  if (manifest.id === "speech-tts-auk") {
+    const hasVoice = !!values.audio;
+    if (!hasVoice) studioLeft.push("audio");
+    const sample = hasVoice ? (ctx.media?.(String(values.audio))?.duration ?? 0) : 0;
+    try {
+      aukTts = { seconds: ttsLength(String(input.prompt ?? ""), sample), hasVoice };
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
+    }
+    values.prompt = ttsInstruction(String(input.prompt ?? ""), { hasVoice, voiceDescription: input.voiceDescription });
+  }
   let studioSegment: Omit<SegmentGraphOptions, "outputs"> | null = null;
   if (manifest.id === STUDIO_WORKFLOWS.segment) {
     const history = typeof extra.historyVideo === "string" && !!extra.historyVideo;
@@ -1616,7 +1656,19 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     loras = [];
   }
   // Matte graphs save a cut-out and a black-and-white matte: params.matteOutput keeps one.
-  const keepRole: string | undefined = ctx.op === "bg-remove-video" ? input.matteOutput : undefined;
+  // The green-screen key's clean foreground leaves through the cut-out's encoder (below), so the cut-out's node is kept.
+  const keyForeground = ctx.op === "bg-remove-video" && input.matteOutput === "foreground";
+  const keepRole: string | undefined = ctx.op === "bg-remove-video" ? (keyForeground ? "cutout" : input.matteOutput) : undefined;
+  // The green-screen key (video-key-corridorkey) writes its cut-out as a transparent WebM, ProRes 4444 with alpha, or EXR
+  // frames beside the WebM (params.format; src/lib/av/keying.ts).
+  const keyExr = ctx.op === "bg-remove-video" && !!b.format && input.format === "exr";
+  if (ctx.op === "bg-remove-video" && b.format) {
+    try {
+      Object.assign(values, keyFormatValues(input.format, input.matteOutput));
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
+    }
+  }
 
   if (b.filenamePrefix) values.filenamePrefix = `fuobe/${ctx.generationId}`;
   // Keyframe animation: every gap's timing and words (src/lib/inbetween.ts); the graph is rewritten for the keyframes below.
@@ -1759,6 +1811,19 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       }
     }
   }
+  // MiniMax H3 with references (Pika H3 Flex Ref2VA): Pika's limits, checked on the uploads' headers before the run; the
+  // graph's Image 1 loader is taken out by expandH3References when there is no image.
+  // A talking clip from a voice (Lipsync & avatars, Fuobe Speak) is one image and the voice as its audio reference.
+  const refAudios = ctx.op === "avatar" ? [input.audio].filter((a): a is string => !!a) : audios;
+  if (manifest.expand === "references") {
+    const length = (n: string) => {
+      const m = ctx.media?.(n);
+      return m?.videoDuration ?? m?.duration;
+    };
+    const problem = h3ReferenceProblem({ images: images.length, videos: clips.map(length), audios: refAudios.map(length) });
+    if (problem) throw new ProviderError(problem);
+    if (!images.length) left.push("image");
+  }
   // The Character swap without an anchor frame: its loader and fit are taken out after binding.
   if (dropAnchor) left.push("image2");
   for (const [k, prev] of REFERENCE_SLOTS.slice(1).map((slot, i) => [slot, REFERENCE_SLOTS[i]] as const)) {
@@ -1818,7 +1883,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (restore) wf = restoreGraph(wf, restore, outputIds);
   // FPS Boost to a lower rate, or one the clip divides into: no interpolation, only every n-th frame.
   if (finish.bypassInterpolation) {
-    const id = Object.keys(wf).find((k) => wf[k].class_type === "FrameInterpolate");
+    const id = Object.keys(wf).find((k) => wf[k].class_type === "FrameInterpolate" || wf[k].class_type === "RTXVideoFrameGeneration");
     if (id) wf = bypassNode(wf, id, "images", outputIds);
   }
   if (surroundSource(sourceChannels)) wf = dbsSurroundBed(wf);
@@ -1864,6 +1929,23 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       throw new ProviderError((e as Error).message);
     }
   }
+  if (speechWindows) {
+    const duration = ctx.media?.(String(values.audio ?? ""))?.duration ?? input.sourceDuration;
+    if (!duration) throw new ProviderError("Couldn't read how long the recording runs: add it again as WAV, MP3, M4A or MP4", 400);
+    try {
+      wf = expandSpeechEditWorkflow(wf, speechWindows, { duration, quality: aukQuality, seed: Number(values.seed) || 0, crossfade: Math.max(0.02, Number(input.crossfade ?? d.crossfade ?? 0.12)) });
+    } catch (e) {
+      throw new ProviderError((e as Error).message, e instanceof SpeechEditError ? 400 : 500);
+    }
+  }
+  if (aukTts) wf = aukTtsWorkflow(wf, aukTts);
+  if (Object.values(wf).some((n) => n.class_type === "AuKModelLoader")) {
+    try {
+      wf = setAukDevice(wf, typeof values.device === "string" ? values.device : undefined);
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
+    }
+  }
   // Keyframe animation: one pass per gap on the shared loaders, every keyframe loaded once.
   if (inbetween) {
     try {
@@ -1876,6 +1958,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   try {
     if (manifest.expand === "videos" && clips.length > 2) wf = expandVideoJoinWorkflow(wf, clips);
     if (manifest.expand === "audios" && audios.length > 2) wf = expandAudioJoinWorkflow(wf, audios);
+    if (manifest.expand === "references") wf = expandH3References(wf, { images, videos: clips, audios: refAudios, videoSound: clips.map((n) => ctx.media?.(n)?.hasAudio) });
   } catch (e) {
     throw new ProviderError((e as Error).message);
   }
@@ -1885,7 +1968,17 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     wf = injectLoras(wf, loras);
   }
   // The output not asked for isn't saved (nor encoded: ComfyUI runs only what an output node needs).
-  if (keepRole && manifest.outputs.some((o) => o.role === keepRole)) for (const o of manifest.outputs) if (o.role && o.role !== keepRole) delete wf[o.node];
+  if (keepRole && manifest.outputs.some((o) => o.role === keepRole)) for (const o of manifest.outputs) if (o.role && o.role !== keepRole && !(keyExr && o.role === "frames")) delete wf[o.node];
+  // The clean foreground (CorridorKey 2.0's despilled colours premultiplied over black, output 2): the cut-out's encoder takes
+  // it as a plain H.264 with sound.
+  if (keyForeground) {
+    const keyer = Object.entries(wf).find(([, n]) => n.class_type === "CorridorKey2")?.[0];
+    const cut = manifest.outputs.find((o) => o.role === "cutout")?.node;
+    if (!keyer || !cut || !wf[cut]) throw new ProviderError(`${manifest.title} doesn't make a clean foreground — CorridorKey in Green screen does`, 400);
+    wf[cut] = { ...wf[cut], inputs: { ...wf[cut].inputs, images: [keyer, 2], format: "video/h264-mp4", pix_fmt: "yuv420p", crf: 19 } };
+  }
+  // A key's EXR frames are written only when asked for (they ride on the cut-out, zipped).
+  if (ctx.op === "bg-remove-video" && !keyExr) for (const o of manifest.outputs) if (o.role === "frames") delete wf[o.node];
   if (ctx.op === "remove-object" && !handOff) for (const o of manifest.outputs) if (o.role === "mask") delete wf[o.node];
   const metaBatch = Object.values(wf).some((n) => n.class_type === "VHS_BatchManager");
   return {
@@ -1946,11 +2039,17 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
   // A node class the server doesn't have: name the pack to install (opt-in packs like ComfyUI-Whisper).
   const packs = missingClass?.pack ? [missingClass.pack] : manifest.customNodes.map((c) => c.name);
   const where = worker === "isolated" ? "the isolated ComfyUI worker" : "your ComfyUI";
+  // An account's run (on its own GPU, or on this install's GPUs as a hosted run) gets the visitor's words, never the owner's.
+  const visitorRun = !!ownGpu() || !!tenantAccount();
   const missingPack =
     body.error?.type === "missing_node_type" && manifest.id === REGEN_WORKFLOW && worker === "main"
-      ? ownGpu()
+      ? visitorRun
         ? REGEN_COPY.missingVisitor
         : REGEN_COPY.missing
+      : body.error?.type === "missing_node_type" && RTX_WORKFLOWS.has(manifest.id) && worker === "main"
+        ? visitorRun
+          ? RTX_MISSING.visitor
+          : RTX_MISSING.owner
       : body.error?.type === "missing_node_type" && packs.length
         ? `This workflow needs the ${packs.join(" + ")} node pack${packs.length > 1 ? "s" : ""} on ${where} (see scripts/comfy/README.md)`
         : undefined;
@@ -1962,6 +2061,9 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
   void status;
   return { message: detail, ...(fix && { fix }) };
 }
+
+/** The NVIDIA RTX Video graphs (their pack is installed only on an NVIDIA RTX host). */
+const RTX_WORKFLOWS: ReadonlySet<string> = new Set([RTX_UPSCALE_WORKFLOW, RTX_FRAMEGEN_WORKFLOW, RTX_HDR_WORKFLOW]);
 
 /** Friendlier words for errors that a workflow's nodes report in their own terms. */
 function explainExecutionError(err: { exception_message?: string; node_type?: string } | undefined, manifest?: ManifestWorkflow): string {
@@ -1981,6 +2083,30 @@ const executionError = (entry: HistoryEntry) => entry.status?.messages?.find(([t
 const promptHasPrefix = (prompt: unknown, prefix: string) =>
   !!prompt && typeof prompt === "object" && Object.values(prompt as ComfyWorkflow).some((n) => n?.inputs?.filename_prefix === prefix);
 
+/** An EXR export's per-frame files (bundleFrames zips them); everything else is a finished result. */
+const isFrame = (o: ComfyOutput) => o.meta?.role === "frames";
+
+/**
+ * A meta-batch pass's place in its job. ComfyUI numbers the first pass as queued (0 or more); VHS re-queues each later
+ * pass under the negated, growing server count (-k, -k-1, …), so a later pass has a more negative number.
+ */
+const passOrder = (e: { prompt?: unknown[] }) => {
+  const n = Number(e.prompt?.[0] ?? 0);
+  return n >= 0 ? 0 : -n;
+};
+
+/**
+ * A meta-batch job's results from its passes (in any order): the clips the last pass saved (only the last pass saves
+ * a video), then every pass's EXR frames in pass order (a frame saver writes in each pass). Empty while no pass saved a
+ * finished result. `collect` reads one pass's files.
+ */
+export function metaBatchResults<E extends { prompt?: unknown[] }>(passes: E[], collect: (e: E) => ComfyOutput[]): ComfyOutput[] {
+  const files = [...passes].sort((a, c) => passOrder(a) - passOrder(c)).map(collect);
+  const last = files.findLastIndex((f) => f.some((o) => !isFrame(o)));
+  if (last < 0) return [];
+  return [...files[last].filter((o) => !isFrame(o)), ...files.flatMap((f) => f.filter(isFrame))];
+}
+
 /**
  * VHS meta-batching re-queues the prompt (new prompt ids) until every frame is done; only the last pass
  * saves the video. Follow the passes by their shared filename prefix.
@@ -1988,18 +2114,16 @@ const promptHasPrefix = (prompt: unknown, prefix: string) =>
 async function followMetaBatch(prefix: string, manifest: ManifestWorkflow | undefined, worker: ComfyWorker): Promise<ComfyOutput[] | "running" | { error: string } | null> {
   const queue = await comfyJson<{ queue_running?: unknown[][]; queue_pending?: unknown[][] }>("/queue", worker);
   if ([...(queue.queue_running ?? []), ...(queue.queue_pending ?? [])].some((q) => promptHasPrefix(q[2], prefix))) return "running";
-  const hist = await comfyJson<Record<string, HistoryEntry>>("/history?max_items=64", worker);
-  const passes = Object.values(hist)
-    .filter((e) => promptHasPrefix(e.prompt?.[2], prefix))
-    .sort((a, c) => Number(c.prompt?.[0] ?? 0) - Number(a.prompt?.[0] ?? 0));
+  const read = async (n: number) => Object.values(await comfyJson<Record<string, HistoryEntry>>(`/history?max_items=${n}`, worker)).filter((e) => promptHasPrefix(e.prompt?.[2], prefix));
+  const collect = (e: HistoryEntry) => collectOutputs(e, manifest, baseUrl(worker), authHeaders(worker));
+  let passes = await read(64);
+  // Frames in each pass: every pass is needed, so look further back.
+  if (passes.some((e) => collect(e).some(isFrame))) passes = await read(META_BATCH_HISTORY);
   // A pass that failed (out of memory, a node exception) ends the job: say why instead of "no output".
   const failed = passes.find((e) => e.status?.status_str === "error");
   if (failed) return { error: explainExecutionError(executionError(failed), manifest) };
-  for (const e of passes) {
-    const files = collectOutputs(e, manifest, baseUrl(worker), authHeaders(worker));
-    if (files.length) return files;
-  }
-  return null;
+  const files = metaBatchResults(passes, collect);
+  return files.length ? files : null;
 }
 
 /** A window preview H3 Relay writes (a 512 px clip or still): anything bigger isn't kept. */
@@ -2143,19 +2267,18 @@ export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_b
   try {
     manifest = t.workflow_id ? getWorkflow(t.workflow_id).manifest : undefined;
   } catch {}
-  const list = (passes ? [...entries].sort((a, c) => Number(c.prompt?.[0] ?? 0) - Number(a.prompt?.[0] ?? 0)) : entries.slice(0, 1)) as HistoryEntry[];
+  const list = (passes ? entries : entries.slice(0, 1)) as HistoryEntry[];
   // A pass that failed (out of memory, a node exception) ends the job: say why instead of "no output".
   const failed = list.find((e) => e?.status?.status_str === "error");
   if (failed) {
     const interrupted = failed.status?.messages?.some(([type]) => type === "execution_interrupted");
     return { error: interrupted ? RELAY_WORDS.stopped : explainExecutionError(executionError(failed), manifest) };
   }
-  let outputs: ComfyOutput[] = [];
-  for (const e of list) {
-    outputs = collectOutputs(e, manifest, `relay:${t.id}`);
-    if (outputs.length) break;
-  }
-  if (!outputs.length) return t.meta_batch && !passes && t.prefix ? { follow: t.prefix } : { error: "This run finished without a result. Press Retry." };
+  const collect = (e: HistoryEntry) => collectOutputs(e, manifest, `relay:${t.id}`);
+  let outputs: ComfyOutput[] = passes ? metaBatchResults(list, collect) : list[0] ? collect(list[0]) : [];
+  // A meta-batch's first pass may have saved only its EXR frames: the clip comes with the last pass.
+  if (t.meta_batch && !passes && t.prefix && !outputs.some((o) => !isFrame(o))) return { follow: t.prefix };
+  if (!outputs.length) return { error: "This run finished without a result. Press Retry." };
   const account = tenantAccount();
   let budget = Infinity;
   if (account) {
@@ -2361,7 +2484,8 @@ export const comfyProvider: ProviderAdapter = {
         return { state: "failed" as const, error: explainExecutionError(executionError(entry), manifest) };
       }
       let outputs = collectOutputs(entry, manifest, baseUrl(worker), authHeaders(worker));
-      if (!outputs.length && meta.metaBatch && typeof meta.prefix === "string") {
+      // A meta-batch's first pass may have saved only its EXR frames: the clip comes with the last pass.
+      if (meta.metaBatch && typeof meta.prefix === "string" && !outputs.some((o) => !isFrame(o))) {
         const next = await followMetaBatch(meta.prefix, manifest, worker);
         if (next === "running") return { state: "running" as const, message: "Rendering the next batch of frames" };
         if (next && "error" in next) {

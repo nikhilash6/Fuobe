@@ -949,19 +949,22 @@
   {
    "name": "CorridorKey 2.0",
    "area": "green/blue screen keying, linear EXR",
-   "licence": "corridor-key-licence-2.0 (CC BY-NC-SA variant: commercial projects allowed; no paid API/resale; seats above US$20M revenue)",
+   "licence": "corridor-key-licence-2.0: the CC BY-NC-SA 4.0 licence with additional terms (LICENSE at cf44a8db): any lawful use including commercial projects, outputs are yours; no repackaging or resale and no charging for the code or weights; no paid API or inference service (paywall, subscription or usage billing); derivatives released free of charge under the same licence; a commercial software package or inference service needs a written agreement with Corridor Digital; organisations above US$20M revenue need a seat per user",
    "vram": "4 GB <= 1440p, 6 GB 4K; RTX 30+",
    "hosted": [],
-   "comfy": "community wrappers (pixelworldai/ComfyUI-CorridorKeyWrapper, TrentNodes, SeanBRVFX): v2 support unverified",
+   "comfy": "Three ComfyUI packs load the 2.0 weights (re-checked 2026-11-02), all under the Corridor Key Licence 2.0: hashu786/ComfyUI-CorridorKey2 @d1228b68 (one CorridorKey2 node; vendors Corridor's corridorkey package at 485f5e9 unmodified), miguelangelarribas/ComfyUI-CorridorKey2 @ab948899 (loader + keyer, also unmodified upstream) and marawan206/ComfyUI-CorridorKey2.0 @c3abf212 (large pack; patches upstream blocks.py). The three named in the brief (pixelworldai/ComfyUI-CorridorKeyWrapper @7eb44e48, SeanBRVFX/ComfyUI-CorridorKey @0f724f7c, TrentNodes @3d80a9df) load CorridorKey_v1.0.pth only. 2.0 also fetches three frozen models: NVIDIA C-RADIOv4-SO400M @c0457f5d (NVIDIA Open Model License, 1.72 GB), MoGe-2 ViT-B @ca5f0e07 (MIT, 0.42 GB), RVM small (CC-BY 4.0, 0.27 GB). Fuobe's graph runs 2.0 through hashu786's node.",
    "released": "2026-10-13",
    "url": "https://huggingface.co/nikopueringer/CorridorKey2.0",
    "inFuobe": false,
-   "confirmed": true
+   "confirmed": true,
+   "revision": "cf44a8db3f024bb49fd59daa408848ccf05f7477",
+   "sizeGb": 2.66,
+   "checked": "2026-11-02"
   },
   {
    "name": "Bria VRMBG 3.0 (open weights) via ComfyUI-RMBG 3.3.0",
    "area": "video matting",
-   "licence": "bria-vrmbg-3.0 (gated, manual approval)",
+   "licence": "bria-vrmbg-3.0: gated with manual approval; the card says non-commercial use only, commercial use needs an agreement with Bria AI, academic access on request",
    "vram": "not stated",
    "hosted": [
     {
@@ -969,23 +972,29 @@
      "endpoint": "bria/video/background-removal/v3"
     }
    ],
-   "comfy": "ComfyUI-RMBG AILab_VRMBG (custom)",
+   "comfy": "ComfyUI-RMBG 3.3.0 AILab_VRMBG (no 3.3.0 tag: pinned at commit a66a5e64, 2026-10-20). The node needs config.json, model.safetensors, model.py and vrmbg3_config.py in models/RMBG/VRMBG-3.0/ (no automatic download); it infers at 1024x1024 and conditions each frame on the one before within one run (reset_state).",
    "released": "pack 2026-10-20",
    "url": "https://huggingface.co/briaai/VRMBG-3.0",
    "inFuobe": true,
-   "confirmed": true
+   "confirmed": true,
+   "revision": "59716e19a6cc97f91311edea190938219c097b76",
+   "sizeGb": 0.88,
+   "checked": "2026-11-02"
   },
   {
    "name": "FeyNoBg (hair / fine-edge matting)",
    "area": "image matting",
-   "licence": "unconfirmed",
+   "licence": "unknown: the Hugging Face repo has no model card, no licence tag and no LICENSE file (checked 2026-11-02); ComfyUI-RMBG's code is GPL-3.0",
    "vram": "1.05 GB weights",
    "hosted": [],
-   "comfy": "ComfyUI-RMBG 3.3.0",
+   "comfy": "ComfyUI-RMBG 3.3.0 AILab_FeyNoBg: downloads config.json, FeyNobg.safetensors and preprocessor_config.json into models/RMBG/FeyNoBg/ on first run; needs the nobg Python package (pack requirements: nobg>=0.3.1)",
    "released": "2026-10-09",
    "url": "https://huggingface.co/1038lab/FeyNobg",
    "inFuobe": false,
-   "confirmed": false
+   "confirmed": true,
+   "revision": "59dd27c65909b7dcc2de8c3239712b0b997c3e41",
+   "sizeGb": 1.05,
+   "checked": "2026-11-02"
   },
   {
    "name": "Bria green-screen despill; Bria guided background removal",
@@ -1005,8 +1014,10 @@
    "comfy": "no",
    "released": "2026-08-27 / 2026-10-10",
    "url": "https://fal.ai/models/bria/guided-remove-background",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "pricing": "green-screen despill $0.05 per second; guided cut-out $0.03 per image (fal llms.txt, 2026-11-02)",
+   "checked": "2026-11-02"
   },
   {
    "name": "LTX-2.5 IC-LoRA Alpha-Gen",
@@ -1018,7 +1029,8 @@
    "released": "2026-10-02 (beta 0.9)",
    "url": "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen",
    "inFuobe": false,
-   "confirmed": true
+   "confirmed": true,
+   "note": "Recorded for later (nm10-keying, 2026-11-02): the LTX-2.5 IC-LoRA graph in the library (video-restore-ltx25-tiled) has not validated, so 'Best · Alpha-Gen' is not offered yet."
   },
   {
    "name": "Marigold V2 / MoGe 3",
@@ -7259,6 +7271,135 @@
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=google/lyria-3.5",
    "capability": "music",
    "fetched": "2026-11-01"
+  },
+  {
+   "family": "bria",
+   "model": "Bria green-screen despill",
+   "title": "Bria Video Background Removal: Green Screen Despill",
+   "vendor": "Bria",
+   "operation": "bg-remove-video",
+   "provider": "fal",
+   "endpoint": "bria/video/background-removal/green-screen-despill",
+   "falCategory": "video-to-video",
+   "status": "active",
+   "keyFields": {
+    "video": "video_url"
+   },
+   "inputs": {
+    "output_container_and_codec": {
+     "type": "enum",
+     "values": [
+      "mp4_h265",
+      "mp4_h264",
+      "webm_vp9",
+      "mov_h265",
+      "mov_proresks",
+      "mkv_h265",
+      "mkv_h264",
+      "mkv_vp9",
+      "gif"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "webm_vp9",
+     "desc": "Output container and codec. Options: mp4_h265, mp4_h264, webm_vp9, mov_h265, mov_proresks, mkv_h265, mkv_h264, mkv_vp9, gif."
+    },
+    "preserve_audio": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If true, audio will be preserved in the output video."
+    },
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Input video filmed on a green screen.",
+     "examples": [
+      "https://bria-datasets.s3.us-east-1.amazonaws.com/rmbg_tests/videos/green_screen_video.webm"
+     ]
+    },
+    "spill_suppression": {
+     "type": "number",
+     "required": false,
+     "default": 1,
+     "minimum": 0,
+     "maximum": 1,
+     "desc": "Strength of green-spill suppression. Higher values pull the green channel toward the red/blue average on green-dominant pixels, removing the green fringe around the subject. 0 disables it."
+    }
+   },
+   "output": "video.url",
+   "price": "Price: $0.05 per seconds",
+   "pricing": {
+    "usd": 0.05,
+    "unit": "second"
+   },
+   "license": "Bria's hosted model (proprietary; used through fal's API)",
+   "notes": "Chroma (green-screen) footage keyed onto a transparent background with the green spill pulled out of the edges. spill_suppression 0-1 (1 by default, 0 turns it off); output_container_and_codec webm_vp9 keeps the transparency (a codec that can't carry alpha falls back to black and says so in warning); preserve_audio keeps the sound. Released 2026-08-27.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/bria/video/background-removal/green-screen-despill",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=bria/video/background-removal/green-screen-despill",
+   "capability": "bg-remove-video",
+   "fetched": "2026-11-02"
+  },
+  {
+   "family": "bria",
+   "model": "Bria guided cut-out",
+   "title": "Bria Guided Remove Background",
+   "vendor": "Bria",
+   "operation": "bg-remove",
+   "provider": "fal",
+   "endpoint": "bria/guided-remove-background",
+   "falCategory": "image-to-image",
+   "status": "active",
+   "keyFields": {
+    "image": "image_url",
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "image_url": {
+     "type": "string",
+     "required": false,
+     "default": "https://labs-assets.bria.ai/api-examples/guided-remove-background/yoga_studio_input.jpg",
+     "desc": "Source image as a public URL, a base64 data URI (data:image/png;base64,...) or raw base64-encoded image bytes.",
+     "examples": [
+      "https://labs-assets.bria.ai/api-examples/guided-remove-background/yoga_studio_input.jpg"
+     ]
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional. Plain words for how to change the default cutout of the photo's obvious subject: add something ('the person with the mat and the plant'), drop something ('the woman at her desk without the lamp') or narrow it ('only the chair'). Everything kept is the original pixels with a new alpha channel. Leave it empty for the plain cutout of the obvious subject.",
+     "examples": [
+      "the person with the mat and the plant"
+     ]
+    },
+    "autocrop": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Tighten the output canvas to the kept content."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "\n            If true, the function waits for the image to be generated and uploaded\n            before returning, so the image is returned directly (base64) instead of\n            via the CDN. Increases latency.\n        "
+    }
+   },
+   "output": "image.url",
+   "price": "Your request will cost $0.03 per image.",
+   "pricing": {
+    "usd": 0.03,
+    "unit": "image"
+   },
+   "license": "Bria's hosted model (proprietary; used through fal's API)",
+   "notes": "The photo's obvious subject cut out (the original pixels with a new alpha, RGBA PNG), adjusted by plain words: add something ('the person with the mat'), drop something ('without the lamp') or narrow it ('only the chair'). The prompt is optional (empty = the plain cut-out); autocrop tightens the canvas to what is kept. Released 2026-10-10.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/bria/guided-remove-background",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=bria/guided-remove-background",
+   "capability": "bg-remove",
+   "fetched": "2026-11-02"
   }
  ]
 }

@@ -102,7 +102,7 @@ export const GenerationRequestSchema = z.object({
       slowdown: z.number().min(1).max(8).optional(),
       colormap: z.string().max(40).optional(),
       sideBySide: z.boolean().optional(),
-      matteOutput: z.enum(["cutout", "matte"]).optional(),
+      matteOutput: z.enum(["cutout", "matte", "foreground"]).optional(),
       position: Focus.optional(),
       scale: z.number().positive().max(10).optional(),
       animation: z.union([z.string().max(200), z.number()]).optional(),

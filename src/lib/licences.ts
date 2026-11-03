@@ -111,7 +111,7 @@ export function licenceTerms(text: string): { flags: LicenceFlag[]; excludes?: s
   const noWeights = /^(n\/a|no model)\b/i.test(text.trim());
   const nonCommercial = /NON-COMMERCIAL/.test(text) || /^CC-BY-NC/.test(text.trim());
   const excludes = /\bEXCLUDES\s+([^);]+)/.exec(text)?.[1].trim();
-  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Hi3D Open License|Terms of Use|free below|below US\$/i.test(text);
+  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Hi3D Open License|Corridor Key Licence|Terms of Use|NVIDIA Software License|free below|below US\$/i.test(text);
   const flags: LicenceFlag[] = [];
   if (nonCommercial) flags.push("non-commercial");
   if (excludes) flags.push("territory");
@@ -278,8 +278,12 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /FLUX \[dev\] Non-Commercial License/, name: "FLUX [dev] Non-Commercial License", class: "non-commercial", url: "https://huggingface.co/black-forest-labs/FLUX.2-dev" },
   { re: /Ideogram Non-Commercial Model Agreement/, name: "Ideogram Non-Commercial Model Agreement", class: "non-commercial", url: "https://huggingface.co/ideogram-ai/ideogram-4-fp8/blob/main/LICENSE.md" },
   { re: /inswapper/, name: "InsightFace inswapper (research only)", class: "research", url: "https://github.com/deepinsight/insightface" },
-  { re: /CC-BY-NC-SA-4\.0/, name: "CC BY-NC-SA 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-SA-4.0") },
-  { re: /CC[- ]BY[- ]NC(?:[- ]4\.0)?\b/, name: "CC BY-NC 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-4.0") },
+  // Corridor's CC BY-NC-SA 4.0 variant that allows commercial projects (no paid API, no resale): before the CC entries.
+  { re: /Corridor Key Licence 2\.0/, name: "Corridor Key Licence 2.0", class: "conditions", url: "https://github.com/nikopueringer/CorridorKey2.0/blob/485f5e9ab759ead6138cc990776184b59d6ea971/LICENSE" },
+  { re: /CC[- ]BY[- ]NC[- ]SA[- ]4\.0/, name: "CC BY-NC-SA 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-SA-4.0") },
+  { re: /CC[- ]BY[- ]NC(?![- ]SA)(?:[- ]4\.0)?\b/, name: "CC BY-NC 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-4.0") },
+  // Before the general entry: AuK's encoder (Edit speech) has its own copy of the licence.
+  { re: /Qwen2\.5-Omni-3B encoder Qwen Research License/, name: "Qwen Research License", class: "non-commercial", url: "https://huggingface.co/Qwen/Qwen2.5-Omni-3B/blob/main/LICENSE" },
   { re: /Qwen Research License/, name: "Qwen Research License", class: "non-commercial", url: "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE" },
   { re: /Tencent Hunyuan 3D 2\.1 Community License/, name: "Tencent Hunyuan 3D 2.1 Community License", class: "regions" },
   { re: /Tencent Hunyuan Community License/, name: "Tencent Hunyuan Community License", class: "regions" },
@@ -304,6 +308,8 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /Gemma Terms of Use/, name: "Gemma Terms of Use", class: "conditions", url: "https://ai.google.dev/gemma/terms" },
   // NVIDIA's open model licence (RE-USE): commercial use; the licence and NVIDIA's notices go with any copy of the weights.
   { re: /OpenMDW-1\.1/, name: "OpenMDW-1.1", class: "commercial", url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/blob/31f82f2efad1095034492f236e8dac9239ba713b/LICENSE" },
+  // NVIDIA's RTX Video SDK (nvidia-vfx): free and proprietary, only on NVIDIA GPUs; no redistributing or published benchmarks.
+  { re: /NVIDIA Software License Agreement/, name: "NVIDIA Software License Agreement", class: "conditions", url: "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/" },
   { re: /Apache[- ]2\.0/, name: "Apache-2.0", class: "commercial", url: SPDX("Apache-2.0") },
   { re: /\bMIT\b/, name: "MIT", class: "commercial", url: SPDX("MIT") },
   { re: /BSD-3-Clause/, name: "BSD-3-Clause", class: "commercial", url: SPDX("BSD-3-Clause") },
@@ -323,20 +329,28 @@ export function modelCardOf(url: string | undefined): string | undefined {
  * the model downloads it covers (the largest first): their Hugging Face page is the link when the licence
  * has no page of its own.
  */
+/** A text that records its weights' licence as not stated anywhere: "<model> weights: unknown (…)". */
+const UNSTATED = /^[^:;(]+\bweights: unknown\b/i;
+
 export function licenceInfo(text: string, cards: string[] = []): LicenceInfo {
   const terms = licenceTerms(text);
   const card = cards.map(modelCardOf).find(Boolean);
   if (text === UNKNOWN_LICENCE) return { name: "Not recorded", class: "unknown", note: text, ...(card && { url: card }) };
   if (terms.noWeights) return { name: "No model weights", class: "commercial", url: COMFYUI_REPO, note: `${text.replace(/^n\/a \((.*)\)$/, "$1")}: ComfyUI's own nodes (GPL-3.0) or FFmpeg` };
+  // Weights whose licence the research found nowhere ("FeyNoBg weights: unknown (no card, no tag, no LICENSE)").
+  const unstated = UNSTATED.test(text);
   const cls: LicenceClass = terms.flags.includes("non-commercial")
     ? /research (?:use )?only/i.test(text)
       ? "research"
       : "non-commercial"
     : terms.flags.includes("territory")
       ? "regions"
-      : terms.flags.includes("conditions")
-        ? "conditions"
-        : "commercial";
+      : unstated
+        ? "unknown"
+        : terms.flags.includes("conditions")
+          ? "conditions"
+          : "commercial";
+  if (cls === "unknown") return { name: "Not recorded", class: cls, note: text, ...(card && { url: card }) };
   const found = KNOWN.filter((k) => k.re.test(text));
   const named = found.find((k) => k.class === cls) ?? found[0];
   const name = named?.name ?? text.split(/[(;:]/)[0].trim();
@@ -445,7 +459,7 @@ export const NODE_PACKS: NodePack[] = [
   pack("ComfyUI-VideoHelperSuite", "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite", { ...GPL, note: "Video loading and saving; GPL-3.0 code, like ComfyUI" }),
   pack("ComfyUI-KJNodes", "https://github.com/kijai/ComfyUI-KJNodes", { ...GPL, note: "Utility nodes (GrowMaskWithBlur, resizing); GPL-3.0 code, like ComfyUI" }),
   pack("ComfyUI-Frame-Interpolation", "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "RIFE and FILM frame interpolation; MIT code" }),
-  pack("ComfyUI-RMBG", "https://github.com/1038lab/ComfyUI-RMBG", { ...GPL, note: "Background removal; GPL-3.0 code. Fuobe uses BEN2 (MIT); RMBG-2.0 in the same pack is CC BY-NC 4.0" }),
+  pack("ComfyUI-RMBG", "https://github.com/1038lab/ComfyUI-RMBG", { ...GPL, note: "Background removal; GPL-3.0 code. Fuobe uses BEN2 (MIT); RMBG-2.0 in the same pack is CC BY-NC 4.0. Its Bria VRMBG 3.0 node loads Bria's gated weights (non-commercial unless Bria agrees otherwise); FeyNoBg's weights state no licence" }),
   pack("ComfyUI-ReActor", "https://github.com/Gourieff/ComfyUI-ReActor", { name: "See its repository", class: "commercial", note: "Face swap node; the inswapper_128 weights it loads are for non-commercial research only" }),
   pack("ComfyUI-MMAudio", "https://github.com/kijai/ComfyUI-MMAudio", { name: "Not recorded", class: "unknown", note: "Code licence not recorded; the MMAudio weights it loads are CC BY-NC 4.0 (non-commercial)" }),
   pack("ComfyUI_Fill-ChatterBox", "https://github.com/filliptm/ComfyUI_Fill-ChatterBox", NO_FILE("; the Chatterbox weights are MIT")),
@@ -477,6 +491,19 @@ export const NODE_PACKS: NodePack[] = [
     class: "commercial",
     url: SPDX("Apache-2.0"),
     note: "VoxCPM2 text to speech (voice design) and voice clone nodes; Apache-2.0 code. The VoxCPM2 weights it downloads are Apache-2.0",
+  }),
+  // Green screen (nm10-keying), pinned in workflows/comfyui/packs.json: its LICENSE is Corridor's own, word for word.
+  pack("ComfyUI-CorridorKey2", "https://github.com/hashu786/ComfyUI-CorridorKey2/tree/d1228b68796786acee92b6497f72a60d70d1a844", {
+    name: "Corridor Key Licence 2.0",
+    class: "conditions",
+    note: "CorridorKey 2.0 nodes, with Corridor's CorridorKey 2.0 code inside unmodified; the code and the weights it downloads are under the Corridor Key Licence 2.0: free for any project, commercial ones included, but never resold or offered as a paid API or inference service. The frozen models it downloads keep their own licences (NVIDIA Open Model License, MIT, CC-BY 4.0)",
+  }),
+  // Edit speech (nm10-speech-edit), pinned in workflows/comfyui/packs.json: the LICENSE file read at the pinned commit.
+  pack("ComfyUI-AuK", "https://github.com/Tencent-Hunyuan/AuK/tree/0d40366b1039e37c6cad008ab4713f6ad6d954b7/comfyui/ComfyUI-AuK", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Tencent AuK's own nodes (speech editing and text to speech); MIT code and weights. The Qwen2.5-Omni-3B encoder AuK loads is under the Qwen Research License (non-commercial)",
   }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
@@ -553,6 +580,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "Fuobe's own pack. The network code is adapted from NVIDIA's RE-USE repository (OpenMDW-1.1, notices kept), and the Mamba layer is a plain-PyTorch rewrite (no mamba-ssm). It matches the reference maths numerically, but it is not NVIDIA's code path",
   }),
+  // NVIDIA RTX Video (Quick · RTX, RTX Frame Generation, RTX Video HDR): an NVIDIA RTX card only; installed on RTX hosts.
+  pack("ComfyUI_Nvidia_VFX_Nodes", "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Comfy-Org's NVIDIA VFX nodes 0.2.1; Apache-2.0 code. The nvidia-vfx runtime they load (the RTX Video SDK and its models) is NVIDIA's own, under the NVIDIA Software License Agreement: free, runs only on NVIDIA GPUs, no redistributing it",
+  }),
 ];
 
 export const nodePack = (name: string): NodePack | undefined => NODE_PACKS.find((p) => p.name === name);
@@ -595,6 +629,13 @@ export const ATTRIBUTIONS: Attribution[] = [
     text: "Adapted from MOSS-Image's prompt-enhancer skill and its layout reference (commit 2b46b1e), copyright OpenMOSS",
     licence: "Apache-2.0",
     url: "https://github.com/OpenMOSS/MOSS-Image",
+  },
+  {
+    for: "the Pika H3 Flex modes of MiniMax H3 on your GPU (Fast · Pika Flex, References, Talk from a voice clip)",
+    text: "Pika H3 Flex FL2VA and Ref2VA adapters, copyright © 2026 Mellis, Inc.",
+    licence: "MiniMax H3 Community License",
+    url: "https://huggingface.co/Pika-Labs/Pika-H3-Flex",
+    note: "Model Derivatives of MiniMax H3 (copyright © 2026 MiniMax). Pika's NOTICE and LICENSE stay with the files; Pika's example code is Apache-2.0.",
   },
 ];
 

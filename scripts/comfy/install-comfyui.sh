@@ -22,7 +22,9 @@ declare -A NODES=(
   [ComfyUI-VideoHelperSuite]="https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite 4d907bee61e92c2e65af3bd6383a4e4d356126d1"
   [ComfyUI-KJNodes]="https://github.com/kijai/ComfyUI-KJNodes 17195fcfa8a05f601b766a0f09c9733284f47416"
   [ComfyUI-Frame-Interpolation]="https://github.com/Fannovel16/ComfyUI-Frame-Interpolation 26545cc2dd95bc3d27f056016300673bdeee78f5"
-  [ComfyUI-RMBG]="https://github.com/1038lab/ComfyUI-RMBG 229529e0ea63fb7085848225d74f91f6dc164956"
+  # 3.3.0 (2026-10-20; no tag, so the commit): adds AILab_VRMBG (Bria VRMBG 3.0) and AILab_FeyNoBg for nm10-keying; RMBG and
+  # ClothesSegment keep their inputs. Its requirements add nobg and refiners.
+  [ComfyUI-RMBG]="https://github.com/1038lab/ComfyUI-RMBG a66a5e641a54988d80ed6aad18946081c85f309e"
   [ComfyUI-ReActor]="https://github.com/Gourieff/ComfyUI-ReActor 3be5f356fe5b120a7a274d2509c0ecef5d0a7498"
   [ComfyUI-MMAudio]="https://github.com/kijai/ComfyUI-MMAudio 8eaeb72edc3aaf2059b57f2d96a1f6f689f19ae2"
   # audio / video-depth packs added with the comfyui-oss-2 workflows (2026-10-16)
@@ -48,6 +50,11 @@ declare -A NODES=(
   # dependencies) and PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel imports triton, installed below).
   [ComfyUI-MiniMax-H3-Turbo]="https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo 77bfa67575b14e3be6214f1747732e540c68b5dd"
   [plaguekind-nodes]="https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes d58d006a4ea32c25c06499f2ff104f0852a045a6"
+  # Green screen (nm10-keying): hashu786's CorridorKey 2.0 nodes (Corridor Key Licence 2.0, like CorridorKey itself; they
+  # vendor Corridor's CorridorKey 2.0 code unmodified at 485f5e9). Read at this commit: nothing is installed at run time; the
+  # node downloads the 2.0 weights and the three frozen models it builds on (about 5.1 GB, into models/corridorkey2/) the
+  # first time it runs, never at import (CORRIDORKEY2_NO_DOWNLOAD=1 turns that off). Its requirements are in the union below.
+  [ComfyUI-CorridorKey2]="https://github.com/hashu786/ComfyUI-CorridorKey2 d1228b68796786acee92b6497f72a60d70d1a844"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.
@@ -131,6 +138,27 @@ if [ "${OPEN_H3_REGEN:-0}" = "1" ]; then
     fi
   done
 fi
+# NVIDIA RTX Video (Upscale → Video "Quick · RTX", FPS Boost "RTX Frame Generation", SDR to HDR "RTX Video HDR";
+# docs/research/new-models-10.md §6): Comfy-Org's ComfyUI Nvidia VFX Nodes 0.2.1 (Apache-2.0) and NVIDIA's nvidia-vfx
+# runtime (its requirements.txt; NVIDIA Software License Agreement, a wheel from pypi.nvidia.com with the SDK's models).
+# They run only on an NVIDIA RTX card (frame generation: RTX 40 or later) with a CUDA PyTorch (cu130 or newer, the
+# pack's README) and a recent driver, so they go in only where nvidia-smi names an RTX card on an x86_64 machine (or
+# RTX_VIDEO=1); RTX_VIDEO=0 leaves them out. nvidia-vfx 0.2.0.0 has no Linux arm64 wheel, so a DGX Spark (GB10) is skipped. This script installs CPU PyTorch: on a GPU server install a CUDA build too.
+RTX_VIDEO_REF="${RTX_VIDEO_REF:-38d790ded00650681fa3645362efe28c8560cf40}"   # 0.2.1 (registry comfyui_nvidia_rtx_nodes), 2026-10-14
+rtx_card="$(command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | grep -i -m1 -E 'RTX' || true)"
+[ "$(uname -m)" = "x86_64" ] || rtx_card=""
+if [ "${RTX_VIDEO:-auto}" = "1" ] || { [ "${RTX_VIDEO:-auto}" = "auto" ] && [ -n "$rtx_card" ]; }; then
+  dest="$COMFYUI_DIR/custom_nodes/ComfyUI_Nvidia_VFX_Nodes"
+  if [ -d "$dest/.git" ] || git clone -q https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes "$dest"; then
+    git -C "$dest" fetch -q --depth 1 origin "$RTX_VIDEO_REF" 2>/dev/null || true
+    git -C "$dest" checkout -q "$RTX_VIDEO_REF" 2>/dev/null || echo "warn: could not pin ComfyUI_Nvidia_VFX_Nodes to $RTX_VIDEO_REF"
+    uv pip install --python "$PY" "nvidia-vfx==0.2.0.0" || echo "warn: could not install nvidia-vfx (NVIDIA RTX Video)"
+    "$PY" -c 'import torch, sys; v = torch.version.cuda; sys.exit(0 if v and tuple(map(int, v.split(".")[:2])) >= (13, 0) else 1)' 2>/dev/null \
+      || echo "warn: the NVIDIA RTX Video nodes need a CUDA PyTorch (cu130 or newer); this ComfyUI's PyTorch isn't one"
+  else
+    echo "warn: could not fetch ComfyUI_Nvidia_VFX_Nodes"
+  fi
+fi
 
 # Hi3D 1.0 mesh refinement (Image to 3D's "Refine detail", the mesh-refine-hi3d workflow; docs/research/hi3d-refine.json):
 # T8star's Comfyui-Hi3d-T8 (MIT code; the Hi3D code it vendors and the weights are under the Hi3D Open License 1.0, which
@@ -173,6 +201,37 @@ a2ca5e44dde51cacecd59b42fceeb5f14e75d55e6dd047337752c4e6f281008c  hi3d/transform
 a2bf730a0c7debf160f7a6b50b3aaf3703e7e88ac73de7a314903141db026dcb  clip/model.safetensors
 SHA
     ) || echo "warn: a Hi3D weight file is missing or failed its SHA-256 check (delete it from models/Hi3D and re-run)"
+  fi
+fi
+
+# Tencent AuK (Audio → Edit speech and AuK speech, nm10-speech-edit; MIT code and weights): ComfyUI-AuK is the comfyui
+# folder of Tencent-Hunyuan/AuK, which imports the auk package from the same checkout. So the whole repository is cloned
+# beside custom_nodes at the pinned commit, installed editable with its [comfyui] extra, and the node folder linked into
+# custom_nodes; its relative model paths (ckpts/...) then resolve inside that checkout. Opt-in, since the weights are about
+# 19 GB and it wants a 24 GB+ NVIDIA GPU (17 GB with the loader's cpu_offload): AUK=1. AUK_WEIGHTS=1 also downloads
+# AuK-Flash and the Qwen2.5-Omni-3B encoder into AuK/ckpts (AUK_BASE=1 adds the 32-step base model). The Prompt Enhancer
+# stays off in Fuobe's graphs, so no LLM_* variables are needed.
+AUK_REF="${AUK_REF:-0d40366b1039e37c6cad008ab4713f6ad6d954b7}"   # 2026-10-27
+AUK_FLASH_REV="${AUK_FLASH_REV:-575b92f0895f75180bf2cbd35f2e176c5732b8ed}"
+AUK_BASE_REV="${AUK_BASE_REV:-790742b71a4430120daf2b2099192abae449eb9f}"
+AUK_QWEN_REV="${AUK_QWEN_REV:-f75b40e3da2003cdd6e1829b1f420ca70797c34e}"
+if [ "${AUK:-0}" = "1" ]; then
+  AUK_HOME_DIR="$COMFYUI_DIR/AuK"
+  if [ -d "$AUK_HOME_DIR/.git" ] || git clone -q https://github.com/Tencent-Hunyuan/AuK "$AUK_HOME_DIR"; then
+    git -C "$AUK_HOME_DIR" fetch -q --depth 1 origin "$AUK_REF" 2>/dev/null || true
+    git -C "$AUK_HOME_DIR" checkout -q "$AUK_REF" 2>/dev/null || echo "warn: could not pin AuK to $AUK_REF"
+    uv pip install --python "$PY" -e "$AUK_HOME_DIR[comfyui]" || echo "warn: AuK's Python package failed to install"
+    ln -sfn "$AUK_HOME_DIR/comfyui/ComfyUI-AuK" "$COMFYUI_DIR/custom_nodes/ComfyUI-AuK"
+    if [ "${AUK_WEIGHTS:-0}" = "1" ]; then
+      uv pip install --python "$PY" "huggingface_hub[cli]"
+      "$COMFYUI_DIR/.venv/bin/hf" download tencent/AuK-Flash --revision "$AUK_FLASH_REV" --local-dir "$AUK_HOME_DIR/ckpts/AuK-Flash" || echo "warn: could not download AuK-Flash"
+      "$COMFYUI_DIR/.venv/bin/hf" download Qwen/Qwen2.5-Omni-3B --revision "$AUK_QWEN_REV" --local-dir "$AUK_HOME_DIR/ckpts/Qwen2.5-Omni-3B" || echo "warn: could not download Qwen2.5-Omni-3B"
+      if [ "${AUK_BASE:-0}" = "1" ]; then
+        "$COMFYUI_DIR/.venv/bin/hf" download tencent/AuK --revision "$AUK_BASE_REV" --local-dir "$AUK_HOME_DIR/ckpts/AuK" || echo "warn: could not download AuK"
+      fi
+    fi
+  else
+    echo "warn: could not fetch Tencent-Hunyuan/AuK"
   fi
 fi
 

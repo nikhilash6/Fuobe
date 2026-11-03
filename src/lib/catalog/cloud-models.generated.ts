@@ -14626,6 +14626,53 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "bria-green-screen",
+    "name": "Bria green screen",
+    "vendor": "Bria",
+    "family": "bria",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Keys green-screen footage onto transparency and cleans the green spill off the edges",
+    "routes": [
+      {
+        "op": "bg-remove-video",
+        "provider": "fal",
+        "endpoint": "bria/video/background-removal/green-screen-despill",
+        "map": {
+          "prompt": false,
+          "video": "video_url",
+          "fixed": {
+            "output_container_and_codec": "webm_vp9"
+          }
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "spill_suppression",
+          "label": "Spill cleanup",
+          "min": 0,
+          "max": 1,
+          "step": 0.1,
+          "default": 1
+        }
+      ],
+      "promptless": true,
+      "matteOutputs": [
+        "cutout"
+      ],
+      "greenScreen": true
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "second",
+      "usd": 0.05
+    }
+  },
+  {
     "id": "depth-anything-video-cloud",
     "name": "Video Depth Anything (hosted)",
     "vendor": "ByteDance",
@@ -14980,6 +15027,39 @@ export const CLOUD_MODELS: ModelDef[] = [
     "pricing": {
       "unit": "image",
       "usd": 0.01
+    }
+  },
+  {
+    "id": "bria-guided-cutout",
+    "name": "Bria guided cut-out",
+    "vendor": "Bria",
+    "family": "bria",
+    "engine": "cloud",
+    "kind": "image",
+    "tagline": "Cut out the subject, then say what to keep or drop: \u201ckeep the shadow\u201d, \u201cwithout the hand\u201d",
+    "routes": [
+      {
+        "op": "bg-remove",
+        "provider": "fal",
+        "endpoint": "bria/guided-remove-background",
+        "map": {
+          "omitEmptyPrompt": true,
+          "image": "image_url"
+        }
+      }
+    ],
+    "options": {
+      "maxImages": 1,
+      "promptOptional": true,
+      "guided": true,
+      "promptPlaceholder": "What to keep or drop, e.g. \u201ckeep the shadow\u201d or \u201cwithout the hand\u201d"
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "image",
+      "usd": 0.03
     }
   },
   {

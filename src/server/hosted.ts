@@ -47,6 +47,7 @@ export const HOSTED_WORDS = {
   notOffered: "This one runs on your own GPU. Connect one in Settings, or pick another model.",
   loras: "Extra LoRAs run on your own GPU. Connect one in Settings, or run without them.",
   inputs: "This kind of file runs on your own GPU. Connect one in Settings, or use a picture.",
+  rtxCard: "This one needs an NVIDIA RTX card, and this studio's GPUs can't run it right now. Connect your own GPU in Settings, or pick another choice.",
   notHosted: "Runs on this studio's GPUs aren't open to this account. Connect your own GPU in Settings.",
   waitedTooLong: "This studio's GPUs were busy, so it didn't run. Not charged.",
 };

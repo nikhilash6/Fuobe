@@ -11,6 +11,7 @@ import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEA
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
 import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
+import { RTX_FRAMEGEN_MODEL, RTX_FRAMEGEN_WORKFLOW, RTX_HDR_MODEL, RTX_HDR_WORKFLOW, RTX_UPSCALE_MODEL, RTX_UPSCALE_WORKFLOW } from "./rtx-video";
 import { COMPOSITE_MODEL, COMPOSITE_WORKFLOW } from "./sharpen";
 import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
@@ -612,11 +613,23 @@ const open: ModelDef[] = [
     routes: [comfy("bg-remove", "bg-remove-birefnet")],
     options: {},
   }),
+  // Image cut-outs, Fine hair (nm10-keying): FeyNoBg's matte for hair, fur, lace and glass, its edges refined.
+  o({
+    id: "oss-matte-feynobg",
+    name: "FeyNoBg fine hair",
+    vendor: "1038lab",
+    family: "feynobg",
+    kind: "image",
+    tagline: "Cut-outs that keep every strand of hair, fur and see-through edges",
+    badges: ["new"],
+    routes: [comfy("bg-remove", "image-matte-feynobg")],
+    options: {},
+  }),
 
   // ---------------- Video
-  // MiniMax H3: text, image and start + end frame to video with its own sound, on the fl2va model. Fast runs larryvrh's
-  // turbo v4 LoRA (8 steps) with SLA attention; Best (params.extra.quality) runs the 20-step graph without them
-  // (resolveWorkflowId). The prompt is wrapped in H3's own layout on the server (promptFormat; src/lib/h3-prompt.ts), and
+  // MiniMax H3: text, image and start + end frame to video with its own sound, on the fl2va model. Standard runs larryvrh's
+  // turbo v4 LoRA (8 steps) with SLA attention; Sharper ("best", params.extra.quality) runs the 20-step graph without them,
+  // Pika Flex ("flex") Pika's post-trained adapter in 6 steps (resolveWorkflowId). References (ref2v) run Pika H3 Flex Ref2VA. The prompt is wrapped in H3's own layout on the server (promptFormat; src/lib/h3-prompt.ts), and
   // the canvas and frame count follow H3's grid (the provider). The graphs are not validated yet (validated: false).
   o({
     id: "oss-minimax-h3",
@@ -630,6 +643,10 @@ const open: ModelDef[] = [
       comfy("t2v", "minimax-h3-t2v", "turbo v4 LoRA, 8 steps"),
       comfy("i2v", "minimax-h3-i2v", "turbo v4 LoRA, 8 steps; the clip takes the start frame's shape"),
       comfy("flf2v", "minimax-h3-flf2v", "turbo v4 LoRA, 8 steps; the clip takes the start frame's shape"),
+      // References (Pika H3 Flex Ref2VA, 6 steps): up to 9 images, 3 clips and 3 voice or music clips, cited in order.
+      comfy("ref2v", "minimax-h3-flex-ref2va", "Pika H3 Flex, 6 steps: up to 9 images, 3 clips and 3 voice or music clips"),
+      // Talk from a voice clip (Lipsync & avatars, Fuobe Speak): one image + the voice as references; a new clip, not a re-sync.
+      comfy("avatar", "minimax-h3-flex-ref2va", "Talk from a voice clip: a new clip of the portrait speaking with this voice (2-15 s), not a re-sync of existing footage"),
     ],
     options: {
       aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"],
@@ -639,13 +656,19 @@ const open: ModelDef[] = [
       endFrame: true,
       audio: "always",
       promptFormat: "minimax-h3",
+      // References mode (Pika H3 Flex Ref2VA): Pika's limits, 12 files in all (src/lib/h3-references.ts).
+      maxImages: 9,
+      maxVideos: 3,
+      maxAudios: 3,
       controls: [
         {
           param: "quality",
           label: "Quality",
-          values: ["fast", "best"],
+          values: ["fast", "best", "flex"],
           default: "fast",
-          labels: { fast: "Fast · 8 steps", best: "Best · 20 steps, about 2.3x longer" },
+          labels: { fast: "Standard · 8 steps", best: "Sharper · 20 steps, about 2.3x longer", flex: "Fast · Pika Flex (6 steps)" },
+          // References and Talk from a voice clip always run Pika H3 Flex: the chip shows on words and frames only.
+          ops: { fast: ["t2v", "i2v", "flf2v"], best: ["t2v", "i2v", "flf2v"], flex: ["t2v", "i2v", "flf2v"] },
         },
         // On a card under 32 GB the run picks FastH3 V2 or Trim by itself (src/server/h3-gpu.ts); this picks one on any card.
         H3_GPU_TIER,
@@ -654,6 +677,8 @@ const open: ModelDef[] = [
       ],
     },
     defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },
+    engineNote:
+      "Pika H3 Flex (Quality → Fast · Pika Flex, References with images, clips and voice or music clips, and Talk from a voice clip) runs on your GPU only: no cloud service offers it, so the cloud runs MiniMax H3 as hosted, without Flex",
   }),
   o({
     id: "oss-ltx25",
@@ -931,6 +956,68 @@ const open: ModelDef[] = [
     options: { formats: ["hlg_10bit", "pq_10bit", "exr"], sliders: [{ param: "peakNits", label: "Peak brightness (nits)", min: 200, max: 2000, step: 50, default: 650 }] },
     defaults: { format: "hlg_10bit" },
   }),
+  // NVIDIA RTX Video (nm10-rtx-video, src/lib/catalog/rtx-video.ts): Comfy-Org's NVIDIA VFX nodes on NVIDIA's RTX Video SDK,
+  // only on an NVIDIA RTX card (frame generation: RTX 40 or later). Listed after each tool's own default so nothing picks
+  // them by default; Upscale → Video offers "Quick · RTX" first on a card that runs it. Nobody hosts them: GPU-only.
+  o({
+    id: RTX_UPSCALE_MODEL,
+    name: "RTX Video Super Resolution",
+    vendor: "NVIDIA",
+    family: "nvidia-rtx-video",
+    kind: "video",
+    tagline: "Fast upscale up to 4x on NVIDIA RTX cards; sharpens without adding new detail",
+    badges: ["fast"],
+    routes: [comfy("upscale-video", RTX_UPSCALE_WORKFLOW, "NVIDIA RTX cards only; in passes, so any length fits, sound kept")],
+    options: {
+      resolutions: VIDEO_UPSCALE_TIERS,
+      controls: [
+        {
+          param: "rtxQuality",
+          label: "Source",
+          values: ["ULTRA", "HIGHBITRATE_ULTRA", "HIGH"],
+          default: "ULTRA",
+          labels: { ULTRA: "Most clips", HIGHBITRATE_ULTRA: "Clean, high quality", HIGH: "Faster" },
+        },
+      ],
+    },
+    defaults: { resolution: "1080p" },
+  }),
+  o({
+    id: RTX_FRAMEGEN_MODEL,
+    name: "RTX Frame Generation",
+    vendor: "NVIDIA",
+    family: "nvidia-rtx-video",
+    kind: "video",
+    tagline: "FPS Boost to 24–120 fps and slow motion on RTX 40 series cards and newer; keeps cuts sharp",
+    badges: ["fast"],
+    routes: [comfy("interpolate", RTX_FRAMEGEN_WORKFLOW, "RTX 40 series cards and newer only; frame rate from the clip's header")],
+    options: {
+      fpsTargets: [...FPS_TARGETS],
+      slowdowns: [...SLOW_MOTION],
+      controls: [
+        {
+          param: "rtxQuality",
+          label: "Quality",
+          values: ["MEDIUM", "HIGH", "LOW"],
+          default: "MEDIUM",
+          labels: { MEDIUM: "Balanced", HIGH: "Best", LOW: "Fastest" },
+        },
+      ],
+    },
+    defaults: { targetFps: DEFAULT_FPS_TARGET },
+  }),
+  o({
+    id: RTX_HDR_MODEL,
+    name: "RTX Video HDR",
+    vendor: "NVIDIA",
+    family: "nvidia-rtx-video",
+    kind: "video",
+    tagline: "SDR footage turned into 10-bit HDR by NVIDIA's learned HDR, on NVIDIA RTX cards: HLG or HDR10 (PQ)",
+    badges: ["fast"],
+    routes: [comfy("sdr-to-hdr", RTX_HDR_WORKFLOW, "NVIDIA RTX cards only; tagged BT.2020 HLG or PQ")],
+    options: { formats: ["hlg_10bit", "pq_10bit"], sliders: [{ param: "peakNits", label: "Peak brightness (nits)", min: 400, max: 2000, step: 50, default: 650 }] },
+    defaults: { format: "hlg_10bit" },
+  }),
   o({
     id: "oss-export-video",
     name: "Pro export",
@@ -1054,6 +1141,41 @@ const open: ModelDef[] = [
     tagline: "Keep just what you name (“the dog”, “the red car”) — a transparent WebM, or its alpha mask",
     routes: [comfy("bg-remove-video", "video-bg-remove-sam3")],
     options: { keepsNamed: true, matteOutputs: ["cutout", "matte"] },
+  }),
+  // Bria's VRMBG 3.0 on your GPU (nm10-keying): the model behind the cloud's Bria matte, each frame following the one before.
+  // Its weights are gated (Bria approves access by hand) and placed by hand; the GPU check says so until they are there.
+  o({
+    id: "oss-video-matte-vrmbg3",
+    name: "Bria VRMBG 3.0",
+    vendor: "Bria",
+    family: "bria",
+    kind: "video",
+    tagline: "Steady, flicker-free cut-outs that follow the subject frame to frame — the same model as the cloud's Bria matte · needs Bria's approval for the weights",
+    badges: ["new"],
+    routes: [comfy("bg-remove-video", "video-matte-vrmbg3", "Bria VRMBG 3.0 (gated weights, placed by hand)")],
+    options: { promptless: true, matteOutputs: ["cutout", "matte"], formats: ["webm_alpha", "prores_4444", "exr"] },
+    defaults: { format: "webm_alpha" },
+  }),
+  // Video tools → Green screen on your GPU (nm10-keying): Corridor Digital's CorridorKey 2.0 neural keyer on footage shot on
+  // a green screen (its despill takes out green), at native resolution, in passes so long clips fit. The cut-out, its mask or
+  // the clean foreground; WebM, ProRes 4444 with alpha, or linear EXR frames. NVIDIA RTX 30-series or newer.
+  o({
+    id: "oss-video-key-corridorkey",
+    name: "CorridorKey 2.0",
+    vendor: "Corridor Digital",
+    family: "corridorkey",
+    kind: "video",
+    tagline: "Neural green-screen keying: clean hair, motion blur and see-through edges, with the green spill taken out",
+    badges: ["new"],
+    routes: [comfy("bg-remove-video", "video-key-corridorkey", "CorridorKey 2.0")],
+    options: {
+      promptless: true,
+      greenScreen: true,
+      matteOutputs: ["cutout", "matte", "foreground"],
+      formats: ["webm_alpha", "prores_4444", "exr"],
+      sliders: [{ param: "despill", label: "Spill cleanup", min: 0, max: 1, step: 0.05, default: 0.5 }],
+    },
+    defaults: { format: "webm_alpha" },
   }),
   o({
     id: "oss-video-depth-da3",
@@ -1347,6 +1469,19 @@ const open: ModelDef[] = [
     tagline: "Design or clone a voice in studio-quality 48 kHz, in 30 languages",
     badges: ["new"],
     routes: [comfy("voice-design", "tts-voxcpm2"), comfy("tts", "tts-voxcpm2-clone")],
+    options: { voiceClone: true, seed: true },
+  }),
+  // Edit speech (nm10-speech-edit): Tencent AuK (MIT) changes words, pitch, pace, emotion and noise in a recording, and
+  // speaks a line in a voice. Hosted on neither fal nor Replicate, so it runs on your GPU only (src/lib/speech-edit.ts).
+  o({
+    id: "oss-auk",
+    name: "AuK",
+    vendor: "Tencent",
+    family: "auk",
+    kind: "audio",
+    tagline: "Change what was said in a recording, or how it was said, or speak a line in a voice: English and Chinese",
+    badges: ["new"],
+    routes: [comfy("speech-edit", "speech-edit-auk", "every edit window in one job"), comfy("tts", "speech-tts-auk")],
     options: { voiceClone: true, seed: true },
   }),
   o({
