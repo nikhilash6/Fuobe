@@ -31,7 +31,6 @@ const routes = {
   queue: await import("@/app/api/admin/queue/route"),
   workers: await import("@/app/api/admin/workers/route"),
   worker: await import("@/app/api/admin/workers/[id]/route"),
-  download: await import("@/app/api/admin/workers/download/route"),
   reports: await import("@/app/api/admin/reports/route"),
   audit: await import("@/app/api/admin/audit/route"),
   files: await import("@/app/api/admin/files/[...path]/route"),
@@ -247,7 +246,6 @@ describe("admin tokens: every admin route asks for its scope", () => {
     { name: "GET files", scope: "outputs:view", run: (o) => routes.files.GET(req("/api/admin/files/outputs/nope.png", o), ctx({ path: ["outputs", "nope.png"] })) },
     { name: "GET queue", scope: "queue:read", run: (o) => routes.queue.GET(req("/api/admin/queue", o)) },
     { name: "GET workers", scope: "workers:read", run: (o) => routes.workers.GET(req("/api/admin/workers", o)) },
-    { name: "GET download", scope: "workers:read", run: (o) => routes.download.GET(req("/api/admin/workers/download", o)) },
     { name: "POST workers", scope: "workers:tokens", run: (o) => routes.workers.POST(req("/api/admin/workers", { ...o, method: "POST", body: { name: `w${++n}` } })) },
     { name: "PATCH worker", scope: "workers:write", run: (o) => routes.worker.PATCH(req("/api/admin/workers/nope", { ...o, method: "PATCH", body: { paused: true } }), ctx({ id: "nope" })) },
     { name: "PATCH worker rotate", scope: "workers:tokens", run: (o) => routes.worker.PATCH(req("/api/admin/workers/nope", { ...o, method: "PATCH", body: { rotate: true } }), ctx({ id: "nope" })) },
@@ -525,7 +523,7 @@ describe("admin tokens: runs, the log's changes and every admin route", () => {
       }
     };
     walk(root);
-    expect(found.length).toBeGreaterThanOrEqual(14);
+    expect(found.length).toBeGreaterThanOrEqual(13);
     for (const f of found) {
       const src = fs.readFileSync(f, "utf8");
       const handlers = src.match(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g) ?? [];

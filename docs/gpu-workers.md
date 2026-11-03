@@ -44,8 +44,9 @@ or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected
 
 1. In **Settings → Workers**, press **Add a worker** and give it a name. The page shows the worker's token only once.
    The worker starts paused, with no hours and no lanes.
-2. On the GPU's PC, you need Node 22 or later and a Fuobe checkout (or a copy of `bin/`, `package.json` and
-   `workflows/comfyui/requirements.json`). Run `node scripts/build-worker.mjs`, then run `node bin/fuobe.mjs worker setup`.
+2. On the GPU's PC, you need Node 22 or later and git. Install the worker from a git checkout of Fuobe at a release tag
+   that you have verified (see "Install and update"). Run `node scripts/build-worker.mjs`, then run
+   `node bin/fuobe.mjs worker setup`.
    Setup asks for the studio's address, the token (as hidden input), ComfyUI's folder, the model folders, a worker
    folder and a port for the worker's own ComfyUI (default 8190). It refuses these:
    - a folder that a cloud drive syncs;
@@ -61,6 +62,21 @@ or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected
    Settings → Workers (the setting is `comfyWhere=workers`).
 
 On a machine with no keyboard, set `FUOBE_WORKER_TOKEN` and `FUOBE_WORKER_SITE` so that the token stays out of files.
+
+### Install and update
+
+The worker runs other people's jobs on your PC, so install it only from code that you can check. The studio does not
+offer the worker as a download. Use a git checkout at a signed release tag:
+
+1. Clone the repository once: `git clone https://github.com/workingprototype/Fuobe.git`.
+2. Fetch the tags: `git fetch --tags`.
+3. Verify the tag that you want: `git verify-tag <tag>`. Go on only when git says that the signature is good and the
+   key is one that you trust.
+4. Check it out: `git checkout <tag>`.
+5. Build the worker's parts: `node scripts/build-worker.mjs`.
+
+To update, stop the worker, do steps 2 to 5 with the new tag, and start the worker again. Do not install the worker
+from a zip file, from a copy that someone sends you, or from a branch.
 
 ### The worker's own ComfyUI
 
