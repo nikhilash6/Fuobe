@@ -270,6 +270,28 @@ describe("Episodes", () => {
       expect(up.request.params?.resolution).toBe("1080p");
       const upscalingOpen: EpisodeView = await (await actionRoute.POST(json("POST"), params({ id: openId, action: "upscale" }))).json();
       expect(gens.getGeneration(upscalingOpen.episode.plan!.upscaled!)).toMatchObject({ op: "upscale-video", modelId: "oss-upscale-video-esrgan", engine: "open" });
+      // Regenerate to 1080p (open engine only): every scene redrawn by Open-H3 Regenerate, joined and mixed again with the
+      // episode's own narration and subtitles timing; the cloud shows no Regenerate.
+      expect(doneCloud.regenerate).toBeNull();
+      expect(doneOpen.regenerate).toEqual({ scenes: 6, demo: true });
+      expect((await actionRoute.POST(json("POST"), params({ id: cloudId, action: "regenerate" }))).status).toBe(422);
+      const regenOpen: EpisodeView = await (await actionRoute.POST(json("POST"), params({ id: openId, action: "regenerate" }))).json();
+      const rIds = regenOpen.episode.plan!.regenerated!.ids;
+      const redraws = Object.entries(rIds).filter(([k]) => k.endsWith("-regen")).map(([, g]) => gens.getGeneration(g)!);
+      expect(redraws).toHaveLength(6);
+      for (const g of redraws) {
+        expect(g).toMatchObject({ modelId: "oss-h3-regenerate", op: "upscale-video", engine: "open" });
+        expect(g.request.params).toMatchObject({ resolution: "1080p", extra: { startSigma: 0.8, draftFrom: "other" } });
+        expect(g.request.prompt?.length).toBeGreaterThan(20);
+      }
+      // The narration, its timing and the bed are the episode's own: nothing is read or timed again.
+      expect(gens.getGeneration(rIds["regen-mix"])).toMatchObject({ op: "mux" });
+      expect(Object.keys(rIds).filter((k) => !k.startsWith("regen-"))).toEqual([]);
+      expect(Object.values(rIds)).not.toContain(doneOpen.episode.plan!.ids.narration);
+      expect(regenOpen.episode.plan!.regenerated!.final).toBe(rIds["regen-captions"]);
+      // A second click while it renders starts nothing new.
+      const again: EpisodeView = await (await actionRoute.POST(json("POST"), params({ id: openId, action: "regenerate" }))).json();
+      expect(again.episode.plan!.regenerated!.ids).toEqual(rIds);
 
       // Timeline editor: change scene 3's picture.
       const target = doneCloud.episode.script.blocks[2].id;

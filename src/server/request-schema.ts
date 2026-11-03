@@ -2,7 +2,18 @@ import "server-only";
 import { z } from "zod";
 import { FORMAT_INFO } from "@/lib/av/formats";
 import type { VideoFormat } from "@/lib/catalog/types";
+import { LATENT_EXTRA } from "@/lib/catalog/regenerate";
 import { SignatureSchema } from "./palettes";
+
+/**
+ * params.extra as a client may send it: any settings, less the ones only the server sets (MiniMax H3's 2K hand-off:
+ * latentDraft, latentFrom), the way the run stamp's fields are dropped. The server checks those again when a run starts.
+ */
+export const ClientExtra = z.record(z.string(), z.unknown()).transform((extra) => {
+  const out = { ...extra };
+  for (const k of LATENT_EXTRA) delete out[k];
+  return out;
+});
 
 /** A point on a picture as fractions of its width and height. */
 const Focus = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
@@ -107,7 +118,7 @@ export const GenerationRequestSchema = z.object({
       position: Focus.optional(),
       scale: z.number().positive().max(10).optional(),
       animation: z.union([z.string().max(200), z.number()]).optional(),
-      extra: z.record(z.string(), z.unknown()).optional(),
+      extra: ClientExtra.optional(),
     })
     .optional(),
   presetOptions: z.record(z.string(), z.string()).optional(),

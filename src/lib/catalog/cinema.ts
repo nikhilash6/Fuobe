@@ -8,6 +8,7 @@ import { DOP_MODEL, LTX25_HOSTED } from "./dop";
 import { dualEngine, onEngine } from "./engines";
 import { localOnly, needsToken, triggerOf } from "./loras";
 import { QMA_MODEL, qmaLabel, qmaView } from "@/lib/qma";
+import { studioResolutions } from "./regenerate";
 import { ANGLES_2511_LORA } from "./open-tools";
 import { composeShots, estimateCost, planGeneration, routesFor } from "./plan";
 import { soulRecipe } from "./soul";
@@ -628,6 +629,17 @@ export const MAX_LIGHTS = 2;
 export const VIDEO_ASPECTS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
 export const IMAGE_ASPECTS = ["16:9", "21:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"];
 export const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"];
+/** MiniMax H3's 2K tier: fal renders it from a 768P base; on your GPU a 768p draft is finished by Open-H3 Regenerate. */
+export const H3_2K_TIER = "2K";
+
+/** Cinema's video tiers for a model: 480p / 720p / 1080p, and 2K for the MiniMax H3 models that offer it. */
+export function videoResolutionsFor(model: Pick<ModelDef, "family" | "options"> | undefined): string[] {
+  const twoK = !!model && (model.family === "minimax-h3" || model.family === "hailuo") && (studioResolutions(model.options) ?? []).some((r) => r.toLowerCase() === "2k");
+  return twoK ? [...VIDEO_RESOLUTIONS, H3_2K_TIER] : VIDEO_RESOLUTIONS;
+}
+
+/** The 2K tier on your GPU, said under the prompt bar. */
+export const H3_2K_OPEN_NOTE = "2K on your GPU: each take is drafted at 768p, then redrawn at 2K with Open-H3 Regenerate (about 5 minutes per 5 s)";
 export const IMAGE_RESOLUTIONS = ["1K", "2K", "4K"];
 export const DURATION = { min: 4, max: 30, default: 5 } as const;
 export const BATCH = { min: 1, max: 4 } as const;
@@ -1381,24 +1393,27 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
     notes.push(`${model.name} doesn't make ${ar} — using ${params.aspectRatio}`);
   } else if (o.aspectRatios?.length || ar) params.aspectRatio = ar;
   const res = input.resolution;
-  if (res && o.resolutions?.length) {
-    if (o.resolutions.includes(res)) params.resolution = res;
-    else if (IMAGE_TIER[res] && o.resolutions.includes(IMAGE_TIER[res])) {
+  // A video's tiers include the ones a finishing pass reaches (MiniMax H3's 2K on your GPU), as the Resolution chip shows them.
+  const tiers = (kind === "video" ? studioResolutions(o) : o.resolutions) ?? [];
+  if (res && tiers.length) {
+    if (tiers.includes(res)) params.resolution = res;
+    else if (IMAGE_TIER[res] && tiers.includes(IMAGE_TIER[res])) {
       params.resolution = IMAGE_TIER[res];
       if (res === "4K") notes.push(`${model.name} makes up to about 2 megapixels (its ${params.resolution} size)`);
-    } else if (kind === "video" && videoTier(o.resolutions, res)) {
-      const tier = videoTier(o.resolutions, res)!;
+    } else if (kind === "video" && videoTier(tiers, res)) {
+      const tier = videoTier(tiers, res)!;
       params.resolution = tier;
       if (tier.toLowerCase() !== res.toLowerCase()) {
         notes.push(tierHeight(tier)! < tierHeight(res)! ? `${model.name} renders up to ${tier} here` : `${model.name} renders at ${tier} here`);
       }
     } else {
       const order = kind === "video" ? VIDEO_RESOLUTIONS : [...IMAGE_RESOLUTIONS, "0.5K", "1.5K", "720p", "1080p"];
-      const below = o.resolutions.filter((r) => order.indexOf(r) <= order.indexOf(res) && order.indexOf(r) >= 0);
-      params.resolution = below.sort((a, b) => order.indexOf(b) - order.indexOf(a))[0] ?? o.resolutions[0];
+      const below = tiers.filter((r) => order.indexOf(r) <= order.indexOf(res) && order.indexOf(r) >= 0);
+      params.resolution = below.sort((a, b) => order.indexOf(b) - order.indexOf(a))[0] ?? tiers[0];
       notes.push(`${model.name} renders up to ${params.resolution} here`);
     }
   }
+  if (kind === "video" && model.engine === "open" && typeof params.resolution === "string" && params.resolution.toLowerCase() === "2k") notes.push(H3_2K_OPEN_NOTE);
   if (kind === "video" && model.kind === "video") {
     const want = Math.max(DURATION.min, Math.min(DURATION.max, Math.round(input.duration ?? DURATION.default)));
     const allowed = plannedDurations(model);

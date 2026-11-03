@@ -163,6 +163,8 @@ describe("round-4 ComfyUI workflows", () => {
       // Idol 3D's clean splats (idol-2): ComfyUI-Idol isn't on the validation server (tests/idol-clean.test.ts).
       "image-to-splat-idol-clean",
       "video-regenerate-h3",
+      "video-h3-t2v-2k",
+      "video-regenerate-h3-latent",
       // NVIDIA RTX Video: the pack needs an NVIDIA RTX card, so it isn't on the CPU validation server (tests/rtx-video.test.ts checks its inputs).
       "upscale-video-rtx",
       "fps-rtx-framegen",

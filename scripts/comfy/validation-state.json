@@ -923,6 +923,12 @@
     "error": null,
     "at": "2026-10-26T09:24:35.576Z"
   },
+  "video-h3-t2v-2k": {
+    "sha256": "2193606d5114870328d785cd55f4138da105c563ca8e2dc9db37a21457d1253d",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Save the 768p latent (Finish in 2K decodes from it)' not found. The custom node may not be installed. (Node ID '#20')",
+    "at": "2026-11-02T15:34:50.056Z"
+  },
   "video-inpaint-wan-vace": {
     "sha256": "71aaa43c8ac4bb0a764a9a835d96d1c47b33244f741611c7036ebea8ffcef3a7",
     "validated": true,
@@ -994,6 +1000,12 @@
     "validated": false,
     "error": "HTTP 400: missing_node_type: Node 'Open-H3 Regenerate LoRA (curve branches off)' not found. The custom node may not be installed. (Node ID '#3')",
     "at": "2026-11-01T16:34:43.069Z"
+  },
+  "video-regenerate-h3-latent": {
+    "sha256": "c5b3c29ab22871a33819819585c2a28505606526fe7e424d6c77d7f549dcc470",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'The draft's saved 768p latent' not found. The custom node may not be installed. (Node ID '#1')",
+    "at": "2026-11-02T15:34:50.077Z"
   },
   "video-relight-bernini-r": {
     "sha256": "218ca68fa4c552a6e5f986973f33f122ad43f27b6808ef493a2d9f9733b8a72d",

@@ -171,6 +171,8 @@ export const BINDING_KEYS = new Set([
   'preset',
   // Open-H3 Regenerate (n7-3): the pack's output size and draft size (its combo strings) and the refine's start noise
   'resolution', 'draftSize', 'startSigma',
+  // Regenerate in Cinema (n7-10): the 768p draft's saved latent (the prefix it's saved under, the file the 2K finish loads)
+  'latentPrefix', 'latent',
   // Character swap in 2K (n7-4): the mask composite's window starts, the two layers' places and the mask's soft edge
   'takeStart', 'maskStart', 'takeX', 'takeY', 'regionWidth', 'regionHeight', 'regenWidth', 'regenHeight', 'regenX', 'regenY', 'trimX', 'trimY', 'feather',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level

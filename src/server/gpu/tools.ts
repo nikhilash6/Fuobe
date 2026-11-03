@@ -15,7 +15,7 @@ import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { PERSON_REMOVAL_TOOLS, REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
-import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { H3_LATENT_DRAFT_WORKFLOW, H3_OPEN_MODEL, REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_LATENT_WORKFLOW, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
 import { RTX_FRAMEGEN_MODEL, RTX_HDR_MODEL, RTX_UPSCALE_MODEL } from "@/lib/catalog/rtx-video";
 import { COMPOSITE_MODEL } from "@/lib/catalog/sharpen";
@@ -337,6 +337,9 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   // nm10-rtx-video: NVIDIA RTX Video in Upscale → Video ("Quick · RTX"), FPS boost and SDR to HDR. An NVIDIA RTX card only
   // (frame generation: RTX 40 or later): elsewhere the row reads "Needs an NVIDIA RTX card".
   { href: `/upscale/video?model=${RTX_UPSCALE_MODEL}`, label: "Quick upscale · RTX", group: "Video tools", steps: [{ modelId: RTX_UPSCALE_MODEL, op: "upscale-video" }] },
+  // n7-10: MiniMax H3 at 2K on your GPU (Cinema and the Video studio's 2K tier, and Finish in 2K on a take): the 768p draft
+  // that keeps its latent, and the 2K finish from it.
+  { href: `/video?model=${H3_OPEN_MODEL}&resolution=2K`, label: "MiniMax H3 in 2K", group: "Video", workflows: [H3_LATENT_DRAFT_WORKFLOW, REGEN_LATENT_WORKFLOW] },
   // n7-4: the Character swap at 1080p / 2K / 4K (Genjutsu, and Sharpen in Character Swap Studio's Finish): the 768p swap,
   // the person's mask (SAM 3.1 on H3 Relay's graph), the part at 24 fps, the swap regenerated, only the character
   // composited over the footage, the windows joined and the part's sound put back.
@@ -438,7 +441,8 @@ export function studioTool(row: StudioRowDef): Tool | null {
   }
   if (row.workflows) {
     const segment = row.workflows[row.workflows.length - 1];
-    return { ref: `studio:${row.href}`, name: row.label, kind: "video", workflows: row.workflows.filter((w) => !!loadIndex().workflows[w]), loras: graphLoras(segment, {}).map(loraNeed) };
+    const loras = [...graphLoras(segment, {}), ...row.workflows.flatMap((w) => regenerateGraphLoras(w))];
+    return { ref: `studio:${row.href}`, name: row.label, kind: "video", workflows: row.workflows.filter((w) => !!loadIndex().workflows[w]), loras: loras.map(loraNeed) };
   }
   const c = row.config;
   const id = c?.defaultModels.open;

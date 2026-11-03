@@ -48,7 +48,19 @@ import { IDOL_PACK, IDOL_PACK_CLASS, IDOL_WORKFLOWS, idolGraphValues, idolKept }
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { expandH3References, h3ReferenceProblem } from "@/lib/h3-references";
-import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
+import {
+  draftSizeFor,
+  H3_LATENT_DRAFT_WORKFLOW,
+  latentFileFor,
+  latentPrefixFor,
+  REGEN_COPY,
+  REGEN_LATENT_WORKFLOW,
+  REGEN_WINDOW_SECONDS,
+  REGEN_WORKFLOW,
+  regenFrames,
+  regenOnePassRefusal,
+  regenResolution,
+} from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
@@ -190,6 +202,20 @@ export function computerScope(): Principal | undefined {
 
 /** The owner's ComfyUI jobs go to the workers (Settings: ComfyUI runs on "workers"), not to one computer. */
 const onWorkers = (computer: Principal | undefined) => computer === "owner" && !ownGpu() && getSetting("comfyWhere") === "workers";
+
+/**
+ * Which ComfyUI a job in this scope runs on, as a name two runs are compared by (MiniMax H3's 2K finish loads the latent
+ * its draft saved only on the ComfyUI that saved it): an account's link or computer, the owner's computer, or this
+ * install's server. null where nothing stays between jobs: the owner's workers empty their output folder after each one.
+ */
+export function comfyPlace(): string | null {
+  const own = ownGpu();
+  if (own) return own.kind === "computer" ? `computer:${own.principal}` : own.url ? `link:${own.url}` : null;
+  const computer = computerScope();
+  if (computer) return onWorkers(computer) ? null : `computer:${computer}`;
+  const url = getSetting("comfyUrl").replace(/\/+$/, "");
+  return url ? `server:${url}` : null;
+}
 
 /**
  * FUOBE_POOL_MEDIA_INPUTS: what a job for workers may send them ("image" unless set; "image,video,audio" for all).
@@ -1466,6 +1492,20 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     values.frames = regenFrames(length);
     delete extra.draftFrom;
   }
+  // MiniMax H3 at 2K (n7-10): the 768p draft saves its latent under a name made from its run's id, and the finish loads
+  // that file (the same ComfyUI keeps it in output/open_h3_latents/), redrawing it at the size asked from the same words.
+  if (manifest.id === H3_LATENT_DRAFT_WORKFLOW) {
+    values.latentPrefix = latentPrefixFor(ctx.generationId);
+    delete extra.latentDraft;
+  }
+  if (manifest.id === REGEN_LATENT_WORKFLOW) {
+    if (!(typeof values.prompt === "string" && values.prompt.trim())) throw new ProviderError("Regenerate redraws the clip from words: describe what is in it", 400);
+    if (typeof extra.latentFrom !== "string" || !extra.latentFrom) throw new ProviderError("This take has no saved draft to finish from", 400);
+    values.latent = latentFileFor(extra.latentFrom);
+    values.resolution = regenResolution(input.resolution);
+    delete extra.latentFrom;
+    delete extra.draftFrom;
+  }
 
   // Drawn motion paths (normalised to the start frame) → one pixel point per output frame (Wan-Move).
   const paths = extra.motionPaths as MotionPaths | undefined;
@@ -2091,6 +2131,12 @@ export function withoutAnchor(wf: ComfyWorkflow, loaderId: string): ComfyWorkflo
 /** What ComfyUI's /prompt answers when it refuses a graph. */
 export type PromptRefusalBody = { error?: { type?: string; message?: string; extra_info?: { class_type?: string } }; node_errors?: unknown };
 
+/** A 2K finish refused because the latent file it loads isn't on that ComfyUI (Load Refined Latent's list of files). */
+export function latentGone(body: PromptRefusalBody, manifest: Pick<ManifestWorkflow, "id">): boolean {
+  if (manifest.id !== REGEN_LATENT_WORKFLOW || !body.node_errors || typeof body.node_errors !== "object") return false;
+  return Object.values(body.node_errors as Record<string, { class_type?: unknown }>).some((n) => n?.class_type === "OpenH3LoadRefinedLatent");
+}
+
 /**
  * A /prompt refusal in words, with what was missing as a code its failed tile turns into "Fix it" (the GPU pre-flight's
  * guided fix). The same for the server's own ComfyUI, a link, and one on someone's computer (its tab reports the answer).
@@ -2110,7 +2156,7 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
   // An account's run (on its own GPU, or on this install's GPUs as a hosted run) gets the visitor's words, never the owner's.
   const visitorRun = !!ownGpu() || !!tenantAccount();
   const missingPack =
-    body.error?.type === "missing_node_type" && manifest.id === REGEN_WORKFLOW && worker === "main"
+    body.error?.type === "missing_node_type" && [REGEN_WORKFLOW, REGEN_LATENT_WORKFLOW, H3_LATENT_DRAFT_WORKFLOW].includes(manifest.id) && worker === "main"
       ? visitorRun
         ? REGEN_COPY.missingVisitor
         : REGEN_COPY.missing
@@ -2122,6 +2168,8 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
         ? `This workflow needs the ${packs.join(" + ")} node pack${packs.length > 1 ? "s" : ""} on ${where} (see scripts/comfy/README.md)`
         : undefined;
   // A LoRA it lacks: point at its model card (a civitai download URL answers 401 without the key) and the LoRA folder setting.
+  // A 2K finish whose draft's saved latent is gone (someone's computer: its tab reports the refusal): plain words, no file.
+  if (latentGone(body, manifest)) return { message: REGEN_COPY.latentGone };
   const loraModels = loras.map((l) => ({ file: l.file, folder: "loras", url: loraByFile(l.file)?.page ?? (l.url && !needsToken(l.url) ? l.url : undefined) }));
   let detail = body.node_errors && Object.keys(body.node_errors as object).length ? explainComfyError(body.node_errors, { ...manifest, models: [...manifest.models, ...loraModels] }) : (missingPack ?? (typeof body.error?.message === "string" ? body.error.message.slice(0, 1024) : undefined));
   // (Settings → LoRAs is the owner's page, for the server's own ComfyUI: an account's, or one on a computer, gets its LoRAs by hand.)
@@ -2491,6 +2539,9 @@ export const comfyProvider: ProviderAdapter = {
       // The pack switched off in Settings → Models & licences: Idol 3D runs its core graph, as without the pack.
       idolPack: async () => ((await import("@/server/model-access")).readAccess().packs.includes(IDOL_PACK) ? false : comfyHasClass(IDOL_PACK_CLASS, worker)),
     });
+    // MiniMax H3's 2K draft that kept its latent says where (the finish loads it only there: generations.ts latentHandOff).
+    const latentAt = manifest.id === H3_LATENT_DRAFT_WORKFLOW ? comfyPlace() : null;
+    if (latentAt) meta.latentAt = latentAt;
     // On someone's computer: the job waits for their Fuobe tab, which sends exactly this graph under the prompt id minted
     // here. A refusal comes back in its report, and the poll explains it as below.
     const computer = computerScope();
@@ -2522,6 +2573,13 @@ export const comfyProvider: ProviderAdapter = {
       worker,
     );
     const body = (await res.json().catch(() => ({}))) as PromptRefusalBody & { prompt_id?: string };
+    // A 2K finish whose draft's latent isn't on this ComfyUI any more (its output folder was cleaned): the draft's clip,
+    // chained into the same run, is redrawn instead.
+    if (!res.ok && latentGone(body, manifest) && typeof input.extra?.latentFrom === "string") {
+      const { latentFrom: _gone, ...extra } = input.extra;
+      void _gone;
+      return comfyProvider.submit({ route, input: { ...input, extra }, generationId, model });
+    }
     if (!res.ok || !body.prompt_id) {
       // The pack may have gone since the server said it had it: the next run asks again (and runs the core graph without it).
       if (manifest.id === IDOL_WORKFLOWS.clean) forgetComfyClass(IDOL_PACK_CLASS, worker);

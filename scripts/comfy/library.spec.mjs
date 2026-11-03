@@ -369,6 +369,8 @@ export const KNOWN_MODELS = {
   'minimax_h3_video_vae_fp16.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_fp16.safetensors' },
   'minimax_h3_audio_vae_fp32.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors' },
   'minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/3ec17a324ced54151364f24f8b5fb6bf7e26414f/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors' },
+  // Regenerate in Cinema (n7-10): LightX2V's FL2V Turbo 4-step v1.2 (Apache-2.0 in its card at 3ec17a3), the 768p draft of rdh's "Prompt to 2K".
+  'minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/3ec17a324ced54151364f24f8b5fb6bf7e26414f/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors' },
   'h3_character_swap_v1.5.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/d06323b7c8e70e97cdab48b78a1e05f786c8cba9/h3_character_swap_v1.5.safetensors' },
   'h3_character_swap_pro4500_1000.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/a665bb7e3bb9804e487d2925f67744f554c8ad49/h3_character_swap_pro4500_1000.safetensors' },
   'H3-Person-Remover-V1.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA/resolve/fe136b3dc93aea993b9f194d48ea9859fdc2de14/H3-Person-Remover-V1.safetensors' },
@@ -5488,6 +5490,56 @@ export const SPEC = [
       'rdh\'s "Decode Saved Latent" graph) and decoded by the fast H3 VAE decoder (tiled H3 VAE fallback). Finish trims the padding, crops 1088 -> 1080 and 2176 -> 2160 and cuts the draft\'s own sound to ' +
       'length, which CreateVideo muxes back at 24 fps. Measured by the pack\'s author: about 3 min per 5 s at 2K on a 72 GB RTX PRO 5000 (9.5 min with dense attention); 22 s on a B200 (NVIDIA); ' +
       'a community run reached about 1080p on 32 GB with a lossy LoRA. The packs were tested by their author on ComfyUI 0.42.0.',
+  },
+  // ---- Regenerate in Cinema and the Video studio (package n7-10-regenerate-more; docs/research/new-models-7.md §2.10 row 8): a
+  // MiniMax H3 take drafted at 768p that keeps its latent, and the 2K finish that starts from that latent (no decode and
+  // re-encode in between), from rdh9616's "Prompt to 2K" and "Decode Saved Latent" examples at 9b686c5.
+  {
+    id: 'video-h3-t2v-2k',
+    title: 'MiniMax H3 text to video at 768p that keeps its latent for a 2K finish (FL2VA + LightX2V Turbo 4-step v1.2, 6 steps er_sde; ComfyUI-Open-H3-Regenerate saves the latent)',
+    capability: 't2v',
+    handBuilt: 'hand-built/video-h3-t2v-2k.json',
+    packs: ['ComfyUI-Open-H3-Regenerate'],
+    bindings: {
+      prompt: [b('10', 'prompt')],
+      width: [b('10', 'width')], height: [b('10', 'height')], frames: [b('10', 'length')],
+      seed: [b('11', 'noise_seed')], steps: [b('13', 'steps')],
+      latentPrefix: [b('20', 'filename_prefix')], filenamePrefix: [b('19', 'filename_prefix')],
+    },
+    outputs: [{ node: '19', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 6 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: `${H3_LICENSE} · LightX2V FL2V Turbo 4-step v1.2 LoRA Apache-2.0 (its card at 3ec17a3) · ComfyUI-Open-H3-Regenerate Apache-2.0`,
+    notes:
+      'The draft half of rdh9616\'s "Open-H3 Regenerate 2K - Prompt to 2K" example: MiniMaxH3ImageToVideo with no frames given (text to video with sound), the FL2VA pruned int8 model with ' +
+      'LightX2V\'s FL2V Turbo 4-step v1.2 LoRA at 1.0 (core LoraLoaderModelOnly), BasicScheduler simple 6 steps, er_sde, CFG 1, decoded with the fp16 H3 video VAE. Between the sampler and the ' +
+      'decoder, Save Refined Latent (20) writes the 768p latent with its soundtrack to output/open_h3_latents/<latentPrefix>_00001.safetensors (Fuobe names it after the run), so "Finish in 2K" ' +
+      '(video-regenerate-h3-latent) upscales that latent straight away instead of re-encoding the decoded draft. The pack is opt-in (OPEN_H3_REGEN=1). rdh measured about 2 min for a 5 s draft ' +
+      '(6 x 16 s) on a 72 GB RTX PRO 5000.',
+  },
+  {
+    id: 'video-regenerate-h3-latent',
+    title: 'Finish a 768p MiniMax H3 draft in 2K from its saved latent: Open-H3 Regenerate 2K without the decode and re-encode (ComfyUI-Open-H3-Regenerate + LBH packs)',
+    capability: 'upscale-video',
+    handBuilt: 'hand-built/video-regenerate-h3-latent.json',
+    packs: ['ComfyUI-Open-H3-Regenerate', 'Comfyui_Minimax_h3_latent_Upscaler'],
+    bindings: {
+      latent: [b('1', 'latent_file')], prompt: [b('16', 'text')], resolution: [b('17', 'resolution')],
+      startSigma: [b('19', 'start_sigma')], steps: [b('19', 'steps')], seed: [b('20', 'noise_seed')], filenamePrefix: [b('28', 'filename_prefix')],
+    },
+    outputs: [{ node: '28', kind: 'video' }],
+    defaults: { resolution: '2k (2560x1440)', startSigma: 0.8, steps: 3, fps: 24 },
+    vramGb: 48,
+    license:
+      'MiniMax H3 Community License (the H3 FL2VA model, its VAEs, the packaged Qwen3-VL text encoder, NVIDIA\'s Open-H3-Regenerate-2K LoRA and the fast H3 VAE decoder): territory EXCLUDES the US, ' +
+      'the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax\'s written authorization; show "MiniMax H3" on the product\'s interface · LBH latent upscaler weights ' +
+      'Apache-2.0, its node code MIT · ComfyUI-Open-H3-Regenerate Apache-2.0',
+    notes:
+      'video-regenerate-h3 started from a saved latent instead of a clip (rdh9616\'s "Decode Saved Latent" loader in front of the "Prompt to 2K" regenerate half): Load Refined Latent (1) reads the ' +
+      'draft\'s output/open_h3_latents/ file by name (latent: the draft run\'s latentPrefix + _00001.safetensors, so it runs on the ComfyUI that made the draft), the LBH upscaler puts it on the ' +
+      'target grid (resolution: 1080p | 2k | 4k), the refine re-noises it to startSigma (0.8, closer to the draft) and runs 3 Euler steps at CFG 1 with Sol-Attn and the prompt, the refined latent ' +
+      'is saved again, the fast H3 VAE decoder decodes it, and Finish trims to the draft\'s frame count and puts the draft\'s own sound back at 24 fps.',
   },
   // ---- Character swap in 2K (package n7-4-character-swap-2k; docs/research/new-models-7.md §2.10 rows 4-5): only the swapped
   // character comes from the regenerate, over the original footage, with the footage's own sound.

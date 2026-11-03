@@ -646,6 +646,12 @@ export interface ModelOptions {
   inbetween?: true;
   aspectRatios?: string[];
   resolutions?: string[];
+  /**
+   * Tiers a finishing pass reaches after the model's own render, offered only where the brief puts them (the Video
+   * studio and Cinema, through studioResolutions): MiniMax H3's 2K on your GPU is a 768p draft redrawn by Open-H3
+   * Regenerate. Tier pickers elsewhere (Faceless, Canvas, Assist, Ad Multiplier) keep to `resolutions`.
+   */
+  finishTiers?: string[];
   durations?: number[];
   /** Max outputs per request the model supports natively. */
   maxOutputs?: number;
@@ -1216,6 +1222,11 @@ export interface GenerationRequest {
    * (src/server/chains.ts createMosaicRun), so it doesn't start another.
    */
   postMade?: boolean;
+  /**
+   * Server-set: the take this run finishes in 2K (MiniMax H3's 2K tier, or "Finish in 2K" on a take; package n7-10), so a
+   * take that has a 2K finish under way or made isn't offered another (src/server/cinema.ts finishTake).
+   */
+  finishOf?: string;
   /** Server-set: what the user calls this result, shown instead of the prompt (Library, feeds). */
   title?: string;
   /** Server-set: the name of the batch it belongs to (an Assist plan's summary): the Library stack's title. */

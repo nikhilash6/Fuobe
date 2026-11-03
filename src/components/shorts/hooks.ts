@@ -159,6 +159,10 @@ export function useShortsActions(id?: string) {
       mutationFn: (v: { index: number; requestId?: string }) => send<ShortsSessionView>(`/api/shorts/sessions/${id}/segments/${v.index}`, "POST", { requestId: v.requestId }),
       onSuccess: put,
     }),
+    enhance: useMutation({
+      mutationFn: (v: { index: number; requestId?: string }) => send<ShortsSessionView>(`/api/shorts/sessions/${id}/segments/${v.index}/enhance`, "POST", { requestId: v.requestId }),
+      onSuccess: put,
+    }),
     primary: useMutation({
       mutationFn: (v: { index: number; generationId: string }) => send<ShortsSessionView>(`/api/shorts/sessions/${id}/segments/${v.index}/primary`, "POST", { generationId: v.generationId }),
       onSuccess: put,
