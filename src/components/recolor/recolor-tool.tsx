@@ -10,14 +10,17 @@ import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { FrameStage, type Frame } from "@/components/remove-object/frame-stage";
 import { fileToSlot, kindOfFile, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
-import { useAskBeforeUpload, useCreateGeneration, useGenerations } from "@/lib/api";
+import { askToSignUp, useAskBeforeUpload, useCreateGeneration, useGenerations, useIsGuest } from "@/lib/api";
 import { colourChip, ITEMS, normaliseHex, RECOLOR, recolorRequest, SWATCHES } from "@/lib/catalog/recolor";
 import type { PixelPoint } from "@/lib/catalog/types";
 import { toastError } from "@/lib/refusals";
+import { postFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { RecolorResult } from "./recolor-result";
 
 const SUBTITLE = "Tap the dress, the jacket or the bag, then pick a colour. Folds, texture and shine stay exactly as they are, and nothing else in the photo changes.";
+/** A photo anyone can tap before adding their own (a run sends it as the visitor's own upload). */
+const EXAMPLE = "/samples/recolor-example.jpg";
 const TAP_WORDS = { positive: "recolour", negative: "leave out", ask: "Tap what to recolour", frame: "Your photo" };
 
 /** The picture's own size, read by the browser once it loads (the taps are in its pixels). */
@@ -102,6 +105,18 @@ function AddPhoto({ onPick }: { onPick: (v: SlotValue | null) => void }) {
           </PopoverContent>
         </Popover>
       </div>
+      <button
+        type="button"
+        onClick={() => onPick({ ref: "", preview: EXAMPLE, kind: "image", name: "recolor-example.jpg" })}
+        className="mt-1 flex items-center gap-3 rounded-xl border bg-card p-1.5 pr-4 text-left outline-none transition hover:border-border-strong focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={EXAMPLE} alt="" width={64} height={48} className="h-12 w-16 rounded-lg object-cover" />
+        <span>
+          <span className="block text-[13px] font-medium">Try it on this photo</span>
+          <span className="block text-[12px] text-muted-foreground">Tap the dress, then pick a colour</span>
+        </span>
+      </button>
       <input
         id={inputId}
         type="file"
@@ -213,6 +228,8 @@ export function RecolorTool({ app }: { app: { name: string; description: string 
   const [custom, setCustom] = useState("#C98B93");
   const [sending, setSending] = useState(false);
   const create = useCreateGeneration();
+  const askFirst = useAskBeforeUpload();
+  const guest = useIsGuest();
   const frame = useFrame(photo?.preview);
 
   const current = useRef<SlotValue | null>(null);
@@ -225,15 +242,28 @@ export function RecolorTool({ app }: { app: { name: string; description: string 
   }, []);
   useHandoff(take);
 
-  const ready = photo && !photo.uploading && photo.ref ? photo : null;
+  const example = photo?.preview === EXAMPLE && !photo.ref;
+  const ready = photo && !photo.uploading && (photo.ref || example) ? photo : null;
   const taps = points.filter((p) => p.label !== "negative").length;
   const blocker = !ready ? "Add a photo" : !taps ? "Tap the piece you want in a new colour." : !colours.length ? "Pick a colour" : null;
 
   const go = async () => {
     if (blocker || !ready || !frame) return void toast(blocker ?? "Add a photo");
+    // The example photo goes up as the visitor's own picture the first time it runs. A guest is asked to sign up for
+    // the run itself (they added no file of their own); an account that can't add pictures gets the usual card.
+    if (example && guest) return askToSignUp("run");
+    if (example && askFirst()) return;
     setSending(true);
     try {
-      for (const colour of colours) await create.mutateAsync(recolorRequest({ image: ready.ref, points, frame, colour, item }));
+      let image = ready.ref;
+      if (!image) {
+        const blob = await (await fetch(EXAMPLE)).blob();
+        image = (await postFile(new File([blob], "recolor-example.jpg", { type: blob.type || "image/jpeg" }))).url;
+        const sent: SlotValue = { ref: image, preview: EXAMPLE, kind: "image", name: "recolor-example.jpg" };
+        current.current = sent;
+        setPhoto(sent);
+      }
+      for (const colour of colours) await create.mutateAsync(recolorRequest({ image, points, frame, colour, item }));
       toast.success(colours.length > 1 ? `Recolouring in ${colours.length} colours` : "Recolouring");
       document.getElementById("recolor-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {

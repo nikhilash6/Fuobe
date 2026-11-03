@@ -11,7 +11,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
     `
       app-behind-the-scenes app-relight app-macroshot-product app-sketch-to-real app-age-shift app-makeup-studio
       app-angles app-shots app-match-lighting app-match-colors app-product-shot app-bullet-time-scene
-      app-bullet-time-splash app-chameleon app-outfit-swap app-steal-the-look app-outfit-shot app-color-grading
+      app-bullet-time-splash app-chameleon app-outfit-swap app-tap-to-recolor app-steal-the-look app-outfit-shot app-color-grading
       app-video-face-swap app-video-background-remover app-clean-up-voice app-breakdown
     `,
     `
@@ -34,7 +34,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       app-3d-figure app-idol app-60s-cafe app-hook-frame app-kick-ad app-graffiti-ad app-volcano-ad app-simlife
       app-pixel-game app-brick-cube app-micro-beasts app-paint-app app-social-media-icon app-victory-card app-comic-book
       app-glitter-sticker app-mukbang app-roller-coaster app-banana-eating app-sticker-pack app-plushies
-      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi app-tap-to-recolor
+      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi
     `,
   ],
   motion: [

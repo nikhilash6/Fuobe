@@ -3162,8 +3162,8 @@ export const SPEC = [
       'each tap asks for the smallest thing of the piece\'s name under it (Jacket: jacket + clothing; Auto: clothing, bag, shoe, hat, scarf), a Leave out tap takes away a hand, arm, hair, ' +
       'belt, bag strap or necklace under it. SAM 3.1\'s point prompt alone (SAM3_Detect) returned the whole person on every GPU test, so taps go through names. If nothing is found ' +
       'the mask is empty and the photo comes back unchanged (if_nothing "empty mask"); free_vram unloads SAM before the repaint. -> GrowMask maskGrow (1) -> Crop For Inpaint ' +
-      '(context 1.4, blend 2 px, multiple 32, 1.5 MP, bicubic: a tight paste, since a wider one showed a blotchy rim on flat studio backgrounds) -> GrowMask 8 on the crop\'s mask ' +
-      '(the sampling mask: smaller left old-colour specks at the edge) -> StringFormat "{a} Keep everything else in the picture exactly the same." -> TextEncodeQwenImage21 with ' +
+      '(context 1.4, blend 2 px, multiple 32, 1.5 MP, bicubic: a tight paste, since a wider one showed a blotchy rim on flat studio backgrounds) -> GrowMask 16 on the crop\'s mask ' +
+      '(the sampling mask: 8 left a thin line of the old colour along a draped neckline, smaller left old-colour specks at the edge) -> StringFormat "{a} Keep everything else in the picture exactly the same." -> TextEncodeQwenImage21 with ' +
       'the crop as image 1 (resolution 0) -> VAEEncode + SetLatentNoiseMask -> QwenImage21Cache -> KSampler 20 steps, cfg 1, euler, simple (16 looked the same as 25 on the tests) -> ' +
       'SplitImageWithAlpha -> Stitch Inpaint (classic, colour match 0: a tone match would pull the new colour back). Outside the piece the photo is bit-identical. ' +
       'RTX 5090: about 32 s per colour warm at 1.5 MP (target_megapixels 1.0 + 16 steps: 19 s, slightly softer stripes), peak 23 GB. ' +

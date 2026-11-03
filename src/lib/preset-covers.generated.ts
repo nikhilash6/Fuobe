@@ -119,6 +119,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-style-snap": ["bae8cec2","5dbb6995"],
   "app-style-transfer": ["3cf4b327","77efd8f7"],
   "app-talking-photo": ["923f7be1","564d2d8b"],
+  "app-tap-to-recolor": ["f3345bc5","dbcc3189"],
   "app-text-edit": ["4805cf16","7d6b1f6d"],
   "app-this-is-fine": "feb86e48",
   "app-transitions": "7a7e55bb",

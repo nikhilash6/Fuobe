@@ -125,7 +125,7 @@
   },
   "21": {
     "inputs": {
-      "expand": 8,
+      "expand": 16,
       "tapered_corners": true,
       "mask": [
         "20",

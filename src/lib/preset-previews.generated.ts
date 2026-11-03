@@ -877,6 +877,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "minimax-h3",
     "variant": "lean-json"
   },
+  "app-tap-to-recolor": {
+    "poster": "/previews/presets/app-tap-to-recolor.jpg?v=f3345bc5",
+    "video": "/previews/presets/app-tap-to-recolor.mp4?v=dbcc3189",
+    "run": "comfyui-previews-2026-10",
+    "engine": "comfyui",
+    "model": "ideogram4+qwen-image-2.1-edit",
+    "variant": "lean-json"
+  },
   "app-text-edit": {
     "poster": "/previews/presets/app-text-edit.jpg?v=4805cf16",
     "video": "/previews/presets/app-text-edit.mp4?v=7d6b1f6d",
