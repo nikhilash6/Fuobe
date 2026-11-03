@@ -118,7 +118,8 @@ A worker gets a job only when all of these are true, all in one SQLite transacti
 - it is paused in neither place, it is not draining, it is inside its hours, and the studio heard from it in the last
   30 seconds;
 - the job is in its pool, in a lane that the owner allows for it, after the lane's delay and `claim_after_ms`;
-- it has the workflow's files and packs (from its inventory) and enough VRAM;
+- it has the workflow's files and packs (from its inventory) and enough VRAM. A workflow's need is its whole GB less
+  3%, because a card reports a little less than its size (a 32 GB card shows about 31.8 GiB);
 - the retry rule allows it: a worker that lost or failed the job gets it again only when no other worker that can run
   the job was heard from in the last 10 minutes;
 - near the end of its hours, the job's estimate fits before the window closes.

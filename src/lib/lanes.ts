@@ -23,8 +23,19 @@ export interface Needs {
   workflowId: string;
   files: FileNeed[];
   packs: string[];
+  /** The graphics memory a worker must report, with VRAM_TOLERANCE already allowed for. */
   minVramBytes: number;
 }
+
+/**
+ * A card sold as a whole number of GB reports a little less than that (a 32 GB card about 31.8 GiB, a 10 GB card a
+ * few MB under 10 GiB). A workflow's VRAM need allows this much under its whole GB, so such a card takes the lanes made
+ * for its size.
+ */
+export const VRAM_TOLERANCE = 0.03;
+
+/** The graphics memory a workflow of `gb` whole GB needs from a worker, in bytes (3% under the whole GB). */
+export const minVramBytesFor = (gb: number) => Math.round((gb || 0) * 2 ** 30 * (1 - VRAM_TOLERANCE));
 
 type Sha = (text: string) => string;
 
@@ -64,7 +75,7 @@ export function allLanes(index: RequirementIndex, sha: Sha): { lane: string; lab
   return [...by].map(([lane, workflows]) => ({ lane, label: laneLabel(index, lane, sha), workflows })).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** What a workflow's task needs: its default files (folder, name, exact size, sha256 when pinned), packs and VRAM. */
+/** What a workflow's task needs: its default files (folder, name, exact size, sha256 when pinned), packs and VRAM (with the tolerance). */
 export function needsOf(index: RequirementIndex, workflowId: string): Needs | null {
   const wf = index.workflows[workflowId];
   if (!wf) return null;
@@ -72,7 +83,7 @@ export function needsOf(index: RequirementIndex, workflowId: string): Needs | nu
     .map((k) => index.files[k])
     .filter(Boolean)
     .map((f) => ({ folder: f.folder, name: f.file, size: f.sizeBytes, sha256: f.sha256 ?? null }));
-  return { workflowId, files, packs: Object.keys(wf.packs).sort(), minVramBytes: Math.round((wf.vramGb || 0) * 2 ** 30) };
+  return { workflowId, files, packs: Object.keys(wf.packs).sort(), minVramBytes: minVramBytesFor(wf.vramGb) };
 }
 
 /** A worker's verified files and node packs (PUT /api/gpu/computer/inventory). */
