@@ -162,6 +162,8 @@
 //   detectExpand*                         (QWMDetect expand: 0 for the kept marks, whose boxes carry the scan's margin; 20 in auto_qwen)
 //   maxSize*                              (here QWMPrepare max_side on both passes: 1024; 1536 past 3000 px; 768 on a GPU under 16 GB)
 // Output role "quality": a node's JSON verdict on the run (QWMFinal), folded into the image outputs' meta.quality.
+// Output role "scan-tile": a tile's QWMDetect report (the scan's four quarters, in scanTiles order), merged by the provider
+// into the "report" output (mergeScanReports in src/lib/watermark.ts), never a result of its own.
 
 import fs from 'node:fs';
 
@@ -2837,15 +2839,23 @@ export const SPEC = [
     handBuilt: 'hand-built/image-watermark-scan-qwen3vl.json',
     packs: ['ComfyUI-Qwen-Watermark'],
     bindings: { image: [b('1', 'image')] },
-    outputs: [{ node: '23', kind: 'text', role: 'report' }],
+    outputs: [
+      { node: '23', kind: 'text', role: 'report' },
+      { node: '70', kind: 'text', role: 'scan-tile' },
+      { node: '71', kind: 'text', role: 'scan-tile' },
+      { node: '72', kind: 'text', role: 'scan-tile' },
+      { node: '73', kind: 'text', role: 'scan-tile' },
+    ],
     limits: { maxWidth: 4096, maxHeight: 4096 },
     vramGb: 10,
     license: 'Qwen3-VL 8B Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
     notes:
       'The pack\'s detect-only workflow (qwen_watermark_detection.api.json) without its preview and save nodes: QWMDetect auto_qwen reads the picture once with ' +
-      'Qwen3-VL 8B (int8, detection side 1536, up to 2048 tokens so a mark tiled over the photo comes back one box per copy, expand 20, padding 0.35, min confidence 0.65) and PreviewAny shows its report, the only output: JSON ' +
+      'Qwen3-VL 8B (int8, detection side 1536, up to 2048 tokens, expand 20, padding 0.35, min confidence 0.65) and PreviewAny shows its report: JSON ' +
       '{coordinate_space: "pixels", image_size, boxes: [{label, bbox (padded repair box), source_bbox (tight), overlay_type, mask_method, confidence}], ' +
-      'rejected_boxes (below 0.65), status}. The app draws source_bbox and sends the kept boxes to image-watermark-remove-qwen21. ' +
+      'rejected_boxes (below 0.65), status}. Four more QWMDetect read the photo in quarters (ImageCrop, each 4/7 of the width and height from ' +
+      'GetImageSize and ComfyMathExpression a * 4 // 7, so a mark repeated over the photo comes back copy by copy); their reports (role scan-tile) ' +
+      'are merged into the report by the provider (mergeScanReports). The app draws source_bbox and sends the kept boxes to image-watermark-remove-qwen21. ' +
       'The GPU pre-flight also checks image-watermark-remove-qwen21 for a scan (its companion graph).',
   },
   {

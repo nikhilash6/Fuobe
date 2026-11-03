@@ -68,6 +68,8 @@ const ROLES: NonNullable<ManifestOutput["role"]>[] = [
   "orbit",
   // Watermark Remover: the repair's verdict, folded into the picture's meta.
   "quality",
+  // Watermark Remover: the four tiles' scan reports, merged into the whole photo's report.
+  "scan-tile",
 ];
 
 describe("round-4 ComfyUI workflows", () => {

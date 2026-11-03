@@ -127,7 +127,7 @@ describe("3. the ops", () => {
 
 describe("4. the manifest entries", () => {
   it("binds the picture, both seeds, the kept marks, the mode, the size and (brush) the mask", () => {
-    expect(entry(SCAN)).toMatchObject({ capability: "watermark-scan", bindings: { image: [{ node: "1", input: "image" }] }, outputs: [{ node: "23", kind: "text", role: "report" }] });
+    expect(entry(SCAN)).toMatchObject({ capability: "watermark-scan", bindings: { image: [{ node: "1", input: "image" }] }, outputs: [{ node: "23", kind: "text", role: "report" }, ...["70", "71", "72", "73"].map((node) => ({ node, kind: "text", role: "scan-tile" }))] });
     for (const id of [REMOVE, BRUSH]) {
       const e = entry(id);
       expect(e.capability).toBe("watermark-remove");
@@ -152,7 +152,7 @@ describe("4. the manifest entries", () => {
 describe("5. the graph files", () => {
   it("keep only the declared outputs, run the int8 UNET, and route the brush's mask to QWMDetect", () => {
     const outputsOf = (g: ComfyWorkflow) => Object.entries(g).filter(([, n]) => /^(SaveImage|PreviewImage|PreviewAny|MaskPreview)$/.test(n.class_type)).map(([id]) => id).sort();
-    expect(outputsOf(graph(SCAN))).toEqual(["23"]);
+    expect(outputsOf(graph(SCAN))).toEqual(["23", "70", "71", "72", "73"]);
     expect(graph(SCAN)["23"].inputs.source).toEqual(["3", 1]);
     for (const id of [REMOVE, BRUSH]) {
       const g = graph(id);
@@ -392,6 +392,114 @@ describe("10. the scan report, read into regions", () => {
     expect(W.pickRegion([caption, logo], 905, 550, 61)?.id).toBe("logo");
     expect(W.pickRegion([caption, logo], 50, 550, 61)?.id).toBe("caption");
     expect(W.pickRegion([caption, logo], 500, 100, 61)).toBeNull();
+  });
+});
+
+describe("10b. the tiled scan, merged", () => {
+  const rep = (w: number, h: number, boxes: { b: number[]; c?: number; t?: string }[], status = "detected") =>
+    JSON.stringify({
+      coordinate_space: "pixels",
+      image_size: [w, h],
+      boxes: boxes.filter((x) => (x.c ?? 0.9) >= 0.65).map((x) => ({ label: "lumastock", bbox: x.b, source_bbox: x.b, overlay_type: x.t ?? "translucent_text_logo", confidence: x.c ?? 0.9 })),
+      rejected_boxes: boxes.filter((x) => (x.c ?? 0.9) < 0.65).map((x) => ({ label: "lumastock", bbox: x.b, source_bbox: x.b, overlay_type: x.t ?? "text_logo", confidence: x.c })),
+      status,
+    });
+
+  it("cuts the photo in four quarters of 4/7, as the graph does (a*4//7)", () => {
+    expect(W.scanTiles(1536, 1152)).toEqual([
+      [0, 0, 877, 658],
+      [659, 0, 1536, 658],
+      [0, 494, 877, 1152],
+      [659, 494, 1536, 1152],
+    ]);
+    const n = graph("image-watermark-scan-qwen3vl");
+    expect(n["41"].inputs.expression).toBe("a * 4 // 7");
+    expect(n["43"].inputs.expression).toBe("a - a * 4 // 7");
+    expect(["60", "61", "62", "63"].map((id) => n[id].class_type)).toEqual(["QWMDetect", "QWMDetect", "QWMDetect", "QWMDetect"]);
+    expect(entry("image-watermark-scan-qwen3vl").outputs.filter((o) => o.role === "scan-tile").map((o) => o.node)).toEqual(["70", "71", "72", "73"]);
+  });
+
+  it("drops a whole-photo box over the copies for the copies the tiles found, each with the scan's margin", () => {
+    const full = rep(1536, 1152, [{ b: [0, 0, 1536, 1151] }, { b: [1340, 1000, 1500, 1120], t: "text_logo" }]);
+    const tiles = [
+      rep(877, 658, [{ b: [69, 127, 346, 247] }, { b: [591, 127, 868, 247] }]),
+      rep(877, 658, [{ b: [454, 127, 731, 247] }]),
+      rep(877, 658, [{ b: [69, 370, 346, 490] }]),
+      rep(877, 658, [{ b: [681, 506, 841, 626], t: "text_logo" }]),
+    ];
+    const merged = JSON.parse(W.mergeScanReports(full, tiles)!);
+    const tight = merged.boxes.map((b: { source_bbox: number[] }) => b.source_bbox);
+    expect(tight).toEqual([
+      [69, 127, 346, 247],
+      [591, 127, 868, 247],
+      [1113, 127, 1390, 247],
+      [69, 864, 346, 984],
+      [1340, 1000, 1500, 1120],
+    ]);
+    expect(merged.boxes[0].bbox).toEqual(W.padBox([69, 127, 346, 247], "translucent_text_logo", 1536, 1152));
+    expect(merged.status).toBe("detected");
+    const regions = W.parseScanReport(W.mergeScanReports(full, tiles))!.regions;
+    expect(regions.every((r) => r.on)).toBe(true);
+  });
+
+  it("drops a tile's one box over the copies the photo's scan found apart (a 3072 px photo, GPU run)", () => {
+    const six = [
+      [261, 315, 876, 604],
+      [1704, 338, 2320, 604],
+      [906, 1214, 1521, 1480],
+      [2196, 1214, 2811, 1480],
+      [261, 1928, 876, 2194],
+      [1704, 1928, 2320, 2194],
+    ];
+    const full = rep(3072, 2304, six.map((b) => ({ b })));
+    const tiles = [
+      rep(1755, 1316, [{ b: [266, 329, 864, 582] }, { b: [1065, 1151, 1492, 1316] }]),
+      rep(1755, 1316, [{ b: [386, 318, 1141, 602] }, { b: [1140, 1154, 1492, 1315] }]),
+      rep(1755, 1316, [{ b: [907, 180, 1496, 461] }, { b: [273, 921, 855, 1202] }]),
+      rep(1755, 1316, [{ b: [0, 180, 1755, 1315] }]),
+    ];
+    const merged = JSON.parse(W.mergeScanReports(full, tiles)!);
+    const tight: number[][] = merged.boxes.map((b: { source_bbox: number[] }) => b.source_bbox);
+    expect(tight).toHaveLength(6);
+    for (const b of six) expect(tight.some((t) => t[0] <= b[0] && t[1] <= b[1] && t[2] >= b[2] && t[3] >= b[3] && (t[2] - t[0]) * (t[3] - t[1]) < 2 * (b[2] - b[0]) * (b[3] - b[1]))).toBe(true);
+  });
+
+  it("joins a mark cut by a tile's edge and seen whole by the photo's scan", () => {
+    const full = rep(1536, 1152, [{ b: [600, 130, 860, 250] }]);
+    const tiles = [rep(877, 658, [{ b: [600, 130, 877, 250] }]), rep(877, 658, [{ b: [0, 130, 201, 250] }]), rep(877, 658, []), rep(877, 658, [])];
+    const merged = JSON.parse(W.mergeScanReports(full, tiles)!);
+    expect(merged.boxes.map((b: { source_bbox: number[] }) => b.source_bbox)).toEqual([[600, 130, 877, 250]]);
+  });
+
+  it("keeps a less sure mark off, and a photo with no marks clean", () => {
+    const none = rep(1000, 800, [], "no_overlay_detected");
+    const tiles = W.scanTiles(1000, 800).map(([x0, y0, x1, y1]) => rep(x1 - x0, y1 - y0, []));
+    expect(JSON.parse(W.mergeScanReports(none, tiles)!)).toMatchObject({ boxes: [], rejected_boxes: [], status: "no_overlay_detected" });
+    const unsure = [rep(571, 457, [{ b: [10, 10, 60, 40], c: 0.5 }]), ...tiles.slice(1)];
+    const merged = JSON.parse(W.mergeScanReports(none, unsure)!);
+    expect(merged).toMatchObject({ boxes: [], status: "needs_review" });
+    expect(W.parseScanReport(JSON.stringify(merged))!.regions.map((r) => r.on)).toEqual([false]);
+  });
+
+  it("gives the photo's report back as it came when a tile can't be read, and null without one", () => {
+    const full = rep(1536, 1152, [{ b: [10, 10, 100, 60] }]);
+    expect(W.mergeScanReports(full, [null, null, null, null])).toBe(full);
+    expect(W.mergeScanReports(full, ["{", "", "x", "y"])).toBe(full);
+    expect(W.mergeScanReports(null, [full, full, full, full])).toBeNull();
+  });
+
+  it("the provider merges the tiles into the one report the page reads", () => {
+    const full = rep(1536, 1152, [{ b: [0, 0, 1536, 1151] }]);
+    const t = (b: number[][]) => ({ text: [rep(877, 658, b.map((x) => ({ b: x })))] });
+    const outs = collectOutputs(
+      { outputs: { "23": { text: [full] }, "70": t([[69, 127, 346, 247]]), "71": t([[454, 127, 731, 247]]), "72": t([]), "73": t([]) } },
+      entry("image-watermark-scan-qwen3vl"),
+    );
+    expect(outs).toHaveLength(1);
+    expect(W.parseScanReport(outs[0].text)!.regions.map((r) => r.box)).toEqual([
+      [69, 127, 346, 247],
+      [1113, 127, 1390, 247],
+    ]);
   });
 });
 

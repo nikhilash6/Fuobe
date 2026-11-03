@@ -10869,6 +10869,26 @@
           "node": "23",
           "kind": "text",
           "role": "report"
+        },
+        {
+          "node": "70",
+          "kind": "text",
+          "role": "scan-tile"
+        },
+        {
+          "node": "71",
+          "kind": "text",
+          "role": "scan-tile"
+        },
+        {
+          "node": "72",
+          "kind": "text",
+          "role": "scan-tile"
+        },
+        {
+          "node": "73",
+          "kind": "text",
+          "role": "scan-tile"
         }
       ],
       "defaults": {},
@@ -10893,7 +10913,7 @@
       "vramGb": 10,
       "license": "Qwen3-VL 8B Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT",
       "validated": false,
-      "notes": "The pack's detect-only workflow (qwen_watermark_detection.api.json) without its preview and save nodes: QWMDetect auto_qwen reads the picture once with Qwen3-VL 8B (int8, detection side 1536, up to 2048 tokens so a mark tiled over the photo comes back one box per copy, expand 20, padding 0.35, min confidence 0.65) and PreviewAny shows its report, the only output: JSON {coordinate_space: \"pixels\", image_size, boxes: [{label, bbox (padded repair box), source_bbox (tight), overlay_type, mask_method, confidence}], rejected_boxes (below 0.65), status}. The app draws source_bbox and sends the kept boxes to image-watermark-remove-qwen21. The GPU pre-flight also checks image-watermark-remove-qwen21 for a scan (its companion graph)."
+      "notes": "The pack's detect-only workflow (qwen_watermark_detection.api.json) without its preview and save nodes: QWMDetect auto_qwen reads the picture once with Qwen3-VL 8B (int8, detection side 1536, up to 2048 tokens, expand 20, padding 0.35, min confidence 0.65) and PreviewAny shows its report: JSON {coordinate_space: \"pixels\", image_size, boxes: [{label, bbox (padded repair box), source_bbox (tight), overlay_type, mask_method, confidence}], rejected_boxes (below 0.65), status}. Four more QWMDetect read the photo in quarters (ImageCrop, each 4/7 of the width and height from GetImageSize and ComfyMathExpression a * 4 // 7, so a mark repeated over the photo comes back copy by copy); their reports (role scan-tile) are merged into the report by the provider (mergeScanReports). The app draws source_bbox and sends the kept boxes to image-watermark-remove-qwen21. The GPU pre-flight also checks image-watermark-remove-qwen21 for a scan (its companion graph)."
     },
     {
       "id": "image-watermark-remove-qwen21",

@@ -198,6 +198,130 @@ export function parseScanReport(text: string | undefined | null): ScanResult | n
   return { width, height, regions };
 }
 
+/**
+ * The scan reads the photo whole and again in four overlapping quarters (each 4/7 of the width and height, so neighbours
+ * share 1/7): a mark repeated over the photo comes back copy by copy, where one look at the whole photo can draw a single
+ * box around all of them. The scan graph crops the same tiles (GetImageSize, then a*4//7 and a - a*4//7).
+ */
+export function scanTiles(width: number, height: number): Box[] {
+  const tw = Math.floor((width * 4) / 7);
+  const th = Math.floor((height * 4) / 7);
+  return [
+    [0, 0],
+    [width - tw, 0],
+    [0, height - th],
+    [width - tw, height - th],
+  ].map(([x, y]) => [x, y, x + tw, y + th] as Box);
+}
+
+interface ScanItem {
+  label: string;
+  box: Box;
+  type: OverlayType;
+  confidence: number;
+  background: string;
+}
+
+const boxArea = (b: Box) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
+const overlap = (a: Box, b: Box) => boxArea([Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]);
+
+function scanItems(doc: Record<string, unknown>, src: number, dx: number, dy: number, width: number, height: number): ScanItem[] {
+  const out: ScanItem[] = [];
+  for (const list of [doc.boxes, doc.rejected_boxes]) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue;
+      const it = item as { bbox?: unknown; source_bbox?: unknown; overlay_type?: unknown; label?: unknown; confidence?: unknown; background?: unknown };
+      const b = box4(it.source_bbox) ?? box4(it.bbox);
+      const box = b && ordered([b[0] + dx, b[1] + dy, b[2] + dx, b[3] + dy], width, height);
+      if (!box) continue;
+      out.push({ src, label: cleanLabel(it.label), box, type: normalizeType(it.overlay_type), confidence: finite(it.confidence) ? it.confidence : 0.5, background: cleanLabel(it.background) });
+    }
+  }
+  return out;
+}
+
+/**
+ * One report from the whole-photo scan and its four tiles' scans (in scanTiles order): the tiles' marks moved to the
+ * photo's pixels, a whole-photo box that holds two or more of the tiles' marks (or covers most of the photo while the
+ * tiles found marks in it) dropped for them, and the boxes that overlap (one mark seen twice, or cut by a tile's edge)
+ * joined. Each sure mark gets the scan's margin again. The whole-photo report as it came when a tile can't be read; null
+ * when the whole-photo report can't be read.
+ */
+export function mergeScanReports(full: string | undefined | null, tiles: (string | undefined | null)[]): string | null {
+  if (!full) return null;
+  let doc: Record<string, unknown>;
+  try {
+    doc = JSON.parse(full) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const size = Array.isArray(doc?.image_size) && doc.image_size.length === 2 && doc.image_size.every((n) => finite(n) && n > 0) ? (doc.image_size as [number, number]) : null;
+  if (!size) return null;
+  const [width, height] = size;
+  const grid = scanTiles(width, height);
+  if (tiles.length !== grid.length) return full;
+  const tileDocs: Record<string, unknown>[] = [];
+  for (const t of tiles) {
+    try {
+      const d = t ? (JSON.parse(t) as Record<string, unknown>) : null;
+      if (!d || typeof d !== "object") return full;
+      tileDocs.push(d);
+    } catch {
+      return full;
+    }
+  }
+  const found = [...scanItems(doc, 0, 0, 0, width, height), ...tileDocs.flatMap((d, i) => scanItems(d, i + 1, grid[i][0], grid[i][1], width, height))];
+  const frameArea = (src: number) => (src === 0 ? width * height : boxArea(grid[src - 1]));
+  // A box is one look drawing a single box around several marks when the other looks found two or more separate marks
+  // inside it (each under half its size), or one mark inside a box that fills half of what that look saw: dropped for them.
+  const coarse = (a: ScanItem) => {
+    const marks: Box[] = [];
+    for (const b of found) {
+      if (b.src === a.src || overlap(a.box, b.box) < 0.6 * boxArea(b.box) || boxArea(b.box) >= 0.5 * boxArea(a.box)) continue;
+      if (!marks.some((m) => overlap(m, b.box) >= 0.2 * Math.min(boxArea(m), boxArea(b.box)))) marks.push(b.box);
+    }
+    return marks.length >= 2 || (marks.length === 1 && boxArea(a.box) >= 0.5 * frameArea(a.src));
+  };
+  const kept = found.filter((a) => !coarse(a));
+  // Join what overlaps (a fifth of the smaller box), until nothing more joins.
+  let items = kept;
+  for (let joined = true; joined; ) {
+    joined = false;
+    outer: for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const a = items[i];
+        const b = items[j];
+        if (overlap(a.box, b.box) < 0.2 * Math.min(boxArea(a.box), boxArea(b.box))) continue;
+        items[i] = {
+          label: b.label.length > a.label.length ? b.label : a.label,
+          box: [Math.min(a.box[0], b.box[0]), Math.min(a.box[1], b.box[1]), Math.max(a.box[2], b.box[2]), Math.max(a.box[3], b.box[3])],
+          type: a.type === "unknown" || b.type === "translucent_text_logo" ? b.type : a.type,
+          confidence: Math.max(a.confidence, b.confidence),
+          background: a.background || b.background,
+        };
+        items.splice(j, 1);
+        joined = true;
+        break outer;
+      }
+    }
+  }
+  items = items.sort((a, b) => a.box[1] - b.box[1] || a.box[0] - b.box[0]);
+  const entry = (it: ScanItem, sure: boolean) => ({
+    label: it.label || "watermark",
+    bbox: sure ? padBox(it.box, it.type, width, height) : it.box,
+    source_bbox: it.box,
+    overlay_type: it.type,
+    confidence: Math.round(it.confidence * 1e4) / 1e4,
+    ...(it.background && { background: it.background }),
+  });
+  const boxes = items.filter((it) => it.confidence >= SURE).map((it) => entry(it, true));
+  const rejected = items.filter((it) => it.confidence < SURE).map((it) => entry(it, false));
+  const unread = [doc, ...tileDocs].some((d) => d.status === "indeterminate");
+  const status = boxes.length ? (rejected.length ? "needs_review" : "detected") : rejected.length ? "needs_review" : unread ? "indeterminate" : "no_overlay_detected";
+  return JSON.stringify({ coordinate_space: "pixels", image_size: [width, height], boxes, rejected_boxes: rejected, status, source: "auto_qwen_tiled" });
+}
+
 /** The region a tap at (x, y) in pixels picks: the smallest one under it, with a margin so small marks are easy to hit. */
 export function regionAt(regions: Region[], x: number, y: number, margin = 0): Region | null {
   let best: Region | null = null;

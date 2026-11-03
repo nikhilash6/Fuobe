@@ -45,7 +45,7 @@ import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { MOTION_GRAPHS, motionTransferPrompt, neutralPrompt, WORDS_NEEDED } from "@/lib/comfy-prompts";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
-import { checkWatermarkBoxes, COPY as WATERMARK_COPY, MAX_SIDE as MAX_WATERMARK_SIDE, maxSideFor, qualityOf, SCAN_EXPAND as WATERMARK_SCAN_EXPAND, KEPT_EXPAND as WATERMARK_KEPT_EXPAND } from "@/lib/watermark";
+import { checkWatermarkBoxes, COPY as WATERMARK_COPY, MAX_SIDE as MAX_WATERMARK_SIDE, maxSideFor, mergeScanReports, qualityOf, SCAN_EXPAND as WATERMARK_SCAN_EXPAND, KEPT_EXPAND as WATERMARK_KEPT_EXPAND } from "@/lib/watermark";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -519,11 +519,14 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
     .filter((o) => o.role === "quality")
     .map((o) => qualityOf(textsOf(outputs[o.node]).join("\n")))
     .find(Boolean);
+  // The Watermark Remover's tile scans (the photo's four quarters): merged into the whole photo's report, never results.
+  const tileSpecs = declared.filter((o) => o.role === "scan-tile");
+  const tileReports = tileSpecs.map((o) => textsOf(outputs[o.node]).join("\n") || null);
   const files: ComfyOutput[] = [];
   const pick = (type: string) => {
     for (const nodeId of order) {
       const spec: ManifestOutput | undefined = declared.find((o) => o.node === nodeId);
-      if (spec?.role === "language" || spec?.role === "frame" || spec?.role === "quality") continue;
+      if (spec?.role === "language" || spec?.role === "frame" || spec?.role === "quality" || spec?.role === "scan-tile") continue;
       const ui = outputs[nodeId] ?? {};
       const texts = textsOf(ui);
       const found: { key: string; f: HistoryFile }[] = [];
@@ -538,7 +541,8 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
       }
       // A text output with no file (PreviewAny): keep the words.
       if (!found.length && type === "output" && spec?.kind === "text" && texts.length) {
-        const text = texts.join("\n");
+        const joined = texts.join("\n");
+        const text = spec.role === "report" && tileSpecs.length ? (mergeScanReports(joined, tileReports) ?? joined) : joined;
         files.push(textOutput({ url: dataUrl(Buffer.from(text), "text/plain"), kind: "text", contentType: "text/plain" }, text, spec, language));
         continue;
       }

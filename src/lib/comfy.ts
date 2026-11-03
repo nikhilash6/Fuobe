@@ -98,7 +98,9 @@ export interface ManifestOutput {
     | "sweep-mask"
     | "mesh"
     // Watermark Remover: the repair's verdict (QWMFinal), folded into the picture outputs' meta.
-    | "quality";
+    | "quality"
+    // Watermark Remover: a tile's scan report (QWMDetect on a quarter of the photo), merged into the "report" output.
+    | "scan-tile";
 }
 
 export interface ManifestWorkflow {
