@@ -155,7 +155,10 @@ export function HomeBento({ bento }: { bento: Bento }) {
   return (
     <section id="home-bento" aria-labelledby="home-bento-title" className={s.bento}>
       <div className={s.head}>
-        {/* No-break spaces keep "finished film," and "one place." whole when the line wraps. */}
+        {/*
+          No-break spaces keep "finished film," and "one place." whole when the line wraps. The empty end mark tells the
+          stylesheet the second line's words have all arrived (home-bento.css).
+        */}
         <h1 id="home-bento-title" className={s.h1}>
           <span className={s.line1}>Make anything:</span>{" "}
           <span className={s.line2}>
@@ -166,6 +169,7 @@ export function HomeBento({ bento }: { bento: Bento }) {
               </span>{" "}
               in one&nbsp;place.
             </span>
+            <span aria-hidden className={s.end} />
           </span>
         </h1>
         <p className={s.aside}>Film, stills, sound, 3D, live edits and whole pipelines. Each tile opens the studio that makes it.</p>

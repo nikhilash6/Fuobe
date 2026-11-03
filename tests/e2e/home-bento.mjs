@@ -19,6 +19,10 @@
 // 1c. The swap: each tile's still is its clip's first frame (the clip at frame 0 over it differs by under 3 levels in
 //    255 on average), at 390@3x and 1440@2x.
 // 2. Layout shift under 0.01 at 390 and 1440, through a load and a scroll to the bottom and back.
+// 2b. The headline holds still when its parts come late, at 390@3x, 768 and 1440@2x (Chromium): with every font file
+//    2.5 s late, and with the HTML in two parts (cut after the second line's first words, 1.5 s apart, by a proxy) and
+//    the fonts 1.5 s late, no layout shift moves anything in the h1, the cut line stays unseen until whole, and once all
+//    is in, the headline looks as on a quick load (its picture within 1 level in 255 on average).
 // 3. Every tile's link answers 200, and the numbers tile opens every studio (the launcher; a phone's sheet).
 // 4. Reduced motion and Save-Data: no clip is fetched or played, nothing moves by itself (the headline is still, the
 //    split rests at 50 %, the live words stay), and the tiles keep their stills.
@@ -32,7 +36,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { DESKTOP, launch, PHONE, root } from "./_browser.mjs";
+import { DESKTOP, ENGINE, launch, PHONE, root } from "./_browser.mjs";
 
 const args = process.argv.slice(2);
 const app = (args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--shots") ?? "http://localhost:3620").replace(/\/$/, "");
@@ -356,6 +360,154 @@ if (!weightOnly)
     check(`layout shift at ${v.w}: first screen ${r.firstScreen.toFixed(4)}, whole page ${r.cls.toFixed(4)}`, r.firstScreen < 0.01, JSON.stringify(r.shifts.slice(0, 4)));
     notes.push(`CLS ${v.w}: first screen ${r.firstScreen.toFixed(4)}, through a scroll ${r.cls.toFixed(4)}`);
   }
+
+// ------------------------------------------------------------------------------------------- 2b. the headline holds still
+/**
+ * A proxy in front of the app that hands Home's HTML over in two parts, the first ending right after the second line's
+ * first words ("From an idea to a"), with `pauseMs` between them, as a slow network can cut it. Everything else passes
+ * straight through.
+ */
+async function splittingProxy(pauseMs) {
+  const http = await import("node:http");
+  const target = new URL(app);
+  const server = http.createServer((req, res) => {
+    const up = http.request(
+      // No kept-alive sockets (agent: false), so nothing holds the script open once the proxy closes.
+      { host: target.hostname, port: target.port, path: req.url, method: req.method, agent: false, headers: { ...req.headers, host: target.host, connection: "close", "accept-encoding": "identity" } },
+      (upRes) => {
+        const isHome = req.method === "GET" && new URL(req.url, app).pathname === "/" && /text\/html/.test(upRes.headers["content-type"] ?? "");
+        if (!isHome) {
+          res.writeHead(upRes.statusCode, upRes.headers);
+          return void upRes.pipe(res);
+        }
+        const parts = [];
+        upRes.on("data", (c) => parts.push(c));
+        upRes.on("end", () => {
+          const html = Buffer.concat(parts).toString("utf8");
+          const at = html.indexOf(">", html.indexOf('class="hb-line2"')) + 1;
+          const cut = html.startsWith("From an idea to a", at) ? at + "From an idea to a".length : -1;
+          const headers = { ...upRes.headers };
+          delete headers["content-length"];
+          delete headers["content-encoding"];
+          res.writeHead(upRes.statusCode, headers);
+          if (cut < 0) return void res.end(html); // not the markup this check knows: sent whole (the check below then fails)
+          res.write(html.slice(0, cut));
+          server.cut = true;
+          setTimeout(() => res.end(html.slice(cut)), pauseMs);
+        });
+      },
+    );
+    up.on("error", () => res.destroy());
+    // A request the browser drops (a clip still streaming as the context closes) ends its upstream request too.
+    res.on("close", () => up.destroy());
+    req.pipe(up);
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  server.url = `http://127.0.0.1:${server.address().port}`;
+  return server;
+}
+
+/** Every layout shift that moves something in the headline, from the first paint. */
+const watchHeadline = () => {
+  window.__headShifts = [];
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) {
+      const h1 = document.querySelector("#home-bento h1");
+      const moved = (e.sources ?? []).filter((s) => h1 && s.node && h1.contains(s.node));
+      if (moved.length)
+        window.__headShifts.push({
+          v: +e.value.toFixed(4),
+          at: Math.round(e.startTime),
+          what: moved.map((s) => `${(s.node.nodeType === 3 ? s.node.parentElement : s.node).className} ${Math.round(s.previousRect.x)},${Math.round(s.previousRect.y)} -> ${Math.round(s.currentRect.x)},${Math.round(s.currentRect.y)}`),
+        });
+    }
+  }).observe({ type: "layout-shift", buffered: true });
+};
+
+/** The headline's picture once everything is in and still (its rise and glow are over). */
+async function headlineShot(page) {
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(2200);
+  return page.locator("#home-bento h1").screenshot();
+}
+
+if (!weightOnly && ENGINE === "chromium") {
+  const sharp = createRequire(path.join(root, "package.json"))("sharp");
+  const diff = async (a, b) => {
+    const [x, y] = await Promise.all([a, b].map((p) => sharp(p).removeAlpha().raw().toBuffer({ resolveWithObject: true })));
+    if (x.info.width !== y.info.width || x.info.height !== y.info.height) return { size: `${x.info.width}x${x.info.height} vs ${y.info.width}x${y.info.height}`, mean: 255 };
+    let sum = 0;
+    for (let i = 0; i < x.data.length; i++) sum += Math.abs(x.data[i] - y.data[i]);
+    return { mean: sum / x.data.length };
+  };
+  const holdFonts = (page, ms) =>
+    page.route(/\.woff2(\?|$)/, async (r) => {
+      await new Promise((x) => setTimeout(x, ms));
+      await r.continue().catch(() => {});
+    });
+  const FONT_LATE_MS = 2500;
+  const HTML_PAUSE_MS = 1500;
+  for (const v of [WIDTHS[0], WIDTHS[1], WIDTHS[4]]) {
+    const tag = `${v.w}@${v.phone ? 3 : v.w >= 1440 ? 2 : 1}x`;
+    // As it looks on a quick load.
+    const ctx0 = await browser.newContext(viewportOpts(v, { colorScheme: "dark" }));
+    const p0 = await ctx0.newPage();
+    await open(p0);
+    const before = await headlineShot(p0);
+    await ctx0.close();
+
+    // a) Every font file FONT_LATE_MS late.
+    const ctx1 = await browser.newContext(viewportOpts(v, { colorScheme: "dark" }));
+    const p1 = await ctx1.newPage();
+    await p1.addInitScript(watchHeadline);
+    await holdFonts(p1, FONT_LATE_MS);
+    await open(p1);
+    await p1.waitForTimeout(FONT_LATE_MS + 800);
+    const late = await p1.evaluate(() => ({
+      shifts: window.__headShifts,
+      italic: [...document.fonts].some((f) => f.family.replace(/"/g, "") === "Instrument Serif" && f.style === "italic" && f.status === "loaded"),
+      // The italic fallback face (globals.css) joins next/font's fallback family, so it must keep that family's name.
+      fallbackItalic: [...document.fonts].some((f) => f.family.replace(/"/g, "") === "Instrument Serif Fallback" && f.style === "italic"),
+    }));
+    const lateShot = await headlineShot(p1);
+    await ctx1.close();
+    check(`headline at ${tag}, fonts ${FONT_LATE_MS} ms late: nothing in it shifts`, late.shifts.length === 0 && late.italic, JSON.stringify(late.shifts.slice(0, 3)));
+    check(`headline at ${tag}: the italic fallback face is in next/font's fallback family`, late.fallbackItalic);
+    const d1 = await diff(before, lateShot);
+    check(`headline at ${tag}, fonts late: looks as on a quick load`, d1.mean < 1, d1.size ?? `mean difference ${d1.mean.toFixed(2)} of 255`);
+
+    // b) The HTML in two parts (cut after "From an idea to a", HTML_PAUSE_MS apart) and the fonts 1.5 s late.
+    const proxy = await splittingProxy(HTML_PAUSE_MS);
+    const ctx2 = await browser.newContext(viewportOpts(v, { colorScheme: "dark" }));
+    const p2 = await ctx2.newPage();
+    await p2.addInitScript(watchHeadline);
+    await holdFonts(p2, 1500);
+    await p2.goto(proxy.url + "/", { waitUntil: "commit", timeout: 90_000 });
+    // Mid-pause: the second line is cut short, and kept unseen.
+    await p2.waitForSelector("#home-bento .hb-line2", { state: "attached", timeout: 20_000 });
+    await p2.waitForTimeout(HTML_PAUSE_MS / 3);
+    const mid = await p2.evaluate(() => {
+      const l2 = document.querySelector("#home-bento .hb-line2");
+      return { whole: !!l2.querySelector(".hb-end"), text: l2.textContent.trim(), visibility: getComputedStyle(l2).visibility };
+    });
+    await p2.waitForLoadState("load", { timeout: 90_000 });
+    await p2.waitForTimeout(2300);
+    const split = await p2.evaluate(() => window.__headShifts);
+    const splitShot = await headlineShot(p2);
+    await ctx2.close();
+    proxy.closeAllConnections();
+    await new Promise((r) => proxy.close(r));
+    check(
+      `headline at ${tag}, HTML in two parts: the cut second line stays unseen until whole`,
+      proxy.cut && !mid.whole && mid.text === "From an idea to a" && mid.visibility === "hidden",
+      JSON.stringify({ cut: !!proxy.cut, ...mid }),
+    );
+    check(`headline at ${tag}, HTML in two parts and fonts late: nothing in it shifts`, split.length === 0, JSON.stringify(split.slice(0, 3)));
+    const d2 = await diff(before, splitShot);
+    check(`headline at ${tag}, HTML in two parts: looks as on a quick load`, d2.mean < 1, d2.size ?? `mean difference ${d2.mean.toFixed(2)} of 255`);
+    if (shotsDir) for (const [n, b] of [["quick", before], ["fonts-late", lateShot], ["html-parts", splitShot]]) fs.writeFileSync(path.join(shotsDir, `headline-${tag}-${n}.png`), b);
+  }
+}
 
 // ------------------------------------------------------------------------------------------- 3. links
 if (!weightOnly) {

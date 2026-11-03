@@ -135,6 +135,22 @@
   --elevation-heavy: 0 16px 20px oklch(0 0 0 / 36%), 0 8px 16px oklch(0 0 0 / 24%), 0 0 8px oklch(0 0 0 / 24%);
 }
 
+/*
+ * The italic face of next/font's fallback family for Instrument Serif (layout.tsx), which only measures the upright
+ * one: Times New Roman's own italic, scaled to Instrument Serif Italic's width and metrics (its 990/310 of 1000
+ * ascent/descent; the size from Home's second headline line, the same length in both), so text drawn in it while the
+ * face is late takes the same box.
+ */
+@font-face {
+  font-family: "Instrument Serif Fallback";
+  font-style: italic;
+  src: local("Times New Roman Italic"), local("TimesNewRomanPS-ItalicMT");
+  ascent-override: 112.22%;
+  descent-override: 35.14%;
+  line-gap-override: 0%;
+  size-adjust: 88.22%;
+}
+
 @theme inline {
   /* Fonts: variables come from next/font (see 5.3) */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

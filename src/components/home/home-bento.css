@@ -120,6 +120,14 @@
   letter-spacing: -0.01em;
   color: var(--ink-2);
 }
+/*
+ * The page's HTML can arrive in parts, and the browser draws what it has: a second line cut after "From an idea to a"
+ * would sit at the right edge alone, then slide left as the rest comes. It stays unseen until its end mark is in (a
+ * browser without :has() drops the rule and shows it as before).
+ */
+.hb-line2:not(:has(> .hb-end)) {
+  visibility: hidden;
+}
 /* A phone: two lines, the second starting at "finished". */
 .hb-l2b {
   display: block;
