@@ -57,7 +57,8 @@
      */
     --grid-min: 450px;
     --l1-room: calc((var(--content-h) - var(--grid-min) - 16px - var(--head-top) - var(--head-gap)) / 1.33);
-    --l1: min(calc(150px + (100vw - 1024px) * 0.1563), var(--l1-room));
+    /* Never below 96px: in a short window the grid runs on below the fold instead of the headline shrinking away. */
+    --l1: max(96px, min(calc(150px + (100vw - 1024px) * 0.1563), var(--l1-room)));
     --l2: calc(var(--l1) * 0.358);
     /* The headline's height (line 1's box, the gap under its descenders, line 2's box), which the grid takes off the screen's. */
     --bento-head: calc(var(--l1) * 0.986 + var(--l2) * 0.96 + var(--head-gap));
@@ -65,7 +66,7 @@
 }
 @media (min-width: 1280px) {
   .hb-bento {
-    --l1: min(190px, var(--l1-room));
+    --l1: max(96px, min(190px, var(--l1-room)));
   }
 }
 
