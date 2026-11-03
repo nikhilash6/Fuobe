@@ -24,16 +24,16 @@ import {
   MODEL3D_FILM_FEATURE,
   MODEL3D_MODES,
   MODELS_3D,
-  RIG_MODEL,
   SIDE_LABELS,
   SIDES_HINT,
   VIEW_SIDES,
   idolPhotoFor,
   isIdol,
+  MAKE_3D_HINT,
   model3dBlocker,
+  readModel3dLink,
   model3dFor,
   model3dRequest,
-  modeOf,
   type IdolQuality,
   type Model3dInput,
   type Model3dMode,
@@ -70,19 +70,29 @@ const HINTS: Record<Model3dMode, string> = {
 };
 
 /**
- * A link's ?model= (from ⌘K) picks that model, its mode and its engine; ?mode= picks a mode; ?model=meshy-rigging
- * (rigging works on a finished model) says where Rig & animate is. Under its own Suspense: it reads the URL.
+ * A link's ?model= (from ⌘K, or an image result's Make it 3D) picks that model, its mode and its engine; ?mode= picks a
+ * mode; ?model=meshy-rigging (rigging works on a finished model) says where Rig & animate is; ?quality= sets Idol 3D's
+ * look and ?image= fills the photo slot (readModel3dLink). Under its own Suspense: it reads the URL.
  */
-function UrlModel({ onModel, onMode, onRig }: { onModel: (mode: Model3dMode, engine: Engine, id: string) => void; onMode: (mode: Model3dMode) => void; onRig: () => void }) {
+function UrlModel({
+  onModel,
+  onMode,
+  onRig,
+  onImage,
+}: {
+  onModel: (mode: Model3dMode, engine: Engine, id: string, quality?: IdolQuality) => void;
+  onMode: (mode: Model3dMode) => void;
+  onRig: () => void;
+  onImage: (url: string, photo: boolean) => void;
+}) {
   const params = useSearchParams();
-  const id = params.get("model");
-  const mode = params.get("mode");
   useEffect(() => {
-    const found = id ? modeOf(id) : null;
-    if (found && id) onModel(found.mode, found.engine, id);
-    else if (id === RIG_MODEL) onRig();
-    else if (MODEL3D_MODES.some((m) => m.id === mode)) onMode(mode as Model3dMode);
-  }, [id, mode, onModel, onMode, onRig]);
+    const link = readModel3dLink(params);
+    if (link.model) onModel(link.model.mode, link.model.engine, link.model.id, link.quality);
+    else if (link.rig) onRig();
+    else if (link.mode) onMode(link.mode);
+    if (link.image) onImage(link.image, !!link.photo);
+  }, [params, onModel, onMode, onRig, onImage]);
   return null;
 }
 
@@ -226,13 +236,24 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const [refine, setRefine] = useState<Hi3dResolution | null>(null);
   const showRigHint = useCallback(() => setRigHint(true), []);
   const fromUrl = useCallback(
-    (m: Model3dMode, e: Engine, id: string) => {
+    (m: Model3dMode, e: Engine, id: string, quality?: IdolQuality) => {
       setMode(m);
       setPicked((p) => ({ ...p, [`${m}:${e}`]: id }));
+      if (quality && isIdol(id)) setIdolQualities((p) => ({ ...p, [`${m}:${e}`]: quality }));
       setEngine(e);
     },
     [setEngine],
   );
+  // A picture handed over in the link (an image result's Make it 3D): in the slot as a result made here, so Idol's photo
+  // crop starts off (the tighter crop suits a generated picture), or on for an upload (?photo=1).
+  const [handed, setHanded] = useState<string | null>(null);
+  const fromImage = useCallback((url: string, asPhoto: boolean) => {
+    const v: SlotValue = { id: "link", ref: url, preview: url, kind: "image", source: asPhoto ? "upload" : "generation" };
+    lastPhoto.current = v;
+    setPhoto(v);
+    setIdolPhoto(asPhoto);
+    setHanded(url);
+  }, []);
   // Models switched off in Settings → Models & licences leave the menu, and the pick falls back to one that is on.
   const choices = keepOffered(MODELS_3D[mode][engine], (m) => offered(access, m.id, engine));
   const wanted = picked[`${mode}:${engine}`];
@@ -282,7 +303,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   return (
     <ToolShell title="Image to 3D" selfHostedOnly>
       <Suspense fallback={null}>
-        <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} />
+        <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} onImage={fromImage} />
       </Suspense>
       <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]}>
         {visitor && <SelfHostNote className="mt-3 max-w-xl">Image to 3D isn&apos;t available here.</SelfHostNote>}
@@ -414,6 +435,11 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
               </div>
               {!idol && (mode === "image" || mode === "multi") && <RefineOption engine={engine} value={refine} onChange={setRefine} openAllowed={refineAllowed} onUseGpu={() => setEngine("open")} />}
               {idol && <IdolSettings quality={idolQuality} onQuality={setIdolQuality} photo={idolPhoto} onPhoto={setIdolPhoto} />}
+              {idol && engine === "open" && !!handed && photo?.ref === handed && (
+                <p className="mt-3 rounded-xl bg-brand-faint px-3 py-2 text-[12px] text-brand-text" data-testid="make-3d-hint">
+                  {MAKE_3D_HINT}
+                </p>
+              )}
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
               </Button>

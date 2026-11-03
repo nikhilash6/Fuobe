@@ -4,7 +4,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { AssistThread, AssistThreadSummary, AssistThreadView } from "./assist";
-import type { OwnerGpuView, TestProvider } from "./connections";
+import { openEngineReady, type OwnerGpuView, type TestProvider } from "./connections";
 import type { ElementKind, StudioElement } from "./catalog/elements";
 import type { Engine, Generation, GenerationRequest, MediaKind, ReviewStatus } from "./catalog/types";
 import {
@@ -29,7 +29,7 @@ import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folde
 import { markRefusalShown, responseError } from "./refusals";
 import { postFile } from "./upload";
 import type { ShareCreated, ShareInfo, ShareListItem, SharePatch, ShareRequest } from "./share";
-import type { AccessSummary } from "./model-access";
+import { offered, type AccessSummary } from "./model-access";
 import { ADD_KEY_HEADER, isCloudProvider, type CloudProvider } from "./your-keys";
 import { BILLING_EVENT, BILLING_HEADER, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
 
@@ -1047,6 +1047,17 @@ export function useEngine(): [Engine, (e: Engine) => void, EngineMode] {
     [mode],
   );
   return [mode === "both" ? engine : mode, set, mode];
+}
+
+/**
+ * Whether results offer what runs on the owner's open engine (Make it 3D on a picture: Idol 3D on your GPU): the
+ * install runs open models, ComfyUI is connected (or placeholder results are on), the viewer is the owner, and Idol 3D
+ * is switched on in Settings → Models & licences. False until hydrated and while the status is unknown.
+ */
+export function useOpenEngine(): boolean {
+  const hydrated = useHydrated();
+  const status = useStatus().data;
+  return hydrated && openEngineReady(status) && offered(status?.access, "oss-idol", "open");
 }
 
 /** Remember the engine the studios start on, before the mode allows it (an account that just added its own key: Cloud). */

@@ -195,6 +195,16 @@ export function connectedEngines(s: ConnectionState): { cloud: boolean; open: bo
   return { cloud: CLOUD_PROVIDERS.some((p) => s.providers[p]?.configured), open: !!s.providers.comfyui?.configured };
 }
 
+/**
+ * The open engine can run here for whoever is looking: the owner's install runs open models (Engine mode open or both),
+ * and ComfyUI is connected (on a server or the owner's computer) or placeholder results are on. A guest or an account
+ * (`viewer`) gets no 3D yet, so actions that need the owner's open engine (Make it 3D) stay off for them. Unknown: off.
+ */
+export function openEngineReady(s: (ConnectionState & { viewer?: unknown }) | undefined): boolean {
+  if (!s || s.viewer || s.engineMode === "cloud") return false;
+  return s.demoMode === "on" || !!s.providers.comfyui?.configured || !!s.ownerGpu;
+}
+
 /** Nothing this install's engine mode uses is connected, so a run asks to connect one (or makes a placeholder, for a tour). */
 export function nothingConnected(s: ConnectionState): boolean {
   const c = connectedEngines(s);

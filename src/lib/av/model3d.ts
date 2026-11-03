@@ -477,3 +477,39 @@ export function retextureRequest(o: { glb: string; prompt?: string; style?: stri
     ...(o.size && o.size !== "2k" && { params: { extra: { texture_resolution: o.size } } }),
   };
 }
+
+/**
+ * What an Image to 3D link asks for: ?model= (⌘K, Make it 3D) picks a model, its mode and its engine; ?model=meshy-rigging
+ * says where Rig & animate is; else ?mode= picks a mode. ?quality= is Idol 3D's Best or Quick look, ?image= a picture for
+ * the photo slot (a file Fuobe keeps, or an https link), and ?photo=1 says it is a photo (an upload), so Idol's looser
+ * photo crop starts on; a picture handed over from a result starts with it off (idol-5).
+ */
+/** What Make it 3D (quick) on an image result does: shown in the studio with the picture handed over (never "2 s"). */
+export const MAKE_3D_HINT = "Turns this picture into a 3D splat on your GPU and renders a turning preview. Takes tens of seconds on a consumer GPU.";
+
+export interface Model3dLink {
+  model?: { mode: Model3dMode; engine: Engine; id: string };
+  rig?: boolean;
+  mode?: Model3dMode;
+  quality?: IdolQuality;
+  image?: string;
+  photo?: boolean;
+}
+
+export function readModel3dLink(sp: Pick<URLSearchParams, "get">): Model3dLink {
+  const id = sp.get("model");
+  const mode = sp.get("mode");
+  const found = id ? modeOf(id) : null;
+  const out: Model3dLink = {};
+  if (found && id) out.model = { ...found, id };
+  else if (id === RIG_MODEL) out.rig = true;
+  else if (MODEL3D_MODES.some((m) => m.id === mode)) out.mode = mode as Model3dMode;
+  const quality = sp.get("quality");
+  if (quality === "best" || quality === "quick") out.quality = quality;
+  const image = sp.get("image");
+  if (image && /^(\/api\/files\/|https:\/\/)/.test(image) && image.length <= 2048) {
+    out.image = image;
+    out.photo = sp.get("photo") === "1";
+  }
+  return out;
+}
