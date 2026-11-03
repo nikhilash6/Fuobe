@@ -1,8 +1,6 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EpisodeSettings, FacelessEpisode } from "@/lib/catalog/faceless";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Placeholder results are off by default, so a studio's run with nothing connected is refused. In the owner's own
@@ -10,7 +8,7 @@ import type { EpisodeSettings, FacelessEpisode } from "@/lib/catalog/faceless";
  * only the image and video composer: never a 500, an error toast, or a request for something else first.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-connect-studios-"));
+const dir = tempDir("fuobe-connect-studios-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: no ComfyUI, no local text model (the offline writer splits the script).
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -32,7 +30,6 @@ beforeAll(() => setSetting("enhanceProvider", "none"));
 afterAll(() => {
   globalThis.__fuobeDb?.close();
   globalThis.__fuobeDb = undefined;
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const json = (method: string, body?: unknown) =>

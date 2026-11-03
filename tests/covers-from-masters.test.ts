@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /** pnpm eval:covers --from-masters: rendered masters (one folder per preset id) become covers, merged into the manifest. */
 type Entry = { poster: string; video?: string; run: string; engine: string; model: string; variant: string };
@@ -20,8 +20,7 @@ const covers = (await import("../scripts/eval/lib/covers.mjs")) as unknown as {
 };
 const { coversFromMasters, dissolveBack, loopsAlready, readManifest, seamless, versionCovers, withVersions, writeManifest } = covers;
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-covers-masters-"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+const dir = tempDir("fuobe-covers-masters-");
 
 /** A content version as the covers spell it: the first 8 hex digits of the sha256 of these files, one after another. */
 const sha8 = (...files: string[]) => {

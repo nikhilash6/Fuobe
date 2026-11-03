@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   cleanGraph,
   connectionError,
@@ -20,13 +19,14 @@ import {
 } from "@/lib/catalog/canvas";
 import { CLOUD_SPLIT_PROBLEM, SPLIT_MODEL } from "@/lib/av/split";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // Canvas → Split soundtrack (DBS D8): a utility node with four outputs (Dialogue, Music, Effects, Music & effects), each
 // edge carrying its stem on to the next node's chain; OUT stays as Dialogue for boards saved before; DBS on the open
 // engine only, so the node is disabled on the cloud with the reason.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-canvas-split-"));
+const dir = tempDir("fuobe-canvas-split-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -38,11 +38,6 @@ const one = await import("@/app/api/canvases/[id]/route");
 const run = await import("@/app/api/canvases/[id]/run/route");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const at = (x: number) => ({ x, y: 0 });
 const clip: CanvasNode = { id: "clip", type: "video-input", position: at(0), data: { url: "/api/files/uploads/2026-11-01/interview.mp4" } };

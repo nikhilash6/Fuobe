@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { muxWebM, type EncodedFrame } from "@/lib/webm";
+import { tempDir } from "./helpers/temp-dir";
 
 /** The WebM writer behind the browser's path render (N7-5): real VP8 frames in, a file ffmpeg reads frame for frame. */
 
@@ -43,7 +43,7 @@ describe("muxWebM", () => {
   });
 
   it.skipIf(!has("ffmpeg") || !has("ffprobe"))("muxes real VP8 frames into a file ffmpeg decodes frame for frame at the given rate", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-webm-"));
+    const dir = tempDir("fuobe-webm-");
     try {
       const ivf = path.join(dir, "in.ivf");
       execFileSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=96x64:rate=16", "-frames:v", "81", "-c:v", "libvpx", "-g", "30", "-f", "ivf", ivf]);

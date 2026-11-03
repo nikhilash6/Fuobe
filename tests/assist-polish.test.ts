@@ -1,15 +1,15 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import { HUB_MODES } from "@/lib/hubs";
 // Plain .mjs helper shared with the Playwright scripts.
 import { dynamicSamples, hubModePaths, querySamples, studioRoutes } from "./e2e/_routes.mjs";
+import { tempDir } from "./helpers/temp-dir";
 
 const root = process.cwd();
 // The proxy reads the sign-in settings from the data folder: use an empty one (no password).
-process.env.FUOBE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-polish-"));
+process.env.FUOBE_DATA_DIR = tempDir("fuobe-polish-");
 
 describe("/apps/<unknown> is a real 404", () => {
   it("the proxy rewrites unknown app ids to the not-found page with status 404", async () => {
@@ -44,7 +44,7 @@ describe("the 390 px sweep visits dynamic routes", () => {
   });
 
   it("gives a route added later (another branch's /faceless/[id]/[episode]) a not-found sample by itself", () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-routes-"));
+    const tmp = tempDir("fuobe-routes-");
     const page = (rel: string) => {
       fs.mkdirSync(path.join(tmp, "src/app/(studio)", rel), { recursive: true });
       fs.writeFileSync(path.join(tmp, "src/app/(studio)", rel, "page.tsx"), "export default function P() { return null; }\n");

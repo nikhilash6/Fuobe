@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-marketing-"));
+const dir = tempDir("fuobe-marketing-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -97,7 +97,6 @@ beforeAll(async () => {
 });
 afterAll(() => {
   server.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const upload = (name = "product.png") => saveFile({ data: PNG, contentType: "image/png", name, source: "upload" }).url;

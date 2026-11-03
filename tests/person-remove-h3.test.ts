@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
 import { graphLoras, h3Canvas, H3_REMOVAL_WORKFLOW, PERSON_REMOVER_LORA } from "@/lib/catalog/character-swap";
 import { planGeneration } from "@/lib/catalog/plan";
@@ -10,14 +9,14 @@ import type { GenInput } from "@/lib/catalog/types";
 import type { ManifestWorkflow } from "@/lib/comfy";
 import { licenceInfo, nodePack } from "@/lib/licences";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // Remove object's "Remove a person (H3)" (docs/research/openjutsu-6.md §4.4, §11.1 item 9): H3 Relay's Person Removal
 // graph with Akatz Labs' Person Remover LoRA, from a clean first frame, on a clip fitted to 24 fps on the 32 grid.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-person-remove-"));
+const tmp = tempDir("fuobe-person-remove-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../workflows/comfyui/manifest.json"), "utf8")) as { workflows: (ManifestWorkflow & { validationError?: string })[] };
 const entry = manifest.workflows.find((w) => w.id === H3_REMOVAL_WORKFLOW)!;

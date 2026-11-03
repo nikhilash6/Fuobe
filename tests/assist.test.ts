@@ -1,11 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { claudeStream } from "./fixtures/claude-sse";
 import type Anthropic from "@anthropic-ai/sdk";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-assist-"));
+const dir = tempDir("fuobe-assist-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -18,7 +16,6 @@ type Msg = Anthropic.Beta.BetaMessage;
 type Block = Anthropic.Beta.BetaContentBlock;
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const text = (t: string) => ({ type: "text", text: t, citations: null }) as Block;
 const use = (id: string, name: string, input: unknown) => ({ type: "tool_use", id, name, input }) as unknown as Block;

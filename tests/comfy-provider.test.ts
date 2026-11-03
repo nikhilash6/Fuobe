@@ -1,14 +1,12 @@
-import fs from "node:fs";
 import { Worker } from "node:worker_threads";
-import os from "node:os";
-import path from "node:path";
 import zlib from "node:zlib";
-import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ManifestWorkflow } from "@/lib/comfy";
 import type { MediaInfo } from "@/lib/media-probe";
 import type { ModelDef, ModelRoute } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-provider-"));
+const dir = tempDir("fuobe-comfy-provider-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 
@@ -17,7 +15,6 @@ const { comfyProvider, collectOutputs, getWorkflow, loadManifest, mediaInfoFor, 
 const { MODELS } = await import("@/lib/catalog");
 const { computeFrames } = await import("@/lib/comfy");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 // ---------------------------------------------------------------------------
 // fetch + WebSocket stubs

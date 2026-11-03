@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { GenInput, ModelDef } from "@/lib/catalog/types";
 import type { Manifest } from "@/lib/comfy";
 import { H3_GPU_TIER } from "@/lib/gpu/h3-tier";
+import { tempDir } from "./helpers/temp-dir";
 
 // MiniMax H3 as an open video model (text, image and start + end frame to video with sound), the Video studio's first
 // model on both engines, the hosted H3's prices, and the studio defaults that changed with it.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-open-h3-"));
+const dir = tempDir("fuobe-open-h3-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here: open runs fall back to the demo
 
@@ -32,13 +32,6 @@ const { MARKETING_IMAGE_MODEL } = await import("@/lib/catalog/marketing");
 const { modelHref } = await import("@/lib/palette-index");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {
-    // Windows keeps the database file open until the process ends.
-  }
-});
 
 const ROOT = process.cwd();
 const LIB = path.join(ROOT, "workflows/comfyui");

@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
 
 // "Redo from here" end to end in demo mode: an H3 person removal runs through the mock provider (which reports three
 // windows), then POST /api/remove-object/reroll draws it again from one window and puts the sound back as before.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-person-reroll-"));
+const dir = tempDir("fuobe-person-reroll-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -28,7 +28,6 @@ beforeAll(() => {
   setSetting("demoMode", "auto");
   clip = saveFile({ data: fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4")), contentType: "video/mp4", source: "upload", name: "skate.mp4" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 90_000): Promise<Generation> {
   const end = Date.now() + ms;

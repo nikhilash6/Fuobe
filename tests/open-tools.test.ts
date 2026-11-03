@@ -1,16 +1,16 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { GenInput, ModelDef, ModelRoute, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 // Build plan O11 (rebranded open tools, Speak and finishing): Fuobe Angles (Qwen-Image-Edit 2509 + dx8152's
 // Multiple-angles LoRA on both engines, the Angles app's Higgsfield-like controls), Fuobe Speak (InfiniteTalk with
 // Higgsfield's Infinite Talk settings on the GPU, fal's InfiniteTalk) and Fuobe Speak · Motion (Wan 2.2 S2V), Depth
 // Map's Large model as a labelled alternative, the HDR route's LoRA endpoint, and Soul's face mosaic (SAM 3.1 + a
 // mosaic on the GPU, fal's SAM 3.1 masks pixelated in the browser).
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-o11-"));
+const dir = tempDir("fuobe-o11-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here: open runs fall back to the demo
 
@@ -34,7 +34,6 @@ const { accessList } = await import("@/server/model-access");
 const { licenceInfo } = await import("@/lib/licences");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const view = (id: string, engine: "open" | "cloud") => onEngine(getModel(id)!, engine);
 const plan = (r: Parameters<typeof planGeneration>[0], engine: "open" | "cloud") =>

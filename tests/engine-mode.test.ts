@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // Isolated database for this file (must be set before the server modules load).
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-test-"));
+const dir = tempDir("fuobe-test-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here → open models fall back to demo
 
@@ -13,7 +11,6 @@ const { chooseRoute, createGenerations, previewGeneration } = await import("@/se
 const { getModel } = await import("@/lib/catalog");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 describe("engine mode", () => {
   it("defaults to both and rejects invalid values", () => {

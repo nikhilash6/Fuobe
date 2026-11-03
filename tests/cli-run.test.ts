@@ -2,10 +2,10 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { unzip } from "@/server/assist/unzip";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * The fuobe CLI as a child process against a stub of Fuobe's REST API: upload → generate → wait →
@@ -14,7 +14,7 @@ import { unzip } from "@/server/assist/unzip";
 
 const TOKEN = "fuobe_test-token";
 const CLI = path.join(process.cwd(), "bin/fuobe.mjs");
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-cli-run-"));
+const tmp = tempDir("fuobe-cli-run-");
 const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
 
 interface Seen {
@@ -163,7 +163,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise((r) => server.close(r));
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 beforeEach(() => {

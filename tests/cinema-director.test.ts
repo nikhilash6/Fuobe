@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // The AI Director answers questions instead of storyboarding them, and keeps an LLM's prose answer.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-cinema-director-"));
+const dir = tempDir("fuobe-cinema-director-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -15,7 +13,6 @@ vi.mock("@/server/enhance", async (orig) => ({ ...(await orig<typeof import("@/s
 const cinema = await import("@/server/cinema");
 const { askDirector, isQuestion, offlineDirector, prose } = await import("@/server/cinema-director");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const empty = { brief: { title: "", body: "" }, director: {} };
 

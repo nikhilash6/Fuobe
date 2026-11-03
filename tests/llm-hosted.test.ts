@@ -1,11 +1,9 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getLlmModel, getLlmProvider, GEMINI_DUMMY_SIGNATURE, type LlmModelDef } from "@/lib/catalog/llm-providers";
 import { fakeLlm, type FakeLlm, type Mode } from "./helpers/fake-llm";
+import { tempDir } from "./helpers/temp-dir";
 
 /*
  * The hosted providers' Chat Completions path, against fakes that enforce each provider's documented
@@ -15,7 +13,7 @@ import { fakeLlm, type FakeLlm, type Mode } from "./helpers/fake-llm";
  * an account's work, never a key over plain http to a public host).
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-llm-hosted-"));
+const dir = tempDir("fuobe-llm-hosted-");
 process.env.FUOBE_DATA_DIR = dir;
 for (const k of Object.keys(process.env)) if (/_API_KEY$|HF_TOKEN$|^FUOBE_LLM_TEST_BASE$/.test(k)) delete process.env[k];
 
@@ -48,9 +46,6 @@ async function fake(mode: Mode, provider: string = mode): Promise<FakeLlm> {
 afterAll(async () => {
   await Promise.all(fakes.map((f) => f.close()));
   delete process.env.FUOBE_LLM_TEST_BASE;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 /**

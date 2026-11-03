@@ -1,19 +1,16 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { loraEntry, loraRef } from "@/lib/catalog/loras";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import { canTakeLoras, type ComfyWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 // LoRAs on the open engine through the provider: a recipe's LoRA stack on the library graphs (injectLoras after
 // each diffusion model loader, Wan 2.2's high / low-noise experts apart), and graphs that can't take one.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-lora-"));
+const tmp = tempDir("fuobe-comfy-lora-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow, getWorkflow } = await import("@/server/providers/comfyui");
 const { getModel, PRESETS, MOTIONS, EFFECTS } = await import("@/lib/catalog");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 async function prepare(id: string, input: GenInput, op: Operation) {
   return prepareWorkflow(id, { seed: 7, ...input }, { generationId: "g", op, upload: async (_d, _t, name) => `up_${name}`, media: () => undefined, serverRam: async () => undefined });

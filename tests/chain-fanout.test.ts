@@ -1,15 +1,15 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation, GenerationRequest, OutputFile } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // The per-index chain slot (ChainSlot.index): one step per output of a list-making step (fan-out),
 // and one step with a slot per index that gathers them back in order (fan-in).
 
 vi.setConfig({ testTimeout: 90_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-fanout-"));
+const dir = tempDir("fuobe-fanout-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -21,7 +21,6 @@ const { saveFile } = await import("@/server/storage");
 const { db } = await import("@/server/db");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 80_000): Promise<Generation> {
   const end = Date.now() + ms;

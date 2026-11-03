@@ -1,19 +1,16 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getMaker, planGenjutsu } from "@/lib/catalog/genjutsu";
 import { danglingLinks, OPENJUTSU_WORKFLOWS as W } from "@/lib/openjutsu-graphs";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // The comfyui provider driving Genjutsu's Openjutsu graphs: the media bound, the settings written by title, the pictures
 // a request leaves out taken out with their branches, and a Context Loop job's run folder deleted once it ends.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-genjutsu-oj-comfy-"));
+const tmp = tempDir("fuobe-genjutsu-oj-comfy-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow, deleteRunFolder } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const clip: MediaInfo = { container: "mp4", hasVideo: true, hasAudio: true, duration: 6, videoDuration: 6, width: 1308, height: 736, fps: 24, frames: 144 };
 const prepare = (id: string, input: Partial<GenInput>, op: Operation) =>

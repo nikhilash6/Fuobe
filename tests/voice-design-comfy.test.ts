@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Design a voice on your GPU: the Qwen3-TTS and VoxCPM2 graphs, their node packs pinned for the
  * GPU pre-flight, and what the ComfyUI provider binds (the voice in words, what a sample says, VoxCPM2's device).
  */
 
-process.env.FUOBE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-voice-design-comfy-"));
+process.env.FUOBE_DATA_DIR = tempDir("fuobe-voice-design-comfy-");
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
 const root = path.resolve(__dirname, "..");

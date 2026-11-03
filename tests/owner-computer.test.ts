@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { startLocalComfy, type LocalComfy } from "./helpers/fake-local-comfy";
 import { loadRoutes, tab, type ComputerRoutes } from "./helpers/computer-tab";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * The owner's ComfyUI on a hosted studio: an address on the server's own machine or network is never called for a
@@ -15,7 +13,7 @@ import { loadRoutes, tab, type ComputerRoutes } from "./helpers/computer-tab";
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 60_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-owner-computer-"));
+const dir = tempDir("fuobe-owner-computer-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing answers here: no test may reach a real ComfyUI on this machine.
 const DEAD = "http://127.0.0.1:9";
@@ -74,9 +72,6 @@ afterAll(async () => {
   globalThis.fetch = realFetch;
   globalThis.__fuobeTestDiskFree = undefined;
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();

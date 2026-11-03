@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-gpu-"));
+const dir = tempDir("fuobe-account-gpu-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 delete process.env.FUOBE_PASSWORD;
@@ -25,10 +25,6 @@ const { accountRun, OWN_GPU_ONLY } = await import("@/server/generations");
 const { getSetting } = await import("@/server/settings");
 afterAll(() => {
   globalThis.fetch = realFetch;
-  // The database stays open until the worker exits (Windows won't delete it before).
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const publicDns = async () => ["93.184.216.34"];

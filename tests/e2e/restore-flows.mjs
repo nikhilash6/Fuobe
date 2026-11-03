@@ -6,9 +6,9 @@
 // Usage: node tests/e2e/restore-flows.mjs [appUrl] [--shots <dir>]   Exits 1 on a failed check.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { tempDir, removeDir } from "./_temp.mjs";
 
 const argv = process.argv.slice(2);
 const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3440").replace(/\/$/, "");
@@ -23,7 +23,7 @@ const check = (label, ok, extra = "") => {
 const fixture = path.join(root, "tests/fixtures/shorts-12s.mp4");
 // Playwright's Chromium has no H.264 decoder: the Explainer reads its still in the browser, so it gets the clip as a
 // black-and-white VP9 WebM (ffmpeg), which also shows the black-and-white wording.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-restore-e2e-"));
+const tmp = tempDir("fuobe-restore-e2e-");
 const greyWebm = path.join(tmp, "harbour-1930.webm");
 execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", fixture, "-t", "4", "-vf", "hue=s=0", "-c:v", "libvpx-vp9", "-b:v", "200k", "-an", greyWebm]);
 
@@ -167,7 +167,7 @@ try {
   }
 } finally {
   await browser.close();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 }
 
 console.log(failures.length ? `\n${failures.length} failed` : "\nall checks passed");

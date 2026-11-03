@@ -1,8 +1,6 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Product } from "@/lib/catalog/marketing";
+import { tempDir } from "./helpers/temp-dir";
 
 // Click to Ad's animated end card: the rendered clip replaces the still and its push-in, the joins stay. Cloud: the
 // clip gets its silent track (mux) and merge-videos joins it after the ad. Open: one join that keeps the ad's sound,
@@ -10,7 +8,7 @@ import type { Product } from "@/lib/catalog/marketing";
 
 vi.setConfig({ testTimeout: 60_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-c2a-motion-"));
+const dir = tempDir("fuobe-c2a-motion-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -22,11 +20,6 @@ const { saveFile } = await import("@/server/storage");
 const { endCardSteps } = await import("@/lib/catalog/marketing");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(400, 7)]);
 const upload = (name = "p.png") => saveFile({ data: PNG, contentType: "image/png", name, source: "upload" }).url;

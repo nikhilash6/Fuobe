@@ -1,9 +1,7 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import zlib from "node:zlib";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /*
  * The Explainer's PDF and Word sources: .docx text through the bounded unzip (word/document.xml only),
@@ -12,7 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
  */
 
 vi.setConfig({ testTimeout: 60_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-explainer-docs-"));
+const dir = tempDir("fuobe-explainer-docs-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -148,7 +146,6 @@ beforeAll(async () => {
 });
 afterAll(() => {
   ollama.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 beforeEach(async () => {
   asked.length = 0;

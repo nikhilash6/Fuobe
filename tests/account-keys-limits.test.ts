@@ -1,8 +1,6 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { startFakeFal, type FakeCloud } from "./helpers/fake-cloud";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Your keys: every account limit applies to runs on its own key too, before anything reaches the provider: runs at
@@ -10,7 +8,7 @@ import { startFakeFal, type FakeCloud } from "./helpers/fake-cloud";
  */
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-keys-limits-"));
+const dir = tempDir("fuobe-keys-limits-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -41,9 +39,6 @@ afterAll(async () => {
   globalThis.__fuobeTestFalUrl = undefined;
   globalThis.__fuobeTestDiskFree = undefined;
   await fal.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(async () => {
   resetRates();

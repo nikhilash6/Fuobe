@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-glb-safety-"));
+const dir = tempDir("fuobe-glb-safety-");
 process.env.FUOBE_DATA_DIR = path.join(dir, "data");
 process.env.FUOBE_TEST_SECRET = "do-not-pass-this-on";
 const { ACCOUNT_TURNTABLE, finishModel, pendingTurntable, scriptEnv } = await import("@/server/model3d-finish");
@@ -13,9 +13,6 @@ const { createGenerations } = await import("@/server/generations");
 const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
 afterAll(() => {
   delete process.env.FUOBE_TEST_SECRET;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const SCRIPT = path.join(process.cwd(), "scripts", "model3d", "finish-glb.mjs");

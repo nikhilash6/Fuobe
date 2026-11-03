@@ -1,16 +1,11 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-files-route-"));
+const dir = tempDir("fuobe-files-route-");
 process.env.FUOBE_DATA_DIR = dir;
 const { GET } = await import("@/app/api/files/[...path]/route");
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const get = (parts: string[]) => GET(new Request(`http://localhost:3000/api/files/${parts.join("/")}`), { params: Promise.resolve({ path: parts }) } as never);
 

@@ -1,9 +1,7 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 
 // Kinetic Motion results through Fuobe (POST /api/generations/local): the owner records its own clip; an account
 // records only its own clip, made from its own files, as its own run (its list, never the owner's Library), within its
@@ -12,7 +10,7 @@ import { NextRequest } from "next/server";
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 30_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-local-motion-"));
+const dir = tempDir("fuobe-local-motion-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 delete process.env.FUOBE_MODERATION_URL;
@@ -53,9 +51,6 @@ afterEach(() => {
 });
 afterAll(() => {
   moderation?.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from("ftypisom"), Buffer.alloc(200, 1)]);

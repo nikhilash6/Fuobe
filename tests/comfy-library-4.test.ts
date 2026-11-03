@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, Manifest, ManifestOutput, ManifestWorkflow } from "@/lib/comfy";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // The round-4 ComfyUI library (docs/research/comfyui-oss-4.json): the 17 graphs with the bindings and outputs the
 // feature packages drive, and the CausVid licence fix of wan21-vace-14b-ref2v.
@@ -437,11 +437,10 @@ describe("round-4 window graphs: VACE remove / swap / insert and VOID", () => {
 // ---------------------------------------------------------------------------
 // Every round-4 workflow bound for real through the provider (prepareWorkflow → applyBindings on the library graph).
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-library-4-"));
+const tmp = tempDir("fuobe-comfy-library-4-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const GIVEN = new Set(["img1.png", "mask.png", "clip.mp4", "voice.wav", "voice2.wav", "curve.wav"]);
 const portrait: MediaInfo = { container: "mp4", hasVideo: true, hasAudio: true, duration: 8, videoDuration: 8, width: 360, height: 640, fps: 30, frames: 240 };

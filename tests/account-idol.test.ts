@@ -1,8 +1,6 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Idol 3D under public sign-up: 3D models are closed to accounts, so an account's Idol run answers 403
@@ -10,7 +8,7 @@ import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-r
  * nothing reaches its GPU or fal.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-idol-"));
+const dir = tempDir("fuobe-account-idol-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -49,7 +47,6 @@ afterAll(async () => {
   globalThis.__fuobeTestGpuPort = undefined;
   globalThis.__fuobeTestDiskFree = undefined;
   await fake.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const post = (body: unknown) => {

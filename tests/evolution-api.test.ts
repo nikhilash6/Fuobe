@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
 
 // /api/evolution end to end in demo mode (no keys, no ComfyUI, no LLM): a run on either engine becomes one pipeline of
 // ordinary generations that the mock provider runs through; estimates with a fal key price the real hosted VACE route.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-evolution-"));
+const dir = tempDir("fuobe-evolution-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -34,7 +34,6 @@ beforeAll(() => {
   const data = Buffer.alloc(32 * 32 * 4, 200);
   ref = saveFile({ data: encodePng({ width: 32, height: 32, data }), contentType: "image/png", source: "upload", name: "ref.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 90_000): Promise<Generation> {
   const end = Date.now() + ms;

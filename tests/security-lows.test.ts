@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-lows-"));
+const dir = tempDir("fuobe-lows-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -29,11 +29,6 @@ afterEach(() => {
   delete process.env.FUOBE_SELF_ADDRESSES;
   globalThis.__fuobeSelfAddresses = undefined;
   globalThis.__fuobeTestGpuPort = undefined;
-});
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 /** A run of `account` (or the owner's), finished. */

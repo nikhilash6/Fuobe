@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-dropped-migrations-"));
+const dir = tempDir("fuobe-dropped-migrations-");
 process.env.FUOBE_DATA_DIR = dir;
 const file = path.join(dir, "fuobe.db");
 
@@ -15,7 +15,6 @@ afterEach(() => {
   globalThis.__fuobeDb = undefined;
   for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true });
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 // The dropped branch's own places 23 and 24 (claude/fuobe-r5-batch-7 at c9cd489), cut to what they made that matters
 // here: acc-1's people table linked to Better Auth and its append-only audit log, and acc-2's DELETE trigger.

@@ -1,16 +1,14 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import sharp from "sharp";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { ANY_ANGLE, SWEEP, viewOf, wrapYaw } from "@/lib/catalog/any-angle";
+import { tempDir } from "./helpers/temp-dir";
 
 // Any Angle on the server (src/server/any-angle.ts): when a 3D view's build succeeds, its front view is measured on the
 // turntable it rendered and kept on the splat (an angle's camera starts there); a photo's view is found again by the
 // photo's content for the same owner or account, never for someone else, and a build that failed is built again.
 
 vi.setConfig({ testTimeout: 60_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-any-angle-"));
+const dir = tempDir("fuobe-any-angle-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -19,12 +17,6 @@ const { db } = await import("@/server/db");
 const { provider } = await import("@/server/providers");
 const { saveFile } = await import("@/server/storage");
 const { findView, viewKeyOf, requestViewKey, NO_SUBJECT_MESSAGE } = await import("@/server/any-angle");
-
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 /** A figure on a turntable (as in tests/any-angle.test.ts): its body's width, colour and side stripe follow the turn. */
 function figure(size: number, yaw: number): { rgb: Buffer; mask: Buffer } {

@@ -1,10 +1,8 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 /*
  * Local LLM servers besides Ollama: LM Studio, Unsloth Studio and any OpenAI-compatible server
@@ -15,7 +13,7 @@ import type { Generation } from "@/lib/catalog/types";
 
 vi.setConfig({ testTimeout: 60_000 });
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-local-llm-"));
+const dir = tempDir("fuobe-local-llm-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -225,9 +223,6 @@ beforeEach(() => {
 afterAll(() => {
   for (const s of servers) s.close();
   // Windows keeps the open SQLite file locked until the worker exits.
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 // ---------------------------------------------------------------------------

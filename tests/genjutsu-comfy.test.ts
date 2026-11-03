@@ -1,18 +1,15 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getMaker, OPEN_TARGET_PROBLEM, ORIGINALS, planGenjutsu } from "@/lib/catalog/genjutsu";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // The comfyui provider driving Genjutsu's open graphs (Wan 2.1 VACE swap / insert, Wan Animate 2, MiniMax H3's
 // Character swap), bound for real on the library graphs, and planned steps going through it.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-genjutsu-comfy-"));
+const tmp = tempDir("fuobe-genjutsu-comfy-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow, withoutAnchor } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const clip: MediaInfo = { container: "mp4", hasVideo: true, hasAudio: true, duration: 12, videoDuration: 12, width: 1280, height: 720, fps: 30, frames: 360 };
 const prepare = (id: string, input: Partial<GenInput>, op: Operation) =>

@@ -1,15 +1,15 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { userTitle } from "@/lib/library";
 import type { ShareListItem } from "@/lib/share";
 import type { ShareRow } from "@/server/share-access";
+import { tempDir } from "./helpers/temp-dir";
 
 // Route handlers call connection() and the page reads its address from headers() (no request scope in a test).
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
@@ -18,7 +18,7 @@ vi.mock("next/headers", async (importOriginal) => ({
   headers: async () => new Headers({ host: "studio.example:3000", "x-forwarded-proto": "https" }),
 }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-share-"));
+const dir = tempDir("fuobe-share-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 delete process.env.FUOBE_PASSWORD;
@@ -41,7 +41,6 @@ const { SharePage } = await import("@/app/s/share-page");
 const sharePage = await import("@/app/s/[token]/page");
 const filesRoute = await import("@/app/api/files/[...path]/route");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 afterEach(() => {
   vi.restoreAllMocks();
   globalThis.__fuobeShareGuard = undefined;

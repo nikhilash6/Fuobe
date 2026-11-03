@@ -1,15 +1,15 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // Route handlers set the session cookie through cookies() (no request scope in a test): a jar that only records.
 const jar = { set: vi.fn(), delete: vi.fn(), get: vi.fn() };
 vi.mock("next/headers", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/headers")>()), cookies: async () => jar }));
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-sign-in-"));
+const dir = tempDir("fuobe-sign-in-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 process.env.FUOBE_TRUST_PROXY = "1";
@@ -51,9 +51,6 @@ afterEach(() => {
 afterAll(() => {
   delete process.env.FUOBE_PUBLIC_SIGNUP;
   delete process.env.FUOBE_TRUST_PROXY;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 describe("M-1: after sign-in, only pages on this site", () => {

@@ -1,12 +1,12 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-signout-"));
+const dir = tempDir("fuobe-signout-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 delete process.env.FUOBE_PUBLIC_SIGNUP;
@@ -15,9 +15,6 @@ const { proxy } = await import("@/proxy");
 const route = await import("@/app/api/auth/sessions/route");
 afterAll(() => {
   delete process.env.FUOBE_PASSWORD;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const DAY = 86_400_000;

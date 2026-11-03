@@ -1,13 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ManifestWorkflow } from "@/lib/comfy";
 import type { ModelDef, ModelRoute } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 /** Cinema Studio's "Create 3D scene" on both engines: the catalog models, the ComfyUI binding and the outputs. */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-scene3d-"));
+const dir = tempDir("fuobe-scene3d-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 
@@ -19,7 +17,6 @@ const { mockProvider } = await import("@/server/providers/mock");
 const { decodePng } = await import("@/server/png");
 const { buildPointCloud, depthEncoding } = await import("@/lib/scene3d");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const manifestOf = (id: string): ManifestWorkflow => getWorkflow(id).manifest;
 

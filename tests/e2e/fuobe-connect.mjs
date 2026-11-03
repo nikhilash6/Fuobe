@@ -11,17 +11,16 @@
 // reach any other route; an owner API token can't act as a worker; Disconnect in the studio stops the token at its
 // next call.
 import { spawn, spawnSync } from "node:child_process";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { root } from "./_browser.mjs";
+import { tempDir, removeDir, stopProcess } from "./_temp.mjs";
 
 const APP_PORT = Number(process.env.E2E_APP_PORT ?? 3361);
 const FAKE_PORT = Number(process.env.E2E_FAKE_PORT ?? 3362);
 const SITE = `http://127.0.0.1:${APP_PORT}`;
 const FAKE = `http://127.0.0.1:${FAKE_PORT}`;
-const data = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-connect-e2e-"));
+const data = tempDir("fuobe-connect-e2e-");
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ name, ok: !!ok, detail });
@@ -85,11 +84,8 @@ async function account(email) {
 async function finish() {
   for (const c of clients) c.kill();
   fake.kill();
-  server.kill();
-  await sleep(500);
-  try {
-    fs.rmSync(data, { recursive: true, force: true });
-  } catch {}
+  await stopProcess(server);
+  removeDir(data);
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed.`);
   if (failed.length) console.log(serverLog.split("\n").slice(-40).join("\n"));

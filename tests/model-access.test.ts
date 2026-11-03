@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { getModel, MODELS } from "@/lib/catalog";
 import { LORA_LIBRARY } from "@/lib/catalog/lora-library.generated";
 import { loraRef, loraEntry } from "@/lib/catalog/loras";
@@ -9,15 +8,15 @@ import type { ModelDef } from "@/lib/catalog/types";
 import type { Manifest } from "@/lib/comfy";
 import { licenceInfo, loraLicenceInfo, mergeLicences, NODE_PACKS, paidApiLicence, UNKNOWN_LICENCE, workflowLicence } from "@/lib/licences";
 import { accessSummary, ALL_ON, applyChange, firstOffered, gateModel, offered, offMessage, parseAccess, routeOff, type FactsOf } from "@/lib/model-access";
+import { tempDir } from "./helpers/temp-dir";
 
 // The switches live in the settings table: a throwaway database.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-model-access-"));
+const dir = tempDir("fuobe-model-access-");
 process.env.FUOBE_DATA_DIR = dir;
 const { changeAccess, factsOf, isOffered, offeredDefault, offeredLoras, offeredModels, offeredSummary, readAccess, routeLicence } = await import("@/server/model-access");
 const { createGenerations, previewGeneration } = await import("@/server/generations");
 const { setSetting } = await import("@/server/settings");
 const { db } = await import("@/server/db");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/comfyui/manifest.json"), "utf8")) as Manifest;
 const model = (id: string) => getModel(id)!;

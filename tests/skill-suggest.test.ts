@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 60_000 });
@@ -11,7 +9,7 @@ vi.setConfig({ testTimeout: 60_000 });
  * words and files) and offers to save it as a skill, at most once a day, until it's saved or dismissed.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-skill-suggest-"));
+const dir = tempDir("fuobe-skill-suggest-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -26,14 +24,6 @@ const { saveFile } = await import("@/server/storage");
 const { encodePng } = await import("@/server/png");
 const { shapeOf, recipeShapeNodes } = await import("@/lib/recipe");
 const route = await import("@/app/api/skill-suggestions/route");
-
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {
-    // Windows keeps the open database.
-  }
-});
 
 let photo = "";
 beforeAll(() => {

@@ -1,18 +1,15 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getModel } from "@/lib/catalog";
 import { loraEntry, loraRef, fitLoras, loraFields, cloudPath, lorasFit } from "@/lib/catalog/loras";
 import { buildPayload, numFramesValue } from "@/lib/catalog/payload";
 import { estimateCost } from "@/lib/catalog/plan";
 import type { GenInput, LoraRef, ModelRoute } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // The fal adapter reads its key from the settings table: a throwaway database.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-fal-lora-"));
+const dir = tempDir("fuobe-fal-lora-");
 process.env.FUOBE_DATA_DIR = dir;
 const { falProvider } = await import("@/server/providers/fal");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** Submit through the fal adapter and return the URL and JSON body it posted. */
 async function submit(route: ModelRoute, input: GenInput): Promise<{ url: string; body: Record<string, unknown> }> {

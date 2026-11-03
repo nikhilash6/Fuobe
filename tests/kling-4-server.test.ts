@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Kling 4.0's clip limits on the server (nm10-kling-4): an edit keeps the clip's own length, so the clip is held to the
@@ -9,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * before anything goes to fal. No paid call is made: fetch is stubbed and nothing reaches fal.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-kling-4-server-"));
+const dir = tempDir("fuobe-kling-4-server-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -50,9 +48,6 @@ const clip = (seconds: number, width?: number, height?: number) =>
 beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
-});
-afterAll(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 describe("Kling 4.0's clip limits before fal is asked", () => {

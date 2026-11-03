@@ -1,14 +1,12 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
 import { elementDraft, initialDoc, nodesFromOutputs, placeOutput, placeTextBlocks, textBlocksFrom, type LayerDoc, type LayerJob, type LayerJobInput, type LayerProject, type LayerProjectView } from "@/lib/layers";
+import { tempDir } from "./helpers/temp-dir";
 
 // Route handlers are called directly, outside a Next request: connection() has nothing to wait for.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-layers-"));
+const dir = tempDir("fuobe-layers-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -24,7 +22,6 @@ const job = await import("@/app/api/layers/[id]/jobs/[jobId]/route");
 const renders = await import("@/app/api/layers/renders/route");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ctx = (params: Record<string, string>) => ({ params: Promise.resolve(params) }) as any;

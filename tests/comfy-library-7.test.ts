@@ -1,20 +1,19 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, Manifest } from "@/lib/comfy";
 import { getModel } from "@/lib/catalog";
 import { sizeValue } from "@/lib/catalog/payload";
 import { compileMoss } from "@/lib/layout-prompt";
+import { tempDir } from "./helpers/temp-dir";
 
 // Research #7 (docs/research/new-models-7.md §4.4, §4.6): MOSS-Image's core-node graph in the ComfyUI library, its pinned
 // weights, and how the provider fills it (a compiled layout reaches CLIPTextEncode verbatim; Quality / Fast settings).
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-moss-"));
+const tmp = tempDir("fuobe-comfy-moss-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const dir = path.join(process.cwd(), "workflows/comfyui");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as Manifest;

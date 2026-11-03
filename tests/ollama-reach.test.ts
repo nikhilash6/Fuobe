@@ -1,12 +1,10 @@
-import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 30_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-ollama-reach-"));
+const dir = tempDir("fuobe-ollama-reach-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -79,7 +77,6 @@ afterAll(() => {
   Object.assign(REACH, reach);
   server.closeAllConnections();
   server.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 beforeEach(() => {
   delay = 0;

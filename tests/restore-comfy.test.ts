@@ -1,7 +1,4 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
 import { onEngine } from "@/lib/catalog/engines";
 import { loraEntry, loraRef } from "@/lib/catalog/loras";
@@ -10,14 +7,14 @@ import { planGeneration } from "@/lib/catalog/plan";
 import { planRestore, RESTORE, restoreNegative } from "@/lib/catalog/restore";
 import type { GenInput } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // Restore & colourise through the ComfyUI provider (the library graph video-restore-ltx25-tiled, bound for real) and
 // through fal's payload builder (the cloud half's FieldMap from the research).
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-restore-comfy-"));
+const tmp = tempDir("fuobe-restore-comfy-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const scan: MediaInfo = { container: "mp4", hasVideo: true, hasAudio: true, duration: 545 / 24, videoDuration: 545 / 24, width: 640, height: 480, fps: 24, frames: 545 };
 const at = (wf: Record<string, { inputs: Record<string, unknown> }>, node: string, input: string) => wf[node]?.inputs[input];

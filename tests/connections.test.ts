@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { candidateValues, connectionSummary, FIRST_RUN_KEY, FIRST_RUN_SCRIPT, isTestProvider, nothingConnected, PROVIDER_SETTINGS, settingProblem, showFirstRun, type ConnectionState } from "@/lib/connections";
+import { tempDir } from "./helpers/temp-dir";
 
 /** Settings' "Save & test", the first-run guide's rule and the connection status strip (R4-02, R4-03, R4-33). */
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-connections-"));
+const dir = tempDir("fuobe-connections-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -18,7 +18,6 @@ const { POST: testRoute } = await import("@/app/api/providers/test/route");
 const { GET: statusRoute } = await import("@/app/api/status/route");
 const { getSetting, setSetting, withCandidates } = await import("@/server/settings");
 const { starterPriceLine } = await import("@/lib/starter-prices");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** Answer fetches by URL prefix (status, JSON body); remembers each request's URL and headers. */
 async function withFetch<T>(answers: Record<string, [number, unknown]>, fn: () => Promise<T>) {

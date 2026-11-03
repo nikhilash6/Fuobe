@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * The review fixes of the marketing suite: open joins keep the voice, plans on fal and Replicate alone,
@@ -9,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * leftovers, a research bar that never goes back, and the sound-keeping join workflows bound for real.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-marketing-fixes-"));
+const dir = tempDir("fuobe-marketing-fixes-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -66,9 +64,6 @@ const clip = (sound: boolean, w?: number, h?: number) => saveFile({ data: mp4(so
 beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
-});
-afterAll(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const product = (over: Partial<import("@/lib/catalog/marketing").Product> = {}): import("@/lib/catalog/marketing").Product => ({

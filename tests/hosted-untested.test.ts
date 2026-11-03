@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Hosted routes no live call has passed yet (src/lib/catalog/hosted-untested.ts) run for the owner only: an account's
@@ -9,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * model out. A Fuobe Original whose cloud half is untested keeps its open engine.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-hosted-untested-"));
+const dir = tempDir("fuobe-hosted-untested-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -43,9 +41,6 @@ beforeAll(() => {
 afterAll(() => {
   globalThis.fetch = realFetch;
   globalThis.__fuobeTestDiskFree = undefined;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const post = (body: unknown) => {

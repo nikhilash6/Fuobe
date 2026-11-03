@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 60_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-assist-sugg-"));
+const dir = tempDir("fuobe-assist-sugg-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -16,7 +14,6 @@ const { db } = await import("@/server/db");
 const { ASSIST_SUGGESTIONS } = await import("@/lib/assist");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 type Job = Record<string, unknown>;
 const jobsOf = (p: ReturnType<typeof agent.offlinePlan>) => ((p?.input as { jobs?: Job[] }).jobs ?? []) as Job[];

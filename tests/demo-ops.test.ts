@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation, GenerationRequest } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("@/lib/catalog", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/lib/catalog")>();
@@ -13,7 +13,7 @@ vi.mock("@/lib/catalog", async (importOriginal) => {
 });
 vi.setConfig({ testTimeout: 60_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-demo-ops-"));
+const dir = tempDir("fuobe-demo-ops-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -24,7 +24,6 @@ const { contentTypeFor, kindFor, saveFile } = await import("@/server/storage");
 const files = await import("@/app/api/files/[...path]/route");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 40_000): Promise<Generation> {
   const end = Date.now() + ms;

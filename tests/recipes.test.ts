@@ -1,15 +1,15 @@
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // Route handlers call connection() (no request scope in a test).
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 120_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-recipes-"));
+const dir = tempDir("fuobe-recipes-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: open models run on the demo provider, and there's no LLM.
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -31,7 +31,6 @@ const verifyRoute = await import("@/app/api/assist/skills/[name]/verify/route");
 const generationsRoute = await import("@/app/api/generations/route");
 const { handleMcp } = await import("@/server/mcp");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 let photo = "";
 let clip = "";

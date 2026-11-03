@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
 
 // /api/remove-object end to end in demo mode (no keys, no ComfyUI): every way of pointing on both engines
 // becomes one pipeline of ordinary generations, which the mock provider runs through.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-remove-object-"));
+const dir = tempDir("fuobe-remove-object-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -41,7 +41,6 @@ beforeAll(() => {
     }
   mask = saveFile({ data: encodePng({ width: 72, height: 128, data }), contentType: "image/png", source: "upload", name: "mask.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 90_000): Promise<Generation> {
   const end = Date.now() + ms;

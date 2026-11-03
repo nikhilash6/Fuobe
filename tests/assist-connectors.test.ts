@@ -1,13 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { claudeStream } from "./fixtures/claude-sse";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 60_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-assist-conn-"));
+const dir = tempDir("fuobe-assist-conn-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -20,7 +18,6 @@ const lib = await import("@/lib/assist-connectors");
 const listRoute = await import("@/app/api/assist/connectors/route");
 const oneRoute = await import("@/app/api/assist/connectors/[connectorId]/route");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const TOKEN = "sk-live-0123456789abcdef";
 

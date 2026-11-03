@@ -1,22 +1,19 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 import type { MediaInfo } from "@/lib/media-probe";
 import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins";
 import { probeMedia } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // The open engine's Ken Burns, loops and joins through the provider (r4/faceless-plus): canonical params →
 // kenburns-still / audio-loop-crossfade / audio-join-crossfade / video-concat-encoded bindings, the crossfade
 // curve the provider writes, and the joins of more clips than the templates bind.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-faceless-plus-"));
+const tmp = tempDir("fuobe-comfy-faceless-plus-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow, getWorkflow } = await import("@/server/providers/comfyui");
 const { getModel } = await import("@/lib/catalog");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 interface Upload {
   name: string;

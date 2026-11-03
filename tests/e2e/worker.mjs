@@ -14,14 +14,14 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { root } from "./_browser.mjs";
+import { tempDir, removeDir, stopProcess } from "./_temp.mjs";
 
 const APP_PORT = Number(process.env.E2E_APP_PORT ?? 3361);
 const COMFY_PORT = Number(process.env.E2E_FAKE_PORT ?? 3362);
 const SITE = `http://127.0.0.1:${APP_PORT}`;
-const data = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-worker-e2e-"));
+const data = tempDir("fuobe-worker-e2e-");
 const home = path.join(data, "worker-home");
 const workDir = path.join(data, "worker-folder");
 const smiState = path.join(data, "smi.json");
@@ -77,11 +77,8 @@ const cli = (...args) => new Promise((r) => spawn(process.execPath, [path.join(r
 
 async function finish() {
   await stopWorker().catch(() => {});
-  server.kill();
-  await sleep(500);
-  try {
-    fs.rmSync(data, { recursive: true, force: true });
-  } catch {}
+  await stopProcess(server);
+  removeDir(data);
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed.`);
   if (failed.length) console.log(`--- worker\n${workerLog.split("\n").slice(-40).join("\n")}\n--- studio\n${serverLog.split("\n").slice(-30).join("\n")}`);

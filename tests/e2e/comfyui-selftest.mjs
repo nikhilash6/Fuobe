@@ -9,12 +9,12 @@
 // (local server only: COMFYUI_PID, else the "main.py --port <port>" process found with pgrep; COMFYUI_PORT, default 8188).
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
+import { tempDir, removeDir } from "./_temp.mjs";
 
 const app = process.argv[2] ?? "http://localhost:3000";
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-selftest-"));
+const tmp = tempDir("fuobe-selftest-");
 const hasFfprobe = spawnSync("ffprobe", ["-version"]).status === 0;
 const hasFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
 if (!hasFfprobe) console.warn("! ffprobe not found: outputs are checked for kind and size only");
@@ -273,5 +273,5 @@ try {
   await realClip();
   console.log("ComfyUI engine OK");
 } finally {
-  fs.rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 }

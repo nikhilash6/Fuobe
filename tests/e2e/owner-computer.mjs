@@ -17,6 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { launch, root } from "./_browser.mjs";
+import { tempDir, removeDir, stopProcess } from "./_temp.mjs";
 
 const MODE = process.env.E2E_MODE === "local" ? "local" : "hosted";
 const HOSTED = MODE === "hosted";
@@ -29,7 +30,7 @@ const SITE = HOSTED ? `http://studio.test:${APP_PORT}` : `http://127.0.0.1:${APP
 const LOCAL = `http://127.0.0.1:${APP_PORT}`;
 const shots = process.env.E2E_SHOTS ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-owner-computer-shots-"));
 fs.mkdirSync(shots, { recursive: true });
-const data = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-owner-computer-e2e-"));
+const data = tempDir("fuobe-owner-computer-e2e-");
 const PASSWORD = `e2e-${Math.random().toString(36).slice(2)}`;
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -99,11 +100,8 @@ let browser;
 async function finish(code) {
   await browser?.close().catch(() => {});
   for (const port of [...fakes.keys()]) await stopFake(port).catch(() => {});
-  server.kill();
-  await sleep(800);
-  try {
-    fs.rmSync(data, { recursive: true, force: true });
-  } catch {}
+  await stopProcess(server);
+  removeDir(data);
   const failed = results.filter((r) => !r.ok);
   console.log(`\n[${MODE}] ${results.length - failed.length}/${results.length} passed. Screenshots: ${shots}`);
   if (failed.length) console.log(serverLog.split("\n").slice(-30).join("\n"));

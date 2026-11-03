@@ -1,16 +1,16 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { currentSegments, jobState, type SwapProject } from "@/lib/catalog/swap-studio";
 import type { SwapProjectView } from "@/server/swap-studio";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 240_000 });
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
 // Character Swap Studio's API end to end in demo mode (no keys, no ComfyUI): projects, clips, cuts, words, masks,
 // anchors, segments queued with continuations (waiting, launched, stopped), review and the assembly, on both engines.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-swap-studio-"));
+const dir = tempDir("fuobe-swap-studio-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -45,7 +45,6 @@ beforeAll(() => {
   const data = Buffer.alloc(64 * 64 * 4, 200);
   hero = saveFile({ data: encodePng({ width: 64, height: 64, data }), contentType: "image/png", source: "upload", name: "hero.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function view(id: string): Promise<SwapProjectView> {
   const res = await project.GET(req("GET"), ctx(id) as never);

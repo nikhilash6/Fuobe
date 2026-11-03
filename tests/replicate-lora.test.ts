@@ -1,21 +1,18 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getModel, getPreset, PRESETS } from "@/lib/catalog";
 import { fitLoras, loraEntry, loraRef } from "@/lib/catalog/loras";
 import { planGeneration } from "@/lib/catalog/plan";
 import type { Generation, GenInput, LoraRef, ModelRoute } from "@/lib/catalog/types";
 import { onEngine } from "@/lib/catalog/engines";
+import { tempDir } from "./helpers/temp-dir";
 
 // Providers and route choice read keys and preferences from the settings table: a throwaway database.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-replicate-lora-"));
+const dir = tempDir("fuobe-replicate-lora-");
 process.env.FUOBE_DATA_DIR = dir;
 const { replicateProvider } = await import("@/server/providers/replicate");
 const { setSetting } = await import("@/server/settings");
 const { chooseRoute, createGenerations, getGeneration, previewGeneration } = await import("@/server/generations");
 const { changeAccess } = await import("@/server/model-access");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function submit(route: ModelRoute, input: GenInput): Promise<{ url: string; body: Record<string, unknown> }> {
   const real = globalThis.fetch;

@@ -1,15 +1,15 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { TINY_PNG } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 // Route handlers are called directly, outside a Next request: connection() has nothing to wait for.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-admin-tokens-"));
+const dir = tempDir("fuobe-admin-tokens-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -41,9 +41,6 @@ const routes = {
 };
 afterAll(() => {
   delete process.env.FUOBE_PUBLIC_SIGNUP;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 type Scope = (typeof admin.SCOPES)[number];

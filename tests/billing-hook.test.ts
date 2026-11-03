@@ -1,14 +1,13 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { listenInRange, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 // The billing hook (docs/billing-hook.md) and hosted runs, against a stand-in billing service and a stand-in ComfyUI
 // as this install's GPUs. Numbers are arbitrary ("7 units").
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-billing-hook-"));
+const dir = tempDir("fuobe-billing-hook-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -57,9 +56,6 @@ afterAll(async () => {
   delete process.env.FUOBE_BILLING_TOKEN;
   await fake.close();
   await comfy.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const on = () => {

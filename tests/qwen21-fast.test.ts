@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 // docs/research/new-models-10.md §6.7: Qwen-Image 2.1 in 2-6 steps (Options → Speed), on 16 GB
 // cards (Options → GPU, Zen Image Edit's small encoder), with the Texture-Fix VAE (Options → Decoder) and the 2.1
 // Next-Scene LoRA for Storyboard's next frames. All on the open engine: Qwen-Image 2.1 isn't hosted on fal or Replicate.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-qwen21-fast-"));
+const tmp = tempDir("fuobe-qwen21-fast-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -29,7 +29,6 @@ const { qwen21Gpu } = await import("@/server/qwen21-gpu");
 const { writeSnapshot, dropSnapshots } = await import("@/server/gpu/snapshots");
 const { gateGeneration } = await import("@/server/gpu/gate");
 const { EDIT_STUDIO, INPAINT_STUDIO } = await import("@/lib/studios");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const LIBRARY = path.join(process.cwd(), "workflows/comfyui");
 const read = (f: string) => JSON.parse(fs.readFileSync(path.join(LIBRARY, f), "utf8"));

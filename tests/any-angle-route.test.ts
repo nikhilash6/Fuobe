@@ -1,14 +1,12 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TINY_PNG } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 // Any Angle through POST /api/generations: a second build of the same photo answers with the first one (running or
 // done) and gives the run back to the hourly count; one account never gets another's; an account may build the 3D view
 // on its own GPU (other 3D models wait for the server's finish).
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-any-angle-route-"));
+const dir = tempDir("fuobe-any-angle-route-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -38,9 +36,6 @@ beforeAll(() => {
 });
 afterAll(() => {
   globalThis.__fuobeTestDiskFree = undefined;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const headers = (who: string, extra: Record<string, string> = {}) => ({ cookie: cookies[who], host: "localhost:3000", ...extra });

@@ -1,9 +1,7 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { tooLong, type EpisodeSettings } from "@/lib/catalog/faceless";
+import { tempDir } from "./helpers/temp-dir";
 
 /*
  * Faceless Studio and the Explainer with an LLM: channel names, topics, scripts, pictures for a pasted
@@ -12,7 +10,7 @@ import { tooLong, type EpisodeSettings } from "@/lib/catalog/faceless";
  */
 
 vi.setConfig({ testTimeout: 60_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-faceless-llm-"));
+const dir = tempDir("fuobe-faceless-llm-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 // The link below is served by the stand-in on 127.0.0.1.
@@ -97,7 +95,6 @@ beforeAll(async () => {
 });
 afterAll(() => {
   server.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const settings: EpisodeSettings = {

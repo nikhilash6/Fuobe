@@ -1,13 +1,13 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { CinemaGenerateInput } from "@/lib/catalog/cinema";
+import { tempDir } from "./helpers/temp-dir";
 
 /** Blockout to film (package blockout-film): the scene maths, beats, prompts, shots, windows, plans, payloads and the API. */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-blockout-"));
+const dir = tempDir("fuobe-blockout-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -29,7 +29,6 @@ beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const VIDEO = "/api/files/uploads/blockout.webm";
 const DEPTH = "/api/files/uploads/blockout-depth.webm";

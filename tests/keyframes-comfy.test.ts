@@ -1,18 +1,15 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import { keyframeChain, planKeyframeClips } from "@/lib/catalog/keyframes";
+import { tempDir } from "./helpers/temp-dir";
 
 // The open keyframe film's clips through the comfyui provider: each pair's start and end frames and its
 // frame count land in the Wan 2.2 start/end-frame graph exactly as the per-pair plan counted them.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-keyframes-comfy-"));
+const tmp = tempDir("fuobe-keyframes-comfy-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { getWorkflow, prepareWorkflow } = await import("@/server/providers/comfyui");
 const { getModel } = await import("@/lib/catalog");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const prepare = (id: string, input: Partial<GenInput>, op: Operation) =>
   prepareWorkflow(id, { prompt: "a paper boat", aspectRatio: "16:9", resolution: "480p", ...input } as GenInput, { generationId: "g1", op, upload: async (_d, _t, name) => `up_${name}` });

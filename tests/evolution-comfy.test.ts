@@ -1,18 +1,17 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { INTENSITIES, planEvolution } from "@/lib/catalog/evolution";
 import type { GenInput } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // The comfyui provider driving Fuobe Evolution's GPU graph (video-evolution-wan22-fun-vace), bound for real on the
 // library graph, with a planned segment going through it.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-evolution-comfy-"));
+const tmp = tempDir("fuobe-evolution-comfy-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const seg: MediaInfo = { container: "mp4", hasVideo: true, hasAudio: false, duration: 61 / 16, videoDuration: 61 / 16, width: 848, height: 480, fps: 16, frames: 61 };
 const at = (wf: Record<string, { inputs: Record<string, unknown> }>, node: string, input: string) => wf[node]?.inputs[input];

@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * "Start from an example": a run may read Fuobe's published example inputs (src/server/example-files.ts), the same for
@@ -11,7 +11,7 @@ import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-r
  * that steps out of its folder, not a link.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-example-refs-"));
+const dir = tempDir("fuobe-example-refs-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -63,9 +63,6 @@ afterAll(async () => {
   globalThis.__fuobeTestGpuPort = undefined;
   globalThis.__fuobeTestDiskFree = undefined;
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();

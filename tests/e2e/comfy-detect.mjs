@@ -17,6 +17,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { tempDir, removeDir, stopProcess } from "./_temp.mjs";
 
 const APP_PORT = Number(process.env.E2E_APP_PORT ?? 3650);
 const COMFY_OPEN = 18188;
@@ -27,7 +28,7 @@ const DEAD_PORT = 3659;
 const SITE = `http://127.0.0.1:${APP_PORT}`;
 const shots = process.env.E2E_SHOTS ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-detect-shots-"));
 fs.mkdirSync(shots, { recursive: true });
-const data = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-detect-e2e-"));
+const data = tempDir("fuobe-comfy-detect-e2e-");
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ name, ok: !!ok, detail });
@@ -86,11 +87,8 @@ async function finish(code) {
   for (const p of procs) p.kill();
   otherApp.close();
   readableApp.close();
-  server.kill();
-  await sleep(500);
-  try {
-    fs.rmSync(data, { recursive: true, force: true });
-  } catch {}
+  await stopProcess(server);
+  removeDir(data);
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed. Screenshots: ${shots}`);
   if (failed.length) console.log(serverLog.split("\n").slice(-30).join("\n"));

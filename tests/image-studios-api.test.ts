@@ -1,12 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // A route's GET opts out of prerendering with connection(), which needs a request scope.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-image-studios-"));
+const dir = tempDir("fuobe-image-studios-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -40,7 +38,6 @@ const { getModel } = await import("@/lib/catalog");
 beforeAll(() => {
   setSetting("demoMode", "auto");
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const json = (method: string, body?: unknown, url = "http://x/api") =>
   new Request(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });

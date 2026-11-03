@@ -1,15 +1,15 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GenInput, Generation, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, Manifest } from "@/lib/comfy";
 import type { ChatRequest } from "@/server/llm";
+import { tempDir } from "./helpers/temp-dir";
 
 // Ideogram 4 on the open engine: the owner's int8 graph with its Quality / Default / Turbo preset table, and the JSON
 // caption the server writes from the words before the run (lean JSON, src/lib/ideogram-caption.ts).
 vi.setConfig({ testTimeout: 60_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-ideogram4-"));
+const dir = tempDir("fuobe-ideogram4-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here: runs fall back to the demo
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -41,7 +41,6 @@ const { licenceInfo, licenceTerms } = await import("@/lib/licences");
 const { captionFromWords, captionRequest, leanProblems, parseCaption, readCaption, writeCaption } = await import("@/lib/ideogram-caption");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 beforeEach(() => {
   llm.answers = [];
   llm.seen = [];

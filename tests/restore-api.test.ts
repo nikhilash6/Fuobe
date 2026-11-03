@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
 
@@ -21,7 +21,7 @@ vi.mock("@/server/chains", async (original) => {
 
 // /api/restore end to end in demo mode (no keys, no ComfyUI, no LLM): a run on either engine becomes one pipeline of
 // ordinary generations the mock provider runs through; estimates with a fal key price the real LTX-2.3 route.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-restore-"));
+const dir = tempDir("fuobe-restore-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -46,7 +46,6 @@ beforeAll(() => {
   // A 12 s, 16 fps, 72×128 clip with a sound track: 192 frames.
   clip = saveFile({ data: fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4")), contentType: "video/mp4", source: "upload", name: "reel.mp4" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 90_000): Promise<Generation> {
   const end = Date.now() + ms;

@@ -22,12 +22,13 @@ import path from "node:path";
 import sharp from "sharp";
 import { DESKTOP, launch, PHONE, root } from "./_browser.mjs";
 import { startFakeFal } from "../helpers/fake-cloud.ts";
+import { tempDir } from "./_temp.mjs";
 
 const PORT = Number(process.env.KINETIC_PORT ?? 3540);
 const APP = `http://127.0.0.1:${PORT}`;
 const out = path.resolve(process.argv[2] ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-kinetic-")));
 fs.mkdirSync(out, { recursive: true });
-const data = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-kinetic-data-"));
+const data = tempDir("fuobe-kinetic-data-");
 const logFile = path.join(out, "server.log");
 const PASSWORD = "owner password for kinetic";
 const ACCT_FAL = "acct-kinetic-key:acct-kinetic-secret";

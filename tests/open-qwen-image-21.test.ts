@@ -1,13 +1,13 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import { dropBranch, type ComfyWorkflow, type ManifestWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 // Qwen-Image 2.1 and Qwen-Image 2.1 Turbo on the open engine (the owner's SOTA image families, 2026-10-31): text to
 // image, edits with up to four references, inpaint and expand from the owner's workflows and the proven preview graphs.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-qwen21-"));
+const tmp = tempDir("fuobe-qwen21-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow, getWorkflow } = await import("@/server/providers/comfyui");
@@ -15,7 +15,6 @@ const { getModel, getPreset } = await import("@/lib/catalog");
 const { planGeneration } = await import("@/lib/catalog/plan");
 const { licenceInfo, NODE_PACKS, workflowLicence } = await import("@/lib/licences");
 const { KNOWN_MODELS, PACK_CLASSES } = await import("../scripts/comfy/library.spec.mjs");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const LIBRARY = path.join(process.cwd(), "workflows/comfyui");
 const read = (f: string) => JSON.parse(fs.readFileSync(path.join(LIBRARY, f), "utf8"));

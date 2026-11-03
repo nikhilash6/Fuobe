@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { LORA_LIBRARY, LORA_LIBRARY_AS_OF, MOTION_EFFECT_LORAS } from "@/lib/catalog/lora-library.generated";
 import { civitaiVersion, libraryEntry, licenceLine, loraByFile, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
+import { tempDir } from "./helpers/temp-dir";
 
 const ROOT = path.resolve(__dirname, "..");
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -115,7 +115,7 @@ describe("LoRA library (lora-library.generated.ts)", () => {
   });
 
   it("is what the generator writes (no hand edits); the generator refuses broken pins and only notes licences", () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-lora-gen-"));
+    const tmp = tempDir("fuobe-lora-gen-");
     const research = () => JSON.parse(fs.readFileSync(path.join(ROOT, "docs/research/fuobe-originals-recipes-5.json"), "utf8"));
     const refuses = (data: unknown, why: RegExp) => {
       fs.writeFileSync(path.join(tmp, "docs/research/fuobe-originals-recipes-5.json"), JSON.stringify(data));

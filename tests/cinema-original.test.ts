@@ -1,15 +1,15 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { ComfyWorkflow } from "@/lib/comfy";
 import type { GenInput, LoraRef, ModelDef, ModelRoute } from "@/lib/catalog/types";
 import type { DirectorSettings } from "@/lib/catalog/cinema";
+import { tempDir } from "./helpers/temp-dir";
 
 // Fuobe Cinema as a run (build plan O6): one model on both engines. In the cloud the payload fal receives (LTX-2.3 22B,
 // prompt expansion off, camera_lora, exact sizes, frames at 24 fps, the plain endpoint unless a LoRA rides along) and its
 // price; on the user's GPU the Wan 2.2 Lightning graphs, a Fun Camera pose on its graph and a camera LoRA injected.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-cinema-original-"));
+const dir = tempDir("fuobe-cinema-original-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here: open runs fall back to the demo
 
@@ -25,7 +25,6 @@ const { needsToken } = await import("@/lib/catalog/loras");
 const { finishedUrl } = await import("@/lib/soul-post");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const view = (engine: "open" | "cloud") => onEngine(getModel(CINEMA_MODEL)!, engine);
 const fal = (op: string) => view("cloud").routes.find((r) => r.provider === "fal" && r.op === op)!;

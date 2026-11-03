@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { claudeStream } from "./fixtures/claude-sse";
 import { fakeLlm, type FakeLlm, type Mode } from "./helpers/fake-llm";
+import { tempDir } from "./helpers/temp-dir";
 
 /*
  * Assist end to end on hosted providers, against fakes that enforce each provider's rules: Smart on an
@@ -16,7 +14,7 @@ import { fakeLlm, type FakeLlm, type Mode } from "./helpers/fake-llm";
 
 vi.setConfig({ testTimeout: 60_000 });
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-assist-providers-"));
+const dir = tempDir("fuobe-assist-providers-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -52,9 +50,6 @@ beforeEach(disconnect);
 afterAll(async () => {
   await Promise.all(fakes.map((f) => f.close()));
   delete process.env.FUOBE_LLM_TEST_BASE;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const job = { model_id: "nano-banana-pro", prompt: "a red fox in snow, golden hour" };

@@ -1,12 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { LayoutDraft } from "@/lib/layout-prompt";
+import { tempDir } from "./helpers/temp-dir";
 
 // N7-2: a layout run never goes through Fuobe's prompt enhancer (it would rewrite the boxes), even when the request asks
 // for it; a plain prompt still does. Demo mode (no keys, no GPU): the mock provider makes the picture.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-layout-"));
+const dir = tempDir("fuobe-layout-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -23,7 +21,6 @@ const { setSetting } = await import("@/server/settings");
 const { createGenerations, getGeneration, previewGeneration } = await import("@/server/generations");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const poster: LayoutDraft = {
   summary: { caption: "A candle sale poster", meta: [], canvas: "single" },

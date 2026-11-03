@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { keysSeen, startFakeFal, startFakeReplicate, type FakeCloud } from "./helpers/fake-cloud";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Settings → Your keys, the routes: an account adds, checks, replaces and removes its own fal.ai key or Replicate token.
@@ -14,7 +14,7 @@ import { keysSeen, startFakeFal, startFakeReplicate, type FakeCloud } from "./he
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.mock("next/headers", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/headers")>()), cookies: async () => ({ delete: () => {}, get: () => undefined }) }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-keys-routes-"));
+const dir = tempDir("fuobe-keys-routes-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -66,9 +66,6 @@ afterAll(async () => {
   globalThis.__fuobeTestDiskFree = undefined;
   await fal.close();
   await rep.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();

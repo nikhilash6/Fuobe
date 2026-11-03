@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation, GenInput, OutputFile } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // Open-H3 Regenerate 2K (package n7-3-regenerate-2k): the library graph, the model, the provider's strings and frames,
 // the 15 s parts, the draft preset by source, the result actions per source and engine, the cloud re-render at 2K,
@@ -11,7 +11,7 @@ import type { MediaInfo } from "@/lib/media-probe";
 // Regenerate is switched off for now (REGEN_OFFERED); these tests check it as it runs once switched on.
 // tests/regenerate-offered.test.ts checks that nothing offers it while it is off.
 vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-regenerate-"));
+const dir = tempDir("fuobe-regenerate-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 delete process.env.FUOBE_PASSWORD;
@@ -66,7 +66,6 @@ const stored = (seconds: number, width?: number, height?: number) =>
   saveFile({ data: mp4(seconds, width, height), contentType: "video/mp4", name: `regen-${seconds}-${width ?? 1280}x${height ?? 720}.mp4`, source: "upload" }).url;
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const ROOT = path.resolve(__dirname, "..");
 const graph = JSON.parse(fs.readFileSync(path.join(ROOT, "workflows/comfyui/video-regenerate-h3.json"), "utf8")) as Record<

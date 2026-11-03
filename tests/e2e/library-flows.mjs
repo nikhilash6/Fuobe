@@ -7,10 +7,9 @@
 // everything with the tag for good: the results, their files, the folders and the uploads. --keep
 // leaves them, to look at. Exits 1 when a check fails.
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { DESKTOP, launch, openRoute, PHONE } from "./_browser.mjs";
+import { tempDir } from "./_temp.mjs";
 
 const app = (process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "http://localhost:3000").replace(/\/$/, "");
 const keep = process.argv.includes("--keep");
@@ -211,7 +210,7 @@ try {
   await page.getByRole("button", { name: `Actions for ${A.name}` }).click();
   const [download] = await Promise.all([page.waitForEvent("download", { timeout: 20_000 }).catch(() => null), page.getByRole("menuitem", { name: "Download (.zip)" }).click()]);
   if (download) {
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-zip-")), "folder.zip");
+    const file = path.join(tempDir("fuobe-zip-"), "folder.zip");
     await download.saveAs(file);
     const names = execFileSync("python3", ["-I", "-c", "import sys,zipfile;z=zipfile.ZipFile(sys.argv[1]);assert z.testzip() is None;print('|'.join(sorted(z.namelist())))", file]).toString().trim();
     check("the folder zip keeps subfolders as paths", names.includes(`${B.name}/`) && names.includes(`${B.name}/${C.name}/`), names);

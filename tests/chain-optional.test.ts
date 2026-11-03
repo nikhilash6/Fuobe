@@ -1,16 +1,16 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
 import { ANCHOR_FALLBACK } from "@/lib/catalog/character-swap";
+import { tempDir } from "./helpers/temp-dir";
 
 // An optional chain input (ChainSlot.optional, Genjutsu's anchor first frame): when its step fails the step reading it
 // runs without it, with the fallback's prompt, and says so; a retry puts the request back as it was planned.
 
 vi.setConfig({ testTimeout: 90_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-optional-"));
+const dir = tempDir("fuobe-optional-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -22,7 +22,6 @@ const { saveFile } = await import("@/server/storage");
 const { db } = await import("@/server/db");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 80_000): Promise<Generation> {
   const end = Date.now() + ms;

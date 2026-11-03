@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * PR #15's tools under the owner's public sign-up rules (docs/public-signup.md): Split soundtrack (and its Export mix),
@@ -11,7 +11,7 @@ import { NextRequest } from "next/server";
  * owner's library closed, and the GPU pre-flight board lists the tools like main's studios.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-signup-tools-"));
+const dir = tempDir("fuobe-signup-tools-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -32,12 +32,6 @@ const flyAround = await import("@/app/api/fly-around/route");
 const audioTools = await import("@/app/api/audio-tools/route");
 const { STUDIO_ROWS, studioOthers, studioTool, toolFor } = await import("@/server/gpu/tools");
 const { loadIndex } = await import("@/server/gpu/index-file");
-afterAll(() => {
-  // The database stays open until the worker exits (Windows won't delete it before).
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const passed = (r: Response) => r.headers.get("x-middleware-next") === "1";
 

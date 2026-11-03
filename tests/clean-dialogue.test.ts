@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   bedOf,
   CLEAN_DIALOGUE_FEATURE,
@@ -23,11 +22,12 @@ import { estimateCost } from "@/lib/catalog/plan";
 import { getModel } from "@/lib/catalog";
 import { defaultModelForNode, modelChoices } from "@/lib/catalog/canvas";
 import type { Generation, GenInput } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // Clean up dialogue (DBS D5): the plan per engine and cleaner, the cloud cleaners' prices and payloads against their
 // research records, graph C (soundtrack-remix-dbs) in the manifest and its bindings, the hand-offs, and the API in demo
 // mode.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-clean-dialogue-"));
+const dir = tempDir("fuobe-clean-dialogue-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -40,7 +40,6 @@ const { outputActions } = await import("@/lib/output-actions");
 const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const ROOT = path.join(__dirname, "..");
 const json = (f: string) => JSON.parse(fs.readFileSync(path.join(ROOT, f), "utf8"));

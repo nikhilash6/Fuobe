@@ -1,13 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { chooseMaker, makersFor } from "@/lib/catalog/genjutsu";
 import { MOTION_MODELS } from "@/lib/av/katana";
 import { chooseEraser, erasersFor } from "@/lib/catalog/remove-object";
 import { SHORTS_MODELS } from "@/lib/catalog/shorts";
 import { TOOL_MODELS } from "@/lib/layers";
 import { keepOffered, offered } from "@/lib/model-access";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Settings → Models & licences in the studios with their own model menus (Genjutsu, Remove object, Shorts, Layers,
@@ -15,7 +13,7 @@ import { keepOffered, offered } from "@/lib/model-access";
  * gives way to the next one that is on, in the browser (keepOffered + offered) as on the server (firstOn, isOffered).
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-access-studios-"));
+const dir = tempDir("fuobe-access-studios-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 const { changeAccess, firstOn, isOffered } = await import("@/server/model-access");
@@ -24,7 +22,6 @@ const { planKatana } = await import("@/server/katana");
 const { multiplierModel } = await import("@/server/marketing");
 const { withOfferedMusic, withOfferedVideo } = await import("@/server/faceless");
 const { setSetting } = await import("@/server/settings");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 beforeEach(() => {
   changeAccess([{ kind: "reset" }]);

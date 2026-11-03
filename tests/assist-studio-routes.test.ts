@@ -1,11 +1,11 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-assist-studios-"));
+const dir = tempDir("fuobe-assist-studios-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: open models run on the demo provider, and there's no LLM (offline writers run).
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -82,7 +82,6 @@ beforeAll(() => {
   clip = saveFile({ data: fs.readFileSync(fixture), contentType: "video/mp4", source: "upload", name: "beach day.mp4" }).url;
   notAnImage = saveFile({ data: Buffer.from("not a picture at all"), contentType: "image/png", source: "upload", name: "broken.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const scenes = [
   { narration: "Tea began as medicine in the mountains of China.", visual: "A misty mountain tea garden at dawn" },

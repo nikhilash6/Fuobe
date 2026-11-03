@@ -1,18 +1,17 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import zlib from "node:zlib";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { metadataPatches, overlay, patchStream, type Patch } from "@/server/media-clean";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Files on share pages lose the generation data saved inside them (ComfyUI writes its prompt and
  * workflow into PNG text chunks, MP4/WebM/FLAC/MP3/Ogg tags, GLB extras and SVG metadata). Each
  * fixture here is a small, well-formed file of that format carrying SECRET where that tool puts it.
  */
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-clean-"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+const dir = tempDir("fuobe-clean-");
 
 const SECRET = "SECRET violet tiger prompt";
 let n = 0;

@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Kling 4.0's reference clips and clip elements (nm10-kling-4): the server reads each clip's header to price it (input
@@ -9,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * check (account-inputs.ts) and storage's guard on the read (readRef) both refuse another's clip, and an account's
  * @mentions never pull the owner's Elements (their photos or clips) into its run.
  */
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-kling-"));
+const dir = tempDir("fuobe-account-kling-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -30,11 +28,6 @@ beforeAll(() => {
   auth.setPassword("install password");
   a = auth.createAccount("kling-a@example.com", "long enough").id;
   b = auth.createAccount("kling-b@example.com", "long enough").id;
-});
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const CLIP = Buffer.from("not really an mp4, but a stored file");

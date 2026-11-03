@@ -17,13 +17,14 @@ import os from "node:os";
 import path from "node:path";
 import { DESKTOP, launch, PHONE, root } from "./_browser.mjs";
 import { startFakeFal, startFakeReplicate } from "../helpers/fake-cloud.ts";
+import { tempDir, removeDir } from "./_temp.mjs";
 
 const APP_PORT = Number(process.env.BYO_PORT ?? 3390);
 const APP = `http://127.0.0.1:${APP_PORT}`;
 const shots = path.resolve(process.argv[2] ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-byo-shots-")));
 fs.mkdirSync(shots, { recursive: true });
-const data = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-byo-data-"));
-const logFile = path.join(data, "..", `${path.basename(data)}-server.log`);
+const data = tempDir("fuobe-byo-data-");
+const logFile = path.join(shots, "server.log");
 
 const PASSWORD = "owner password for the smoke";
 const OWNER_FAL = "owner-fal-db-key:owner-fal-db-secret";
@@ -244,9 +245,7 @@ try {
 } finally {
   await stopAll();
   console.log(`\nscreenshots: ${shots}\nserver log: ${logFile}`);
-  try {
-    fs.rmSync(data, { recursive: true, force: true });
-  } catch {}
+  removeDir(data);
 }
 if (failures.length) {
   console.log(`\n${failures.length} failed`);

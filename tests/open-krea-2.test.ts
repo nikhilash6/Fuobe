@@ -1,16 +1,16 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, Manifest } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Krea 2 on the open engine (the owner's SOTA image families, 2026-10-31): Realism and Turbo for text to image, the
  * General and Identity Edit V2 LoRAs, image to image at a strength, and Inpaint / Expand on Ostris' edit nodes. Each
  * graph follows the owner's workflow (scripts/comfy/library.spec.mjs notes); the person in Krea 2 Edit is optional.
  */
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-krea2-"));
+const dir = tempDir("fuobe-krea2-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -21,7 +21,6 @@ const { computeDimensions, dropBranch } = await import("@/lib/comfy");
 const { licenceTerms, NODE_PACKS, workflowLicence } = await import("@/lib/licences");
 const { CUSTOM_NODE_REPOS, KNOWN_MODELS, PACK_CLASSES } = await import("../scripts/comfy/library.spec.mjs");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const LIBRARY = path.join(process.cwd(), "workflows/comfyui");
 const read = (f: string) => JSON.parse(fs.readFileSync(path.join(LIBRARY, f), "utf8"));

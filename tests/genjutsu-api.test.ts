@@ -1,17 +1,17 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import http from "node:http";
 import { CLOUD_NO_LORA } from "@/lib/catalog/character-swap";
 import { CLOUD_CLICK_PROBLEM } from "@/lib/catalog/genjutsu";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
 
 // /api/genjutsu end to end in demo mode (no keys, no ComfyUI): each mode on both engines becomes one pipeline of
 // ordinary generations, which the mock provider runs through; estimates with keys set price the real routes.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-genjutsu-"));
+const dir = tempDir("fuobe-genjutsu-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -49,7 +49,6 @@ beforeAll(() => {
   hero = saveFile({ data: px(64, 64, () => true), contentType: "image/png", source: "upload", name: "hero.png" }).url;
   mask = saveFile({ data: px(72, 128, (x, y) => x >= 20 && x < 50 && y >= 80 && y < 110), contentType: "image/png", source: "upload", name: "mask.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 90_000): Promise<Generation> {
   const end = Date.now() + ms;

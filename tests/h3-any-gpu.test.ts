@@ -1,15 +1,15 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 import type { GpuInventory, RequirementIndex } from "@/lib/gpu/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // MiniMax H3 on smaller cards (docs/research/new-models-10.md §6.4): MiniMax H3 on 8-31 GB cards (FastH3 V2 and Trim), the GPU
 // tier decided once per run, the pre-flight checking the graph and file the run loads, the board naming each card's build,
 // and Fast decode (Sol-H3-VAE) on the full model. All on the open engine: the cloud keeps fal's hosted MiniMax H3.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-h3-any-gpu-"));
+const tmp = tempDir("fuobe-h3-any-gpu-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -24,7 +24,6 @@ const { writeSnapshot, dropSnapshots } = await import("@/server/gpu/snapshots");
 const { gateGeneration } = await import("@/server/gpu/gate");
 const { buildViews } = await import("@/server/gpu/readiness-service");
 const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const LIBRARY = path.join(process.cwd(), "workflows/comfyui");
 const read = (f: string) => JSON.parse(fs.readFileSync(path.join(LIBRARY, f), "utf8"));

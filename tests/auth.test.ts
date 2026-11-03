@@ -1,13 +1,12 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-auth-"));
+const dir = tempDir("fuobe-auth-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 const auth = await import("@/server/auth");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 describe("auth", () => {
   it("is off until a password is set", () => {

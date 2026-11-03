@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { corsFlag, fixFor, guessInstall, installFromStats, platformOf, startFile, START_FILE_NAME } from "@/lib/comfy-install";
@@ -11,6 +10,7 @@ import { parseComfyBinary, parseComfyText } from "@/lib/comfy-ws";
 import { tileJob, type LocalJob } from "@/lib/computer-runner";
 import { browserSupport, COMFY_PORTS, firstPorts, graphProblem, lookStrength, localBase, mayDownload, pageCanReach, pickLook, portsToLook, preflightPath, readPath, sameFinder, settled, statsFacts, typedPort, viewPath, writePath, type Finder } from "@/lib/local-comfy";
 import { DONE_SHOWN_MS, duration, jobFraction, jobWords, madeNoun, makingWords, queueWords, RELAY_WORDS, reportAllowed, savingWords, sendingWords, tabFailureWords, type RelayState } from "@/lib/relay";
+import { tempDir } from "./helpers/temp-dir";
 
 const ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
 const OTHER = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
@@ -437,7 +437,7 @@ describe("ComfyUI's one setting", () => {
   it.runIf(process.platform === "win32")("is PowerShell that parses", () => {
     const bat = startFile(8189, "http://127.0.0.1:3370");
     const script = bat.slice(bat.indexOf("#FUOBE-PS"));
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-start-")), "s.ps1");
+    const file = path.join(tempDir("fuobe-start-"), "s.ps1");
     fs.writeFileSync(file, script);
     const out = execFileSync(
       "powershell",

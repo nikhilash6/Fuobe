@@ -1,20 +1,19 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ComfyWorkflow, Manifest } from "@/lib/comfy";
 import { getModel } from "@/lib/catalog";
 import { graphLoras, H3_WORKFLOWS, SWAP_LORAS, TURBO_LORA } from "@/lib/catalog/character-swap";
 import { STUDIO_MODELS, STUDIO_WORKFLOWS } from "@/lib/catalog/swap-studio-plan";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // Character Swap Studio's two ComfyUI graphs (H3 Relay 2.0), bound for real by the provider on the library files.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-swap-studio-comfy-"));
+const tmp = tempDir("fuobe-swap-studio-comfy-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const dir = path.join(process.cwd(), "workflows/comfyui");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as Manifest;

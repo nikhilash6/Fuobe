@@ -1,8 +1,6 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 // Route handlers call connection(); outside a request scope it would throw.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
@@ -12,7 +10,7 @@ vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typ
  * uploads are its own.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-visitors-"));
+const dir = tempDir("fuobe-visitors-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 delete process.env.FUOBE_ALLOWED_ORIGINS;
@@ -23,10 +21,6 @@ const access = await import("@/lib/guest-access");
 const { db } = await import("@/server/db");
 afterAll(() => {
   delete process.env.FUOBE_PUBLIC_SIGNUP;
-  // The database stays open until the worker exits (Windows won't delete it before).
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const passed = (r: Response) => r.headers.get("x-middleware-next") === "1";

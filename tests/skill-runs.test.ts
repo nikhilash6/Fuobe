@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 180_000 });
@@ -12,7 +12,7 @@ vi.setConfig({ testTimeout: 180_000 });
  * the state survives a restart, and the free dry run deletes the studio records it made.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-skill-runs-"));
+const dir = tempDir("fuobe-skill-runs-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -28,14 +28,6 @@ const { recipeProblems, parseRecipe, isStaged } = await import("@/lib/recipe");
 const { runAsDemo, inDemoScope, outsideDemo } = await import("@/server/demo-scope");
 const { spendOf } = await import("@/lib/assist-schedule");
 const tools = await import("@/server/assist/tools");
-
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {
-    // Windows keeps the open database.
-  }
-});
 
 let clip = "";
 beforeAll(() => {

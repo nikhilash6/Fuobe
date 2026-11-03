@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * The hosted catch-up: fal's H3 Max lip sync, relight, insert and five looks, H3 Max Turbo, Vidu Q4, Meshy retexture and
@@ -10,10 +9,9 @@ import { afterAll, describe, expect, it } from "vitest";
  * them. No paid call is made: pure functions and demo mode only.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-hosted-catchup-"));
+const dir = tempDir("fuobe-hosted-catchup-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const { getModel, getPreset, MODELS } = await import("@/lib/catalog");
 const { buildPayload, extractOutputs } = await import("@/lib/catalog/payload");

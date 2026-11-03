@@ -1,16 +1,14 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { MODELS } from "@/lib/catalog";
 import { findModels, toModelInfo } from "@/lib/model-list";
+import { tempDir } from "./helpers/temp-dir";
 
 /** The REST routes the fuobe CLI added: GET /api/models and POST /api/generations?preview=1. */
 
 // Route handlers are called directly, outside a Next request: connection() has nothing to wait for.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-cli-api-"));
+const dir = tempDir("fuobe-cli-api-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -20,7 +18,6 @@ const { listGenerations } = await import("@/server/generations");
 const { setSetting } = await import("@/server/settings");
 // Placeholders where nothing is connected, as the studio once did by default ("auto": code in this process only).
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 type ModelsBody = {
   engineMode: string;

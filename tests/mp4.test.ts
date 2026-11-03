@@ -1,9 +1,9 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { muxMp4 } from "@/lib/mp4";
+import { tempDir } from "./helpers/temp-dir";
 
 /** The browser's MP4 writer (Blockout to film's grey-box render for the cloud): its boxes, and a real decoder reading it. */
 
@@ -64,7 +64,7 @@ describe("muxMp4", () => {
   });
 
   it.skipIf(!hasFfmpeg)("makes a file ffmpeg decodes frame for frame", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-mp4-"));
+    const dir = tempDir("fuobe-mp4-");
     try {
       const raw = path.join(dir, "in.h264");
       execFileSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=64x48:rate=24", "-frames:v", "30", "-c:v", "libx264", "-bf", "0", "-g", "24", "-pix_fmt", "yuv420p", "-x264-params", "aud=1", "-f", "h264", raw]);

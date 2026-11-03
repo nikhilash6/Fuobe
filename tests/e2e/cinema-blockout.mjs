@@ -12,9 +12,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { DESKTOP, PHONE, chromiumPath, loadPlaywright } from "./_browser.mjs";
+import { tempDir, removeDir } from "./_temp.mjs";
 
 const args = process.argv.slice(2);
 const app = (args.find((a) => !a.startsWith("--")) ?? "http://localhost:3440").replace(/\/$/, "");
@@ -48,7 +48,7 @@ const hideDevBadge = (ctx) =>
     }),
   );
 const noSideScroll = async (page, what) => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), 0, `${what}: nothing scrolls sideways`);
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-blockout-e2e-"));
+const tmp = tempDir("fuobe-blockout-e2e-");
 /** Frames and codec of a stored file, read with ffprobe. */
 async function probe(url) {
   const res = await (await api).fetch(app + url);
@@ -237,6 +237,6 @@ try {
   console.error(e);
 } finally {
   await browser.close();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
   process.exit(failed ? 1 : 0);
 }

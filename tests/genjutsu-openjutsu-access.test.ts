@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -11,7 +11,7 @@ vi.setConfig({ testTimeout: 60_000 });
  * an account's price check for it is refused in words (the tab isn't shown to them either); runs and From picture's
  * describer stay the owner's on this server, as every Genjutsu run.
  */
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-genjutsu-oj-access-"));
+const dir = tempDir("fuobe-genjutsu-oj-access-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -29,11 +29,6 @@ const sceneRoute = await import("@/app/api/genjutsu/scene/route");
 const { estimateGenjutsu, NOT_HERE } = await import("@/server/genjutsu");
 const generationsRoute = await import("@/app/api/generations/route");
 const { directRunFeatures } = await import("@/lib/catalog/genjutsu");
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const passed = (r: Response) => r.headers.get("x-middleware-next") === "1";
 const req = (url: string, init: { method?: string; cookie?: string } = {}) => {

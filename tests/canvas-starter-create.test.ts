@@ -1,15 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Canvas } from "@/lib/catalog/canvas";
+import { tempDir } from "./helpers/temp-dir";
 
 // A ready board made by the owner starts with its sample files in place: each input node names a stored copy of the
 // template's sample, the copy is made once and reused, the Library lists don't show it, and the board plans as it is.
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-starter-"));
+const dir = tempDir("fuobe-starter-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -17,12 +16,6 @@ const { CANVAS_TEMPLATES, planCanvas } = await import("@/lib/catalog/canvas");
 const { absolutePath, filesRel, listAssets } = await import("@/server/storage");
 const { sampleFile } = await import("@/server/canvas-samples");
 const list = await import("@/app/api/canvases/route");
-
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const create = async (templateId: string, engine: "open" | "cloud") =>
   (await (await list.POST(new Request("http://localhost/api/canvases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId, engine }) }))).json()) as Canvas;

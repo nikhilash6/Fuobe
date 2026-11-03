@@ -1,21 +1,20 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, Manifest, ManifestWorkflow } from "@/lib/comfy";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { ATTRIBUTIONS, licenceInfo, licenceTerms, nodePack, OPENMDW_NOTICE, workflowLicence } from "@/lib/licences";
 import type { ReuseModel } from "@/lib/av/clean-voice";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // Clean up voice on the open engine: Fuobe's ComfyUI-RE-USE pack in this repository, its two graphs in the manifest, the
 // pinned weights, the install script, the licence rows, and how the provider fills the RE-USE bindings.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-reuse-"));
+const tmp = tempDir("fuobe-comfy-reuse-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { collectOutputs, comfyReuseModels, prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const root = path.resolve(__dirname, "..");
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");

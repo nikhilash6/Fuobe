@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -53,6 +52,7 @@ import { FLAT_SUBJECT, FRAGMENT, LOW_SHORT, packLight, reachAt, subjectDepthOf, 
 import { isHelperFeature } from "@/lib/library";
 import { recordLocalGeneration } from "@/server/generations";
 import { relightToolLive } from "@/server/relight";
+import { tempDir } from "./helpers/temp-dir";
 
 const NEGATION = /\b(no|not|never|nothing|none|without|don't|do not|doesn't|avoid|remove|removed)\b/i;
 const ROOT = path.join(__dirname, "..");
@@ -690,7 +690,7 @@ describe("where Relight lives", () => {
   });
 
   it("opens the tool to everyone once its workflow has passed its check, and keeps the composer until then", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-relight-live-"));
+    const dir = tempDir("fuobe-relight-live-");
     const write = (validated: boolean) => {
       const f = path.join(dir, `m-${validated}.json`);
       fs.writeFileSync(f, JSON.stringify({ workflows: [{ id: RELIGHT_WORKFLOW, validated }, { id: "relight-scene-read", validated: true }] }));

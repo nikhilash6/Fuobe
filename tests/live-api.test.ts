@@ -5,7 +5,6 @@
  * use which route (guests, accounts by their GPU, the owner).
  */
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,11 +12,12 @@ import { NextRequest } from "next/server";
 import { FrameReader, type Frame } from "@/lib/live/frames";
 import { CONNECT_GPU_MESSAGE, GUEST_RUN_MESSAGE, LIBRARY_MESSAGE, accountLive, liveRoute } from "@/lib/guest-access";
 import { startLocalComfy, type IndexLike, type LocalComfy } from "./helpers/fake-local-comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 // Route handlers are called directly, outside a Next request: connection() has nothing to wait for.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-live-api-"));
+const dir = tempDir("fuobe-live-api-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -56,9 +56,6 @@ afterAll(async () => {
   globalThis.__fuobeTestDiskFree = undefined;
   globalThis.__fuobeLiveSocket?.ws?.close();
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => resetRates());
 

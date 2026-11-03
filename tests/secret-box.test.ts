@@ -1,26 +1,20 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Your keys: the box that seals an account's fal.ai key or Replicate token at rest (src/server/secret-box.ts). AES-256-GCM
  * under a server key in data/secrets.key, made once, never derived from the sign-in secret, bound to the account and the
  * provider. A broken key file fails closed: nothing is sealed, nothing opens, and the file is never written over.
  */
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-secret-box-"));
+const dir = tempDir("fuobe-secret-box-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 
 const box = await import("@/server/secret-box");
 const auth = await import("@/server/auth");
 const keyFile = path.join(dir, "secrets.key");
-
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 /** Replace the key file's content, with a new modification time so the server reads it again. */
 // Each rewrite moves the file's time on by a whole second more than the last: two rewrites in the same millisecond

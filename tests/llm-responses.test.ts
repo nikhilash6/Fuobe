@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getLlmModel, getLlmProvider } from "@/lib/catalog/llm-providers";
 import { fakeLlm, type FakeLlm } from "./helpers/fake-llm";
+import { tempDir } from "./helpers/temp-dir";
 
 /*
  * OpenAI direct, on the Responses API (GPT-6.x call tools only there): a stateless request
@@ -13,7 +11,7 @@ import { fakeLlm, type FakeLlm } from "./helpers/fake-llm";
  * stays with its calls (the fake refuses a call without it); and a reply cut off by the output limit.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-llm-responses-"));
+const dir = tempDir("fuobe-llm-responses-");
 process.env.FUOBE_DATA_DIR = dir;
 for (const k of Object.keys(process.env)) if (/_API_KEY$|^FUOBE_LLM_TEST_BASE$/.test(k)) delete process.env[k];
 
@@ -37,9 +35,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await f.close();
   delete process.env.FUOBE_LLM_TEST_BASE;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const sol = () => getLlmModel("openai", "gpt-6.1-sol")!;

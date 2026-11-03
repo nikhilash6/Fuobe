@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-storyboard-name-"));
+const dir = tempDir("fuobe-storyboard-name-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -17,7 +15,6 @@ beforeAll(() => {
   // No prompt LLM: the story is split by the offline shot list.
   setSetting("enhanceProvider", "none");
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const batchTitle = (id: string) => (gens.getGeneration(id)!.request as { batchTitle?: string }).batchTitle;
 

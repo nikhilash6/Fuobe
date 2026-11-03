@@ -1,13 +1,13 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Your keys: where an account's own fal.ai key or Replicate token is kept. Sealed on its record in auth.json, never in
  * plain text in any file of the data folder, shown only by its last 4 characters, gone with the account.
  */
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-keys-"));
+const dir = tempDir("fuobe-account-keys-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 delete process.env.FUOBE_ENGINE_MODE;
@@ -39,11 +39,6 @@ beforeAll(() => {
   auth.setPassword("install password");
   a = auth.createAccount("keys-a@example.com", "long enough").id;
   b = auth.createAccount("keys-b@example.com", "long enough").id;
-});
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 describe("an account's own keys, at rest", () => {

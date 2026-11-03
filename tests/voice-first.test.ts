@@ -1,17 +1,17 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { planVoiceFirst, voiceFirstCost, voiceFirstDefault, voiceFirstSource, wantsVoiceFirst, VOICE_FIRST_PARAM } from "@/lib/av/voice-first";
 import { transcribeRequest } from "@/lib/av/captions";
 import { planTranscribe } from "@/lib/catalog/swap-studio-plan";
 import type { GenerationRequest } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // "Clean the voice first" (DBS D6): the speech apart from the music and effects before a transcriber or a lip sync hears
 // it (DBS on your GPU, ElevenLabs voice isolation in the cloud), and after a lip re-sync on your GPU the music and effects
 // of the same recording go back under it. The studio owner's until it has passed a real run.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-voice-first-"));
+const dir = tempDir("fuobe-voice-first-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 delete process.env.FUOBE_PASSWORD;
@@ -27,11 +27,6 @@ const { soundLive } = await import("@/server/sound-live");
 beforeAll(() => setSetting("demoMode", "auto"));
 afterEach(() => {
   delete process.env.FUOBE_PUBLIC_SIGNUP;
-});
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const flag = { extra: { [VOICE_FIRST_PARAM]: true } };
@@ -124,7 +119,7 @@ describe("runs (demo mode)", () => {
 describe("public sign-up: the studio owner's until it has passed a real run", () => {
   it("starts closed in this repository, and opens only with a validated graph and a passed run", () => {
     expect(soundLive()).toEqual({ "clean-voice-first": false, "original-sound": false });
-    const d = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-sound-live-"));
+    const d = tempDir("fuobe-sound-live-");
     const files = (validated: boolean, passed: boolean) => {
       fs.writeFileSync(path.join(d, "m.json"), JSON.stringify({ workflows: [{ id: "separate-soundtrack-dbs", validated }] }));
       fs.writeFileSync(path.join(d, "r.json"), JSON.stringify({ features: { "clean-voice-first": { passed } } }));

@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { GpuWatch, othersOf, parseApps, parseGpu } from "../bin/lib/worker/gpu.mjs";
@@ -9,6 +8,7 @@ import { comfyArgs, OwnComfy, PortBusy, portFree } from "../bin/lib/worker/comfy
 import { parseFor, syncedFolder } from "../bin/lib/worker/config.mjs";
 import { localPause } from "../bin/lib/worker/run.mjs";
 import { inventoryHash as workerHash } from "../bin/lib/worker/inventory.mjs";
+import { tempDir } from "./helpers/temp-dir";
 
 const MIN = 60_000;
 const PORT = 3367;
@@ -100,7 +100,7 @@ describe("its own ComfyUI (check 12)", () => {
     await new Promise<void>((r) => squatter.listen(PORT, "127.0.0.1", r));
     try {
       expect(await portFree(PORT)).toBe(false);
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-worker-port-"));
+      const dir = tempDir("fuobe-worker-port-");
       const c = new OwnComfy({ port: PORT, workDir: dir, comfyDir: dir, comfyCommand: [process.execPath, "-e", "setTimeout(()=>{},1e6)"] });
       await expect(c.start()).rejects.toBeInstanceOf(PortBusy);
       expect(c.alive()).toBe(false);
@@ -120,7 +120,7 @@ describe("its own ComfyUI (check 12)", () => {
 
 describe("cleanup (check 13) and setup", () => {
   it("after a job, its files leave the worker folder and its history entry goes", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-worker-clean-"));
+    const dir = tempDir("fuobe-worker-clean-");
     const f = { input: path.join(dir, "input"), output: path.join(dir, "output"), temp: path.join(dir, "temp") };
     for (const d of Object.values(f)) fs.mkdirSync(d, { recursive: true });
     fs.writeFileSync(path.join(f.input, "fuobe_abcdefgh12.png"), "x");

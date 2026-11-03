@@ -7,9 +7,9 @@
 // Exits 1 on a failed check.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { tempDir, removeDir } from "./_temp.mjs";
 
 const argv = process.argv.slice(2);
 const app = (
@@ -31,7 +31,7 @@ const check = (label, ok, extra = "") => {
 };
 
 // A 4 s 1280×720 clip Kling 4.0 takes, and the 432×768 fixture it doesn't (under 700 px on a side).
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-kling-4-e2e-"));
+const tmp = tempDir("fuobe-kling-4-e2e-");
 const clip720 = path.join(tmp, "clip-720p.mp4");
 const made = spawnSync("ffmpeg", [
   "-v",
@@ -324,7 +324,7 @@ try {
   }
 } finally {
   await browser.close();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 }
 if (failures.length) {
   console.log(`\n${failures.length} failed`);

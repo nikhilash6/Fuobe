@@ -8,9 +8,9 @@
 // Exits 1 on a failed check.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { tempDir } from "./_temp.mjs";
 
 const argv = process.argv.slice(2);
 const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
@@ -25,7 +25,7 @@ const check = (label, ok, extra = "") => {
 // The walk clip with a hard cut at 4 s (the last 2 s mirrored and inverted), as VP9 WebM: the browser reads its frames
 // for Detect edits and the frame to click (Playwright's Chromium decodes no H.264).
 const walk = path.join(root, "scripts/eval/fixtures/walk-6s.mp4");
-const clipFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "swap-studio-e2e-")), "walk.webm");
+const clipFile = path.join(tempDir("swap-studio-e2e-"), "walk.webm");
 execFileSync("ffmpeg", [
   "-v", "error", "-y", "-i", walk,
   "-filter_complex", "[0:v]split[a][b];[a]trim=0:4,setpts=PTS-STARTPTS[v1];[b]trim=4:6,setpts=PTS-STARTPTS,negate,hflip[v2];[v1][v2]concat=n=2:v=1:a=0[v]",

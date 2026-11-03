@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { EpisodeSettings, EpisodeView } from "@/lib/catalog/faceless";
+import { tempDir } from "./helpers/temp-dir";
 
 // Every ready-made starter of Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and Marketing Studio,
 // made as the owner's "Use template" makes it, on a fresh data dir, then run on the demo provider to the end: the
@@ -14,7 +14,7 @@ vi.mock("next/server", async (importOriginal) => ({
   after: (task: unknown) => void Promise.resolve(typeof task === "function" ? (task as () => unknown)() : task).catch(() => {}),
 }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-starters-"));
+const dir = tempDir("fuobe-starters-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: models run on the demo provider, and there's no LLM (the offline writers run).
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -40,11 +40,6 @@ const { TEMPLATE_INDEX } = await import("@/lib/catalog/marketing");
 beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
-});
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

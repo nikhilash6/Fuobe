@@ -1,11 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Generation, ModelDef } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 30_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-isolated-"));
+const dir = tempDir("fuobe-isolated-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 
@@ -18,7 +16,6 @@ const { studioCatalog } = await import("@/lib/studio-catalog");
 const { LIPSYNC_STUDIO, SFX_STUDIO, FOLEY_STUDIO } = await import("@/lib/studios");
 const { toModelRow } = await import("@/lib/model-rows");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 // fetch + WebSocket stubs, as in comfy-provider.test.ts
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>;

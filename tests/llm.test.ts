@@ -1,13 +1,11 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { Worker } from "node:worker_threads";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 40_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-llm-"));
+const dir = tempDir("fuobe-llm-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -48,7 +46,6 @@ beforeAll(async () => {
 });
 afterAll(() => {
   server.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 beforeEach(() => {
   seen.length = 0;

@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 // FIBO 2 on the open engine (the owner's SOTA image families, 2026-10-31): FIBO 2 Dev for text to image through the
 // owner's VGL graph (Qwen3.5 writes Bria's structured JSON prompt) and for edits with up to four references, and
 // FIBO 2 Edit Turbo for 4-step edits. The graphs are the owner's fibo/ workflows; none is rendered through Fuobe yet.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-fibo2-"));
+const dir = tempDir("fuobe-fibo2-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here
 
@@ -20,7 +20,6 @@ const { licenceInfo } = await import("@/lib/licences");
 const { KNOWN_MODELS } = await import("../scripts/comfy/library.spec.mjs");
 const known = KNOWN_MODELS as Record<string, { folder: string; url: string; variants?: string[] }>;
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const ROUTES: Record<string, Partial<Record<Operation, string>>> = {
   "oss-fibo2-dev": { t2i: "fibo2-dev-t2i", edit: "fibo2-dev-edit" },

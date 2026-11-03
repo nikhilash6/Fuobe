@@ -1,16 +1,15 @@
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import zlib from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { GenInput, ModelDef } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // Full songs on the open engine: MiniMax Music 3 and YuE2 (songs and covers) on core ComfyUI nodes, bound for real; and the
 // fal provider's song tools (a song sent first through Mureka's files/upload, stems unpacked from Mureka's zip) against a
 // stand-in fal.ai on this machine.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-music3-"));
+const dir = tempDir("fuobe-music3-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 
@@ -151,7 +150,6 @@ describe("the fal provider's song tools", () => {
   afterAll(async () => {
     globalThis.__fuobeTestFalUrl = undefined;
     await new Promise<void>((r) => server.close(() => r()));
-    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   const model = (id: string) => getModel(id)!;

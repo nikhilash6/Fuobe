@@ -1,11 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 40_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-runner-"));
+const dir = tempDir("fuobe-runner-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -17,7 +15,6 @@ const { mockProvider } = await import("@/server/providers/mock");
 const live = await import("@/server/live");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

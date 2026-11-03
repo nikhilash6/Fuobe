@@ -11,6 +11,9 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",
+    // Every temp file of a run goes in one folder of its own, removed when the run ends (tests/setup/temp-root.ts).
+    // Tests make their folders with tempDir() from tests/helpers/temp-dir.ts, which removes each after its file.
+    globalSetup: ["tests/setup/temp-root.ts"],
     // Local LLM servers on this machine (LM Studio on :1234, Unsloth Studio on :8888) stay out of the
     // tests: Automatic would find them. Tests that need one start a stand-in and point Settings at it.
     // Hosted LLM keys from this machine's environment stay out too, so no test reaches a real provider: tests that need

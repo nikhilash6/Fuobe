@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import type { SwapProject, SwapTake } from "@/lib/catalog/swap-studio";
 import type { SwapProjectView } from "@/server/swap-studio";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 240_000 });
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
@@ -15,7 +13,7 @@ vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typ
 // Your GPU's sizes regenerate with Open-H3 Regenerate, which is switched off for now (REGEN_OFFERED); these tests check
 // them as they run once it is on. tests/regenerate-offered.test.ts checks that nothing offers them while it is off.
 vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-swap-sharpen-"));
+const dir = tempDir("fuobe-swap-sharpen-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -76,7 +74,6 @@ beforeAll(() => {
   square = saveFile({ data: mp4(6, 2048, 2048), contentType: "video/mp4", source: "upload", name: "square.mp4" }).url;
   hero = saveFile({ data: encodePng({ width: 64, height: 64, data: Buffer.alloc(64 * 64 * 4, 200) }), contentType: "image/png", source: "upload", name: "hero.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function view(id: string): Promise<SwapProjectView> {
   const res = await project.GET(req("GET"), ctx(id) as never);

@@ -1,17 +1,14 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import { compileCastPrompt, compileDressPrompt, planInfluencer, type InfluencerState } from "@/lib/influencer";
+import { tempDir } from "./helpers/temp-dir";
 
 // The comfyui provider driving the AI Influencer builder's open engine on the library graphs: the Soul Cast
 // sheet (Z-Image Turbo) with the compiled character, then Qwen-Image 2.1 with the sheet first.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-influencer-comfy-"));
+const tmp = tempDir("fuobe-influencer-comfy-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const prepare = (id: string, input: GenInput, op: Operation) => prepareWorkflow(id, input, { generationId: "g1", op, upload: async (_d, _t, name) => `up_${name}` });
 const at = (wf: Record<string, { inputs: Record<string, unknown> }>, node: string, input: string) => wf[node]?.inputs[input];

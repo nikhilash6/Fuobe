@@ -1,10 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { CANVAS_TEMPLATES } from "@/lib/catalog/canvas";
 import { PRESETS } from "@/lib/catalog/content-factory";
 import { EXPLAINER_STYLE_IDS } from "@/lib/catalog/faceless";
@@ -19,6 +18,7 @@ import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
 import { STARTERS } from "@/lib/starters/catalog";
 import { TEMPLATE_GROUPS, templateCover, type TemplateGroup } from "@/lib/template-covers";
 import { TEMPLATE_COVERS } from "@/lib/template-covers.generated";
+import { tempDir } from "./helpers/temp-dir";
 
 /*
  * The template tiles' covers manifest (src/lib/template-covers.generated.ts, written by pnpm eval:covers --templates)
@@ -142,8 +142,7 @@ describe("the template covers manifest", () => {
 });
 
 const hasFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-template-covers-"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+const dir = tempDir("fuobe-template-covers-");
 const SAMPLE_CLIP = path.join(root, "public", "samples", "demo-landscape.mp4");
 
 describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {

@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { GENJUTSU_FEATURE_KEYS, GENJUTSU_FEATURES } from "@/lib/catalog/genjutsu";
 import { genjutsuLive } from "@/server/genjutsu-live";
+import { tempDir } from "./helpers/temp-dir";
 
 // Genjutsu's Openjutsu features open to everyone one by one: each needs its workflows accepted by ComfyUI AND a real render
 // recorded as passed (workflows/comfyui/gpu-tested.json). The manifest flag alone never opens one.
 const ROOT = process.cwd();
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-genjutsu-live-"));
+const dir = tempDir("fuobe-genjutsu-live-");
 const write = (name: string, v: unknown) => {
   const f = path.join(dir, name);
   fs.writeFileSync(f, typeof v === "string" ? v : JSON.stringify(v));

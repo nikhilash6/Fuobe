@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
 import { cueReducer, cueProblems, formatCueTime, normalizeCues, parseCueTime } from "@/lib/av/cue-edit";
 import {
@@ -34,10 +33,11 @@ import { timelineFor, timelineTracks } from "@/lib/av/timeline";
 import { DUB_LANGUAGES, supportsTarget } from "@/lib/av/languages";
 import { getModel } from "@/lib/catalog";
 import { buildPayload } from "@/lib/catalog/payload";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-av-dub-"));
+const dir = tempDir("fuobe-av-dub-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -51,7 +51,6 @@ const { loadIndex } = await import("@/server/gpu/index-file");
 const { saveFile } = await import("@/server/storage");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 100_000): Promise<Generation> {
   const end = Date.now() + ms;

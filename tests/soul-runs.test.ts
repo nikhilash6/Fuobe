@@ -1,12 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { ComfyWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 // Fuobe Soul as a run (build plan O2): one model on both engines, the look applied on the server, the cloud
 // payload from the research's FieldMaps, the ComfyUI graph with the look's LoRA chain, prices and post steps.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-soul-"));
+const dir = tempDir("fuobe-soul-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here: open runs fall back to the demo
 
@@ -21,7 +19,6 @@ const { loraEntry } = await import("@/lib/catalog/loras");
 const { SOUL_TAILS } = await import("@/lib/catalog/soul-originals.generated");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const soul = () => getModel("fuobe-soul")!;
 const plan = (engine: "open" | "cloud", req: Partial<Parameters<typeof planGeneration>[0]> = {}) => {

@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { ModelDef, ModelRoute } from "@/lib/catalog/types";
 import { keysSeen, startFakeFal, startFakeReplicate, type FakeCloud } from "./helpers/fake-cloud";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Your keys, at every provider call site: inside an account's work fal.ai and Replicate get that account's own key, and
@@ -11,7 +9,7 @@ import { keysSeen, startFakeFal, startFakeReplicate, type FakeCloud } from "./he
  * account without a key send nothing at all. The owner's calls still send the owner's key. Against stand-in servers
  * (tests/helpers/fake-cloud.ts): no real key, no paid call.
  */
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-keys-providers-"));
+const dir = tempDir("fuobe-keys-providers-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 // The owner's keys everywhere they can be: the environment (the fal client's own defaults too) and Settings.
@@ -56,9 +54,6 @@ afterAll(async () => {
   globalThis.__fuobeTestReplicateUrl = undefined;
   await fal.close();
   await rep.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   fal.log.length = 0;

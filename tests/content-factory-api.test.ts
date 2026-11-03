@@ -1,13 +1,13 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { offlineBrief, type SeriesEstimate, type SeriesView } from "@/lib/catalog/content-factory";
+import { tempDir } from "./helpers/temp-dir";
 
 // Content Factory's server (r4/content-factory): references (an upload, a link through the guard and the
 // SSRF-safe fetch, a preset), reading them into a brief on both engines (demo mode here), prices, "Generate
 // here" (a channel and Faceless episodes that carry the brief), "Next episode", and the message for Claude.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-content-factory-"));
+const dir = tempDir("fuobe-content-factory-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: cloud and open models run on the demo provider, and there's no LLM (the offline writers run).
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -30,7 +30,6 @@ beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const json = (method: string, body?: unknown) =>
   new Request("http://x/api", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });

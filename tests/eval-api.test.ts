@@ -1,23 +1,22 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
 import { planGeneration, routeLoras } from "@/lib/catalog/plan";
 import { loraEntry, loraRef } from "@/lib/catalog/loras";
+import { tempDir } from "./helpers/temp-dir";
 
 /** The REST seams the evaluation harness (scripts/eval) needs: a recipe's LoRAs on POST /api/generations, and a preview that says which ones run. */
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-eval-api-"));
+const dir = tempDir("fuobe-eval-api-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
 const { POST } = await import("@/app/api/generations/route");
 // Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
 beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const post = async (body: unknown, preview = true) => {
   const res = await POST(new Request(`http://localhost/api/generations${preview ? "?preview=1" : ""}`, { method: "POST", body: JSON.stringify(body) }));

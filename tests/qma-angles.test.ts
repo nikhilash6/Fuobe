@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 // The QMA camera-angles LoRA on Qwen-Image 2.1 (96 views) in the Angles app, Cinema's location views and
 // 3D re-shoots, the turnaround's missing sides and its 8-view still set, and the Canvas product angles. Open engine only:
 // fal's Qwen-Image 2.1 takes no LoRAs and Replicate has none.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-qma-"));
+const tmp = tempDir("fuobe-qma-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -23,7 +23,6 @@ const { QMA_MODEL, QMA_WORKFLOW, parseQmaPrompt } = await import("@/lib/qma");
 const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
 const { modelLicence } = await import("@/server/model-access");
 const { TurnaroundSchema } = await import("@/server/turnaround");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const LIBRARY = path.join(process.cwd(), "workflows/comfyui");
 const read = (f: string) => JSON.parse(fs.readFileSync(path.join(LIBRARY, f), "utf8"));

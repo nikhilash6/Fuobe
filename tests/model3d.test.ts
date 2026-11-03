@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { Model3dChoice, Model3dMode } from "@/lib/av/model3d";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Image to 3D's modes (r4/3d-plus): the plan per mode and engine, the cloud payloads (SAM 3D's prompt is
@@ -10,7 +10,7 @@ import type { Model3dChoice, Model3dMode } from "@/lib/av/model3d";
  * and Rig & animate.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-model3d-"));
+const dir = tempDir("fuobe-model3d-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -25,7 +25,6 @@ const { dropBranch } = await import("@/lib/comfy");
 const m3d = await import("@/lib/av/model3d");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const plan = (req: Parameters<typeof planGeneration>[0]) => planGeneration(req, getModel, getPreset);
 const photo = "/api/files/uploads/p.png";

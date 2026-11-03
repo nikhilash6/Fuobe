@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { CLOUD_SPLIT_PROBLEM } from "@/lib/av/split";
 import { OFF_DB, planRemix, REMIX_FEATURE, remixWords } from "@/lib/av/clean-dialogue";
 import type { GenInput } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // Assist and MCP's split_soundtrack and remove_dialogue (DBS D9), and the remix at set levels they run on graph C
 // (oss-dbs-remix, the model Clean up dialogue runs on).
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-sound-assist-"));
+const dir = tempDir("fuobe-sound-assist-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -22,11 +22,6 @@ const { handleMcp } = await import("@/server/mcp");
 const { getGeneration } = await import("@/server/generations");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 /** A 16-bit PCM WAV of `seconds` of silence. */
 function wav(seconds: number, channels = 2, rate = 8000): Buffer {

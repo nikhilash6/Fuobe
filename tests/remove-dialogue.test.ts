@@ -1,7 +1,4 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   CLOUD_ONLY_REMOVE_PROBLEM,
   CLOUD_REMOVE_PROBLEM,
@@ -23,10 +20,11 @@ import { splitTime } from "@/lib/av/split";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { HUB_MODES, modeHref } from "@/lib/hubs";
 import type { Generation, GenInput, Operation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // Video tools → Remove dialogue (DBS D2): the planner, the two-step chain on the open engine (graph A, then the
 // stream-copy mux), the graph the mux runs, the provider's bindings and the API in demo mode.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-remove-dialogue-"));
+const dir = tempDir("fuobe-remove-dialogue-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: the open models run on the demo provider.
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -41,7 +39,6 @@ const { nextSteps, outputActions } = await import("@/lib/output-actions");
 const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const VIDEO = "/api/files/uploads/2026-11-01/interview.mp4";
 

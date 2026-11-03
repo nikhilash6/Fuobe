@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import {
   contextUpdate,
   factMap,
@@ -24,7 +24,7 @@ import {
 // Route handlers call connection() (no request scope in a test).
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-assist-skills-"));
+const dir = tempDir("fuobe-assist-skills-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -40,7 +40,6 @@ const { db } = await import("@/server/db");
 const tools = await import("@/server/assist/tools");
 const downloadRoute = await import("@/app/api/assist/skills/[name]/download/route");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const md = (fm: string, body = "# Do it\n\n1. Step one.") => `---\n${fm}\n---\n\n${body}\n`;
 

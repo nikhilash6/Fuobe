@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { indexEntries } from "@/lib/command-search";
 import { paletteIndex } from "@/lib/palette-index";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Settings → Models & licences in the places that list or pick models: GET /api/models (the CLI's list and the
@@ -13,7 +11,7 @@ import { paletteIndex } from "@/lib/palette-index";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-access-listings-"));
+const dir = tempDir("fuobe-access-listings-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -25,7 +23,6 @@ const { changeAccess } = await import("@/server/model-access");
 const tools = await import("@/server/assist/tools");
 const { offlinePlan } = await import("@/server/assist/agent");
 const { setSetting } = await import("@/server/settings");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 type Body = { defaults: Record<string, { cloud?: string; open?: string }>; items: { id: string; engines: string[] }[] };
 const models = async (query = "") => (await (await listModels(new Request(`http://localhost/api/models${query}`))).json()) as Body;

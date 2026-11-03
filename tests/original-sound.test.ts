@@ -1,28 +1,21 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { CLOUD_ORIGINAL_SOUND, ORIGINAL_SOUNDS, originalSoundDefault, originalSoundOn, withOriginalSound } from "@/lib/av/original-sound";
 import { getMaker, ORIGINALS, planGenjutsu, type GenjutsuPlanInput } from "@/lib/catalog/genjutsu";
 import { defaultValues, getMixedPreset, planMixed, type MixedPlanInput } from "@/lib/catalog/mixed-media";
 import { getEraser, planRemoval, type RemovalPlanInput } from "@/lib/catalog/remove-object";
 import { lookFromPreset, planShorts, SHORTS_MODELS, SHORTS_PRESETS, type PlanStep, type ShortsPlanInput } from "@/lib/catalog/shorts";
 import type { GenerationRequest } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // "Original sound" (DBS D7): what of a clip's sound goes back under its new picture in Shorts, Mixed Media, Genjutsu,
 // Remove object and Character Swap Studio. Everything stays as before; on your GPU the other choices split the sound with
 // DBS and put the chosen stem(s) back with the studio's own mux; the cloud has Everything only.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-original-sound-"));
+const dir = tempDir("fuobe-original-sound-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 const { setSetting } = await import("@/server/settings");
 const { createPipeline } = await import("@/server/chains");
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const mux = (over: Partial<PlanStep> = {}): PlanStep => ({ key: "final", request: { feature: "x", batchTitle: "T", title: "T", modelId: "oss-mux", op: "mux", step: { label: "Final", index: 1200, of: 1000 } }, ...over });
 const muxOf = (steps: PlanStep[], key: string) => steps.find((s) => s.key === key)!;

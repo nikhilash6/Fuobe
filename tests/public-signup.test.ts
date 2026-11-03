@@ -1,16 +1,16 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 // Route handlers call connection(); outside a request scope it would throw.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 // Route handlers set the session cookie through cookies() (no request scope in a test): a jar that only records.
 const jar = vi.hoisted(() => ({ set: vi.fn(), delete: vi.fn(), get: vi.fn() }));
 vi.mock("next/headers", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/headers")>()), cookies: async () => jar }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-signup-"));
+const dir = tempDir("fuobe-signup-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 delete process.env.FUOBE_PUBLIC_SIGNUP;
@@ -18,12 +18,6 @@ delete process.env.FUOBE_ALLOWED_ORIGINS;
 const auth = await import("@/server/auth");
 const { proxy } = await import("@/proxy");
 const access = await import("@/lib/guest-access");
-afterAll(() => {
-  // The database stays open until the worker exits (Windows won't delete it before).
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const passed = (r: Response) => r.headers.get("x-middleware-next") === "1";
 const toLogin = (r: Response) => r.status === 307 && new URL(r.headers.get("location") ?? "", "http://x").pathname === "/login";

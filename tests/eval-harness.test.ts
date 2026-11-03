@@ -2,10 +2,10 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * The evaluation harness (scripts/eval) end to end against Fuobe's real route handlers, served over
@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-eval-harness-"));
+const dir = tempDir("fuobe-eval-harness-");
 const results = path.join(dir, "results");
 process.env.FUOBE_DATA_DIR = path.join(dir, "data");
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -123,7 +123,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise((r) => server.close(r));
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const sink = () => {
