@@ -759,6 +759,11 @@
 .hb-side.hb-right {
   right: 12px;
 }
+/* The catwalk clip and its still: a wide, short tile crops from the bottom, so the model's head always shows. */
+.hb-video .hb-fill,
+.hb-video .hb-clip video {
+  object-position: 50% 0%;
+}
 /* The pair's framing: a phone's and a tablet's wide tile keeps her face in its upper half; from lg the tall crop is centred on her. */
 .hb-restore .hb-fill {
   object-position: 50% 12%;
