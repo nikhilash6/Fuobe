@@ -19,6 +19,7 @@ import numpy as np
 
 from . import maths
 from . import separation as sep
+from . import splat
 from .media import audio_channels, audio_track, have_ffmpeg, images_of, kind_of, video_frames, video_window
 from .models import MODELS, Aesthetic, Asr, Clip, Dino, Faces, Missing, device_of
 from .registry import FAMILIES
@@ -55,15 +56,23 @@ def palette_of(job: dict) -> np.ndarray:
 
 
 def media_outputs(run_dir: pathlib.Path, job: dict) -> list[pathlib.Path]:
-    """The job's picture or clip outputs (masks, first frames and other helpers left out)."""
+    """The job's picture or clip outputs (masks, first frames and other helpers left out). A preview still that comes
+    with a clip (Idol's clean graph renders the input view beside its orbit) is a helper too: the clip is scored."""
+    outs = job.get("outputs", [])
+    with_clip = any(o.get("kind") == "video" for o in outs)
     out = []
-    for o in job.get("outputs", []):
-        if o.get("role") in {"mask", "first-frame", "depth"}:
+    for o in outs:
+        if o.get("role") in {"mask", "first-frame", "depth"} or (with_clip and o.get("role") == "preview" and o.get("kind") == "image"):
             continue
         p = run_dir / o["file"]
         if p.exists() and kind_of(p) in {"image", "video"}:
             out.append(p)
     return out
+
+
+def splat_outputs(run_dir: pathlib.Path, job: dict) -> list[pathlib.Path]:
+    """The job's 3D files (the splat suite reads the splat among them)."""
+    return [run_dir / o["file"] for o in job.get("outputs", []) if o.get("kind") == "model3d" and (run_dir / o["file"]).exists()]
 
 
 # Stem names as the providers write them (src/server/generations.ts STEM_ALIASES), folded to the suite's four.
@@ -134,7 +143,7 @@ def input_file(job: dict) -> pathlib.Path | None:
 
 def fingerprint(run_dir: pathlib.Path, job: dict, config: dict) -> str:
     h = hashlib.sha256(json.dumps(config, sort_keys=True).encode())
-    for p in media_outputs(run_dir, job) + list(audio_outputs(run_dir, job).values()) + [pathlib.Path(r) for r in job.get("references", [])]:
+    for p in media_outputs(run_dir, job) + splat_outputs(run_dir, job) + list(audio_outputs(run_dir, job).values()) + [pathlib.Path(r) for r in job.get("references", [])]:
         try:
             st = p.stat()
             h.update(f"{p}|{st.st_size}|{int(st.st_mtime)}".encode())
@@ -321,6 +330,18 @@ class Scorer:
         if not d["frames"]:
             return {"_note": "no source frames in the case's range"}
         return {"bgDiff": round(d["mae"], 5), "bgPsnr": round(d["psnr"], 2)}
+
+    def m_splat(self, job, outs):
+        files = splat_outputs(self.run_dir, job)
+        if not files:
+            return {"_note": "no 3D file in the result"}
+        why = []
+        for f in files:
+            try:
+                return splat.haze(splat.opacities(f))
+            except splat.NotASplat as e:
+                why.append(f"{f.name}: {e}")
+        return {"_note": "no splat file to read (" + "; ".join(why) + ")"}
 
     def m_lipsync(self, job, outs):
         clips = [o for o in outs if kind_of(o) == "video"]

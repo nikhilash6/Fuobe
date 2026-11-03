@@ -20,6 +20,8 @@ FAMILIES = {
     # the job's own transcript when its graph transcribes (Qwen3-ASR in the dub's first step).
     "wer": ["wer", "werInput", "werTranscript"],
     "background": ["bgDiff", "bgPsnr"],
+    # A splat file's nearly transparent share (opacity under 0.05) and its count (the splat suite).
+    "splat": ["haze", "gaussians"],
 }
 
 METRICS = {
@@ -57,6 +59,8 @@ METRICS = {
     "werTranscript": {"label": "WER, the job's transcript", "better": "lower", "unit": "word error rate 0–1"},
     "bgDiff": {"label": "Background change vs the source", "better": "lower", "unit": "mean abs error 0–1 on the frame's outer ring"},
     "bgPsnr": {"label": "Background PSNR vs the source", "better": "higher", "unit": "dB on the frame's outer ring"},
+    "haze": {"label": "Splat haze", "better": "lower", "unit": "share of Gaussians under opacity 0.05"},
+    "gaussians": {"label": "Gaussians", "better": "none", "unit": "count in the splat file"},
 }
 
 # Weights, each pinned to a Hugging Face revision. "commercial" says whether the model itself may be used

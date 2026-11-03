@@ -544,7 +544,8 @@
               "palette",
               "background",
               "separation",
-              "wer"
+              "wer",
+              "splat"
             ]
           }
         },
@@ -555,6 +556,13 @@
         "candidate": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "styleModel": {
+          "type": "string",
+          "enum": [
+            "clip",
+            "dinov2"
+          ]
         },
         "timeoutSeconds": {
           "default": 1800,
@@ -726,6 +734,14 @@
           },
           "op": {
             "type": "string"
+          },
+          "tags": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
           },
           "params": {
             "type": "object",
@@ -1294,7 +1310,8 @@
                 "palette",
                 "background",
                 "separation",
-                "wer"
+                "wer",
+                "splat"
               ]
             }
           },
