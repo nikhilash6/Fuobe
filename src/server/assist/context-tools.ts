@@ -1,7 +1,8 @@
 import "server-only";
 import { z } from "zod";
 import { guessCategory, MEMORY_CATEGORIES, MEMORY_MAX_CHARS, toCategory, type MemoryCategory } from "@/lib/assist";
-import { recipeMarkdown } from "@/lib/recipe";
+import { rankSkills, recipeMarkdown } from "@/lib/recipe";
+import { skillUses } from "../skill-uses";
 import { getSkill, skillFile, skillRecipe } from "../skills";
 import { canUseSkill, skillsFor } from "./context";
 import { defineTool } from "./define";
@@ -22,9 +23,11 @@ const listSkills = defineTool({
     let list = skillsFor(projectId);
     if (query?.trim()) {
       const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-      const scored = list.map((s) => ({ s, n: words.filter((w) => `${s.name} ${s.title} ${s.description} ${s.whenToUse}`.toLowerCase().includes(w)).length }));
-      if (scored.some((x) => x.n)) list = scored.filter((x) => x.n).sort((a, b) => b.n - a.n).map((x) => x.s);
+      const hits = list.filter((s) => words.some((w) => `${s.name} ${s.title} ${s.description} ${s.whenToUse}`.toLowerCase().includes(w)));
+      if (hits.length) list = hits;
     }
+    // Word matches first, then the most used and most recently used skills (their run history).
+    list = rankSkills(list, { query, uses: skillUses() });
     return {
       content: JSON.stringify(
         list.map((s) => {
