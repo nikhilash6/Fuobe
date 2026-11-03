@@ -217,8 +217,8 @@ describe("running a recipe", () => {
     makeSkill("caption-it", captions(), "Caption it");
     const check = await recipes.verifyRecipe("caption-it", "demo");
     expect(check.ok).toBe(true);
-    // A studio step gets the plan check only in W1 (its dry run would make a record the user sees).
-    expect(check.engines.map((e) => e.dryRun?.skipped)).toEqual([expect.stringContaining("checked by its plan only"), expect.stringContaining("checked by its plan only")]);
+    // A studio step's dry run runs the studio as a demo (W7), then deletes what it made.
+    expect(check.engines.map((e) => e.dryRun)).toEqual([{ ok: true, problems: [] }, { ok: true, problems: [] }]);
     const out = await recipes.runRecipe("caption-it", { values: { video: clip, lang: "German" } }, "open");
     expect(out.runs).toHaveLength(1);
     expect(out.runs[0].href).toMatch(/^\/video-tools\/captions\?video=/);

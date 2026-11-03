@@ -101,6 +101,7 @@ import { accountSend } from "./account-send";
 import { stamped, stampOf, withRunStamp } from "./run-stamp";
 import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
 import { sweepBilling } from "./billing-outbox";
+import { inDemoScope, outsideDemo } from "./demo-scope";
 import { moderationConfigured } from "./moderation";
 import { holdForCheck, sweepOutputChecks } from "./output-checks";
 import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir } from "./storage";
@@ -422,6 +423,8 @@ export const ASSET_REFS: AssetRef[] = [
   { table: "swap_projects", cols: ["data_json"], what: "Character Swap project", name: "name" },
   // A user skill's bundled text files: its recipe.json names the files a run starts from (an example, a fixed logo).
   { table: "skills", cols: ["files_json"], what: "skill", key: "name", name: "title" },
+  // A skill run that spans studios: the files its inputs name, and each step's results and studio page.
+  { table: "skill_runs", cols: ["values_json", "state_json"], what: "skill run", name: "skill" },
 ];
 
 /**
@@ -544,7 +547,7 @@ export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef
   const routes = preferred === "auto" ? candidates : [...candidates].sort((a, b) => Number(b.provider === preferred) - Number(a.provider === preferred));
   const demo = getSetting("demoMode");
   // A request marked demo (a skill recipe's free dry run) runs on the demo provider whatever Settings says.
-  if (demo === "on" || forceDemo) return { route: routes[0], demo: true };
+  if (demo === "on" || forceDemo || inDemoScope()) return { route: routes[0], demo: true };
   const takes = (r: ModelRoute) => !r.map?.maxImages || images <= r.map.maxImages;
   // A route that carries every LoRA wins (Replicate's Wan 2.2 takes one per expert, fal's takes a Mix), then one
   // that makes the length asked; otherwise the first ready one runs and the plan's notes say what it changes.
@@ -1005,7 +1008,8 @@ function stampTenant(asked: GenerationRequest, opts: CreateOptions): GenerationR
 }
 
 export function createGenerations(given: GenerationRequest, opts: CreateOptions = {}): Generation[] {
-  const asked = stampTenant(given, opts);
+  // A studio's dry run (src/server/demo-scope.ts): its rows say so, so their waiting steps stay demos too.
+  const asked = stampTenant(inDemoScope() && !given.demo ? { ...given, demo: true } : given, opts);
   // A retired model or operation (a retry, an old script, a saved project) runs on what replaced it, and says so.
   const moved = currentRequest(asked);
   const original = withFinishOf(moved.request, opts.dependsOn);
@@ -2128,12 +2132,12 @@ declare global {
 }
 
 /**
- * Run `fn` as the owner's background work: outside any account's run (its tenant, its ComfyUI, the open-engine settings
+ * Run `fn` as the owner's background work: outside a skill check's demo scope and any account's run (its tenant, its ComfyUI, the open-engine settings
  * it runs with). Timers started inside inherit where they were started, so the runner, often first started by a run, is
  * started this way: every tick then polls each row in that row's own context.
  */
 export function outsideRuns<T>(fn: () => T): T {
-  return outsideTenant(() => outsideOwnGpu(() => withoutCandidates(fn)));
+  return outsideDemo(() => outsideTenant(() => outsideOwnGpu(() => withoutCandidates(fn))));
 }
 
 /**

@@ -29,6 +29,7 @@ import { gatedFileReady, gatedHint } from "./loras";
 import { isOffered, offeredModel } from "./model-access";
 import { localLabel, localWhat, probeLocal } from "./llm";
 import { engineMode, getSetting } from "./settings";
+import { inDemoScope } from "./demo-scope";
 import { probeSource, ShortsError } from "./shorts";
 import { tenant } from "./tenant";
 
@@ -131,7 +132,7 @@ export interface PromptAnswer {
 export async function writeRestorePrompt(body: z.infer<typeof PromptSchema>): Promise<PromptAnswer> {
   mustMatchMode(body.engine);
   const offline = (why: string): PromptAnswer => ({ ...offlineRestorePrompt(body.hint), by: "offline", why });
-  if (getSetting("demoMode") === "on") return offline("demo mode");
+  if (getSetting("demoMode") === "on" || inDemoScope()) return offline("demo mode");
   const textModel = getModel(body.engine === "open" ? "oss-text-llm" : "text-llm");
   if (!textModel || !offeredModel(textModel)) return offline(`the text model is switched off in ${ACCESS_PLACE}`);
   const backend = llmTextBackend();
