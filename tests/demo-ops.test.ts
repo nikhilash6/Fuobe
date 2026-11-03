@@ -209,13 +209,18 @@ describe("demo outputs for the round-4 operations", () => {
     expect(await wavSeconds(done["audio-loop"].outputs[0].url)).toBeCloseTo(20, 1);
     expect(await wavSeconds(done["audio-join"].outputs[0].url)).toBeCloseTo(9, 1);
 
-    for (const k of ["scene-3d", "splat", "text-to-3d", "rig-3d"]) {
+    for (const k of ["scene-3d", "text-to-3d", "rig-3d"]) {
       const m = done[k].outputs.find((o) => o.kind === "model3d");
       expect(m, k).toMatchObject({ contentType: "model/gltf-binary" });
       expect(m!.url, k).toMatch(/\.glb$/);
     }
     expect(done["rig-3d"].outputs[0].meta?.rigged).toBe(true);
-    checkGlb(Buffer.from(await (await serve(done.splat.outputs[0].url)).arrayBuffer()));
+    checkGlb(Buffer.from(await (await serve(done["rig-3d"].outputs[0].url)).arrayBuffer()));
+    // A cloud splat is a real .ply (the splat viewer draws it in demo mode), like fal's TripoSplat.
+    expect(done.splat.outputs).toEqual([expect.objectContaining({ kind: "model3d", contentType: "model/ply", meta: expect.objectContaining({ format: "ply" }) })]);
+    expect(done.splat.outputs[0].url).toMatch(/\.ply$/);
+    const ply = Buffer.from(await (await serve(done.splat.outputs[0].url)).arrayBuffer());
+    expect(ply.subarray(0, 4).toString("ascii")).toBe("ply\n");
 
     const frames = done["extract-frames"].outputs;
     expect(frames.map((f) => [f.kind, f.meta?.index])).toEqual([0, 1, 2, 3].map((i) => ["image", i]));
