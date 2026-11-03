@@ -8,7 +8,7 @@ import type { Scene, SceneInput } from "@/lib/motion/scene";
 import { setType, type BoxMeasure } from "@/lib/motion/type/glyphs";
 import { measure, RASTER_LOGO } from "./helpers/motion";
 
-// The poster rules from the second review: filled ghosts (never hairlines), lit two-stop fields, a readable foot that
+// The poster rules: filled ghosts (never hairlines), lit two-stop fields, a readable foot that
 // reaches the safe line, line breaks at a clause, words that never collide on any frame or size, and a countdown that
 // ticks down to exactly what was typed.
 

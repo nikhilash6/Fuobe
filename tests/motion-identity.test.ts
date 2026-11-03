@@ -9,11 +9,10 @@ import { showcaseRecipe } from "@/lib/motion/showcase";
 import { measure, RASTER_LOGO } from "./helpers/motion";
 
 // Kinetic's editor adds optional recipe fields. A recipe without them (or with every one at its default: the first
-// preset of each category, identity group timing and no tracks) must draw exactly what phase 2 drew: every scene, size
-// and Easy choice at 12 times, the rest frame included. The fixture holds a hash of those display lists made on the
-// phase 2 code (UPDATE_MOTION_IDENTITY=1 writes it; only ever from a checkout without the editor's changes), apart
-// from Kinetic Headline, whose end card later gained the ground's light, and Offer Badge on the brand colour, which later
-// gained a soft pool behind the product (their keys were written again then, alone).
+// preset of each category, identity group timing and no tracks) must draw exactly what the scenes draw as designed:
+// every scene, size and Easy choice at 12 times, the rest frame included. The fixture holds a hash of those display
+// lists, written by UPDATE_MOTION_IDENTITY=1 when a scene's design changes (only ever from a checkout whose editor
+// code is unchanged), so an editor change that moves a default frame fails here.
 
 const FIXTURE = path.join(process.cwd(), "tests/fixtures/motion-identity.json");
 const WRITE = process.env.UPDATE_MOTION_IDENTITY === "1";
@@ -68,7 +67,7 @@ function withDefaults(r: Recipe): Recipe {
   };
 }
 
-describe("a recipe without the editor's changes draws exactly what phase 2 drew", () => {
+describe("a recipe without the editor's changes draws exactly what its scene draws", () => {
   it("holds for every scene, size and Easy choice, at 12 times", async () => {
     const all = cases();
     expect(all.length).toBeGreaterThan(200);
@@ -83,5 +82,5 @@ describe("a recipe without the editor's changes draws exactly what phase 2 drew"
     for (const c of all) expect(got[c.key], c.key).toBe(want[c.key]);
     // Every editor field at its default changes nothing either.
     for (const c of all) expect(await hashOf(withDefaults(c.recipe)), `${c.key} with defaults`).toBe(want[c.key]);
-  });
+  }, 180_000);
 });

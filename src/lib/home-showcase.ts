@@ -287,7 +287,7 @@ export async function homeShowcase() {
     effects: EFFECTS.length,
     destinations: homeDestinations().length,
     cinemaMoves: CAMERA_MOVES.length,
-    adTemplates: TEMPLATES.length,
+    adTemplates: TEMPLATES.filter((t) => !t.ownerOnly).length,
     mixedLooks: EFFECTS.filter((e) => e.category === "Mixed Media").length,
     audioTools: HUB_MODES.audio.length,
     skills: skills.count,

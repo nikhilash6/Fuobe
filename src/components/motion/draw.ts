@@ -192,7 +192,8 @@ interface Cached {
 }
 const cached = new Map<string, Cached>();
 let cachedPixels = 0;
-const CACHE_PIXELS = 48e6;
+/** The cache's budget for a canvas: eight of its frames' worth, 8 to 32 million pixels (phones keep canvas memory low). */
+const cacheBudget = (c: { width: number; height: number }) => Math.min(32e6, Math.max(8e6, 8 * c.width * c.height));
 
 /** Forget every cached bitmap (fonts arrived, so letters drawn with a stand-in face must be drawn again). */
 export function clearMotionCache(): void {
@@ -235,7 +236,7 @@ function drawCached(ctx: Ctx, n: GroupNode, gm: Matrix, a: number, src: Sources,
     cached.set(key, hit);
     cachedPixels += hit.pixels;
     for (const [old, v] of cached) {
-      if (cachedPixels <= CACHE_PIXELS || cached.size <= 1) break;
+      if (cachedPixels <= cacheBudget(ctx.canvas) || cached.size <= 1) break;
       cached.delete(old);
       cachedPixels -= v.pixels;
     }

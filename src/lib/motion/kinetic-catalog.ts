@@ -32,16 +32,16 @@ export interface KineticEntry {
 }
 
 const ORDER: { slug: KineticSlug; template: string; blurb: string }[] = [
-  { slug: "kinetic-headline", template: "ms-kinetic-headline", blurb: "Your promise sets itself word by word, then resolves to your logo." },
+  { slug: "kinetic-headline", template: "ms-kinetic-headline", blurb: "Your promise sets itself letter by letter in huge type over a lit field." },
   { slug: "big-number", template: "ms-big-number", blurb: "One huge stat counts up to its value, with a caption and your logo." },
   { slug: "end-card", template: "ms-end-card", blurb: "Your logo, line and call to action in one of five animated styles." },
-  { slug: "quote", template: "ms-five-star-quote", blurb: "Five stars fill, then a customer's words set line by line." },
-  { slug: "logo-sting", template: "ms-logo-sting", blurb: "Shapes converge and click together into your mark." },
-  { slug: "feature-cards", template: "ms-feature-cards", blurb: "Rounded cards fly in and stack, one benefit each." },
+  { slug: "quote", template: "ms-five-star-quote", blurb: "A customer's words set line by line beside a photo, then five stars pop in." },
+  { slug: "logo-sting", template: "ms-logo-sting", blurb: "Your name comes into focus in polished metal, and your mark lands last." },
+  { slug: "feature-cards", template: "ms-feature-cards", blurb: "Three cards slide in under a big headline, one benefit each." },
   { slug: "stat-dashboard", template: "ms-dashboard-zoom", blurb: "The camera pushes into a dashboard as a key number counts up." },
   { slug: "line-reveal", template: "m2-line-reveal", blurb: "One line draws your product, then the real product fills in." },
   { slug: "starburst", template: "m2-retro-starburst", blurb: "A retro starburst turns behind your product and headline." },
-  { slug: "offer-badge", template: "m2-offer-badge", blurb: "An offer badge pops and turns as your product slides in." },
+  { slug: "offer-badge", template: "m2-offer-badge", blurb: "An offer badge lands beside your product under a bold headline." },
 ];
 
 const byTemplate = new Map(TEMPLATES.map((t) => [t.id, t]));

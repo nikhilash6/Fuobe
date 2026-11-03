@@ -8,13 +8,13 @@ import { templateLengths, templateSizes } from "@/lib/motion/template";
 import { templateCover } from "@/lib/template-covers";
 import { measure, RASTER_LOGO } from "./helpers/motion";
 
-// The scene list bundled with /kinetic: ten scenes from the code templates, and every animation step of every scene in
-// exactly one named motion group (so no visitor ever sees an internal id).
+// The scene list bundled with /kinetic: ten scenes from the code templates (the owner-only ones join later), and every
+// animation step of every scene in exactly one named motion group (so no visitor ever sees an internal id).
 
 describe("the Kinetic scene catalogue", () => {
   it("has the ten scenes with their slugs and every template field", () => {
     expect(KINETIC_SLUGS.sort()).toEqual(["big-number", "end-card", "feature-cards", "kinetic-headline", "line-reveal", "logo-sting", "offer-badge", "quote", "starburst", "stat-dashboard"]);
-    const code = TEMPLATES.filter((t) => t.render === "code").map((t) => t.id);
+    const code = TEMPLATES.filter((t) => t.render === "code" && !t.ownerOnly).map((t) => t.id);
     expect(KINETIC_SCENES.map((e) => e.template).sort()).toEqual([...code].sort());
     for (const e of KINETIC_SCENES) {
       const t = templateOf(e);
@@ -47,12 +47,10 @@ describe("the Kinetic scene catalogue", () => {
     }
   });
 
-  it("rests Kinetic Headline on its set headline, before its end card; other scenes on their last frame", async () => {
+  it("rests every scene on its last frame, the poster", async () => {
     const kh = startRecipe(entryBySlug("kinetic-headline")!);
     const plan = (await loadScene(kh.scene)).plan({ recipe: kh, measure, logo: null });
-    const cut = plan.timeline.events.find((e) => e.id === "words.exit")!.start;
-    expect(restingTime(plan, kh)).toBeLessThan(cut);
-    expect(restingTime(plan, kh)).toBeGreaterThan(cut - 0.2);
+    expect(restingTime(plan, kh)).toBe(plan.rest);
     const big = startRecipe(entryBySlug("big-number")!);
     const bp = (await loadScene(big.scene)).plan({ recipe: big, measure, logo: null });
     expect(restingTime(bp, big)).toBe(bp.rest);

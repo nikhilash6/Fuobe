@@ -30,64 +30,134 @@ const END_CARD_GROUPS: MotionGroupDef[] = [
   { id: "site", label: "Web address", match: ["site"] },
 ];
 
+/** The tiny facts on a poster's corners (web address, note, the arrow), one group in every poster scene. */
+const DETAILS: MotionGroupDef = { id: "details", label: "Corner details", match: ["website", "corner", "foot", "note"] };
+const LOGO: MotionGroupDef = { id: "logo", label: "Logo", match: ["brand"] };
+
 /** By scene id ("end-card/…" scenes share one list). */
 const GROUPS: Record<string, MotionGroupDef[]> = {
   "end-card": END_CARD_GROUPS,
   "marketing/kinetic-headline": [
-    { id: "words", label: "Words", match: ["word", "mark", "words"] },
-    { id: "wipe", label: "Wipe", match: ["panel"] },
-    // The same ids as the end card's own groups: the card inside the headline is retimed by them too.
-    { id: "logo", label: "Logo", match: ["card.logo", "card.brand", "card.mark"], inner: true },
-    { id: "cta", label: "Call to action", match: ["card.cta"], inner: true },
-    { id: "site", label: "Web address", match: ["card.site"], inner: true },
+    { id: "headline", label: "Headline", match: ["headline"] },
+    { id: "highlight", label: "Highlight", match: ["mark"] },
+    { id: "cta", label: "Call to action", match: ["cta", "pill"] },
+    LOGO,
+    DETAILS,
   ],
   "marketing/line-reveal": [
     { id: "outline", label: "Line drawing", match: ["trace", "arch"] },
-    { id: "picture", label: "Picture", match: ["ground", "fill", "shadow"] },
-    { id: "headline", label: "Headline", match: ["head"] },
+    { id: "picture", label: "Picture", match: ["ground", "fill", "sweep"] },
+    { id: "headline", label: "Headline", match: ["headline"] },
     { id: "cta", label: "Call to action", match: ["cta"] },
-    { id: "brand", label: "Logo", match: ["brand"] },
+    LOGO,
+    { ...DETAILS, match: ["website", "note"] },
   ],
   "marketing/starburst": [
-    { id: "burst", label: "Starburst", match: ["rays", "halo"] },
-    { id: "picture", label: "Picture", match: ["drop", "spin", "shadow"] },
-    { id: "badge", label: "Badge", match: ["badge"] },
-    { id: "headline", label: "Headline", match: ["band", "head"] },
+    { id: "burst", label: "Pattern", match: ["halftone"] },
+    { id: "picture", label: "Picture", match: ["product", "wiggle"] },
+    { id: "badge", label: "Badge", match: ["badge", "sticker"] },
+    { id: "headline", label: "Headline", match: ["headline", "squiggle"] },
+    LOGO,
+    DETAILS,
   ],
   "marketing/offer-badge": [
-    { id: "badge", label: "Badge", match: ["badge"] },
-    { id: "picture", label: "Picture", match: ["slide", "shadow"] },
-    { id: "headline", label: "Headline", match: ["head"] },
-    { id: "cta", label: "Call to action", match: ["cta"] },
+    { id: "badge", label: "Badge", match: ["badge", "offer", "ring"] },
+    { id: "picture", label: "Picture", match: ["product", "squash", "sweep"] },
+    { id: "headline", label: "Headline", match: ["headline"] },
+    { id: "cta", label: "Call to action", match: ["cta", "pill"] },
+    LOGO,
+    DETAILS,
   ],
   "marketing/feature-cards": [
-    { id: "headline", label: "Headline", match: ["head"] },
-    { id: "cards", label: "Cards", match: ["card", "check"] },
-    { id: "brand", label: "Logo", match: ["brand"] },
+    { id: "headline", label: "Headline", match: ["headline"] },
+    { id: "cards", label: "Cards", match: ["card", "num", "point1", "point2", "point3"] },
+    LOGO,
+    DETAILS,
   ],
   "marketing/stat-dashboard": [
     { id: "panel", label: "Dashboard", match: ["panel", "grid"] },
-    { id: "chart", label: "Chart", match: ["bar", "bars", "line", "area", "dot"] },
-    { id: "number", label: "Number", match: ["count"] },
+    { id: "chart", label: "Chart", match: ["spark", "area", "dot", "change"] },
+    { id: "number", label: "Number", match: ["stat", "ghost"] },
     { id: "label", label: "Label", match: ["label"] },
-    { id: "brand", label: "Logo", match: ["brand"] },
+    LOGO,
+    DETAILS,
   ],
   "marketing/logo-sting": [
-    { id: "lines", label: "Lines", match: ["lines"] },
-    { id: "shapes", label: "Shapes", match: ["shard"] },
-    { id: "logo", label: "Logo", match: ["flash", "ring", "settle", "glint"] },
+    { id: "name", label: "Name", match: ["brand"] },
+    { id: "logo", label: "Logo", match: ["mark"] },
     { id: "tagline", label: "Tagline", match: ["tagline"] },
+    DETAILS,
   ],
   "marketing/big-number": [
-    { id: "number", label: "Number", match: ["count", "stat"] },
-    { id: "caption", label: "Caption", match: ["cap", "caption"] },
-    { id: "mark", label: "Logo", match: ["mark"] },
+    { id: "number", label: "Number", match: ["stat"] },
+    { id: "caption", label: "Caption", match: ["caption", "rule"] },
+    { id: "highlight", label: "Highlight", match: ["mark"] },
+    LOGO,
+    DETAILS,
   ],
   "marketing/quote": [
-    { id: "stars", label: "Stars", match: ["outline", "star", "stars"] },
-    { id: "quote", label: "Quote", match: ["line", "quote"] },
-    { id: "name", label: "Name", match: ["rule", "name"] },
-    { id: "brand", label: "Logo", match: ["brand"] },
+    { id: "stars", label: "Stars", match: ["star"] },
+    { id: "quote", label: "Quote", match: ["quote"] },
+    { id: "name", label: "Name", match: ["name"] },
+    { id: "picture", label: "Picture", match: ["panel", "seat", "sweep"] },
+    LOGO,
+    { ...DETAILS, match: ["corner", "note"] },
+  ],
+  "marketing/drop-countdown": [
+    { id: "countdown", label: "Countdown", match: ["count"] },
+    { id: "headline", label: "Headline", match: ["headline"] },
+    { id: "light", label: "Light", match: ["bars", "rule"] },
+    { id: "cta", label: "Call to action", match: ["cta", "pill"] },
+    LOGO,
+    { ...DETAILS, match: ["website", "corner", "foot", "when"] },
+  ],
+  "marketing/fragrance-reveal": [
+    { id: "picture", label: "Picture", match: ["bottle", "spot"] },
+    { id: "headline", label: "Headline", match: ["headline", "line", "rule"] },
+    { id: "cta", label: "Call to action", match: ["cta"] },
+    LOGO,
+    DETAILS,
+  ],
+  "marketing/editorial-sale": [
+    { id: "picture", label: "Picture", match: ["photo"] },
+    { id: "headline", label: "Headline", match: ["headline"] },
+    { id: "offer", label: "Offer", match: ["offer", "bar"] },
+    { id: "cta", label: "Call to action", match: ["cta", "pill", "arrow"] },
+    LOGO,
+    { ...DETAILS, match: ["corner", "foot"] },
+  ],
+  "marketing/glass-spotlight": [
+    { id: "picture", label: "Picture", match: ["product", "plinth", "rings"] },
+    { id: "headline", label: "Headline", match: ["headline", "line", "rule"] },
+    { id: "cta", label: "Call to action", match: ["cta"] },
+    LOGO,
+    DETAILS,
+  ],
+  "marketing/announcement": [
+    { id: "picture", label: "Picture", match: ["leak", "lit"] },
+    { id: "headline", label: "Headline", match: ["headline", "rule"] },
+    { id: "facts", label: "Date and place", match: ["when", "place"] },
+    { id: "cta", label: "Call to action", match: ["cta", "pill"] },
+    LOGO,
+    { ...DETAILS, match: ["corner", "foot"] },
+  ],
+  "marketing/lookbook": [
+    { id: "headline", label: "Headline", match: ["headline", "accent", "line"] },
+    LOGO,
+    { ...DETAILS, match: ["website", "note"] },
+  ],
+  "marketing/stat-stack": [
+    { id: "numbers", label: "Numbers", match: ["stat1", "stat2", "stat3", "idx"] },
+    { id: "labels", label: "Labels", match: ["label1", "label2", "label3", "rule", "mark"] },
+    LOGO,
+    DETAILS,
+  ],
+  "marketing/testimonials": [
+    { id: "quote", label: "Quote", match: ["quote1", "name1"] },
+    { id: "cards", label: "Cards", match: ["card", "quote2", "quote3", "name2", "name3"] },
+    { id: "stars", label: "Stars", match: ["star"] },
+    LOGO,
+    DETAILS,
   ],
 };
 
@@ -95,7 +165,7 @@ const GROUPS: Record<string, MotionGroupDef[]> = {
 export const CLIP_SCENES: readonly string[] = ["marketing/kinetic-headline", "marketing/big-number", "marketing/quote", "marketing/logo-sting", "marketing/feature-cards"];
 
 /** How many shots (windows between cuts) a scene has. */
-const WINDOWS: Record<string, number> = { "marketing/kinetic-headline": 2 };
+const WINDOWS: Record<string, number> = {};
 
 /** A scene's motion groups (the end card's five styles share one list). */
 export function groupDefsFor(sceneId: string): MotionGroupDef[] {

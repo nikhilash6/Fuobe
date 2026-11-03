@@ -10,7 +10,7 @@
  * only fields, shapes, photos and decorative ghost copies (text nodes marked `decor`) bleed.
  */
 
-import { group, translate, type Box, type DisplayList, type DisplayNode, type Paint, type TextNode, type TextRun } from "../../display";
+import { about, group, multiply, translate, type Box, type DisplayList, type DisplayNode, type Paint, type TextNode, type TextRun } from "../../display";
 import type { CurveName } from "../../ease";
 import { curve } from "../../ease";
 import { chroma, contrastOf, ensureContrast, fieldStops, kineticPalette, mixOk, okStops, withLightness, toLab, type KineticPalette, type Look } from "../../color";
@@ -23,9 +23,12 @@ import { twoShadow } from "../../fx/depth";
 import { gridFor, placementOf, type Grid, type Placement } from "../../grid";
 import type { Recipe } from "../../recipe";
 import type { Scene, SceneInput, ScenePlan } from "../../scene";
-import { designSize } from "../../sizes";
-import { frameCount, local } from "../../time";
-import { DURATION_LIMITS, timeline, type EventKind, type MotionEvent, type StaggerUnit, type Timeline } from "../../tween";
+import { designSize, tileCover } from "../../sizes";
+import { frameCount } from "../../time";
+import { DURATION_LIMITS, linearProgress, progress, timeline, type EventKind, type MotionEvent, type StaggerUnit, type Timeline } from "../../tween";
+import { extraCamera, kineticTiming } from "../../edit";
+import { finishAt } from "../../finish";
+import { clipLayer, clipNodes, CLIP_GROUND } from "../../video-layer";
 import { drawType, planType, type TextMotion, type TypePlan, type TypeStyle } from "../../type/animate";
 import { fontOf } from "../../type/faces";
 import { setType, type BoxMeasure, type TypeSet, type TypeSpec } from "../../type/glyphs";
@@ -135,6 +138,9 @@ export interface PosterDef {
 
 export const POSTER_DURATIONS = { min: 5, max: 8, default: 5 } as const;
 
+/** How long a tile cover's clip holds and dissolves its finished poster before the opening plays (seconds). */
+export const COVER_LEAD = 0.45;
+
 const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
 
 /** The face a role is set in (the pairing's). */
@@ -144,6 +150,28 @@ export const faceOf = (p: Pairing, role: Role): RoleFace => (role === "accent" ?
 export function pairingFamilies(id: PairingId): string[] {
   const p = PAIRINGS[id];
   return [...new Set([p.hero, p.accent, p.meta, p.body, p.figures].filter((f): f is RoleFace => !!f).map((f) => f.family))];
+}
+
+/** The person picked their own brand fonts over the template's type pairing (`controls.type` "brand"). */
+export const brandType = (r: Pick<Recipe, "controls">): boolean => r.controls?.type === "brand";
+
+/**
+ * A pairing in the brand's own fonts: the heading font for the hero, its accent and the figures (heavy, upright), the
+ * body font for the corner facts and copy; the template's leading and tracking kept where they suit any face.
+ */
+export function brandPairing(p: Pairing, fonts: { heading?: string; body?: string }): Pairing {
+  const heading = fonts.heading?.trim() || fonts.body?.trim();
+  const body = fonts.body?.trim() || heading;
+  if (!heading || !body) return p;
+  const big = (f: RoleFace, weight: number): RoleFace => ({ family: heading, weight, style: "normal", leading: Math.max(0.95, f.leading), tracking: Math.min(0, f.tracking) });
+  return {
+    ...p,
+    hero: big(p.hero, 800),
+    accent: p.accent ? big(p.accent, 700) : null,
+    figures: big(p.figures, 800),
+    meta: { ...p.meta, family: body, weight: 500, style: "normal" },
+    body: { ...p.body, family: body, weight: 400, style: "normal" },
+  };
 }
 
 export function posterScene(def: PosterDef): Scene {
@@ -162,11 +190,13 @@ export function posterScene(def: PosterDef): Scene {
       const look = (["light", "dark", "brand"] as const).find((l) => l === recipe.controls?.look) ?? def.look ?? "light";
       const pal = kineticPalette(recipe.brand.colors, look);
       const last = (frameCount(recipe.duration, recipe.fps) - 1) / recipe.fps;
-      const pace = recipe.controls?.pace === "calm" ? 1.2 : recipe.controls?.pace === "punchy" ? 0.85 : 1;
+      // Kinetic's Pro pace wins over the Easy choice.
+      const pace = recipe.motion?.pace ?? (recipe.controls?.pace === "calm" ? 1.2 : recipe.controls?.pace === "punchy" ? 0.85 : 1);
       const room = Math.max(1.5, recipe.duration - 1.3);
       const events: MotionEvent[] = [];
       const plans: TypePlan[] = [];
-      const pairing = PAIRINGS[def.pairing];
+      const planEvents = new Map<TypePlan, [number, number]>();
+      const pairing = brandType(recipe) ? brandPairing(PAIRINGS[def.pairing], recipe.brand.fonts) : PAIRINGS[def.pairing];
       const measure = input.measure as BoxMeasure;
       const ctx: PosterContext = {
         recipe,
@@ -220,6 +250,7 @@ export function posterScene(def: PosterDef): Scene {
         move(set, motion, id) {
           const plan = planType(id ?? set.field, set, { seed: recipe.seed, speed: Math.min(1.4, Math.max(0.7, (motion.speed ?? 1) * ctx.speed)), dark: ctx.dark, loopUntil: last - 0.1, ...motion }, design);
           plans.push(plan);
+          planEvents.set(plan, [events.length, events.length + plan.events.length]);
           events.push(...plan.events);
           return plan;
         },
@@ -229,40 +260,82 @@ export function posterScene(def: PosterDef): Scene {
         },
       };
       const built = def.build(ctx);
-      const tl: Timeline = timeline(events);
-      const settled = Math.min(last, events.filter((e) => e.kind !== "camera").reduce((m, e) => Math.max(m, e.start + e.dur), 0));
-      const P = (t: number) => (id: string) => {
-        const e = tl.byId.get(id);
-        return e ? curve(e.curve)(local(t, e.start, e.start + e.dur)) : 1;
-      };
-      const Lp = (t: number) => (id: string) => {
-        const e = tl.byId.get(id);
-        return e ? local(t, e.start, e.start + e.dur) : 1;
-      };
+      // Kinetic's editor: retimed groups, the motion feel and the camera's clock (the scene as designed without them).
+      const timing = kineticTiming(recipe, def.id, events, built.cuts ?? [], last);
+      const tl: Timeline = timeline(timing.events, timing.curves);
+      const settled = Math.min(last, timing.events.filter((e) => e.kind !== "camera").reduce((m, e) => Math.max(m, e.start + e.dur), 0));
+      const P = (t: number) => (id: string) => progress(tl, id, t);
+      const Lp = (t: number) => (id: string) => linearProgress(tl, id, t);
+      // A type set's own clock: a retimed group moves its letters with it (the set's span mapped onto its new span).
+      const clocks = new Map<TypePlan, (t: number) => number>();
+      for (const [plan, [a, b]] of planEvents) {
+        if (timing.events === events || !timing.events.slice(a, b).some((e, i) => e !== events[a + i])) continue;
+        const o = events.slice(a, b);
+        const n = timing.events.slice(a, b);
+        const oA = Math.min(...o.map((e) => e.start));
+        const oB = Math.max(...o.map((e) => e.start + e.dur));
+        const nA = Math.min(...n.map((e) => e.start));
+        const nB = Math.max(...n.map((e) => e.start + e.dur));
+        const warp = n.find((e) => e.warp)?.warp;
+        // After its span the set's clock eases back onto the film's, so its loops and the last frame are as designed.
+        const tail = (t: number) => (last > nB ? t + (oB - nB) * Math.max(0, 1 - (t - nB) / (last - nB)) : t);
+        clocks.set(plan, (t) => (t <= nA ? t - nA + oA : t >= nB ? tail(t) : oA + (warp ?? ((u: number) => u))((t - nA) / Math.max(1e-6, nB - nA)) * (oB - oA)));
+      }
       const background = built.background ?? pal.ground;
+      const clip = clipLayer(input);
+      const unlit = recipe.look?.light === false;
+      const locked = recipe.camera?.move === "locked";
+      const breath = locked ? 0 : (recipe.camera?.breath ?? 1);
+      const extra = extraCamera(recipe, last);
+      const cx = design.w / 2;
+      const cy = design.h / 2;
       const draw = (t: number, home: boolean): DisplayList => {
         let nudge = { x: 0, y: 0 };
         let flash = 0;
+        const tc = timing.clock ? timing.clock(t) : t;
         const kit: DrawKit = {
           P: P(t),
           L: Lp(t),
           type(plan, style) {
-            const f = drawType(plan, style, t);
+            const f = drawType(plan, style, home ? t : (clocks.get(plan)?.(t) ?? t));
             nudge = { x: nudge.x + f.camera.x, y: nudge.y + f.camera.y };
             flash = Math.max(flash, f.flash);
             return f.nodes;
           },
         };
-        const layers = built.draw(t, kit);
+        let layers = built.draw(t, kit);
+        // The person's clip takes the place of the field (and its tonal ghost); without ground light the field has no pools of light.
+        if (clip) layers = layers.filter((l) => l.role !== "ground" && l.role !== "atmosphere" && l.role !== "ghost");
+        else if (unlit) layers = layers.filter((l) => l.role !== "atmosphere");
         if (built.grain !== false) layers.push({ role: "grain", nodes: [grain({ w: design.w, h: design.h, seed: recipe.seed, frame: Math.round(t * recipe.fps), dark: ctx.dark, ...(typeof built.grain === "number" && { amount: built.grain }) })] });
-        if (built.vignette !== false) layers.push({ role: "finish", nodes: [vignette({ w: design.w, h: design.h, strength: typeof built.vignette === "number" ? built.vignette : 0.14, color: withLightness(pal.ground, 0.08) })] });
+        if (built.vignette !== false && !unlit) layers.push({ role: "finish", nodes: [vignette({ w: design.w, h: design.h, strength: typeof built.vignette === "number" ? built.vignette : 0.14, color: withLightness(pal.ground, 0.08) })] });
         const fl = flashNode(design.w, design.h, flash);
         if (fl) layers.push({ role: "light", nodes: [fl] });
-        const cam = home ? { x: 0, y: 0 } : built.camera?.(t) ?? { x: 0, y: 0 };
+        const cam = home || locked ? { x: 0, y: 0 } : (built.camera?.(tc) ?? { x: 0, y: 0 });
         const camera = { x: cam.x + nudge.x, y: cam.y + nudge.y };
-        return { w: design.w, h: design.h, background, nodes: stack(layers, { w: design.w, h: design.h, t, duration: last, camera, sandwich: built.sandwich, push: built.push }) };
+        let nodes = stack(layers, { w: design.w, h: design.h, t: tc, duration: last, camera, sandwich: built.sandwich, push: built.push !== false && breath > 0 });
+        // The extra camera (Kinetic's camera tracks and moves) over the whole poster; the last frame keeps its values there.
+        const o = extra?.(t, tc, design.w);
+        if (o && (o.zoom !== 1 || o.x !== 0 || o.y !== 0 || o.roll !== 0)) nodes = [group(nodes, { id: "camera", transform: multiply(translate(o.x, o.y), about(cx, cy, o.zoom, o.roll)) })];
+        else if (!home) nodes = [group(nodes, { id: "camera" })];
+        const list: DisplayList = { w: design.w, h: design.h, background: clip ? CLIP_GROUND : background, nodes: [...(clip ? clipNodes(recipe, clip, design, pal.ground, t) : []), ...nodes] };
+        const finish = finishAt(recipe, t);
+        if (finish) list.finish = finish;
+        return list;
       };
       const still = draw(last, true);
+      // A gallery tile's clip opens on the finished poster (the tile's still) and dissolves into the opening, so a
+      // tile that starts playing never flashes an empty field; the scene then plays a little quicker to the same end.
+      const lead = tileCover(recipe) && last > 2 ? COVER_LEAD : 0;
+      const evaluate = (t: number): DisplayList => {
+        if (t >= last) return still;
+        if (!lead) return draw(Math.max(0, t), false);
+        const u = Math.max(0, t);
+        const scene = draw(u < lead ? 0 : ((u - lead) * last) / (last - lead), false);
+        if (u >= lead) return scene;
+        const fade = 1 - curve("move")(Math.min(1, Math.max(0, (u - lead * 0.35) / (lead * 0.65))));
+        return fade <= 0 ? scene : { ...scene, nodes: [...scene.nodes, group([{ type: "rect", x: 0, y: 0, w: design.w, h: design.h, fill: still.background }, ...still.nodes], { id: "lead", opacity: fade })] };
+      };
       return {
         design,
         timeline: tl,
@@ -271,7 +344,7 @@ export function posterScene(def: PosterDef): Scene {
         ...(built.signature !== undefined && { signature: Math.min(last, built.signature) }),
         cuts: built.cuts ?? [],
         overflow: [...new Set(built.overflow)],
-        evaluate: (t) => (t >= last ? still : draw(Math.max(0, t), false)),
+        evaluate,
         still: (t) => t >= last,
       };
     },

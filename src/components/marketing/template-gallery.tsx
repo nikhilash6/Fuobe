@@ -3,6 +3,7 @@
 import { Play, Search, Zap } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
+import { useIsOwner } from "@/lib/api";
 import { useCoverPlayback } from "@/components/template-cover";
 import { CATEGORIES, FORMATS, interleaved, isCodeTemplate, templatesFor, type MarketingCategory, type MarketingTemplate } from "@/lib/catalog/marketing";
 import { templateCover } from "@/lib/template-covers";
@@ -54,13 +55,14 @@ export function TemplateGallery({ category, onCategory, media, onMedia, selected
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim().toLowerCase());
   const [show, setShow] = useState(30);
+  const owner = useIsOwner();
   const list = useMemo(() => {
-    const base = templatesFor(category, media);
+    const base = templatesFor(category, media, owner);
     const found = query ? base.filter((t) => `${t.name} ${FORMATS[t.format].cardLabel} ${FORMATS[t.format].name} ${t.prompt}`.toLowerCase().includes(query)) : base;
     const ordered = category === "all" && !query ? interleaved(found) : found;
     // Templates with a real cover lead; the rest keep their order after them.
     return [...ordered].sort((a, b) => Number(!templateCover("marketing", a.id)) - Number(!templateCover("marketing", b.id)));
-  }, [category, media, query]);
+  }, [category, media, query, owner]);
   const [fadeRef, fadeStyle] = useEdgeFade<HTMLDivElement>();
   return (
     <section aria-labelledby="explore-templates">

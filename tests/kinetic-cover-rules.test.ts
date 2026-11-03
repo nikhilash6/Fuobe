@@ -12,7 +12,7 @@ import { showcaseRecipe } from "@/lib/motion/showcase";
 import { TILE_COVER, TILE_CHIPS } from "@/lib/motion/sizes";
 import { measure, RASTER_LOGO } from "./helpers/motion";
 
-// The third review's rules: the brand's fonts are loaded in every weight a template sets (a cover measured before its
+// Cover and type rules: the brand's fonts are loaded in every weight a template sets (a cover measured before its
 // face arrives draws off-centre), the end card's stack is centred on the frame at the gallery tile's size, small facts
 // never type on letter by letter, ghost type stays a faint step off its ground, and a subhead never ends a line on a
 // little joining word.
@@ -20,7 +20,7 @@ import { measure, RASTER_LOGO } from "./helpers/motion";
 const root = process.cwd();
 const src = (p: string) => readFileSync(join(root, p), "utf8");
 
-describe("third review rules", () => {
+describe("cover and type rules", () => {
   it("loads every weight a template sets brand type in (the end card's product line and tag are 600)", () => {
     const fonts = src("src/components/motion/fonts.ts");
     const list = /export const FONT_WEIGHTS = \[([^\]]+)\]/.exec(fonts)![1].split(",").map((w) => Number(w.trim()));

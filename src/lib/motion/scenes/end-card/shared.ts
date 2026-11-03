@@ -280,31 +280,49 @@ export function cardField(r: EndCardRest, seed = 7, name = "", drift = 0): Displ
   const mx = mark ? mark.x + mark.w / 2 : w / 2;
   const my = mark ? mark.y + mark.h / 2 : h * 0.4;
   const rgba = (hex: string, al: number) => `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${al})`;
+  // The stage: a tall arch of light behind the stack (a boutique window), standing on a floor whose horizon glows
+  // where the arch meets it; the brand's name lies whole on the floor in a tone a step off the ground. Every piece is
+  // sized from the stack, so it fits every size and never sits under a word.
+  const block = (t: TextBlock | undefined) => (t ? { x: t.cx - t.layout.width / 2, y: t.y, w: t.layout.width, h: t.layout.height } : null);
+  const parts = [mark, block(r.headline), r.cta ? { x: r.cta.x, y: r.cta.y, w: r.cta.w, h: r.cta.h } : null, block(r.site)].filter((b): b is { x: number; y: number; w: number; h: number } => !!b && b.w > 0);
+  const top = Math.min(...parts.map((b) => b.y));
+  const foot = Math.max(...parts.map((b) => b.y + b.h));
+  const stackW = Math.max(...parts.map((b) => b.w));
+  const aw = Math.min(w * 0.88, stackW + S * 0.2);
+  const ax = (w - aw) / 2;
+  const floorY = Math.min(h - S * 0.05, foot + S * 0.11);
+  const ay = Math.max(S * 0.025, top - S * 0.16);
+  const R = Math.max(1, Math.min(aw / 2, (floorY - ay) * 0.45));
+  const arch = `M${ax} ${floorY}L${ax} ${ay + R}A${aw / 2} ${R} 0 0 1 ${ax + aw} ${ay + R}L${ax + aw} ${floorY}Z`;
+  const rim = mixHex(r.ink, a, 0.55);
   const rows: DisplayNode[] = [];
   const word = name.trim();
   if (word) {
-    // One whole word, filled a step lighter than the brand colour (never a hairline), wider than the card's middle and
-    // centred, standing on the bottom edge so the edge crops its foot (every letter shows whole across); it drifts by
-    // `drift` (design units) while the card plays and sits centred at rest. Its width is estimated from its length
-    // (it is decoration: only roughly centred).
+    // One whole word on the floor (accents and all), as wide as the room allows; none at all when the floor is too
+    // shallow to hold it whole. It drifts by `drift` while the card plays and sits centred at rest. Its width is
+    // estimated from its length (it is decoration: only roughly centred).
     const unit = Math.max(1, [...word].length * 48);
-    const foot = r.site ? r.site.y + r.site.layout.height : r.cta ? r.cta.y + r.cta.h : r.headline.y + r.headline.layout.height;
-    // Whole: the word is sized to stand in the room under the stack with only the foot of its letters cropped (accents
-    // and all), never a cut-off fragment.
-    const size = Math.min(S * 0.6, ((w * 0.86) / unit) * 100, Math.max(S * 0.12, (h - foot - S * 0.06) / 0.92));
-    const font = fontString(r.theme.heading, size, 700);
-    const y0 = Math.max(foot + S * 0.06, h - size * 0.92);
-    const width = (unit * size) / 100;
-    const tone = mixHex(a, dark ? "#ffffff" : "#000000", dark ? 0.05 : 0.045);
-    const runs: TextRun[] = [{ text: word, gap: "", font, x: (w - width) / 2 + drift, y: y0, fill: tone }];
-    rows.push({ type: "text", field: "brand", runs, decor: true });
+    const size = Math.min(S * 0.5, ((w * 0.84) / unit) * 100, (h - floorY - S * 0.05) / 1.02);
+    if (size >= S * 0.14) {
+      const font = fontString(r.theme.heading, size, 700);
+      const y0 = floorY + (h - floorY - size * 1.02) * 0.5;
+      const width = (unit * size) / 100;
+      const tone = mixHex(deep, dark ? "#ffffff" : "#000000", dark ? 0.07 : 0.05);
+      rows.push({ type: "text", field: "brand", runs: [{ text: word, gap: "", font, x: (w - width) / 2 + drift, y: y0, fill: tone }], decor: true });
+    }
   }
   // A warm orb of the words' own colour behind the mark: one light source the card is lit by.
   const orb = Math.max(S * 0.5, Math.min(w, h) * 0.7);
   return [
-    { type: "rect", id: "card.light", x: 0, y: 0, w, h, fill: { kind: "radial", cx: w / 2, cy: h * 0.28, r0: 0, r1: Math.hypot(w, h) * 0.55, stops: [{ at: 0, color: rgba(light, 0.85) }, { at: 0.55, color: rgba(light, 0.18) }, { at: 1, color: rgba(light, 0) }] } },
-    { type: "rect", id: "card.corners", x: 0, y: 0, w, h, fill: { kind: "radial", cx: w / 2, cy: h * 0.45, r0: S * 0.4, r1: Math.hypot(w, h) * 0.62, stops: [{ at: 0, color: rgba(deep, 0) }, { at: 1, color: rgba(deep, 0.8) }] } },
-    { type: "rect", id: "card.glow", x: mx - orb, y: my - orb, w: orb * 2, h: orb * 2, fill: { kind: "radial", cx: mx, cy: my, r0: 0, r1: orb, stops: [{ at: 0, color: rgba(mixHex(r.ink, "#ffb46b", 0.25), 0.26) }, { at: 0.4, color: rgba(r.ink, 0.1) }, { at: 1, color: rgba(r.ink, 0) }] } },
+    { type: "rect", id: "card.light", x: 0, y: 0, w, h, fill: { kind: "radial", cx: w / 2, cy: h * 0.28, r0: 0, r1: Math.hypot(w, h) * 0.55, stops: [{ at: 0, color: rgba(light, 0.6) }, { at: 0.55, color: rgba(light, 0.12) }, { at: 1, color: rgba(light, 0) }] } },
+    { type: "rect", id: "card.corners", x: 0, y: 0, w, h, fill: { kind: "radial", cx: w / 2, cy: h * 0.45, r0: S * 0.4, r1: Math.hypot(w, h) * 0.62, stops: [{ at: 0, color: rgba(deep, 0) }, { at: 1, color: rgba(deep, 0.85) }] } },
+    // The floor: darker towards the viewer, its horizon lit where the arch stands.
+    { type: "rect", id: "card.floor", x: 0, y: floorY, w, h: h - floorY, fill: { kind: "linear", x0: 0, y0: floorY, x1: 0, y1: h, stops: [{ at: 0, color: rgba(deep, 0.35) }, { at: 1, color: rgba(deep, 0.75) }] } },
+    { type: "path", id: "card.arch", d: arch, fill: { kind: "linear", x0: 0, y0: ay, x1: 0, y1: floorY, stops: [{ at: 0, color: rgba(light, 0.55) }, { at: 0.6, color: rgba(light, 0.2) }, { at: 1, color: rgba(deep, 0.12) }] }, stroke: { paint: rgba(rim, 0.5), width: Math.max(1, S * 0.0018) } },
+    // The horizon's light: a round pool squashed flat onto the floor line, so it fades on every side.
+    group([{ type: "rect", x: w / 2 - aw * 0.62, y: floorY - aw * 0.62, w: aw * 1.24, h: aw * 1.24, fill: { kind: "radial", cx: w / 2, cy: floorY, r0: 0, r1: aw * 0.62, stops: [{ at: 0, color: rgba(mixHex(r.ink, "#ffffff", 0.3), 0.34) }, { at: 0.5, color: rgba(r.ink, 0.1) }, { at: 1, color: rgba(r.ink, 0) }] } }], { id: "card.horizon", transform: [1, 0, 0, 0.09, 0, floorY * 0.91] }),
+    { type: "rect", id: "card.line", x: ax - S * 0.06, y: floorY - 0.5, w: aw + S * 0.12, h: 1, fill: { kind: "linear", x0: ax - S * 0.06, y0: 0, x1: ax + aw + S * 0.06, y1: 0, stops: [{ at: 0, color: rgba(rim, 0) }, { at: 0.5, color: rgba(rim, 0.7) }, { at: 1, color: rgba(rim, 0) }] } },
+    { type: "rect", id: "card.glow", x: mx - orb, y: my - orb, w: orb * 2, h: orb * 2, fill: { kind: "radial", cx: mx, cy: my, r0: 0, r1: orb, stops: [{ at: 0, color: rgba(mixHex(r.ink, "#ffb46b", 0.25), 0.24) }, { at: 0.4, color: rgba(r.ink, 0.08) }, { at: 1, color: rgba(r.ink, 0) }] } },
     ...rows,
     { type: "grain", seed, frame: 0, amount: dark ? 0.035 : 0.045, size: 1.25, blend: dark ? "screen" : "overlay", x: 0, y: 0, w, h },
   ];

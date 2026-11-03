@@ -27,6 +27,8 @@ export interface TemplateState {
   brand: TemplateBrand;
   /** The picture the template shows (a stored file, or one of Fuobe's sample products). */
   product?: string | null;
+  /** Set in the brand's own fonts instead of the template's type pairing. */
+  brandFonts?: boolean;
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -96,6 +98,7 @@ export function templateRecipe(t: MarketingTemplate, s: TemplateState): Recipe {
   // The end card's "Name" choice sets the brand name in type even when there is a logo.
   const logo = s.brand.logo && !(endCard && s.controls.mark === "name") ? s.brand.logo : undefined;
   const controls: Record<string, string> = { template: t.id };
+  if (s.brandFonts && !endCard) controls.type = "brand";
   for (const g of t.easy ?? []) if (!g.scene && s.controls[g.id]) controls[g.id] = s.controls[g.id];
   const product = t.picture && s.product ? s.product : undefined;
   return {

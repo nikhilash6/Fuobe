@@ -4,7 +4,7 @@ import { Loader2, Save, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BrandRow, kitBrand, useStoredBrand } from "@/components/motion/brand-row";
-import { EasyChips, LengthSlider, SizeChips } from "@/components/motion/easy-chips";
+import { EasyChips, LengthSlider, SizeChips, TypeChips } from "@/components/motion/easy-chips";
 import { shortenLine, TemplateFields } from "@/components/motion/fields";
 import { KINETIC_FEATURE, MadeStrip } from "@/components/motion/made-strip";
 import { MotionPlayer, useMotionInputs, usePlan, useScene } from "@/components/motion/player";
@@ -157,7 +157,7 @@ export function KineticTemplate({ template: t, onClose, kitId, onKit }: { templa
             </span>
             <RunPlaceChip place={IN_BROWSER} className="h-7 px-2.5 text-[12px]" />
           </div>
-          <p className="mt-1 text-[13px] text-pretty text-muted-foreground">Your exact words in your brand&apos;s fonts and colours. It plays as you type; saving keeps the clip in Fuobe, ready to download.</p>
+          <p className="mt-1 text-[13px] text-pretty text-muted-foreground">Your exact words in your brand&apos;s colours, set in the template&apos;s type or your own fonts. It plays as you type; saving keeps the clip in Fuobe, ready to download.</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close template" className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           <X className="size-4" />
@@ -189,6 +189,7 @@ export function KineticTemplate({ template: t, onClose, kitId, onKit }: { templa
             <BrandRow value={state.brand} onChange={setBrand} />
           )}
           {brandOver && <p className="text-[12px] text-destructive">Shorten the brand name to fit</p>}
+          {!recipe.scene.startsWith("end-card/") && <TypeChips value={!!state.brandFonts} onChange={(brandFonts) => setState((s) => ({ ...s, brandFonts }))} />}
           {t.easy && <EasyChips groups={t.easy} values={state.controls} onChange={(id, c) => setState((s) => ({ ...s, controls: { ...s.controls, [id]: c } }))} />}
           <SizeChips sizes={sizes} value={state.size} onChange={(size) => setState((s) => ({ ...s, size }))} />
           <LengthSlider min={lengths.min} max={lengths.max} value={recipe.duration} onChange={(duration) => setState((s) => ({ ...s, duration }))} />

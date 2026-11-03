@@ -16,7 +16,10 @@ const pub = (url: string) => join(ROOT, "public", url.replace(/^\//, ""));
 
 describe("Kinetic faces", () => {
   it("ships every face as a subset WOFF2 with its licence, at the size and version listed", () => {
-    expect(KINETIC_FACES.length).toBeGreaterThanOrEqual(30);
+    expect(KINETIC_FACES.length).toBeGreaterThanOrEqual(20);
+    // Only faces a pairing draws with are shipped.
+    const used = new Set(Object.values(PAIRINGS).flatMap((p) => [p.hero, p.accent, p.meta, p.body, p.figures].filter((f) => !!f).map((f) => f!.family)));
+    for (const f of KINETIC_FACES) expect(used.has(f.family), f.family).toBe(true);
     let total = 0;
     for (const f of KINETIC_FACES) {
       const file = pub(f.file);

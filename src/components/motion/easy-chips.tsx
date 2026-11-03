@@ -24,6 +24,21 @@ function Choices<T extends string>({ label, choices, value, onChange }: { label:
   );
 }
 
+/** Type: the template's own type pairing, or the brand's heading and body fonts. */
+export function TypeChips({ value, onChange }: { value: boolean; onChange: (brandFonts: boolean) => void }) {
+  return (
+    <Choices
+      label="Type"
+      choices={[
+        { id: "template", label: "Template type" },
+        { id: "brand", label: "My brand fonts" },
+      ]}
+      value={value ? "brand" : "template"}
+      onChange={(v) => onChange(v === "brand")}
+    />
+  );
+}
+
 export function EasyChips({ groups, values, onChange }: { groups: EasyGroup[]; values: Record<string, string>; onChange: (id: string, choice: string) => void }) {
   return (
     <div className="space-y-3">

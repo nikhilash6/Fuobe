@@ -15,7 +15,7 @@ import { BrandChip } from "@/components/brand/brand-dialog";
 import { inputCls } from "@/components/brand/fields";
 import { withoutOwnGpu } from "@/lib/catalog/engines";
 import { Switch } from "@/components/ui/switch";
-import { DRAWN_WORDS_HINT, DRAWN_WORDS_LABEL, FORMATS, formatModels, isCodeTemplate, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
+import { DRAWN_WORDS_HINT, DRAWN_WORDS_LABEL, FORMATS, formatModels, isCodeTemplate, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, visibleTemplate, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
 import { SelfHostNote } from "@/components/self-host-note";
 import { StarterSection } from "@/components/starters/starter-section";
 import { useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
@@ -295,17 +295,20 @@ function FormatChip({ draft, onFormat }: { draft: Draft; onFormat: (f: FormatId)
   );
 }
 
-function UrlParams({ onTemplate, onTab }: { onTemplate: (t: MarketingTemplate) => void; onTab: (t: "templates" | "generations") => void }) {
+function UrlParams({ onTemplate, onTab, owner }: { onTemplate: (t: MarketingTemplate) => void; onTab: (t: "templates" | "generations") => void; owner: boolean }) {
   const q = useSearchParams();
   // The address read last: a ready shoot opened from this page (?template=…&product=…) is read too, once.
   const done = useRef<string | null>(null);
   useEffect(() => {
-    if (done.current === q.toString()) return;
-    done.current = q.toString();
+    // An owner-only template's address is read again once the owner is known.
+    const key = `${q.toString()}|${owner}`;
+    if (done.current === key) return;
+    done.current = key;
     const t = q.get("template");
-    if (t && TEMPLATE_INDEX.get(t)) onTemplate(TEMPLATE_INDEX.get(t)!);
+    const found = t ? TEMPLATE_INDEX.get(t) : undefined;
+    if (found && visibleTemplate(found, owner)) onTemplate(found);
     if (q.get("tab") === "generations") onTab("generations");
-  }, [q, onTemplate, onTab]);
+  }, [q, onTemplate, onTab, owner]);
   return null;
 }
 
@@ -336,7 +339,8 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
   const isOwner = useIsOwner();
   const set = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
   const f = FORMATS[draft.format];
-  const template = draft.templateId ? TEMPLATE_INDEX.get(draft.templateId) : undefined;
+  const found = draft.templateId ? TEMPLATE_INDEX.get(draft.templateId) : undefined;
+  const template = visibleTemplate(found, isOwner) ? found : undefined;
   // A template drawn by Kinetic Motion opens its own panel (words, brand, sizes, live preview, Save) instead of the
   // composer: nothing is generated, so it is open to everyone and asks only on Save.
   const code = isCodeTemplate(template);
@@ -454,7 +458,7 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
     <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title="Marketing Studio" active="studio" engine={engine} onEngine={setEngine} selfHostedOnly />
       <Suspense fallback={null}>
-        <UrlParams onTemplate={pickTemplate} onTab={setTab} />
+        <UrlParams onTemplate={pickTemplate} onTab={setTab} owner={isOwner} />
         <ProductParam products={products.data} onProduct={(p) => set({ product: productChoice(p) })} />
       </Suspense>
       <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-4 pb-10 sm:px-6">

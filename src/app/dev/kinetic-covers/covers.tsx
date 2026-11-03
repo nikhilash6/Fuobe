@@ -41,6 +41,7 @@ declare global {
       showcases: typeof showcases;
       render(recipe: Recipe): Promise<{ ms: number; frames: number; w: number; h: number; type: string; clip: string; poster: string }>;
       frames(recipe: Recipe, times: number[], blur?: boolean): Promise<{ out: string[]; rest: number; overflow: string[]; events: [string, number, number][] }>;
+      centring?(recipe: Recipe, widths: number[], fields: string[]): Promise<{ width: number; field: string; ink: number; frame: number }[]>;
     };
   }
 }
@@ -70,6 +71,42 @@ export function KineticCovers() {
         }
         return { out, rest: plan.rest, overflow: plan.overflow, events: plan.timeline.events.map((e) => [e.id, +e.start.toFixed(3), +e.dur.toFixed(3)] as [string, number, number]) };
       },
+    };
+    /**
+     * Where each named field's ink is drawn on the rest frame, at each pixel width: the field alone on a clear canvas,
+     * its painted columns' middle against the frame's (the browser check for text measured in one face and drawn in
+     * another).
+     */
+    window.__kinetic!.centring = async (recipe, widths, fields) => {
+      const { inputs, scene } = await prepare(recipe);
+      const plan = scene.plan({ recipe, measure: measureText, logo: inputs.logo, images: inputs.images, outlines: inputs.outlines });
+      const list = plan.evaluate(plan.rest);
+      const out: { width: number; field: string; ink: number; frame: number }[] = [];
+      const texts = (nodes: typeof list.nodes): typeof list.nodes => nodes.flatMap((n) => (n.type === "group" ? texts(n.children) : n.type === "text" && !n.decor ? [n] : []));
+      for (const width of widths) {
+        const height = Math.round((width * list.h) / list.w);
+        for (const field of fields) {
+          const nodes = texts(list.nodes).filter((n) => n.type === "text" && n.field === field);
+          if (!nodes.length) continue;
+          const c = new OffscreenCanvas(width, height);
+          const ctx = c.getContext("2d")!;
+          drawDisplayList(ctx, { ...list, background: "rgba(0,0,0,0)", nodes, finish: undefined }, inputs.sources);
+          const px = ctx.getImageData(0, 0, width, height).data;
+          let lo = width;
+          let hi = -1;
+          for (let x = 0; x < width; x++) {
+            for (let y = 0; y < height; y++) {
+              if (px[(y * width + x) * 4 + 3] > 40) {
+                lo = Math.min(lo, x);
+                hi = Math.max(hi, x);
+                break;
+              }
+            }
+          }
+          if (hi >= lo) out.push({ width, field, ink: (lo + hi + 1) / 2, frame: width / 2 });
+        }
+      }
+      return out;
     };
     // Ready once the hooks are on window (a microtask later, not inside the effect itself).
     queueMicrotask(() => setReady(true));
