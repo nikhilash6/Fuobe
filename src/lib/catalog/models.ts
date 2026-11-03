@@ -1227,6 +1227,17 @@ const open: ModelDef[] = [
     options: { seed: true, resolutions: ["480p", "720p"], maxImages: 1 },
   }),
   o({
+    id: "oss-h3-motion",
+    name: "MiniMax H3",
+    vendor: "MiniMax × Openjutsu",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Your character from one photo performs the clip's movement in the photo's own setting · the clip's sound kept · 24 GB GPU",
+    hidden: true,
+    routes: [comfy("motion-transfer", "video-motion-transfer-h3", "Native MiniMax H3 + DMAD: the character photo as the look, the part's Metric3D normals as the motion")],
+    options: { seed: true, resolutions: ["480p", "720p"], maxImages: 1 },
+  }),
+  o({
     id: "oss-h3-fix-faces",
     name: "Fix faces",
     vendor: "MiniMax × Openjutsu",

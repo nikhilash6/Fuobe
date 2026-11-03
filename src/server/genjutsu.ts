@@ -29,6 +29,7 @@ import {
   GENJUTSU,
   getMaker,
   modeOpen,
+  MOTION_H3,
   OPENJUTSU_LIMITS,
   requestFeatures,
   type FeatureCheck,
@@ -418,7 +419,7 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
   const fps = source.fps ?? 30;
   const fuobeLook = body.mode === "restyle" && m.looks === "fuobe";
   const len = range.end - range.start;
-  if (m.group || m.actions || m.review || m.tool) {
+  if (m.group || m.actions || m.review || m.tool || m.id === MOTION_H3) {
     notes.push(...openjutsuNotes(body, m, range));
     return notes;
   }
@@ -510,6 +511,9 @@ function openjutsuNotes(body: GenjutsuBody, m: Maker, range: RemoveRange): strin
   } else if (m.actions) {
     notes.push(`About ${minutes(50)} min on your GPU · keeps the clip's sound`);
     if (body.object?.action === "background") notes.push("The people stay exactly as filmed");
+  } else if (m.id === MOTION_H3) {
+    notes.push(`About ${minutes(60)} min on your GPU · keeps the clip's sound`);
+    notes.push("Your character performs the clip's moves in their photo's own setting");
   } else if (m.review) {
     notes.push(body.picture?.stage === "video" ? `About ${minutes(60)} min on your GPU · keeps the clip's sound` : "The first frame takes about a minute: check it before the video is made");
   } else if (m.tool === "faces") {

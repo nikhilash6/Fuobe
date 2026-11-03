@@ -176,6 +176,39 @@ describe("From picture's graphs", () => {
   });
 });
 
+describe("Motion transfer's MiniMax H3 graph", () => {
+  it("is From picture's H3 graph with the character photo as Picture 1, in the photo's setting", () => {
+    const g = graph(W.motionH3);
+    const picture = graph(W.h3);
+    expect(Object.keys(g).sort()).toEqual(Object.keys(picture).sort());
+    for (const id of Object.keys(g)) expect(g[id].class_type, id).toBe(picture[id].class_type);
+    expect(g["20"]).toMatchObject({ class_type: "LoadImage", _meta: { title: "Character photo" } });
+    expect(g["56"].inputs["ref_images.ref_image_0"]).toEqual(["20", 0]);
+    expect(g["56"].inputs.ref_image_size).toBe("match");
+    const prompt = String(g["56"].inputs.prompt);
+    expect(prompt).toMatch(/^subject_definitions:\n<Picture 1> defines the character's identity, face, hair, body and complete outfit, and the setting/);
+    expect(prompt).toContain("inside the setting of <Picture 1>");
+    expect(prompt).toContain("overall_soundscape:\nReuse <Audio 1> exactly as it is.");
+    // Only what is wanted: the picture is never called a first frame, and no negatives.
+    expect(prompt).not.toMatch(/first frame you|approved|prepared|\bno\b|\bnot\b|\bwithout\b|\bavoid\b/i);
+    expect(danglingLinks(g)).toEqual([]);
+  });
+
+  it("takes the settings as From picture's H3 video does: frames on the grid, the clip's shape, the words opening the description", () => {
+    const g = openjutsuGraph(W.motionH3, graph(W.motionH3), { seconds: 5.17, quality: "720p", motion: 0, seed: 1001, scene: "She lifts her hat at the end." }, { generationId: "g1", clip: { width: 1024, height: 768 } });
+    expect(g["1"].inputs.frame_load_cap).toBe(124);
+    expect(g["56"].inputs).toMatchObject({ width: 992, height: 736, length: 124 });
+    expect(g["33"].inputs).toMatchObject({ width: 992, height: 736 });
+    expect(g["58"].inputs.noise_seed).toBe(1001);
+    expect(g["60"].inputs.steps).toBe(6);
+    expect(String(g["56"].inputs.prompt)).toContain("detailed_description:\nShe lifts her hat at the end. From the first frame the character holds the motion guide's first pose");
+    const small = openjutsuGraph(W.motionH3, graph(W.motionH3), { seconds: 15, quality: "480p" }, { generationId: "g2", clip: { width: 1920, height: 1080 } });
+    expect(small["56"].inputs).toMatchObject({ width: 864, height: 480, length: 345 });
+    expect(() => openjutsuGraph(W.motionH3, graph(W.motionH3), {}, { generationId: "g3" })).toThrow(/clip's size/);
+    expect(openjutsuLeftOut(W.motionH3, {})).toEqual([]);
+  });
+});
+
 describe("Finish's graphs", () => {
   it("Fix faces: match the photo drops the blurred face; largest_face; sections", () => {
     const photo = pruneFace(graph(W.faces), { style: "photo", seed: 2, chunkSeconds: 4 });

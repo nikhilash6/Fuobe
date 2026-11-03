@@ -682,9 +682,13 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
                         ? longPart
                           ? `${CHARACTER_SWAP.minSeconds}–${CHARACTER_SWAP.maxContinued} s; past 15 s it continues window by window`
                           : `${CHARACTER_SWAP.minSeconds}–${CHARACTER_SWAP.maxSeconds} s of one continuous shot, the person in its first frame`
-                        : duration && duration > GENJUTSU.maxSeconds
-                          ? `Pick up to ${GENJUTSU.maxSeconds} s — only that part comes out`
-                          : `${GENJUTSU.minSeconds}–${GENJUTSU.maxSeconds} s; the whole clip, or just the part you need`
+                        : mode === "motion" && maker?.part
+                          ? duration && duration > maker.part.max
+                            ? `Pick up to ${maker.part.max} s — only that part comes out`
+                            : `${maker.part.min}–${maker.part.max} s; the whole clip, or just the part you need`
+                          : duration && duration > GENJUTSU.maxSeconds
+                            ? `Pick up to ${GENJUTSU.maxSeconds} s — only that part comes out`
+                            : `${GENJUTSU.minSeconds}–${GENJUTSU.maxSeconds} s; the whole clip, or just the part you need`
                     }
                     onMeta={source.setBrowserMeta}
                   />
@@ -983,6 +987,9 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
                       setPicked((p) => ({ ...p, [choiceKey]: id }));
                       // Another model than Scene edit: back to swapping (Remove it and New background are Scene edit's).
                       if (mode === "swap" && !options.find((m) => m.id === id)?.actions) setAction("change");
+                      // Motion transfer's MiniMax H3 takes up to 15 s: a longer selection is cut back to its first 15 s.
+                      const most = mode === "motion" ? options.find((m) => m.id === id)?.part?.max : undefined;
+                      if (most && range && range.endTime - range.startTime > most + 0.05) setRange({ ...range, endTime: Math.round((range.startTime + most) * 100) / 100 });
                     }}
                     onlyYou={(m) => !!m.features && !m.features.some((f) => !!live?.[f]) && owner}
                   />

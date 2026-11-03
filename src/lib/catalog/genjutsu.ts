@@ -157,7 +157,8 @@ export type GenjutsuFeature =
   | "picture-own-person"
   | "picture-h3-renderer"
   | "finish-faces"
-  | "finish-colours";
+  | "finish-colours"
+  | "motion-h3";
 
 export const GENJUTSU_FEATURES: Record<GenjutsuFeature, { mode: GenjutsuMode; workflows: string[]; maker: string }> = {
   "group-swap": { mode: "character", workflows: ["video-group-swap-h3"], maker: "oss-h3-group-swap" },
@@ -171,6 +172,7 @@ export const GENJUTSU_FEATURES: Record<GenjutsuFeature, { mode: GenjutsuMode; wo
   "picture-h3-renderer": { mode: "picture", workflows: ["video-from-picture-h3"], maker: "oss-from-picture" },
   "finish-faces": { mode: "finish", workflows: ["video-fix-faces-h3"], maker: "oss-h3-fix-faces" },
   "finish-colours": { mode: "finish", workflows: ["video-fix-colours"], maker: "oss-fix-colours" },
+  "motion-h3": { mode: "motion", workflows: ["video-motion-transfer-h3"], maker: "oss-h3-motion" },
 };
 
 export const GENJUTSU_FEATURE_KEYS = Object.keys(GENJUTSU_FEATURES) as GenjutsuFeature[];
@@ -257,6 +259,7 @@ export function requestFeatures(o: { mode: GenjutsuMode; maker: Maker; character
     ];
   }
   if (m.tool) return [m.tool === "faces" ? "finish-faces" : "finish-colours"];
+  if (m.id === MOTION_H3) return ["motion-h3"];
   return [];
 }
 
@@ -284,6 +287,8 @@ export function directRunFeatures(modelId: string, settings: Record<string, unkn
       return ["finish-faces"];
     case "oss-fix-colours":
       return ["finish-colours"];
+    case MOTION_H3:
+      return ["motion-h3"];
     default:
       return null;
   }
@@ -362,6 +367,9 @@ export interface Maker {
 const VACE_CLOUD_WINDOW: FrameWindow = { cap: 241, step: 4, base: 1, min: 17 };
 const VACE_FUN_CLOUD = "wan-22-vace-inpaint";
 const FAL_RES = ["480p", "580p", "720p"];
+
+/** Motion transfer on MiniMax H3 (your GPU): the character photo is the look, the part's normals the motion. */
+export const MOTION_H3 = "oss-h3-motion";
 
 export const ORIGINALS = {
   motion: "fuobe-genjutsu-motion",
@@ -480,6 +488,20 @@ export const MAKERS: Maker[] = [
     keepsSound: true,
     qualities: ["480p", "720p"],
     promptOptional: true,
+  },
+  {
+    id: MOTION_H3,
+    engine: "open",
+    modes: ["motion"],
+    label: "MiniMax H3",
+    note: "Your character in their photo's setting · keeps the clip's sound · 2–15 s · free on your GPU (24 GB)",
+    source: "open",
+    refs: { min: 1, max: 1 },
+    keepsSound: true,
+    qualities: ["480p", "720p"],
+    promptOptional: true,
+    features: ["motion-h3"],
+    part: { min: OPENJUTSU_LIMITS.minSeconds, max: OPENJUTSU_LIMITS.maxSeconds },
   },
 
   // Character swap (Openjutsu, Akatz Labs' H3 Character Swap).
@@ -1345,7 +1367,7 @@ export function planGenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
 
 function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {
   const om = input.maker;
-  if (om.group || om.actions || om.review || om.tool) return planOpenjutsu(input);
+  if (om.group || om.actions || om.review || om.tool || om.id === MOTION_H3) return planOpenjutsu(input);
   if (input.mode === "character" && input.maker.h3) return planCharacterSwap(input);
   if (input.mode === "restyle" && input.maker.id === ORIGINALS.restyle && input.maker.engine === "cloud") return planCloudRestyle(input);
   if (input.mode === "restyle" && input.maker.looks === "fuobe") return planFuobeRestyle(input);
@@ -1753,7 +1775,7 @@ export function sceneWords(o: ObjectEdit | undefined, subject?: string): { targe
 }
 
 /**
- * Group swap, Scene edit, From picture and Finish on your GPU: the part fitted first (24 fps, the quality's short edge,
+ * Group swap, Scene edit, From picture, Finish and Motion transfer's MiniMax H3 on your GPU: the part fitted first (24 fps, the quality's short edge,
  * the clip's sound: video-fit-clip, so ComfyUI never decodes more of the clip than it needs), then one job on the
  * Openjutsu graph with its settings (params.extra.openjutsu). From picture's first frame reads the clip itself (one frame).
  */
@@ -1819,6 +1841,21 @@ function planOpenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
       }),
     );
     return { steps, final: "edit", pieces: 1, sound: false, tracked: false };
+  }
+  if (m.id === MOTION_H3) {
+    // The character photo is H3's look reference (not a first frame), so there is nothing to approve first.
+    const refs = input.references.slice(0, 1);
+    if (!refs.length) throw new Error(REFS_MISSING.motion);
+    fit(sized(quality === "720p" ? 736 : 480));
+    steps.push(
+      job("motion", "motion-transfer", "Transfer the motion", refs, {
+        seconds: r3(end - start),
+        quality,
+        motion: 0,
+        scene: (input.prompt ?? "").trim().slice(0, OPENJUTSU_LIMITS.sceneChars),
+      }),
+    );
+    return { steps, final: "motion", pieces: 1, sound: false, tracked: false };
   }
   if (m.review) {
     const p = input.picture ?? { stage: "frame" as const };

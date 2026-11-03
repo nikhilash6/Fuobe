@@ -63,6 +63,8 @@ describe("the Openjutsu graphs in the library", () => {
   it("the models Genjutsu runs point at them, one by one and the H3 renderer as variants", () => {
     expect(getModel("oss-h3-group-swap")!.routes[0].endpoint).toBe(OPENJUTSU_WORKFLOWS.group);
     expect(getModel("oss-from-picture")!.routes[0].endpoint).toBe(OPENJUTSU_WORKFLOWS.solar);
+    expect(getModel("oss-h3-motion")!.routes[0]).toMatchObject({ op: "motion-transfer", provider: "comfyui", endpoint: OPENJUTSU_WORKFLOWS.motionH3 });
+    expect(getModel("oss-h3-motion")!.name).toBe("MiniMax H3");
     const has = () => true;
     const r = (endpoint: string, extra: Record<string, unknown>) => resolveWorkflowId(endpoint, { op: "x", clips: 0, images: 0, audio2: false, extra, has });
     expect(r(OPENJUTSU_WORKFLOWS.group, { openjutsu: { onePerPerson: true } })).toBe(OPENJUTSU_WORKFLOWS.groupOneByOne);

@@ -171,6 +171,7 @@ describe("round-4 ComfyUI workflows", () => {
       "video-scene-describe",
       "video-from-picture-solar",
       "video-from-picture-h3",
+      "video-motion-transfer-h3",
       "video-fix-faces-h3",
       "video-fix-colours",
     ]);

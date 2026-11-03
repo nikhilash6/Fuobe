@@ -555,6 +555,8 @@ export const OPENJUTSU_WORKFLOWS = {
   describe: "video-scene-describe",
   solar: "video-from-picture-solar",
   h3: "video-from-picture-h3",
+  /** Motion transfer's MiniMax H3: the From picture H3 graph with the character photo itself as Picture 1. */
+  motionH3: "video-motion-transfer-h3",
   faces: "video-fix-faces-h3",
   colours: "video-fix-colours",
 } as const;
@@ -615,12 +617,13 @@ export function openjutsuGraph(id: string, wf: ComfyWorkflow, o: OpenjutsuSettin
     case OPENJUTSU_WORKFLOWS.describe:
       return describeScene(wf, { frames: pictureFrames(num(o.seconds, 6)), ownPerson: o.ownPerson === true });
     case OPENJUTSU_WORKFLOWS.solar:
-    case OPENJUTSU_WORKFLOWS.h3: {
+    case OPENJUTSU_WORKFLOWS.h3:
+    case OPENJUTSU_WORKFLOWS.motionH3: {
       const w = ctx.clip?.width;
       const h = ctx.clip?.height;
       if (!w || !h) throw new Error("Couldn't read the clip's size to make the video.");
       const motion = o.motion === 512 || o.motion === 768 ? o.motion : 0;
-      return pictureVideo(wf, { renderer: id === OPENJUTSU_WORKFLOWS.h3 ? "h3" : "solar", seconds: num(o.seconds, 6), width: w, height: h, quality: str(o.quality, "480p"), motion, seed, description: str(o.scene) });
+      return pictureVideo(wf, { renderer: id === OPENJUTSU_WORKFLOWS.solar ? "solar" : "h3", seconds: num(o.seconds, 6), width: w, height: h, quality: str(o.quality, "480p"), motion, seed, description: str(o.scene) });
     }
     case OPENJUTSU_WORKFLOWS.faces:
       return pruneFace(wf, { style: o.faceStyle === "photo" ? "photo" : "mouth", seed, chunkSeconds: (CHUNK_SECONDS as readonly number[]).includes(num(o.chunkSeconds, 6.5)) ? num(o.chunkSeconds, 6.5) : 6.5 });

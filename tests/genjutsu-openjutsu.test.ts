@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   chooseMaker,
   decodeSetup,
+  directRunFeatures,
   encodeSetup,
   fitSize,
   GENJUTSU_FEATURES,
@@ -10,6 +11,7 @@ import {
   getMaker,
   makersFor,
   modeOpen,
+  MOTION_H3,
   ORIGINALS,
   planGenjutsu,
   requestFeatures,
@@ -41,7 +43,53 @@ describe("Genjutsu: the Openjutsu modes", () => {
     for (const mode of ["character", "swap", "picture", "finish"] as const) {
       for (const m of makersFor("open", mode, mode === "swap" || mode === "character" ? "type" : undefined, none)) expect(m.features, m.id).toBeUndefined();
     }
-    expect(Object.keys(GENJUTSU_FEATURES)).toHaveLength(11);
+    expect(Object.keys(GENJUTSU_FEATURES)).toHaveLength(12);
+  });
+
+  it("Motion transfer's MiniMax H3: a model choice the owner sees after the Original, a visitor only once it opens", () => {
+    const h3 = open(MOTION_H3);
+    expect(h3).toMatchObject({ label: "MiniMax H3", modes: ["motion"], source: "open", refs: { min: 1, max: 1 }, keepsSound: true, qualities: ["480p", "720p"], features: ["motion-h3"], part: { min: 2, max: 15 } });
+    expect(GENJUTSU_FEATURES["motion-h3"]).toEqual({ mode: "motion", workflows: ["video-motion-transfer-h3"], maker: MOTION_H3 });
+    expect(makersFor("open", "motion").map((m) => m.id)).toEqual([ORIGINALS.motionLite, MOTION_H3]);
+    expect(makersFor("open", "motion", undefined, none).map((m) => m.id)).toEqual([ORIGINALS.motionLite]);
+    expect(makersFor("open", "motion", undefined, (f) => f === "motion-h3").map((m) => m.id)).toEqual([ORIGINALS.motionLite, MOTION_H3]);
+    expect(makersFor("cloud", "motion").map((m) => m.id)).not.toContain(MOTION_H3);
+    // The Original stays the default; H3 runs when picked (the owner, or anyone once it opens).
+    expect(chooseMaker({ engine: "open", mode: "motion" })).toMatchObject({ maker: { id: ORIGINALS.motionLite } });
+    expect(chooseMaker({ engine: "open", mode: "motion", modelId: MOTION_H3 })).toMatchObject({ maker: { id: MOTION_H3 } });
+    expect(chooseMaker({ engine: "open", mode: "motion", modelId: MOTION_H3, open: none })).toMatchObject({ maker: { id: ORIGINALS.motionLite } });
+    expect(requestFeatures({ mode: "motion", maker: h3 })).toEqual(["motion-h3"]);
+    expect(directRunFeatures(MOTION_H3, { seconds: 5 })).toEqual(["motion-h3"]);
+    const code = encodeSetup({ mode: "motion", engine: "open", model: MOTION_H3 });
+    expect(decodeSetup(code)?.model).toBe(MOTION_H3);
+    expect(decodeSetup(code, none)?.model).toBeUndefined();
+  });
+
+  it("Motion transfer's MiniMax H3: 2–15 s, one character photo, then the part at 24 fps and one job on the H3 graph", () => {
+    const h3 = open(MOTION_H3);
+    const c = (o: Partial<Parameters<typeof genjutsuProblem>[0]> = {}) => genjutsuProblem({ mode: "motion", maker: h3, source, range: { start: 0, end: 6 }, references: 1, ...o });
+    expect(c()).toBeNull();
+    expect(c({ references: 0 })).toBe("Add a picture of your character");
+    expect(c({ range: { start: 0, end: 1.5 } })).toBe("Pick a part between 2 and 15 seconds");
+    expect(c({ range: { start: 0, end: 16 } })).toBe("Pick a part between 2 and 15 seconds");
+    expect(c({ range: { start: 2, end: 17 } })).toBeNull();
+
+    const p = oj({ mode: "motion", maker: h3, references: [ref, "/api/files/two.png"], seed: 9, prompt: "She smiles at the end." });
+    expect(p.steps.map((s) => s.key)).toEqual(["part", "motion"]);
+    expect(step(p, "part").request).toMatchObject({ modelId: "oss-fit-clip", op: "trim", params: { startTime: 2, endTime: 8, fps: 24, extra: { width: 1308, height: 736 } } });
+    const job = step(p, "motion");
+    expect(job.request).toMatchObject({ modelId: MOTION_H3, op: "motion-transfer", feature: "genjutsu", inputs: { images: [ref] }, params: { seed: 9, resolution: "720p" } });
+    expect(job.request.params?.extra?.openjutsu).toEqual({ seconds: 6, quality: "720p", motion: 0, scene: "She smiles at the end.", seed: 9 });
+    expect(job.after).toEqual(["part"]);
+    expect(job.chain).toEqual([{ slot: "video" }]);
+    expect(p).toMatchObject({ final: "motion", pieces: 1, sound: false });
+    // The graph keeps the part's sound itself: nothing is put back afterwards.
+    expect(p.steps.map((s) => s.request.modelId)).not.toContain("oss-mux");
+
+    const small = oj({ mode: "motion", maker: h3, references: [ref], quality: "480p" });
+    expect(step(small, "part").request.params?.extra).toEqual({ width: 854, height: 480 });
+    expect(step(small, "motion").request.params?.extra?.openjutsu).toMatchObject({ quality: "480p", scene: "" });
+    expect(() => oj({ mode: "motion", maker: h3, references: [] })).toThrow(/picture of your character/);
   });
 
   it("two characters or more move the swap to Group swap on your GPU (Recast in the cloud); one stays Fuobe's", () => {
