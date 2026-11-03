@@ -225,6 +225,14 @@ export function ExampleCardView({
   );
 }
 
+/** How wide a grid's card shows (its picture's `sizes`), by how many cards it has: as the grid below lays them out. */
+function gridSizes(n: number): string {
+  if (n === 1) return "(min-width: 392px) 360px, calc(100vw - 32px)";
+  if (n === 2) return "(min-width: 640px) 252px, 50vw";
+  if (n === 3) return "(min-width: 640px) 245px, 50vw";
+  return "(min-width: 1032px) 240px, (min-width: 640px) 25vw, 50vw";
+}
+
 /** Cards in a grid: two across a phone, four across a desktop (1000 px at most; one or two cards centred, one alone at 360 px). */
 export function ExampleGrid({ cards, activeId, onPick, aspect, className }: { cards: ExampleCard[]; activeId?: string; onPick: ExamplePick; aspect?: ExampleAspect; className?: string }) {
   return (
@@ -238,7 +246,7 @@ export function ExampleGrid({ cards, activeId, onPick, aspect, className }: { ca
       )}
     >
       {cards.map((c, i) => (
-        <ExampleCardView key={c.id} card={c} index={i} active={!!activeId && exampleKey(c) === activeId} onPick={onPick} aspect={aspect} />
+        <ExampleCardView key={c.id} card={c} index={i} active={!!activeId && exampleKey(c) === activeId} onPick={onPick} aspect={aspect} sizes={gridSizes(cards.length)} />
       ))}
     </div>
   );

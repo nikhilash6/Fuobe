@@ -77,6 +77,9 @@ function watch() {
     const img = v.parentElement?.querySelector("img");
     if (!img?.complete || !img.naturalWidth || !/\/(previews\/presets|examples)\//.test(img.currentSrc)) return;
     v.__seen = true;
+    // A card resting on its peak that the viewer asked to play (a hover or focus) starts before the change, by design
+    // (PresetPreview's Clip, `rest.from`, under a 150 ms fade): only a clip that plays by itself is held to its still.
+    if (!v.loop && v.currentTime < 1) return;
     try {
       const a = grey(v);
       const b = grey(img);
