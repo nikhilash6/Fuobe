@@ -18,6 +18,7 @@ import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useCreateGeneration, useEngine, useGenerations, useHydrated, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
+  FINAL_3D,
   IDOL_QUALITIES,
   MAX_3D_PROMPT,
   MODEL3D_FEATURE,
@@ -71,18 +72,33 @@ const HINTS: Record<Model3dMode, string> = {
 
 /**
  * A link's ?model= (from ⌘K) picks that model, its mode and its engine; ?mode= picks a mode; ?model=meshy-rigging
- * (rigging works on a finished model) says where Rig & animate is. Under its own Suspense: it reads the URL.
+ * (rigging works on a finished model) says where Rig & animate is; ?image= fills in the picture (an Idol 3D result's
+ * "Build the final with TRELLIS.2"). Under its own Suspense: it reads the URL.
  */
-function UrlModel({ onModel, onMode, onRig }: { onModel: (mode: Model3dMode, engine: Engine, id: string) => void; onMode: (mode: Model3dMode) => void; onRig: () => void }) {
+function UrlModel({
+  onModel,
+  onMode,
+  onRig,
+  onImage,
+}: {
+  onModel: (mode: Model3dMode, engine: Engine, id: string) => void;
+  onMode: (mode: Model3dMode) => void;
+  onRig: () => void;
+  onImage: (url: string) => void;
+}) {
   const params = useSearchParams();
   const id = params.get("model");
   const mode = params.get("mode");
+  const image = params.get("image");
   useEffect(() => {
     const found = id ? modeOf(id) : null;
     if (found && id) onModel(found.mode, found.engine, id);
     else if (id === RIG_MODEL) onRig();
     else if (MODEL3D_MODES.some((m) => m.id === mode)) onMode(mode as Model3dMode);
   }, [id, mode, onModel, onMode, onRig]);
+  useEffect(() => {
+    if (image) onImage(image);
+  }, [image, onImage]);
   return null;
 }
 
@@ -225,6 +241,13 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   // Refine detail · Hi3D 1.0 (open engine, From an image and From several images): the resolution, or off.
   const [refine, setRefine] = useState<Hi3dResolution | null>(null);
   const showRigHint = useCallback(() => setRigHint(true), []);
+  // A picture handed over in the link (?image=): a Fuobe result's, so Idol's photo crop stays off.
+  const fromImage = useCallback((url: string) => {
+    const v: SlotValue = { ref: url, preview: url, kind: "image" };
+    lastPhoto.current = v;
+    setPhoto(v);
+    setIdolPhoto(false);
+  }, []);
   const fromUrl = useCallback(
     (m: Model3dMode, e: Engine, id: string) => {
       setMode(m);
@@ -264,6 +287,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const cloudAllowed = engineMode !== "open";
   // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on.
   const refineAllowed = !visitor && engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
+  // "Build the final with TRELLIS.2" on an Idol 3D result: while TRELLIS.2 runs here and is switched on.
+  const finalAllowed = !visitor && engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");
   const refining = refineAllowed && engine === "open" && (mode === "image" || mode === "multi") && refine !== null ? refine : null;
   const go = () => {
     if (visitor) return;
@@ -282,7 +307,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   return (
     <ToolShell title="Image to 3D" selfHostedOnly>
       <Suspense fallback={null}>
-        <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} />
+        <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} onImage={fromImage} />
       </Suspense>
       <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]}>
         {visitor && <SelfHostNote className="mt-3 max-w-xl">Image to 3D isn&apos;t available here.</SelfHostNote>}
@@ -451,7 +476,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((g) => (
-              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />
+              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} />
             ))}
           </div>
         )}
@@ -469,12 +494,12 @@ function retryOf(g: Generation): GenerationRequest {
   return r;
 }
 
-function ResultCard({ g, info, cloudAllowed, refineAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed: boolean }) {
+function ResultCard({ g, info, cloudAllowed, refineAllowed, finalAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed: boolean; finalAllowed: boolean }) {
   const create = useCreateGeneration();
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
   if (g.kind === "video") return <FilmCard g={g} />;
-  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />;
+  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} />;
 }
 
 /** A photoreal orbit filmed from a model ("Film it photoreal"): the clip, to watch and download. */
