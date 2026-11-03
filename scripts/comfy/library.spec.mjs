@@ -5330,7 +5330,7 @@ export const SPEC = [
       'with frames 4: a full turn in four steps of 90°, starting at the input view, 1024 px on white, opacity_threshold 0.05. SaveImage 96 keeps the batch: ' +
       'index 0 is the front (the input view), 1 the object\'s left, 2 its back, 3 its right. The sign of frames sets the direction: +4 turns the camera ' +
       'about world +Y (three.js, Y up) toward the viewer\'s right, which is the object\'s left (checked with an asymmetric splat through RenderSplat on 0.41.0); -4 would give the right first. ' +
-      'No splat file and no orbit video are saved. The views are renders of a 3D guess: soft, and untested on realistic people. Same weights, presets and VRAM listing as image-to-splat-idol.',
+      'No splat file and no orbit video are saved. The views are renders of a 3D reconstruction and can look soft; faces of real people are the hardest case, so check them before use. Same weights, presets and VRAM listing as image-to-splat-idol.',
   },
   {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).
