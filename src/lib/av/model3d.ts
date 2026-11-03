@@ -254,7 +254,7 @@ export interface Model3dView {
   glb?: string;
   /** The GLB to show in a viewer: the web GLB when there is one, else `glb`. */
   web?: string;
-  /** A Gaussian splat (.ply / .spz / .ksplat), which the page doesn't draw: downloaded, with its turntable or preview shown. */
+  /** A Gaussian splat (.ply / .spz / .ksplat): the splat viewer draws it (src/components/model3d/splat-viewer.tsx), with its turntable or preview as the poster and fallback, and it downloads. */
   splat?: { url: string; format: string };
   /** A rendered turntable that came with the model (the server's render for open 3D models, TripoSplat's orbit on the open engine, demo). */
   turntable?: string;
@@ -276,7 +276,8 @@ const SPLAT_FORMATS = new Set(["ply", "spz", "ksplat", "splat"]);
 
 /**
  * A Gaussian splat's format (ply, spz, ksplat), which no glTF viewer loads, else undefined. A splat says so
- * (meta.format), or its file's extension does; the demo's "splat" is a GLB the viewer shows.
+ * (meta.format), or its file's extension does. A GLB marked as a splat (older demo results) stays a GLB; today's demo
+ * splat is a real .spz or .ply (scripts/gen-demo-splat.mjs).
  */
 export function splatFormatOf(o: Pick<OutputFile, "url" | "meta"> | undefined): string | undefined {
   if (!o) return undefined;

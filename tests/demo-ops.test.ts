@@ -226,4 +226,21 @@ describe("demo outputs for the round-4 operations", () => {
     expect(frames.map((f) => [f.kind, f.meta?.index])).toEqual([0, 1, 2, 3].map((i) => ["image", i]));
     expect(done.overlay.outputs).toEqual([expect.objectContaining({ kind: "image", contentType: "image/svg+xml" })]);
   });
+
+  it("gives an open-engine splat an .spz with its orbit video, as the TripoSplat and Idol 3D graphs write", async () => {
+    const image = saveFile({ data: png, contentType: "image/png", source: "upload" }).url;
+    for (const modelId of ["oss-triposplat", "oss-idol"]) {
+      const [g] = gens.createGenerations({ feature: "image-to-3d", modelId, op: "splat", inputs: { images: [image] } });
+      expect(g.kind, modelId).toBe("model3d");
+      const done = await settle(g.id);
+      expect(done.status, `${modelId}: ${done.error}`).toBe("succeeded");
+      const splat = done.outputs.find((o) => o.kind === "model3d");
+      expect(splat, modelId).toMatchObject({ contentType: "model/x-spz", meta: expect.objectContaining({ format: "spz", role: "splat" }) });
+      expect(splat!.url, modelId).toMatch(/\.spz$/);
+      expect(done.outputs.find((o) => o.kind === "video"), modelId).toMatchObject({ contentType: "video/mp4", meta: expect.objectContaining({ turntable: true }) });
+      // Niantic's .spz is gzip.
+      const spz = Buffer.from(await (await serve(splat!.url)).arrayBuffer());
+      expect([spz[0], spz[1]], modelId).toEqual([0x1f, 0x8b]);
+    }
+  });
 });

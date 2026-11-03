@@ -127,3 +127,23 @@ describe("Spark loads only with the splat viewer", () => {
     expect(engineUsers.map((f) => path.relative(process.cwd(), f))).toEqual(["src/components/model3d/splat-viewer.tsx"]);
   });
 });
+
+describe("the viewer leaves the page as it found it", () => {
+  const read = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
+
+  it("gives its WebGL context back when it closes, and falls back when the browser takes it", () => {
+    const engine = read("src/components/model3d/splat-engine.ts");
+    const dispose = engine.slice(engine.indexOf("  dispose() {"));
+    expect(dispose.slice(0, dispose.indexOf("\n  }\n"))).toMatch(/this\.renderer\.forceContextLoss\(\)/);
+    expect(engine).toMatch(/addEventListener\("webglcontextlost"/);
+  });
+
+  it("the full-screen panel takes focus only when the user chose 'Look around in 3D', so the arrow keys keep browsing", () => {
+    const panel = read("src/components/studio/result-media.tsx");
+    const tag = panel.match(/<SplatViewer[^>]*\/>/)![0];
+    expect(tag).toMatch(/autoFocus=\{asked\}/);
+    // A dialog that focuses the stage on opening doesn't hand it ArrowLeft / ArrowRight (tests/e2e/splat-viewer.mjs checks it in a browser).
+    const viewer = read("src/components/model3d/splat-viewer.tsx");
+    expect(viewer).toMatch(/if \(!engaged\.current && \(e\.key === "ArrowLeft" \|\| e\.key === "ArrowRight"\)\) return;/);
+  });
+});

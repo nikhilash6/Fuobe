@@ -211,6 +211,21 @@ for (const phone of [false, true]) {
       await noSideScroll(page, `${tag} library viewer`);
       await sleep(1000);
       await shoot(page, `${name}-panel`);
+      // Opening the panel doesn't take the arrow keys: ArrowRight keeps browsing the results.
+      const shown = async () => (await dialog.getByRole("link", { name: /^\.(spz|ply)$/ }).first().getAttribute("href", { timeout: 2000 }).catch(() => null)) ?? "";
+      const before = await shown();
+      await page.keyboard.press("ArrowRight");
+      await until(async () => (await shown()) !== before, `${tag}: ArrowRight moved to the next result`, 15_000);
+      // Once the user presses on the splat, the arrow keys turn it instead.
+      const stagePanel = dialog.getByRole("application");
+      if ((await stagePanel.count()) === 1) {
+        await stagePanel.waitFor();
+        await stagePanel.click();
+        const here = await shown();
+        await page.keyboard.press("ArrowRight");
+        await sleep(1500);
+        assert.equal(await shown(), here, `${tag}: ArrowRight turns the splat the user pressed on`);
+      }
     } catch (e) {
       failures.push(`${tag}: ${e.message}`);
       await shoot(page, `${name}-failure`);
@@ -257,6 +272,8 @@ for (const phone of [false, true]) {
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "Look around in 3D" }).click({ timeout: 30_000 });
     await dialog.getByRole("toolbar", { name: "3D view" }).waitFor({ timeout: 60_000 });
+    // Chosen: the viewer takes the focus, so the keys turn the splat.
+    await until(() => dialog.getByRole("application").evaluate((el) => document.activeElement === el), "reduced motion: the chosen viewer has the focus", 30_000);
     await shoot(page, "reduced-motion-panel");
   } catch (e) {
     failures.push(`reduced motion: ${e.message}`);

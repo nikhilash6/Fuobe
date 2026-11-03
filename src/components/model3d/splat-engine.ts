@@ -34,7 +34,17 @@ export class SplatEngine {
   /** The last frame's CPU time in milliseconds (renderer.render), for the numbers in docs/research/idol-9.md. */
   lastFrameMs = 0;
 
-  constructor(private canvas: HTMLCanvasElement) {
+  private onLost = (e: Event) => {
+    e.preventDefault();
+    if (!this.disposed) this.onContextLost?.();
+  };
+
+  /** onContextLost: the browser took the WebGL context away (too many open, a GPU reset) while this was showing. */
+  constructor(
+    private canvas: HTMLCanvasElement,
+    private onContextLost?: () => void,
+  ) {
+    canvas.addEventListener("webglcontextlost", this.onLost);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
     this.spark = new SparkRenderer({ renderer: this.renderer, onDirty: () => this.requestRender() });
     this.scene.add(this.spark);
@@ -178,6 +188,10 @@ export class SplatEngine {
     this.mesh?.dispose();
     this.spark.dispose();
     this.renderer.dispose();
+    // Give the context back now rather than at garbage collection: browsers keep only about 16 live, and a feed
+    // of cards that open and close the viewer would otherwise push out the one that is showing.
+    this.renderer.forceContextLoss();
+    this.canvas.removeEventListener("webglcontextlost", this.onLost);
   }
 }
 

@@ -249,7 +249,8 @@ export function ModelViewer({ output, g }: { output: OutputFile; g: Generation }
 /**
  * A splat in the full-screen viewer (the Library's 3D tab and "View in 3D" open it): the splat viewer, with the file
  * to download. The orbit video (or the picture) stays instead where the browser has no WebGL2 or the file is too big
- * for the device, and when the user prefers reduced motion until they choose "Look around in 3D".
+ * for the device, and when the user prefers reduced motion until they choose "Look around in 3D". The viewer takes
+ * focus only when they chose it: otherwise the arrow keys keep browsing the results (the Viewer's own keys).
  */
 function SplatPanel({ output, format, poster, video, g }: { output: OutputFile; format: string; poster?: string; video?: string; g: Generation }) {
   const hydrated = useHydrated();
@@ -267,7 +268,7 @@ function SplatPanel({ output, format, poster, video, g }: { output: OutputFile; 
     return (
       <div className="flex size-full flex-col">
         <div className="relative min-h-0 flex-1 overflow-hidden md:rounded-lg">
-          <SplatViewer url={output.url} format={format} poster={poster} name={name} defaultCutoff={hazeCutoffFor(g.modelId)} tone="panel" label={g.request.prompt || "the splat"} autoFocus onUnavailable={setNote} />
+          <SplatViewer url={output.url} format={format} poster={poster} name={name} defaultCutoff={hazeCutoffFor(g.modelId)} tone="panel" label={g.request.prompt || "the splat"} autoFocus={asked} onUnavailable={setNote} />
         </div>
         <div className="flex shrink-0 justify-center pt-2">{download}</div>
       </div>

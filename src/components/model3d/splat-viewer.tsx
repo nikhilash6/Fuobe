@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { uploadFile, useIsGuest } from "@/lib/api";
+import { uploadFile, useViewer } from "@/lib/api";
 import { backgroundColor, FALLBACK_TEXT, HAZE_MAX, HAZE_STEP, SPLAT_BACKGROUNDS, SPLAT_MAX_BYTES, stillFileName, type SplatBackground } from "@/lib/av/splat-view";
 import { toastError } from "@/lib/refusals";
 import { cn } from "@/lib/utils";
@@ -87,7 +87,9 @@ export function SplatViewer({
   const { resolvedTheme } = useTheme();
   const [background, setBackground] = useState<SplatBackground>(() => (tone === "panel" ? "dark" : resolvedTheme === "dark" ? "dark" : "light"));
   const [saving, setSaving] = useState(false);
-  const guest = useIsGuest();
+  // "Save a still" waits until who is viewing is known: a guest can't save (the upload would be refused).
+  const viewer = useViewer().data;
+  const canSave = !!viewer && !(viewer.publicSignup && !viewer.signedIn);
   const helpId = useId();
   const onUnavailableRef = useRef(onUnavailable);
   useEffect(() => void (onUnavailableRef.current = onUnavailable));
@@ -103,7 +105,12 @@ export function SplatViewer({
     import("./splat-engine")
       .then(async ({ SplatEngine, SplatTooBigError }) => {
         if (ctl.signal.aborted) return;
-        eng = new SplatEngine(canvas);
+        eng = new SplatEngine(canvas, () => {
+          // The browser took the WebGL context back (too many open, or the GPU reset): show the fallback.
+          if (ctl.signal.aborted) return;
+          setStatus("error");
+          onUnavailableRef.current?.("The 3D view stopped here. Open it again, or download the file to look around it in a splat viewer.");
+        });
         engineRef.current = eng;
         const el = stageRef.current;
         if (el) eng.resize(el.clientWidth, el.clientHeight, Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 2));
@@ -149,8 +156,25 @@ export function SplatViewer({
     backgroundRef.current = background;
     engineRef.current?.setBackground(backgroundColor(background));
   }, [background]);
+  // The stage takes ArrowLeft / ArrowRight only once the user has reached for it (tabbed to it, pressed on it, used
+  // one of its keys, or chose to open it). A dialog that focuses it by itself on opening leaves those two keys to
+  // the page, so the full-screen viewer keeps browsing the results.
+  const engaged = useRef(false);
+  const tabbed = useRef(false);
   useEffect(() => {
-    if (autoFocus && status === "ready") stageRef.current?.focus({ preventScroll: true });
+    const onKeyDown = (e: KeyboardEvent) => void (tabbed.current = e.key === "Tab");
+    const onPointer = () => void (tabbed.current = false);
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("pointerdown", onPointer, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("pointerdown", onPointer, true);
+    };
+  }, []);
+  useEffect(() => {
+    if (!autoFocus || status !== "ready") return;
+    engaged.current = true;
+    stageRef.current?.focus({ preventScroll: true });
   }, [autoFocus, status]);
 
   const ready = status === "ready";
@@ -171,6 +195,8 @@ export function SplatViewer({
     };
     const fn = act[e.key];
     if (!fn) return;
+    if (!engaged.current && (e.key === "ArrowLeft" || e.key === "ArrowRight")) return;
+    engaged.current = true;
     e.preventDefault();
     fn();
   };
@@ -223,6 +249,9 @@ export function SplatViewer({
         aria-describedby={helpId}
         aria-busy={!ready}
         onKeyDown={onKey}
+        onFocus={() => void (engaged.current ||= tabbed.current)}
+        onBlur={() => void (engaged.current = false)}
+        onPointerDown={() => void (engaged.current = true)}
         className="absolute inset-0 touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <canvas ref={setCanvas} className={cn("size-full transition-opacity", ready ? "opacity-100" : "opacity-0")} />
@@ -293,7 +322,7 @@ export function SplatViewer({
               </PopoverContent>
             </Popover>
           )}
-          {!guest && (
+          {canSave && (
             <IconButton text={saving ? "Saving the still…" : "Save a still"} panel={panel} onClick={() => void saveStill()} disabled={saving}>
               {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
             </IconButton>
