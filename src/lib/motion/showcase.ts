@@ -6,7 +6,7 @@
  */
 
 import { DEFAULT_EXPORT, type Recipe } from "./recipe";
-import type { SizePreset } from "./sizes";
+import { TILE_COVER, type SizePreset } from "./sizes";
 
 export interface ShowcaseBrand {
   name: string;
@@ -46,28 +46,26 @@ export interface Showcase {
    * fully set, before it gives way to the logo). By default the cover rests on the last frame.
    */
   poster?: string;
-  /**
-   * The size its cover is made at, when not its own: a tall piece's cover is made at 4:5, so the gallery's 3:4 tile
-   * shows all of it (a 9:16 frame cropped to 3:4 loses its top and its foot).
-   */
-  cover?: SizePreset;
 }
 
 /** Each code-drawn template's showcase, by template id. */
 export const SHOWCASES: Record<string, Showcase> = {
-  "ms-kinetic-headline": { brand: "lumen", size: "9:16", fields: { headline: "Invoices that *chase* themselves.", cta: "Start free", website: "lumenlabs.io" }, controls: { pace: "punchy", look: "dark", align: "centre" }, poster: "words.exit", cover: "4:5" },
-  "m2-line-reveal": { brand: "ardent", size: "9:16", product: "perfume", fields: { headline: "Quietly exceptional.", cta: "Discover the scent" }, controls: { pace: "calm", look: "light", line: "fine" }, cover: "4:5" },
+  "ms-kinetic-headline": { brand: "lumen", size: "9:16", fields: { headline: "Invoices that *chase* themselves.", cta: "Start free", website: "lumenlabs.io" }, controls: { pace: "punchy", look: "dark", align: "centre" }, poster: "words.exit" },
+  "m2-line-reveal": { brand: "ardent", size: "9:16", product: "perfume", fields: { headline: "Quietly exceptional.", cta: "Discover the scent" }, controls: { pace: "calm", look: "light", line: "fine" } },
   "ms-logo-sting": { brand: "lumen", size: "4:5", fields: { tagline: "Software that ships itself" }, controls: { pace: "punchy", look: "dark" } },
   "ms-feature-cards": { brand: "ledgerly", size: "4:5", fields: { headline: "Month-end, minus the panic", point1: "Invoices that chase themselves", point2: "Payroll in two taps", point3: "Books that close on Friday" }, controls: { pace: "calm", look: "light" } },
   "ms-dashboard-zoom": { brand: "ledgerly", size: "4:5", fields: { stat: "$1,284,000", label: "Revenue this quarter, up 38%" }, controls: { pace: "calm", look: "dark" } },
-  "m2-retro-starburst": { brand: "vesper", size: "9:16", product: "heel", fields: { headline: "Made to be noticed.", badge: "New!" }, controls: { pace: "punchy", look: "brand" }, cover: "4:5" },
-  "m2-offer-badge": { brand: "sora", size: "9:16", product: "perfume", fields: { offer: "20% off", headline: "The gifting edit", cta: "Shop the edit" }, controls: { pace: "punchy", look: "light" }, cover: "4:5" },
+  "m2-retro-starburst": { brand: "vesper", size: "9:16", product: "heel", fields: { headline: "Made to be noticed.", badge: "New!" }, controls: { pace: "punchy", look: "brand" } },
+  "m2-offer-badge": { brand: "sora", size: "9:16", product: "perfume", fields: { offer: "20% off", headline: "The gifting edit", cta: "Shop the edit" }, controls: { pace: "punchy", look: "light" } },
   "ms-big-number": { brand: "ledgerly", size: "4:5", fields: { stat: "3×", caption: "faster month-end close" }, controls: { pace: "punchy", look: "brand" } },
   "ms-five-star-quote": { brand: "sora", size: "4:5", fields: { quote: "“The only serum I’ve ever bought three times.”", name: "Amara K., verified buyer" }, controls: { pace: "calm", look: "light" } },
-  "ms-end-card": { brand: "aurele", size: "9:16", scene: "end-card/draw-on", fields: { product: "Le Sérum Nuit", cta: "Discover the ritual", website: "aurele-paris.com" }, controls: { style: "draw-on", mark: "logo" }, cover: "4:5" },
+  "ms-end-card": { brand: "aurele", size: "9:16", scene: "end-card/draw-on", fields: { product: "Le Sérum Nuit", cta: "Discover the ritual", website: "aurele-paris.com" }, controls: { style: "draw-on", mark: "logo" } },
 };
 
-/** A template's showcase as a full recipe (its scene, 30 fps, its own length; `cover`: at its cover's size). */
+/**
+ * A template's showcase as a full recipe (its scene, 30 fps, its own length). With `cover`: its gallery tile's cover,
+ * made at the tile's own shape (TILE_COVER) so nothing is cropped, with its words and product clear of the tile's chips.
+ */
 export function showcaseRecipe(id: string, scene: string, duration = 5, o: { cover?: boolean } = {}): Recipe | null {
   const s = SHOWCASES[id];
   if (!s) return null;
@@ -78,13 +76,13 @@ export function showcaseRecipe(id: string, scene: string, duration = 5, o: { cov
     v: 1,
     scene: s.scene ?? scene,
     seed: 7,
-    size: (o.cover && s.cover) || s.size,
+    size: o.cover ? { ...TILE_COVER } : s.size,
     fps: 30,
     duration,
     fields: s.brand === "aurele" ? { brand: b.name, ...s.fields } : { ...s.fields },
     brand: { name: b.name, colors: [...b.colors], fonts: { ...b.fonts }, ...(logo && { logo }) },
     ...(s.product && { media: { product: SHOWCASE_PRODUCTS[s.product] } }),
-    controls: { template: id, ...s.controls },
+    controls: { template: id, ...s.controls, ...(o.cover && { cover: "tile" }) },
     export: DEFAULT_EXPORT,
   };
 }

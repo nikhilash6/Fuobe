@@ -13,7 +13,7 @@ import { curve } from "../../ease";
 import { layoutText, type Measure, type TextLayout } from "../../layout";
 import type { Recipe } from "../../recipe";
 import type { LogoInfo, Scene, SceneInput, ScenePlan } from "../../scene";
-import { designSize } from "../../sizes";
+import { designSize, TILE_CHIPS, tileCover } from "../../sizes";
 import { frameCount } from "../../time";
 import { timeline, scaleCues, type Cue, type Timeline } from "../../tween";
 
@@ -84,7 +84,7 @@ export function cardColours(theme: AdTheme, colors: readonly string[]): { ink: s
  * sets the same sizes as a tall one; a tall card keeps its foot clear (where phone apps put their buttons and
  * captions). Text is set as typed (layoutText); a stack too tall for the frame is reported, never squeezed.
  */
-export function endCardRest(p: { theme: AdTheme; content: EndCardContent; logo: { w: number; h: number } | null; measure: Measure; size: { w: number; h: number }; letters?: boolean; colors?: readonly string[] }): EndCardRest {
+export function endCardRest(p: { theme: AdTheme; content: EndCardContent; logo: { w: number; h: number } | null; measure: Measure; size: { w: number; h: number }; letters?: boolean; colors?: readonly string[]; clear?: { top: number; bottom: number } }): EndCardRest {
   const { w: W, h: H } = p.size;
   const t = p.theme;
   const S = Math.min(W, H);
@@ -114,8 +114,12 @@ export function endCardRest(p: { theme: AdTheme; content: EndCardContent; logo: 
   let y = (H - total) / 2 - V * 0.03;
   // A tall card keeps its bottom fifth clear.
   if (H / W > 1.5) y = Math.min(y, H * 0.8 - total);
-  const fits = y >= m - 0.5 && y + total <= H - m + 0.5;
-  y = Math.max(m, y);
+  // Where the stack may go: inside the margins, and clear of what lies over the card (a gallery tile's chips).
+  const lo = Math.max(m, p.clear?.top ?? 0);
+  const hi = H - Math.max(m, p.clear?.bottom ?? 0);
+  if (p.clear) y = Math.max(lo, Math.min(y, hi - total));
+  const fits = y >= lo - 0.5 && y + total <= hi + 0.5;
+  y = Math.max(lo, y);
 
   let logo: EndCardRest["logo"];
   let brand: TextBlock | undefined;
@@ -348,7 +352,9 @@ export function endCardScene(variant: EndCardVariant, build: (c: StyleContext) =
     plan(input: SceneInput): ScenePlan {
       const design = designSize(input.recipe.size);
       const { theme, content } = endCardFrom(input.recipe);
-      const rest = endCardRest({ theme, content, logo: input.logo ? { w: input.logo.w, h: input.logo.h } : null, measure: input.measure, size: design, colors: input.recipe.brand.colors });
+      // A gallery tile's cover keeps the card clear of the tile's chips.
+      const clear = tileCover(input.recipe) ? { top: design.h * TILE_CHIPS.top, bottom: design.h * TILE_CHIPS.bottom } : undefined;
+      const rest = endCardRest({ theme, content, logo: input.logo ? { w: input.logo.w, h: input.logo.h } : null, measure: input.measure, size: design, colors: input.recipe.brand.colors, clear });
       const style = build({ rest, input, second: secondColour(input.recipe.brand.colors, theme.accent) });
       const k = timeScale(input.recipe.duration);
       const lead = (style.lead ?? 0) * k;

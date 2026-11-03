@@ -14,6 +14,19 @@ export const SIZE_PRESETS: Record<SizePreset, { w: number; h: number; preview: {
   "4:5": { w: 1080, h: 1350, preview: { w: 576, h: 720 } },
 };
 
+/** The shape of Marketing's gallery tiles (3:4): a template's cover is made at it, so the tile shows all of it. */
+export const TILE_COVER = { w: 1080, h: 1440 } as const;
+
+/**
+ * A gallery tile's chips (its format top left, play top right, "Instant" bottom left) cover these shares of its height
+ * at the smallest tile (a 360 px phone), with a little room: a cover made for the tile (`tileCover`) keeps its words and
+ * its product between them.
+ */
+export const TILE_CHIPS = { top: 0.165, bottom: 0.15 } as const;
+
+/** Whether a recipe makes a gallery tile's cover (showcaseRecipe with `cover`). */
+export const tileCover = (r: { controls?: Record<string, unknown> }): boolean => r.controls?.cover === "tile";
+
 /** The fps a clip may be made at (60 comes with the editor). */
 export const FPS_CHOICES = [24, 25, 30] as const;
 export const DEFAULT_FPS = 30;

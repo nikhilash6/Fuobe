@@ -12,7 +12,7 @@ import { curve, type CurveName } from "../../ease";
 import { layoutText, type Measure, type TextLayout } from "../../layout";
 import type { Recipe } from "../../recipe";
 import type { Outline, Scene, SceneInput, ScenePlan } from "../../scene";
-import { designSize, type SizeSpec } from "../../sizes";
+import { designSize, TILE_CHIPS, tileCover, type SizeSpec } from "../../sizes";
 import { frameCount, local } from "../../time";
 import { DURATION_LIMITS, timeline, type EventKind, type MotionEvent, type StaggerUnit, type Timeline } from "../../tween";
 import { cardColours, lineLeft, lineRun, lineRuns, secondColour, type TextBlock } from "../end-card/shared";
@@ -134,9 +134,10 @@ export function paletteFor(look: LookId, theme: AdTheme, colors: readonly string
  * Where words may go: 6 % of the short side in from every edge; a tall 9:16 frame keeps its top 12 % and bottom 18 %
  * clear for the platform's own buttons and captions.
  */
-export function safeArea(d: { w: number; h: number }): { x: number; y: number; w: number; h: number } {
+export function safeArea(d: { w: number; h: number }, tile = false): { x: number; y: number; w: number; h: number } {
   const S = Math.min(d.w, d.h);
   const side = Math.round(S * 0.06);
+  if (tile) return { x: side, y: Math.round(d.h * TILE_CHIPS.top), w: d.w - 2 * side, h: Math.round(d.h * (1 - TILE_CHIPS.top - TILE_CHIPS.bottom)) };
   if (d.h / d.w > 1.7) return { x: side, y: Math.round(d.h * 0.12), w: d.w - 2 * side, h: Math.round(d.h * 0.7) };
   return { x: side, y: side, w: d.w - 2 * side, h: d.h - 2 * side };
 }
@@ -396,7 +397,7 @@ export function marketingScene(def: MarketingSceneDef): Scene {
         measure: input.measure,
         design,
         S,
-        safe: safeArea(design),
+        safe: safeArea(design, tileCover(recipe)),
         theme,
         palette: paletteFor(lookId, theme, recipe.brand.colors),
         pace: paceOf(recipe.controls),
