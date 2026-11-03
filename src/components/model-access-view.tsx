@@ -94,7 +94,7 @@ function LicenceLine({ licence, prefix, full }: { licence: LicenceInfo; prefix?:
         )}
         <ClassBadge licence={licence} />
         {licence.notices?.map((n) => (
-          <span key={n} className={cn(badge, "border")}>
+          <span key={n} className={cn(badge, "h-auto min-h-5 max-w-full rounded-[10px] border py-0.5 leading-snug whitespace-normal [overflow-wrap:anywhere]")}>
             Shows “{n}”
           </span>
         ))}
