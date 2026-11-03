@@ -264,8 +264,15 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
               ["skills", "Skills"],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={cn("rounded-full px-3.5 transition-colors", tab === k ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground")}>
-              {label}
+            <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={cn("rounded-full px-3.5 whitespace-nowrap transition-colors", tab === k ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground")}>
+              {k === "mine" ? (
+                <>
+                  <span className="sm:hidden">Mine</span>
+                  <span className="max-sm:hidden">{label}</span>
+                </>
+              ) : (
+                label
+              )}
             </button>
           ))}
         </div>
