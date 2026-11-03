@@ -215,6 +215,8 @@ export function scanTiles(width: number, height: number): Box[] {
 }
 
 interface ScanItem {
+  /** Which scan found it: 0 the whole photo, then the tiles in scanTiles order. */
+  src: number;
   label: string;
   box: Box;
   type: OverlayType;
@@ -294,6 +296,7 @@ export function mergeScanReports(full: string | undefined | null, tiles: (string
         const b = items[j];
         if (overlap(a.box, b.box) < 0.2 * Math.min(boxArea(a.box), boxArea(b.box))) continue;
         items[i] = {
+          src: a.src,
           label: b.label.length > a.label.length ? b.label : a.label,
           box: [Math.min(a.box[0], b.box[0]), Math.min(a.box[1], b.box[1]), Math.max(a.box[2], b.box[2]), Math.max(a.box[3], b.box[3])],
           type: a.type === "unknown" || b.type === "translucent_text_logo" ? b.type : a.type,
