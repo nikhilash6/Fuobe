@@ -109,9 +109,9 @@ export async function modelFiles(modelDirs, index, cacheFile, pins = filePins())
   return out;
 }
 
-/** The same hash the studio computes (src/server/computer/pool.ts inventoryHash). */
+/** The same hash the studio computes (src/server/computer/pool.ts inventoryHash), with the kinds of input it takes. */
 export function inventoryHash(inv) {
   const files = inv.files.map((f) => `${f.folder}/${f.name}:${f.size}:${f.sha256 ?? ""}`).sort();
   const packs = inv.nodePacks.map((p) => `${p.name}@${p.commit ?? ""}`).sort();
-  return crypto.createHash("sha256").update(JSON.stringify({ files, packs })).digest("hex");
+  return crypto.createHash("sha256").update(JSON.stringify({ files, packs, ...(inv.media && { media: [...inv.media].sort() }) })).digest("hex");
 }

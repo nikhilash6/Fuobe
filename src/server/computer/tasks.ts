@@ -16,6 +16,7 @@ import {
   type BeatAnswer,
   type ClaimedTask,
   type ComputerFacts,
+  type GiveBackWhy,
   type HistoryEntryLike,
   type RelayState,
   type ReportEvent,
@@ -568,6 +569,9 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       }
       const entries = e.event === "finished" ? [e.entry] : e.entries;
       if (!Array.isArray(entries) || entries.some((x) => !x || typeof x !== "object")) throw new RelayError(400, "Bad history entry");
+      // A worker's measured execution time and GPU, kept with the task for metering.
+      const exec = execFields(e);
+      const extra = (more: Record<string, unknown> = {}) => ({ ...(exec || Object.keys(more).length ? { extra_json: JSON.stringify({ ...extraOf(t), ...(exec && { exec }), ...more }) } : {}) });
       const p = plan(entries, e.event === "passes");
       if ("follow" in p) {
         if (!t.meta_batch) {
@@ -578,12 +582,12 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
         return { ok: true, follow: p.follow };
       }
       if ("error" in p) {
-        endTask(t.id, "failed", { error: p.error });
+        endTask(t.id, "failed", { error: p.error, ...extra() });
         return { ok: true };
       }
       const received: Received[] = p.wanted.map((w) => ({ n: w.n, bytes: 0, total: 0, done: false }));
       if (!p.wanted.length) {
-        endTask(t.id, "done", { result_json: JSON.stringify(p.outputs), wanted_json: "[]", received_json: "[]" });
+        endTask(t.id, "done", { result_json: JSON.stringify(p.outputs), wanted_json: "[]", received_json: "[]", ...extra() });
         return { ok: true, wanted: [] };
       }
       setTask(t.id, {
@@ -592,10 +596,15 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
         result_json: JSON.stringify(p.outputs),
         wanted_json: JSON.stringify(p.wanted),
         received_json: JSON.stringify(received),
-        extra_json: JSON.stringify({ ...extraOf(t), budget: p.budget }),
+        ...extra({ budget: p.budget }),
       });
       return { ok: true, wanted: p.wanted };
     }
+    case "give-back":
+      // Only a worker's task goes back to the line (a person's own computer keeps its jobs).
+      if (!t.pools || !poolGiveBack) throw new RelayError(409, "That doesn't fit this run now");
+      poolGiveBack(t, e.why);
+      return { ok: true };
     case "gone":
       if (t.attempts < 2 && t.state !== "sending") {
         setTask(t.id, { ...seen, state: "sending", note: "resent", started_at: null });
@@ -798,6 +807,30 @@ export function checkClocks(t: TaskRow, now = Date.now()): TaskRow {
 /** A task for workers keeps the workers' clocks (pool.ts sets this, so this file needn't import it). */
 let poolClocks: ((t: TaskRow, now: number) => TaskRow) | null = null;
 export const setPoolClocks = (fn: (t: TaskRow, now: number) => TaskRow) => (poolClocks = fn);
+
+/** A worker gives its task back to the line (pool.ts sets this too). */
+let poolGiveBack: ((t: TaskRow, why: GiveBackWhy) => void) | null = null;
+export const setPoolGiveBack = (fn: (t: TaskRow, why: GiveBackWhy) => void) => (poolGiveBack = fn);
+
+/** The execution time (ms, at most a week) and GPU name a worker reported with a finished job, as kept. */
+export interface ExecFacts {
+  ms: number;
+  device?: string;
+}
+
+function execFields(e: ReportEvent): ExecFacts | null {
+  if (e.event !== "finished" && e.event !== "passes") return null;
+  const ms = typeof e.execMs === "number" && Number.isFinite(e.execMs) && e.execMs >= 0 ? Math.min(Math.round(e.execMs), 7 * 24 * 3_600_000) : null;
+  if (ms === null) return null;
+  const device = typeof e.device === "string" && e.device.trim() ? e.device.trim().slice(0, FACT_LIMITS.text) : undefined;
+  return { ms, ...(device && { device }) };
+}
+
+/** What a worker measured for a task's run: its ComfyUI's execution time and its GPU, or null (none reported). */
+export const execOf = (t: TaskRow): ExecFacts | null => {
+  const x = json<{ exec?: ExecFacts }>(t.extra_json, {}).exec;
+  return x && typeof x.ms === "number" ? x : null;
+};
 
 /** The file of a received output, for the principal whose task it is (anyone else: null). */
 export function receivedFile(principal: Principal, taskId: string, n: number): { path: string; contentType?: string } | null {

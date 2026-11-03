@@ -86,10 +86,30 @@ export function needsOf(index: RequirementIndex, workflowId: string): Needs | nu
   return { workflowId, files, packs: Object.keys(wf.packs).sort(), minVramBytes: minVramBytesFor(wf.vramGb) };
 }
 
-/** A worker's verified files and node packs (PUT /api/gpu/computer/inventory). */
+/** The kinds of input file a worker may take. A worker makes every clip and sound again before its ComfyUI reads it. */
+export const MEDIA_KINDS = ["image", "video", "audio"] as const;
+export type MediaKind = (typeof MEDIA_KINDS)[number];
+
+/** The node types that read a clip or a sound file the job sent. */
+export const MEDIA_LOADERS: Record<"video" | "audio", readonly string[]> = {
+  video: ["LoadVideo", "VHS_LoadVideo", "VHS_LoadVideoPath", "VHS_LoadVideoFFmpeg", "VHS_LoadVideoFFmpegPath"],
+  audio: ["LoadAudio", "VHS_LoadAudio", "VHS_LoadAudioUpload"],
+};
+
+/** The kinds of input file a workflow reads besides pictures: "video", "audio", both or none. */
+export function mediaOf(wf: Pick<IndexWorkflow, "core" | "packs">): ("video" | "audio")[] {
+  const classes = new Set([...wf.core, ...Object.values(wf.packs).flat()]);
+  return (["video", "audio"] as const).filter((k) => MEDIA_LOADERS[k].some((c) => classes.has(c)));
+}
+
+/**
+ * A worker's verified files and node packs (PUT /api/gpu/computer/inventory), and the kinds of input it takes (`media`:
+ * a worker without a way to make clips and sound again takes pictures only). No `media`: every kind.
+ */
 export interface Inventory {
   files: FileNeed[];
   nodePacks: { name: string; commit: string | null }[];
+  media?: MediaKind[];
 }
 
 const fileKey = (f: Pick<FileNeed, "folder" | "name">) => `${f.folder}/${f.name}`;
@@ -109,6 +129,7 @@ export function lanesFor(
   sha: Sha,
 ): { lanes: string[]; workflows: string[]; missing: { lane: string; label: string; files: string[]; bytes: number }[] } {
   const packs = new Set(inv.nodePacks.map((p) => p.name));
+  const takes = new Set<string>(inv.media ?? MEDIA_KINDS);
   const ok = new Map<string, boolean>();
   const workflows: string[] = [];
   const lacking = new Map<string, Map<string, number>>();
@@ -118,13 +139,15 @@ export function lanesFor(
     const n = needsOf(index, id)!;
     const missingFiles = n.files.filter((f) => !hasFile(inv, f));
     const missingPacks = n.packs.filter((p) => !packs.has(p));
-    const fine = !missingFiles.length && !missingPacks.length;
+    const missingMedia = mediaOf(index.workflows[id]).filter((k) => !takes.has(k));
+    const fine = !missingFiles.length && !missingPacks.length && !missingMedia.length;
     if (fine) workflows.push(id);
     ok.set(lane, (ok.get(lane) ?? true) && fine);
     if (!fine) {
       const m = lacking.get(lane) ?? new Map<string, number>();
       for (const f of missingFiles) m.set(fileKey(f), f.size);
       for (const p of missingPacks) m.set(`pack:${p}`, 0);
+      for (const k of missingMedia) m.set(`input:${k}`, 0);
       lacking.set(lane, m);
     }
   }

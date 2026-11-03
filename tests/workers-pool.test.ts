@@ -22,7 +22,8 @@ const claimRoute = await import("@/app/api/gpu/computer/claim/route");
 const reportRoute = await import("@/app/api/gpu/computer/tasks/[id]/report/route");
 const { forWorkers } = await import("@/server/providers/comfyui");
 const { hoursAt, parseHours } = await import("@/lib/worker-hours");
-const { lanesFor, needsOf, laneOf } = await import("@/lib/lanes");
+const lanesModule = await import("@/lib/lanes");
+const { lanesFor, needsOf, laneOf } = lanesModule;
 const { loadIndex } = await import("@/server/gpu/index-file");
 
 const LANE_A = "aaaaaaaaaaaa";
@@ -358,5 +359,104 @@ describe("hours and lanes", () => {
     const bad = { ...good, files: good.files.map((f, i) => (i === 0 ? { ...f, size: f.size + 1 } : f)) };
     expect(lanesFor(index, bad, sha).workflows).not.toContain(id);
     expect(laneOf(index, id, sha)).toMatch(/^([0-9a-f]{12}|small)$/);
+  });
+});
+
+describe("a worker's own reports: giving a job back, its execution time, the inputs it takes", () => {
+  const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
+
+  async function routed(w: W, id: string) {
+    const headers = { host: "localhost:3000", authorization: `Bearer ${w.token}`, "content-type": "application/json" };
+    const c = await claimRoute.POST(new Request("http://localhost:3000/api/gpu/computer/claim", { method: "POST", headers, body: JSON.stringify({ running: [] }) }));
+    const { task: t } = await c.json();
+    expect(t.id).toBe(id);
+    const say = async (body: Record<string, unknown>) => {
+      const r = await reportRoute.POST(new Request(`http://localhost:3000/api/gpu/computer/tasks/${id}/report`, { method: "POST", headers: { ...headers, "x-fuobe-lease": t.lease }, body: JSON.stringify(body) }), { params: Promise.resolve({ id }) });
+      return { status: r.status, body: await r.json() };
+    };
+    return { t, say };
+  }
+
+  it("a job given back goes back in line with its place, counts as an attempt, and the third time fails in plain words", async () => {
+    clock = Date.now();
+    const id = task();
+    const rank = state(id).rank_at;
+    const w = worker("gives-back");
+    for (let i = 1; i <= 3; i++) {
+      const { t, say } = await routed(w, id);
+      expect(t.attempt).toBe(i);
+      expect((await say({ event: "sent", promptId: t.promptId })).status).toBe(200);
+      const back = await say({ event: "give-back", why: i === 1 ? "stalled" : i === 2 ? "run-limit" : "media" });
+      expect(back.status).toBe(200);
+      if (i < 3) {
+        expect(back.body.state).toBe("waiting");
+        expect(state(id)).toMatchObject({ state: "waiting", requeues: i, rank_at: rank, worker_id: null });
+        expect(JSON.parse(state(id).tried_json ?? "[]")).toEqual([w.id]);
+      } else {
+        expect(back.body.state).toBe("failed");
+        expect(state(id).error).toBe(pool.GAVE_BACK_WORDS);
+      }
+    }
+  });
+
+  it("a give-back with an unknown reason is refused, and a person's own computer can't give its job back", async () => {
+    clock = Date.now();
+    const id = task();
+    const w = worker("bad-reason");
+    const { t, say } = await routed(w, id);
+    await say({ event: "sent", promptId: t.promptId });
+    expect((await say({ event: "give-back", why: "bored" })).status).toBe(400);
+    expect(state(id).state).toBe("queued");
+    const own = tasks.createTask({ principal: "owner", generationId: "own-gen", graph: { "1": { class_type: "SaveImage", inputs: { filename_prefix: "x" } } } });
+    db().prepare("UPDATE relay_tasks SET state = 'running' WHERE id = ?").run(own.id);
+    expect(() => tasks.report(state(own.id), { event: "give-back", why: "stalled" }, () => ({ error: "x" }))).toThrow(/doesn't fit/);
+  });
+
+  it("keeps the execution time and the GPU name a worker reports with a finished job", async () => {
+    clock = Date.now();
+    const id = task();
+    const w = worker("exec");
+    const { t } = await routed(w, id);
+    tasks.report(state(id), { event: "sent", promptId: t.promptId }, () => ({ error: "x" }));
+    const entry = { status: { status_str: "success", completed: true }, outputs: {} };
+    tasks.report(state(id), { event: "finished", entry, execMs: 12_345.6, device: "  Test GPU  " }, () => ({ wanted: [], outputs: [], budget: 0 }));
+    expect(state(id).state).toBe("done");
+    expect(tasks.execOf(state(id))).toEqual({ ms: 12_346, device: "Test GPU" });
+    // Nothing reported: nothing kept; a nonsense time is not kept either.
+    const id2 = task();
+    const { t: t2 } = await routed(w, id2);
+    tasks.report(state(id2), { event: "sent", promptId: t2.promptId }, () => ({ error: "x" }));
+    tasks.report(state(id2), { event: "finished", entry, execMs: -5 }, () => ({ wanted: [], outputs: [], budget: 0 }));
+    expect(tasks.execOf(state(id2))).toBeNull();
+  });
+
+  it("a worker that can't make clips and sound again gets no workflow that reads them", () => {
+    const index = loadIndex();
+    const { mediaOf } = lanesModule;
+    const reads = Object.keys(index.workflows).filter((k) => !index.workflows[k].isolated && mediaOf(index.workflows[k]).length);
+    const pictures = Object.keys(index.workflows).filter((k) => !index.workflows[k].isolated && !mediaOf(index.workflows[k]).length);
+    expect(reads.length).toBeGreaterThan(10);
+    // A worker that has every file and pack.
+    const files = Object.values(index.files).map((f) => ({ folder: f.folder, name: f.file, size: f.sizeBytes, sha256: f.sha256 ?? null }));
+    const nodePacks = Object.keys(index.packs).map((name) => ({ name, commit: null }));
+    const all = lanesFor(index, { files, nodePacks }, sha).workflows;
+    expect(all).toEqual(expect.arrayContaining([...reads, ...pictures]));
+    expect(lanesFor(index, { files, nodePacks, media: ["image", "video", "audio"] }, sha).workflows).toEqual(all);
+    const onlyPictures = lanesFor(index, { files, nodePacks, media: ["image"] }, sha);
+    expect(onlyPictures.workflows).toEqual(expect.arrayContaining(pictures));
+    for (const id of reads) expect(onlyPictures.workflows).not.toContain(id);
+    expect(onlyPictures.missing.some((m) => m.files.includes("input:video"))).toBe(true);
+  });
+
+  it("the inventory's hash covers the kinds of input, and the worker hashes it the same way", async () => {
+    const { inventoryHash: workerHash } = await import("../bin/lib/worker/inventory.mjs");
+    const inv = { files: [{ folder: "loras", name: "a.safetensors", size: 7, sha256: null }], nodePacks: [{ name: "P", commit: null }] };
+    expect(pool.inventoryHash({ ...inv, media: ["image"] })).not.toBe(pool.inventoryHash(inv));
+    expect(pool.inventoryHash({ ...inv, media: ["video", "image"] })).toBe(pool.inventoryHash({ ...inv, media: ["image", "video"] }));
+    expect(workerHash({ ...inv, media: ["image", "audio"] })).toBe(pool.inventoryHash({ ...inv, media: ["image", "audio"] }));
+    const w = worker("media");
+    const saved = pool.saveInventory(row(w), { ...inv, media: ["image", "teleport"] });
+    expect(saved.lanes).toBeDefined();
+    expect(JSON.parse(row(w).inventory_json ?? "{}").media).toEqual(["image"]);
   });
 });

@@ -23,9 +23,20 @@ export interface HistoryEntryLike {
   outputs?: Record<string, Record<string, unknown>>;
 }
 
-/** Why the tab gave up on a task by itself (the server says it in plain words). */
-export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed", "unknown-node", "unsafe-path", "model-unverified"] as const;
+/**
+ * Why the tab gave up on a task by itself (the server says it in plain words). A worker adds two: its ComfyUI stopped
+ * twice while running the task ("input-crashed"), and a clip or a sound that couldn't be made again ("input-unreadable").
+ */
+export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed", "unknown-node", "unsafe-path", "model-unverified", "input-crashed", "input-unreadable"] as const;
 export type TabFailure = (typeof TAB_FAILURES)[number];
+
+/**
+ * Why a worker gives a task back to the line (another worker, or this one later, runs it): it made no progress for too
+ * long ("stalled"), it ran past its run limit ("run-limit"), or it takes clips or sound and this worker can't make them
+ * again ("media").
+ */
+export const GIVE_BACK = ["stalled", "run-limit", "media"] as const;
+export type GiveBackWhy = (typeof GIVE_BACK)[number];
 
 /** What the tab reports about one task. */
 export type ReportEvent =
@@ -37,10 +48,18 @@ export type ReportEvent =
   | { event: "queued"; position: number }
   /** Running: the sampler's steps, and the node. */
   | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number }
-  /** Finished: its /history entry (a worker adds the most VRAM it took, for the benchmarks). */
-  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number }
-  /** A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. */
-  | { event: "passes"; running: boolean; entries: HistoryEntryLike[] }
+  /**
+   * Finished: its /history entry. A worker adds the most VRAM it took (for the benchmarks), how long its ComfyUI spent
+   * executing the job (`execMs`: execution only, no waits, no uploads) and its GPU's name (`device`).
+   */
+  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string }
+  /**
+   * A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. The
+   * last one (not running) is the job's end: a worker adds `execMs` and `device` as for "finished".
+   */
+  | { event: "passes"; running: boolean; entries: HistoryEntryLike[]; execMs?: number; device?: string }
+  /** A worker gives the task back to the line (it counts as an attempt). */
+  | { event: "give-back"; why: GiveBackWhy }
   /** ComfyUI has no trace of it (restarted): the server sends it again once. */
   | { event: "gone" }
   /** The tab can't use ComfyUI: it doesn't answer, or (`why: "setting"`) it answers without Fuobe's setting. */
@@ -61,6 +80,7 @@ const ALLOWED: Record<ReportEventName, readonly RelayState[]> = {
   finished: ["queued", "running"],
   passes: ["queued", "running"],
   gone: ["sending", "queued", "running"],
+  "give-back": ["sending", "queued", "running"],
   "comfy-down": ["sending", "queued", "running", "collecting"],
   stopped: ["sending", "queued", "running", "collecting", "done", "failed", "canceled"],
   failed: ["sending", "queued", "running", "collecting"],
@@ -355,6 +375,10 @@ export function tabFailureWords(reason: TabFailure, status?: number): string {
       return "The GPU that took this run refused it: it names a file path.";
     case "model-unverified":
       return "The GPU that took this run refused it: it needs a model file that GPU couldn't verify.";
+    case "input-crashed":
+      return "This run stopped twice at the same point. Try another file or different settings.";
+    case "input-unreadable":
+      return "A clip or a sound in this run couldn't be read. Try another file.";
     default:
       return `Your ComfyUI answered HTTP ${Number.isInteger(status) ? status : "?"}. Check that it's running, then press Retry.`;
   }

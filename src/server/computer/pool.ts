@@ -1,11 +1,11 @@
 import "server-only";
 import crypto from "node:crypto";
-import { allLanes, laneLabel, lanesFor, needsOf, type Inventory, type Needs } from "@/lib/lanes";
+import { allLanes, laneLabel, lanesFor, MEDIA_KINDS, needsOf, type Inventory, type Needs } from "@/lib/lanes";
 import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type WorkerAnswer, type WorkerBeat } from "@/lib/relay";
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
-import { cleanFacts, endTask, getTask, json, noteProgress, setPoolClocks, setTask, takeTask, type TaskRow } from "./tasks";
+import { cleanFacts, endTask, getTask, json, noteProgress, setPoolClocks, setPoolGiveBack, setTask, takeTask, type TaskRow } from "./tasks";
 import { createWorker, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 
 /**
@@ -199,7 +199,9 @@ export function saveInventory(w: WorkerRow, raw: unknown): { lanes: string[]; wo
     const name = text(x?.name, 128);
     return name ? [{ name, commit: text(x?.commit, 64) }] : [];
   });
-  const inv: Inventory = { files, nodePacks };
+  // The kinds of input it takes (none said: every kind, as before workers said so).
+  const media = Array.isArray(o.media) ? MEDIA_KINDS.filter((k) => (o.media as unknown[]).includes(k)) : undefined;
+  const inv: Inventory = { files, nodePacks, ...(media && { media }) };
   const r = lanesFor(loadIndex(), inv, sha);
   const invHash = inventoryHash(inv);
   db()
@@ -212,7 +214,7 @@ export function saveInventory(w: WorkerRow, raw: unknown): { lanes: string[]; wo
 export function inventoryHash(inv: Inventory): string {
   const files = [...inv.files].map((f) => `${f.folder}/${f.name}:${f.size}:${f.sha256 ?? ""}`).sort();
   const packs = [...inv.nodePacks].map((p) => `${p.name}@${p.commit ?? ""}`).sort();
-  return sha(JSON.stringify({ files, packs }));
+  return sha(JSON.stringify({ files, packs, ...(inv.media && { media: [...inv.media].sort() }) }));
 }
 
 // ---------------------------------------------------------------------------
@@ -365,6 +367,16 @@ setPoolClocks((t, now) => {
   sweepPool(now);
   return getTask(t.principal, t.id) ?? t;
 });
+
+/** The words of a run whose worker gave it back the third time. */
+export const GAVE_BACK_WORDS = "This run couldn't finish. Press Retry.";
+
+/**
+ * A worker gives its task back (it stalled, ran past its run limit, or takes clips or sound the worker can't make
+ * again): it goes back in line with its place kept, and counts as an attempt, so another worker that can run it is
+ * preferred and the third time fails it.
+ */
+setPoolGiveBack((t) => backInLine(t, { blame: true, why: GAVE_BACK_WORDS }));
 
 // ---------------------------------------------------------------------------
 // Place in line and the wait (4.4)
