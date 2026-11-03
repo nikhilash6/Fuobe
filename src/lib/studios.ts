@@ -127,6 +127,7 @@ export const LIPSYNC_STUDIO: StudioConfig = {
   defaultModels: { cloud: "kling-avatar-2", open: "oss-infinitetalk" },
   promptOptional: true,
   voiceFacts: true,
+  voiceFirst: true,
   // A talking character from words, not a re-sync of footage: Kandinsky 6.0 speaks the prompt's quoted lines with its own voice.
   related: { href: "/video", label: "No voice yet? Make a talking character from words with Kandinsky 6.0", models: { cloud: "kandinsky-6", open: "oss-kandinsky6" } },
 };
@@ -299,6 +300,7 @@ export const TRANSCRIBE_STUDIO: StudioConfig = {
   defaultModels: { cloud: "scribe-v2", open: "oss-qwen3-asr" },
   promptOptional: true,
   hidePrompt: true,
+  voiceFirst: true,
 };
 
 export const SFX_STUDIO: StudioConfig = {

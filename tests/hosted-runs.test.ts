@@ -145,6 +145,37 @@ describe("hosted runs on", () => {
     expect(quoted?.quote).toBeTruthy();
   });
 
+  it("Clean the voice first: its clean-voice step plans and prices here, and a policy that keeps it off keeps the run off", async () => {
+    process.env.FUOBE_BILLING_URL = fake.url;
+    process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
+    fake.policy = { ...fake.policy, uploads: { image: true, video: false, audio: true } };
+    const up = await upload(wav(), "audio/wav", "voice.wav");
+    expect(up.status).toBe(201);
+    const { url } = (await up.json()) as { url: string };
+    const { decidePlace, poolQuote } = await import("@/server/hosted-run");
+    const req = { feature: "transcribe", modelId: "oss-qwen3-asr", op: "transcribe" as const, inputs: { audio: url }, params: { sourceLanguage: "en" }, voiceFirst: true };
+    const place = await decidePlace(auth.accountById(a)!, req, undefined);
+    expect(place.kind).toBe("pool");
+    if (place.kind !== "pool") return;
+    expect(place.planned.steps).toEqual([{ model: "oss-dbs-separate", op: "separate-audio" }]);
+    const before = fake.calls_of("/v1/quote").length;
+    const quoted = await poolQuote(auth.accountById(a)!, req, undefined);
+    expect(quoted?.planned.model.id).toBe("oss-qwen3-asr");
+    const sent = fake.calls_of("/v1/quote").slice(before).at(-1)?.body as { run: { model: string; steps?: unknown } };
+    expect(sent.run.model).toBe("oss-qwen3-asr");
+    expect(sent.run.steps).toEqual([{ model: "oss-dbs-separate", op: "separate-audio" }]);
+    // Without the switch there are no other steps to send.
+    const plain = await poolQuote(auth.accountById(a)!, { ...req, voiceFirst: false }, undefined);
+    expect(plain?.planned.steps).toBeUndefined();
+    // A policy that keeps the clean-voice model off this install's GPUs keeps the whole run off, priced or run.
+    fake.policy = { ...fake.policy, pool: { deny: ["oss-dbs-separate"] } };
+    billing.resetBillingCache();
+    expect(await poolQuote(auth.accountById(a)!, req, undefined)).toBeNull();
+    const refused = await decidePlace(auth.accountById(a)!, req, undefined);
+    expect(refused.kind).toBe("refuse");
+    expect((await decidePlace(auth.accountById(a)!, { ...req, voiceFirst: false }, undefined)).kind).toBe("pool");
+  });
+
   it("the pool's allow and deny lists, for models and apps", () => {
     expect(poolAllows({ pool: {} }, "m")).toBe(true);
     expect(poolAllows({ pool: { allow: ["m"] } }, "m")).toBe(true);
@@ -164,3 +195,23 @@ describe("hosted runs on", () => {
     }
   });
 });
+
+/** A 1 s mono 16 kHz WAV. */
+function wav(): Buffer {
+  const frames = 16000;
+  const b = Buffer.alloc(44 + frames * 2);
+  b.write("RIFF", 0);
+  b.writeUInt32LE(36 + frames * 2, 4);
+  b.write("WAVE", 8);
+  b.write("fmt ", 12);
+  b.writeUInt32LE(16, 16);
+  b.writeUInt16LE(1, 20);
+  b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(16000, 24);
+  b.writeUInt32LE(32000, 28);
+  b.writeUInt16LE(2, 32);
+  b.writeUInt16LE(16, 34);
+  b.write("data", 36);
+  b.writeUInt32LE(frames * 2, 40);
+  return b;
+}

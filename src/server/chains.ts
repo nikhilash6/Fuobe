@@ -61,7 +61,7 @@ export function assertOneMode(steps: ModeStep[]): void {
  * the result (src/server/recipe-builder.ts) rebuilds that one request, not the rows it expanded into, whose number
  * changes with the input (a film of 3 shots is 4 rows, of 5 shots 6).
  */
-function withAsked(made: Generation[], asked: GenerationRequest, engine: Engine): Generation[] {
+export function withAsked(made: Generation[], asked: GenerationRequest, engine: Engine): Generation[] {
   const [first, ...rest] = made;
   if (!first) return made;
   // A Fuobe Original keeps the engine it ran on, as a plain row's request does (createGenerations).
