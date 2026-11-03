@@ -324,6 +324,40 @@ export function dissolveBack(frames, fade) {
   return out;
 }
 
+/** An ffmpeg scale filter that fits a picture within `px` on its longest side, never enlarging it. */
+const fit = (px) => `scale='if(gt(iw,ih),min(${px},iw),-2)':'if(gt(iw,ih),-2,min(${px},ih))'`;
+
+/**
+ * A cover clip's frames, cut and looped as encode() cuts them (its `opts`), decoded through `scale` (an ffmpeg filter:
+ * the published clip's fit(CLIP_PX), or a larger copy's width), so a copy of any size has the same frames at the same
+ * times. `rest` is the index of the frame a card rests on (a reveal's last, or the frame at `rest` seconds), or null
+ * when its poster is its first frame; `stream` turns frames back into a y4m stream.
+ * @param {string} src
+ * @param {{ rest?: "start" | "end" | number, length?: "full" }} opts
+ * @param {string} scale
+ */
+export function coverLoop(src, opts, scale) {
+  const atEnd = opts.rest === "end";
+  // A clip that rests on a moment of its own (seconds): kept whole, like a reveal, with that frame its poster.
+  const atTime = typeof opts.rest === "number" && opts.rest >= 0 ? opts.rest : null;
+  const whole = atEnd || atTime !== null;
+  // How much of the clip its loop keeps: the first CLIP_SECONDS, or all of it (up to REST_CLIP_SECONDS).
+  const full = opts.length === "full";
+  const keep = full ? REST_CLIP_SECONDS : CLIP_SECONDS;
+  // Decoded at CLIP_FPS: what it keeps, plus the frames the crossfade takes back from the start (a reveal or a full
+  // clip: all of it, as a full clip's dissolve is added after its end).
+  const seconds = whole || full ? REST_CLIP_SECONDS : keep + LOOP_FADE / CLIP_FPS;
+  const y4m = run(["-i", src, "-t", String(seconds), "-an", "-sn", "-dn", "-vf", `${scale},fps=${CLIP_FPS},format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
+  const { header, frames, luma } = readY4m(y4m);
+  if (frames.length < 2) throw new Error(`${src} has no frames to make a clip of`);
+  const cut = frames.slice(0, keep * CLIP_FPS);
+  const fade = Math.min(LOOP_FADE, Math.floor(frames.length / 4));
+  const looped = whole ? frames : loopsAlready(cut, luma) ? cut : full ? dissolveBack(cut, fade) : seamless(frames, fade);
+  const stream = (list) => Buffer.concat([Buffer.from(`${header}\n`, "latin1"), ...list.flatMap((fr) => [Buffer.from("FRAME\n"), fr])]);
+  const rest = !whole ? null : atEnd ? looped.length - 1 : Math.min(looped.length - 1, Math.round(atTime * CLIP_FPS));
+  return { looped, rest, stream };
+}
+
 /**
  * A still at most STILL_PX wide/tall (a 4:2:0 JPEG), or a clip's first seconds at most CLIP_PX that loops
  * without a jump (crossfaded, unless it loops already), with its first frame as the poster.
@@ -343,30 +377,12 @@ export function dissolveBack(frames, fade) {
  * @returns {{ poster: string, video?: string, at?: number }}
  */
 export function encode(src, kind, destBase, opts = {}) {
-  const fit = (px) => `scale='if(gt(iw,ih),min(${px},iw),-2)':'if(gt(iw,ih),-2,min(${px},ih))'`;
   if (kind === "video") {
-    const atEnd = opts.rest === "end";
-    // A clip that rests on a moment of its own (seconds): kept whole, like a reveal, with that frame its poster.
-    const atTime = typeof opts.rest === "number" && opts.rest >= 0 ? opts.rest : null;
-    const whole = atEnd || atTime !== null;
-    // How much of the clip its loop keeps: the first CLIP_SECONDS, or all of it (up to REST_CLIP_SECONDS).
-    const full = opts.length === "full";
-    const keep = full ? REST_CLIP_SECONDS : CLIP_SECONDS;
-    // Decoded at CLIP_FPS: what it keeps, plus the frames the crossfade takes back from the start (a reveal or a full
-    // clip: all of it, as a full clip's dissolve is added after its end).
-    const seconds = whole || full ? REST_CLIP_SECONDS : keep + LOOP_FADE / CLIP_FPS;
-    const y4m = run(["-i", src, "-t", String(seconds), "-an", "-sn", "-dn", "-vf", `${fit(CLIP_PX)},fps=${CLIP_FPS},format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
-    const { header, frames, luma } = readY4m(y4m);
-    if (frames.length < 2) throw new Error(`${src} has no frames to make a clip of`);
-    const cut = frames.slice(0, keep * CLIP_FPS);
-    const fade = Math.min(LOOP_FADE, Math.floor(frames.length / 4));
-    const looped = whole ? frames : loopsAlready(cut, luma) ? cut : full ? dissolveBack(cut, fade) : seamless(frames, fade);
-    const stream = (list) => Buffer.concat([Buffer.from(`${header}\n`, "latin1"), ...list.flatMap((fr) => [Buffer.from("FRAME\n"), fr])]);
+    const { looped, rest, stream } = coverLoop(src, opts, fit(CLIP_PX));
     run(["-f", "yuv4mpegpipe", "-i", "-", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", "-map_metadata", "-1", "-movflags", "+faststart", `${destBase}.mp4`], stream(looped));
-    if (whole) {
-      const i = atEnd ? looped.length - 1 : Math.min(looped.length - 1, Math.round(atTime * CLIP_FPS));
-      run(["-f", "yuv4mpegpipe", "-i", "-", "-frames:v", "1", "-vf", "format=yuvj420p", "-q:v", "4", `${destBase}.jpg`], stream([looped[i]]));
-      return { poster: `${destBase}.jpg`, video: `${destBase}.mp4`, at: Math.round((i / CLIP_FPS) * 1000) / 1000 };
+    if (rest !== null) {
+      run(["-f", "yuv4mpegpipe", "-i", "-", "-frames:v", "1", "-vf", "format=yuvj420p", "-q:v", "4", `${destBase}.jpg`], stream([looped[rest]]));
+      return { poster: `${destBase}.jpg`, video: `${destBase}.mp4`, at: Math.round((rest / CLIP_FPS) * 1000) / 1000 };
     }
     run(["-i", `${destBase}.mp4`, "-frames:v", "1", "-vf", "format=yuvj420p", "-q:v", "4", `${destBase}.jpg`]);
     return { poster: `${destBase}.jpg`, video: `${destBase}.mp4` };

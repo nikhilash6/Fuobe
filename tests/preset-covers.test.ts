@@ -11,6 +11,8 @@ import { coverPreview, presetCover, thumbOf } from "@/lib/preset-covers";
 import { HOME_BENTO_MEDIA } from "@/lib/home-bento.generated";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
+import { PRESET_HD } from "@/lib/preset-hd.generated";
+import { presetHdFiles } from "@/lib/preset-hd";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
 import { mp4Seconds } from "./helpers/mp4-length";
@@ -86,6 +88,8 @@ describe("the preset covers manifest", () => {
     const named = new Set(entries.flatMap(([, e]) => [e.poster, thumbOf(e.poster), e.video].filter((u): u is string => !!u).map((u) => u.split("?")[0])));
     for (const id of Object.keys(PRESET_PEAKS)) for (const f of [`/previews/presets/peak/${id}.jpg`, thumbOf(`/previews/presets/peak/${id}.jpg`)]) named.add(f);
     for (const id of Object.keys(PRESET_BEFORE_AFTER)) for (const f of beforeAfterFiles(id)) named.add(f);
+    // The larger copies (scripts/gen-preset-hd.mjs, tests/preset-hd.test.ts).
+    for (const id of Object.keys(PRESET_HD)) for (const f of presetHdFiles(id, !!PRESET_PEAKS[id])) named.add(f);
     // Home's first screen makes its own clips and stills (scripts/gen-home-bento.mjs, tests/home-bento.test.ts).
     for (const f of Object.keys(HOME_BENTO_MEDIA)) named.add(f);
     const dir = path.join(root, "public", "previews");

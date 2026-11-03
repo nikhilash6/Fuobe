@@ -17,8 +17,10 @@ import {
   type PreviewScene,
 } from "@/lib/preset-cards";
 import { coverFraming } from "@/lib/cover-framing";
+import { coverWidth, pickWidth } from "@/lib/media-pick";
 import { releaseVideo } from "@/lib/media-release";
 import { glyphFor } from "@/lib/move-glyphs";
+import { presetClipCopies, presetStillSources } from "@/lib/preset-hd";
 import { autoplays, browserPlaybackEnv, createPlaybackStore, playsWhenAsked, previewKind, untilPlace, type AutoPlay } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 
@@ -280,6 +282,9 @@ function Fx({ fx, scene }: { fx: NonNullable<Preview["fx"]>; scene: PreviewScene
   }
 }
 
+/** The cover clips' shape (width / height): every one is 4:3. */
+const CLIP_ASPECT = 4 / 3;
+
 /** When the clips' shared cycle began (performance.now()), set by the first clip ready to play by itself (Clip). */
 let cycleStart: number | undefined;
 
@@ -311,7 +316,8 @@ function Clip({ src, rest, asked, place, focus }: { src: string; rest?: Preview[
   useLayoutEffect(() => {
     const v = ref.current;
     if (!v) return;
-    v.src = src;
+    // The narrowest copy at least as wide as the box shows it on this screen (preset-hd.ts; most clips have one).
+    v.src = pickWidth(presetClipCopies(src), coverWidth(v.clientWidth, v.clientHeight, CLIP_ASPECT, window.devicePixelRatio || 1)).src;
     void v.play().catch(() => {});
     return () => {
       releaseVideo(v);
@@ -400,24 +406,36 @@ export const PresetPreview = memo(function PresetPreview({
     // How the cover sits in a frame of another shape (cover-framing.ts): a focus point, or the whole picture.
     const framing = coverFraming(still);
     const focus = framing?.focus;
+    // Larger copies (preset-hd.ts), where the cover has them: the box takes one at least as wide as it shows.
+    const hd = sizes ? presetStillSources(still, thumbOf(still)) : undefined;
+    const img = (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={still}
+        srcSet={hd ? hd.jpeg : sizes ? `${thumbOf(still)} 320w, ${still} 512w` : undefined}
+        sizes={sizes}
+        alt=""
+        width={512}
+        height={384}
+        draggable={false}
+        loading={loading}
+        fetchPriority={fetchPriority}
+        decoding={fetchPriority ? undefined : "async"}
+        className="absolute inset-0 size-full object-cover"
+        style={focus ? { objectPosition: focus } : undefined}
+        aria-hidden
+      />
+    );
     const cover = (
       <>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={still}
-          srcSet={sizes ? `${thumbOf(still)} 320w, ${still} 512w` : undefined}
-          sizes={sizes}
-          alt=""
-          width={512}
-          height={384}
-          draggable={false}
-          loading={loading}
-          fetchPriority={fetchPriority}
-          decoding={fetchPriority ? undefined : "async"}
-          className="absolute inset-0 size-full object-cover"
-          style={focus ? { objectPosition: focus } : undefined}
-          aria-hidden
-        />
+        {hd ? (
+          <picture>
+            <source type="image/avif" srcSet={hd.avif} sizes={sizes} />
+            {img}
+          </picture>
+        ) : (
+          img
+        )}
         {preview.video && playing && <Clip src={preview.video} rest={preview.rest} asked={asked} place={place} focus={focus} />}
       </>
     );
