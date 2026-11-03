@@ -7,7 +7,7 @@ import { dubLanguageFor } from "@/lib/assist-studios";
 import { isHelperFeature } from "@/lib/library";
 import { probeMedia } from "@/lib/media-probe";
 import { videoPoster } from "@/lib/output-actions";
-import { isMediaRef, leafKeys, RECIPE_LIMITS, today, type ParamType, type Recipe, type RecipeCheck, type RecipeStep } from "@/lib/recipe";
+import { isMediaRef, leafKeys, RECIPE_LIMITS, stepRef, stepRefs, today, type ParamType, type Recipe, type RecipeCheck, type RecipeStep } from "@/lib/recipe";
 import {
   DEMO_NOTE,
   isExpansionLabel,
@@ -118,7 +118,7 @@ interface Node {
   modelName: string;
   notes: string[];
   /** A tool step: its studio, the record it was rebuilt from, and where its media inputs are. */
-  tool?: { studio: string; record: string; inputs: { path: (string | number)[]; type: ParamType; label: string }[]; texts: { path: (string | number)[]; label: string }[] };
+  tool?: { studio: string; record: string; inputs: { path: (string | number)[]; type: ParamType; label: string }[]; texts: { path: (string | number)[]; label: string }[]; outputs?: string[] };
 }
 
 /** The single image a step without `chain` takes from each earlier step (createGenerations' slotsFor). */
@@ -368,7 +368,8 @@ function linkByFile(walk: Walk): void {
 /** Steps in an order where each comes after the ones it waits for (Kahn's algorithm, stable). */
 function ordered(nodes: Node[]): Node[] {
   const keys = new Set(nodes.map((n) => n.key));
-  const waits = (n: Node) => (n.step.kind === "generate" ? (Array.isArray(n.step.after) ? n.step.after : n.step.after ? [n.step.after] : []).filter((a) => keys.has(a)) : []);
+  const refs = (n: Node) => stepRefs(n.step.kind === "tool" ? n.step.input : n.step.request).map((r) => r.key);
+  const waits = (n: Node) => [...(n.step.kind === "generate" ? (Array.isArray(n.step.after) ? n.step.after : n.step.after ? [n.step.after] : []) : []), ...refs(n)].filter((a) => keys.has(a));
   const out: Node[] = [];
   const done = new Set<string>();
   while (out.length < nodes.length) {
@@ -378,6 +379,35 @@ function ordered(nodes: Node[]): Node[] {
     done.add(next.key);
   }
   return out;
+}
+
+/**
+ * A studio step's result handed on by hand in a chat (a clip dubbed, then captioned), or a result handed to a studio
+ * step: the file becomes a step reference ({{steps.<key>.output}}, recipe version 2), so a new run waits for the step
+ * and takes its new result (W7). Generate steps that feed each other are chained by linkByFile instead.
+ */
+function linkStudios(walk: Walk): boolean {
+  const nodes = [...walk.nodes.values()];
+  const outputs = (n: Node) => n.tool?.outputs ?? n.gen.outputs.map((o) => o.url);
+  const made = new Map<string, Node>();
+  for (const n of [...nodes].sort((a, b) => a.gen.createdAt - b.gen.createdAt)) for (const u of outputs(n)) if (u && !made.has(u)) made.set(u, n);
+  let linked = false;
+  const swap = (n: Node, v: unknown): unknown => {
+    if (typeof v === "string") {
+      const src = made.get(v);
+      if (!src || src === n || src.gen.createdAt > n.gen.createdAt || (!src.tool && !n.tool)) return v;
+      linked = true;
+      return stepRef(src.key);
+    }
+    if (Array.isArray(v)) return v.map((x) => swap(n, x));
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, swap(n, x)]));
+    return v;
+  };
+  for (const n of nodes) {
+    if (n.step.kind === "tool") n.step = { ...n.step, input: swap(n, n.step.input) as Record<string, unknown> };
+    else if (n.step.request.inputs) n.step = { ...n.step, request: { ...n.step.request, inputs: swap(n, n.step.request.inputs) as typeof n.step.request.inputs } };
+  }
+  return linked;
 }
 
 // ---------------------------------------------------------------------------
@@ -719,7 +749,7 @@ export const draftFromGenerations = (ids: string[]): DraftResult => buildDraft(i
 interface Origin {
   thread?: string;
   /** Studio calls of the chat: each the tool's exact input, and the result that stands for it. */
-  calls?: { lifted: Lifted; pick: Generation }[];
+  calls?: { lifted: Lifted; pick: Generation; outputs?: string[] }[];
   refusals?: DraftRefusal[];
   notes?: string[];
   /** Every generation the kept calls started (the recipe's source). */
@@ -727,7 +757,7 @@ interface Origin {
 }
 
 /** A studio's work as one tool step (W2's lifts and W3's chat calls). */
-function toolNode(walk: Walk, lifted: Lifted, g: Generation): Node {
+function toolNode(walk: Walk, lifted: Lifted, g: Generation, outputs?: string[]): Node {
   const key = walk.key(lifted.tool.replace(/_/g, "-"));
   return {
     key,
@@ -737,14 +767,14 @@ function toolNode(walk: Walk, lifted: Lifted, g: Generation): Node {
     label: lifted.studio,
     modelName: lifted.studio,
     notes: [`Runs ${lifted.studio} again with the same settings`],
-    tool: { studio: lifted.studio, record: lifted.record, inputs: lifted.inputs, texts: lifted.texts },
+    tool: { studio: lifted.studio, record: lifted.record, inputs: lifted.inputs, texts: lifted.texts, ...(outputs && { outputs }) },
   };
 }
 
 function buildDraft(ids: string[], o: Origin = {}): DraftResult {
   const refusals: DraftRefusal[] = [...(o.refusals ?? [])];
   const walk = new Walk();
-  const tools: { node: Node; pick: Generation }[] = (o.calls ?? []).map((c) => ({ node: toolNode(walk, c.lifted, c.pick), pick: c.pick }));
+  const tools: { node: Node; pick: Generation }[] = (o.calls ?? []).map((c) => ({ node: toolNode(walk, c.lifted, c.pick, c.outputs), pick: c.pick }));
   const generated: Generation[] = [];
   const unique = [...new Set(ids)].slice(0, 200);
   for (const id of unique) {
@@ -790,23 +820,26 @@ function buildDraft(ids: string[], o: Origin = {}): DraftResult {
       refusals.push({ id, title, reason: e.message });
     }
   }
-  // Version 1 runs a graph of generate steps or one studio tool, not both (a tool feeding later steps is W7).
-  if (tools.length && (walk.nodes.size || tools.length > 1)) {
+  // From the Library, a graph of generate steps or one studio tool, not both. A chat's steps may span studios (W7):
+  // a recipe of version 2, its studio steps beside the others and results handed on as step references.
+  const spans = !!o.thread;
+  if (!spans && tools.length && (walk.nodes.size || tools.length > 1)) {
     const keep = walk.nodes.size ? [] : tools.slice(0, 1);
     for (const t of tools.filter((x) => !keep.includes(x))) {
       refusals.push({ id: t.pick.id, title: cut(t.pick.request.title || t.pick.request.prompt || t.node.label, 80), reason: walk.nodes.size ? "A studio step can't be in a skill with other steps yet: make a skill from it on its own" : "One studio step per skill for now: make a skill from each" });
     }
     tools.splice(0, tools.length, ...keep);
   }
-  if (tools.length) walk.nodes.set(tools[0].node.key, tools[0].node);
+  for (const t of spans ? tools : tools.slice(0, 1)) walk.nodes.set(t.node.key, t.node);
   linkByFile(walk);
+  const linked = spans && linkStudios(walk);
   const nodes = ordered([...walk.nodes.values()]);
   if (!nodes.length) return { draft: null, refusals };
   if (nodes.length > RECIPE_LIMITS.steps) return { draft: null, refusals: [...refusals, { id: ids[0], title: "These results", reason: `They take ${nodes.length} steps; a skill has at most ${RECIPE_LIMITS.steps}` }] };
 
   // Steps in an order where every step comes after the ones it waits for (the walk added dependencies first).
   const steps = nodes.map((n) => n.step);
-  const recipe: Recipe = { fuobeRecipe: 1, params: [], steps };
+  const recipe: Recipe = { fuobeRecipe: linked || (tools.length > 0 && steps.length > 1) ? 2 : 1, params: [], steps };
   const leaves = leafKeys(recipe);
   const checks: Record<string, RecipeCheck> = {};
   for (const n of nodes) if (leaves.has(n.key) && n.step.kind === "generate") checks[n.key] = proposeCheck(n);
@@ -858,9 +891,6 @@ function buildDraft(ids: string[], o: Origin = {}): DraftResult {
 
 // ---------------------------------------------------------------------------
 // A skill from an Assist chat (W3)
-
-/** Why a chat's step can't join the others: a studio step's result feeding another step, or the other way round (W7). */
-export const STUDIO_WAIT = "Skills can't wait for a studio step yet: make a skill from each step on its own";
 
 /** Tools whose started generations are drafted as plain results (a run_skill pipeline is one too). */
 const GENERATE_TOOLS = new Set(["generate", "run_skill"]);
@@ -1057,16 +1087,9 @@ export function draftFromThread(threadId: string): ThreadDraft {
   }
   const kept = calls.filter((c) => keptSet.has(c));
   const replaced = calls.length - kept.length;
-  // A studio step's result feeding a later step, or a step's result feeding a studio step: refused (W7).
-  const joined: typeof kept = [];
-  for (const c of kept) {
-    const from = joined.filter((d) => [...d.outputs].some((u) => c.inputs.has(u)));
-    if (from.length && (c.studio || from.some((d) => d.studio))) {
-      refusals.push({ id: c.gens[0].id, title: cut(cardTitle(c.name, c.input), 80), reason: STUDIO_WAIT });
-      continue;
-    }
-    joined.push(c);
-  }
+  // A studio step's result feeding a later step, or a step's result feeding a studio step, becomes a step reference
+  // (recipe version 2, W7: buildDraft's linkStudios).
+  const joined = kept;
   const notes: string[] = [];
   if (replaced) notes.push(replaced === 1 ? "An earlier try of a step was left out: the skill keeps the last one" : `${replaced} earlier tries of steps were left out: the skill keeps the last of each`);
   if (declined || failed) notes.push(`Left out: ${[declined && `${declined} plan${declined === 1 ? "" : "s"} you declined`, failed && `${failed} that didn't run`].filter(Boolean).join(" and ")}`);
@@ -1086,7 +1109,7 @@ export function draftFromThread(threadId: string): ThreadDraft {
       continue;
     }
     const pick = c.gens.findLast((g) => g.status === "succeeded");
-    if (pick) studioCalls.push({ lifted: chatLift(c, c.use), pick });
+    if (pick) studioCalls.push({ lifted: chatLift(c, c.use), pick, outputs: [...c.outputs] });
   }
   const result = buildDraft(ids, { thread: threadId, calls: studioCalls, refusals, notes, generations: joined.flatMap((c) => c.gens.map((g) => g.id)) });
   return { ...result, words };
