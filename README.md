@@ -36,6 +36,34 @@
   <a href="docs/media/fuobe-demo.mp4"><b>▶ Watch the launch film</b></a> (3 min)
 </p>
 
+## Showcase
+
+Real covers from the galleries. Every clip and still below was rendered locally on ComfyUI.
+
+<p align="center">
+  <a href="https://fuobe.com/motions"><img src="docs/media/gifs/showcase-motions.gif" alt="Twelve Fuobe camera motions playing side by side: Dolly In, Catwalk, Glam, Crane Up, Slow Motion, Super Dolly In, Arc Left, Lazy Susan, Crane Over the Head, Snorricam, Aerial Pullback and Crash Zoom In" width="100%"></a><br>
+  <b>108 camera motions.</b> Dollies, cranes, arcs, orbits, drones and crash zooms; mix any two in one clip.<br>
+  <a href="https://fuobe.com/motions">Browse all motions →</a> &nbsp;·&nbsp; <a href="docs/media/gifs/showcase-motions.mp4">MP4</a>
+</p>
+
+<p align="center">
+  <a href="https://fuobe.com/effects"><img src="docs/media/gifs/showcase-effects.gif" alt="Twelve Fuobe effects playing side by side: Sand Storm, Outfit Switch, Wind to Face, Levitation, Nature Bloom, Lens Flare, Dirty Lens, Train Rush, Display Transition, Pearl Earring, Blue Depth and Film Colors" width="100%"></a><br>
+  <b>255 effects.</b> Weather, transitions, lens looks, film grades and transformations, on any photo or clip.<br>
+  <a href="https://fuobe.com/effects">Browse all effects →</a> &nbsp;·&nbsp; <a href="docs/media/gifs/showcase-effects.mp4">MP4</a>
+</p>
+
+<p align="center">
+  <a href="https://fuobe.com/apps"><img src="docs/media/gifs/showcase-apps.gif" alt="Twelve Fuobe apps showing their results: Outfit Swap, Head Swap, Restore Photo, Photo to 3D, Relight, Colorize, Tap to Recolor, Steam It, Upscale, Product Shot, Makeup Studio and Hairstyle Try-On" width="100%"></a><br>
+  <b>131 apps.</b> One-click tools for fashion, portraits, products and ads: swap, restore, relight, recolor, upscale and more.<br>
+  <a href="https://fuobe.com/apps">Browse all apps →</a> &nbsp;·&nbsp; <a href="docs/media/gifs/showcase-apps.mp4">MP4</a>
+</p>
+
+<p align="center">
+  <a href="https://fuobe.com/live-edit"><img src="docs/media/gifs/showcase-live-edit.gif" alt="Live edit: a portrait changes step by step as a prompt is typed, from evening makeup to a candlelit ballroom" width="80%"></a><br>
+  <b>Live edit.</b> The picture changes as you type, on your own GPU. Here, ten changes to one photo in one growing prompt.<br>
+  <a href="https://fuobe.com/live-edit">Try Live edit →</a> &nbsp;·&nbsp; <a href="docs/media/gifs/showcase-live-edit.mp4">MP4</a>
+</p>
+
 ### New this week
 
 - **A new Home.** One first screen shows every kind of media (film, stills, sound, 3D, live edit and whole pipelines), and each tile opens the studio that makes it.
