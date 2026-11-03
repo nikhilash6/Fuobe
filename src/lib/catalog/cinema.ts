@@ -18,6 +18,7 @@ import { WORLDCAST_AFTER, WORLDCAST_MODELS, WORLDCAST_SECONDS, worldcastFallback
 import { WORLDCAST_RUN } from "@/lib/worldcast";
 import { exactDefaults, exactSummary, normalizeExact, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { CAST_LOOK } from "./soul-cards";
+import { clipSeconds, normalizeWorld, scriptKey, turnAt, WORLD_JOIN, WORLD_LIMITS, WORLD_MODEL, worldSeconds, type WorldScript } from "@/lib/world";
 import type { Engine, GenerationRequest, GenParams, LoraRef, ModelDef, Operation } from "./types";
 
 /*
@@ -176,6 +177,11 @@ export interface CinemaTakeInfo {
   path?: { keys: CameraKey[]; duration: number; preset?: string };
   /** A filmed blockout: its length, how many shots or windows it was filmed in, and its beats. */
   blockout?: { seconds: number; parts: number; beats: string[] };
+  /**
+   * A World turn (nm10-hy-nomas-world): which turn, the script it was made from (up to that turn) and its key (scriptKey),
+   * so the World panel can rebuild the turn timeline from the takes; or the joined film of the turns.
+   */
+  world?: { turn: number; script: WorldScript; made: string; joined?: boolean };
 }
 
 /** A generation's membership in a project (and its folder = scene). */
@@ -210,7 +216,7 @@ export interface DirectorMessage {
 }
 
 export type CinemaMode = "video" | "image";
-export type CinemaAction = "generate" | "extend-forward" | "extend-backward" | "edit" | "grid" | "cast" | "location" | "location-view" | "scene" | "recompose" | "path" | "turnaround" | "blockout";
+export type CinemaAction = "generate" | "extend-forward" | "extend-backward" | "edit" | "grid" | "cast" | "location" | "location-view" | "scene" | "recompose" | "path" | "turnaround" | "blockout" | "world";
 export type GridSize = "2x2" | "3x3" | "4x4";
 export type GridType = "freeform" | "zooms" | "shots" | "next_shots" | "prev_shots";
 export type CastValues = Record<string, string | number | string[] | undefined>;
@@ -255,6 +261,16 @@ export interface CinemaGenerateInput {
   turnaround?: Omit<TurnaroundInput, "engine" | "feature" | "stepFeature">;
   /** "blockout": a grey-box blockout filmed with references and beats (package blockout-film: src/lib/blockout.ts). */
   blockout?: BlockoutRun;
+  /** "world": a World turn to run, or (join) the turns' clips to join into one film (nm10-hy-nomas-world: src/lib/world.ts). */
+  world?: WorldRun;
+}
+
+/** A World take: the script and the turn to run (0 = the opening), or the finished turns' clips to join. */
+export interface WorldRun {
+  script: WorldScript;
+  turn: number;
+  /** Export: every turn's clip, in order (one film, no re-encode). */
+  join?: string[];
 }
 
 /** A blockout to film: the grey box (and its depth), its beats and references, and the words around them. */
@@ -1482,6 +1498,7 @@ const FEATURES: Partial<Record<CinemaAction, string>> = {
   path: "cinema-path",
   turnaround: "cinema-turnaround",
   blockout: "cinema-blockout",
+  world: "cinema-world",
 };
 const feature = (action: CinemaAction, mode: CinemaMode) => FEATURES[action] ?? (mode === "image" ? "cinema-image" : "cinema");
 
@@ -2480,6 +2497,68 @@ export function blockoutTake(input: Pick<CinemaGenerateInput, "blockout">, plan:
   return { seconds: Math.round(b.seconds * 100) / 100, parts, beats: normalizeBeats(b.beats, b.seconds).map((x) => x.label).slice(0, BLOCKOUT.maxMarkers) };
 }
 
+
+// ---------------------------------------------------------------------------
+// World mode (nm10-hy-nomas-world; research #10 §6.14): a world described once, then steered turn by turn
+
+/** Said where World mode is offered on the cloud engine: Hy-Nomas is hosted on neither fal nor Replicate. */
+export const WORLD_OPEN_ONLY = "World mode runs on your GPU (open source): switch to Open source to use it";
+/** Said after a turn: Hy-Nomas makes no sound. */
+export const WORLD_SOUND = "Hy-Nomas makes no sound: add it afterwards with Sound for video or Music";
+
+/**
+ * A World take. One turn: Hy-Nomas continues the world from the turns before it and films this turn (1280 × 704 at
+ * 24 fps). Export: the turns' clips joined into one film, packet by packet (they share one size, rate and codec). Open
+ * engine only: no stand-in model on the cloud.
+ */
+function planWorld(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
+  const has = ctx.has ?? ((id: string) => !!getModel(id));
+  const model = getModel(WORLD_MODEL)!;
+  const run = input.world;
+  const script = normalizeWorld(run?.script);
+  const notes: string[] = [];
+  if (input.engine !== "open") return finish(model, [], notes, WORLD_OPEN_ONLY);
+  if (!has(WORLD_MODEL)) return finish(model, [], notes, "World mode needs the Hy-Nomas workflow on your GPU");
+  if (run?.join) {
+    const join = getModel(WORLD_JOIN);
+    const clips = run.join.filter(Boolean);
+    if (!join || !has(WORLD_JOIN)) return finish(model, [], notes, "Joining the turns needs the join workflow on your GPU");
+    notes.push(`Joins the ${clips.length} turns into one ${Math.round(worldSeconds(script))} s film on your GPU, without re-encoding them`, WORLD_SOUND);
+    const step: CinemaStep = { key: "main", request: { feature: "cinema-world", modelId: join.id, op: "concat", prompt: "World film", inputs: { videos: clips }, params: { numOutputs: 1 } } };
+    return finish(join, [step], notes, clips.length < 2 ? "Run at least two turns to export a film" : undefined);
+  }
+  const k = Math.max(0, Math.min(script.turns.length, Math.round(run?.turn ?? 0)));
+  const t = turnAt(script, k)!;
+  const total = script.turns.length + 1;
+  notes.push(
+    k === 0
+      ? `The opening on your GPU: Hy-Nomas starts the world from your words, ${clipSeconds(t)} s at 1280 × 704, 24 fps`
+      : `Turn ${k} of ${total - 1} on your GPU: Hy-Nomas continues the world from the turns before it, then films this one (${clipSeconds(t)} s at 1280 × 704, 24 fps)`,
+  );
+  if (k > 0) notes.push("While ComfyUI still holds the earlier turns only this one is made; after another job it makes them again from the same seed first, which takes longer");
+  notes.push(WORLD_SOUND);
+  const prompt = (k === 0 ? script.opening.words : [t.words, t.action].filter(Boolean).join(" · ")) || "Camera move";
+  const request: GenerationRequest = {
+    feature: "cinema-world",
+    modelId: model.id,
+    op: "world-turn",
+    prompt: prompt.slice(0, WORLD_LIMITS.maxScene),
+    params: { numOutputs: 1, seed: script.seed, duration: clipSeconds(t), extra: { world: script, turn: k } },
+  };
+  return finish(model, [{ key: "main", request }], notes);
+}
+
+/** What a World take remembers: its turn, the script up to it and that part's key; or that it is the joined film. */
+export function worldTake(input: Pick<CinemaGenerateInput, "world">): CinemaTakeInfo["world"] {
+  const run = input.world;
+  if (!run) return undefined;
+  const script = normalizeWorld(run.script);
+  if (run.join) return { turn: script.turns.length, script, made: scriptKey(script, script.turns.length), joined: true };
+  const k = Math.max(0, Math.min(script.turns.length, Math.round(run.turn)));
+  const upTo = { ...script, turns: script.turns.slice(0, k) };
+  return { turn: k, script: upTo, made: scriptKey(script, k) };
+}
+
 /** Everything a Generate press would run, priced, without running it (the browser shows it live). */
 export function planCinema(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
   const i = { ...input, settings: input.settings ?? {}, prompt: input.prompt ?? "" };
@@ -2506,6 +2585,8 @@ export function planCinema(input: CinemaGenerateInput, ctx: CinemaContext): Cine
       return planTurnaroundTake(i, ctx);
     case "blockout":
       return planBlockout(i, ctx);
+    case "world":
+      return planWorld(i, ctx);
     default:
       return i.mode === "image" ? planStill(i) : planVideo(i, ctx);
   }
