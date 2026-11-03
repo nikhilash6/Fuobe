@@ -10,3 +10,11 @@ export function mp4Seconds(file: string): number {
   const length = v1 ? Number(buf.readBigUInt64BE(at + 28)) : buf.readUInt32BE(at + 20);
   return length / scale;
 }
+
+/** An MP4's first track's picture size in pixels, from its track header box (tkhd, version 0). */
+export function mp4Size(file: string): { w: number; h: number } {
+  const buf = fs.readFileSync(file);
+  const at = buf.indexOf("tkhd");
+  if (at < 0 || buf[at + 4] !== 0) throw new Error(`${file} has no version 0 track header`);
+  return { w: buf.readUInt32BE(at + 80) >>> 16, h: buf.readUInt32BE(at + 84) >>> 16 };
+}

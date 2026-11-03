@@ -1,16 +1,28 @@
 #!/usr/bin/env node
 /**
- * Stills and data for Home's first screen (src/components/home/home-bento.tsx): small AVIF copies of pictures the site
- * already publishes, and the Audio tile's waveform, read from the Audio studio's own sample. Nothing is rendered: every
- * picture is a resized copy of a published one, so the tiles show exactly what the studios show.
+ * Media and data for Home's first screen (src/components/home/home-bento.tsx): its two clips and their posters in two
+ * widths, AVIF copies of pictures the site already publishes, and the Audio tile's waveform, read from the Audio
+ * studio's own sample. Nothing is rendered: every file is a copy of a published picture or of the full-size render a
+ * published clip was cut from, so the tiles show exactly what the studios show, only sharper.
  *
- * Output:
- *   public/previews/home/catwalk-512.avif             the catwalk clip's poster (its first frame), the video tile's still
- *   public/previews/home/image-4-{480,768}.avif       the Image studio's example 4
- *   public/previews/home/ba-{before,after}-{640,960}.avif         Colorize's before and after (4:3)
- *   public/previews/home/ba-{before,after}-tall-{360,576}.avif    the same pair, a 3:5 crop for the tall tile
- *   public/previews/home/board-{photo,film}.webp      the Canvas board's photo and a frame of its film, 168 px squares
- *   src/lib/home-bento.generated.ts                   each file's content version, and the waveform
+ * Output (public/previews/home/):
+ *   catwalk-{640,1024}.{mp4,avif}         the catwalk clip at two widths, and its first frame as the video tile's poster
+ *   rotation-{640,1024}.{mp4,avif}        the turning gown (the 3D tile), the same way
+ *   image-4-{480,768}.avif                the Image studio's example 4
+ *   ba-{before,after}-{640,960,1280}.avif       Colorize's before and after (4:3)
+ *   ba-{before,after}-tall-{432,691}.avif       the same pair, a 3:5 crop for the tall tile
+ *   board-{photo,film}.webp               the Canvas board's photo and a frame of its film, 168 px squares
+ * and src/lib/home-bento.generated.ts: each file's content version, and the waveform.
+ *
+ * The clips: the published clip's own cut (scripts/eval/lib/covers.mjs: its first CLIP_SECONDS at CLIP_FPS, looped
+ * the same way), made again from the full-size render instead of the 512 px copy, in H.264 High (a CRF per clip,
+ * faststart, no sound). Each tile picks the width its box needs on the screen it is on (bento-islands.tsx).
+ *
+ * Masters: the full-size renders are not in the repo. With --masters <dir> (or FUOBE_HOME_MASTERS) the clips, their
+ * posters and the before/after copies are made from the files in it:
+ *   <dir>/motion-catwalk.mp4, <dir>/app-3d-rotation.mp4          the renders the published clips were cut from
+ *   <dir>/app-colorize-before.png, <dir>/app-colorize-after.png  Colorize's pair at full size (1536 x 1152)
+ * Without it those files are kept as they are (and versioned); only the rest is made again.
  *
  * The waveform: the Clean up voice sample decoded to 8 kHz mono, its loudness (RMS) in WAVE_BARS equal slices, scaled
  * so the loudest is 1, with a floor of WAVE_FLOOR so a pause still shows a bar. It is keyed by the sample's own
@@ -22,16 +34,19 @@
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
-import { contentVersion } from "./eval/lib/covers.mjs";
+import { CLIP_FPS, CLIP_SECONDS, LOOP_FADE, contentVersion, loopsAlready, readY4m, seamless } from "./eval/lib/covers.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
 const OUT_DIR = path.join(PUBLIC, "previews", "home");
 const OUT_TS = path.join(ROOT, "src", "lib", "home-bento.generated.ts");
 const DRY = process.argv.includes("--dry-run");
+const argAt = process.argv.indexOf("--masters");
+const MASTERS = argAt > 0 ? process.argv[argAt + 1] : process.env.FUOBE_HOME_MASTERS;
 
 export const WAVE_BARS = 48;
 export const WAVE_FLOOR = 0.12;
@@ -41,9 +56,17 @@ const WAVE_SOURCE = "/samples/clean-voice/clean.m4a";
 const BA_APP = "app-colorize";
 /**
  * The before/after tile is wide on a phone and a tablet (the 4:3 pair) and tall from lg: there it takes a 3:5 crop of
- * the 1280 pair around the subject, so it is never stretched past its own pixels and her face stays in the frame.
+ * the full-size pair (1536 x 1152) around the subject, so it is never stretched past its own pixels and her face stays
+ * in the frame.
  */
-const BA_TALL = { left: 352, top: 0, width: 576, height: 960 };
+const BA_TALL = { left: 422, top: 0, width: 691, height: 1152 };
+/** The two clips: their published preset, the name of their copies here, and the CRF each is encoded at. */
+const CLIPS = [
+  { key: "motion-catwalk", name: "catwalk", crf: 24 },
+  { key: "app-3d-rotation", name: "rotation", crf: 23 },
+];
+/** The widths each clip and its poster are made at: a tile takes the first at least as wide as its box needs. */
+const CLIP_WIDTHS = [640, 1024];
 /** The Canvas board's two pictures (src/lib/home-bento.ts, BENTO_BOARD): the photo going in and a frame of the film. */
 const BOARD_THUMBS = [
   { name: "board-photo.webp", from: "/examples/effect-pearl-earring/1/in-image.jpg" },
@@ -51,25 +74,55 @@ const BOARD_THUMBS = [
 ];
 /** Each copy: its name under previews/home, the published file it comes from, its width, and a crop where it has one. */
 const STILLS = [
-  { name: "catwalk-512.avif", from: "/previews/presets/motion-catwalk.jpg", width: 512 },
   { name: "image-4-480.avif", from: "/examples/image/4/out.jpg", width: 480 },
   { name: "image-4-768.avif", from: "/examples/image/4/out.jpg", width: 768 },
-  ...["before", "after"].flatMap((side) => [
-    ...[640, 960].map((width) => ({ name: `ba-${side}-${width}.avif`, from: `/previews/presets/ba/1280/${BA_APP}-${side}.jpg`, width })),
-    ...[360, 576].map((width) => ({ name: `ba-${side}-tall-${width}.avif`, from: `/previews/presets/ba/1280/${BA_APP}-${side}.jpg`, width, crop: BA_TALL })),
-  ]),
 ];
-/** AVIF quality: the copies sit under a dark shade and are never shown larger than their own pixels. */
+/** Copies made from a master (`master`: its file name in the masters folder). */
+const MASTER_STILLS = ["before", "after"].flatMap((side) => [
+  ...[640, 960, 1280].map((width) => ({ name: `ba-${side}-${width}.avif`, master: `${BA_APP}-${side}.png`, width })),
+  ...[432, 691].map((width) => ({ name: `ba-${side}-tall-${width}.avif`, master: `${BA_APP}-${side}.png`, width, crop: BA_TALL })),
+]);
+/** AVIF quality: the copies sit under a dark shade, and each tile takes one at least as wide as it shows. */
 const QUALITY = 55;
 /** The board's pictures show at 36 to 56 px: a 168 px square covers them on a 3x screen. */
 const THUMB = 168;
 
-const ffmpeg = (args) => {
-  const r = spawnSync(process.env.FUOBE_FFMPEG ?? "ffmpeg", args, { maxBuffer: 64 << 20 });
+const ffmpeg = (args, input) => {
+  const r = spawnSync(process.env.FUOBE_FFMPEG ?? "ffmpeg", args, { input, maxBuffer: 1 << 30 });
   if (r.error?.code === "ENOENT") throw new Error("gen-home-bento needs ffmpeg on PATH");
   if (r.status !== 0) throw new Error(`ffmpeg failed: ${String(r.stderr).trim().split("\n").at(-1)}`);
   return r.stdout;
 };
+
+/**
+ * A clip's loop at `width`, cut as covers.mjs encode() cuts the published one: decoded at CLIP_FPS, its first
+ * CLIP_SECONDS (and the frames the crossfade takes back), looped without a seam unless it loops already. Returns the
+ * y4m stream of it and of its first frame alone (the poster).
+ */
+function loopAt(src, width) {
+  const seconds = CLIP_SECONDS + LOOP_FADE / CLIP_FPS;
+  const y4m = ffmpeg(["-v", "error", "-i", src, "-t", String(seconds), "-an", "-sn", "-dn", "-vf", `scale=${width}:-2:flags=lanczos,fps=${CLIP_FPS},format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
+  const { header, frames, luma } = readY4m(y4m);
+  const cut = frames.slice(0, CLIP_SECONDS * CLIP_FPS);
+  const looped = loopsAlready(cut, luma) ? cut : seamless(frames, Math.min(LOOP_FADE, Math.floor(frames.length / 4)));
+  const stream = (list) => Buffer.concat([Buffer.from(`${header}\n`, "latin1"), ...list.flatMap((fr) => [Buffer.from("FRAME\n"), fr])]);
+  return { all: stream(looped), first: stream([looped[0]]), frames: looped.length };
+}
+
+/** H.264 High, the published clip's loop, muted, its index at the front so it starts before it has all loaded. */
+function encodeClipBuffer(y4m, crf) {
+  const out = path.join(os.tmpdir(), `gen-home-bento-${process.pid}.mp4`);
+  try {
+    encodeClip(y4m, crf, out);
+    return fs.readFileSync(out);
+  } finally {
+    fs.rmSync(out, { force: true });
+  }
+}
+
+function encodeClip(y4m, crf, out) {
+  ffmpeg(["-v", "error", "-y", "-f", "yuv4mpegpipe", "-i", "-", "-an", "-c:v", "libx264", "-profile:v", "high", "-preset", "slow", "-tune", "film", "-crf", String(crf), "-g", String(2 * CLIP_FPS), "-pix_fmt", "yuv420p", "-map_metadata", "-1", "-movflags", "+faststart", out], y4m);
+}
 
 /** The sample's loudness in `bars` slices, 0..1, the loudest 1, none under `floor`. */
 export function waveform(samples, bars = WAVE_BARS, floor = WAVE_FLOOR) {
@@ -91,8 +144,45 @@ function readWave() {
 
 async function main() {
   if (!DRY) fs.mkdirSync(OUT_DIR, { recursive: true });
+  if (MASTERS && !fs.existsSync(MASTERS)) throw new Error(`no masters folder at ${MASTERS}`);
+  const master = (name) => path.join(MASTERS, name);
   const versions = {};
   let total = 0;
+  // Made from the masters when there are any; without them the files already here are kept (and versioned).
+  const fromMasters = [
+    ...CLIPS.flatMap((c) =>
+      CLIP_WIDTHS.flatMap((w) => {
+        let loop;
+        const at = () => (loop ??= loopAt(master(`${c.key}.mp4`), w));
+        const poster = () => ffmpeg(["-v", "error", "-f", "yuv4mpegpipe", "-i", "-", "-frames:v", "1", "-c:v", "png", "-f", "image2pipe", "-"], at().first);
+        return [
+          { name: `${c.name}-${w}.mp4`, clip: true, make: () => encodeClipBuffer(at().all, c.crf) },
+          { name: `${c.name}-${w}.avif`, make: () => sharp(poster()).avif({ quality: QUALITY, effort: 6 }).toBuffer() },
+        ];
+      }),
+    ),
+    ...MASTER_STILLS.map((s) => ({
+      ...s,
+      make: () => {
+        const img = sharp(master(s.master));
+        return (s.crop ? img.extract(s.crop) : img).resize(s.width).avif({ quality: QUALITY, effort: 6 }).toBuffer();
+      },
+    })),
+  ];
+  for (const s of fromMasters) {
+    const out = path.join(OUT_DIR, s.name);
+    if (!MASTERS) {
+      if (!fs.existsSync(out)) throw new Error(`${s.name} is made from the full-size renders: run with --masters <dir>`);
+      console.log(`${s.name}  kept (no --masters)`);
+    } else {
+      const buf = await s.make();
+      if (!s.clip) total += buf.length;
+      console.log(`${s.name}  ${(buf.length / 1024).toFixed(1)} KB`);
+      if (DRY) continue;
+      if (!fs.existsSync(out) || !fs.readFileSync(out).equals(buf)) fs.writeFileSync(out, buf);
+    }
+    if (!DRY) versions[`/previews/home/${s.name}`] = contentVersion([out]);
+  }
   const jobs = [
     ...STILLS.map((s) => ({
       ...s,
@@ -114,7 +204,7 @@ async function main() {
     versions[`/previews/home/${s.name}`] = contentVersion([out]);
   }
   const { wave, seconds } = readWave();
-  console.log(`stills ${(total / 1024).toFixed(1)} KB · waveform ${wave.length} bars over ${seconds.toFixed(2)} s`);
+  console.log(`stills ${(total / 1024).toFixed(1)} KB (clips aside) · waveform ${wave.length} bars over ${seconds.toFixed(2)} s`);
   if (DRY) return;
   const source = contentVersion([path.join(PUBLIC, WAVE_SOURCE)]);
   const body = `/**

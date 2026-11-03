@@ -9,96 +9,207 @@
  * screen, the page has loaded and previews aren't paused; "0" once paused or scrolled away (the animations freeze where
  * they are). Without it (before load, reduced motion, Save-Data) every tile rests on its still frame.
  *
- * Accent: every glow, line, caret, dot and edge is the theme's --primary.
+ * Accent: every glow, line, caret, dot and edge in the grid is the theme's --primary; the headline's accent is its own.
  */
 
 .hb-bento {
   --bento-gap: 12px;
   --bento-accent: var(--primary);
   --bento-glow: color-mix(in oklch, var(--primary) 30%, transparent);
-  --bento-head: 0px;
-  /* PageShell's top padding is 48 px from md: the grid starts 24 px under the bar, as the design does. */
+  /*
+   * The headline's two sizes (--l1 "Make anything:", --l2 the line under it): 68 / 28 px at 390, 112 / 42 at 768,
+   * 150 / 54 at 1024 and 190 / 68 from 1280, in a straight line between those widths, so nothing jumps.
+   */
+  --l1: 17.44vw;
+  --l2: 7.18vw;
+  /* From the bar to "Make anything:", and from the headline to the grid. */
+  --head-top: 28px;
+  --head-gap: 20px;
   scroll-margin-top: 1rem;
+  /*
+   * PageShell's top padding (16 px; 48 px from md) is taken back, so the tops of the headline's letters sit --head-top
+   * under the bar (they start 0.026 of the size into the line).
+   */
+  margin-top: calc(var(--head-top) - 1rem - var(--l1) * 0.026);
+}
+@media (min-width: 390px) {
+  .hb-bento {
+    --l1: calc(68px + (100vw - 390px) * 0.1164);
+    --l2: calc(28px + (100vw - 390px) * 0.037);
+  }
 }
 @media (min-width: 768px) {
   .hb-bento {
-    margin-top: -1.5rem;
+    --l1: calc(112px + (100vw - 768px) * 0.1484);
+    --l2: calc(42px + (100vw - 768px) * 0.0469);
+    --head-top: 40px;
+    --head-gap: 28px;
+    margin-top: calc(var(--head-top) - 3rem - var(--l1) * 0.026);
   }
 }
 @media (min-width: 1024px) {
   .hb-bento {
     --bento-gap: 14px;
-    --bento-head: 6.5rem;
+    /*
+     * All eight tiles stay on the first screen, the grid at least --grid-min tall: on a short screen (under about 860
+     * px of page) the headline gives way first, at the same proportions. --l1-room: the most "Make anything:" can be
+     * for that, 1.33 being the headline's height in --l1 (both lines: see --bento-head, with --l2 at 0.358 of it).
+     */
+    --grid-min: 450px;
+    --l1-room: calc((var(--content-h) - var(--grid-min) - 16px - var(--head-top) - var(--head-gap)) / 1.33);
+    --l1: min(calc(150px + (100vw - 1024px) * 0.1563), var(--l1-room));
+    --l2: calc(var(--l1) * 0.358);
+    /* The headline's height (line 1's box, the gap under its descenders, line 2's box), which the grid takes off the screen's. */
+    --bento-head: calc(var(--l1) * 0.986 + var(--l2) * 0.96 + var(--head-gap));
+  }
+}
+@media (min-width: 1280px) {
+  .hb-bento {
+    --l1: min(190px, var(--l1-room));
   }
 }
 
 /* ---------------------------------------------------------------- headline */
 
+/*
+ * "Make anything:" at display size, set tight and a touch heavier than the face's one weight (a hairline stroke in its
+ * own colour); the second line in italic under it, right-aligned to the grid's edge from 768, with only "finished
+ * film," in the accent. Each line rises into place once as the page opens (transform and opacity only, from 40 %, so
+ * the words are on the first paint), and the accent's glow fades in after; none of it under reduced motion.
+ */
 .hb-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 2rem;
-  margin-bottom: 16px;
+  position: relative;
+  margin-bottom: var(--head-gap);
+  --ink-1: #0b0b0f;
+  --ink-2: #0b0b0f;
+  --ink-accent: #5b45e0;
+  --ink-note: #6b6875;
 }
-@media (min-width: 768px) {
-  .hb-head {
-    margin-bottom: 20px;
-  }
+.dark .hb-head {
+  --ink-1: #fff;
+  --ink-2: #f4f1ff;
+  --ink-accent: #c9bfff;
+  --ink-note: #8a8794;
 }
 .hb-h1 {
+  margin: 0;
   font-family: var(--font-heading);
   font-weight: 400;
-  font-size: 30px;
-  line-height: 1.06;
+  font-size: var(--l1);
+  line-height: 0.86;
+  letter-spacing: -0.035em;
+  color: var(--ink-1);
+}
+.hb-line1,
+.hb-line2 {
+  display: block;
+}
+.hb-line1 {
+  /* The M's stem on the grid's left edge (the face's side bearing, taken back). */
+  margin-left: -0.04em;
+  white-space: nowrap;
+  -webkit-text-stroke: 0.008em currentColor;
+}
+/* Line 2 tucks in just under the descenders of "anything" (0.126 of line 1's size under its line), clear of them. */
+.hb-line2 {
+  margin-top: calc(var(--l1) * 0.126 + var(--l2) * 0.06);
+  font-size: var(--l2);
+  font-style: italic;
+  line-height: 1.04;
   letter-spacing: -0.01em;
-  text-wrap: balance;
-  margin: 0;
+  color: var(--ink-2);
 }
-/* Two lines from md: "Make anything:" over the rest, which keeps to one line. */
+/* A phone: two lines, the second starting at "finished". */
+.hb-l2b {
+  display: block;
+}
+.hb-accent {
+  position: relative;
+  color: var(--ink-accent);
+}
 @media (min-width: 768px) {
-  .hb-h1 {
-    font-size: 40px;
-    line-height: 1.04;
-  }
-  .hb-line1,
   .hb-line2 {
-    display: block;
-  }
-  .hb-line2 {
+    text-align: right;
     white-space: nowrap;
+    line-height: 0.9;
+  }
+  .hb-l2b {
+    display: inline;
   }
 }
-@media (min-width: 1024px) {
-  .hb-h1 {
-    font-size: 46px;
-  }
+
+/* The glow, on a layer of its own (the same words, see-through) so it can fade in on opacity alone. */
+.dark .hb-accent::after {
+  content: attr(data-glow) / "";
+  position: absolute;
+  inset: 0;
+  white-space: nowrap;
+  color: transparent;
+  text-shadow: 0 0 40px rgb(185 173 255 / 0.22);
+  pointer-events: none;
 }
-@media (min-width: 1280px) {
-  .hb-h1 {
-    font-size: 50px;
-  }
+
+.hb-line1 {
+  animation: hb-rise 700ms var(--ease-enter, cubic-bezier(0.08, 0.82, 0.17, 1)) both;
 }
 .hb-line2 {
-  font-style: italic;
-  color: color-mix(in oklch, var(--primary) 85%, var(--foreground));
+  animation: hb-rise 900ms var(--ease-enter, cubic-bezier(0.08, 0.82, 0.17, 1)) 120ms both;
 }
-.dark .hb-line2 {
-  color: #b9adff;
+.dark .hb-accent::after {
+  animation: hb-glow 1.2s ease 500ms both;
 }
+@keyframes hb-rise {
+  from {
+    opacity: 0.4;
+    transform: translateY(0.12em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes hb-glow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hb-line1,
+  .hb-line2,
+  .dark .hb-accent::after {
+    animation: none;
+  }
+}
+
+/*
+ * The note under the headline: in the flow under the second line up to lg; from lg in the room right of
+ * "Make anything:", its last line on that line's baseline, so it takes no height from the grid.
+ */
 .hb-aside {
-  display: none;
-  max-width: 340px;
-  margin: 0 0 6px;
-  font-size: 14px;
+  max-width: 300px;
+  margin: 10px 0 0;
+  font-size: 13px;
   line-height: 1.45;
-  text-align: right;
-  color: var(--muted-foreground);
+  color: var(--ink-note);
   text-wrap: pretty;
 }
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .hb-aside {
-    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    /* Down to line 1's baseline (0.768 of its size under the top of its line), and the note's own descent. */
+    height: calc(var(--l1) * 0.768 + 5px);
+    width: min(300px, calc(100% - var(--l1) * 4.86 - 32px));
+    max-width: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    font-size: 14px;
   }
 }
 
@@ -149,7 +260,7 @@
   .hb-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     grid-template-rows: repeat(3, minmax(0, 1fr));
-    height: clamp(520px, calc(var(--content-h) - var(--bento-head) - 6.5rem), 760px);
+    height: clamp(var(--grid-min), calc(var(--content-h) - var(--bento-head) - var(--head-top) - 3.25rem), 760px);
     grid-template-areas:
       "video video image audio"
       "video video three restore"

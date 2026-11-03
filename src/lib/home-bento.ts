@@ -19,6 +19,9 @@ import { templateCover } from "@/lib/template-covers";
 
 /** The preset whose clip each moving tile plays (no other card on Home plays these: tests/home-showcase.test.ts). */
 export const BENTO_CLIPS = { video: "motion-catwalk", threeD: "app-3d-rotation" } as const;
+/** Each clip's copies here (scripts/gen-home-bento.mjs): its name, and the widths it and its poster come in. */
+export const BENTO_CLIP_FILES = { video: "catwalk", threeD: "rotation" } as const;
+export const BENTO_CLIP_WIDTHS = [640, 1024] as const;
 /** The Image studio's example the image tile shows and opens with (src/lib/examples/plan.json). */
 export const BENTO_IMAGE_EXAMPLE = { id: "image.4", out: "/examples/image/4/out.jpg" };
 /** The app the before/after tile shows and opens: black and white to colour reads at a glance. */
@@ -43,13 +46,20 @@ export const BENTO_HREFS = {
 export type BentoKey = keyof typeof BENTO_HREFS;
 
 /**
- * A picture in two widths: AVIF for the browsers that take it, the published JPEG for the rest. `tall`: a portrait
+ * A picture in two or three widths: AVIF for the browsers that take it, the published JPEG for the rest. `tall`: a portrait
  * crop of it for a tile that is tall from lg (home-bento.tsx), so the picture is never stretched past its own pixels.
  */
 export interface BentoPicture {
   avif: { src: string; w: number }[];
   fallback: string;
   tall?: { src: string; w: number }[];
+}
+
+/** A tile's clip: its id in the playback store, its poster, and the clip in each width (the tile picks one). */
+export interface BentoMovingTile {
+  id: string;
+  poster: BentoPicture;
+  clips: { src: string; w: number }[];
 }
 
 export interface BentoTile {
@@ -153,10 +163,20 @@ export async function homeBento(f: BentoFacts) {
     return { avif: [{ src: fr.small, w: 512 }, { src: fr.mid, w: 768 }], fallback: fr.webp } satisfies BentoPicture;
   };
   const restoreSide = (side: "before" | "after"): BentoPicture => ({
-    avif: [640, 960].map((w) => ({ src: made(`/previews/home/ba-${side}-${w}.avif`), w })),
-    tall: [360, 576].map((w) => ({ src: made(`/previews/home/ba-${side}-tall-${w}.avif`), w })),
+    avif: [640, 960, 1280].map((w) => ({ src: made(`/previews/home/ba-${side}-${w}.avif`), w })),
+    tall: [432, 691].map((w) => ({ src: made(`/previews/home/ba-${side}-tall-${w}.avif`), w })),
     fallback: `/previews/presets/ba/960/${BENTO_BEFORE_AFTER}-${side}.jpg?v=${baV}`,
   });
+  // A moving tile: its poster (the clip's first frame) and its clip, each in every width; the published JPEG poster is
+  // the fallback for a browser without AVIF.
+  const moving = (key: keyof typeof BENTO_CLIPS, fallback: string): BentoMovingTile => {
+    const name = BENTO_CLIP_FILES[key];
+    return {
+      id: BENTO_CLIPS[key],
+      poster: { avif: BENTO_CLIP_WIDTHS.map((w) => ({ src: made(`/previews/home/${name}-${w}.avif`), w })), fallback },
+      clips: BENTO_CLIP_WIDTHS.map((w) => ({ src: made(`/previews/home/${name}-${w}.mp4`), w })),
+    };
+  };
   const tile = (key: BentoKey, kind: string, meta: string, title: string, cta: string): BentoTile => ({
     key,
     meta,
@@ -181,12 +201,12 @@ export async function homeBento(f: BentoFacts) {
       live: tile("live", "Live edit", "Live edit", "Type it, watch it change", "Open Live edit"),
       canvas: tile("canvas", "Canvas", "Canvas", "Chain any step, end to end", "Open Canvas"),
     },
-    video: { id: BENTO_CLIPS.video, poster: { avif: [{ src: made("/previews/home/catwalk-512.avif"), w: 512 }], fallback: video.poster } satisfies BentoPicture, clip: video.video },
+    video: moving("video", video.poster),
     image: {
       avif: [480, 768].map((w) => ({ src: made(`/previews/home/image-4-${w}.avif`), w })),
       fallback: example(BENTO_IMAGE_EXAMPLE.out),
     } satisfies BentoPicture,
-    threeD: { id: BENTO_CLIPS.threeD, poster: threeD.poster, clip: threeD.video },
+    threeD: moving("threeD", threeD.poster),
     restore: { before: restoreSide("before"), after: restoreSide("after") },
     wave: { bars: HOME_BENTO_WAVE.bars, seconds: HOME_BENTO_WAVE.seconds },
     live: { frames: BENTO_LIVE_STEPS.map(frame), phrases: livePhrases(demo) },

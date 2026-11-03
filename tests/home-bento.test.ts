@@ -12,7 +12,10 @@ import { HUB_MODES } from "@/lib/hubs";
 import { studioCount } from "@/lib/nav-model";
 import { HOME_BENTO_MEDIA, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
 import { contentVersion } from "../scripts/eval/lib/covers.mjs";
-import { mp4Seconds } from "./helpers/mp4-length";
+import sharp from "sharp";
+import type { BentoPicture } from "@/lib/home-bento";
+import { coverWidth, pickWidth } from "@/lib/media-pick";
+import { mp4Seconds, mp4Size } from "./helpers/mp4-length";
 
 /*
  * Home's first screen (src/components/home/home-bento.tsx, src/lib/home-bento.ts): every tile's media is a published
@@ -27,7 +30,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const { BENTO_BOARD, BENTO_CLIPS, BENTO_HREFS, BENTO_BEFORE_AFTER, BENTO_IMAGE_EXAMPLE, livePhrases, openModelsOf } = await import("@/lib/home-bento");
+const { BENTO_BOARD, BENTO_CLIPS, BENTO_CLIP_WIDTHS, BENTO_HREFS, BENTO_BEFORE_AFTER, BENTO_IMAGE_EXAMPLE, livePhrases, openModelsOf } = await import("@/lib/home-bento");
 const { HOME_BEFORE_AFTER, HOME_EFFECTS, HOME_MOTIONS, HOME_REVEALS, HOME_STUDIOS, homeShowcase, navLabel } = await import("@/lib/home-showcase");
 const { HomeBento } = await import("@/components/home/home-bento");
 
@@ -54,15 +57,65 @@ describe("Home's first screen", () => {
       expect(contentVersion([file(f)]), f).toBe(v);
       expect(urls).toContain(`${f}?v=${v}`);
     }
+    // Nothing else is left in its folder: a copy no longer listed goes with the list.
+    const folder = path.join(process.cwd(), "public", "previews", "home");
+    expect(fs.readdirSync(folder).map((n) => `/previews/home/${n}`).sort()).toEqual(Object.keys(HOME_BENTO_MEDIA).sort());
     // And the page's HTML asks for them as listed (no URL without its version).
     for (const m of html.matchAll(/(?:src|srcSet)="([^"]+)"/g)) for (const part of m[1].split(", ")) expect(part.split(" ")[0], part).toMatch(versioned);
   });
 
-  it("plays the catwalk and the turning gown, at the length of their published clips", () => {
-    expect(bento.video.clip).toMatch(/^\/previews\/presets\/motion-catwalk\.mp4\?v=/);
-    expect(bento.threeD.clip).toMatch(/^\/previews\/presets\/app-3d-rotation\.mp4\?v=/);
-    expect(mp4Seconds(file(bento.video.clip))).toBeCloseTo(4, 1);
-    expect(mp4Seconds(file(bento.threeD.clip))).toBeCloseTo(3.04, 1);
+  it("plays the catwalk and the turning gown in two widths, at the length of their published clips", () => {
+    const tiles = [
+      { tile: bento.video, name: "catwalk", published: "motion-catwalk", seconds: 4 },
+      { tile: bento.threeD, name: "rotation", published: "app-3d-rotation", seconds: 3.04 },
+    ];
+    for (const { tile, name, published, seconds } of tiles) {
+      expect(tile.id).toBe(published);
+      expect(tile.clips.map((c) => c.w)).toEqual([...BENTO_CLIP_WIDTHS]);
+      for (const c of tile.clips) {
+        expect(c.src).toMatch(new RegExp(`^/previews/home/${name}-${c.w}\\.mp4\\?v=[0-9a-f]{8}$`));
+        // Each is as wide as it says, 4:3, and as long as the published clip it stands in for (the same cut and loop).
+        expect(mp4Size(file(c.src))).toEqual({ w: c.w, h: (c.w * 3) / 4 });
+        expect(mp4Seconds(file(c.src))).toBeCloseTo(seconds, 1);
+        expect(mp4Seconds(file(`/previews/presets/${published}.mp4`))).toBeCloseTo(seconds, 1);
+      }
+      // Its poster comes in the same widths (the clip's first frame); the published JPEG for a browser without AVIF.
+      expect(tile.poster.avif.map((a) => a.w)).toEqual([...BENTO_CLIP_WIDTHS]);
+      for (const a of tile.poster.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/${name}-${a.w}\\.avif\\?v=`));
+      expect(tile.poster.fallback).toMatch(new RegExp(`^/previews/presets/${published}\\.jpg\\?v=`));
+    }
+  });
+
+  it("lists every picture at its real width", async () => {
+    const pictures: BentoPicture[] = [bento.video.poster, bento.threeD.poster, bento.image, bento.restore.before, bento.restore.after];
+    for (const p of pictures)
+      for (const a of [...p.avif, ...(p.tall ?? [])]) {
+        const m = await sharp(file(a.src)).metadata();
+        expect(m.width, a.src).toBe(a.w);
+      }
+    // The tall crop is 3:5.
+    for (const a of bento.restore.after.tall ?? []) {
+      const m = await sharp(file(a.src)).metadata();
+      expect(m.width! / m.height!).toBeCloseTo(0.6, 2);
+    }
+  });
+
+  it("gives each tile a copy at least as wide as it shows, up to the widest there is", () => {
+    // object-fit: cover: a 4:3 clip in a square box needs its height x 4/3 of width, times the pixel ratio.
+    expect(coverWidth(173, 173, 4 / 3, 3)).toBe(692);
+    expect(coverWidth(569, 419, 4 / 3, 2)).toBe(1138);
+    expect(coverWidth(476, 210, 4 / 3, 2)).toBe(952);
+    const clips = bento.video.clips;
+    expect(pickWidth(clips, 300).w).toBe(640);
+    expect(pickWidth(clips, 640).w).toBe(640);
+    expect(pickWidth(clips, 641).w).toBe(1024);
+    // Past the widest copy (the render's own size): the widest, never stretched further.
+    expect(pickWidth(clips, 1339).w).toBe(1024);
+    // The widest of each is its master's own width: the clips are 1024 x 768 renders, the before/after pair 1536.
+    for (const t of [bento.video, bento.threeD]) expect(Math.max(...t.clips.map((c) => c.w))).toBe(1024);
+    // The before/after pair covers a 3x phone (358 px wide) and the tall tile on a 2x 1920 screen.
+    expect(Math.max(...bento.restore.after.avif.map((a) => a.w))).toBeGreaterThanOrEqual(358 * 3);
+    expect(Math.max(...(bento.restore.after.tall ?? []).map((a) => a.w))).toBeGreaterThanOrEqual(602);
   });
 
   it("opens a real page from every tile, named by the navigation or the catalog", () => {
@@ -107,9 +160,15 @@ describe("Home's first screen", () => {
     expect(tiles.find((a) => a.includes('data-tile="numbers"'))).toContain('aria-haspopup="dialog"');
     // No link or button inside a tile: the whole tile is the one target.
     for (const chunk of html.split("data-tile=").slice(1)) expect(chunk.split("</a>")[0]).not.toMatch(/<(a|button)\b/);
-    // The page's only h1: the headline.
+    // The page's only h1: the headline, in its own words; "finished film," and "one place." never break apart.
     expect(html.match(/<h1\b/g)).toHaveLength(1);
-    expect(html.replace(/<[^>]+>/g, "")).toContain("Make anything: From an idea to a finished film, in one place.");
+    const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/.exec(html)![1].replace(/<[^>]+>/g, "");
+    expect(h1.replace(/ /g, " ")).toBe("Make anything: From an idea to a finished film, in one place.");
+    expect(h1).toContain("finished film,");
+    expect(h1).toContain("one place.");
+    // The note under it, both sentences whole, and nothing hidden shipped with it.
+    expect(html).toContain("Film, stills, sound, 3D, live edits and whole pipelines. Each tile opens the studio that makes it.");
+    expect(html).not.toMatch(/data-hero|hb-eyebrow|hb-vignette/);
   });
 
   it("quotes the catalog's numbers, never typed in", () => {

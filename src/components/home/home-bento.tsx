@@ -7,12 +7,16 @@ import { cn } from "@/lib/utils";
 import { s } from "./home-bento-classes";
 import "./home-bento.css";
 
-/** How wide each tile's picture shows, per width (the grid's columns: home-bento.css). */
+/**
+ * How wide each tile's picture shows, per width (the grid's columns: home-bento.css): under object-fit: cover, the
+ * tile's width or, where the tile is the squarer shape, its height times 4/3, so the browser picks a copy that sharp.
+ */
 const SIZES = {
-  video: "(min-width: 1024px) 562px, (min-width: 768px) 466px, 100vw",
-  square: "(min-width: 1024px) 274px, (min-width: 768px) 227px, 50vw",
+  video: "(min-width: 1024px) 572px, (min-width: 768px) 576px, calc(100vw - 32px)",
+  /** A 4:3 picture in a square tile on a phone (half the row): cropped at its sides, so 4/3 of the tile's width. */
+  square: "(min-width: 1024px) 290px, (min-width: 768px) 280px, calc((100vw - 44px) * 0.667)",
   /** The before/after tile: wide (its 4:3 pair) below lg; from lg it is tall and takes the pair's 3:5 crop (`tall`). */
-  wide: "(min-width: 768px) 466px, 100vw",
+  wide: "(min-width: 768px) 476px, calc(100vw - 32px)",
   tall: "290px",
 };
 /** From lg the before/after tile is tall (home-bento.css). */
@@ -150,8 +154,18 @@ export function HomeBento({ bento }: { bento: Bento }) {
   return (
     <section id="home-bento" aria-labelledby="home-bento-title" className={s.bento}>
       <div className={s.head}>
+        {/* No-break spaces keep "finished film," and "one place." whole when the line wraps. */}
         <h1 id="home-bento-title" className={s.h1}>
-          <span className={s.line1}>Make anything:</span> <span className={s.line2}>From an idea to a finished film, in one place.</span>
+          <span className={s.line1}>Make anything:</span>{" "}
+          <span className={s.line2}>
+            From an idea to a{" "}
+            <span className={s.l2b}>
+              <span className={s.accent} data-glow={"finished film,"}>
+                finished&nbsp;film,
+              </span>{" "}
+              in one&nbsp;place.
+            </span>
+          </span>
         </h1>
         <p className={s.aside}>Film, stills, sound, 3D, live edits and whole pipelines. Each tile opens the studio that makes it.</p>
       </div>
@@ -159,7 +173,7 @@ export function HomeBento({ bento }: { bento: Bento }) {
       <div className={s.grid}>
         <Tile tile={tiles.video} area={s.video} bigMeta>
           <Pic pic={bento.video.poster} sizes={SIZES.video} fetchPriority="high" />
-          <BentoClip id={bento.video.id} clip={bento.video.clip} progress glyph />
+          <BentoClip id={bento.video.id} clips={bento.video.clips} progress glyph />
           <span aria-hidden className={s.badge}>
             <Video className="size-3.5" /> Video
           </span>
@@ -179,9 +193,8 @@ export function HomeBento({ bento }: { bento: Bento }) {
         </Tile>
 
         <Tile tile={tiles.threeD} area={s.three}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={bento.threeD.poster} alt="" width={512} height={384} loading="eager" fetchPriority="low" decoding="async" draggable={false} className={s.fill} />
-          <BentoClip id={bento.threeD.id} clip={bento.threeD.clip} />
+          <Pic pic={bento.threeD.poster} sizes={SIZES.square} fetchPriority="low" />
+          <BentoClip id={bento.threeD.id} clips={bento.threeD.clips} />
         </Tile>
 
         <Tile tile={tiles.restore} area={s.restore}>

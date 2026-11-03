@@ -22,15 +22,15 @@ export const MANIFEST_FILE = path.join(REPO_DIR, "src", "lib", "preset-previews.
 /** Longest side of a cover still, and of a cover clip (px); a clip's first seconds, at CLIP_FPS. */
 const STILL_PX = 768;
 const CLIP_PX = 512;
-const CLIP_SECONDS = 4;
-const CLIP_FPS = 24;
+export const CLIP_SECONDS = 4;
+export const CLIP_FPS = 24;
 /**
  * Longest a clip that rests on its last frame keeps (s): a reveal is cut at its own end, not at CLIP_SECONDS. A clip
  * that keeps its whole length (`length: "full"`) is cut here too.
  */
 const REST_CLIP_SECONDS = 8;
 /** Frames at a clip's end crossfaded into its first ones: the cards play clips with `loop`, and this hides the jump. */
-const LOOP_FADE = 6;
+export const LOOP_FADE = 6;
 /** Width of a poster's small copy (px), which the pickers' tiles show: enough for a 136 px tile on a 2x screen. */
 const THUMB_PX = 320;
 
@@ -244,7 +244,7 @@ function run(args, input) {
 }
 
 /** A y4m stream (ffmpeg's yuv4mpegpipe, 4:2:0) as its header line and each frame's bytes. */
-function readY4m(buf) {
+export function readY4m(buf) {
   const nl = buf.indexOf(0x0a);
   const header = buf.subarray(0, Math.max(nl, 0)).toString("latin1");
   const w = Number(/ W(\d+)/.exec(header)?.[1]);

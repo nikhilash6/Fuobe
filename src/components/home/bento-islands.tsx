@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useNavUi } from "@/components/nav/nav-ui";
 import { usePreviewPlayback, usePreviewsPaused } from "@/components/preset-preview";
 import type { BentoPicture } from "@/lib/home-bento";
+import { coverWidth, pickWidth, type Sized } from "@/lib/media-pick";
 import { releaseVideo } from "@/lib/media-release";
 import { browserPlaybackEnv } from "@/lib/preview-playback";
 import { s } from "./home-bento-classes";
@@ -106,17 +107,32 @@ export function BentoMotion({ target }: { target: string }) {
   return null;
 }
 
+/** The clips' shape (width / height): both tiles play 4:3 renders (scripts/gen-home-bento.mjs). */
+const CLIP_ASPECT = 4 / 3;
+
 /**
  * A tile's clip, over its still: it joins the site's playback rules (preset-preview.tsx) once the page has loaded, so
  * it plays in view, at most a few at once, never under reduced motion, Save-Data or Pause previews, and a hover or
- * keyboard focus on its tile still plays it. Its source is set only when it first plays. Once started it stays mounted
- * and pauses on its frame. `progress`: a line along the bottom follows the clip; `glyph`: a play sign until it plays.
+ * keyboard focus on its tile still plays it. Its source is set only when it first plays: the narrowest of `clips` at
+ * least as wide as the tile shows it on this screen (its box under `object-fit: cover`, times the pixel ratio), and
+ * that one stays. Once started it stays mounted and pauses on its frame. `progress`: a line along the bottom follows
+ * the clip; `glyph`: a play sign until it plays.
  */
-export function BentoClip({ id, clip, progress, glyph }: { id: string; clip: string; progress?: boolean; glyph?: boolean }) {
+export function BentoClip({ id, clips, progress, glyph }: { id: string; clips: Sized[]; progress?: boolean; glyph?: boolean }) {
   const loaded = useLoaded();
-  const { ref, playing, handlers } = usePreviewPlayback<HTMLSpanElement>(id, loaded ? { video: clip } : {});
-  const [started, setStarted] = useState(false);
-  if (playing && !started) setStarted(true);
+  const { ref, playing, handlers } = usePreviewPlayback<HTMLSpanElement>(id, loaded ? { video: clips[0].src } : {});
+  // The pixels of width the tile needs, kept up to date with its size until the clip starts.
+  const [need, setNeed] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setNeed(coverWidth(e.contentRect.width, e.contentRect.height, CLIP_ASPECT, window.devicePixelRatio || 1)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  const [clip, setClip] = useState<string | null>(null);
+  if (playing && !clip) setClip(pickWidth(clips, need).src);
+  const started = clip !== null;
   const [ready, setReady] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const bar = useRef<HTMLElement>(null);
@@ -167,7 +183,7 @@ export function BentoClip({ id, clip, progress, glyph }: { id: string; clip: str
 
   return (
     <span ref={ref} aria-hidden className={s.clip} onPointerEnter={handlers.onPointerEnter} onPointerLeave={handlers.onPointerLeave}>
-      {started && <video ref={video} src={clip} muted loop playsInline preload="auto" data-ready={ready || undefined} onLoadedData={() => setReady(true)} />}
+      {clip && <video ref={video} src={clip} muted loop playsInline preload="auto" data-ready={ready || undefined} onLoadedData={() => setReady(true)} />}
       {glyph && (
         <span className={s.playGlyph} data-on={(playing && ready) || undefined}>
           <Play className="size-6" fill="#fff" stroke="#fff" />

@@ -8,6 +8,7 @@ import { SOUL_LOOK_CARDS } from "@/lib/catalog/soul-looks.generated";
 import { previewFor, toPresetCard } from "@/lib/preset-card-data";
 import { isCover, onPeak, presetCard } from "@/lib/preset-cards";
 import { coverPreview, presetCover, thumbOf } from "@/lib/preset-covers";
+import { HOME_BENTO_MEDIA } from "@/lib/home-bento.generated";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
@@ -85,6 +86,8 @@ describe("the preset covers manifest", () => {
     const named = new Set(entries.flatMap(([, e]) => [e.poster, thumbOf(e.poster), e.video].filter((u): u is string => !!u).map((u) => u.split("?")[0])));
     for (const id of Object.keys(PRESET_PEAKS)) for (const f of [`/previews/presets/peak/${id}.jpg`, thumbOf(`/previews/presets/peak/${id}.jpg`)]) named.add(f);
     for (const id of Object.keys(PRESET_BEFORE_AFTER)) for (const f of beforeAfterFiles(id)) named.add(f);
+    // Home's first screen makes its own clips and stills (scripts/gen-home-bento.mjs, tests/home-bento.test.ts).
+    for (const f of Object.keys(HOME_BENTO_MEDIA)) named.add(f);
     const dir = path.join(root, "public", "previews");
     const files = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(jpg|mp4)$/.test(f)) : [];
     // public/previews/templates is the template covers' (tests/template-covers.test.ts checks it).

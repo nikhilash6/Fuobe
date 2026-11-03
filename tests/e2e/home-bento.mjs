@@ -7,16 +7,20 @@
 //   --weight-only: only measure what the first screen downloads (to compare another build, such as main's).
 //
 // 1. Every width (390, 768, 1024, 1280, 1440, 1920), light and dark, as a guest and as the owner: no sideways scroll,
-//    one h1, the headline (two lines from 768, its second line whole), and the first screen holds what it should
-//    (a phone: the video tile and the three under it; from 1024: all eight). A picture of each (--shots), and a contact
-//    sheet of them all.
+//    one h1, the headline in its own words ("Make anything:" on one line; the second line whole from 768, and on a
+//    phone two lines that break before "finished film,"), it rose into place once, and the first screen holds what it
+//    should (a phone: the video tile and the two under it; from 1024: all eight). A picture of each (--shots), and a
+//    contact sheet of them all.
+// 1b. Sharp at every width and pixel ratio (1x, 2x, 3x): every picture on the first screen is at least as wide as its
+//    box shows it (object-fit: cover, times the ratio), up to the widest copy there is, and so is each clip once it
+//    plays.
 // 2. Layout shift under 0.01 at 390 and 1440, through a load and a scroll to the bottom and back.
 // 3. Every tile's link answers 200, and the numbers tile opens every studio (the launcher; a phone's sheet).
-// 4. Reduced motion and Save-Data: no clip is fetched or played, nothing moves by itself (the split rests at 50 %, the
-//    live words stay), and the tiles keep their stills.
+// 4. Reduced motion and Save-Data: no clip is fetched or played, nothing moves by itself (the headline is still, the
+//    split rests at 50 %, the live words stay), and the tiles keep their stills.
 // 5. Pause previews stops the catwalk and freezes every animation; pressed again, they go on.
 // 6. Weight: what the page downloads before `load` (clips aside), at 390 and 1440, reported; the first screen's own
-//    stills stay under 280 KB.
+//    stills stay under 300 KB. The clips it fetches after load are reported on their own.
 // 7. The composer: /?new=1 brings it into view with the focus; a plain visit stays at the top (no autofocus jump).
 // 8. Every tile is a named link, and Tab reaches them in the grid's reading order with a visible ring.
 import assert from "node:assert/strict";
@@ -84,15 +88,27 @@ const layout = (page) =>
       return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height };
     };
     const h1 = document.querySelector("#home-bento h1");
-    const line2 = h1.querySelector("span:last-child");
-    const lh = parseFloat(getComputedStyle(h1).lineHeight);
+    const [line1, line2] = h1.querySelectorAll(":scope > span");
+    // The lines a span's words fall on: its text's boxes, grouped by their top.
+    const lines = (el) => {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const tops = [];
+      for (const b of r.getClientRects()) if (b.width > 0 && !tops.some((t) => Math.abs(t - b.top) < b.height / 2)) tops.push(b.top);
+      return tops.length;
+    };
+    const accent = line2.querySelector("[data-glow]");
+    const rise = (el) =>
+      el.getAnimations().map((a) => ({ name: a.animationName, state: a.playState, ms: a.effect.getTiming().duration, delay: a.effect.getTiming().delay, from: a.effect.getKeyframes()[0]?.opacity }));
     return {
       h1s: document.querySelectorAll("h1").length,
       text: h1.textContent.replace(/\s+/g, " ").trim(),
-      h1Lines: Math.round(h1.getBoundingClientRect().height / lh),
-      line2Lines: Math.round(line2.getBoundingClientRect().height / lh),
+      line1Lines: lines(line1),
+      line2Lines: lines(line2),
       line2Italic: getComputedStyle(line2).fontStyle,
-      line2Color: getComputedStyle(line2).color,
+      // On a phone the second line breaks before "finished film,": the accent starts its own line, at the left.
+      accentStartsLine: Math.abs(accent.getClientRects()[0].left - line2.getBoundingClientRect().left) < 2,
+      rise: { line1: rise(line1), line2: rise(line2) },
       scroll: [document.documentElement.scrollWidth, document.documentElement.clientWidth],
       vh: innerHeight,
       tiles: Object.fromEntries(tiles.map((t) => [t, box(document.querySelector(`#home-bento [data-tile="${t}"]`))])),
@@ -100,8 +116,51 @@ const layout = (page) =>
     };
   }, TILES);
 
+/**
+ * Each picture and playing clip on the first screen against what its box needs: the box under object-fit: cover (its
+ * width, or its height times the picture's shape when that is more), times the pixel ratio, up to the widest copy the
+ * page offers for it.
+ */
+const sharpness = (page) =>
+  page.evaluate(() => {
+    const dpr = devicePixelRatio;
+    // The copies the browser could choose from for an img: its <picture>'s matching source, or its own srcset, each as
+    // its URL and its width. (naturalWidth is no help here: under a w-descriptor it is scaled by the pixel ratio.)
+    const copies = (img) => {
+      const pic = img.closest("picture");
+      const srcset = (pic ? [...pic.querySelectorAll("source")].find((s) => !s.media || matchMedia(s.media).matches)?.srcset : undefined) ?? img.srcset ?? "";
+      return srcset
+        .split(",")
+        .map((c) => /^(\S+)\s+(\d+)w$/.exec(c.trim()))
+        .filter(Boolean)
+        .map((m) => ({ url: new URL(m[1], location.href).href, w: Number(m[2]) }));
+    };
+    const out = [];
+    for (const img of document.querySelectorAll("#home-bento [data-tile] img")) {
+      const r = img.getBoundingClientRect();
+      if (!img.complete || !img.naturalWidth || r.width < 2) continue;
+      const list = copies(img);
+      const chosen = list.find((c) => c.url === img.currentSrc);
+      const has = chosen?.w ?? img.naturalWidth;
+      const ratio = img.naturalWidth / img.naturalHeight;
+      const need = Math.ceil(Math.max(r.width, r.height * ratio) * dpr);
+      const max = list.length ? Math.max(...list.map((c) => c.w)) : has;
+      const what = new URL(img.currentSrc || img.src).pathname.split("/").pop();
+      out.push({ what, tile: img.closest("[data-tile]").dataset.tile, has, need, max, ok: has >= Math.min(need, max) * 0.98 });
+    }
+    for (const v of document.querySelectorAll("#home-bento [data-tile] video")) {
+      if (!v.videoWidth) continue;
+      const r = v.getBoundingClientRect();
+      const need = Math.ceil(Math.max(r.width, (r.height * v.videoWidth) / v.videoHeight) * dpr);
+      const what = new URL(v.currentSrc).pathname.split("/").pop();
+      out.push({ what, tile: v.closest("[data-tile]").dataset.tile, has: v.videoWidth, need, max: 1024, ok: v.videoWidth >= Math.min(need, 1024) * 0.98 });
+    }
+    return out;
+  });
+
 // ------------------------------------------------------------------------------------------- 1. every width
 const shots = [];
+const sharpNotes = [];
 if (!weightOnly)
   for (const who of ["guest", "owner"]) {
     for (const scheme of ["light", "dark"]) {
@@ -119,12 +178,20 @@ if (!weightOnly)
         check(`${tag}: no sideways scroll`, l.scroll[0] === l.scroll[1], l.scroll.join(" vs "));
         check(`${tag}: one h1, the headline`, l.h1s === 1 && l.text === HEADLINE, `${l.h1s} · ${l.text}`);
         check(`${tag}: theme`, l.dark === (scheme === "dark"));
-        if (v.w >= 768) check(`${tag}: headline on two lines, the second whole and italic`, l.h1Lines === 2 && l.line2Lines === 1 && l.line2Italic === "italic", `${l.h1Lines}/${l.line2Lines}`);
+        check(`${tag}: "Make anything:" on one line, the second line in italic`, l.line1Lines === 1 && l.line2Italic === "italic", String(l.line1Lines));
+        if (v.w >= 768) check(`${tag}: the second line whole`, l.line2Lines === 1, String(l.line2Lines));
+        else check(`${tag}: the second line on two, the second starting at "finished film,"`, l.line2Lines === 2 && l.accentStartsLine, `${l.line2Lines} ${l.accentStartsLine}`);
+        const [r1, r2] = [l.rise.line1[0], l.rise.line2[0]];
+        check(
+          `${tag}: the headline rose once, from 40 % (its words on the first paint)`,
+          r1?.name === "hb-rise" && r1.ms === 700 && r2?.ms === 900 && r2.delay === 120 && [r1, r2].every((r) => r.state === "finished" && Number(r.from) === 0.4),
+          JSON.stringify(l.rise),
+        );
         if (v.phone) {
           const bottom = l.vh - 64;
-          const first = ["video", "image", "threeD", "restore"];
+          const first = ["video", "image", "threeD"];
           const out = first.filter((t) => l.tiles[t].top < 0 || l.tiles[t].bottom > bottom);
-          check(`${tag}: the video tile and three more on the first screen`, out.length === 0, first.map((t) => `${t} ${Math.round(l.tiles[t].bottom)}`).join(", ") + ` ≤ ${bottom}`);
+          check(`${tag}: the video tile and the two under it on the first screen`, out.length === 0, first.map((t) => `${t} ${Math.round(l.tiles[t].bottom)}`).join(", ") + ` ≤ ${bottom}`);
           check(`${tag}: every tile at least 44 px to tap`, TILES.every((t) => l.tiles[t].w >= 44 && l.tiles[t].h >= 44));
         }
         if (v.w >= 1024) {
@@ -140,6 +207,30 @@ if (!weightOnly)
       }
     }
   }
+
+// ------------------------------------------------------------------------------------------- 1b. sharp at every ratio
+if (!weightOnly)
+  for (const v of WIDTHS)
+    for (const dpr of [1, 2, 3]) {
+      const ctx = await browser.newContext({ ...(v.phone ? PHONE : {}), viewport: { width: v.w, height: v.h }, deviceScaleFactor: dpr });
+      const page = await ctx.newPage();
+      await open(page);
+      // The clips start after load, once on screen: wait until each has its first frame.
+      await page
+        .waitForFunction(() => [...document.querySelectorAll("#home-bento [data-tile] video")].filter((x) => x.videoWidth > 0).length >= 2, null, { timeout: 12_000 })
+        .catch(() => {});
+      await page.waitForTimeout(300);
+      const s = await sharpness(page);
+      const bad = s.filter((x) => !x.ok);
+      const clips = s.filter((x) => x.what.endsWith(".mp4"));
+      check(
+        `sharp at ${v.w}@${dpr}x: ${s.length} pictures and clips at least their box x ratio`,
+        bad.length === 0 && clips.length === 2,
+        (bad.length ? bad : clips).map((x) => `${x.tile} ${x.what} ${x.has} for ${x.need} (max ${x.max})`).join("; "),
+      );
+      sharpNotes.push(`${v.w}@${dpr}x: ${s.map((x) => `${x.tile} ${x.what} ${x.has}/${x.need}`).join(", ")}`);
+      await ctx.close();
+    }
 
 // ------------------------------------------------------------------------------------------- 2. layout shift
 async function cls(v) {
@@ -224,8 +315,9 @@ if (!weightOnly) {
     play: document.getElementById("home-bento").dataset.play ?? null,
     videos: [...document.querySelectorAll("#home-bento video")].filter((v) => v.getAttribute("src") && !v.paused).length,
     split: getComputedStyle(document.querySelector("#home-bento [data-tile=restore] picture:nth-of-type(2) img")).clipPath,
+    headline: document.querySelector("#home-bento h1").parentElement.getAnimations({ subtree: true }).length,
   }));
-  check("reduced motion: nothing moves by itself", state.play === null && state.videos === 0 && clips.length === 0, JSON.stringify({ ...state, clips: clips.length }));
+  check("reduced motion: nothing moves by itself", state.play === null && state.videos === 0 && clips.length === 0 && state.headline === 0, JSON.stringify({ ...state, clips: clips.length }));
   check("reduced motion: the split rests at 50 %", /inset\(0(px)? 50%/.test(state.split), state.split);
   check("reduced motion: the live words stay", a === b, `${JSON.stringify(a)} / ${JSON.stringify(b)}`);
   await ctx.close();
@@ -291,7 +383,13 @@ async function weight(v) {
   await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
   const reqs = new Map();
   let loaded = false;
+  // The clips come after load: every byte of a video response, counted as it arrives (a clip may come in ranges).
+  const clips = new Map();
   cdp.on("Network.responseReceived", (e) => reqs.set(e.requestId, { url: e.response.url, type: e.type, mime: e.response.mimeType, bytes: 0, done: false }));
+  cdp.on("Network.dataReceived", (e) => {
+    const r = reqs.get(e.requestId);
+    if (r?.mime.startsWith("video/")) clips.set(r.url, (clips.get(r.url) ?? 0) + e.encodedDataLength);
+  });
   cdp.on("Network.loadingFinished", (e) => {
     const r = reqs.get(e.requestId);
     if (r && !loaded) Object.assign(r, { bytes: e.encodedDataLength, done: true });
@@ -299,12 +397,24 @@ async function weight(v) {
   await page.goto(app + "/", { waitUntil: "load", timeout: 90_000 });
   loaded = true;
   await page.waitForTimeout(300);
+  // The first screen's own pictures: the tiles' stills (anything else is the page's, below it).
+  const ownUrls = new Set(await page.evaluate(() => [...document.querySelectorAll("#home-bento img")].map((i) => new URL(i.currentSrc || i.src, location.href).pathname)));
+  // Then the clips, until both tiles have theirs whole (or 15 s).
+  await page
+    .waitForFunction(
+      () => {
+        const v = [...document.querySelectorAll("#home-bento [data-tile] video")];
+        return v.length >= 2 && v.every((x) => x.readyState >= 4 && x.buffered.length > 0 && x.buffered.end(0) >= x.duration - 0.05);
+      },
+      null,
+      { timeout: 15_000 },
+    )
+    .catch(() => {});
+  await page.waitForTimeout(500);
   const by = {};
   let total = 0;
   let own = 0;
   const media = [];
-  // The first screen's own pictures: the tiles' stills (anything else is the page's, below it).
-  const ownUrls = new Set(await page.evaluate(() => [...document.querySelectorAll("#home-bento img")].map((i) => new URL(i.currentSrc || i.src, location.href).pathname)));
   for (const r of reqs.values()) {
     if (!r.done || r.mime.startsWith("video/")) continue;
     const kind = r.type === "Document" ? "html" : r.type === "Stylesheet" ? "css" : r.type === "Script" ? "js" : r.type === "Font" ? "fonts" : r.type === "Image" ? "images" : "other";
@@ -318,13 +428,21 @@ async function weight(v) {
   }
   await ctx.close();
   const kb = (n) => `${(n / 1024).toFixed(0)} KB`;
-  return { total, own, line: `${v.w}@${viewportOpts(v).deviceScaleFactor}x: ${kb(total)} (${Object.entries(by).map(([k, n]) => `${k} ${kb(n)}`).join(", ")}); the first screen's own stills ${kb(own)}`, media };
+  const clipBytes = [...clips.values()].reduce((a, b) => a + b, 0);
+  const clipLine = [...clips].map(([u, n]) => `${new URL(u).pathname.split("/").pop()} ${kb(n)}`).join(" · ");
+  return {
+    total,
+    own,
+    clipBytes,
+    line: `${v.w}@${viewportOpts(v).deviceScaleFactor}x: ${kb(total)} (${Object.entries(by).map(([k, n]) => `${k} ${kb(n)}`).join(", ")}); the first screen's own stills ${kb(own)}; clips after load ${kb(clipBytes)} (${clipLine || "none"})`,
+    media,
+  };
 }
-for (const v of [WIDTHS[0], WIDTHS[4]]) {
+for (const v of [WIDTHS[0], WIDTHS[3], WIDTHS[4], WIDTHS[5]]) {
   const r = await weight(v);
   // The whole page's total is reported (main's own script and fonts are most of it: compare with --weight-only on
   // main's build); the first screen's own stills have a budget of their own.
-  check(`weight before load, clips aside: ${r.line}`, weightOnly || r.own < 280 * 1024);
+  check(`weight before load, clips aside: ${r.line}`, weightOnly || r.own < 300 * 1024);
   notes.push(`weight ${r.line}`);
   notes.push(`  first screen's stills: ${r.media.join(" · ")}`);
 }
@@ -402,7 +520,7 @@ if (shotsDir && shots.length) {
   console.log(`contact sheet: ${path.join(shotsDir, "contact-sheet.jpg")}`);
 }
 
-console.log("\n" + notes.join("\n"));
+console.log("\n" + [...notes, ...sharpNotes.map((n) => `sharp ${n}`)].join("\n"));
 if (failures.length) {
   console.log(`\n${failures.length} failed:\n- ${failures.join("\n- ")}`);
   process.exit(1);
