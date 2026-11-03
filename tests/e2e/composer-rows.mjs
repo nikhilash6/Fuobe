@@ -2,7 +2,8 @@
 // a row, at 390, 768 and 1440 px, in light and dark, the row sits a fixed step below the composer (or the suggestions
 // right under it), its heading is on the cards' left edge with a fixed step to the cards, and the row lines up with the
 // composer's column. On the pages where the row is a section of its own (Genjutsu, Katana, Ads Studio…) the heading is
-// on the cards' edge, the row stays inside the page and lines up with the box above it (Cinema: with the page's title).
+// on the cards' edge, the row stays inside the page and lines up with the box above it (Cinema: with the page's title;
+// Ads Studio: with the page's column, which its ready brands above and Your brands below share).
 // The cards' pictures in a line of the grid share one top. After load no card is grey or empty and no skeleton is left;
 // while the cards' code loads (on /image, and on /video whose captions wrap to different lengths), the skeleton has the
 // row's heading and the cards' place and pictures, so nothing moves when they arrive.
@@ -57,9 +58,11 @@ const STUDIOS = [
 /** Pages whose row is a section of its own under an upload box or a project list. */
 const SECTIONS = ["/genjutsu", "/katana", "/image-to-3d", "/layers", "/cinema", "/ads", "/ads/multiplier", "/character-swap"];
 /** Section pages whose row takes the width of the box right above it (an upload box, a hero). */
-const BOXED = new Set(["/genjutsu", "/image-to-3d", "/layers", "/ads"]);
+const BOXED = new Set(["/genjutsu", "/image-to-3d", "/layers"]);
 /** Section pages whose row takes the page's own width: its edge is the page title's. */
 const TITLED = new Set(["/cinema"]);
+/** Section pages whose row fills the page's column (the content box of the element it sits in). */
+const COLUMNED = new Set(["/ads"]);
 /** Pages whose loading state is checked: every card the same lines (/image), and captions of different lengths (/video). */
 const LOADING = ["/image", "/video"];
 const SIZES = [
@@ -138,6 +141,13 @@ function measure() {
     pictures,
     misaligned,
     title: box(document.querySelector("h1")),
+    column: (() => {
+      const parent = section?.parentElement;
+      if (!parent) return null;
+      const b = box(parent);
+      const cs = getComputedStyle(parent);
+      return { l: b.l + parseFloat(cs.paddingLeft), r: b.r - parseFloat(cs.paddingRight) };
+    })(),
     loading: !!section?.hasAttribute("data-examples-loading"),
     headingText: heading?.textContent?.trim() ?? "",
     headingAlign: heading ? getComputedStyle(heading).textAlign : "",
@@ -214,6 +224,8 @@ for (const size of SIZES) {
             m.previous && near(m.grid.l, m.previous.l) && near(m.grid.r, m.previous.r),
             m.previous ? `row ${Math.round(m.grid.l)}-${Math.round(m.grid.r)}, box ${Math.round(m.previous.l)}-${Math.round(m.previous.r)}` : "nothing above",
           );
+        if (COLUMNED.has(url))
+          check(`${label}: the row fills the page's column`, near(m.grid.l, m.column?.l) && near(m.grid.r, m.column?.r), `row ${Math.round(m.grid.l)}-${Math.round(m.grid.r)}, column ${Math.round(m.column?.l)}-${Math.round(m.column?.r)}`);
         if (TITLED.has(url)) check(`${label}: the row starts at the page title's edge`, near(m.grid.l, m.title?.l), `${m.grid.l} vs ${m.title?.l}`);
       }
       const filled = await cardsFilled(page);
@@ -267,16 +279,21 @@ for (const size of SIZES) {
         await held.waitForTimeout(500);
         const after = await held.evaluate(measure);
         check(`${label}: the cards replace the skeleton`, !after.loading && after.headingText === before.headingText, `${before.headingText} -> ${after.headingText}${fed ? "" : " (the feed never answered)"}`);
+        // Heights are from the composer's bottom: a line above the composer that comes with the viewer (a guest's, once
+        // known) is not the row's to hold, and in WebKit it can land between the two measures.
+        const fromB = (m) => (t) => (t == null ? t : t - (m.composer?.b ?? 0));
+        const [b, a] = [fromB(before), fromB(after)];
+        const shifted = Math.round((after.composer?.b ?? 0) - (before.composer?.b ?? 0));
         check(
           `${label}: nothing moves when the cards arrive`,
-          near(before.heading.t, after.heading.t) && near(before.grid.t, after.grid.t) && near(before.grid.l, after.grid.l) && near(before.grid.r, after.grid.r) && near(before.firstCard?.w, after.firstCard?.w),
-          `heading ${Math.round(before.heading.t)}->${Math.round(after.heading.t)}, grid ${Math.round(before.grid.l)}-${Math.round(before.grid.r)} -> ${Math.round(after.grid.l)}-${Math.round(after.grid.r)}`,
+          near(b(before.heading.t), a(after.heading.t)) && near(b(before.grid.t), a(after.grid.t)) && near(before.grid.l, after.grid.l) && near(before.grid.r, after.grid.r) && near(before.firstCard?.w, after.firstCard?.w),
+          `heading ${Math.round(before.heading.t)}->${Math.round(after.heading.t)}, grid ${Math.round(before.grid.l)}-${Math.round(before.grid.r)} -> ${Math.round(after.grid.l)}-${Math.round(after.grid.r)}${shifted ? ` (the composer moved ${shifted} px)` : ""}`,
         );
         if (loading)
           check(
             `${label}: each card's picture stays where its skeleton was`,
-            before.pictures.length === after.pictures.length && before.pictures.every((t, i) => near(t, after.pictures[i])),
-            `${before.pictures.map(Math.round).join("/")} -> ${after.pictures.map(Math.round).join("/")}`,
+            before.pictures.length === after.pictures.length && before.pictures.every((t, i) => near(b(t), a(after.pictures[i]))),
+            `${before.pictures.map(Math.round).join("/")} -> ${after.pictures.map(Math.round).join("/")}${shifted ? ` (the composer moved ${shifted} px)` : ""}`,
           );
         if (!loading) console.log(`note ${label}: the cards were already there (no skeleton seen)`);
       }

@@ -136,7 +136,8 @@ export function AdsHome({ examples, starters: given = [] }: { examples?: Example
 
         {!brands.isLoading && !hasBrands && <StarterSection surface="ads" starters={given} className="mt-12" />}
 
-        {!!moreToTry?.cards.length && (visitor || (brands.isSuccess && !brands.data.length)) && <ExampleRow row={moreToTry} layout="column" className="mx-auto mt-12 max-w-[720px]" />}
+        {/* On the page's column, like the ready brands above it and Your brands below it. */}
+        {!!moreToTry?.cards.length && (visitor || (brands.isSuccess && !brands.data.length)) && <ExampleRow row={moreToTry} layout="column" className="mt-12" />}
 
         {(brands.isLoading || hasBrands || !readyShown) && (
           <section className="mt-14">
