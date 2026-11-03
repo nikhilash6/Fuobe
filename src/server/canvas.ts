@@ -1,5 +1,6 @@
 import "server-only";
 import { MAX_KEYS } from "@/lib/camera-path";
+import { RECIPE_MAX_BYTES, RecipeSchema } from "@/lib/motion/recipe";
 import { CameraKeySchema, ExactOrbitSchema } from "./fly-around";
 import fs from "node:fs";
 import { nanoid } from "nanoid";
@@ -43,6 +44,7 @@ import {
   type CanvasNodeType,
   type CanvasPlan,
   type CanvasRuns,
+  type NodeRun,
   type CanvasSummary,
   type StepSource,
 } from "@/lib/catalog/canvas";
@@ -113,6 +115,7 @@ const NODE_TYPES = [
   "layout",
   "camera-path",
   "fly-around",
+  "kinetic",
   "output",
   "note",
 ] as const satisfies readonly CanvasNodeType[];
@@ -201,6 +204,14 @@ const NodeData = z.object({
   orbit: ExactOrbitSchema.optional(),
   keys: z.array(CameraKeySchema).min(1).max(MAX_KEYS).optional(),
   duration: z.number().min(1).max(15).optional(),
+  // Kinetic: its scene and settings as a recipe (one that doesn't read as one is dropped, never refused).
+  kinetic: z
+    .unknown()
+    .transform((v) => {
+      const r = RecipeSchema.safeParse(v);
+      return r.success && JSON.stringify(r.data).length <= RECIPE_MAX_BYTES ? r.data : undefined;
+    })
+    .optional(),
 });
 
 const Num = z.number().finite();
@@ -371,8 +382,11 @@ function previewOf(runs: CanvasRuns): CanvasSummary["preview"] {
       `SELECT g.outputs_json FROM generations g WHERE g.id IN (${ids.map(() => "?").join(",")}) AND g.status = 'succeeded' AND g.kind IN ('image','video') AND ${NOT_TRASHED} ORDER BY g.kind = 'image' DESC, g.completed_at DESC LIMIT 1`,
     )
     .all(...ids) as { outputs_json: string }[];
-  const o = rows[0] ? (JSON.parse(rows[0].outputs_json) as { url: string; kind: MediaKind }[]).find((x) => x.kind === "image" || x.kind === "video") : undefined;
-  return o ? { url: o.url, kind: o.kind } : null;
+  const o = rows[0] ? (JSON.parse(rows[0].outputs_json) as { url: string; kind: MediaKind; meta?: { poster?: unknown } }[]).find((x) => x.kind === "image" || x.kind === "video") : undefined;
+  if (!o) return null;
+  // A clip's own poster (a Kinetic clip's last frame) shows on the card instead of its empty first frame.
+  const poster = o.kind === "video" && typeof o.meta?.poster === "string" ? o.meta.poster : undefined;
+  return { url: o.url, kind: o.kind, ...(poster && { poster }) };
 }
 
 export function listCanvases(): CanvasSummary[] {
@@ -688,4 +702,41 @@ export function runCanvas(id: string, opts: RunOptions = {}): RunResult | null {
     errors,
     costUsd: Math.round([...spent.values()].reduce((sum, c) => sum + c, 0) * 10000) / 10000,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Kinetic: runs made in the browser
+
+/** At most this many rows of a Kinetic node are kept as one run. */
+export const KINETIC_RUN_ROWS = 50;
+
+export class KineticRunProblem extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Keeps the run of a Kinetic node (rendered in the owner's browser, each row saved as a result): the node must be a
+ * Kinetic node on this canvas, and every id a finished Kinetic Motion result (model local-motion) of the owner's own
+ * (an account's run never joins a canvas). Merged into the latest runs, as a server run is.
+ */
+export function recordKineticRun(id: string, nodeId: string, run: { sig: string; ids: string[]; rows?: string[]; rowSigs?: string[] }): Canvas {
+  const canvas = getCanvas(id);
+  if (!canvas) throw new KineticRunProblem("Not found", 404);
+  const node = canvas.pages.flatMap((p) => p.graph.nodes).find((n) => n.id === nodeId);
+  if (!node || node.type !== "kinetic") throw new KineticRunProblem("That isn't a Kinetic node on this canvas", 400);
+  if (!run.ids.length || run.ids.length > KINETIC_RUN_ROWS) throw new KineticRunProblem(`A Kinetic run keeps 1 to ${KINETIC_RUN_ROWS} results`, 400);
+  const mine = db().prepare(`SELECT 1 FROM generations g WHERE g.id = ? AND g.status = 'succeeded' AND g.model_id = 'local-motion' AND json_extract(g.request_json, '$.account') IS NULL AND ${NOT_TRASHED}`);
+  if (run.ids.some((g) => !mine.get(g))) throw new KineticRunProblem("We can't find that.", 404);
+  const value: NodeRun = { sig: run.sig, ids: run.ids, at: Date.now(), ...(run.rows && { rows: run.rows }), ...(run.rowSigs && { rowSigs: run.rowSigs }) };
+  db().transaction(() => {
+    const row = db().prepare("SELECT runs_json FROM canvases WHERE id = ?").get(id) as { runs_json: string } | undefined;
+    const merged = { ...(row ? (JSON.parse(row.runs_json) as CanvasRuns) : {}), [nodeId]: value };
+    db().prepare("UPDATE canvases SET runs_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(merged), Date.now(), id);
+  })();
+  return getCanvas(id)!;
 }

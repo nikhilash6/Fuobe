@@ -75,7 +75,7 @@ function Details({ g, index }: { g: Generation; index: number }) {
     <div className="space-y-4">
       <div>
         <p className="font-heading text-[20px] leading-snug">{title}</p>
-        {g.prompt && g.prompt !== title && <p className="mt-1 line-clamp-6 text-[12px] leading-relaxed break-words text-muted-foreground">Sent to the model: {g.prompt}</p>}
+        {g.prompt && g.prompt !== title && <p className="mt-1 line-clamp-6 text-[12px] leading-relaxed break-words text-muted-foreground">{g.modelId === "local-motion" ? "Words" : "Sent to the model"}: {g.prompt}</p>}
         {g.prompt && (
           <button
             onClick={() => void copyWithToast(g.prompt ?? "", "Prompt copied")}

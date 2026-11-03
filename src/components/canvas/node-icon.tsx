@@ -24,6 +24,7 @@ import {
   ImageIcon,
   Languages,
   LayoutDashboard,
+  LetterText,
   MessageSquareText,
   Mic2,
   MonitorPlay,
@@ -68,6 +69,8 @@ export const ICONS: Record<string, LucideIcon> = {
   UserRound,
   Languages,
   Table,
+  // Kinetic
+  LetterText,
   // Camera path and Fly around
   Orbit,
   Rotate3d,

@@ -142,11 +142,11 @@ describe("which bar item holds the page", () => {
 describe("the launcher's columns", () => {
   const html = render(createElement(LauncherColumns, { kind: undefined, now: Date.parse("2026-11-02") }));
 
-  it("shows every studio, Apps and the Sound column, 8/6/5/6/5/3, each column's lead first", () => {
+  it("shows every studio, Apps and the Sound column, 8/6/6/6/5/3, each column's lead first", () => {
     const links = hrefs(html);
-    expect(links).toHaveLength(33);
-    expect(new Set(links).size).toBe(33);
-    expect(launcherColumns(undefined).map((c) => 1 + c.rest.length)).toEqual([8, 6, 5, 6, 5, 3]);
+    expect(links).toHaveLength(34);
+    expect(new Set(links).size).toBe(34);
+    expect(launcherColumns(undefined).map((c) => 1 + c.rest.length)).toEqual([8, 6, 6, 6, 5, 3]);
     expect(launcherColumns(undefined).map((c) => c.lead.id)).toEqual(["cinema", "shorts", "marketing", "fashion-factory", "audio", "upscale"]);
     expect(html).toContain("grid-cols-6");
     for (const [i, c] of launcherColumns(undefined).entries()) {
@@ -154,7 +154,7 @@ describe("the launcher's columns", () => {
       expect(at(c.lead.href)).toContain(`data-col="${i}" data-row="0"`);
       c.rest.forEach((e, r) => expect(at(e.href), e.id).toContain(`data-col="${i}" data-row="${r + 1}"`));
     }
-    expect(studioCount()).toBe(28);
+    expect(studioCount()).toBe(29);
   });
 
   it("labels the groups, and every link has its studio's real cover in a box of fixed size", () => {
@@ -171,7 +171,7 @@ describe("the launcher's columns", () => {
     }
     // The six lead cards load as the panel warms; a row's picture when the row shows (lazy).
     expect(count(html, 'loading="eager"')).toBe(6);
-    expect(count(html, 'alt=""')).toBe(33);
+    expect(count(html, 'alt=""')).toBe(34);
   });
 
   it("marks the open page's studio, and nothing else", () => {

@@ -1,6 +1,9 @@
+import fs from "node:fs";
 import { z } from "zod";
+import { imageSize } from "@/lib/image-size";
 import { LIBRARY_MESSAGE } from "@/lib/guest-access";
-import { RECIPE_MAX_BYTES, RecipeSchema } from "@/lib/motion/recipe";
+import { RECIPE_MAX_BYTES, RecipeSchema, type Recipe } from "@/lib/motion/recipe";
+import { designSize, exportSize } from "@/lib/motion/sizes";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, diskHasRoom } from "@/server/account-files";
 import { fileAccount } from "@/server/account-library";
 import { accountInputProblem } from "@/server/account-inputs";
@@ -10,8 +13,41 @@ import { moderateRun } from "@/server/hosted-run";
 import { holdForCheck } from "@/server/output-checks";
 import { hit, unhit } from "@/server/rate";
 import { db } from "@/server/db";
-import { contentTypeFor, filesRel } from "@/server/storage";
+import { absolutePath, contentTypeFor, filesRel } from "@/server/storage";
 import { runAsTenant } from "@/server/tenant";
+
+/** Kinetic's picture results: a frame, a contact sheet, a version (PNG images; every other Kinetic result is a clip). */
+const KINETIC_IMAGE_FEATURES: readonly string[] = ["kinetic-frame", "kinetic-sheet", "kinetic-version"];
+const imageFeature = (f: string) => KINETIC_IMAGE_FEATURES.includes(f);
+
+/**
+ * The pixel size a Kinetic result of this recipe has: a clip, a frame and a contact sheet are the export size (even
+ * sides), a version is the rest frame with 540 px on its long side (render.ts makes them the same way).
+ */
+function kineticOutputSize(recipe: Recipe, feature: string): { width: number; height: number } {
+  if (feature === "kinetic-version") {
+    const d = designSize(recipe.size);
+    const k = 540 / Math.max(d.w, d.h);
+    return { width: Math.max(2, Math.round(d.w * k)), height: Math.max(2, Math.round(d.h * k)) };
+  }
+  const { w, h } = exportSize(recipe.size);
+  return { width: w - (w % 2), height: h - (h % 2) };
+}
+
+/** A stored picture's pixel size, from its first bytes (null when it can't be read). */
+function storedImageSize(rel: string): { width: number; height: number } | null {
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(absolutePath(rel), "r");
+    const head = new Uint8Array(64);
+    const n = fs.readSync(fd, head, 0, head.length, 0);
+    return imageSize(head.subarray(0, n));
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) fs.closeSync(fd);
+  }
+}
 
 const Body = z
   .object({
@@ -38,9 +74,15 @@ const Body = z
       if (!recipe || typeof recipe !== "object" || Array.isArray(recipe)) ctx.addIssue({ code: "custom", path: ["params", "extra", "motion"], message: "The recipe" });
       else if (JSON.stringify(recipe).length > RECIPE_MAX_BYTES) ctx.addIssue({ code: "custom", path: ["params", "extra", "motion"], message: "The recipe is too big" });
       else if (!RecipeSchema.safeParse(recipe).success) ctx.addIssue({ code: "custom", path: ["params", "extra", "motion"], message: "The recipe" });
-      if (b.output.kind !== "video" || !/^video\/(mp4|webm)$/.test(b.output.contentType ?? "")) ctx.addIssue({ code: "custom", path: ["output"], message: "An MP4 or WebM clip" });
-      // A clip is made from pictures (its logo, its product): never from a video.
-      if (b.inputs.video) ctx.addIssue({ code: "custom", path: ["inputs", "video"], message: "No video" });
+      // A frame, a contact sheet or a version is a PNG picture; everything else is an MP4 or WebM clip.
+      if (imageFeature(b.feature)) {
+        if (b.output.kind !== "image" || b.output.contentType !== "image/png") ctx.addIssue({ code: "custom", path: ["output"], message: "A PNG picture" });
+      } else if (b.output.kind !== "video" || !/^video\/(mp4|webm)$/.test(b.output.contentType ?? "")) ctx.addIssue({ code: "custom", path: ["output"], message: "An MP4 or WebM clip" });
+      // A clip under the words is the recipe's own clip, named as its video input; nothing else is a video input.
+      if (b.inputs.video) {
+        const parsed = RecipeSchema.safeParse(recipe);
+        if (!parsed.success || parsed.data.layers?.video?.src !== b.inputs.video) ctx.addIssue({ code: "custom", path: ["inputs", "video"], message: "The recipe's clip" });
+      }
     }
   });
 
@@ -60,7 +102,7 @@ function typeProblem(rel: string, output: { kind: string; contentType?: string }
   const stored = contentTypeFor(rel);
   if (!stored.startsWith(`${output.kind}/`)) return true;
   if (output.contentType && output.contentType.split(";")[0].trim().toLowerCase() !== stored) return true;
-  return op === "motion" && !/^video\/(mp4|webm)$/.test(stored);
+  return op === "motion" && !(output.kind === "image" ? stored === "image/png" : /^video\/(mp4|webm)$/.test(stored));
 }
 
 /** The files a motion recipe names: its logo when it is stored here, its product and its pictures. */
@@ -77,6 +119,8 @@ function recipeFiles(extra: Record<string, unknown> | undefined): Record<string,
   if (r.data.media?.product && stored(r.data.media.product)) out._product = r.data.media.product;
   const media = (r.data.media?.images ?? []).filter(stored);
   if (media.length) out._media = media;
+  // The clip under the words (Kinetic's video layer): always a stored file.
+  if (r.data.layers?.video?.src) out._clip = r.data.layers.video.src;
   return out;
 }
 
@@ -104,6 +148,20 @@ export async function POST(request: Request) {
   if (typeProblem(rel, body.output, body.op)) return refuse(400, "Invalid result");
   const poster = body.output.meta?.poster;
   if (poster && (body.output.kind !== "video" || !contentTypeFor(filesRel(poster) ?? "").startsWith("image/"))) return refuse(400, "Invalid result");
+  // A Kinetic result is the size its recipe makes (a picture's own header must say so), and is recorded with it; the clip
+  // under its words is a stored video.
+  let output: typeof body.output & { width?: number; height?: number } = body.output;
+  if (body.op === "motion") {
+    const recipe = RecipeSchema.parse(body.params?.extra?.motion);
+    const size = kineticOutputSize(recipe, body.feature);
+    if (imageFeature(body.feature)) {
+      const real = storedImageSize(rel);
+      if (!real || real.width !== size.width || real.height !== size.height) return refuse(400, "Invalid result");
+    }
+    const clip = recipe.layers?.video?.src;
+    if (clip && !contentTypeFor(filesRel(clip) ?? "").startsWith("video/")) return refuse(400, "Invalid result");
+    output = { ...body.output, ...size };
+  }
 
   if (viewer.kind === "owner") {
     // The owner's own files only: never an account's file recorded as the owner's result.
@@ -114,7 +172,7 @@ export async function POST(request: Request) {
       if (r === null || typeof fileAccount(r) === "string") return refuse(403, NOT_FOUND);
     }
     try {
-      return Response.json(recordLocalGeneration(body), { status: 201 });
+      return Response.json(recordLocalGeneration({ ...body, output }), { status: 201 });
     } catch (e) {
       return refuse(422, (e as Error).message);
     }
@@ -142,11 +200,11 @@ export async function POST(request: Request) {
     return refuse(422, checked.refusal.body.error, { code: checked.refusal.body.code });
   }
   try {
-    const g = runAsTenant({ kind: "account", id: account.id }, () => recordLocalGeneration({ ...body, prompt }));
+    const g = runAsTenant({ kind: "account", id: account.id }, () => recordLocalGeneration({ ...body, output, prompt }));
     if (checked.checkOutputs) {
       // Held until the output check answers, as any account run's files are.
       const assetId = assetIdOf(body.output.url);
-      holdForCheck(g.id, [{ ...body.output, ...(assetId && { assetId }) }]);
+      holdForCheck(g.id, [{ ...output, ...(assetId && { assetId }) }]);
       return Response.json(getGeneration(g.id) ?? g, { status: 201 });
     }
     return Response.json(g, { status: 201 });

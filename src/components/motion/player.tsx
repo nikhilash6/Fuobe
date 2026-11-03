@@ -169,7 +169,7 @@ export function MotionPlayer({ plan, sources, size, duration, fps, label, contro
   // Still frames: the rest frame (not playing, reduced motion, a chip at rest) or the scrubbed time.
   useEffect(() => {
     if (moving || !plan) return;
-    const t = !active ? (poster ?? plan.rest) : reduced && !askedPlay ? plan.rest : timeRef.current;
+    const t = !active || (reduced && !askedPlay) ? (poster ?? plan.rest) : timeRef.current;
     draw(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moving, plan, active, reduced, askedPlay, sources, time, poster]);

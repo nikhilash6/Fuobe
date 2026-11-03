@@ -189,11 +189,11 @@ describe("the Studios sheet", () => {
   // The grid ends on a See all tile (/studios): the family's whole set.
   const tiles = (html: string) => hrefs(html).filter((h) => h !== "/" && h !== "/library" && h !== "/studios");
 
-  it("shows every studio, Apps and the Sound modes (33 tiles, 28 studios), in launcher order, each with a real cover", () => {
+  it("shows every studio, Apps and the Sound modes (34 tiles, 29 studios), in launcher order, each with a real cover", () => {
     const html = at("/", () => sheet());
     const all = launcherEntries(undefined);
-    expect(all).toHaveLength(33);
-    expect(studioCount()).toBe(28);
+    expect(all).toHaveLength(34);
+    expect(studioCount()).toBe(29);
     expect(tiles(html)).toEqual(all.map((e) => e.href));
     for (const e of all) {
       expect(e.cover, e.id).toBeTruthy();
@@ -227,7 +227,7 @@ describe("the Studios sheet", () => {
   });
 
   it("starts on the group it was opened for", () => {
-    const sizes = { film: 8, social: 6, sell: 5, people: 6, sound: 5, finish: 3 } as const;
+    const sizes = { film: 8, social: 6, sell: 6, people: 6, sound: 5, finish: 3 } as const;
     for (const g of LAUNCHER_GROUPS) {
       const html = at("/", () => sheet({ group: g.id }));
       expect(tiles(html), g.id).toEqual(launcherEntries(undefined, g.id).map((e) => e.href));

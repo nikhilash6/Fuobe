@@ -38,6 +38,8 @@ export interface SceneInput {
   images?: Record<string, { w: number; h: number }>;
   /** A cut-out picture's outline by key (traced from its transparency; null: it has none, so it gets a frame). */
   outlines?: Record<string, Outline | null>;
+  /** The person's clips by key ("clip"): their size and length, known before planning (Kinetic's video layer). */
+  clips?: Record<string, { w: number; h: number; duration: number }>;
 }
 
 /** A cut-out's outer edge, traced from its transparency (outline.ts), in the traced grid's units. */

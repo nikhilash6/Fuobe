@@ -36,7 +36,11 @@ and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Short
 Marketing…). The pages of those tools say so up front and turn off their upload and Generate.
 What is drawn in the browser itself is open to try: Click to Ad's animated end card and Marketing
 Studio's code-drawn templates (Kinetic Motion) take a guest's words and play live (a code-drawn
-template shows no "isn't available" note, as nothing is generated); their Save opens the sign-up card before anything renders. Price
+template shows no "isn't available" note, as nothing is generated); their Save opens the sign-up card before anything renders.
+The Kinetic page (`/kinetic`) is open the same way: a guest plays and edits every scene (Easy and Pro, presets,
+timing, undo), and Save, Save frame, Save contact sheet, Save version, "Pick a clip" and an upload open the sign-up
+card before anything renders or uploads. A guest's versions list is empty and `/kinetic?from=<id>` opens the scene
+picker. Price
 checks (the estimate routes, and `?preview=1` on the run routes that support it) stay open, so the
 studios can show prices. A guest may send 120 price checks a minute (per visitor behind a trusted
 reverse proxy; see below), and so may each account. A price check reads only the header of a file
@@ -74,6 +78,9 @@ An account is signed in, but it sees the owner's studio as a guest does:
   So does Split soundtrack's **Export mix** (`POST /api/audio-tools/export`), which saves into the
   owner's Library, with or without a GPU. Accounts have their own uploads and runs (below), but no
   projects yet.
+  A Canvas Kinetic node renders in the owner's browser; keeping its run on the board
+  (`PUT /api/canvases/<id>/runs/<node>`) is a canvas change like any other (403 `library` for an account, 401
+  for a guest), and it takes only the owner's own finished Kinetic Motion results.
   Canvas shows its ready boards to guests and accounts as read-only pages (`/canvas/start/<id>`):
   what goes in, the steps and what comes out. Only the owner makes boards. Assist, Cinema Studio,
   Storyboard, Elements, Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and
@@ -99,13 +106,16 @@ An account is signed in, but it sees the owner's studio as a guest does:
 - **Its own uploads are its own.** Only the account that uploaded a file can use it in a run, and
   no other account can open it. See [Uploads](#uploads).
 - **Results made in the browser (Kinetic Motion) are its own runs too.** A motion clip rendered in
-  the page (an animated end card, a text template) is saved with an upload and
+  the page (an animated end card, a text template, anything made on the Kinetic page) is saved with an upload and
   `POST /api/generations/local` (`op: "motion"`, model `local-motion`). No model makes it, so any
   account may save one, with or without its own GPU or key (the upload is sent with
   `x-fuobe-kinetic: 1`; see [Uploads](#uploads)). It counts as the account's own runs and files: the clip and every file it
-  names (its pictures, and the recipe's logo, product and pictures) must be the account's own (403
-  otherwise), a clip is never made from a video (400), the stored file must be the MP4 or WebM it
-  claims to be (400), and it shares the account's hourly run budget (60 an hour with its other runs,
+  names (its pictures, and the recipe's logo, product, pictures and clip) must be the account's own (403
+  otherwise). Frames, contact sheets and versions are Kinetic results too (`feature` `kinetic-frame`,
+  `kinetic-sheet` or `kinetic-version`, a PNG picture of the size its recipe makes: the export size for a frame or a
+  sheet, the rest frame 540 px on its long side for a version; 400 otherwise); a clip under the words must be the account's own stored video,
+  and a video input is taken only when it is the recipe's own clip (`layers.video.src`; 400 otherwise). The stored
+  file must be the MP4, WebM or (for those three) PNG it claims to be (400), and it shares the account's hourly run budget (60 an hour with its other runs,
   429). The words drawn on the clip (the recipe's fields and brand name) and its title go through the
   studio's checks when they are on, whatever the page sends as the prompt, and are what the run keeps
   (a refusal answers 422; a result the checks want to see waits for them). It shows in the account's

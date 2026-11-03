@@ -32,7 +32,8 @@ async function discoverRoutes() {
   const chats = [askFirst?.id, autoRun?.id].filter(Boolean).map((id) => `/assist?c=${id}`);
   // A skill with a recipe: its Run form opens from /assist/skills?run=<name>.
   const recipeSkill = await recipeSkillSample();
-  const samples = [...urls, ...chats, ...querySamples({ recipeSkill }), "/library?tab=favorites", "/login", "/this-page-does-not-exist"];
+  // Kinetic opens on a scene by its address (the editor), as well as on its scene picker (/kinetic).
+  const samples = [...urls, ...chats, ...querySamples({ recipeSkill }), "/library?tab=favorites", "/kinetic?scene=big-number", "/login", "/this-page-does-not-exist"];
   if (!recipeSkill) console.log("note: couldn't create a sample skill with a recipe, only an unknown /assist/skills?run= is checked");
   if (!project?.id) console.log("note: couldn't create a sample cinema project, only an unknown /cinema/[id] is checked");
   if (!canvas?.id) console.log("note: couldn't create a sample canvas, only an unknown /canvas/[id] is checked");

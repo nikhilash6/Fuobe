@@ -24,6 +24,7 @@ const { listGenerations, getGeneration } = await import("@/server/generations");
 const { hit } = await import("@/server/rate");
 const { RECIPE_MAX_BYTES } = await import("@/lib/motion/recipe");
 const { recipe } = await import("./helpers/motion");
+const { designSize, exportSize } = await import("@/lib/motion/sizes");
 
 let moderation: http.Server | null = null;
 let answer: Record<string, unknown> = { allowed: true };
@@ -237,5 +238,94 @@ describe("guests and the proxy", () => {
     expect(guest.status).toBe(401);
     expect(guest.headers.get(access.GUEST_HEADER)).toBe("1");
     expect((await call(body(ownerFile()))).status).toBe(401);
+  });
+});
+
+describe("Kinetic page results: frames, contact sheets, versions and a clip under the words", () => {
+  /** A PNG's first bytes: the signature and an IHDR chunk with its size (enough for the route's size check). */
+  const pngOf = (w: number, h: number) => {
+    const ihdr = Buffer.alloc(25);
+    ihdr.writeUInt32BE(13, 0);
+    ihdr.write("IHDR", 4, "ascii");
+    ihdr.writeUInt32BE(w, 8);
+    ihdr.writeUInt32BE(h, 12);
+    ihdr[16] = 8;
+    ihdr[17] = 6;
+    return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), ihdr, Buffer.alloc(100, 2)]);
+  };
+  /** The size a picture result of the default recipe (the draw-on end card) is made at. */
+  const sizeFor = (feature: string) => {
+    const r = recipe("end-card/draw-on");
+    if (feature === "kinetic-version") {
+      const d = designSize(r.size);
+      const k = 540 / Math.max(d.w, d.h);
+      return { w: Math.round(d.w * k), h: Math.round(d.h * k) };
+    }
+    const e = exportSize(r.size);
+    return { w: e.w - (e.w % 2), h: e.h - (e.h % 2) };
+  };
+  const png = (accountId?: string, feature = "kinetic-frame", size = sizeFor(feature)) =>
+    saveFile({ data: pngOf(size.w, size.h), contentType: "image/png", name: "k.png", source: "upload", ...(accountId && { accountId }) }).url;
+  const picture = (url: string, feature: string, over: Record<string, unknown> = {}) => body(url, { feature, output: { url, kind: "image", contentType: "image/png" }, ...over });
+  const layer = (src: string) => ({ src, from: 0, fit: "cover", dim: 0.2, scrim: "bottom" });
+
+  it("records a frame, a contact sheet and a version as PNG pictures; a PNG is never a clip", async () => {
+    for (const f of ["kinetic-frame", "kinetic-sheet", "kinetic-version"]) {
+      const r = await call(picture(png(undefined, f), f), owner());
+      expect(r.status, f).toBe(201);
+      const o = (await r.json()).outputs[0];
+      expect(o.kind).toBe("image");
+      // Recorded with its size, so its tile shows it whole.
+      expect({ w: o.width, h: o.height }, f).toEqual(sizeFor(f));
+    }
+    expect((await call(picture(png(), "kinetic"), owner())).status).toBe(400);
+    // A clip recorded as a frame, and a frame stored as a clip, are refused.
+    expect((await call(body(ownerFile(), { feature: "kinetic-frame" }), owner())).status).toBe(400);
+    expect((await call(body(png(), { feature: "kinetic-frame", output: { url: png(), kind: "video", contentType: "video/mp4" } }), owner())).status).toBe(400);
+  });
+
+  it("takes a picture only at the size its recipe makes, and records a clip with its size", async () => {
+    // Any other PNG (a picture that isn't this recipe's frame) is refused, as is one whose header can't be read.
+    for (const f of ["kinetic-frame", "kinetic-sheet", "kinetic-version"]) {
+      expect((await call(picture(png(undefined, f, { w: 640, h: 640 }), f), owner())).status, f).toBe(400);
+    }
+    const bare = saveFile({ data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]), contentType: "image/png", name: "cut.png", source: "upload" }).url;
+    expect((await call(picture(bare, "kinetic-frame"), owner())).status).toBe(400);
+    const r = await call(body(ownerFile()), owner());
+    expect(r.status).toBe(201);
+    const o = (await r.json()).outputs[0];
+    expect({ w: o.width, h: o.height }).toEqual(sizeFor("kinetic"));
+  });
+
+  it("takes only a stored video as the clip under the words", async () => {
+    const picture = saveFile({ data: pngOf(64, 64), contentType: "image/png", name: "still.png", source: "upload" }).url;
+    const motion = recipe("marketing/big-number", { layers: { video: layer(picture) } } as never);
+    expect((await call(body(ownerFile(), { feature: "kinetic", params: { extra: { motion } } }), owner())).status).toBe(400);
+  });
+
+  it("takes a video input only when it is the recipe's own clip", async () => {
+    const clip = ownerFile("video/mp4", "under.mp4");
+    const motion = recipe("marketing/big-number", { layers: { video: layer(clip) } } as never);
+    expect((await call(body(ownerFile(), { feature: "kinetic", inputs: { video: clip }, params: { extra: { motion } } }), owner())).status).toBe(201);
+    expect((await call(body(ownerFile(), { feature: "kinetic", inputs: { video: ownerFile("video/mp4", "other.mp4") }, params: { extra: { motion } } }), owner())).status).toBe(400);
+  });
+
+  it("an account's clip under the words must be its own file", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    const a = newAccount();
+    const b = newAccount();
+    const mine = accountFile(a.id, "video/mp4", "mine.mp4");
+    const ok = await call(body(accountFile(a.id), { feature: "kinetic", inputs: { video: mine }, params: { extra: { motion: recipe("marketing/big-number", { layers: { video: layer(mine) } } as never) } } }), a.cookie);
+    expect(ok.status).toBe(201);
+    for (const theirs of [accountFile(b.id, "video/mp4", "theirs.mp4"), ownerFile("video/mp4", "owners.mp4")]) {
+      const r = await call(body(accountFile(a.id), { feature: "kinetic", inputs: { video: theirs }, params: { extra: { motion: recipe("marketing/big-number", { layers: { video: layer(theirs) } } as never) } } }), a.cookie);
+      expect(r.status).toBe(403);
+      expect((await r.json()).error).toMatch(/can't find/);
+      // Named in the recipe only, it is checked all the same.
+      const r2 = await call(body(accountFile(a.id), { feature: "kinetic", params: { extra: { motion: recipe("marketing/big-number", { layers: { video: layer(theirs) } } as never) } } }), a.cookie);
+      expect(r2.status).toBe(403);
+    }
+    // Its own frame as a picture result.
+    expect((await call(picture(png(a.id, "kinetic-version"), "kinetic-version"), a.cookie)).status).toBe(201);
   });
 });

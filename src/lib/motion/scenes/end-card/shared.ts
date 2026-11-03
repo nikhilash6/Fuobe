@@ -16,6 +16,8 @@ import type { LogoInfo, Scene, SceneInput, ScenePlan } from "../../scene";
 import { designSize, TILE_CHIPS, tileCover } from "../../sizes";
 import { frameCount } from "../../time";
 import { timeline, scaleCues, type Cue, type Timeline } from "../../tween";
+import { extraCamera, kineticTiming } from "../../edit";
+import { finishAt } from "../../finish";
 
 export const END_CARD_VARIANTS = ["draw-on", "rise", "iris", "split", "glint"] as const;
 export type EndCardVariant = (typeof END_CARD_VARIANTS)[number];
@@ -366,13 +368,39 @@ export function endCardScene(variant: EndCardVariant, build: (c: StyleContext) =
       const own = typeof input.recipe.controls?.template === "string";
       const ends = Math.max(0.3, ...cued.map((e) => e.start + e.dur));
       const f = own ? Math.max(1, Math.min(2.4, (last * 0.72) / ends)) : 1;
-      const tl = timeline(cued.map((e) => ({ ...e, start: Math.round((e.start > 0 ? e.start * f : e.start) * 1e6) / 1e6 })));
+      const spread = cued.map((e) => ({ ...e, start: Math.round((e.start > 0 ? e.start * f : e.start) * 1e6) / 1e6 }));
+      // Kinetic's editor. Inside another scene (the Kinetic Headline's card) only its group timing and feel apply: the
+      // camera, the finish and the tracks belong to the outer scene.
+      const recipe = input.recipe;
+      const template = recipe.controls?.template;
+      const nested = typeof template === "string" && template !== "ms-end-card";
+      const timing = kineticTiming(recipe, `end-card/${variant}`, spread, [], last);
+      const tl = timeline(timing.events, timing.curves);
       const settled = Math.min(last, tl.rest);
-      const still: DisplayList = { w: design.w, h: design.h, background: theme.accent, nodes: restNodes(rest) };
+      const locked = !nested && recipe.camera?.move === "locked";
+      const breath = nested || locked ? (locked ? 0 : 1) : (recipe.camera?.breath ?? 1);
+      const extra = nested ? null : extraCamera(recipe, last);
+      const clock = nested ? null : timing.clock;
+      const graded = (list: DisplayList, t: number): DisplayList => {
+        const finish = nested ? null : finishAt(recipe, t);
+        return finish ? { ...list, finish } : list;
+      };
+      const cx = design.w / 2;
+      const cy = design.h / 2;
+      const homeExtra = extra?.(last, last, design.w);
+      const homeMoved = !!homeExtra && (homeExtra.zoom !== 1 || homeExtra.x !== 0 || homeExtra.y !== 0 || homeExtra.roll !== 0);
+      const restList: DisplayList = { w: design.w, h: design.h, background: theme.accent, nodes: homeMoved ? [group(restNodes(rest), { id: "camera", transform: multiply(translate(homeExtra.x, homeExtra.y), about(cx, cy, homeExtra.zoom, homeExtra.roll)) })] : restNodes(rest) };
+      const still = graded(restList, last);
       const drift = curve("drift");
       const camera = (t: number, nodes: DisplayNode[]): DisplayNode[] => {
-        const z = CAMERA_FROM + (1 - CAMERA_FROM) * drift(last > 0 ? t / last : 1);
-        return z >= 1 ? nodes : [group(nodes, { id: "camera", transform: about(design.w / 2, design.h / 2, z) })];
+        const tc = clock ? clock(t) : t;
+        const u = drift(last > 0 ? tc / last : 1);
+        let z = breath === 1 ? CAMERA_FROM + (1 - CAMERA_FROM) * u : 1 - (1 - CAMERA_FROM) * breath + (1 - CAMERA_FROM) * breath * u;
+        if (!extra) return z >= 1 ? nodes : [group(nodes, { id: "camera", transform: about(cx, cy, z) })];
+        const o = extra(t, tc, design.w);
+        z *= o.zoom;
+        if (z === 1 && o.x === 0 && o.y === 0 && o.roll === 0) return nodes;
+        return [group(nodes, { id: "camera", transform: multiply(translate(o.x, o.y), about(cx, cy, z, o.roll)) })];
       };
       return {
         design,
@@ -384,9 +412,9 @@ export function endCardScene(variant: EndCardVariant, build: (c: StyleContext) =
         overflow: rest.overflow,
         evaluate: (t) => {
           if (t >= last) return still;
-          if (t >= settled) return { ...still, nodes: camera(t, still.nodes) };
+          if (t >= settled) return graded({ ...restList, nodes: camera(t, restNodes(rest)) }, t);
           const f = style.frame(t, tl);
-          return { w: design.w, h: design.h, background: style.background ?? theme.accent, nodes: [...(f.under ?? []), ...camera(t, f.nodes), ...(f.over ?? [])] };
+          return graded({ w: design.w, h: design.h, background: style.background ?? theme.accent, nodes: [...(f.under ?? []), ...camera(t, f.nodes), ...(f.over ?? [])] }, t);
         },
         still: (t) => t >= last,
       };

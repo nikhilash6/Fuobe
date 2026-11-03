@@ -48,6 +48,7 @@ export type OutputActionId =
   | "clean-dialogue"
   | "copy-text"
   | "view-3d"
+  | "remix-kinetic"
   | "download"
   | "download-txt"
   | "download-srt"
@@ -113,6 +114,9 @@ const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(
 
 const q = (url: string) => encodeURIComponent(url);
 
+/** The model a Kinetic Motion result records (components/motion/save.ts MOTION_MODEL). */
+const KINETIC_MODEL = "local-motion";
+
 /** Every action for output `index` of `g`, in display order. */
 export function outputActions(g: Generation, index: number, ctx: ActionContext = {}): OutputAction[] {
   const o = g.outputs[index];
@@ -131,6 +135,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   const link = (id: OutputActionId, label: string, href: string, placement: OutputAction["placement"] = "menu") => {
     if (!(ctx.visitor && OWNER_ONLY_ACTIONS.has(id))) out.push({ id, label, href, placement });
   };
+  // A Kinetic Motion result (a clip, a frame, a contact sheet or a version) opens its recipe in the Kinetic editor.
+  // A visitor opens only their own (an owner's result shown on a public page would not open for them).
+  if (g.modelId === KINETIC_MODEL && g.status === "succeeded" && (!ctx.visitor || !!g.request.account)) link("remix-kinetic", "Remix in Kinetic", `/kinetic?from=${q(g.id)}`, "primary");
   switch (o.kind) {
     case "image":
       if (isVector(g, o)) {

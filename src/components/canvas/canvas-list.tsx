@@ -37,7 +37,7 @@ function CanvasCard({ c, onRename, onDelete }: { c: CanvasSummary; onRename: () 
         <div className="aspect-[16/10] overflow-hidden rounded-xl border bg-muted/50 transition-shadow group-hover/card:shadow-normal">
           {c.preview ? (
             c.preview.kind === "video" ? (
-              <video src={`${c.preview.url}#t=0.1`} muted playsInline preload="metadata" className="size-full object-cover" />
+              <video src={`${c.preview.url}#t=0.1`} poster={c.preview.poster} muted playsInline preload="metadata" className="size-full object-cover" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={c.preview.url} alt="" loading="lazy" className="size-full object-cover" />

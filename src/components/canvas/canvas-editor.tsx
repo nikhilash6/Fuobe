@@ -117,6 +117,7 @@ import { AddMenu, DRAG_TYPE, Palette, PaletteToggle } from "./palette";
 import { BoardToolbar, PAGE_PANEL_ID, PageTabs, pageTabId, TOOL_KEYS, type DragShape, type PageOps, type Tool } from "./toolbar";
 import { saveCanvas, useCanvasView, useRunCanvas, type CanvasView } from "./use-canvas";
 import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
+import { KINETIC_RUN_EVENT } from "./kinetic-node";
 
 const GRID: [number, number] = [16, 16];
 const snap = (p: { x: number; y: number }) => ({ x: Math.round(p.x / GRID[0]) * GRID[0], y: Math.round(p.y / GRID[1]) * GRID[1] });
@@ -732,6 +733,8 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
           { page: latest.current.pageId, targets: t, group, force: f, pages: docOf() },
           {
             onSuccess: (r) => {
+              // Kinetic nodes render in this tab: they start now, each waiting for what feeds it.
+              if (!group) window.dispatchEvent(new CustomEvent(KINETIC_RUN_EVENT, { detail: { canvasId: id, targets: t, ran: r.ran ?? [], errors: r.errors ?? [] } }));
               // The run saved the whole canvas as it was at `at`.
               savedRev.current = Math.max(savedRev.current, at);
               if (latest.current.rev === savedRev.current) setSaveState("saved");
@@ -749,7 +752,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
       };
       go(targets, force);
     },
-    [runMutate, docOf],
+    [runMutate, docOf, id],
   );
 
   /**
@@ -1281,7 +1284,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
             boardEngine={boardEngine}
             selectedCount={isMobile ? 0 : selected.length}
             running={runM.isPending}
-            canRun={generators.length > 0}
+            canRun={generators.length > 0 || graph.nodes.some((n) => n.type === "kinetic")}
             mode={mode}
             ui={ui}
           />

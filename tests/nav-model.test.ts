@@ -205,15 +205,15 @@ describe("nav model: entries", () => {
 });
 
 describe("nav model: launcher", () => {
-  it("has 28 studios, Apps and four Audio modes in six columns of 8, 6, 5, 6, 5 and 3, one lead each", () => {
-    expect(studioCount()).toBe(28);
+  it("has 29 studios, Apps and four Audio modes in six columns of 8, 6, 6, 6, 5 and 3, one lead each", () => {
+    expect(studioCount()).toBe(29);
     const cols = launcherColumns("owner");
     expect(cols.map((c) => c.group.id)).toEqual(["film", "social", "sell", "people", "sound", "finish"]);
-    expect(cols.map((c) => 1 + c.rest.length)).toEqual([8, 6, 5, 6, 5, 3]);
+    expect(cols.map((c) => 1 + c.rest.length)).toEqual([8, 6, 6, 6, 5, 3]);
     expect(cols.map((c) => c.lead.id)).toEqual(["cinema", "shorts", "marketing", "fashion-factory", "audio", "upscale"]);
     for (const g of LAUNCHER_GROUPS) expect(NAV_ENTRIES.filter((e) => e.group === g.id && e.lead)).toHaveLength(1);
-    expect(launcherEntries("guest")).toHaveLength(33);
-    expect(launcherEntries("guest", "sell").map((e) => e.id)).toEqual(["marketing", "ads", "mixed-media", "moodboards", "photodump"]);
+    expect(launcherEntries("guest")).toHaveLength(34);
+    expect(launcherEntries("guest", "sell").map((e) => e.id)).toEqual(["marketing", "ads", "kinetic", "mixed-media", "moodboards", "photodump"]);
     expect(launcherEntries(undefined, "finish").map((e) => e.id)).toEqual(["upscale", "image-to-3d", "apps"]);
     // Sound: the Audio studio, then voice's neighbours (music, sound effects, clean-up, translate & dub); Lipsync stays in Social.
     expect(launcherEntries(undefined, "sound").map((e) => e.href)).toEqual(["/audio", "/audio/music", "/audio/sfx", "/audio/clean", "/audio/translate"]);
@@ -225,7 +225,7 @@ describe("nav model: launcher", () => {
     expect(entry("storyboard")?.group).toBe("film");
   });
 
-  it("shows the same 33 to everyone", () => {
+  it("shows the same 34 to everyone", () => {
     for (const k of KINDS) expect(launcherEntries(k).map((e) => e.id)).toEqual(launcherEntries("owner").map((e) => e.id));
   });
 });

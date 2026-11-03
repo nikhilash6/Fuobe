@@ -1,6 +1,7 @@
 "use client";
 
 import { IDENTITY, multiply, type ClipShape, type DisplayList, type DisplayNode, type Gradient, type Matrix, type Paint, type Stroke } from "@/lib/motion/display";
+import { cssFilter, GRAIN_GAIN, GRAIN_TILE, grainOffset, grainScale, grainTile, gradePixels, type Finish } from "@/lib/motion/finish";
 import type { LogoInfo, LogoPath } from "@/lib/motion/scene";
 
 /**
@@ -15,6 +16,8 @@ type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
 export interface Sources {
   /** Pictures by key ("logo", "product"). */
   images: Map<string, CanvasImageSource>;
+  /** The person's clips by key ("clip"): a muted video element each, at the frame the caller put it on. */
+  clips?: Map<string, CanvasImageSource>;
 }
 
 const paths = new Map<string, Path2D>();
@@ -47,21 +50,42 @@ function pathLength(d: string): number {
   return n;
 }
 
-let filterOk: boolean | null = null;
-/** Whether this browser's canvas takes a CSS filter (blur); where it can't, scenes keep their scale moves only. */
-function canFilter(ctx: Ctx): boolean {
-  if (filterOk === null) {
+/**
+ * Whether a canvas of this kind really draws through a CSS filter, tested on pixels once per kind: where canvas filters
+ * are missing (Safari before 18), assigning `ctx.filter` only makes a plain property that reads back the same text, so a
+ * read-back test would say yes. A red pixel drawn with saturate(0) must come out grey.
+ */
+const filterWorks = new Map<string, boolean>();
+function canvasFilters(ctx: Ctx): boolean {
+  const html = typeof HTMLCanvasElement !== "undefined" && ctx.canvas instanceof HTMLCanvasElement;
+  const kind = html ? "html" : "offscreen";
+  let ok = filterWorks.get(kind);
+  if (ok === undefined) {
+    ok = false;
     try {
-      const before = ctx.filter;
-      ctx.filter = "blur(1px)";
-      filterOk = ctx.filter === "blur(1px)";
-      ctx.filter = before;
+      const make = (): AnyCanvas => (html ? Object.assign(document.createElement("canvas"), { width: 1, height: 1 }) : new OffscreenCanvas(1, 1));
+      const src = make();
+      const s = src.getContext("2d") as Ctx;
+      s.fillStyle = "rgb(200,40,40)";
+      s.fillRect(0, 0, 1, 1);
+      const dst = make();
+      const d = dst.getContext("2d", { willReadFrequently: true }) as Ctx;
+      if ("filter" in Object.getPrototypeOf(d)) {
+        d.filter = "saturate(0)";
+        d.drawImage(src, 0, 0);
+        const [r, g, b] = d.getImageData(0, 0, 1, 1).data;
+        ok = Math.abs(r - g) < 12 && Math.abs(g - b) < 12;
+      }
     } catch {
-      filterOk = false;
+      ok = false;
     }
+    filterWorks.set(kind, ok);
   }
-  return filterOk;
+  return ok;
 }
+
+/** Whether this browser's canvas takes a CSS filter (blur); where it can't, scenes keep their scale moves only. */
+const canFilter = (ctx: Ctx): boolean => canvasFilters(ctx);
 
 function makeCanvas(w: number, h: number): AnyCanvas {
   if (typeof OffscreenCanvas !== "undefined") return new OffscreenCanvas(w, h);
@@ -263,6 +287,20 @@ function drawNode(ctx: Ctx, n: DisplayNode, m: Matrix, alpha: number, src: Sourc
       ctx.direction = "ltr";
       return;
     }
+    case "video": {
+      const v = src.clips?.get(n.src);
+      if (!v) return;
+      setMatrix(ctx, m);
+      ctx.globalAlpha = alpha * (n.opacity ?? 1);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      try {
+        ctx.drawImage(v, n.x, n.y, n.w, n.h);
+      } catch {
+        // A clip with no picture yet draws nothing (the ground shows).
+      }
+      return;
+    }
     case "image": {
       const img = src.images.get(n.src);
       if (!img) return;
@@ -280,7 +318,7 @@ function drawNode(ctx: Ctx, n: DisplayNode, m: Matrix, alpha: number, src: Sourc
  * Draw a display list onto a canvas `pixelWidth / list.w` times its design size (the canvas is that size). Clears to
  * the list's background first, so every frame stands alone.
  */
-export function drawDisplayList(ctx: Ctx, list: DisplayList, sources: Sources): void {
+export function drawDisplayList(ctx: Ctx, list: DisplayList, sources: Sources, o: { finish?: boolean; grain?: boolean } = {}): void {
   const W = ctx.canvas.width;
   const H = ctx.canvas.height;
   const k = W / list.w;
@@ -293,6 +331,79 @@ export function drawDisplayList(ctx: Ctx, list: DisplayList, sources: Sources): 
   ctx.fillRect(0, 0, W, H);
   const base: Matrix = multiply([k, 0, 0, H / list.h, 0, 0], IDENTITY);
   for (const n of list.nodes) drawNode(ctx, n, base, 1, sources, 0);
+  ctx.restore();
+  if (list.finish && o.finish !== false) applyFinish(ctx, list.finish, { grain: o.grain });
+}
+
+// ---------------------------------------------------------------------------
+// The finish (Kinetic's grade and grain), once per output frame
+
+/** Whether this canvas draws contrast/saturate through a CSS filter (a pixel test per kind of canvas, done once). */
+export function canGradeWithFilter(ctx: Ctx): boolean {
+  return canvasFilters(ctx);
+}
+
+const grainCanvases = new Map<number, AnyCanvas>();
+function grainCanvas(seed: number): AnyCanvas {
+  let c = grainCanvases.get(seed);
+  if (!c) {
+    c = makeCanvas(GRAIN_TILE, GRAIN_TILE);
+    const g = c.getContext("2d") as Ctx;
+    const img = g.createImageData(GRAIN_TILE, GRAIN_TILE);
+    const tile = grainTile(seed);
+    for (let i = 0; i < tile.length; i++) {
+      img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = tile[i];
+      img.data[i * 4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    if (grainCanvases.size > 4) grainCanvases.clear();
+    grainCanvases.set(seed, c);
+  }
+  return c;
+}
+
+/**
+ * The finish over what is on the canvas: contrast and saturation (a canvas filter where the browser has one, else the
+ * same maths per pixel), then the seeded grain laid with "overlay", sized to the canvas and offset per frame.
+ * `pixels` forces the pixel pass (tests compare the two).
+ */
+export function applyFinish(ctx: Ctx, f: Finish, o: { grain?: boolean; pixels?: boolean } = {}): void {
+  const W = ctx.canvas.width;
+  const H = ctx.canvas.height;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  if (f.contrast !== 0 || f.saturation !== 0) {
+    if (!o.pixels && canGradeWithFilter(ctx)) {
+      const layer = layerFor(ctx.canvas as AnyCanvas, 7);
+      layer.ctx.save();
+      layer.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      layer.ctx.globalCompositeOperation = "copy";
+      layer.ctx.filter = "none";
+      layer.ctx.drawImage(ctx.canvas, 0, 0);
+      layer.ctx.restore();
+      ctx.globalCompositeOperation = "copy";
+      ctx.filter = cssFilter(f);
+      ctx.drawImage(layer.canvas, 0, 0);
+      ctx.filter = "none";
+    } else {
+      const img = ctx.getImageData(0, 0, W, H);
+      gradePixels(img.data, f);
+      ctx.putImageData(img, 0, 0);
+    }
+  }
+  if (f.grain > 0 && o.grain !== false) {
+    const pat = ctx.createPattern(grainCanvas(f.seed), "repeat");
+    if (pat) {
+      const s = grainScale(f, Math.min(W, H));
+      const [ox, oy] = grainOffset(f.seed, f.frame);
+      pat.setTransform(new DOMMatrix([s, 0, 0, s, -ox * s, -oy * s]));
+      ctx.globalCompositeOperation = "overlay";
+      ctx.globalAlpha = Math.min(1, f.grain * GRAIN_GAIN);
+      ctx.fillStyle = pat;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
   ctx.restore();
 }
 

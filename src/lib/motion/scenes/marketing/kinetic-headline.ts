@@ -10,7 +10,7 @@ import { group, translate, type DisplayNode, type TextRun } from "../../display"
 import { sample, type Key } from "../../tween";
 import drawOn from "../end-card/draw-on";
 import { glyphTop, lineLeft } from "../end-card/shared";
-import { ev, marked, marketingScene, MIN_HEAD, setText, textBlock } from "./kit";
+import { ev, groundLight, marked, marketingScene, MIN_HEAD, setText, textBlock } from "./kit";
 
 /** The end card's share of the clip. */
 const CARD = 2.3;
@@ -96,6 +96,8 @@ export default marketingScene({
     const same = typeof cardGround === "string" && cardGround.toLowerCase() === pal.ground.toLowerCase();
     const R = Math.hypot(design.w, design.h) / 2 + 2;
     const size = L?.size ?? S * 0.1;
+    // The card's ground gets the same slow light and falloff as the words' ground, so it never reads as a flat fill.
+    const lit = recipe.look?.light === false ? null : same ? groundLight(c) : typeof cardGround === "string" ? groundLight(c, { ground: cardGround, look: "brand" }) : null;
     return {
       events,
       breath: false,
@@ -106,7 +108,11 @@ export default marketingScene({
       frame(t, P, Lp) {
         if (t >= T0) {
           const list = card.evaluate(t >= c.last ? card.rest : t - T0);
-          return { nodes: [], over: [{ type: "rect", x: 0, y: 0, w: design.w, h: design.h, fill: list.background }, ...list.nodes] };
+          const glow = lit ? lit(t) : [];
+          // A card that opened out of the middle lights up as it lands; on the scene's own ground the light carries on.
+          const fade = same ? 1 : Math.min(1, (t - T0) / 0.5);
+          const light: DisplayNode[] = !glow.length ? [] : fade < 1 ? [group(glow, { opacity: fade })] : glow;
+          return { nodes: [], over: [{ type: "rect", x: 0, y: 0, w: design.w, h: design.h, fill: list.background }, ...light, ...list.nodes] };
         }
         const swatches: DisplayNode[] = [];
         const runs: TextRun[] = [];

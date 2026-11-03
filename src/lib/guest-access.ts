@@ -137,6 +137,8 @@ const LIBRARY_CHANGES: [methods: string, path: RegExp][] = [
   ],
   ["DELETE", /^\/api\/(katana|marketing\/runs|photodump\/packs)\/[^/]+$/],
   ["POST", /^\/api\/canvases\/[^/]+\/duplicate$/],
+  // A Kinetic node's run (rendered in the owner's browser) kept on the canvas.
+  ["PUT", /^\/api\/canvases\/[^/]+\/runs\/[^/]+$/],
   // A ready-made starter (a channel, a brand kit with its product) is saved to the owner's library.
   ["POST", /^\/api\/starters\/[^/]+$/],
   ["POST", /^\/api\/assist\/skills\/[^/]+\/duplicate$/],

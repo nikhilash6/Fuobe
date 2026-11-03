@@ -2751,7 +2751,7 @@ export function recordLocalGeneration(input: {
   title?: string;
   inputs: GenerationRequest["inputs"];
   params?: GenerationRequest["params"];
-  output: { url: string; kind: OutputFile["kind"]; contentType?: string; meta?: { poster: string } };
+  output: { url: string; kind: OutputFile["kind"]; contentType?: string; meta?: { poster: string }; width?: number; height?: number };
 }): Generation {
   const model = getModel(input.modelId);
   // A browser tool's own result: the model's local route for this very step (a grade is not recorded as a Relight blend).

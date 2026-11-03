@@ -4,7 +4,7 @@
  * read at any t. The same events drive the timing checks in the tests and, later, the sound made from motion.
  */
 
-import { curve, type CurveName } from "./ease";
+import { curve, type CurveName, type Ease } from "./ease";
 import { local, mix } from "./time";
 
 export interface Key {
@@ -52,6 +52,8 @@ export interface MotionEvent {
   /** Events in one staggered group share it, with how they are spaced. */
   group?: string;
   unit?: StaggerUnit;
+  /** A retimed motion group's clock (Kinetic's editor): plain progress in, warped progress out (never falls). */
+  warp?: (u: number) => number;
 }
 
 export interface Timeline {
@@ -59,25 +61,34 @@ export interface Timeline {
   byId: Map<string, MotionEvent>;
   /** Every element is set by then. */
   rest: number;
+  /** A motion feel's curves, read before the named ones (absent: the curves as designed). */
+  curves?: Partial<Record<CurveName, Ease>>;
 }
 
-export function timeline(events: MotionEvent[]): Timeline {
+export function timeline(events: MotionEvent[], curves?: Partial<Record<CurveName, Ease>>): Timeline {
   const byId = new Map(events.map((e) => [e.id, e]));
-  return { events, byId, rest: events.reduce((m, e) => Math.max(m, e.start + e.dur), 0) };
+  const tl: Timeline = { events, byId, rest: events.reduce((m, e) => Math.max(m, e.start + e.dur), 0) };
+  if (curves && Object.keys(curves).length) tl.curves = curves;
+  return tl;
 }
+
+/** The curve a timeline uses for a name (its feel's, else the named one). */
+export const curveIn = (tl: Pick<Timeline, "curves">, name: CurveName): Ease => tl.curves?.[name] ?? curve(name);
 
 /** An event's eased progress at `t` (0 before it, 1 after it; an unknown id is done). */
 export function progress(tl: Timeline, id: string, t: number): number {
   const e = tl.byId.get(id);
   if (!e) return 1;
-  return curve(e.curve)(local(t, e.start, e.start + e.dur));
+  const u = local(t, e.start, e.start + e.dur);
+  return curveIn(tl, e.curve)(e.warp ? e.warp(u) : u);
 }
 
-/** An event's plain (linear) progress at `t`. */
+/** An event's plain (linear) progress at `t` (a retimed group's warp included). */
 export function linearProgress(tl: Timeline, id: string, t: number): number {
   const e = tl.byId.get(id);
   if (!e) return 1;
-  return local(t, e.start, e.start + e.dur);
+  const u = local(t, e.start, e.start + e.dur);
+  return e.warp ? e.warp(u) : u;
 }
 
 /** Limits per kind, in seconds: an entrance 350–700 ms, nothing that moves under 200 ms. */

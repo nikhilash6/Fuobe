@@ -39,7 +39,7 @@ const SAMPLES: { id: keyof typeof SHOWCASE_PRODUCTS; label: string }[] = [
   { id: "heel", label: "Sample: red heel" },
 ];
 
-function PicturePicker({ value, onChange, owner }: { value: string | null | undefined; onChange: (url: string | null) => void; owner: boolean }) {
+export function PicturePicker({ value, onChange, owner }: { value: string | null | undefined; onChange: (url: string | null) => void; owner: boolean }) {
   const [own, setOwn] = useState<SlotValue | null>(null);
   const [product, setProduct] = useState<ProductChoice | null>(null);
   const tile = (on: boolean) => cn("relative size-14 shrink-0 overflow-hidden rounded-xl bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring", on && "ring-2 ring-primary ring-offset-2 ring-offset-background");

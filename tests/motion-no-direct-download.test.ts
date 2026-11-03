@@ -10,7 +10,7 @@ const files = (dir: string): string[] =>
   fs.existsSync(dir) ? fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? files(path.join(dir, d.name)) : /\.(ts|tsx)$/.test(d.name) ? [path.join(dir, d.name)] : [])) : [];
 
 describe("no direct download of a motion render", () => {
-  const sources = [...files(path.join(ROOT, "src/components/motion")), ...files(path.join(ROOT, "src/lib/motion")), path.join(ROOT, "src/components/marketing/end-card-motion.tsx")];
+  const sources = [...files(path.join(ROOT, "src/components/motion")), ...files(path.join(ROOT, "src/components/kinetic")), ...files(path.join(ROOT, "src/lib/motion")), path.join(ROOT, "src/components/marketing/end-card-motion.tsx"), path.join(ROOT, "src/components/canvas/kinetic-node.tsx")];
 
   it("finds the motion code", () => {
     expect(sources.length).toBeGreaterThan(15);

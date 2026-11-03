@@ -721,3 +721,64 @@ html {
 @media (prefers-reduced-motion: reduce) {
   [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"] { animation: none !important; }
 }
+
+/*
+ * Kinetic's sliders: a themed track with the value filled in the brand colour (--fill, set by the slider) and a 20 px
+ * thumb, the same in light and dark (the native track is light grey on white in every theme).
+ */
+.k-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  --fill: 0%;
+  --track: color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+.k-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, var(--primary) var(--fill), var(--track) var(--fill));
+}
+.k-range[dir="rtl"]::-webkit-slider-runnable-track {
+  background: linear-gradient(to left, var(--primary) var(--fill), var(--track) var(--fill));
+}
+.k-range::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--track);
+}
+.k-range::-moz-range-progress {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--primary);
+}
+.k-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border-radius: 9999px;
+  background: var(--background);
+  border: 2px solid var(--primary);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+.k-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--background);
+  border: 2px solid var(--primary);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+.k-range:focus-visible {
+  outline: none;
+}
+.k-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 45%, transparent);
+}
+.k-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 45%, transparent);
+}
+.k-range:disabled {
+  cursor: default;
+}

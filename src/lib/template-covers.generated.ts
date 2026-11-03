@@ -36,7 +36,7 @@ export const TEMPLATE_COVERS: Record<string, TemplateCoverEntry> = {
   "marketing/ms-end-card": {"poster":"/previews/templates/marketing/ms-end-card.jpg?v=a445714e","video":"/previews/templates/marketing/ms-end-card.mp4?v=b706f02c","at":2.458},
   "marketing/ms-feature-cards": {"poster":"/previews/templates/marketing/ms-feature-cards.jpg?v=0adfaea1","video":"/previews/templates/marketing/ms-feature-cards.mp4?v=db6c688f","at":4.958},
   "marketing/ms-five-star-quote": {"poster":"/previews/templates/marketing/ms-five-star-quote.jpg?v=5a4d1301","video":"/previews/templates/marketing/ms-five-star-quote.mp4?v=af449d3c","at":4.958},
-  "marketing/ms-kinetic-headline": {"poster":"/previews/templates/marketing/ms-kinetic-headline.jpg?v=d9ff2197","video":"/previews/templates/marketing/ms-kinetic-headline.mp4?v=aea37133","at":2.167},
+  "marketing/ms-kinetic-headline": {"poster":"/previews/templates/marketing/ms-kinetic-headline.jpg?v=b0473175","video":"/previews/templates/marketing/ms-kinetic-headline.mp4?v=911ab1f4","at":2.167},
   "marketing/ms-logo-sting": {"poster":"/previews/templates/marketing/ms-logo-sting.jpg?v=46c7b096","video":"/previews/templates/marketing/ms-logo-sting.mp4?v=bf3836cc","at":4.958},
   "marketing/po-retro-sunburst": "4c19058c",
   "marketing/po-riso-bloom": "69f64638",

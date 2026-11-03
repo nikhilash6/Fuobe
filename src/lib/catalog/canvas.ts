@@ -24,6 +24,8 @@ import { fillLayout, layoutPlaceholders } from "@/lib/layout-surfaces";
 import { FLY_MODELS, flyKeys, planFlyAround } from "./fly-around";
 import type { CameraKey } from "@/lib/camera-path";
 import type { ExactOrbit } from "@/lib/exact-orbit";
+import type { Recipe } from "@/lib/motion/recipe";
+import { CLIP_SCENES as KINETIC_CLIP_SCENES } from "@/lib/motion/kinetic-groups";
 import {
   OPERATION_LABELS,
   OPERATION_OUTPUT,
@@ -76,6 +78,7 @@ export type CanvasNodeType =
   | "layout"
   | "camera-path"
   | "fly-around"
+  | "kinetic"
   | "output"
   | "note";
 
@@ -133,6 +136,8 @@ export interface CanvasNodeData {
   keys?: CameraKey[];
   /** Fly around: the clip's length in seconds (the cloud; your GPU always films about 5 s). */
   duration?: number;
+  /** Kinetic: the scene and its settings, as a Kinetic Motion recipe (its words come from the Text input per row). */
+  kinetic?: Recipe;
 }
 
 export interface CanvasNode {
@@ -216,7 +221,7 @@ export interface CanvasSummary {
   pageCount: number;
   templateId: string | null;
   /** The newest finished image or video made on this canvas. */
-  preview: { url: string; kind: MediaKind } | null;
+  preview: { url: string; kind: MediaKind; poster?: string } | null;
   outline: Outline;
   createdAt: number;
   updatedAt: number;
@@ -271,6 +276,7 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   layout: { type: "layout", label: "Layout", group: "Inputs", icon: "LayoutDashboard", description: "Boxes for a headline, a product, a price: the image model draws each in its place" },
   "camera-path": { type: "camera-path", label: "Camera path", group: "Inputs", icon: "Orbit", description: "A move round the subject: a preset or an exact orbit" },
   "fly-around": { type: "fly-around", label: "Fly around", group: "Generate", icon: "Rotate3d", ops: ["camera-path"], description: "A still filmed along a camera path, with other views if you have them" },
+  kinetic: { type: "kinetic", label: "Kinetic", group: "Generate", icon: "LetterText", description: "Your words as motion graphics in your brand, drawn in your browser" },
   output: { type: "output", label: "Output", group: "Output", icon: "MonitorPlay", description: "Preview what's connected, side by side" },
   note: { type: "note", label: "Sticky note", group: "Output", icon: "StickyNote", description: "A note on the board (not run)" },
 };
@@ -328,6 +334,7 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("layout"), id: "layout", data: { layout: { summary: { caption: "", meta: [], canvas: "single" }, items: [], aspect: "1:1" } }, keywords: "layout boxes poster text placement composition headline price moss" },
   { ...pick("camera-path"), id: "camera-path", data: { pathPreset: "orbit_360" }, keywords: "orbit arc camera move path keyframes exact turnaround" },
   { ...pick("fly-around"), id: "fly-around", keywords: "orbit fly around turnaround camera path 360 spin product" },
+  { ...pick("kinetic"), id: "kinetic", keywords: "motion text title animation brand kinetic" },
   { ...pick("output"), id: "output", keywords: "preview compare result" },
   { ...pick("note"), id: "note", keywords: "comment annotation" },
 ];
@@ -644,6 +651,13 @@ export function inputPorts(n: Pick<CanvasNode, "type" | "data">): PortDef[] {
   // Clone voice: the sample can come from another node (a recording, a generated voice) instead of a file.
   if (n.type === "clone-voice") return [{ id: "audio", label: "Sample", type: "audio", multiple: false }];
   if (n.type === "output") return [];
+  // Kinetic: words (a Table feeds one render per row), a picture (the product, else the logo) and a clip under the words.
+  if (n.type === "kinetic")
+    return [
+      { id: "prompt", label: "Text", type: "text", multiple: true },
+      { id: "images", label: "Picture", type: "image", multiple: false },
+      { id: "video", label: "Clip", type: "video", multiple: false },
+    ];
   // Fly around: the still (then any other views of the subject), the path, and motion words.
   if (n.type === "fly-around")
     return [
@@ -698,7 +712,7 @@ export function outputType(_graph: CanvasGraph, n: CanvasNode): PortType | null 
   if (n.type === "clone-voice") return "voice";
   if (n.type === "element") return "element";
   if (n.type === "camera-path") return "path";
-  if (n.type === "fly-around") return "video";
+  if (n.type === "fly-around" || n.type === "kinetic") return "video";
   if (MEDIA_INPUT_TYPE[n.type]) return MEDIA_INPUT_TYPE[n.type]!;
   if (!isGenerator(n)) return null;
   // Never inferred from the inputs (that would walk the whole upstream graph): a chosen or fixed op, else the model's kind.
@@ -817,6 +831,9 @@ export function connectionError(graph: CanvasGraph, c: Connection): string | nul
   if (s.id === t.id) return "A node can't feed itself";
   const type = outputType(graph, s);
   if (!type || (c.sourceHandle && !outputHandles(s).includes(c.sourceHandle))) return `${nodeLabel(s)} has no output`;
+  // Kinetic renders in the browser: its clips go to Output nodes only (for now).
+  if (s.type === "kinetic" && t.type !== "output") return "Connect Kinetic to an Output node";
+  if (t.type === "kinetic" && c.targetHandle === "video" && !KINETIC_CLIP_SCENES.includes(t.data.kinetic?.scene ?? "")) return "This scene doesn't take a clip";
   if (t.type === "output") {
     if (c.targetHandle && c.targetHandle !== PREVIEW_IN) return "Unknown input";
     if (!acceptsType("preview", type)) return "Elements go into a model's Elements input";

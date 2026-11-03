@@ -150,13 +150,13 @@ describe("the palette's body", () => {
     expect(order.every((i) => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(html.indexOf("Every studio")).toBeGreaterThan(html.indexOf("Also try"));
-    expect(tiles(html)).toHaveLength(33);
+    expect(tiles(html)).toHaveLength(34);
   });
 
   it("starts filtered to a goal when opened for one", () => {
     const html = body("", "sell");
-    expect(tiles(html)).toEqual(["Marketing Studio", "Ads Studio", "Mixed Media", "Moodboards", "Photodump"]);
-    expect(html).toContain("5 in Sell &amp; advertise");
+    expect(tiles(html)).toEqual(["Marketing Studio", "Ads Studio", "Fuobe Kinetic Motion", "Mixed Media", "Moodboards", "Photodump"]);
+    expect(html).toContain("6 in Sell &amp; advertise");
   });
 
   it("starts on the best match, or on the first studio when nothing is typed", () => {

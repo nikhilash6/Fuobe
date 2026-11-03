@@ -37,14 +37,15 @@ export interface SaveMeta {
   images?: string[];
 }
 
-/** Uploads a rendered clip and records it as a result; returns the result. */
-export async function saveMotionResult(clip: MotionResult, meta: SaveMeta): Promise<Generation> {
-  const ext = clip.type === "video/webm" ? "webm" : "mp4";
-  const [asset, poster] = await Promise.all([
-    uploadKinetic(new File([clip.blob], `kinetic-motion.${ext}`, { type: clip.type })),
-    clip.poster ? uploadKinetic(new File([clip.poster], "kinetic-motion.png", { type: "image/png" })).catch(() => null) : null,
-  ]);
+/** The files a result names as its inputs: its pictures (logo, product) and the clip under its words. */
+function inputsOf(meta: SaveMeta): { images?: string[]; video?: string } {
   const images = (meta.images ?? []).filter((u) => u.startsWith("/api/files/")).slice(0, 4);
+  const video = meta.recipe.layers?.video?.src;
+  return { ...(images.length && { images }), ...(video && { video }) };
+}
+
+/** Records an uploaded Kinetic file as a result (a clip, or a frame, sheet or version picture). */
+async function record(meta: SaveMeta, output: { url: string; kind: "video" | "image"; contentType: string; meta?: { poster: string } }): Promise<Generation> {
   const res = await fetch("/api/generations/local", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -54,14 +55,30 @@ export async function saveMotionResult(clip: MotionResult, meta: SaveMeta): Prom
       op: "motion",
       prompt: meta.prompt.slice(0, 2000),
       title: meta.title.slice(0, 200),
-      inputs: images.length ? { images } : {},
+      inputs: inputsOf(meta),
       params: { extra: { motion: meta.recipe } },
-      output: { url: asset.url, kind: "video", contentType: asset.contentType, ...(poster && { meta: { poster: poster.url } }) },
+      output,
     }),
   });
   const body = (await res.json().catch(() => ({}))) as Generation & { error?: string };
   if (!res.ok) throw responseError(res, body.error ?? "Couldn't save it. Try again.");
   return body;
+}
+
+/** Uploads a rendered picture (a PNG frame, contact sheet or version) and records it as a result. */
+export async function saveMotionPicture(png: Blob, meta: SaveMeta): Promise<Generation> {
+  const asset = await uploadKinetic(new File([png], "kinetic-motion.png", { type: "image/png" }));
+  return record(meta, { url: asset.url, kind: "image", contentType: "image/png" });
+}
+
+/** Uploads a rendered clip and records it as a result; returns the result. */
+export async function saveMotionResult(clip: MotionResult, meta: SaveMeta): Promise<Generation> {
+  const ext = clip.type === "video/webm" ? "webm" : "mp4";
+  const [asset, poster] = await Promise.all([
+    uploadKinetic(new File([clip.blob], `kinetic-motion.${ext}`, { type: clip.type })),
+    clip.poster ? uploadKinetic(new File([clip.poster], "kinetic-motion.png", { type: "image/png" })).catch(() => null) : null,
+  ]);
+  return record(meta, { url: asset.url, kind: "video", contentType: asset.contentType ?? clip.type, ...(poster && { meta: { poster: poster.url } }) });
 }
 
 export type SavePhase = { kind: "idle" } | { kind: "rendering"; done: number; total: number } | { kind: "saving" } | { kind: "saved"; id: string };

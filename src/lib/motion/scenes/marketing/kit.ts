@@ -14,7 +14,10 @@ import type { Recipe } from "../../recipe";
 import type { Outline, Scene, SceneInput, ScenePlan } from "../../scene";
 import { designSize, TILE_CHIPS, tileCover, type SizeSpec } from "../../sizes";
 import { frameCount, local } from "../../time";
-import { DURATION_LIMITS, timeline, type EventKind, type MotionEvent, type StaggerUnit, type Timeline } from "../../tween";
+import { DURATION_LIMITS, linearProgress, progress, timeline, type EventKind, type MotionEvent, type StaggerUnit, type Timeline } from "../../tween";
+import { extraCamera, kineticTiming, paceOf } from "../../edit";
+import { finishAt } from "../../finish";
+import { clipLayer, clipNodes, CLIP_GROUND } from "../../video-layer";
 import { cardColours, lineLeft, lineRun, lineRuns, secondColour, type TextBlock } from "../end-card/shared";
 
 export type LookId = "light" | "dark" | "brand";
@@ -154,7 +157,7 @@ export const MIN_HEAD = 0.06;
 export const spread = (c: { room: number; pace: number }, base: number, hi = 2.2): number => Math.max(0.9, Math.min(hi, (c.room / base) * c.pace, c.room / base));
 
 /** How much slower (> 1) or quicker the pace is. */
-export const paceOf = (controls: Recipe["controls"]): number => (controls?.pace === "calm" ? 1.2 : controls?.pace === "punchy" ? 0.82 : 1);
+export { paceOf } from "../../edit";
 
 /** An event, its length held to its kind's limits. */
 export function ev(id: string, kind: EventKind, start: number, dur: number, c: CurveName, g?: { group: string; unit: StaggerUnit }): MotionEvent {
@@ -340,13 +343,15 @@ export interface Built {
 /**
  * The ground's light: a soft pool of light that drifts slowly across the frame the whole clip long and comes to rest
  * on the last frame (high and a little off centre), over a gentle falloff to the corners, so a flat ground has depth
- * and the frame never stands quite still. On a dark ground the light is the brand's own colour.
+ * and the frame never stands quite still. On a dark ground the light is the brand's own colour. A scene can light
+ * another ground of its own the same way (`on`: an end card set on the brand colour).
  */
-function groundLight(c: MarketingContext): (t: number) => DisplayNode[] {
-  const { design, palette: pal, last } = c;
+export function groundLight(c: MarketingContext, on?: { ground: string; look: LookId }): (t: number) => DisplayNode[] {
+  const { design, last } = c;
+  const pal = on ?? c.palette;
   const R = Math.max(design.w, design.h) * 0.85;
   const dark = pal.look === "dark";
-  const tone = dark ? pal.mark : "#ffffff";
+  const tone = dark ? c.palette.mark : "#ffffff";
   const a = dark ? 0.22 : pal.look === "brand" ? 0.2 : 0.55;
   const corner = shadowOf(pal.ground, dark ? 0.35 : pal.look === "brand" ? 0.22 : 0.07);
   const vignette: DisplayNode = { type: "rect", x: 0, y: 0, w: design.w, h: design.h, fill: { kind: "radial", cx: design.w / 2, cy: design.h * 0.42, r0: Math.min(design.w, design.h) * 0.35, r1: Math.hypot(design.w, design.h) * 0.62, stops: [{ at: 0, color: shadowOf(pal.ground, 0) }, { at: 1, color: corner }] } };
@@ -400,7 +405,8 @@ export function marketingScene(def: MarketingSceneDef): Scene {
         safe: safeArea(design, tileCover(recipe)),
         theme,
         palette: paletteFor(lookId, theme, recipe.brand.colors),
-        pace: paceOf(recipe.controls),
+        // Kinetic's Pro pace wins over the Easy choice.
+        pace: recipe.motion?.pace ?? paceOf(recipe.controls),
         room: Math.max(1.5, recipe.duration - 1.3),
         last,
         wide: design.w / design.h > 1.2,
@@ -408,30 +414,51 @@ export function marketingScene(def: MarketingSceneDef): Scene {
         field: (key, fallback = "") => (recipe.fields[key] ?? fallback).trim(),
       };
       const built = def.build(ctx);
-      const tl: Timeline = timeline(built.events);
-      const settled = Math.min(last, built.events.filter((e) => e.kind !== "camera").reduce((m, e) => Math.max(m, e.start + e.dur), 0));
+      // Kinetic's editor: retimed groups, the motion feel and the camera's clock (the scene as designed without them).
+      const timing = kineticTiming(recipe, def.id, built.events, built.cuts ?? [], last);
+      const tl: Timeline = timeline(timing.events, timing.curves);
+      const settled = Math.min(last, timing.events.filter((e) => e.kind !== "camera").reduce((m, e) => Math.max(m, e.start + e.dur), 0));
       const drift = curve("drift");
-      const P = (t: number) => (id: string) => {
-        const e = tl.byId.get(id);
-        return e ? curve(e.curve)(local(t, e.start, e.start + e.dur)) : 1;
-      };
-      const L = (t: number) => (id: string) => {
-        const e = tl.byId.get(id);
-        return e ? local(t, e.start, e.start + e.dur) : 1;
-      };
+      const P = (t: number) => (id: string) => progress(tl, id, t);
+      const L = (t: number) => (id: string) => linearProgress(tl, id, t);
       const cx = design.w / 2;
       const cy = design.h / 2;
-      const glow = built.background || built.light === false ? () => [] : groundLight(ctx);
+      const clip = clipLayer(input);
+      const glow = built.background || built.light === false || recipe.look?.light === false || clip ? () => [] : groundLight(ctx);
+      const locked = recipe.camera?.move === "locked";
+      const breath = locked ? 0 : (recipe.camera?.breath ?? 1);
+      const extra = extraCamera(recipe, last);
+      const clock = timing.clock;
       const draw = (t: number, home: boolean): DisplayList => {
         const f = built.frame(t, P(t), L(t));
         let nodes = f.nodes;
         if (!home) {
-          const cam = built.camera?.(t) ?? { zoom: 1, x: 0, y: 0 };
-          const z = (built.breath === false ? 1 : 1 - BREATH + BREATH * drift(last > 0 ? Math.min(1, t / last) : 1)) * cam.zoom;
-          const m = multiply(translate(cam.x, cam.y), about(cx, cy, z, cam.roll ?? 0));
+          const tc = clock ? clock(t) : t;
+          const cam = (!locked && built.camera?.(tc)) || { zoom: 1, x: 0, y: 0 };
+          const u = drift(last > 0 ? Math.min(1, tc / last) : 1);
+          let z = (built.breath === false ? 1 : breath === 1 ? 1 - BREATH + BREATH * u : 1 - BREATH * breath + BREATH * breath * u) * cam.zoom;
+          let x = cam.x;
+          let y = cam.y;
+          let roll = cam.roll ?? 0;
+          if (extra) {
+            const o = extra(t, tc, design.w);
+            z *= o.zoom;
+            x += o.x;
+            y += o.y;
+            roll += o.roll;
+          }
+          const m = multiply(translate(x, y), about(cx, cy, z, roll));
           nodes = [group(nodes, { id: "camera", transform: m })];
+        } else if (extra) {
+          // The last frame keeps the camera tracks' values there, so the still and the poster match it.
+          const o = extra(t, t, design.w);
+          if (o.zoom !== 1 || o.x !== 0 || o.y !== 0 || o.roll !== 0) nodes = [group(nodes, { id: "camera", transform: multiply(translate(o.x, o.y), about(cx, cy, o.zoom, o.roll)) })];
         }
-        return { w: design.w, h: design.h, background: built.background ?? ctx.palette.ground, nodes: [...glow(t), ...(f.under ?? []), ...nodes, ...(f.over ?? [])] };
+        const ground = built.background ?? ctx.palette.ground;
+        const list: DisplayList = { w: design.w, h: design.h, background: clip ? CLIP_GROUND : ground, nodes: [...(clip ? clipNodes(recipe, clip, design, ctx.palette.ground, t) : []), ...glow(t), ...(f.under ?? []), ...nodes, ...(f.over ?? [])] };
+        const finish = finishAt(recipe, t);
+        if (finish) list.finish = finish;
+        return list;
       };
       const still = draw(last, true);
       return {

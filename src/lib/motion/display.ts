@@ -4,6 +4,8 @@
  * export and the covers alike. Coordinates are design units (1080 on the frame's short side); the drawer scales.
  */
 
+import type { Finish } from "./finish";
+
 /** A 2D affine matrix [a, b, c, d, e, f] (canvas setTransform order). */
 export type Matrix = [number, number, number, number, number, number];
 
@@ -148,7 +150,21 @@ export interface ImageNode {
   smoothing?: boolean;
 }
 
-export type DisplayNode = GroupNode | RectNode | EllipseNode | PathNode | TextNode | ImageNode;
+/** The person's own clip (Kinetic's video layer): the frame on screen at `time` seconds into the clip, in a box. */
+export interface VideoNode {
+  type: "video";
+  /** The clip's key in the drawer's sources ("clip"). */
+  src: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Seconds into the clip. */
+  time: number;
+  opacity?: number;
+}
+
+export type DisplayNode = GroupNode | RectNode | EllipseNode | PathNode | TextNode | ImageNode | VideoNode;
 
 export interface DisplayList {
   /** Design size. */
@@ -156,7 +172,12 @@ export interface DisplayList {
   h: number;
   background: string;
   nodes: DisplayNode[];
+  /** A grade and grain over the finished frame (absent: as drawn). */
+  finish?: Finish;
 }
+
+/** The clip's node in a list (the video layer is always drawn first), if any. */
+export const videoNodeOf = (list: DisplayList): VideoNode | undefined => (list.nodes[0]?.type === "video" ? list.nodes[0] : undefined);
 
 export const group = (children: DisplayNode[], o: Omit<GroupNode, "type" | "children"> = {}): GroupNode => ({ type: "group", ...o, children });
 

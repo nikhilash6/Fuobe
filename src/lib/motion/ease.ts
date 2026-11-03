@@ -178,3 +178,28 @@ export const CURVES = {
 export type CurveName = keyof typeof CURVES;
 
 export const curve = (name: CurveName): Ease => CURVES[name];
+
+/**
+ * The motion feels Kinetic's editor offers: each swaps a few of the named curves for its own version, and leaves the
+ * rest as authored (move, exit, draw, drift and linear are never swapped, so in-place moves, exits, strokes and the
+ * camera's rest keep their timing). Every swapped curve keeps f(0) = 0 and f(1) = 1.
+ * smooth: the curves as designed. snappy: quicker, firmer arrivals. springy: springs with more overshoot (a pop about
+ * 10 % past its size). steady: even sine in-and-out moves.
+ */
+export const CURVE_SETS: Record<"smooth" | "snappy" | "springy" | "steady", Partial<Record<CurveName, Ease>>> = {
+  smooth: {},
+  snappy: {
+    enter: bezier(0.05, 0.9, 0.1, 1),
+    glide: bezier(0.12, 0.9, 0.2, 1),
+    settle: spring({ stiffness: 320, damping: 32 }),
+  },
+  springy: {
+    enter: spring({ stiffness: 240, damping: 17 }),
+    pop: spring({ stiffness: 380, damping: 23 }),
+    settle: spring({ stiffness: 170, damping: 14.5 }),
+  },
+  steady: { enter: sine.inOut, glide: sine.inOut, settle: sine.inOut, pop: sine.inOut },
+};
+
+/** The curves a feel never swaps. */
+export const FIXED_CURVES: readonly CurveName[] = ["move", "exit", "draw", "drift", "linear"];

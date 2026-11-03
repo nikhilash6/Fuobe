@@ -128,6 +128,7 @@ import { layoutCanvas } from "@/lib/catalog/plan";
 import { getModel } from "@/lib/catalog";
 import type { EditorCanvas } from "@/components/studio/layout-editor";
 import { BOARD_NODE_TYPES, type BoardType } from "./board";
+import { KineticNodeBody } from "./kinetic-node";
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { PATH_PRESETS } from "@/lib/camera-path";
 import { exactDefaults } from "@/lib/exact-orbit";
@@ -528,6 +529,7 @@ function OutputThumb({ o, onOpen, className, large }: { o: OutputFile; onOpen: (
       {o.kind === "video" ? (
         <video
           src={`${o.url}#t=0.1`}
+          poster={typeof o.meta?.poster === "string" ? o.meta.poster : undefined}
           muted
           loop
           playsInline
@@ -1261,6 +1263,25 @@ export function CameraPathFields({ data, onChange, disabled, label }: { data: Ca
 }
 
 /** Camera path: a preset move, or an exact orbit by its numbers, for Fly around nodes to follow. */
+// ---------------------------------------------------------------------------
+// Kinetic: words as motion graphics, rendered in this tab once per row
+
+const KineticNode = memo(function KineticNode({ id, type, data, selected }: NodeProps<FlowNode>) {
+  const v = useNodeView(id);
+  const node = useMemo(() => asNode(id, "kinetic", data), [id, data]);
+  const ports = useMemo(() => inputPorts(node), [node]);
+  return (
+    <NodeShell id={id} type={type as CanvasNodeType} data={data} selected={!!selected} out="video" width={280}>
+      <div className="border-b py-1">
+        {ports.map((p) => (
+          <InPort key={p.id} port={p} count={v.counts[p.id] ?? 0} />
+        ))}
+      </div>
+      <KineticNodeBody id={id} data={data} />
+    </NodeShell>
+  );
+}, sameNodeProps);
+
 const CameraPathNode = memo(function CameraPathNode({ id, type, data, selected }: NodeProps<FlowNode>) {
   const actions = useEditorActions();
   const { readOnly } = useEditorGlobals();
@@ -1706,7 +1727,7 @@ const OutputNode = memo(function OutputNode({ id, type, data, selected }: NodePr
 function SourcePreview({ node }: { node: Source }) {
   const actions = useEditorActions();
   const r = useNodeResults(node.id);
-  if (isGenerator(node)) {
+  if (isGenerator(node) || node.type === "kinetic") {
     if (r.outputs.length) return <OutputThumb o={r.outputs[0].o} onOpen={() => actions.open(node.id, 0)} large />;
     if (r.state !== "idle") return <Results id={node.id} r={r} compact />;
     return <div className="grid h-20 place-items-center rounded-lg bg-muted text-[11px] text-muted-foreground">Not run yet</div>;
@@ -2015,6 +2036,7 @@ export const NODE_TYPES = {
   concat: GeneratorNode,
   restore: GeneratorNode,
   "fly-around": GeneratorNode,
+  kinetic: KineticNode,
   "camera-path": CameraPathNode,
   table: TableNode,
   layout: LayoutNode,

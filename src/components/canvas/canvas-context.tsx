@@ -210,6 +210,13 @@ export function buildViews(
   const reused = new Set(plan.reused.map((r) => r.nodeId));
   const out = new Map<string, NodeView>();
   for (const n of graph.nodes) {
+    // A Kinetic node renders in the browser: its view is what feeds it and what it made (no op, no estimate).
+    if (n.type === "kinetic") {
+      const next: NodeView = { ...EMPTY_VIEW, counts: counts.get(n.id) ?? EMPTY_VIEW.counts, results: results.get(n.id) ?? EMPTY_RESULTS };
+      const old = prev?.get(n.id);
+      out.set(n.id, old && sameView(old, next) ? old : next);
+      continue;
+    }
     if (!isGenerator(n)) continue;
     const d = describe(n.id);
     const next: NodeView = {

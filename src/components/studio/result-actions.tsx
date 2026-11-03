@@ -2,6 +2,7 @@
 
 import {
   ArchiveRestore,
+  LetterText,
   Disc3,
   Layers3,
   ListMusic,
@@ -140,6 +141,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "restore-video": Palette,
   "extend-song": ListMusic,
   "remix-song": Disc3,
+  "remix-kinetic": LetterText,
   "song-stems": Layers3,
   "delete-forever": Trash2,
 };
