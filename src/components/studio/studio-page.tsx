@@ -4,7 +4,7 @@ import { ArrowRight, ArrowUp, Loader2, Upload, Zap } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
@@ -20,6 +20,7 @@ import { migrateRequest } from "@/lib/catalog/replaced";
 import { SoulPresetCards } from "@/components/moodboards/soul-preset-cards";
 import type { StudioCatalog } from "@/lib/studio-catalog";
 import { EXAMPLE_PARAM, exampleFits, exampleKey, type ExampleCard, type ExampleRowData } from "@/lib/examples/types";
+import { ExampleRowSkeleton } from "@/components/examples/example-row-frame";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { ComposerBridgeCtx, useComposerBridge, type ComposerBridge } from "./attachments";
@@ -31,23 +32,10 @@ import { Feed } from "./feed";
 import { applyExample, draftFromGeneration, initialDraft, slot } from "./draft";
 import { PresetUrlCtx, StartRequestCtx, StudioProvider, usePresetUrl, useStudio, useStudioActions, type Draft, type StudioConfig } from "./studio-context";
 
-/**
- * The example cards while their chunk loads (a page reached by a tap): empty covers in the row's place, so the rest of the
- * page draws at once. A `loading` option is what gives a dynamic() its own Suspense boundary: without it the chunk's load
- * suspends the whole page up to the route's skeleton.
- */
-function ExampleCardsPlaceholder() {
-  return (
-    <div aria-hidden className="mx-auto grid w-full max-w-[1000px] grid-cols-2 gap-3 px-4 pb-10 sm:grid-cols-4 sm:gap-4 sm:px-6">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className={cn("aspect-[4/5] rounded-xl bg-muted", i >= 2 && "max-sm:hidden")} />
-      ))}
-    </div>
-  );
-}
-
 // The example cards (and the clip player they bring) are their own chunk: a page with no examples never loads them.
-const ExampleRow = dynamic(() => import("@/components/examples/example-cards").then((m) => m.ExampleRow), { loading: ExampleCardsPlaceholder });
+// The row loads under its own Suspense boundary (StudioExamples), whose fallback is the row's skeleton: the same heading
+// and card shapes, sized from the row itself, so nothing moves when the cards arrive.
+const ExampleRow = lazy(() => import("@/components/examples/example-cards").then((m) => ({ default: m.ExampleRow })));
 const ExampleStrip = dynamic(() => import("@/components/examples/example-cards").then((m) => m.ExampleStrip), { loading: () => null });
 const ExamplesButton = dynamic(() => import("@/components/examples/example-cards").then((m) => m.ExamplesButton), { loading: () => null });
 
@@ -372,7 +360,7 @@ function PromptSuggestions({ suggestions }: { suggestions: string[] }) {
   const model = catalog.getModel(draft.modelId);
   if (!promptShown(config.hidePrompt, preset?.userPrompt, model?.options.promptless)) return null;
   return (
-    <div className="mx-auto mt-4 flex w-full max-w-[760px] min-w-0 flex-wrap justify-center gap-2 px-3 pb-10">
+    <div className="mt-4 flex w-full min-w-0 flex-wrap justify-center gap-2">
       {suggestions.map((s) => (
         <button
           key={s}
@@ -386,17 +374,37 @@ function PromptSuggestions({ suggestions }: { suggestions: string[] }) {
   );
 }
 
+/** The space between the composer (or what sits right under it) and each section below it. */
+const UNDER_COMPOSER = "mt-10 sm:mt-12";
+
+/** How long the row waits for the feed's answer before it shows its cards anyway: a slow feed never leaves grey tiles. */
+const FEED_WAIT_MS = 3000;
+
 /**
  * "Start from an example" under the empty composer (src/lib/examples): each card loads its own files, words and settings
  * into this composer. Hidden while a motion or effect is picked: its own examples are in its card above the composer.
+ * The row fills the composer's column, so its heading and cards line up with the composer. Until the feed has answered
+ * (`ready`, or FEED_WAIT_MS at most) and while the cards' code loads, its skeleton holds the same place.
  */
-function StudioExamples({ row }: { row: ExampleRowData }) {
+function StudioExamples({ row, ready }: { row: ExampleRowData; ready: boolean }) {
   const { draft, config } = useStudio();
   const loader = useContext(ExamplesCtx);
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    if (ready) return;
+    const timer = setTimeout(() => setWaited(true), FEED_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [ready]);
   if (draft.presetId && draft.presetId !== config.preset?.id) return null;
   // An app's page shows its examples in its card above the composer.
   if (config.preset && row.cards.some((c) => c.load.via !== "look")) return null;
-  return <ExampleRow row={row} activeId={loader?.activeId} onPick={(c) => loader?.use(c)} className="px-4 pb-10 sm:px-6" />;
+  const skeleton = <ExampleRowSkeleton row={row} layout="column" className={UNDER_COMPOSER} />;
+  if (!ready && !waited) return skeleton;
+  return (
+    <Suspense fallback={skeleton}>
+      <ExampleRow row={row} activeId={loader?.activeId} onPick={(c) => loader?.use(c)} layout="column" className={UNDER_COMPOSER} />
+    </Suspense>
+  );
 }
 
 /** Once there are results, "Examples" beside the composer opens the cards: a picked motion's or effect's, else the page's. */
@@ -626,13 +634,17 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
         </div>
       </div>
 
-      {/* Hidden, not unmounted, while Live is on: the page around the panel keeps its state. */}
-      <div className={live ? "hidden" : "contents"}>
-        {/* Examples that load into the composer take the suggestions' place: they come first on a phone. */}
-        {!hasItems && config.suggestions && !examples?.cards.some((c) => c.load.via !== "look") && <PromptSuggestions suggestions={config.suggestions} />}
-        {!hasItems && config.signature && <SoulPresetCards />}
-        {/* Only once the feed is known to be empty: a studio with results would show the row, fetch its covers, then drop it. */}
-        {feed.isSuccess && !hasItems && !!examples?.cards.length && <StudioExamples row={examples} />}
+      {/* What sits under the empty composer, in the composer's own column: its suggestions right under it, then each
+          section a clear step below. Hidden, not unmounted, while Live is on: the page around the panel keeps its state. */}
+      <div className={cn("px-4 pb-10 sm:px-6 sm:pb-16", (live || hasItems) && "hidden")}>
+        <div data-under-composer className="mx-auto flex w-full max-w-[760px] min-w-0 flex-col">
+          {/* Examples that load into the composer take the suggestions' place: they come first on a phone. */}
+          {!hasItems && config.suggestions && !examples?.cards.some((c) => c.load.via !== "look") && <PromptSuggestions suggestions={config.suggestions} />}
+          {!hasItems && config.signature && <SoulPresetCards className={UNDER_COMPOSER} />}
+          {/* The cards once the feed has answered (a studio with results would show the row, fetch its covers, then drop
+              it); its skeleton until then, never a blank gap that fills in. */}
+          {!hasItems && !!examples?.cards.length && <StudioExamples row={examples} ready={!feed.isPending} />}
+        </div>
       </div>
 
       {dragging && (

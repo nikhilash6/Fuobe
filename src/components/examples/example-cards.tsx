@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { useIsMobile } from "@/hooks/use-mobile";
 import { exampleKey, type ExampleCard, type ExampleInput, type ExampleMedia, type ExampleRowData } from "@/lib/examples/types";
 import { hasHdStill } from "@/lib/preset-hd";
+import { ROW_GAP, ROW_HEADING, rowColumns, rowSection, rowWidth, type ExampleAspect, type RowLayout } from "./example-row-frame";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 
@@ -22,8 +23,7 @@ import { cn } from "@/lib/utils";
 /** What a card does when tapped. */
 export type ExamplePick = (card: ExampleCard) => void;
 
-/** A card's shape: 4:3, or 3:4 on the vertical studios. */
-export type ExampleAspect = "4/3" | "3/4";
+export type { ExampleAspect };
 
 /** A real cover's still has a 320 px copy beside it (thumbs/), used on small screens, or larger copies (preset-hd.ts). */
 const hasCopies = (src: string) => /^\/previews\/presets\/(peak\/)?[^/]+\.(jpg|webp)\?/.test(src) || hasHdStill(src);
@@ -233,18 +233,27 @@ function gridSizes(n: number): string {
   return "(min-width: 1032px) 240px, (min-width: 640px) 25vw, 50vw";
 }
 
-/** Cards in a grid: two across a phone, four across a desktop (1000 px at most; one or two cards centred, one alone at 360 px). */
-export function ExampleGrid({ cards, activeId, onPick, aspect, className }: { cards: ExampleCard[]; activeId?: string; onPick: ExamplePick; aspect?: ExampleAspect; className?: string }) {
+/**
+ * Cards in a grid: two across a phone, up to four across a desktop. On its own (the Examples sheet) one to three cards
+ * stay centred at a card's width; inside a row (`bare`) the row's frame sets the width, so its heading lines up with it.
+ */
+export function ExampleGrid({
+  cards,
+  activeId,
+  onPick,
+  aspect,
+  bare = false,
+  className,
+}: {
+  cards: ExampleCard[];
+  activeId?: string;
+  onPick: ExamplePick;
+  aspect?: ExampleAspect;
+  bare?: boolean;
+  className?: string;
+}) {
   return (
-    <div
-      className={cn(
-        "grid gap-3 sm:gap-4",
-        // One card: one column, centred, never half a row with the other half empty.
-        cards.length === 1 ? "mx-auto max-w-[360px] grid-cols-1" : "grid-cols-2",
-        cards.length > 3 ? "sm:grid-cols-4" : cards.length === 3 ? "mx-auto max-w-[760px] sm:grid-cols-3" : cards.length === 2 && "mx-auto max-w-[520px]",
-        className,
-      )}
-    >
+    <div data-example-grid className={cn("grid", ROW_GAP, rowColumns(cards.length), !bare && rowWidth(cards.length), className)}>
       {cards.map((c, i) => (
         <ExampleCardView key={c.id} card={c} index={i} active={!!activeId && exampleKey(c) === activeId} onPick={onPick} aspect={aspect} sizes={gridSizes(cards.length)} />
       ))}
@@ -252,12 +261,16 @@ export function ExampleGrid({ cards, activeId, onPick, aspect, className }: { ca
   );
 }
 
-/** A row under a composer or an upload box: its line, and its cards. Look-only cards open their sheet here. */
+/**
+ * A row under a composer or an upload box: its heading on the cards' left edge, and its cards. Look-only cards open
+ * their sheet here. Its frame (example-row-frame.tsx) is the one its skeleton draws while this code loads.
+ */
 export function ExampleRow({
   row,
   activeId,
   onPick,
   aspect,
+  layout = "centred",
   className,
 }: {
   row: ExampleRowData;
@@ -265,6 +278,8 @@ export function ExampleRow({
   /** Loads a card into the page's composer; left out, every card is looked at. */
   onPick?: ExamplePick;
   aspect?: ExampleAspect;
+  /** "column" under a studio's composer (the row fills the composer's column), "centred" as a section of its own. */
+  layout?: RowLayout;
   className?: string;
 }) {
   const heading = useId();
@@ -272,11 +287,13 @@ export function ExampleRow({
   if (!row.cards.length) return null;
   const pick: ExamplePick = (c) => (c.load.via === "look" || !onPick ? setLooking(c) : onPick(c));
   return (
-    <section aria-labelledby={heading} data-examples className={cn("mx-auto w-full max-w-[1000px]", className)}>
-      <h2 id={heading} className="mb-3 text-center text-[12.5px] font-medium text-muted-foreground">
-        {row.heading}
-      </h2>
-      <ExampleGrid cards={row.cards} activeId={activeId} onPick={pick} aspect={aspect} />
+    <section aria-labelledby={heading} data-examples className={cn(rowSection(layout), className)}>
+      <div className={rowWidth(row.cards.length, layout)}>
+        <h2 id={heading} className={ROW_HEADING}>
+          {row.heading}
+        </h2>
+        <ExampleGrid cards={row.cards} activeId={activeId} onPick={pick} aspect={aspect} bare />
+      </div>
       <ExampleSheet card={looking} onOpenChange={(o) => !o && setLooking(null)} />
     </section>
   );
