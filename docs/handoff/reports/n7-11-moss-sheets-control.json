@@ -1,0 +1,121 @@
+{
+  "key": "n7-11-moss-sheets-control",
+  "impl": {
+    "branch": "o/n7-11-moss-sheets-control",
+    "summary": "N7-11 built on top of N7-1/N7-2's layout library and plan (nothing duplicated). Storyboard gets a 'One sheet' option: the whole board is drawn as one MOSS-Image page (multi_panel layout, one object box per panel with its shot), on oss-moss-image (your GPU) or moss-image (fal). The browser shows each panel from the sheet and cuts it out (canvas crop, then upload) when you Animate or Edit it. Following the brief's 'gate behind a GPU test result', the option is shown only to the owner, marked as not yet tested on a GPU, until a result is recorded in ONE_SHEET_GPU_TEST; after that everyone gets it, up to the panel count that result records. Layers gets a new 'Re-render from layers' tool. Each visible layer's rotation-aware bounds, clipped to the canvas, plus its name or prompt become an object or character item. Layers that fill the canvas are named in the caption as the backdrop. OCR lines from the latest whole-picture text detection become text items with their exact words. The job runs this as text-to-image with the layout on the picture's nearest aspect ratio, and the result lands as a new layer on top with the original layers kept underneath. Models: open oss-moss-image; cloud moss-image (default), ideogram-4-5 and flux-3. The existing planLayout compiles the layout per model and turns prompt expansion and the enhancer off. The colour / depth control part was not built: it needs the ComfyUI pin bump.",
+    "built": [
+      "src/lib/catalog/storyboard.ts: SHEET_MODELS, SHEET_ASPECTS, SHEET_GUTTER, ONE_SHEET_GPU_TEST (null) + sheetPanelLimit(owner), sheetGrid (picks the cols/rows and sheet aspect that give the panels the most area, keeps each panel at its own shape, centres a short last row), sheetCrop/sheetCrops (whole pixels, rounded inward), sheetPanelStyle (CSS background crop), sheetCaption, planOneSheet (one FrameRequest with params.extra.layout and frame.sheet; refuses references)",
+      "src/lib/catalog/types.ts: GenerationRequest.frame.sheet {cols, rows, aspect, panels[{scene, box}]}",
+      "src/server/storyboard.ts: body field sheet:boolean; boardFrames() routes estimate and create to planOneSheet (a look is refused); estimates still go through priceAs on the existing route",
+      "src/components/storyboard-view.tsx: SheetPill ('Frame by frame' / 'One sheet'), shown only when sheetPanelLimit > 0. The owner check waits for hydration. With One sheet on, references, look, partner and next-scene pickers are hidden, the count is capped, and the price reads 'N panels · 1 sheet'. The intro line and hint describe the sheet, and the board view shows SheetPanels (panel tiles cropped from the sheet; Animate and Edit cut the panel out in the browser, upload it and open /video or /edit)",
+      "src/lib/layers.ts: LayerTool 'rerender', TOOL_LABELS, TOOL_MODELS.rerender, APPLIES_TO_DOC, settings.layout, RERENDER_MAX_LAYERS=32 / RERENDER_MAX_TEXT=16, PlacedText, layersLayout(doc, text, words)",
+      "src/server/layers.ts: JobInputSchema tool 'rerender' + settings.layout; jobSteps case 'rerender' (readLayout, at most 48 boxes, t2i with the layout, nearestAspect on a log scale); nearestAspect exported",
+      "src/components/layers: Re-render tool in the rail (RerenderTool in tools.tsx: counts of layers, text lines and backdrop; optional description; 'Read the text first' runs text-detect on the whole picture; a 'Keep the text word for word' switch; model picker; price; run). editor-context gets ToolId and TOOL_FOR_JOB. layers-editor no longer renders or uploads a picture for rerender. apply.ts lands the result as a 'Re-render' layer covering the canvas",
+      "tests/moss-sheets.test.ts (19 tests), tests/layers.test.ts OPS map + rerender: ['t2i'], tests/e2e/moss-sheets.mjs"
+    ],
+    "tests": {
+      "targeted": "tests/moss-sheets.test.ts 19/19. layers*, storyboard*, layout*, public-signup* all pass (228 tests in that run before the layers.test OPS fix, then layers.test 42/42)",
+      "browser": "node tests/e2e/moss-sheets.mjs against pnpm dev -p 3461 (FUOBE_DEMO_MODE=on, own data dir), passed. Storyboard at 1440 and 390 px in light and dark: One sheet renders, is reached by keyboard and by tap at 390 px, hides references and the next-frame picker, shows 'Placeholder · free' and '4 panels · 1 sheet', and nothing scrolls sideways. A 4-panel sheet was generated and its panels showed as frames with Animate and Edit. Layers at 1440 px in light and dark: the tool is reached by keyboard and lists 3 layers plus 1 backdrop after a demo decomposition; the run landed the 'Re-render' layer on top. Console errors failed the run; one hydration mismatch it caught was fixed. Server stopped and .next deleted",
+      "final": "npx next typegen exit 0. pnpm typecheck exit 0 (run with NODE_OPTIONS=--max-old-space-size=6144; the default heap ran out of memory once while ComfyUI was starting). pnpm lint exit 0 (3 warnings, none in files this package changed). Full vitest --maxWorkers=2 exit 1: 8 failed / 5074 passed. 6 of the 8 are the known rule-8 failures (comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack). The other 2, picker-covers and preset-covers, are rule-12 timeouts and pass when rerun alone (36/36). No failures belong to this package"
+    },
+    "left": [
+      "Render quality is unverified: no GPU and no fal key. One-sheet panels at 1K about 1 MP (each of 8 panels comes out around 300 px), how well MOSS follows multi_panel boxes, and how Ideogram 4.5 / FLUX.3 place layer boxes all wait for a GPU render or a fal key.",
+      "One sheet stays owner-only until someone renders it on a GPU and sets ONE_SHEET_GPU_TEST {date, gpu, maxPanels} in src/lib/catalog/storyboard.ts.",
+      "'Make the film' is not offered for a one-sheet board, because the film route chains frame generations and a sheet is one generation. Filming a sheet would need the crops stored as frames on the server.",
+      "Retrying a failed sheet re-posts through /api/generations, whose schema drops request.frame (as it already does for ordinary storyboard frames), so the retried picture shows as a plain frame.",
+      "Layers' editor is desktop-only: phones get the existing read-only view, so the Re-render tool has no 390 px or touch check.",
+      "Not built (owner's or integrator's call): the ComfyUI pin bump to >= v0.43.1 (086099f5; requires comfyui-workflow-templates==0.11.98 and a full library re-validation). After it, the Sketch editor's draw mode can feed MOSS colour regions or a depth map through core MOSSImageControl with Comfy-Org's loras/moss_image_color_depth_control (0.313 GB, darask0, Apache-2.0; training depth from Depth Anything V2 Large, CC-BY-NC-4.0, information only). That needs a new graph (scripts/comfy entry plus model-pins.json pin) and a GPU test. There is no hosted equivalent, so the cloud keeps the box layout.",
+      "No new ComfyUI graph, node pack, migration or route: no changes to requirements.json, packs.json, model-pins.json, STUDIO_ROWS or the public sign-up tables. Both features use existing routes (POST /api/storyboards, /api/storyboards/estimate, /api/layers/:id/jobs), which already follow the guest/account rules."
+    ],
+    "docsNotes": [
+      "FEATURES/STATUS: Storyboard 'One sheet' (MOSS-Image on both engines; owner-only and marked as not yet tested on a GPU until a GPU result is recorded; panels cut out in the browser). Layers 'Re-render from layers' (MOSS-Image on both engines, plus Ideogram 4.5 and FLUX.3 in the cloud; layer boxes and OCR text become a layout).",
+      "Brief out of date: the coordinator said n7-8 (layouts everywhere) was merged into the base, but origin/o/n7-8-layouts-everywhere is not an ancestor of origin/claude/fuobe-parity-4 at 3afb3bce, which is what this branch is built on. This package touches none of n7-8's files and stays additive. rotatedBounds is at L512 in src/lib/layers.ts, not L479.",
+      "Already there before this package: compileMoss with canvas multi_panel, readLayout, planLayout (compile at the render size, expansion and enhancer off, exact size on both engines), oss-moss-image / moss-image in the catalog, rotatedBounds, the text-detect / OCR pipeline (textBlocksFrom, placeTextBlocks)."
+    ],
+    "blocked": ""
+  },
+  "review": {
+    "findings": [
+      {
+        "severity": "medium",
+        "file": "src/server/layers.ts",
+        "line": 385,
+        "title": "Re-render: the backdrop is dropped from the prompt whenever the person types a description",
+        "detail": "layersLayout(doc, text, words) builds the caption as '<words>. Behind everything: <backdrop>.' when words are given, and the tool shows '· N backdrop layer described in words'. But RerenderTool sends prompt: words.trim(), and jobSteps uses `prompt || layout.summary.caption`. planLayout then replaces the draft caption with that prompt. So the 'Behind everything: …' part never reaches the model. Verified with a scratch probe: a full-canvas layer named 'a beach at dusk' plus words 'warm photo' gives the draft caption 'warm photo. Behind everything: a beach at dusk.', but the planned moss-image prompt contains no 'beach'. Fix: let the layout's caption win for rerender (send no separate prompt, or have jobSteps use layout.summary.caption when the layout carries one), and add a test that a backdrop survives typed words."
+      },
+      {
+        "severity": "low",
+        "file": "src/lib/layers.ts",
+        "line": 1230,
+        "title": "A second re-render treats the first result as the backdrop named 'Re-render'",
+        "detail": "apply.ts lands the result as a visible, opaque, full-canvas node named 'Re-render', and its prompt goes on the revision, not on node.prompt. On the next run layersLayout counts it as a backdrop (area >= 0.9). 'Re-render' is not in GENERIC_NAME, so the caption says 'Behind everything: Re-render.' and the status line counts an extra backdrop layer. That layer also hides every layer the run boxes. Either skip earlier re-render layers (or every hidden-by-cover result) or add 're-render' to GENERIC_NAME."
+      },
+      {
+        "severity": "low",
+        "file": "src/lib/layers.ts",
+        "line": 1236,
+        "title": "A sliver of a layer left on the canvas fails the whole re-render with 'Box 1 has no size: draw it again'",
+        "detail": "intersect() keeps any positive overlap, but frac() rounds to 1e-6, so a layer whose on-canvas part is thinner than about 1e-6 of the canvas produces a zero-width box. validateLayout then refuses the run with a message that makes no sense in Layers. Verified with a probe: a 4000 px canvas with a layer at x=3999.9999 gives box [1,0,1,0.0125] and 'Box 1 has no size: draw it again'. This is rare, but the fix is cheap: drop boxes under about 1 px in layersLayout."
+      },
+      {
+        "severity": "low",
+        "file": "src/components/storyboard-view.tsx",
+        "line": 379,
+        "title": "A failed or cancelled sheet's header says 'on the way'",
+        "detail": "The header reads `${done ? 'done' : 'on the way'}`, and done counts only succeeded generations. A failed or cancelled sheet therefore shows 'N panels on one sheet · on the way' next to the FailedTile. It should say failed when first.status is failed or canceled. Retrying, as the implementer noted, re-posts through /api/generations, whose schema drops request.frame, so the retried sheet shows as a plain frame."
+      },
+      {
+        "severity": "low",
+        "file": "src/server/storyboard.ts",
+        "line": 89,
+        "title": "The One sheet gate and the panel cap are enforced only in the browser",
+        "detail": "sheetPanelLimit / ONE_SHEET_GPU_TEST only hide the pill and cap the counter in the UI. POST /api/storyboards and /estimate accept sheet:true with up to MAX_FRAMES panels from any caller allowed to reach them. Today this is harmless, because POST /api/storyboards is a library change and so owner-only (tests/public-signup.test.ts storyboards family). Once a GPU result is recorded, though, the recorded maxPanels is not enforced server-side. planOneSheet could clamp to sheetPanelLimit(true) instead. Also, after a test with maxPanels < 8, manual mode silently drops scenes past the limit that were written before One sheet was picked (filled.slice(0, sheetLimit)) without saying so."
+      }
+    ],
+    "checks": {
+      "diff_reviewed": "git diff 3afb3bce..HEAD (4 commits, 13 files): src/lib/catalog/storyboard.ts, types.ts, src/lib/layers.ts, src/server/layers.ts, src/server/storyboard.ts, src/components/storyboard-view.tsx, src/components/layers/{apply,editor-context,layers-editor,tools}.tsx, tests/moss-sheets.test.ts, tests/layers.test.ts, tests/e2e/moss-sheets.mjs. Traced: planGeneration -> planLayout (layout compiled at the render size, enhancePrompt off, image_size / width-height set); layoutCanvas and IMG_AR versus SHEET_ASPECTS (all 10 accepted by oss-moss-image and fal moss-image); the film button is hidden for sheet boards (frames.length is 1); /video?image= and /edit?image= deep links match the existing FrameTile.",
+      "scratch_probe": "Vitest probe in the scratchpad (repo untouched). Every panel count 1-8 at 16:9, 9:16, 1:1, 21:9, 4:3 and auto on both engines plans without error (8 x 16:9 gives a 2x4 grid on a 4:5 sheet at 912x1152, prompt 1387 chars). A maximal rerender (32 layers + 16 text lines) plans on moss-image, oss-moss-image, ideogram-4-5 and flux-3 (prompts 6-10.6k chars; fal/Replicate prompt limits are unverified). The probe confirmed the backdrop-dropped and sliver-box findings.",
+      "public_signup": "No new routes. POST /api/storyboards is in the storyboards library family (owner-only), /api/storyboards/estimate is in ESTIMATES (priceAs), and Layers jobs are LIBRARY_CHANGES for accounts. Rerender reads no input file (t2i), so no tenant or account-inputs path is involved. No new model, graph, pack or LoRA, so no licence, requirements or STUDIO_ROWS changes are needed (neither /storyboard nor /layers has a pre-flight row on the base, which is a pre-existing gap). No Higgsfield use, no committed media.",
+      "targeted_vitest": "tests/moss-sheets, layers*, storyboard*, layout*, public-signup*: 13 files, 247/247 passed",
+      "typecheck": "npx next typegen exit 0; NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck exit 0",
+      "lint": "eslint on every changed file exit 0",
+      "full_vitest": "The one allowed run (FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2) was cut off by the usage-limit interruption before it printed a summary. It was not rerun, because of the one-full-run limit. The failures it reported before the cut were only the rule-8 known ones: soul-runs (2), dop-originals, preset-featured, comfy-reuse and split-soundtrack. The implementer's full run reported 8 failures: those 6 plus picker-covers and preset-covers, which are rule-12 timeouts.",
+      "browser": "Not rerun by the reviewer. Reviewed tests/e2e/moss-sheets.mjs, which the implementer ran: Storyboard at 1440 and 390 in light and dark, keyboard and tap, no sideways scroll, and it fails on console errors including hydration. Layers was checked at 1440 only, because the editor is desktop-only and phones get the read-only view."
+    },
+    "verdict": "approve with fixes: the build matches the brief (One sheet on oss-moss-image / moss-image, gated to the owner until a GPU result is recorded; Re-render from layers on MOSS on both engines plus Ideogram 4.5 / FLUX.3 in the cloud; the colour / depth control is correctly left out and what it needs is recorded). Fix the medium finding before merge: typed words drop the backdrop description from the re-render prompt. The low findings are polish."
+  },
+  "fix": {
+    "applied": [
+      "MEDIUM (src/server/layers.ts): when the person typed words, Re-render dropped the backdrop from the prompt. The cause was that jobSteps used `prompt || layout.summary.caption`. The new rerenderCaption(caption, prompt) makes the layout's caption win: the browser builds that caption from the typed words plus 'Behind everything: <backdrop>'. If words come in beside a caption that doesn't already start with them (an API caller), they are put in front of it, so neither the words nor the backdrop is lost. Test: a full-canvas 'a beach at dusk' layer plus the words 'warm photo' gives the request prompt 'warm photo. Behind everything: a beach at dusk.' on oss-moss-image, moss-image, ideogram-4-5 and flux-3, and the planned prompt contains 'a beach at dusk'. Also covers rerenderCaption's edge cases. The existing assertion for a typed prompt beside an auto caption was updated to match.",
+      "LOW (src/lib/layers.ts): a second re-render counted the first result as a backdrop named 'Re-render'. layersLayout now skips any node whose active revision label is TOOL_LABELS.rerender. 're-render' is added to GENERIC_NAME, so a renamed or copied one reads as 'a picture element'. RerenderTool now sends TOOL_LABELS.rerender as the job label instead of a literal string. Test added.",
+      "LOW (src/lib/layers.ts): a sliver of a layer on the canvas failed the whole run with 'Box 1 has no size'. layersLayout now keeps a layer or text box only when its part on the canvas is at least 1 px each way. Test: a layer at x=399.9999 on a 400 px canvas and a text box 0.5 px wide are both dropped, and the job plans without an error.",
+      "LOW (src/components/storyboard-view.tsx, src/lib/catalog/storyboard.ts): a failed or cancelled sheet's header said 'on the way'. The new sheetState(status) returns done, failed, cancelled or on the way, and the header uses it. Test added.",
+      "LOW (src/lib/catalog/storyboard.ts): the panel cap was enforced only in the browser. planOneSheet(input, test = ONE_SHEET_GPU_TEST) now refuses more panels than sheetPanelLimit(true, test), with 'A one-sheet board has at most N panels…', and refuses everything when the recorded test allows 0. Today nothing changes, because no test is recorded and the owner gets MAX_FRAMES. Test added with a recorded 6-panel result."
+    ],
+    "rejected": [
+      "Part of LOW #5: when a recorded GPU test allows fewer than 8 panels, manual mode silently drops scenes past the limit (filled.slice(0, sheetLimit)). Not changed: this can't happen until ONE_SHEET_GPU_TEST is set, and the owner today gets all 8. Recorded in 'left'.",
+      "Part of LOW #4: a retried sheet re-posts through /api/generations, whose schema drops request.frame. Not changed: this already happens for ordinary storyboard frames, and fixing it means changing the shared generations schema (a recipe-fidelity hot file). Already recorded by the implementer."
+    ],
+    "checks": {
+      "setup": "Worked in /home/user/Fuobe on o/n7-11-moss-sheets-control, as the coordinator directed. The branch is checked out there, so a separate worktree for it could not be added. The branch lists only this package's 4 commits plus 2 fix commits. claude/fuobe-parity-4 is not an ancestor, and the base was NOT merged, per the coordinator's instruction.",
+      "typegen": "npx next typegen exit 0",
+      "typecheck": "NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck exit 0",
+      "lint": "pnpm lint exit 0 (3 warnings, none in changed files)",
+      "targeted_vitest": "tests/moss-sheets.test.ts 24/24. Together with layers*, storyboard*, layout* and public-signup*: 13 files, 252/252, exit 0",
+      "full_vitest": "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2 exit 1: 7 failed / 5080 passed / 4 skipped. 6 are known rule-8 failures: soul-runs x2, dop-originals, preset-featured, comfy-reuse, split-soundtrack. The 7th, preset-covers, is a rule-12 timeout and passes alone (11/11). tests/library.test.ts also reported an afterAll hook timeout under load while all 36 of its tests passed, and it passes alone (36/36). No failure belongs to this package.",
+      "browser": "Not rerun: the changes are a header string, server and library logic, and a job label, all covered by unit tests.",
+      "tree": ".next deleted; git status clean; nothing pushed"
+    },
+    "finalSummary": "Fixed the medium finding: typed words no longer drop the backdrop from the Re-render prompt. All four low findings were confirmed and fixed (the UI-only half of #5 is deferred), each with a test in tests/moss-sheets.test.ts. Open engine (your GPU): One sheet on oss-moss-image and Re-render on oss-moss-image are built and plan correctly; render quality is unverified because there is no GPU. Cloud: One sheet on fal moss-image and Re-render on moss-image, ideogram-4-5 and flux-3 are built and plan correctly; not run, because there is no fal key. Public sign-up: guests browse read-only. POST /api/storyboards and Layers jobs are owner-only library changes (403 for accounts). The estimate goes through priceAs. One sheet stays owner-only until a GPU result is recorded, and that recorded panel count is now also held on the server. No routes, graphs, packs or migrations were added.",
+    "left": [
+      "Merge claude/fuobe-parity-4 into the branch (the coordinator's job; the base is not an ancestor now).",
+      "Render quality on a GPU or with a fal key: how well MOSS follows the multi_panel boxes, panel resolution, and how Ideogram 4.5 and FLUX.3 place the layer boxes.",
+      "Set ONE_SHEET_GPU_TEST after a GPU render. If its maxPanels is under 8, make manual mode say when scenes past the limit are dropped instead of slicing them silently.",
+      "A retried sheet comes back as a plain frame, because /api/generations drops request.frame.",
+      "'Make the film' is not offered for a one-sheet board.",
+      "ComfyUI pin bump (>= v0.43.1) and the MOSS colour/depth control: not built; needs the owner's OK and a GPU test.",
+      "The first fix commit includes the whole updated test file, so its storyboard tests only pass from the second commit on."
+    ],
+    "blocked": ""
+  }
+}

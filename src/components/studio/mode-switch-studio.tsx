@@ -17,6 +17,7 @@ import {
   VIDEO_COLOR_MATCH_STUDIO,
   VIDEO_DEPTH_STUDIO,
   VIDEO_EXPORT_STUDIO,
+  VIDEO_KEY_STUDIO,
   VIDEO_MATTE_STUDIO,
   VIDEO_RELIGHT_STUDIO,
   VIDEO_UPSCALE_STUDIO,
@@ -35,6 +36,7 @@ import { SplitSoundtrackTool } from "@/components/audio-tools/split-tool";
 import { RemoveDialogueTool } from "@/components/audio-tools/remove-dialogue-tool";
 import { CleanVoiceTool } from "@/components/audio-tools/clean-voice-tool";
 import { DesignVoiceTool } from "@/components/audio-tools/design-voice-tool";
+import { SpeechEditTool } from "@/components/audio-tools/speech-edit-tool";
 import { ModeStudio, ModeTabs } from "./mode-studio";
 import type { StudioConfig } from "./studio-context";
 
@@ -53,6 +55,7 @@ const CONFIGS: Record<HubKind, Record<string, StudioConfig>> = {
   },
   "video-tools": {
     matte: VIDEO_MATTE_STUDIO,
+    "green-screen": VIDEO_KEY_STUDIO,
     relight: VIDEO_RELIGHT_STUDIO,
     depth: VIDEO_DEPTH_STUDIO,
     join: JOIN_CLIPS_STUDIO,
@@ -60,7 +63,7 @@ const CONFIGS: Record<HubKind, Record<string, StudioConfig>> = {
   },
 };
 
-/** Modes that are their own tool rather than a composer studio (Translate & dub, Loop / extend, Join, Split soundtrack, Clean up voice, Design a voice, Remove object, Remove dialogue, Evolution, Restore & colourise, Captions, Trim). */
+/** Modes that are their own tool rather than a composer studio (Translate & dub, Loop / extend, Join, Split soundtrack, Clean up voice, Design a voice, Edit speech, Remove object, Remove dialogue, Evolution, Restore & colourise, Captions, Trim). */
 const TOOLS: Partial<Record<HubKind, Record<string, (p: { tabs: React.ReactNode }) => React.ReactNode>>> = {
   audio: {
     translate: ({ tabs }) => <DubStudio tabs={tabs} />,
@@ -69,6 +72,7 @@ const TOOLS: Partial<Record<HubKind, Record<string, (p: { tabs: React.ReactNode 
     split: ({ tabs }) => <SplitSoundtrackTool tabs={tabs} />,
     clean: ({ tabs }) => <CleanVoiceTool tabs={tabs} />,
     design: ({ tabs }) => <DesignVoiceTool tabs={tabs} />,
+    "edit-speech": ({ tabs }) => <SpeechEditTool tabs={tabs} />,
   },
   "video-tools": {
     "remove-object": ({ tabs }) => <RemoveObjectTool tabs={tabs} />,

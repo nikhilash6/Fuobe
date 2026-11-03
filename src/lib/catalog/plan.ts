@@ -1,4 +1,5 @@
 import { FORMAT_INFO, formatList } from "@/lib/av/formats";
+import { keyFormatValues } from "@/lib/av/keying";
 import type {
   Engine,
   GenerationRequest,
@@ -26,6 +27,9 @@ import { isInstrumental, lyricsOf, lyricsProblem, LYRICS_PARAM, promptLyricsProb
 import { presetRoutes } from "./preset-recipe-routes";
 
 export { pricingAt } from "./promo";
+
+/** Operations that make a video from words and stills only: an attached clip has no place in them. */
+const MAKES_FROM_STILLS = new Set<Operation>(["t2v", "i2v", "flf2v", "keyframes", "ref2v", "avatar"]);
 
 /** Infer the operation from what the user attached. */
 export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op" | "inputs" | "params">): Operation {
@@ -238,7 +242,7 @@ const PROMPTLESS = new Set<Operation>([
   "concat", "frame", "color-match", "finalize", "reframe", "dialogue", "voice-change", "dub", "bg-remove-video", "depth-video", "upscale-image", "upscale-video", "bg-remove",
   "interpolate", "v2a", "face-swap", "motion-transfer", "lipsync", "avatar",
   // round 3: tools that work from their inputs (open caption burn-in takes timed lines as its prompt and says so when they're missing)
-  "trim", "transcribe", "mux", "separate-audio", "enhance-voice", "layers", "image-to-3d", "captions", "text-layers", "vectorize", "level",
+  "trim", "transcribe", "mux", "separate-audio", "enhance-voice", "speech-edit", "layers", "image-to-3d", "captions", "text-layers", "vectorize", "level",
   // av-tools: the dub voice track (clips placed on the video's timeline)
   "timeline",
   // round 4: tools that work from their inputs (removing an object needs a prompt only on models that read one)
@@ -461,7 +465,22 @@ export function planGeneration(
   } else if (params.multiShot === "auto" && model.options.multiShot?.mode === "prompt") {
     prompt = `${prompt.replace(/[.\s]+$/, "")}. Multi-shot sequence: tell it in several distinct shots with clean cuts between them.`;
   }
+  const inferred = op === undefined;
   op = op ?? inferOperation(model, req);
+  if (model.kind === "video" && inferred) {
+    // What the run would drop without a word: a clip on an operation that makes a new video from words and stills (MiniMax H3
+    // in Lipsync & avatars makes a new talking clip, it doesn't re-sync one), or reference clips and sound beside an end frame.
+    if (req.inputs?.video && MAKES_FROM_STILLS.has(op)) {
+      throw new Error(
+        routesFor(model, "avatar").length && !routesFor(model, "lipsync").length
+          ? `${model.name} makes a new talking video from a portrait and the voice; it doesn't re-sync an existing clip. Add a portrait instead of the video, or pick another model`
+          : `${model.name} can't take a video here. Remove it, or pick another model`,
+      );
+    }
+    if (op === "flf2v" && ((req.inputs?.videos?.length ?? 0) || (req.inputs?.audios?.length ?? 0))) {
+      throw new Error("Reference clips and sound can't go with an end frame. Remove the end frame, or the clips and sound");
+    }
+  }
   // Reference clips and video elements on a model that bills them with the output (Kling 4.0, Pricing.clipInput): priced
   // at the least they bill (twice the output) until the server reads their length (params.clipSeconds).
   if (model.pricing?.clipInput && req.inputs?.videos?.length && params.clipSeconds === undefined) params = { ...params, clipSeconds: 0 };
@@ -535,6 +554,7 @@ export function planGeneration(
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");
   if (op === "voice-design" && !params.voiceDescription?.trim()) throw new Error("Describe the voice you want");
+  if (op === "speech-edit" && !(Array.isArray(params.extra?.speechWindows) && params.extra.speechWindows.length)) throw new Error("Edit the words, or pick a range and an effect");
   if (model.options.motionPaths && !(params.extra?.motionPaths as { paths?: unknown[] } | undefined)?.paths?.length) {
     throw new Error(`Draw on the start frame — ${model.name} moves things along the paths you draw`);
   }
@@ -732,8 +752,16 @@ function checkVideoToolOptions(model: ModelDef, op: "bg-remove-video" | "depth-v
     const clicked = !!params.points?.length && routesFor(model, op).some((r) => !!r.map?.points);
     if (o.keepsNamed && !prompt && !clicked) throw new Error("Say what to keep, e.g. “the dog” or “the woman in red”");
     const outputs = o.matteOutputs ?? ["cutout"];
+    // ProRes 4444 and EXR carry the cut-out with its alpha (CorridorKey, VRMBG 3.0 on your GPU): not the mask or the foreground.
+    if (params.format && o.formats?.length) keyFormatValues(params.format, params.matteOutput);
     if (params.matteOutput && !outputs.includes(params.matteOutput)) {
-      throw new Error(params.matteOutput === "matte" ? `${model.name} makes the cut-out only — pick BiRefNet or SAM for an alpha mask` : `${model.name} makes the alpha mask only — pick BiRefNet for a cut-out video`);
+      throw new Error(
+        params.matteOutput === "foreground"
+          ? `${model.name} doesn't make a clean foreground — CorridorKey in Green screen does`
+          : params.matteOutput === "matte"
+            ? `${model.name} makes the cut-out only — pick BiRefNet or SAM for an alpha mask`
+            : `${model.name} makes the alpha mask only — pick BiRefNet for a cut-out video`,
+      );
     }
     return;
   }
@@ -823,6 +851,7 @@ const NEEDS: Partial<
   transcribe: { oneOf: ["audio", "video"], msg: "Add the audio or video to transcribe" },
   "separate-audio": { oneOf: ["audio", "video"], msg: "Add the audio or video to split" },
   "enhance-voice": { oneOf: ["audio", "video"], msg: "Add the audio or video to clean" },
+  "speech-edit": { oneOf: ["audio", "video"], msg: "Add the recording to edit" },
   level: { audio: true, msg: "Add the audio to level" },
   // round 4
   "remove-object": { video: true, msg: "Add the video to remove something from" },

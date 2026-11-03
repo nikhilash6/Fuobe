@@ -97,7 +97,7 @@
 // segment per caption cue before submitting), "timeline", "videos" / "audios" (one loader per clip in inputs.videos / audios),
 // optionalModels (files a model control can pick instead of the graph's own,
 // listed in the manifest with optional: true so missing-model help can name their download),
-// packs (node packs the validation server lacks, see PACK_CLASSES; listed in customNodes), modelUrls (a file's
+// runtimeNodes (classes the app adds per run, e.g. expandH3References' clip loaders, counted as the graph's for its packs), packs (node packs the validation server lacks, see PACK_CLASSES; listed in customNodes), modelUrls (a file's
 // download at a pinned revision for this workflow, over KNOWN_MODELS).
 // Keys added with Genjutsu's Character swap (O5, docs/research/openjutsu-6.md). * = the provider fills it:
 //   quality*                              (H3 PrepareVideo resolution "480" | "768": params.resolution 480p / 768p)
@@ -130,6 +130,9 @@
 // Entry field requiredModels: files a loader reads by a name with no extension (DBSLoader's model folder), listed in the
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
+// Keys added with Green screen (nm10-keying). * = the provider fills it:
+//   despill                               (CorridorKey2 despill_strength 0-1, 0.5 = Corridor's default; params.extra.despill)
+//   format*, profile*                     (the cut-out's VHS_VideoCombine: video/webm + yuva420p, or video/ProRes + 4444 for params.format prores_4444)
 // Keys added with Clean up voice (NVIDIA RE-USE, ComfyUI-RE-USE). * = the provider fills it:
 //   reuseModel*                           (REUSELoader model: the file for params.extra.reuseModel voice | laughter, refused in words when
 //                                          GET /models/reuse doesn't list it)
@@ -147,6 +150,10 @@
 //   draftSize*                            (OpenH3RegenPrepareDraft's size: "768p (1344x768)" for H3 drafts, "576p (1024x576)" for other
 //                                          models, whatever the shape: the pack upscales to 16:9 or 9:16 only; regenerate.ts draftSizeFor)
 //   startSigma                            (OpenH3RegenSigmas start noise: the Creativity control, 0 = the release 0.909 grid)
+// Keys added with the NVIDIA RTX Video nodes (nm10-rtx-video, docs/research/new-models-10.md §6), a model control (params.extra):
+//   rtxQuality                            (RTX Video Super Resolution quality: ULTRA | HIGHBITRATE_ULTRA …; Frame Generation mode: LOW | MEDIUM | HIGH)
+// Entry field gpu: the card a graph's nodes need, which the GPU pre-flight checks by the card's name: "nvidia-rtx" (an NVIDIA
+// RTX card) or "nvidia-rtx-40" (RTX 40 series or later). The manifest and requirements.json carry it.
 
 import fs from 'node:fs';
 
@@ -211,10 +218,19 @@ export const CUSTOM_NODE_REPOS = {
   // Apache-2.0 code, release v2 (adapter_v12). Not on the validation server (needs transformers >= 5.17; the pinned
   // ComfyUI's venv has 5.22.1).
   'zen-image-edit-comfyui': 'https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d',
+  // nm10-rtx-video: Comfy-Org's NVIDIA VFX nodes 0.2.1 (Apache-2.0; registry comfyui_nvidia_rtx_nodes) over NVIDIA's
+  // nvidia-vfx runtime (RTX Video SDK, NVIDIA Software License Agreement). An NVIDIA RTX card only (frame generation: RTX 40
+  // or later) and a CUDA PyTorch: install-comfyui.sh adds it on an NVIDIA RTX host only; never on the validation server.
+  ComfyUI_Nvidia_VFX_Nodes: 'https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40',
   // nm10-voice-design: Design a voice. 1038lab's Qwen3-TTS nodes (GPL-3.0 code, Apache-2.0 weights) and Saganaki22's VoxCPM2
   // nodes (Apache-2.0). Neither is on the validation server; both download their weights from Hugging Face on first run.
   'ComfyUI-QwenTTS': 'https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293',
   'ComfyUI-VoxCPM2': 'https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f',
+  'ComfyUI-CorridorKey2': 'https://github.com/hashu786/ComfyUI-CorridorKey2/tree/d1228b68796786acee92b6497f72a60d70d1a844',
+  // nm10-speech-edit: Tencent AuK's own ComfyUI nodes (MIT), the comfyui/ComfyUI-AuK folder of its repository. Not on the
+  // validation server (the auk package and ~19 GB of weights): its graphs are checked against the node list read from
+  // nodes.py at this commit (tests/speech-edit-comfy.test.ts).
+  'ComfyUI-AuK': 'https://github.com/Tencent-Hunyuan/AuK/tree/0d40366b1039e37c6cad008ab4713f6ad6d954b7/comfyui/ComfyUI-AuK',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -239,8 +255,14 @@ export const PACK_CLASSES = {
   // Live edit's nodes (fuobe_live.py), which Fuobe writes into custom_nodes itself.
   'fuobe-live': /FuobeLive$/,
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
+  ComfyUI_Nvidia_VFX_Nodes: /^RTX(VideoSuperResolution|TrueHDR|VideoFrameGeneration)$/,
   'ComfyUI-QwenTTS': /^AILab_Qwen3TTS(VoiceDesign|VoiceClone|CustomVoice)(_Advanced)?$/,
   'ComfyUI-VoxCPM2': /^VoxCPM2_(TTS|Clone)$/,
+  // Green screen and fine hair (nm10-keying): hashu786's CorridorKey 2.0 nodes, and ComfyUI-RMBG 3.3.0's new nodes (neither
+  // is on the validation server at these commits, so their definitions come from the packs' source at the pinned commits).
+  'ComfyUI-CorridorKey2': /^CorridorKey2(RenderToDisk)?$/,
+  'ComfyUI-RMBG': /^AILab_(VRMBG|FeyNoBg)$/,
+  'ComfyUI-AuK': /^AuK(ModelLoader|GenerateEdit)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -329,6 +351,10 @@ export const KNOWN_MODELS = {
   'minimax_h3_fl2va_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors' },
   'minimax_h3_video_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors' },
   'minimax_h3_turbo_v4_step600_ema.safetensors': { folder: 'loras', url: 'https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/43a74557ac3f6539db8e0f2a959d03feb7a81480/minimax_h3_turbo_v4_step600_ema.safetensors' },
+  // Pika H3 Flex (nm10-pika-flex): Pika's two Comfy-format BF16 adapters (1.96 GB each; MiniMax H3 Community License, Model Derivatives,
+  // Copyright 2026 Mellis, Inc.; keep Pika's NOTICE), at the model card's revision 3ff16644. SHA-256 in workflows/comfyui/model-pins.json.
+  'pika_h3_flex_fl2va_comfy_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/Pika-Labs/Pika-H3-Flex/resolve/3ff166447d5edb1406107ab8370c42000ce173e4/comfy/loras/pika_h3_flex_fl2va_comfy_bf16.safetensors' },
+  'pika_h3_flex_ref2va_comfy_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/Pika-Labs/Pika-H3-Flex/resolve/3ff166447d5edb1406107ab8370c42000ce173e4/comfy/loras/pika_h3_flex_ref2va_comfy_bf16.safetensors' },
   'minimax_h3_flf2v_lora_v1.safetensors': { folder: 'loras', url: 'https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA/resolve/5ddbc2dbbe95edbbdaf5017c3e934b1d01791697/minimax_h3_flf2v_lora_v1.safetensors' },
   // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu, research #10 §6.4): FastVideo's FastH3 V2 (8-step DMD2, int8 22.1 GB or
   // NVFP4 13.6 GB for Blackwell) and FastH3 Trim (42 of 50 blocks, experimental; NVFP4 11.9 / fp8 19.7 / int8 ConvRot 18.9 GB),
@@ -447,6 +473,9 @@ export const KNOWN_MODELS = {
   'dino/model.safetensors': { folder: 'Hi3D', url: 'https://huggingface.co/facebook/dinov2-large/resolve/47b73eefe95e8d44ec3623f8890bd894b6ea2d6c/model.safetensors' },
   'clip/config.json': { folder: 'Hi3D', url: 'https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/config.json' },
   'clip/model.safetensors': { folder: 'Hi3D', url: 'https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/model.safetensors' },
+  // Bria VRMBG 3.0 (nm10-keying): gated with manual approval, placed by hand in models/RMBG/VRMBG-3.0/ (the node never downloads
+  // it). Only the weights file is listed (GET /models lists .safetensors); config.json, model.py and vrmbg3_config.py go beside it.
+  'VRMBG-3.0/model.safetensors': { folder: 'RMBG', url: 'https://huggingface.co/briaai/VRMBG-3.0/resolve/59716e19a6cc97f91311edea190938219c097b76/model.safetensors' },
   // RE-USE (Clean up voice): the NemotronLabs repositories only (OpenMDW-1.1; the older nvidia/RE-USE is non-commercial), at
   // pinned revisions, named so both fit in models/reuse. install-comfyui.sh checks the SHA-256.
   'NemotronLabs-RE-USE.safetensors': { folder: 'reuse', url: 'https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/resolve/31f82f2efad1095034492f236e8dac9239ba713b/model.safetensors' },
@@ -518,6 +547,18 @@ const H3_LICENSE =
   'commercial use above US$20M yearly revenue needs MiniMax\'s written authorization; show "MiniMax H3" on the product\'s interface; no outputs used to improve other AI models · ' +
   'Qwen3-VL-32B base Apache-2.0';
 const H3_LICENSE_FAST = `${H3_LICENSE} · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT`;
+// Pika H3 Flex (minimax-h3-flex-*): the H3 licence plus Pika's adapters and their NOTICE.
+const H3_FLEX_LICENSE =
+  `${H3_LICENSE} · Pika H3 Flex FL2VA and Ref2VA adapters: Model Derivatives of MiniMax H3 under the MiniMax H3 Community License, ` +
+  'Copyright © 2026 Mellis, Inc. (keep Pika\'s NOTICE and LICENSE with the files) · Pika\'s example code Apache-2.0';
+const H3_FLEX_NOTES =
+  'Pika H3 Flex\'s sampling contract, as Comfy-Org\'s video_pika_h3_flex templates: the adapter at a fixed 1.0 (LoraLoaderModelOnly), KSamplerSelect lcm ' +
+  '(fresh noise at every step), ManualSigmas 1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0 (the knots 1000/750/500/250/100/40/0 at video shift 12, ' +
+  'so no MiniMaxH3SigmaShift node; audio shift 3 is the model\'s own), BasicGuider (CFG 1). 6 steps; Pika: generic 6-step Euler is not equivalent, and ' +
+  'stacking another speed LoRA (Turbo, Lightning) breaks the output. Native 480p or 768p in 11 aspect ratios (21:9 to 9:21), 24 fps, 5-15 s on the 17n+5 grid ' +
+  '(124 frames = 5.17 s, 362 = 15.08 s), 32 kHz stereo. Pika: "an end-to-end ComfyUI render has not been verified as part of this upload"; ' +
+  'tested by Pika on an H100 80 GB (consumer VRAM unpublished). The file names are Pika\'s (comfy/loras at 3ff16644); Comfy-Org\'s templates name a ' +
+  'repack (pika_h3_flex_*_v1_bf16, 128 bytes larger) of the same adapters.';
 const H3_NOTES_FIRST_FRAME =
   'The first frame is resized to width x height with no crop, so the canvas should have the still\'s shape (an "auto" aspect ratio sizes it from the still).';
 const H3_NOTES_SIZE = 'Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344).';
@@ -1243,6 +1284,22 @@ export const SPEC = [
     notes: 'Custom pack alternative to bg-remove-birefnet. Model choices on node 2: RMBG-2.0 (best, but CC BY-NC 4.0 non-commercial), INSPYRENET, BEN, BEN2 (default). Output RGBA PNG.',
   },
   {
+    id: 'image-matte-feynobg',
+    title: 'Fine-hair cut-out (FeyNoBg, ComfyUI-RMBG 3.3.0)',
+    capability: 'bg-remove',
+    handBuilt: 'hand-built/image-matte-feynobg.json',
+    packs: ['ComfyUI-RMBG'],
+    bindings: { image: [b('1', 'image')] },
+    outputs: [{ node: '3', kind: 'image' }],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 4,
+    license: 'FeyNoBg weights: unknown (the Hugging Face repo 1038lab/FeyNobg has no card, no licence tag and no LICENSE file, checked 2026-11-02); ComfyUI-RMBG code GPL-3.0',
+    autoDownloads: ['AILab_FeyNoBg downloads config.json, FeyNobg.safetensors (1.05 GB) and preprocessor_config.json from 1038lab/FeyNobg into models/RMBG/FeyNoBg/ on first run'],
+    notes:
+      'AILab_FeyNoBg (ComfyUI-RMBG 3.3.0): a 263M Swin-L matting model for hair, fur, glass and lace, no trimap; refine_foreground on (sub-pixel edge refinement), background Alpha -> RGBA PNG. ' +
+      'Needs the nobg Python package (the pack\'s requirements.txt: nobg>=0.3.1). The class is recorded from ComfyUI-RMBG\'s source at the pinned commit.',
+  },
+  {
     id: 'face-swap-reactor',
     title: 'Face Swap (ReActor)',
     capability: 'face-swap',
@@ -1818,6 +1875,92 @@ export const SPEC = [
       'one frozen instant, the camera in one continuous 360-degree orbit, everything holding its place, camera parallax the only movement. The LoRA was trained ' +
       `without sound; the graph still decodes H3's audio. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_SIZE} ${H3_NOTES_FILES} With the Orbit LoRA (0.16 GB).`,
   },
+  // ---- Pika H3 Flex (nm10-pika-flex): Pika's post-trained H3 in 6 steps, as Comfy-Org's video_pika_h3_flex_{t2v,fl2va,ref2va} templates.
+  {
+    id: 'minimax-h3-flex-t2v',
+    title: 'MiniMax H3 Text to Video + Audio (Pika H3 Flex, 6 steps)',
+    capability: 't2v',
+    handBuilt: 'hand-built/minimax-h3-flex-t2v.json',
+    bindings: {
+      prompt: [b('131', 'prompt')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: H3_FLEX_LICENSE,
+    notes:
+      'Text to video with sound (FL2VA with no frames). The fl2va pruned int8 model with Pika\'s FL2VA adapter; core nodes only. ' +
+      `${H3_FLEX_NOTES} ${H3_NOTES_SIZE} ${H3_NOTES_LAYOUT} ${H3_NOTES_FILES} With Pika\'s FL2VA adapter (1.96 GB).`,
+  },
+  {
+    id: 'minimax-h3-flex-i2v',
+    title: 'MiniMax H3 Image to Video + Audio (Pika H3 Flex, 6 steps)',
+    capability: 'i2v',
+    handBuilt: 'hand-built/minimax-h3-flex-i2v.json',
+    bindings: {
+      prompt: [b('131', 'prompt')], image: [b('138', 'image')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: H3_FLEX_LICENSE,
+    notes:
+      'Image to video with sound: image = the first frame. The fl2va pruned int8 model with Pika\'s FL2VA adapter; core nodes only. ' +
+      `${H3_FLEX_NOTES} ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_SIZE} ${H3_NOTES_LAYOUT} ${H3_NOTES_FILES} With Pika\'s FL2VA adapter (1.96 GB).`,
+  },
+  {
+    id: 'minimax-h3-flex-flf2v',
+    title: 'MiniMax H3 Start + End Frame to Video + Audio (Pika H3 Flex, 6 steps)',
+    capability: 'flf2v',
+    handBuilt: 'hand-built/minimax-h3-flex-flf2v.json',
+    bindings: {
+      prompt: [b('131', 'prompt')], image: [b('138', 'image')], endImage: [b('140', 'image')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: H3_FLEX_LICENSE,
+    notes:
+      'Start and end frame to video with sound: image = the first frame, endImage = the last. The fl2va pruned int8 model with Pika\'s FL2VA adapter; core nodes only. ' +
+      `${H3_FLEX_NOTES} ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_SIZE} ${H3_NOTES_LAYOUT} ${H3_NOTES_FILES} With Pika\'s FL2VA adapter (1.96 GB).`,
+  },
+  {
+    id: 'minimax-h3-flex-ref2va',
+    title: 'MiniMax H3 References to Video + Audio (Pika H3 Flex Ref2VA: up to 9 images, 3 clips, 3 audio clips; 6 steps)',
+    capability: 'ref2v',
+    handBuilt: 'hand-built/minimax-h3-flex-ref2va.json',
+    expand: 'references',
+    bindings: {
+      prompt: [b('131', 'prompt')], image: [b('150', 'image')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24 },
+    limits: { maxFrames: 362, dimensionMultiple: 32, maxImages: 9, maxVideos: 3, maxAudios: 3, maxReferences: 12, maxReferenceGroupSec: 15 },
+    // The clips' loader is added per run (expandH3References), so the graph itself doesn't hold it.
+    runtimeNodes: ['VHS_LoadVideo'],
+    vramGb: 32,
+    license: H3_FLEX_LICENSE,
+    notes:
+      'References to video with sound: core MiniMaxH3ReferenceToVideo on the ref2va pruned int8 model with Pika\'s Ref2VA adapter. The graph holds Image 1 ' +
+      '(LoadImage 150 → ref_images.ref_image_0); the provider adds the rest per run (expandH3References): up to 9 images (LoadImage → ' +
+      'ref_images.ref_image_N), 3 clips (VHS_LoadVideo at 24 fps, up to 15 s → ref_videos.ref_video_N, and the clip\'s own sound → ref_video_audios.ref_video_audio_N) ' +
+      'and 3 standalone audio clips (LoadAudio → ref_audios.ref_audio_N), 12 files in all, at least one image or clip; a request with no image takes node 150 out. ' +
+      'Each clip or audio clip 2-15 s, each group at most 15 s combined; a clip\'s own sound is not counted as an audio file. The prompt cites them in order: ' +
+      '<Picture 1>, <Video 1>, <Audio 1> (the studio writes Image 1, Clip 1, Voice 1 and the server turns them into these tags). ref_image_size stays match ' +
+      `(the template's; max keeps a 2048 px short edge for stronger identity and is several times slower). ${H3_FLEX_NOTES} ${H3_NOTES_SIZE} ${H3_NOTES_FILES.replace('fl2va', 'ref2va')} ` +
+      'With Pika\'s Ref2VA adapter (1.96 GB). VideoHelperSuite loads the clips (runtimeNodes, so the GPU pre-flight asks for it).',
+  },
   // ---- MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu, research #10 §6.4): Comfy-Org's "FastVideo FastH3" templates
   // (workflow_templates video_fastvideo_fasth3_t2v / _i2v, the "First Last Frame to Video (FastVideo FastH3)" subgraph) as
   // API graphs. src/lib/gpu/h3-tier.ts picks the tier and binds `unet` to the card's file (NVFP4 on Blackwell, else int8, or
@@ -2318,6 +2461,63 @@ export const SPEC = [
       'VoxCPM2_Clone(reference_audio = the voice sample, at most 50 s; prompt_text = what it says: given, the closest ("ultimate") clone, empty, the "controllable" clone; text = the line; ' +
       'the same model settings as tts-voxcpm2, denoiser and ASR off, 3 retries on a babbling or silent take). A saved voice from Design a voice passes its take and the take\'s line, so it is cloned the ultimate way. Output MP3 V0. Get consent for cloned voices.',
   },
+  // nm10-speech-edit: Tencent AuK (MIT) edits what was said in a recording (Audio → Edit speech) and speaks a line in a
+  // voice. Open engine only (AuK is hosted on neither fal nor Replicate).
+  {
+    id: 'speech-edit-auk',
+    title: 'Edit what was said with Tencent AuK (words, pitch, pace, emotion, noise; windows crossfaded back)',
+    capability: 'speech-edit',
+    handBuilt: 'hand-built/speech-edit-auk.json',
+    packs: ['ComfyUI-AuK'],
+    bindings: {
+      audio: [b('1', 'audio')],
+      fadeCurve: [b('2', 'audio')],
+      seed: [b('11', 'seed')],
+      device: [b('4', 'device')],
+    },
+    outputs: [{ node: '50', kind: 'audio' }],
+    expand: 'speech',
+    defaults: { crossfade: 0.12 },
+    limits: { maxDurationSec: 1200 },
+    vramGb: 24,
+    license: 'AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (NON-COMMERCIAL)',
+    autoDownloads: [
+      'install-comfyui.sh with AUK=1 AUK_WEIGHTS=1 downloads into the AuK checkout\'s ckpts/ (relative paths resolve there, not in a ComfyUI models folder): tencent/AuK-Flash at 575b92f0895f75180bf2cbd35f2e176c5732b8ed (auk_flash.safetensors 6.12 GB, vae.safetensors 0.64 GB, config.yaml) and Qwen/Qwen2.5-Omni-3B at f75b40e3da2003cdd6e1829b1f420ca70797c34e (3 safetensors shards, 11.97 GB, plus config and tokenizer files); AUK_BASE=1 adds tencent/AuK at 790742b71a4430120daf2b2099192abae449eb9f (auk_base.safetensors 6.12 GB) for the Best setting',
+    ],
+    notes:
+      'The recording (a video upload works: LoadAudio reads its soundtrack) and the edit windows Fuobe plans (params.extra.speechWindows: start, end, instruction, seconds). ' +
+      'The graph is rebuilt for every window in one prompt: each window is cut with TrimAudioDuration, edited by AuKGenerateEdit (one shared AuKModelLoader) and ' +
+      'crossfaded back over its first and last 0.12 s as a + (b − a) × fade-in, with the linear fade-in Fuobe writes (fadeCurve: the ramp, then a flat tail AudioMerge trims off). The recording and each edit are first brought to one rate (merged with silence at the other\'s: AuK speaks at 24 kHz), so no seam piece is resampled at its edges (a resampled piece tapers there: a click). Windows hold at least 1 s of untouched speech each side and are cut at silences. ' +
+      'AuK takes a window plus its new audio up to 30 s per call (its node refuses more and does not split), so a window is at most about 14.7 s for a same-length effect. ' +
+      'AuK-Flash by default (checkpoint ckpts/AuK-Flash/auk_flash.safetensors, 4 steps, CFG 0, sway -1); params.extra.quality "best" loads ckpts/AuK/auk_base.safetensors at 32 steps, CFG 2. ' +
+      'The Prompt Enhancer is off: Fuobe writes the Cookbook instruction (Replace \'X\' with \'Y\'. / Add … after … / Remove …; pitch, speed, volume, emotion, whisper, enhancement and speaker extraction) and sets generation_seconds itself. ' +
+      'device is bound to the server\'s first torch device (cuda:0, or cpu with fp32). AuK outputs mono, so edited windows are duplicated into a stereo recording. Peak VRAM ~25 GiB (AuK\'s README, A800, bf16), ~17 GiB with cpu_offload. ' +
+      'Languages: English and Chinese (the technical report, arXiv 2609.08936: a bilingual corpus). Saves FLAC.',
+  },
+  {
+    id: 'speech-tts-auk',
+    title: 'Tencent AuK text to speech (clone a voice sample, or a voice from its description)',
+    capability: 'tts',
+    handBuilt: 'hand-built/speech-tts-auk.json',
+    packs: ['ComfyUI-AuK'],
+    bindings: {
+      audio: [b('1', 'audio')],
+      prompt: [b('3', 'instruction')],
+      seed: [b('3', 'seed')],
+      device: [b('2', 'device')],
+    },
+    outputs: [{ node: '4', kind: 'audio' }],
+    limits: { maxDurationSec: 30 },
+    vramGb: 24,
+    license: 'AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (NON-COMMERCIAL)',
+    autoDownloads: [
+      'install-comfyui.sh with AUK=1 AUK_WEIGHTS=1 downloads into the AuK checkout\'s ckpts/ (relative paths resolve there, not in a ComfyUI models folder): tencent/AuK-Flash at 575b92f0895f75180bf2cbd35f2e176c5732b8ed (auk_flash.safetensors 6.12 GB, vae.safetensors 0.64 GB, config.yaml) and Qwen/Qwen2.5-Omni-3B at f75b40e3da2003cdd6e1829b1f420ca70797c34e (3 safetensors shards, 11.97 GB, plus config and tokenizer files); AUK_BASE=1 adds tencent/AuK at 790742b71a4430120daf2b2099192abae449eb9f (auk_base.safetensors 6.12 GB) for the Best setting',
+    ],
+    notes:
+      'Zero-shot TTS: the voice sample (audio) and the line as AuK\'s instruction (Say the following with the same voice: "…"), written by Fuobe; without a sample the loader is removed and AuK is asked for ' +
+      'instruct TTS (Generate speech based on the following description: "…". The content to speak is: "…".) with params.voiceDescription. generation_seconds is the line\'s length at a speaking rate (the Prompt Enhancer that would estimate it is off). ' +
+      'The sample plus the line fit in 30 s. AuK-Flash, 4 steps, CFG 0. Get consent for cloned voices. Saves FLAC.',
+  },
   {
     id: 'tts-dialogue-chatterbox',
     title: 'Chatterbox Dialogue (2 speakers, voice clone)',
@@ -2665,6 +2865,69 @@ export const SPEC = [
       'Masks are hard-edged; multiply with the BiRefNet matte for hair. Output under history "images" (animated .webm). Template utility_video_segment_sam3 runs SAM3_Detect per frame instead. ' +
       'Second output (node 12, role "matte", added by the remove-object package) = the black-and-white matte .mp4 of what was kept (MaskToImage -> CreateVideo at the source fps); ' +
       'params.matteOutput ("cutout" | "matte", on a Remove background job: op bg-remove-video) makes the provider drop the other save node, so only the chosen one is encoded.',
+  },
+  {
+    id: 'video-matte-vrmbg3',
+    title: 'Video Background Removal (Bria VRMBG 3.0, temporal, transparent WebM) (ComfyUI-RMBG 3.3.0)',
+    capability: 'bg-remove-video',
+    handBuilt: 'hand-built/video-matte-vrmbg3.json',
+    packs: ['ComfyUI-RMBG'],
+    requiredModels: ['VRMBG-3.0/model.safetensors'],
+    bindings: { video: [b('1', 'file')], format: [b('4', 'format')], profile: [b('4', 'profile')] },
+    outputs: [
+      { node: '4', kind: 'video', role: 'cutout' },
+      { node: '6', kind: 'video', role: 'matte' },
+      { node: '7', kind: 'image', role: 'frames' },
+    ],
+    defaults: { format: 'video/webm', profile: '4444' },
+    limits: { maxWidth: 2048, maxHeight: 2048 },
+    vramGb: 6,
+    license: 'Bria VRMBG-3.0 licence: NON-COMMERCIAL (the card: non-commercial use only, commercial use needs an agreement with Bria AI; gated, Bria approves access by hand); ComfyUI-RMBG code GPL-3.0',
+    notes:
+      'AILab_VRMBG (ComfyUI-RMBG 3.3.0, 2026-10-20): Bria\'s VRMBG 3.0, the model behind fal\'s bria/video/background-removal/v3, so the open matte is the cloud\'s model once Bria grants access. ' +
+      'Each frame is read at 1024x1024 paired with the previous frame\'s RGB times its alpha (reset_state true: the clip starts clean), and the alpha is scaled back to the frame. ' +
+      'Output 0 is the straight RGBA cut-out -> VHS_VideoCombine (video/webm yuva420p, crf 20, the source\'s fps and sound; params.format prores_4444 switches it to video/ProRes profile 4444, ' +
+      'yuva444p10le with alpha): role cutout; output 2 (the matte as an image) -> CreateVideo -> SaveVideo: role matte; node 7 writes the RGBA as half-float OpenEXR frames (input sRGB -> scene-linear): role frames, ' +
+      'kept only for params.format exr (zipped onto the cut-out). params.matteOutput keeps one of cutout / matte (the provider drops the other save node). The whole clip is decoded at once (GetVideoComponents): RAM grows with the length. ' +
+      'The weights are gated: request access at huggingface.co/briaai/VRMBG-3.0, then put config.json, model.safetensors, model.py and vrmbg3_config.py (revision 59716e19) in models/RMBG/VRMBG-3.0/. ' +
+      'model.py is Bria\'s own model code, loaded by the node. The class is recorded from ComfyUI-RMBG\'s source at the pinned commit.',
+  },
+  {
+    id: 'video-key-corridorkey',
+    title: 'Green-screen key: CorridorKey 2.0 with despill, transparent WebM / ProRes 4444 / EXR, in passes (ComfyUI-CorridorKey2 + VHS)',
+    capability: 'bg-remove-video',
+    handBuilt: 'hand-built/video-key-corridorkey.json',
+    packs: ['ComfyUI-CorridorKey2', 'ComfyUI-VideoHelperSuite'],
+    bindings: {
+      video: [b('1', 'video')],
+      framesPerBatch: [b('2', 'frames_per_batch')],
+      despill: [b('6', 'despill_strength')],
+      format: [b('7', 'format')],
+      profile: [b('7', 'profile')],
+    },
+    outputs: [
+      { node: '7', kind: 'video', role: 'cutout' },
+      { node: '9', kind: 'video', role: 'matte' },
+      { node: '11', kind: 'image', role: 'frames' },
+    ],
+    defaults: { framesPerBatch: 48, despill: 0.5, format: 'video/webm', profile: '4444' },
+    limits: { maxWidth: 3840, maxHeight: 2160 },
+    // Corridor: 4 GB up to 1440p and 6 GB for 4K (the node picks a smaller temporal window and its low-VRAM path on a
+    // smaller card); about 6 GB at 1080p in the wrapper's own notes. NVIDIA RTX 30-series or newer (bf16).
+    vramGb: 6,
+    license: 'CorridorKey 2.0 weights: Corridor Key Licence 2.0 (CC BY-NC-SA 4.0 with added terms: free for any lawful use including commercial projects, and what you make is yours; it may NOT be offered as a paid API or inference service, nor resold or repackaged; derivatives stay under the same licence; a commercial software package needs a written agreement with Corridor Digital; organisations above US$20M revenue need a seat per user). The frozen models it builds on keep their own licences: NVIDIA C-RADIOv4-SO400M (NVIDIA Open Model License), Microsoft MoGe-2 ViT-B (MIT), Google DeepMind RVM small (CC-BY 4.0). The ComfyUI nodes (hashu786/ComfyUI-CorridorKey2) are under the same Corridor Key Licence 2.0.',
+    autoDownloads: [
+      'CorridorKey2 downloads about 5.1 GB into models/corridorkey2/ on first run: corridorkey_v2.safetensors (2.66 GB) and foundation_stats.safetensors from nikopueringer/CorridorKey2.0 (its main revision, cf44a8db when checked), NVIDIA C-RADIOv4-SO400M @ c0457f5d (1.72 GB), Microsoft MoGe-2 ViT-B @ ca5f0e07 (0.42 GB) and Google DeepMind RVM small (0.27 GB, md5-checked)',
+    ],
+    notes:
+      'VHS_LoadVideo decodes framesPerBatch frames per pass (VHS_BatchManager, 48 by default) and the three VHS_VideoCombine encodes stay open across passes, so memory stays flat on a long clip. ' +
+      'CorridorKey2 (hashu786/ComfyUI-CorridorKey2, which vendors Corridor\'s CorridorKey 2.0 code unmodified at 485f5e9) keys each pass as one clip at native resolution, with overlapping temporal Hann windows ' +
+      '(window auto: the largest that fits the free VRAM) and no hint, so the model picks the subject; despill 0.5 (Corridor\'s default), input sRGB. Each pass starts its temporal context afresh. ' +
+      'Only the outputs a node reads are computed. Roles: node 7 cutout (output 4, the despilled straight RGBA, as a transparent WebM, VP9 yuva420p, with the clip\'s sound; params.format prores_4444 switches it to ' +
+      'video/ProRes profile 4444, which VHS writes as yuva444p10le with alpha), node 9 matte (output 1 as an H.264 MP4), node 11 frames (the RGBA as half-float OpenEXR, input sRGB -> scene-linear, one file a frame, in every pass). ' +
+      'params.matteOutput keeps cutout or matte; "foreground" feeds node 7 the despilled foreground premultiplied over black (output 2) as H.264 with sound instead. ' +
+      'Node 11 stays only for params.format exr, with the cut-out as its preview, and Fuobe zips every pass\'s frames onto it. ' +
+      'Corridor\'s despill takes out green spill: the key is for green screens. NVIDIA CUDA only (RTX 30-series or newer). The node\'s class is recorded from its source at the pinned commit.',
   },
   {
     id: 'video-depth-da3',
@@ -5169,5 +5432,81 @@ export const SPEC = [
       'frame as a half-float EXR with input_color_space HDR, i.e. the inverse HLG curve: scene-linear light in Rec.2020 primaries, highlights above 1.0 kept. Node 6 saves the 10-bit HLG MP4 with the clip\'s sound as ' +
       'the result to watch (role preview); Fuobe zips the frames (role frames) and attaches the zip to it. Decodes the whole clip: RAM grows with the length (Fuobe refuses a clip too long for the memory it has). ' +
       'Tested through Fuobe on CPU (2 s 160x96 30 fps clip with sound): 60 half-float EXR frames zipped onto an H.264 High 10 HLG (arib-std-b67, bt2020) preview with AAC.',
+  },
+  // ---- NVIDIA RTX Video (nm10-rtx-video, docs/research/new-models-10.md §6): Comfy-Org's ComfyUI Nvidia VFX Nodes 0.2.1 on
+  // NVIDIA's RTX Video SDK (nvidia-vfx). An NVIDIA RTX card only, no model files to download (the SDK's models ship in the wheel).
+  {
+    id: 'upscale-video-rtx',
+    title: 'Video Upscale on an NVIDIA RTX card: RTX Video Super Resolution (1-4x) in passes of a few frames, sound kept (ComfyUI Nvidia VFX Nodes)',
+    capability: 'upscale-video',
+    handBuilt: 'hand-built/upscale-video-rtx.json',
+    packs: ['ComfyUI_Nvidia_VFX_Nodes'],
+    gpu: 'nvidia-rtx',
+    bindings: {
+      video: [b('1', 'video')], framesPerBatch: [b('2', 'frames_per_batch')], shortSide: [b('4', 'value')], rtxQuality: [b('6', 'quality')],
+    },
+    outputs: [{ node: '8', kind: 'video' }],
+    defaults: { shortSide: 1080, rtxQuality: 'ULTRA' },
+    limits: { maxWidth: 3840, maxHeight: 3840, maxScale: 4 },
+    vramGb: 0,
+    license:
+      'NVIDIA Software License Agreement (2025-05-05) and Product-Specific Terms for NVIDIA AI Products: the nvidia-vfx 0.2.0.0 runtime (RTX Video SDK libraries and their models, ' +
+      'bundled in the wheel; free, proprietary, runs only on NVIDIA GPUs, no redistributing or reverse engineering, no published benchmarks without NVIDIA\'s permission); ' +
+      'the wheel also carries the NVIDIA Open Model License (models commercially usable; NVIDIA claims no outputs) · ComfyUI Nvidia VFX Nodes Apache-2.0 · VideoHelperSuite GPL-3.0 code',
+    notes:
+      'Built like upscale-video-esrgan-chunked: VHS_LoadVideo decodes framesPerBatch frames per pass (VHS_BatchManager re-queues the prompt until the clip is done) and one H.264 encode stays open across ' +
+      'passes; the last pass writes the file with the source\'s sound at the source frame rate. RTX Video Super Resolution (node 6) scales by min(4, max(1, shortSide / the clip\'s shorter edge)) ' +
+      '(ComfyMathExpression 5 from VHS_VideoInfo\'s loaded size), rounds the size to 8 and splits its own work into chunks of at most 16 MP of output; ResizeImageMaskNode 7 then lands exactly on shortSide ' +
+      '(the shape kept). rtxQuality: ULTRA (compressed sources, the default) or HIGHBITRATE_ULTRA (clean, high-bitrate sources); LOW-HIGH are faster. Needs an NVIDIA RTX card, ComfyUI on a CUDA ' +
+      'PyTorch (cu130 or newer, the pack\'s README) and a graphics driver of 570.190+ / 580.82+ / 590.44+ on Linux (570.65+ on Windows); no CPU, Apple or AMD path. The runtime ships its models, so ' +
+      'nothing downloads at run time. The node\'s inputs follow the pack\'s schema at 38d790d.',
+  },
+  {
+    id: 'fps-rtx-framegen',
+    title: 'FPS Boost and slow motion on an RTX 40 series card or later: RTX Video Frame Generation by m, keep every n-th frame, cuts detected (ComfyUI Nvidia VFX Nodes)',
+    capability: 'interpolate',
+    handBuilt: 'hand-built/fps-rtx-framegen.json',
+    packs: ['ComfyUI_Nvidia_VFX_Nodes'],
+    gpu: 'nvidia-rtx-40',
+    bindings: {
+      video: [b('1', 'file')], multiplier: [b('6', 'value')], every: [b('8', 'value')], slowdown: [b('10', 'value')], rtxQuality: [b('7', 'mode')],
+    },
+    outputs: [{ node: '13', kind: 'video' }],
+    defaults: { rtxQuality: 'MEDIUM' },
+    limits: { maxMultiplier: 16 },
+    vramGb: 0,
+    license:
+      'NVIDIA Software License Agreement (2025-05-05) and Product-Specific Terms for NVIDIA AI Products: the nvidia-vfx 0.2.0.0 runtime (RTX Video SDK libraries and their models, ' +
+      'bundled in the wheel; free, proprietary, runs only on NVIDIA GPUs, no redistributing or reverse engineering, no published benchmarks without NVIDIA\'s permission); ' +
+      'the wheel also carries the NVIDIA Open Model License (models commercially usable; NVIDIA claims no outputs) · ComfyUI Nvidia VFX Nodes Apache-2.0 · VideoHelperSuite GPL-3.0 code',
+    notes:
+      'interpolate-rife-fps with RTX Video Frame Generation in place of FrameInterpolate (same node ids, no model loader): the provider picks m (2-16) and n from the clip\'s frame rate so that ' +
+      'source fps x m / n = target x slowdown, and links node 7 out when m is 1. The node returns (N - 1) x m + 1 frames for N inputs; the last frame is held once more first, so N source frames ' +
+      'become N x m + 1 (the RIFE graph\'s count, fpsFrames). automatic_shot_change_detection is on, so a cut is not blended across. rtxQuality = the node\'s mode (LOW, MEDIUM (default), HIGH). ' +
+      'Decodes the whole clip and holds source frames x m (the provider\'s RAM check counts it like RIFE). Needs an NVIDIA RTX 40 series card or later (the pack\'s README), a CUDA PyTorch ' +
+      '(cu130 or newer) and a recent graphics driver; no CPU path. The node\'s inputs follow the pack\'s schema at 38d790d.',
+  },
+  {
+    id: 'sdr-to-hdr-rtx',
+    title: 'SDR to HDR on an NVIDIA RTX card: RTX Video HDR to BT.2020 HLG or PQ (HDR10), saved as 10-bit H.264 with matching colour tags (ComfyUI Nvidia VFX Nodes)',
+    capability: 'sdr-to-hdr',
+    handBuilt: 'hand-built/sdr-to-hdr-rtx.json',
+    packs: ['ComfyUI_Nvidia_VFX_Nodes'],
+    gpu: 'nvidia-rtx',
+    bindings: { video: [b('1', 'file')], peakNits: [b('3', 'luminance')], colorSpace: [b('3', 'output_colorspace'), b('4', 'color_space')] },
+    outputs: [{ node: '5', kind: 'video' }],
+    defaults: { colorSpace: 'HDR', peakNits: 650 },
+    limits: { minPeakNits: 400, maxPeakNits: 2000 },
+    vramGb: 0,
+    license:
+      'NVIDIA Software License Agreement (2025-05-05) and Product-Specific Terms for NVIDIA AI Products: the nvidia-vfx 0.2.0.0 runtime (RTX Video SDK libraries and their models, ' +
+      'bundled in the wheel; free, proprietary, runs only on NVIDIA GPUs, no redistributing or reverse engineering, no published benchmarks without NVIDIA\'s permission); ' +
+      'the wheel also carries the NVIDIA Open Model License (models commercially usable; NVIDIA claims no outputs) · ComfyUI Nvidia VFX Nodes Apache-2.0',
+    notes:
+      'The learned alternative to video-sdr-to-hdr\'s inverse tone map: RTX Video HDR (the SDK\'s TrueHDR, with its DL-Debander pass) at peakNits (400-2000, 650 by default), contrast 100, ' +
+      'saturation 100, middle grey 50. A ComfyUI IMAGE carries no colour metadata, so colorSpace binds both the node\'s output_colorspace and CreateVideo\'s color_space to the same value: ' +
+      '"HDR" = BT.2020 HLG (params.format hlg_10bit), "HDR PQ" = BT.2020 PQ, HDR10\'s transfer (pq_10bit); CreateVideo writes 10 bits and SaveVideo an H.264 High 10 MP4 tagged ' +
+      'bt2020nc / bt2020 / arib-std-b67 or smpte2084 (the same encode as video-sdr-to-hdr). The sound is kept. EXR frames stay on video-sdr-to-hdr-exr. ' +
+      'Decodes the whole clip: RAM grows with the length. Needs an NVIDIA RTX card and a CUDA PyTorch (cu130 or newer); no CPU path. The node\'s inputs follow the pack\'s schema at 38d790d.',
   },
 ];

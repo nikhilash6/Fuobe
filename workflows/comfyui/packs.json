@@ -1,4 +1,13 @@
 {
+  "ComfyUI-AuK": {
+    "repo": "https://github.com/Tencent-Hunyuan/AuK",
+    "commit": "0d40366b1039e37c6cad008ab4713f6ad6d954b7",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": "comfyui/ComfyUI-AuK",
+    "folders": []
+  },
   "ComfyUI-DBS": {
     "repo": "https://github.com/hiroki-abe-58/ComfyUI-DBS",
     "commit": "f656e53434b5485c148a2866fbd6ddc6b6152ed6",
@@ -136,7 +145,7 @@
   },
   "ComfyUI-RMBG": {
     "repo": "https://github.com/1038lab/ComfyUI-RMBG",
-    "commit": "229529e0ea63fb7085848225d74f91f6dc164956",
+    "commit": "a66a5e641a54988d80ed6aad18946081c85f309e",
     "registry": { "id": "comfyui-rmbg", "version": "" },
     "requirementsTxt": true,
     "isolated": false,
@@ -301,6 +310,24 @@
     "repo": "https://github.com/T8mars/Comfyui-Hi3d-T8",
     "commit": "73848490976e6a9b0c735ce02984c03866a495e7",
     "registry": { "id": "hi3d-t8", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-CorridorKey2": {
+    "repo": "https://github.com/hashu786/ComfyUI-CorridorKey2",
+    "commit": "d1228b68796786acee92b6497f72a60d70d1a844",
+    "registry": null,
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": ["corridorkey2"]
+  },
+  "ComfyUI_Nvidia_VFX_Nodes": {
+    "repo": "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes",
+    "commit": "38d790ded00650681fa3645362efe28c8560cf40",
+    "registry": { "id": "comfyui_nvidia_rtx_nodes", "version": "" },
     "requirementsTxt": true,
     "isolated": false,
     "subdir": null,

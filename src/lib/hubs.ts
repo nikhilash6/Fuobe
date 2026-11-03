@@ -18,6 +18,7 @@ export const HUB_MODES: Record<HubKind, { id: string; label: string }[]> = {
     { id: "dialogue", label: "Dialogue" },
     { id: "voice-change", label: "Voice change" },
     { id: "design", label: "Design a voice" },
+    { id: "edit-speech", label: "Edit speech" },
     { id: "translate", label: "Translate" },
     { id: "transcribe", label: "Transcribe" },
     { id: "clean", label: "Clean up voice" },
@@ -31,6 +32,7 @@ export const HUB_MODES: Record<HubKind, { id: string; label: string }[]> = {
   ],
   "video-tools": [
     { id: "matte", label: "Remove background" },
+    { id: "green-screen", label: "Green screen" },
     { id: "remove-object", label: "Remove object" },
     { id: "remove-dialogue", label: "Remove dialogue" },
     { id: "remove-person", label: "Remove a person" },

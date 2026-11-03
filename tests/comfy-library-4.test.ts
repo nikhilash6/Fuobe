@@ -93,6 +93,9 @@ describe("round-4 ComfyUI workflows", () => {
     // encoder became the int8 file (the w4a8 one faulted the driver). MiniMax H3's video graphs wait for their first run.
     expect(manifest.workflows.filter((w) => !w.validated).map((w) => w.id)).toEqual([
       "moss-image-t2i",
+      // Green screen and fine hair (nm10-keying): ComfyUI-RMBG 3.3.0 and the CorridorKey wrapper aren't on the validation
+      // server (tests/keying.test.ts checks their classes against the packs' source).
+      "image-matte-feynobg",
       "minimax-h3-t2v",
       "minimax-h3-i2v",
       "minimax-h3-flf2v",
@@ -110,6 +113,11 @@ describe("round-4 ComfyUI workflows", () => {
       "tts-qwen3-clone",
       "tts-voxcpm2",
       "tts-voxcpm2-clone",
+      // Edit speech (nm10-speech-edit): ComfyUI-AuK isn't on the validation server (tests/speech-edit-comfy.test.ts checks its node list).
+      "speech-edit-auk",
+      "speech-tts-auk",
+      "video-matte-vrmbg3",
+      "video-key-corridorkey",
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",
@@ -153,6 +161,10 @@ describe("round-4 ComfyUI workflows", () => {
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
       "video-regenerate-h3",
+      // NVIDIA RTX Video: the pack needs an NVIDIA RTX card, so it isn't on the CPU validation server (tests/rtx-video.test.ts checks its inputs).
+      "upscale-video-rtx",
+      "fps-rtx-framegen",
+      "sdr-to-hdr-rtx",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);
   });
