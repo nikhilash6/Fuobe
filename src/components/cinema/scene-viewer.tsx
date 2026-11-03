@@ -320,15 +320,21 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
     if (status === "ready") engineRef.current?.pickProp(pickedReady ? pickedProp : null, handle);
   }, [pickedProp, pickedReady, handle, status]);
 
+  /** Place a Library splat in the scene; says why not when it can't (the scene isn't ready, or it is full). */
   const placeCandidate = useCallback(
-    (c: PropCandidate & { name: string }) => {
+    (c: PropCandidate & { name: string }): "placed" | "not-ready" | "full" => {
       const eng = engineRef.current;
-      if (!eng || !info) return;
+      if (!eng || !info) return "not-ready";
+      const ps = propsRef.current;
+      if (ps.length >= MAX_PROPS) return "full";
       const id = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      setProps((ps) => (ps.length >= MAX_PROPS ? ps : [...ps, placeProp(c, eng.getPose(), info.pivotDepth, ps.length, id)]));
+      const next = [...ps, placeProp(c, eng.getPose(), info.pivotDepth, ps.length, id)];
+      propsRef.current = next;
+      setProps(next);
       setPickedProp(id);
       setHandle("translate");
       setAddOpen(false);
+      return "placed";
     },
     [info],
   );
@@ -338,8 +344,10 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
       setMaking((m) => m.filter((x) => x !== id));
       const c = g && propCandidateOf(g);
       if (c) {
-        placeCandidate({ ...c, name: propName(c.modelId) });
-        toast.success("Your prop is in the scene");
+        const placed = placeCandidate({ ...c, name: propName(c.modelId) });
+        if (placed === "placed") toast.success("Your prop is in the scene");
+        else if (placed === "full") toast.info(`Your prop is ready in your Library. The scene holds ${MAX_PROPS} props: remove one, then add it from Add a prop`);
+        else toast.info("Your prop is ready in your Library. Add it to the scene from Add a prop");
       } else toast.error("Couldn't make the prop from that picture. Try another picture, with one object on a plain background");
     },
     [placeCandidate],
@@ -976,7 +984,7 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
             setAddOpen(false);
             toast.success("Making your prop — it lands in the scene when it's ready", { duration: 3000 });
           }}
-          full={props.length >= MAX_PROPS}
+          full={props.length + making.length >= MAX_PROPS}
         />
         {making.length > 0 && <MakingWatch ids={making} onDone={madeProp} />}
       </DialogContent>

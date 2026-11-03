@@ -51,7 +51,7 @@ export function AddPropDialog({
           </DialogTitle>
           <DialogDescription>Place an object made from a picture in the scene, then move, turn and size it. It shows in captures and in paths filmed on your GPU.</DialogDescription>
         </DialogHeader>
-        {full ? <p className="rounded-lg bg-muted/60 p-3 text-[13px]">This scene has {MAX_PROPS} props, the most it holds. Remove one to add another.</p> : open && <AddPropBody onPlace={onPlace} onMaking={onMaking} />}
+        {full ? <p className="rounded-lg bg-muted/60 p-3 text-[13px]">This scene holds {MAX_PROPS} props at most, counting any still being made. Remove one to add another.</p> : open && <AddPropBody onPlace={onPlace} onMaking={onMaking} />}
       </DialogContent>
     </Dialog>
   );
@@ -117,7 +117,8 @@ function MakeFromPicture({ onMaking }: { onMaking: (generationId: string) => voi
       ? model3dRequest({ engine: "open", mode: "splat", modelId: IDOL_MODELS.open, photo: photo.ref, quality, photoCrop: photo.source !== "generation" })
       : null;
   const preview = useRunPreview(req);
-  const price = priceLine(preview.data) ?? "Free";
+  // No price until the preview has one (not while it loads, or when it failed).
+  const price = priceLine(preview.data);
   const make = () => {
     if (!req) return;
     create.mutate(req, {
@@ -160,7 +161,7 @@ function MakeFromPicture({ onMaking }: { onMaking: (generationId: string) => voi
             </div>
           </div>
           <Button className="w-full rounded-full" disabled={!req || create.isPending} onClick={make}>
-            {create.isPending ? <Loader2 className="animate-spin" /> : <Plus />} Make the prop · {price}
+            {create.isPending ? <Loader2 className="animate-spin" /> : <Plus />} Make the prop{price ? ` · ${price}` : ""}
           </Button>
         </>
       )}

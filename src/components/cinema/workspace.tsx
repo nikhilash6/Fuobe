@@ -634,6 +634,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
       />
       {openScene && (
         <SceneViewer
+          key={openScene.generation.id}
           take={openScene}
           projectId={id}
           engine={engine}

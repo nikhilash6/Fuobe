@@ -51,13 +51,32 @@ const hideDevBadge = (ctx) =>
 const noSideScroll = async (page, what) => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), 0, `${what}: nothing scrolls sideways`);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-props-"));
 
-/** The first frame of a path render as raw RGB (ffmpeg), with its size. */
-async function firstFrame(url, name) {
+/** The first and last frames of a path render as raw RGB (ffmpeg), with their size. */
+async function ends(url, name) {
   const file = path.join(tmp, `${name}${path.extname(url)}`);
   fs.writeFileSync(file, Buffer.from(await (await (await api).fetch(app + url)).body()));
   const probe = JSON.parse(execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "json", file]).toString()).streams[0];
-  const rgb = execFileSync("ffmpeg", ["-v", "error", "-i", file, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { maxBuffer: 64 << 20 });
-  return { width: probe.width, height: probe.height, rgb };
+  const first = execFileSync("ffmpeg", ["-v", "error", "-i", file, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { maxBuffer: 64 << 20 });
+  // The last half second, then its last frame.
+  const tail = execFileSync("ffmpeg", ["-v", "error", "-sseof", "-0.5", "-i", file, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { maxBuffer: 256 << 20 });
+  const n = probe.width * probe.height * 3;
+  return { width: probe.width, height: probe.height, first, last: tail.subarray(tail.length - n) };
+}
+
+/** How one frame differs from the same frame without the prop: changed pixels, the splat's violet, the handle's colours. */
+function compare(a, b) {
+  let changed = 0;
+  let violet = 0;
+  let handle = 0;
+  for (let i = 0; i < a.length; i += 3) {
+    const d = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
+    if (d < 60) continue;
+    changed++;
+    const [r, g, bl] = [b[i], b[i + 1], b[i + 2]];
+    if (bl > r + 25 && bl > g + 25) violet++;
+    if ((r > 180 && g < 90 && bl < 90) || (g > 180 && r < 90 && bl < 90)) handle++;
+  }
+  return { changed, violet, handle };
 }
 
 const status = await call("/api/status");
@@ -124,8 +143,11 @@ try {
   await aside.getByRole("button", { name: "Add a prop" }).click();
   const dialog = page.getByRole("dialog", { name: "Add a prop" });
   await dialog.getByRole("heading", { name: "From a picture" }).waitFor();
-  // The owner on placeholder results may make one from a picture (Idol 3D on the GPU), priced before it runs.
-  await dialog.getByRole("button", { name: /^Make the prop · / }).waitFor();
+  // The owner on placeholder results may make one from a picture (Idol 3D on the GPU). No price shows until a picture
+  // is picked and priced (never a "Free" guessed before the preview).
+  const makeButton = dialog.getByRole("button", { name: /^Make the prop/ });
+  await makeButton.waitFor();
+  assert.equal((await makeButton.textContent()).trim(), "Make the prop", "no price before a picture is picked");
   await shoot(page, "props-add-dialog-dark");
   await dialog.getByRole("button", { name: /^Place Idol 3D/ }).first().click();
   await dialog.waitFor({ state: "detached" });
@@ -169,26 +191,22 @@ try {
   // The prop stays picked: its handle shows on screen, and must not reach the render.
   await page.mouse.move(1300, 20);
   const withProp = await filmOpen(page, seen);
-  const a = await firstFrame(plain.request.inputs.video, "plain");
-  const b = await firstFrame(withProp.request.inputs.video, "prop");
+  const a = await ends(plain.request.inputs.video, "plain");
+  const b = await ends(withProp.request.inputs.video, "prop");
   assert.equal(a.width, b.width);
   assert.equal(a.height, b.height);
-  let changed = 0;
-  let violet = 0;
-  let handle = 0;
-  for (let i = 0; i < a.rgb.length; i += 3) {
-    const d = Math.abs(a.rgb[i] - b.rgb[i]) + Math.abs(a.rgb[i + 1] - b.rgb[i + 1]) + Math.abs(a.rgb[i + 2] - b.rgb[i + 2]);
-    if (d < 60) continue;
-    changed++;
-    const [r, g, bl] = [b.rgb[i], b.rgb[i + 1], b.rgb[i + 2]];
-    if (bl > r + 25 && bl > g + 25) violet++;
-    if ((r > 180 && g < 90 && bl < 90) || (g > 180 && r < 90 && bl < 90)) handle++;
-  }
   const total = a.width * a.height;
+  const { changed, violet, handle } = compare(a.first, b.first);
   console.log(`  first frame ${a.width}x${a.height}: ${changed} px changed (${((changed / total) * 100).toFixed(1)}%), ${violet} violet, ${handle} handle-coloured`);
   assert.ok(changed > total * 0.01, "the prop changes the render's first frame");
   assert.ok(violet > changed * 0.5, "what changed is the prop's violet");
   assert.ok(handle < changed * 0.01, "the handle isn't in the render");
+  // The last frame, the furthest from where the screen's camera stayed, shows the prop too, and only the prop.
+  const late = compare(a.last, b.last);
+  console.log(`  last frame: ${late.changed} px changed (${((late.changed / total) * 100).toFixed(1)}%), ${late.violet} violet, ${late.handle} handle-coloured`);
+  assert.ok(late.changed > total * 0.01, "the prop is in the render's last frame");
+  assert.ok(late.violet > late.changed * 0.5, "what changed in the last frame is the prop's violet");
+  assert.ok(late.handle < late.changed * 0.01, "the handle isn't in the last frame");
 
   step("the prop is kept for the scene after a reload");
   await page.reload({ waitUntil: "load" });

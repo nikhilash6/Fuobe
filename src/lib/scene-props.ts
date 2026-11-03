@@ -139,7 +139,7 @@ function parseProp(v: unknown): SceneProp | null {
   const str = (x: unknown) => (typeof x === "string" && x.length > 0 && x.length <= 2048 ? x : undefined);
   const id = str(o.id);
   const url = str(o.url);
-  if (!id || !url || !/^(\/|https?:\/\/)/.test(url)) return null;
+  if (!id || !url || !/^(\/(?!\/)|https?:\/\/)/.test(url)) return null;
   const format = typeof o.format === "string" ? splatFormatOf({ url: `x.${o.format}` }) : undefined;
   if (!format) return null;
   const vec = (x: unknown): Vec3 | null => (Array.isArray(x) && x.length === 3 && x.every((n) => typeof n === "number" && Number.isFinite(n)) ? [x[0], x[1], x[2]] : null);

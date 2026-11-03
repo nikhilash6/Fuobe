@@ -245,6 +245,11 @@ export class SceneEngine {
   private disposed = false;
   /** A path preview or recording owns the camera. */
   private playing = false;
+  /**
+   * A path is being recorded: the screen isn't drawn meanwhile. Drawing it would make Spark sort the props for the
+   * on-screen camera while a path frame waits for its own sort, and the frame would be drawn in the wrong order.
+   */
+  private recording = false;
   /** Props: their splats (Spark, once the first is added) and their groups by id. */
   private splats: SceneSplats | null = null;
   private splatsLoading: Promise<SceneSplats> | null = null;
@@ -516,7 +521,7 @@ export class SceneEngine {
         this.refocus();
       }
     }
-    if (this.dirty && this.view && this.info) {
+    if (this.dirty && this.view && this.info && !this.recording) {
       this.dirty = false;
       this.draw(null, Math.round(this.size.w * this.size.dpr), Math.round(this.size.h * this.size.dpr), this.view.frame.width * this.size.dpr, this.view.frame.height * this.size.dpr);
     }
@@ -574,6 +579,8 @@ export class SceneEngine {
   async addProp(p: SceneProp, o: { signal?: AbortSignal; maxBytes?: number } = {}): Promise<number> {
     if (!this.splatsLoading) {
       const loading = import("../model3d/splat-engine").then(({ SceneSplats }) => {
+        // The viewer closed while Spark was loading: make nothing for it.
+        if (this.disposed) throw new DOMException("Closed", "AbortError");
         const splats = new SceneSplats(this.renderer, () => (this.dirty = true));
         this.scene.add(splats.root);
         this.splats = splats;
@@ -764,6 +771,7 @@ export class SceneEngine {
       if (o.signal?.aborted || this.disposed) throw new DOMException("Stopped", "AbortError");
     };
     this.playing = true;
+    this.recording = true;
     try {
       // Blockout to film: the render as the cloud models read it (MP4 where the browser encodes H.264).
       if (o.mp4 && !mask) {
@@ -804,6 +812,7 @@ export class SceneEngine {
       out.dispose();
       this.renderer.setRenderTarget(null);
       this.playing = false;
+      this.recording = false;
       this.dirty = true;
     }
   }

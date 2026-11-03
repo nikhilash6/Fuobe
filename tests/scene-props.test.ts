@@ -128,6 +128,7 @@ describe("the scene state round trip", () => {
     const bad = [
       { ...good, id: "" },
       { ...good, id: "u", url: "javascript:alert(1)" },
+      { ...good, id: "pr", url: "//elsewhere.example/x.spz" },
       { ...good, id: "f", format: "glb" },
       { ...good, id: "n", position: [0, Number.NaN, 0] },
       { ...good, id: "s", size: -1 },
@@ -188,5 +189,38 @@ describe("the scene draws props in its own render", () => {
 
   it("props write depth, so the post pass doesn't take them for holes (Uni3C's transparent black)", () => {
     expect(read("src/components/model3d/splat-engine.ts")).toMatch(/new SparkRenderer\(\{ renderer, onDirty, depthWrite: true/);
+  });
+
+  it("doesn't draw the screen while a path records, so every path frame keeps its own camera's sort", () => {
+    const engine = read("src/components/cinema/scene-engine.ts");
+    // step() draws only when not recording (a screen draw would start a sort for the on-screen camera mid-frame).
+    expect(engine).toMatch(/if \(this\.dirty && this\.view && this\.info && !this\.recording\)/);
+    const record = engine.slice(engine.indexOf("async recordPath("), engine.indexOf("dispose() {"));
+    expect(record).toMatch(/this\.recording = true;/);
+    // ...and gives the screen back however the recording ends.
+    expect(record.slice(record.indexOf("} finally {"))).toMatch(/this\.recording = false;/);
+  });
+
+  it("makes no Spark renderer for a viewer that closed while Spark was loading", () => {
+    const engine = read("src/components/cinema/scene-engine.ts");
+    const add = engine.slice(engine.indexOf("async addProp("), engine.indexOf("updateProp(p: SceneProp)"));
+    expect(add.indexOf("if (this.disposed)")).toBeGreaterThan(-1);
+    expect(add.indexOf("if (this.disposed)")).toBeLessThan(add.indexOf("new SceneSplats("));
+  });
+
+  it("a prop made from a picture says so when it couldn't go in the scene, and props being made count towards the most", () => {
+    const viewer = read("src/components/cinema/scene-viewer.tsx");
+    const made = viewer.slice(viewer.indexOf("const madeProp"), viewer.indexOf("const changeProp"));
+    expect(made).toMatch(/if \(placed === "placed"\) toast\.success\("Your prop is in the scene"\)/);
+    expect(made).toMatch(/placed === "full"/);
+    expect(viewer).toMatch(/full=\{props\.length \+ making\.length >= MAX_PROPS\}/);
+    // A new scene opened in place starts from its own props.
+    expect(read("src/components/cinema/workspace.tsx")).toMatch(/<SceneViewer\s+key=\{openScene\.generation\.id\}/);
+  });
+
+  it("the Make the prop button shows no price until the preview has one", () => {
+    const ui = read("src/components/cinema/scene-props.tsx");
+    expect(ui).not.toMatch(/priceLine\(preview\.data\) \?\? "Free"/);
+    expect(ui).toMatch(/Make the prop\{price \? ` · \$\{price\}` : ""\}/);
   });
 });
