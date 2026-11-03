@@ -167,6 +167,7 @@ node validate-workflows.mjs <ids> wan21-vace-14b-ref2v --shared
 | `image-to-splat-triposplat` | splat | subject Gaussian splat (`.spz`) + orbit MP4 (TripoSplat) | no |
 | `image-to-splat-idol` | splat | one object as a Gaussian splat (`.spz`) + orbit MP4 (Idol 3D on the TripoSplat core nodes; Best / Quick look, looser photo crop) | no |
 | `image-to-splat-idol-clean` | splat | the same with the ComfyUI-Idol pack: Idol's own crop (synthetic / real), the saved splat pruned of its haze (and optional spikes), the input-view still; not on the validation server (checked through `PACK_CLASSES`) | no |
+| `image-to-mesh-idol` | image-to-3d | one object as a rough vertex-coloured GLB (Idol 3D's splat → core Extract Mesh from Splat, 384 grid, no textures) + orbit MP4 | no |
 | `reference-brief-gemma4` | write | reference clip's frames + sound → JSON style brief (Gemma 4 E4B) | no |
 
 - **Changes from the research graphs** (each also in the entry's notes): the painted / insert masks are read from the

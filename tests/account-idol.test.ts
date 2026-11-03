@@ -6,8 +6,8 @@ import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-r
 
 /**
  * Idol 3D (idol-1) under public sign-up: 3D models are closed to accounts, so an account's Idol run answers 403
- * own-gpu-tool on both engines — on its own linked ComfyUI (oss-idol) and with its own fal.ai key (idol-3d) — and
- * nothing reaches its GPU or fal.
+ * own-gpu-tool on both engines — on its own linked ComfyUI (oss-idol, and idol-7's quick mesh oss-idol-mesh) and with its
+ * own fal.ai key (idol-3d) — and nothing reaches its GPU or fal.
  */
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-idol-"));
@@ -65,12 +65,14 @@ const post = (body: unknown) => {
 
 describe("Idol 3D stays closed to accounts", () => {
   it.each([
-    ["open", "oss-idol"],
-    ["cloud", "idol-3d"],
-  ] as const)("on the %s engine (%s): 403 own-gpu-tool, nothing sent", async (engine, modelId) => {
+    ["open", "oss-idol", "splat"],
+    ["cloud", "idol-3d", "splat"],
+    // idol-7: Idol 3D quick mesh, in From an image.
+    ["open", "oss-idol-mesh", "image"],
+  ] as const)("on the %s engine (%s): 403 own-gpu-tool, nothing sent", async (engine, modelId, mode) => {
     expect(getModel(modelId)?.engine).toBe(engine);
     const photo = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload", accountId: account }).url;
-    const req = model3dRequest({ engine, mode: "splat", modelId, photo, quality: "quick", photoCrop: true });
+    const req = model3dRequest({ engine, mode, modelId, photo, quality: "quick", photoCrop: true });
     expect(req.modelId).toBe(modelId);
     fake.log.length = 0;
     fetched.length = 0;

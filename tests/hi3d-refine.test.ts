@@ -99,7 +99,7 @@ describe("the catalog: open engine only", () => {
   });
 
   it("puts the switch on every open image-to-3D model, off unless picked", () => {
-    for (const id of ["oss-pixal3d", "oss-trellis2", "oss-hunyuan3d-21", "oss-trellis2-multi"]) {
+    for (const id of ["oss-pixal3d", "oss-trellis2", "oss-hunyuan3d-21", "oss-idol-mesh", "oss-trellis2-multi"]) {
       const c = getModel(id)!.options.controls?.find((x) => x.param === "hi3dRefine");
       expect(c, id).toMatchObject({ default: "off", values: ["off", 512, 1024, 1536] });
     }
