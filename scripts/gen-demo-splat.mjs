@@ -5,6 +5,8 @@
  * the open TripoSplat and Idol 3D graphs write). Like an Idol splat, about a third of its Gaussians are faint haze
  * (opacity under 0.05) around the object, so the viewer's "Hide faint haze" slider has something to hide.
  * Deterministic (a seeded generator). Run: node scripts/gen-demo-splat.mjs
+ * A bigger one to time the viewer with (not committed): --gaussians=262144 --out=/tmp/splat-262k (writes
+ * demo-splat.ply and .spz there).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -12,11 +14,13 @@ import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const out = path.join(root, "public", "samples");
+const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
+const out = arg("out") ? path.resolve(arg("out")) : path.join(root, "public", "samples");
+fs.mkdirSync(out, { recursive: true });
 
-const SOLID = 2816;
-const HAZE = 1280;
-const N = SOLID + HAZE;
+const N = Number(arg("gaussians") ?? 4096);
+const SOLID = Math.round(N * (2816 / 4096));
+const HAZE = N - SOLID;
 
 // mulberry32: the same file on every run.
 let seed = 0x5d4bdb;

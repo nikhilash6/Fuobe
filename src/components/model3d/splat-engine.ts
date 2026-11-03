@@ -28,6 +28,8 @@ export class SplatEngine {
   private cutoff = dyno.dynoFloat(0);
   private home = { position: new THREE.Vector3(0, 0, 3), target: new THREE.Vector3() };
   private frame = 0;
+  /** Keep drawing until then (performance.now()): Spark builds, sorts and uploads over a few frames after a change. */
+  private until = 0;
   private disposed = false;
   /** The last frame's CPU time in milliseconds (renderer.render), for the numbers in docs/research/idol-9.md. */
   lastFrameMs = 0;
@@ -68,7 +70,7 @@ export class SplatEngine {
     this.mesh = mesh;
     this.scene.add(mesh);
     this.frameObject(mesh.getBoundingBox(true));
-    this.requestRender();
+    this.requestRender(1500);
     return { splats: mesh.packedSplats?.numSplats ?? 0, bytes: bytes.byteLength };
   }
 
@@ -126,7 +128,7 @@ export class SplatEngine {
   setCutoff(value: number) {
     this.cutoff.value = value;
     this.mesh?.updateVersion();
-    this.requestRender();
+    this.requestRender(500);
   }
 
   setBackground(color: string) {
@@ -149,13 +151,16 @@ export class SplatEngine {
     return new Promise((resolve, reject) => this.canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't save the still"))), "image/png"));
   }
 
-  private requestRender() {
+  /** Draw on the next frame, and keep drawing for `settleMs` (Spark finishing its work), or while the camera glides. */
+  private requestRender(settleMs = 150) {
+    this.until = Math.max(this.until, performance.now() + settleMs);
     if (this.frame || this.disposed) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
       this.render();
       // Damping keeps the camera gliding after a drag: keep drawing until it settles.
-      if (this.controls.update()) this.requestRender();
+      const gliding = this.controls.update();
+      if (gliding || performance.now() < this.until) this.requestRender(0);
     });
   }
 
