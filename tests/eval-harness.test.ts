@@ -387,7 +387,19 @@ describe("the runner on the demo provider", () => {
         ["shorts/session", "fuobe-shorts", null],
       ]);
       // Clean up dialogue's hosted cleaners: planned and priced as dry runs, each on its own op.
-      const sep = await dry(["--suite", "separation", "--engine", "cloud", "--variants", "clean-veed,clean-deepfilternet,demucs", "--cases", "separation/centre,separation/video", "--allow-fixtures"]);
+      // The video case reads your own clip (scripts/eval/local, git-ignored); where there is none, it borrows the fixture
+      // clip (a video with sound) for this check, so the case is a video here too, not the audio fixture it falls back to.
+      const clip = path.join(process.cwd(), "scripts/eval/local/separation/video/clip.mp4");
+      const lent = !fs.existsSync(clip);
+      // The first folder this check made (none if the folder was already there): removed afterwards with the clip.
+      const made = lent ? fs.mkdirSync(path.dirname(clip), { recursive: true }) : undefined;
+      if (lent) fs.copyFileSync(path.join(process.cwd(), "scripts/eval/fixtures/walk-6s.mp4"), clip);
+      let sep: Plan;
+      try {
+        sep = await dry(["--suite", "separation", "--engine", "cloud", "--variants", "clean-veed,clean-deepfilternet,demucs", "--cases", "separation/centre,separation/video", "--allow-fixtures"]);
+      } finally {
+        if (lent) fs.rmSync(made ?? clip, { recursive: true, force: true });
+      }
       expect(sep.jobs.map((j) => [j.case, j.variant, j.model, j.skip ? "refused" : typeof j.costUsd])).toEqual([
         ["separation/centre", "clean-veed", "veed-clean-audio", "number"],
         ["separation/centre", "clean-deepfilternet", "deepfilternet3", "number"],
