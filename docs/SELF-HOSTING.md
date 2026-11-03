@@ -76,6 +76,17 @@ To manage accounts, runs and workers from your own tools without the owner's sig
 
 Public sign-up, guest browsing and connecting your own GPU to a shared install are described in [public-signup.md](public-signup.md).
 
+### Sign-in data
+
+The password, the sign-in secret, API tokens and accounts are kept in the database, `data/fuobe.db`, which only the server's own user can read (on Linux and macOS). Older versions kept them in `data/auth.json`. Upgrading needs no step:
+
+- On the first start of this version, `auth.json` moves into the database in one go, checked before it is saved. A crash part-way changes nothing, and the next start does it again.
+- For 10 minutes after that, `auth.json` is kept up to date, in case a server of the older version still runs on the same folder (for example during a deploy that starts the new server before it stops the old one).
+- Then it is renamed to `auth.json.migrated-<date and time>`, which is kept as a backup, and a short note takes its place. An older version that finds the note keeps sign-in on with nobody signed in, rather than opening the studio without a password.
+- If `auth.json` can't be read, nothing moves and sign-in stays on with nobody signed in until you fix or restore the file. If its data can't be moved (two accounts with the same email, for example), nothing changes, and the server answers every request with 503 and says why in its log.
+
+To back up, copy `fuobe.db` (stop the server first, or use `sqlite3 data/fuobe.db ".backup backup.db"`, which also takes the `-wal` file's changes) together with `secrets.key`. To go back to an older version: stop the server and copy `auth.json.migrated-<…>` over `auth.json`. Changes made since the move (new accounts, a new password) are not in that file.
+
 ## Environment variables
 
 | Variable | What it does |
@@ -84,7 +95,7 @@ Public sign-up, guest browsing and connecting your own GPU to a shared install a
 | `FUOBE_ALLOWED_ORIGINS` | Extra hosts Fuobe is reached at, comma-separated. Without a password, Fuobe answers only on IP addresses, localhost, single-label and LAN names (`.local`, `.lan`, `.home.arpa`, `.internal`) and the machine's hostname; add any other domain (a reverse proxy, a tunnel, a Tailscale name), or `*` to turn the check off. Also counts as "same site" for the cross-site write check behind a proxy that forwards neither Host nor X-Forwarded-Host |
 | `FUOBE_TRUST_PROXY=1` | Behind a reverse proxy: trust the last `X-Forwarded-For` hop, so wrong passwords, and too many wrong share links, lock out only that visitor (60 s). Without it, everyone shares one limit: passwords are slowed to one attempt every 4 s and never locked, and wrong share links past 100 a minute get 429 while real links still open |
 | `FUOBE_ALLOW_PRIVATE_URLS=1` | Let inputs, product links and project sources be fetched from private / LAN addresses (they are refused by default), and let Assist connectors use plain http beyond localhost (without it a connector needs https unless it is on localhost; a private https address is accepted, with a warning that Claude can only reach it through a public tunnel) |
-| `FUOBE_DATA_DIR` | Where the database, files and `auth.json` live (default `./data`). Back up `secrets.key` there with `auth.json`: it opens the fal.ai and Replicate keys accounts saved ([Your keys](public-signup.md#your-keys)), which must be added again without it |
+| `FUOBE_DATA_DIR` | Where the database (with the sign-in data) and files live (default `./data`). Back up `secrets.key` there with `fuobe.db`: it opens the fal.ai and Replicate keys accounts saved ([Your keys](public-signup.md#your-keys)), which must be added again without it |
 | `FUOBE_DEMO_MODE` | `off` (default: a run with nothing connected asks you to connect one) or `on` (placeholder results, for a tour: every run makes a labelled placeholder). The old `auto` reads as `off`, and a saved `auto` is cleared on start |
 | `FUOBE_SKILLS_DIR` | Where Assist's built-in skills are read from (default `./skills`) |
 | `FUOBE_ENGINE_MODE`, `FUOBE_CLOUD_PROVIDER`, `FUOBE_ENHANCE_PROVIDER`, `FUOBE_LLM_PROVIDER` | The Settings choices above |

@@ -11,7 +11,7 @@ import { DATA_DIR } from "./db";
  * context (the account and the provider), so a sealed value copied to another account or provider doesn't open.
  *
  * Fails closed: a key file that can't be read or isn't a key seals nothing and opens nothing, and is never written
- * over. Back it up with auth.json: without it, the saved keys must be added again.
+ * over. Back it up with the database (fuobe.db): without it, the saved keys must be added again.
  */
 
 const VERSION = "v1";

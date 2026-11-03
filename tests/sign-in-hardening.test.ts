@@ -1,6 +1,4 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { tempDir } from "./helpers/temp-dir";
 
@@ -99,12 +97,11 @@ describe("M-2: password checks are counted and never hold up the server", () => 
     await expect(auth.verifyPassword("nope nope")).resolves.toBe(false);
   });
 
-  it("records a log-in at most once an hour, so log-ins don't rewrite the accounts file", async () => {
-    const file = path.join(dir, "auth.json");
+  it("records a log-in at most once an hour, so log-ins don't write the sign-in data each time", async () => {
     expect((await login.POST(post("/api/auth/login", { email: "member@example.com", password: "member password" }))).status).toBe(200);
-    const before = fs.readFileSync(file, "utf8");
+    const before = auth.authVersion();
     for (let i = 0; i < 3; i++) expect((await login.POST(post("/api/auth/login", { email: "member@example.com", password: "member password" }))).status).toBe(200);
-    expect(fs.readFileSync(file, "utf8")).toBe(before);
+    expect(auth.authVersion()).toBe(before);
   });
 
   it("an account deleting itself gets 5 password checks a minute", async () => {

@@ -153,23 +153,21 @@ describe("L-16: pages carry a Content-Security-Policy, and no X-Powered-By", () 
   });
 });
 
-describe("L-17: sign-in fails closed when the accounts file can't be read", () => {
-  it("keeps sign-in on and never overwrites a file it couldn't read", () => {
-    const file = path.join(dir, "auth.json");
-    const good = fs.readFileSync(file, "utf8");
+describe("L-17: sign-in fails closed when the sign-in data can't be read", () => {
+  it("keeps sign-in on, signs nobody in and writes nothing while the sign-in tables can't be used", () => {
     const owner = auth.createSession().value;
+    const before = auth.listAccounts().length;
+    globalThis.__fuobeAuthTablesError = "a test";
     try {
-      fs.writeFileSync(file, "{ not json");
-      fs.utimesSync(file, new Date(), new Date(Date.now() + 10_000));
       expect(auth.authEnabled()).toBe(true);
       expect(auth.validSession(owner)).toBe(false);
-      expect(() => auth.createAccount("late@example.com", "long enough")).toThrow();
-      expect(fs.readFileSync(file, "utf8")).toBe("{ not json");
+      expect(() => auth.createAccount("late@example.com", "long enough")).toThrow(/can't be read/);
     } finally {
-      fs.writeFileSync(file, good);
-      fs.utimesSync(file, new Date(), new Date(Date.now() + 20_000));
+      globalThis.__fuobeAuthTablesError = null;
     }
     expect(auth.validSession(owner)).toBe(true);
+    expect(auth.listAccounts()).toHaveLength(before);
+    // An auth.json that can't be read, waiting to move into the database: tests/auth-migration.test.ts.
   });
 });
 

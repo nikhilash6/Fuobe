@@ -5,6 +5,83 @@ import path from "node:path";
 
 export const DATA_DIR = path.resolve(/*turbopackIgnore: true*/ process.env.FUOBE_DATA_DIR ?? path.join(process.cwd(), "data"));
 
+/**
+ * Sign-in data (src/server/auth-store.ts), which data/auth.json held before. Every name starts with "auth_": a data folder
+ * may hold tables of the same plain names ("users", "api_tokens"…) from a dropped branch. Secrets stay as auth.json had
+ * them: scrypt password hashes ("salt:hash"), account keys sealed by secret-box.ts, API tokens by their SHA-256 only.
+ * - auth_install: one row: the cookie secret, the Settings password's hash, the public sign-up switch, auth.json's
+ *   top-level fields this build doesn't know, and a number that grows with every change (authVersion).
+ * - auth_migration: one row once the store is set up: where it came from (an imported auth.json, or new) and whether
+ *   the imported file is still kept in step for a build that may still read it ("bridge") or was put aside ("done").
+ * - auth_tokens, auth_accounts (one per email, lower-cased), auth_account_gpu and auth_account_keys (rows of an
+ *   account, removed with it), auth_signed_out (signed-out cookies by their SHA-256, until they would have expired).
+ * Safe to run on every start.
+ */
+export const AUTH_TABLES = `CREATE TABLE IF NOT EXISTS auth_install (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    secret TEXT NOT NULL DEFAULT '',
+    password_hash TEXT,
+    public_signup INTEGER NOT NULL DEFAULT 0,
+    extra_json TEXT,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS auth_migration (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    source TEXT NOT NULL,
+    state TEXT NOT NULL,
+    started_at INTEGER NOT NULL,
+    synced_at INTEGER,
+    json_stat TEXT,
+    json_sha256 TEXT,
+    counts_json TEXT,
+    backup_file TEXT,
+    retired_at INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS auth_tokens (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    hash TEXT NOT NULL UNIQUE,
+    prefix TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    last_used_at INTEGER,
+    extra_json TEXT
+  );
+  CREATE TABLE IF NOT EXISTS auth_accounts (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL CHECK (email = lower(email)),
+    password_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    password_changed_at INTEGER,
+    last_login_at INTEGER,
+    disabled INTEGER NOT NULL DEFAULT 0,
+    sessions_after INTEGER,
+    extra_json TEXT
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS auth_accounts_email ON auth_accounts(email);
+  CREATE INDEX IF NOT EXISTS auth_accounts_created ON auth_accounts(created_at DESC);
+  CREATE TABLE IF NOT EXISTS auth_account_gpu (
+    account_id TEXT PRIMARY KEY REFERENCES auth_accounts(id) ON DELETE CASCADE,
+    mode TEXT CHECK (mode IS NULL OR mode IN ('link', 'computer')),
+    url TEXT,
+    token TEXT,
+    CHECK (mode = 'computer' OR url IS NOT NULL)
+  );
+  CREATE TABLE IF NOT EXISTS auth_account_keys (
+    account_id TEXT NOT NULL REFERENCES auth_accounts(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    sealed TEXT NOT NULL,
+    last4 TEXT NOT NULL,
+    added_at INTEGER NOT NULL,
+    rejected_at INTEGER,
+    PRIMARY KEY (account_id, provider)
+  );
+  CREATE TABLE IF NOT EXISTS auth_signed_out (
+    hash TEXT PRIMARY KEY,
+    exp INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS auth_signed_out_exp ON auth_signed_out(exp);`;
+
 /** Run in order, once each: a migration is known by its place in this list (append only, never reorder). */
 export const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS generations (
@@ -612,7 +689,13 @@ export const MIGRATIONS: string[] = [
   // skill's name, one set of its inputs as text (a file is its /api/files/… URL) and the file inputs that take the
   // newest upload of their kind when the run starts. NULL: a request, as before.
   `ALTER TABLE assist_schedules ADD COLUMN skill_json TEXT;`,
+  // Sign-in data (AUTH_TABLES, src/server/auth-store.ts), which data/auth.json held before. Also made on every open
+  // (ensureAuthTables), since other branches append migrations at the same place.
+  AUTH_TABLES,
 ];
+
+/** The place of the sign-in tables' migration in MIGRATIONS. */
+const AUTH_MIGRATION = 27;
 
 /**
  * "Use the ComfyUI on this computer" (src/server/computer/tasks.ts). relay_runners: each principal's computer (the one
@@ -815,6 +898,44 @@ export const SKILL_TABLES = `CREATE TABLE IF NOT EXISTS skill_runs (
   CREATE INDEX IF NOT EXISTS skill_runs_skill ON skill_runs(skill, created_at DESC);
   CREATE INDEX IF NOT EXISTS skill_runs_status ON skill_runs(status);`;
 
+/** The columns each sign-in table must have: a table of the same name made by something else is never used. */
+const AUTH_COLUMNS: Record<string, string[]> = {
+  auth_install: ["id", "secret", "password_hash", "public_signup", "extra_json", "version", "updated_at"],
+  auth_migration: ["id", "source", "state", "started_at", "synced_at", "json_stat", "json_sha256", "counts_json", "backup_file", "retired_at"],
+  auth_tokens: ["id", "name", "hash", "prefix", "created_at", "last_used_at", "extra_json"],
+  auth_accounts: ["id", "email", "password_hash", "created_at", "password_changed_at", "last_login_at", "disabled", "sessions_after", "extra_json"],
+  auth_account_gpu: ["account_id", "mode", "url", "token"],
+  auth_account_keys: ["account_id", "provider", "sealed", "last4", "added_at", "rejected_at"],
+  auth_signed_out: ["hash", "exp"],
+};
+
+/** Make the sign-in tables and check they are ours. Never throws: a problem is kept for auth-store.ts, which fails closed. */
+function ensureAuthTables(db: Database.Database): string | null {
+  try {
+    for (const [table, columns] of Object.entries(AUTH_COLUMNS)) {
+      const have = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+      if (have.length && columns.some((c) => !have.includes(c))) return `a table named ${table} with other columns is already in the database`;
+    }
+    db.exec(AUTH_TABLES);
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+
+/**
+ * The database holds the cookie secret, password hashes and sealed keys: only the server's own user may read it (and
+ * its -wal and -shm files, which SQLite makes with the database file's mode). Not on Windows, which has no such modes.
+ */
+function keepPrivate(file: string): void {
+  if (process.platform === "win32") return;
+  for (const f of [file, `${file}-wal`, `${file}-shm`]) {
+    try {
+      if ((fs.statSync(f).mode & 0o077) !== 0) fs.chmodSync(f, 0o600);
+    } catch {}
+  }
+}
+
 /** Columns the optional services added to existing tables: [table, column, type]. */
 const HOOK_COLUMNS: [string, string, string][] = [
   // 1: never served to the account (its output check hasn't said "show").
@@ -843,6 +964,8 @@ const RELAY_COLUMNS: [string, string, string][] = [
 
 declare global {
   var __fuobeDb: Database.Database | undefined;
+  /** Why the sign-in tables couldn't be made or used (null: they are fine). auth-store.ts then fails closed. */
+  var __fuobeAuthTablesError: string | null | undefined;
 }
 
 /**
@@ -863,22 +986,45 @@ function forgetDroppedBranchMigrations(db: Database.Database): void {
   if (done(24) && !hasColumn("assets", "account_id") && has("trigger", "audit_log_no_delete")) forget(24);
 }
 
+/** Add a column found missing: another server starting at the same moment may have just added it. */
+function addColumn(db: Database.Database, alter: string): void {
+  try {
+    db.exec(alter);
+  } catch (e) {
+    if (!/duplicate column name/i.test((e as Error).message)) throw e;
+  }
+}
+
 function open(): Database.Database {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  const db = new Database(path.join(DATA_DIR, "fuobe.db"));
-  db.pragma("journal_mode = WAL");
+  const file = path.join(DATA_DIR, "fuobe.db");
+  const db = new Database(file);
+  keepPrivate(file);
+  // Before anything else: another server opening the same file at the same moment is waited for, not an error.
   db.pragma("busy_timeout = 5000");
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  // A deleted row's bytes are overwritten where that costs no extra writes: a deleted account's email and password hash
+  // don't stay behind in the file.
+  db.pragma("secure_delete = FAST");
   db.exec(`CREATE TABLE IF NOT EXISTS _migrations (id INTEGER PRIMARY KEY)`);
   forgetDroppedBranchMigrations(db);
   const done = new Set(
     (db.prepare("SELECT id FROM _migrations").all() as { id: number }[]).map((r) => r.id),
   );
+  // The sign-in tables first: a folder whose place 27 went to another branch's migration still gets them. When they
+  // can't be made (a table of the same name with other columns), their migration waits and sign-in fails closed.
+  globalThis.__fuobeAuthTablesError = ensureAuthTables(db);
+  if (globalThis.__fuobeAuthTablesError) console.error(`[fuobe] The sign-in tables can't be used: ${globalThis.__fuobeAuthTablesError}`);
   MIGRATIONS.forEach((sql, i) => {
     if (done.has(i)) return;
+    if (i === AUTH_MIGRATION && globalThis.__fuobeAuthTablesError) return;
+    // The write lock first, then a second look: another server starting at the same moment may have run it.
     db.transaction(() => {
+      if (db.prepare("SELECT 1 FROM _migrations WHERE id = ?").get(i)) return;
       db.exec(sql);
       db.prepare("INSERT INTO _migrations (id) VALUES (?)").run(i);
-    })();
+    }).immediate();
   });
   // Placeholder results are opt-in (settings.ts, demoMode): a saved "auto", which made a placeholder whenever the model
   // wasn't connected, is cleared, so the install runs with the default "off". A saved "on" stays. Safe on every start.
@@ -887,7 +1033,7 @@ function open(): Database.Database {
   // "openrouter"…); chats from before read agent "claude" as Anthropic. Added when it's missing rather than as a
   // numbered migration, so branches that add migrations never clash over its place in the list.
   if (!(db.prepare("PRAGMA table_info(assist_thread_state)").all() as { name: string }[]).some((c) => c.name === "provider")) {
-    db.exec("ALTER TABLE assist_thread_state ADD COLUMN provider TEXT");
+    addColumn(db, "ALTER TABLE assist_thread_state ADD COLUMN provider TEXT");
   }
   // "Use the ComfyUI on this computer" (src/server/computer): its tables, made here rather than as a numbered migration,
   // since other branches add migrations at the same time and a migration is known by its place in the list.
@@ -895,13 +1041,13 @@ function open(): Database.Database {
   // Columns added after the tables were first made (a data folder that ran an earlier build of this feature).
   for (const [table, column, type] of RELAY_COLUMNS) {
     const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
-    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    if (!has) addColumn(db, `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
   // The optional billing and moderation services (billing.ts, moderation.ts): their tables and columns.
   db.exec(HOOK_TABLES);
   for (const [table, column, type] of HOOK_COLUMNS) {
     const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
-    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    if (!has) addColumn(db, `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
   // Admin tokens and the admin API's log.
   db.exec(ADMIN_TABLES);
@@ -920,6 +1066,7 @@ function open(): Database.Database {
   } catch (e) {
     console.warn(`[fuobe] Couldn't index runs by account: ${(e as Error).message}`);
   }
+  keepPrivate(file);
   return db;
 }
 

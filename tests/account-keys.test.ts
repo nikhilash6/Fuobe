@@ -2,9 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { tempDir } from "./helpers/temp-dir";
+import { accountRows, authDb, dbBytes } from "./helpers/auth-db";
 
 /**
- * Your keys: where an account's own fal.ai key or Replicate token is kept. Sealed on its record in auth.json, never in
+ * Your keys: where an account's own fal.ai key or Replicate token is kept. Sealed on its account's row in the database, never in
  * plain text in any file of the data folder, shown only by its last 4 characters, gone with the account.
  */
 const dir = tempDir("fuobe-account-keys-");
@@ -42,13 +43,15 @@ beforeAll(() => {
 });
 
 describe("an account's own keys, at rest", () => {
-  it("are sealed on its record: auth.json holds the sealed value and the last 4 characters, never the key", () => {
+  it("are sealed on its record: the database holds the sealed value and the last 4 characters, never the key", () => {
     const info = keys.saveAccountKey(a, "fal", FAL);
     expect(info).toEqual({ last4: "9f3a", addedAt: expect.any(Number), readable: true });
     keys.saveAccountKey(a, "replicate", REP);
-    const record = JSON.parse(fs.readFileSync(path.join(dir, "auth.json"), "utf8")).accounts.find((x: { id: string }) => x.id === a);
-    expect(record.keys.fal).toEqual({ sealed: expect.stringMatching(/^v1\./), last4: "9f3a", addedAt: expect.any(Number) });
-    expect(record.keys.replicate.last4).toBe("7c21");
+    authDb().pragma("wal_checkpoint(TRUNCATE)");
+    const record = auth.accountById(a)!;
+    expect(accountRows("auth_account_keys", a).map((r) => r.provider).sort()).toEqual(["fal", "replicate"]);
+    expect(record.keys!.fal).toEqual({ sealed: expect.stringMatching(/^v1\./), last4: "9f3a", addedAt: expect.any(Number) });
+    expect(record.keys!.replicate!.last4).toBe("7c21");
     expect(keys.accountKey(a, "fal")).toBe(FAL);
     expect(keys.accountKey(a, "replicate")).toBe(REP);
     for (const f of dataFiles()) {
@@ -117,7 +120,8 @@ describe("an account's own keys, at rest", () => {
     keys.saveAccountKey(c, "fal", "acct-fal-c-key:secret-c");
     auth.deleteAccount(c);
     expect(auth.accountKeyRecord(c, "fal")).toBeNull();
-    expect(fs.readFileSync(path.join(dir, "auth.json"), "utf8")).not.toContain("keys-c@example.com");
+    expect(dbBytes(dir)).not.toContain("keys-c@example.com");
+    expect(accountRows("auth_account_keys", c)).toEqual([]);
     // secrets.key lost (a restore without it): the account's keys stop, the record stays to say "add it again".
     fs.rmSync(path.join(dir, "secrets.key"));
     expect(keys.accountKey(a, "fal")).toBeNull();

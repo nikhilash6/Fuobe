@@ -58,8 +58,10 @@ takes an account's GPU type from the status strip's last check and asks the GPU 
   still works as before: `POST /api/auth/login` with `{ "password" }`, or the owner's sign-in at
   `/login?owner=1`. The login page links to it only in development, so a public site doesn't
   advertise it.
-- Accounts are stored in `auth.json` in the data folder: the email in lower case, a salted scrypt
-  hash of the password (the same scheme as the install password), and the creation time.
+- Accounts are stored in the database (`fuobe.db` in the data folder, table `auth_accounts`): the
+  email in lower case (one account per email), a salted scrypt hash of the password (the same scheme
+  as the install password), and the creation time. An install from before this kept them in
+  `auth.json`, which moves into the database on the first start ([Sign-in data](SELF-HOSTING.md#sign-in-data)).
 - Sign-up and log-in attempts are rate limited per visitor (set `FUOBE_TRUST_PROXY=1` behind a
   reverse proxy, so that each visitor gets their own limit; an IPv6 address counts by its /64).
   A visitor gets 30 account log-ins a minute, right or wrong, and 10 a minute for one email. After
@@ -220,8 +222,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
 
 - **Saving.** `PUT /api/account/gpu` with `{ "url", "token"? }` checks the address and asks that
   ComfyUI for `/system_stats` (`?test=1` checks without saving). `DELETE` disconnects. The address
-  and the optional token (sent as `Authorization: Bearer`) are stored with the account in
-  `auth.json`, never as the studio's ComfyUI setting.
+  and the optional token (sent as `Authorization: Bearer`) are stored with the account in the
+  database (`auth_account_gpu`), never as the studio's ComfyUI setting.
 - **Server-side requests.** Addresses on the server itself, on private networks or link-local
   addresses are refused. The check runs again on the address each connection actually uses, so a
   name that is later pointed at the server can't reach the studio's own ComfyUI. The studio's own
@@ -305,8 +307,8 @@ account with that provider. The studio's own keys are never used for an account'
   reaches the provider counts: 10 a minute per account, 20 per address (behind a trusted proxy),
   120 for all accounts together.
 - **Stored encrypted.** The key is sealed with AES-256-GCM under a server key in
-  `data/secrets.key`, made the first time a key is saved, and kept on the account's record in
-  `auth.json`. The server key isn't derived from the sign-in secret, so a new password or "Sign
+  `data/secrets.key`, made the first time a key is saved, and kept with the account in the
+  database (`auth_account_keys`). The server key isn't derived from the sign-in secret, so a new password or "Sign
   everyone out" leaves saved keys working. Without `secrets.key` (lost, or restored from another
   server), saved keys can't be opened: accounts are asked to add them again, and the studio's keys
   are never used instead.

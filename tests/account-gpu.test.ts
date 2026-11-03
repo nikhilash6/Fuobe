@@ -1,7 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tempDir } from "./helpers/temp-dir";
+import { accountRows } from "./helpers/auth-db";
 
 const dir = tempDir("fuobe-account-gpu-");
 process.env.FUOBE_DATA_DIR = dir;
@@ -99,7 +98,8 @@ describe("Your GPU: where an account's runs go", () => {
   it("forgets the GPU on disconnect", () => {
     auth.setAccountGpu(id, null);
     expect(auth.accountGpu(id)).toBeNull();
-    expect(JSON.parse(fs.readFileSync(path.join(dir, "auth.json"), "utf8")).accounts[0]).not.toHaveProperty("gpu");
+    expect(auth.accountById(id)).not.toHaveProperty("gpu");
+    expect(accountRows("auth_account_gpu", id)).toEqual([]);
   });
 });
 

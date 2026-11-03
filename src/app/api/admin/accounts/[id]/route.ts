@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { z } from "zod";
 import { accountsWithStats } from "@/server/account-admin";
 import { adminAccess, audit, auditRead, type Actor } from "@/server/admin-tokens";
-import { AccountError, listAccounts, setAccountDisabled, signOutAccount } from "@/server/auth";
+import { AccountError, accountInfo, setAccountDisabled, signOutAccount } from "@/server/auth";
 import { removeAccount } from "@/server/account-sweep";
 import { revokeWorkersOf } from "@/server/computer/workers";
 
@@ -24,7 +24,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/admin/accoun
   const access = adminAccess(request, "accounts:read", DENIED);
   if (access instanceof Response) return access;
   const { id } = await ctx.params;
-  const account = listAccounts().find((a) => a.id === id);
+  const account = accountInfo(id);
   if (!account) return Response.json({ error: "No such account" }, { status: 404, headers: NO_STORE });
   auditRead(access.actor, "account.read", null, id);
   return Response.json(accountsWithStats([account]).items[0], { headers: NO_STORE });
@@ -53,7 +53,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/acco
     return failed(e, access.actor, action, id);
   }
   audit(access.actor, action, id, computers ? { computers } : null, 200);
-  return Response.json(listAccounts().find((a) => a.id === id), { headers: NO_STORE });
+  return Response.json(accountInfo(id), { headers: NO_STORE });
 }
 
 /** Delete an account. */

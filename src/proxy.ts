@@ -33,6 +33,7 @@ import { hit } from "@/server/rate";
 import { recordExists } from "@/server/records";
 import { findShare, shareGuard, shareTargetExists } from "@/server/share-access";
 import { hostedRunsOn } from "@/server/hosted-switch";
+import { authStoreFailed } from "@/server/auth-store";
 
 /**
  * Paths that work signed out: the login page and its API (and share links: openShare). Sign-up and
@@ -326,6 +327,11 @@ function safeDecode(s: string): string {
 }
 
 export function proxy(request: NextRequest) {
+  // Sign-in data that can't be used (the database, or an auth.json that couldn't be moved into it): nothing is served,
+  // not even /login, so a new release in this state is never switched to and the studio is never open by mistake.
+  if (authStoreFailed()) {
+    return new NextResponse("Fuobe can't read its sign-in data. The server log says why.", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "30" } });
+  }
   // DNS rebinding: a page whose own name now points at this machine. Every method, reads too. With a
   // password set the sign-in check below already stops it (the session cookie belongs to the real name).
   if (!authEnabled() && !hostAllowed(request.headers.get("host") ?? request.nextUrl.host)) {

@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 import { keysSeen, startFakeFal, startFakeReplicate, type FakeCloud } from "./helpers/fake-cloud";
 import { TINY_PNG } from "./helpers/fake-comfy-runner";
 import { tempDir } from "./helpers/temp-dir";
+import { dbBytes } from "./helpers/auth-db";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.mock("next/headers", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/headers")>()), cookies: async () => ({ delete: () => {}, get: () => undefined }) }));
@@ -361,7 +362,7 @@ describe("deleting an account stops its paid runs with its key, then forgets the
       const cancel = fal.log.find((r) => r.path.endsWith("/cancel"));
       expect(cancel?.authorization, how).toBe("Key acct-fal-E");
       expect(auth.accountById(id), how).toBeUndefined();
-      expect(fs.readFileSync(path.join(dir, "auth.json"), "utf8")).not.toContain(`gone-${how}@example.com`);
+      expect(dbBytes(dir)).not.toContain(`gone-${how}@example.com`);
       expect(keysSeen(fal.log)).toEqual(["Key acct-fal-E"]);
     }
   });

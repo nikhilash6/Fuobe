@@ -7,6 +7,7 @@ import type { AccountListing, AccountRun, AccountTotals } from "@/server/account
 import type { ListOptions } from "@/server/generations";
 import { TINY_PNG } from "./helpers/fake-comfy-runner";
 import { tempDir } from "./helpers/temp-dir";
+import { authSecret } from "./helpers/auth-db";
 
 // Route handlers are called directly, outside a Next request: connection() has nothing to wait for.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
@@ -73,13 +74,13 @@ function output(id: string, bytes = 0) {
   return asset;
 }
 
-/** Session cookies: the owner's, account A's and C's, an owner-shaped one signed with auth.json's secret alone, and two at once. */
+/** Session cookies: the owner's, account A's and C's, an owner-shaped one signed with the stored secret alone, and two at once. */
 const cookies = {} as Record<"owner" | "a" | "c" | "forged" | "doubled", string>;
 beforeAll(() => {
   auth.setPassword("install password");
   const owner = auth.createSession().value;
   const a = auth.createSession(A).value;
-  const secret = (JSON.parse(fs.readFileSync(path.join(dir, "auth.json"), "utf8")) as { secret: string }).secret;
+  const secret = authSecret();
   const exp = Date.now() + 60_000;
   cookies.owner = `${auth.SESSION_COOKIE}=${owner}`;
   cookies.a = `${auth.SESSION_COOKIE}=${a}`;

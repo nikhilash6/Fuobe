@@ -1,9 +1,8 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { tempDir } from "./helpers/temp-dir";
+import { authDb, authSecret, dbBytes } from "./helpers/auth-db";
 // Route handlers call connection(); outside a request scope it would throw.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 // Route handlers set the session cookie through cookies() (no request scope in a test): a jar that only records.
@@ -41,9 +40,8 @@ describe("accounts", () => {
     expect(a.email).toBe("judge@example.com");
     expect(a.hash).toMatch(/^[0-9a-f]{32}:[0-9a-f]{64}$/);
     expect(a.createdAt).toBeGreaterThan(0);
-    const file = fs.readFileSync(path.join(dir, "auth.json"), "utf8");
-    expect(file).not.toContain("long enough");
-    expect(JSON.parse(file).accounts[0].email).toBe("judge@example.com");
+    expect(dbBytes(dir)).not.toContain("long enough");
+    expect(authDb().prepare("SELECT email FROM auth_accounts WHERE id = ?").get(a.id)).toEqual({ email: "judge@example.com" });
   });
 
   it("logs in with the right password only", () => {
@@ -433,7 +431,7 @@ describe("an account changes its password (Settings → Account)", () => {
       headers: { "content-type": "application/json", cookie: `${auth.SESSION_COOKIE}=${cookie}` },
       body: JSON.stringify(body),
     });
-  const secret = () => (JSON.parse(fs.readFileSync(path.join(dir, "auth.json"), "utf8")) as { secret: string }).secret;
+  const secret = authSecret;
   /** An account cookie signed with the secret alone, as before account keys held the password's fingerprint. */
   const legacy = (id: string) => {
     const payload = `${Date.now() + 86_400_000}.${id}`;

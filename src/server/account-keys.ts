@@ -5,7 +5,7 @@ import { accountKeyContext, open, seal } from "./secret-box";
 import { savedSetting } from "./settings";
 
 /**
- * Your keys (public sign-up): an account's own fal.ai key or Replicate token. Sealed on its record in auth.json
+ * Your keys (public sign-up): an account's own fal.ai key or Replicate token. Sealed on its row in the database
  * (secret-box.ts, bound to the account and the provider), so it goes with the account. Opened on each use and never
  * kept in plain text, so a removed or replaced key stops at once. Only provider-keys.ts hands one to a provider call;
  * nothing here ever returns a key to a browser (accountKeyInfo: the last 4 characters).
