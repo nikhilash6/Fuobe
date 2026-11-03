@@ -145,9 +145,24 @@ Before its ComfyUI gets a graph, the worker checks all of these. The studio cann
 1. Every node type is on the allowlist that is built into the worker (`bin/lib/worker/dist/allowed-nodes.json`, made
    by `scripts/build-worker.mjs` from the catalog's workflows and the graph builders). For your own workflows, pass
    a file with `allowNodesFile` in `worker.json`. The studio can never send a file like that.
-2. Every file that the graph reads was sent with the job.
-3. No string input names a path (an absolute path, a drive letter, a network share or a `..` step).
-4. Every model file that the graph names is one that the worker verified.
+2. Every file that the graph reads was sent with the job, under the name the studio gave it.
+3. Every input keeps to its rule (`bin/lib/worker/dist/input-rules.json`). The build gives a rule to each input that
+   could name a file, a folder, a download or code, from the values in the catalog's own workflows:
+   - a fixed value, or one of a list (a subtitle node writes no file; a timeline node reads no clip by path; a format
+     string, a download name and a save folder stay the catalog's);
+   - a number range;
+   - a file that this job sent;
+   - a save name that the studio makes (plain name parts, no path);
+   - a model file that the worker verified, in the model folder that its loader reads.
+
+   No link from another node may reach an input that has a rule, so a value cannot be built from pieces. A node that
+   has such an input takes only the inputs that the catalog gives it.
+4. Inputs with no rule that do not take free text hold no path. A name is refused if it has a `:`, `%`, `~` or `..`.
+   Any value is refused if it starts with `/`, `\`, `~` or a drive (`C:`), or if it holds an address (`://`), an
+   encoded or variable part (`%2e`, `%TEMP%`), a `..` step or a Windows device name (`CON`, `NUL`, `COM1`…).
+   Prompts, lyrics and captions keep any text.
+5. Every model file that the graph names is one that the worker verified, by its exact name. A file with the same
+   name in another folder does not count.
 
 After each job, the worker deletes the job's inputs and results from its folders and deletes the prompt from its
 ComfyUI's history. At start, it empties its folders.
@@ -170,8 +185,9 @@ token on every call, so a revoked token stops at once.
   models }`.
 - `POST /api/gpu/computer/bench`: bench jobs for this worker only (none are defined yet). The times of every finished
   job also count: the last 20 jobs in each lane give the median and the 90th percentile.
-- Reports, inputs and results work as they do for the browser. `failed` can also give `unknown-node`, `unsafe-path`
-  or `model-unverified` as the reason.
+- Reports, inputs and results work as they do for the browser. `failed` can also give `unknown-node`, `unsafe-path` (a
+  path, or an input outside its rule) or `model-unverified` as the reason. The worker's own log names the node and the
+  input, never the value.
 
 Each worker counts against its own rate limits, so three workers that beat every 5 seconds never hold each other up.
 
@@ -192,7 +208,10 @@ routes.
 
 ## Tests
 
-- `pnpm test` (`tests/workers-pool.test.ts`, `tests/workers-pairing.test.ts`, `tests/worker-program.test.ts`)
+- `pnpm test` (`tests/workers-pool.test.ts`, `tests/workers-pairing.test.ts`, `tests/worker-program.test.ts`,
+  `tests/worker-input-rules.test.ts`, `tests/worker-environment.test.ts`). The input-rule tests send graphs that try to
+  write or read files outside the worker's folders, and check that the worker refuses them. They also prepare every
+  catalog workflow the way the studio does, and check that the worker accepts each one.
 - `node tests/e2e/worker.mjs` and `node tests/e2e/fuobe-connect.mjs` (after `pnpm build`, or with `E2E_DEV=1`). These
   use a stand-in ComfyUI and a stand-in `nvidia-smi` on ports 3361 and 3362. They never touch a real GPU or ComfyUI.
 - `python -m unittest discover -s tests` in `integrations/fuobe-connect`

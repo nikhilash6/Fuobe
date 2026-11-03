@@ -2,6 +2,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { inputRules } from "../bin/lib/worker/checks.mjs";
 import { comfyArgs, comfyEnv, OFFLINE_ENV, OwnComfy } from "../bin/lib/worker/comfy.mjs";
 import { nodePacks, packFolders } from "../bin/lib/worker/inventory.mjs";
 import { minVramBytesFor, needsOf, VRAM_TOLERANCE } from "@/lib/lanes";
@@ -92,6 +93,12 @@ describe("its own ComfyUI's environment", () => {
     } finally {
       await c.stop();
     }
+  });
+});
+
+describe("the worker's built rules", () => {
+  it("must be there: a worker never runs without them", () => {
+    expect(() => inputRules(path.join(tempDir("fuobe-worker-norules-"), "input-rules.json"))).toThrow();
   });
 });
 

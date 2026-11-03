@@ -2,12 +2,14 @@
 //
 // 1. Every node type is on the allowlist built into this worker (dist/allowed-nodes.json), plus a file the PC's owner
 //    passes with --allow-nodes. The studio can never add to it: a studio taken over can't run new code on this PC.
-// 2. Every file the graph reads was sent with the job (the shared runner's graphProblem does this one).
-// 3. No string input names a path: an absolute path, a drive letter, a network share, or a ".." step.
-// 4. Every model file the graph names is one this worker verified (its inventory).
+// 2. Every file the graph reads was sent with the job (the shared runner's graphProblem, and the input-file rule).
+// 3. Every input keeps to its rule (dist/input-rules.json, see rules.mjs), and no link from another node reaches an
+//    input that has one. Inputs with no rule that don't take free text hold no path (the second layer).
+// 4. Every model file the graph names is one this worker verified (its inventory), by its exact name.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { inputProblem, verifiedIndex } from "./rules.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -17,28 +19,38 @@ export function allowedNodes(extraFile) {
   return new Set([...built, ...(Array.isArray(extra) ? extra : (extra.nodes ?? []))]);
 }
 
-const PATHLIKE = [/^[A-Za-z]:[\\/]/, /^\\\\/, /^\/(?!\/)[^\s]*\//, /(^|[\\/])\.\.([\\/]|$)/, /^~[\\/]/];
-const MODEL = /\.(safetensors|gguf|ckpt|pt|pth|bin|sft)$/i;
+/** The input rules built into this worker. Throws when they aren't built: the worker never runs without them. */
+export function inputRules(file = path.join(here, "dist", "input-rules.json")) {
+  const r = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!r || typeof r.inputs !== "object") throw new Error("The worker's input rules are unreadable. Run: node scripts/build-worker.mjs");
+  return r;
+}
 
-/** The first problem with a job's graph for this worker, or null. */
-export function vetGraph(graph, allowed, verified) {
-  for (const node of Object.values(graph ?? {})) {
-    if (!node || typeof node.class_type !== "string" || !allowed.has(node.class_type)) return "unknown-node";
+/**
+ * The first problem with a job's graph for this worker, or null: { reason, node, cls, input }. The reason is
+ * "unknown-node", "unsafe-path" (an input outside its rule, a link into a ruled input, or a path) or "model-unverified".
+ * `o`: { rules, staged } (the built rules, and the names of the files this job sent).
+ */
+export function graphCheck(graph, allowed, verified, o = {}) {
+  for (const [id, node] of Object.entries(graph ?? {})) {
+    if (!node || typeof node.class_type !== "string" || !allowed.has(node.class_type)) return { reason: "unknown-node", node: id, cls: typeof node?.class_type === "string" ? node.class_type : null, input: null };
   }
-  for (const node of Object.values(graph)) {
-    for (const v of Object.values(node.inputs ?? {})) {
-      if (typeof v !== "string") continue;
-      if (PATHLIKE.some((r) => r.test(v))) return "unsafe-path";
+  const ctx = { rules: o.rules ?? null, staged: o.staged ?? [], byName: verifiedIndex(verified) };
+  let unverified = null;
+  for (const [id, node] of Object.entries(graph)) {
+    const inputs = node.inputs && typeof node.inputs === "object" ? node.inputs : {};
+    for (const [input, v] of Object.entries(inputs)) {
+      const reason = inputProblem(node.class_type, input, v, ctx);
+      if (reason === "unsafe-path") return { reason, node: id, cls: node.class_type, input };
+      if (reason && !unverified) unverified = { reason, node: id, cls: node.class_type, input };
     }
   }
-  for (const node of Object.values(graph)) {
-    for (const v of Object.values(node.inputs ?? {})) {
-      if (typeof v !== "string" || !MODEL.test(v)) continue;
-      const name = v.replace(/\\/g, "/");
-      if (!verified.has(name) && !verified.has(name.split("/").pop())) return "model-unverified";
-    }
-  }
-  return null;
+  return unverified;
+}
+
+/** The first problem with a job's graph for this worker (its reason), or null. */
+export function vetGraph(graph, allowed, verified, o = {}) {
+  return graphCheck(graph, allowed, verified, o)?.reason ?? null;
 }
 
 /** Delete everything in the worker's own input, output and temp folders (at start: whatever a crash left). */

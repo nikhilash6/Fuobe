@@ -30,7 +30,7 @@ export async function worker(args, io) {
         io.stderr.write("This worker isn't set up yet. Run: fuobe worker setup\n");
         return 2;
       }
-      if (!fs.existsSync(path.join(here, "dist", "computer-runner.mjs"))) {
+      if (!["computer-runner.mjs", "allowed-nodes.json", "input-rules.json"].every((f) => fs.existsSync(path.join(here, "dist", f)))) {
         io.stderr.write("The worker's shared parts aren't built. Run: node scripts/build-worker.mjs\n");
         return 2;
       }

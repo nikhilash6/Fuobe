@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { cleanJob, emptyFolders, allowedNodes, vetGraph } from "./checks.mjs";
+import { allowedNodes, cleanJob, emptyFolders, graphCheck, inputRules } from "./checks.mjs";
 import { folders, OwnComfy, PortBusy } from "./comfy.mjs";
 import { PROTOCOL, readControl, writeControl, writeStatus } from "./config.mjs";
 import { GpuWatch, othersOf, readGpu } from "./gpu.mjs";
@@ -40,7 +40,8 @@ export function localPause(control, gpu, comfyTrouble, now) {
 }
 
 /**
- * Run until `signal` aborts. `deps`: { fetch, now, sleep, readGpu, log, home, requirements, ComputerRunner }.
+ * Run until `signal` aborts. `deps`: { fetch, now, sleep, readGpu, log, home, requirements, ComputerRunner, rules }
+ * (rules: the built input rules, read from dist/ when not given).
  */
 export async function runWorker(cfg, deps) {
   const now = deps.now ?? Date.now;
@@ -54,6 +55,7 @@ export async function runWorker(cfg, deps) {
   fs.mkdirSync(cfg.workDir, { recursive: true });
   emptyFolders(f);
   const allowed = allowedNodes(cfg.allowNodesFile);
+  const rules = deps.rules ?? inputRules();
   const comfy = new OwnComfy(cfg, { now, fetch: fetchFn, folderNames: index.folders ?? [] });
   const gpu = new GpuWatch({ autoResume: !!cfg.autoResume, resumeAfterMs: (cfg.resumeAfterMin ?? 10) * 60_000, resumeBelowC: cfg.resumeBelowC ?? 75 });
   let comfyTrouble = null;
@@ -76,7 +78,6 @@ export async function runWorker(cfg, deps) {
     invHash = inventoryHash(inv);
   }
   await scan();
-  const verified = () => new Set(inv.files.flatMap((x) => [x.name, `${x.folder}/${x.name}`]));
 
   const runner = new ComputerRunner(
     {
@@ -88,7 +89,12 @@ export async function runWorker(cfg, deps) {
       socket: typeof WebSocket === "function" ? (url) => new WebSocket(url) : undefined,
       now,
       sleep,
-      vet: (t) => vetGraph(t.graph, allowed, verified()),
+      vet: (t) => {
+        const problem = graphCheck(t.graph, allowed, inv.files, { rules, staged: (t.inputs ?? []).map((i) => i.name) });
+        // Which node and input, for the PC's owner (never a value: those are someone's prompt or file).
+        if (problem) log(`Refused job ${t.id}: ${problem.reason} at node ${problem.node}${problem.cls ? ` (${problem.cls}${problem.input ? `.${problem.input}` : ""})` : ""}.`);
+        return problem?.reason ?? null;
+      },
       ended: (t, phase) => {
         log(`Job ${t.id} ${phase}.`);
         return cleanJob(t, f, comfy.base, fetchFn);
