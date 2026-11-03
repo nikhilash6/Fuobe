@@ -537,8 +537,9 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
   const shots = useMemo(() => (ref ? (results.data ?? []).filter((g) => photoOf(g) === ref) : []), [results.data, ref]);
 
   const cloudOnly = mode === "cloud";
-  // Where the angles are made and their price, as the studios say it (the 3D view, then one picture per angle).
-  const place = useOpenRunPlace([getModel(ANY_ANGLE.buildModel)?.name, getModel(ANY_ANGLE.shotModel)?.name].filter((x): x is string => !!x), null);
+  // Where the angles are made and their price, as the studios say it (the 3D view, then one picture per angle). The 3D
+  // view is built on the viewer's own GPU only (this studio's GPUs refuse it), so an account connects its own.
+  const place = useOpenRunPlace([getModel(ANY_ANGLE.buildModel)?.name, getModel(ANY_ANGLE.shotModel)?.name].filter((x): x is string => !!x), null, { ownGpuOnly: true });
   const ready = !!view && !!ref;
   // A build that failed takes the angles waiting for it with it.
   const waiting = build?.status === "failed" || build?.status === "canceled" ? null : asked;
@@ -688,6 +689,7 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
                       ? (build?.error ?? "The 3D view didn't finish. Try again.")
                       : "First we build a 3D view of your photo. It takes about two minutes, once per photo."}
               </p>
+              {!building && !noSubject && <RunPlaceChip place={place} className="shrink-0 self-start sm:self-center" />}
               {!building &&
                 (noSubject ? (
                   <Button size="lg" className="shrink-0 rounded-full" onClick={() => take({ ref: "", preview: "" })}>
@@ -698,6 +700,7 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
                     size="lg"
                     className="shrink-0 rounded-full"
                     disabled={!ref || create.isPending}
+                    title={place?.send ? `${failedBuild ? "Try again" : "Build 3D view"} · ${place.send}` : undefined}
                     onClick={() => {
                       if (failedBuild) setBuildId(null);
                       setWaiting(null);

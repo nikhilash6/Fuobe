@@ -100,9 +100,9 @@ export function NewAds({
       onError: (e) => toastError(e),
     });
   };
-  // Where the ads are made and their price, as the studios say it.
+  // Where the ads are made and their price, as the studios say it (the picked picture model until the run is priced).
   const priced = est.data && !est.data.blocker ? est.data : undefined;
-  const place = useRunPlace({ engine, models: priced ? [priced.modelName] : undefined, costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Ads Studio" });
+  const place = useRunPlace({ engine, models: priced ? [priced.modelName] : undefined, model: priced?.modelName ?? visual?.name, costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Ads Studio" });
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border bg-background p-4 sm:p-5">
@@ -216,7 +216,7 @@ export function NewAds({
             </div>
             <div className="flex items-center gap-3">
               <RunPlaceChip place={place} engine={engine} onEngine={onEngine} pending={est.isFetching && !est.data} className="bg-background" />
-              <Button size="lg" onClick={create} disabled={createBatch.isPending || !!est.data?.blocker} title={place?.send ? `Create ${total} ads · ${place.send}` : undefined}>
+              <Button size="lg" onClick={create} disabled={createBatch.isPending || !!est.data?.blocker} title={est.data?.blocker ?? (place?.send ? `Create ${total} ads · ${place.send}` : undefined)}>
                 {createBatch.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Create {total} ads
               </Button>
             </div>

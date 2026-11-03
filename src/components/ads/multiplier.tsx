@@ -278,7 +278,7 @@ export function AdMultiplier({ models, examples }: { models: Record<string, Mode
   // Where the new versions are made and their price (the studios' words); a guest or an account is told it isn't
   // available here (its run would be refused), with no price.
   const priced = est.data && !est.data.blocker ? est.data : undefined;
-  const place = useRunPlace({ engine, models: priced?.steps.map((s) => s.modelName), model: mainModel(priced?.steps), costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Ad Multiplier" });
+  const place = useRunPlace({ engine, models: priced?.steps.map((s) => s.modelName), model: mainModel(priced?.steps) ?? model?.name, costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Ad Multiplier" });
   const runLabel = versions > 1 ? `Generate ${versions} versions` : "Generate";
 
   const mention = (n: number) => {

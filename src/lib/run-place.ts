@@ -53,6 +53,8 @@ export interface RunPlace {
   send: string;
   /** What this viewer does before the run can start: create an account, connect a GPU, or add a key. */
   needs?: "signup" | "gpu" | "key";
+  /** The cloud model the chip names, when known (the label is "Cloud" without one). */
+  model?: string;
 }
 
 const list = (names: readonly string[]) => (names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
@@ -150,8 +152,10 @@ export function runPlace(input: RunPlaceInput): RunPlace {
     price,
     title: "Runs in the cloud",
     tip,
-    send: input.demo ? price : [price, who].filter(Boolean).join(" · "),
+    // Not priced yet: the button says what this viewer does first, else nothing (never a bare "cloud").
+    send: input.demo ? price : price ? `${price} · ${who}` : needs ? who : "",
     ...(needs && { needs }),
+    ...(model && { model }),
   };
 }
 
@@ -167,3 +171,15 @@ export function mainModel(steps: readonly { modelName: string; costUsd: number |
 
 /** Drawn in this browser (a Kinetic template, Click to Ad's end card): the same place and price whoever looks. */
 export const IN_BROWSER: RunPlace = runPlace({ audience: "guest", engine: "browser", format: String });
+
+/**
+ * The price check's answer for a run on this studio's GPUs (`?preview=1` with `place: "pool"`), as the chip's `pool`:
+ * only when the server says the run goes there (`place: "pool"` with a quote). Undefined otherwise (not checked yet, a
+ * model the studio doesn't offer there, its own GPU or key): the chip then says your GPU, never this studio's.
+ * `count`: runs one press starts (the quote is for one, said "each").
+ */
+export function checkedPool(check: { place?: "pool"; quote?: { text: string; sub?: string } } | null | undefined, count = 1): { text: string; sub?: string } | undefined {
+  if (check?.place !== "pool" || !check.quote) return undefined;
+  const { text, sub } = check.quote;
+  return { text: count > 1 && text ? `${text} each` : text, ...(sub && { sub }) };
+}

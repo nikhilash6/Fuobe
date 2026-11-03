@@ -161,9 +161,22 @@ try {
         if (who === "owner") {
           check(chip.where === "gpu" || chip.where === "cloud", `${tag}: on your GPU or in the cloud (${chip.where}: "${chip.text}")`);
           check(chip.where !== "gpu" || /Your GPU/.test(chip.text), `${tag}: the GPU chip says Your GPU`);
+          // A cloud chip names its model (never a bare "Cloud"), and the screen reader never hears "on Cloud".
+          check(chip.where !== "cloud" || !/^Cloud\b/.test(chip.text), `${tag}: the cloud chip names its model ("${chip.text}")`);
+          check(!/on Cloud\b/.test(chip.aria), `${tag}: the chip's label names no bare cloud ("${chip.aria}")`);
+          if (size === "390" && id === "marketing") {
+            // A phone's Marketing chip is its icon and price: the format chip keeps its room.
+            const label = chip.el.locator("span").first();
+            check(!(await label.isVisible().catch(() => true)), `${tag}: the phone chip leaves its label to the panel`);
+          }
           await chip.el.click();
           const panel = page.getByText(chip.where === "gpu" ? "Runs on your GPU" : "Runs in the cloud").first();
           check(await panel.isVisible({ timeout: 10_000 }).catch(() => false), `${tag}: the chip opens where it runs`);
+          if (size === "1440") {
+            await page.waitForTimeout(900);
+            // The popover takes focus itself: no control's tooltip covers its words.
+            check(!(await page.locator('[role="tooltip"]').first().isVisible().catch(() => false)), `${tag}: no tooltip covers the panel`);
+          }
           await page.screenshot({ path: path.join(shots, `${who}-${size}-${id}-panel.png`) });
           const sw = page.getByRole("radiogroup").or(page.locator('[role="dialog"] button, [data-radix-popper-content-wrapper] button').filter({ hasText: /Cloud|Open source/ }));
           check((await sw.count()) > 0, `${tag}: the engine switch is in the panel`);

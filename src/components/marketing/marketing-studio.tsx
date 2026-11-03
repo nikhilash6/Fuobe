@@ -581,7 +581,7 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
               {f.brandKit && <BrandChip value={brandId} onChange={pickBrand} />}
               <SettingsPanel draft={draft} set={set} models={models} engine={engine} />
             </div>
-            <RunPlaceChip place={place} steps={priced?.steps} engine={engine} onEngine={setEngine} pending={est.isFetching && !est.data} className="max-sm:max-w-[11rem]" />
+            <RunPlaceChip place={place} steps={priced?.steps} engine={engine} onEngine={setEngine} pending={est.isFetching && !est.data} compact className="max-sm:shrink-0 sm:max-w-[16rem]" />
             <Tooltip>
               <TooltipTrigger asChild>
                 <button

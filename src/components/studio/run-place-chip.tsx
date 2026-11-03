@@ -11,7 +11,7 @@ import type { Engine, GenerationRequest } from "@/lib/catalog/types";
 import { CONNECT_GPU_EVENT, signInHref, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { formatCost } from "@/lib/format";
 import { quoteBody, useHostedQuote, useSettled } from "@/lib/hosted";
-import { runPlace, type RunAudience, type RunPlace, type RunPlaceInput } from "@/lib/run-place";
+import { checkedPool, runPlace, type RunAudience, type RunPlace, type RunPlaceInput } from "@/lib/run-place";
 import { cn } from "@/lib/utils";
 import { chipBase, chipIdle } from "./chip";
 import { EngineSwitch } from "./engine-switch";
@@ -42,18 +42,20 @@ export function useRunPlace(input: Omit<RunPlaceInput, "audience" | "format" | "
 
 /**
  * The place and price of an open-model run sent through the studios' generations (an app's own tool): your GPU, free;
- * with hosted runs on, an account with no GPU of its own runs on this studio's GPUs at the price the server quotes for
- * `request` (null: not quoted yet). `count`: runs one press starts (the quote is for one, said "each"). `ownGpuOnly`: a
- * tool that asks an account to connect its GPU instead (Relight), so it is never sent to this studio's GPUs.
+ * with hosted runs on, a guest or an account with no GPU of its own runs on this studio's GPUs once the server's price
+ * check for `request` says the run goes there, at its price (null: nothing to check yet, said as your GPU). `count`: runs
+ * one press starts (the quote is for one, said "each"). `ownGpuOnly`: a tool that asks an account to connect its GPU
+ * instead (Relight, Any Angle), so it is never sent to this studio's GPUs.
  */
 export function useOpenRunPlace(models: readonly string[], request: GenerationRequest | null, o: { count?: number; ownGpuOnly?: boolean } = {}): RunPlace | null {
   const viewer = useRunViewer();
-  const who = viewer && o.ownGpuOnly ? { ...viewer, hosted: false } : viewer;
-  const onPool = !!who && who.audience === "account" && who.hosted && !who.gpu;
-  const quote = useHostedQuote(useSettled(onPool ? quoteBody(request, "pool") : null)).data?.quote;
-  if (!who) return null;
-  const pool = quote ? { text: (o.count ?? 1) > 1 && quote.text ? `${quote.text} each` : quote.text, sub: quote.sub } : undefined;
-  return runPlace({ engine: "open", models, ...who, pool, format: formatCost });
+  const mayPool = !!viewer && !o.ownGpuOnly && viewer.audience !== "owner" && viewer.hosted && !viewer.gpu;
+  const checked = useHostedQuote(useSettled(mayPool ? quoteBody(request, "pool") : null)).data;
+  if (!viewer) return null;
+  // This studio's GPUs only on the server's word (as the studio composer asks it): a model it doesn't offer there, or
+  // no complete run to check yet, is your GPU (connect it, or sign up).
+  const pool = mayPool ? checkedPool(checked, o.count) : undefined;
+  return runPlace({ engine: "open", models, ...viewer, hosted: !!pool, pool, format: formatCost });
 }
 
 /**
@@ -67,6 +69,7 @@ export function RunPlaceChip({
   engine,
   onEngine,
   pending,
+  compact,
   className,
 }: {
   place: RunPlace | null;
@@ -77,6 +80,8 @@ export function RunPlaceChip({
   onEngine?: (e: Engine) => void;
   /** The price is being worked out. */
   pending?: boolean;
+  /** On phones, the icon and the price only (the icon alone when there is no price); the panel says the rest. */
+  compact?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -88,6 +93,8 @@ export function RunPlaceChip({
   const price = pending && !place.price ? "…" : place.price;
   const canSwitch = !!(engine && onEngine && (place.where === "cloud" || place.where === "gpu" || place.where === "pool"));
   const many = (steps?.length ?? 0) > 1;
+  // A compact chip on a phone: the label goes (the price stays), so the composer's other controls keep their room.
+  const iconOnly = compact && !price;
   return (
     <ResponsivePanel
       open={open}
@@ -95,18 +102,20 @@ export function RunPlaceChip({
       title={place.title}
       description={place.tip}
       align="end"
+      focusSelf
       trigger={
         <button
           type="button"
           data-run-place={place.where}
-          aria-label={`${place.title}${place.where === "cloud" ? ` on ${place.label}` : ""}${place.price ? `, ${place.price}` : ""}. ${canSwitch ? "Details and engine" : "Details"}`}
-          className={cn(chipBase, chipIdle, "max-w-full min-w-0", className)}
+          aria-label={`${place.title}${place.model ? ` on ${place.model}` : ""}${place.price ? `, ${place.price}` : ""}. ${canSwitch ? "Details and engine" : "Details"}`}
+          title={compact ? [place.label, place.price].filter(Boolean).join(" · ") : undefined}
+          className={cn(chipBase, chipIdle, "max-w-full min-w-0", iconOnly && "max-sm:px-2.5", className)}
         >
           <Icon className="size-3.5 shrink-0" />
-          <span className="min-w-0 truncate max-sm:max-w-[9rem]">{place.label}</span>
+          <span className={cn("min-w-0 truncate max-sm:max-w-[9rem]", compact && "max-sm:hidden")}>{place.label}</span>
           {price && (
             <>
-              <span aria-hidden className="opacity-50">
+              <span aria-hidden className={cn("opacity-50", compact && "max-sm:hidden")}>
                 ·
               </span>
               <span className="shrink-0 tabular-nums">{price}</span>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { IN_BROWSER, mainModel, placePrice, runPlace, type RunPlaceInput } from "@/lib/run-place";
+import { checkedPool, IN_BROWSER, mainModel, placePrice, runPlace, type RunPlaceInput } from "@/lib/run-place";
 
 /** Where a run happens and what it costs, for each audience and engine (the composers' place chip and send button). */
 const fmt = (usd: number) => `$${usd.toFixed(2)}`;
@@ -35,7 +35,12 @@ describe("the owner", () => {
     expect(p.tip).toBe("Runs in the cloud with GPT-5 mini and Nano Banana Pro. Estimated cost, billed by the provider to your key.");
   });
   it("names the cloud before the run is priced, and the first model when no main one is given", () => {
-    expect(at({ audience: "owner", engine: "cloud" })).toMatchObject({ label: "Cloud", price: "", send: "cloud" });
+    // Not priced and no model known: "Cloud" on the chip, nothing after the button's name, no model for the screen reader.
+    const bare = at({ audience: "owner", engine: "cloud" });
+    expect(bare).toMatchObject({ label: "Cloud", price: "", send: "" });
+    expect(bare.model).toBeUndefined();
+    expect(at({ audience: "owner", engine: "cloud", model: "Seedance 2.5" })).toMatchObject({ label: "Seedance 2.5", model: "Seedance 2.5", send: "" });
+    expect(at({ audience: "account", engine: "cloud", model: "Seedance 2.5" })).toMatchObject({ needs: "key", send: "add your key" });
     expect(at({ audience: "owner", engine: "cloud", models: ["Kling 2.5"] }).label).toBe("Kling 2.5");
   });
   it("says placeholder results are free stand-ins", () => {
@@ -177,5 +182,24 @@ describe("the main model of a pipeline", () => {
     expect(mainModel([{ modelName: "Join", costUsd: null }, { modelName: "Seedance", costUsd: 0.2 }])).toBe("Seedance");
     expect(mainModel([])).toBeUndefined();
     expect(mainModel(undefined)).toBeUndefined();
+  });
+});
+
+describe("checkedPool", () => {
+  it("is this studio's GPUs only when the price check says the run goes there", () => {
+    expect(checkedPool({ place: "pool", quote: { text: "$0.02", sub: "Billed to your balance" } })).toEqual({ text: "$0.02", sub: "Billed to your balance" });
+    expect(checkedPool({ place: "pool", quote: { text: "$0.02" } }, 3)).toEqual({ text: "$0.02 each" });
+    expect(checkedPool({ place: "pool", quote: { text: "" } }, 3)).toEqual({ text: "" });
+  });
+  it("is nothing before the check, for a model not offered there, or for a run on the viewer's own GPU or key", () => {
+    expect(checkedPool(undefined)).toBeUndefined();
+    expect(checkedPool(null)).toBeUndefined();
+    expect(checkedPool({})).toBeUndefined();
+    expect(checkedPool({ place: "pool" })).toBeUndefined();
+  });
+  it("leaves an account with no GPU on your GPU (connect it) when the check finds no place there", () => {
+    const pool = checkedPool({});
+    const p = runPlace({ audience: "account", engine: "open", hosted: !!pool, gpu: false, pool, format: (n) => `$${n.toFixed(2)}` });
+    expect(p).toMatchObject({ where: "gpu", label: "Your GPU", needs: "gpu" });
   });
 });

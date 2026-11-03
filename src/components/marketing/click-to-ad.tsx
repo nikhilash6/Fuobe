@@ -16,7 +16,7 @@ import { StarterSection } from "@/components/starters/starter-section";
 import { useCoverPlayback } from "@/components/template-cover";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { uploadFile, useLikelyVisitor } from "@/lib/api";
-import { AD_STYLES, END_CARD, KIT_LABELS, type AdStyle, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
+import { AD_STYLES, END_CARD, KIT_LABELS, UGC_MODELS, type AdStyle, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
 import { RunPlaceChip, useRunPlace } from "@/components/studio/run-place-chip";
 import { IN_BROWSER, mainModel } from "@/lib/run-place";
 import type { StarterCardData } from "@/lib/starters/types";
@@ -284,7 +284,9 @@ export function ClickToAd({ models, starters = [] }: { models: Record<string, Mo
           : est.data?.blocker;
   // Where the video is made and its price (the studios' words); a guest or an account is told it isn't available here.
   const priced = est.data && !est.data.blocker ? est.data : undefined;
-  const place = useRunPlace({ engine, models: priced?.steps.map((s) => s.modelName), model: mainModel(priced?.steps), costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Click to Ad" });
+  // Before the run is priced (no product yet, or a key to add), the chip names the clip's model, never a bare "Cloud".
+  const clipModel = models[withPresenter ? UGC_MODELS[engine].talk : UGC_MODELS[engine].clip]?.name;
+  const place = useRunPlace({ engine, models: priced?.steps.map((s) => s.modelName), model: mainModel(priced?.steps) ?? clipModel, costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Click to Ad" });
 
   const writeScript = async () => {
     if (!productId) return;
