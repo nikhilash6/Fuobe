@@ -274,6 +274,7 @@ fuobe eval run --suite selftest --engine demo        # a free self-test of the h
 fuobe eval run --suite soul --engine open --looks v1-general --variants recipe,prompt-only
 fuobe eval compare latest~1 latest --fail-on clip --threshold 1   # exit 1 on a regression
 fuobe eval trash latest                              # the run's generations to that Fuobe's Trash
+fuobe eval from-skill lamp-turntable                 # a saved skill as a suite: then run --suite skill-lamp-turntable
 ```
 
 See [`scripts/eval/README.md`](../scripts/eval/README.md) for the suites, metrics, blind review and

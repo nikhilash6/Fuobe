@@ -6,10 +6,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { planRunnable, totalCost, type PlannedJob } from "@/lib/assist";
-import { getModel } from "@/lib/catalog";
+import { getModel, modelsFor } from "@/lib/catalog";
 import { dualEngine } from "@/lib/catalog/engines";
 import { currentModelId, replacedBy } from "@/lib/catalog/replaced";
-import type { Engine, Generation, GenerationRequest, MediaKind } from "@/lib/catalog/types";
+import { OPERATION_LABELS, type Engine, type Generation, type GenerationRequest, type MediaKind, type Operation } from "@/lib/catalog/types";
 import { probeMedia, type MediaInfo } from "@/lib/media-probe";
 import {
   checkOutputs,
@@ -24,7 +24,11 @@ import {
   RECIPE_LIMITS,
   recipeProblems,
   RecipeSchema,
+  isShapeHelper,
+  shapeOf,
+  shapeOfRecipe,
   SKILL_CHECK_FEATURE,
+  SUGGEST_RULE,
   today,
   verifiedLine,
   type Compiled,
@@ -38,18 +42,25 @@ import {
   type RecipeView,
   type VerifiedEngine,
   type VerifyResult,
+  type FixCandidate,
+  type ShapeNode,
+  type SkillHistory,
+  type SkillRunRecord,
+  type SkillSuggestion,
+  type StepFix,
 } from "@/lib/recipe";
 import type { Skill } from "@/lib/assist";
 import { planSteps } from "./assist/studio-tools";
 import { executeTool, getTool, planFor, validateInput } from "./assist/tools";
 import { createPipeline } from "./chains";
 import { llmSeesImages, llmText } from "./enhance";
-import { cancelGeneration, createGenerations, currentRequest, getGeneration, previewChained, stampRequests } from "./generations";
+import { cancelGeneration, createGenerations, currentRequest, getGeneration, previewChained, stampRequests, waitedOnFailure } from "./generations";
 import { trashGenerations } from "./library";
-import { isOffered, modelLicence } from "./model-access";
+import { db } from "./db";
+import { isOffered, modelLicence, offeredModels } from "./model-access";
 import { GenerationRequestSchema } from "./request-schema";
 import { engineMode } from "./settings";
-import { createSkill, deleteSkill, getSkill, setSkillFile, skillFile, SkillError } from "./skills";
+import { createSkill, deleteSkill, getSkill, listSkills, setSkillFile, skillFile, skillRecipe, SkillError } from "./skills";
 import { absolutePath, readRef, saveFile } from "./storage";
 
 /**
@@ -939,4 +950,409 @@ export async function saveDraft(input: DraftSave): Promise<RecipeView> {
   draftChecks().delete(key);
   draftChecks().set(key, { verified: { ...known, ...verified }, at: Date.now(), saved: input.name });
   return recipeView(input.name);
+}
+
+// ---------------------------------------------------------------------------
+// Suggestions, run history, fixes and use (package W6: Fuobe suggests skills and keeps them working)
+
+const DAY_MS = 86_400_000;
+
+/** The settings row that remembers the sweep and the shapes not to suggest (JSON; no migration). The owner's alone. */
+const SUGGEST_KEY = "skills.suggestions";
+
+interface SuggestState {
+  /** "Don't suggest this": shape ids. */
+  dismissed: string[];
+  /** "Not now": shape id → when it may come back. */
+  later: Record<string, number>;
+  /** The last sweep: when, and what it found (before dismissals and saved skills are taken out). */
+  swept?: { at: number; list: SkillSuggestion[] };
+}
+
+function suggestState(): SuggestState {
+  const row = db().prepare("SELECT value FROM settings WHERE key = ?").get(SUGGEST_KEY) as { value: string } | undefined;
+  try {
+    const v = row ? (JSON.parse(row.value) as Partial<SuggestState>) : {};
+    return { dismissed: Array.isArray(v.dismissed) ? v.dismissed.filter((x) => typeof x === "string") : [], later: v.later && typeof v.later === "object" ? v.later : {}, ...(v.swept && { swept: v.swept }) };
+  } catch {
+    return { dismissed: [], later: {} };
+  }
+}
+
+function saveSuggestState(s: SuggestState): void {
+  db().prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(SUGGEST_KEY, JSON.stringify(s));
+}
+
+/** A shape's id: short, stable, and what dismissals remember. */
+const shapeId = (key: string) => crypto.createHash("sha256").update(key).digest("hex").slice(0, 16);
+
+const depList = (v: string | null): string[] => {
+  if (!v) return [];
+  if (!v.startsWith("[")) return [v];
+  try {
+    const a = JSON.parse(v) as unknown;
+    return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+};
+
+/** The rows the sweep reads at most (the newest first). */
+const SWEEP_ROWS = 5000;
+
+interface SweepRow {
+  id: string;
+  feature: string;
+  provider: string;
+  status: string;
+  created_at: number;
+  depends_on: string | null;
+  request_json: string;
+  outputs_json: string;
+}
+
+/** Inputs that take a list of files, and those that take one: a result handed on by hand fills them (W2's linkByFile). */
+const LIST_INPUTS = ["images", "videos", "audios"] as const;
+const ONE_INPUTS = ["endImage", "video", "audio", "audio2", "voiceAudio"] as const;
+
+/**
+ * Group the owner's chains of the last SUGGEST_RULE.days days by shape (shapeOf) and keep the shapes made
+ * SUGGEST_RULE.runs times or more. Only the owner's own runs count (an account's stay out of the owner's lists), and
+ * never a skill's own runs or a helper row. A chain is the rows linked by depends_on, or by a result handed on by hand
+ * (its file is another step's input, as the skill builder links them). Only a finished chain counts, and only when it
+ * worked: a step that failed or was stopped must have been made again in it (a retry), and its shape and rows are the
+ * steps that succeeded, so Make a skill is handed rows the builder can repeat.
+ */
+export function sweepSuggestions(now = Date.now()): SkillSuggestion[] {
+  const rows = db()
+    .prepare(
+      `SELECT g.id, g.feature, g.provider, g.status, g.created_at, g.depends_on, g.request_json, g.outputs_json FROM generations g
+       LEFT JOIN generation_trash t ON t.generation_id = g.id
+       WHERE t.deleted_at IS NULL AND g.created_at >= ? AND g.created_at <= ?
+         AND json_extract(g.request_json, '$.account') IS NULL AND json_extract(g.request_json, '$.skill') IS NULL
+       ORDER BY g.created_at DESC LIMIT ${SWEEP_ROWS}`,
+    )
+    .all(now - SUGGEST_RULE.days * DAY_MS, now) as SweepRow[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  // Chains: rows joined by depends_on (union-find over the window).
+  const parent = new Map(rows.map((r) => [r.id, r.id]));
+  const find = (id: string): string => {
+    let p = parent.get(id)!;
+    while (p !== parent.get(p)) p = parent.get(p)!;
+    parent.set(id, p);
+    return p;
+  };
+  // Who made each file: a result handed on by hand (Edit, Animate, Use as input) links two steps as a chain slot does.
+  const madeBy = new Map<string, SweepRow>();
+  for (const r of [...rows].reverse()) {
+    try {
+      for (const o of JSON.parse(r.outputs_json) as { url?: string }[]) if (o.url && !madeBy.has(o.url)) madeBy.set(o.url, r);
+    } catch {
+      // A row without readable outputs feeds nothing.
+    }
+  }
+  const nodes = new Map<string, ShapeNode>();
+  for (const r of rows) {
+    let req: GenerationRequest;
+    try {
+      req = JSON.parse(r.request_json) as GenerationRequest;
+    } catch {
+      continue;
+    }
+    const after = depList(r.depends_on).filter((d) => byId.has(d));
+    const slots: string[] = after.map((_, i) => req.chain?.[i]?.slot ?? "images");
+    const inputs = (req.inputs ?? {}) as Record<string, unknown>;
+    const link = (url: unknown, slot: string) => {
+      const src = typeof url === "string" ? madeBy.get(url) : undefined;
+      if (!src || src.id === r.id || src.created_at > r.created_at || after.includes(src.id)) return;
+      after.push(src.id);
+      slots.push(slot);
+    };
+    for (const k of LIST_INPUTS) if (Array.isArray(inputs[k])) for (const url of inputs[k] as unknown[]) link(url, k);
+    for (const k of ONE_INPUTS) link(inputs[k], k);
+    for (const d of after) parent.set(find(r.id), find(d));
+    nodes.set(r.id, { id: r.id, modelId: currentModelId(req.modelId), op: req.op, feature: req.feature ?? r.feature, after, slots });
+  }
+  const chains = new Map<string, ShapeNode[]>();
+  for (const n of nodes.values()) {
+    const root = find(n.id);
+    chains.set(root, [...(chains.get(root) ?? []), n]);
+  }
+  const groups = new Map<string, { labels: string[]; runs: { ids: string[]; last: number; demo: boolean }[] }>();
+  const statusOf = (n: ShapeNode) => byId.get(n.id)!.status;
+  for (const all of chains.values()) {
+    // Still running: it counts once it has finished.
+    if (all.some((n) => statusOf(n) === "queued" || statusOf(n) === "running")) continue;
+    const chain = all.filter((n) => statusOf(n) === "succeeded");
+    const done = (n: ShapeNode) => chain.some((o) => o.modelId === n.modelId && o.op === n.op);
+    if (all.some((n) => statusOf(n) !== "succeeded" && !isShapeHelper(n.feature) && !done(n))) continue;
+    const shape = shapeOf(chain);
+    if (shape.steps < 2) continue;
+    const ids = chain.map((n) => n.id);
+    const run = { ids, last: Math.max(...ids.map((id) => byId.get(id)!.created_at)), demo: ids.every((id) => byId.get(id)!.provider === "mock") };
+    const id = shapeId(shape.key);
+    const g = groups.get(id) ?? { labels: shape.labels, runs: [] };
+    g.runs.push(run);
+    groups.set(id, g);
+  }
+  return [...groups.entries()]
+    .filter(([, g]) => g.runs.length >= SUGGEST_RULE.runs)
+    .map(([shape, g]) => {
+      const newest = g.runs.reduce((a, b) => (b.last > a.last ? b : a));
+      // The newest run's rows, oldest first (as the builder walks them).
+      const ids = [...newest.ids].sort((a, b) => byId.get(a)!.created_at - byId.get(b)!.created_at);
+      return { shape, labels: g.labels, count: g.runs.length, ids, last: newest.last, demo: g.runs.every((r) => r.demo) };
+    })
+    .sort((a, b) => b.count - a.count || b.last - a.last);
+}
+
+/** The shapes the owner's saved recipe skills already have (a tool recipe has none). */
+function savedShapes(): Set<string> {
+  const out = new Set<string>();
+  for (const s of listSkills()) {
+    if (s.source !== "user" || !s.recipe) continue;
+    const r = skillRecipe(s.name);
+    const shape = r && shapeOfRecipe(r, currentModelId);
+    if (shape) out.add(shapeId(shape.key));
+  }
+  return out;
+}
+
+/**
+ * The Library's suggestions: the day's sweep (run again at most once a day, when the Library opens, or with `fresh`),
+ * without the shapes the owner dismissed or put off, those a saved skill already has, and runs since trashed.
+ */
+export function skillSuggestions(o: { now?: number; fresh?: boolean } = {}): SkillSuggestion[] {
+  const now = o.now ?? Date.now();
+  const state = suggestState();
+  let list = state.swept?.list;
+  if (!list || o.fresh || !(now - state.swept!.at < DAY_MS && state.swept!.at <= now)) {
+    list = sweepSuggestions(now);
+    // Put-offs that have come back are forgotten.
+    const later = Object.fromEntries(Object.entries(state.later).filter(([, until]) => until > now));
+    saveSuggestState({ ...state, later, swept: { at: now, list } });
+  }
+  const saved = savedShapes();
+  const dismissed = new Set(state.dismissed);
+  const shown = list.filter((s) => !dismissed.has(s.shape) && !((state.later[s.shape] ?? 0) > now) && !saved.has(s.shape));
+  if (!shown.length) return [];
+  // The newest run's rows must still be there (not trashed since the sweep) for Make a skill to draft from them.
+  const ids = shown.flatMap((s) => s.ids);
+  const there = new Set(
+    (db().prepare(`SELECT g.id FROM generations g LEFT JOIN generation_trash t ON t.generation_id = g.id WHERE t.deleted_at IS NULL AND g.id IN (${ids.map(() => "?").join(", ")})`).all(...ids) as { id: string }[]).map((r) => r.id),
+  );
+  return shown.filter((s) => s.ids.every((id) => there.has(id)));
+}
+
+/** How long "Not now" puts a suggestion off. */
+const LATER_MS = 7 * DAY_MS;
+const DISMISSED_MAX = 500;
+
+/** "Don't suggest this" (never again) or "Not now" (a week). */
+export function dismissSuggestion(shape: string, how: "never" | "later", now = Date.now()): void {
+  if (!/^[0-9a-f]{16}$/.test(shape)) throw new SkillError("No such suggestion", 404);
+  const state = suggestState();
+  if (how === "never") state.dismissed = [...state.dismissed.filter((s) => s !== shape), shape].slice(-DISMISSED_MAX);
+  else state.later = { ...state.later, [shape]: now + LATER_MS };
+  saveSuggestState(state);
+}
+
+interface HistoryRow {
+  id: string;
+  batch_id: string | null;
+  status: string;
+  cost_usd: number | null;
+  favorite: number;
+  created_at: number;
+  provider: string;
+  engine: string;
+  error: string | null;
+  model: string | null;
+  run: string | null;
+  /** The recipe step that made the row (older rows have none). */
+  step: string | null;
+}
+
+/** The owner's runs of a skill (its stamp in request_json), newest first; a skill's own dry runs don't count. */
+function historyRows(name: string, limit = 2000): HistoryRow[] {
+  return db()
+    .prepare(
+      `SELECT g.id, g.batch_id, g.status, g.cost_usd, g.favorite, g.created_at, g.provider, g.engine, g.error,
+              json_extract(g.request_json, '$.modelId') AS model, json_extract(g.request_json, '$.skill.run') AS run,
+              json_extract(g.request_json, '$.skill.step') AS step
+       FROM generations g
+       WHERE json_extract(g.request_json, '$.skill.name') = ? AND g.feature != ? AND json_extract(g.request_json, '$.account') IS NULL
+       ORDER BY g.created_at DESC LIMIT ?`,
+    )
+    .all(name, SKILL_CHECK_FEATURE, limit) as HistoryRow[];
+}
+
+/** Rows grouped into runs (by the run stamp), newest first. */
+function runsOf(rows: HistoryRow[]): { run: string; rows: HistoryRow[] }[] {
+  const runs = new Map<string, HistoryRow[]>();
+  for (const r of rows) {
+    const key = r.run ?? r.batch_id ?? r.id;
+    runs.set(key, [...(runs.get(key) ?? []), r]);
+  }
+  return [...runs.entries()].map(([run, list]) => ({ run, rows: list })).sort((a, b) => Math.max(...b.rows.map((r) => r.created_at)) - Math.max(...a.rows.map((r) => r.created_at)));
+}
+
+function runRecord(run: string, rows: HistoryRow[]): SkillRunRecord {
+  const statuses = rows.map((r) => r.status);
+  const status: SkillRunRecord["status"] = statuses.some((s) => s === "queued" || s === "running")
+    ? "running"
+    : statuses.includes("failed")
+      ? "failed"
+      : statuses.includes("canceled")
+        ? "canceled"
+        : "succeeded";
+  const demo = rows.every((r) => r.provider === "mock");
+  const known = rows.filter((r) => r.cost_usd !== null);
+  const free = demo || rows.every((r) => r.engine === "open");
+  const error = rows.find((r) => r.status === "failed")?.error ?? undefined;
+  return {
+    run,
+    batchId: rows.find((r) => r.batch_id)?.batch_id ?? null,
+    status,
+    costUsd: free ? 0 : known.length ? Math.round(known.reduce((s, r) => s + (r.cost_usd ?? 0), 0) * 1000) / 1000 : null,
+    createdAt: Math.min(...rows.map((r) => r.created_at)),
+    steps: rows.length,
+    favorite: rows.some((r) => r.favorite === 1),
+    demo,
+    ...(error && { error }),
+  };
+}
+
+/** A skill's run history: runs, success rate, spend, last run, favourites and the newest `limit` runs. */
+export function skillHistory(name: string, limit = 10): SkillHistory {
+  if (!getSkill(name)) throw new SkillError("No such skill", 404);
+  const runs = runsOf(historyRows(name)).map((r) => runRecord(r.run, r.rows));
+  const finished = runs.filter((r) => r.status === "succeeded" || r.status === "failed");
+  return {
+    runs: runs.length,
+    successRate: finished.length ? Math.round((finished.filter((r) => r.status === "succeeded").length / finished.length) * 100) / 100 : null,
+    spentUsd: Math.round(runs.reduce((s, r) => s + (r.costUsd ?? 0), 0) * 1000) / 1000,
+    lastRun: runs[0]?.createdAt ?? null,
+    favorites: runs.filter((r) => r.favorite).length,
+    recent: runs.slice(0, limit),
+  };
+}
+
+
+/** Candidates considered for one step at most, and shown. */
+const FIX_CONSIDER = 16;
+const FIX_SHOW = 6;
+
+/**
+ * A recipe with one step's model swapped. A step kept on one engine (for what only that engine does) stays there when
+ * the new model also runs on both; otherwise its engine is left to the new model.
+ */
+function withModel(recipe: Recipe, key: string, modelId: string): Recipe {
+  const next = getModel(modelId);
+  return {
+    ...recipe,
+    steps: recipe.steps.map((s) => {
+      if (s.kind !== "generate" || s.key !== key) return s;
+      const request: Record<string, unknown> = { ...s.request, modelId };
+      const pinned = s.request.engine;
+      if (!(pinned && dualEngine(next) && next!.engines!.includes(pinned))) delete request.engine;
+      return { ...s, request: request as typeof s.request };
+    }),
+  };
+}
+
+/** A waiting step's failure that an earlier step caused (advanceDependents: waitedOnFailure, or an input that fell short). */
+const UPSTREAM = waitedOnFailure().replace(/ didn't finish$/, " ");
+const upstreamFailure = (error: string | null) => !!error && (error === waitedOnFailure() || error.startsWith(UPSTREAM));
+
+/** Why a step needs a fix: it failed in 2 of the last 5 runs, it was moved by REPLACED_BY, or it's switched off. */
+function stepTrouble(s: Recipe["steps"][number], lastRuns: { rows: HistoryRow[] }[]): { why: string; failing?: boolean } | null {
+  if (s.kind !== "generate") return null;
+  const r = replacedBy(s.request.modelId);
+  if (r) return { why: `${r.was} was replaced by ${getModel(r.id)?.name ?? r.id}` };
+  const id = currentModelId(s.request.modelId);
+  const m = getModel(id);
+  if (!m) return { why: `Fuobe has no model “${s.request.modelId}” anymore` };
+  const engines = dualEngine(m) ? (s.request.engine ? [s.request.engine] : (m.engines ?? ENGINES)) : [undefined];
+  if (!engines.some((e) => isOffered(id, e))) return { why: `${m.name} is switched off in Settings → Models & licences` };
+  // A step's own failure only: a step failed by what an earlier one did ("An earlier step didn't finish", or made too
+  // little) never ran, so it isn't blamed. A row says which step made it; an older row without that is matched by model.
+  const ownFailure = (row: HistoryRow) =>
+    row.status === "failed" && !upstreamFailure(row.error) && (row.step !== null ? row.step === s.key : row.model !== null && currentModelId(row.model) === id);
+  const failed = lastRuns.filter((run) => run.rows.some(ownFailure)).length;
+  if (failed >= 2) return { why: `${m.name} failed in ${failed} of the last ${lastRuns.length} runs`, failing: true };
+  return null;
+}
+
+/**
+ * The steps of a saved skill that need a fix, each with the models that could take its place: the same operation and
+ * kind, switched on (search_models' list), each priced as the whole run would be with it. Nothing is swapped here.
+ */
+export function stepFixes(name: string): StepFix[] {
+  const { recipe } = getRecipe(name);
+  const lastRuns = runsOf(historyRows(name, 400))
+    .slice(0, 5)
+    .filter((r) => r.rows.every((x) => x.status !== "queued" && x.status !== "running"));
+  const mode = engineMode();
+  const out: StepFix[] = [];
+  for (const s of recipe.steps) {
+    if (s.kind !== "generate") continue;
+    const trouble = stepTrouble(s, lastRuns);
+    if (!trouble) continue;
+    const { why, failing } = trouble;
+    const was = getModel(s.request.modelId);
+    const id = currentModelId(s.request.modelId);
+    const m = getModel(id) ?? was;
+    const op = (typeof s.request.op === "string" ? s.request.op : m?.routes[0]?.op) as Operation | undefined;
+    const replaced = id !== s.request.modelId;
+    const candidates: FixCandidate[] = [];
+    if (m && op) {
+      const pool = offeredModels(modelsFor({ kind: m.kind, ops: [op], engine: mode === "both" ? "all" : mode })).filter((c) => (replaced ? true : c.id !== id) && c.id !== s.request.modelId);
+      // What replaced it first (a re-check's own fix), then the catalog's order.
+      pool.sort((a, b) => Number(b.id === id) - Number(a.id === id));
+      for (const c of pool.slice(0, FIX_CONSIDER)) {
+        const next = withModel(recipe, s.key, c.id);
+        const engines = recipeEngines(next);
+        let found: FixCandidate | null = null;
+        for (const e of engines) {
+          try {
+            const plan = planCheck(compileRun({ name, title: "Check" }, next, valuesForCheck(next), e, { run: "check" }), e);
+            if (plan.errors.length) continue;
+            const demo = plan.jobs.length > 0 && plan.jobs.every((j) => j.demo);
+            found = { modelId: c.id, name: c.name, engine: e, total: plan.total, free: e === "open" || plan.total === 0, demo };
+            break;
+          } catch {
+            continue;
+          }
+        }
+        if (found) candidates.push(found);
+        if (candidates.length >= FIX_SHOW) break;
+      }
+    }
+    out.push({ key: s.key, label: s.label ?? (op ? (OPERATION_LABELS[op] ?? op) : s.key), modelId: s.request.modelId, modelName: was?.name ?? m?.name ?? s.request.modelId, why, ...(failing && { failing }), candidates });
+  }
+  return out;
+}
+
+/**
+ * Put the picked model in a step that needs a fix, after W1's checks pass with it (the plan, then the free dry run) on
+ * an engine: then it is saved with what passed. Only a candidate stepFixes offers is taken; nothing changes otherwise.
+ */
+export async function applyFix(name: string, key: string, modelId: string): Promise<VerifyResult> {
+  const found = getRecipe(name);
+  if (found.skill.source === "builtin") throw new SkillError("Built-in skills can't be changed — Duplicate it first, then change your copy", 403);
+  const fix = stepFixes(name).find((f) => f.key === key);
+  if (!fix) throw new SkillError(`Step “${key}” doesn't need a fix`, 409);
+  if (!fix.candidates.some((c) => c.modelId === modelId)) throw new SkillError("Pick one of the models offered for this step", 422);
+  const next = withModel(found.recipe, key, modelId);
+  const problems = allProblems(next);
+  if (problems.length) throw new RecipeError(problems);
+  const engines = recipeEngines(next);
+  if (!engines.length) throw new SkillError(noEngine(next), 422);
+  const { checks, verified } = await checkEngines(found.skill, next, "demo", engines, {});
+  const passed = checks.filter((c) => c.plan.ok && (c.dryRun?.ok ?? true));
+  if (!passed.length) throw new RecipeError([...new Set(checks.flatMap((c) => [...c.plan.errors, ...(c.dryRun?.problems ?? [])]))].slice(0, 6));
+  if (!sameRecipe(getRecipe(name).recipe, found.recipe)) throw new SkillError("The recipe changed while it was being checked — try again", 409);
+  saveRecipe(name, { ...next, verified }, { keepVerified: true });
+  return { ok: allPassed(checks), engines: checks, view: recipeView(name) };
 }

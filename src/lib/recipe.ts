@@ -14,7 +14,8 @@
  */
 import { z } from "zod";
 import type { PlannedJob } from "./assist";
-import type { ChainSlot, GenerationRequest, MediaKind, OutputFile } from "./catalog/types";
+import { OPERATION_LABELS, type ChainSlot, type GenerationRequest, type MediaKind, type OutputFile } from "./catalog/types";
+import { isHelperFeature } from "./library";
 import type { MediaInfo } from "./media-probe";
 
 export const RECIPE_FILE = "recipe.json";
@@ -398,7 +399,7 @@ export function compile(recipe: Recipe, values: RecipeValues, o: CompileOptions)
       request: {
         ...s.request,
         batchTitle: o.title.slice(0, 200),
-        skill: { name: o.skill, run: o.run },
+        skill: { name: o.skill, run: o.run, step: s.key },
         ...(s.label && { step: { label: s.label, index: i, of: n } }),
         ...(o.demo && { demo: true, feature: SKILL_CHECK_FEATURE }),
       },
@@ -942,4 +943,193 @@ export interface VerifyResult {
   ok: boolean;
   engines: EngineCheck[];
   view: RecipeView;
+}
+
+// ---------------------------------------------------------------------------
+// Noticing repeated work, run history and finding skills (package W6)
+
+/**
+ * One step of a DAG as shapeOf reads it: from a generation row (its request_json and depends_on) or from a recipe's
+ * generate step. `modelId` is the model it runs on now (the server moves a retired id first); `slots` are the chain
+ * slots its earlier steps fill, in `after` order.
+ */
+export interface ShapeNode {
+  id: string;
+  modelId: string;
+  op?: string;
+  feature?: string;
+  after: string[];
+  slots: string[];
+}
+
+export interface DagShape {
+  /** The shape's identity: equal for the same models, operations and chain slots, whatever the prompts and inputs. */
+  key: string;
+  /** Distinct steps (a step's several takes are one step). */
+  steps: number;
+  /** Each step's operation in words, earliest first ("Background removal", "Image edit", "Image to video"). */
+  labels: string[];
+}
+
+/** Helper rows a shape never counts (a studio's own steps, the evaluation harness, a skill's dry run). */
+export const isShapeHelper = (feature: string | undefined) => !!feature && isHelperFeature(feature);
+
+const OP_WORDS: Record<string, string> = Object.fromEntries(Object.entries(OPERATION_LABELS));
+
+/**
+ * The shape of a DAG of steps: the sorted model ids, operations and chain slots of its steps and of the steps each one
+ * waits for. Prompts, inputs, params and the run's own ids don't count; neither do helper rows (`isHelperFeature`,
+ * the `eval` harness and a skill's dry run), which are dropped with their links. A step that made several takes is
+ * one step. Pure: the Library's sweep groups runs by it, and a saved recipe's shape (shapeOfRecipe) is compared with it.
+ */
+export function shapeOf(nodes: ShapeNode[]): DagShape {
+  const kept = nodes.filter((n) => !isShapeHelper(n.feature));
+  const byId = new Map(kept.map((n) => [n.id, n]));
+  const memo = new Map<string, string>();
+  const depth = new Map<string, number>();
+  const visiting = new Set<string>();
+  const sig = (n: ShapeNode): string => {
+    const known = memo.get(n.id);
+    if (known !== undefined) return known;
+    if (visiting.has(n.id)) return `${n.modelId}|${n.op ?? ""}`;
+    visiting.add(n.id);
+    const parents = n.after.flatMap((id, i) => {
+      const p = byId.get(id);
+      return p ? [`${n.slots[i] ?? "images"}<${sig(p)}>`] : [];
+    });
+    depth.set(n.id, 1 + Math.max(0, ...n.after.map((id) => (byId.has(id) ? (depth.get(id) ?? 0) : 0))));
+    visiting.delete(n.id);
+    const s = `${n.modelId}|${n.op ?? ""}${parents.length ? `(${parents.sort().join(",")})` : ""}`;
+    memo.set(n.id, s);
+    return s;
+  };
+  const steps = new Map<string, { op?: string; depth: number }>();
+  for (const n of kept) {
+    const s = sig(n);
+    if (!steps.has(s)) steps.set(s, { op: n.op, depth: depth.get(n.id) ?? 1 });
+  }
+  const sorted = [...steps.entries()].sort((a, b) => a[1].depth - b[1].depth || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return {
+    key: [...steps.keys()].sort().join("\n"),
+    steps: steps.size,
+    labels: sorted.map(([, v]) => (v.op ? (OP_WORDS[v.op] ?? v.op) : "Generate")),
+  };
+}
+
+const asIds = (a: string | string[] | undefined): string[] => (a === undefined ? [] : Array.isArray(a) ? a : [a]);
+
+/**
+ * A recipe's shape, as its runs would have it (none for a tool recipe: a studio's own steps aren't compared).
+ * `current` gives each model id as it runs now (the server passes currentModelId).
+ */
+export function shapeOfRecipe(recipe: Pick<Recipe, "steps">, current: (id: string) => string = (id) => id): DagShape | null {
+  if (recipe.steps.some((s) => s.kind !== "generate")) return null;
+  return shapeOf(
+    (recipe.steps as GenerateStep[]).map((s) => {
+      const after = asIds(s.after);
+      const chain = (s.chain ?? (s.request.chain as ChainSlot[] | undefined)) ?? [];
+      return { id: s.key, modelId: current(s.request.modelId), op: typeof s.request.op === "string" ? s.request.op : undefined, feature: s.request.feature, after, slots: after.map((_, i) => chain[i]?.slot ?? "images") };
+    }),
+  );
+}
+
+/** "cut-out → scene → turntable": a suggestion's steps in words. */
+export const shapeWords = (labels: string[]): string => labels.map((l, i) => (i ? l.toLowerCase() : l)).join(" → ");
+
+/** A chain made often enough to offer as a skill (the Library's card). */
+export interface SkillSuggestion {
+  /** The shape's id (a hash of DagShape.key): what "Don't suggest this" remembers. */
+  shape: string;
+  labels: string[];
+  /** Runs of it in the window. */
+  count: number;
+  /** The newest run's rows: Make a skill drafts from them (W2). */
+  ids: string[];
+  /** When the newest run was made. */
+  last: number;
+  /** Every run it was seen in ran on the demo provider: the card says so. */
+  demo: boolean;
+}
+
+/** How many runs of one shape, within how many days, make a suggestion. */
+export const SUGGEST_RULE = { runs: 3, days: 14 } as const;
+
+/** One run of a saved skill (the rows that share its `skill.run` stamp). */
+export interface SkillRunRecord {
+  run: string;
+  batchId: string | null;
+  status: "running" | "succeeded" | "failed" | "canceled";
+  /** What it cost, where known (the open engine is free). */
+  costUsd: number | null;
+  createdAt: number;
+  steps: number;
+  favorite: boolean;
+  demo: boolean;
+  error?: string;
+}
+
+/** A skill's run history (generations whose request_json carries its stamp; a skill's own checks don't count). */
+export interface SkillHistory {
+  runs: number;
+  /** Finished runs that succeeded, 0–1 (null before one finishes). */
+  successRate: number | null;
+  spentUsd: number;
+  lastRun: number | null;
+  favorites: number;
+  /** The newest runs, newest first. */
+  recent: SkillRunRecord[];
+}
+
+/** A model that could stand in for a step that needs fixing: same operation and kind, switched on, priced. */
+export interface FixCandidate {
+  modelId: string;
+  name: string;
+  engine: RecipeEngine;
+  /** The whole run's price with this model in the step (null: varies). */
+  total: number | null;
+  free: boolean;
+  /** Every job would run on the demo provider here (no provider connected, or placeholders on): priced as a placeholder. */
+  demo: boolean;
+}
+
+/** A step of a saved skill that needs a fix, why, and what could replace its model. */
+export interface StepFix {
+  key: string;
+  label: string;
+  modelId: string;
+  modelName: string;
+  why: string;
+  /** Why is its recent runs (it keeps failing), which a re-check doesn't change; else its model moved or is off. */
+  failing?: boolean;
+  candidates: FixCandidate[];
+}
+
+/** How a skill is used (from its run history): Assist ranks skills by it. */
+export interface SkillUse {
+  runs: number;
+  last: number;
+}
+
+/** Words too common to tell skills apart (a chat's first message is matched word by word). */
+const COMMON_WORDS = new Set(["an", "and", "as", "at", "be", "by", "can", "do", "for", "from", "get", "in", "into", "is", "it", "make", "me", "my", "new", "of", "on", "or", "our", "please", "some", "the", "this", "that", "to", "we", "with", "you", "your"]);
+
+/**
+ * Skills in the order Assist should see them: those matching the words first (by how many words match), then the
+ * most used, then the most recently used, then as listed. `now` and the 30-day half-life keep an old favourite from
+ * outranking what's used this week forever.
+ */
+export function rankSkills<T extends { name: string; title: string; description: string; whenToUse?: string }>(list: T[], o: { query?: string; uses?: Map<string, SkillUse>; now?: number } = {}): T[] {
+  const words = [...new Set((o.query ?? "").toLowerCase().split(/[^\p{L}\p{N}-]+/u))].filter((w) => w.length > 1 && !COMMON_WORDS.has(w));
+  const now = o.now ?? Date.now();
+  const score = (s: T) => {
+    const hay = `${s.name} ${s.title} ${s.description} ${s.whenToUse ?? ""}`.toLowerCase();
+    const match = words.filter((w) => hay.includes(w)).length;
+    const use = o.uses?.get(s.name);
+    const fresh = use ? Math.pow(0.5, Math.max(0, now - use.last) / (30 * 86_400_000)) : 0;
+    return { match, use: use ? Math.log2(1 + use.runs) * (0.5 + fresh) : 0, last: use?.last ?? 0 };
+  };
+  return list
+    .map((s, i) => ({ s, i, ...score(s) }))
+    .sort((a, b) => b.match - a.match || b.use - a.use || b.last - a.last || a.i - b.i)
+    .map((x) => x.s);
 }

@@ -79,6 +79,7 @@ harness measures what a user gets.
 | `pnpm eval:validate` | Checks every case file, and that the generated suites match the research |
 | `pnpm eval:setup` | Creates the metrics venv with uv (`--identity`, `--download`, `--dinov2`, `--torch-backend`) |
 | `pnpm eval:trash <runId>` | Moves the run's generations to the Trash of the Fuobe it ran on (`--dry-run` counts them). The run's folder here keeps its outputs and scores |
+| `pnpm eval:from-skill <name>` | Writes a suite that runs a saved skill with the examples it was made from, one case per engine it runs on, to `local/cases/skill-<name>.json` ([Skills](#saved-skills)) |
 
 Every command takes `--json`. Runs are named by id, by path, or as `latest`, `latest~1` (the run
 before) and so on. `pnpm eval:<command> --help` lists each command's options.
@@ -237,6 +238,29 @@ starts. A training the server would run as a demo (no fal.ai key or AI-Toolkit c
 mode On) is skipped with its case, so a "trained" result is always a trained LoRA. The look case runs
 the trained style as the board's own look (`"presetId": "own-style"`), as a trained moodboard does in
 the app.
+
+## Saved skills
+
+A skill saved with a recipe (Skills → Make a skill, or Save as skill in Assist) can be regression-tested like an
+Original. `pnpm eval:from-skill <name>` reads the skill's recipe from the Fuobe it talks to and writes
+`scripts/eval/local/cases/skill-<name>.json` (git-ignored, since it names your own files):
+
+- one case per engine the skill runs on. Each sends the skill's run route (`POST /api/assist/skills/<name>/run`)
+  that engine and the recipe's examples, and is priced first by the skill's estimate route, so `--max-usd` caps a
+  cloud run as it does any other;
+- a media input with no example, and every media input of a `--engine demo` run, takes a fixture instead;
+- the recipe's checks (kind, takes, shape, length, sound, look) go into the case's note, and the result is scored
+  by its kind (`aesthetic` for a picture, `temporal` for a clip).
+
+```bash
+pnpm eval:from-skill lamp-turntable
+pnpm eval:run --suite skill-lamp-turntable --engine demo     # free
+pnpm eval:run --suite skill-lamp-turntable --engine cloud --max-usd 2
+pnpm eval:compare latest~1 latest --fail-on aesthetic         # after a model change
+```
+
+A skill that runs a studio tool (Translate & dub, Katana, Captions) isn't measured yet: its steps run inside the
+studio. Write the suite again after you change the skill.
 
 ## The case format
 

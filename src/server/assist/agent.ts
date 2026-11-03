@@ -1396,6 +1396,14 @@ function ordered(results: ToolResult[], order: string[]): ToolResult[] {
   return [...results].sort((a, b) => order.indexOf(a.tool_use_id) - order.indexOf(b.tool_use_id));
 }
 
+/** The chat's first message from the user, as text (the skills index ranks the skills that match it first). */
+function firstWords(messages: MessageParam[]): string | undefined {
+  const first = messages.find((m) => m.role === "user");
+  if (!first) return undefined;
+  const text = typeof first.content === "string" ? first.content : first.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(" ");
+  return text.trim().slice(0, 500) || undefined;
+}
+
 /**
  * The chat's system prompt and, when something changed since the model last looked, the
  * "Context update" message to append. The first call freezes the context into the system prompt.
@@ -1409,6 +1417,7 @@ function contextFor(s: State, connectors: Connector[]): { system: ModelRequest["
     capUsd: s.ext.capUsd,
     scheduleId: s.ext.scheduleId,
     connectors: connectors.map((c) => c.name),
+    words: firstWords(s.messages),
   });
   const sent = factMap(facts);
   if (!s.ext.context) {

@@ -696,7 +696,7 @@ function titleFor(g: Generation, label: string): string {
 function freeName(title: string): string {
   const base = slugify(title).slice(0, 56).replace(/-+$/, "") || "my-skill";
   let name = base;
-  for (let i = 2; getSkill(name) || ["upload", "new", "draft"].includes(name); i++) name = `${base}-${i}`;
+  for (let i = 2; getSkill(name) || ["upload", "new", "draft", "suggestions"].includes(name); i++) name = `${base}-${i}`;
   return name;
 }
 
