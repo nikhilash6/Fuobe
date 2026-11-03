@@ -4,18 +4,21 @@ import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import {
   AUTO_SECONDS,
+  MUSIC_CLIP_MIN_SECONDS,
   blockCount,
   buildEpisodeGraph,
   CAMERA_WORDS,
   changedKeys,
   channelName,
   defaultSettings,
+  BED_CROSSFADE,
   ENGINE_MODELS,
   estimateGraph,
   EXPLAINER_MAX,
   EXPLAINER_MIN,
   genreInfo,
   getStyle,
+  LOOP_MAX,
   MAX_SCRIPT,
   MAX_SOURCES,
   musicPlan,
@@ -31,6 +34,8 @@ import {
   plannedTiming,
   planRerun,
   previewLine,
+  regeneratePlan,
+  regenerateReuses,
   resolveModels,
   sameCameraMove,
   sceneSpans,
@@ -86,6 +91,7 @@ import { PdfError, pdfText } from "./assist/pdf";
 import { db } from "./db";
 import { listElements } from "./elements";
 import { connectRefusal } from "./connect-refusal";
+import { createPipeline } from "./chains";
 import { cancelGeneration, chooseRoute, ConnectComfyError, createGenerations, getGeneration, previewChained } from "./generations";
 import { provider } from "./providers";
 import type { JsonSpec } from "./llm";
@@ -673,7 +679,7 @@ function stopEpisode(ep: FacelessEpisode): Promise<void>[] {
     w.abort.abort();
     writing().delete(ep.id);
   }
-  const ids = new Set([...Object.values(ep.plan?.ids ?? {}), ...Object.values(ep.plan?.previous?.ids ?? {}), ...(ep.plan?.upscaled ? [ep.plan.upscaled] : [])]);
+  const ids = new Set([...Object.values(ep.plan?.ids ?? {}), ...Object.values(ep.plan?.previous?.ids ?? {}), ...(ep.plan?.upscaled ? [ep.plan.upscaled] : []), ...Object.values(ep.plan?.regenerated?.ids ?? {})]);
   return [...ids].map((g) => cancelGeneration(g).catch(() => {}));
 }
 
@@ -1051,8 +1057,9 @@ export function applyChange(id: string, c: ChangeInput): FacelessEpisode {
     stillEdits,
     previous: { ids: p.ids, blocks: ep.script.blocks, stillEdits: p.stillEdits, timing: p.timing, untimed: p.untimed, awaiting: p.awaiting },
     lastFinal: final?.status === "succeeded" ? final.id : p.lastFinal,
-    // A new version: its upscale is made again on request.
+    // A new version: its upscale (or regenerated film) is made again on request.
     upscaled: undefined,
+    regenerated: undefined,
     changes: [...p.changes, { at: Date.now(), blocks: ids, part: c.part, instruction: c.part === "narration" ? (c.narration ?? []).join(" / ") : (c.instruction ?? ""), costUsd: est.unknown ? null : est.total }].slice(-50),
   };
   updateEpisodeRow(id, { status: "rendering", error: null, plan_json: JSON.stringify(updated), script_json: JSON.stringify({ ...ep.script, blocks }) });
@@ -1079,6 +1086,7 @@ export function undoChange(id: string): FacelessEpisode {
     previous: undefined,
     lastFinal: undefined,
     upscaled: undefined,
+    regenerated: undefined,
     changes,
   };
   updateEpisodeRow(id, { status: "rendering", error: null, plan_json: JSON.stringify(plan), script_json: JSON.stringify({ ...ep.script, blocks: prev.blocks }) });
@@ -1127,6 +1135,60 @@ export function upscaleEpisode(id: string): FacelessEpisode {
     throw new FacelessError((e as Error).message, 422);
   }
   updateEpisodeRow(id, { plan_json: JSON.stringify({ ...ep.plan, upscaled: g.id } satisfies EpisodePlan) });
+  return mustEpisode(id);
+}
+
+// ---------------------------------------------------------------------------
+// Regenerate to 1080p (open engine)
+
+/** "Regenerate to 1080p" on this episode: offered on the open engine once the film is done (null otherwise). */
+function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["regenerate"] {
+  const modelId = ENGINE_MODELS[ep.settings.engine].regenerate;
+  if (!modelId || !getModel(modelId)) return null;
+  let demo = false;
+  try {
+    demo = runsAsDemo(modelId, "upscale-video");
+  } catch {
+    // Nothing connected runs it yet: offered, and the click opens the connect card.
+  }
+  return { scenes, demo };
+}
+
+/**
+ * "Regenerate to 1080p": every scene redrawn by Open-H3 Regenerate (RIFE first for a 16 fps clip), joined at 1080p, with
+ * the episode's own narration, music bed and subtitles put back on (regeneratePlan). Runs on your GPU only; the finished
+ * film becomes the download once it's done, beside "Upscale to 1080p".
+ */
+export function regenerateEpisode(id: string): FacelessEpisode {
+  const ep = mustEpisode(id);
+  if (!ENGINE_MODELS[ep.settings.engine].regenerate) throw new FacelessError("Regenerate runs on your GPU (open source): switch the episode to open source to use it", 422);
+  const final = finalOf(ep);
+  if (!ep.plan || !final) throw new FacelessError("Wait for the episode to finish first", 409);
+  const had = ep.plan.regenerated ? getGeneration(ep.plan.regenerated.final) : null;
+  if (had && had.status !== "failed" && had.status !== "canceled") return ep;
+  const graph = currentGraph(ep);
+  const models = resolveModels(withOfferedVideo(ep.settings), narrationText(ep.script.blocks).length, getModel);
+  let plan: ReturnType<typeof regeneratePlan>;
+  try {
+    plan = regeneratePlan(graph, { engine: ep.settings.engine, joinMax: models.joinMax, lookup: getModel });
+  } catch (e) {
+    throw new FacelessError((e as Error).message, 422);
+  }
+  const existing: Record<string, string> = {};
+  for (const k of regenerateReuses(plan.steps)) {
+    const gid = ep.plan.ids[k];
+    if (!gid || getGeneration(gid)?.status !== "succeeded") throw new FacelessError(`“${graph.find((s) => s.key === k)?.label ?? k}” has no result to reuse — retry the episode first`, 409);
+    existing[k] = gid;
+  }
+  let made: Record<string, string>;
+  try {
+    const pipeline = createPipeline(plan.steps, { batchId: ep.plan.batchId, existing });
+    made = Object.fromEntries(plan.steps.map((s) => [s.key, pipeline.byKey[s.key].id]));
+  } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
+    throw new FacelessError((e as Error).message, 422);
+  }
+  updateEpisodeRow(id, { plan_json: JSON.stringify({ ...ep.plan, regenerated: { ids: made, final: made[plan.final] } } satisfies EpisodePlan) });
   return mustEpisode(id);
 }
 
@@ -1232,6 +1294,8 @@ export function episodeView(id: string): EpisodeView {
   const spent = [...gens.values()].reduce((n, g) => n + (g && g.status !== "failed" && g.status !== "canceled" ? (g.costUsd ?? 0) : 0), 0);
   const spans = sceneSpans(graph, current.script.blocks.length);
   const upscaled = plan?.upscaled ? getGeneration(plan.upscaled) : null;
+  const regenIds = Object.values(plan?.regenerated?.ids ?? {});
+  const regenerated = plan?.regenerated ? getGeneration(plan.regenerated.final) : null;
   return {
     episode: current,
     channel: current.channelId ? getChannel(current.channelId) : null,
@@ -1245,6 +1309,9 @@ export function episodeView(id: string): EpisodeView {
     timing: plan?.timing && !plan.untimed ? "narration" : "planned",
     upscaled,
     upscale: final ? upscaleOffer(current, spans.reduce((n, s) => n + s.seconds, 0)) : null,
+    regenerated,
+    regenerating: regenerated && (regenerated.status === "queued" || regenerated.status === "running") ? { done: regenIds.filter((g) => getGeneration(g)?.status === "succeeded").length, of: regenIds.length } : null,
+    regenerate: final ? regenerateOffer(current, steps.filter((s) => s.part === "clip").length) : null,
   };
 }
 
@@ -1369,9 +1436,16 @@ function notesFor(settings: EpisodeSettings, seconds: number): { notes?: string[
   const limit = styleRefLimit(settings.engine, getModel);
   if (settings.styleRefs.length > limit) notes.push(`The open-source picture model follows the first ${limit} style references.`);
   if (settings.engine === "open" && settings.styleRefs.length && settings.sourceImages?.length) notes.push("Your style references set the look; the attached images aren't used for the open-source pictures.");
-  if (m.music) {
+  const minutes = (s: number) => `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}`;
+  if (m.music && m.bedClip) {
+    // Your clip's music and effects: cut to the film when it's longer, looped (as buildEpisodeGraph plans) when shorter.
+    const clip = Math.round(m.bedClip.duration);
+    const loop = m.loop && m.bedClip.duration < seconds ? Math.min(LOOP_MAX[m.loop] ?? Infinity, Math.ceil(seconds) + 1) : null;
+    if (loop) notes.push(`Your clip's music and effects (${clip} s) loop with a ${BED_CROSSFADE}-second crossfade to cover the film.`);
+    else if (m.bedClip.duration > Math.ceil(seconds) + 2) notes.push(`Only the first ${minutes(Math.ceil(seconds) + 1)} of your clip's sound is used.`);
+    if (loop && loop < seconds) notes.push(`The music bed goes up to ${minutes(loop)}, so the last ${Math.ceil(seconds - loop)} s play without music.`);
+  } else if (m.music) {
     const plan = musicPlan(getModel(m.music), m.loop ? getModel(m.loop) : undefined, seconds);
-    const minutes = (s: number) => `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}`;
     if (plan.loop?.crossfade) notes.push(`The music is made ${minutes(plan.bed)} long, then looped with a ${plan.loop.crossfade}-second crossfade to cover the film.`);
     else if (plan.loop) notes.push(`The music is made ${minutes(plan.bed)} long and plays again to cover the film.`);
     if (plan.short) notes.push(`The music bed goes up to ${minutes(plan.loop?.duration ?? plan.bed)}, so the last ${plan.short} s play without music.`);
@@ -1530,6 +1604,14 @@ export const SettingsSchema = z.object({
   resolution: z.string().max(10).optional(),
   auto: z.boolean().optional(),
   brief: BriefLookSchema.optional(),
+  /** "Use a clip's soundtrack as the bed" (your GPU): the clip, and its seconds as the browser read them. */
+  musicClip: z
+    .object({
+      url: FileUrl,
+      name: z.string().max(200).optional(),
+      duration: z.number().finite().min(MUSIC_CLIP_MIN_SECONDS, `Pick a clip of ${MUSIC_CLIP_MIN_SECONDS} s or more for the bed`).max(3600),
+    })
+    .optional(),
 });
 
 export const BlockSchema = z.object({

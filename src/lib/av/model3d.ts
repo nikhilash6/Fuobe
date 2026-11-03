@@ -84,6 +84,22 @@ export const CLOUD_NOTICES: Record<string, string[]> = { triposplat: ["Built wit
 export const IDOL_MODELS = { open: "oss-idol", cloud: "idol-3d" } as const;
 export const isIdol = (id: string | null | undefined) => id === IDOL_MODELS.open || id === IDOL_MODELS.cloud;
 
+/**
+ * Draft then final (idol-6, docs/research/idol-9.md §8): an Idol 3D splat on your GPU is a quick look at the object's
+ * sides; the textured final is TRELLIS.2 from the same picture, an ordinary Image to 3D run (not an Idol substitute).
+ */
+export const FINAL_3D = { model: "oss-trellis2", label: "Build the final with TRELLIS.2", note: "A textured, riggable .glb · 16 GB GPU" } as const;
+
+/**
+ * Where "Build the final with TRELLIS.2" goes from a finished Idol 3D result on the open engine: Image to 3D with
+ * TRELLIS.2 picked and the result's own picture filled in. null on any other result, without the picture, or when
+ * TRELLIS.2 isn't offered here (`allowed`: switched on in Settings → Models & licences, open models run, not a visitor).
+ */
+export function finalBuildHref(g: Pick<Generation, "request">, view: Pick<Model3dView, "photo">, allowed: boolean): string | null {
+  if (!allowed || g.request.modelId !== IDOL_MODELS.open || !view.photo) return null;
+  return `/image-to-3d?${new URLSearchParams({ mode: "image", model: FINAL_3D.model, image: view.photo })}`;
+}
+
 export type IdolQuality = "best" | "quick";
 
 /**
@@ -104,14 +120,66 @@ export const IDOL_QUALITIES: { id: IdolQuality; label: string; hint: string }[] 
 ];
 
 /**
- * Idol 3D's settings for a request: on the open engine the graph's (photoCrop picks the looser crop), on fal the
- * endpoint's own fields. fal takes the steps, the Gaussians and the kind of picture ("real" is Idol's photo crop),
- * but no sampler and no CFG in ComfyUI's form, so its guidance stays fal's default (Idol's reference weight 3).
+ * Idol 3D's two open graphs: the core one (idol-1: TripoSplat's nodes, a core-node photo crop, the saved file not
+ * pruned) and the clean one (idol-2: the ComfyUI-Idol pack's crop, pruning and input-view still), which the server
+ * runs when its ComfyUI has the pack (GET /object_info/IdolPruneSplat).
  */
-export function idolExtra(engine: Engine, quality: IdolQuality = "best", photoCrop = false): Record<string, unknown> {
+export const IDOL_WORKFLOWS = { core: "image-to-splat-idol", clean: "image-to-splat-idol-clean" } as const;
+/** The node pack the clean graph needs (src/lib/licences.ts NODE_PACKS), and the class whose presence says a ComfyUI has it. */
+export const IDOL_PACK = "ComfyUI-Idol";
+export const IDOL_PACK_CLASS = "IdolPruneSplat";
+
+/**
+ * "Trim spikes": IdolPruneSplat's max_scale, the longest axis a Gaussian may have (object units, the object spans
+ * about 1), which drops the needle-shaped ones at the silhouette. 0.05 is the pack's "reasonable start".
+ */
+export const IDOL_TRIM_SPIKES = 0.05;
+
+/**
+ * Idol 3D's settings for a request: on the open engine the graph's (photoCrop picks the looser crop; trimSpikes the
+ * pack's max_scale, used where the pack is installed), on fal the endpoint's own fields. fal takes the steps, the
+ * Gaussians and the kind of picture ("real" is Idol's photo crop), but no sampler, no CFG in ComfyUI's form and no
+ * pruning, so its guidance stays fal's default (Idol's reference weight 3).
+ */
+export function idolExtra(engine: Engine, quality: IdolQuality = "best", photoCrop = false, trimSpikes = false): Record<string, unknown> {
   const p = IDOL_PRESETS[quality] ?? IDOL_PRESETS.best;
-  if (engine === "open") return { ...p, photoCrop };
+  if (engine === "open") return { ...p, photoCrop, ...(trimSpikes && { maxScale: IDOL_TRIM_SPIKES }) };
   return { num_inference_steps: p.steps, num_gaussians: p.numGaussians, image_type: photoCrop ? "real" : "synthetic" };
+}
+
+const unit = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : undefined);
+
+/**
+ * An Idol run's crop and pruning in the words of the graph it runs on (`has`: the graph binds that key). The clean graph
+ * takes cropMode ("It's a photo" is Idol's "real" crop, else "synthetic"), minOpacity and maxScale (0-1); the core
+ * graph takes its photoCrop switch (a cropMode of "real" turns it on) and has no pruning. Keys a graph doesn't bind are
+ * left out.
+ */
+export function idolGraphValues(extra: Record<string, unknown>, has: (key: string) => boolean): Record<string, unknown> {
+  const mode = extra.cropMode === "real" || extra.cropMode === "synthetic" ? extra.cropMode : undefined;
+  const photo = typeof extra.photoCrop === "boolean" ? extra.photoCrop : mode ? mode === "real" : undefined;
+  const out: Record<string, unknown> = {};
+  if (has("cropMode")) out.cropMode = mode ?? (photo ? "real" : "synthetic");
+  else if (has("photoCrop") && photo !== undefined) out.photoCrop = photo;
+  for (const k of ["minOpacity", "maxScale"] as const) {
+    const v = unit(extra[k]);
+    if (has(k) && v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+/** What a clean splat's count said (PreviewAny's text): the number of Gaussians the prune kept, else undefined. */
+export function idolKept(text: string | undefined): number | undefined {
+  const t = text?.trim();
+  const n = Number(t);
+  return t && Number.isInteger(n) && n >= 0 ? n : undefined;
+}
+
+/** The result card's line about a splat file: how many Gaussians the clean graph kept, or that it wasn't cleaned. */
+export function idolCleanLine(meta: Record<string, unknown> | undefined): { cleaned: boolean; text: string } | undefined {
+  if (typeof meta?.kept === "number") return { cleaned: true, text: `Cleaned: ${meta.kept.toLocaleString("en-US")} Gaussians kept` };
+  if (meta?.pruned === false) return { cleaned: false, text: "Not cleaned" };
+  return undefined;
 }
 
 /**
@@ -165,6 +233,8 @@ export interface Model3dInput {
   quality?: IdolQuality;
   /** Splat with Idol 3D: the picture is a photo, so the object gets Idol's looser crop. */
   photoCrop?: boolean;
+  /** Splat with Idol 3D on your GPU: also drop the needle-shaped Gaussians (with the ComfyUI-Idol pack). */
+  trimSpikes?: boolean;
 }
 
 /** The model for a mode and engine: the one picked when the mode offers it, else its default (null: none on that engine). */
@@ -218,7 +288,7 @@ export function model3dRequest(i: Model3dInput): GenerationRequest {
       return { ...base, op: "image-to-3d", prompt, inputs: { images } };
     case "splat":
       // Idol 3D gets its Best / Quick look settings and the photo crop; TripoSplat's request is unchanged.
-      return { ...base, op: "splat", inputs: { images }, ...(isIdol(modelId) && { params: { extra: idolExtra(i.engine, i.quality, !!i.photoCrop) } }) };
+      return { ...base, op: "splat", inputs: { images }, ...(isIdol(modelId) && { params: { extra: idolExtra(i.engine, i.quality, !!i.photoCrop, !!i.trimSpikes) } }) };
     default:
       return { ...base, op: "image-to-3d", inputs: { images } };
   }
@@ -256,6 +326,8 @@ export interface Model3dView {
   web?: string;
   /** A Gaussian splat (.ply / .spz / .ksplat): the splat viewer draws it (src/components/model3d/splat-viewer.tsx), with its turntable or preview as the poster and fallback, and it downloads. */
   splat?: { url: string; format: string };
+  /** Idol 3D on your GPU: the splat file cleaned of its haze (how many Gaussians were kept), or not (no ComfyUI-Idol). */
+  clean?: { cleaned: boolean; text: string };
   /** A rendered turntable that came with the model (the server's render for open 3D models, TripoSplat's orbit on the open engine, demo). */
   turntable?: string;
   /** The server is still rendering the turntable (after the job finished): waiting its turn, or how far (0-1). */
@@ -306,10 +378,12 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   if (listed && typeof listed === "object") for (const [k, v] of Object.entries(listed as Record<string, unknown>)) if (typeof v === "string") formats[k.toLowerCase()] = v;
   const format = splatFormatOf(mesh);
   const splat = mesh && format ? { url: mesh.url, format } : undefined;
+  const clean = splat ? idolCleanLine(meta) : undefined;
   return {
     glb: splat ? undefined : mesh?.url,
     web: mesh && !splat ? viewerGlb(mesh) : undefined,
     splat,
+    ...(clean && { clean }),
     turntable: str(meta.turntable) ?? str(meta.video) ?? video?.url,
     rendering: pending ? { queued: finish.turntable === "queued", progress: typeof finish.turntableProgress === "number" ? finish.turntableProgress : 0 } : undefined,
     material: str(finish.material),
@@ -477,4 +551,61 @@ export function retextureRequest(o: { glb: string; prompt?: string; style?: stri
     inputs: { model3d: o.glb, ...(o.style && { images: [o.style] }) },
     ...(o.size && o.size !== "2k" && { params: { extra: { texture_resolution: o.size } } }),
   };
+}
+
+/** What Make it 3D (quick) on an image result does: shown in the studio with the picture handed over (never "2 s"). */
+export const MAKE_3D_HINT = "Turns this picture into a 3D splat on your GPU and renders a turning preview. Takes tens of seconds on a consumer GPU.";
+
+export interface Model3dLink {
+  model?: { mode: Model3dMode; engine: Engine; id: string };
+  rig?: boolean;
+  mode?: Model3dMode;
+  quality?: IdolQuality;
+  image?: string;
+  photo?: boolean;
+}
+
+/**
+ * The photo slot's value for a picture handed over in an Image to 3D link: a result made here (so Idol's photo crop
+ * starts off), or an upload with ?photo=1 (crop on).
+ */
+export function linkedPicture(url: string, asPhoto: boolean): { id: string; ref: string; preview: string; kind: "image"; source: "upload" | "generation" } {
+  return { id: "link", ref: url, preview: url, kind: "image", source: asPhoto ? "upload" : "generation" };
+}
+
+/** Idol 3D's look per `${mode}:${engine}` after a link's ?quality=: set only when the linked model is Idol 3D. */
+export function linkedIdolQuality(prev: Record<string, IdolQuality>, mode: Model3dMode, engine: Engine, id: string, quality?: IdolQuality): Record<string, IdolQuality> {
+  return quality && isIdol(id) ? { ...prev, [`${mode}:${engine}`]: quality } : prev;
+}
+
+/**
+ * What an Image to 3D link asks for: ?model= (⌘K, Make it 3D) picks a model, its mode and its engine; ?model=meshy-rigging
+ * says where Rig & animate is; else ?mode= picks a mode. ?quality= is Idol 3D's Best or Quick look, ?image= a picture for
+ * the photo slot (a file Fuobe keeps, or an https link), and ?photo=1 says it is a photo (an upload), so Idol's looser
+ * photo crop starts on; a picture handed over from a result starts with it off (idol-5).
+ */
+export function readModel3dLink(sp: Pick<URLSearchParams, "get">): Model3dLink {
+  const id = sp.get("model");
+  const mode = sp.get("mode");
+  const found = id ? modeOf(id) : null;
+  const out: Model3dLink = {};
+  if (found && id) out.model = { ...found, id };
+  else if (id === RIG_MODEL) out.rig = true;
+  else if (MODEL3D_MODES.some((m) => m.id === mode)) out.mode = mode as Model3dMode;
+  const quality = sp.get("quality");
+  if (quality === "best" || quality === "quick") out.quality = quality;
+  const image = sp.get("image");
+  if (image && /^(\/api\/files\/|https:\/\/)/.test(image) && image.length <= 2048) {
+    out.image = image;
+    out.photo = sp.get("photo") === "1";
+  }
+  return out;
+}
+
+/**
+ * Whether an Image to 3D link's picture sets Idol's "It's a photo": only Make it 3D's link (it names Idol 3D) says what
+ * the picture is. Other links with ?image= (an Idol 3D result's "Build the final with TRELLIS.2") leave it as it is.
+ */
+export function linkedPhoto(link: Model3dLink): boolean | undefined {
+  return link.image && link.model && isIdol(link.model.id) ? !!link.photo : undefined;
 }

@@ -186,6 +186,20 @@ describe("Episodes", () => {
     expect(notes).toEqual(expect.arrayContaining([expect.stringMatching(/first 2 style references/), expect.stringMatching(/made 4 min long, then looped with a 3-second crossfade/)]));
   });
 
+  it("a clip's soundtrack as the bed: looped when it's shorter than the film, cut when it's longer, and 8 s at least", async () => {
+    const est = (s: EpisodeSettings) => estimateRoute.POST(json("POST", { kind: "faceless", settings: s }));
+    const clip = (duration: number) => ({ ...open, length: 60, musicClip: { url: "/api/files/bed.mp4", name: "bed", duration } });
+    const short = await (await est(clip(20))).json();
+    expect(short.notes).toEqual(expect.arrayContaining([expect.stringMatching(/Your clip's music and effects \(20 s\) loop with a 3-second crossfade/)]));
+    expect(short.notes.join(" ")).not.toMatch(/made .* long/);
+    const long = await (await est(clip(900))).json();
+    expect(long.notes).toEqual(expect.arrayContaining([expect.stringMatching(/Only the first 1 min( \d+ s)? of your clip's sound is used/)]));
+    expect(long.estimate.parts.music ?? 0).toBe(0);
+    const tooShort = await est(clip(5));
+    expect(tooShort.status).toBe(400);
+    expect((await tooShort.json()).error).toMatch(/8 s or more/);
+  });
+
   it(
     "renders end to end in demo mode on both engines (narration timed first, then the scenes), re-runs one scene, undoes it and retries a failure",
     async () => {
@@ -256,6 +270,28 @@ describe("Episodes", () => {
       expect(up.request.params?.resolution).toBe("1080p");
       const upscalingOpen: EpisodeView = await (await actionRoute.POST(json("POST"), params({ id: openId, action: "upscale" }))).json();
       expect(gens.getGeneration(upscalingOpen.episode.plan!.upscaled!)).toMatchObject({ op: "upscale-video", modelId: "oss-upscale-video-esrgan", engine: "open" });
+      // Regenerate to 1080p (open engine only): every scene redrawn by Open-H3 Regenerate, joined and mixed again with the
+      // episode's own narration and subtitles timing; the cloud shows no Regenerate.
+      expect(doneCloud.regenerate).toBeNull();
+      expect(doneOpen.regenerate).toEqual({ scenes: 6, demo: true });
+      expect((await actionRoute.POST(json("POST"), params({ id: cloudId, action: "regenerate" }))).status).toBe(422);
+      const regenOpen: EpisodeView = await (await actionRoute.POST(json("POST"), params({ id: openId, action: "regenerate" }))).json();
+      const rIds = regenOpen.episode.plan!.regenerated!.ids;
+      const redraws = Object.entries(rIds).filter(([k]) => k.endsWith("-regen")).map(([, g]) => gens.getGeneration(g)!);
+      expect(redraws).toHaveLength(6);
+      for (const g of redraws) {
+        expect(g).toMatchObject({ modelId: "oss-h3-regenerate", op: "upscale-video", engine: "open" });
+        expect(g.request.params).toMatchObject({ resolution: "1080p", extra: { startSigma: 0.8, draftFrom: "other" } });
+        expect(g.request.prompt?.length).toBeGreaterThan(20);
+      }
+      // The narration, its timing and the bed are the episode's own: nothing is read or timed again.
+      expect(gens.getGeneration(rIds["regen-mix"])).toMatchObject({ op: "mux" });
+      expect(Object.keys(rIds).filter((k) => !k.startsWith("regen-"))).toEqual([]);
+      expect(Object.values(rIds)).not.toContain(doneOpen.episode.plan!.ids.narration);
+      expect(regenOpen.episode.plan!.regenerated!.final).toBe(rIds["regen-captions"]);
+      // A second click while it renders starts nothing new.
+      const again: EpisodeView = await (await actionRoute.POST(json("POST"), params({ id: openId, action: "regenerate" }))).json();
+      expect(again.episode.plan!.regenerated!.ids).toEqual(rIds);
 
       // Timeline editor: change scene 3's picture.
       const target = doneCloud.episode.script.blocks[2].id;

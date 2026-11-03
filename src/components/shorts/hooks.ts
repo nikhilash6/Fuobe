@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { useCallback, useDeferredValue, useRef } from "react";
 import type { ShortsCustomPreset, ShortsRange, ShortsRatio, ShortsSession } from "@/lib/catalog/shorts";
 import type { Engine, Generation } from "@/lib/catalog/types";
+import type { SoundChoice } from "@/lib/av/original-sound";
 import { useGenerationEvents } from "@/lib/api";
 import { responseError } from "@/lib/refusals";
 
@@ -29,6 +30,8 @@ export interface ShortsBody {
   aspectRatio: ShortsRatio;
   language: string;
   modelId?: string;
+  /** Original sound (unset = Everything). */
+  sound?: SoundChoice;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }
@@ -154,6 +157,10 @@ export function useShortsActions(id?: string) {
     }),
     regenerate: useMutation({
       mutationFn: (v: { index: number; requestId?: string }) => send<ShortsSessionView>(`/api/shorts/sessions/${id}/segments/${v.index}`, "POST", { requestId: v.requestId }),
+      onSuccess: put,
+    }),
+    enhance: useMutation({
+      mutationFn: (v: { index: number; requestId?: string }) => send<ShortsSessionView>(`/api/shorts/sessions/${id}/segments/${v.index}/enhance`, "POST", { requestId: v.requestId }),
       onSuccess: put,
     }),
     primary: useMutation({

@@ -1,4 +1,6 @@
 import "server-only";
+import { originalSoundProblem, separates, soundLine, type SoundChoice } from "@/lib/av/original-sound";
+import { SoundChoiceSchema } from "./shorts-schemas";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import { characterLicenceLine, PERSON_REMOVER_LORA } from "@/lib/catalog/character-swap";
@@ -68,6 +70,8 @@ export interface RemovalBody {
   source: { url: string; name?: string; duration?: number; fps?: number; width?: number; height?: number; hasAudio?: boolean };
   range?: RemoveRange;
   seed?: number;
+  /** Original sound (unset = Everything). */
+  sound?: SoundChoice;
   /** H3 Person Removal: how far the person's mask is grown, in pixels. */
   maskGrow?: number;
 }
@@ -98,6 +102,7 @@ export const RemovalBodySchema = z.object({
   }),
   range: z.object({ start: seconds, end: seconds }).optional(),
   seed: z.number().int().min(0).max(2 ** 48).optional(),
+  sound: SoundChoiceSchema.optional(),
   maskGrow: z.number().int().min(REMOVE.maskGrow.min).max(REMOVE.maskGrow.max).optional(),
   /** A client nonce for one submit: a repeat gets the first answer (see once()). */
   requestId: z.string().trim().min(8).max(64).optional(),
@@ -239,6 +244,10 @@ function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boole
     if (eraser.everyone) notes.push("LTX Clean Plate removes every person in the shot — it doesn't take a target");
   }
   if (!wholeClip(range, source.duration)) notes.push("Only the selected part comes out (the rest of the clip isn't kept)");
+  const soundProblem = originalSoundProblem(eraser.engine, body.sound);
+  if (soundProblem) throw new ShortsError(soundProblem, 422);
+  const split = separates(eraser.engine, body.sound) && !!source.hasAudio;
+  if (split) notes.push(`Original sound: ${soundLine(body.sound)} — your GPU splits the clip's sound first (free)`);
 
   const name = (body.source.name ?? "").replace(/\.[a-z0-9]{2,4}$/i, "").trim().slice(0, 40);
   const title = removalTitle({ mode: body.mode, prompt: body.prompt, everyone: eraser.everyone });
@@ -256,6 +265,7 @@ function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boole
       points,
       mask: body.mode === "paint" && eraser.engine === "open" ? body.mask : undefined,
       ...(body.seed !== undefined ? { seed: body.seed } : {}),
+      ...(split && body.sound && { sound: body.sound }),
       ...(eraser.cleanFrame && body.maskGrow !== undefined ? { maskGrow: body.maskGrow } : {}),
     },
   };

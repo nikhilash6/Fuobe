@@ -3,6 +3,7 @@ import { HI3D_CHAIN_PARAM } from "@/lib/av/hi3d";
 import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
+import { KANDINSKY_PLACEHOLDER } from "@/lib/kandinsky-prompt";
 import { QWEN21_DECODER, QWEN21_GPU, QWEN21_SPEED } from "@/lib/qwen21-speed";
 import { QMA_AZIMUTHS, QMA_AZIMUTH_LABELS, QMA_DISTANCES, QMA_DISTANCE_LABELS, QMA_DISTANCE_ZOOM, QMA_ELEVATIONS, QMA_ELEVATION_DEGREES, QMA_ELEVATION_LABELS, QMA_MODEL, QMA_PARAMS } from "@/lib/qma";
 import { H3_DECODER, H3_FAST_DECODE_OFFERED, H3_GPU_TIER } from "@/lib/gpu/h3-tier";
@@ -60,6 +61,9 @@ const CONCAT_SHOTS = { mode: "concat", maxShots: 4 } as const;
 
 const IMG_AR = ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9", "5:4", "4:5"];
 const VID_AR = ["16:9", "9:16", "1:1"];
+/** Kandinsky 6.0's distilled transformers on your GPU (the graphs' unet): Lite (6.4 GB) and Pro (60.3 GB). */
+const K6_LITE = "Kandinsky-6.0-Lite-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors";
+const K6_PRO = "Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors";
 /** Open video upscalers: the result's shorter edge (1080p = 1080 px in any shape). */
 const VIDEO_UPSCALE_TIERS = ["720p", "1080p", "1440p", "2160p"];
 
@@ -652,6 +656,9 @@ const open: ModelDef[] = [
       aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"],
       durations: [3, 5, 10, 15],
       resolutions: ["768p"],
+      // 2K in the Video studio and Cinema only: a 768p draft, then Open-H3 Regenerate at 2K from it (from its latent for
+      // text to video), on your GPU (n7-10).
+      finishTiers: ["2K"],
       seed: true,
       endFrame: true,
       audio: "always",
@@ -769,6 +776,51 @@ const open: ModelDef[] = [
     routes: [comfy("t2v", "ltx2-t2v"), comfy("i2v", "ltx2-i2v")],
     options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [5, 8], resolutions: ["720p"], seed: true, negativePrompt: true, audio: "always" },
     defaults: { aspectRatio: "16:9", duration: 5, resolution: "720p" },
+  }),
+  // Kandinsky 6.0 (Kandinsky Lab, 2026-10-06, MIT; research #10 §2.1, package nm10-kandinsky6): 5 s clips at 24 fps with 44 kHz
+  // sound and lip-synced dialogue, from words or a first frame, on Kandinsky Lab's own packs (kandinsky6). Quality picks the
+  // 10-step distilled Lite (3B, the default here: it fits ordinary GPUs) or Pro (29B, a 60 GB file); the Prompt helper runs
+  // Kandinsky's Qwen3.5 9B rewrite first. Quoted words are what someone says (promptFormat). The cloud half is kandinsky-6.
+  o({
+    id: "oss-kandinsky6",
+    name: "Kandinsky 6.0",
+    vendor: "Kandinsky Lab",
+    family: "kandinsky",
+    kind: "video",
+    tagline: "Kandinsky 6.0 · both engines: 5 s clips with dialogue, lip sync and sound from words or a first frame · Lite on a 24 GB GPU, Pro about 80 GB · MIT",
+    badges: ["new", "audio"],
+    routes: [
+      comfy("t2v", "kandinsky6-t2av", "10-step distilled model; the sound is made with the picture"),
+      comfy("i2v", "kandinsky6-i2av", "10-step distilled model; the image is the first frame"),
+    ],
+    options: {
+      aspectRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
+      durations: [5],
+      resolutions: ["480p"],
+      seed: true,
+      negativePrompt: true,
+      audio: "always",
+      promptFormat: "kandinsky6",
+      promptPlaceholder: KANDINSKY_PLACEHOLDER,
+      controls: [
+        {
+          param: "quality",
+          label: "Quality",
+          values: ["lite", "pro"],
+          default: "lite",
+          labels: { lite: "Lite · 10 steps, fits a 24 GB GPU", pro: "Pro · 10 steps, about 80 GB (extra 60 GB file)" },
+          sets: { lite: { unet: K6_LITE }, pro: { unet: K6_PRO } },
+        },
+        {
+          param: PROMPT_HELPER_PARAM,
+          label: "Prompt helper",
+          values: ["off", "on"],
+          default: "off",
+          labels: { off: "Off · your words as typed", on: "On · Kandinsky writes a fuller caption (extra 19 GB file)" },
+        },
+      ],
+    },
+    defaults: { aspectRatio: "16:9", duration: 5, resolution: "480p" },
   }),
   o({
     id: "oss-hunyuan15",
@@ -908,6 +960,20 @@ const open: ModelDef[] = [
       ],
     },
     defaults: { resolution: REGEN_DEFAULT_TIER },
+  }),
+  // Kandinsky VSR (nm10-kandinsky6): Kandinsky Lab's 2-step distilled video upscaler (kandinsky6-sr pack), 2x, 2.25x (480p to
+  // 1080p) or 4x by tiled diffusion, keeping the clip's sound; at most 121 frames at 24 fps (about 5 s), as on fal (kandinsky-vsr).
+  o({
+    id: "oss-kandinsky6-vsr",
+    name: "Kandinsky VSR",
+    vendor: "Kandinsky Lab",
+    family: "kandinsky",
+    kind: "video",
+    tagline: "Kandinsky 6.0 · both engines: sharp 2x, 2.25x or 4x video upscale, clips up to 5 s · MIT",
+    badges: ["new"],
+    routes: [comfy("upscale-video", "video-upscale-kandinsky6-vsr", "2-step distilled upscaler, tiled; keeps the sound")],
+    options: { seed: true, resolutions: ["2x", "2.25x", "4x"], maxSourceSeconds: 5 },
+    defaults: { resolution: "2.25x" },
   }),
   o({
     id: "oss-upscale-video-esrgan",
@@ -2268,6 +2334,81 @@ const open: ModelDef[] = [
       requires: { images: 1, video: true, msg: "Add the still and the render of the path (Cinema's 3D scene records it when you film a path)" },
     },
     defaults: { resolution: "480p", aspectRatio: "auto" },
+  }),
+  // N7-9: WorldCast (PixCtrol) on the WorldCast worker, outside ComfyUI (docs/workers/worldcast.md). Fly path, Turnaround and
+  // the exact orbits prefer it when the worker answers: the still's depth (MoGe 2), SAM 3.1 masks of the still and the views,
+  // then one case; the back and sides follow the views. 81 frames, portrait 480 × 832, 15 fps.
+  o({
+    id: "oss-worldcast",
+    name: "WorldCast",
+    vendor: "PixCtrol (Xiaomi MiLM Plus, Wuhan University)",
+    family: "wan",
+    kind: "video",
+    tagline: "A still filmed along an exact camera path, with the back and sides following your own views · portrait 480 × 832, 5.4 s · 48 GB+ GPU · Apache-2.0",
+    badges: ["new"],
+    hidden: true,
+    routes: [{ op: "camera-path", provider: "worldcast", endpoint: "cases", note: "WorldCast on Wan 2.1 I2V 720P, on your WorldCast worker" }],
+    licence: {
+      licence: "Apache-2.0",
+      commercial: true,
+      note:
+        "Apache-2.0 (code at PixCtrol/WorldCast 7ccf2e0d; weights ly56/worldcast 27635f27, on Wan2.1-I2V-14B-720P, Apache-2.0). Stage 1 trained on SpatialVID (CC BY-NC-SA 4.0), which the authors say they used \"strictly for academic research purposes and not for any commercial applications\"",
+      checked: "2026-11-02",
+    },
+    options: {
+      seed: true,
+      maxImages: 11,
+      aspectRatios: ["9:16"],
+      requires: { images: 1, msg: "Add the still to film" },
+    },
+    defaults: { aspectRatio: "9:16" },
+  }),
+  // N7-9: the paper's own depth models, on the WorldCast worker when it has them (GET /health "depth"): MoGe 2 stays the default.
+  o({
+    id: "oss-depth-pro",
+    name: "Depth Pro",
+    vendor: "Apple",
+    family: "depth-pro",
+    kind: "image",
+    tagline: "Metric depth of one photo, the depth WorldCast's paper used · on your WorldCast worker · Apple research licence (no commercial use)",
+    hidden: true,
+    routes: [{ op: "edit", provider: "worldcast", endpoint: "depth/depth-pro", note: "apple/DepthPro on the WorldCast worker" }],
+    licence: {
+      licence: "Apple ML Research License (research only; non-commercial)",
+      commercial: false,
+      note: "apple/DepthPro ccd1350a: research use only; it \"does not include any commercial exploitation, product development or use in any commercial product or service\"",
+      checked: "2026-11-02",
+    },
+    options: { maxImages: 1, requires: { images: 1, msg: "Add the still" } },
+  }),
+  o({
+    id: "oss-vggt-omega",
+    name: "VGGT-Omega",
+    vendor: "Meta FAIR",
+    family: "vggt",
+    kind: "image",
+    tagline: "Depth and cameras of a photo, the poses WorldCast's paper used · on your WorldCast worker · FAIR Noncommercial (gated download)",
+    hidden: true,
+    routes: [{ op: "edit", provider: "worldcast", endpoint: "depth/vggt-omega", note: "facebook/VGGT-Omega on the WorldCast worker (gated: the worker needs a Hugging Face token)" }],
+    licence: {
+      licence: "FAIR Noncommercial Research License",
+      commercial: false,
+      note: "facebook/VGGT-Omega 1041e80f: FAIR Noncommercial Research License; a gated download that Meta approves by hand",
+      checked: "2026-11-02",
+    },
+    options: { maxImages: 1, requires: { images: 1, msg: "Add the still" } },
+  }),
+  // N7-9: the person's mask in a picture (SAM 3.1), for WorldCast's still and views.
+  o({
+    id: "oss-person-mask",
+    name: "SAM 3.1 person mask",
+    vendor: "Meta",
+    family: "sam",
+    kind: "image",
+    tagline: "A black-and-white mask of the person in a picture · 4 GB GPU · Meta SAM License",
+    hidden: true,
+    routes: [comfy("bg-remove", "image-person-mask-sam3", "SAM 3.1 finds the person: white where they are")],
+    options: { maxImages: 1, requires: { images: 1, msg: "Add the picture" } },
   }),
   o({
     id: "oss-tryon-klein",

@@ -12338,6 +12338,881 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "Kandinsky6AudioVAEDecode": {
+    "input": {
+      "required": {
+        "audio_vae": [
+          "VAE"
+        ],
+        "joint_latent": [
+          "LATENT"
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "audio_vae",
+        "joint_latent"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "AUDIO"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "AUDIO"
+    ],
+    "name": "Kandinsky6AudioVAEDecode",
+    "display_name": "Kandinsky 6 Audio VAE Decode",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6",
+    "category": "Kandinsky 6",
+    "output_node": false
+  },
+  "Kandinsky6AudioVAELoader": {
+    "input": {
+      "required": {
+        "tod_vae": [
+          [
+            "v1-44.pth"
+          ]
+        ],
+        "bigvgan_dir": [
+          [
+            "bigvgan_vocoder"
+          ]
+        ],
+        "mode": [
+          [
+            "44k"
+          ],
+          {
+            "default": "44k"
+          }
+        ],
+        "scaling_factor": [
+          "FLOAT",
+          {
+            "default": 0.417,
+            "min": 0.0001,
+            "max": 10.0,
+            "step": 0.0001
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "tod_vae",
+        "bigvgan_dir",
+        "mode",
+        "scaling_factor"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "VAE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "VAE"
+    ],
+    "name": "Kandinsky6AudioVAELoader",
+    "display_name": "Kandinsky 6 Audio VAE Loader",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6",
+    "category": "Kandinsky 6",
+    "output_node": false
+  },
+  "Kandinsky6BeautifyPrompt": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP",
+          {
+            "lazy": true
+          }
+        ],
+        "video_caption": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ],
+        "audio_caption": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ],
+        "enabled": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 42,
+            "min": 0,
+            "max": 18446744073709551615,
+            "control_after_generate": true
+          }
+        ],
+        "max_tokens": [
+          "INT",
+          {
+            "default": 1500,
+            "min": 1,
+            "max": 32768
+          }
+        ],
+        "temperature": [
+          "FLOAT",
+          {
+            "default": 0.3,
+            "min": 0.01,
+            "max": 2.0,
+            "step": 0.01
+          }
+        ],
+        "repetition_penalty": [
+          "FLOAT",
+          {
+            "default": 1.1,
+            "min": 1.0,
+            "max": 5.0,
+            "step": 0.01
+          }
+        ]
+      },
+      "optional": {
+        "image": [
+          "IMAGE"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "video_caption",
+        "audio_caption",
+        "enabled",
+        "seed",
+        "max_tokens",
+        "temperature",
+        "repetition_penalty"
+      ],
+      "optional": [
+        "image"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "STRING",
+      "STRING",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "video_caption",
+      "audio_caption",
+      "full_prompt"
+    ],
+    "name": "Kandinsky6BeautifyPrompt",
+    "display_name": "Kandinsky 6 Beautify Prompt (Qwen3.5-9B)",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6",
+    "category": "Kandinsky 6",
+    "output_node": false
+  },
+  "Kandinsky6EmptyLatent": {
+    "input": {
+      "required": {
+        "width": [
+          "INT",
+          {
+            "default": 864,
+            "min": 256,
+            "max": 2048,
+            "step": 16
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 480,
+            "min": 256,
+            "max": 2048,
+            "step": 16
+          }
+        ],
+        "length": [
+          "INT",
+          {
+            "default": 121,
+            "min": 1,
+            "max": 1001,
+            "step": 4
+          }
+        ],
+        "fps": [
+          "FLOAT",
+          {
+            "default": 24.0,
+            "min": 1.0,
+            "max": 120.0
+          }
+        ],
+        "batch_size": [
+          "INT",
+          {
+            "default": 1,
+            "min": 1,
+            "max": 1
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "width",
+        "height",
+        "length",
+        "fps",
+        "batch_size"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "LATENT",
+      "FLOAT"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "joint_latent",
+      "fps"
+    ],
+    "name": "Kandinsky6EmptyLatent",
+    "display_name": "Kandinsky 6 Empty Latent (video+audio)",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6",
+    "category": "Kandinsky 6",
+    "output_node": false
+  },
+  "Kandinsky6ImageToVideoAudio": {
+    "input": {
+      "required": {
+        "positive": [
+          "CONDITIONING"
+        ],
+        "negative": [
+          "CONDITIONING"
+        ],
+        "empty_latent": [
+          "LATENT"
+        ],
+        "reference_latent": [
+          "LATENT"
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "positive",
+        "negative",
+        "empty_latent",
+        "reference_latent"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "CONDITIONING",
+      "LATENT"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "positive",
+      "negative",
+      "joint_latent"
+    ],
+    "name": "Kandinsky6ImageToVideoAudio",
+    "display_name": "Kandinsky 6 Image to Video+Audio",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6",
+    "category": "Kandinsky 6",
+    "output_node": false
+  },
+  "Kandinsky6LatentUpscalerLoader": {
+    "input": {
+      "required": {
+        "latent_upscaler_checkpoint": [
+          [
+            "Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/latent_upscaler/diffusion_pytorch_model.safetensors"
+          ]
+        ],
+        "target_scale": [
+          [
+            "2x",
+            "4x"
+          ],
+          {
+            "default": "2x"
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "latent_upscaler_checkpoint",
+        "target_scale"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "K6_LATENT_UPSCALER"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "latent_upscaler"
+    ],
+    "name": "Kandinsky6LatentUpscalerLoader",
+    "display_name": "Kandinsky6 SR Latent Upscaler Loader",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6-sr",
+    "category": "Kandinsky 6/SR",
+    "output_node": false
+  },
+  "Kandinsky6MagCache": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL"
+        ],
+        "steps": [
+          "INT",
+          {
+            "default": 50,
+            "min": 1,
+            "max": 1000
+          }
+        ],
+        "threshold": [
+          "FLOAT",
+          {
+            "default": 0.02,
+            "min": 0.0001,
+            "max": 1.0,
+            "step": 0.0001
+          }
+        ],
+        "max_skip_steps": [
+          "INT",
+          {
+            "default": 4,
+            "min": 1,
+            "max": 32
+          }
+        ],
+        "retention_ratio": [
+          "FLOAT",
+          {
+            "default": 0.1,
+            "min": 0.0,
+            "max": 0.95,
+            "step": 0.01
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "steps",
+        "threshold",
+        "max_skip_steps",
+        "retention_ratio"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "name": "Kandinsky6MagCache",
+    "display_name": "Kandinsky 6 MagCache (Pro)",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6",
+    "category": "Kandinsky 6",
+    "output_node": false
+  },
+  "Kandinsky6RemoveReferenceLatent": {
+    "input": {
+      "required": {
+        "joint_latent": [
+          "LATENT"
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "joint_latent"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "LATENT"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "joint_latent"
+    ],
+    "name": "Kandinsky6RemoveReferenceLatent",
+    "display_name": "Kandinsky 6 Remove I2VA Reference",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6",
+    "category": "Kandinsky 6",
+    "output_node": false
+  },
+  "Kandinsky6SRVAELoader": {
+    "input": {
+      "required": {
+        "kvae_checkpoint": [
+          [
+            "Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/vae/diffusion_pytorch_model.safetensors"
+          ]
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "kvae_checkpoint"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "K6_SR_VAE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "sr_vae"
+    ],
+    "name": "Kandinsky6SRVAELoader",
+    "display_name": "Kandinsky6 SR VAE Loader",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6-sr",
+    "category": "Kandinsky 6/SR",
+    "output_node": false
+  },
+  "Kandinsky6Sampler": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL",
+          {
+            "tooltip": "The model used for denoising the input latent."
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 18446744073709551615,
+            "control_after_generate": true,
+            "tooltip": "The random seed used for creating the noise."
+          }
+        ],
+        "steps": [
+          "INT",
+          {
+            "default": 10,
+            "min": 1,
+            "max": 10000,
+            "tooltip": "The number of steps used in the denoising process."
+          }
+        ],
+        "cfg": [
+          "FLOAT",
+          {
+            "default": 1.0,
+            "min": 0.0,
+            "max": 100.0,
+            "step": 0.1,
+            "round": 0.01,
+            "tooltip": "The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality."
+          }
+        ],
+        "sampler_name": [
+          [
+            "euler",
+            "euler_cfg_pp",
+            "euler_ancestral",
+            "euler_ancestral_cfg_pp",
+            "heun",
+            "heunpp2",
+            "exp_heun_2_x0",
+            "exp_heun_2_x0_sde",
+            "dpm_2",
+            "dpm_2_ancestral",
+            "lms",
+            "dpm_fast",
+            "dpm_adaptive",
+            "dpmpp_2s_ancestral",
+            "dpmpp_2s_ancestral_cfg_pp",
+            "dpmpp_sde",
+            "dpmpp_sde_gpu",
+            "dpmpp_2m",
+            "dpmpp_2m_cfg_pp",
+            "dpmpp_2m_sde",
+            "dpmpp_2m_sde_gpu",
+            "dpmpp_2m_sde_heun",
+            "dpmpp_2m_sde_heun_gpu",
+            "dpmpp_3m_sde",
+            "dpmpp_3m_sde_gpu",
+            "ddpm",
+            "lcm",
+            "ipndm",
+            "ipndm_v",
+            "deis",
+            "cfgpp_ud10_ab",
+            "res_multistep",
+            "res_multistep_cfg_pp",
+            "res_multistep_ancestral",
+            "res_multistep_ancestral_cfg_pp",
+            "gradient_estimation",
+            "gradient_estimation_cfg_pp",
+            "er_sde",
+            "seeds_2",
+            "seeds_3",
+            "sa_solver",
+            "sa_solver_pece",
+            "ddim",
+            "uni_pc",
+            "uni_pc_bh2"
+          ],
+          {
+            "tooltip": "The algorithm used when sampling, this can affect the quality, speed, and style of the generated output."
+          }
+        ],
+        "scheduler": [
+          [
+            "simple",
+            "sgm_uniform",
+            "karras",
+            "exponential",
+            "ddim_uniform",
+            "beta",
+            "normal",
+            "linear_quadratic",
+            "kl_optimal"
+          ],
+          {
+            "tooltip": "The scheduler controls how noise is gradually removed to form the image."
+          }
+        ],
+        "positive": [
+          "CONDITIONING",
+          {
+            "tooltip": "The conditioning describing the attributes you want to include in the image."
+          }
+        ],
+        "negative": [
+          "CONDITIONING",
+          {
+            "tooltip": "The conditioning describing the attributes you want to exclude from the image."
+          }
+        ],
+        "latent_image": [
+          "LATENT",
+          {
+            "tooltip": "The latent image to denoise."
+          }
+        ],
+        "denoise": [
+          "FLOAT",
+          {
+            "default": 1.0,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01,
+            "tooltip": "The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "seed",
+        "steps",
+        "cfg",
+        "sampler_name",
+        "scheduler",
+        "positive",
+        "negative",
+        "latent_image",
+        "denoise"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "LATENT"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "LATENT"
+    ],
+    "name": "Kandinsky6Sampler",
+    "display_name": "Kandinsky 6 Sampler",
+    "description": "Automatically runs the DX PiFlow policy for distilled Pro/Lite (CFG=1). For non-distilled models, uses the normal ComfyUI sampler and scheduler.",
+    "python_module": "custom_nodes.kandinsky6",
+    "category": "Kandinsky 6",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "output_tooltips": [
+      "The denoised latent."
+    ],
+    "search_aliases": [
+      "sampler",
+      "sample",
+      "generate",
+      "denoise",
+      "diffuse",
+      "txt2img",
+      "img2img"
+    ]
+  },
+  "Kandinsky6TextEncode": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP"
+        ],
+        "video_caption": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ],
+        "audio_caption": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "video_caption",
+        "audio_caption"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "CONDITIONING"
+    ],
+    "name": "Kandinsky6TextEncode",
+    "display_name": "Kandinsky 6 Text Encode (video+audio)",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6",
+    "category": "Kandinsky 6",
+    "output_node": false
+  },
+  "Kandinsky6VSRUpscale": {
+    "input": {
+      "required": {
+        "sr_model": [
+          "MODEL"
+        ],
+        "sr_vae": [
+          "K6_SR_VAE"
+        ],
+        "images": [
+          "IMAGE"
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 42,
+            "min": 0,
+            "max": 18446744073709551615,
+            "control_after_generate": true
+          }
+        ],
+        "steps": [
+          "INT",
+          {
+            "default": 5,
+            "min": 2,
+            "max": 100
+          }
+        ],
+        "tiles_batch_size": [
+          "INT",
+          {
+            "default": 1,
+            "min": 1,
+            "max": 16
+          }
+        ],
+        "scale": [
+          [
+            "2.25x",
+            "2x",
+            "4x"
+          ],
+          {
+            "default": "2.25x"
+          }
+        ],
+        "overlap": [
+          "FLOAT",
+          {
+            "default": 0.2,
+            "min": 0.0,
+            "max": 0.95,
+            "step": 0.01
+          }
+        ],
+        "frame_rate": [
+          "FLOAT",
+          {
+            "default": 24.0,
+            "min": 1.0,
+            "max": 240.0
+          }
+        ],
+        "target_resolution": [
+          [
+            "none",
+            "2k",
+            "fullhd",
+            "hd"
+          ],
+          {
+            "default": "none"
+          }
+        ]
+      },
+      "optional": {
+        "latent_upscaler": [
+          "K6_LATENT_UPSCALER"
+        ],
+        "audio": [
+          "AUDIO"
+        ],
+        "use_nabla": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "sr_model",
+        "sr_vae",
+        "images",
+        "seed",
+        "steps",
+        "tiles_batch_size",
+        "scale",
+        "overlap",
+        "frame_rate",
+        "target_resolution"
+      ],
+      "optional": [
+        "latent_upscaler",
+        "audio",
+        "use_nabla"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "FLOAT",
+      "AUDIO"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "images",
+      "frame_rate",
+      "audio"
+    ],
+    "name": "Kandinsky6VSRUpscale",
+    "display_name": "Kandinsky6 SR Upscale",
+    "description": "",
+    "python_module": "custom_nodes.kandinsky6-sr",
+    "category": "Kandinsky 6/SR",
+    "output_node": false
+  },
   "Krea2EditGroundedEncode": {
     "input": {
       "required": {

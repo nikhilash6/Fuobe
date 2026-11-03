@@ -505,6 +505,20 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "Tencent AuK's own nodes (speech editing and text to speech); MIT code and weights. The Qwen2.5-Omni-3B encoder AuK loads is under the Qwen Research License (non-commercial)",
   }),
+  // Kandinsky 6.0 (nm10-kandinsky6), pinned in workflows/comfyui/packs.json: Kandinsky Lab's packs, the comfyui/ folder of each
+  // repository, LICENSE files read at the pinned commits.
+  pack("kandinsky6", "https://github.com/kandinskylab/kandinsky-6/tree/7ceeefad7fb625011f7db602c43893a989f19c15/comfyui", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Kandinsky 6.0 text and image to video with sound; MIT code, its vendored Kandinsky video code Apache-2.0. The Kandinsky weights are MIT; the MMAudio audio VAE file it loads (v1-44.pth) is CC BY-NC 4.0",
+  }),
+  pack("kandinsky6-sr", "https://github.com/kandinskylab/kandinsky-6-sr/tree/b15e2aac526519c51f59dfec2b848355bb8902de/comfyui", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Kandinsky VSR video upscaling (2x, 2.25x, 4x); Apache-2.0 code. The Kandinsky VSR weights are MIT",
+  }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
     ...GPL,
@@ -526,6 +540,13 @@ export const NODE_PACKS: NodePack[] = [
     class: "commercial",
     url: SPDX("MIT"),
     note: "Dialogue, music and effects separation; MIT code, bundled DBS code Apache-2.0 with MIT notices. The DBS weights are Apache-2.0, trained on DnR v2 (CC BY 4.0), some of whose clips carry their own licences",
+  }),
+  // Idol 3D's clean splats (idol-2, docs/research/idol-9.md §5.1-5.2), pinned in install-comfyui.sh.
+  pack("ComfyUI-Idol", "https://github.com/Nynxz/ComfyUI-Idol/tree/4d3a4f671028f0e062d9f004cda1a2dd73360d35", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Idol's crop modes, predicted camera and splat pruning; Apache-2.0 code, no model code; ports idol-sdk's preprocess and camera code (Apache-2.0)",
   }),
   // Krea 2's edits (the owner's SOTA image families, 2026-10-31).
   pack("comfyui-krea2edit", "https://github.com/lbouaraba/comfyui-krea2edit", {

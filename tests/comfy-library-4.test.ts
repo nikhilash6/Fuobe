@@ -160,11 +160,19 @@ describe("round-4 ComfyUI workflows", () => {
       "video-character-swap-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
+      // Idol 3D's clean splats (idol-2): ComfyUI-Idol isn't on the validation server (tests/idol-clean.test.ts).
+      "image-to-splat-idol-clean",
       "video-regenerate-h3",
+      "video-h3-t2v-2k",
+      "video-regenerate-h3-latent",
       // NVIDIA RTX Video: the pack needs an NVIDIA RTX card, so it isn't on the CPU validation server (tests/rtx-video.test.ts checks its inputs).
       "upscale-video-rtx",
       "fps-rtx-framegen",
       "sdr-to-hdr-rtx",
+      // Kandinsky 6.0 (nm10-kandinsky6): Kandinsky Lab's kandinsky6 / kandinsky6-sr packs aren't on the validation server (tests/kandinsky6.test.ts).
+      "kandinsky6-t2av",
+      "kandinsky6-i2av",
+      "video-upscale-kandinsky6-vsr",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);
   });

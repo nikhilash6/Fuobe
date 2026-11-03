@@ -57,8 +57,8 @@ import {
   IMAGE_RESOLUTIONS,
   ORIGINAL_LINES,
   VIDEO_ASPECTS,
-  VIDEO_RESOLUTIONS,
   checkReferences,
+  videoResolutionsFor,
   modelLine,
   planCinema,
   type DirectorSettings,
@@ -333,7 +333,7 @@ export interface PromptBarProps {
   onSettings: (patch: Partial<DirectorSettings>) => void;
   palettes: { name: string; hex: string[] }[];
   onPalettes: (p: { name: string; hex: string[] }[]) => void;
-  context: { cloudAllowed: boolean; civitai?: boolean };
+  context: { cloudAllowed: boolean; civitai?: boolean; worldcast?: boolean };
   brief: string;
   spentUsd: number;
   costCapUsd: number | null;
@@ -475,6 +475,8 @@ export function PromptBar(props: PromptBarProps) {
       ? "Describe the scene – the whole grid shares it"
       : "Describe your still – use @ to add characters & locations";
 
+  // MiniMax H3 adds a 2K tier (fal's 2K, or a 768p draft finished by Open-H3 Regenerate on your GPU).
+  const videoTiers = videoResolutionsFor(model);
   // Secondary settings: inline on wide bars, in one Settings popover on narrow ones.
   const settingsItems: { label: string; node: React.ReactNode }[] = [
     {
@@ -489,8 +491,9 @@ export function PromptBar(props: PromptBarProps) {
           key="resolution"
           icon={Maximize}
           label="Resolution"
-          value={draft.resolution[draft.mode]}
-          options={video ? VIDEO_RESOLUTIONS : IMAGE_RESOLUTIONS}
+          value={video && !videoTiers.includes(draft.resolution.video) ? "1080p" : draft.resolution[draft.mode]}
+          options={video ? videoTiers : IMAGE_RESOLUTIONS}
+          describe={video && videoTiers.includes("2K") ? (v) => (v !== "2K" ? "" : model.engine === "open" ? "768p draft, then redrawn at 2K on your GPU" : "Rendered from a 768P base") : undefined}
           onChange={(v) => setDraft((d) => ({ resolution: { ...d.resolution, [d.mode]: v } }))}
         />
       ),

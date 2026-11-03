@@ -8,11 +8,14 @@ import { DOP_MODEL, LTX25_HOSTED } from "./dop";
 import { dualEngine, onEngine } from "./engines";
 import { localOnly, needsToken, triggerOf } from "./loras";
 import { QMA_MODEL, qmaLabel, qmaView } from "@/lib/qma";
+import { studioResolutions } from "./regenerate";
 import { ANGLES_2511_LORA } from "./open-tools";
 import { composeShots, estimateCost, planGeneration, routesFor } from "./plan";
 import { soulRecipe } from "./soul";
 import { planTurnaround, type TurnaroundInput } from "./turnaround";
 import { planFlyAround } from "./fly-around";
+import { WORLDCAST_AFTER, WORLDCAST_MODELS, WORLDCAST_SECONDS, worldcastFallback, worldcastNote, worldcastSteps } from "./worldcast-plan";
+import { WORLDCAST_RUN } from "@/lib/worldcast";
 import { exactDefaults, exactSummary, normalizeExact, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { CAST_LOOK } from "./soul-cards";
 import type { Engine, GenerationRequest, GenParams, LoraRef, ModelDef, Operation } from "./types";
@@ -329,6 +332,11 @@ export interface CinemaContext {
    * needs it is written into the prompt instead (unknown = assumed set).
    */
   civitai?: boolean;
+  /**
+   * The studio's WorldCast worker answers (N7-9): the Fly path and the exact orbits film with WorldCast on your GPU. False:
+   * it doesn't, and those runs say what they film on instead. Undefined: nothing is said (a visitor, or WorldCast is off).
+   */
+  worldcast?: boolean;
 }
 
 export interface CinemaStep {
@@ -621,6 +629,17 @@ export const MAX_LIGHTS = 2;
 export const VIDEO_ASPECTS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
 export const IMAGE_ASPECTS = ["16:9", "21:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"];
 export const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"];
+/** MiniMax H3's 2K tier: fal renders it from a 768P base; on your GPU a 768p draft is finished by Open-H3 Regenerate. */
+export const H3_2K_TIER = "2K";
+
+/** Cinema's video tiers for a model: 480p / 720p / 1080p, and 2K for the MiniMax H3 models that offer it. */
+export function videoResolutionsFor(model: Pick<ModelDef, "family" | "options"> | undefined): string[] {
+  const twoK = !!model && (model.family === "minimax-h3" || model.family === "hailuo") && (studioResolutions(model.options) ?? []).some((r) => r.toLowerCase() === "2k");
+  return twoK ? [...VIDEO_RESOLUTIONS, H3_2K_TIER] : VIDEO_RESOLUTIONS;
+}
+
+/** The 2K tier on your GPU, said under the prompt bar. */
+export const H3_2K_OPEN_NOTE = "2K on your GPU: each take is drafted at 768p, then redrawn at 2K with Open-H3 Regenerate (about 5 minutes per 5 s)";
 export const IMAGE_RESOLUTIONS = ["1K", "2K", "4K"];
 export const DURATION = { min: 4, max: 30, default: 5 } as const;
 export const BATCH = { min: 1, max: 4 } as const;
@@ -1374,24 +1393,27 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
     notes.push(`${model.name} doesn't make ${ar} — using ${params.aspectRatio}`);
   } else if (o.aspectRatios?.length || ar) params.aspectRatio = ar;
   const res = input.resolution;
-  if (res && o.resolutions?.length) {
-    if (o.resolutions.includes(res)) params.resolution = res;
-    else if (IMAGE_TIER[res] && o.resolutions.includes(IMAGE_TIER[res])) {
+  // A video's tiers include the ones a finishing pass reaches (MiniMax H3's 2K on your GPU), as the Resolution chip shows them.
+  const tiers = (kind === "video" ? studioResolutions(o) : o.resolutions) ?? [];
+  if (res && tiers.length) {
+    if (tiers.includes(res)) params.resolution = res;
+    else if (IMAGE_TIER[res] && tiers.includes(IMAGE_TIER[res])) {
       params.resolution = IMAGE_TIER[res];
       if (res === "4K") notes.push(`${model.name} makes up to about 2 megapixels (its ${params.resolution} size)`);
-    } else if (kind === "video" && videoTier(o.resolutions, res)) {
-      const tier = videoTier(o.resolutions, res)!;
+    } else if (kind === "video" && videoTier(tiers, res)) {
+      const tier = videoTier(tiers, res)!;
       params.resolution = tier;
       if (tier.toLowerCase() !== res.toLowerCase()) {
         notes.push(tierHeight(tier)! < tierHeight(res)! ? `${model.name} renders up to ${tier} here` : `${model.name} renders at ${tier} here`);
       }
     } else {
       const order = kind === "video" ? VIDEO_RESOLUTIONS : [...IMAGE_RESOLUTIONS, "0.5K", "1.5K", "720p", "1080p"];
-      const below = o.resolutions.filter((r) => order.indexOf(r) <= order.indexOf(res) && order.indexOf(r) >= 0);
-      params.resolution = below.sort((a, b) => order.indexOf(b) - order.indexOf(a))[0] ?? o.resolutions[0];
+      const below = tiers.filter((r) => order.indexOf(r) <= order.indexOf(res) && order.indexOf(r) >= 0);
+      params.resolution = below.sort((a, b) => order.indexOf(b) - order.indexOf(a))[0] ?? tiers[0];
       notes.push(`${model.name} renders up to ${params.resolution} here`);
     }
   }
+  if (kind === "video" && model.engine === "open" && typeof params.resolution === "string" && params.resolution.toLowerCase() === "2k") notes.push(H3_2K_OPEN_NOTE);
   if (kind === "video" && model.kind === "video") {
     const want = Math.max(DURATION.min, Math.min(DURATION.max, Math.round(input.duration ?? DURATION.default)));
     const allowed = plannedDurations(model);
@@ -1498,13 +1520,16 @@ function clipModel(model: ModelDef, input: CinemaGenerateInput, notes: string[])
  * the orbit's numbers as Fly around plans it (src/lib/catalog/fly-around.ts): H3 Max camera-controls on the cloud; on your
  * GPU, MoGe 2's depth, the server's render of the path and Uni3C. The other moves and the Director's words stay words.
  */
-function planExactVideo(input: CinemaGenerateInput): CinemaPlan | null {
+function planExactVideo(input: CinemaGenerateInput, ctx: CinemaContext = {}): CinemaPlan | null {
   const moves = (input.moves ?? []).filter((m) => moveBySlug(m));
   if (!input.exact || !takesExact(moves[0])) return null;
   const orbit = normalizeExact(input.exact, exactDefaults(moves[0]));
   const image = input.images?.[0];
   const compiled = compileDirector({ prompt: input.prompt, settings: input.settings, moves: moves.slice(1), brief: input.brief, mode: "video", target: "prompt" });
-  const plan = planFlyAround({ engine: input.engine, image, orbit, prompt: compiled.prompt, duration: input.duration, resolution: input.resolution, feature: "cinema" });
+  const plan = planFlyAround(
+    { engine: input.engine, image, orbit, prompt: compiled.prompt, duration: input.duration, resolution: input.resolution, feature: "cinema" },
+    { worldcast: ctx.worldcast },
+  );
   const notes = [`${moveBySlug(moves[0])!.name} follows your numbers exactly: ${exactSummary(orbit)}`, ...plan.notes];
   if ((input.images?.length ?? 0) > 1) notes.push("An exact orbit films from the first image alone");
   const blocker = !image ? "Add a start frame to film an exact orbit" : plan.blocker;
@@ -1512,7 +1537,7 @@ function planExactVideo(input: CinemaGenerateInput): CinemaPlan | null {
 }
 
 function planVideo(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
-  const exact = planExactVideo(input);
+  const exact = planExactVideo(input, ctx);
   if (exact) return exact;
   const notes: string[] = [];
   const engine = input.engine;
@@ -2140,13 +2165,28 @@ export const PATH_DURATIONS = [3, 5, 8, 10, 15];
 export const PATH_RENDER_FIRST = "Record the path first";
 
 /**
+ * The Fly path on WorldCast (N7-9): the server measures the still's depth, finds the person and renders the path itself, so
+ * the browser records nothing; the subject's views come from the take's references when it has them (none here yet).
+ */
+function planPathWorldcast(input: CinemaGenerateInput): CinemaPlan {
+  const src = input.source?.kind === "image" ? input.source.url : undefined;
+  const keys = normalizeKeys(input.path?.keys ?? []);
+  const steps = worldcastSteps({ feature: "cinema-path", still: src ? { url: src } : undefined, anchors: [], keys, prompt: input.prompt });
+  const notes = [worldcastNote(0), WORLDCAST_AFTER];
+  if (input.path?.duration && Math.abs(input.path.duration - WORLDCAST_SECONDS) > 0.5) notes.push(`WorldCast always films about ${WORLDCAST_SECONDS} s, so the path is spread over that`);
+  const blocker = !src ? "Pick the scene's still" : keys.length < 2 ? "Add a keyframe or pick a move first" : undefined;
+  return finish(getModel(WORLDCAST_MODELS.film)!, steps, notes, blocker);
+}
+
+/**
  * Film the still along a path. Cloud: H3 Max camera-controls gets the still as its first frame and the keyframes as its
  * camera_trajectory (a pure slide as its own truck move), prompt expansion off, and motion words that let the subject move
  * (its default prompt freezes the scene). Open: the still is Wan 2.1's start image and the browser's render of the 3D scene
  * along the path guides the camera through Uni3C; 81 frames at 16 fps.
  */
-function planPath(input: CinemaGenerateInput): CinemaPlan {
+function planPath(input: CinemaGenerateInput, ctx: CinemaContext = {}): CinemaPlan {
   const open = input.engine === "open";
+  if (open && ctx.worldcast) return planPathWorldcast(input);
   const model = getModel(PATH_MODELS[input.engine])!;
   const src = input.source?.kind === "image" ? input.source.url : undefined;
   const path = input.path;
@@ -2163,6 +2203,7 @@ function planPath(input: CinemaGenerateInput): CinemaPlan {
       `Your browser renders the 3D scene along the path, then Wan 2.1 starts from the still and Uni3C keeps its camera on that render — ${PATH_FRAMES} frames at ${PATH_FPS} fps (${seconds} s) on your GPU, which needs about 48 GB`,
     );
     if (path?.duration && Math.abs(path.duration - seconds) > 0.5) notes.push(`The open engine always films about ${seconds} s, so the path is spread over that`);
+    if (ctx.worldcast === false) notes.push(worldcastFallback("Uni3C"));
     const params: GenParams = { numOutputs: 1, aspectRatio: "auto", ...(resolution ? { resolution } : {}), cameraPath: keys };
     request = { feature: "cinema-path", modelId: model.id, op: "camera-path", prompt, inputs: src && path?.render ? { images: [src], video: path.render } : undefined, params };
   } else {
@@ -2187,8 +2228,10 @@ function planPath(input: CinemaGenerateInput): CinemaPlan {
 
 /** What a filmed path's take remembers: the keys it was planned with (from the photo's pose) and the clip's real length. */
 export function pathTake(input: Pick<CinemaGenerateInput, "engine" | "path">, plan: CinemaPlan): CinemaTakeInfo["path"] {
-  const params = plan.steps[0]?.request.params;
-  const duration = input.engine === "open" ? PATH_FRAMES / PATH_FPS : (params?.duration ?? 5);
+  // WorldCast's plan measures depth and masks first: the film is its last step, 81 frames at 15 fps.
+  const worldcast = plan.model.id === WORLDCAST_MODELS.film;
+  const params = (worldcast ? plan.steps.at(-1) : plan.steps[0])?.request.params;
+  const duration = worldcast ? WORLDCAST_RUN.frames / WORLDCAST_RUN.fps : input.engine === "open" ? PATH_FRAMES / PATH_FPS : (params?.duration ?? 5);
   return { keys: params?.cameraPath ?? normalizeKeys(input.path?.keys ?? []), duration, ...(input.path?.preset ? { preset: input.path.preset } : {}) };
 }
 
@@ -2197,7 +2240,7 @@ export function pathTake(input: Pick<CinemaGenerateInput, "engine" | "path">, pl
 
 /** The turnaround's own steps (src/lib/catalog/turnaround.ts), filed as Cinema takes and priced as Cinema prices them. */
 function planTurnaroundTake(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
-  const plan = planTurnaround({ ...input.turnaround, engine: input.engine, feature: "cinema-turnaround", stepFeature: "cinema-turnaround" }, { has: ctx.has });
+  const plan = planTurnaround({ ...input.turnaround, engine: input.engine, feature: "cinema-turnaround", stepFeature: "cinema-turnaround" }, { has: ctx.has, worldcast: ctx.worldcast });
   return finish(plan.model, plan.steps, plan.notes, plan.blocker);
 }
 
@@ -2458,7 +2501,7 @@ export function planCinema(input: CinemaGenerateInput, ctx: CinemaContext): Cine
     case "recompose":
       return planRecompose(i);
     case "path":
-      return planPath(i);
+      return planPath(i, ctx);
     case "turnaround":
       return planTurnaroundTake(i, ctx);
     case "blockout":

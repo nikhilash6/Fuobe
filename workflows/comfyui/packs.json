@@ -44,6 +44,15 @@
     "subdir": null,
     "folders": ["foley"]
   },
+  "ComfyUI-Idol": {
+    "repo": "https://github.com/Nynxz/ComfyUI-Idol",
+    "commit": "4d3a4f671028f0e062d9f004cda1a2dd73360d35",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
   "ComfyUI-IndexTTS2": {
     "repo": "https://github.com/snicolast/ComfyUI-IndexTTS2",
     "commit": "5b33e02bc0112b8aaf1fc823d5e5a609ca07fc27",
@@ -304,6 +313,25 @@
     "requirementsTxt": true,
     "isolated": false,
     "subdir": null,
+    "folders": []
+  },
+  "kandinsky6": {
+    "repo": "https://github.com/kandinskylab/kandinsky-6",
+    "commit": "7ceeefad7fb625011f7db602c43893a989f19c15",
+    "registry": { "id": "kandinsky6", "version": "1.0.2" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": "comfyui",
+    "folders": ["audio_vae"],
+    "listAs": { "audio_vae": "kandinsky6_audio_vae" }
+  },
+  "kandinsky6-sr": {
+    "repo": "https://github.com/kandinskylab/kandinsky-6-sr",
+    "commit": "b15e2aac526519c51f59dfec2b848355bb8902de",
+    "registry": { "id": "kandinsky6-sr", "version": "0.1.2" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": "comfyui",
     "folders": []
   },
   "Comfyui-Hi3d-T8": {

@@ -1,8 +1,10 @@
 import { describeMove, KEN_BURNS_FPS, sceneMoves } from "@/lib/av/ken-burns";
 import { COPY_JOIN_VIDEOS, lengthRange, plannedDurations } from "./clip-lengths";
 import { estimateCost } from "./plan";
+import { REGEN_FINISH_TIER, REGEN_MODEL, regenFinishSteps, sixteenFpsModel, type FinishStep } from "./regenerate";
 import { pricingAt } from "./promo";
 import type { ChainSlot, Engine, Generation, GenerationRequest, ModelDef } from "./types";
+import { SPLIT_MODEL } from "../av/split";
 
 /*
  * Faceless Studio and the Explainer: the data and the pure planning shared by the browser (wizard,
@@ -415,7 +417,26 @@ export interface EpisodeSettings {
   auto?: boolean;
   /** Content Factory: a reference clip's style brief, applied to the script and the look. */
   brief?: BriefLook;
+  /**
+   * "Use a clip's soundtrack as the bed" (your GPU): the clip's music and effects, its dialogue taken out (DBS), looped
+   * under the voice instead of a generated bed. duration: the clip's seconds (the loop reads it).
+   */
+  musicClip?: MusicClip;
 }
+
+export interface MusicClip {
+  url: string;
+  name?: string;
+  duration: number;
+}
+
+/** The shortest clip whose soundtrack can be a bed (the loop crossfades 3 s at each seam). */
+export const MUSIC_CLIP_MIN_SECONDS = 8;
+/** What a clip's soundtrack as the bed does, and that it runs on your GPU. */
+export const MUSIC_CLIP_HINT: Record<Engine, string> = {
+  open: "Its music and sound effects, with the talking taken out, looped under the voice",
+  cloud: "Runs on your GPU (open source) — the cloud makes a new instrumental bed",
+};
 
 /**
  * How a style brief (src/lib/catalog/content-factory.ts) shapes an episode: lines for the script writer, words
@@ -634,6 +655,11 @@ export interface EngineModels {
   sourceStill?: string;
   /** "Upscale to 1080p" on a finished episode (cloud: SeedVR2; open: Real-ESRGAN in passes of a few frames, so memory stays flat). */
   upscale?: string;
+  /**
+   * "Regenerate to 1080p (sharper, may redraw)": each scene redrawn by Open-H3 Regenerate before the join and the music
+   * (open engine only: nobody hosts the open refiner, so the cloud keeps its upscaler and shows no Regenerate).
+   */
+  regenerate?: string;
   write: string;
 }
 
@@ -690,6 +716,7 @@ export const ENGINE_MODELS: Record<Engine, EngineModels> = {
     captionsUseWords: true,
     sourceStill: "oss-qwen-image-21-turbo",
     upscale: "oss-upscale-video-esrgan",
+    regenerate: REGEN_MODEL,
     write: "oss-text-llm",
   },
 };
@@ -731,6 +758,8 @@ export const MUSIC_MAX: Record<string, number> = { "sonilo-music": 600, "oss-ace
 
 /** Longest bed a loop model makes (the open loop graph's limit; the cloud's whole plays go past any film). */
 export const LOOP_MAX: Record<string, number> = { "oss-audio-loop": 600 };
+/** Cuts a bed clip longer than the film before its split (your GPU; a CPU step). */
+export const BED_CUT_MODEL = "oss-trim";
 
 /** Seconds of crossfade at each seam of a looped bed (open engine): long enough to hide the restart. */
 export const BED_CROSSFADE = 3;
@@ -840,6 +869,8 @@ export interface ResolvedModels {
   resolution: string;
   narration: string;
   music: string | null;
+  /** The bed is a clip's soundtrack split by DBS (its background stem), not a generated one (your GPU). */
+  bedClip?: MusicClip;
   /** Extends the bed past what the music model makes. */
   loop: string | null;
   /** Brings the bed down under the voice before the mix (cloud). */
@@ -876,7 +907,15 @@ export function resolveModels(settings: EpisodeSettings, narrationChars: number,
     video,
     resolution: wanted,
     narration,
-    music: settings.music ? (settings.musicModel && m.musicChoices.includes(settings.musicModel) ? settings.musicModel : m.music) : null,
+    // A clip's soundtrack as the bed: DBS on your GPU (no hosted DBS; the cloud makes its own bed). Otherwise the chosen music model.
+    music: settings.music
+      ? settings.engine === "open" && settings.musicClip
+        ? SPLIT_MODEL
+        : settings.musicModel && m.musicChoices.includes(settings.musicModel)
+          ? settings.musicModel
+          : m.music
+      : null,
+    ...(settings.music && settings.engine === "open" && settings.musicClip && { bedClip: settings.musicClip }),
     loop: settings.music ? m.loop : null,
     level: settings.music ? (m.levelMusic ?? null) : null,
     mux: settings.music ? m.mixMusic : m.mux,
@@ -1149,7 +1188,60 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
   });
 
   let bedKey = "music";
-  if (models.music) {
+  // The clip's split: its music and effects (the "background" stem) are the bed.
+  let bedStem: string | undefined;
+  if (models.music && models.bedClip) {
+    const clip = models.bedClip;
+    // A clip much longer than the film is cut to the film (and a second) first: only what plays is split.
+    const need = Math.ceil(length) + 1;
+    const cut = clip.duration > need + 1;
+    const clipSeconds = cut ? need : Math.max(1, clip.duration);
+    bedStem = "background";
+    if (cut)
+      steps.push({
+        key: "music-cut",
+        part: "music",
+        label: "Music bed · cut to the film",
+        request: { ...base, modelId: BED_CUT_MODEL, op: "trim", inputs: { video: clip.url }, params: { startTime: 0, endTime: need }, step: { label: "Music bed cut", index: n, of: n } },
+      });
+    steps.push({
+      key: "music",
+      part: "music",
+      label: "Music bed · from your clip",
+      seconds: clipSeconds,
+      ...(cut && { after: ["music-cut"], chain: [{ slot: "video" as const }] }),
+      request: {
+        ...base,
+        modelId: models.music,
+        op: "separate-audio",
+        title: `Stems · ${clip.name?.trim() || "music bed"}`,
+        ...(!cut && { inputs: { video: clip.url } }),
+        params: { sourceDuration: Math.round(clipSeconds * 1000) / 1000, extra: { channels: "mono" } },
+        step: { label: "Music bed", index: n, of: n },
+      },
+    });
+    const loopDef = models.loop ? lookup(models.loop) : undefined;
+    if (clipSeconds < length && loopDef) {
+      const duration = Math.min(LOOP_MAX[loopDef.id] ?? Infinity, Math.ceil(length) + 1);
+      steps.push({
+        key: "music-loop",
+        part: "music",
+        label: "Music bed · looped",
+        after: ["music"],
+        chain: [{ slot: "audio", stem: bedStem }],
+        seconds: duration,
+        request: {
+          ...base,
+          modelId: models.loop!,
+          op: "audio-loop",
+          params: { duration, sourceDuration: Math.round(clipSeconds * 1000) / 1000, crossfade: BED_CROSSFADE },
+          step: { label: "Music loop", index: n, of: n },
+        },
+      });
+      bedKey = "music-loop";
+      bedStem = undefined;
+    }
+  } else if (models.music) {
     const musicDef = pick(lookup, models.music);
     const plan = musicPlan(musicDef, models.loop ? lookup(models.loop) : undefined, length);
     const bed = plan.bed;
@@ -1211,7 +1303,7 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
     label: mixLabel,
     seconds: length,
     after: models.music ? [film, "narration", bedKey] : [film, "narration"],
-    chain: models.music ? [{ slot: "video" }, { slot: "audio" }, { slot: "audio2" }] : [{ slot: "video" }, { slot: "audio" }],
+    chain: models.music ? [{ slot: "video" }, { slot: "audio" }, { slot: "audio2", ...(bedStem && { stem: bedStem }) }] : [{ slot: "video" }, { slot: "audio" }],
     request: {
       ...base,
       modelId: models.mux,
@@ -1252,6 +1344,91 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
 
 /** The step whose output is the finished episode. */
 export const finalKey = (graph: Pick<GraphStep, "key">[]) => (graph.some((s) => s.key === "captions") ? "captions" : "mix");
+
+// ---------------------------------------------------------------------------
+// "Regenerate to 1080p" (package n7-10; docs/research/new-models-7.md §2.10)
+
+/** Keys of the regenerated film's steps (beside the episode's own). */
+export const REGEN_PREFIX = "regen-";
+
+export const FACELESS_REGEN_COPY = {
+  label: "Regenerate to 1080p",
+  hint: "Sharper, may redraw: each scene is redrawn at 1080p from its own words, then joined under the same voice and music.",
+  /** The GPU time a visitor sees (no install detail). */
+  time: (scenes: number) => `Runs on your GPU · about ${Math.max(1, Math.round(scenes * 1.5))} min`,
+  done: "Regenerated (1080p)",
+} as const;
+
+/**
+ * The regenerated film from an episode's graph: each clip (one scene, or one shot of it; never over 15 s) is redrawn by
+ * Open-H3 Regenerate at 1080p with the 576p preset and start sigma 0.8, from the scene's own words (its picture's
+ * prompt, and its motion for an animated scene); a 16 fps clip (Wan) goes through RIFE to 24 fps first. Then the clips
+ * are joined the way the episode joins them, at 1080p, and the same narration, music bed and subtitles go on top: the
+ * steps reuse the episode's narration, bed and timing (their keys stay as they are, for `existing`). `joinMax` is the
+ * episode's fold size (resolveModels).
+ */
+export function regeneratePlan(graph: GraphStep[], o: { engine: Engine; joinMax: number; lookup: ModelLookup }): { steps: FinishStep[]; final: string } {
+  const regen = ENGINE_MODELS[o.engine].regenerate;
+  if (!regen) throw new Error("Regenerate runs on your GPU (open source): switch the episode to open source to use it");
+  const byKey = new Map(graph.map((s) => [s.key, s]));
+  const steps: FinishStep[] = [];
+  const clips: string[] = [];
+  for (const c of graph.filter((s) => s.part === "clip")) {
+    const still = c.after?.length ? byKey.get(c.after[0]) : undefined;
+    const words = [still?.request.prompt, c.request.op === "i2v" ? c.request.prompt : undefined].filter((w): w is string => !!w?.trim()).join(" ");
+    const seconds = c.seconds ?? c.request.params?.duration ?? 5;
+    const plan = regenFinishSteps({
+      key: `${REGEN_PREFIX}${c.key}`,
+      clip: { key: c.key },
+      prompt: words || c.request.prompt || "",
+      seconds,
+      fps: sixteenFpsModel(c.request.modelId) ? 16 : undefined,
+      draftFrom: "other",
+      helper: { feature: c.request.feature, batchTitle: c.request.batchTitle },
+      label: c.label,
+    });
+    steps.push(...plan.steps);
+    clips.push(plan.final);
+  }
+  if (!clips.length) throw new Error("The episode has no scenes to regenerate");
+  // The joins: the episode's own join model, folded the same way, at 1080p where it takes a size.
+  const join = graph.find((s) => s.part === "join");
+  let film = clips[0];
+  if (join) {
+    const sized = o.lookup(join.request.modelId)?.options.resolutions?.includes(REGEN_FINISH_TIER);
+    const name = (k: string) => (clips.includes(k) ? k : `${REGEN_PREFIX}${k}`);
+    for (const level of foldJoins(clips, o.joinMax)) {
+      for (const j of level) {
+        steps.push({
+          key: name(j.key),
+          request: { ...join.request, params: { ...join.request.params, ...(sized && { resolution: REGEN_FINISH_TIER }) }, step: { label: j.key === "join" ? "Joining the redrawn scenes" : "Joining scenes", index: 0, of: 1 } },
+          after: j.after.map(name),
+          chain: j.after.map(() => ({ slot: "videos" as const })),
+        });
+      }
+    }
+    if (clips.length > 1) film = `${REGEN_PREFIX}join`;
+  }
+  // The same voice, bed and subtitles as the episode.
+  const mix = graph.find((s) => s.key === "mix");
+  if (!mix) throw new Error("The episode has no mix to put on the redrawn scenes");
+  const swap = (k: string) => (k === mix.after?.[0] ? film : k);
+  steps.push({ key: `${REGEN_PREFIX}mix`, request: { ...mix.request, title: undefined }, after: (mix.after ?? []).map(swap), chain: mix.chain });
+  const captions = graph.find((s) => s.key === "captions");
+  if (captions) {
+    steps.push({ key: `${REGEN_PREFIX}captions`, request: captions.request, after: (captions.after ?? []).map((k) => (k === "mix" ? `${REGEN_PREFIX}mix` : k)), chain: captions.chain });
+  }
+  const final = captions ? `${REGEN_PREFIX}captions` : `${REGEN_PREFIX}mix`;
+  const last = steps.find((s) => s.key === final)!;
+  last.request = { ...last.request, title: `${graph[0]?.request.batchTitle ?? "Episode"} · 1080p` };
+  return { steps, final };
+}
+
+/** The episode steps a regenerated film reads as they are (its clips, narration, timing and bed). */
+export function regenerateReuses(steps: FinishStep[]): string[] {
+  const own = new Set(steps.map((s) => s.key));
+  return [...new Set(steps.flatMap((s) => s.after ?? []).filter((k) => !own.has(k)))];
+}
 
 /** Keys that wait (directly or not) on any of `keys`. */
 export function descendants(graph: Pick<GraphStep, "key" | "after">[], keys: Iterable<string>): Set<string> {
@@ -2083,6 +2260,8 @@ export interface EpisodePlan {
   lastFinal?: string;
   /** "Upscale to 1080p": the upscaled copy of the finished film. */
   upscaled?: string;
+  /** "Regenerate to 1080p" (open engine): its steps by key, and the finished film's generation. */
+  regenerated?: { ids: Record<string, string>; final: string };
   changes: EpisodeChange[];
 }
 
@@ -2131,6 +2310,12 @@ export interface EpisodeView {
   upscaled: Generation | null;
   /** What "Upscale to 1080p" would cost (null: not offered on this engine). */
   upscale: { costUsd: number | null; demo: boolean } | null;
+  /** The film with every scene regenerated at 1080p, once asked for. */
+  regenerated: Generation | null;
+  /** While it renders: its steps done of all. */
+  regenerating: { done: number; of: number } | null;
+  /** "Regenerate to 1080p" on this engine (null: not offered, as on the cloud): free on your GPU. */
+  regenerate: { scenes: number; demo: boolean } | null;
 }
 
 /** One item in the Explainer's history or a channel's episode list. */

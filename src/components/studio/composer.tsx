@@ -364,11 +364,20 @@ export function Composer({ docked }: { docked: boolean }) {
   const draft = useMemo(
     () =>
       config.clipFacts
-        ? { ...typed, params: { ...typed.params, sourceDuration: typed.slots.video?.ref ? facts?.duration : undefined, sourceFps: typed.slots.video?.ref ? facts?.fps : undefined } }
+        ? {
+            ...typed,
+            params: {
+              ...typed.params,
+              sourceDuration: typed.slots.video?.ref ? facts?.duration : undefined,
+              sourceFps: typed.slots.video?.ref ? facts?.fps : undefined,
+              // An upscale billed per output frame (Kandinsky VSR) is priced on the clip's size.
+              sourceSize: typed.slots.video?.ref && facts?.width && facts.height ? { width: facts.width, height: facts.height } : undefined,
+            },
+          }
         : config.voiceFacts
           ? { ...typed, params: { ...typed.params, sourceDuration: voiceRef ? voice?.duration : undefined } }
           : typed,
-    [config.clipFacts, config.voiceFacts, typed, facts?.duration, facts?.fps, voiceRef, voice?.duration],
+    [config.clipFacts, config.voiceFacts, typed, facts?.duration, facts?.fps, facts?.width, facts?.height, voiceRef, voice?.duration],
   );
   const liveElements = useElements().data;
   const elements = (hydrated && liveElements) || EMPTY;

@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
+import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
+import type { SoundChoice } from "@/lib/av/original-sound";
 import { MediaThumb } from "@/components/studio/result-media";
 import { VideoTrimmer, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
 import { LookCard } from "@/components/shorts/preset-card";
@@ -318,6 +320,7 @@ function Editor({
   const [fpsChoice, setFpsChoice] = useState<FpsChoice>(MIXED.defaultFps as number);
   const [manual, setManual] = useState<number>(MIXED.defaultFps);
   const [resolution, setResolution] = useState<MixedResolution>("1K");
+  const [sound, setSound] = useState<SoundChoice>({ sound: "everything" });
   // Frame by frame (the default, priced per frame), Smooth (the first frame, then carried through by depth) or, on the
   // cloud, Fast (one video-to-video pass). A mode the engine hasn't (Fast on your GPU) reads as Per frame.
   const [picked, setMode] = useState<MixedMode>("frames");
@@ -403,6 +406,7 @@ function Editor({
           modelId,
           mode,
           ...(anchor ? { anchor } : {}),
+          ...soundBody(engine, sound),
         }
       : null;
   const estimate = useMixedEstimate(body);
@@ -572,6 +576,8 @@ function Editor({
           <Segmented<MixedResolution> label="Resolution" value={resShown} onChange={setResolution} options={resOptions} />
         </Field>
       )}
+
+      <OriginalSoundField engine={engine} value={sound} onChange={setSound} hasAudio={clip?.info?.hasAudio} />
 
       {preset && <AdvancedSettings preset={preset} values={values} onChange={setValues} />}
 

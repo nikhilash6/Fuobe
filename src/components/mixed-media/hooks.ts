@@ -3,6 +3,7 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDeferredValue } from "react";
 import type { MixedMode, MixedResolution, MixedValues } from "@/lib/catalog/mixed-media";
+import type { SoundChoice } from "@/lib/av/original-sound";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { useGenerationEvents } from "@/lib/api";
 import { send } from "@/components/shorts/hooks";
@@ -22,6 +23,8 @@ export interface MixedBody {
   mode?: MixedMode;
   anchor?: string;
   frameUrl?: string;
+  /** Original sound (unset = Everything). */
+  sound?: SoundChoice;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }

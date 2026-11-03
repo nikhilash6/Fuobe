@@ -297,6 +297,20 @@ describe("Remove object: runs", () => {
     expect(removal.request.prompt).toBe("the skater");
   });
 
+  it("Original sound: the cloud refuses a split in words; your GPU's paint removal splits the cut and lowers the music", async () => {
+    const cloud = await createRoute.POST(json(body({ modelId: "bria-video-erase", sound: { sound: "no-dialogue" } })));
+    expect(cloud.status).toBe(422);
+    expect((await cloud.json()).error).toMatch(/runs on your GPU \(open source\)/);
+    const res = await createRoute.POST(json(body({ engine: "open", mode: "paint", prompt: undefined, mask, sound: { sound: "lower-music", musicDb: -18 } })));
+    expect(res.status).toBe(201);
+    const { final } = (await res.json()) as { final: Generation };
+    const rows = batchOf(final.id);
+    expect(rows.filter((r) => r.op === "separate-audio").map((r) => r.model_id)).toEqual(["oss-dbs-separate"]);
+    expect(final).toMatchObject({ modelId: "oss-mux", feature: REMOVE.feature });
+    expect(final.request.params?.extra).toMatchObject({ backgroundVolumeDb: -18 });
+    expect((await settle(final.id)).status).toBe("succeeded");
+  });
+
   it("mask preview: SAM 3.1 on the first 2 s (cloud), the SAM 3 matte (open)", async () => {
     const cloud = (await (await previewRoute.POST(json(body({ requestId: "preview-cloud-1" })))).json()) as Generation;
     expect(cloud).toMatchObject({ feature: REMOVE.previewFeature, modelId: "sam-3-1-video-mask", op: "bg-remove-video", prompt: "the skateboard" });

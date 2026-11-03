@@ -5,15 +5,16 @@
  */
 import { FORMAT_INFO } from "./av/formats";
 import { fpsPlan, fpsSummary } from "./av/fps";
-import { targetShortEdge, upscaledSize, upscaleFactorFor, upscaleTier } from "./av/upscale";
+import { sideMultipleProblem, targetShortEdge, upscaledSize, upscaleFactorFor, upscaleTier } from "./av/upscale";
 import { wholeClipProblem, wholeClipTool } from "./av/video-finish";
 import { clipFpsProblem, clipSizeProblem, clipWindowProblem } from "./catalog/clip-windows";
-import { clipBilling } from "./catalog/plan";
+import { clipBilling, sourceLengthProblem } from "./catalog/plan";
 import { addFrameAt, frameTimes, framesInputs, removeFrameAt, spread, type FrameSupport } from "./catalog/keyframes";
 import { keyTimes, totalSeconds, type InbetweenTiming } from "./inbetween";
 import { FACE_MOSAIC_MODELS } from "./catalog/open-tools";
 import { pricingOn, type PriceClock } from "./catalog/promo";
 import { soulPostStep } from "./catalog/soul";
+import { studioResolutions } from "./catalog/regenerate";
 import { appModels, ownRoute, presetRoutes, type HasModel, type RecipePreset } from "./catalog/preset-recipe-routes";
 import { COLORMAPS, type Engine, type GenParams, type InputSlot, type MatteOutput, type MediaKind, type ModelDef, type Operation, type Preset, type PresetRoute, type VideoFormat } from "./catalog/types";
 import { formatCost } from "./format";
@@ -91,7 +92,8 @@ export function settingsShape(
   const shaped = routes.length > 0 && routes.every((r) => r.unsized || r.followsImage);
   return {
     aspect: !sized || shaped || op === "i2v" || op === "flf2v" ? null : many(o.aspectRatios),
-    resolution: sized ? many(o.resolutions) : null,
+    // With the tiers a finishing pass reaches (MiniMax H3's 2K on your GPU: a 768p draft redrawn by Open-H3 Regenerate).
+    resolution: sized ? many(studioResolutions(o)) : null,
     duration: params.shots ? null : many(o.durations),
     count: (kind === "image" || kind === "video") && !single,
     draft: !!o.draft,
@@ -315,10 +317,13 @@ export function clipBlocker(
       (facts.fps ? clipFpsProblem(named, facts.fps) : null)
     );
   }
+  const long = model && "name" in model && model.name ? sourceLengthProblem({ name: model.name, options: model.options }, facts?.duration) : null;
+  if (long) return long;
   if (!facts?.width || !facts.height || !model) return null;
   if (op === "upscale-video") {
     const tier = upscaleTier(params.resolution ?? model.defaults?.resolution, model.options.resolutions, { width: facts.width, height: facts.height }, params.resolution !== undefined);
-    return "error" in tier ? tier.error : null;
+    if ("error" in tier) return tier.error;
+    return sideMultipleProblem(model.name ?? "This model", model.options.sideMultiple, model.options.resolutions, tier.resolution, { width: facts.width, height: facts.height });
   }
   if (model.engine !== "open" || !ramBytes || !facts.duration || !facts.fps) return null;
   const target = params.targetFps ?? model.defaults?.targetFps;
@@ -1302,4 +1307,11 @@ export function controlsFor(controls: NonNullable<ModelDef["options"]["controls"
     const values = c.values.filter((v) => c.ops?.[String(v)]?.includes(op) ?? true);
     return values.length > 1 ? [{ ...c, values }] : [];
   });
+}
+
+/** A related studio's link (StudioConfig.related), opened on its model for this engine when it names one (Lipsync → Kandinsky 6.0). */
+export function relatedHref(related: { href: string; models?: Partial<Record<Engine, string>> }, engine: Engine): string {
+  const model = related.models?.[engine];
+  if (!model) return related.href;
+  return `${related.href}${related.href.includes("?") ? "&" : "?"}model=${encodeURIComponent(model)}`;
 }

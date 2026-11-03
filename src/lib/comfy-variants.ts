@@ -38,6 +38,13 @@ export const H3_FLEX_GRAPH: Record<string, string> = {
   "minimax-h3-flf2v": "minimax-h3-flex-flf2v",
 };
 
+/**
+ * MiniMax H3 at 2K on your GPU (n7-10): the text-to-video draft that keeps its 768p latent (params.extra.latentDraft), and
+ * Regenerate's finish that starts from that latent (params.extra.latentFrom, the draft run's id) instead of the clip.
+ */
+export const H3_LATENT_DRAFT_GRAPH: Record<string, string> = { "minimax-h3-t2v": "video-h3-t2v-2k" };
+export const REGEN_LATENT_GRAPH: Record<string, string> = { "video-regenerate-h3": "video-regenerate-h3-latent" };
+
 /** MiniMax H3's 360-degree orbit of a still (params.extra.orbit): the Orbit LoRA graph, with the still as first and last frame. */
 export const H3_ORBIT_GRAPH: Record<string, string> = { "minimax-h3-i2v": "minimax-h3-orbit" };
 
@@ -95,10 +102,15 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   const tier = r.extra[H3_TIER_PARAM];
   const small = tier === "fast" || tier === "trim" ? tierGraphFor(endpoint, tier, r.has) : undefined;
   const flex = H3_FLEX_GRAPH[endpoint];
-  if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
+  const latentDraft = H3_LATENT_DRAFT_GRAPH[endpoint];
+  // The 2K tier's text-to-video draft that keeps its latent (never a Flex take's: h3TwoKRequests drafts that on Flex's graph).
+  if (latentDraft && r.extra.latentDraft === true && r.has(latentDraft)) endpoint = latentDraft;
+  else if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
   else if (flex && r.extra.quality === "flex" && r.has(flex)) endpoint = flex;
   else if (small) endpoint = small;
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
+  const fromLatent = REGEN_LATENT_GRAPH[endpoint];
+  if (fromLatent && typeof r.extra.latentFrom === "string" && r.extra.latentFrom && r.has(fromLatent)) endpoint = fromLatent;
   const cover = YUE2_COVER_GRAPH[endpoint];
   if (cover && r.audio && r.has(cover)) endpoint = cover;
   const bed = REUSE_BED_GRAPH[endpoint];

@@ -16,21 +16,26 @@ import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useCreateGeneration, useEngine, useGenerations, useHydrated, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { useCreateGeneration, useEngine, useGenerations, useHydrated, useIsOwner, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
+  FINAL_3D,
   IDOL_QUALITIES,
   MAX_3D_PROMPT,
   MODEL3D_FEATURE,
   MODEL3D_FILM_FEATURE,
   MODEL3D_MODES,
   MODELS_3D,
-  RIG_MODEL,
   SIDE_LABELS,
   SIDES_HINT,
   VIEW_SIDES,
   idolPhotoFor,
   isIdol,
+  MAKE_3D_HINT,
   model3dBlocker,
+  readModel3dLink,
+  linkedIdolQuality,
+  linkedPicture,
+  linkedPhoto,
   model3dFor,
   model3dRequest,
   modeOf,
@@ -70,27 +75,53 @@ const HINTS: Record<Model3dMode, string> = {
 };
 
 /**
- * A link's ?model= (from ⌘K) picks that model, its mode and its engine; ?mode= picks a mode; ?model=meshy-rigging
- * (rigging works on a finished model) says where Rig & animate is. Under its own Suspense: it reads the URL.
+ * A link's ?model= (from ⌘K, or an image result's Make it 3D) picks that model, its mode and its engine; ?mode= picks a
+ * mode; ?model=meshy-rigging (rigging works on a finished model) says where Rig & animate is; ?quality= sets Idol 3D's
+ * look and ?image= fills the photo slot (readModel3dLink: an image result's Make it 3D, or an Idol 3D result's "Build the
+ * final with TRELLIS.2"). Under its own Suspense: it reads the URL.
  */
-function UrlModel({ onModel, onMode, onRig }: { onModel: (mode: Model3dMode, engine: Engine, id: string) => void; onMode: (mode: Model3dMode) => void; onRig: () => void }) {
+function UrlModel({
+  onModel,
+  onMode,
+  onRig,
+  onImage,
+}: {
+  onModel: (mode: Model3dMode, engine: Engine, id: string, quality?: IdolQuality) => void;
+  onMode: (mode: Model3dMode) => void;
+  onRig: () => void;
+  onImage: (url: string, photo?: boolean) => void;
+}) {
   const params = useSearchParams();
-  const id = params.get("model");
-  const mode = params.get("mode");
   useEffect(() => {
-    const found = id ? modeOf(id) : null;
-    if (found && id) onModel(found.mode, found.engine, id);
-    else if (id === RIG_MODEL) onRig();
-    else if (MODEL3D_MODES.some((m) => m.id === mode)) onMode(mode as Model3dMode);
-  }, [id, mode, onModel, onMode, onRig]);
+    const link = readModel3dLink(params);
+    if (link.model) onModel(link.model.mode, link.model.engine, link.model.id, link.quality);
+    else if (link.rig) onRig();
+    else if (link.mode) onMode(link.mode);
+    if (link.image) onImage(link.image, linkedPhoto(link));
+  }, [params, onModel, onMode, onRig, onImage]);
   return null;
 }
 
 /**
  * Idol 3D's settings: Best or Quick look (labelled by steps and Gaussians), and "It's a photo", which gives the object
- * Idol's looser crop.
+ * Idol's looser crop. On your GPU, Advanced → "Trim spikes" also drops the thin spikes at the edges (fal has no such
+ * setting, so the cloud doesn't offer it).
  */
-function IdolSettings({ quality, onQuality, photo, onPhoto }: { quality: IdolQuality; onQuality: (q: IdolQuality) => void; photo: boolean; onPhoto: (v: boolean) => void }) {
+function IdolSettings({
+  quality,
+  onQuality,
+  photo,
+  onPhoto,
+  trim,
+}: {
+  quality: IdolQuality;
+  onQuality: (q: IdolQuality) => void;
+  photo: boolean;
+  onPhoto: (v: boolean) => void;
+  trim?: { on: boolean; onChange: (v: boolean) => void };
+}) {
+  // Only the owner reads what trimming needs on the ComfyUI (it's theirs to set up).
+  const owner = useIsOwner();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const move = (from: number, by: number) => {
     const i = (from + by + IDOL_QUALITIES.length) % IDOL_QUALITIES.length;
@@ -135,6 +166,27 @@ function IdolSettings({ quality, onQuality, photo, onPhoto }: { quality: IdolQua
         </Label>
         <Switch id="m3d-idol-photo" checked={photo} onCheckedChange={onPhoto} />
       </div>
+      {trim && (
+        <details className="group rounded-xl border px-3 py-2 [&_summary::-webkit-details-marker]:hidden">
+          <summary className="cursor-pointer list-none text-[13px] font-medium outline-none select-none focus-visible:ring-2 focus-visible:ring-ring">
+            Advanced{trim.on && <span className="text-[12px] font-normal text-muted-foreground"> · trimming spikes</span>}
+          </summary>
+          <div className="flex items-center justify-between gap-3 pt-3">
+            <div className="min-w-0">
+              <Label htmlFor="m3d-idol-trim" className="text-[13px] font-normal">
+                Trim spikes
+              </Label>
+              <p id="m3d-idol-trim-hint" className="mt-0.5 text-[12px] text-muted-foreground">
+                Drops the thin, needle-like bits around the edges of the 3D file.
+              </p>
+              {owner && (
+                <p className="mt-0.5 text-[12px] text-muted-foreground">Needs the ComfyUI-Idol nodes on your ComfyUI; without them the file is saved untrimmed.</p>
+              )}
+            </div>
+            <Switch id="m3d-idol-trim" aria-describedby="m3d-idol-trim-hint" checked={trim.on} onCheckedChange={trim.onChange} />
+          </div>
+        </details>
+      )}
     </div>
   );
 }
@@ -208,6 +260,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   // picked from the library, is taken for a photo; a result made here for a render or a generated image.
   const [idolQualities, setIdolQualities] = useState<Record<string, IdolQuality>>({});
   const [idolPhoto, setIdolPhoto] = useState(true);
+  // Idol 3D on your GPU: Advanced → Trim spikes (the open graph's max_scale; the cloud has no such setting).
+  const [idolTrim, setIdolTrim] = useState(false);
   // The last value the drop gave (an upload reports twice: uploading, then done, from one closure).
   const lastPhoto = useRef<SlotValue | null>(null);
   const takePhoto = (v: SlotValue | null) => {
@@ -225,13 +279,36 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   // Refine detail · Hi3D 1.0 (open engine, From an image and From several images): the resolution, or off.
   const [refine, setRefine] = useState<Hi3dResolution | null>(null);
   const showRigHint = useCallback(() => setRigHint(true), []);
+  // A picture handed over in the link (?image=). An image result's Make it 3D names Idol 3D and says what the picture is:
+  // a result made here goes in as one, so Idol's photo crop starts off (the tighter crop suits a generated picture), and an
+  // upload (?photo=1) starts it on. Other links (an Idol 3D result's "Build the final with TRELLIS.2") leave Idol's
+  // "It's a photo" as it is: they don't say whether the picture is a photo (an Idol 3D draft's is usually the user's own upload).
+  const [handed, setHanded] = useState<string | null>(null);
+  const fromImage = useCallback((url: string, asPhoto?: boolean) => {
+    const v: SlotValue = asPhoto === undefined ? { ref: url, preview: url, kind: "image" } : linkedPicture(url, asPhoto);
+    lastPhoto.current = v;
+    setPhoto(v);
+    if (asPhoto === undefined) return;
+    setIdolPhoto(asPhoto);
+    setHanded(url);
+  }, []);
   const fromUrl = useCallback(
-    (m: Model3dMode, e: Engine, id: string) => {
+    (m: Model3dMode, e: Engine, id: string, quality?: IdolQuality) => {
       setMode(m);
       setPicked((p) => ({ ...p, [`${m}:${e}`]: id }));
+      setIdolQualities((p) => linkedIdolQuality(p, m, e, id, quality));
       setEngine(e);
     },
     [setEngine],
+  );
+  // "Build the final with TRELLIS.2" on a result card: fills the form on every click, also when the link is the URL already.
+  const toFinal = useCallback(
+    (url: string) => {
+      const found = modeOf(FINAL_3D.model);
+      if (found) fromUrl(found.mode, found.engine, FINAL_3D.model);
+      fromImage(url);
+    },
+    [fromUrl, fromImage],
   );
   // Models switched off in Settings → Models & licences leave the menu, and the pick falls back to one that is on.
   const choices = keepOffered(MODELS_3D[mode][engine], (m) => offered(access, m.id, engine));
@@ -248,7 +325,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
     photo: photo?.ref,
     views: sides,
     prompt: mode === "text" ? text : mode === "objects" ? object : undefined,
-    ...(idol && { quality: idolQuality, photoCrop: idolPhoto }),
+    ...(idol && { quality: idolQuality, photoCrop: idolPhoto, ...(engine === "open" && { trimSpikes: idolTrim }) }),
   };
   const uploading = !!photo?.uploading || VIEW_SIDES.some((s) => views[s]?.uploading);
   // A guest or an account reads why the button is off, not a step on an upload that is off too.
@@ -264,6 +341,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const cloudAllowed = engineMode !== "open";
   // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on.
   const refineAllowed = !visitor && engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
+  // "Build the final with TRELLIS.2" on an Idol 3D result: while TRELLIS.2 runs here and is switched on.
+  const finalAllowed = !visitor && engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");
   const refining = refineAllowed && engine === "open" && (mode === "image" || mode === "multi") && refine !== null ? refine : null;
   const go = () => {
     if (visitor) return;
@@ -282,7 +361,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   return (
     <ToolShell title="Image to 3D" selfHostedOnly>
       <Suspense fallback={null}>
-        <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} />
+        <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} onImage={fromImage} />
       </Suspense>
       <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]}>
         {visitor && <SelfHostNote className="mt-3 max-w-xl">Image to 3D isn&apos;t available here.</SelfHostNote>}
@@ -413,7 +492,20 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {licence && licence.notices.length > 0 && <p className="text-[12px] text-muted-foreground">{licence.notices.join(" · ")}</p>}
               </div>
               {!idol && (mode === "image" || mode === "multi") && <RefineOption engine={engine} value={refine} onChange={setRefine} openAllowed={refineAllowed} onUseGpu={() => setEngine("open")} />}
-              {idol && <IdolSettings quality={idolQuality} onQuality={setIdolQuality} photo={idolPhoto} onPhoto={setIdolPhoto} />}
+              {idol && (
+                <IdolSettings
+                  quality={idolQuality}
+                  onQuality={setIdolQuality}
+                  photo={idolPhoto}
+                  onPhoto={setIdolPhoto}
+                  trim={engine === "open" ? { on: idolTrim, onChange: setIdolTrim } : undefined}
+                />
+              )}
+              {idol && engine === "open" && !!handed && photo?.ref === handed && (
+                <p className="mt-3 rounded-xl bg-brand-faint px-3 py-2 text-[12px] text-brand-text" data-testid="make-3d-hint">
+                  {MAKE_3D_HINT}
+                </p>
+              )}
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
               </Button>
@@ -451,7 +543,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((g) => (
-              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />
+              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={toFinal} />
             ))}
           </div>
         )}
@@ -469,12 +561,26 @@ function retryOf(g: Generation): GenerationRequest {
   return r;
 }
 
-function ResultCard({ g, info, cloudAllowed, refineAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed: boolean }) {
+function ResultCard({
+  g,
+  info,
+  cloudAllowed,
+  refineAllowed,
+  finalAllowed,
+  onFinal,
+}: {
+  g: Generation;
+  info: Record<string, Model3dInfo>;
+  cloudAllowed: boolean;
+  refineAllowed: boolean;
+  finalAllowed: boolean;
+  onFinal: (photo: string) => void;
+}) {
   const create = useCreateGeneration();
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
   if (g.kind === "video") return <FilmCard g={g} />;
-  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />;
+  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={onFinal} />;
 }
 
 /** A photoreal orbit filmed from a model ("Film it photoreal"): the clip, to watch and download. */

@@ -10,7 +10,8 @@
  * answers), `missing` (a file /prompt answers "not in list" for), `output` ("video" or "image"), `layers` (the
  * history lists that many Qwen-Image-Layered layers, node 60), `frames` (an EXR export: a preview clip, node 5, and
  * that many frames, node 3), `historyError` (/history answers HTTP 500 and then sends nothing), `uploadStatus` (the HTTP
- * status /upload/image answers, e.g. 500 to fail every upload).
+ * status /upload/image answers, e.g. 500 to fail every upload), `refuseClass` (/prompt answers "not in list" for a graph with
+ * a node of that class).
  * This file runs under plain Node too: only erasable TypeScript.
  */
 import http from "node:http";
@@ -29,6 +30,8 @@ export interface FakeComfyOptions {
   frames?: number;
   historyError?: boolean;
   uploadStatus?: number;
+  /** /prompt answers "not in list" for a graph with a node of this class (a file that node loads isn't there). */
+  refuseClass?: string;
 }
 
 export interface FakeLogEntry {
@@ -105,6 +108,13 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         try {
           entry.prompt = (JSON.parse(body.toString("utf8")) as { prompt?: Record<string, unknown> }).prompt;
         } catch {}
+        const refused = opts.refuseClass ? Object.entries(entry.prompt ?? {}).find(([, n]) => (n as { class_type?: string })?.class_type === opts.refuseClass) : undefined;
+        if (refused) {
+          return json(400, {
+            error: { type: "prompt_outputs_failed_validation", message: "Prompt outputs failed validation" },
+            node_errors: { [refused[0]]: { errors: [{ type: "value_not_in_list", message: "Value not in list", details: "not in list", extra_info: { input_name: "latent_file", received_value: "x" } }], class_type: opts.refuseClass } },
+          });
+        }
         if (opts.missing) {
           return json(400, {
             error: { type: "prompt_outputs_failed_validation", message: "Prompt outputs failed validation" },

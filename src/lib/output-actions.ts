@@ -12,7 +12,7 @@ import { PRESETS as GRADE_PRESETS } from "./grade";
 import { storedPath } from "./share";
 import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout-prompt";
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
-import { canRerender, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
+import { canEnhance, canRerender, ENHANCE_LABEL, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
 import { exportsCleanly } from "./av/keying";
 import { isInstrumental, lyricsOf, songFormat, STEMS_FORMATS } from "./lyrics";
@@ -46,6 +46,7 @@ export type OutputActionId =
   | "edit-speech"
   | "copy-text"
   | "view-3d"
+  | "make-3d"
   | "download"
   | "download-txt"
   | "download-srt"
@@ -56,6 +57,7 @@ export type OutputActionId =
   | "finalize"
   | "regenerate"
   | "rerender-2k"
+  | "enhance-h3"
   | "compare"
   | "reuse"
   | "make-skill"
@@ -93,9 +95,19 @@ export interface ActionContext {
    * (a server render, a share page): as "both".
    */
   engineMode?: "both" | "open" | "cloud";
+  /**
+   * The open engine can run here: Engine mode is open or both and ComfyUI is connected (or placeholder results are on),
+   * for the owner (openEngineReady in src/lib/connections.ts). Make it 3D (quick) needs it: Idol 3D runs on your GPU.
+   */
+  openEngine?: boolean;
 }
 
 const q = (url: string) => encodeURIComponent(url);
+
+/** Make it 3D (quick) on a picture: Image to 3D → Splat on Idol 3D's Quick look, the picture in the slot (idol-5). */
+export function make3dHref(url: string, photo = false): string {
+  return `/image-to-3d?mode=splat&model=oss-idol&quality=quick&image=${q(url)}${photo ? "&photo=1" : ""}`;
+}
 
 /** Every action for output `index` of `g`, in display order. */
 export function outputActions(g: Generation, index: number, ctx: ActionContext = {}): OutputAction[] {
@@ -131,6 +143,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       // A picture drawn from a layout (or one fal's MOSS-Image planned itself) reopens as boxes in the Image studio.
       if (editableLayout(g, index)) link("edit-layout", "Edit layout", editLayoutHref(g, index));
       link("genjutsu", "Animate with Genjutsu", `/genjutsu?mode=motion&image=${q(o.url)}`);
+      // Idol 3D runs on your GPU only (fal's Idol is a choice of its own in Image to 3D): hidden where the open engine
+      // can't run. An upload is likely a photo, so it opens with the looser photo crop on.
+      if (ctx.openEngine && ctx.engineMode !== "cloud") link("make-3d", "Make it 3D (quick)", make3dHref(o.url, g.feature === "upload"));
       out.push({ id: "save-character", label: "Save as character", placement: "menu" });
       break;
     case "video": {
@@ -225,6 +240,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   if (o.kind === "video" && g.status === "succeeded") {
     if (canRerender(g, ctx.engineMode)) out.push({ id: "rerender-2k", label: rerenderLabel(g.modelId), placement: "menu" });
     else if ((g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
+    // An Edit video result (up to 15 s): redrawn at 1080p on your GPU, from the edit's own words.
+    if (canEnhance(g, o, ctx.engineMode)) out.push({ id: "enhance-h3", label: ENHANCE_LABEL, placement: "menu" });
   }
   if (ctx.compare) out.push({ id: "compare", label: "Compare with original", placement: "menu" });
   if (ctx.reuse) out.push({ id: "reuse", label: "Reuse settings", placement: "menu" });

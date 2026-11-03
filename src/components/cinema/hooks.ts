@@ -17,7 +17,7 @@ export interface ProjectView {
   project: CinemaProject;
   folders: CinemaFolder[];
   spentUsd: number;
-  context: { cloudAllowed: boolean; civitai?: boolean };
+  context: { cloudAllowed: boolean; civitai?: boolean; worldcast?: boolean };
 }
 
 async function json<T>(res: Response): Promise<T> {
@@ -235,6 +235,11 @@ export function useItemActions(projectId: string) {
     },
     retry: async (g: CinemaGeneration) => {
       await send(`/api/cinema/projects/${g.projectId ?? projectId}/items/${g.id}/retry`, "POST").finally(settle);
+    },
+    /** Finish in 2K: a MiniMax H3 take made again at 2K (fal) or redrawn at 2K on your GPU, in the same folder. */
+    finish2k: async (g: CinemaGeneration, requestId?: string) => {
+      await send(`/api/cinema/projects/${g.projectId ?? projectId}/items/${g.id}/finish`, "POST", requestId ? { requestId } : undefined).finally(settle);
+      return true;
     },
     saveTiles: async (generationId: string, tiles: CinemaTile[]) => {
       await send(`/api/cinema/projects/${projectId}/items/${generationId}/tiles`, "PUT", { tiles });

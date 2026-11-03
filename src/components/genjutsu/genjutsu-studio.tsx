@@ -62,6 +62,8 @@ import { refusalShown, toastError } from "@/lib/refusals";
 import { CharacterControls, CharacterFacts, qualityOff } from "./character-panel";
 import { useDescribeCharacter, useGenjutsuEstimate, useGenjutsuRun, useTranscribeClip, waitForGeneration, type GenjutsuBody } from "./hooks";
 import { LookPicker, type LookSource } from "./look-picker";
+import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
+import { defaultSound, type SoundChoice } from "@/lib/av/original-sound";
 import { SetupCode } from "./setup-code";
 import { useClipCuts } from "./use-cuts";
 
@@ -110,6 +112,7 @@ export function GenjutsuStudio() {
   const clip = source.clip;
   const trimmer = useRef<VideoTrimmerHandle>(null);
   const [range, setRange] = useState<TrimRange | null>(null);
+  const [soundPick, setSoundPick] = useState<SoundChoice | null>(null);
   const [refs, setRefs] = useState<SlotValue[]>([]);
   const [targets, setTargets] = useState<Partial<Record<GenjutsuMode, GenjutsuTarget>>>({});
   const [subject, setSubject] = useState("");
@@ -413,6 +416,9 @@ export function GenjutsuStudio() {
           ...(isCharacter ? { seed: seedNumber, character } : {}),
         })
       : null;
+  // Original sound: a character swap suggests Music & effects only (the new person's speech isn't theirs); a pick stays.
+  const soundSuggested = defaultSound(engine, { personReplaced: isCharacter });
+  const sound: SoundChoice = soundPick ?? { sound: soundSuggested };
   const body: GenjutsuBody | null =
     uploaded && maker && !problem && !refs.some((r) => r.uploading) && !custom.some((r) => r.uploading)
       ? {
@@ -432,6 +438,7 @@ export function GenjutsuStudio() {
           source: { url: clip.url!, name: clip.name, duration, fps: clip.info?.fps, width: size.width, height: size.height, hasAudio: clip.info?.hasAudio },
           range: { start: range.startTime, end: range.endTime },
           ...(isCharacter ? { character, ...(seedNumber !== undefined ? { seed: seedNumber } : {}), ...(cuts?.length ? { cuts } : {}) } : {}),
+          ...soundBody(engine, sound),
         }
       : null;
   const estimate = useGenjutsuEstimate(body);
@@ -747,6 +754,8 @@ export function GenjutsuStudio() {
                   />
                 </Field>
               )}
+
+              {clip && <OriginalSoundField engine={engine} value={sound} onChange={setSoundPick} hasAudio={clip.info?.hasAudio} suggested={soundSuggested} />}
 
               <div className="space-y-3 border-t pt-3">
                 <div className="flex items-center gap-2">

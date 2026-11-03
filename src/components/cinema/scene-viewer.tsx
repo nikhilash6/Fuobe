@@ -24,6 +24,7 @@ import { toastError } from "@/lib/refusals";
 import { useCinemaGenerate } from "./hooks";
 import { usePlanPrice, type SceneTake } from "./scene-actions";
 import { FilmButton, OPEN_SECONDS, PathKeys, PathOptions } from "./scene-path";
+import { WORLDCAST_SECONDS } from "@/lib/catalog/worldcast-plan";
 import type { SceneEngine, SceneInfo } from "./scene-engine";
 
 /**
@@ -43,7 +44,7 @@ export interface SceneViewerProps {
   engine: Engine;
   onEngine: (e: Engine) => void;
   settings: DirectorSettings;
-  context: { cloudAllowed: boolean; civitai?: boolean };
+  context: { cloudAllowed: boolean; civitai?: boolean; worldcast?: boolean };
   brief: string;
   onClose: () => void;
   /** Blockout to film: the path rendered through the scene (24 fps) handed to the composer as a blockout. */
@@ -145,7 +146,7 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
   const pathModel = getModel(PATH_MODELS[engine]);
   const qualities = engine === "cloud" ? (pathModel?.options.resolutions ?? []) : [];
   const quality = pathQuality && qualities.includes(pathQuality) ? pathQuality : (pathModel?.defaults?.resolution ?? qualities[0] ?? "");
-  const seconds = engine === "open" ? OPEN_SECONDS : pathSeconds;
+  const seconds = engine === "open" ? (context.worldcast ? WORLDCAST_SECONDS : OPEN_SECONDS) : pathSeconds;
   const pathInput: Omit<CinemaGenerateInput, "brief"> = useMemo(
     () => ({
       engine,
@@ -160,7 +161,7 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
     [engine, words, settings, take.still, quality, keys, pathSeconds, preset],
   );
   const pathPlan = useMemo(
-    () => planCinema({ ...pathInput, brief, path: { ...pathInput.path!, ...(engine === "open" ? { render: PLACEHOLDER_RENDER } : {}) } }, context),
+    () => planCinema({ ...pathInput, brief, path: { ...pathInput.path!, ...(engine === "open" && !context.worldcast ? { render: PLACEHOLDER_RENDER } : {}) } }, context),
     [pathInput, brief, context, engine],
   );
   const pathPrice = usePlanPrice(pathPlan);
@@ -176,7 +177,8 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
   const openRefusal = (): string | undefined => {
     const m = pathPlan.model;
     if (!offered(access, m.id, "open")) return `${m.name} is turned off in ${ACCESS_PLACE}. Turn it back on there, or film on the cloud engine`;
-    if (appStatus && !pathPrice.demo && !m.routes.some((r) => appStatus.providers[r.provider]?.configured)) return "Connect ComfyUI in Settings to film a path on your GPU";
+    if (appStatus && !pathPrice.demo && !m.routes.some((r) => appStatus.providers[r.provider]?.configured))
+      return m.routes.some((r) => r.provider === "worldcast") ? "Connect the WorldCast worker in Settings to film a path with it" : "Connect ComfyUI in Settings to film a path on your GPU";
     return undefined;
   };
 
@@ -341,7 +343,8 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
     let uploaded: string | undefined;
     try {
       let render: string | undefined;
-      if (engine === "open") {
+      // WorldCast (N7-9) renders the path on the server from the still's depth: nothing to record here.
+      if (engine === "open" && !context.worldcast) {
         // The still's own view along the path: Uni3C's guide, in the still's shape (the open run keeps it).
         setFilming("render");
         setProgress(0);
@@ -577,6 +580,7 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
       words={words}
       onWords={setWords}
       notes={pathPlan.notes}
+      worldcast={engine === "open" && !!context.worldcast}
       disabled={status !== "ready" || pathBusy}
     />
   );

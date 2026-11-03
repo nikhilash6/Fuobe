@@ -23,6 +23,7 @@ const sessionRoute = await import("@/app/api/shorts/sessions/[id]/route");
 const regenRoute = await import("@/app/api/shorts/sessions/[id]/segments/[index]/route");
 const primaryRoute = await import("@/app/api/shorts/sessions/[id]/segments/[index]/primary/route");
 const stitchRoute = await import("@/app/api/shorts/sessions/[id]/stitch/route");
+const enhanceRoute = await import("@/app/api/shorts/sessions/[id]/segments/[index]/enhance/route");
 const estimateRoute = await import("@/app/api/shorts/estimate/route");
 const presetsRoute = await import("@/app/api/shorts/presets/route");
 const mixedRoute = await import("@/app/api/mixed-media/route");
@@ -247,6 +248,41 @@ describe("Shorts sessions", () => {
     expect(await settle(final.id)).toMatchObject({ status: "succeeded" });
   });
 
+  it("Original sound: the cloud refuses a split in words; your GPU splits the cut and keeps the choice for Stitch again", async () => {
+    const cloud = await estimateRoute.POST(json("POST", body({ sound: { sound: "no-dialogue" } })));
+    expect(cloud.status).toBe(422);
+    expect((await cloud.json()).error).toMatch(/Music & effects only runs on your GPU \(open source\)/);
+    const bad = await estimateRoute.POST(json("POST", body({ engine: "open", sound: { sound: "louder" } })));
+    expect(bad.status).toBe(400);
+    const est = await (await estimateRoute.POST(json("POST", body({ engine: "open", source: { url: "/api/files/placeholder.mp4", duration: 12 }, sound: { sound: "lower-music", musicDb: -20 } })))).json();
+    expect(est.notes.join(" ")).toMatch(/Original sound: dialogue, with the music and effects 20 dB lower/);
+    const res = await sessionsRoute.POST(json("POST", body({ engine: "open", range: { start: 1.5, end: 9.5 }, sound: { sound: "no-dialogue" } })));
+    expect(res.status).toBe(201);
+    const s = await res.json();
+    expect(s.settings.sound).toEqual({ sound: "no-dialogue" });
+    const stitch = s.stitches[0];
+    const split = stitch.ids.map((id: string) => gens.getGeneration(id)!).find((g: { op: string }) => g.op === "separate-audio");
+    expect(split).toMatchObject({ modelId: "oss-dbs-separate", feature: "shorts-step" });
+    const final = gens.getGeneration(stitch.final)!;
+    expect(final.request.chain).toEqual([{ slot: "video" }, { slot: "audio", stem: "background" }]);
+    expect(dependsOn(final.id)).toContain(split.id);
+    expect(await settle(final.id)).toMatchObject({ status: "succeeded" });
+    // Stitch again with Dialogue only: kept on the session for the stitches after it.
+    const again = await (await stitchRoute.POST(json("POST", { sound: { sound: "dialogue-only" } }), params({ id: s.id }))).json();
+    expect(again.settings.sound).toEqual({ sound: "dialogue-only" });
+    expect(gens.getGeneration(again.stitches[1].final)!.request.chain).toEqual([{ slot: "video" }, { slot: "audio", stem: "voice" }]);
+    expect(shorts.getSession(s.id).settings.sound).toEqual({ sound: "dialogue-only" });
+  });
+
+  it("Original sound: a clip read as silent gets no split, and no note about one", () => {
+    const b = body({ engine: "open", source: { url: clip, duration: 12 }, sound: { sound: "no-dialogue" } }) as never;
+    const note = /your GPU splits the clip's sound first/;
+    expect(shorts.estimateWith(b, { duration: 12, hasAudio: true }).notes.join(" ")).toMatch(note);
+    expect(shorts.estimateWith(b, { duration: 12, hasAudio: false }).notes.join(" ")).not.toMatch(note);
+    // Sound the header reader couldn't find counts as none, as the stitch plans it.
+    expect(shorts.estimateWith(b, { duration: 12 }).notes.join(" ")).not.toMatch(note);
+  });
+
   it("runs the open engine: segment (+ first frame) → Qwen first-frame restyle → Wan VACE → join → soundtrack", async () => {
     const s = await shorts.createSession(body({ engine: "open" }) as never);
     // Fuobe Shorts is the open engine's restyle model (the same graph oss-wan22-vace-restyle ran), on the GPU.
@@ -263,6 +299,47 @@ describe("Shorts sessions", () => {
     const frame = gens.getGeneration(take.frame!)!;
     expect(frame.status).toBe("succeeded");
     expect(frame.request.inputs?.images?.[0]).toMatch(/^\/api\/files\//);
+  });
+
+  it("enhances a segment on your GPU (RIFE to 24 fps, then Regenerate at 1080p) and stitches the mix at one rate", async () => {
+    const s = await shorts.createSession(body({ engine: "open" }) as never);
+    const before = await settle(s.segments[1].primary);
+    expect(before.status).toBe("succeeded");
+    const res = await enhanceRoute.POST(json("POST", { requestId: "enhance-1" }), params({ id: s.id, index: "1" }));
+    expect(res.status).toBe(201);
+    const v = await res.json();
+    const take = v.segments[1].takes.at(-1);
+    expect(take.enhance.from).toBe(s.segments[1].primary);
+    expect(gens.getGeneration(take.enhance.smooth)).toMatchObject({ modelId: "oss-rife", op: "interpolate", request: { params: { targetFps: 24 } } });
+    const regen = gens.getGeneration(take.look)!;
+    expect(regen).toMatchObject({ modelId: "oss-h3-regenerate", op: "upscale-video", engine: "open", feature: "shorts" });
+    expect(regen.request.params).toMatchObject({ resolution: "1080p", extra: { startSigma: 0.8, draftFrom: "other" } });
+    expect(regen.request.prompt).toBe(before.request.prompt);
+    expect(dependsOn(take.look)).toEqual([take.enhance.smooth]);
+    // The same request id answers with the first take; an enhanced take isn't enhanced again.
+    const same = await (await enhanceRoute.POST(json("POST", { requestId: "enhance-1" }), params({ id: s.id, index: "1" }))).json();
+    expect(same.segments[1].takes).toHaveLength(2);
+    expect(await settle(take.look)).toMatchObject({ status: "succeeded" });
+    const picked = shorts.makePrimary(s.id, 1, take.look);
+    expect((await enhanceRoute.POST(json("POST"), params({ id: s.id, index: "1" }))).status).toBe(409);
+    // The stitch: the other segments to 24 fps, the join at 1080p, each clip in its place.
+    await settle(s.stitches[0].final);
+    const st = await (await stitchRoute.POST(json("POST"), params({ id: picked.id }))).json();
+    const ids: string[] = st.stitches.at(-1).ids;
+    const smooth = ids.map((id) => gens.getGeneration(id)!).filter((g) => g.modelId === "oss-rife");
+    expect(smooth).toHaveLength(2);
+    const join = ids.map((id) => gens.getGeneration(id)!).find((g) => g.op === "concat")!;
+    expect(join.request.params?.resolution).toBe("1080p");
+    expect(await settle(st.stitches.at(-1).final)).toMatchObject({ status: "succeeded" });
+    const joined = gens.getGeneration(join.id)!;
+    const regenUrl = gens.getGeneration(take.look)!.outputs[0].url;
+    expect(joined.request.inputs?.videos?.[1]).toBe(regenUrl);
+    // A cloud short: Enhance runs on your GPU only.
+    const cloud = await shorts.createSession(body() as never);
+    await settle(cloud.segments[0].primary);
+    const refused = await enhanceRoute.POST(json("POST"), params({ id: cloud.id, index: "0" }));
+    expect(refused.status).toBe(422);
+    expect((await refused.json()).error).toMatch(/runs on your GPU \(open source\)/);
   });
 
   it("runs Fuobe Shorts in the cloud by default: cut → first frame → Qwen edit in the look → Wan Fun VACE by depth → join → sound", async () => {
@@ -399,6 +476,17 @@ describe("Mixed Media renders", () => {
   it("estimates frames as floor(seconds × fps) and caps the frame rate at the clip's", async () => {
     const est = await (await mixedEstimateRoute.POST(json("POST", mm({ source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 16 } })))).json();
     expect(est).toMatchObject({ frames: 80, fps: 16, demo: true, costUsd: 0, previewUsd: 0 });
+  });
+
+  it("Original sound on your GPU: the render, the cut's split and a mux of the chosen stem; the cloud says it runs on your GPU", async () => {
+    const res = await mixedRoute.POST(json("POST", mm({ sound: { sound: "dialogue-only" } })));
+    expect(res.status).toBe(201);
+    const { final, items } = await res.json();
+    expect(items.map((g: { op: string }) => g.op)).toEqual(["v2v", "trim", "separate-audio", "mux"]);
+    expect(final).toMatchObject({ modelId: "oss-mux", feature: "mixed-media", request: { title: "Sketch · skate", chain: [{ slot: "video" }, { slot: "audio", stem: "voice" }] } });
+    expect(await settle(final.id)).toMatchObject({ status: "succeeded" });
+    const cloud = await mixedEstimateRoute.POST(json("POST", mm({ engine: "cloud", sound: { sound: "dialogue-only" } })));
+    expect(cloud.status).toBe(422);
   });
 
   it("renders on the open engine in one per-frame job", async () => {

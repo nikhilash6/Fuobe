@@ -12,7 +12,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import type { Generation, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
-import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest } from "@/lib/api";
+import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useHydrated, useIsGuest } from "@/lib/api";
 import {
   claimStartToken,
   followEngineDefault,
@@ -22,6 +22,7 @@ import {
   presetModel,
   presetParams,
   promptShown,
+  relatedHref,
   routeParams,
   START_PARAM,
   withoutLayout,
@@ -33,6 +34,7 @@ import { editableLayout, EDIT_LAYOUT_PARAM, readEditLayoutParam } from "@/lib/ou
 import { positionsFrom, spread } from "@/lib/catalog/keyframes";
 import { reuseSignature, withSignatureWords } from "@/lib/catalog/palettes";
 import { movedAppRequest } from "@/lib/catalog/plan";
+import { studioResolutions } from "@/lib/catalog/regenerate";
 import { currentModelId, migrateRequest } from "@/lib/catalog/replaced";
 import { matchSpokenLanguage } from "@/lib/speech-languages";
 import { SoulPresetCards } from "@/components/moodboards/soul-preset-cards";
@@ -146,7 +148,7 @@ function initialDraft(
   // An output format handed over in the link (Export → "ProRes in the cloud"), when the model writes it.
   const format = model?.options.formats?.find((f) => f === sp.get("format"));
   // A size handed over (Regenerate in 2K → 1440p), when the model offers it.
-  const resolution = model?.options.resolutions?.find((r) => r === sp.get("resolution"));
+  const resolution = studioResolutions(model?.options)?.find((r) => r === sp.get("resolution"));
   // Stills handed over as frames (Storyboard's "Animate these panels", a Character Sheet's poses): Frames mode, evenly spaced.
   const handed = config.frames ? handoffFrames(sp.get("frames")) : [];
   const frames = handed.length ? handed.map((u, i) => ({ value: slot(u)!, at: spread(handed.length)[i] })) : undefined;
@@ -461,6 +463,8 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
   // Config and actions only: the draft lives in the composer, so typing doesn't re-render the page or the feed.
   const { config, setDraft } = useStudioActions();
   const [engine, setEngine, engineMode] = useEngine();
+  // The engine is the browser's own: a link that names its model (Lipsync → Kandinsky) waits for it, so the page hydrates as rendered.
+  const hydrated = useHydrated();
   // A GPU-only step (Regenerate) isn't offered while the install runs paid APIs only.
   const firstSteps = config.firstSteps?.filter((f) => !f.openOnly || engineMode !== "cloud");
   const feed = useGenerations(config.feed);
@@ -552,7 +556,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
             <h2 className="font-heading text-display text-balance">{config.hero}</h2>
             {config.subtitle && <StudioSubtitle text={config.subtitle} />}
             {config.related && (
-              <Link href={config.related.href} className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+              <Link href={hydrated ? relatedHref(config.related, engine) : config.related.href} className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                 {config.related.label}
                 <ArrowRight className="size-3" />
               </Link>

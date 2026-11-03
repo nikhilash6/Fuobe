@@ -5,8 +5,8 @@ import Link from "next/link";
 import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { uploadFile, useEngine, useHydrated } from "@/lib/api";
-import { animateSpinHref, animationName, model3dView, photorealAngle, photorealBody, stillOf, type Model3dView } from "@/lib/av/model3d";
+import { uploadFile, useEngine, useHydrated, useIsOwner } from "@/lib/api";
+import { FINAL_3D, animateSpinHref, animationName, finalBuildHref, model3dView, photorealAngle, photorealBody, stillOf, type Model3dView } from "@/lib/av/model3d";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { useFlyAround } from "@/components/fly-around-run";
 import type { Generation } from "@/lib/catalog/types";
@@ -44,9 +44,25 @@ function rigClips(g: Generation, view: Model3dView): { key: string; label: strin
  * the GLB, loads only when "View in 3D" opens it: the web GLB when the server made one, else the original (a rig
  * plays its animation). A splat shows its orbit video or picture, and "View in 3D" opens the splat viewer in its
  * place (Spark, loaded only then; the orbit video stays where there's no WebGL2). Then the turntable, Animate the
- * spin and Rig & animate.
+ * spin and Rig & animate; an Idol 3D draft on your GPU, "Build the final with TRELLIS.2".
  */
-export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed?: boolean }) {
+export function ModelCard({
+  g,
+  info,
+  cloudAllowed,
+  refineAllowed = false,
+  finalAllowed = false,
+  onFinal,
+}: {
+  g: Generation;
+  info: Record<string, Model3dInfo>;
+  cloudAllowed: boolean;
+  refineAllowed?: boolean;
+  /** TRELLIS.2 runs here and is switched on: an Idol 3D draft offers "Build the final with TRELLIS.2". */
+  finalAllowed?: boolean;
+  /** Fills the form for the final every time it's clicked (the link alone does nothing when the URL is already its own). */
+  onFinal?: (photo: string) => void;
+}) {
   const view = model3dView(g);
   // "preview": the turntable or the still (a splat with an orbit video: the video). "3d": the viewer (a splat: its
   // picture). "look": a splat in the splat viewer.
@@ -66,6 +82,7 @@ export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g:
   // "View in 3D" unmounts itself: focus moves to the viewer once it's there.
   const focusViewer = useRef(false);
   const hydrated = useHydrated();
+  const owner = useIsOwner();
   const canRecord = hydrated && !!recordableType();
   // A splat opens in the splat viewer where the browser draws WebGL2 and the file isn't too big for it (it says so).
   const [splatNote, setSplatNote] = useState<string | null>(null);
@@ -206,6 +223,8 @@ export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g:
   const canFilm = !!photoreal && !view.rigged && (engine === "cloud" || (view.glb ? canRecord && !failed : !!view.turntable));
   const filmBusy = filming !== null || fly.run.isPending;
   const spin = view.rigged ? null : animateSpinHref(view, recorded?.saved);
+  // Draft then final (idol-6): an Idol 3D splat's picture, rebuilt as a textured mesh with TRELLIS.2.
+  const final = finalBuildHref(g, view, finalAllowed);
   // Hi3D's results: geometry only, and "Powered by Hi3D 1.0" (linked, as its licence asks) instead of the plain notice.
   const refined = isRefined(g);
   const notices = (info[g.modelId]?.notices ?? []).filter((n) => !(refined && n === HI3D_NOTICE));
@@ -351,6 +370,11 @@ export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g:
           {g.prompt && !view.rigged ? ` · ${g.prompt}` : ""}
         </p>
         {view.splat && hydrated && !canLook && <p className="text-[12px] text-muted-foreground">{splatNote ?? FALLBACK_TEXT["no-webgl2"]}</p>}
+        {/* Idol 3D on your GPU: how clean the file is. Only the owner reads how to make it cleaner (it's their ComfyUI). */}
+        {view.clean?.cleaned && <p className="text-[12px] font-medium">{view.clean.text}</p>}
+        {view.clean && !view.clean.cleaned && owner && (
+          <p className="text-[12px] text-muted-foreground">Not cleaned: this run used the core nodes. With ComfyUI-Idol installed and switched on, splat files come out cleaner.</p>
+        )}
         <div className="flex flex-wrap gap-1.5">
           {view.splat ? (
             <Button asChild variant="outline" size="sm" className="rounded-full">
@@ -445,6 +469,16 @@ export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g:
             </Button>
           )}
         </div>
+        {final && (
+          <div className="space-y-1">
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link href={final} prefetch={false} onClick={() => view.photo && onFinal?.(view.photo)}>
+                <Box className="size-3.5" /> {FINAL_3D.label}
+              </Link>
+            </Button>
+            <p className="text-[12px] text-muted-foreground">{FINAL_3D.note}</p>
+          </div>
+        )}
         {refined && <p className="text-[12px] text-muted-foreground">Geometry only: no colour or texture. Set its real size in Print-ready.</p>}
         {(notices.length > 0 || refined) && (
           <p className="text-[11px] text-muted-foreground">

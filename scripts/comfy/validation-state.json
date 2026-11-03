@@ -197,6 +197,12 @@
     "error": "HTTP 400: missing_node_type: Node 'FeyNoBg fine-hair matte (foreground refine on)' not found. The custom node may not be installed. (Node ID '#2')",
     "at": "2026-11-02T11:07:46.548Z"
   },
+  "image-person-mask-sam3": {
+    "sha256": "81f9b96a74bb2dfe09589e87c53ecb843f08d57b08a4e8b2418ae138f539a659",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T21:03:03.876Z"
+  },
   "image-to-3d-hunyuan3d-21": {
     "sha256": "275a30c4184a8728e919166e72d88913abcf61a85b051a897ecb7249db849a08",
     "validated": true,
@@ -274,6 +280,18 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T20:57:26.862Z"
+  },
+  "kandinsky6-i2av": {
+    "sha256": "2ba5f947197fdb84a241373b7a8bb4985d022aaac54bd1d6e704d8703f88fc44",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Audio VAE (MMAudio 44 kHz) + BigVGAN vocoder' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T11:05:12.479Z"
+  },
+  "kandinsky6-t2av": {
+    "sha256": "db4b91fec291482b63dd051c95410cf0d213695ca8c68bb577e99a0137a43230",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Audio VAE (MMAudio 44 kHz) + BigVGAN vocoder' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T11:05:12.444Z"
   },
   "kenburns-still": {
     "sha256": "34c5bdc4b0a425d82b5971ca31eae697da6b7363ea48b30dfe055d7a8573976d",
@@ -905,6 +923,12 @@
     "error": null,
     "at": "2026-10-26T09:24:35.576Z"
   },
+  "video-h3-t2v-2k": {
+    "sha256": "2193606d5114870328d785cd55f4138da105c563ca8e2dc9db37a21457d1253d",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Save the 768p latent (Finish in 2K decodes from it)' not found. The custom node may not be installed. (Node ID '#20')",
+    "at": "2026-11-02T15:34:50.056Z"
+  },
   "video-inpaint-wan-vace": {
     "sha256": "71aaa43c8ac4bb0a764a9a835d96d1c47b33244f741611c7036ebea8ffcef3a7",
     "validated": true,
@@ -977,6 +1001,12 @@
     "error": "HTTP 400: missing_node_type: Node 'Open-H3 Regenerate LoRA (curve branches off)' not found. The custom node may not be installed. (Node ID '#3')",
     "at": "2026-11-01T16:34:43.069Z"
   },
+  "video-regenerate-h3-latent": {
+    "sha256": "c5b3c29ab22871a33819819585c2a28505606526fe7e424d6c77d7f549dcc470",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'The draft's saved 768p latent' not found. The custom node may not be installed. (Node ID '#1')",
+    "at": "2026-11-02T15:34:50.077Z"
+  },
   "video-relight-bernini-r": {
     "sha256": "218ca68fa4c552a6e5f986973f33f122ad43f27b6808ef493a2d9f9733b8a72d",
     "validated": true,
@@ -1024,6 +1054,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-23T00:12:16.143Z"
+  },
+  "video-upscale-kandinsky6-vsr": {
+    "sha256": "2ed6d22b03034fb762043da81e7ed6489973d9e56e45fa921a268c4b780dafe3",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Kandinsky VSR VAE' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T11:05:12.503Z"
   },
   "voice-change-chatterbox": {
     "sha256": "ad8b9d59f8cb4632f2859db6a0ee2e8b6114263a9507f144554cd827ceea3f0c",

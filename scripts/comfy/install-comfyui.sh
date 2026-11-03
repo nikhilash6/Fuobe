@@ -55,6 +55,11 @@ declare -A NODES=(
   # node downloads the 2.0 weights and the three frozen models it builds on (about 5.1 GB, into models/corridorkey2/) the
   # first time it runs, never at import (CORRIDORKEY2_NO_DOWNLOAD=1 turns that off). Its requirements are in the union below.
   [ComfyUI-CorridorKey2]="https://github.com/hashu786/ComfyUI-CorridorKey2 d1228b68796786acee92b6497f72a60d70d1a844"
+  # Idol 3D's clean splats (image-to-splat-idol-clean; docs/research/idol-9.md §5.1-5.2): Nynxz's Idol nodes (Preprocess
+  # Image, Camera, Prune Splat). Apache-2.0, no Python dependencies, no model code (the model runs on the core TripoSplat
+  # nodes). Read at this commit: 3 AI-assisted commits on 2026-10-30, not in the Comfy Registry. It goes in the main
+  # ComfyUI, not the isolated worker. Without it the provider runs image-to-splat-idol on core nodes.
+  [ComfyUI-Idol]="https://github.com/Nynxz/ComfyUI-Idol 4d3a4f671028f0e062d9f004cda1a2dd73360d35"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.
@@ -158,6 +163,30 @@ if [ "${RTX_VIDEO:-auto}" = "1" ] || { [ "${RTX_VIDEO:-auto}" = "auto" ] && [ -n
   else
     echo "warn: could not fetch ComfyUI_Nvidia_VFX_Nodes"
   fi
+fi
+
+# Kandinsky 6.0 (nm10-kandinsky6): Kandinsky Lab's own packs, each the comfyui/ folder of its repository (the Comfy Registry's
+# kandinsky6 1.0.2 and kandinsky6-sr 0.1.2), pinned at the commits Fuobe's graphs follow: kandinsky6 (MIT; text / image to
+# video with sound, ComfyUI 0.38+) and kandinsky6-sr (Apache-2.0; the VSR upscaler). Their requirements (einops,
+# huggingface-hub, librosa, loguru, omegaconf, pydantic, pyyaml, safetensors) are in the union below. Neither downloads
+# anything when it loads (their "Download models" button does, when clicked). K6_PACKS=0 leaves them out.
+K6_REF="${K6_REF:-7ceeefad7fb625011f7db602c43893a989f19c15}"        # kandinskylab/kandinsky-6, 2026-10-25
+K6_SR_REF="${K6_SR_REF:-b15e2aac526519c51f59dfec2b848355bb8902de}"  # kandinskylab/kandinsky-6-sr, 2026-10-20
+if [ "${K6_PACKS:-1}" = "1" ]; then
+  for pack in "kandinsky6 https://github.com/kandinskylab/kandinsky-6 $K6_REF" "kandinsky6-sr https://github.com/kandinskylab/kandinsky-6-sr $K6_SR_REF"; do
+    read -r name url ref <<<"$pack"
+    [ -d "$COMFYUI_DIR/custom_nodes/$name" ] && continue
+    k6tmp="$(mktemp -d)"
+    if git clone -q --filter=blob:none --no-checkout "$url" "$k6tmp/repo" \
+      && git -C "$k6tmp/repo" sparse-checkout set --no-cone /comfyui/ \
+      && git -C "$k6tmp/repo" checkout -q "$ref" \
+      && cp -r "$k6tmp/repo/comfyui" "$COMFYUI_DIR/custom_nodes/$name"; then
+      :
+    else
+      echo "warn: could not fetch $name at $ref"
+    fi
+    rm -rf "$k6tmp"
+  done
 fi
 
 # Hi3D 1.0 mesh refinement (Image to 3D's "Refine detail", the mesh-refine-hi3d workflow; docs/research/hi3d-refine.json):
@@ -270,6 +299,8 @@ fi
 # ComfyUI-QwenASR: do NOT install its requirements.txt (nagisa/DyNet38 have no cp313 wheels and are unused on the
 # Hugging Face path); transformers>=5.13 from ComfyUI's requirements is all it needs.
 uv pip install --python "$PY" loguru
+# kandinsky6 / kandinsky6-sr (above): pydantic and pyyaml besides what the union has.
+if [ "${K6_PACKS:-1}" = "1" ]; then uv pip install --python "$PY" "pydantic>=2.11.0" "pyyaml>=6.0.2" "safetensors>=0.8.0" || echo "warn: the Kandinsky packs' requirements failed to install"; fi
 # ComfyUI-ToSVG imports vtracer (MIT), potracer and PyMuPDF (AGPL-3.0, used only by its SVG-to-image node) at load time.
 uv pip install --python "$PY" "vtracer==0.6.15" "potracer==0.0.4" "PyMuPDF==1.26.5"
 # ComfyUI-LTXVideo (Restore & colourise): its requirements.txt at the pinned commit. colour-science, diffusers, einops,
