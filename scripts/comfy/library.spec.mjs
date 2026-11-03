@@ -5780,12 +5780,12 @@ export const SPEC = [
       'Nynxz\'s ComfyUI-HyNomas (pinned at a89e0515) on core loaders: UNETLoader (the distilled DiT, int8 ConvRot, 8.97 GB), CLIPLoader qwen_image (qwen_2.5_vl_7b, 16.6 GB, shared with Qwen-Image), ' +
       'VAELoader (the PixelUMM decoder, 15.8 GB): about 25 GB of files beside the shared text encoder. ' +
       'The template is the pack\'s nomas_world example: Nomas World Prompt (perspective, style, subject, scene, action, seconds) -> Nomas World (seed, 1280x704, 8 Euler steps, window history) with a Nomas Camera Path, ' +
-      'then Nomas World Continue for a turn (change, action, camera, seconds). Fuobe rebuilds it per run (expand: "world", src/lib/world.ts expandWorldWorkflow): the opening and one Continue per turn up to the one asked for, ' +
-      'each with the key script src/lib/world-path.ts flies along the turn\'s camera move (or no camera for a still turn), then TrimVideoLatent drops the earlier turns\' latents so VAE Decode -> CreateVideo 24 fps -> SaveVideo writes this turn alone. ' +
+      'then Nomas World Continue for a turn (change, action, camera, seconds). Fuobe rebuilds it per run: the opening and one Continue per turn up to the one asked for, ' +
+      'each with a key script that flies along the turn\'s camera move (or no camera for a still turn), then TrimVideoLatent drops the earlier turns\' latents so VAE Decode -> CreateVideo 24 fps -> SaveVideo writes this turn alone. ' +
       'The port keeps a world in ComfyUI\'s memory (NOMAS_WORLD plus an int8 key/value cache in temp/nomas_history), and ComfyUI reuses the outputs of the last prompt it ran: the turns before this one have the same inputs and node ids every time, ' +
       'so only the new turn is generated; after another job or a restart they are generated again from the same seed. ' +
       'No sound (Hy-Nomas makes none). No image input: Hy-Nomas starts every world from words. ' +
       'Speed and VRAM are the port author\'s: about 21 s per 3 s turn plus about 4 s of decode per 10-latent window on an RTX 5090 at 1280x704 int8; Tencent\'s single-4090 configuration uses an int8 DiT and cache, ' +
-      'an FP8 decoder and CPU offload. 24 GB is a guess. The pack patches the core loaders\' model detection (Load Diffusion Model, Load VAE) to recognise the Nomas files.',
+      'an FP8 decoder and CPU offload; plan on a 24 GB card. The pack patches the core loaders\' model detection (Load Diffusion Model, Load VAE) to recognise the Nomas files.',
   },
 ];
