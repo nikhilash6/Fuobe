@@ -122,9 +122,10 @@ describe("Spark loads only with the splat viewer", () => {
     for (const f of engineUsers) {
       const text = fs.readFileSync(f, "utf8");
       // Type imports vanish from the bundle; anything else must be import("./splat-engine").
-      expect(text.replace(/import type [^;]+;/g, "").replace(/import\("\.\/splat-engine"\)/g, ""), path.relative(process.cwd(), f)).not.toMatch(/splat-engine/);
+      expect(text.replace(/import type [^;]+;/g, "").replace(/import\("(\.\/|\.\.\/model3d\/)splat-engine"\)/g, ""), path.relative(process.cwd(), f)).not.toMatch(/splat-engine/);
     }
-    expect(engineUsers.map((f) => path.relative(process.cwd(), f))).toEqual(["src/components/model3d/splat-viewer.tsx"]);
+    // The splat viewer, and Cinema's 3D scene for its props (idol-9; itself loaded only when a scene opens).
+    expect(engineUsers.map((f) => path.relative(process.cwd(), f)).sort()).toEqual(["src/components/cinema/scene-engine.ts", "src/components/model3d/splat-viewer.tsx"]);
   });
 });
 
