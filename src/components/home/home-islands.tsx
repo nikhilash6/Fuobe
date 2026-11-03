@@ -26,7 +26,7 @@ export function HomeRail({ className, children }: { className?: string; children
 }
 
 /** Stops every preview playing by itself, on every page, for this visit; a hover still plays one. */
-export function PausePreviews() {
+export function PausePreviews({ className }: { className?: string }) {
   const paused = usePreviewsPaused();
   const Icon = paused ? Play : Pause;
   const label = paused ? "Play previews" : "Pause previews";
@@ -37,7 +37,10 @@ export function PausePreviews() {
       aria-label={label}
       title={label}
       // 44 px to tap: its hit area reaches past its 28 px circle.
-      className="relative inline-flex size-7 shrink-0 items-center justify-center gap-1.5 rounded-full border text-[12px] text-muted-foreground transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-accent hover:text-foreground sm:w-[8.5rem]"
+      className={cn(
+        "relative inline-flex size-7 shrink-0 items-center justify-center gap-1.5 rounded-full border text-[12px] text-muted-foreground transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-accent hover:text-foreground sm:w-[8.5rem]",
+        className,
+      )}
     >
       <Icon className="size-3" />
       <span className="max-sm:hidden">{label}</span>

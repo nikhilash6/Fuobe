@@ -1,5 +1,5 @@
 /**
- * What Home shows below the composer: which presets, studios, models and skills, and every number it quotes, read
+ * What Home shows: which presets, studios, models and skills, and every number it quotes, read
  * from the catalog, the ComfyUI manifest and the skills folder, never typed in. Server only: the page gets slim
  * cards and strings, and the catalog stays here (tests/home-showcase.test.ts checks every id and number).
  */
@@ -13,6 +13,8 @@ import { CAMERA_MOVES } from "@/lib/catalog/cinema";
 import { TEMPLATES } from "@/lib/catalog/marketing";
 import type { ModelDef } from "@/lib/catalog/types";
 import type { Manifest } from "@/lib/comfy";
+import { homeBento, openModelsOf } from "@/lib/home-bento";
+import { studioCount } from "@/lib/nav-model";
 import { HUB_MODES } from "@/lib/hubs";
 import { modelHref } from "@/lib/palette-index";
 import { cacheLife } from "next/cache";
@@ -21,8 +23,8 @@ import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { onPeak, thumbOf, type PresetCardData } from "@/lib/preset-cards";
 
 /**
- * The wall under the composer: the first pictures a visitor sees, each with what it does, in a line that fits a
- * phone's tile (HOME_CAPTION_MAX.wall).
+ * Captions and kinds for these presets' tiles elsewhere (a studio's row of examples reads them: studio-examples.ts), in
+ * a line that fits a phone's tile (HOME_CAPTION_MAX.wall). Home itself opens on its first screen's grid (home-bento.ts).
  */
 export const HOME_WALL = [
   { id: "motion-crane-up", kind: "Camera motion", caption: "Rises over a pink lake" },
@@ -104,7 +106,8 @@ export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => 
   { href: "/mixed-media", id: "effect-paper", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },
   { href: "/motion-control", id: "motion-static", line: () => "Give anyone the moves from any clip." },
   { href: "/audio", id: "app-clean-up-voice", line: () => "Voices, music and sound for any clip, made or split apart." },
-  { href: "/image-to-3d", id: "app-3d-rotation", line: () => "A photo or a sentence to a 3D model you can spin." },
+  // The collectible figure: the first screen's 3D tile plays the turning gown (home-bento.ts), and a clip plays in one place.
+  { href: "/image-to-3d", id: "app-3d-figure", line: () => "A photo or a sentence to a 3D model you can spin." },
 ];
 
 /** Destinations with a section of their own on Home, so they aren't pills as well. */
@@ -143,8 +146,8 @@ export const HOME_NEW_OPEN = [
 ];
 
 /**
- * The chips under the composer. Each fills it with a prompt that looks like a cover on this page (Glam, FPV Drone
- * and Crane Up on the wall, Relight under Apps); nothing runs until Start. Whoever runs the studio gets Assist's chip in
+ * The chips under the composer. Each fills it with a prompt that looks like a picture on this page (the gold sequins
+ * on the first screen, Relight under Apps); nothing runs until Start. Whoever runs the studio gets Assist's chip in
  * place of the last (home-view.tsx): only the owner can use Assist.
  */
 export const HOME_TRY = [
@@ -202,7 +205,7 @@ export function homeCard(id: string): PresetCardData {
 export const presetHref = (id: string) => (id.startsWith("app-") ? `/apps/${id}` : `/video?preset=${id}`);
 
 const navItems = (label: string) => NAV.find((g) => g.label === label)?.items ?? [];
-const navLabel = (href: string) => [...navItems("Create"), ...navItems("Studios")].find((i) => i.href === href)?.label ?? href;
+export const navLabel = (href: string) => [...navItems("Create"), ...navItems("Studios")].find((i) => i.href === href)?.label ?? href;
 
 /** The navigation's places to create, but Home. */
 export const homeDestinations = () => [...navItems("Create"), ...navItems("Studios")].filter((i) => i.href !== "/");
@@ -260,7 +263,7 @@ async function readSkills() {
 const captioned = ({ id, caption }: { id: string; caption: string }) => ({ card: homeCard(id), caption });
 
 /**
- * Everything Home shows below the composer, computed once per build (the page stays prerendered): all of it changes
+ * Everything Home shows, from its first screen down, computed once per build (the page stays prerendered): all of it changes
  * only with a deploy, so it's kept for as long as Next keeps anything ("max").
  */
 export async function homeShowcase() {
@@ -289,9 +292,20 @@ export async function homeShowcase() {
     audioTools: HUB_MODES.audio.length,
     skills: skills.count,
   };
+  const bento = await homeBento({
+    studios: studioCount(),
+    apps: facts.apps,
+    effectsAndMotions: facts.effects + facts.motions,
+    motions: facts.motions,
+    openModels: facts.openModels,
+    imageModels: openModelsOf("image"),
+    videoModels: openModelsOf("video"),
+    models3d: openModelsOf("model3d"),
+    soundTools: facts.audioTools,
+  });
   return {
     facts,
-    wall: HOME_WALL.map((t) => ({ ...t, card: homeCard(t.id), href: presetHref(t.id) })),
+    bento,
     effects: HOME_EFFECTS.map(captioned),
     motions: HOME_MOTIONS.map(captioned),
     reveals: HOME_REVEALS.map(captioned),

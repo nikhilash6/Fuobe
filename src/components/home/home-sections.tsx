@@ -31,6 +31,7 @@ import { studioCount } from "@/lib/nav-model";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 import { plainTagline } from "@/lib/plain-tagline";
+import type { PresetCardData } from "@/lib/preset-cards";
 
 /*
  * Home's sections under the wall. Server components: their words, numbers and links ship as HTML, and only the
@@ -156,7 +157,7 @@ export function ShowcaseWall({
   label = "What Fuobe makes",
   foot = true,
 }: {
-  wall: readonly { id: string; kind: string; caption: string; href: string; card: HomeShowcase["wall"][number]["card"] }[];
+  wall: readonly { id: string; kind: string; caption: string; href: string; card: PresetCardData }[];
   label?: string;
   foot?: boolean;
 }) {

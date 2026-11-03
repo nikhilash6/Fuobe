@@ -6,10 +6,10 @@ import {
   LiveEditSection,
   MotionsSection,
   OpenSourceSection,
-  ShowcaseWall,
   StartSection,
   StudiosSection,
 } from "@/components/home/home-sections";
+import { HomeBento } from "@/components/home/home-bento";
 import { HomeView } from "@/components/home-view";
 import { GoalRow } from "@/components/nav/goal-row";
 import { ASSIST_SUGGESTIONS } from "@/lib/assist";
@@ -33,7 +33,7 @@ function goalTapNames(): Record<string, string> {
 
 /**
  * The catalog stays on the server: Home gets slim cards, the numbers it quotes (each computed, lib/home-showcase.ts),
- * and what Start and the first-run guide cost. The sections under the wall are server components.
+ * and what Start and the first-run guide cost. The first screen and the sections under the composer are server components.
  */
 export default async function Page() {
   const home = await homeShowcase();
@@ -43,7 +43,7 @@ export default async function Page() {
       chips={HOME_TRY}
       assist={{ label: "Plan a perfume ad with Assist", href: `/assist?prompt=${encodeURIComponent(ASSIST_SUGGESTIONS[0])}` }}
       goals={<GoalRow names={goalTapNames()} />}
-      wall={<ShowcaseWall wall={home.wall} />}
+      bento={<HomeBento bento={home.bento} />}
       prices={starterPriceLine()}
       quotes={startQuotes()}
     >
