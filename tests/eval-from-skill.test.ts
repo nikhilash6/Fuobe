@@ -152,4 +152,12 @@ describe("pnpm eval:from-skill", () => {
     expect(() => fromSkill.suiteFromSkill(view)).toThrow(/runs a studio tool/);
     expect(() => fromSkill.suiteFromSkill({ ...view, engines: [], why: "It runs on cloud models, which aren't available here", recipe: lamp() })).toThrow(/doesn't run on this Fuobe: It runs on cloud models/);
   });
+
+  it("refuses a skill that runs in parts (a step takes another's output by reference)", () => {
+    const parts = lamp();
+    const scene = { key: "scene", kind: "generate", request: { ...parts.steps[1].request, inputs: { images: ["{{steps.cutout.output}}"] } } };
+    const view = { name: "parts", title: "Parts", engines: ["cloud"], recipe: { ...parts, fuobeRecipe: 2, steps: [parts.steps[0], scene] } };
+    expect(() => fromSkill.suiteFromSkill(view)).toThrow(/runs in parts/);
+    expect(() => fromSkill.suiteFromSkill({ ...view, recipe: lamp() })).not.toThrow();
+  });
 });

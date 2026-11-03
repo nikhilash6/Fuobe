@@ -9,6 +9,8 @@ import { LOCAL_DIR } from "./paths.mjs";
 const FIXTURE = { image: "fixtures/start-frame.png", video: "fixtures/walk-6s.mp4", audio: "fixtures/voice.wav" };
 /** The case's input list per type (cases' `inputs`), and the body's token for its n-th file. */
 const SLOT = { image: "images", video: "videos", audio: "audios" };
+/** A step reference (recipe version 2): a field that takes an earlier step's output, `{{steps.<key>.output}}`. */
+const STEP_REF = /\{\{\s*steps\./;
 /** What a kind of result is measured by (no reference or prompt of its own: the words vary per skill). */
 const METRICS_FOR = { image: ["aesthetic"], video: ["temporal"], audio: [] };
 
@@ -43,6 +45,9 @@ export function suiteFromSkill(view) {
   const recipe = view?.recipe;
   if (!recipe || !Array.isArray(recipe.steps)) throw new Error("That skill has no recipe to measure");
   if (recipe.steps.some((s) => s.kind !== "generate")) throw new Error(`/${view.name} runs a studio tool: the harness measures skills made of generate steps`);
+  // A step that takes an earlier step's output by reference ({{steps.<key>.output}}, recipe version 2) makes the run go
+  // in parts: the run route answers with the first part's rows only, so the harness would measure the wrong result.
+  if (recipe.steps.some((s) => STEP_REF.test(JSON.stringify(s.request ?? {})))) throw new Error(`/${view.name} runs in parts (a step takes another's output by reference): the harness measures skills that run as one pipeline`);
   if (!view.engines?.length) throw new Error(`/${view.name} doesn't run on this Fuobe${view.why ? `: ${view.why}` : ""}`);
   const ends = leaves(recipe.steps);
   const end = ends.at(-1);
