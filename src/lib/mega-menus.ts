@@ -6,7 +6,7 @@
  */
 import type { CoverFraming } from "./cover-framing";
 import { area } from "./nav-areas";
-import { launcherColumns, studioCount, type NavEntry, type NavIconName, type ViewerKind } from "./nav-model";
+import { entriesFor, launcherColumns, studioCount, studioSubs, STUDIO_SUBS, subLabel, subParent, type NavEntry, type NavIconName, type ViewerKind } from "./nav-model";
 
 export type MegaId = "studios" | "apps" | "motions" | "canvas";
 
@@ -45,6 +45,22 @@ export interface MegaItem {
   short?: string;
   /** ISO date: a "New" badge until then. */
   newUntil?: string;
+  /** What it holds inside (a studio's tabs and modes): links under it (Studios). */
+  subs?: MegaSub[];
+  /** The window height its links need (800, 880 or 960 px): below it they hide, so the panel never scrolls. */
+  subsFrom?: 800 | 880 | 960;
+}
+
+/** A feature inside a studio, as a link under it: its tab's name, its line as the link's title. */
+export interface MegaSub {
+  id: string;
+  href: string;
+  label: string;
+  line?: string;
+  /** "See all N": the studio's page, where every one of its features is a tab. */
+  more?: true;
+  /** The window height this one link needs, when it is more than its studio's other links do (the owner's own). */
+  from?: 880 | 960;
 }
 
 export interface MegaColumn {
@@ -142,7 +158,35 @@ const studioItem = (e: NavEntry): MegaItem => ({
   ...(e.newUntil && { newUntil: e.newUntil }),
 });
 
-/** Studios as a menu: the launcher's columns (launcherColumns) for who is looking, as the bar has always shown them. */
+/** A studio's features as the menu links them under it (STUDIO_SUBS), then "See all N" when it lists only some. */
+export function megaSubs(parent: NavEntry, kind: ViewerKind | undefined): MegaSub[] {
+  const shown = studioSubs(parent.id, kind, "menu");
+  if (!shown.length) return [];
+  const ownerTall = STUDIO_SUBS[parent.id]?.ownerTall;
+  const subs: MegaSub[] = shown.map((e) => ({
+    id: e.id,
+    href: e.href,
+    label: subLabel(e),
+    line: e.what,
+    ...(ownerTall && e.visibility?.length === 1 && e.visibility[0] === "owner" && { from: ownerTall }),
+  }));
+  // Every tab the studio's page shows this viewer (Audio's rows in the Sound column count too).
+  const all = Math.max(studioSubs(parent.id, kind, "list").length, entriesFor(kind).filter((e) => e.kind === "tool" && e.parent === parent.id).length);
+  if (all > shown.length) subs.push({ id: `${parent.id}-all`, href: parent.href, label: `See all ${all}`, line: `Every tool in ${parent.label}`, more: true });
+  return subs;
+}
+
+const withSubs = (e: NavEntry, kind: ViewerKind | undefined): MegaItem => {
+  const subs = megaSubs(e, kind);
+  const from = STUDIO_SUBS[e.id]?.tall;
+  return { ...studioItem(e), ...(subs.length > 0 && { subs, ...(from && { subsFrom: from }) }) };
+};
+
+/**
+ * Studios as a menu: the launcher's columns (launcherColumns) for who is looking, each studio with what it holds inside
+ * as links under it (megaSubs). A studio that is a tab of another's suite (Ads Studio, in Marketing Studio's) is one of
+ * those links instead of a row of its own.
+ */
 export function studiosMenu(kind: ViewerKind | undefined): MegaModel {
   const n = studioCount();
   return {
@@ -150,7 +194,13 @@ export function studiosMenu(kind: ViewerKind | undefined): MegaModel {
     count: n,
     countLine: `${n} studios, grouped by what you want to make`,
     seeAll: { href: MEGA_AREAS.studios.href, name: "See all studios" },
-    columns: launcherColumns(kind).map((c) => ({ id: c.group.id, label: c.group.label, chip: c.group.chip, lead: studioItem(c.lead), rows: c.rest.map(studioItem) })),
+    columns: launcherColumns(kind).map((c) => ({
+      id: c.group.id,
+      label: c.group.label,
+      chip: c.group.chip,
+      lead: withSubs(c.lead, kind),
+      rows: c.rest.filter((e) => !subParent(e.id)).map((e) => withSubs(e, kind)),
+    })),
   };
 }
 

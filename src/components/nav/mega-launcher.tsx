@@ -3,7 +3,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { IntentLink } from "@/components/intent-link";
 import { MEGA_AREAS, megaMove, megaPanelId, TILE_COLS, type MegaId } from "@/lib/mega-menus";
-import { launcherActive, studioCount } from "@/lib/nav-model";
+import { launcherActive, studioCount, subActive } from "@/lib/nav-model";
 import { isPlainClick } from "@/lib/use-tapped-tab";
 import { cn } from "@/lib/utils";
 import { BAR_CHEVRON, BAR_LABEL, BAR_SPLIT, BarChevron, useHoverIntent } from "./bar-split";
@@ -48,9 +48,9 @@ export const LAUNCHER_PANEL =
 /** The routes a menu's links lead to that load ahead when it opens (each row also loads on hover: IntentLink). */
 const WARM: Record<MegaId, NavPanel> = { studios: "studios", apps: "more", motions: "more", canvas: "more" };
 
-/** The item of a menu the open page is (aria-current): a studio, an app, a preset, a ready board. */
+/** The item of a menu the open page is (aria-current): a studio or one of its features, an app, a preset, a ready board. */
 export function megaCurrent(id: MegaId, pathname: string, search = ""): string | undefined {
-  if (id === "studios") return launcherActive(pathname);
+  if (id === "studios") return subActive(pathname, search) ?? launcherActive(pathname);
   if (id === "apps") return /^\/apps\/([^/]+)$/.exec(pathname)?.[1];
   if (id === "motions") return pathname === "/video" ? (new URLSearchParams(search).get("preset") ?? undefined) : undefined;
   return /^\/canvas\/start\/([^/]+)$/.exec(pathname)?.[1];

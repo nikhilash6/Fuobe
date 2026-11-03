@@ -8,7 +8,7 @@ import { AREAS, area, type AreaId } from "@/lib/nav-areas";
 import { navIcon } from "@/lib/nav-icons";
 import { entry, type NavEntry } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { AreaSearch, AreaTabs, JumpBackIn, OwnerPills, type AreaTab } from "./area-islands";
+import { AreaSearch, AreaTabs, JumpBackIn, OwnerPills, OwnerSubRow, type AreaTab } from "./area-islands";
 
 /*
  * An area page: everything one of the bar's menus holds, as Home shows its studios (src/components/home/home-sections.tsx,
@@ -102,10 +102,56 @@ export function AreaSections({ sections }: { sections: AreaShowcase["sections"] 
           grid
           after={s.ownerPills.length > 0 ? <OwnerPills ids={s.ownerPills.map((p) => p.id)} /> : undefined}
         />
+        <StudioFeatures section={s.id} subs={s.subs} />
       </div>
       {i === 0 && <JumpBackIn ids={ids} />}
     </div>
   ));
+}
+
+/** A studio's row of features: its name, then its tabs and modes as pills that wrap (44 px to tap). */
+export const SUB_ROW = "flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-4";
+export const SUB_ROW_NAME = "shrink-0 pt-1.5 text-[13px] leading-5 font-medium sm:w-40";
+export const SUB_PILL = cn(PILL, PILL_TAP);
+
+/**
+ * What a section's studios hold inside (their tabs and modes), a row per studio under its cards and pills, so each is
+ * one tap from here: "Marketing Studio  (Click to Ad) (Ad Multiplier)". The owner's own features come with the island.
+ */
+function StudioFeatures({ section, subs }: { section: string; subs: AreaShowcase["sections"][number]["subs"] }) {
+  const shown = subs.filter((g) => g.pills.length > 0);
+  if (!shown.length) return null;
+  const titleId = `${section}-inside`;
+  return (
+    <div className="mt-6" data-studio-features={section}>
+      <h3 id={titleId} className="mb-2 font-sans text-[13px] text-muted-foreground">
+        Inside these studios
+      </h3>
+      <ul aria-labelledby={titleId} className="flex flex-col gap-2.5">
+        {subs.map((g) =>
+          g.pills.length > 0 ? (
+            <li key={g.parent.id} className={SUB_ROW}>
+              <p id={`${section}-inside-${g.parent.id}`} className={SUB_ROW_NAME}>
+                {g.parent.label}
+              </p>
+              <ul aria-labelledby={`${section}-inside-${g.parent.id}`} className="flex flex-wrap gap-x-1.5 gap-y-3">
+                {g.pills.map((p) => (
+                  <li key={p.id}>
+                    <IntentLink href={p.href} className={SUB_PILL}>
+                      {p.label}
+                    </IntentLink>
+                  </li>
+                ))}
+                {g.ownerIds.length > 0 && <OwnerPills ids={g.ownerIds} sub />}
+              </ul>
+            </li>
+          ) : (
+            <OwnerSubRow key={g.parent.id} parent={g.parent.id} ids={g.ownerIds} />
+          ),
+        )}
+      </ul>
+    </div>
+  );
 }
 
 /** The pills at the end of an area page: the other areas, then Canvas and Assist. */

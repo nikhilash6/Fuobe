@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { IntentLink } from "@/components/intent-link";
 import { useCanvasActions, useCanvases } from "@/components/canvas/use-canvas";
 import { timeAgo } from "@/lib/format";
+import { entry } from "@/lib/nav-model";
 import { toastError } from "@/lib/refusals";
 
 /** How many of the owner's boards the Canvas menu lists, the newest edited first. */
@@ -54,6 +55,8 @@ export default function CanvasOwnerStart({ col, labelledBy, fallback }: { col: n
   const boards = useCanvases();
   const { busy, start } = useNewBoard();
   const recent = [...(boards.data ?? [])].sort((a, b) => (b.editedAt ?? b.updatedAt) - (a.editedAt ?? a.updatedAt)).slice(0, RECENT_BOARDS);
+  // Canvas' own section of skills drawn as boards (/canvas?tab=skills), last in the column.
+  const skills = entry("canvas-skills");
   return (
     <ul aria-labelledby={labelledBy} className="flex flex-col gap-2">
       <li>
@@ -108,6 +111,20 @@ export default function CanvasOwnerStart({ col, labelledBy, fallback }: { col: n
         </li>
       ) : (
         fallback && <li>{fallback}</li>
+      )}
+      {skills && !boards.isPending && (
+        <li>
+          <IntentLink
+            href={skills.href}
+            data-col={col}
+            data-row={recent.length ? recent.length + 2 : 2}
+            title={skills.what}
+            className="nav-row group/all -mx-2 inline-flex h-10 items-center gap-1 self-start rounded-[10px] px-2 text-[13px] font-medium text-brand-text"
+          >
+            {skills.label}
+            <ArrowRight aria-hidden className="size-3.5 motion-safe:transition-transform group-hover/all:translate-x-0.5" />
+          </IntentLink>
+        </li>
       )}
     </ul>
   );

@@ -41,6 +41,7 @@ const { COVER_SIZES, CoverThumb } = await import("@/components/nav/cover-thumb")
 const { NavUiProvider } = await import("@/components/nav/nav-ui");
 const { navCovers } = await import("@/lib/nav-covers");
 const { entriesFor, entry, launcherColumns, NAV_ENTRIES, studioCount } = await import("@/lib/nav-model");
+const { studiosMenu } = await import("@/lib/mega-menus");
 
 const covers = navCovers();
 const Nav = NavUiProvider as (p: { covers: typeof covers; children?: ReactNode }) => ReactNode;
@@ -142,25 +143,49 @@ describe("which bar item holds the page", () => {
 describe("the launcher's columns", () => {
   const html = render(createElement(LauncherColumns, { kind: undefined, now: Date.parse("2026-11-02") }));
 
-  it("shows every studio, Apps and the Sound column, 8/6/6/6/5/3, each column's lead first", () => {
-    const links = hrefs(html);
-    expect(links).toHaveLength(34);
-    expect(new Set(links).size).toBe(34);
+  it("shows every studio, Apps and the Sound column, 8/6/5/6/5/3 (Ads Studio under Marketing Studio), each column's lead first", () => {
+    const main = anchors(html).filter((a) => !a.tag.includes("data-sub"));
+    expect(main).toHaveLength(33);
+    expect(new Set(main.map((a) => a.href)).size).toBe(33);
     expect(launcherColumns(undefined).map((c) => 1 + c.rest.length)).toEqual([8, 6, 6, 6, 5, 3]);
+    expect(studiosMenu(undefined).columns.map((c) => 1 + c.rows.length)).toEqual([8, 6, 5, 6, 5, 3]);
     expect(launcherColumns(undefined).map((c) => c.lead.id)).toEqual(["cinema", "shorts", "marketing", "fashion-factory", "audio", "upscale"]);
     expect(html).toContain("grid-cols-6");
-    for (const [i, c] of launcherColumns(undefined).entries()) {
-      const at = (href: string) => anchors(html).find((a) => a.href === href)?.tag ?? "";
-      expect(at(c.lead.href)).toContain(`data-col="${i}" data-row="0"`);
-      c.rest.forEach((e, r) => expect(at(e.href), e.id).toContain(`data-col="${i}" data-row="${r + 1}"`));
+    // The arrow keys' places: the lead, its features, then each row and its features, top to bottom.
+    for (const [i, c] of studiosMenu(undefined).columns.entries()) {
+      const at = (href: string, sub: boolean) => anchors(html).find((a) => a.href === href && a.tag.includes(`data-col="${i}"`) && a.tag.includes("data-sub") === sub)?.tag ?? "";
+      let r = 0;
+      for (const e of [c.lead!, ...c.rows]) {
+        expect(at(e.href, false), e.id).toContain(`data-col="${i}" data-row="${r++}"`);
+        for (const s of e.subs ?? []) expect(at(s.href, true), s.id).toContain(`data-col="${i}" data-row="${r++}"`);
+      }
     }
     expect(studioCount()).toBe(29);
+  });
+
+  it("lists what a studio holds inside under it, by the names of its own tabs", () => {
+    const subs = (id: string) =>
+      studiosMenu(undefined)
+        .columns.flatMap((c) => [c.lead!, ...c.rows])
+        .find((e) => e.id === id)
+        ?.subs?.map((s) => s.label);
+    expect(subs("marketing")).toEqual(["Click to Ad", "Ads Studio", "Ad Multiplier"]);
+    expect(subs("genjutsu")).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert"]);
+    expect(subs("upscale")).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export"]);
+    expect(subs("audio")).toEqual(["Dialogue", "Voice change", "Design a voice", "See all 13"]);
+    expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 10"]);
+    for (const w of ["Click to Ad", "Ads Studio", "Ad Multiplier", "Motion transfer", "FPS Boost"]) expect(words(html)).toContain(w);
+    // Under a hairline, quieter than a row, with no picture and no line of their own.
+    const sub = anchors(html).find((a) => a.tag.includes("data-sub"))!.tag;
+    expect(sub).toContain("text-[12.5px]");
+    expect(sub).toContain("min-h-7");
+    expect(sub).toContain("[@media(pointer:coarse)]:min-h-11");
   });
 
   it("labels the groups, and every link has its studio's real cover in a box of fixed size", () => {
     for (const label of ["Film &amp; video", "Social &amp; shorts", "Sell &amp; advertise", "People &amp; fashion", ">Sound<", "Finish &amp; convert"]) expect(html).toContain(label);
     for (const c of launcherColumns(undefined)) {
-      for (const e of [c.lead, ...c.rest]) {
+      for (const e of [c.lead, ...c.rest].filter((x) => x.id !== "ads")) {
         const cover = covers[e.cover!];
         expect(cover, e.id).toBeDefined();
         // The lead card shows the 320 px copy (and the poster by its srcset); a row the 96 px one.
@@ -169,9 +194,9 @@ describe("the launcher's columns", () => {
       // The lead's 4:3 card picks the poster on sharp screens.
       expect(html).toContain(`${covers[c.lead.cover!].poster} 512w`);
     }
-    // The six lead cards load as the panel warms; a row's picture when the row shows (lazy).
+    // The six lead cards load as the panel warms; a row's picture when the row shows (lazy). A studio's features have none.
     expect(count(html, 'loading="eager"')).toBe(6);
-    expect(count(html, 'alt=""')).toBe(34);
+    expect(count(html, 'alt=""')).toBe(33);
   });
 
   it("marks the open page's studio, and nothing else", () => {

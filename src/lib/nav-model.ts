@@ -55,6 +55,11 @@ export interface NavEntry {
   eager?: true;
   /** A tool's studio id ("audio" for audio-clean): search shows "Audio › Clean up voice". */
   parent?: string;
+  /**
+   * A tool's name on its studio's own tab, where its label says more for search ("Upscale video" is the Upscale tab
+   * "Video"): the links under its studio show this one.
+   */
+  tab?: string;
 }
 
 export interface LauncherGroup {
@@ -273,6 +278,7 @@ const HUB_TOOLS: NavEntry[] = HUB_ORDER.flatMap((hub) =>
       id,
       href: modeHref(hub, m.id),
       label: copy?.label ?? m.label,
+      ...(copy?.label && copy.label !== m.label && { tab: m.label }),
       what: copy?.what ?? m.label,
       kind: "tool",
       goals: [],
@@ -288,13 +294,68 @@ const HUB_TOOLS: NavEntry[] = HUB_ORDER.flatMap((hub) =>
   }),
 );
 
-/** Pages inside a studio that people look for by name. */
+/** Pages inside a studio that people look for by name (labels as the studio's own tabs say them). */
 const SUB_TOOLS: NavEntry[] = [
-  { id: "marketing-click-to-ad", href: "/marketing/click-to-ad", label: "Click to ad", what: "From a product link to an ad", kind: "tool", goals: [], keywords: "product link url to ad shop page amazon", icon: "Megaphone", parent: "marketing" },
-  { id: "ads-multiplier", href: "/ads/multiplier", label: "Ad multiplier", what: "One ad in many versions", kind: "tool", goals: [], keywords: "variations versions sizes multiply", icon: "Target", parent: "ads" },
+  { id: "marketing-click-to-ad", href: "/marketing/click-to-ad", label: "Click to Ad", what: "From a product link to an ad", kind: "tool", goals: [], keywords: "product link url to ad shop page amazon", icon: "Megaphone", parent: "marketing" },
+  // A tab of Marketing Studio's suite (Marketing Studio · Click to Ad · Ads Studio · Ad Multiplier), so its studio is that one.
+  { id: "ads-multiplier", href: "/ads/multiplier", label: "Ad Multiplier", what: "One ad in many versions", kind: "tool", goals: [], keywords: "variations versions sizes multiply ads studio", icon: "Target", parent: "marketing" },
   { id: "assist-skills", href: "/assist/skills", label: "Skills", what: "Reusable recipes", kind: "tool", goals: [], keywords: "skill recipe playbook automation", icon: "MessageCircle", parent: "assist" },
   // An app with a page of its own that Create lists: a tool of Apps, so the bar marks Apps on its page.
   { id: "any-angle", href: "/apps/app-any-angle", label: "Any Angle", what: "See it from any angle", kind: "tool", goals: [], keywords: "angle rotate turn view camera viewpoint orbit 3d", cover: "app-any-angle", icon: "Rotate3d", parent: "apps" },
+];
+
+/** A feature inside a studio: one of its tabs or modes, opened by its own link. */
+const feature = (parent: string, icon: NavIconName, id: string, href: string, label: string, what: string, keywords: string, visibility?: readonly ViewerKind[]): NavEntry => ({
+  id: `${parent}-${id}`,
+  href,
+  label,
+  what,
+  kind: "tool",
+  goals: [],
+  keywords,
+  icon,
+  parent,
+  ...(visibility && { visibility }),
+});
+
+/**
+ * The modes and tabs inside the studios that have no page of their own, each opened by its link (?mode=, ?tab=):
+ * Genjutsu (src/lib/catalog/genjutsu.ts), Character Sheet, Image to 3D (src/lib/av/model3d.ts), Photodump, Cinema
+ * Studio, Canvas and Assist. Labels are the studio's own (a test holds them to it).
+ */
+const STUDIO_FEATURES: NavEntry[] = [
+  ...(
+    [
+      ["motion", "Motion transfer", "Your character, moving as filmed", "motion transfer move copy movement dance performance replace person"],
+      ["character", "Character swap", "Your character takes over a part", "character swap replace person face actor recast one part"],
+      ["swap", "Object swap", "Swap a thing or an outfit", "object swap replace thing product outfit clothes"],
+      ["restyle", "Restyle", "A new look on every frame", "restyle style look anime clay painting filter"],
+      ["insert", "Insert", "Add something to the shot", "insert add object put into clip place"],
+    ] as const
+  ).map(([id, label, what, kw]) => feature("genjutsu", "WandSparkles", id, `/genjutsu?mode=${id}`, label, what, kw)),
+  feature("genjutsu", "WandSparkles", "picture", "/genjutsu?mode=picture", "From picture", "Your picture's setting, moving", "from picture photo setting animate motion", OWNER),
+  feature("genjutsu", "WandSparkles", "finish", "/genjutsu?mode=finish", "Finish", "Fix faces and colours", "finish fix faces colours colors", OWNER),
+  ...(
+    [
+      ["reference", "From Reference", "A sheet from your photos", "reference photo upload face sheet"],
+      ["cast", "Build from scratch", "Pick every trait yourself", "build scratch cast traits face body"],
+      ["describe", "From a description", "A sheet from a few words", "describe description words text prompt"],
+    ] as const
+  ).map(([id, label, what, kw]) => feature("character-sheet", "UserRoundCog", id, `/character-sheet?mode=${id}`, label, what, kw)),
+  ...(
+    [
+      ["image", "From an image", "One photo to a 3D model", "photo picture image to 3d glb"],
+      ["multi", "From several images", "Photos from 2 to 4 sides", "multi view several photos sides 3d"],
+      ["text", "From text", "Describe one object", "text to 3d describe words"],
+      ["objects", "Pick an object", "One object out of a photo", "segment pick object out of photo 3d"],
+      ["splat", "Splat", "A soft, photoreal 3D capture", "gaussian splat capture photoreal"],
+    ] as const
+  ).map(([id, label, what, kw]) => feature("image-to-3d", "Box", id, `/image-to-3d?mode=${id}`, label, what, kw)),
+  feature("photodump", "Camera", "instadump", "/photodump?tab=instadump", "From a selfie", "A photo pack from one selfie", "instadump selfie one photo pack instagram"),
+  feature("cinema", "Clapperboard", "blockout", "/cinema?blockout=1", "Blockout", "Block a scene out in 3D", "blockout block out 3d layout previs scene", OWNER),
+  feature("canvas", "Network", "skills", "/canvas?tab=skills", "Skills as canvases", "Assist's skills, drawn as boards", "skills recipes boards assist canvas", OWNER),
+  feature("assist", "MessageCircle", "memory", "/assist/memory", "Memory", "What Assist remembers", "memory remember facts notes", OWNER),
+  feature("assist", "MessageCircle", "scheduled", "/assist/scheduled", "Scheduled", "Tasks that run on a schedule", "scheduled schedule recurring tasks", OWNER),
 ];
 
 /** The pages that show everything one of the bar's menus holds (src/lib/nav-areas.ts lays them out). */
@@ -397,7 +458,7 @@ const ACTIONS: NavEntry[] = [
   { id: "login", href: "/login", label: "Log in", what: "Back to your account", kind: "action", goals: [], keywords: "log in login sign in account", icon: "LogIn", visibility: GUEST },
 ];
 
-export const NAV_ENTRIES: readonly NavEntry[] = [...PAGES, ...STUDIOS, ...HUB_TOOLS, ...SUB_TOOLS, ...AREA_PAGES, ...SETTINGS, ...ACCOUNT_SETTINGS, ...ACTIONS].map((e) =>
+export const NAV_ENTRIES: readonly NavEntry[] = [...PAGES, ...STUDIOS, ...HUB_TOOLS, ...SUB_TOOLS, ...STUDIO_FEATURES, ...AREA_PAGES, ...SETTINGS, ...ACCOUNT_SETTINGS, ...ACTIONS].map((e) =>
   CARD_LINES[e.id] ? { ...e, line: CARD_LINES[e.id] } : e,
 );
 
@@ -603,6 +664,101 @@ export function launcherActive(pathname: string): string | undefined {
   let best: NavEntry | undefined;
   for (const e of NAV_ENTRIES) {
     if (!e.group || !navActive(e.href, pathname, new URLSearchParams(), LAUNCHER_HREFS)) continue;
+    if (!best || e.href.length > best.href.length) best = e;
+  }
+  return best?.id;
+}
+
+/**
+ * What each studio holds inside (its tabs and modes), as the bar lists it under the studio: links under its card or row
+ * in the Studios menu, pills under a group's tiles in the phone's Studios sheet, and a row of pills in its section of
+ * /studios. Search finds every one of them on its own ("Genjutsu › Restyle").
+ * - `ids`: NavEntry ids in the studio's own order (a viewer sees those visibleTo them).
+ * - `menu`: how many the Studios menu lists (it never scrolls): these first (`pick`), then "See all N" to the studio
+ *   (so not the one its own link opens). Omitted: all of them. 0: none (its column has no room): the sheet, /studios
+ *   and search carry them.
+ * - `tall`: the menu shows them only on a window this tall (800, 880 or 960 px), where its column has the room.
+ * Ads Studio is a tab of Marketing Studio's suite: it lives under Marketing Studio, not as a row of its own.
+ */
+export interface StudioSubs {
+  ids: readonly string[];
+  menu?: number;
+  pick?: readonly string[];
+  tall?: 800 | 880 | 960;
+  /** The owner's own features in the list (Genjutsu's From picture and Finish) show from this height. */
+  ownerTall?: 880 | 960;
+}
+
+const hubTools = (hub: HubKind, skip: readonly string[] = []) => HUB_MODES[hub].map((m) => `${hub}-${m.id}`).filter((id) => !skip.includes(id));
+
+export const STUDIO_SUBS: Readonly<Record<string, StudioSubs>> = {
+  marketing: { ids: ["marketing-click-to-ad", "ads", "ads-multiplier"] },
+  genjutsu: { ids: ["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert", "genjutsu-picture", "genjutsu-finish"], tall: 800, ownerTall: 880 },
+  // The modes that aren't rows of the Sound column already.
+  audio: { ids: hubTools("audio", SOUND_COLUMN), menu: 3 },
+  upscale: { ids: hubTools("upscale") },
+  "video-tools": { ids: hubTools("video-tools"), menu: 3, pick: ["video-tools-relight", "video-tools-captions", "video-tools-remove-object"], tall: 880 },
+  photodump: { ids: ["photodump-instadump"] },
+  "image-to-3d": { ids: ["image-to-3d-image", "image-to-3d-multi", "image-to-3d-text", "image-to-3d-objects", "image-to-3d-splat"], menu: 3, tall: 800 },
+  "character-sheet": { ids: ["character-sheet-reference", "character-sheet-cast", "character-sheet-describe"], menu: 0 },
+  cinema: { ids: ["cinema-blockout"], menu: 0 },
+  canvas: { ids: ["canvas-skills"] },
+  assist: { ids: ["assist-skills", "assist-memory", "assist-scheduled"] },
+};
+
+/**
+ * Features a guest or an account may open but not run here (their pages say so up front, docs/public-signup.md): the
+ * menus and the phone sheet link them for the owner only. Search and /studios still list them.
+ */
+export const OWNER_RUNS: ReadonlySet<string> = new Set([
+  "audio-split",
+  "video-tools-remove-dialogue",
+  ...STUDIO_SUBS["image-to-3d"].ids,
+  ...STUDIO_SUBS["character-sheet"].ids,
+  ...STUDIO_SUBS.photodump.ids,
+]);
+
+/** The studio a feature lives under in the menus (Ads Studio under Marketing Studio). */
+const SUB_PARENT = new Map(Object.entries(STUDIO_SUBS).flatMap(([parent, s]) => s.ids.map((id) => [id, parent] as const)));
+export const subParent = (id: string): string | undefined => SUB_PARENT.get(id);
+
+/** A studio's features as this viewer sees them: all (`list`, for /studios and search), or as the menus and sheets link them. */
+export function studioSubs(parent: string, kind: ViewerKind | undefined, place: "list" | "sheet" | "menu" = "list"): NavEntry[] {
+  const spec = STUDIO_SUBS[parent];
+  if (!spec) return [];
+  const all = spec.ids.map((id) => byId.get(id)).filter((e): e is NavEntry => !!e && visibleTo(e, kind));
+  if (place === "list") return all;
+  const linked = all.filter((e) => kind === "owner" || !OWNER_RUNS.has(e.id));
+  if (place === "sheet") return linked;
+  if (spec.menu === 0) return [];
+  if (spec.menu === undefined || spec.menu >= linked.length) return linked;
+  // A cut list ends on "See all", the studio's own page: the feature that page opens on is left to it.
+  const home = byId.get(parent)?.href;
+  const pick = spec.pick ?? [];
+  const rest = linked.filter((e) => e.href !== home);
+  const ordered = [...rest.filter((e) => pick.includes(e.id)).sort((a, b) => pick.indexOf(a.id) - pick.indexOf(b.id)), ...rest.filter((e) => !pick.includes(e.id))];
+  return ordered.slice(0, spec.menu);
+}
+
+/** A sub-link's name: its studio's own tab name ("Video" under Upscale), else its label. */
+export const subLabel = (e: Pick<NavEntry, "label" | "tab">) => e.tab ?? e.label;
+
+/**
+ * The studio feature a page is (for aria-current on its link under its studio): the one whose link the path and query
+ * match, the longest such link winning. None when the feature's link is its studio's own (/upscale is Upscale, and its
+ * "Image" tab is that same page), so the studio stays the one marked.
+ */
+export function subActive(pathname: string, search: string | URLSearchParams = ""): string | undefined {
+  const q = typeof search === "string" ? new URLSearchParams(search) : search;
+  let best: NavEntry | undefined;
+  for (const [id, parent] of SUB_PARENT) {
+    const e = byId.get(id);
+    const p = byId.get(parent);
+    if (!e || !p || e.href === p.href) continue;
+    const [path, query] = e.href.split("?");
+    if (path !== pathname) continue;
+    const want = new URLSearchParams(query ?? "");
+    if ([...want].some(([k, v]) => q.get(k) !== v)) continue;
     if (!best || e.href.length > best.href.length) best = e;
   }
   return best?.id;

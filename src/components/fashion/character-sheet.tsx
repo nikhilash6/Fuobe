@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { SheetExample } from "@/components/empty-examples";
+import { linkTab, TabFromLink } from "@/components/nav/tab-from-link";
 
 type Mode = "reference" | "cast" | "describe";
 const MODES: [Mode, string][] = [
@@ -35,6 +36,8 @@ const MODES: [Mode, string][] = [
   ["cast", "Build from scratch"],
   ["describe", "From a description"],
 ];
+/** The tabs a link can open (?mode=reference|cast|describe: the bar's menus, search). */
+const MODE_IDS: readonly Mode[] = MODES.map(([id]) => id);
 
 const fmt = (f: CastFieldData, v: string | number) => (f.format ? f.format.replace("{v}", String(v)) : String(v));
 
@@ -232,6 +235,7 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
       <Suspense fallback={null}>
         <HandoffImage onImage={takeHandoff} />
       </Suspense>
+      <TabFromLink param="mode" ids={MODE_IDS} onTab={setMode} />
       <PageHeader title="Character Sheet" description="Build your AI avatar: a consistent character for your videos, from a reference or defined from scratch.">
         <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
@@ -240,7 +244,17 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
         <section className="min-w-0 space-y-4">
           <TabRow role="tablist" aria-label="How to build it" follow>
             {MODES.map(([id, label]) => (
-              <button key={id} role="tab" aria-selected={mode === id} onClick={() => setMode(id)} className={TAB_PILL} {...onAttr(mode === id)}>
+              <button
+                key={id}
+                role="tab"
+                aria-selected={mode === id}
+                onClick={() => {
+                  setMode(id);
+                  linkTab("mode", id);
+                }}
+                className={TAB_PILL}
+                {...onAttr(mode === id)}
+              >
                 {label}
               </button>
             ))}

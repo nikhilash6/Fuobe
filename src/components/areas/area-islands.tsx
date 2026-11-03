@@ -11,7 +11,7 @@ import { onAttr, reducedMotion, TAB_PILL, TabRow } from "@/components/ui/tab-row
 import { glideTo } from "@/lib/glide-scroll";
 import { area, type AreaId } from "@/lib/nav-areas";
 import { navIcon } from "@/lib/nav-icons";
-import { entry, visibleTo, type NavEntry } from "@/lib/nav-model";
+import { entry, subLabel, visibleTo, type NavEntry } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
 
 /*
@@ -238,6 +238,15 @@ const pillOf = (e: NavEntry, tap = true) => {
   );
 };
 
+/** A studio's feature as a pill in its row on /studios: its tab's name, no icon (the row names the studio). */
+const subPillOf = (e: NavEntry) => (
+  <li key={e.id}>
+    <IntentLink href={e.href} className={cn(PILL, PILL_TAP)}>
+      {subLabel(e)}
+    </IntentLink>
+  </li>
+);
+
 /**
  * "Jump back in": the last four pages of this area this browser opened, newest first, for someone signed in. Nothing for
  * a guest, while hydrating, when storage is blocked, or before anything here was opened. It sits under the first
@@ -265,9 +274,27 @@ export function JumpBackIn({ ids }: { ids: string[] }) {
   );
 }
 
-/** The owner's own pills in a section's row (a mode only the owner sees), added once the viewer is known. */
-export function OwnerPills({ ids }: { ids: string[] }) {
+/** The owner's own pills in a section's row (a mode only the owner sees), added once the viewer is known. `sub`: a studio's feature row. */
+export function OwnerPills({ ids, sub }: { ids: string[]; sub?: boolean }) {
   const kind = useViewerKind();
   if (kind !== "owner") return null;
-  return <>{ids.map(entry).filter((e): e is NavEntry => !!e && visibleTo(e, kind)).map((e) => pillOf(e))}</>;
+  const list = ids.map(entry).filter((e): e is NavEntry => !!e && visibleTo(e, kind));
+  return <>{list.map((e) => (sub ? subPillOf(e) : pillOf(e)))}</>;
+}
+
+/** A studio's feature row on /studios that only the owner has (Cinema Studio's Blockout), added once the viewer is known. */
+export function OwnerSubRow({ parent, ids }: { parent: string; ids: string[] }) {
+  const kind = useViewerKind();
+  const p = entry(parent);
+  if (kind !== "owner" || !p) return null;
+  const list = ids.map(entry).filter((e): e is NavEntry => !!e && visibleTo(e, kind));
+  if (!list.length) return null;
+  return (
+    <li className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-4">
+      <p className="shrink-0 pt-1.5 text-[13px] leading-5 font-medium sm:w-40">{p.label}</p>
+      <ul aria-label={`In ${p.label}`} className="flex flex-wrap gap-x-1.5 gap-y-3">
+        {list.map(subPillOf)}
+      </ul>
+    </li>
+  );
 }

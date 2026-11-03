@@ -92,6 +92,41 @@ function Row({ e, col, row, current, now, className }: { e: MegaItem; col: numbe
   );
 }
 
+/** A studio's links hide on a window shorter than they need (the panel never scrolls inside). */
+const SUBS_FROM: Record<800 | 880 | 960, string> = { 800: "[@media(max-height:799.98px)]:hidden", 880: "[@media(max-height:879.98px)]:hidden", 960: "[@media(max-height:959.98px)]:hidden" };
+
+/**
+ * What a studio holds inside (its tabs and modes), as links under its card or row: names only, smaller and quieter
+ * than the rows, hung from a hairline under the studio. `row`: the first link's place for the arrow keys (they go
+ * down from the studio through its links to the next row). `current`: the open page's feature.
+ */
+function SubLinks({ e, col, row, current, className }: { e: MegaItem; col: number; row: number; current?: string; className?: string }) {
+  if (!e.subs?.length) return null;
+  return (
+    <ul aria-label={`In ${e.label}`} data-subs={e.id} className={cn("mt-0.5 mb-1 ml-[17px] flex flex-col border-l border-border pl-1 max-[1439.98px]:ml-1.5", e.subsFrom && SUBS_FROM[e.subsFrom], className)}>
+      {e.subs.map((s, i) => (
+        <li key={s.id} className={s.from && SUBS_FROM[s.from]}>
+          <IntentLink
+            href={s.href}
+            data-col={col}
+            data-row={row + i}
+            data-sub=""
+            aria-current={current === s.id ? "page" : undefined}
+            title={s.line}
+            className={cn(
+              "nav-row nav-mark-start group/sub flex min-h-7 items-center gap-1 rounded-[8px] px-2 text-[12.5px] leading-4 [@media(pointer:coarse)]:min-h-11",
+              s.more ? "font-medium text-brand-text" : "text-muted-foreground hover:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground",
+            )}
+          >
+            <span className="truncate">{s.label}</span>
+            {s.more && <ArrowRight aria-hidden className="size-3 shrink-0 motion-safe:transition-transform group-hover/sub:translate-x-0.5" />}
+          </IntentLink>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * A ready board as a 16:9 tile: its peak frame (the finished scene), its name and one line. The first row's pictures
  * load with the panel; a later row's when it shows (lazy: a row hidden by the window's height never fetches its own).
@@ -214,6 +249,13 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
         </div>
       );
     }
+    // Places for the arrow keys, top to bottom: the lead (0), its links, then each row and its links.
+    let next = 1 + (c.lead?.subs?.length ?? 0);
+    const at = c.rows.map((e) => {
+      const r = next;
+      next += 1 + (e.subs?.length ?? 0);
+      return r;
+    });
     return (
       <div key={c.id} data-group={c.id} className={cn("flex min-w-0 flex-col gap-2", place)}>
         {label}
@@ -221,11 +263,13 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
           {c.lead && (
             <li className="pb-1.5">
               <LeadCard e={c.lead} col={col} current={current === c.lead.id} now={now} />
+              <SubLinks e={c.lead} col={col} row={1} current={current} className="mt-1.5" />
             </li>
           )}
           {c.rows.map((e, ri) => (
             <li key={e.id} className={capped ? ROW_HIDE(ri, families) : undefined}>
-              <Row e={e} col={col} row={ri + 1} current={current === e.id} now={now} />
+              <Row e={e} col={col} row={at[ri]} current={current === e.id} now={now} />
+              <SubLinks e={e} col={col} row={at[ri] + 1} current={current} />
             </li>
           ))}
         </ul>

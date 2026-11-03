@@ -10,7 +10,7 @@ import { keyPlaces } from "@/components/nav/mega-panel";
 import { CANVAS_INTRO } from "@/lib/canvas-template-cards";
 import { MENU_LINES } from "@/lib/menu-lines";
 import type { Preset } from "@/lib/catalog/types";
-import { launcherColumns } from "@/lib/nav-model";
+import { launcherColumns, subParent } from "@/lib/nav-model";
 import { featuredAll } from "@/lib/preset-featured";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
 import { templateCover } from "@/lib/template-covers";
@@ -158,10 +158,20 @@ describe("the menus' size", () => {
 });
 
 describe("Studios as a menu", () => {
-  it("is the launcher's columns as they were", () => {
+  it("is the launcher's columns, a studio that is a tab of another's suite under that one", () => {
     for (const kind of [undefined, "guest", "account", "owner"] as const) {
       const m: MegaModel = studiosMenu(kind);
-      expect(m.columns.map((c) => [c.id, c.lead?.id, ...c.rows.map((r) => r.id)])).toEqual(launcherColumns(kind).map((c) => [c.group.id, c.lead.id, ...c.rest.map((e) => e.id)]));
+      expect(m.columns.map((c) => [c.id, c.lead?.id, ...c.rows.map((r) => r.id)])).toEqual(
+        launcherColumns(kind).map((c) => [c.group.id, c.lead.id, ...c.rest.filter((e) => !subParent(e.id)).map((e) => e.id)]),
+      );
+      const marketing = m.columns.find((c) => c.id === "sell")!.lead!;
+      expect(marketing.subs!.map((s) => [s.id, s.href])).toEqual([
+        ["marketing-click-to-ad", "/marketing/click-to-ad"],
+        ["ads", "/ads"],
+        ["ads-multiplier", "/ads/multiplier"],
+      ]);
+      // A studio's features stay out of the phone's "All" (megaItems: leads and rows).
+      expect(megaItems(m).some((e) => e.id === "ads" || e.id.startsWith("genjutsu-"))).toBe(false);
     }
   });
 });

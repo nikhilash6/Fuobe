@@ -29,7 +29,7 @@ const { categoryFrom, skippedInAll } = await import("@/lib/gallery-category");
 const KINDS = [undefined, "guest", "account", "owner"] as const;
 /** Words no visitor reads about the site itself. */
 const STATUS = /\b(beta|unverified|not checked|coming soon|demo|placeholder|experimental|wip)\b/i;
-const ids = (id: "create" | "studios", kind?: (typeof KINDS)[number]) => areaSections(id, kind).flatMap((s) => [...s.cards, ...s.chips]);
+const ids = (id: "create" | "studios", kind?: (typeof KINDS)[number]) => areaSections(id, kind).flatMap((s) => [...s.cards, ...s.chips, ...(s.subs ?? []).flatMap((x) => x.ids)]);
 
 describe("what each area lists", () => {
   it("names only entries of the navigation model, each once per page, and only what the viewer may see", () => {
@@ -120,16 +120,28 @@ describe("/studios", () => {
     for (const kind of KINDS) expect(areaCount("studios", kind)).toBe(studioCount());
   });
 
-  it("lists a studio's own tools under it, never a pill that repeats a card", () => {
+  it("lists what each studio holds inside in a row of its own, never a pill that repeats a card or a pill", () => {
     const sections = areaSections("studios", "guest");
-    const film = sections.find((s) => s.id === "film")!;
-    expect(film.chips).toContain("video-tools-captions");
-    expect(film.chips).not.toContain("video-tools-matte"); // Video tools' first mode is the studio's own page
-    expect(sections.find((s) => s.id === "sell")!.chips).toEqual(expect.arrayContaining(["marketing-click-to-ad", "ads-multiplier"]));
+    const subsOf = (section: string, parent: string) => sections.find((s) => s.id === section)!.subs!.find((x) => x.parent === parent)?.ids ?? [];
+    expect(subsOf("film", "video-tools")).toContain("video-tools-captions");
+    expect(subsOf("film", "video-tools")).not.toContain("video-tools-matte"); // Video tools' first mode is the studio's own page
+    // Ads Studio is a studio with a card or pill of its own here: Marketing Studio's row has the other two.
+    expect(subsOf("sell", "marketing")).toEqual(["marketing-click-to-ad", "ads-multiplier"]);
+    expect(subsOf("people", "genjutsu")).toEqual(["genjutsu-motion", "genjutsu-character", "genjutsu-swap", "genjutsu-restyle", "genjutsu-insert"]);
+    expect(subsOf("people", "character-sheet")).toEqual(["character-sheet-reference", "character-sheet-cast", "character-sheet-describe"]);
+    expect(subsOf("sound", "audio")).not.toContain("audio-music"); // a card of its own
     for (const s of sections) {
-      const hrefs = new Set(s.cards.map((c) => entry(c)!.href));
-      for (const c of s.chips) expect(hrefs.has(entry(c)!.href), `${s.id}: ${c}`).toBe(false);
+      // A tool is a pill of the section only when it is in the bar's menu itself (the Sound column's modes).
+      expect(s.chips.filter((c) => entry(c)!.kind === "tool" && !entry(c)!.group), s.id).toEqual([]);
+      const hrefs = new Set([...s.cards, ...s.chips].map((c) => entry(c)!.href));
+      for (const c of s.chips) expect(s.cards.map((x) => entry(x)!.href), `${s.id}: ${c}`).not.toContain(entry(c)!.href);
+      for (const x of s.subs ?? []) for (const c of x.ids) expect(hrefs.has(entry(c)!.href), `${s.id}: ${c}`).toBe(false);
     }
+    // The owner's own (Genjutsu's From picture, Cinema Studio's Blockout) are theirs alone.
+    const owner = areaSections("studios", "owner");
+    expect(owner.find((s) => s.id === "people")!.subs!.find((x) => x.parent === "genjutsu")!.ids).toContain("genjutsu-picture");
+    expect(owner.find((s) => s.id === "film")!.subs!.find((x) => x.parent === "cinema")!.ids).toEqual(["cinema-blockout"]);
+    expect(subsOf("film", "cinema")).toEqual([]);
   });
 });
 

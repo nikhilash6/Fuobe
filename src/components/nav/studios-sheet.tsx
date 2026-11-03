@@ -8,7 +8,7 @@ import { useNavUi, useViewerKind } from "@/components/nav/nav-ui";
 import { IntentLink } from "@/components/intent-link";
 import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 import { MEGA_AREAS, type MegaId, type MegaItem, type MegaModel } from "@/lib/mega-menus";
-import { isNew } from "@/lib/nav-model";
+import { isNew, studioSubs, subLabel, subParent, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
 import { megaCurrent } from "./mega-launcher";
 import { useMegaMenu, warmMenu } from "./mega-data";
@@ -45,6 +45,36 @@ function Tile({ entry, current }: { entry: MegaItem; current: boolean }) {
         </span>
       </IntentLink>
     </li>
+  );
+}
+
+/**
+ * What the group's studios hold inside (their tabs and modes, every one a viewer may run): under the tiles, a small
+ * heading per studio and its features as 44 px pills that wrap. Only for one group (All stays one screen of tiles).
+ */
+function SheetSubs({ items, kind, current }: { items: MegaItem[]; kind: ViewerKind | undefined; current?: string }) {
+  const groups = items.map((e) => ({ e, subs: studioSubs(e.id, kind, "sheet") })).filter((g) => g.subs.length > 0);
+  if (!groups.length) return null;
+  return (
+    <div data-sheet-subs className="flex flex-col gap-3 border-t pt-3 pb-3">
+      {groups.map(({ e, subs }) => (
+        <section key={e.id} aria-labelledby={`sheet-subs-${e.id}`}>
+          <p id={`sheet-subs-${e.id}`} className="text-[11px] leading-4 font-semibold tracking-[.08em] text-brand-text uppercase">
+            {e.label}
+          </p>
+          {/* 36 px pills whose touch area reaches 4 px past each edge (44 px): rows 8 px apart, so no two overlap. */}
+          <ul aria-labelledby={`sheet-subs-${e.id}`} className="mt-2 flex flex-wrap gap-x-1.5 gap-y-2">
+            {subs.map((s) => (
+              <li key={s.id}>
+                <IntentLink href={s.href} aria-current={current === s.id ? "page" : undefined} {...onAttr(current === s.id)} title={s.what} className={cn(TAB_PILL, "px-3.5 text-[13px]")}>
+                  {subLabel(s)}
+                </IntentLink>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -142,6 +172,8 @@ export function StudiosSheet({ family = "studios", group: initial, onSearch }: {
   useEffect(() => warmMenu(family), [family]);
   // The query too: moving from one preset to another (/video?preset=…) keeps the path.
   const current = megaCurrent(family, pathname, useSearchParams()?.toString() ?? "");
+  // On a studio's feature (Genjutsu's Restyle, Ads Studio), that studio's tile is the one marked.
+  const currentTile = family === "studios" && current ? (subParent(current) ?? current) : current;
   const area = MEGA_AREAS[family];
   // Canvas: its "Start here" column is the desktop's; on a phone the boards are the grid.
   const columns = model?.columns.filter((c) => !(family === "canvas" && c.id === "start")) ?? [];
@@ -219,13 +251,16 @@ export function StudiosSheet({ family = "studios", group: initial, onSearch }: {
             </ul>
           </>
         ) : (
-          <ul aria-label={group ? columns.find((c) => c.id === group)?.label : area.panel} className="grid grid-cols-5 gap-x-1 pb-1">
-            {items.map((e) => (
-              <Tile key={e.id} entry={e} current={e.id === current} />
-            ))}
-            {seeAll && family !== "studios" && <SeeAllTile {...seeAll} />}
-            {family === "studios" && <SeeAllTile href={area.href} label="See all" name="See all studios" />}
-          </ul>
+          <>
+            <ul aria-label={group ? columns.find((c) => c.id === group)?.label : area.panel} className="grid grid-cols-5 gap-x-1 pb-1">
+              {items.map((e) => (
+                <Tile key={e.id} entry={e} current={e.id === currentTile} />
+              ))}
+              {seeAll && family !== "studios" && <SeeAllTile {...seeAll} />}
+              {family === "studios" && <SeeAllTile href={area.href} label="See all" name="See all studios" />}
+            </ul>
+            {family === "studios" && group && <SheetSubs items={items} kind={kind} current={current} />}
+          </>
         )}
       </div>
     </>

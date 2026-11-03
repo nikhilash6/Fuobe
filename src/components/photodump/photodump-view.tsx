@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ArrowRight, History, Library, Loader2, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
@@ -19,6 +19,7 @@ import type { Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
+import { linkTab, TabFromLink } from "@/components/nav/tab-from-link";
 import { toastError } from "@/lib/refusals";
 import { PackCover } from "./covers";
 import { useRun, useRunPreview, usePackActions, useUserPacks } from "./hooks";
@@ -44,6 +45,9 @@ const TABS = [
   ["instadump", "From a selfie"],
   ["mine", "My packs"],
 ] as const;
+type PackTab = (typeof TABS)[number][0];
+/** The tabs a link can open (?tab=instadump: the bar's menus, search). */
+const TAB_IDS: readonly PackTab[] = TABS.map(([id]) => id);
 const ratioOf = (a: string) => {
   const [w, h] = a.split(":").map(Number);
   return w && h ? w / h : 3 / 4;
@@ -159,7 +163,12 @@ export function PhotodumpView() {
   const isOwner = useIsOwner();
   const [step, setStep] = useState(0);
   const [reached, setReached] = useState(0);
-  const [tab, setTab] = useState<(typeof TABS)[number][0]>("all");
+  const [tab, setTab] = useState<PackTab>("all");
+  // A link to a tab (the bar's menus, search) shows that tab's packs: back to the first step.
+  const tabFromLink = useCallback((id: PackTab) => {
+    setTab(id);
+    setStep(0);
+  }, []);
   const [q, setQ] = useState("");
   const [packId, setPackId] = useState<string>();
   const [subjectMode, setSubjectMode] = useState<"selfie" | "character">("selfie");
@@ -226,6 +235,7 @@ export function PhotodumpView() {
 
   return (
     <PageShell wide>
+      <TabFromLink param="tab" ids={TAB_IDS} onTab={tabFromLink} />
       <PageHeader title="Photodump" description="A whole set of photos of you in one go, from one selfie or a saved character, in a pack of styles.">
         <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
@@ -239,7 +249,17 @@ export function PhotodumpView() {
           <div className="flex flex-wrap items-center gap-3">
             <TabRow role="tablist" aria-label="Packs" follow className="max-w-full">
               {TABS.map(([id, label]) => (
-                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={TAB_PILL} {...onAttr(tab === id)}>
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={tab === id}
+                  onClick={() => {
+                    setTab(id);
+                    linkTab("tab", id);
+                  }}
+                  className={TAB_PILL}
+                  {...onAttr(tab === id)}
+                >
                   {label}
                 </button>
               ))}

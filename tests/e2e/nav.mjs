@@ -171,10 +171,17 @@ try {
       await p.setViewportSize({ width: w, height: h });
       await trigger.click();
       await panel.waitFor({ state: "visible" });
-      const links = panel.locator("a[data-col]");
+      // The studios and Apps (Ads Studio is a link under Marketing Studio), then See all; and each studio's links that show.
+      const links = panel.locator("a[data-col]:not([data-sub])");
       const seen = [...(await inView(links)), ...(await inView(panel.getByRole("link", { name: "See all studios", exact: true })))];
+      const subs = await panel.locator("a[data-sub]").evaluateAll((as_) =>
+        as_.filter((a) => a.checkVisibility()).map((a) => {
+          const r = a.getBoundingClientRect();
+          return r.top >= 0 && r.bottom <= innerHeight + 0.5;
+        }),
+      );
       const scrolls = await panel.evaluate((el) => el.scrollHeight > el.clientHeight + 1);
-      check(seen.length === 34 && seen.every(Boolean) && !scrolls, `launcher at ${w}x${h}: all 33 studios and See all on screen, no scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
+      check(seen.length === 33 && seen.every(Boolean) && subs.every(Boolean) && !scrolls, `launcher at ${w}x${h}: all 32 studios, their links and See all on screen, no scrolling`, `${seen.filter(Boolean).length}/${seen.length}, links ${subs.filter(Boolean).length}/${subs.length}`);
       await p.keyboard.press("Escape");
     }
     await p.setViewportSize(DESKTOP.viewport);
@@ -294,9 +301,9 @@ try {
     await p.waitForTimeout(350);
     const tiles = sheet.locator("ul").first().getByRole("link");
     const seen = await inView(tiles);
-    // 33 tiles and the closing See all.
-    if (size.height >= 844) check(seen.length === 34 && seen.every(Boolean), `${label}: the Studios sheet shows all 33 and See all without scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
-    else check(seen.length === 34, `${label}: the Studios sheet lists all 33 and See all (it scrolls inside at this height)`, String(seen.length));
+    // 32 tiles (Ads Studio is under Marketing Studio, in the Sell group) and the closing See all.
+    if (size.height >= 844) check(seen.length === 33 && seen.every(Boolean), `${label}: the Studios sheet shows all 32 and See all without scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
+    else check(seen.length === 33, `${label}: the Studios sheet lists all 32 and See all (it scrolls inside at this height)`, String(seen.length));
     await sheet.getByRole("button", { name: /^Film/ }).tap();
     check((await sheet.locator("ul").first().getByRole("link").count()) === 9, `${label}: the Film chip shows 8 and See all`);
     if (size.height >= 844) await shot(p, "phone-studios-sheet-film-390");

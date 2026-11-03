@@ -8,7 +8,7 @@ import { cacheLife } from "next/cache";
 import { EFFECTS, MOTIONS } from "@/lib/catalog";
 import { HOME_EFFECTS, HOME_MOTIONS, HOME_STUDIOS, homeCard, homeShowcase, presetHref, type HomeFacts } from "@/lib/home-showcase";
 import { areaCount, areaSections, rankCards, type AreaId } from "@/lib/nav-areas";
-import { entry, NAV_ENTRIES, visibleTo, type NavEntry } from "@/lib/nav-model";
+import { entry, NAV_ENTRIES, subLabel, visibleTo, type NavEntry } from "@/lib/nav-model";
 import type { PresetCardData } from "@/lib/preset-cards";
 import { featuredAll, featuredBand } from "@/lib/preset-featured";
 
@@ -42,6 +42,11 @@ export interface AreaShowcaseSection {
   pills: AreaPill[];
   /** Added for the studio's owner only, by a client island (OwnerPills), so the server's HTML never holds them. */
   ownerPills: AreaPill[];
+  /**
+   * What the section's studios hold inside, a row per studio: its features everyone sees, and the ids of the owner's
+   * own (added by OwnerPills). A studio with only the owner's has no pills and its row is the owner's alone.
+   */
+  subs: { parent: AreaPill; pills: AreaPill[]; ownerIds: string[] }[];
 }
 
 const DRAWN: Record<string, AreaDrawn> = { "live-edit": "live" };
@@ -53,6 +58,8 @@ function lineOf(e: NavEntry, facts: HomeFacts): string {
 }
 
 const pill = (e: NavEntry): AreaPill => ({ id: e.id, href: e.href, label: e.label, icon: e.icon });
+/** A feature as a pill under its studio: its tab's name. */
+const subPill = (e: NavEntry): AreaPill => ({ ...pill(e), label: subLabel(e) });
 
 /**
  * A card's cover: Home's for a page Home has a card for (so a studio looks the same in both places), unless another
@@ -103,6 +110,13 @@ export async function areaShowcase(id: AreaId) {
       };
     });
     const entries = (ids: string[]) => ids.map(entry).filter((e): e is NavEntry => !!e);
+    const guestSubs = s.subs ?? [];
+    const subs = (owner.find((o) => o.id === s.id)?.subs ?? []).flatMap((o) => {
+      const parent = entry(o.parent);
+      if (!parent) return [];
+      const everyone = guestSubs.find((g) => g.parent === o.parent)?.ids ?? [];
+      return [{ parent: pill(parent), pills: entries(everyone).map(subPill), ownerIds: o.ids.filter((x) => !everyone.includes(x)) }];
+    });
     return {
       id: s.id,
       title: s.title,
@@ -113,6 +127,7 @@ export async function areaShowcase(id: AreaId) {
       ownerPills: entries(ownerOnly)
         .filter((e) => visibleTo(e, "owner"))
         .map(pill),
+      subs,
     };
   });
   return { count: areaCount(id, undefined), sections };

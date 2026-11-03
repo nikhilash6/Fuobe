@@ -14,6 +14,7 @@ import {
   LAUNCHER_GROUPS,
   launcherEntries,
   NAV_ENTRIES,
+  studioSubs,
   visibleTo,
   type LauncherGroupId,
   type NavEntry,
@@ -35,6 +36,8 @@ export interface AreaSection {
   cards: string[];
   /** NavEntry ids drawn as pills under the cards. */
   chips: string[];
+  /** What the section's studios hold inside (their tabs and modes): a row of pills per studio, under the rest. */
+  subs?: { parent: string; ids: string[] }[];
 }
 
 export interface Area {
@@ -157,8 +160,8 @@ function createSections(): AreaSection[] {
 const CREATE_CARDS: ReadonlySet<string> = new Set(createSections().flatMap((s) => s.cards));
 
 /**
- * /studios' sections: one per launcher group, its studios as cards, then the ones whose card is on /create, their
- * tools and Apps (a page of its own) as pills.
+ * /studios' sections: one per launcher group, its studios as cards, then the ones whose card is on /create and Apps (a
+ * page of its own) as pills, then what each studio holds inside (STUDIO_SUBS: its tabs and modes) as a row of its own.
  */
 function studioSections(kind: ViewerKind | undefined): AreaSection[] {
   return LAUNCHER_GROUPS.map((g) => {
@@ -169,7 +172,8 @@ function studioSections(kind: ViewerKind | undefined): AreaSection[] {
       title: g.label,
       ...GROUP_COPY[g.id],
       cards: studios.filter((id) => !CREATE_CARDS.has(id)),
-      chips: [...studios.filter((id) => CREATE_CARDS.has(id)), ...toolsOf(studios), ...all.filter((id) => id === "apps")],
+      chips: [...studios.filter((id) => CREATE_CARDS.has(id)), ...all.filter((id) => id === "apps")],
+      subs: studios.map((parent) => ({ parent, ids: studioSubs(parent, kind).map((e) => e.id) })).filter((s) => s.ids.length > 0),
     };
   });
 }
@@ -198,7 +202,13 @@ export function areaSections(id: AreaId, kind: ViewerKind | undefined, order: (i
         .map(entry)
         .filter(seen)
         .filter((e, i, list) => !cardHrefs.has(e.href) && list.findIndex((x) => x.href === e.href) === i);
-      return { ...s, cards: cards.map((e) => e.id), chips: chips.map((e) => e.id) };
+      // A studio's features, less any that is a card or a pill of its own here (Ads Studio is a studio too).
+      const listed = new Set([...cards, ...chips].map((e) => e.href));
+      const subs = (s.subs ?? [])
+        .filter((x) => seen(entry(x.parent)))
+        .map((x) => ({ parent: x.parent, ids: x.ids.map(entry).filter(seen).filter((e) => !listed.has(e.href)).map((e) => e.id) }))
+        .filter((x) => x.ids.length > 0);
+      return { ...s, cards: cards.map((e) => e.id), chips: chips.map((e) => e.id), ...(s.subs && { subs }) };
     })
     .filter((s) => s.cards.length || s.chips.length);
 }
