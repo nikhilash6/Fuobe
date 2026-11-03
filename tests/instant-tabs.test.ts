@@ -157,7 +157,9 @@ describe("other tab bars switch without a round trip", () => {
   });
 
   it("the studio's route skeleton keeps a hub's bar and tabs on the way in", () => {
-    expect(src("src/app/(studio)/loading.tsx")).toMatch(/<StudioRouteSkeleton /);
+    // Each studio folder's loading.tsx (none around Home: tests/home-first-paint.test.ts).
+    expect(src("src/components/studio/route-loading.tsx")).toMatch(/<StudioRouteSkeleton /);
+    expect(src("src/app/(studio)/image/loading.tsx")).toMatch(/@\/components\/studio\/route-loading/);
   });
 
   it("example cards (a lazy chunk) load under their own placeholder, so a tapped page never waits for them", () => {

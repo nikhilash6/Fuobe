@@ -172,8 +172,8 @@ export function HomeView({
   const recent = useGenerations({ limit: 6 });
   // How many (up to 6): a phone's grid holds 3 a row, so 1 to 3 results are one row of skeletons, 4 to 6 two.
   useHadItems("home-recent", recent.data?.length, 6);
-  // The page hydrates inside the route's Suspense boundary, possibly after the sidebar already fetched
-  // the status: render the server's (status-less) view until hydrated, as useEngineMode does.
+  // The page may hydrate after the top bar already fetched the status: render the server's (status-less) view
+  // until hydrated, as useEngineMode does.
   const hydrated = useHydrated();
   const statusData = useStatus().data;
   const status = hydrated ? statusData : undefined;
@@ -449,7 +449,8 @@ export function HomeView({
         </Row>
       ) : (
         // Loading, in a browser that saw results here last time: the row keeps its place from the first paint, so the rows below don't move down when it arrives.
-        !recent.data && (
+        // A read that failed or ran out of time (a busy or restarting server) takes the placeholder away: no row, rather than one that never fills.
+        !recent.data && recent.failureCount === 0 && (
           <>
             <HadItemsScript name="home-recent" />
             <Row title="Recent" href="/library" className="mt-12 hidden sm:mt-16 [html[data-had-home-recent]_&]:block">

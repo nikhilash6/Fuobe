@@ -25,6 +25,7 @@ import {
   type Pages,
   type StreamEvent,
 } from "./generation-stream";
+import { fetchWithin, READ_LIMIT_MS } from "./fetch-within";
 import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folder } from "./library";
 import { markRefusalShown, responseError } from "./refusals";
 import { postFile } from "./upload";
@@ -447,7 +448,7 @@ export function useGenerations(filter: FeedFilter, opts: { keepPrevious?: boolea
   const connected = useGenerationStream();
   return useQuery({
     queryKey: feedKey(filter),
-    queryFn: async () => (await json<{ items: Generation[] }>(await fetch(`/api/generations?${filterToSearch(filter)}`))).items,
+    queryFn: async () => (await json<{ items: Generation[] }>(await fetchWithin(`/api/generations?${filterToSearch(filter)}`, READ_LIMIT_MS.list))).items,
     placeholderData: opts.keepPrevious ? keepPreviousData : undefined,
     structuralSharing: shareById,
     refetchInterval: (q) => pollEvery(q.state.data, connected),
@@ -464,7 +465,7 @@ export function useRunningGenerations() {
   const connected = useGenerationStream();
   return useQuery({
     queryKey: feedKey(RUNNING),
-    queryFn: async () => (await json<{ items: Generation[] }>(await fetch(`/api/generations?${filterToSearch(RUNNING)}`))).items,
+    queryFn: async () => (await json<{ items: Generation[] }>(await fetchWithin(`/api/generations?${filterToSearch(RUNNING)}`, READ_LIMIT_MS.list))).items,
     structuralSharing: shareById,
     refetchInterval: (q) => (q.state.data?.length ? (connected ? 30_000 : 5000) : false),
   });
@@ -931,7 +932,7 @@ export async function saveSettings(patch: Record<string, string>): Promise<void>
 export function useStatus() {
   return useQuery({
     queryKey: ["status"],
-    queryFn: async () => json<StatusInfo>(await fetch("/api/status")),
+    queryFn: async () => json<StatusInfo>(await fetchWithin("/api/status", READ_LIMIT_MS.status)),
     staleTime: 15_000,
     refetchInterval: 30_000,
   });
@@ -1168,7 +1169,7 @@ export interface ViewerInfo {
 export function useViewer() {
   return useQuery({
     queryKey: ["viewer"],
-    queryFn: async () => json<ViewerInfo>(await fetch("/api/auth/me")),
+    queryFn: async () => json<ViewerInfo>(await fetchWithin("/api/auth/me", READ_LIMIT_MS.viewer)),
     staleTime: 60_000,
   });
 }

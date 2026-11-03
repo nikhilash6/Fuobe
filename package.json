@@ -16,6 +16,7 @@
     "test:e2e:comfyui": "node tests/e2e/comfyui-selftest.mjs",
     "test:e2e:library": "node tests/e2e/library-flows.mjs",
     "test:e2e:home": "node tests/e2e/home-bento.mjs",
+    "test:e2e:first-paint": "node tests/e2e/home-first-paint.mjs",
     "test:e2e:mobile": "node tests/e2e/no-horizontal-scroll.mjs",
     "test:e2e:shell": "node tests/e2e/shell.mjs",
     "test:e2e:tabs": "node tests/e2e/instant-tabs.mjs",

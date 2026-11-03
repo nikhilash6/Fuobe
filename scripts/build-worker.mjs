@@ -12,7 +12,7 @@ import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "bin/lib/worker/dist");
-const SOURCES = ["computer-runner", "comfy-guard", "comfy-ws", "local-comfy", "relay", "lanes", "worker-hours"];
+const SOURCES = ["computer-runner", "comfy-guard", "comfy-ws", "fetch-within", "local-comfy", "relay", "lanes", "worker-hours"];
 
 fs.mkdirSync(out, { recursive: true });
 for (const name of SOURCES) {
