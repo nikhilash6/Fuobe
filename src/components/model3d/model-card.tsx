@@ -6,7 +6,7 @@ import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { uploadFile, useEngine, useHydrated, useIsOwner } from "@/lib/api";
-import { animateSpinHref, animationName, model3dView, photorealAngle, photorealBody, stillOf, type Model3dView } from "@/lib/av/model3d";
+import { FINAL_3D, animateSpinHref, animationName, finalBuildHref, model3dView, photorealAngle, photorealBody, stillOf, type Model3dView } from "@/lib/av/model3d";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { useFlyAround } from "@/components/fly-around-run";
 import type { Generation } from "@/lib/catalog/types";
@@ -41,9 +41,25 @@ function rigClips(g: Generation, view: Model3dView): { key: string; label: strin
  * A finished 3D model. The card plays its turntable (or shows its poster or photo); the orbitable viewer, and with it
  * the GLB, loads only when "View in 3D" opens it: the web GLB when the server made one, else the original (a rig
  * plays its animation). A splat shows its orbit video or picture with the file to download. Then the turntable,
- * Animate the spin and Rig & animate.
+ * Animate the spin and Rig & animate; an Idol 3D draft on your GPU, "Build the final with TRELLIS.2".
  */
-export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed?: boolean }) {
+export function ModelCard({
+  g,
+  info,
+  cloudAllowed,
+  refineAllowed = false,
+  finalAllowed = false,
+  onFinal,
+}: {
+  g: Generation;
+  info: Record<string, Model3dInfo>;
+  cloudAllowed: boolean;
+  refineAllowed?: boolean;
+  /** TRELLIS.2 runs here and is switched on: an Idol 3D draft offers "Build the final with TRELLIS.2". */
+  finalAllowed?: boolean;
+  /** Fills the form for the final every time it's clicked (the link alone does nothing when the URL is already its own). */
+  onFinal?: (photo: string) => void;
+}) {
   const view = model3dView(g);
   // "preview": the turntable or the still (a splat with an orbit video: the video). "3d": the viewer (a splat: its picture).
   const [show, setShow] = useState<"preview" | "3d">("preview");
@@ -197,6 +213,8 @@ export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g:
   const canFilm = !!photoreal && !view.rigged && (engine === "cloud" || (view.glb ? canRecord && !failed : !!view.turntable));
   const filmBusy = filming !== null || fly.run.isPending;
   const spin = view.rigged ? null : animateSpinHref(view, recorded?.saved);
+  // Draft then final (idol-6): an Idol 3D splat's picture, rebuilt as a textured mesh with TRELLIS.2.
+  const final = finalBuildHref(g, view, finalAllowed);
   // Hi3D's results: geometry only, and "Powered by Hi3D 1.0" (linked, as its licence asks) instead of the plain notice.
   const refined = isRefined(g);
   const notices = (info[g.modelId]?.notices ?? []).filter((n) => !(refined && n === HI3D_NOTICE));
@@ -426,6 +444,16 @@ export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g:
             </Button>
           )}
         </div>
+        {final && (
+          <div className="space-y-1">
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link href={final} prefetch={false} onClick={() => view.photo && onFinal?.(view.photo)}>
+                <Box className="size-3.5" /> {FINAL_3D.label}
+              </Link>
+            </Button>
+            <p className="text-[12px] text-muted-foreground">{FINAL_3D.note}</p>
+          </div>
+        )}
         {refined && <p className="text-[12px] text-muted-foreground">Geometry only: no colour or texture. Set its real size in Print-ready.</p>}
         {(notices.length > 0 || refined) && (
           <p className="text-[11px] text-muted-foreground">

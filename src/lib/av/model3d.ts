@@ -84,6 +84,22 @@ export const CLOUD_NOTICES: Record<string, string[]> = { triposplat: ["Built wit
 export const IDOL_MODELS = { open: "oss-idol", cloud: "idol-3d" } as const;
 export const isIdol = (id: string | null | undefined) => id === IDOL_MODELS.open || id === IDOL_MODELS.cloud;
 
+/**
+ * Draft then final (idol-6, docs/research/idol-9.md §8): an Idol 3D splat on your GPU is a quick look at the object's
+ * sides; the textured final is TRELLIS.2 from the same picture, an ordinary Image to 3D run (not an Idol substitute).
+ */
+export const FINAL_3D = { model: "oss-trellis2", label: "Build the final with TRELLIS.2", note: "A textured, riggable .glb · 16 GB GPU" } as const;
+
+/**
+ * Where "Build the final with TRELLIS.2" goes from a finished Idol 3D result on the open engine: Image to 3D with
+ * TRELLIS.2 picked and the result's own picture filled in. null on any other result, without the picture, or when
+ * TRELLIS.2 isn't offered here (`allowed`: switched on in Settings → Models & licences, open models run, not a visitor).
+ */
+export function finalBuildHref(g: Pick<Generation, "request">, view: Pick<Model3dView, "photo">, allowed: boolean): string | null {
+  if (!allowed || g.request.modelId !== IDOL_MODELS.open || !view.photo) return null;
+  return `/image-to-3d?${new URLSearchParams({ mode: "image", model: FINAL_3D.model, image: view.photo })}`;
+}
+
 export type IdolQuality = "best" | "quick";
 
 /**

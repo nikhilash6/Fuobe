@@ -18,6 +18,7 @@ import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useCreateGeneration, useEngine, useGenerations, useHydrated, useIsOwner, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
+  FINAL_3D,
   IDOL_QUALITIES,
   MAX_3D_PROMPT,
   MODEL3D_FEATURE,
@@ -36,6 +37,7 @@ import {
   linkedPicture,
   model3dFor,
   model3dRequest,
+  modeOf,
   type IdolQuality,
   type Model3dInput,
   type Model3dMode,
@@ -74,7 +76,8 @@ const HINTS: Record<Model3dMode, string> = {
 /**
  * A link's ?model= (from ⌘K, or an image result's Make it 3D) picks that model, its mode and its engine; ?mode= picks a
  * mode; ?model=meshy-rigging (rigging works on a finished model) says where Rig & animate is; ?quality= sets Idol 3D's
- * look and ?image= fills the photo slot (readModel3dLink). Under its own Suspense: it reads the URL.
+ * look and ?image= fills the photo slot (readModel3dLink: an image result's Make it 3D, or an Idol 3D result's "Build the
+ * final with TRELLIS.2"). Under its own Suspense: it reads the URL.
  */
 function UrlModel({
   onModel,
@@ -85,7 +88,7 @@ function UrlModel({
   onModel: (mode: Model3dMode, engine: Engine, id: string, quality?: IdolQuality) => void;
   onMode: (mode: Model3dMode) => void;
   onRig: () => void;
-  onImage: (url: string, photo: boolean) => void;
+  onImage: (url: string, photo?: boolean) => void;
 }) {
   const params = useSearchParams();
   useEffect(() => {
@@ -93,7 +96,8 @@ function UrlModel({
     if (link.model) onModel(link.model.mode, link.model.engine, link.model.id, link.quality);
     else if (link.rig) onRig();
     else if (link.mode) onMode(link.mode);
-    if (link.image) onImage(link.image, !!link.photo);
+    // Only Make it 3D's link (Idol 3D) says whether the picture is a photo; the others leave "It's a photo" as it is.
+    if (link.image) onImage(link.image, link.model && isIdol(link.model.id) ? !!link.photo : undefined);
   }, [params, onModel, onMode, onRig, onImage]);
   return null;
 }
@@ -275,6 +279,19 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   // Refine detail · Hi3D 1.0 (open engine, From an image and From several images): the resolution, or off.
   const [refine, setRefine] = useState<Hi3dResolution | null>(null);
   const showRigHint = useCallback(() => setRigHint(true), []);
+  // A picture handed over in the link (?image=). An image result's Make it 3D names Idol 3D and says what the picture is:
+  // a result made here goes in as one, so Idol's photo crop starts off (the tighter crop suits a generated picture), and an
+  // upload (?photo=1) starts it on. Other links (an Idol 3D result's "Build the final with TRELLIS.2") leave Idol's
+  // "It's a photo" as it is: they don't say whether the picture is a photo (an Idol 3D draft's is usually the user's own upload).
+  const [handed, setHanded] = useState<string | null>(null);
+  const fromImage = useCallback((url: string, asPhoto?: boolean) => {
+    const v: SlotValue = asPhoto === undefined ? { ref: url, preview: url, kind: "image" } : linkedPicture(url, asPhoto);
+    lastPhoto.current = v;
+    setPhoto(v);
+    if (asPhoto === undefined) return;
+    setIdolPhoto(asPhoto);
+    setHanded(url);
+  }, []);
   const fromUrl = useCallback(
     (m: Model3dMode, e: Engine, id: string, quality?: IdolQuality) => {
       setMode(m);
@@ -284,16 +301,15 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
     },
     [setEngine],
   );
-  // A picture handed over in the link (an image result's Make it 3D): in the slot as a result made here, so Idol's photo
-  // crop starts off (the tighter crop suits a generated picture), or on for an upload (?photo=1).
-  const [handed, setHanded] = useState<string | null>(null);
-  const fromImage = useCallback((url: string, asPhoto: boolean) => {
-    const v: SlotValue = linkedPicture(url, asPhoto);
-    lastPhoto.current = v;
-    setPhoto(v);
-    setIdolPhoto(asPhoto);
-    setHanded(url);
-  }, []);
+  // "Build the final with TRELLIS.2" on a result card: fills the form on every click, also when the link is the URL already.
+  const toFinal = useCallback(
+    (url: string) => {
+      const found = modeOf(FINAL_3D.model);
+      if (found) fromUrl(found.mode, found.engine, FINAL_3D.model);
+      fromImage(url);
+    },
+    [fromUrl, fromImage],
+  );
   // Models switched off in Settings → Models & licences leave the menu, and the pick falls back to one that is on.
   const choices = keepOffered(MODELS_3D[mode][engine], (m) => offered(access, m.id, engine));
   const wanted = picked[`${mode}:${engine}`];
@@ -325,6 +341,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const cloudAllowed = engineMode !== "open";
   // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on.
   const refineAllowed = !visitor && engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
+  // "Build the final with TRELLIS.2" on an Idol 3D result: while TRELLIS.2 runs here and is switched on.
+  const finalAllowed = !visitor && engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");
   const refining = refineAllowed && engine === "open" && (mode === "image" || mode === "multi") && refine !== null ? refine : null;
   const go = () => {
     if (visitor) return;
@@ -525,7 +543,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((g) => (
-              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />
+              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={toFinal} />
             ))}
           </div>
         )}
@@ -543,12 +561,26 @@ function retryOf(g: Generation): GenerationRequest {
   return r;
 }
 
-function ResultCard({ g, info, cloudAllowed, refineAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed: boolean }) {
+function ResultCard({
+  g,
+  info,
+  cloudAllowed,
+  refineAllowed,
+  finalAllowed,
+  onFinal,
+}: {
+  g: Generation;
+  info: Record<string, Model3dInfo>;
+  cloudAllowed: boolean;
+  refineAllowed: boolean;
+  finalAllowed: boolean;
+  onFinal: (photo: string) => void;
+}) {
   const create = useCreateGeneration();
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
   if (g.kind === "video") return <FilmCard g={g} />;
-  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />;
+  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={onFinal} />;
 }
 
 /** A photoreal orbit filmed from a model ("Film it photoreal"): the clip, to watch and download. */
