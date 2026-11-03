@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <a href="https://fuobe.com"><img src="docs/media/buttons/nav-website.svg" alt="fuobe.com" height="36"></a>
-  <a href="#documentation"><img src="docs/media/buttons/nav-docs.svg" alt="Docs" height="36"></a>
-  <a href="#quick-start"><img src="docs/media/buttons/nav-quick-start.svg" alt="Quick start" height="36"></a>
+  <a href="https://fuobe.com"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-website-on-dark.svg"><img src="docs/media/buttons/nav-website.svg" alt="fuobe.com" height="36"></picture></a>
+  <a href="#documentation"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-docs-on-dark.svg"><img src="docs/media/buttons/nav-docs.svg" alt="Docs" height="36"></picture></a>
+  <a href="#quick-start"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-quick-start-on-dark.svg"><img src="docs/media/buttons/nav-quick-start.svg" alt="Quick start" height="36"></picture></a>
 </p>
 
 <br>
@@ -34,11 +34,11 @@
   <tr>
     <td align="center" width="50%">
       <a href="docs/media/fuobe-short.mp4"><img src="docs/media/short-poster.jpg" alt="Watch the 46-second Fuobe launch film" width="100%"></a><br>
-      <a href="docs/media/fuobe-short.mp4"><img src="docs/media/buttons/watch-launch-film.svg" alt="Watch the launch film, 46 s" height="48"></a>
+      <a href="docs/media/fuobe-short.mp4"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/watch-launch-film-on-dark.svg"><img src="docs/media/buttons/watch-launch-film.svg" alt="Watch the launch film, 46 s" height="48"></picture></a>
     </td>
     <td align="center" width="50%">
       <a href="docs/media/fuobe-demo.mp4"><img src="docs/media/demo-poster.jpg" alt="Watch the full Fuobe film" width="100%"></a><br>
-      <a href="docs/media/fuobe-demo.mp4"><img src="docs/media/buttons/watch-full-film.svg" alt="Watch the full film, 3 min" height="48"></a>
+      <a href="docs/media/fuobe-demo.mp4"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/watch-full-film-on-dark.svg"><img src="docs/media/buttons/watch-full-film.svg" alt="Watch the full film, 3 min" height="48"></picture></a>
     </td>
   </tr>
 </table>
@@ -50,25 +50,25 @@ Real covers from the galleries. Every clip and still below was rendered locally 
 <p align="center">
   <a href="https://fuobe.com/motions"><img src="docs/media/gifs/showcase-motions.gif" alt="Twelve Fuobe camera motions playing side by side: Dolly In, Catwalk, Glam, Crane Up, Slow Motion, Super Dolly In, Arc Left, Lazy Susan, Crane Over the Head, Snorricam, Aerial Pullback and Crash Zoom In" width="100%"></a><br>
   <b>108 camera motions.</b> Dollies, cranes, arcs, orbits, drones and crash zooms; mix any two in one clip.<br>
-  <a href="https://fuobe.com/motions"><img src="docs/media/buttons/browse-motions.svg" alt="Browse all 108 motions" height="40"></a>
+  <a href="https://fuobe.com/motions"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/browse-motions-on-dark.svg"><img src="docs/media/buttons/browse-motions.svg" alt="Browse all 108 motions" height="40"></picture></a>
 </p>
 
 <p align="center">
   <a href="https://fuobe.com/effects"><img src="docs/media/gifs/showcase-effects.gif" alt="Twelve Fuobe effects playing side by side: Sand Storm, Outfit Switch, Wind to Face, Levitation, Nature Bloom, Lens Flare, Dirty Lens, Train Rush, Display Transition, Pearl Earring, Blue Depth and Film Colors" width="100%"></a><br>
   <b>255 effects.</b> Weather, transitions, lens looks, film grades and transformations, on any photo or clip.<br>
-  <a href="https://fuobe.com/effects"><img src="docs/media/buttons/browse-effects.svg" alt="Browse all 255 effects" height="40"></a>
+  <a href="https://fuobe.com/effects"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/browse-effects-on-dark.svg"><img src="docs/media/buttons/browse-effects.svg" alt="Browse all 255 effects" height="40"></picture></a>
 </p>
 
 <p align="center">
   <a href="https://fuobe.com/apps"><img src="docs/media/gifs/showcase-apps.gif" alt="Twelve Fuobe apps showing their results: Outfit Swap, Head Swap, Restore Photo, Photo to 3D, Relight, Colorize, Tap to Recolor, Steam It, Upscale, Product Shot, Makeup Studio and Hairstyle Try-On" width="100%"></a><br>
   <b>132 apps.</b> One-click tools for fashion, portraits, products and ads: swap, restore, relight, recolor, upscale and more.<br>
-  <a href="https://fuobe.com/apps"><img src="docs/media/buttons/browse-apps.svg" alt="Browse all 132 apps" height="40"></a>
+  <a href="https://fuobe.com/apps"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/browse-apps-on-dark.svg"><img src="docs/media/buttons/browse-apps.svg" alt="Browse all 132 apps" height="40"></picture></a>
 </p>
 
 <p align="center">
   <a href="https://fuobe.com/live-edit"><img src="docs/media/gifs/showcase-live-edit.gif" alt="Live edit: a portrait changes step by step as a prompt is typed, from evening makeup to a candlelit ballroom" width="80%"></a><br>
   <b>Live edit.</b> The picture changes as you type, on your own GPU. Here, ten changes to one photo in one growing prompt.<br>
-  <a href="https://fuobe.com/live-edit"><img src="docs/media/buttons/try-live-edit.svg" alt="Try Live edit" height="40"></a>
+  <a href="https://fuobe.com/live-edit"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/try-live-edit-on-dark.svg"><img src="docs/media/buttons/try-live-edit.svg" alt="Try Live edit" height="40"></picture></a>
 </p>
 
 ### New this week
