@@ -55,6 +55,7 @@ export const COPY = {
   details: [
     "What was hidden under a mark is re-imagined from what's around it, so it may not match the original exactly.",
     "Everything outside the marks stays pixel for pixel the same.",
+    "A mark repeated all over a photo may not all be found at once. Brush over any that are left.",
     "Use it on pictures you own or have the rights to.",
     "Runs on your own GPU.",
   ],
@@ -245,8 +246,8 @@ function scanItems(doc: Record<string, unknown>, src: number, dx: number, dy: nu
 
 /**
  * One report from the whole-photo scan and its four tiles' scans (in scanTiles order): the tiles' marks moved to the
- * photo's pixels, a whole-photo box that holds two or more of the tiles' marks (or covers most of the photo while the
- * tiles found marks in it) dropped for them, and the boxes that overlap (one mark seen twice, or cut by a tile's edge)
+ * photo's pixels, a box from any look that holds two or more marks the other looks found apart (or fills half of what
+ * that look saw while another look found a mark in it) dropped for them, and the boxes that overlap (one mark seen twice, or cut by a tile's edge)
  * joined. Each sure mark gets the scan's margin again. The whole-photo report as it came when a tile can't be read; null
  * when the whole-photo report can't be read.
  */
