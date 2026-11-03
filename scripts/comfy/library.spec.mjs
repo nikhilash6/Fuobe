@@ -5303,6 +5303,36 @@ export const SPEC = [
       'Same weights, sampler presets and VRAM listing as image-to-splat-idol.',
   },
   {
+    // idol-8 (docs/research/idol-9.md §8, §9 idol-8): the other sides of an object from one picture, for From several images
+    // (TRELLIS.2 multi-view) and Elements. Needs the ComfyUI-Idol pack (IdolCamera); there is no core-node fallback.
+    id: 'image-to-views-idol',
+    title: 'Four views of one object from one picture (Idol splat, rendered from its predicted camera: front, left, back, right)',
+    capability: 'splat',
+    handBuilt: 'hand-built/image-to-views-idol.json',
+    packs: ['ComfyUI-Idol'],
+    bindings: {
+      image: [b('99', 'image')], cutout: [b('88:35', 'switch')], numGaussians: [b('88:55', 'num_gaussians')], steps: [b('88:6', 'steps')], cfg: [b('88:6', 'cfg')],
+      sampler: [b('88:6', 'sampler_name')], cropMode: [b('88:110', 'mode')], minOpacity: [b('88:111', 'min_opacity')], maxScale: [b('88:111', 'max_scale')],
+      seed: [b('88:6', 'seed'), b('88:55', 'seed')],
+    },
+    // One batch of four (meta.index 0-3 = front, left, back, right; the provider names each side).
+    outputs: [{ node: '96', kind: 'image', role: 'tiles' }],
+    defaults: { cutout: true, cropMode: 'synthetic', minOpacity: 0.05, maxScale: 0 },
+    limits: { maxGaussians: 1048576 },
+    vramGb: 8,
+    license:
+      'Apache-2.0 (speridlabs/idol weights; the ComfyUI files are nynxz/Idol\'s conversion, Apache-2.0); Idol is VAST-AI-Research\'s TripoSplat architecture (MIT, code and weights); ' +
+      'the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; ' +
+      'the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT; ComfyUI-Idol nodes Apache-2.0',
+    notes:
+      'Fill the other sides from one picture: image-to-splat-idol-clean up to the pruned splat (IdolPreprocessImage 88:110, the sampler 88:6, ' +
+      'the decoder 88:55, IdolPruneSplat 88:111 at minOpacity 0.05), then RenderSplat 88:120 from IdolCamera 88:112 (the camera Idol predicted for the input picture) ' +
+      'with frames 4: a full turn in four steps of 90°, starting at the input view, 1024 px on white, opacity_threshold 0.05. SaveImage 96 keeps the batch: ' +
+      'index 0 is the front (the input view), 1 the object\'s left, 2 its back, 3 its right. The sign of frames sets the direction: +4 turns the camera ' +
+      'about world +Y (three.js, Y up) toward the viewer\'s right, which is the object\'s left (checked with an asymmetric splat through RenderSplat on 0.41.0); -4 would give the right first. ' +
+      'No splat file and no orbit video are saved. The views are renders of a 3D guess: soft, and untested on realistic people. Same weights, presets and VRAM listing as image-to-splat-idol.',
+  },
+  {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).
     id: 'wan21-i2v-uni3c-path',
     title: 'Fly path: a still filmed along a camera path, Wan 2.1 I2V guided by Uni3C on a browser render of the path (core nodes)',
