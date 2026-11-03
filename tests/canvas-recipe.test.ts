@@ -116,12 +116,17 @@ describe("what isn't drawn", () => {
     expect(refused(withStep({ request: { ...base.request, inputs: { mask: "/api/files/m.png" } } }))).toMatch(/no port/);
   });
 
-  it("a settings input (a number or a choice)", () => {
-    const r = recipe({
+  it("a settings input (a number or a choice) that isn't a whole setting, or has no value to show", () => {
+    const inWords = recipe({
       params: [{ id: "takes", label: "Takes", type: "number", default: 1, min: 1, max: 4 }],
-      steps: [{ key: "a", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "a lamp", params: { numOutputs: "{{takes}}" as unknown as number } } }],
+      steps: [{ key: "a", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "a lamp, {{takes}} takes" } }],
     });
-    expect(refused(r)).toMatch(/no node for Takes/);
+    expect(refused(inWords)).toMatch(/no node for Takes/);
+    const blank = recipe({
+      params: [{ id: "shape", label: "Shape", type: "choice", options: ["1:1", "16:9"] }],
+      steps: [{ key: "a", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "a lamp", params: { aspectRatio: "{{shape}}" as unknown as string } } }],
+    });
+    expect(refused(blank)).toMatch(/Give Shape a default first/);
   });
 
   it("a studio step shows as one note, never nodes", () => {
@@ -227,5 +232,138 @@ describe("canvas → recipe", () => {
     const out = canvasToRecipe(g);
     expect(out.recipe).toBeNull();
     expect(out.problems[0]).toMatchObject({ nodeId: "m" });
+  });
+});
+
+describe("settings inputs ride on their nodes", () => {
+  /** What W2 makes when the takes and the shape vary: optional inputs with defaults, followed by the step's check. */
+  const posters = recipe({
+    params: [
+      { id: "subject", label: "Subject", type: "text", required: true, example: "a red fox" },
+      { id: "takes", label: "Takes", type: "number", default: 2, min: 1, max: 4, step: 1 },
+      { id: "shape", label: "Shape", type: "choice", default: "1:1", options: ["1:1", "16:9", "9:16"] },
+    ],
+    steps: [
+      {
+        key: "poster",
+        kind: "generate",
+        request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "{{subject}}, poster style", params: { numOutputs: "{{takes}}" as unknown as number, aspectRatio: "{{shape}}" as unknown as string } },
+      },
+    ],
+    checks: { poster: { kind: "image", count: "{{takes}}", aspect: "{{shape}}" } },
+  });
+  const node = (g: CanvasGraph) => g.nodes.find((n) => n.id === "step-poster")!;
+  const withParams = (g: CanvasGraph, patch: object, data: object = {}): CanvasGraph => ({
+    ...g,
+    nodes: g.nodes.map((n) => (n.id === "step-poster" ? { ...n, data: { ...n.data, ...data, params: { ...n.data.params, ...patch } } } : n)),
+  });
+
+  it("draws the values on the node and comes back as the same recipe", () => {
+    const g = drawn(posters);
+    expect(node(g).data.params).toMatchObject({ numOutputs: 2, aspectRatio: "1:1" });
+    const back = canvasToRecipe(g);
+    expect(back.problems).toEqual([]);
+    expect(recipeShape(back.recipe!)).toBe(recipeShape(posters));
+    expect(back.varies.sort()).toEqual(["shape", "subject", "takes"]);
+  });
+
+  it("follows a value changed on the board, and lets go of one the input doesn't take or a swapped model", () => {
+    const changed = canvasToRecipe(withParams(drawn(posters), { aspectRatio: "16:9" })).recipe!;
+    expect(changed.params.find((p) => p.id === "shape")).toMatchObject({ default: "16:9" });
+    expect((changed.steps[0] as { request: { params: object } }).request.params).toMatchObject({ aspectRatio: "{{shape}}" });
+    // 21:9 isn't one of the input's options: the setting stays as the board has it, and the check stops following it.
+    const out = canvasToRecipe(withParams(drawn(posters), { aspectRatio: "21:9" })).recipe!;
+    expect(out.params.map((p) => p.id)).toEqual(["subject", "takes"]);
+    expect((out.steps[0] as { request: { params: object } }).request.params).toMatchObject({ aspectRatio: "21:9", numOutputs: "{{takes}}" });
+    expect(out.checks).toEqual({ poster: { kind: "image", count: "{{takes}}" } });
+    expect(recipeProblems(out)).toEqual([]);
+    const swapped = canvasToRecipe(withParams(drawn(posters), {}, { modelId: "qwen-image-2512-cloud" })).recipe;
+    expect(swapped!.params.map((p) => p.id)).toEqual(["subject"]);
+  });
+
+  it("starts as Varies in the review and saves back as the skill had it; Fixed puts the value in the steps and checks", () => {
+    const back = canvasToRecipe(drawn(posters));
+    const draft = fixedDraft(back.recipe!, back.varies);
+    const takes = draft.candidates.find((c) => c.id === "takes")!;
+    expect(takes).toMatchObject({ kind: "setting", kept: true, varies: true, optional: true, example: 2 });
+    const start = buildRecipe(draft, { varies: Object.fromEntries(draft.candidates.filter((c) => c.varies).map((c) => [c.id, true])) });
+    expect(start.steps).toEqual(posters.steps);
+    expect(start.checks).toEqual(posters.checks);
+    expect([...start.params].sort((a, b) => a.id.localeCompare(b.id))).toEqual([...posters.params].sort((a, b) => a.id.localeCompare(b.id)));
+    const fixed = buildRecipe(draft, { varies: { subject: true, shape: true } });
+    expect((fixed.steps[0] as { request: { params: object } }).request.params).toEqual({ numOutputs: 2, aspectRatio: "{{shape}}" });
+    expect(fixed.checks).toEqual({ poster: { kind: "image", count: 2, aspect: "{{shape}}" } });
+    expect(recipeProblems(fixed)).toEqual([]);
+  });
+});
+
+describe("the way back keeps what the skill asks for", () => {
+  it("keeps words a skill asks for with no example as an input, and Fixed leaves them empty", () => {
+    const r = recipe({
+      params: [{ id: "subject", label: "Subject", type: "text", required: true }],
+      steps: [{ key: "a", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "A photo of {{subject}}" } }],
+    });
+    const back = canvasToRecipe(drawn(r));
+    const draft = fixedDraft(back.recipe!, back.varies);
+    expect(draft.candidates[0]).toMatchObject({ id: "subject", kept: true, varies: true });
+    expect(draft.candidates[0].locked).toBeUndefined();
+    const start = buildRecipe(draft, { varies: { subject: true } });
+    expect(start.params).toEqual(r.params);
+    expect(start.steps).toEqual(r.steps);
+    const fixed = buildRecipe(draft, { varies: {} });
+    expect(fixed.params).toEqual([]);
+    expect((fixed.steps[0] as { request: { prompt: string } }).request.prompt).toBe("A photo of ");
+  });
+
+  it("drops a step's check when its model is swapped for one that makes something else", () => {
+    const r = recipe({
+      params: [{ id: "subject", label: "Subject", type: "text", required: true, example: "a lamp" }],
+      steps: [{ key: "a", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "{{subject}}" } }],
+      checks: { a: { kind: "image", count: 1 } },
+    });
+    const g = drawn(r);
+    expect(canvasToRecipe(g).recipe!.checks).toEqual(r.checks);
+    const video: CanvasGraph = { ...g, nodes: g.nodes.map((n) => (n.type === "model" ? { ...n, data: { ...n.data, modelId: "kling-3", op: "t2v" as const, mediaKind: "video" as const } } : n)) };
+    const out = canvasToRecipe(video);
+    expect(out.problems).toEqual([]);
+    expect(out.recipe!.checks).toEqual({ a: { kind: "video" } });
+    // A skill whose step had no check gets none on the way back while its model stays.
+    const none = recipe({ ...r, checks: undefined });
+    expect(canvasToRecipe(drawn(none)).recipe!.checks).toBeUndefined();
+  });
+});
+
+describe("a Video concatenator", () => {
+  it("compiles to its cuts and join as a run of the board does, with its clips as inputs", () => {
+    const g: CanvasGraph = {
+      nodes: [
+        { id: "a", type: "video-input", position: { x: 0, y: 0 }, data: { url: "/api/files/uploads/a.mp4", label: "First clip" } },
+        { id: "b", type: "video-input", position: { x: 0, y: 200 }, data: { url: "/api/files/uploads/b.mp4", label: "Second clip" } },
+        { id: "f", type: "concat", position: { x: 400, y: 0 }, data: { label: "Film", modelId: "oss-join-encoded", params: { aspectRatio: "16:9" }, clips: { a: { start: 1, end: 3, mute: true } } } },
+      ],
+      edges: [
+        { id: "e1", source: "a", sourceHandle: "out", target: "f", targetHandle: "videos" },
+        { id: "e2", source: "b", sourceHandle: "out", target: "f", targetHandle: "videos" },
+      ],
+    };
+    const out = canvasToRecipe(g);
+    expect(out.problems).toEqual([]);
+    const r = out.recipe!;
+    expect(r.params.map((p) => [p.id, p.type])).toEqual([
+      ["first_clip", "video"],
+      ["second_clip", "video"],
+    ]);
+    expect(r.steps.length).toBeGreaterThan(1);
+    const steps = r.steps as Extract<Recipe["steps"][number], { kind: "generate" }>[];
+    // The join is the node's own step (its label and the skill's feature); every cut before it is a helper step.
+    const join = steps.find((s) => s.label === "Film")!;
+    expect(join.request).toMatchObject({ feature: "skill", modelId: "oss-join-encoded" });
+    expect(steps.filter((s) => s !== join).every((s) => s.request.feature === "canvas-step")).toBe(true);
+    expect(steps.indexOf(join)).toBe(steps.length - 1);
+    // Each clip reaches a cut through its input, and the first clip keeps its window.
+    expect(JSON.stringify(steps)).toContain("{{first_clip}}");
+    expect(JSON.stringify(steps)).toContain("{{second_clip}}");
+    expect(recipeProblems(r)).toEqual([]);
+    expect(RecipeSchema.safeParse(r).success).toBe(true);
   });
 });

@@ -72,6 +72,13 @@ export interface DraftCandidate {
   part?: boolean;
   /** It starts as Varies (an input of the skill a canvas was drawn from, a Table's column). */
   varies?: boolean;
+  /**
+   * Its `{{id}}` is still at each spot (W5: words a skill asks for that have no example yet). Varies keeps it there
+   * under its input id; Fixed puts in the empty words.
+   */
+  kept?: boolean;
+  /** A kept candidate's input as the skill had it (its id and label are the review's). */
+  param?: RecipeParam;
 }
 
 export type SettingId = "numOutputs" | "aspectRatio" | "duration" | "resolution";
@@ -344,6 +351,8 @@ export function buildRecipe(draft: Pick<SkillDraft, "recipe" | "candidates">, ch
   const byKey = new Map(recipe.steps.map((s) => [s.key, s]));
   const checks = recipe.checks ?? {};
   const varying = draft.candidates.filter((c) => choices.varies[c.id] && !c.locked);
+  // Inputs kept as `{{id}}` (W5) that end up Fixed: the value they had, in the steps and the checks.
+  for (const c of draft.candidates) if (c.kept && !varying.includes(c)) putKept(recipe, c, null);
   // Elements last: a prompt that varies as a whole has replaced its words by then, so an element named only there
   // finds no @handle and adds no input (the whole prompt's input carries it).
   const order = [...varying.filter((c) => c.kind !== "element"), ...varying.filter((c) => c.kind === "element")];
@@ -351,6 +360,13 @@ export function buildRecipe(draft: Pick<SkillDraft, "recipe" | "candidates">, ch
   for (const c of order) {
     const id = idOf(c, choices);
     const label = (choices.labels?.[c.id]?.trim() || c.label).slice(0, 60);
+    if (c.kept && c.param) {
+      // As the skill had it, under the id and label the review gives it.
+      if (!putKept(recipe, c, id)) continue;
+      const required = choices.required?.[c.id];
+      placed.push({ ...c.param, id, label, ...(required !== undefined && { required }) });
+      continue;
+    }
     let used = 0;
     for (const spot of c.at) {
       const step = byKey.get(spot.step);
@@ -420,6 +436,30 @@ export function buildRecipe(draft: Pick<SkillDraft, "recipe" | "candidates">, ch
 // ---------------------------------------------------------------------------
 // A recipe made elsewhere (a canvas, W5) as a draft
 
+/**
+ * A kept candidate's `{{id}}` at each of its spots and in the checks: under `to` (it varies), or its value (Fixed; a
+ * number stays a number where it's the whole value). How many spots it changed.
+ */
+function putKept(recipe: Recipe, c: DraftCandidate, to: string | null): number {
+  const re = new RegExp(`\\{\\{\\s*${c.id}\\s*\\}\\}`, "g");
+  const swap = (v: string): unknown => (to !== null ? v.replace(re, `{{${to}}}`) : v.replace(re, "").trim() === "" && typeof c.example === "number" ? c.example : v.replace(re, String(c.example)));
+  let n = 0;
+  const byKey = new Map(recipe.steps.map((s) => [s.key, s]));
+  for (const spot of c.at) {
+    const step = byKey.get(spot.step);
+    if (!step) continue;
+    const body = bodyOf(step);
+    const cur = getAt(body, spot.path);
+    if (typeof cur !== "string" || !cur.match(re)) continue;
+    setAt(body, spot.path, swap(cur));
+    n++;
+  }
+  for (const check of Object.values(recipe.checks ?? {})) {
+    for (const [k, v] of Object.entries(check)) if (typeof v === "string" && v.match(re)) (check as Record<string, unknown>)[k] = swap(v);
+  }
+  return n;
+}
+
 /** Every spot of each placeholder in a value: its path, and whether the placeholder is the whole string there. */
 function spotsIn(v: unknown, path: (string | number)[], out: Map<string, { path: (string | number)[]; whole: boolean }[]>): void {
   if (typeof v === "string") {
@@ -451,7 +491,11 @@ export function fixedDraft(recipe: Recipe, varies: string[] = []): Pick<SkillDra
     const at = spots.get(p.id) ?? [];
     if (!at.length) continue;
     const value = p.example ?? p.default ?? "";
-    for (const spot of at) {
+    // An input of the skill the board was drawn from that a canvas holds no value for (words with no example yet, a
+    // setting): its `{{id}}` stays where it is, in the steps and the checks, and it starts as Varies as the skill had
+    // it, so saving back keeps the input instead of fixing it.
+    const kept = varies.includes(p.id) && ((p.type === "text" && !String(value).trim()) || p.type === "number" || p.type === "choice");
+    for (const spot of kept ? [] : at) {
       const body = bodyOf(byKey.get(spot.step)!);
       const cur = getAt(body, spot.path);
       if (typeof cur !== "string") continue;
@@ -460,7 +504,7 @@ export function fixedDraft(recipe: Recipe, varies: string[] = []): Pick<SkillDra
     const kind: CandidateKind = isMediaType(p.type) ? "media" : p.type === "element" ? "element" : p.type === "text" ? "text" : "setting";
     const part = kind === "text" && at.some((x) => !x.whole);
     const text = String(value);
-    const locked = kind === "text" && !text.trim() ? "Write its words on the canvas first" : kind === "text" && text.length > 2000 ? "Too long to change in a form (over 2000 characters)" : undefined;
+    const locked = kept ? undefined : kind === "text" && !text.trim() ? "Write its words on the canvas first" : kind === "text" && text.length > 2000 ? "Too long to change in a form (over 2000 characters)" : undefined;
     candidates.push({
       id: p.id,
       label: p.label,
@@ -468,9 +512,12 @@ export function fixedDraft(recipe: Recipe, varies: string[] = []): Pick<SkillDra
       kind,
       example: value,
       at: at.map(({ step, path }) => ({ step, path })),
-      ...(part && { part: true }),
+      ...(part && !kept && { part: true }),
+      ...(kept && { kept: true, param: p }),
+      ...(kind === "setting" && p.default !== undefined && { optional: true }),
       ...(p.max !== undefined && { max: p.max }),
       ...(p.min !== undefined && { min: p.min }),
+      ...(p.step !== undefined && { step: p.step }),
       ...(p.options && { options: p.options }),
       ...(locked && { locked }),
       ...(!locked && varies.includes(p.id) && { varies: true }),

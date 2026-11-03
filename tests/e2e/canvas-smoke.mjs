@@ -114,14 +114,18 @@ try {
       method: "PUT",
       body: JSON.stringify({
         fuobeRecipe: 1,
-        params: [{ id: "subject", label: "Subject", type: "text", required: true, example: "a red fox in snow" }],
-        steps: [{ key: "poster", kind: "generate", label: "Poster", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "{{subject}}, a bold travel poster", params: { aspectRatio: "3:4" } } }],
+        params: [
+          { id: "subject", label: "Subject", type: "text", required: true, example: "a red fox in snow" },
+          { id: "shape", label: "Shape", type: "choice", default: "3:4", options: ["3:4", "1:1", "16:9"] },
+        ],
+        steps: [{ key: "poster", kind: "generate", label: "Poster", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "{{subject}}, a bold travel poster", params: { aspectRatio: "{{shape}}" } } }],
       }),
     });
     check("the canvas skill is seeded", put.canvas?.ok === true, JSON.stringify(put.canvas ?? put.error));
     const noSideScroll = (pg) => pg.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
     const seen = (loc, timeout = 30_000) => loc.waitFor({ timeout }).then(() => true).catch(() => false);
     let flowDone = false;
+    const made = [];
     for (const [width, height] of [
       [1440, 900],
       [390, 844],
@@ -139,6 +143,7 @@ try {
         if (!flowDone && width === 1440) {
           await open.click();
           await pg.waitForURL(/\/canvas\/[^/?]+$/, { timeout: 30_000 });
+          made.push(new URL(pg.url()).pathname.split("/").pop());
           await pg.locator(".react-flow__node").first().waitFor({ timeout: 60_000 });
           check(`${tag}: the canvas has the skill's input and step`, (await pg.locator(".react-flow__node").count()) === 2);
           await pg.getByRole("button", { name: "More run options" }).click();
@@ -157,7 +162,8 @@ try {
           await dialog.getByRole("button", { name: "Save back" }).click();
           check(`${tag}: saved back, its Run form opens`, await seen(pg.getByText(/Saved back into/).first(), 60_000));
           const after = await api(`/api/assist/skills/${NAME}/recipe`);
-          check(`${tag}: the skill kept its input and is checked`, after.recipe?.params?.[0]?.id === "subject" && after.ready?.length > 0, JSON.stringify(after.recipe?.params));
+          const ids = (after.recipe?.params ?? []).map((p) => p.id).sort().join(",");
+          check(`${tag}: the skill kept its inputs (words and a setting) and is checked`, ids === "shape,subject" && after.ready?.length > 0, JSON.stringify(after.recipe?.params));
           flowDone = true;
         } else if (width < 500) {
           // On a phone: the review fills the screen without scrolling sideways.
@@ -172,6 +178,9 @@ try {
         await ctx.close();
       }
     }
+    // Leave nothing behind: the canvases Open as canvas made, and the skill.
+    for (const id of made) await fetch(`${app}/api/canvases/${id}`, { method: "DELETE" });
+    await fetch(`${app}/api/assist/skills/${NAME}`, { method: "DELETE" });
   }
 
   // 4. A big board stays responsive.

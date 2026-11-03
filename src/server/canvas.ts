@@ -210,6 +210,7 @@ const NodeData = z.object({
       modelId: z.string().max(120),
       extra: z.record(z.string(), z.unknown()).optional(),
       check: z.record(z.string(), z.unknown()).optional(),
+      settings: z.record(z.string().max(40), z.object({ param: z.record(z.string(), z.unknown()), at: z.number().int().min(0).max(100) })).optional(),
       from: z.string().max(64).optional(),
     })
     .refine((m) => JSON.stringify(m).length <= 20_000, "too much kept from its skill")

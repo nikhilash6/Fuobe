@@ -2577,6 +2577,11 @@ export interface SkillStepMark {
   /** Request fields the board doesn't hold (LoRAs, a preset, a negative prompt), and settings it has no field for. */
   extra?: Record<string, unknown>;
   check?: RecipeCheck;
+  /**
+   * Settings inputs (a number or a choice) by the setting they fill: the node shows the value, and the way back puts the
+   * input there again while the node keeps its model and a value the input takes. `at`: its place in the form.
+   */
+  settings?: Record<string, { param: RecipeParam; at: number }>;
   /** The skill it was drawn from (Save as skill offers to save it back). */
   from?: string;
 }
@@ -2643,18 +2648,32 @@ function ownWords(prompt: string, texts: Set<string>): { own: string; order: str
 /**
  * A recipe skill drawn as a board: each input an input node, each generate step a model node (on its model, op,
  * words and settings), each chain slot an edge into the port it fills. Only when every slot maps to a port (prompt,
- * images, endImage, video, videos, audio, voice ↔ voiceAudio): a recipe with a studio step, a settings input (a number
- * or a choice), `audio2`, `audios`, `model3d` or `mask`, or a chain slot with a stem, an index or a position isn't
- * drawn. The drawing is read back (canvasToRecipe) before it's offered: what wouldn't come back the same isn't drawn.
+ * images, endImage, video, videos, audio, voice ↔ voiceAudio): a recipe with a studio step, `audio2`, `audios`,
+ * `model3d` or `mask`, a chain slot with a stem, an index or a position, or a settings input (a number or a choice)
+ * that isn't a whole setting with a value isn't drawn. A settings input rides on the nodes it fills (data.skill.settings). The drawing is read back (canvasToRecipe) before it's offered: what wouldn't come back the same isn't drawn.
  */
 export function recipeToCanvas(recipe: Recipe, opts: { elements?: readonly ElementInfo[]; from?: string } = {}): RecipeDrawing {
   const refuse = (detail: string, studio?: string): RecipeDrawing => ({ ok: false, reason: CANT_DRAW, detail, ...(studio && { studio }) });
   const tool = recipe.steps.find((s): s is Extract<RecipeStep, { kind: "tool" }> => s.kind === "tool");
   if (tool) return refuse("It runs one studio step, which shows as a note: open it from Skills", tool.tool);
-  const settings = recipe.params.filter((p) => p.type === "number" || p.type === "choice");
-  if (settings.length) return refuse(`A canvas has no node for ${words(settings.map((p) => p.label))} yet`);
   const params = new Map(recipe.params.map((p) => [p.id, p]));
   const steps = recipe.steps as GenerateStep[];
+  // A settings input (a number or a choice) rides on the nodes whose settings it fills: each node shows its value and
+  // keeps the input for the way back. It must be a whole setting (params.<name>) with a value to show.
+  const isSetting = (p: RecipeParam | undefined) => p?.type === "number" || p?.type === "choice";
+  const settingAt = (r: GenerationRequest): Map<string, RecipeParam> => {
+    const out = new Map<string, RecipeParam>();
+    for (const [k, v] of Object.entries((r.params ?? {}) as Record<string, unknown>)) {
+      const ph = typeof v === "string" ? EXACT_PH.exec(v) : null;
+      if (ph && isSetting(params.get(ph[1]))) out.set(k, params.get(ph[1])!);
+    }
+    return out;
+  };
+  const placedSettings = new Set(steps.flatMap((s) => [...settingAt(s.request).values()].map((p) => p.id)));
+  const loose = recipe.params.filter((p) => isSetting(p) && !placedSettings.has(p.id));
+  if (loose.length) return refuse(`A canvas has no node for ${words(loose.map((p) => p.label))} yet`);
+  const blank = recipe.params.filter((p) => isSetting(p) && (p.example ?? p.default) == null);
+  if (blank.length) return refuse(`Give ${words(blank.map((p) => p.label))} a default first: a canvas draws a setting with its value`);
   const keys = new Set(steps.map((s) => s.key));
   for (const s of steps) {
     const r = s.request;
@@ -2675,6 +2694,10 @@ export function recipeToCanvas(recipe: Recipe, opts: { elements?: readonly Eleme
         if (found.some((f) => !f.exact || !params.has(f.id) || !["image", "video", "audio"].includes(params.get(f.id)!.type))) return refuse(`“${name}” takes a file input a canvas can't wire yet`);
       } else if (k === "prompt") {
         if (found.some((f) => !params.has(f.id) || !["text", "element"].includes(params.get(f.id)!.type))) return refuse(`“${name}” puts an input into its words that a canvas can't draw yet`);
+      } else if (k === "params") {
+        const whole = settingAt(r);
+        const rest = Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([pk]) => !whole.has(pk)));
+        if (placeholdersIn(rest).length) return refuse(`An input changes “${name}”'s settings, which a canvas can't draw yet`);
       } else return refuse(`An input changes “${name}”'s settings, which a canvas can't draw yet`);
     }
   }
@@ -2706,7 +2729,12 @@ export function recipeToCanvas(recipe: Recipe, opts: { elements?: readonly Eleme
     }
     const boardParams: GenParams = {};
     const extraParams: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries((r.params ?? {}) as Record<string, unknown>)) {
+    const stepSettings = settingAt(r);
+    const settingMarks: NonNullable<SkillStepMark["settings"]> = {};
+    for (const [k, raw] of Object.entries((r.params ?? {}) as Record<string, unknown>)) {
+      const setting = stepSettings.get(k);
+      const v = setting ? (setting.example ?? setting.default) : raw;
+      if (setting) settingMarks[k] = { param: setting, at: recipe.params.indexOf(setting) };
       const scalar = k === "extra" && v && typeof v === "object" && Object.values(v).every((x) => ["string", "number", "boolean"].includes(typeof x));
       if (BOARD_PARAMS.has(k) || scalar) (boardParams as Record<string, unknown>)[k] = v;
       else extraParams[k] = v;
@@ -2720,7 +2748,8 @@ export function recipeToCanvas(recipe: Recipe, opts: { elements?: readonly Eleme
       ...(r.feature !== "skill" && { feature: r.feature }),
       modelId: model.id,
       ...(Object.keys(extra).length && { extra }),
-      ...(recipe.checks?.[s.key] && { check: recipe.checks[s.key] }),
+      ...(recipe.checks?.[s.key] && { check: { ...recipe.checks[s.key] } }),
+      ...(Object.keys(settingMarks).length && { settings: settingMarks }),
       ...(opts.from && { from: opts.from }),
     };
     const id = `step-${s.key}`.slice(0, 80);
@@ -2839,6 +2868,12 @@ export interface CanvasRecipe {
   nodes: Record<string, string>;
 }
 
+/** A value a settings input takes: one of a choice's options, a number in its range. */
+function settingFits(p: RecipeParam, v: unknown): boolean {
+  if (p.type === "choice") return typeof v === "string" && (!p.options || p.options.includes(v));
+  return typeof v === "number" && Number.isFinite(v) && (p.min === undefined || v >= p.min) && (p.max === undefined || v <= p.max);
+}
+
 const nodeValue = (n: CanvasNode): string =>
   n.type === "prompt" ? (n.data.text ?? "") : n.type === "element" ? (n.data.handle ? `@${n.data.handle}` : "") : (n.data.url ?? "");
 const INPUT_TYPE: Partial<Record<CanvasNodeType, "text" | "image" | "video" | "audio" | "element">> = { prompt: "text", "image-input": "image", "video-input": "video", "audio-input": "audio", "clone-voice": "audio", element: "element" };
@@ -2946,6 +2981,7 @@ export function canvasToRecipe(graph: CanvasGraph, page: { canvas?: string } = {
   };
   const steps: GenerateStep[] = [];
   const checks: Record<string, RecipeCheck> = {};
+  const settingParams = new Map<string, { p: RecipeParam; at: number }>();
   const stepNodes: Record<string, string> = {};
   const fromSkills = new Set<string>();
   /** A chain slot's position only where it matters: before the step's own files in that list ("last" is the default). */
@@ -2976,6 +3012,18 @@ export function canvasToRecipe(graph: CanvasGraph, page: { canvas?: string } = {
       const { params, ...rest } = mark.extra as { params?: Record<string, unknown> };
       Object.assign(out, rest);
       if (params) out.params = { ...out.params, ...params } as GenParams;
+    }
+    // Settings inputs come back where the node still has the model and a value the input takes (else the value stays).
+    if (main && mark?.settings && mark.modelId === req.modelId) {
+      for (const [k, { param, at }] of Object.entries(mark.settings)) {
+        const v = (out.params as Record<string, unknown> | undefined)?.[k];
+        if (!settingFits(param, v) || taken.has(param.id)) continue;
+        const was = param.example ?? param.default;
+        const now = v as string | number;
+        const p: RecipeParam = now === was ? param : param.default !== undefined ? { ...param, default: now } : { ...param, example: now };
+        if (!settingParams.has(p.id)) settingParams.set(p.id, { p, at });
+        out.params = { ...out.params, [k]: `{{${p.id}}}` } as GenParams;
+      }
     }
     return out;
   };
@@ -3019,9 +3067,12 @@ export function canvasToRecipe(graph: CanvasGraph, page: { canvas?: string } = {
         });
       }
     }
-    if (mark?.check) checks[key] = mark.check;
-    else if (!mark) {
-      const kind = d.plan ? OPERATION_OUTPUT[d.plan.op] : undefined;
+    const kind = d.plan ? OPERATION_OUTPUT[d.plan.op] : undefined;
+    // A step's own check holds while its model does (like its extra fields): a model swapped on the board gets the
+    // kind-only check a board made from scratch gets, so an image check never stays on a step that now makes a video.
+    const same = !!mark && mark.modelId === d.request.modelId;
+    if (mark && same && mark.check && (!mark.check.kind || mark.check.kind === kind)) checks[key] = { ...mark.check };
+    else if (!same || mark?.check) {
       if (kind && kind !== "text" && !graph.edges.some((e) => e.source === n.id && isGenerator(nodes.get(e.target) ?? n) && e.target !== n.id)) checks[key] = { kind: kind as RecipeCheck["kind"] };
     }
   }
@@ -3032,7 +3083,7 @@ export function canvasToRecipe(graph: CanvasGraph, page: { canvas?: string } = {
   }
   // Inputs no step uses (a text joined nowhere, an element whose node isn't wired) are left out.
   const used = new Set(steps.flatMap((s) => placeholdersIn(s.request).map((p) => p.id)));
-  const params: RecipeParam[] = [];
+  const placed: { p: RecipeParam; at: number }[] = [];
   const varies: string[] = [];
   for (const n of inputs) {
     const id = idOf.get(n.id)!;
@@ -3041,13 +3092,29 @@ export function canvasToRecipe(graph: CanvasGraph, page: { canvas?: string } = {
     const value = nodeValue(n);
     const type = INPUT_TYPE[n.type]!;
     const label = nodeLabel(n).slice(0, 60);
+    const at = n.data.input?.at ?? Infinity;
     if (mark) {
       const was = mark.example ?? mark.default;
       const p: RecipeParam = { ...mark, id, label, type };
       if (value && value !== was) p.example = value.length > 2000 ? undefined : value;
-      params.push(p);
+      placed.push({ p, at });
       varies.push(id);
-    } else params.push({ id, label, type, required: true, ...(value && value.length <= 2000 && { example: value }) });
+    } else placed.push({ p: { id, label, type, required: true, ...(value && value.length <= 2000 && { example: value }) }, at });
+  }
+  for (const s of settingParams.values()) {
+    placed.push(s);
+    varies.push(s.p.id);
+  }
+  // The form's order as the skill had it (a stable sort: inputs made on the board stay after, as they were).
+  placed.sort((a, b) => (a.at === b.at ? 0 : a.at - b.at));
+  const params: RecipeParam[] = placed.map((x) => x.p);
+  // A check that follows a settings input that didn't come back (its value no longer fits) drops that part.
+  const known = new Set(params.map((p) => p.id));
+  for (const c of Object.values(checks)) {
+    for (const [k, v] of Object.entries(c)) {
+      const ph = typeof v === "string" ? EXACT_PH.exec(v) : null;
+      if (ph && !known.has(ph[1])) delete (c as Record<string, unknown>)[k];
+    }
   }
   for (const c of columns) {
     if (!used.has(c.id)) continue;

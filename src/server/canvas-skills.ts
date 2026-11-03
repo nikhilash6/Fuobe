@@ -99,7 +99,8 @@ export function draftFromCanvas(id: string, page?: string): { draft: SkillDraft 
     recipe: fixed,
     steps,
     candidates,
-    name: replaces?.name ?? freeName(title),
+    // A free name for a new skill: saving back into the skill it was drawn from (replaces) doesn't use it.
+    name: freeName(title),
     title,
     description: from?.description || cut(`${steps.length === 1 ? flow : `${steps.length} steps: ${flow}`}, with ${models.join(", ")}. Made on a canvas and run again with new inputs.`, 1000),
     whenToUse: from?.whenToUse || cut(`When you want the “${canvas.name}” canvas run again with new inputs, from a form, Assist or a schedule.`, 1000),

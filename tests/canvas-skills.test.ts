@@ -92,7 +92,7 @@ describe("Save as skill from a canvas", () => {
     const c = await (await canvasesRoute.POST(post("/api/canvases", { skill: "lamp-scene" }))).json();
     const { draft } = await draftOf(c.id);
     expect(draft!.replaces).toEqual({ name: "lamp-scene", title: "Lamp scene" });
-    expect(draft!.name).toBe("lamp-scene");
+    expect(draft!.name).toBe("lamp-scene-2");
     expect(draft!.recipe.params).toEqual([]);
     expect(draft!.candidates.map((x) => [x.id, x.kind, x.varies])).toEqual([
       ["product", "media", true],
@@ -168,5 +168,32 @@ describe("Save as skill from a canvas", () => {
     const c = await (await canvasesRoute.POST(post("/api/canvases", { skill: "lamp-scene" }))).json();
     const { draft } = await draftOf(c.id);
     expect(recipeShape(buildRecipe(draft!, startChoices(draft!)))).toBe(recipeShape({ ...r, checks: r.checks }));
+  });
+
+  it("saves back a skill's inputs a canvas holds no value for: words with no example, and settings", async () => {
+    skills.createSkill({ name: "fox-shots", title: "Fox shots", description: "Shots of anything.", body: "# Fox shots" });
+    recipes.saveRecipe("fox-shots", {
+      fuobeRecipe: 1,
+      params: [
+        { id: "subject", label: "Subject", type: "text", required: true },
+        { id: "takes", label: "Takes", type: "number", default: 1, min: 1, max: 4 },
+      ],
+      steps: [{ key: "a", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "A photo of {{subject}}", params: { numOutputs: "{{takes}}" as unknown as number } } }],
+      checks: { a: { kind: "image", count: "{{takes}}" } },
+    });
+    expect(recipes.recipeView("fox-shots").canvas).toEqual({ ok: true });
+    const c = await (await canvasesRoute.POST(post("/api/canvases", { skill: "fox-shots" }))).json();
+    const { draft } = await draftOf(c.id);
+    expect(draft!.candidates.map((x) => [x.id, x.varies ?? false, x.locked ?? null])).toEqual([
+      ["subject", true, null],
+      ["takes", true, null],
+    ]);
+    const recipe = buildRecipe(draft!, startChoices(draft!));
+    const saved = await saveRoute.POST(post("/api/assist/skills/draft/save", { name: "fox-shots", title: "Fox shots", description: "Shots of anything.", body: "# Fox shots", recipe, replace: true }));
+    expect(saved.status).toBe(201);
+    const now = recipes.getRecipe("fox-shots").recipe;
+    expect(now.params.map((p) => p.id).sort()).toEqual(["subject", "takes"]);
+    expect((now.steps[0] as { request: { prompt: string; params: object } }).request).toMatchObject({ prompt: "A photo of {{subject}}", params: { numOutputs: "{{takes}}" } });
+    expect(now.checks).toEqual({ a: { kind: "image", count: "{{takes}}" } });
   });
 });

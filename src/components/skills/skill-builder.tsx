@@ -309,14 +309,14 @@ function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: 
               )}
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                 <Field label="Title" id="sb-title">
-                  <Input id="sb-title" value={title} maxLength={SKILL_LIMITS.title} onChange={(e) => setTitle(e.target.value)} />
+                  <Input id="sb-title" value={title} maxLength={SKILL_LIMITS.title} onChange={(e) => setTitle(e.target.value)} disabled={replace} />
                 </Field>
                 <Field label="Name" id="sb-name" hint="Run it as /name in Assist">
                   <div className="flex items-center rounded-md border bg-background pl-2.5 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
                     <span className="text-[14px] text-muted-foreground">/</span>
                     <input
                       id="sb-name"
-                      value={name}
+                      value={replace && draft.replaces ? draft.replaces.name : name}
                       maxLength={SKILL_LIMITS.name}
                       onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
                       onBlur={() => setName((n) => slugify(n) || draft.name)}
@@ -328,10 +328,10 @@ function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: 
                 </Field>
               </div>
               <Field label="Description" id="sb-desc">
-                <Textarea id="sb-desc" rows={2} value={description} maxLength={SKILL_LIMITS.description} onChange={(e) => setDescription(e.target.value)} />
+                <Textarea id="sb-desc" rows={2} value={description} maxLength={SKILL_LIMITS.description} onChange={(e) => setDescription(e.target.value)} disabled={replace} />
               </Field>
               <Field label="When to use it" id="sb-when">
-                <Textarea id="sb-when" rows={2} value={whenToUse} maxLength={SKILL_LIMITS.whenToUse} onChange={(e) => setWhenToUse(e.target.value)} />
+                <Textarea id="sb-when" rows={2} value={whenToUse} maxLength={SKILL_LIMITS.whenToUse} onChange={(e) => setWhenToUse(e.target.value)} disabled={replace} />
               </Field>
               <Collapsible className="overflow-hidden rounded-xl border">
                 <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] font-medium hover:bg-accent">
@@ -660,6 +660,12 @@ function Words({ c, varies, slots, setSlots, takenIds }: { c: DraftCandidate; va
     setSlotLabel("");
     setTyping(false);
   };
+  if (varies && c.kept) {
+    return <p className="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-[12px] text-muted-foreground">These words are an input, asked for in the Run form.</p>;
+  }
+  if (c.kept) {
+    return <p className="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-[12px] text-muted-foreground">Fixed leaves these words empty in the skill.</p>;
+  }
   if (varies) {
     return <p className="mt-2 line-clamp-3 rounded-lg bg-muted/60 px-3 py-2 text-[12px] break-words text-muted-foreground">{c.part ? "These words are an input" : "The whole prompt is an input"}. Was: “{text}”</p>;
   }
