@@ -1,4 +1,5 @@
 import { CLOUD_MODELS, ORIGINAL_CLOUD } from "./cloud-models.generated";
+import { HI3D_CHAIN_PARAM } from "@/lib/av/hi3d";
 import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
@@ -22,6 +23,18 @@ import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, ty
  */
 
 const comfy = (op: Operation, workflow: string, note?: string): ModelRoute => ({ op, provider: "comfyui", endpoint: workflow, note });
+/**
+ * "Refine detail · Hi3D 1.0" on the open image-to-3D models (hi3d-refine): after the model is built, Hi3D refines its
+ * geometry from the same photo (src/server/chains.ts createRefinedModel). Off unless picked; the Canvas 3D node and
+ * the composer show it as a control, Image to 3D as a switch.
+ */
+const HI3D_REFINE_CONTROL = {
+  param: HI3D_CHAIN_PARAM,
+  label: "Refine detail · Hi3D 1.0",
+  values: ["off", 512, 1024, 1536],
+  default: "off",
+  labels: { off: "Off", 512: "Hi3D 512 (one pass)", 1024: "Hi3D 1024 (two passes)", 1536: "Hi3D 1536 (three passes)" },
+};
 
 /** Chatterbox Multilingual's language list (FL_ChatterboxMultilingualTTS). */
 const CHATTERBOX_LANGUAGES = [
@@ -1984,7 +1997,7 @@ const open: ModelDef[] = [
     tagline: "A textured 3D model (.glb) that stays true to your photo (camera-aware), plus a turntable video · 16 GB GPU",
     badges: ["new", "top"],
     routes: [comfy("image-to-3d", "image-to-3d-pixal3d", "MoGe-2 camera → Pixal3D; ~250k triangles; web GLB + turntable made after the job")],
-    options: { seed: true },
+    options: { seed: true, controls: [HI3D_REFINE_CONTROL] },
   }),
   o({
     id: "oss-trellis2",
@@ -1995,7 +2008,7 @@ const open: ModelDef[] = [
     tagline: "A textured 3D model (.glb) from one product photo, plus a turntable video; the fallback to Pixal3D · 16 GB GPU · MIT",
     badges: ["new"],
     routes: [comfy("image-to-3d", "image-to-3d-trellis2", "~250k triangles; web GLB + turntable made after the job")],
-    options: { seed: true },
+    options: { seed: true, controls: [HI3D_REFINE_CONTROL] },
   }),
   o({
     id: "oss-hunyuan3d-21",
@@ -2005,7 +2018,22 @@ const open: ModelDef[] = [
     kind: "model3d",
     tagline: "Untextured 3D shape from a photo · 10 GB GPU · licence excludes the EU, UK and South Korea",
     routes: [comfy("image-to-3d", "image-to-3d-hunyuan3d-21")],
-    options: { seed: true },
+    options: { seed: true, controls: [HI3D_REFINE_CONTROL] },
+  }),
+  // hi3d-refine (docs/research/hi3d-refine.json): Hi3D 1.0 refines a finished model's geometry from the photo it came from.
+  // Nobody hosts the open model, so it is open-engine only. Geometry only; its results carry "Powered by Hi3D 1.0".
+  o({
+    id: "oss-hi3d-refine",
+    name: "Hi3D 1.0",
+    vendor: "Hi3D (Sparc3D)",
+    family: "hi3d",
+    kind: "model3d",
+    tagline: "Refines a 3D model's geometry at 512, 1024 or 1536 from the photo it was made from; geometry only, no colour · Ampere GPU or newer, CUDA 12 · Powered by Hi3D 1.0",
+    badges: ["new"],
+    routes: [comfy("refine-3d", "mesh-refine-hi3d", "coarse GLB + photo → BiRefNet mask → Hi3D refine (25 steps a pass) → GLB, recentred at unit radius")],
+    options: { seed: true, minImages: 1, maxImages: 1, promptless: true },
+    engineNote: "Runs on your GPU only: no cloud service hosts the open Hi3D model.",
+    hidden: true,
   }),
   // Round 4 (r4/3d-plus): Image to 3D's other modes on the open engine.
   o({
@@ -2018,7 +2046,7 @@ const open: ModelDef[] = [
     badges: ["new"],
     // params.extra.views names each photo's side ("front", "left", "back", "right"); the front is needed.
     routes: [comfy("image-to-3d", "image-to-3d-trellis2-multiview", "Pixal3D multi-view on TRELLIS.2; the front, then any of left, back and right")],
-    options: { seed: true, minImages: 2, maxImages: 4 },
+    options: { seed: true, minImages: 2, maxImages: 4, controls: [HI3D_REFINE_CONTROL] },
   }),
   o({
     id: "oss-text-trellis2",

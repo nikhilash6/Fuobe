@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToday } from "@/hooks/use-today";
-import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
+import { estimateCost, imageLimit, inferOperation, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
 import type { Engine, GenerationRequest, GenParams, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
 import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } from "@/lib/lyrics";
 import { dualEngine } from "@/lib/catalog/engines";
@@ -20,10 +20,12 @@ import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
+import { putsBedBack, voiceFirstApplies, voiceFirstCost, voiceFirstDefault, voiceSource } from "@/lib/av/voice-first";
+import { VoiceFirstSwitch } from "@/components/studio/voice-first-switch";
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
-import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useStatus } from "@/lib/api";
+import { CONNECT_GPU_EVENT, enhance, ownGpuOf, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
@@ -117,7 +119,7 @@ import { SketchTools } from "./sketch-tools";
 import { RECENT_MODELS, useStoredList } from "./stored-list";
 import { usePresetUrl, useStartRequest, useStudio, type Draft } from "./studio-context";
 import { useEdgeFade } from "./use-edge-fade";
-import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning } from "@/components/audio-tools/clean-voice-switch";
+import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning, type CleanedSlot } from "@/components/audio-tools/clean-voice-switch";
 import { useSignature } from "../palettes/use-signature";
 import { placeholdersOn } from "@/lib/demo-mode";
 
@@ -656,6 +658,19 @@ export function Composer({ docked }: { docked: boolean }) {
     return { mentions, sketched, signed, request: m ? stripMotionPaths(sketched.request, m) : sketched.request };
   };
   const { mentions, sketched, signed } = prepare(draft);
+  // "Clean the voice first" (Transcribe, Lipsync): on by default for a video's soundtrack, off for an audio upload; a pick holds
+  // while the same speech file stays attached. The speech's header times or prices the step.
+  const vfOp = studioOp ?? (model ? inferOperation(model, signed.request) : undefined);
+  const vfSource = config.voiceFirst ? voiceSource(signed.request, vfOp) : null;
+  const vfApplies = !!config.voiceFirst && voiceFirstApplies(signed.request, vfOp) && !draft.slots.audio?.uploading && !draft.slots.video?.uploading;
+  const [vfPick, setVfPick] = useState<{ ref: string; on: boolean } | null>(null);
+  // A voice "Clean up voice" already cleaned as it was added starts off and says so: it isn't cleaned twice unless asked.
+  const vfCleaned = !!vfSource && !!(draft.slots[vfSource.slot] as CleanedSlot | undefined)?.original;
+  const voiceFirstOn = vfApplies && (vfPick && vfPick.ref === vfSource?.url ? vfPick.on : !vfCleaned && voiceFirstDefault(signed.request, vfOp));
+  const vfFacts = useClipFacts(vfApplies ? vfSource?.url : undefined).data;
+  const vfClip = useClipFacts(vfApplies && vfOp === "lipsync" ? signed.request.inputs?.video : undefined).data;
+  const vfEngine = model?.engine ?? engine;
+  const vfBed = vfApplies && !!vfOp && putsBedBack(signed.request, vfOp, vfEngine, vfClip?.hasAudio);
   // Hosted runs: an open model may run on this studio's GPUs. Its price there is the server's (the words of the
   // studio's billing service, or free), asked again 300 ms after a change. With the account's own GPU online, that
   // GPU is the default; the person can pick either.
@@ -720,6 +735,8 @@ export function Composer({ docked }: { docked: boolean }) {
       if (cost !== null) cost += prestepCost(preset, plan.model.id, engine);
       // PixeletedFace pixelates each picture's faces afterwards ($0.01 a picture in the cloud, free on the GPU).
       if (cost !== null) cost += postStepCost(plan.model.id, planned.presetId, engine, planned.params?.numOutputs ?? 1, catalog.getModel, today);
+      // "Clean the voice first": ElevenLabs Voice Isolation in the cloud (per minute of speech), free on your GPU.
+      if (cost !== null && voiceFirstOn) cost += voiceFirstCost(plan.model.engine, vfFacts?.duration, catalog.getModel);
     } catch (e) {
       planError = (e as Error).message;
     }
@@ -830,7 +847,7 @@ export function Composer({ docked }: { docked: boolean }) {
     );
     // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
     const hosted = viewerInfo?.hosted ? { place: runOn, ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
-    const body = { ...sent.request, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
+    const body = { ...sent.request, ...hosted, ...(skipGpu && { gpuCheck: "skip" }), ...(voiceFirstOn && { voiceFirst: true }) } as typeof sent.request;
     create.mutate(body, {
       // Accepted: nothing to try again (a card opened later never starts this run a second time).
       onSuccess: () => dropGpuRetry(),
@@ -1383,6 +1400,20 @@ export function Composer({ docked }: { docked: boolean }) {
       )}
       {/* On a phone the slot row scrolls sideways, so the switch gets its own line under it. */}
       {showAttachments && !collapsed && !framesOn && hasCleanVoice && <CleanVoiceSwitch status className="px-3 pb-2 sm:hidden" hint="first, free on your GPU" />}
+      {showAttachments && !collapsed && vfApplies && vfSource && (
+        <VoiceFirstSwitch
+          className="px-3 pb-2"
+          engine={vfEngine}
+          on={voiceFirstOn}
+          onChange={(on) => setVfPick({ ref: vfSource.url, on })}
+          seconds={vfFacts?.duration}
+          device={ownGpuOf(status)?.device}
+          bed={vfBed}
+          clip={vfOp === "lipsync" && !!signed.request.inputs?.video && vfClip?.hasAudio !== false}
+          cleaned={vfCleaned}
+          getModel={catalog.getModel}
+        />
+      )}
 
       {showPrompt && (
         <PromptInput

@@ -87,7 +87,8 @@ const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/
 const workflowById = new Map(manifest.workflows.map((w) => [w.id, w]));
 /** Settings the ComfyUI provider consumes itself instead of writing them into a binding. */
 // promptHelper: FLUX 3 Image Klein's Prompt helper, which the provider reads to take the helper's branch out (skipPromptHelper).
-const PROVIDER_PARAMS = new Set(["wordsPerCaption", "paletteWeights", "cues", "promptHelper"]);
+// hi3dRefine: read by the server (Refine detail · Hi3D 1.0 adds the refine step after the model, src/server/chains.ts), not the graph.
+const PROVIDER_PARAMS = new Set(["wordsPerCaption", "paletteWeights", "cues", "promptHelper", "hi3dRefine"]);
 
 describe("round-3 open models", () => {
   it.each(Object.entries(ROUND3_MODELS))("%s routes to its validated workflow", (id, want) => {

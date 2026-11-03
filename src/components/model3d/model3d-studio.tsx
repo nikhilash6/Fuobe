@@ -45,6 +45,8 @@ import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useRunPreview } from "./hooks";
 import { ModelCard } from "./model-card";
+import { RefineOption } from "./refine-option";
+import { HI3D_MODEL, withRefine, type Hi3dResolution } from "@/lib/av/hi3d";
 
 /**
  * A model's name, the notices its results carry ("Built with DINOv3") and, for open models, the licence the
@@ -220,6 +222,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const [object, setObject] = useState("");
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [rigHint, setRigHint] = useState(false);
+  // Refine detail · Hi3D 1.0 (open engine, From an image and From several images): the resolution, or off.
+  const [refine, setRefine] = useState<Hi3dResolution | null>(null);
   const showRigHint = useCallback(() => setRigHint(true), []);
   const fromUrl = useCallback(
     (m: Model3dMode, e: Engine, id: string) => {
@@ -258,11 +262,17 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const free = !!preview.data && !preview.data.demo && (preview.data.engine === "open" || preview.data.costUsd === 0);
   const price = visitor && free ? "Not available here" : priceLine(preview.data);
   const cloudAllowed = engineMode !== "open";
+  // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on.
+  const refineAllowed = !visitor && engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
+  const refining = refineAllowed && engine === "open" && (mode === "image" || mode === "multi") && refine !== null ? refine : null;
   const go = () => {
     if (visitor) return;
     if (blocker) return void toast(blocker, { id: "3d-blocker" });
-    create.mutate(model3dRequest(input), {
-      onSuccess: () => toast.success(mode === "splat" ? "Making your splat" : mode === "text" && engine === "open" ? "Drawing the object, then building it in 3D" : "Building your 3D model"),
+    create.mutate(withRefine(model3dRequest(input), engine, refining), {
+      onSuccess: () =>
+        toast.success(
+          mode === "splat" ? "Making your splat" : mode === "text" && engine === "open" ? "Drawing the object, then building it in 3D" : refining ? "Building your 3D model, then refining its detail" : "Building your 3D model",
+        ),
       onError: (e) => toastError(e),
     });
   };
@@ -402,6 +412,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {!licence && info[modelId]?.notices.length > 0 && <p className="text-[12px] font-medium">{info[modelId].notices.join(" · ")}</p>}
                 {licence && licence.notices.length > 0 && <p className="text-[12px] text-muted-foreground">{licence.notices.join(" · ")}</p>}
               </div>
+              {!idol && (mode === "image" || mode === "multi") && <RefineOption engine={engine} value={refine} onChange={setRefine} openAllowed={refineAllowed} onUseGpu={() => setEngine("open")} />}
               {idol && <IdolSettings quality={idolQuality} onQuality={setIdolQuality} photo={idolPhoto} onPhoto={setIdolPhoto} />}
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
@@ -440,7 +451,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((g) => (
-              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} />
+              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />
             ))}
           </div>
         )}
@@ -458,12 +469,12 @@ function retryOf(g: Generation): GenerationRequest {
   return r;
 }
 
-function ResultCard({ g, info, cloudAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean }) {
+function ResultCard({ g, info, cloudAllowed, refineAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed: boolean }) {
   const create = useCreateGeneration();
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
   if (g.kind === "video") return <FilmCard g={g} />;
-  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} />;
+  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />;
 }
 
 /** A photoreal orbit filmed from a model ("Film it photoreal"): the clip, to watch and download. */

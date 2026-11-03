@@ -122,7 +122,8 @@ export function planPreview(clip: SwapClip): PlanStep[] | null {
 // ---------------------------------------------------------------------------
 // Transcript
 
-export function planTranscribe(clip: SwapClip, engine: Engine): PlanStep[] {
+/** The clip's words; with `voiceFirst`, read from the speech alone ("Clean the voice first", src/lib/av/voice-first.ts). */
+export function planTranscribe(clip: SwapClip, engine: Engine, voiceFirst = false): PlanStep[] {
   const s = clip.source.duration;
   return [
     {
@@ -134,6 +135,7 @@ export function planTranscribe(clip: SwapClip, engine: Engine): PlanStep[] {
         op: "transcribe",
         inputs: { video: workingClip(clip, engine) },
         params: { duration: s, sourceDuration: s },
+        ...(voiceFirst && { voiceFirst: true }),
         step: { label: "The clip's words", index: 0, of: 1 },
       },
     },

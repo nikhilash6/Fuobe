@@ -79,6 +79,7 @@ export type Operation =
   | "splat" // image → a Gaussian splat of the subject (meta.format "ply" | "spz")
   | "text-to-3d" // prompt → 3D model
   | "rig-3d" // 3D model (+ params.animation) → rigged / animated model
+  | "refine-3d" // 3D model + the photo it was made from (+ params.extra.meshResolution) → the same model with finer geometry (Hi3D)
   | "extract-frames" // video → an image every params.frameInterval frames (meta.index)
   | "images-to-video" // images in order → a video at params.fps
   | "overlay" // image + a second image (logo) → composited (params.position, params.scale)
@@ -163,6 +164,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   splat: "Gaussian splat",
   "text-to-3d": "Text to 3D",
   "rig-3d": "Rig 3D model",
+  "refine-3d": "Refine 3D model",
   "extract-frames": "Extract frames",
   "images-to-video": "Images to video",
   overlay: "Overlay image",
@@ -242,6 +244,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   splat: "model3d",
   "text-to-3d": "model3d",
   "rig-3d": "model3d",
+  "refine-3d": "model3d",
   "extract-frames": "image",
   "images-to-video": "video",
   overlay: "image",
@@ -1108,7 +1111,7 @@ export interface GenerationRequest {
     videos?: string[];
     /** Reference audio clips (reference-to-video: voices, music or sound the clip should follow). */
     audios?: string[];
-    /** A 3D model file (.glb) to work on (rig-3d). */
+    /** A 3D model file (.glb) to work on (rig-3d, refine-3d). */
     model3d?: string;
   };
   params?: GenParams;
@@ -1190,6 +1193,12 @@ export interface GenerationRequest {
    * steps, src/server/turnaround.ts; a character trained with it carries its training's time). Stripped from API input.
    */
   consentAt?: number;
+  /**
+   * "Clean the voice first" (src/lib/av/voice-first.ts): a transcript or a lip sync runs on the speech taken out from
+   * under the music and effects (DBS on your GPU, ElevenLabs Voice Isolation in the cloud), and a lip re-sync on your GPU
+   * gets the clip's music and effects back after it. The server expands it into steps (src/server/voice-first.ts).
+   */
+  voiceFirst?: boolean;
 }
 
 export interface ChainSlot {
