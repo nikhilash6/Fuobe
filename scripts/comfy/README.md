@@ -166,6 +166,7 @@ node validate-workflows.mjs <ids> wan21-vace-14b-ref2v --shared
 | `scene-mesh-moge` | scene-3d | whole-scene textured GLB + depth PNG (MoGe 2) | research only (42 s on CPU) |
 | `image-to-splat-triposplat` | splat | subject Gaussian splat (`.spz`) + orbit MP4 (TripoSplat) | no |
 | `image-to-splat-idol` | splat | one object as a Gaussian splat (`.spz`) + orbit MP4 (Idol 3D on the TripoSplat core nodes; Best / Quick look, looser photo crop) | no |
+| `image-to-mesh-idol` | image-to-3d | one object as a rough vertex-coloured GLB (Idol 3D's splat → core Extract Mesh from Splat, 384 grid, no textures) + orbit MP4 | no |
 | `reference-brief-gemma4` | write | reference clip's frames + sound → JSON style brief (Gemma 4 E4B) | no |
 
 - **Changes from the research graphs** (each also in the entry's notes): the painted / insert masks are read from the
