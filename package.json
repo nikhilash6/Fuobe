@@ -28,7 +28,8 @@
     "eval:validate": "node scripts/eval/eval.mjs validate",
     "eval:setup": "node scripts/eval/eval.mjs setup",
     "eval:trash": "node scripts/eval/eval.mjs trash",
-    "eval:covers": "node scripts/eval/eval.mjs covers"
+    "eval:covers": "node scripts/eval/eval.mjs covers",
+    "eval:from-skill": "node scripts/eval/eval.mjs from-skill"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

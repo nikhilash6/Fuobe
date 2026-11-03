@@ -1163,7 +1163,7 @@ export const COMMANDS = {
   },
   eval: {
     summary: "Measure Fuobe Originals: run a suite, score, review blind, compare runs",
-    usage: "fuobe eval <run|report|review|compare|promote|covers|history|validate|setup|trash> [options]   (from a Fuobe checkout)",
+    usage: "fuobe eval <run|report|review|compare|promote|covers|history|validate|setup|trash|from-skill> [options]   (from a Fuobe checkout)",
     examples: ["fuobe eval run --suite selftest --engine demo", "fuobe eval run --suite soul --engine open --looks v1-general --variants recipe,prompt-only", "fuobe eval compare latest~1 latest --fail-on clip --threshold 1"],
     passthrough: true,
     run: evalHarness,
