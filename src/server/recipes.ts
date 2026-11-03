@@ -991,23 +991,29 @@ interface SweepRow {
   created_at: number;
   depends_on: string | null;
   request_json: string;
+  outputs_json: string;
 }
+
+/** Inputs that take a list of files, and those that take one: a result handed on by hand fills them (W2's linkByFile). */
+const LIST_INPUTS = ["images", "videos", "audios"] as const;
+const ONE_INPUTS = ["endImage", "video", "audio", "audio2", "voiceAudio"] as const;
 
 /**
  * Group the owner's chains of the last SUGGEST_RULE.days days by shape (shapeOf) and keep the shapes made
  * SUGGEST_RULE.runs times or more. Only the owner's own runs count (an account's stay out of the owner's lists), and
- * never a skill's own runs, a helper row or a canceled one. A chain is the rows linked by depends_on.
+ * never a skill's own runs, a helper row or a canceled one. A chain is the rows linked by depends_on, or by a result
+ * handed on by hand (its file is another step's input, as the skill builder links them).
  */
 export function sweepSuggestions(now = Date.now()): SkillSuggestion[] {
   const rows = db()
     .prepare(
-      `SELECT g.id, g.feature, g.provider, g.created_at, g.depends_on, g.request_json FROM generations g
+      `SELECT g.id, g.feature, g.provider, g.created_at, g.depends_on, g.request_json, g.outputs_json FROM generations g
        LEFT JOIN generation_trash t ON t.generation_id = g.id
-       WHERE t.deleted_at IS NULL AND g.created_at >= ? AND g.status != 'canceled'
+       WHERE t.deleted_at IS NULL AND g.created_at >= ? AND g.created_at <= ? AND g.status != 'canceled'
          AND json_extract(g.request_json, '$.account') IS NULL AND json_extract(g.request_json, '$.skill') IS NULL
        ORDER BY g.created_at DESC LIMIT ${SWEEP_ROWS}`,
     )
-    .all(now - SUGGEST_RULE.days * DAY_MS) as SweepRow[];
+    .all(now - SUGGEST_RULE.days * DAY_MS, now) as SweepRow[];
   const byId = new Map(rows.map((r) => [r.id, r]));
   // Chains: rows joined by depends_on (union-find over the window).
   const parent = new Map(rows.map((r) => [r.id, r.id]));
@@ -1017,6 +1023,15 @@ export function sweepSuggestions(now = Date.now()): SkillSuggestion[] {
     parent.set(id, p);
     return p;
   };
+  // Who made each file: a result handed on by hand (Edit, Animate, Use as input) links two steps as a chain slot does.
+  const madeBy = new Map<string, SweepRow>();
+  for (const r of [...rows].reverse()) {
+    try {
+      for (const o of JSON.parse(r.outputs_json) as { url?: string }[]) if (o.url && !madeBy.has(o.url)) madeBy.set(o.url, r);
+    } catch {
+      // A row without readable outputs feeds nothing.
+    }
+  }
   const nodes = new Map<string, ShapeNode>();
   for (const r of rows) {
     let req: GenerationRequest;
@@ -1026,8 +1041,18 @@ export function sweepSuggestions(now = Date.now()): SkillSuggestion[] {
       continue;
     }
     const after = depList(r.depends_on).filter((d) => byId.has(d));
+    const slots = after.map((_, i) => req.chain?.[i]?.slot ?? "images");
+    const inputs = (req.inputs ?? {}) as Record<string, unknown>;
+    const link = (url: unknown, slot: string) => {
+      const src = typeof url === "string" ? madeBy.get(url) : undefined;
+      if (!src || src.id === r.id || src.created_at > r.created_at || after.includes(src.id)) return;
+      after.push(src.id);
+      slots.push(slot);
+    };
+    for (const k of LIST_INPUTS) if (Array.isArray(inputs[k])) for (const url of inputs[k] as unknown[]) link(url, k);
+    for (const k of ONE_INPUTS) link(inputs[k], k);
     for (const d of after) parent.set(find(r.id), find(d));
-    nodes.set(r.id, { id: r.id, modelId: currentModelId(req.modelId), op: req.op, feature: req.feature ?? r.feature, after, slots: after.map((_, i) => req.chain?.[i]?.slot ?? "images") });
+    nodes.set(r.id, { id: r.id, modelId: currentModelId(req.modelId), op: req.op, feature: req.feature ?? r.feature, after, slots });
   }
   const chains = new Map<string, ShapeNode[]>();
   for (const n of nodes.values()) {

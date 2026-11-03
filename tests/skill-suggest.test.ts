@@ -40,15 +40,15 @@ const DAY = 86_400_000;
 let n = 0;
 
 /** One stored row, as the runner leaves a finished generation. */
-function row(o: { request: Record<string, unknown>; after?: string[]; at: number; provider?: string; feature?: string; status?: string; batch?: string }): string {
+function row(o: { request: Record<string, unknown>; after?: string[]; at: number; provider?: string; feature?: string; status?: string; batch?: string; outputs?: string[] }): string {
   const id = `g${++n}`.padEnd(12, "x");
   const req: Record<string, unknown> = { feature: o.feature ?? "image", ...o.request };
   db()
     .prepare(
       `INSERT INTO generations (id, batch_id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at, depends_on)
-       VALUES (?, ?, ?, ?, 'cloud', ?, ?, 'image', ?, ?, '[]', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, 'cloud', ?, ?, 'image', ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, o.batch ?? null, req.feature, String(req.modelId), o.provider ?? "fal", String(req.op ?? "t2i"), o.status ?? "succeeded", JSON.stringify(req), o.at, o.at, o.after?.length ? (o.after.length === 1 ? o.after[0] : JSON.stringify(o.after)) : null);
+    .run(id, o.batch ?? null, req.feature, String(req.modelId), o.provider ?? "fal", String(req.op ?? "t2i"), o.status ?? "succeeded", JSON.stringify(req), JSON.stringify((o.outputs ?? []).map((url) => ({ url, kind: "image" }))), o.at, o.at, o.after?.length ? (o.after.length === 1 ? o.after[0] : JSON.stringify(o.after)) : null);
   return id;
 }
 
@@ -141,6 +141,26 @@ describe("the Library's sweep", () => {
     }
     const demo = recipes.sweepSuggestions(later).find((s) => s.labels.length === 2);
     expect(demo).toMatchObject({ count: 3, demo: true });
+  });
+
+  it("counts a chain made by hand (a result handed on as the next step's input) as the same chain", () => {
+    const at = Date.UTC(2026, 9, 1, 12);
+    const linked = (t: number, i: number) => {
+      const a = row({ at: t, outputs: [`/api/files/outputs/cut-${i}.png`], request: { modelId: "birefnet-cloud", op: "bg-remove", inputs: { images: [`/api/files/uploads/p${i}.png`] } } });
+      const b = row({ at: t + 1, after: [a], request: { modelId: "seedream-5-pro", op: "edit", prompt: `scene ${i}`, chain: [{ slot: "images", position: "first" }] } });
+      return [a, b];
+    };
+    const byHand = (t: number, i: number) => {
+      const a = row({ at: t, outputs: [`/api/files/outputs/hand-${i}.png`], request: { modelId: "birefnet-cloud", op: "bg-remove", inputs: { images: [`/api/files/uploads/h${i}.png`] } } });
+      // An upload stays an input; the cut-out handed on links the two.
+      const b = row({ at: t + 1, request: { modelId: "seedream-5-pro", op: "edit", prompt: `by hand ${i}`, inputs: { images: [`/api/files/outputs/hand-${i}.png`, "/api/files/uploads/backdrop.png"] } } });
+      return [a, b];
+    };
+    linked(at - 3 * DAY, 1);
+    byHand(at - 2 * DAY, 2);
+    const newest = byHand(at - DAY, 3);
+    const found = recipes.sweepSuggestions(at).find((s) => s.labels.join() === "Background removal,Image edit");
+    expect(found).toMatchObject({ count: 3, ids: newest });
   });
 
   it("runs once a day, and leaves out what was dismissed or put off", async () => {
