@@ -2621,6 +2621,8 @@ const FILE_PORT: Record<string, InputPortId> = { images: "images", endImage: "en
 const CHAIN_PORT: Partial<Record<ChainSlot["slot"], InputPortId>> = { prompt: "prompt", ...(FILE_PORT as Partial<Record<ChainSlot["slot"], InputPortId>>) };
 const EXACT_PH = /^\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}$/;
 const ANY_PH = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
+/** A step reference ({{steps.<key>.output}}, recipe version 2). */
+const STEP_REF_PH = /\{\{\s*steps\./;
 const INPUT_NODE = { image: "image-input", video: "video-input", audio: "audio-input", text: "prompt", element: "element" } as const satisfies Record<string, CanvasNodeType>;
 const SENTINEL_EXT = { image: "png", video: "mp4", audio: "wav" } as const;
 const SENTINEL = /^\/api\/files\/recipe-input\/([A-Za-z][A-Za-z0-9_]*)\.(png|mp4|wav)$/;
@@ -2673,6 +2675,9 @@ export function recipeToCanvas(recipe: Recipe, opts: { elements?: readonly Eleme
   if (tool) return refuse("It runs one studio step, which shows as a note: open it from Skills", tool.tool);
   const params = new Map(recipe.params.map((p) => [p.id, p]));
   const steps = recipe.steps as GenerateStep[];
+  // A step that takes an earlier step's output by reference (recipe version 2) runs in parts: a canvas has no wire for it.
+  const byRef = steps.find((s) => STEP_REF_PH.test(JSON.stringify(s.request)));
+  if (byRef) return refuse(`“${byRef.label ?? byRef.key}” takes an earlier step's result by reference, which a canvas can't wire yet`);
   // A settings input (a number or a choice) rides on the nodes whose settings it fills: each node shows its value and
   // keeps the input for the way back. It must be a whole setting (params.<name>) with a value to show.
   const isSetting = (p: RecipeParam | undefined) => p?.type === "number" || p?.type === "choice";

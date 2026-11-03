@@ -112,6 +112,11 @@ describe("what isn't drawn", () => {
     expect(refused(withStep(patch))).toMatch(/can't wire yet/);
   });
 
+  it("a step that takes an earlier step's result by reference (recipe version 2)", () => {
+    const r = withStep({ request: { ...base.request, inputs: { images: ["{{steps.cutout.output}}"] } } });
+    expect(refused({ ...r, fuobeRecipe: 2 })).toMatch(/by reference, which a canvas can't wire yet/);
+  });
+
   it("an input a canvas has no port for", () => {
     expect(refused(withStep({ request: { ...base.request, inputs: { mask: "/api/files/m.png" } } }))).toMatch(/no port/);
   });
