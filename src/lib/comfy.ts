@@ -116,9 +116,10 @@ export interface ManifestWorkflow {
    * "timeline": one loader per audio clip, each placed at its start time; "videos" / "audios": one loader
    * per clip of a join, src/lib/av/joins.ts; "references": one loader per reference image, clip and audio clip of
    * MiniMax H3's Ref2VA graph, src/lib/h3-references.ts; "speech": every Edit speech window of params.extra.speechWindows,
-   * src/lib/av/speech-edit-graph.ts).
+   * src/lib/av/speech-edit-graph.ts; "world": the opening and every turn of a World up to the one asked for,
+   * src/lib/world.ts).
    */
-  expand?: "captions" | "timeline" | "videos" | "audios" | "speech" | "keyframes" | "references";
+  expand?: "captions" | "timeline" | "videos" | "audios" | "speech" | "keyframes" | "references" | "world";
   /** Classes the app adds to the graph per run (the References clip loaders): the GPU pre-flight counts them as the graph's. */
   runtimeNodes?: string[];
   validated: boolean;

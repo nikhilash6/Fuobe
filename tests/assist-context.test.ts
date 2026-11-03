@@ -383,13 +383,17 @@ describe("studio tools", () => {
       { video, seconds: 8, beats: [{ start: 0, label: "Arrival", words: "She walks in." }] },
       { video, seconds: 40, beats: [{ start: 0, label: "Arrival" }, { start: 20, label: "Lights out" }], references: [{ url: image, role: "character", name: "Mara" }], model: "minimax-h3-max-3d", sounds: ["Footsteps"] },
     ],
+    world_film: [
+      { scene: "A stone path through a forest at dusk, blue fireflies between mossy trees", turns: [] },
+      { scene: "A harbour at dawn", subject: "a fishing boat", turns: [{ words: "the fog lifts", move: "orbit_90_ccw", seconds: 12 }, { words: "gulls circle the mast", move: "zoom_in" }, { words: "", move: "truck_left", seconds: 6 }], seed: 3 },
+    ],
     edit_speech: [
       { media: video, kind: "video", transcript: [{ start: 0, end: 2.4, text: "We open on Tuesday." }, { start: 3, end: 5, text: "Everyone is welcome." }], changes: [{ line: 0, text: "We open on Thursday." }] },
       { media: video, kind: "video", transcript: [{ start: 0, end: 2.4, text: "We open on Tuesday." }], effect: { kind: "pitch", semitones: 2 }, range: { start: 0, end: 2.4 } },
     ],
   };
   /** Tools that run on your GPU only: "Paid APIs only" refuses them on the card, with the reason. */
-  const OPEN_ONLY = new Set(["edit_speech"]);
+  const OPEN_ONLY = new Set(["edit_speech", "world_film"]);
 
   it("every studio tool plans without errors on both engines in demo mode", () => {
     expect(Object.keys(SAMPLES).sort()).toEqual(studio.STUDIO_TOOLS.map((t) => t.name).sort());

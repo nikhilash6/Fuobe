@@ -241,6 +241,9 @@ export const CUSTOM_NODE_REPOS = {
   // comfyui/ folder of each repository). Neither is on the validation server; core ComfyUI has no Kandinsky 6 nodes yet (PR #16825).
   kandinsky6: 'https://github.com/kandinskylab/kandinsky-6/tree/7ceeefad7fb625011f7db602c43893a989f19c15/comfyui',
   'kandinsky6-sr': 'https://github.com/kandinskylab/kandinsky-6-sr/tree/b15e2aac526519c51f59dfec2b848355bb8902de/comfyui',
+  // World mode (nm10-hy-nomas-world): Nynxz's native Hy-Nomas port (Apache-2.0, no Python dependencies; it registers the
+  // DiT and the PixelUMM decoder with the core loaders). Read at this commit (2026-10-24); not on the validation server.
+  'ComfyUI-HyNomas': 'https://github.com/Nynxz/ComfyUI-HyNomas/tree/a89e0515619924da71093aa3fe52dbb7104cb06e',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -276,11 +279,17 @@ export const PACK_CLASSES = {
   'ComfyUI-Idol': /^Idol(PreprocessImage|Camera|PruneSplat)$/,
   kandinsky6: /^Kandinsky6(BeautifyPrompt|Sampler|EmptyLatent|ImageToVideoAudio|RemoveReferenceLatent|AudioVAELoader|AudioVAEDecode|TextEncode|MagCache)$/,
   'kandinsky6-sr': /^Kandinsky6(SRVAELoader|LatentUpscalerLoader|VSRUpscale)$/,
+  'ComfyUI-HyNomas': /^Nomas(WorldPrompt|PromptJSON|CameraPath|WorldGenerate|WorldContinue|Explore)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
 // (UI templates usually carry node.properties.models; custom-node examples do not).
 export const KNOWN_MODELS = {
+  // World mode (nm10-hy-nomas-world): nynxz/Hy-Nomas, Tencent's Hy-Nomas converted for ComfyUI's core loaders, at the
+  // revision read on 2026-11-03. The DiT is Apache-2.0; the PixelUMM decoder is NVIDIA One-Way Noncommercial (its card).
+  'nomas_dit_distilled_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_dit_distilled_int8_convrot.safetensors' },
+  'nomas_dit_distilled_bf16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_dit_distilled_bf16.safetensors' },
+  'nomas_pixelumm_vae_bf16.safetensors': { folder: 'vae', url: 'https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_pixelumm_vae_bf16.safetensors' },
   // Kandinsky 6.0 (nm10-kandinsky6): Kandinsky Lab's distilled transformers (MIT) at the revisions read on 2026-11-02, saved
   // where the pack's README puts them (diffusion_models/<repo>/transformer/…); the encoders, VAE and vocoder its templates load;
   // and the VSR bundle, whose loaders list a file only with its config.json beside it.
@@ -5801,5 +5810,40 @@ export const SPEC = [
       'The pack resamples the clip to 24 fps and keeps at most 121 frames (about 5 s): Fuobe refuses a longer clip rather than cut it. 2x and 4x need sides that are multiples of 16. ' +
       'Each loader lists a file only with its config.json beside it (the eight files of the SR README\'s manual-download table, in diffusion_models/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/). ' +
       'VRAM is not published: 24 GB is an estimate (a 3.19 GB DiT, a 6.96 GB K-VAE and a 7.31 GB latent upscaler bank, loaded one stage at a time). The same model runs on fal (kandinsky-vsr).',
+  },
+  // ---- World mode: Hy-Nomas (research #10 §6.14, package nm10-hy-nomas-world) ----------------------------------------------
+  // Nynxz's ComfyUI-HyNomas isn't on the validation server: the graph follows its nomas_world example and is checked against
+  // the node definitions read from its source at the pinned commit (tests/world-mode.test.ts).
+  {
+    id: 'world-hy-nomas-turn',
+    title: 'World mode: one turn of a Hy-Nomas world (the opening and every turn before it, then this turn in words and a camera move, 1280x704 at 24 fps)',
+    capability: 'world-turn',
+    handBuilt: 'hand-built/world-hy-nomas-turn.json',
+    packs: ['ComfyUI-HyNomas'],
+    expand: 'world',
+    bindings: {
+      prompt: [b('4', 'scene')], seed: [b('6', 'seed')], width: [b('6', 'width')], height: [b('6', 'height')],
+      steps: [b('6', 'steps'), b('8', 'steps')], filenamePrefix: [b('12', 'filename_prefix')],
+    },
+    outputs: [{ node: '12', kind: 'video' }],
+    defaults: { width: 1280, height: 704, steps: 8, fps: 24 },
+    limits: { maxDurationSec: 12, dimensionMultiple: 32 },
+    // The bf16 DiT (17.1 GB) is the base for LoRA merges, never needed for a run.
+    optionalModels: ['nomas_dit_distilled_bf16.safetensors'],
+    vramGb: 24,
+    license:
+      'Apache-2.0 (Hy-Nomas DiT, Tencent Hunyuan; the ComfyUI files are nynxz/Hy-Nomas\'s conversion); PixelUMM decoder (nomas_pixelumm_vae_bf16, Tencent\'s fine-tune of NVIDIA PixelUMM): ' +
+      'NVIDIA One-Way Noncommercial License (NON-COMMERCIAL research and evaluation only, per the converted weights\' card); Qwen2.5-VL 7B text encoder Apache-2.0; ComfyUI-HyNomas nodes Apache-2.0',
+    notes:
+      'Nynxz\'s ComfyUI-HyNomas (pinned at a89e0515) on core loaders: UNETLoader (the distilled DiT, int8 ConvRot, 8.97 GB), CLIPLoader qwen_image (qwen_2.5_vl_7b, 16.6 GB, shared with Qwen-Image), ' +
+      'VAELoader (the PixelUMM decoder, 15.8 GB): about 25 GB of files beside the shared text encoder. ' +
+      'The template is the pack\'s nomas_world example: Nomas World Prompt (perspective, style, subject, scene, action, seconds) -> Nomas World (seed, 1280x704, 8 Euler steps, window history) with a Nomas Camera Path, ' +
+      'then Nomas World Continue for a turn (change, action, camera, seconds). Fuobe rebuilds it per run: the opening and one Continue per turn up to the one asked for, ' +
+      'each with a key script that flies along the turn\'s camera move (or no camera for a still turn), then TrimVideoLatent drops the earlier turns\' latents so VAE Decode -> CreateVideo 24 fps -> SaveVideo writes this turn alone. ' +
+      'The port keeps a world in ComfyUI\'s memory (NOMAS_WORLD plus an int8 key/value cache in temp/nomas_history), and ComfyUI reuses the outputs of the last prompt it ran: the turns before this one have the same inputs and node ids every time, ' +
+      'so only the new turn is generated; after another job or a restart they are generated again from the same seed. ' +
+      'No sound (Hy-Nomas makes none). No image input: Hy-Nomas starts every world from words. ' +
+      'Speed and VRAM are the port author\'s: about 21 s per 3 s turn plus about 4 s of decode per 10-latent window on an RTX 5090 at 1280x704 int8; Tencent\'s single-4090 configuration uses an int8 DiT and cache, ' +
+      'an FP8 decoder and CPU offload; plan on a 24 GB card. The pack patches the core loaders\' model detection (Load Diffusion Model, Load VAE) to recognise the Nomas files.',
   },
 ];

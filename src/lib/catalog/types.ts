@@ -100,7 +100,9 @@ export type Operation =
   // nm10-music3: a song's cloud tools (Mureka). The song is inputs.audio, or one of Mureka's own (params.extra.songId)
   | "song-extend" // song + lyrics for the new part (+ params.startTime: where it begins; params.extra.extend_type tail | head) → the song, longer
   | "song-remix" // song + a style (prompt) + the whole song's lyrics → a new arrangement of it
-  | "song-stems"; // song → its vocal and instrument tracks (meta.stem), one file each
+  | "song-stems" // song → its vocal and instrument tracks (meta.stem), one file each
+  // nm10-hy-nomas-world
+  | "world-turn"; // params.extra.world (src/lib/world.ts: the opening and the turns) + params.extra.turn → that turn's clip of the world (Hy-Nomas)
 
 export const OPERATION_LABELS: Record<Operation, string> = {
   t2i: "Text to image",
@@ -180,6 +182,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   "song-extend": "Extend a song",
   "song-remix": "Remix a song",
   "song-stems": "Song stems",
+  "world-turn": "World turn",
 };
 
 export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
@@ -261,6 +264,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   "song-extend": "audio",
   "song-remix": "audio",
   "song-stems": "audio",
+  "world-turn": "video",
 };
 
 /**

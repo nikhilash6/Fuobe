@@ -17265,6 +17265,528 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "NomasCameraPath": {
+    "input": {
+      "required": {
+        "script": [
+          "STRING",
+          {
+            "tooltip": "One '<keys> <seconds>' per line, keys joined with + (w a s d up down left right, or wait). 'look <dx> <dy> <seconds>' is a mouse drag in pixels.",
+            "multiline": true,
+            "default": "w 2\nw+left 1.5\nw 1.5"
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "script"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "NOMAS_CAMERA"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "camera"
+    ],
+    "name": "NomasCameraPath",
+    "display_name": "Nomas Camera Path",
+    "description": "A camera move for one turn, as keys held for a time (the demo's controls at 24 fps). W/S move along the view, A/D strafe, the arrows turn 20 deg/s. Only the direction and the relative speed of moves reach the model; turning speed matters.",
+    "python_module": "custom_nodes.ComfyUI-HyNomas",
+    "category": "video/nomas",
+    "output_node": false
+  },
+  "NomasExplore": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL",
+          {}
+        ],
+        "clip": [
+          "CLIP",
+          {}
+        ],
+        "vae": [
+          "VAE",
+          {}
+        ],
+        "turn": [
+          "NOMAS_TURN",
+          {}
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 42,
+            "min": 0,
+            "max": 18446744073709551615
+          }
+        ],
+        "width": [
+          "INT",
+          {
+            "default": 1280,
+            "min": 256,
+            "max": 2048,
+            "step": 32
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 704,
+            "min": 256,
+            "max": 2048,
+            "step": 32
+          }
+        ],
+        "change": [
+          "STRING",
+          {
+            "multiline": false,
+            "default": ""
+          }
+        ],
+        "action": [
+          "STRING",
+          {
+            "multiline": false,
+            "default": ""
+          }
+        ],
+        "seconds": [
+          "FLOAT",
+          {
+            "default": 3.0,
+            "min": 0.5,
+            "max": 15.0,
+            "step": 0.5
+          }
+        ],
+        "steps": [
+          "INT",
+          {
+            "advanced": true,
+            "default": 8,
+            "min": 1,
+            "max": 16
+          }
+        ],
+        "history": [
+          "COMBO",
+          {
+            "advanced": true,
+            "default": "window",
+            "multiselect": false,
+            "options": [
+              "window",
+              "full"
+            ]
+          }
+        ],
+        "controls": [
+          "STRING",
+          {
+            "advanced": true,
+            "multiline": false,
+            "default": ""
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "clip",
+        "vae",
+        "turn",
+        "seed",
+        "width",
+        "height",
+        "change",
+        "action",
+        "seconds",
+        "steps",
+        "history",
+        "controls"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "LATENT",
+      "NOMAS_WORLD"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "turn_frames",
+      "LATENT",
+      "world"
+    ],
+    "name": "NomasExplore",
+    "display_name": "Nomas Explore",
+    "description": "Explore a Hy-Nomas world interactively: hold W/A/S/D and the arrow keys (or drag with the mouse) to record a camera move, and each move becomes the next turn of the world. Holds the world in memory between runs.",
+    "python_module": "custom_nodes.ComfyUI-HyNomas",
+    "category": "video/nomas",
+    "output_node": true
+  },
+  "NomasPromptJSON": {
+    "input": {
+      "required": {
+        "json": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "json"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "NOMAS_TURN"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "turn"
+    ],
+    "name": "NomasPromptJSON",
+    "display_name": "Nomas Prompt (JSON)",
+    "description": "A whole Hy-Nomas prompt as JSON (perspective_view, Style, subject_list, segments with start_time / end_time), as in the release's examples/prompts.json. Each segment becomes one turn.",
+    "python_module": "custom_nodes.ComfyUI-HyNomas",
+    "category": "video/nomas",
+    "output_node": false
+  },
+  "NomasWorldContinue": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL",
+          {}
+        ],
+        "clip": [
+          "CLIP",
+          {}
+        ],
+        "world": [
+          "NOMAS_WORLD",
+          {}
+        ],
+        "change": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ],
+        "action": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ],
+        "seconds": [
+          "FLOAT",
+          {
+            "tooltip": "Unless the camera path sets it.",
+            "default": 5.0,
+            "min": 0.5,
+            "max": 30.0,
+            "step": 0.5
+          }
+        ],
+        "steps": [
+          "INT",
+          {
+            "advanced": true,
+            "default": 8,
+            "min": 1,
+            "max": 16
+          }
+        ]
+      },
+      "optional": {
+        "camera": [
+          "NOMAS_CAMERA",
+          {}
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "clip",
+        "world",
+        "change",
+        "action",
+        "seconds",
+        "steps"
+      ],
+      "optional": [
+        "camera"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "LATENT",
+      "NOMAS_WORLD"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "LATENT",
+      "world"
+    ],
+    "name": "NomasWorldContinue",
+    "display_name": "Nomas World Continue",
+    "description": "Adds one turn to a world: a change in words, a camera move, or both. The latent holds the whole world.",
+    "python_module": "custom_nodes.ComfyUI-HyNomas",
+    "category": "video/nomas",
+    "output_node": false
+  },
+  "NomasWorldGenerate": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL",
+          {
+            "tooltip": "The Nomas DiT (Load Diffusion Model)."
+          }
+        ],
+        "clip": [
+          "CLIP",
+          {
+            "tooltip": "qwen_2.5_vl_7b from Load CLIP, type qwen_image."
+          }
+        ],
+        "turn": [
+          "NOMAS_TURN",
+          {}
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 42,
+            "min": 0,
+            "max": 18446744073709551615,
+            "control_after_generate": true
+          }
+        ],
+        "width": [
+          "INT",
+          {
+            "tooltip": "Trained at 1280x704 (the release's '720p' is 704 rows).",
+            "default": 1280,
+            "min": 256,
+            "max": 2048,
+            "step": 32
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 704,
+            "min": 256,
+            "max": 2048,
+            "step": 32
+          }
+        ],
+        "steps": [
+          "INT",
+          {
+            "tooltip": "Euler steps on the shift-5 schedule. The distilled DiT was made for 4, 6 or 8.",
+            "advanced": true,
+            "default": 8,
+            "min": 1,
+            "max": 16
+          }
+        ],
+        "history": [
+          "COMBO",
+          {
+            "advanced": true,
+            "default": "window",
+            "multiselect": false,
+            "options": [
+              "window",
+              "full"
+            ]
+          }
+        ]
+      },
+      "optional": {
+        "camera": [
+          "NOMAS_CAMERA",
+          {
+            "tooltip": "A camera path for the first turn."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "clip",
+        "turn",
+        "seed",
+        "width",
+        "height",
+        "steps",
+        "history"
+      ],
+      "optional": [
+        "camera"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "LATENT",
+      "NOMAS_WORLD"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "LATENT",
+      "world"
+    ],
+    "name": "NomasWorldGenerate",
+    "display_name": "Nomas World",
+    "description": "Generates a Hy-Nomas world segment by segment. Each segment attends to a cache of the earlier ones. Decode the latent with VAE Decode and the PixelUMM VAE; continue it with Nomas World Continue.",
+    "python_module": "custom_nodes.ComfyUI-HyNomas",
+    "category": "video/nomas",
+    "output_node": false
+  },
+  "NomasWorldPrompt": {
+    "input": {
+      "required": {
+        "perspective": [
+          "COMBO",
+          {
+            "default": "third-person follow",
+            "multiselect": false,
+            "options": [
+              "first-person",
+              "second-person",
+              "third-person follow",
+              "third-person observer"
+            ]
+          }
+        ],
+        "style": [
+          "COMBO",
+          {
+            "default": "real-world footage",
+            "multiselect": false,
+            "options": [
+              "real-world footage",
+              "animation/anime",
+              "CG",
+              "video game",
+              "software/web/app/computer screen recording",
+              "slideshow"
+            ]
+          }
+        ],
+        "subject": [
+          "STRING",
+          {
+            "tooltip": "Who the camera follows. Written as <|Subject1|> in the scene and action text.",
+            "multiline": false,
+            "default": "a small orange fox"
+          }
+        ],
+        "subject_details": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "Orange fur, a white chest and a fluffy tail."
+          }
+        ],
+        "scene": [
+          "STRING",
+          {
+            "tooltip": "The opening shot. Use <|Subject1|> for the subject.",
+            "multiline": true,
+            "default": "<|Subject1|> stands on a stone path in a luminous forest at dusk. Blue fireflies drift between tall mossy trees, and soft mist hangs over the ground."
+          }
+        ],
+        "action": [
+          "STRING",
+          {
+            "tooltip": "What happens during the turn (optional). Leave empty for a camera-driven turn.",
+            "multiline": true,
+            "default": "<|Subject1|> walks slowly along the path."
+          }
+        ],
+        "seconds": [
+          "FLOAT",
+          {
+            "tooltip": "Length of the turn, unless a camera path sets it.",
+            "default": 5.0,
+            "min": 0.5,
+            "max": 30.0,
+            "step": 0.5
+          }
+        ]
+      },
+      "optional": {}
+    },
+    "input_order": {
+      "required": [
+        "perspective",
+        "style",
+        "subject",
+        "subject_details",
+        "scene",
+        "action",
+        "seconds"
+      ],
+      "optional": []
+    },
+    "is_input_list": false,
+    "output": [
+      "NOMAS_TURN"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "turn"
+    ],
+    "name": "NomasWorldPrompt",
+    "display_name": "Nomas World Prompt",
+    "description": "The first turn of a Hy-Nomas world, in the format its prompt enhancer writes: perspective, style, one subject and a scene description, with an optional action.",
+    "python_module": "custom_nodes.ComfyUI-HyNomas",
+    "category": "video/nomas",
+    "output_node": false
+  },
   "OpenH3RegenFastVAEDecode": null,
   "OpenH3RegenFinish": null,
   "OpenH3RegenLora": null,

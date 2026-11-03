@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-03T05:15:51.422Z",
+  "generatedAt": "2026-11-03T05:21:42.050Z",
   "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
   "comfyuiVersion": "0.41.0",
   "workflowTemplatesVersion": "0.11.86",
@@ -26170,6 +26170,109 @@
       "validated": false,
       "notes": "The kandinsky6-sr pack's Video Super Resolution template, with Fuobe's bindings: LoadVideo -> GetVideoComponents -> Kandinsky6VSRUpscale (the 2-step distilled VSR DiT from Load Diffusion Model, the K-VAE and the latent upscaler bank; tiled diffusion in latent space, overlap 0.2, NABLA attention off) -> CreateVideo with the clip's own sound (trimmed to the frames kept) -> SaveVideo. scale = params.resolution as the pack's combo (\"2x\", \"2.25x\", \"4x\"); upscalerScale = the bank entry it needs (\"2x\" for 2x and 2.25x, \"4x\" for 4x). The pack resamples the clip to 24 fps and keeps at most 121 frames (about 5 s): Fuobe refuses a longer clip rather than cut it. 2x and 4x need sides that are multiples of 16. Each loader lists a file only with its config.json beside it (the eight files of the SR README's manual-download table, in diffusion_models/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/). VRAM is not published: 24 GB is an estimate (a 3.19 GB DiT, a 6.96 GB K-VAE and a 7.31 GB latent upscaler bank, loaded one stage at a time). The same model runs on fal (kandinsky-vsr).",
       "validationError": "HTTP 400: missing_node_type: Node 'Kandinsky VSR VAE' not found. The custom node may not be installed. (Node ID '#4')"
+    },
+    {
+      "id": "world-hy-nomas-turn",
+      "title": "World mode: one turn of a Hy-Nomas world (the opening and every turn before it, then this turn in words and a camera move, 1280x704 at 24 fps)",
+      "capability": "world-turn",
+      "file": "world-hy-nomas-turn.json",
+      "source": "hand-built (scripts/comfy/hand-built/world-hy-nomas-turn.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "4",
+            "input": "scene"
+          }
+        ],
+        "seed": [
+          {
+            "node": "6",
+            "input": "seed"
+          }
+        ],
+        "width": [
+          {
+            "node": "6",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "6",
+            "input": "height"
+          }
+        ],
+        "steps": [
+          {
+            "node": "6",
+            "input": "steps"
+          },
+          {
+            "node": "8",
+            "input": "steps"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "12",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "12",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1280,
+        "height": 704,
+        "steps": 8,
+        "fps": 24
+      },
+      "limits": {
+        "maxDurationSec": 12,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "nomas_dit_distilled_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_dit_distilled_int8_convrot.safetensors",
+          "sizeGb": 8.97
+        },
+        {
+          "file": "qwen_2.5_vl_7b.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image/resolve/1f12b17be14c89b026c51a91d67c32f84bb047bc/split_files/text_encoders/qwen_2.5_vl_7b.safetensors",
+          "sizeGb": 16.58
+        },
+        {
+          "file": "nomas_pixelumm_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_pixelumm_vae_bf16.safetensors",
+          "sizeGb": 15.78
+        },
+        {
+          "file": "nomas_dit_distilled_bf16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_dit_distilled_bf16.safetensors",
+          "sizeGb": 17.11,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-HyNomas",
+          "repo": "https://github.com/Nynxz/ComfyUI-HyNomas/tree/a89e0515619924da71093aa3fe52dbb7104cb06e"
+        }
+      ],
+      "vramGb": 24,
+      "license": "Apache-2.0 (Hy-Nomas DiT, Tencent Hunyuan; the ComfyUI files are nynxz/Hy-Nomas's conversion); PixelUMM decoder (nomas_pixelumm_vae_bf16, Tencent's fine-tune of NVIDIA PixelUMM): NVIDIA One-Way Noncommercial License (NON-COMMERCIAL research and evaluation only, per the converted weights' card); Qwen2.5-VL 7B text encoder Apache-2.0; ComfyUI-HyNomas nodes Apache-2.0",
+      "validated": false,
+      "notes": "Nynxz's ComfyUI-HyNomas (pinned at a89e0515) on core loaders: UNETLoader (the distilled DiT, int8 ConvRot, 8.97 GB), CLIPLoader qwen_image (qwen_2.5_vl_7b, 16.6 GB, shared with Qwen-Image), VAELoader (the PixelUMM decoder, 15.8 GB): about 25 GB of files beside the shared text encoder. The template is the pack's nomas_world example: Nomas World Prompt (perspective, style, subject, scene, action, seconds) -> Nomas World (seed, 1280x704, 8 Euler steps, window history) with a Nomas Camera Path, then Nomas World Continue for a turn (change, action, camera, seconds). Fuobe rebuilds it per run: the opening and one Continue per turn up to the one asked for, each with a key script that flies along the turn's camera move (or no camera for a still turn), then TrimVideoLatent drops the earlier turns' latents so VAE Decode -> CreateVideo 24 fps -> SaveVideo writes this turn alone. The port keeps a world in ComfyUI's memory (NOMAS_WORLD plus an int8 key/value cache in temp/nomas_history), and ComfyUI reuses the outputs of the last prompt it ran: the turns before this one have the same inputs and node ids every time, so only the new turn is generated; after another job or a restart they are generated again from the same seed. No sound (Hy-Nomas makes none). No image input: Hy-Nomas starts every world from words. Speed and VRAM are the port author's: about 21 s per 3 s turn plus about 4 s of decode per 10-latent window on an RTX 5090 at 1280x704 int8; Tencent's single-4090 configuration uses an int8 DiT and cache, an FP8 decoder and CPU offload; plan on a 24 GB card. The pack patches the core loaders' model detection (Load Diffusion Model, Load VAE) to recognise the Nomas files.",
+      "expand": "world"
     }
   ]
 }

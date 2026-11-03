@@ -38,6 +38,7 @@ import { SceneCreateDialog, askSceneConfirmAgain, sceneTake, skipSceneConfirm, u
 import { SidePanel } from "./side-panel";
 import { SoulCastDialog, SoulLocationDialog } from "./soul-builders";
 import { BlockoutPanel, initialBlockout, withBuilt, type BlockoutDraft } from "./blockout-panel";
+import { WorldPanel } from "./world-panel";
 import type { BlockoutScene } from "@/lib/blockout";
 
 /** What a browser that can only write WebM is told: Seedance 2.5 takes MP4 or MOV reference clips. */
@@ -183,7 +184,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
   const id = project.id;
   const router = useRouter();
   const share = useShare();
-  const [engine, setEngine] = useEngine();
+  const [engine, setEngine, engineMode] = useEngine();
   const [view, setView] = useState<CinemaView>({ kind: "home" });
   const [nested, setNested] = useState(true);
   const [draft, setDraftState] = useState<CinemaDraft>(() => restoreDraft(id));
@@ -222,6 +223,9 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
   // /cinema/<id>?blockout=1 (a link to Blockout to film) opens it.
   const search = useSearchParams();
   const [blockoutOpen, setBlockoutOpen] = useState(() => search.get("blockout") === "1");
+  // World mode: /cinema/<id>?world=1 (the GPU board's World mode row) opens it. Hidden when the engine mode is "Paid APIs
+  // only": Hy-Nomas runs on your GPU alone.
+  const [worldOpen, setWorldOpen] = useState(() => search.get("world") === "1");
   const [blockout, setBlockout] = useState<BlockoutDraft>(initialBlockout);
   const [builder, setBuilder] = useState<BlockoutScene | null>(null);
   const [dropping, setDropping] = useState(false);
@@ -594,6 +598,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
                 onCast={() => setCastOpen(true)}
                 onLocation={() => setLocationOpen(true)}
                 onBlockout={() => setBlockoutOpen(true)}
+                onWorld={engineMode === "cloud" ? undefined : () => setWorldOpen(true)}
               />
             </div>
           </div>
@@ -685,6 +690,19 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
           }}
         />
       )}
+      <WorldPanel
+        open={worldOpen && engineMode !== "cloud"}
+        onOpenChange={setWorldOpen}
+        projectId={id}
+        folderId={folderId}
+        engine={engine}
+        onEngine={setEngine}
+        openAllowed={engineMode !== "cloud"}
+        settings={settings}
+        brief={project.brief.body}
+        context={context}
+        takes={items}
+      />
       <SoulCastDialog open={castOpen} onOpenChange={setCastOpen} {...builderProps} />
       <SoulLocationDialog open={locationOpen} onOpenChange={setLocationOpen} {...builderProps} />
       <ProjectDialog open={settingsOpen} onOpenChange={setSettingsOpen} project={project} spentUsd={spentUsd} onDone={() => setSettingsOpen(false)} onDeleted={() => router.push("/cinema")} />

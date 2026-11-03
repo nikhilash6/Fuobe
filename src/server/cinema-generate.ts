@@ -5,6 +5,7 @@ import { getModel } from "@/lib/catalog";
 import {
   SWATCH_PLACEHOLDER,
   blockoutTake,
+  worldTake,
   pathTake,
   planCinema,
   withPlaceholders,
@@ -168,6 +169,7 @@ export function generateInProject(projectId: string, asked: CinemaRequest, folde
     ...(input.action === "recompose" && input.capture ? { camera: { lens: input.capture.lens, aperture: input.capture.aperture, pose: input.capture.pose } } : {}),
     ...(input.action === "path" && input.path ? { path: pathTake(input, plan) } : {}),
     ...(input.action === "blockout" && input.blockout ? { blockout: blockoutTake(input, plan) } : {}),
+    ...(input.action === "world" && input.world ? { world: worldTake(input) } : {}),
   };
   const batchId = nanoid(10);
   const made: Record<string, Generation[]> = {};

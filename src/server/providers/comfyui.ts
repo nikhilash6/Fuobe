@@ -74,6 +74,7 @@ import { SpeechEditError, ttsInstruction, ttsLength, type SpeechWindow } from "@
 import { expandInbetweenWorkflow, type InbetweenPass } from "@/lib/av/inbetween-graph";
 import { gapPrompt, requestTiming, type InbetweenTiming } from "@/lib/inbetween";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
+import { expandWorldWorkflow, readWorld, WorldGraphError, worldProblem, type WorldScript } from "@/lib/world";
 import { RTX_FRAMEGEN_WORKFLOW, RTX_HDR_WORKFLOW, RTX_MISSING } from "@/lib/catalog/rtx-video";
 import { exportValues, framesPerPass, hdrColorSpace, RTX_UPSCALE_WORKFLOW, rtxScale, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
 import { keyFormatValues } from "@/lib/av/keying";
@@ -1804,6 +1805,20 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     delete extra.inbetween;
     delete extra.stillMouth;
   }
+  // World mode (world-hy-nomas-turn): the script and the turn asked for; the graph is rebuilt for them below. The script's
+  // own seed always: the turns before this one must match the ones ComfyUI already made.
+  let world: { script: WorldScript; turn: number } | null = null;
+  if (manifest.expand === "world") {
+    const script = readWorld(extra.world);
+    const turn = Math.round(Number(extra.turn ?? 0));
+    const problem = script ? worldProblem(script, turn) : "Describe the world first: the opening is where it starts";
+    if (problem || !script) throw new ProviderError(problem ?? "Describe the world first", 400);
+    world = { script, turn };
+    if (b.prompt) values.prompt = script.opening.words;
+    if (b.seed) values.seed = script.seed;
+  }
+  delete extra.world;
+  delete extra.turn;
   const cues = manifest.expand === "captions" ? captionCues(input, extra) : [];
   delete extra.cues;
   delete extra.wordsPerCaption;
@@ -2075,6 +2090,13 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       wf = setAukDevice(wf, typeof values.device === "string" ? values.device : undefined);
     } catch (e) {
       throw new ProviderError((e as Error).message, 400);
+    }
+  }
+  if (world) {
+    try {
+      wf = expandWorldWorkflow(wf, world.script, world.turn);
+    } catch (e) {
+      throw new ProviderError((e as Error).message, e instanceof WorldGraphError ? 400 : 500);
     }
   }
   // Keyframe animation: one pass per gap on the shared loaders, every keyframe loaded once.

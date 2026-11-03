@@ -174,6 +174,8 @@ describe("round-4 ComfyUI workflows", () => {
       "kandinsky6-t2av",
       "kandinsky6-i2av",
       "video-upscale-kandinsky6-vsr",
+      // World mode (nm10-hy-nomas-world): Nynxz's ComfyUI-HyNomas isn't on the validation server (tests/world-mode.test.ts).
+      "world-hy-nomas-turn",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);
   });

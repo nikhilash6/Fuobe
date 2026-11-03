@@ -27,6 +27,7 @@ import { carriesLayout, flux3Boxes, flux3Caption, layoutCompilerFor, LAYOUT_MAX_
 import { pricingOn, type PriceClock } from "./promo";
 import { isInstrumental, lyricsOf, lyricsProblem, LYRICS_PARAM, promptLyricsProblem } from "@/lib/lyrics";
 import { presetRoutes } from "./preset-recipe-routes";
+import { readWorld, worldProblem } from "@/lib/world";
 
 export { pricingAt } from "./promo";
 
@@ -277,6 +278,8 @@ const PROMPTLESS = new Set<Operation>([
   "song-extend", "song-stems",
   // nm10-hosted-catchup: an inserted moment can be left to the model; a retexture takes words or a style picture
   "insert-moment", "retexture-3d",
+  // nm10-hy-nomas-world: a world turn's words are in its script (params.extra.world)
+  "world-turn",
 ]);
 
 /**
@@ -577,6 +580,11 @@ export function planGeneration(
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");
   if (op === "voice-design" && !params.voiceDescription?.trim()) throw new Error("Describe the voice you want");
   if (op === "speech-edit" && !(Array.isArray(params.extra?.speechWindows) && params.extra.speechWindows.length)) throw new Error("Edit the words, or pick a range and an effect");
+  if (op === "world-turn") {
+    const world = readWorld(params.extra?.world);
+    const problem = world ? worldProblem(world, Number(params.extra?.turn ?? 0)) : "Describe the world first: the opening is where it starts";
+    if (problem) throw new Error(problem);
+  }
   if (model.options.motionPaths && !(params.extra?.motionPaths as { paths?: unknown[] } | undefined)?.paths?.length) {
     throw new Error(`Draw on the start frame — ${model.name} moves things along the paths you draw`);
   }

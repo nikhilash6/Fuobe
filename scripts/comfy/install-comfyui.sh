@@ -60,6 +60,11 @@ declare -A NODES=(
   # nodes). Read at this commit: 3 AI-assisted commits on 2026-10-30, not in the Comfy Registry. It goes in the main
   # ComfyUI, not the isolated worker. Without it the provider runs image-to-splat-idol on core nodes.
   [ComfyUI-Idol]="https://github.com/Nynxz/ComfyUI-Idol 4d3a4f671028f0e062d9f004cda1a2dd73360d35"
+  # World mode (world-hy-nomas-turn; research #10 §6.14): Nynxz's native Hy-Nomas port. Apache-2.0, no Python
+  # dependencies; importing it registers the Nomas DiT and the PixelUMM decoder with the core loaders' model detection.
+  # Read at this commit (2026-10-24, three commits, not in the Comfy Registry). Weights: about 25 GB from nynxz/Hy-Nomas
+  # (model-pins.json), the PixelUMM decoder under the NVIDIA One-Way Noncommercial License.
+  [ComfyUI-HyNomas]="https://github.com/Nynxz/ComfyUI-HyNomas a89e0515619924da71093aa3fe52dbb7104cb06e"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.

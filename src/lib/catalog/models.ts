@@ -2354,6 +2354,21 @@ const open: ModelDef[] = [
     },
     defaults: { resolution: "480p", aspectRatio: "auto" },
   }),
+  // World mode (nm10-hy-nomas-world): Hy-Nomas (Tencent Hunyuan, Apache-2.0) through Nynxz's ComfyUI port, a world described
+  // once and steered turn by turn. Hosted on neither fal nor Replicate: open engine only. Cinema's World take runs it
+  // (src/lib/world.ts); it isn't a model of the Video studio's menu.
+  o({
+    id: "oss-hy-nomas-world",
+    name: "Hy-Nomas",
+    vendor: "Tencent Hunyuan",
+    family: "hy-nomas",
+    kind: "video",
+    tagline: "A world you describe once, then steer turn by turn with words and camera moves · 1280 × 704 at 24 fps · Apache-2.0",
+    badges: ["new"],
+    hidden: true,
+    routes: [comfy("world-turn", "world-hy-nomas-turn", "the opening and every turn before this one, then this turn's clip")],
+    options: { seed: true },
+  }),
   // N7-9: WorldCast (PixCtrol) on the WorldCast worker, outside ComfyUI (docs/workers/worldcast.md). Fly path, Turnaround and
   // the exact orbits prefer it when the worker answers: the still's depth (MoGe 2), SAM 3.1 masks of the still and the views,
   // then one case; the back and sides follow the views. 81 frames, portrait 480 × 832, 15 fps.

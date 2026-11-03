@@ -12,6 +12,7 @@ import { CLEAN_MODEL } from "@/lib/av/clean-voice";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
 import { graphLoras, PERSON_REMOVER_LORA } from "@/lib/catalog/character-swap";
 import { BLOCKOUT_MODELS, PATH_MODELS } from "@/lib/catalog/cinema";
+import { WORLD_JOIN, WORLD_MODEL } from "@/lib/world";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { PERSON_REMOVAL_TOOLS, REMOVE_TOOLS } from "@/lib/catalog/remove-object";
@@ -271,6 +272,17 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: "oss-segment", op: "trim" },
       { modelId: "oss-extract-frame", op: "frame" },
       { modelId: "oss-join-encoded", op: "concat" },
+    ],
+  },
+  // World mode (nm10-hy-nomas-world): Cinema's World take, Hy-Nomas turn by turn on Nynxz's port, and the turns joined into
+  // one film. The projects list takes ?world=1 on to the project picked, which opens the World panel.
+  {
+    href: "/cinema?world=1",
+    label: "World mode",
+    group: "Video",
+    steps: [
+      { modelId: WORLD_MODEL, op: "world-turn" },
+      { modelId: WORLD_JOIN, op: "concat" },
     ],
   },
   // The turnaround (N7-6): Frames mode's start/end-frame clips joined into one film, with the sides it has no picture of

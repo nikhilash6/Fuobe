@@ -1268,5 +1268,20 @@
   "revision": "59716e19a6cc97f91311edea190938219c097b76",
   "sizeBytes": 884915688,
   "sha256": "3100fd296d2991f4859db9d83c43ece45f432659b06db3d79810dad033c62253"
+ },
+ "https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_dit_distilled_int8_convrot.safetensors": {
+  "revision": "e8ddc4bfa664d69213930552493c220c3af56f41",
+  "sizeBytes": 8966889488,
+  "sha256": "0cf9c169c22149c83c647485e5e30319f137cd153a62bdf5813bc0657520b835"
+ },
+ "https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_dit_distilled_bf16.safetensors": {
+  "revision": "e8ddc4bfa664d69213930552493c220c3af56f41",
+  "sizeBytes": 17107123184,
+  "sha256": "fecc7c94de4c4d7a9513e4d9c15c430fad24927554e5a2531b2d36313bafdbb7"
+ },
+ "https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_pixelumm_vae_bf16.safetensors": {
+  "revision": "e8ddc4bfa664d69213930552493c220c3af56f41",
+  "sizeBytes": 15776972360,
+  "sha256": "2003b63f87917f80061d0196c3114c70374c4d60a44ce72e03cf52305eeaa5e3"
  }
 }
