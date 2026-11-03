@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { isCodeTemplate, TEMPLATES } from "@/lib/catalog/marketing";
 import { RecipeSchema } from "@/lib/motion/recipe";
 import { hasScene, loadScene } from "@/lib/motion/registry";
-import { SHOWCASES } from "@/lib/motion/showcase";
+import { SHOWCASE_PRODUCT_THUMBS, SHOWCASE_PRODUCTS, SHOWCASES } from "@/lib/motion/showcase";
 import { initialState, ownFiles, templateRecipe, templateScene, templateSizes, templateWords } from "@/lib/motion/template";
 import { templateCover } from "@/lib/template-covers";
 import type { Generation } from "@/lib/catalog/types";
@@ -82,6 +85,17 @@ describe("a template's recipe", () => {
     expect(templateRecipe(end, { ...s, controls: { style: "iris", mark: "name" }, brand: { ...s.brand, logo: "/api/files/2026/11/logo.png" } }).brand.logo).toBeUndefined();
   });
 
+  it("ships every sample product (and its picker tile) as a cut-out whose version is its contents", () => {
+    for (const [id, url] of [...Object.entries(SHOWCASE_PRODUCTS), ...Object.entries(SHOWCASE_PRODUCT_THUMBS).map(([k, u]) => [`${k} tile`, u] as const)]) {
+      const [file, v] = url.split("?v=");
+      const buf = fs.readFileSync(path.join(process.cwd(), "public", file));
+      expect(createHash("sha256").update(buf).digest("hex").slice(0, 8), id).toBe(v);
+      // A WebP with an alpha channel (VP8X with the alpha flag), so the picture traces as a cut-out.
+      expect(buf.subarray(8, 16).toString("latin1"), id).toBe("WEBPVP8X");
+      expect(buf[20] & 0x10, id).toBe(0x10);
+    }
+  });
+
   it("holds the length to the template's range and names its own files only", () => {
     const head = CODE.find((t) => t.id === "ms-kinetic-headline")!;
     const s = initialState(head);
@@ -89,7 +103,7 @@ describe("a template's recipe", () => {
     expect(templateRecipe(head, { ...s, duration: 1 }).duration).toBe(5);
     const line = CODE.find((t) => t.id === "m2-line-reveal")!;
     const l = initialState(line);
-    expect(l.product).toMatch(/^\/previews\/kinetic\/perfume\.webp\?v=/);
+    expect(l.product).toMatch(/^\/previews\/kinetic\/products\/ardent-parfum\.webp\?v=/);
     expect(ownFiles(templateRecipe(line, l))).toEqual([]);
     expect(ownFiles(templateRecipe(line, { ...l, product: "/api/files/2026/11/bottle.png", brand: { ...l.brand, logo: "/api/files/2026/11/mark.png" } }))).toEqual(["/api/files/2026/11/mark.png", "/api/files/2026/11/bottle.png"]);
   });

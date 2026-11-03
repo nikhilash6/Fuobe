@@ -658,7 +658,8 @@ export interface BadgeSpot {
 /**
  * Where a round badge sits by a product so it covers the least of it: of the spots round the picture's upper corners
  * and sides (and just past them, inside `bounds`), the one with the least of the badge over the product's outline
- * (point in polygon, so a spot inside the shape never counts as clear), nearer the top when two tie. The badge is sized
+ * (point in polygon, so a spot inside the shape never counts as clear; a ring 15 % wider than the badge counts too, so
+ * its points keep clear of the product), nearer the top when two tie. The badge is sized
  * to the product (its radius at most `maxShare` of the product's width, never more than `r`), and shrinks (down to 70 %) while every spot
  * still covers the product. A photo without an outline: its upper right corner, overlapping by a third.
  */
@@ -682,7 +683,8 @@ export function badgeSpot(img: { x: number; y: number; w: number; h: number }, o
     for (let i = 0; i <= 8; i++) {
       for (const fy of [-0.04, 0.08, 0.2, 0.34, 0.48]) {
         const [cx, cy] = clampIn(img.x - rr * 1.1 + ((img.w + rr * 2.2) * i) / 8, img.y + img.h * fy + (fy < 0 ? -rr * 0.3 : 0), rr);
-        const spot = { cx, cy, r: rr, cover: discCover(pts, cx, cy, rr) };
+        // Scored with a little clearance round the badge, so its points never touch the product; drawn at rr.
+        const spot = { cx, cy, r: rr, cover: discCover(pts, cx, cy, rr * 1.15) };
         if (!best || score(spot) < score(best)) best = spot;
       }
     }

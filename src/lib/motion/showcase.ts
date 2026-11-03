@@ -27,11 +27,30 @@ export const SHOWCASE_BRANDS = {
 
 export type ShowcaseBrandId = keyof typeof SHOWCASE_BRANDS;
 
-/** Fuobe's own sample products, cut out (with their versions). */
+/**
+ * Fuobe's own sample products, cut out (with their versions): objects made for the showcase brands, in their
+ * palettes. The earlier files (/previews/kinetic/perfume.webp, heel.webp) stay in place for pieces saved with them.
+ */
 export const SHOWCASE_PRODUCTS = {
-  perfume: "/previews/kinetic/perfume.webp?v=118749e2",
-  heel: "/previews/kinetic/heel.webp?v=2ce2f692",
+  perfume: "/previews/kinetic/products/ardent-parfum.webp?v=b7d1a73c",
+  serum: "/previews/kinetic/products/sora-serum.webp?v=d4a7b1f7",
+  heel: "/previews/kinetic/products/vesper-stiletto.webp?v=1f3e75c7",
+  nightSerum: "/previews/kinetic/products/aurele-serum-nuit.webp?v=2c31f473",
+  lipstick: "/previews/kinetic/products/vesper-lipstick.webp?v=9f42e87f",
+  card: "/previews/kinetic/products/ledgerly-card.webp?v=0a08b3fc",
+  headphones: "/previews/kinetic/products/lumen-headphones.webp?v=5f4b8973",
 } as const;
+
+/** The same products as small tiles (the Picture picker shows these; a piece always gets the full picture). */
+export const SHOWCASE_PRODUCT_THUMBS: Record<keyof typeof SHOWCASE_PRODUCTS, string> = {
+  perfume: "/previews/kinetic/products/thumbs/ardent-parfum.webp?v=ac88c6f3",
+  serum: "/previews/kinetic/products/thumbs/sora-serum.webp?v=5af213c8",
+  heel: "/previews/kinetic/products/thumbs/vesper-stiletto.webp?v=43ab64fa",
+  nightSerum: "/previews/kinetic/products/thumbs/aurele-serum-nuit.webp?v=9f0092b4",
+  lipstick: "/previews/kinetic/products/thumbs/vesper-lipstick.webp?v=e9a8a417",
+  card: "/previews/kinetic/products/thumbs/ledgerly-card.webp?v=3eb0d0ff",
+  headphones: "/previews/kinetic/products/thumbs/lumen-headphones.webp?v=0d3422a9",
+};
 
 export interface Showcase {
   brand: ShowcaseBrandId;
@@ -56,7 +75,7 @@ export const SHOWCASES: Record<string, Showcase> = {
   "ms-feature-cards": { brand: "ledgerly", size: "4:5", fields: { headline: "Month-end, minus the panic", point1: "Invoices that chase themselves", point2: "Payroll in two taps", point3: "Books that close on Friday" }, controls: { pace: "calm", look: "light" } },
   "ms-dashboard-zoom": { brand: "ledgerly", size: "4:5", fields: { stat: "$1,284,000", label: "Revenue this quarter, up 38%" }, controls: { pace: "calm", look: "dark" } },
   "m2-retro-starburst": { brand: "vesper", size: "9:16", product: "heel", fields: { headline: "Made to be noticed.", badge: "New!" }, controls: { pace: "punchy", look: "brand" } },
-  "m2-offer-badge": { brand: "sora", size: "9:16", product: "perfume", fields: { offer: "20% off", headline: "The gifting edit", cta: "Shop the edit" }, controls: { pace: "punchy", look: "light" } },
+  "m2-offer-badge": { brand: "sora", size: "9:16", product: "serum", fields: { offer: "20% off", headline: "The gifting edit", cta: "Shop the edit" }, controls: { pace: "punchy", look: "light" } },
   "ms-big-number": { brand: "ledgerly", size: "4:5", fields: { stat: "3×", caption: "faster month-end close" }, controls: { pace: "punchy", look: "brand" } },
   "ms-five-star-quote": { brand: "sora", size: "4:5", fields: { quote: "“The only serum I’ve ever bought three times.”", name: "Amara K., verified buyer" }, controls: { pace: "calm", look: "light" } },
   "ms-end-card": { brand: "aurele", size: "9:16", scene: "end-card/draw-on", fields: { product: "Le Sérum Nuit", cta: "Discover the ritual", website: "aurele-paris.com" }, controls: { style: "draw-on", mark: "logo" } },

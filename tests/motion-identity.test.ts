@@ -12,7 +12,8 @@ import { measure, RASTER_LOGO } from "./helpers/motion";
 // preset of each category, identity group timing and no tracks) must draw exactly what phase 2 drew: every scene, size
 // and Easy choice at 12 times, the rest frame included. The fixture holds a hash of those display lists made on the
 // phase 2 code (UPDATE_MOTION_IDENTITY=1 writes it; only ever from a checkout without the editor's changes), apart
-// from Kinetic Headline, whose end card later gained the ground's light (its keys were written again then, alone).
+// from Kinetic Headline, whose end card later gained the ground's light, and Offer Badge on the brand colour, which later
+// gained a soft pool behind the product (their keys were written again then, alone).
 
 const FIXTURE = path.join(process.cwd(), "tests/fixtures/motion-identity.json");
 const WRITE = process.env.UPDATE_MOTION_IDENTITY === "1";

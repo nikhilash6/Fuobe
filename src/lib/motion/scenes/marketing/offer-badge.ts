@@ -3,10 +3,11 @@
  * typed; the product slides in under it from the side and lands on its shadow; the headline rises line by line and the
  * call-to-action pill pops last. The badge sits where it covers none of the product (its own outline, not just its
  * box), sized to the product; when no spot is clear the product steps back a little. While it holds, the product floats
- * and the badge rocks gently. Without a product the logo (or the name) takes its place.
+ * and the badge rocks gently. On the brand colour a soft lighter pool sits behind the product. Without a product the
+ * logo (or the name) takes its place.
  */
 
-import { about, group, multiply, translate, type DisplayNode } from "../../display";
+import { about, group, mixHex, multiply, translate, withAlpha, type DisplayNode } from "../../display";
 import { lineRuns } from "../end-card/shared";
 import { badgeSpot, contactShadow, ev, fitBox, heroOf, holdFloat, logoNode, marketingScene, MIN_BODY, MIN_HEAD, readable, risingLines, setText, spread, starPath, textBlock, type BadgeSpot } from "./kit";
 
@@ -95,6 +96,21 @@ export default marketingScene({
         const fl = holdFloat(t, holdFrom, c.last, S * 0.012, 0.01);
         if (img && hero) {
           const sh = P("shadow");
+          // On the brand colour a product in that same colour would lose its edge: a soft pool of lighter ground
+          // behind it keeps it apart (it fades in as the product lands).
+          if (pal.look === "brand" && hero.src === "product" && lin > 0) {
+            const gx = img.x + img.w / 2;
+            const gy = img.y + img.h * 0.52;
+            const gr = Math.max(img.w, img.h) * 0.62;
+            const lift = mixHex(pal.ground, "#ffffff", 0.5);
+            const stops = [
+              { at: 0, color: withAlpha(lift, 0.55) },
+              { at: 0.55, color: withAlpha(lift, 0.25) },
+              { at: 1, color: withAlpha(lift, 0) },
+            ];
+            const sx = Math.min(1, Math.max(0.75, (img.w * 1.5) / gr));
+            nodes.push(group([{ type: "ellipse", cx: gx, cy: gy, rx: gr, ry: gr, fill: { kind: "radial", cx: gx, cy: gy, r0: 0, r1: gr, stops } }], { transform: about(gx, gy, sx, 0, 1), ...(lin < 1 && { opacity: lin }) }));
+          }
           if (sh > 0 && hero.src === "product") nodes.push(contactShadow(img.x + img.w / 2, img.y + img.h, img.w * 0.85 * (1 + fl.dy / (S * 0.2)), pal.ground, 0.3, sh));
           const pic: DisplayNode = hero.src === "logo" ? logoNode(c, img, pal.ink) : { type: "image", src: hero.src, x: img.x, y: img.y, w: img.w, h: img.h };
           if (lin > 0) nodes.push(group([pic], { transform: multiply(translate((1 - s) * S * 0.7, fl.dy), about(img.x + img.w / 2, img.y + img.h, 1, (1 - s) * 0.12 + fl.roll)), ...(lin < 0.25 && { opacity: lin / 0.25 }) }));

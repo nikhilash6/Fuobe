@@ -13,7 +13,7 @@ import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { RunPlaceChip } from "@/components/studio/run-place-chip";
 import { useIsOwner } from "@/lib/api";
 import type { BrandKit, MarketingTemplate } from "@/lib/catalog/marketing";
-import { SHOWCASE_PRODUCTS } from "@/lib/motion/showcase";
+import { SHOWCASE_PRODUCT_THUMBS, SHOWCASE_PRODUCTS } from "@/lib/motion/showcase";
 import type { SizePreset } from "@/lib/motion/sizes";
 import { initialState, ownFiles, templateLengths, templateRecipe, templateSizes, templateWords, type TemplateBrand, type TemplateState } from "@/lib/motion/template";
 import { IN_BROWSER } from "@/lib/run-place";
@@ -39,6 +39,11 @@ const PREVIEW_WIDTH: Record<SizePreset, string> = {
 const SAMPLES: { id: keyof typeof SHOWCASE_PRODUCTS; label: string }[] = [
   { id: "perfume", label: "Sample: perfume bottle" },
   { id: "heel", label: "Sample: red heel" },
+  { id: "serum", label: "Sample: serum bottle" },
+  { id: "nightSerum", label: "Sample: night serum" },
+  { id: "lipstick", label: "Sample: lipstick" },
+  { id: "card", label: "Sample: metal card" },
+  { id: "headphones", label: "Sample: headphones" },
 ];
 
 export function PicturePicker({ value, onChange, owner }: { value: string | null | undefined; onChange: (url: string | null) => void; owner: boolean }) {
@@ -52,7 +57,7 @@ export function PicturePicker({ value, onChange, owner }: { value: string | null
         {SAMPLES.map((s) => (
           <button key={s.id} type="button" aria-pressed={value === SHOWCASE_PRODUCTS[s.id]} aria-label={s.label} onClick={() => onChange(SHOWCASE_PRODUCTS[s.id])} className={tile(value === SHOWCASE_PRODUCTS[s.id])}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={SHOWCASE_PRODUCTS[s.id]} alt="" className="size-full object-contain p-1" />
+            <img src={SHOWCASE_PRODUCT_THUMBS[s.id]} alt="" className="size-full object-contain p-1" />
           </button>
         ))}
         {owner ? (
