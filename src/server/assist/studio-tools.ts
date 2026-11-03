@@ -26,6 +26,12 @@ import { storedMedia } from "../storage";
 import { EMOTIONS, PACES, PITCH_STEPS, planSpeechEdit, VOLUME_STEPS, CLOUD_ONLY_SPEECH_EDIT_PROBLEM, type SpeechEffect } from "@/lib/speech-edit";
 import { fileUrl, saveFile } from "../storage";
 import { defineTool, type JobPlace, type ToolContext, type ToolOutcome } from "./define";
+// originals (o/dbs-d9): Split soundtrack and Remove dialogue as tools
+import { dbsChannelsFor, durationWords, hostPick, KEEP_STEMS, REMIX_MAX_DB, REMIX_MIN_DB, remixWords, SPLIT_MODEL, splitOutcome, splitTime, type KeepStem, type SplitOutcome } from "@/lib/av/split";
+import { LOWER_DEFAULT_DB, LOWER_MAX_DB, LOWER_MIN_DB, removeDialogueTime, type DialogueOutcome } from "@/lib/av/remove-dialogue";
+import { AudioToolBody, planAudioTool, previewAudioTool, runAudioTool, type AudioToolPlan, type AudioToolRequest } from "../audio-tools";
+import { comfyDevice, comfyDeviceSeen } from "../providers/comfyui";
+import { contentTypeFor, filesRel, kindFor } from "../storage";
 
 /**
  * Agent access to whole studios: split an image into layers, restyle footage, dub a video, make a
@@ -977,3 +983,217 @@ export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpis
 
 /** For tests: the fallback pipelines, as they would be created. */
 export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests, blockout: blockoutSteps, flyAround: flyAroundSteps };
+
+// ---------------------------------------------------------------------------
+// originals (o/dbs-d9): Split soundtrack and Remove dialogue in one call (docs/research/dbs-separation-7.md §8 and §9 D9).
+// Both run the Audio hub's and Video tools' own plans (src/lib/av/split.ts, src/lib/av/remove-dialogue.ts through
+// src/server/audio-tools.ts), so a call reads the file's header, picks the stems and the mux exactly as the pages do, and
+// its results land in the Library. Open engine only: DBS is hosted nowhere, and SAM Audio in the cloud is the owner's call,
+// not taken (docs/handoff/owner-decisions.json samAudioCloud: false); the cloud engine refuses in words.
+
+const SoundtrackEngine = z
+  .enum(["open", "cloud"])
+  .optional()
+  .describe("Leave it out: it runs on the open engine (the user's GPU, free). 'cloud' is refused: DBS isn't hosted on fal or Replicate, and there is no cloud stand-in.");
+
+const SplitSoundtrackInput = z.object({
+  media: ref.describe("The audio file or the video whose soundtrack to split."),
+  keep: z
+    .array(z.enum(KEEP_STEMS as [KeepStem, ...KeepStem[]]))
+    .optional()
+    .describe(
+      "The stems to keep. Left out: all four stems come back (voice = dialogue, music, effects, background = music & effects). One stem (['music']): that stem alone. ['music','effects']: the background stem. Dialogue with music or with effects: one mixed file of those.",
+    ),
+  levels_db: z
+    .object({
+      dialogue: z.number().min(REMIX_MIN_DB).max(REMIX_MAX_DB).optional(),
+      music: z.number().min(REMIX_MIN_DB).max(REMIX_MAX_DB).optional(),
+      effects: z.number().min(REMIX_MIN_DB).max(REMIX_MAX_DB).optional(),
+    })
+    .optional()
+    .describe(`Mix the kept stems back into ONE file at these levels (whole dB, ${REMIX_MIN_DB} to +${REMIX_MAX_DB}; a kept stem with no level stays at 0 dB), e.g. { music: -12 } for the music 12 dB under the dialogue and effects.`),
+  quality: z.enum(["fast", "best"]).optional().describe("fast = DBS-BSRNN, best = DBS-TIGER (about 3x slower on a CPU). Left out: the GPU's pick (best on CUDA, fast on a CPU)."),
+  engine: SoundtrackEngine,
+});
+const RemoveDialogueInput = z.object({
+  video: ref.describe("The video to take the dialogue out of (it must have sound)."),
+  keep: z
+    .enum(["bed", "dialogue"])
+    .optional()
+    .describe("bed (default): the music and sound effects stay, the talking goes. dialogue: only the talking stays. With music_db: the talking stays and the music and effects go quieter under it."),
+  music_db: z.number().min(LOWER_MIN_DB).max(LOWER_MAX_DB).optional().describe(`Keep the dialogue and lower the music and effects to this level under it (dB, ${LOWER_MIN_DB} to 0; ${LOWER_DEFAULT_DB} is a good start).`),
+  quality: z.enum(["fast", "best"]).optional().describe("fast = DBS-BSRNN, best = DBS-TIGER. Left out: the GPU's pick."),
+  engine: SoundtrackEngine,
+});
+export type SplitSoundtrackToolInput = z.infer<typeof SplitSoundtrackInput>;
+export type RemoveDialogueToolInput = z.infer<typeof RemoveDialogueInput>;
+
+/** The engine a soundtrack tool runs on: the open engine unless asked otherwise (Engine mode wins). */
+const soundtrackEngine = (asked?: Engine): Engine => (engineMode() === "both" ? (asked ?? "open") : (engineMode() as Engine));
+
+/** audio / video from the file's name, or why the file can't be split. */
+function mediaKind(url: string): "audio" | "video" {
+  const rel = filesRel(url);
+  const kind = rel ? kindFor(contentTypeFor(rel)) : null;
+  if (kind === "audio" || kind === "video") return kind;
+  throw new Error("Pass an audio file or a video with sound (a file URL from the chat, /api/files/…)");
+}
+
+const levelOf = (l: SplitSoundtrackToolInput["levels_db"]) => l && { dialogue: l.dialogue, music: l.music, effects: l.effects };
+
+/** The Audio hub's Split soundtrack request for a call, and what it returns. Throws what's in the way. */
+export function splitSoundtrackBody(i: SplitSoundtrackToolInput): { body: AudioToolRequest; outcome: SplitOutcome } {
+  const outcome = splitOutcome(i.keep, levelOf(i.levels_db));
+  const kind = mediaKind(i.media);
+  const parsed = AudioToolBody.safeParse({
+    tool: "split",
+    engine: soundtrackEngine(i.engine),
+    media: i.media,
+    kind,
+    ...(i.quality && { quality: i.quality }),
+    ...(outcome.kind === "mix" && { remix: outcome.levels }),
+  });
+  if (!parsed.success) throw new Error("Pass a file URL from the chat (/api/files/…)");
+  return { body: parsed.data, outcome };
+}
+
+/** Video tools → Remove dialogue's request for a call. Throws what's in the way. */
+export function removeDialogueBody(i: RemoveDialogueToolInput): { body: AudioToolRequest; outcome: DialogueOutcome } {
+  if (i.keep === "bed" && i.music_db !== undefined) throw new Error("music_db lowers the music under the dialogue: leave keep out (or set it to 'dialogue') to use it");
+  if (mediaKind(i.video) !== "video") throw new Error("remove_dialogue takes a video: use split_soundtrack for an audio file");
+  const outcome: DialogueOutcome = i.music_db !== undefined ? "lower-music" : i.keep === "dialogue" ? "dialogue-only" : "no-dialogue";
+  const parsed = AudioToolBody.safeParse({
+    tool: "remove-dialogue",
+    engine: soundtrackEngine(i.engine),
+    video: i.video,
+    outcome,
+    ...(outcome === "lower-music" && { musicDb: Math.round(i.music_db!) }),
+    ...(i.quality && { quality: i.quality }),
+  });
+  if (!parsed.success) throw new Error("Pass a video URL from the chat (/api/files/…)");
+  return { body: parsed.data, outcome };
+}
+
+/**
+ * "about 1–2 min on your GPU" for the card, from the GPU's last known device. Before the device has been read the card
+ * leaves the time out (a CUDA card and a CPU differ about 80x) and asks the GPU in the background, so the next card has it.
+ */
+export function soundtrackTime(p: AudioToolPlan, body: AudioToolRequest): string | null {
+  const seconds = p.split?.duration;
+  if (!seconds || (body.tool !== "split" && body.tool !== "remove-dialogue")) return null;
+  const device = comfyDeviceSeen();
+  if (!device) {
+    void comfyDevice().catch(() => undefined);
+    return null;
+  }
+  const quality = body.quality ?? hostPick(device);
+  const mode = dbsChannelsFor(body.tool === "split" && (body.stereo ?? !!body.remix) ? "each channel" : "mono", p.split?.channels);
+  const t = (body.tool === "split" ? splitTime : removeDialogueTime)({ seconds, quality, mode, channels: p.split?.channels, device });
+  return `${durationWords(t)} ${device === "cpu" ? "on your computer" : "on your GPU"}`;
+}
+
+/** Price (and time) the call the way the page does; never throws: what's in the way is the card's error. */
+function planSoundtrack(tool: string, name: string, kind: "audio" | "video", build: () => { body: AudioToolRequest }): PlannedJob[] {
+  let body: AudioToolRequest;
+  let p: AudioToolPlan;
+  try {
+    body = build().body;
+    p = planAudioTool(body);
+  } catch (e) {
+    return [{ tool, modelId: SPLIT_MODEL, modelName: name, kind, op: "separate-audio", prompt: name, count: 0, costUsd: 0, demo: false, atomic: true, error: (e as Error).message }];
+  }
+  const jobs = planSteps(tool, p.steps.map((s) => ({ key: s.key, request: s.request, ...(s.after && { after: s.after }), ...(s.chain && { chain: s.chain }) })));
+  const time = jobs.some((j) => j.demo) ? null : soundtrackTime(p, body);
+  // The card's first line says what the whole call does (the steps' own labels are their notes).
+  if (jobs[0]) jobs[0] = { ...jobs[0], prompt: p.summary };
+  if (time && jobs[0] && !jobs[0].error) jobs[0] = { ...jobs[0], note: `${jobs[0].note ?? name} · ${time}` };
+  return jobs;
+}
+
+/** Start the call: the host's check first (a DBS model it doesn't have is refused before anything is queued), then one batch. */
+async function runSoundtrack(name: string, href: string, build: () => { body: AudioToolRequest; returns: string }): Promise<ToolOutcome> {
+  let body: AudioToolRequest;
+  let returns: string;
+  try {
+    ({ body, returns } = build());
+  } catch (e) {
+    return { content: JSON.stringify({ error: (e as Error).message }), isError: true };
+  }
+  try {
+    const preview = await previewAudioTool(body);
+    const run = await runAudioTool(body);
+    return {
+      content: JSON.stringify({
+        tool: name,
+        href,
+        engine: body.engine,
+        steps: run.items.map((g) => ({ step: g.request.step?.label, id: g.id })),
+        result: run.result.id,
+        returns,
+        costUsd: preview.costUsd,
+        ...(preview.estimate && !preview.demo && { takes: `${durationWords(preview.estimate)} on your GPU` }),
+        demo: preview.demo || undefined,
+        note: "It runs in the background: check_generations on the result gives the output URLs (a split's audio outputs carry meta.stem: voice, music, effects or background; a mix is the one audio output, tagged meta.stem voice whatever levels it has, with a short text report beside it).",
+      }),
+      items: [
+        { id: "", role: "tool", text: `${name}: started${preview.estimate && !preview.demo ? ` (${durationWords(preview.estimate)})` : ""}`, href },
+        { id: "", role: "generations", ids: [run.result.id] },
+      ],
+    };
+  } catch (e) {
+    return { content: JSON.stringify({ error: (e as Error).message }), isError: true };
+  }
+}
+
+const STEM_WORDS: Record<string, string> = { voice: "voice (the dialogue)", music: "music", effects: "effects", background: "background (music & effects)" };
+
+function splitReturns(o: SplitOutcome): string {
+  if (o.kind === "stems") return "four stems on the result: voice (the dialogue), music, effects, background (music & effects)";
+  if (o.kind === "stem") return `the ${STEM_WORDS[o.stem]} stem of the result (it holds all four stems; pick meta.stem ${o.stem})`;
+  return `one mixed file: ${remixWords(o.levels)} (the result's audio output; it carries meta.stem voice whatever it holds, and a text report comes with it)`;
+}
+
+const splitSoundtrack = defineTool({
+  name: "split_soundtrack",
+  description:
+    "Split a soundtrack (an audio file or a video) into dialogue, music and effects with DBS — Fuobe's Split soundtrack (Audio → Split soundtrack): " +
+    "four stems (voice, music, effects, background = music & effects), one stem ('give me just the music': keep ['music']), or one file remixed at your levels (levels_db). " +
+    "Runs on the user's GPU (open source, free; a CPU works too, at about a quarter of real time); there is no hosted DBS, so the cloud engine refuses it. " +
+    "Dialogue separates cleanly; music and effects can bleed into each other. A mix that would clip is turned down as a whole. Gated by the same approval card as generate.",
+  schema: SplitSoundtrackInput,
+  gated: true,
+  title: (i) => (i.levels_db ? "Remix the soundtrack" : i.keep?.length === 1 ? `Split soundtrack: just the ${i.keep[0]}` : "Split soundtrack"),
+  place: () => ({ studio: "Split soundtrack", href: "/audio/split" }),
+  plan: (i) => planSoundtrack("split_soundtrack", "Split soundtrack", "audio", () => splitSoundtrackBody(i)),
+  run: (i) =>
+    runSoundtrack("Split soundtrack", "/audio/split", () => {
+      const b = splitSoundtrackBody(i);
+      return { body: b.body, returns: splitReturns(b.outcome) };
+    }),
+});
+
+const REMOVE_RETURNS: Record<DialogueOutcome, string> = {
+  "no-dialogue": "a new video with the music and effects only (the picture copied untouched); the dialogue it took out is a stem of the split step",
+  "dialogue-only": "a new video with the dialogue only (the picture copied untouched); the music & effects it took out are a stem of the split step",
+  "lower-music": "a new video with the dialogue over the lowered music and effects (the picture copied untouched)",
+};
+
+const removeDialogue = defineTool({
+  name: "remove_dialogue",
+  description:
+    "Take the dialogue out of a video, keep only the dialogue, or keep it with the music lowered (music_db) — Fuobe's Remove dialogue (Video tools → Remove dialogue): DBS splits the soundtrack, then the chosen sound goes back on the video with the picture copied untouched. " +
+    "Runs on the user's GPU (open source, free); there is no hosted DBS, so the cloud engine refuses it. Gated by the same approval card as generate.",
+  schema: RemoveDialogueInput,
+  gated: true,
+  title: (i) => (i.music_db !== undefined ? `Lower the music (${Math.round(i.music_db)} dB)` : i.keep === "dialogue" ? "Keep only the dialogue" : "Remove the dialogue"),
+  place: () => ({ studio: "Remove dialogue", href: "/video-tools/remove-dialogue" }),
+  plan: (i) => planSoundtrack("remove_dialogue", "Remove dialogue", "video", () => removeDialogueBody(i)),
+  run: (i) =>
+    runSoundtrack("Remove dialogue", "/video-tools/remove-dialogue", () => {
+      const b = removeDialogueBody(i);
+      return { body: b.body, returns: REMOVE_RETURNS[b.outcome] };
+    }),
+});
+
+/** originals (o/dbs-d9): Split soundtrack and Remove dialogue (registered after the studio tools in ./tools.ts). */
+export const SOUNDTRACK_TOOLS = [splitSoundtrack, removeDialogue];
