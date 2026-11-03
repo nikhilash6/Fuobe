@@ -46,6 +46,7 @@ import {
 import { languageByCode, supportsTarget, type DubRoute } from "@/lib/av/languages";
 import type { Cue } from "@/lib/cues";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { useDubActions, useDubPrice, useDubSessions, useVoicePrice } from "./hooks";
 
@@ -464,20 +465,21 @@ function SessionView({ s, onBack }: { s: DubSessionView; onBack: () => void }) {
         </AlertDialog>
       </div>
 
-      <div role="tablist" aria-label="Languages" className="scrollbar-none mb-4 flex gap-1.5 overflow-x-auto">
+      <TabRow role="tablist" aria-label="Languages" follow className="mb-3">
         {s.targets.map((c) => (
           <button
             key={c}
             role="tab"
             aria-selected={c === lang}
             onClick={() => setLang(c)}
-            className={cn("inline-flex h-8 shrink-0 items-center gap-2 rounded-full px-3 text-[13px] font-medium transition-colors", c === lang ? "bg-foreground text-background" : "bg-secondary hover:bg-accent")}
+            className={TAB_PILL}
+            {...onAttr(c === lang)}
           >
             {languageByCode(c)?.name ?? c}
             <span className={cn("size-1.5 rounded-full", { preparing: "bg-subtle-foreground", review: "bg-highlight", voicing: "bg-primary", done: "bg-success", failed: "bg-destructive" }[languageStage(s, c)])} />
           </button>
         ))}
-      </div>
+      </TabRow>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
         <div className="space-y-3 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:self-start">

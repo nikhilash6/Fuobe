@@ -1,6 +1,7 @@
 "use client";
 
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
+import { useSwapFade } from "@/components/ui/tab-row";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { HubHeaderExtras, useInHub } from "@/components/studio/hub-chrome";
 import { useEngine } from "@/lib/api";
@@ -20,6 +21,7 @@ export function ToolShell({
   selfHostedOnly,
   children,
   wide,
+  fadeKey,
 }: {
   title: string;
   tabs?: React.ReactNode;
@@ -30,10 +32,13 @@ export function ToolShell({
   selfHostedOnly?: boolean;
   children: React.ReactNode;
   wide?: boolean;
+  /** What the body shows (a mode tab): when it changes, the body fades in. */
+  fadeKey?: unknown;
 }) {
   const [engine, setEngine] = useEngine();
   const inHub = useInHub();
-  const body = <div className={cn("mx-auto w-full min-w-0 flex-1 px-4 pb-16 sm:px-6", wide ? "max-w-[1240px]" : "max-w-[1040px]")}>{children}</div>;
+  const fade = useSwapFade<HTMLDivElement>(fadeKey);
+  const body = <div ref={fade} className={cn("mx-auto w-full min-w-0 flex-1 px-4 pb-16 sm:px-6", wide ? "max-w-[1240px]" : "max-w-[1040px]")}>{children}</div>;
   if (inHub)
     return (
       <>

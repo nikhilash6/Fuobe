@@ -41,6 +41,7 @@ import {
   type InfluencerState,
 } from "@/lib/influencer";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { CATEGORY_ICON, LockButton, OptionTiles, pickRule, TierPanel } from "./option-panel";
 
@@ -142,6 +143,7 @@ export function InfluencerBuilder() {
   const categories = useMemo(() => categoriesFor(state.tier), [state.tier]);
   const category = categories.find((c) => c.id === active);
   const tab = category ? category.id : "tier";
+  const panel = useSwapFade<HTMLElement>(tab);
   // The rail scrolls sideways on phones: keep the open category in view (a summary chip can open any).
   const railMoved = useRef(false);
   useEffect(() => {
@@ -209,12 +211,13 @@ export function InfluencerBuilder() {
 
       <div className="grid gap-4 lg:grid-cols-[212px_minmax(0,1fr)] xl:grid-cols-[212px_minmax(0,1fr)_340px]">
         {/* The rail: Character type, then the categories this type shows. Phones scroll it sideways inside itself. */}
-        <div
+        <TabRow
           role="tablist"
           aria-label="Categories"
           aria-orientation={wide ? "vertical" : "horizontal"}
           onKeyDown={tabKeys}
-          className="scrollbar-none -mx-4 flex min-w-0 gap-1 overflow-x-auto px-4 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0"
+          follow
+          className="max-lg:-mx-4 max-lg:px-4 lg:flex-col lg:items-stretch lg:overflow-visible"
         >
           {[{ id: "tier", label: "Character type" }, ...categories].map((c) => {
             const Icon = CATEGORY_ICON[c.id];
@@ -230,12 +233,10 @@ export function InfluencerBuilder() {
                 aria-controls="ib-panel"
                 tabIndex={on ? 0 : -1}
                 onClick={() => setActive(c.id)}
-                className={cn(
-                  "flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring lg:h-8 lg:rounded-lg lg:px-2.5",
-                  on && "bg-brand-faint text-brand-text hover:bg-brand-faint-hover hover:text-brand-text",
-                )}
+                className={cn(TAB_PILL, "lg:justify-start")}
+                {...onAttr(on)}
               >
-                {Icon && <Icon className="size-3.5 shrink-0" aria-hidden />}
+                {Icon && <Icon aria-hidden />}
                 <span className="lg:min-w-0 lg:flex-1 lg:truncate lg:text-left">{c.label}</span>
                 {c.id === "tier" ? (
                   <span className="text-[11.5px] text-muted-foreground">{tierLabel}</span>
@@ -248,9 +249,9 @@ export function InfluencerBuilder() {
               </button>
             );
           })}
-        </div>
+        </TabRow>
 
-        <section id="ib-panel" role="tabpanel" aria-labelledby={`ib-tab-${tab}`} className="min-w-0 space-y-4 rounded-2xl border bg-background p-4 sm:p-5">
+        <section ref={panel} id="ib-panel" role="tabpanel" aria-labelledby={`ib-tab-${tab}`} className="min-w-0 space-y-4 rounded-2xl border bg-background p-4 sm:p-5">
           <div className="flex flex-wrap items-center gap-2">
             <div className="mr-auto min-w-0">
               <h2 className="font-heading text-[22px] leading-tight">{category?.label ?? "Character type"}</h2>

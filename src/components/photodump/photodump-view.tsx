@@ -18,6 +18,7 @@ import { customPack, DEFAULT_ASPECT, MAX_PACK_REFS, MAX_SELFIE_MB, PACKS, PHOTOD
 import type { Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { PackCover } from "./covers";
 import { useRun, useRunPreview, usePackActions, useUserPacks } from "./hooks";
@@ -236,13 +237,13 @@ export function PhotodumpView() {
       {step === 0 && (
         <section aria-label="Choose a pack" className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div role="tablist" aria-label="Packs" className="scrollbar-none inline-flex max-w-full overflow-x-auto rounded-full bg-muted p-0.5">
+            <TabRow role="tablist" aria-label="Packs" follow className="max-w-full">
               {TABS.map(([id, label]) => (
-                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn("h-8 shrink-0 rounded-full px-3 text-[13px] font-medium text-muted-foreground transition", tab === id && "bg-background text-foreground shadow-soft")}>
+                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={TAB_PILL} {...onAttr(tab === id)}>
                   {label}
                 </button>
               ))}
-            </div>
+            </TabRow>
             <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-full border bg-background px-3 focus-within:border-primary sm:w-auto sm:max-w-xs sm:flex-1">
               <Search className="size-4 text-muted-foreground" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search packs" aria-label="Search packs" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" />

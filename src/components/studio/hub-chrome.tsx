@@ -9,9 +9,8 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine, useLikelyVisitor } from "@/lib/api";
 import { HUB_MODES, HUB_TITLE, hubOfPath, modeHref, modeOfPath, type HubKind } from "@/lib/hubs";
 import { prefetchOptions, useIdlePrefetch } from "@/lib/idle-prefetch";
-import { cn } from "@/lib/utils";
 import { isPlainClick, useTappedTab } from "@/lib/use-tapped-tab";
-import { useEdgeFade } from "./use-edge-fade";
+import { onAttr, reducedMotion, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 
 /**
  * The frame of a hub (Audio, Video tools, Upscale): the sticky title bar and the mode tabs live in the hub's layout, shared
@@ -101,7 +100,7 @@ function HubTabs({
   onWaiting?: (waiting: boolean) => void;
 }) {
   const router = useRouter();
-  const [ref, fade] = useEdgeFade<HTMLDivElement>();
+  const ref = useRef<HTMLElement>(null);
   const activeRef = useRef<HTMLAnchorElement>(null);
   const visitor = useLikelyVisitor();
   // The tab just tapped: the current one from the next frame on, until the route moves (then the path says).
@@ -138,7 +137,7 @@ function HubTabs({
 
   return (
     <nav aria-label="Modes" className="border-b">
-      <div ref={ref} style={fade} className="scrollbar-none flex gap-1 overflow-x-auto px-4 sm:px-6">
+      <TabRow ref={ref} className="m-0 px-4 py-1.5 sm:px-6">
         {modes.map((m) => {
           const on = m.id === active;
           const href = modeHref(kind, m.id);
@@ -154,18 +153,15 @@ function HubTabs({
               // A new tab or window (modifier, middle button) leaves this page as it is.
               onClick={(e) => isPlainClick(e) && tap(m.id)}
               aria-current={on ? "page" : undefined}
-              className={cn(
-                "relative flex h-11 shrink-0 items-center rounded-md px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                "after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full focus-visible:after:bg-ring",
-                on && "text-foreground after:bg-foreground",
-              )}
+              className={TAB_PILL}
+              {...onAttr(on)}
             >
               {m.label}
               <TabWaiting onWaiting={onWaiting} />
             </Link>
           );
         })}
-      </div>
+      </TabRow>
     </nav>
   );
 }
@@ -174,6 +170,23 @@ function HubTabs({
 function PathTabs({ kind, onActive, onWaiting }: { kind: HubKind; onActive: (mode: string) => void; onWaiting: (waiting: boolean) => void }) {
   const pathname = usePathname();
   return <HubTabs kind={kind} pathname={pathname} onActive={onActive} onWaiting={onWaiting} />;
+}
+
+/**
+ * The hub body fades in when a mode's page arrives (the path changes with it): the page is there in that frame and only
+ * its opacity eases, so a switch is never slower. Inside Suspense (the path is runtime data while a route prerenders).
+ */
+function PathFade({ body }: { body: React.RefObject<HTMLDivElement | null> }) {
+  const pathname = usePathname();
+  const last = useRef(pathname);
+  useLayoutEffect(() => {
+    if (last.current === pathname) return;
+    last.current = pathname;
+    const el = body.current;
+    if (!el || reducedMotion() || typeof el.animate !== "function") return;
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "cubic-bezier(0.25, 0.8, 0.25, 1)" });
+  }, [pathname, body]);
+  return null;
 }
 
 /** How long a tapped tab's page may keep the old one on screen before the skeleton replaces it. */
@@ -207,6 +220,7 @@ export function HubFrame({ kind, skeleton, children }: { kind: HubKind; skeleton
   }, [waiting]);
   // `waiting` ends before paint when the page arrives, so the skeleton never covers the new page.
   const skeletonShown = waiting && late;
+  const body = useRef<HTMLDivElement>(null);
   return (
     <div className="flex min-h-content min-w-0 flex-col" data-hub={kind}>
       <div className="max-md:sticky top-chrome z-20 bg-background/85 backdrop-blur" data-hub-chrome>
@@ -223,7 +237,10 @@ export function HubFrame({ kind, skeleton, children }: { kind: HubKind; skeleton
         </Suspense>
       </div>
       <HubCtx.Provider value={store}>
-        <div className="flex min-w-0 flex-1 flex-col" data-hub-body>
+        <Suspense fallback={null}>
+          <PathFade body={body} />
+        </Suspense>
+        <div ref={body} className="flex min-w-0 flex-1 flex-col" data-hub-body>
           {skeletonShown && skeleton}
           <div className={skeletonShown ? "hidden" : "contents"}>{children}</div>
         </div>

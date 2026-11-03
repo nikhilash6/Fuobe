@@ -19,6 +19,7 @@
     "test:e2e:mobile": "node tests/e2e/no-horizontal-scroll.mjs",
     "test:e2e:shell": "node tests/e2e/shell.mjs",
     "test:e2e:tabs": "node tests/e2e/instant-tabs.mjs",
+    "test:e2e:tab-rows": "node tests/e2e/tab-rows.mjs",
     "gen:catalog": "python3 scripts/gen-cloud-models.py && python3 scripts/gen-studio-packs.py && python3 scripts/gen-oss-loras.py && python3 scripts/gen-lora-library.py && python3 scripts/gen-influencer-options.py && python3 scripts/gen-soul-originals.py && python3 scripts/gen-trainers.py && node scripts/gen-icon-map.mjs",
     "typecheck": "tsc --noEmit",
     "eval:run": "node scripts/eval/eval.mjs run",

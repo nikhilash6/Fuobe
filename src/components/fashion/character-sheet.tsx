@@ -25,6 +25,7 @@ import { castFieldVisible, castNameFor, randomCast, SHEET_MAX_REFS, type CastAns
 import { sheetPictures } from "@/lib/catalog/turnaround";
 import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { SheetExample } from "@/components/empty-examples";
 
@@ -42,13 +43,13 @@ function CastForm({ fields, values, set }: { fields: CastFieldData[]; values: Ca
   const [tab, setTab] = useState(tabs[0]);
   return (
     <div className="space-y-4">
-      <div role="tablist" aria-label="Soul Cast" className="scrollbar-none flex gap-1 overflow-x-auto">
+      <TabRow role="tablist" aria-label="Soul Cast" follow>
         {tabs.map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("h-8 shrink-0 rounded-full px-3 text-[12.5px] font-medium transition-colors", tab === t ? "bg-brand-faint text-brand-text" : "bg-secondary text-secondary-foreground hover:bg-accent")}>
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={TAB_PILL} {...onAttr(tab === t)}>
             {t}
           </button>
         ))}
-      </div>
+      </TabRow>
       {fields
         .filter((f) => f.tab === tab && castFieldVisible(f.key, values))
         .map((f) => {
@@ -237,13 +238,13 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
       {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Character Sheet isn&apos;t available here.</SelfHostNote>}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section className="min-w-0 space-y-4">
-          <div role="tablist" aria-label="How to build it" className="scrollbar-none inline-flex max-w-full overflow-x-auto rounded-full bg-muted p-0.5">
+          <TabRow role="tablist" aria-label="How to build it" follow>
             {MODES.map(([id, label]) => (
-              <button key={id} role="tab" aria-selected={mode === id} onClick={() => setMode(id)} className={cn("h-8 shrink-0 rounded-full px-3.5 text-[13px] font-medium text-muted-foreground transition", mode === id && "bg-background text-foreground shadow-soft")}>
+              <button key={id} role="tab" aria-selected={mode === id} onClick={() => setMode(id)} className={TAB_PILL} {...onAttr(mode === id)}>
                 {label}
               </button>
             ))}
-          </div>
+          </TabRow>
 
           {mode === "reference" && (
             <div className="space-y-3">

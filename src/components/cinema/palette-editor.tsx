@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { HARMONIES, harmonyPalette, hexToRgb, hslToHex, kmeans, rgbToHex, rgbToHsl, type Harmony, type RGB } from "./color-math";
 
 interface Point {
@@ -364,7 +365,7 @@ function EditorBody({ onClose, onSave }: { onClose: () => void; onSave: (p: { na
         <DialogTitle>New palette</DialogTitle>
         <DialogDescription>Pull colours from a frame you like, or build a harmony on the colour wheel.</DialogDescription>
       </DialogHeader>
-      <div className="inline-flex w-fit rounded-full bg-muted p-0.5" role="tablist">
+      <TabRow className="w-fit" role="tablist" aria-label="Source" fade={false}>
         {(
           [
             ["image", "From image"],
@@ -379,11 +380,14 @@ function EditorBody({ onClose, onSave }: { onClose: () => void; onSave: (p: { na
               setTab(id);
               // The wheel starts from a harmony right away; the image tab waits for a picture.
               setHex(id === "wheel" ? harmonyPalette(WHEEL_BASE, "analogous", 6) : []);
-            }} className={cn("h-7 rounded-full px-3 text-[12px] font-medium", tab === id ? "bg-background shadow-soft" : "text-muted-foreground")}>
+            }}
+            className={TAB_PILL}
+            {...onAttr(tab === id)}
+          >
             {label}
           </button>
         ))}
-      </div>
+      </TabRow>
       {tab === "image" ? <FromImage onColors={setHex} /> : <ColorWheel onColors={setHex} />}
       <div className="space-y-1.5">
         <p className="text-[12px] text-muted-foreground">{hex.length ? "Click a colour to change it, drag to reorder." : "Your colours appear here."}</p>

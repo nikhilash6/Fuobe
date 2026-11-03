@@ -26,7 +26,7 @@ import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/compone
 import { openInStudio } from "@/components/swap-studio/hooks";
 import { SelfHostNote } from "@/components/self-host-note";
 import { ExampleRow } from "@/components/studio/example-row";
-import { useEdgeFade } from "@/components/studio/use-edge-fade";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { useEngine, useGenerations, useIsOwner, useLikelyVisitor, useModelAccess, useSoundLive, useStatus } from "@/lib/api";
 import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterChoice, type CharacterOptions } from "@/lib/catalog/character-swap";
 import {
@@ -635,7 +635,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   const tabs = <ModeTabsRow modes={GENJUTSU_MODES.filter((m) => modeOpen(m.id, open))} mode={mode} onMode={setMode} onlyYou={(m) => owner && !modeOpen(m, (f) => !!live?.[f])} />;
 
   return (
-    <ToolShell title="Genjutsu" tabs={tabs} header={<SetupCode setup={setup} onPaste={apply} />} wide selfHostedOnly>
+    <ToolShell title="Genjutsu" tabs={tabs} fadeKey={mode} header={<SetupCode setup={setup} onPaste={apply} />} wide selfHostedOnly>
       {!clip && (
         <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint}${visitor ? "" : " Free on your own ComfyUI."}`}>
           {isCharacter && (
@@ -1195,38 +1195,20 @@ function frameHint(mode: GenjutsuMode, target: GenjutsuTarget | undefined, point
 
 /** The modes as tabs under the header (the selected one is in the URL as ?mode=); only the ones open to this viewer. */
 function ModeTabsRow({ modes, mode, onMode, onlyYou }: { modes: typeof GENJUTSU_MODES; mode: GenjutsuMode; onMode: (m: GenjutsuMode) => void; onlyYou: (m: GenjutsuMode) => boolean }) {
-  const [row, fade] = useEdgeFade<HTMLDivElement>();
   // The selected tab stays in view on a phone, where the row scrolls (only the row: the page stays put).
-  useEffect(() => {
-    const r = row.current;
-    const on = r?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (r && on) r.scrollTo({ left: Math.max(0, on.offsetLeft - (r.clientWidth - on.offsetWidth) / 2) });
-  }, [mode, row]);
   return (
     <div className="border-b">
-      <div ref={row} style={fade} role="tablist" aria-label="Genjutsu modes" onKeyDown={tabKeys} className="scrollbar-none flex gap-1 overflow-x-auto px-4 sm:px-6">
+      <TabRow role="tablist" aria-label="Genjutsu modes" onKeyDown={tabKeys} follow className="m-0 px-4 py-1.5 sm:px-6">
         {modes.map((m) => {
           const on = m.id === mode;
           return (
-            <button
-              key={m.id}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              tabIndex={on ? 0 : -1}
-              onClick={() => onMode(m.id)}
-              className={cn(
-                "relative flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground",
-                "after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:transition-colors focus-visible:after:bg-ring",
-                on && "text-foreground after:bg-foreground",
-              )}
-            >
+            <button key={m.id} type="button" role="tab" aria-selected={on} tabIndex={on ? 0 : -1} onClick={() => onMode(m.id)} className={TAB_PILL} {...onAttr(on)}>
               {m.label}
               {onlyYou(m.id) && <OnlyYou />}
             </button>
           );
         })}
-      </div>
+      </TabRow>
     </div>
   );
 }

@@ -19,10 +19,10 @@ import { AreaSearch, AreaTabs, JumpBackIn, OwnerPills, type AreaTab } from "./ar
 
 /**
  * Each section's space under the one before, as Home's (without Home's content-visibility, which needs a known height).
- * A jump to it stops under the bar and the tabs: the phone's bar and the tabs (108 px) and the notch; from md the page
- * already keeps the bar's 56 px clear (scroll-padding), so the tabs' 52 px and a little air.
+ * A jump to it stops under the bar and the tabs: the phone's bar and the tabs (108 px), 8 px of air and the notch; from md the page
+ * already keeps the bar's 56 px clear (scroll-padding), so the tabs' 52 px and 8 px of air.
  */
-export const AREA_SECTION = "-mx-4 mt-8 -mb-2 scroll-mt-[calc(7.25rem+env(safe-area-inset-top))] px-4 py-2 sm:mt-12 md:scroll-mt-16";
+export const AREA_SECTION = "-mx-4 mt-8 -mb-2 scroll-mt-[calc(7.25rem+env(safe-area-inset-top))] px-4 py-2 sm:mt-12 md:scroll-mt-[60px]";
 
 /** The area page's heading: its name and count, its line, and its search (Create, Studios) beside it, or under it on a phone. */
 export function AreaHero({ id, count, search, action }: { id: AreaId; count: number; search?: string[]; action?: React.ReactNode }) {

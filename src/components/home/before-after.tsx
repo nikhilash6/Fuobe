@@ -3,6 +3,7 @@
 import { ArrowRight } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { IntentLink } from "@/components/intent-link";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { cn } from "@/lib/utils";
 
 /** One side's picture: a 512 px still, and with HD stills its 960 and 1280 px copies (each with its version). */
@@ -246,10 +247,11 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
         </span>
       </div>
       <div className="min-w-0 lg:max-xl:flex-1">
-        <div
+        <TabRow
           role="tablist"
           aria-label="Apps to compare"
-          className="mt-2 flex gap-1.5 lg:max-xl:mt-0 lg:max-xl:flex-col"
+          fade={false}
+          className="mt-2 lg:max-xl:mt-0 lg:max-xl:flex-col lg:max-xl:items-stretch"
           onKeyDown={(e) => {
             const keys = ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"];
             if (!keys.includes(e.key)) return;
@@ -270,21 +272,20 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
               onClick={() => pick(i)}
               onPointerEnter={() => preload(p)}
               onFocus={() => preload(p)}
-              className={cn(
-                "relative flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg p-1 text-[12px] after:absolute after:inset-x-0 after:-inset-y-1 after:content-[''] font-medium text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-sm:h-9 sm:justify-start sm:pr-2 xl:flex-col xl:items-stretch xl:gap-1 xl:pr-1 xl:pb-1.5",
-                i === tab && "bg-muted text-foreground",
-              )}
+              // Each tab takes an equal share of the row (stacked from lg to xl). A phone's tabs are words alone, so each
+              // name fits whole.
+              className={cn(TAB_PILL, "min-w-0 flex-1 max-sm:px-3.5 lg:max-xl:flex-none lg:max-xl:justify-start")}
+              {...onAttr(i === tab)}
             >
-              {/* A phone's tabs are words alone, and from xl (a narrower picture) the thumb stands over the name, so each
-                  name fits whole. The sketch's paper edge is cropped as in the picture. */}
-              <span className="hidden shrink-0 overflow-hidden rounded-md sm:block sm:h-[42px] sm:w-14 xl:h-10 xl:w-full">
+              {/* The sketch's paper edge is cropped as in the picture. */}
+              <span className="tab-thumb max-sm:hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.thumb} alt="" width={56} height={42} loading="lazy" decoding="async" className="size-full object-cover" style={{ scale: p.zoom }} />
+                <img src={p.thumb} alt="" width={20} height={20} loading="lazy" decoding="async" style={{ scale: p.zoom }} />
               </span>
-              <span className="truncate leading-tight xl:text-center">{p.name}</span>
+              <span className="truncate">{p.name}</span>
             </button>
           ))}
-        </div>
+        </TabRow>
         <div className="mt-2 flex items-center justify-between gap-3 text-[12px] text-muted-foreground lg:max-xl:mt-4 lg:max-xl:flex-col lg:max-xl:items-start lg:max-xl:gap-1.5 lg:max-xl:px-1">
           <span>Drag to compare</span>
           <IntentLink

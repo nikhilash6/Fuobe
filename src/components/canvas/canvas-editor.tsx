@@ -95,6 +95,7 @@ import type { Engine, MediaKind, ModelDef } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { useModKey } from "@/lib/keys";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import {
   buildViews,
@@ -1287,14 +1288,14 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
 
           {isMobile && (
             <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
-              <div className="inline-grid h-9 grid-cols-2 rounded-full bg-muted p-0.5 text-[13px] font-medium" role="tablist" aria-label="View">
+              <TabRow role="tablist" aria-label="View" fade={false}>
                 {(["board", "list"] as const).map((t) => (
-                  <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("inline-flex items-center gap-1.5 rounded-full px-3.5", tab === t ? "bg-background shadow-soft" : "text-muted-foreground")}>
-                    {t === "board" ? <LayoutGrid className="size-3.5" /> : <List className="size-3.5" />}
+                  <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={TAB_PILL} {...onAttr(tab === t)}>
+                    {t === "board" ? <LayoutGrid aria-hidden /> : <List aria-hidden />}
                     {t === "board" ? "Board" : "Nodes"}
                   </button>
                 ))}
-              </div>
+              </TabRow>
               {pages.length > 1 && (
                 <select value={pageId} onChange={(e) => pageOps.switchTo(e.target.value)} aria-label="Page" className="h-9 max-w-32 shrink-0 truncate rounded-full bg-muted px-3 text-[13px] font-medium outline-none">
                   {pages.map((p) => (

@@ -34,6 +34,7 @@ import { EmptyIcon, MarketingHeader, useMarketingEngine } from "./shell";
 import { TemplateGallery, type MediaFilter } from "./template-gallery";
 import { TemplatePreview } from "./template-preview";
 import { plainTagline } from "@/lib/plain-tagline";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 
 const IMAGE_FORMATS: FormatId[] = ["product-standalone", "product-with-model", "ads", "poster", "marketplace"];
 const VIDEO_FORMATS: FormatId[] = ["motion-hyper", "motion-2d", "motion-mixed", "motion-saas", "ugc-talking", "tiktok"];
@@ -316,6 +317,7 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
   const qc = useQueryClient();
   const { engine, setEngine } = useMarketingEngine();
   const [tab, setTab] = useState<"templates" | "generations">("templates");
+  const viewRef = useSwapFade<HTMLDivElement>(tab);
   const [category, setCategory] = useState<MarketingCategory | "all">("all");
   const [media, setMedia] = useState<MediaFilter>("all");
   const [draft, setDraft] = useState<Draft>(BLANK);
@@ -452,14 +454,14 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
         {!code && noProducts && <StarterSection surface="marketing" starters={starters} center compact className="mt-6 mb-4" />}
         {/* Under the ready shoots, so it doesn't read as an answer to them. */}
         {visitor && !code && <SelfHostNote className="mx-auto mt-3 max-w-xl text-center">Marketing Studio isn&apos;t available here.</SelfHostNote>}
-        <div role="tablist" aria-label="View" className="mx-auto mt-4 flex w-fit rounded-full bg-muted p-0.5">
+        <TabRow role="tablist" aria-label="View" fade={false} className="mx-auto mt-4 w-fit">
           {(["templates", "generations"] as const).map((t) => (
-            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("h-8 rounded-full px-4 text-[13px] font-medium text-muted-foreground", tab === t && "bg-background text-foreground shadow-soft")}>
+            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={TAB_PILL} {...onAttr(tab === t)}>
               {t === "templates" ? "Templates" : "My generations"}
             </button>
           ))}
-        </div>
-        <div className="mt-6">
+        </TabRow>
+        <div ref={viewRef} className="mt-6">
           {tab === "templates" ? (
             <>
               {/* Once there are products of your own, the ready shoots are one row above the templates. */}

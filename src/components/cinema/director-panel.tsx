@@ -34,6 +34,7 @@ import {
 import type { StudioElement } from "@/lib/catalog/elements";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { MoveChips, MoveList, prefetchMoves } from "./camera-moves";
 import { PaletteEditor } from "./palette-editor";
 
@@ -215,7 +216,7 @@ export function CameraChip({
         {missing && <TooltipContent>Stills need a camera, lens and focal length</TooltipContent>}
       </Tooltip>
       <PopoverContent className="w-[min(94vw,540px)] p-3" align="start" side="top" collisionPadding={12}>
-        <div className="scrollbar-none mb-3 flex gap-0.5 overflow-x-auto rounded-full bg-muted p-0.5" role="tablist">
+        <TabRow className="mb-2" role="tablist" aria-label="Camera" follow>
           {CAMERA_TABS.filter((t) => t.id !== "movement" || mode === "video").map((t) => (
             <button
               key={t.id}
@@ -224,17 +225,15 @@ export function CameraChip({
               onClick={() => setTab(t.id)}
               onPointerEnter={t.id === "movement" ? prefetchMoves : undefined}
               onFocus={t.id === "movement" ? prefetchMoves : undefined}
-              className={cn(
-                "inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-medium transition-colors",
-                tab === t.id ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
-              )}
+              className={TAB_PILL}
+              {...onAttr(tab === t.id)}
             >
               {t.label}
               {needs(t.id) && <span className="size-1.5 rounded-full bg-warning" aria-label="required" />}
               {t.id === "movement" && moves.length > 0 && <span className="font-mono text-[10px] text-brand-text">{moves.length}</span>}
             </button>
           ))}
-        </div>
+        </TabRow>
         <div className="max-h-[min(56vh,420px)] overflow-y-auto pr-0.5">
           {tab === "camera" && <OptionGrid options={CAMERA_BODIES} value={settings.camera} onChange={(camera) => onChange({ camera })} />}
           {tab === "lens" && <OptionGrid options={LENSES} value={settings.lens} onChange={(lens) => onChange({ lens })} />}
@@ -516,19 +515,13 @@ export function LightingChip({ settings, onChange }: { settings: DirectorSetting
       </PopoverTrigger>
       <PopoverContent className="w-[min(94vw,520px)] p-3" align="start" side="top" collisionPadding={12}>
         <PanelHeader title="Set up lighting" subtitle="Pick a scheme or place your own lights" />
-        <div className="mb-3 inline-flex rounded-full bg-muted p-0.5" role="tablist">
+        <TabRow className="mb-2" role="tablist" aria-label="Lighting" fade={false}>
           {(["presets", "custom"] as const).map((t) => (
-            <button
-              key={t}
-              role="tab"
-              aria-selected={tab === t}
-              onClick={() => setTab(t)}
-              className={cn("h-7 rounded-full px-3 text-[12px] font-medium", tab === t ? "bg-background shadow-soft" : "text-muted-foreground hover:text-foreground")}
-            >
+            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={TAB_PILL} {...onAttr(tab === t)}>
               {t === "presets" ? "Presets" : "Custom rig"}
             </button>
           ))}
-        </div>
+        </TabRow>
         <div className="max-h-[min(56vh,440px)] overflow-y-auto pr-0.5">
           {tab === "presets" ? (
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2" role="radiogroup">

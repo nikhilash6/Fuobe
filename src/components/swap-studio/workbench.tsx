@@ -13,6 +13,7 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { uploadFile } from "@/lib/api";
 import { clipExtension, clipNeedsPreview, clipProblem, jobState, MODE_LABELS, pageClip, secondsLabel, SWAP_STUDIO, type GenSummary, type StudioEstimate, type SwapClip, type SwapProject, type SwapShot } from "@/lib/catalog/swap-studio";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { decisionsHref, useAddClip, usePrepareClip, useSwapEdit, useSwapEstimate, useSwapProject, type EditInput } from "./hooks";
 import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
@@ -175,7 +176,7 @@ export function SwapWorkbench({ id }: { id: string }) {
           ) : (
             <section aria-label={`Clip ${clip.name}`} className="min-w-0 space-y-3">
               <ClipHeader {...props} />
-              <div role="tablist" aria-label="Stages" onKeyDown={tabKeys} className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+              <TabRow role="tablist" aria-label="Stages" onKeyDown={tabKeys} follow>
                 {STAGES.map((s) => (
                   <button
                     key={s.id}
@@ -186,15 +187,13 @@ export function SwapWorkbench({ id }: { id: string }) {
                     aria-controls={`${tabsId}-panel`}
                     tabIndex={stage === s.id ? 0 : -1}
                     onClick={() => setStage(s.id)}
-                    className={cn(
-                      "h-8 shrink-0 rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      stage === s.id ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:text-foreground",
-                    )}
+                    className={TAB_PILL}
+                    {...onAttr(stage === s.id)}
                   >
                     {s.label}
                   </button>
                 ))}
-              </div>
+              </TabRow>
               {stage !== "shots" && stage !== "words" && stage !== "assemble" && <ShotStrip clip={clip} shot={shot} onPick={setShotId} gens={v.gens} />}
               <div role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-${stage}`} className="min-w-0">
                 {stage === "shots" && <ShotsStage key={clip.id} {...props} />}

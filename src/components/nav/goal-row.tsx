@@ -9,7 +9,8 @@ import { area } from "@/lib/nav-areas";
 import { NAV_ICONS } from "@/lib/nav-icons";
 import { GOALS, goalBand, isNew, tapHref, type GoalId, type NavEntry, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { GOAL_STRIP, GOAL_TAB, GOAL_TAB_ON } from "./goal-tab";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
+import { GOAL_STRIP } from "./goal-tab";
 
 /**
  * Home's goal row: six goals under the hero, each a button that opens a band of that goal's studios, one-tap presets
@@ -248,7 +249,7 @@ export function GoalRow({ names }: { names: Readonly<Record<string, string>> }) 
   // The goal that holds the row's one tab stop (the last one focused or opened).
   const [stop, setStop] = useState(0);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
-  const scroller = useFadeEdges<HTMLDivElement>();
+  const scroller = useRef<HTMLDivElement>(null);
 
   /** Scrolls the row (only the row, never the page) so a goal that sits past its edge comes fully into view. */
   const reveal = (b: HTMLElement) => {
@@ -290,13 +291,7 @@ export function GoalRow({ names }: { names: Readonly<Record<string, string>> }) 
     >
       <div className={GOAL_STRIP}>
         {/* A phone scrolls the goals sideways inside the row, never the page. */}
-        <div
-          ref={scroller}
-          role="toolbar"
-          aria-label="Start from a goal"
-          onKeyDown={onRowKey}
-          className="fade-x scrollbar-none relative flex min-w-0 flex-1 snap-x items-stretch gap-0.5 overflow-x-auto"
-        >
+        <TabRow ref={scroller} role="toolbar" aria-label="Start from a goal" onKeyDown={onRowKey} className="flex-1 max-sm:mx-0 max-sm:px-4">
           {GOALS.map((g, i) => {
             const on = open === g.id;
             const Icon = NAV_ICONS[g.icon as keyof typeof NAV_ICONS] ?? LayoutGrid;
@@ -318,27 +313,22 @@ export function GoalRow({ names }: { names: Readonly<Record<string, string>> }) 
                   setOpen(on ? null : g.id);
                   if (!on) reveal(e.currentTarget);
                 }}
-                className={cn(GOAL_TAB, on && GOAL_TAB_ON)}
+                className={TAB_PILL}
+                {...onAttr(on)}
               >
-                <Icon aria-hidden className={cn("size-4 shrink-0 md:max-lg:hidden", on ? "text-brand-text" : "text-muted-foreground")} />
-                {/* The label's bold copy keeps its width, so opening a goal never moves the ones beside it. */}
-                <span className="grid">
-                  <span className={cn("col-start-1 row-start-1", on ? "font-semibold" : "font-medium")}>{g.label}</span>
-                  <span aria-hidden className="invisible col-start-1 row-start-1 font-semibold">
-                    {g.label}
-                  </span>
-                </span>
+                <Icon aria-hidden />
+                {g.label}
               </button>
             );
           })}
-        </div>
+        </TabRow>
         {/* Every studio and tool on one page, with covers (the bar's Studios menu is the quick way). */}
         <IntentLink
           href={area("studios").href}
           className={cn(
-            "flex shrink-0 items-center justify-center gap-2 self-center rounded-[10px] text-[13.5px] font-medium text-brand-text",
+            "flex shrink-0 items-center justify-center gap-2 self-center rounded-full text-[13.5px] font-medium text-brand-text",
             // Its words from xl; narrower, its icon (with the words for screen readers) leaves the goals the room.
-            "ml-1 size-11 max-sm:mr-1 xl:ml-2 xl:h-10 xl:w-auto xl:px-3",
+            "ml-1 size-11 max-sm:mr-3 xl:ml-2 xl:h-9 xl:w-auto xl:px-3.5",
             FOCUS,
           )}
         >

@@ -7,7 +7,7 @@ import { CardPending, IntentLink } from "@/components/intent-link";
 import { PRESET_ICONS } from "@/components/preset-icons";
 import { PresetPreview, usePreviewPlayback } from "@/components/preset-preview";
 import { GALLERY_GRID } from "@/components/skeletons";
-import { useFadeEdges } from "@/components/use-fade-edges";
+import { onAttr, TAB_PILL, TabRow, useFadeOn } from "@/components/ui/tab-row";
 import { useProgressive } from "@/components/use-progressive";
 import { CardChip, badgeKey, parseBadgeKey } from "@/components/gpu/readiness-chip";
 import { useGpuBadges } from "@/hooks/use-gpu";
@@ -274,8 +274,9 @@ export function PresetGallery({
   // Cards render a page at a time; a new filter starts from the first page again.
   const { shown, hasMore, moreFrom, sentinel, left } = useProgressive(list.length, `${cat}|${query}|${runsOn}`, FIRST_PAGE, PAGE);
   const grid = useRef<HTMLDivElement>(null);
+  // A category tapped: its cards fade in (they are there at once).
+  useFadeOn(grid, cat);
 
-  const strip = useFadeEdges<HTMLDivElement>();
   const stale = q.trim().toLowerCase() !== query;
   const lead = (leading ?? []).filter((c) => cat === "All" && runsOn !== "cloud" && (!query || matchesSearch(`${c.title} ${c.line} ${c.words ?? ""}`.toLowerCase(), query)));
   // One fetch of the viewer's chips (the GPU pre-flight); each card gets one string.
@@ -324,12 +325,11 @@ export function PresetGallery({
             to see what runs on it.
           </p>
         )}
-        <div
-          ref={strip}
+        <TabRow
           role="group"
           aria-label="Categories"
           // From sm up every category shows (wrapped): a mouse can't scroll a row whose scrollbar is hidden.
-          className="fade-x scrollbar-none -mx-1 flex snap-x scroll-px-1 gap-1 overflow-x-auto px-1 sm:flex-wrap sm:overflow-visible"
+          className="sm:flex-wrap sm:overflow-visible"
         >
           {cats.map((c) => (
             <button
@@ -341,15 +341,13 @@ export function PresetGallery({
                 setCat(c);
                 e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
               }}
-              className={cn(
-                "h-8 shrink-0 snap-start rounded-full px-3 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                cat === c && "bg-secondary text-foreground",
-              )}
+              className={TAB_PILL}
+              {...onAttr(cat === c)}
             >
               {c}
             </button>
           ))}
-        </div>
+        </TabRow>
       </div>
       {list.length || lead.length ? (
         <>

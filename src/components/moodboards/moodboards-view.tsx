@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { BoardCover, CuratedCover, StatusBadge } from "./cards";
 import { CreateMoodboardDialog } from "./create-moodboard";
@@ -183,7 +184,7 @@ export function MoodboardsView() {
       </PageHeader>
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
-        <div role="tablist" aria-label="Moodboards" className="inline-flex rounded-full bg-muted p-0.5">
+        <TabRow role="tablist" aria-label="Moodboards" fade={false}>
           {(
             [
               ["mine", `My moodboards${data ? ` · ${data.items.length}` : ""}`],
@@ -195,12 +196,13 @@ export function MoodboardsView() {
               role="tab"
               aria-selected={tab === id}
               onClick={() => setTab(id)}
-              className={cn("h-8 rounded-full px-3.5 text-[13px] font-medium text-muted-foreground transition", tab === id && "bg-background text-foreground shadow-soft")}
+              className={TAB_PILL}
+              {...onAttr(tab === id)}
             >
               {label}
             </button>
           ))}
-        </div>
+        </TabRow>
         <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-full border bg-background px-3 focus-within:border-primary sm:w-auto sm:max-w-xs sm:flex-1">
           <Search className="size-4 text-muted-foreground" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search moodboards..." aria-label="Search moodboards" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" />

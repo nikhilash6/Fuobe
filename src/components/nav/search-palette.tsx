@@ -16,6 +16,7 @@ import { useModKey } from "@/lib/keys";
 import { entriesFor, entry, LAUNCHER_GROUPS, launcherEntries, studioCount, visibleTo, type LauncherGroupId, type NavEntry } from "@/lib/nav-model";
 import { isExternal, isThemeAction, navSearchEntries, searchNav, type NavHit, type SearchResult } from "@/lib/nav-search";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { useViewerKind } from "./nav-ui";
 import { fetchPaletteIndex, PALETTE_INDEX_KEY, type PaletteScope, type PaletteSession } from "./search-context";
 import { AlsoTile, BestRow, HitRow, RecentRow, sectionHeading, StudioTile } from "./search-results";
@@ -306,16 +307,12 @@ export function PaletteBody({
           studios right under them; while searching the studios come last, under their own heading. */}
       {!searching && !scoped && (
         <div className="shrink-0 px-5 pt-2.5 max-md:px-3">
-          <div className="flex flex-wrap items-center gap-x-2.5 py-1 md:h-10 md:flex-nowrap md:py-0">
+          <div className="flex flex-wrap items-center gap-x-2.5 py-1 md:h-11 md:flex-nowrap md:py-0">
             <span aria-hidden className="ml-2 text-[11px] leading-[14px] font-semibold tracking-[.08em] text-brand-text uppercase">
               Every studio
             </span>
             <span className="text-[12px] text-muted-foreground">{groupLabel ? `${tiles.length} in ${groupLabel}` : studioCount()}</span>
-            <div
-              role="group"
-              aria-label="Show the studios for one goal"
-              className="-mx-1 flex w-full items-center gap-0.5 overflow-x-auto px-1 scrollbar-none md:ml-auto md:w-auto md:overflow-visible"
-            >
+            <TabRow role="group" aria-label="Show the studios for one goal" follow className="mt-1 w-[calc(100%+8px)] md:mt-0 md:ml-auto md:w-auto md:overflow-visible">
               {(["all", ...LAUNCHER_GROUPS.map((g) => g.id)] as Group[]).map((id) => {
                 const g = LAUNCHER_GROUPS.find((x) => x.id === id);
                 const on = group === id;
@@ -327,20 +324,14 @@ export function PaletteBody({
                     aria-label={g ? g.label : "All studios"}
                     onKeyDown={keepKeys}
                     onClick={() => setGroup(id)}
-                    className={cn("group/chip flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full px-0.5 md:h-10", focusRing)}
+                    className={TAB_PILL}
+                    {...onAttr(on)}
                   >
-                    <span
-                      className={cn(
-                        "inline-flex h-7 items-center rounded-full border px-[11px] text-[12px] font-medium motion-safe:transition-colors",
-                        on ? "border-brand-text/40 bg-brand-faint text-brand-text" : "border-border text-muted-foreground group-hover/chip:text-foreground",
-                      )}
-                    >
-                      {g ? g.chip : "All"}
-                    </span>
+                    {g ? g.chip : "All"}
                   </button>
                 );
               })}
-            </div>
+            </TabRow>
           </div>
         </div>
       )}

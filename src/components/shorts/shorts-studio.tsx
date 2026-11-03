@@ -32,6 +32,7 @@ import type { Engine } from "@/lib/catalog/types";
 import type { TrimRange } from "@/lib/trim-range";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { CustomPresetDialog } from "./custom-preset-dialog";
 import { useShortsActions, useShortsEstimate, useShortsPresets, useSubmitGuard, type ShortsBody } from "./hooks";
@@ -49,6 +50,7 @@ const CUSTOM = "Created by you";
 /** Shorts Studio: choose a preset → upload and trim a clip → generate a session (then /shorts/[id]). */
 export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]> }) {
   const [tab, setTab] = useState<"presets" | "history">("presets");
+  const body = useSwapFade<HTMLDivElement>(tab);
   const [engine, setEngine] = useEngine();
   // Restyle models switched off in Settings → Models & licences leave the menu (the default is the first one on).
   const access = useModelAccess();
@@ -87,7 +89,7 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
     <div className="flex min-h-content min-w-0 flex-col">
       <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">Shorts Studio</h1>
-        <div role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} className="ml-2 flex h-8 shrink-0 items-center rounded-full bg-muted p-0.5 sm:ml-4">
+        <TabRow role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} fade={false} className="ml-1 shrink-0 sm:ml-3">
           {(["presets", "history"] as const).map((t) => (
             <button
               key={t}
@@ -96,19 +98,20 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
               aria-selected={tab === t}
               tabIndex={tab === t ? 0 : -1}
               onClick={() => pickTab(t)}
-              className={cn("h-7 rounded-full px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground", tab === t && "bg-background text-foreground shadow-soft")}
+              className={TAB_PILL}
+              {...onAttr(tab === t)}
             >
               {t === "presets" ? "Presets" : "History"}
             </button>
           ))}
-        </div>
+        </TabRow>
         <div className="ml-auto shrink-0">
           {/* A phone's header has room for the title and the tabs, not "Add key" too. */}
           <EngineSwitch value={engine} onChange={setEngine} wordless selfHostedOnly />
         </div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-4 pb-28 sm:px-6 lg:pb-16">
+      <div ref={body} className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-4 pb-28 sm:px-6 lg:pb-16">
         {tab === "history" ? (
           <ShortsHistory onStart={() => pickTab("presets")} />
         ) : (
@@ -239,6 +242,7 @@ function PresetGrid({
 }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>("All");
+  const grid = useSwapFade<HTMLDivElement>(cat);
   const query = useDeferredValue(q.trim().toLowerCase());
   const cats = ["All", ...(custom.length ? [CUSTOM] : []), ...SHORTS_CATEGORIES];
   const list = useMemo(
@@ -271,20 +275,14 @@ function PresetGrid({
           )}
         </div>
       </div>
-      <div role="group" aria-label="Categories" className="fade-x scrollbar-none -mx-1 flex gap-1 overflow-x-auto px-1">
+      <TabRow role="group" aria-label="Categories" follow>
         {cats.map((c) => (
-          <button
-            key={c}
-            type="button"
-            aria-pressed={cat === c}
-            onClick={() => setCat(c)}
-            className={cn("h-8 shrink-0 rounded-full px-3 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-accent hover:text-foreground", cat === c && "bg-secondary text-foreground")}
-          >
+          <button key={c} type="button" aria-pressed={cat === c} onClick={() => setCat(c)} className={TAB_PILL} {...onAttr(cat === c)}>
             {c}
           </button>
         ))}
-      </div>
-      <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-4">
+      </TabRow>
+      <div ref={grid} className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-4">
         {onCreate && !query && (cat === "All" || cat === CUSTOM) && <CreateCard onClick={onCreate} />}
         {mine.map((p) => (
           <CustomCard key={p.id} {...p} selected={presetId === p.id} onSelect={onSelect} onEdit={onEdit} />

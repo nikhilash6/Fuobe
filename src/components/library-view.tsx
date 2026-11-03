@@ -19,7 +19,6 @@ import { useShare } from "@/components/share/share-provider";
 import { SharedLinks } from "@/components/share/shared-links";
 import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
 import { downloadUrl, ForeverConfirmProvider, useConfirmForever } from "@/components/studio/result-actions";
-import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { Viewer } from "@/components/studio/viewer";
 import {
   AlertDialog,
@@ -51,6 +50,7 @@ import { isExpired } from "@/lib/share";
 import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { starterShown, type StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 
 type TabId = "all" | "images" | "videos" | "audio" | "text" | "3d" | "favorites" | "uploads" | "shared" | "trash";
@@ -444,7 +444,7 @@ function Inner({ starters: given }: { starters: StarterCardData[] }) {
   const missingFolder = !!folderId && !!folders.data && !folder && !trash;
 
   // The tab strip scrolls sideways on phones: fade the hidden edge and keep the active tab in view.
-  const [tabsRef, tabsFade] = useEdgeFade<HTMLDivElement>();
+  const tabsRef = useRef<HTMLElement>(null);
   const activeTab = useRef<HTMLButtonElement>(null);
   const focusTab = useRef(false);
   // Again once the counts load: tabs for kinds you have (Text, 3D) appear and shift the rest.
@@ -457,6 +457,8 @@ function Inner({ starters: given }: { starters: StarterCardData[] }) {
 
   const loading = uploadsTab ? uploads.isLoading : lib.isLoading;
   const refreshing = !uploadsTab && lib.isPlaceholderData;
+  // The results fade in when another section's (or folder's) arrive, not while the last ones still show.
+  const resultsRef = useSwapFade<HTMLDivElement>(refreshing ? null : `${tab.id}:${folderId ?? ""}`);
   const count = (t: (typeof TABS)[number]) => {
     const f = facets.data;
     if (!f) return undefined;
@@ -643,12 +645,11 @@ function Inner({ starters: given }: { starters: StarterCardData[] }) {
       </div>
 
       {!folder && !foldersLoading && !missingFolder && (
-        <div
+        <TabRow
           ref={tabsRef}
-          style={tabsFade}
           role="tablist"
           aria-label="Library sections"
-          className="scrollbar-none mb-4 flex gap-4 overflow-x-auto border-b"
+          className="mb-4"
           onKeyDown={(e) => {
             // Arrow keys move between tabs (and open them), as in any tab strip.
             if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -670,21 +671,19 @@ function Inner({ starters: given }: { starters: StarterCardData[] }) {
                 aria-selected={on}
                 tabIndex={on ? 0 : -1}
                 onClick={() => go({ tab: t.id === "all" ? undefined : t.id, folder: undefined })}
-                className={cn(
-                  "-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 border-transparent px-1 pb-2 text-[14px] whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                  on && "border-foreground font-medium text-foreground",
-                )}
+                className={TAB_PILL}
+                {...onAttr(on)}
               >
                 {t.label}
                 {n ? (
-                  <span className="min-w-4 font-mono text-[11px] text-muted-foreground tabular-nums" aria-label={`${n} items`}>
+                  <span className="tab-count min-w-4" aria-label={`${n} items`}>
                     {n}
                   </span>
                 ) : null}
               </button>
             );
           })}
-        </div>
+        </TabRow>
       )}
 
       {/* The folder row has its place from the first paint: arriving later, it pushed the filters and the cards down. */}
@@ -721,6 +720,7 @@ function Inner({ starters: given }: { starters: StarterCardData[] }) {
         </div>
       )}
 
+      <div ref={resultsRef}>
       {sharedTab ? (
         <SharedLinks />
       ) : missingFolder ? (
@@ -816,6 +816,7 @@ function Inner({ starters: given }: { starters: StarterCardData[] }) {
           </div>
         </div>
       )}
+      </div>
 
       {(selecting || selected.size > 0) && !uploadsTab && !sharedTab && (
         <div className="pointer-events-none fixed inset-x-0 bottom-chrome z-30 flex justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom))]">

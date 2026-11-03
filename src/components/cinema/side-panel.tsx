@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { directorSummary, moveBySlug, type CinemaProject, type DirectorMessage, type DirectorSettings, type DirectorShot } from "@/lib/catalog/cinema";
-import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { useAutosave, useDirectorChat, useUpdateProject } from "./hooks";
 
@@ -230,7 +230,7 @@ export function SidePanel({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-2.5">
-        <div className="inline-flex h-8 rounded-full bg-muted p-0.5" role="tablist">
+        <TabRow role="tablist" aria-label="Panel" fade={false}>
           {(
             [
               ["director", "AI Director", Bot],
@@ -243,12 +243,14 @@ export function SidePanel({
               role="tab"
               aria-selected={tab === id}
               onClick={() => setTab(id)}
-              className={cn("inline-flex items-center gap-1 rounded-full px-2.5 text-[12.5px] font-medium", tab === id ? "bg-background shadow-soft" : "text-muted-foreground hover:text-foreground")}
+              className={TAB_PILL}
+              {...onAttr(tab === id)}
             >
-              <Icon className="size-3.5" /> {label}
+              <Icon aria-hidden />
+              {label}
             </button>
           ))}
-        </div>
+        </TabRow>
         <button type="button" onClick={onClose} className="ml-auto grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close panel">
           <X className="size-4" />
         </button>

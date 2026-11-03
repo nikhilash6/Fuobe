@@ -8,7 +8,7 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine } from "@/lib/api";
 import type { Engine } from "@/lib/catalog/types";
 import { useIdlePrefetch } from "@/lib/idle-prefetch";
-import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { isPlainClick, useTappedTab } from "@/lib/use-tapped-tab";
 
 export type SuiteTab = "studio" | "click" | "ads" | "multiplier";
@@ -67,23 +67,21 @@ export function MarketingHeader({
         </div>
         <PhoneNavButton />
       </div>
-      <nav ref={nav} aria-label="Marketing tools" className="scrollbar-none -mb-px flex gap-1 overflow-x-auto px-4 sm:px-6">
+      <TabRow ref={nav} as="nav" memory="marketing-suite" aria-label="Marketing tools" className="m-0 px-4 pt-0.5 pb-1.5 sm:px-6">
         {TABS.map((t) => (
           <Link
             key={t.id}
             href={t.href}
             aria-current={t.id === current ? "page" : undefined}
             onClick={(e) => isPlainClick(e) && tap(t.id)}
-            className={cn(
-              "inline-flex h-9 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
-              t.id === current && "border-primary text-foreground",
-            )}
+            className={TAB_PILL}
+            {...onAttr(t.id === current)}
           >
-            <t.icon className="size-3.5" />
+            <t.icon />
             {t.label}
           </Link>
         ))}
-      </nav>
+      </TabRow>
     </header>
   );
 }

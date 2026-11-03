@@ -8,6 +8,7 @@ import type { Preset } from "@/lib/catalog/types";
 import { presetCover } from "@/lib/preset-covers";
 import { featuredAll } from "@/lib/preset-featured";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { CoverScrollBox, CoverTile, usePickerPlayback } from "@/components/cover-tile";
 import { PRESET_ICONS } from "@/components/preset-icons";
 import { loadFullCatalog, useCatalog } from "./catalog";
@@ -57,19 +58,13 @@ export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] 
   const cats = ["All", ...new Set(list.map((p) => p.category))];
   return (
     <>
-      <div className="scrollbar-none mb-2 flex shrink-0 gap-1 overflow-x-auto" role="tablist" aria-label="Categories">
+      <TabRow className="mb-1 shrink-0" role="tablist" aria-label="Categories" follow>
         {cats.map((c) => (
-          <button
-            key={c}
-            role="tab"
-            aria-selected={cat === c}
-            onClick={() => setCat(c)}
-            className={cn("h-7 shrink-0 rounded-full px-2.5 text-[12px] font-medium text-muted-foreground hover:bg-accent", cat === c && "bg-secondary text-foreground")}
-          >
+          <button key={c} role="tab" aria-selected={cat === c} onClick={() => setCat(c)} className={TAB_PILL} {...onAttr(cat === c)}>
             {c}
           </button>
         ))}
-      </div>
+      </TabRow>
       <CoverScrollBox value={box}>
         {/* The box scrolls and gives way in the picker (min-h-0); the grid inside keeps its rows whole. */}
         <div ref={box} className="max-h-[28rem] min-h-0 overflow-y-auto overscroll-contain">

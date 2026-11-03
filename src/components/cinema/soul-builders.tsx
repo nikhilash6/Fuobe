@@ -41,6 +41,7 @@ import { QMA_MODEL } from "@/lib/qma";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { useCinemaGenerate, useCinemaItems } from "./hooks";
 import { placeholdersOn } from "@/lib/demo-mode";
@@ -275,7 +276,7 @@ function SoulCast({ projectId, folderId, engine, context, brief, onOpenChange }:
         <DialogTitle className="font-heading text-[26px] font-normal">Build your cast</DialogTitle>
         <DialogDescription>Build your film&apos;s cast from scratch - genre, budget, appearance, and every detail in between.</DialogDescription>
       </DialogHeader>
-      <div className="scrollbar-none -mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist">
+      <TabRow role="tablist" aria-label="Cast details" follow>
         {SOUL_CAST_TABS.map((t) => {
           const filled = SOUL_CAST_FIELDS.some((f) => f.tab === t && visible[f.key] !== undefined && !(f.default !== undefined && visible[f.key] === f.default));
           return (
@@ -285,14 +286,15 @@ function SoulCast({ projectId, folderId, engine, context, brief, onOpenChange }:
               role="tab"
               aria-selected={tab === t}
               onClick={() => setTab(t)}
-              className={cn("inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 text-[12.5px] font-medium", tab === t ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-accent")}
+              className={TAB_PILL}
+              {...onAttr(tab === t)}
             >
               {t}
               {filled && tab !== t && <span className="size-1.5 rounded-full bg-primary" />}
             </button>
           );
         })}
-      </div>
+      </TabRow>
       <div className="min-h-[200px] space-y-4">
         {fields.map((f) => (
           <Field key={f.key} f={f} values={values} set={set} />

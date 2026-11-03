@@ -42,6 +42,7 @@ import type { Engine, Generation } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import type { TrimRange } from "@/lib/trim-range";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import type { StudioExampleRow } from "@/lib/studio-examples";
 import { MixedHistory } from "./history";
@@ -89,6 +90,7 @@ export function MixedStudio({
   how?: StudioExampleRow;
 }) {
   const [tab, setTab] = useState<Tab>("presets");
+  const body = useSwapFade<HTMLDivElement>(tab);
   const [engine, setEngine, engineMode] = useEngine();
   // A render doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // upload, the preview and Generate are off, instead of a run the server refuses.
@@ -109,7 +111,7 @@ export function MixedStudio({
     <div className="flex min-h-content min-w-0 flex-col">
       <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="sr-only font-heading text-[22px] leading-none sm:not-sr-only sm:truncate">Mixed Media</h1>
-        <div role="tablist" aria-label="Mixed Media" onKeyDown={tabKeys} className="fade-x scrollbar-none flex h-8 min-w-0 items-center overflow-x-auto rounded-full bg-muted p-0.5 sm:ml-4">
+        <TabRow role="tablist" aria-label="Mixed Media" onKeyDown={tabKeys} follow className="sm:ml-3">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -118,19 +120,20 @@ export function MixedStudio({
               aria-selected={tab === t.id}
               tabIndex={tab === t.id ? 0 : -1}
               onClick={() => pick(t.id)}
-              className={cn("h-7 shrink-0 rounded-full px-3 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground", tab === t.id && "bg-background text-foreground shadow-soft")}
+              className={TAB_PILL}
+              {...onAttr(tab === t.id)}
             >
               {t.label}
             </button>
           ))}
-        </div>
+        </TabRow>
         <div className="ml-auto shrink-0">
           {/* A phone's header has room for the tabs, not "Add key" too. */}
           <EngineSwitch value={engine} onChange={setEngine} wordless selfHostedOnly />
         </div>
         <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-4 pb-28 sm:px-6 lg:pb-16">
+      <div ref={body} className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-4 pb-28 sm:px-6 lg:pb-16">
         {tab === "history" ? (
           <MixedHistory onStart={() => pick("presets")} />
         ) : tab === "how" ? (

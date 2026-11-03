@@ -7,10 +7,7 @@ import { CoverThumb } from "@/components/nav/cover-thumb";
 import { useNavUi, useViewerKind } from "@/components/nav/nav-ui";
 import { IntentLink } from "@/components/intent-link";
 import { isNew, LAUNCHER_GROUPS, launcherActive, launcherEntries, type LauncherGroupId, type NavEntry } from "@/lib/nav-model";
-
-/** A goal chip: 32 px to look at, 44 px to tap (the row's padding holds the larger hit area). */
-const CHIP =
-  "nav-focus relative h-8 min-w-11 shrink-0 rounded-full border border-border bg-secondary px-[7px] text-[12px] font-medium text-secondary-foreground after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[''] active:bg-[var(--nav-press)] aria-pressed:border-transparent aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:active:bg-foreground/85 motion-safe:transition-colors";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 
 function Tile({ entry, current }: { entry: NavEntry; current: boolean }) {
   const fresh = isNew(entry);
@@ -86,17 +83,19 @@ export function StudiosSheet({ group: initial, onSearch }: { group?: LauncherGro
   const tiles = launcherEntries(kind, group ?? undefined);
   const current = launcherActive(pathname);
   const chips: { id: LauncherGroupId | null; label: string }[] = [{ id: null, label: "All" }, ...LAUNCHER_GROUPS.map((g) => ({ id: g.id, label: g.chip }))];
+  // A goal tapped: its studios fade in (they are there at once).
+  const tilesRef = useSwapFade<HTMLDivElement>(group);
   return (
     <>
       <Shortcuts onSearch={onSearch} />
-      <div role="group" aria-label="Show the studios for one goal" className="flex shrink-0 gap-1 overflow-x-auto px-4 py-1.5 scrollbar-none">
+      <TabRow role="group" aria-label="Show the studios for one goal" follow className="m-0 shrink-0 px-4 py-1.5">
         {chips.map((c) => (
-          <button key={c.id ?? "all"} type="button" aria-pressed={group === c.id} className={CHIP} onClick={() => setGroup(c.id)}>
+          <button key={c.id ?? "all"} type="button" aria-pressed={group === c.id} className={TAB_PILL} {...onAttr(group === c.id)} onClick={() => setGroup(c.id)}>
             {c.label}
           </button>
         ))}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
+      </TabRow>
+      <div ref={tilesRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
         <ul aria-label={group ? LAUNCHER_GROUPS.find((g) => g.id === group)?.label : "All studios"} className="grid grid-cols-5 gap-x-1 gap-y-0.5 pb-1">
           {tiles.map((e) => (
             <Tile key={e.id} entry={e} current={e.id === current} />
