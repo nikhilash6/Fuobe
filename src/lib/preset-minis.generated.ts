@@ -132,6 +132,7 @@ export const PRESET_MINIS: Record<string, string> = {
   "app-video-face-swap": "8c114fd9",
   "app-virtual-try-on": "3fc9648e",
   "app-volcano-ad": "64f335f5",
+  "app-watermark-remover": "1d6362ab",
   "app-what-s-next": "996471fb",
   "app-yes-kiss": "64102263",
   "app-zoom-out": "8e88090a",
