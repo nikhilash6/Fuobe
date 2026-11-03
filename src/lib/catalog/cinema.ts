@@ -2548,6 +2548,26 @@ function planWorld(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
   return finish(model, [{ key: "main", request }], notes);
 }
 
+/**
+ * A whole World film in one go (Assist's world_film): every turn in order, each after the one before (so ComfyUI still
+ * holds the turns it continues from), then the turns joined into one film. Throws what stops it.
+ */
+export function worldFilmSteps(script: WorldScript, engine: Engine): CinemaStep[] {
+  if (engine !== "open") throw new Error(WORLD_OPEN_ONLY);
+  const s = normalizeWorld(script);
+  const steps: CinemaStep[] = [];
+  for (let k = 0; k <= s.turns.length; k++) {
+    const plan = planWorld({ engine, mode: "video", action: "world", prompt: "", settings: {}, world: { script: s, turn: k } }, {});
+    if (plan.blocker) throw new Error(plan.blocker);
+    steps.push({ key: `turn${k}`, ...(k ? { after: [`turn${k - 1}`] } : {}), request: plan.steps[0].request });
+  }
+  if (steps.length > 1) {
+    const keys = steps.map((x) => x.key);
+    steps.push({ key: "join", after: keys, request: { feature: "cinema-world", modelId: WORLD_JOIN, op: "concat", prompt: "World film", params: { numOutputs: 1 }, chain: keys.map(() => ({ slot: "videos" as const })) } });
+  }
+  return steps;
+}
+
 /** What a World take remembers: its turn, the script up to it and that part's key; or that it is the joined film. */
 export function worldTake(input: Pick<CinemaGenerateInput, "world">): CinemaTakeInfo["world"] {
   const run = input.world;

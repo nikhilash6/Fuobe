@@ -329,6 +329,19 @@ describe("Cinema's World take", () => {
     expect(refused.status).toBe(422);
   });
 
+  it("films a 60 s walk-through for Assist: five 12 s turns, each after the one before, then joined", async () => {
+    const { worldFilmSteps } = await import("@/lib/catalog/cinema");
+    const { worldFilmScript } = await import("@/server/assist/studio-tools");
+    const s = worldFilmScript({ scene: "A stone path through a forest at dusk", turns: Array.from({ length: 4 }, (_, i) => ({ words: `turn ${i + 1}`, move: "orbit_90_ccw" })), seed: 9 });
+    expect(W.worldSeconds(s)).toBe(60);
+    const steps = worldFilmSteps(s, "open");
+    expect(steps.map((x) => x.key)).toEqual(["turn0", "turn1", "turn2", "turn3", "turn4", "join"]);
+    expect(steps[3].after).toEqual(["turn2"]);
+    expect(steps[3].request.params?.extra).toMatchObject({ turn: 3, world: { seed: 9 } });
+    expect(steps[5]).toMatchObject({ after: ["turn0", "turn1", "turn2", "turn3", "turn4"], request: { modelId: W.WORLD_JOIN, op: "concat" } });
+    expect(() => worldFilmSteps(s, "cloud")).toThrow(WORLD_OPEN_ONLY);
+  });
+
   it("has a row on the GPU pre-flight board", () => {
     const row = STUDIO_ROWS.find((r) => r.href === "/cinema?world=1")!;
     expect(row).toMatchObject({ label: "World mode", group: "Video" });

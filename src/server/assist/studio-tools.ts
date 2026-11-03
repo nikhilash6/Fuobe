@@ -12,7 +12,8 @@ import { offlineRestorePrompt, RESTORE, restoreNegative } from "@/lib/catalog/re
 import { SHORTS_MODELS } from "@/lib/catalog/shorts";
 import type { ChainSlot, Engine, GenerationRequest, Operation } from "@/lib/catalog/types";
 import { TOOL_MODELS } from "@/lib/layers";
-import { planCinema } from "@/lib/catalog/cinema";
+import { planCinema, worldFilmSteps } from "@/lib/catalog/cinema";
+import { normalizeWorld, PERSPECTIVES, STYLES as WORLD_STYLES, WORLD_LIMITS, WORLD_MODEL, WORLD_MOVES, type Perspective, type WorldScript, type WorldStyle } from "@/lib/world";
 import { FLY_VIEWS_MAX, planFlyAround } from "@/lib/catalog/fly-around";
 import { PATH_PRESETS } from "@/lib/camera-path";
 import { createPipeline, type PipelineStep } from "../chains";
@@ -823,6 +824,69 @@ const blockoutFilm = defineTool({
 });
 
 // ---------------------------------------------------------------------------
+// World mode (nm10-hy-nomas-world): Hy-Nomas on your GPU, turn after turn, joined into one film
+
+const WorldTurnInput = z.object({
+  words: z.string().max(WORLD_LIMITS.maxWords).describe("What changes in this turn, e.g. 'a wooden bridge crosses a glowing stream ahead'. Can be empty when the camera move alone steers the turn."),
+  action: z.string().max(WORLD_LIMITS.maxWords).optional().describe("What the subject does during the turn."),
+  move: z.string().optional().describe(`The camera move: ${WORLD_MOVES.map((m) => m.id).join(", ")} (still = the camera stays put).`),
+  seconds: z.number().min(WORLD_LIMITS.minSeconds).max(WORLD_LIMITS.maxSeconds).optional().describe(`Seconds, ${WORLD_LIMITS.minSeconds}–${WORLD_LIMITS.maxSeconds} (default 12).`),
+});
+const WorldFilmInput = z.object({
+  scene: z.string().min(1).max(WORLD_LIMITS.maxScene).describe("The world the film starts in, in words: place, light, weather, what is in view."),
+  subject: z.string().max(120).optional().describe("Who or what the camera follows (optional), e.g. 'a small orange fox'."),
+  details: z.string().max(WORLD_LIMITS.maxWords).optional().describe("How the subject looks."),
+  action: z.string().max(WORLD_LIMITS.maxWords).optional().describe("What happens in the opening."),
+  perspective: z.enum(PERSPECTIVES.map((p) => p.id) as [Perspective, ...Perspective[]]).optional().describe("The camera: third-person follow (default), third-person observer, first-person or second-person."),
+  style: z.enum(WORLD_STYLES.map((p) => p.id) as [WorldStyle, ...WorldStyle[]]).optional().describe("The look (default real-world footage)."),
+  move: z.string().optional().describe("The opening's camera move (default zoom_in)."),
+  seconds: z.number().min(WORLD_LIMITS.minSeconds).max(WORLD_LIMITS.maxSeconds).optional().describe("The opening's seconds (default 12)."),
+  turns: z.array(WorldTurnInput).max(WORLD_LIMITS.maxTurns - 1).describe(`The turns after the opening, in order. A 60 s walk-through is the opening and four turns of 12 s; up to ${WORLD_LIMITS.maxTotal} s in all.`),
+  seed: z.number().int().min(0).optional(),
+});
+export type WorldFilmToolInput = z.infer<typeof WorldFilmInput>;
+
+/** The tool's arguments as a World script. */
+export function worldFilmScript(i: WorldFilmToolInput): WorldScript {
+  return normalizeWorld({
+    opening: { words: i.scene, subject: i.subject, details: i.details, action: i.action, perspective: i.perspective, style: i.style, move: i.move ?? "zoom_in", seconds: i.seconds ?? 12 },
+    turns: i.turns.map((t) => ({ words: t.words, action: t.action, move: t.move ?? "still", seconds: t.seconds ?? 12 })),
+    seed: i.seed ?? Math.floor(Math.random() * 2 ** 31),
+  });
+}
+
+/** The film's steps: on your GPU whatever the chat's engine (no cloud service runs Hy-Nomas); "Paid APIs only" refuses it. */
+function worldFilmSteps_(i: WorldFilmToolInput): PipelineStep[] {
+  return worldFilmSteps(worldFilmScript(i), engineMode() === "cloud" ? "cloud" : "open").map((s) => ({ key: s.key, request: s.request, ...(s.after?.length && { after: s.after }) }));
+}
+
+const worldFilm = defineTool({
+  name: "world_film",
+  description:
+    "Film a world walk-through — Fuobe's World mode (Cinema Studio → World): Hy-Nomas (Tencent, open source) on your GPU starts a world from words, then continues it turn by turn, each turn steered by what changes, what the subject does and a camera move from the fly-path library (orbits, arcs, dollies, trucks, figure-8, or still); the turns are joined into one film, 1280 × 704 at 24 fps. " +
+    "Free on your GPU (about 24 GB; it runs on no cloud service), silent (add sound with Sound for video or Music afterwards). For 'a 60 s world walk-through' pass the opening and four turns of 12 s. Gated by the same approval card as generate.",
+  schema: WorldFilmInput,
+  gated: true,
+  title: (i) => `World: ${i.scene}`.slice(0, 80),
+  plan: (i) => {
+    try {
+      return planSteps("world_film", worldFilmSteps_(i));
+    } catch (e) {
+      return [{ tool: "world_film", modelId: WORLD_MODEL, modelName: "World", kind: "video", op: "world-turn", prompt: "World", count: 0, costUsd: 0, demo: false, atomic: true, error: (e as Error).message }];
+    }
+  },
+  async run(i) {
+    let steps: PipelineStep[];
+    try {
+      steps = worldFilmSteps_(i);
+    } catch (e) {
+      return { content: JSON.stringify({ error: (e as Error).message }), isError: true };
+    }
+    return startPipeline("World", steps, `World: ${i.scene}`.slice(0, 200));
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Edit speech (nm10-speech-edit): Tencent AuK on your GPU
 
 const SpeechEditInput = z.object({
@@ -973,7 +1037,7 @@ const flyAround = defineTool({
   },
 });
 
-export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, removePerson, blockoutFilm, flyAround, editSpeech];
+export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, removePerson, blockoutFilm, flyAround, editSpeech, worldFilm];
 
 /** For tests: the fallback pipelines, as they would be created. */
 export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests, blockout: blockoutSteps, flyAround: flyAroundSteps };
