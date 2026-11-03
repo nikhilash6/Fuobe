@@ -1326,7 +1326,7 @@ function RunPanel({ run, onAgain, finish = [], onFinish }: { run: Run; onAgain: 
         ) : (
           <div className="space-y-3">
             <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress * 100)} aria-label="Progress">
-              <div className={cn("h-full transition-[width]", state.status === "failed" ? "bg-destructive" : "bg-primary")} style={{ width: `${Math.max(4, state.progress * 100)}%` }} />
+              <div className={cn("h-full origin-left transition-transform duration-(--motion-slow) ease-standard", state.status === "failed" ? "bg-destructive" : "bg-primary")} style={{ transform: `scaleX(${(Math.max(4, state.progress * 100)) / 100})` }} />
             </div>
             <p className={cn("text-[13px]", state.status === "failed" ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
               {state.status === "failed" ? `${state.label}: ${state.error}` : state.label}

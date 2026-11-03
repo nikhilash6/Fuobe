@@ -193,7 +193,7 @@ function Brief({ project }: { project: CinemaProject }) {
       <div className="flex items-center gap-2">
         <Input value={title} onChange={(e) => (setTitle(e.target.value), save(e.target.value, body))} placeholder="Brief title" className="h-9 font-heading text-[18px]" aria-label="Brief title" />
         <span className="flex shrink-0 items-center gap-1 text-[11.5px] text-muted-foreground" aria-live="polite">
-          {state === "saving" ? <Loader2 className="size-3 animate-spin" /> : state === "saved" ? <Check className="size-3" /> : null}
+          {state === "saving" ? <Loader2 className="size-3 animate-spin" /> : state === "saved" ? <Check className="motion-confirm size-3" /> : null}
           {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Editing"}
         </span>
       </div>

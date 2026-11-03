@@ -32,7 +32,7 @@ function GalleryRow({
   pillsLabel: string;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className={AREA_SECTION}>
+    <section id={id} aria-labelledby={`${id}-title`} data-reveal className={AREA_SECTION}>
       <SectionHead id={`${id}-title`} title={title} count={data.count} all={href} line={line} />
       {/* Four a row, as the other area pages' cards, so every line under a picture shows whole. */}
       <PresetRail items={data.row} className="sm:grid-cols-4" />

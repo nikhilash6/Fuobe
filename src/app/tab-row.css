@@ -6,14 +6,14 @@
  * - Selected: a soft fill. Hover: a lighter fill of the same shape (only for a mouse, and never while the page scrolls
  *   under a resting mouse). Pressed: a stronger fill. Keyboard focus: a 2 px ring of the same shape.
  * - Once the row's script runs, one fill (`.tab-ind`) slides between the items instead of each item painting its own.
- * In @layer components, so a row's own utilities (margins, wrapping) still apply.
+ * Timings are the site's motion tokens (motion.css). In @layer components, so a row's own utilities (margins,
+ * wrapping) still apply.
  */
 :root {
   /* Hover and pressed are the nav's own fills (nav-states.css); selected is a step stronger than hover. */
   --tab-hi: var(--nav-hi);
   --tab-on: color-mix(in oklab, var(--foreground) 10%, transparent);
   --tab-press: var(--nav-press);
-  --tab-ease: cubic-bezier(0.25, 0.8, 0.25, 1);
   /* Where a sticky row of tabs sits: under the phone's bar (and the notch), or under the top bar from md. */
   --tab-band-top: calc(3.5rem + env(safe-area-inset-top));
 }
@@ -70,8 +70,8 @@
     user-select: none;
     -webkit-tap-highlight-color: transparent;
     transition:
-      background-color 140ms var(--tab-ease),
-      color 140ms var(--tab-ease);
+      background-color var(--motion-fast) var(--ease-standard),
+      color var(--motion-fast) var(--ease-standard);
   }
   /* An icon leads: a little less room on its side, so icon and words look centred. */
   .tab-pill:has(> svg:first-child) {
@@ -100,7 +100,7 @@
     height: 16px;
     flex-shrink: 0;
     color: var(--muted-foreground);
-    transition: color 140ms var(--tab-ease);
+    transition: color var(--motion-fast) var(--ease-standard);
   }
   /* A count after the words (Library). */
   .tab-pill .tab-count {
@@ -169,7 +169,7 @@
     pointer-events: none;
     z-index: -1;
     opacity: 0;
-    transition: opacity 160ms var(--tab-ease);
+    transition: opacity var(--motion-base) var(--ease-enter);
   }
   .tab-row[data-ind] > .tab-ind {
     opacity: 1;
@@ -198,7 +198,7 @@
     transform: translate(var(--ti-r, 0px), var(--ti-y, 0px));
   }
   .tab-row[data-ind-moving] > .tab-ind > span {
-    transition: transform 320ms var(--tab-ease);
+    transition: transform var(--motion-slow) var(--ease-standard);
   }
   /* While the fill is there, the selected pill paints none of its own. */
   .tab-row[data-ind] > .tab-pill:is([data-on], [data-state="active"]),
@@ -237,7 +237,7 @@
     clip-path: inset(0 -100vmax);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 160ms var(--tab-ease);
+    transition: opacity var(--motion-base) var(--ease-enter);
   }
   .tab-band[data-stuck]::after {
     opacity: 1;

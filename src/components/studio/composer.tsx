@@ -1603,10 +1603,19 @@ export function Composer({ docked }: { docked: boolean }) {
               onClick={submit}
               disabled={create.isPending || signature.lock.isPending || priceUnavailable}
               aria-label={blocker ? `Generate — ${blocker.message}` : "Generate"}
+              aria-busy={create.isPending || signature.lock.isPending || undefined}
               // Blocked, it stays the brand colour (paler, the arrow still 3:1 or more): pressing it still says what's missing and points at it.
               className={cn("size-10 shrink-0 rounded-full", blocker && "bg-primary/70 hover:bg-primary/80")}
             >
-              {create.isPending || signature.lock.isPending ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+              {create.isPending || signature.lock.isPending ? (
+                // A quick send keeps its arrow; a wait of more than a moment hands over to the spinner.
+                <span className="grid place-items-center">
+                  <ArrowUp className="motion-hand-off col-start-1 row-start-1 size-4" />
+                  <Loader2 className="motion-spinner col-start-1 row-start-1 size-4" />
+                </span>
+              ) : (
+                <ArrowUp className="size-4" />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent>

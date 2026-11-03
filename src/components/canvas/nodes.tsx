@@ -558,7 +558,7 @@ function Results({ id, r, compact }: { id: string; r: NodeResults; compact?: boo
           <p className="shimmer-text animate-shimmer-text truncate text-[12px] font-medium">{r.message ?? (r.state === "queued" ? "Queued" : "Generating…")}</p>
           {pct != null && <span className="font-mono text-[11px] text-muted-foreground">{pct}%</span>}
         </div>
-        {pct != null && <div className="absolute inset-x-0 top-0 h-0.5 bg-primary transition-[width] duration-500" style={{ width: `${pct}%` }} />}
+        {pct != null && <div className="absolute inset-x-0 top-0 h-0.5 bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(pct) / 100})` }} />}
       </div>
     );
   }

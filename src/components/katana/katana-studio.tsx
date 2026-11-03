@@ -436,7 +436,7 @@ function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
                   {stage !== "done" && (
                     <div className="mt-3">
                       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div className={cn("h-full rounded-full transition-[width] duration-500", stage === "failed" ? "bg-destructive" : "bg-primary")} style={{ width: `${Math.max(3, pct)}%` }} />
+                        <div className={cn("h-full rounded-full origin-left transition-transform duration-(--motion-slow) ease-standard", stage === "failed" ? "bg-destructive" : "bg-primary")} style={{ transform: `scaleX(${(Math.max(3, pct)) / 100})` }} />
                       </div>
                       <p className="mt-1 text-[12px] text-muted-foreground">
                         {stage === "failed" ? "A step failed — open the steps for the reason, then retry: the finished steps are kept" : `${pct}% · steps run as soon as the ones before them finish`}

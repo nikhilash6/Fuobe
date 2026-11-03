@@ -345,6 +345,7 @@ export function MegaLauncher({
           data-mega-panel={id}
           aria-label={area.panel}
           hidden={!open}
+          inert={!open}
           onKeyDown={onPanelKey}
           onPointerMove={onPanelPointer}
           onClick={(e) => {

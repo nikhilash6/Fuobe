@@ -104,7 +104,7 @@ function Player({ view, onRetry, retrying }: { view: View; onRetry: () => void; 
                 <p className="shimmer-text animate-shimmer-text font-heading text-[24px]">Generating your episode</p>
                 <p className="mt-1 text-[13px] text-muted-foreground">This can take a while for longer videos. You can close this page — it will keep running.</p>
                 <div className="mx-auto mt-4 h-1.5 w-56 overflow-hidden rounded-full bg-background/70" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(view.progress * 100)} aria-label="Episode progress">
-                  <div className="h-full rounded-full bg-primary transition-[width] duration-700" style={{ width: `${Math.max(3, Math.round(view.progress * 100))}%` }} />
+                  <div className="h-full rounded-full bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(Math.max(3, Math.round(view.progress * 100))) / 100})` }} />
                 </div>
                 <p className="mt-2 font-mono text-[12px] text-muted-foreground tabular-nums">
                   {stepsDone} of {view.steps.length} steps · {Math.round(view.progress * 100)}%

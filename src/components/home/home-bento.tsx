@@ -2,6 +2,7 @@ import { ArrowRight, ArrowUpRight, ChevronsLeftRight, Play, Sparkles, Video } fr
 import { BentoClip, BentoMotion, LiveTyping, NumbersLink } from "@/components/home/bento-islands";
 import { PausePreviews } from "@/components/home/home-islands";
 import { IntentLink } from "@/components/intent-link";
+import { CountUp } from "@/components/ui/count-up";
 import type { BentoPicture, BentoTile, HomeBento as Bento } from "@/lib/home-bento";
 import { cn } from "@/lib/utils";
 import { s } from "./home-bento-classes";
@@ -218,7 +219,9 @@ export function HomeBento({ bento }: { bento: Bento }) {
             {bento.numbers.map((n) => (
               <div key={n.label}>
                 <dt>{n.label}</dt>
-                <dd>{n.value}</dd>
+                <dd>
+                  <CountUp value={n.value} id={`bento-${n.label}`} />
+                </dd>
               </div>
             ))}
           </dl>

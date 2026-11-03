@@ -155,7 +155,7 @@ function RunCard({ run, brand, onOpen, onCompose }: { run: MarketingRun; brand?:
                 {elapsed(run.createdAt)}
               </p>
             </div>
-            {steps.length > 1 && <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/70 transition-[width] duration-500" style={{ width: `${Math.round((done / steps.length) * 100)}%` }} />}
+            {steps.length > 1 && <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/70 origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(Math.round((done / steps.length) * 100)) / 100})` }} />}
           </div>
         )}
         <DropdownMenu>

@@ -46,8 +46,8 @@ export function ShortsHistory({ onStart }: { onStart: () => void }) {
 function SessionCard({ s }: { s: ShortsSessionCard }) {
   const out = s.cover?.status === "succeeded" ? s.cover.outputs.find((o) => o.kind === "video") : undefined;
   return (
-    <Link href={`/shorts/${s.id}`} className="group/card min-w-0 rounded-xl p-1.5 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
-      <div className="relative aspect-[9/14] overflow-hidden rounded-lg bg-muted">
+    <Link href={`/shorts/${s.id}`} className="group/card card-motion card-fill min-w-0 rounded-xl p-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <div className="card-cover relative aspect-[9/14] overflow-hidden rounded-lg bg-muted">
         {out ? (
           <MediaThumb output={out} />
         ) : (

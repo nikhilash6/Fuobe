@@ -247,7 +247,7 @@ export function CreateMoodboardDialog({ open, onOpenChange, onCreated }: { open:
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex min-w-40 flex-1 items-center gap-2">
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                <span className={cn("block h-full rounded-full transition-[width]", q.tone)} style={{ width: `${q.pct}%` }} />
+                <span className={cn("block h-full rounded-full origin-left transition-transform duration-(--motion-slow) ease-standard", q.tone)} style={{ transform: `scaleX(${(q.pct) / 100})` }} />
               </span>
               <span className="text-[12px] font-medium tabular-nums">
                 {q.label} · {items.length}/{MOODBOARD_LIMITS.max}

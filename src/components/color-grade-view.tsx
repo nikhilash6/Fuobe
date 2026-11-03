@@ -585,7 +585,7 @@ function Grader() {
           <div className="space-y-2 border-t p-3">
             {saving?.progress !== undefined && (
               <div className="h-1 overflow-hidden rounded-full bg-muted">
-                <div className="h-full bg-primary transition-[width]" style={{ width: `${saving.progress * 100}%` }} />
+                <div className="h-full bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(saving.progress * 100) / 100})` }} />
               </div>
             )}
             <div className="flex gap-2">

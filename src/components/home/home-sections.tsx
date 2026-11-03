@@ -18,6 +18,7 @@ import {
 } from "@/components/home/home-islands";
 import { PILL, PILL_ICON, PILL_TAP } from "@/components/home/pill";
 import { ShowcaseTile } from "@/components/home/showcase-tile";
+import { CountUp } from "@/components/ui/count-up";
 import { IntentLink } from "@/components/intent-link";
 import { LiveDemo } from "@/components/live/live-demo";
 import { NAV } from "@/components/nav-items";
@@ -95,7 +96,7 @@ export function SectionHead({
               aria-hidden
               className="ml-2 inline-block rounded-full bg-muted px-2 align-[0.3em] font-sans text-[13px] leading-6 tracking-normal text-muted-foreground tabular-nums"
             >
-              {count}
+              <CountUp value={count} id={id} />
             </span>
           )}
         </Heading>
@@ -185,7 +186,7 @@ export function ShowcaseWall({
 
 export function EffectsSection({ facts, effects }: Pick<HomeShowcase, "facts" | "effects">) {
   return (
-    <section aria-labelledby="home-effects" className={cn(SECTION, "[--cv:336px] sm:[--cv:946px] md:[--cv:846px] lg:[--cv:691px] xl:[--cv:490px]")}>
+    <section aria-labelledby="home-effects" data-reveal className={cn(SECTION, "[--cv:336px] sm:[--cv:946px] md:[--cv:846px] lg:[--cv:691px] xl:[--cv:490px]")}>
       <SectionHead
         id="home-effects"
         title="Effects"
@@ -200,7 +201,7 @@ export function EffectsSection({ facts, effects }: Pick<HomeShowcase, "facts" | 
 
 export function MotionsSection({ facts, motions }: Pick<HomeShowcase, "facts" | "motions">) {
   return (
-    <section aria-labelledby="home-motions" className={cn(SECTION, "[--cv:336px] sm:[--cv:528px] md:[--cv:492px] lg:[--cv:293px] xl:[--cv:290px]")}>
+    <section aria-labelledby="home-motions" data-reveal className={cn(SECTION, "[--cv:336px] sm:[--cv:528px] md:[--cv:492px] lg:[--cv:293px] xl:[--cv:290px]")}>
       <SectionHead
         id="home-motions"
         title="Camera motions"
@@ -220,7 +221,7 @@ export function MotionsSection({ facts, motions }: Pick<HomeShowcase, "facts" | 
 export function AppsSection({ facts, beforeAfter, reveals, start }: Pick<HomeShowcase, "facts" | "beforeAfter" | "reveals"> & { start?: { title: string; line: string } }) {
   const id = start ? "apps-start" : "home-apps";
   return (
-    <section aria-labelledby={id} className={cn(SECTION, "[--cv:676px] sm:[--cv:1004px] md:[--cv:943px] lg:[--cv:957px] xl:[--cv:525px]")}>
+    <section aria-labelledby={id} data-reveal className={cn(SECTION, "[--cv:676px] sm:[--cv:1004px] md:[--cv:943px] lg:[--cv:957px] xl:[--cv:525px]")}>
       {start ? (
         <SectionHead id={id} title={start.title} line={start.line} />
       ) : (
@@ -247,7 +248,7 @@ export function LiveEditSection() {
     [Undo2, "Undo a change, or start fresh from the picture"],
   ];
   return (
-    <section aria-labelledby="home-live" className={cn(SECTION, "[--cv:720px] sm:[--cv:860px] md:[--cv:820px] lg:[--cv:470px] xl:[--cv:500px]")}>
+    <section aria-labelledby="home-live" data-reveal className={cn(SECTION, "[--cv:720px] sm:[--cv:860px] md:[--cv:820px] lg:[--cv:470px] xl:[--cv:500px]")}>
       <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-12 lg:gap-10">
         <LiveDemo className="aspect-[4/3] w-full shadow-strong lg:col-span-7" />
         <div className="min-w-0 lg:col-span-5">
@@ -453,7 +454,7 @@ export function StudiosSection({ facts, studios, audioTools, pills }: Pick<HomeS
       all={area("studios").href}
       allCount={studioCount()}
       allNoun="studios"
-      className={cn(SECTION, "[--cv:529px] sm:[--cv:1597px] md:[--cv:1482px] lg:[--cv:770px] xl:[--cv:795px]")}
+      data-reveal className={cn(SECTION, "[--cv:529px] sm:[--cv:1597px] md:[--cv:1482px] lg:[--cv:770px] xl:[--cv:795px]")}
     />
   );
 }
@@ -472,7 +473,7 @@ export function AssistSection({ facts, skills }: Pick<HomeShowcase, "facts" | "s
     [Plug, "Works with your other tools"],
   ];
   return (
-    <section aria-labelledby="home-assist" className={cn(SECTION, "[--cv:912px] sm:[--cv:831px] md:[--cv:911px] lg:[--cv:562px] xl:[--cv:480px]")}>
+    <section aria-labelledby="home-assist" data-reveal className={cn(SECTION, "[--cv:912px] sm:[--cv:831px] md:[--cv:911px] lg:[--cv:562px] xl:[--cv:480px]")}>
       <div className="grid gap-8 rounded-2xl border bg-card p-5 sm:p-7 lg:grid-cols-2">
         <div className="min-w-0">
           <AssistTag />
@@ -509,7 +510,7 @@ export function OpenSourceSection({ facts, newModels }: Pick<HomeShowcase, "fact
     { value: facts.presets, label: "presets: apps, camera motions and effects", href: "/effects" },
   ];
   return (
-    <section aria-labelledby="home-open" className={cn(SECTION, "[--cv:528px] sm:[--cv:494px] md:[--cv:571px] lg:[--cv:494px] xl:[--cv:363px]")}>
+    <section aria-labelledby="home-open" data-reveal className={cn(SECTION, "[--cv:528px] sm:[--cv:494px] md:[--cv:571px] lg:[--cv:494px] xl:[--cv:363px]")}>
       <h2 id="home-open" className={H2}>
         Open source, all the way down
       </h2>
@@ -574,7 +575,7 @@ const COMMANDS = ["git clone https://github.com/workingprototype/fuobe.git && cd
 
 export function StartSection() {
   return (
-    <section aria-labelledby="home-start" className={cn(SECTION, "[--cv:843px] sm:[--cv:726px] md:[--cv:748px] lg:[--cv:430px] xl:[--cv:427px]")}>
+    <section aria-labelledby="home-start" data-reveal className={cn(SECTION, "[--cv:843px] sm:[--cv:726px] md:[--cv:748px] lg:[--cv:430px] xl:[--cv:427px]")}>
       <h2 id="home-start" className={H2}>
         Your GPU. Your models. Your files.
       </h2>

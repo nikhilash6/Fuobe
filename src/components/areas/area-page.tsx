@@ -89,7 +89,7 @@ export function AreaSections({ sections }: { sections: AreaShowcase["sections"] 
   const ids = areaIds(sections);
   return sections.map((s, i) => (
     <div key={s.id}>
-      <div id={s.id} className={AREA_SECTION}>
+      <div id={s.id} data-reveal className={AREA_SECTION}>
         <DestinationsSection
           id={`${s.id}-title`}
           title={s.title}
@@ -113,7 +113,7 @@ export function MoreInFuobe({ current }: { current: AreaId }) {
   const others = AREAS.filter((a) => a.id !== current).map((a) => entry(a.entryId));
   const list = [...others, entry("canvas"), entry("assist")].filter((e): e is NavEntry => !!e);
   return (
-    <section aria-labelledby="more-in-fuobe" className="mt-10 sm:mt-14">
+    <section aria-labelledby="more-in-fuobe" data-reveal className="mt-10 sm:mt-14">
       <h2 id="more-in-fuobe" className="mb-2 font-sans text-[13px] font-medium">
         More in Fuobe
       </h2>

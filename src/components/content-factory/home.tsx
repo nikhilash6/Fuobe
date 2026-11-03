@@ -583,10 +583,10 @@ export function ContentFactoryHome({ voices, starters: given = [], fills: givenF
 function SeriesTile({ s }: { s: SeriesCard }) {
   const picture = s.poster?.outputs.find((o) => o.kind === "image");
   return (
-    <Link href={`/content-factory/${s.id}`} className="group/card block min-w-0 animate-fade-up rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <Link href={`/content-factory/${s.id}`} className="group/card card-motion block min-w-0 animate-fade-up rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <div className={cn("relative overflow-hidden rounded-xl bg-muted", s.aspect === "9:16" ? "aspect-[4/5]" : "aspect-video")}>
         {picture ? (
-          <MediaThumb output={picture} className="transition-transform duration-300 ease-move group-hover/card:scale-[1.02]" />
+          <MediaThumb output={picture} className="card-zoom" />
         ) : s.thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={s.thumbnail} alt="" className="size-full object-cover" />

@@ -53,10 +53,10 @@ export function ChannelCard({ channel }: { channel: FacelessChannel }) {
   const cover = channel.cover?.outputs.find((o) => o.kind === "image");
   const refs = channel.settings.styleRefs ?? [];
   return (
-    <Link href={`/faceless/${channel.id}`} className="group/card block animate-fade-up rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <Link href={`/faceless/${channel.id}`} className="group/card card-motion block animate-fade-up rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <div className="relative aspect-video overflow-hidden rounded-xl bg-muted">
         {cover ? (
-          <MediaThumb output={cover} className="transition-transform duration-300 ease-move group-hover/card:scale-[1.02]" />
+          <MediaThumb output={cover} className="card-zoom" />
         ) : (
           <StylePicture styleId={channel.settings.styleId} styleRef={refs[0]} className="opacity-90" />
         )}
@@ -92,10 +92,10 @@ export function EpisodeTile({ ep, href, onLike }: { ep: Card; href: string; onLi
   const vertical = ep.aspect === "9:16";
   return (
     <div className="group/card relative min-w-0 animate-fade-up">
-      <Link href={href} className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Open ${ep.title}`}>
+      <Link href={href} className="card-motion block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Open ${ep.title}`}>
         <div className={cn("relative overflow-hidden rounded-xl bg-muted", vertical ? "aspect-[4/5]" : "aspect-video")}>
           {picture ? (
-            <MediaThumb output={picture} className={cn("transition-transform duration-300 ease-move group-hover/card:scale-[1.02]", ep.status !== "done" && "opacity-70")} />
+            <MediaThumb output={picture} className={cn("card-zoom", ep.status !== "done" && "opacity-70")} />
           ) : film ? (
             <MediaThumb output={film} />
           ) : (
@@ -116,7 +116,7 @@ export function EpisodeTile({ ep, href, onLike }: { ep: Card; href: string; onLi
           )}
           {ep.status === "rendering" && (
             <div className="absolute inset-x-0 top-0 h-0.5">
-              <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${Math.round(ep.progress * 100)}%` }} />
+              <div className="h-full bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(Math.round(ep.progress * 100)) / 100})` }} />
             </div>
           )}
           {ep.status === "done" && <span className="absolute right-2 bottom-2 rounded-full bg-black/55 px-1.5 py-0.5 font-mono text-[11px] text-white tabular-nums">{formatLength(ep.seconds)}</span>}

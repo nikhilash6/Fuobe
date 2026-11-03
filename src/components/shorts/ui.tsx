@@ -200,7 +200,7 @@ export function ClipBar({ clip, onRemove }: { clip: SourceClip; onRemove: () => 
         </p>
         {clip.uploading && clip.progress < 1 && (
           <div className="mt-1 h-1 overflow-hidden rounded-full bg-background">
-            <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(clip.progress * 100)}%` }} />
+            <div className="h-full bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(Math.round(clip.progress * 100)) / 100})` }} />
           </div>
         )}
       </div>

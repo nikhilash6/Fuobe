@@ -1166,7 +1166,7 @@ export function LiveEditor(props: LiveEditorProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button size="lg" variant="secondary" className={cn("h-11 shrink-0 rounded-2xl px-4 max-sm:w-11 max-sm:px-0", keptFlash && "bg-success text-white hover:bg-success")} onClick={() => void keep()} disabled={!canKeep} aria-label="Start fresh from this picture" data-live-keep>
-                  {keeping ? <Loader2 className="size-4 animate-spin" /> : keptFlash ? <Check className="size-4" /> : <Layers className="size-4" />}
+                  {keeping ? <Loader2 className="size-4 animate-spin" /> : keptFlash ? <Check className="motion-confirm size-4" /> : <Layers className="size-4" />}
                   <span className="max-sm:hidden">Start fresh</span>
                 </Button>
               </TooltipTrigger>
@@ -1174,7 +1174,7 @@ export function LiveEditor(props: LiveEditorProps) {
             </Tooltip>
           ) : (
             <Button size="lg" className={cn("h-11 shrink-0 rounded-2xl px-4", keptFlash && "bg-success hover:bg-success")} onClick={() => void keep()} disabled={!canKeep} data-live-keep>
-              {keeping ? <Loader2 className="size-4 animate-spin" /> : keptFlash ? <Check className="size-4" /> : <CornerDownLeft className="size-4" />}
+              {keeping ? <Loader2 className="size-4 animate-spin" /> : keptFlash ? <Check className="motion-confirm size-4" /> : <CornerDownLeft className="size-4" />}
               {keptFlash ? "Kept" : "Keep"}
             </Button>
           )}
@@ -1290,7 +1290,7 @@ function StatusPill({ tone, text, detail, progress }: { tone: string; text: stri
         {text}
         {detail && <span className="max-sm:hidden"> · {detail}</span>}
       </span>
-      {tone === "busy" && progress !== undefined && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary/70 transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />}
+      {tone === "busy" && progress !== undefined && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary/70 origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(Math.round(progress * 100)) / 100})` }} />}
     </span>
   );
 }

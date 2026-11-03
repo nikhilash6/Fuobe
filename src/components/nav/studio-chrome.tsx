@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Suspense, useLayoutEffect } from "react";
 import { JobNotifications } from "@/components/job-notifications";
+import { PageMotion } from "@/components/page-motion";
 import { SkillBuilderProvider } from "@/components/skills/skill-builder-provider";
 import { CHROME_STATE_SCRIPT, fullScreenStudio } from "@/lib/nav";
 import type { NavCovers } from "@/lib/nav-covers";
@@ -78,6 +79,8 @@ export function StudioChrome({ covers, children }: { covers: NavCovers; children
           <Suspense fallback={null}>
             <ExploreTracker />
             <ChromeState />
+            {/* usePathname: inside Suspense, like ChromeState. */}
+            <PageMotion />
           </Suspense>
           <JobNotifications />
         </SearchPaletteProvider>

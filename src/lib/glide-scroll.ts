@@ -1,3 +1,5 @@
+import { REVEAL_EVENT } from "@/lib/ui-motion";
+
 /*
  * A refined scroll to a section: ease-out over 450 to 650 ms (longer for a longer way, never crawling), landing exactly
  * where a jump to its #id would (under the sticky bars: the page's scroll-padding-top and the section's
@@ -29,6 +31,8 @@ let stopCurrent: (() => void) | null = null;
 /** Glides the page to `el`. Resolves true when it landed, false when the visitor took over (or another glide began). */
 export function glideTo(el: Element): Promise<boolean> {
   stopCurrent?.();
+  // Sections on the way (and the target) show before the glide starts, so it never lands on one still waiting.
+  document.dispatchEvent(new CustomEvent(REVEAL_EVENT, { detail: { target: el } }));
   const instant = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (instant) {
     window.scrollTo({ top: landingY(el), behavior: "instant" });

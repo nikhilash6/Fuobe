@@ -277,6 +277,11 @@ export function BarSplitMenu({
           warmNav(panel);
         }}
         onPointerLeave={hover.leave}
+        // A press on the chevron is the trigger's own (it closes the menu, or pins one opened by hovering): it never
+        // also counts as a press outside, which would close a menu the press meant to pin.
+        onInteractOutside={(e) => {
+          if (chevron.current?.contains(e.target as Node)) e.preventDefault();
+        }}
         {...keepFocusOnHover(hover.openedByHover)}
         onCloseAutoFocus={(e) => {
           if (quietClose.current) {

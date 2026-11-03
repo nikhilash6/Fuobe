@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight, Columns2, Copy, Info, Layers, MoreHorizontal, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
@@ -167,6 +167,22 @@ export function Viewer({
   const [saving, setSaving] = useState(false);
   // A video this browser can't decode (HEVC or 10-bit H.264 on some systems): shown as a file to download instead.
   const [failedVideo, setFailedVideo] = useState<string | null>(null);
+  // Closing plays the dialog's exit first; the owner hears onClose once it has gone (Radix calls onCloseAutoFocus then).
+  const [open, setOpen] = useState(true);
+  const dismiss = () => setOpen(false);
+  // Where focus goes back to when it closes: what opened it (read before the dialog takes focus), else this result's
+  // Open button in the feed.
+  const opener = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const at = document.activeElement;
+    if (at instanceof HTMLElement && at !== document.body) opener.current = at;
+  }, []);
+  const giveFocusBack = () => {
+    const back =
+      (opener.current?.isConnected ? opener.current : null) ??
+      document.querySelector<HTMLElement>(`[data-gen-id="${CSS.escape(g.id)}"] button[aria-label^="Open"]`);
+    back?.focus({ preventScroll: true });
+  };
   const run = useActionRunner({ onReuse: onReuse && ((x) => (onReuse(x), onClose())), onCompare: () => setComparing((v) => !v), onDeleted: onClose });
   const engineMode = useEngineMode();
   const visitor = useLikelyVisitor();
@@ -311,9 +327,14 @@ export function Viewer({
     );
 
   return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => !v && dismiss()}>
       <DialogContent
         showCloseButton={false}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          onClose();
+          giveFocusBack();
+        }}
         className="flex h-[100svh] w-screen max-w-none gap-0 overflow-hidden rounded-none p-0 sm:max-w-none md:h-[min(92vh,900px)] md:w-[min(96vw,1400px)] md:rounded-xl"
       >
         <DialogTitle className="sr-only">{userTitle(g)}</DialogTitle>
@@ -389,7 +410,7 @@ export function Viewer({
             <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
               <Info className="size-3.5" /> Details
             </span>
-            <button onClick={onClose} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close">
+            <button onClick={dismiss} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close">
               <X className="size-4" />
             </button>
           </div>
@@ -448,7 +469,7 @@ export function Viewer({
           </p>
         </aside>
 
-        <button onClick={onClose} className="absolute top-3 right-3 grid size-10 place-items-center rounded-full bg-black/40 text-white backdrop-blur md:hidden" aria-label="Close">
+        <button onClick={dismiss} className="absolute top-3 right-3 grid size-10 place-items-center rounded-full bg-black/40 text-white backdrop-blur md:hidden" aria-label="Close">
           <X className="size-5" />
         </button>
 

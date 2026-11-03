@@ -42,7 +42,7 @@ export const LookCard = memo(function LookCard({
       aria-pressed={selected}
       data-look={id}
       className={cn(
-        "group/card flex min-w-0 flex-col gap-2 rounded-xl p-1.5 text-left transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
+        "group/card card-motion flex min-w-0 flex-col gap-2 rounded-xl p-1.5 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
         selected && "bg-brand-faint hover:bg-brand-faint-hover",
       )}
     >

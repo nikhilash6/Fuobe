@@ -119,7 +119,7 @@ function SaveBadge({ state, onRetry }: { state: SaveState; onRetry: () => void }
   const bad = state === "error" || state === "conflict";
   const body = (
     <>
-      {state === "saved" ? <Check className="size-3.5 shrink-0" /> : bad ? <CloudOff className="size-3.5 shrink-0" /> : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+      {state === "saved" ? <Check className="motion-confirm size-3.5 shrink-0" /> : bad ? <CloudOff className="size-3.5 shrink-0" /> : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
       <span className="sr-only">{text}</span>
       <span className="hidden xl:inline" aria-hidden>
         {short}

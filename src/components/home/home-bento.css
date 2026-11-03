@@ -310,8 +310,8 @@
   outline-offset: 2px;
   container-type: inline-size;
   transition:
-    border-color 0.25s ease,
-    transform 0.25s ease,
+    border-color var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard),
     box-shadow 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }

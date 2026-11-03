@@ -1,10 +1,43 @@
 "use client";
 
 import { ArrowRight } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { IntentLink } from "@/components/intent-link";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
+import { reducedMotion } from "@/lib/ui-motion";
 import { cn } from "@/lib/utils";
+
+/**
+ * Shows a pair's two pictures together: when neither has loaded yet (after hydration, or a tab just picked), the pair
+ * waits hidden (motion.css: [data-pair]) and fades in once both are there, instead of an empty frame, then one side,
+ * then the other. Server HTML and a page without JS show the pictures as they load; one already showing is never hidden.
+ */
+function usePairTogether(key: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || reducedMotion()) return;
+    const imgs = [...el.querySelectorAll("img")];
+    if (imgs.length < 2 || imgs.some((i) => i.complete)) return;
+    el.dataset.pair = "wait";
+    let left = imgs.length;
+    // Each picture ends with a load or an error; once both have, the pair shows.
+    const show = () => {
+      for (const i of imgs) {
+        i.removeEventListener("load", one);
+        i.removeEventListener("error", one);
+      }
+      el.dataset.pair = "in";
+    };
+    const one = () => --left <= 0 && show();
+    for (const i of imgs) {
+      i.addEventListener("load", one);
+      i.addEventListener("error", one);
+    }
+    return show;
+  }, [key]);
+  return ref;
+}
 
 /** One side's picture: a 512 px still, and with HD stills its 960 and 1280 px copies (each with its version). */
 export interface BeforeAfterStill {
@@ -173,6 +206,7 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
     }
   };
   const value = Math.round(pos);
+  const together = usePairTogether(pair.id);
 
   return (
     <div className="w-full max-w-[512px] lg:max-xl:flex lg:max-xl:max-w-none lg:max-xl:items-start lg:max-xl:gap-4 xl:max-w-[460px]">
@@ -211,7 +245,7 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
           touch.current = null;
         }}
       >
-        <div key={pair.id} className="absolute inset-0 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150">
+        <div key={pair.id} ref={together} data-own-motion className="absolute inset-0 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150">
           {/* Both enlarged alike (pair.zoom), so an edge in the source never shows; the after is cut at the handle. */}
           <BeforeAfterPicture still={pair.before} zoom={pair.zoom} hd={near} onLoad={() => setLoaded((n) => n + 1)} />
           <div className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${pos}%)` }}>
@@ -220,30 +254,32 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
         </div>
         <span className={cn(TAG, "left-2.5")}>{beforeTag}</span>
         <span className={cn(TAG, "right-2.5")}>{afterTag}</span>
-        <span aria-hidden className="pointer-events-none absolute inset-y-0 -ml-px w-0.5 bg-white shadow-[0_0_6px_rgb(0_0_0/35%)]" style={{ left: `${pos}%` }} />
-        <span
-          role="slider"
-          tabIndex={0}
-          aria-label={`Compare ${beforeTag.toLowerCase()} and ${afterTag.toLowerCase()}`}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={value}
-          aria-valuetext={`${beforeTag} ${value}%, ${afterTag} ${100 - value}%`}
-          onKeyDown={(e) => {
-            const big = e.shiftKey ? 25 : 5;
-            const next =
-              e.key === "ArrowLeft" || e.key === "ArrowDown" ? pos - big : e.key === "ArrowRight" || e.key === "ArrowUp" ? pos + big : e.key === "Home" ? 0 : e.key === "End" ? 100 : null;
-            if (next === null) return;
-            e.preventDefault();
-            take();
-            setPos(clamp(next));
-          }}
-          className="absolute top-1/2 -mt-3.5 -ml-3.5 grid size-7 place-items-center rounded-full bg-white text-black shadow-[0_2px_8px_rgb(0_0_0/30%)] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          style={{ left: `${pos}%` }}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden className="size-3.5" fill="currentColor">
-            <path d="M6 4 2 8l4 4V4Zm4 0v8l4-4-4-4Z" />
-          </svg>
+        {/* The handle and its line move by transform (a full-width layer shifted by pos %): no layout while it plays. */}
+        <span className="pointer-events-none absolute inset-0" style={{ transform: `translateX(${pos}%)` }}>
+          <span aria-hidden className="absolute inset-y-0 left-0 -ml-px w-0.5 bg-white shadow-[0_0_6px_rgb(0_0_0/35%)]" />
+          <span
+            role="slider"
+            tabIndex={0}
+            aria-label={`Compare ${beforeTag.toLowerCase()} and ${afterTag.toLowerCase()}`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={value}
+            aria-valuetext={`${beforeTag} ${value}%, ${afterTag} ${100 - value}%`}
+            onKeyDown={(e) => {
+              const big = e.shiftKey ? 25 : 5;
+              const next =
+                e.key === "ArrowLeft" || e.key === "ArrowDown" ? pos - big : e.key === "ArrowRight" || e.key === "ArrowUp" ? pos + big : e.key === "Home" ? 0 : e.key === "End" ? 100 : null;
+              if (next === null) return;
+              e.preventDefault();
+              take();
+              setPos(clamp(next));
+            }}
+            className="pointer-events-auto absolute top-1/2 left-0 -mt-3.5 -ml-3.5 grid size-7 place-items-center rounded-full bg-white text-black shadow-[0_2px_8px_rgb(0_0_0/30%)] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden className="size-3.5" fill="currentColor">
+              <path d="M6 4 2 8l4 4V4Zm4 0v8l4-4-4-4Z" />
+            </svg>
+          </span>
         </span>
       </div>
       <div className="min-w-0 lg:max-xl:flex-1">

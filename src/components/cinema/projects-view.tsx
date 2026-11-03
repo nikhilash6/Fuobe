@@ -51,9 +51,9 @@ function ProjectCard({ project, onSettings, query = "" }: { project: CinemaProje
   const href = `/cinema/${project.id}${query}`;
   return (
     <div className="group/card relative animate-fade-up">
-      <Link href={href} className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Link href={href} className="card-motion block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <div className="relative aspect-video overflow-hidden rounded-xl bg-muted">
-          <Cover project={project} className="transition-transform duration-300 ease-move group-hover/card:scale-[1.02]" />
+          <Cover project={project} className="card-zoom" />
           {project.pinned && (
             <span className="absolute top-2 left-2 grid size-7 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
               <Pin className="size-3.5" />

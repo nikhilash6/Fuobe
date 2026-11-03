@@ -356,7 +356,7 @@ function ClipsPanel({
         <div className="mb-2 rounded-lg bg-muted px-2.5 py-2 text-[12px]">
           <span className="block truncate font-medium">{upload.name}</span>
           <div className="mt-1 h-1 overflow-hidden rounded-full bg-background" role="progressbar" aria-valuenow={Math.round(upload.progress * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Uploading">
-            <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(upload.progress * 100)}%` }} />
+            <div className="h-full bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(Math.round(upload.progress * 100)) / 100})` }} />
           </div>
         </div>
       )}

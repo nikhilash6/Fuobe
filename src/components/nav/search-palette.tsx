@@ -107,8 +107,9 @@ export function SearchPalette({ session, onClose, takeReturn }: { session: Palet
     <>
       <DialogPrimitive.Root open={session.open} onOpenChange={(o) => !o && onClose()}>
         <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-overlay backdrop-blur-[2px] motion-safe:duration-150 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-closed:animate-out motion-safe:data-closed:fade-out-0" />
+          <DialogPrimitive.Overlay data-slot="search-palette-overlay" className="fixed inset-0 z-50 bg-overlay backdrop-blur-[2px] motion-safe:duration-150 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-closed:animate-out motion-safe:data-closed:fade-out-0" />
           <DialogPrimitive.Content
+            data-slot="search-palette"
             onCloseAutoFocus={restoreFocus}
             className={cn(
               "fixed inset-0 z-50 flex h-dvh w-full flex-col overflow-hidden bg-popover text-popover-foreground outline-none",

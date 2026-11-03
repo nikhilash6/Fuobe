@@ -64,8 +64,10 @@ export function CopyCommand({ text }: { text: string }) {
       }}
       className="inline-flex h-6 items-center gap-1.5 rounded-full bg-white/10 px-2.5 text-[12px] text-white/80 transition-colors hover:bg-white/15 hover:text-white"
     >
-      {done ? <Check className="size-3" /> : <Copy className="size-3" />}
-      {done ? "Copied" : "Copy"}
+      {done ? <Check className="motion-confirm size-3" /> : <Copy className="size-3" />}
+      <span key={done ? "done" : "copy"} className="motion-swap">
+        {done ? "Copied" : "Copy"}
+      </span>
     </button>
   );
 }

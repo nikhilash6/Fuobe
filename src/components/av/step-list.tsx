@@ -64,7 +64,7 @@ export function StepList({ steps, className }: { steps: StepRow[]; className?: s
               </div>
               {(status === "running" || (status === "queued" && !waiting)) && (
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
-                  <div className={cn("h-full rounded-full bg-primary transition-[width] duration-500", pct == null && "w-1/3 animate-pulse")} style={pct != null ? { width: `${Math.max(4, pct)}%` } : undefined} />
+                  <div className={cn("h-full rounded-full bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard", pct == null && "w-1/3 animate-pulse")} style={pct != null ? { transform: `scaleX(${(Math.max(4, pct)) / 100})` } : undefined} />
                 </div>
               )}
               {(status === "failed" || status === "canceled") && g?.error && <p className="mt-0.5 text-[12px] leading-snug break-words text-destructive">{g.error}</p>}

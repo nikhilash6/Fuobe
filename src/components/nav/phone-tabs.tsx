@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { CircleUserRound, House, LayoutGrid, Library, Plus, type LucideIcon } from "lucide-react";
 import { IntentLink } from "@/components/intent-link";
 import { useNavUi, useViewerKind } from "@/components/nav/nav-ui";
@@ -10,6 +10,7 @@ import { avatarDot, useShownStatus } from "@/components/nav/status-chips";
 import { NavPrefetcher } from "@/components/nav/nav-prefetch";
 import { useEngineMode } from "@/lib/api";
 import { navActive } from "@/lib/nav";
+import { ms } from "@/lib/ui-motion";
 import { activeEntry } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
 
@@ -147,13 +148,26 @@ function useKeyboardFlag() {
 export function PhoneTabs() {
   const { sheet } = useNavUi();
   useKeyboardFlag();
+  // Stays above a closing sheet until its slide out ends, so the sheet goes back under the bar the way it came.
+  const [lastSheet, setLastSheet] = useState(sheet);
+  const [closing, setClosing] = useState(false);
+  if (sheet !== lastSheet) {
+    setLastSheet(sheet);
+    setClosing(!sheet);
+  }
+  useEffect(() => {
+    if (!closing) return;
+    const t = window.setTimeout(() => setClosing(false), ms("base") + 40);
+    return () => window.clearTimeout(t);
+  }, [closing]);
+  const raised = !!sheet || closing;
   return (
     <nav
       aria-label="Main"
       data-phone-tabs
       className={cn(
         "pointer-events-auto fixed inset-x-0 bottom-0 grid h-[calc(4rem+env(safe-area-inset-bottom))] grid-cols-5 border-t border-sidebar-border bg-sidebar/95 pt-[3px] pr-[max(0.5rem,env(safe-area-inset-right))] pb-[calc(0.25rem+env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] backdrop-blur md:hidden print:hidden [html[data-fullscreen-studio]_&]:hidden [html[data-keyboard-open]_&]:hidden",
-        sheet ? "z-[60]" : "z-40",
+        raised ? "z-[60]" : "z-40",
       )}
     >
       <Suspense fallback={<Tabs pathname="" />}>

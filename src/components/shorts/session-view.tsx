@@ -164,7 +164,7 @@ function Session({ s }: { s: View }) {
                   {Math.round(overall * 100)}%
                 </p>
                 <div className="relative h-1 w-40 overflow-hidden rounded-full bg-background/70">
-                  <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${Math.round(overall * 100)}%` }} />
+                  <div className="h-full bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(Math.round(overall * 100)) / 100})` }} />
                 </div>
               </div>
             )}
