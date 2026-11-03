@@ -16,6 +16,7 @@ import {
   LICENCE_CLASSES,
   llmLicence,
   licenceInfo,
+  UNKNOWN_LICENCE,
   loraLicenceInfo,
   mergeLicences,
   modelCardOf,
@@ -122,8 +123,10 @@ function comfyFacts(endpoint: string): { licence: LicenceInfo; packs: string[]; 
 }
 
 /** A route's licence: the weights' for ComfyUI, the provider's terms for a paid API, Fuobe's own code in the browser. */
-export function routeLicence(route: ModelRoute, model: Pick<ModelDef, "vendor">): LicenceInfo {
+export function routeLicence(route: ModelRoute, model: Pick<ModelDef, "vendor" | "licence">): LicenceInfo {
   if (route.provider === "comfyui") return comfyFacts(route.endpoint).licence;
+  // The WorldCast worker (N7-9): the weights it runs, as the catalog records them (ModelDef.licence).
+  if (route.provider === "worldcast") return model.licence ? weightsLicence(model.licence) : licenceInfo(UNKNOWN_LICENCE);
   if (route.provider === "local") return BROWSER_LICENCE;
   if (route.provider === "llm") {
     const local = localModelInUse();

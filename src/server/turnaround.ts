@@ -9,6 +9,7 @@ import { needsConsent } from "@/lib/catalog/training";
 import { getElement } from "./elements";
 import { cancelGeneration, createGenerations, previewChained, previewGeneration } from "./generations";
 import { isOffered } from "./model-access";
+import { worldcastContext } from "./worldcast-on";
 import { loadManifest } from "./providers/comfyui";
 import { consentOnFile } from "./training";
 
@@ -25,7 +26,7 @@ export const TurnaroundSchema = z.object({
   engine: z.enum(["cloud", "open"]),
   views: z.object({ front: FileRef.optional(), right: FileRef.optional(), back: FileRef.optional(), left: FileRef.optional() }).default({}),
   sheet: FileRef.optional(),
-  route: z.enum(["frames", "references", "keyframes", "camera", "stills"]).optional(),
+  route: z.enum(["worldcast", "frames", "references", "keyframes", "camera", "stills"]).optional(),
   fill: z.boolean().optional(),
   fillWith: z.enum(["angles", "qma"]).optional(),
   path: z.string().max(40).optional(),
@@ -86,7 +87,7 @@ export interface TurnaroundRequest extends TurnaroundInput {
 
 /** What this install offers (Settings → Models & licences). */
 export function turnaroundContext(): TurnaroundContext {
-  return { has: (id) => !!getModel(id) && isOffered(id) };
+  return { has: (id) => !!getModel(id) && isOffered(id), worldcast: worldcastContext() };
 }
 
 /** Said when a real person's pictures go without the consent line (Soul ID's, src/lib/catalog/training.ts). */
@@ -120,6 +121,8 @@ function gpuGb(plan: TurnaroundPlan): number | undefined {
   let most: number | undefined;
   for (const s of plan.steps) {
     const m = getModel(s.request.modelId);
+    // WorldCast's worker: 48 GB or more (its README and model card).
+    if (m?.routes.some((r) => r.provider === "worldcast")) most = Math.max(most ?? 0, 48);
     const route = m && routesFor(m, s.request.op ?? "edit").find((r) => r.provider === "comfyui");
     const gb = route && flows.find((w) => w.id === route.endpoint)?.vramGb;
     if (typeof gb === "number") most = Math.max(most ?? 0, gb);

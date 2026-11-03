@@ -197,6 +197,12 @@
     "error": "HTTP 400: missing_node_type: Node 'FeyNoBg fine-hair matte (foreground refine on)' not found. The custom node may not be installed. (Node ID '#2')",
     "at": "2026-11-02T11:07:46.548Z"
   },
+  "image-person-mask-sam3": {
+    "sha256": "81f9b96a74bb2dfe09589e87c53ecb843f08d57b08a4e8b2418ae138f539a659",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T21:03:03.876Z"
+  },
   "image-to-3d-hunyuan3d-21": {
     "sha256": "275a30c4184a8728e919166e72d88913abcf61a85b051a897ecb7249db849a08",
     "validated": true,
