@@ -43,6 +43,7 @@ import {
 } from "@/lib/comfy";
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
+import { MOTION_GRAPHS, motionTransferPrompt, neutralPrompt, WORDS_NEEDED } from "@/lib/comfy-prompts";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
@@ -1334,15 +1335,20 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // MiniMax H3 stretches the start frame to the canvas with no crop: a clip from a still (or the orbit of one) always takes the
   // still's shape, so an aspect ratio left over from a text draft can't distort it.
   const h3 = isH3Graph(manifest.id);
-  const aspectRatio = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || b.image) ? "auto" : followClip && !input.aspectRatio ? "auto" : input.aspectRatio;
+  // The clip's own size: its upload's header, else what the server read from the file before sending it (sourceSize).
+  const clipSize = clip?.width && clip.height ? clip : input.sourceSize?.width && input.sourceSize.height ? input.sourceSize : undefined;
+  // Motion transfer crops the driving clip to the canvas, so the canvas always takes the clip's shape: a run that names
+  // none (the Motion control studio) fell back to the graph's portrait 482 × 854 and cut a landscape clip's sides off.
+  const followDriver = ctx.op === "motion-transfer" && !!b.video && !!clipSize;
+  const aspectRatio = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || b.image) ? "auto" : (followClip && !input.aspectRatio) || followDriver ? "auto" : input.aspectRatio;
   if (b.width || b.height) {
     const multiple = Number(manifest.limits?.dimensionMultiple ?? 16);
     // With motion paths the frame keeps the start image's shape, so the paths need no cropping;
     // "auto" keeps the source clip's shape when its header told us.
     const srcAspect = (extra.motionPaths as MotionPaths | undefined)?.aspect;
     // "auto" keeps the source clip's shape when its header told us, else the start frame's (image-to-video).
-    const still = aspectRatio === "auto" && !clip?.width ? ctx.media?.(String(values.image ?? "")) : undefined;
-    const src = clip?.width && clip.height ? clip : still?.width && still.height ? still : undefined;
+    const still = aspectRatio === "auto" && !clipSize ? ctx.media?.(String(values.image ?? "")) : undefined;
+    const src = clipSize ?? (still?.width && still.height ? still : undefined);
     const shape = srcAspect ? `${srcAspect[0]}:${srcAspect[1]}` : aspectRatio === "auto" ? (src ? `${src.width}:${src.height}` : undefined) : aspectRatio;
     if (h3) {
       // H3's own canvas (ComfyUI's adapt_canvas): 768 px on the short side, at most 768 × 1344, multiples of 32.
@@ -1628,6 +1634,15 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       if (!named) values.prompt = makerPrompt({ mode: "swap", maker: vace, subject: words, refs: 1 });
     }
     if (!words && b.prompt) values.prompt = makerPrompt({ mode: ctx.op === "video-swap" ? "swap" : "insert", maker: vace, subject: String(values.maskPrompt ?? ""), refs: 1 });
+  }
+  // A graph's own prompt text is its template's sample (Wan Animate 2's "Cartoon character lost" in an empty white room),
+  // so it never stays in a run: motion transfer always describes the character from the photo with the user's words,
+  // other graphs that run without words take Fuobe's neutral line, and one that can't do without words refuses.
+  if (b.prompt) {
+    const asked = typeof values.prompt === "string" && values.prompt.trim() ? values.prompt : undefined;
+    if (MOTION_GRAPHS.has(manifest.id)) values.prompt = motionTransferPrompt(manifest.id, asked);
+    else if (!asked && WORDS_NEEDED[manifest.id]) throw new ProviderError(WORDS_NEEDED[manifest.id], 400);
+    else if (!asked) values.prompt = neutralPrompt(manifest.id) ?? values.prompt;
   }
   // Depth maps: Video Depth Anything draws gray or inferno (the other graphs grayscale only), and can put the
   // original clip next to the map.

@@ -80,7 +80,10 @@ describe("Genjutsu's open graphs through the provider", () => {
     const { workflow: wf } = await prepare("wan-animate2", { images: ["knight.png"], prompt: "A knight in silver armour", aspectRatio: "auto", resolution: "720p" }, "motion-transfer");
     expect(at(wf, "189", "image")).toBe("knight.png");
     expect(at(wf, "240", "file")).toBe("clip.mp4");
-    expect(at(wf, "672:582", "text")).toBe("A knight in silver armour");
+    // The user's words join the character from the photo, in the template's two labelled lines.
+    expect(at(wf, "672:582", "text")).toBe(
+      "Character Description: The person from the reference picture, with their own face, hair, body and complete outfit. A knight in silver armour.\nBackground description: The setting, background and light of the reference picture.",
+    );
     expect([at(wf, "672:600", "resize_type.width"), at(wf, "672:600", "resize_type.height")]).toEqual([1280, 720]);
   });
 });

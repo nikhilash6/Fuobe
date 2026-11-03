@@ -37,7 +37,7 @@
       ],
       "frame_rate": 8,
       "duration": 8,
-      "prompt": "footsteps on gravel, a car door closes",
+      "prompt": "The natural sounds of what happens in the video, in sync with the picture.",
       "negative_prompt": "noisy, harsh",
       "cfg_scale": 4.5,
       "steps": 50,

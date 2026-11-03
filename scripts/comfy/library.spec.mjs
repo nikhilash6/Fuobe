@@ -1473,6 +1473,8 @@ export const SPEC = [
       // (same thresholds the template uses in its bypassed 4-step variant) so a raw video works.
       { op: 'addNodes', nodes: { 1601: { class_type: 'Canny', inputs: { image: ['156', 0], low_threshold: 0.1, high_threshold: 0.6 }, _meta: { title: 'Canny (control preprocessing)' } } } },
       { op: 'set', node: '160', input: 'control_video', value: ['1601', 0] },
+      // Fuobe's own words in place of the template's sample (src/lib/comfy-prompts.ts writes them for every run).
+      { op: 'set', node: '99', input: 'text', value: 'The person from the reference picture, with their own face, hair, body and complete outfit, moves exactly like the person in the driving video, in the setting and light of the reference picture.' },
     ],
     bindings: {
       prompt: [b('99', 'text')],
@@ -1536,6 +1538,8 @@ export const SPEC = [
     title: 'Wan 2.2 S2V 14B Talking Video (image + audio)',
     capability: 'lipsync',
     export: 'video_wan2_2_14B_s2v',
+    // Fuobe's neutral line in place of the template's sample (src/lib/comfy-prompts.ts).
+    transforms: [{ op: 'set', node: '6', input: 'text', value: 'A person is talking to the camera.' }],
     bindings: {
       prompt: [b('6', 'text')],
       negativePrompt: [b('7', 'text')],
@@ -1561,6 +1565,8 @@ export const SPEC = [
       { op: 'removeOutputs', ids: ['292'] },
       { op: 'resolveSwitches' },
       { op: 'set', node: '672:585', input: 'text', value: 'The character performs exactly the same movements as the person in the driving video, background stationary' },
+      // Fuobe's own words in place of the template's sample (src/lib/comfy-prompts.ts writes them for every run).
+      { op: 'set', node: '672:582', input: 'text', value: 'Character Description: The person from the reference picture, with their own face, hair, body and complete outfit.\nBackground description: The setting, background and light of the reference picture.' },
     ],
     bindings: {
       prompt: [b('672:582', 'text')],
