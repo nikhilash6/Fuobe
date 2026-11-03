@@ -3,7 +3,7 @@
 //
 // At 1440 px and 390 px, in light and dark: an Idol 3D result on your GPU shows "Build the final with TRELLIS.2" with its
 // note, a TRELLIS.2 result doesn't, and the link opens Image to 3D → From an image on TRELLIS.2 with the same picture
-// filled in. Nothing scrolls sideways; no page errors or console errors.
+// filled in, also on a second click of the same link. Nothing scrolls sideways; no page errors or console errors.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -64,13 +64,17 @@ for (const phone of [false, true]) {
       const cards = page.locator("#your-3d-models article");
       await cards.first().waitFor({ timeout: 60_000 });
       await sleep(800);
-      const link = page.getByRole("link", { name: LABEL });
-      assert.equal(await link.count(), 1, `${tag}: one Idol draft offers the final (the TRELLIS.2 card doesn't)`);
+      // Every Idol draft offers the final and nothing else does (an earlier run of this script leaves its own cards).
+      const links = page.getByRole("link", { name: LABEL });
+      const idolCards = await page.locator('#your-3d-models article:has(img[alt="The Idol 3D model"])').count();
+      assert.ok(idolCards > 0 && (await links.count()) === idolCards, `${tag}: only the Idol drafts offer the final (${await links.count()} of ${idolCards})`);
+      assert.equal(await page.locator(`#your-3d-models article:not(:has(img[alt="The Idol 3D model"]))`).getByRole("link", { name: LABEL }).count(), 0, `${tag}: the TRELLIS.2 card doesn't`);
+      const link = links.first();
       const href = await link.getAttribute("href");
       const q = new URL(href, app).searchParams;
       assert.deepEqual(Object.fromEntries(q), { mode: "image", model: "oss-trellis2", image: photo.url }, `${tag}: the link`);
       await link.scrollIntoViewIfNeeded();
-      assert.ok(await page.getByText("A textured, riggable .glb · 16 GB GPU").isVisible(), `${tag}: the note under it`);
+      assert.ok(await link.locator("xpath=ancestor::article").getByText("A textured, riggable .glb · 16 GB GPU").isVisible(), `${tag}: the note under it`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), 0, `${tag}: nothing scrolls sideways`);
       if (shots) await link.locator("xpath=ancestor::article").screenshot({ path: path.join(shots, `card-${phone ? "390" : "1440"}-${scheme}.png`) });
       await link.click();
@@ -79,9 +83,16 @@ for (const phone of [false, true]) {
       // From an image, on TRELLIS.2, with the picture filled in.
       assert.equal(await page.getByRole("radio", { name: "From an image" }).getAttribute("aria-checked"), "true", `${tag}: From an image`);
       assert.ok((await page.locator("main").innerText()).includes("TRELLIS.2"), `${tag}: TRELLIS.2 picked`);
-      assert.ok((await page.locator(`img[src="${photo.url}"]`).count()) > 0, `${tag}: the picture is filled in`);
+      // The photo slot's picture (the Idol card shows the same picture, so it is told apart by its label).
+      const slotPhoto = page.locator(`img[alt="Add a photo of the object"][src="${photo.url}"]`);
+      assert.equal(await slotPhoto.count(), 1, `${tag}: the picture is filled in`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), 0, `${tag}: the studio doesn't scroll sideways`);
       if (shots) await page.screenshot({ path: path.join(shots, `studio-${phone ? "390" : "1440"}-${scheme}.png`) });
+      // Clicked again with the URL already its own (the picture removed by hand): it fills the picture in again.
+      await page.getByRole("button", { name: "Remove the photo" }).click();
+      await until(async () => (await slotPhoto.count()) === 0, "the picture to go", 15_000);
+      await links.first().click();
+      await until(async () => (await slotPhoto.count()) === 1, `${tag}: the picture filled in again`, 15_000);
       console.log(`ok ${tag}`);
     } catch (e) {
       failures.push(`${tag}: ${e.message}`);

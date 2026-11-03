@@ -241,12 +241,12 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   // Refine detail · Hi3D 1.0 (open engine, From an image and From several images): the resolution, or off.
   const [refine, setRefine] = useState<Hi3dResolution | null>(null);
   const showRigHint = useCallback(() => setRigHint(true), []);
-  // A picture handed over in the link (?image=): a Fuobe result's, so Idol's photo crop stays off.
+  // A picture handed over in the link (?image=). Idol's "It's a photo" is left as it is: the link doesn't say whether
+  // the picture is a photo (an Idol 3D draft's is usually the user's own upload).
   const fromImage = useCallback((url: string) => {
     const v: SlotValue = { ref: url, preview: url, kind: "image" };
     lastPhoto.current = v;
     setPhoto(v);
-    setIdolPhoto(false);
   }, []);
   const fromUrl = useCallback(
     (m: Model3dMode, e: Engine, id: string) => {
@@ -255,6 +255,15 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
       setEngine(e);
     },
     [setEngine],
+  );
+  // "Build the final with TRELLIS.2" on a result card: fills the form on every click, also when the link is the URL already.
+  const toFinal = useCallback(
+    (url: string) => {
+      const found = modeOf(FINAL_3D.model);
+      if (found) fromUrl(found.mode, found.engine, FINAL_3D.model);
+      fromImage(url);
+    },
+    [fromUrl, fromImage],
   );
   // Models switched off in Settings → Models & licences leave the menu, and the pick falls back to one that is on.
   const choices = keepOffered(MODELS_3D[mode][engine], (m) => offered(access, m.id, engine));
@@ -476,7 +485,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((g) => (
-              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} />
+              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={toFinal} />
             ))}
           </div>
         )}
@@ -494,12 +503,26 @@ function retryOf(g: Generation): GenerationRequest {
   return r;
 }
 
-function ResultCard({ g, info, cloudAllowed, refineAllowed, finalAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed: boolean; finalAllowed: boolean }) {
+function ResultCard({
+  g,
+  info,
+  cloudAllowed,
+  refineAllowed,
+  finalAllowed,
+  onFinal,
+}: {
+  g: Generation;
+  info: Record<string, Model3dInfo>;
+  cloudAllowed: boolean;
+  refineAllowed: boolean;
+  finalAllowed: boolean;
+  onFinal: (photo: string) => void;
+}) {
   const create = useCreateGeneration();
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
   if (g.kind === "video") return <FilmCard g={g} />;
-  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} />;
+  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={onFinal} />;
 }
 
 /** A photoreal orbit filmed from a model ("Film it photoreal"): the clip, to watch and download. */

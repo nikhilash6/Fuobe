@@ -49,6 +49,7 @@ export function ModelCard({
   cloudAllowed,
   refineAllowed = false,
   finalAllowed = false,
+  onFinal,
 }: {
   g: Generation;
   info: Record<string, Model3dInfo>;
@@ -56,6 +57,8 @@ export function ModelCard({
   refineAllowed?: boolean;
   /** TRELLIS.2 runs here and is switched on: an Idol 3D draft offers "Build the final with TRELLIS.2". */
   finalAllowed?: boolean;
+  /** Fills the form for the final every time it's clicked (the link alone does nothing when the URL is already its own). */
+  onFinal?: (photo: string) => void;
 }) {
   const view = model3dView(g);
   // "preview": the turntable or the still (a splat with an orbit video: the video). "3d": the viewer (a splat: its picture).
@@ -438,7 +441,7 @@ export function ModelCard({
         {final && (
           <div className="space-y-1">
             <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link href={final} prefetch={false}>
+              <Link href={final} prefetch={false} onClick={() => view.photo && onFinal?.(view.photo)}>
                 <Box className="size-3.5" /> {FINAL_3D.label}
               </Link>
             </Button>

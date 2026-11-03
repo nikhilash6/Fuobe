@@ -68,5 +68,13 @@ describe("Build the final with TRELLIS.2", () => {
     expect(studio).toContain('const finalAllowed = !visitor && engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");');
     expect(studio).toContain('params.get("image")');
     expect(studio).toContain("onImage={fromImage}");
+    // A second click on the same link still fills the form (the URL doesn't change, so UrlModel can't).
+    expect(card).toContain("onClick={() => view.photo && onFinal?.(view.photo)}");
+    expect(studio).toContain("onFinal={toFinal}");
+    expect(studio).toContain("if (found) fromUrl(found.mode, found.engine, FINAL_3D.model);");
+    // ?image= leaves Idol's "It's a photo" as it is: the picture is usually the user's own upload.
+    const fromImage = studio.slice(studio.indexOf("const fromImage = useCallback"), studio.indexOf("const fromUrl = useCallback"));
+    expect(fromImage).toContain("setPhoto(v);");
+    expect(fromImage).not.toContain("setIdolPhoto");
   });
 });
