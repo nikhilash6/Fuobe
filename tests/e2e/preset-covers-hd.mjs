@@ -14,7 +14,6 @@
 // 3. Layout shift from cover media (a moved node that is or holds a cover's still or clip) under 0.01 through the
 //    load and the scroll; the whole page's shift is reported.
 // 4. Weight: the bytes of cover media fetched (stills and clips), reported per page.
-import fs from "node:fs";
 import { launch, PHONE } from "./_browser.mjs";
 
 const args = process.argv.slice(2);

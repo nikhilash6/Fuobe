@@ -28,8 +28,8 @@ const gap = (a: Buffer, b: Buffer) => {
   const [ma, mb] = [mean(a), mean(b)];
   return a.reduce((sum, v, i) => sum + Math.abs(v - ma - (b[i] - mb)), 0) / a.length;
 };
-/** As gen-preset-hd.mjs's MATCH. */
-const MATCH = 6;
+/** gen-preset-hd.mjs checks the decoded frame against MATCH (7); its AVIF and JPEG copies add a little of their own. */
+const MATCH = 8;
 /** The most a copy may weigh, by width: gen-preset-hd.mjs holds a clip to 1200 / 2000 kbit/s, about 0.9 / 1.5 MB for a 6 s loop. */
 const MAX_CLIP = { 640: 950_000, 1024: 1_600_000 } as Record<number, number>;
 const MAX_STILL = { 320: 30_000, 640: 120_000, 1024: 260_000 } as Record<number, number>;

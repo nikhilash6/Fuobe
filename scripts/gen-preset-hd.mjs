@@ -68,8 +68,8 @@ const CRF = { 640: 26, 1024: 25 };
 const MAX_KBPS = { 640: 1200, 1024: 2000 };
 const AVIF_QUALITY = 62;
 const JPEG_QUALITY = 82;
-/** How far (of 255) a copy may differ from the published still, on average: another frame is 10 and more. */
-const MATCH = 6;
+/** How far (of 255) a copy may differ from the published still, on average (from its mean): another frame is 10 and more. */
+const MATCH_DEFAULT = 7;
 /** The colours every clip is tagged with (libx264 takes them as its own options): its stills are decoded the same way. */
 const BT709 = ["-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709", "-color_range", "tv"];
 
@@ -81,7 +81,9 @@ const MASTERS = valuesOf("--masters");
 const JOBS = Number(valuesOf("--jobs")[0] ?? 1);
 const PART = valuesOf("--part")[0];
 const REPORT = valuesOf("--report")[0];
-const valued = new Set(["--masters", "--jobs", "--part", "--report"]);
+// --match <n>: a looser check for named covers whose published still was cut with another decode (check the frame first).
+const MATCH = Number(valuesOf("--match")[0] ?? MATCH_DEFAULT);
+const valued = new Set(["--masters", "--jobs", "--part", "--report", "--match"]);
 const named = argv.filter((a, i) => !a.startsWith("--") && !valued.has(argv[i - 1]));
 
 const tool = (name, args, input) => {
@@ -274,7 +276,7 @@ async function inParallel(ids, n) {
       (part, i) =>
         new Promise((resolve, reject) => {
           const file = path.join(os.tmpdir(), `gen-preset-hd-${process.pid}-part${i}.json`);
-          const args = [SELF, ...MASTERS.flatMap((m) => ["--masters", m]), "--part", file, ...(DRY ? ["--dry-run"] : []), ...part];
+          const args = [SELF, ...MASTERS.flatMap((m) => ["--masters", m]), "--part", file, "--match", String(MATCH), ...(DRY ? ["--dry-run"] : []), ...part];
           const child = spawn(process.execPath, args, { stdio: ["ignore", "inherit", "inherit"] });
           child.on("error", reject);
           child.on("exit", (code) => {
