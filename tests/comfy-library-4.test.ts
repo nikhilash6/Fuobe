@@ -118,10 +118,6 @@ describe("round-4 ComfyUI workflows", () => {
       "tts-qwen3-clone",
       "tts-voxcpm2",
       "tts-voxcpm2-clone",
-      // Watermark Remover: ComfyUI-Qwen-Watermark isn't on the validation server yet; built from the committed subset.
-      "image-watermark-scan-qwen3vl",
-      "image-watermark-remove-qwen21",
-      "image-watermark-remove-qwen21-brush",
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",

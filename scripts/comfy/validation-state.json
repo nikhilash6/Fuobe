@@ -239,6 +239,24 @@
     "error": null,
     "at": "2026-10-22T18:38:56.968Z"
   },
+  "image-watermark-remove-qwen21": {
+    "sha256": "8a3903e075ff7fa3904d357fa7cf39c9c95b1497fe65e5ff18948713a4d8d15b",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T17:49:58.936Z"
+  },
+  "image-watermark-remove-qwen21-brush": {
+    "sha256": "24dfd9abc40c254d49d89325074855757c7ec0c55b5a8757f57e0ab92196e689",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T17:50:00.189Z"
+  },
+  "image-watermark-scan-qwen3vl": {
+    "sha256": "ae2e680d64db0ee820bad7280a7556d5b419307eab37c70cffef4f644c924815",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T17:49:58.301Z"
+  },
   "infinitetalk-native": {
     "sha256": "816327852679ebc006a3842668c35a0c9127f724690abc4d58d7e820d2cf0de5",
     "validated": true,
