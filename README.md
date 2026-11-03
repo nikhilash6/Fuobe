@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <a href="https://fuobe.com"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-website-on-dark.svg"><img src="docs/media/buttons/nav-website.svg" alt="fuobe.com" width="126"></picture></a>
-  <a href="#documentation"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-docs-on-dark.svg"><img src="docs/media/buttons/nav-docs.svg" alt="Docs" width="88"></picture></a>
-  <a href="#quick-start"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-quick-start-on-dark.svg"><img src="docs/media/buttons/nav-quick-start.svg" alt="Quick start" width="126"></picture></a>
+  <a href="https://fuobe.com"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-website-on-dark.svg"><img src="docs/media/buttons/nav-website.svg" alt="fuobe.com" width="111"></picture></a>
+  <a href="#documentation"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-docs-on-dark.svg"><img src="docs/media/buttons/nav-docs.svg" alt="Docs" width="75"></picture></a>
+  <a href="#quick-start"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-quick-start-on-dark.svg"><img src="docs/media/buttons/nav-quick-start.svg" alt="Quick start" width="111"></picture></a>
 </p>
 
 <br>
