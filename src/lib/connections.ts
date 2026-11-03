@@ -4,6 +4,7 @@
  * address looks like, when to offer the first-run guide, and each connection's one-line status.
  */
 import { LLM_PROVIDERS } from "./catalog/llm-providers";
+import { offered, type AccessSummary } from "./model-access";
 
 export type TestProvider = "fal" | "replicate" | "comfyui" | "llm" | "civitai" | "huggingface" | "ai-toolkit";
 
@@ -203,6 +204,14 @@ export function connectedEngines(s: ConnectionState): { cloud: boolean; open: bo
 export function openEngineReady(s: (ConnectionState & { viewer?: unknown }) | undefined): boolean {
   if (!s || s.viewer || s.engineMode === "cloud") return false;
   return s.demoMode === "on" || !!s.providers.comfyui?.configured || !!s.ownerGpu;
+}
+
+/**
+ * Whether an image result offers Make it 3D (quick): the open engine can run for the owner (openEngineReady) and Idol 3D
+ * is switched on for it in Settings → Models & licences.
+ */
+export function make3dOffered(s: (ConnectionState & { viewer?: unknown; access?: AccessSummary }) | undefined): boolean {
+  return openEngineReady(s) && offered(s?.access, "oss-idol", "open");
 }
 
 /** Nothing this install's engine mode uses is connected, so a run asks to connect one (or makes a placeholder, for a tour). */

@@ -32,6 +32,8 @@ import {
   MAKE_3D_HINT,
   model3dBlocker,
   readModel3dLink,
+  linkedIdolQuality,
+  linkedPicture,
   model3dFor,
   model3dRequest,
   type IdolQuality,
@@ -239,7 +241,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
     (m: Model3dMode, e: Engine, id: string, quality?: IdolQuality) => {
       setMode(m);
       setPicked((p) => ({ ...p, [`${m}:${e}`]: id }));
-      if (quality && isIdol(id)) setIdolQualities((p) => ({ ...p, [`${m}:${e}`]: quality }));
+      setIdolQualities((p) => linkedIdolQuality(p, m, e, id, quality));
       setEngine(e);
     },
     [setEngine],
@@ -248,7 +250,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   // crop starts off (the tighter crop suits a generated picture), or on for an upload (?photo=1).
   const [handed, setHanded] = useState<string | null>(null);
   const fromImage = useCallback((url: string, asPhoto: boolean) => {
-    const v: SlotValue = { id: "link", ref: url, preview: url, kind: "image", source: asPhoto ? "upload" : "generation" };
+    const v: SlotValue = linkedPicture(url, asPhoto);
     lastPhoto.current = v;
     setPhoto(v);
     setIdolPhoto(asPhoto);

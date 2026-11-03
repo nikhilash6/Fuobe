@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
 import { make3dHref, nextSteps, outputActions } from "@/lib/output-actions";
-import { MAKE_3D_HINT, idolPhotoFor, readModel3dLink } from "@/lib/av/model3d";
-import { openEngineReady } from "@/lib/connections";
+import { MAKE_3D_HINT, idolPhotoFor, linkedIdolQuality, linkedPicture, readModel3dLink } from "@/lib/av/model3d";
+import { make3dOffered, openEngineReady } from "@/lib/connections";
 
 /**
  * Make it 3D (quick) on image results (idol-5, docs/research/idol-9.md §8, §9): a menu action that opens Image to 3D →
@@ -150,5 +150,46 @@ describe("openEngineReady", () => {
     expect(openEngineReady(s({ engineMode: "cloud", providers: { comfyui: { configured: true } }, demoMode: "on" }))).toBe(false);
     expect(openEngineReady(s({ providers: { comfyui: { configured: true } }, viewer: { kind: "account" } }))).toBe(false);
     expect(openEngineReady(s({ demoMode: "on", viewer: { kind: "guest" } }))).toBe(false);
+  });
+});
+
+describe("make3dOffered", () => {
+  const ready = { providers: { comfyui: { configured: true } }, engineMode: "both" as const };
+  it("follows openEngineReady when every model is on", () => {
+    expect(make3dOffered(ready)).toBe(true);
+    expect(make3dOffered({ ...ready, access: { off: [] } })).toBe(true);
+    expect(make3dOffered(undefined)).toBe(false);
+    expect(make3dOffered({ ...ready, engineMode: "cloud" })).toBe(false);
+    expect(make3dOffered({ ...ready, viewer: { kind: "account" } })).toBe(false);
+  });
+  it("is hidden when Idol 3D is switched off in Settings, or switched on for the cloud only", () => {
+    expect(make3dOffered({ ...ready, access: { off: ["oss-idol"] } })).toBe(false);
+    expect(make3dOffered({ ...ready, access: { off: [], engines: { "oss-idol": ["cloud"] } } })).toBe(false);
+    expect(make3dOffered({ ...ready, access: { off: [], engines: { "oss-idol": ["open"] } } })).toBe(true);
+    expect(make3dOffered({ ...ready, access: { off: ["oss-trellis2"] } })).toBe(true);
+  });
+});
+
+describe("the studio's hand-over from a link", () => {
+  it("puts a result's picture in the photo slot with the photo crop off, an upload's with it on", () => {
+    const url = "/api/files/abc.png";
+    const result = linkedPicture(url, false);
+    expect(result).toMatchObject({ ref: url, preview: url, kind: "image", source: "generation" });
+    expect(idolPhotoFor(result, null)).toBe(false);
+    const upload = linkedPicture(url, true);
+    expect(upload.source).toBe("upload");
+    expect(idolPhotoFor(upload, null)).toBe(true);
+  });
+  it("sets Idol 3D's look for the linked mode and engine only, and only for Idol", () => {
+    const prev = { "splat:cloud": "best" as const };
+    expect(linkedIdolQuality(prev, "splat", "open", "oss-idol", "quick")).toEqual({ "splat:cloud": "best", "splat:open": "quick" });
+    expect(linkedIdolQuality(prev, "splat", "open", "oss-idol")).toBe(prev);
+    expect(linkedIdolQuality(prev, "image", "open", "oss-trellis2", "quick")).toBe(prev);
+  });
+  it("reads a Make it 3D link into exactly that state", () => {
+    const link = readModel3dLink(new URLSearchParams(make3dHref("/api/files/abc.png").split("?")[1]));
+    expect(link.model).toEqual({ mode: "splat", engine: "open", id: "oss-idol" });
+    expect(linkedIdolQuality({}, link.model!.mode, link.model!.engine, link.model!.id, link.quality)).toEqual({ "splat:open": "quick" });
+    expect(linkedPicture(link.image!, !!link.photo).source).toBe("generation");
   });
 });

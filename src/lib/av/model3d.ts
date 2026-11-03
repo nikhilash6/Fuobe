@@ -478,12 +478,6 @@ export function retextureRequest(o: { glb: string; prompt?: string; style?: stri
   };
 }
 
-/**
- * What an Image to 3D link asks for: ?model= (⌘K, Make it 3D) picks a model, its mode and its engine; ?model=meshy-rigging
- * says where Rig & animate is; else ?mode= picks a mode. ?quality= is Idol 3D's Best or Quick look, ?image= a picture for
- * the photo slot (a file Fuobe keeps, or an https link), and ?photo=1 says it is a photo (an upload), so Idol's looser
- * photo crop starts on; a picture handed over from a result starts with it off (idol-5).
- */
 /** What Make it 3D (quick) on an image result does: shown in the studio with the picture handed over (never "2 s"). */
 export const MAKE_3D_HINT = "Turns this picture into a 3D splat on your GPU and renders a turning preview. Takes tens of seconds on a consumer GPU.";
 
@@ -496,6 +490,25 @@ export interface Model3dLink {
   photo?: boolean;
 }
 
+/**
+ * The photo slot's value for a picture handed over in an Image to 3D link: a result made here (so Idol's photo crop
+ * starts off), or an upload with ?photo=1 (crop on).
+ */
+export function linkedPicture(url: string, asPhoto: boolean): { id: string; ref: string; preview: string; kind: "image"; source: "upload" | "generation" } {
+  return { id: "link", ref: url, preview: url, kind: "image", source: asPhoto ? "upload" : "generation" };
+}
+
+/** Idol 3D's look per `${mode}:${engine}` after a link's ?quality=: set only when the linked model is Idol 3D. */
+export function linkedIdolQuality(prev: Record<string, IdolQuality>, mode: Model3dMode, engine: Engine, id: string, quality?: IdolQuality): Record<string, IdolQuality> {
+  return quality && isIdol(id) ? { ...prev, [`${mode}:${engine}`]: quality } : prev;
+}
+
+/**
+ * What an Image to 3D link asks for: ?model= (⌘K, Make it 3D) picks a model, its mode and its engine; ?model=meshy-rigging
+ * says where Rig & animate is; else ?mode= picks a mode. ?quality= is Idol 3D's Best or Quick look, ?image= a picture for
+ * the photo slot (a file Fuobe keeps, or an https link), and ?photo=1 says it is a photo (an upload), so Idol's looser
+ * photo crop starts on; a picture handed over from a result starts with it off (idol-5).
+ */
 export function readModel3dLink(sp: Pick<URLSearchParams, "get">): Model3dLink {
   const id = sp.get("model");
   const mode = sp.get("mode");
