@@ -57,7 +57,8 @@ import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins
 import { expandInbetweenWorkflow, type InbetweenPass } from "@/lib/av/inbetween-graph";
 import { gapPrompt, requestTiming, type InbetweenTiming } from "@/lib/inbetween";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
-import { exportValues, framesPerPass, hdrColorSpace, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
+import { RTX_FRAMEGEN_WORKFLOW, RTX_HDR_WORKFLOW, RTX_MISSING } from "@/lib/catalog/rtx-video";
+import { exportValues, framesPerPass, hdrColorSpace, RTX_UPSCALE_WORKFLOW, rtxScale, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
 import { keyFormatValues } from "@/lib/av/keying";
 import { guessKind } from "@/lib/catalog/payload";
 import { loraByFile, needsToken } from "@/lib/catalog/loras";
@@ -1152,8 +1153,11 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
     values.shortSide = shortSide;
     if (b.framesPerBatch && extra.framesPerBatch === undefined) {
       const seedvr = /seedvr/i.test(manifest.id);
+      // RTX Video Super Resolution writes the scaled frame itself (1-4x, the graph's own factor), not a fixed 4x one.
+      const rtx = manifest.id === RTX_UPSCALE_WORKFLOW;
+      const modelScale = seedvr ? 0 : rtx ? rtxScale(facts, shortSide) : 4;
       // ESRGAN on a big source (1440p → 2160p: about 0.85 GB a frame): down to one frame a pass, to stay near the budget.
-      values.framesPerBatch = framesPerPass(facts, { shortSide, modelScale: seedvr ? 0 : 4, fourNPlusOne: seedvr, min: seedvr ? 5 : 1, max: seedvr ? 33 : 64, fallback: Number(d.framesPerBatch ?? 16) });
+      values.framesPerBatch = framesPerPass(facts, { shortSide, modelScale, fourNPlusOne: seedvr, min: seedvr ? 5 : 1, max: seedvr ? 33 : 64, fallback: Number(d.framesPerBatch ?? 16) });
     }
   } else if (b.framesPerBatch && manifest.capability === "export-video" && extra.framesPerBatch === undefined) {
     values.framesPerBatch = framesPerPass(facts, { min: 8, max: 256, fallback: Number(d.framesPerBatch ?? 64) });
@@ -1850,7 +1854,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (restore) wf = restoreGraph(wf, restore, outputIds);
   // FPS Boost to a lower rate, or one the clip divides into: no interpolation, only every n-th frame.
   if (finish.bypassInterpolation) {
-    const id = Object.keys(wf).find((k) => wf[k].class_type === "FrameInterpolate");
+    const id = Object.keys(wf).find((k) => wf[k].class_type === "FrameInterpolate" || wf[k].class_type === "RTXVideoFrameGeneration");
     if (id) wf = bypassNode(wf, id, "images", outputIds);
   }
   if (surroundSource(sourceChannels)) wf = dbsSurroundBed(wf);
@@ -1989,11 +1993,17 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
   // A node class the server doesn't have: name the pack to install (opt-in packs like ComfyUI-Whisper).
   const packs = missingClass?.pack ? [missingClass.pack] : manifest.customNodes.map((c) => c.name);
   const where = worker === "isolated" ? "the isolated ComfyUI worker" : "your ComfyUI";
+  // An account's run (on its own GPU, or on this install's GPUs as a hosted run) gets the visitor's words, never the owner's.
+  const visitorRun = !!ownGpu() || !!tenantAccount();
   const missingPack =
     body.error?.type === "missing_node_type" && manifest.id === REGEN_WORKFLOW && worker === "main"
-      ? ownGpu()
+      ? visitorRun
         ? REGEN_COPY.missingVisitor
         : REGEN_COPY.missing
+      : body.error?.type === "missing_node_type" && RTX_WORKFLOWS.has(manifest.id) && worker === "main"
+        ? visitorRun
+          ? RTX_MISSING.visitor
+          : RTX_MISSING.owner
       : body.error?.type === "missing_node_type" && packs.length
         ? `This workflow needs the ${packs.join(" + ")} node pack${packs.length > 1 ? "s" : ""} on ${where} (see scripts/comfy/README.md)`
         : undefined;
@@ -2005,6 +2015,9 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
   void status;
   return { message: detail, ...(fix && { fix }) };
 }
+
+/** The NVIDIA RTX Video graphs (their pack is installed only on an NVIDIA RTX host). */
+const RTX_WORKFLOWS: ReadonlySet<string> = new Set([RTX_UPSCALE_WORKFLOW, RTX_FRAMEGEN_WORKFLOW, RTX_HDR_WORKFLOW]);
 
 /** Friendlier words for errors that a workflow's nodes report in their own terms. */
 function explainExecutionError(err: { exception_message?: string; node_type?: string } | undefined, manifest?: ManifestWorkflow): string {

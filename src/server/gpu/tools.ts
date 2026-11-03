@@ -17,6 +17,7 @@ import { PERSON_REMOVAL_TOOLS, REMOVE_TOOLS } from "@/lib/catalog/remove-object"
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
 import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
+import { RTX_FRAMEGEN_MODEL, RTX_HDR_MODEL, RTX_UPSCALE_MODEL } from "@/lib/catalog/rtx-video";
 import { COMPOSITE_MODEL } from "@/lib/catalog/sharpen";
 import { ORIGINALS, SHARPEN_TOOLS } from "@/lib/catalog/genjutsu";
 import { libraryEntry, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
@@ -319,6 +320,9 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: REGEN_JOIN, op: "concat" },
     ],
   },
+  // nm10-rtx-video: NVIDIA RTX Video in Upscale → Video ("Quick · RTX"), FPS boost and SDR to HDR. An NVIDIA RTX card only
+  // (frame generation: RTX 40 or later): elsewhere the row reads "Needs an NVIDIA RTX card".
+  { href: `/upscale/video?model=${RTX_UPSCALE_MODEL}`, label: "Quick upscale · RTX", group: "Video tools", steps: [{ modelId: RTX_UPSCALE_MODEL, op: "upscale-video" }] },
   // n7-4: the Character swap at 1080p / 2K / 4K (Genjutsu, and Sharpen in Character Swap Studio's Finish): the 768p swap,
   // the person's mask (SAM 3.1 on H3 Relay's graph), the part at 24 fps, the swap regenerated, only the character
   // composited over the footage, the windows joined and the part's sound put back.
@@ -337,7 +341,9 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     ],
   },
   { href: "/upscale/fps", label: "FPS boost", group: "Video tools", config: S.FPS_BOOST_STUDIO },
+  { href: `/upscale/fps?model=${RTX_FRAMEGEN_MODEL}`, label: "FPS boost · RTX", group: "Video tools", steps: [{ modelId: RTX_FRAMEGEN_MODEL, op: "interpolate" }] },
   { href: "/upscale/hdr", label: "SDR to HDR", group: "Video tools", config: S.SDR_TO_HDR_STUDIO },
+  { href: `/upscale/hdr?model=${RTX_HDR_MODEL}`, label: "SDR to HDR · RTX", group: "Video tools", steps: [{ modelId: RTX_HDR_MODEL, op: "sdr-to-hdr" }] },
   { href: "/upscale/export", label: "Export", group: "Video tools", config: S.VIDEO_EXPORT_STUDIO },
   { href: "/video-tools", label: "Remove background", group: "Video tools", config: S.VIDEO_MATTE_STUDIO },
   // nm10-keying: CorridorKey 2.0 on footage shot on a green screen (its own list: ModelOptions.greenScreen).

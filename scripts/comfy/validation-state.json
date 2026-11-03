@@ -149,6 +149,12 @@
     "error": null,
     "at": "2026-11-01T13:51:34.372Z"
   },
+  "fps-rtx-framegen": {
+    "sha256": "cabe1f235a447892a526dec506c0018fc9c094bb8de43ee164032cadc46ac18c",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'RTX Video Frame Generation: (N - 1) x m + 1 frames, cuts detected' not found. The custom node may not be installed. (Node ID '#7')",
+    "at": "2026-11-02T10:52:33.580Z"
+  },
   "frame-extract": {
     "sha256": "0f695a5ddf779a1d7b57f1c817e14c36e53534c81148449055f39c55cf9952ab",
     "validated": true,
@@ -503,6 +509,12 @@
     "error": null,
     "at": "2026-10-23T00:12:21.301Z"
   },
+  "sdr-to-hdr-rtx": {
+    "sha256": "f7ba6d2b932efd5f4479fafb4e7e17a02657dcb994f680ebf8bf88a7fb64d4c5",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'RTX Video HDR (peak nits; HDR = BT.2020 HLG, HDR PQ = BT.2020 PQ)' not found. The custom node may not be installed. (Node ID '#3')",
+    "at": "2026-11-02T10:52:33.596Z"
+  },
   "sdxl-t2i": {
     "sha256": "ae16cc9b74193179da08136571719871c3e31e2abacf5297985657c2fe5e9fbf",
     "validated": true,
@@ -682,6 +694,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-23T22:48:22.275Z"
+  },
+  "upscale-video-rtx": {
+    "sha256": "c850e3910096031d865de8d4b8206e39b8a7f7fa960e17ecb7d6d282755a66ac",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'RTX Video Super Resolution (quality: rtxQuality)' not found. The custom node may not be installed. (Node ID '#6')",
+    "at": "2026-11-02T10:52:33.559Z"
   },
   "upscale-video-seedvr2": {
     "sha256": "42f7ef1d6ab68d53f96a704037fc443fd207b790562da473c747f9f6e14c34fc",

@@ -189,6 +189,8 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       optional: uniq(wf.models.filter((m) => m.optional).map((m) => `${m.folder}/${m.file}`)),
       vramGb: Number(wf.vramGb) || 0,
       isolated: wf.worker === 'isolated',
+      // The card its nodes need (the NVIDIA RTX Video nodes): readiness checks it against the GPU's name.
+      ...(wf.gpu && { gpu: wf.gpu }),
       firstRun: wf.autoDownloads ?? [],
       ...(wf.validated && { validated: true }),
     };
