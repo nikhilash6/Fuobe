@@ -12,7 +12,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import type { Generation, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
-import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest } from "@/lib/api";
+import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useHydrated, useIsGuest } from "@/lib/api";
 import {
   claimStartToken,
   followEngineDefault,
@@ -22,6 +22,7 @@ import {
   presetModel,
   presetParams,
   promptShown,
+  relatedHref,
   routeParams,
   START_PARAM,
   withoutLayout,
@@ -461,6 +462,8 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
   // Config and actions only: the draft lives in the composer, so typing doesn't re-render the page or the feed.
   const { config, setDraft } = useStudioActions();
   const [engine, setEngine, engineMode] = useEngine();
+  // The engine is the browser's own: a link that names its model (Lipsync → Kandinsky) waits for it, so the page hydrates as rendered.
+  const hydrated = useHydrated();
   // A GPU-only step (Regenerate) isn't offered while the install runs paid APIs only.
   const firstSteps = config.firstSteps?.filter((f) => !f.openOnly || engineMode !== "cloud");
   const feed = useGenerations(config.feed);
@@ -552,7 +555,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
             <h2 className="font-heading text-display text-balance">{config.hero}</h2>
             {config.subtitle && <StudioSubtitle text={config.subtitle} />}
             {config.related && (
-              <Link href={config.related.href} className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+              <Link href={hydrated ? relatedHref(config.related, engine) : config.related.href} className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                 {config.related.label}
                 <ArrowRight className="size-3" />
               </Link>

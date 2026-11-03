@@ -97,6 +97,7 @@ export const GenerationRequestSchema = z.object({
       crossfade: z.number().min(0).max(30).optional(),
       sourceDuration: z.number().positive().max(36_000).optional(),
       sourceFps: z.number().positive().max(1000).optional(),
+      sourceSize: z.object({ width: z.number().int().positive().max(16_384), height: z.number().int().positive().max(16_384) }).optional(),
       frameInterval: z.number().int().min(1).max(10_000).optional(),
       targetFps: z.number().positive().max(240).optional(),
       slowdown: z.number().min(1).max(8).optional(),

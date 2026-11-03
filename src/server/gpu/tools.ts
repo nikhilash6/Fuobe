@@ -212,6 +212,17 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/extend", label: "Extend", group: "Video", config: S.EXTEND_STUDIO },
   { href: "/reframe", label: "Reframe", group: "Video", config: S.REFRAME_STUDIO },
   { href: "/lipsync", label: "Lipsync", group: "Video", config: S.LIPSYNC_STUDIO },
+  // nm10-kandinsky6: Kandinsky 6.0's clips with dialogue and sound (the Video studio, and Lipsync's "talking character from
+  // words" link), on Lite unless Quality picks Pro.
+  {
+    href: "/video?model=oss-kandinsky6",
+    label: "Video with dialogue",
+    group: "Video",
+    steps: [
+      { modelId: "oss-kandinsky6", op: "t2v" },
+      { modelId: "oss-kandinsky6", op: "i2v" },
+    ],
+  },
   // Clean the voice first (DBS D6) on a lip re-sync of a clip: the voice cleaned, the re-sync on it, and the clip's music
   // and effects put back by the stream-copy mux (its own DBS pass, the same graph).
   {
@@ -343,6 +354,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: SHARPEN_TOOLS.mux, op: "mux" },
     ],
   },
+  // nm10-kandinsky6: Upscale → Video's Kandinsky VSR (2x, 2.25x, 4x; clips up to 5 s).
+  { href: "/upscale/video?model=oss-kandinsky6-vsr", label: "Kandinsky VSR", group: "Video tools", steps: [{ modelId: "oss-kandinsky6-vsr", op: "upscale-video" }] },
   { href: "/upscale/fps", label: "FPS boost", group: "Video tools", config: S.FPS_BOOST_STUDIO },
   { href: `/upscale/fps?model=${RTX_FRAMEGEN_MODEL}`, label: "FPS boost · RTX", group: "Video tools", steps: [{ modelId: RTX_FRAMEGEN_MODEL, op: "interpolate" }] },
   { href: "/upscale/hdr", label: "SDR to HDR", group: "Video tools", config: S.SDR_TO_HDR_STUDIO },

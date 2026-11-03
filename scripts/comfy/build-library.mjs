@@ -78,6 +78,11 @@ export const LOADER_FOLDERS = {
   OpenH3RegenFastVAEDecode: { vae_name: 'vae' },
   // Clean up voice: ComfyUI-RE-USE's loader reads models/reuse.
   REUSELoader: { model: 'reuse' },
+  // Kandinsky 6.0 (nm10-kandinsky6): the audio VAE in models/audio_vae (bigvgan_dir names a folder there: requiredModels), and
+  // the VSR's K-VAE and latent upscaler in its bundle under models/diffusion_models.
+  Kandinsky6AudioVAELoader: { tod_vae: 'audio_vae' },
+  Kandinsky6SRVAELoader: { kvae_checkpoint: 'diffusion_models' },
+  Kandinsky6LatentUpscalerLoader: { latent_upscaler_checkpoint: 'diffusion_models' },
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
 // Zen Image Edit's adapter loader reads paths (nm10-qwen21-fast): its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
@@ -184,6 +189,8 @@ export const BINDING_KEYS = new Set([
   'despill',
   // nm10-rtx-video: the NVIDIA RTX Video nodes' quality (Super Resolution) or mode (Frame Generation)
   'rtxQuality',
+  // Kandinsky VSR (nm10-kandinsky6): the latent upscaler bank entry its factor needs
+  'upscalerScale',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.
@@ -213,10 +220,12 @@ async function hfSize(url, cache) {
     // A renamed repository answers with a redirect to its new name on huggingface.co (Comfy-Org/flux2-dev → Flux-2-Dev):
     // follow that one. The download's own redirect, to the CDN, carries the size and isn't followed.
     const moved = res.headers.get('location');
+    // A small file's redirect to its cached copy already says its size (x-linked-size), which the copy (chunked) may not.
+    const first = res.headers.get('x-linked-size');
     if ([301, 302, 307, 308].includes(res.status) && moved?.startsWith('/')) res = await fetch(new URL(moved, url), { method: 'HEAD', redirect: 'manual' });
     // A GitHub release asset (Zen Image Edit's adapter) redirects to its storage, which answers with the size.
     else if ([301, 302, 307, 308].includes(res.status) && /^https:\/\/github\.com\/[^/]+\/[^/]+\/releases\/download\//.test(url)) res = await fetch(url, { method: 'HEAD' });
-    const linked = res.headers.get('x-linked-size');
+    const linked = res.headers.get('x-linked-size') || first;
     const len = linked || (res.status === 200 ? res.headers.get('content-length') : null);
     if (res.status === 401 || res.status === 403) {
       const size = await hfTreeSize(url);
@@ -401,8 +410,12 @@ async function main() {
     // Files a loader reads by a name with no extension (DBSLoader: models/dbs/<model>/config.json + model.safetensors), which the
     // loop above can't see: listed like any model, so install help and the presence check (GET /models/<folder>) know them.
     // Then files a model control can pick instead (FILM for RIFE): listed as optional, so missing-model help names them.
+    // A file the graph loads can be optional too: one its nodes load only when a control asks (Kandinsky 6.0's Prompt helper).
     for (const [file, optional] of [...(spec.requiredModels || []).map((f) => [f, false]), ...(spec.optionalModels || []).map((f) => [f, true])]) {
-      if (models.has(file)) continue;
+      if (models.has(file)) {
+        if (optional) models.get(file).optional = true;
+        continue;
+      }
       const known = KNOWN_MODELS[file];
       if (!known?.url) {
         errs.push(`${optional ? 'optional' : 'required'} model ${file}: no download URL known`);

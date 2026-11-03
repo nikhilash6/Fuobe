@@ -131,6 +131,7 @@ describe("requirements.json", () => {
   // 27.1 KB gzipped, so the budget moves to 256 KB / 32 KB: room for about fifteen more graphs before it is looked at again.
   // Green screen (VRMBG 3.0 and CorridorKey 2.0), RTX Video's three graphs and Edit speech's two, on top of Pika-H3-Flex's
   // four, took it to 260.3 KB / 32.6 KB gzipped, so the budget moves to 288 KB / 36 KB.
+  // Kandinsky 6.0's three graphs, two packs and sixteen files took it to 265 KB / 32.9 KB gzipped, so the budget moves to 288 KB / 36 KB.
   it("stays within its size budget (288 KB, 36 KB gzipped)", () => {
     expect(Buffer.byteLength(text)).toBeLessThanOrEqual(288 * 1024);
     expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(36 * 1024);

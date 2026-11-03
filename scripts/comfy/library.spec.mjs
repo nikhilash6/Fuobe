@@ -124,6 +124,8 @@
 //   voiceDescription*                     (the voice in words: params.voiceDescription, op voice-design)
 //   voiceTranscript*                      (what the voice sample says: params.voiceTranscript, or a saved voice's line)
 //   device*                               (VoxCPM2's device combo: the server's first torch device, cuda | mps | cpu)
+// Keys added with Kandinsky 6.0 (nm10-kandinsky6). * = the provider fills it:
+//   upscalerScale*                        (Kandinsky VSR's latent upscaler bank entry: "4x" for 4x, "2x" for 2x and 2.25x; scale* is params.resolution)
 // Keys added with Hi3D mesh refinement (hi3d-refine). * = the provider fills it:
 //   model3d*                              (Hi3DLoadMesh: the coarse GLB, uploaded like any input: inputs.model3d)
 //   meshResolution                        (Hi3DRefine resolution 512 | 1024 | 1536: params.extra.meshResolution)
@@ -235,6 +237,10 @@ export const CUSTOM_NODE_REPOS = {
   // idol-2 (docs/research/idol-9.md §5.1-5.2): Nynxz's Idol nodes (crop modes, predicted camera, splat pruning), Apache-2.0,
   // no Python dependencies and no model code. Pinned in install-comfyui.sh; not on the validation server.
   'ComfyUI-Idol': 'https://github.com/Nynxz/ComfyUI-Idol/tree/4d3a4f671028f0e062d9f004cda1a2dd73360d35',
+  // Kandinsky 6.0 (nm10-kandinsky6): Kandinsky Lab's own packs, on the Comfy Registry as kandinsky6 and kandinsky6-sr (the
+  // comfyui/ folder of each repository). Neither is on the validation server; core ComfyUI has no Kandinsky 6 nodes yet (PR #16825).
+  kandinsky6: 'https://github.com/kandinskylab/kandinsky-6/tree/7ceeefad7fb625011f7db602c43893a989f19c15/comfyui',
+  'kandinsky6-sr': 'https://github.com/kandinskylab/kandinsky-6-sr/tree/b15e2aac526519c51f59dfec2b848355bb8902de/comfyui',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -268,11 +274,33 @@ export const PACK_CLASSES = {
   'ComfyUI-RMBG': /^AILab_(VRMBG|FeyNoBg)$/,
   'ComfyUI-AuK': /^AuK(ModelLoader|GenerateEdit)$/,
   'ComfyUI-Idol': /^Idol(PreprocessImage|Camera|PruneSplat)$/,
+  kandinsky6: /^Kandinsky6(BeautifyPrompt|Sampler|EmptyLatent|ImageToVideoAudio|RemoveReferenceLatent|AudioVAELoader|AudioVAEDecode|TextEncode|MagCache)$/,
+  'kandinsky6-sr': /^Kandinsky6(SRVAELoader|LatentUpscalerLoader|VSRUpscale)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
 // (UI templates usually carry node.properties.models; custom-node examples do not).
 export const KNOWN_MODELS = {
+  // Kandinsky 6.0 (nm10-kandinsky6): Kandinsky Lab's distilled transformers (MIT) at the revisions read on 2026-11-02, saved
+  // where the pack's README puts them (diffusion_models/<repo>/transformer/…); the encoders, VAE and vocoder its templates load;
+  // and the VSR bundle, whose loaders list a file only with its config.json beside it.
+  'Kandinsky-6.0-Lite-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/4c487e8b4aeeb9059e5a77905aa2ddb59ec28f81/transformer/diffusion_pytorch_model.safetensors' },
+  'Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers/resolve/80d5e6c7f646c5f512b684e2da0765618d805894/transformer/diffusion_pytorch_model.safetensors' },
+  'clip_l.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors' },
+  'qwen_2.5_vl_7b.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/Qwen-Image/resolve/1f12b17be14c89b026c51a91d67c32f84bb047bc/split_files/text_encoders/qwen_2.5_vl_7b.safetensors' },
+  'hunyuan_video_vae_bf16.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/Hunyuan-Video/resolve/533a43813f01517d9e624f9e824a85bb94094120/split_files/vae/hunyuan_video_vae_bf16.safetensors' },
+  'qwen3.5_9b_bf16.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/Qwen3.5/resolve/5d50a2252bf1bcd49e5fee9b5f296986d442682b/text_encoders/qwen3.5_9b_bf16.safetensors' },
+  'v1-44.pth': { folder: 'audio_vae', url: 'https://huggingface.co/hkchengrex/MMAudio/resolve/eb13a1a98fdbec91753775c57b074ccdfc60587c/ext_weights/v1-44.pth' },
+  'bigvgan_vocoder/bigvgan_generator.pt': { folder: 'audio_vae', url: 'https://huggingface.co/nvidia/bigvgan_v2_44khz_128band_512x/resolve/95a9d1dcb12906c03edd938d77b9333d6ded7dfb/bigvgan_generator.pt' },
+  'bigvgan_vocoder/config.json': { folder: 'audio_vae', url: 'https://huggingface.co/nvidia/bigvgan_v2_44khz_128band_512x/resolve/95a9d1dcb12906c03edd938d77b9333d6ded7dfb/config.json' },
+  'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/transformer/diffusion_pytorch_model.safetensors' },
+  'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/transformer/config.json': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/transformer/config.json' },
+  'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/vae/diffusion_pytorch_model.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/vae/diffusion_pytorch_model.safetensors' },
+  'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/vae/config.json': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/vae/config.json' },
+  'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/latent_upscaler/diffusion_pytorch_model.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/latent_upscaler/diffusion_pytorch_model.safetensors' },
+  'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/latent_upscaler/config.json': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/latent_upscaler/config.json' },
+  'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/model_index.json': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/model_index.json' },
+  'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/scheduler/scheduler_config.json': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/scheduler/scheduler_config.json' },
   // nm10-music3: MiniMax Music 3 and YuE2 as Comfy-Org repacked them (the files the core templates audio_minimax_music_3,
   // audio_yue2_text2music and audio_yue2_music_cover load), pinned in model-pins.json at the revisions read on 2026-11-01.
   'minimax_music3_dit_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/diffusion_models/minimax_music3_dit_int8_convrot.safetensors' },
@@ -746,6 +774,21 @@ const qwen21Tier = (op, tier, base, extra) => ({
     `Options → Speed "${tier}" on qwen-image-21-${op}: the same graph with a LoraLoaderModelOnly after the UNETLoader${extra?.after ?? ''} and its KSampler replaced by ` +
     `RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. ${QWEN21_TIERS[tier].notes}${extra?.notes ?? ''}${QWEN21_CLEAN_NOTE}`,
 });
+
+// Kandinsky 6.0 (nm10-kandinsky6): each file's licence as its card states it, and what the graphs share.
+const K6_LICENSE =
+  'MIT (Kandinsky 6.0 Lite and Pro distilled weights, Kandinsky Lab); Qwen2.5-VL 7B text encoder Apache-2.0; CLIP-L MIT; HunyuanVideo VAE: Tencent Hunyuan Community License ' +
+  '(territory EXCLUDES the EU, UK and South Korea); audio VAE v1-44.pth from hkchengrex/MMAudio: CC BY-NC 4.0 (NON-COMMERCIAL); BigVGAN v2 vocoder MIT (NVIDIA); ' +
+  'Qwen3.5 9B (Prompt helper) Apache-2.0; kandinsky6 pack code MIT (vendored Kandinsky video code Apache-2.0)';
+const K6_NOTES =
+  'Kandinsky Lab\'s kandinsky6 pack (its T2VA / I2VA templates, without the VSR stage: Upscale -> Kandinsky VSR does that) on core loaders: UNETLoader (the transformer), DualCLIPLoader kandinsky5 ' +
+  '(qwen_2.5_vl_7b + clip_l), VAELoader (HunyuanVideo VAE), Kandinsky6AudioVAELoader (v1-44.pth + models/audio_vae/bigvgan_vocoder, 44k, scaling 0.417). ' +
+  'unet = the Quality setting: Lite distilled (default, 6.38 GB) or Pro distilled (60.3 GB, an optional download); both run the pack\'s PiFlow sampler at 10 steps and CFG 1 (MagCache is bypassed for distilled models, so it is left out). ' +
+  'One caption feeds the picture and the sound (Kandinsky6TextEncode): spoken lines between <S> and <E>, the sound between <AUDCAP> and <ENDAUDCAP>; Fuobe writes the tags from quoted words and a "Sound:" line. ' +
+  'Node 20 is the Prompt helper (Kandinsky6BeautifyPrompt on Qwen3.5 9B bf16, 19.3 GB): Fuobe takes it out unless Prompt helper is on, so the encoder reads the words as typed. ' +
+  '5 s = 121 frames (4n + 1) at 24 fps; width and height multiples of 16 (480p by default: 864x480 in the template, Fuobe\'s 16:9 is 848x480). ' +
+  'VRAM is not published: 24 GB for Lite is an estimate (6.4 GB DiT; the 16.6 GB encoder and the VAE load in turn), Pro distilled holds a 60.3 GB DiT (an 80 GB GPU, or a lot of system RAM for ComfyUI to offload into). ' +
+  'The kandinsky6 pack needs ComfyUI 0.38 or newer; the cloud half is kandinsky-6 on fal.';
 
 export const SPEC = [
   // =========================================================================
@@ -5571,5 +5614,82 @@ export const SPEC = [
       '"HDR" = BT.2020 HLG (params.format hlg_10bit), "HDR PQ" = BT.2020 PQ, HDR10\'s transfer (pq_10bit); CreateVideo writes 10 bits and SaveVideo an H.264 High 10 MP4 tagged ' +
       'bt2020nc / bt2020 / arib-std-b67 or smpte2084 (the same encode as video-sdr-to-hdr). The sound is kept. EXR frames stay on video-sdr-to-hdr-exr. ' +
       'Decodes the whole clip: RAM grows with the length. Needs an NVIDIA RTX card and a CUDA PyTorch (cu130 or newer); no CPU path. The node\'s inputs follow the pack\'s schema at 38d790d.',
+  },
+  // ---- Kandinsky 6.0 (research #10, package nm10-kandinsky6) -------------------------------------------------------------
+  // Kandinsky Lab's packs (kandinsky6, kandinsky6-sr) aren't on the validation server: the graphs follow the packs' own
+  // templates and are checked against the node definitions read from their source at the pinned commits.
+  {
+    id: 'kandinsky6-t2av',
+    title: 'Kandinsky 6.0 text to video with sound and dialogue (distilled Lite or Pro, 10 steps, 5 s at 24 fps)',
+    capability: 't2v',
+    handBuilt: 'hand-built/kandinsky6-t2av.json',
+    packs: ['kandinsky6'],
+    bindings: {
+      prompt: [b('20', 'video_caption')], negativePrompt: [b('6', 'video_caption')],
+      width: [b('7', 'width')], height: [b('7', 'height')], frames: [b('7', 'length')], fps: [b('7', 'fps')],
+      seed: [b('8', 'seed'), b('20', 'seed')], unet: [b('1', 'unet_name')],
+      filenamePrefix: [b('12', 'filename_prefix')],
+    },
+    outputs: [{ node: '12', kind: 'video' }],
+    defaults: { width: 864, height: 480, frames: 121, fps: 24, frameStep: 4, unet: 'Kandinsky-6.0-Lite-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors' },
+    limits: { maxFrames: 121, dimensionMultiple: 16, maxWidth: 2048, maxHeight: 2048 },
+    // Pro (Quality) and the Prompt helper's Qwen3.5 9B (off by default: its nodes are taken out) are needed only when picked.
+    optionalModels: ['Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors', 'qwen3.5_9b_bf16.safetensors'],
+    requiredModels: ['bigvgan_vocoder/bigvgan_generator.pt', 'bigvgan_vocoder/config.json'],
+    vramGb: 24,
+    license: K6_LICENSE,
+    notes: K6_NOTES,
+  },
+  {
+    id: 'kandinsky6-i2av',
+    title: 'Kandinsky 6.0 image to video with sound and dialogue (the image is the first frame; distilled Lite or Pro, 10 steps)',
+    capability: 'i2v',
+    handBuilt: 'hand-built/kandinsky6-i2av.json',
+    packs: ['kandinsky6'],
+    bindings: {
+      prompt: [b('20', 'video_caption')], negativePrompt: [b('6', 'video_caption')], image: [b('30', 'image')],
+      width: [b('7', 'width'), b('31', 'width')], height: [b('7', 'height'), b('31', 'height')], frames: [b('7', 'length')], fps: [b('7', 'fps')],
+      seed: [b('8', 'seed'), b('20', 'seed')], unet: [b('1', 'unet_name')],
+      filenamePrefix: [b('12', 'filename_prefix')],
+    },
+    outputs: [{ node: '12', kind: 'video' }],
+    defaults: { width: 864, height: 480, frames: 121, fps: 24, frameStep: 4, unet: 'Kandinsky-6.0-Lite-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors' },
+    limits: { maxFrames: 121, dimensionMultiple: 16, maxWidth: 2048, maxHeight: 2048 },
+    // Pro (Quality) and the Prompt helper's Qwen3.5 9B (off by default: its nodes are taken out) are needed only when picked.
+    optionalModels: ['Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors', 'qwen3.5_9b_bf16.safetensors'],
+    requiredModels: ['bigvgan_vocoder/bigvgan_generator.pt', 'bigvgan_vocoder/config.json'],
+    vramGb: 24,
+    license: K6_LICENSE,
+    notes:
+      K6_NOTES +
+      ' Image to video: the picture is cropped to the clip\'s size (ImageScale, centre), encoded with the VAE and appended as the reference tail (Kandinsky6ImageToVideoAudio, the I2VA template), which Kandinsky6RemoveReferenceLatent takes off before decoding. The prompt helper also sees the picture.',
+  },
+  {
+    id: 'video-upscale-kandinsky6-vsr',
+    title: 'Kandinsky VSR video upscale: 2x, 2.25x (480p to 1080p) or 4x, tiled, keeps the sound (clips up to 121 frames)',
+    capability: 'upscale-video',
+    handBuilt: 'hand-built/video-upscale-kandinsky6-vsr.json',
+    packs: ['kandinsky6-sr'],
+    bindings: {
+      video: [b('1', 'file')], seed: [b('6', 'seed')], scale: [b('6', 'scale')], upscalerScale: [b('5', 'target_scale')],
+      filenamePrefix: [b('8', 'filename_prefix')],
+    },
+    outputs: [{ node: '8', kind: 'video' }],
+    defaults: { scale: '2.25x', upscalerScale: '2x' },
+    limits: { maxDurationSec: 5 },
+    requiredModels: [
+      'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/transformer/config.json', 'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/vae/config.json',
+      'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/latent_upscaler/config.json', 'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/model_index.json',
+      'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/scheduler/scheduler_config.json',
+    ],
+    vramGb: 24,
+    license: 'MIT (Kandinsky 6.0 VSR weights, kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers); kandinsky6-sr pack code Apache-2.0',
+    notes:
+      'The kandinsky6-sr pack\'s Video Super Resolution template, with Fuobe\'s bindings: LoadVideo -> GetVideoComponents -> Kandinsky6VSRUpscale (the 2-step distilled VSR DiT from Load Diffusion Model, ' +
+      'the K-VAE and the latent upscaler bank; tiled diffusion in latent space, overlap 0.2, NABLA attention off) -> CreateVideo with the clip\'s own sound (trimmed to the frames kept) -> SaveVideo. ' +
+      'scale = params.resolution as the pack\'s combo ("2x", "2.25x", "4x"); upscalerScale = the bank entry it needs ("2x" for 2x and 2.25x, "4x" for 4x). ' +
+      'The pack resamples the clip to 24 fps and keeps at most 121 frames (about 5 s): Fuobe refuses a longer clip rather than cut it. 2x and 4x need sides that are multiples of 16. ' +
+      'Each loader lists a file only with its config.json beside it (the eight files of the SR README\'s manual-download table, in diffusion_models/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/). ' +
+      'VRAM is not published: 24 GB is an estimate (a 3.19 GB DiT, a 6.96 GB K-VAE and a 7.31 GB latent upscaler bank, loaded one stage at a time). The same model runs on fal (kandinsky-vsr).',
   },
 ];

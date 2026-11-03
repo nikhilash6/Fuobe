@@ -1,5 +1,6 @@
 import { FORMAT_INFO, formatList } from "@/lib/av/formats";
 import { keyFormatValues } from "@/lib/av/keying";
+import { factorTier, factorTierProblem } from "@/lib/av/upscale";
 import type {
   Engine,
   GenerationRequest,
@@ -11,6 +12,7 @@ import type {
   Preset,
   PresetEndStep,
   PresetRoute,
+  Pricing,
 } from "./types";
 import { billedClipSeconds, editClipsProblem, insertRangeProblem, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
@@ -74,8 +76,28 @@ export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op
   return model.routes[0].op;
 }
 
-export function routesFor(model: ModelDef, op: Operation): ModelRoute[] {
-  return model.routes.filter((r) => r.op === op);
+/**
+ * Why a clip is too long for a model that takes clips up to a length (ModelOptions.maxSourceSeconds: Kandinsky VSR's 121
+ * frames at 24 fps), in the words the composer shows and the server refuses with; null when it fits or isn't known.
+ */
+export function sourceLengthProblem(model: Pick<ModelDef, "name" | "options">, seconds: number | undefined): string | null {
+  const max = model.options.maxSourceSeconds;
+  if (!max || !seconds || seconds <= max + 0.05) return null;
+  return `${model.name} takes clips up to ${max} s, and this one is ${Math.round(seconds * 10) / 10} s: trim it first, or pick SeedVR2 for longer clips`;
+}
+
+/**
+ * The routes that run `op`. With the run's params, a route that runs only for one value of a setting (ModelRoute.when:
+ * Kandinsky 6.0's Pro or Lite on fal) qualifies when the setting has that value, or is unset and it is the first such route.
+ */
+export function routesFor(model: ModelDef, op: Operation, params?: GenParams): ModelRoute[] {
+  const routes = model.routes.filter((r) => r.op === op);
+  if (!params || !routes.some((r) => r.when)) return routes;
+  return routes.filter((r) => {
+    if (!r.when) return true;
+    const v = params.extra?.[r.when.param];
+    return v === undefined || v === null ? routes.find((x) => x.when?.param === r.when!.param) === r : String(v) === r.when.value;
+  });
 }
 
 /** Fewer characters than this of the overall prompt in front of a capped shot prompt say too little: it is left out. */
@@ -597,6 +619,10 @@ export function planGeneration(
   if (missing) throw new Error(missing);
   const tooMany = extraImages(model, op, req);
   if (tooMany) throw new Error(tooMany);
+  const tooLong = sourceLengthProblem(model, params.sourceDuration);
+  if (tooLong) throw new Error(tooLong);
+  const tier = op === "upscale-video" ? factorTierProblem(model.name, model.options.resolutions, params.resolution) : null;
+  if (tier) throw new Error(tier);
 
   // Soul Cinema's 21:9 (research §4.5: a crop option): made at 16:9 on both engines, then cropped to 21:9 with
   // its grade after generation (meta.crop).
@@ -1160,6 +1186,42 @@ function routeMegapixels(model: ModelDef, params: GenParams, op?: Operation): nu
 }
 
 /**
+ * A clip's price by its steps on the variant it runs (Pricing.steps: fal's Kandinsky 6.0): the settings the run carries, else
+ * the ones its controls' defaults stand for; between two step counts fal prices, the line between them. Undefined when the
+ * variant or the operation has no prices.
+ */
+function stepsPrice(model: ModelDef, s: NonNullable<Pricing["steps"]>, params: GenParams, op?: Operation): number | undefined {
+  const own = controlSets(model, { extra: {} }).extra ?? {};
+  const variant = String(params.extra?.[s.variantKey] ?? own[s.variantKey] ?? Object.keys(s.prices)[0]);
+  const byOp = s.prices[variant];
+  const table = byOp?.[op ?? model.routes[0]?.op] ?? Object.values(byOp ?? {})[0];
+  const steps = Number(params.extra?.[s.stepsKey] ?? own[s.stepsKey]);
+  if (!table || !Number.isFinite(steps)) return undefined;
+  const points = Object.entries(table)
+    .map(([k, v]) => [Number(k), v] as const)
+    .sort((a, b) => a[0] - b[0]);
+  if (!points.length) return undefined;
+  const exact = points.find(([k]) => k === steps);
+  if (exact) return exact[1];
+  const hi = points.findIndex(([k]) => k > steps);
+  // Outside the published counts: the nearest two's line, never below nothing.
+  const [a, b] = hi <= 0 ? [points[0], points[1] ?? points[0]] : hi === -1 ? [points.at(-2) ?? points[0], points.at(-1)!] : [points[hi - 1], points[hi]];
+  if (a[0] === b[0]) return a[1];
+  return Math.max(0, a[1] + ((b[1] - a[1]) * (steps - a[0])) / (b[0] - a[0]));
+}
+
+/**
+ * An upscale billed per output megapixel per frame (Pricing.outputFrames: fal's Kandinsky VSR): the clip's size times the
+ * factor, every frame at the API's rate up to its cap. A clip not read yet is priced at the assumed size and the cap.
+ */
+function outputFramesPrice(o: NonNullable<Pricing["outputFrames"]>, params: GenParams, fallback?: string): number {
+  const k = factorTier(params.resolution ?? fallback) ?? 2;
+  const src = params.sourceSize?.width && params.sourceSize.height ? params.sourceSize : o.assume;
+  const frames = params.sourceDuration && params.sourceDuration > 0 ? Math.min(o.maxFrames, Math.round(params.sourceDuration * o.fps)) : o.maxFrames;
+  return o.usd * ((src.width * k * src.height * k) / 1e6) * frames;
+}
+
+/**
  * Rough USD estimate for a plan (BYO-key cloud runs). Open-source runs are free. A launch price (Pricing.promo) is read
  * at `now` (./promo): the clock when not given (the server planning a run, the browser after it hydrates); with null (a
  * page prerendering, the browser before it hydrates) a launch-priced model's price isn't known yet (null).
@@ -1213,6 +1275,11 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
     // Whole minutes of input, at least one (VEED Clean Audio: whole seconds, then up to the next full minute).
     per = usd * (p.roundUp ? Math.max(1, Math.ceil(Math.round(minutes * 60) / 60 - 1e-9)) : minutes);
   }
+  if (p.steps) {
+    const clip = stepsPrice(model, p.steps, params, op);
+    if (clip !== undefined) per = clip * n;
+  }
+  if (p.outputFrames) per = outputFramesPrice(p.outputFrames, params, model.defaults?.resolution);
   // Settings that change the price (60 fps, a Pro tier, a cheaper model).
   for (const f of p.factors ?? []) {
     const v = f.param === "targetFps" ? (params.targetFps ?? model.defaults?.targetFps) : (params.extra?.[f.param] ?? model.options.controls?.find((c) => c.param === f.param)?.default);

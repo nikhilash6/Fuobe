@@ -298,8 +298,9 @@ export async function gatherInventory(t: ComfyTransport, idx: RequirementIndex, 
   const folders = o.folders ?? idx.folders;
   const indexNames = new Map<string, Map<string, string>>();
   for (const f of Object.values(idx.files)) {
-    if (!indexNames.has(f.folder)) indexNames.set(f.folder, new Map());
-    indexNames.get(f.folder)!.set(key(f.file), f.file);
+    const listed = f.listFolder ?? f.folder;
+    if (!indexNames.has(listed)) indexNames.set(listed, new Map());
+    indexNames.get(listed)!.set(key(f.file), f.file);
   }
   const loraWanted = new Map((o.loraNames ?? []).map((n) => [key(n), basename(n)]));
   const listFolders = [...new Set([...folders, ...(loraWanted.size ? ["loras"] : [])])];

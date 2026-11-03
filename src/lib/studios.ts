@@ -128,6 +128,8 @@ export const LIPSYNC_STUDIO: StudioConfig = {
   promptOptional: true,
   voiceFacts: true,
   voiceFirst: true,
+  // A talking character from words, not a re-sync of footage: Kandinsky 6.0 speaks the prompt's quoted lines with its own voice.
+  related: { href: "/video", label: "No voice yet? Make a talking character from words with Kandinsky 6.0", models: { cloud: "kandinsky-6", open: "oss-kandinsky6" } },
 };
 
 export const UPSCALE_STUDIO: StudioConfig = {

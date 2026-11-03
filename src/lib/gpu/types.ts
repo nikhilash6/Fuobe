@@ -64,6 +64,8 @@ export interface IndexFile {
   gated: boolean;
   /** The pack that registers this file's folder. */
   packFolder?: string;
+  /** The name ComfyUI lists the folder under when its pack registers it as another (kandinsky6: audio_vae → kandinsky6_audio_vae). */
+  listFolder?: string;
   presence: Presence;
   /** [class_type, input] of the loader nodes that pick this file (presence "loader"). */
   loaders?: [cls: string, input: string][];

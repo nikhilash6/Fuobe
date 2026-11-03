@@ -26,6 +26,7 @@ import {
   paletteSentence,
   parseCueLines,
   PROMPT_HELPER_GRAPHS,
+  PROMPT_HELPER_OPT_IN,
   PROMPT_HELPER_PARAM,
   skipPromptHelper,
   randomSeed,
@@ -63,6 +64,7 @@ import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
 import { RTX_FRAMEGEN_WORKFLOW, RTX_HDR_WORKFLOW, RTX_MISSING } from "@/lib/catalog/rtx-video";
 import { exportValues, framesPerPass, hdrColorSpace, RTX_UPSCALE_WORKFLOW, rtxScale, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
 import { keyFormatValues } from "@/lib/av/keying";
+import { factorTier } from "@/lib/av/upscale";
 import { guessKind } from "@/lib/catalog/payload";
 import { loraByFile, needsToken } from "@/lib/catalog/loras";
 import { CHARACTER_SWAP, packResolution, samCoords, swapPrompt, SWAP_LORAS, windowPlan } from "@/lib/catalog/character-swap";
@@ -1441,6 +1443,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     }
     values.frames = frames;
   }
+  // Kandinsky VSR: the factor asked (params.resolution "2x" / "2.25x" / "4x") as the pack's combo, and the latent upscaler bank
+  // entry it needs (2x serves 2x and 2.25x).
+  if (b.upscalerScale) {
+    const k = factorTier(input.resolution) ?? factorTier(String(d.scale ?? "")) ?? 2.25;
+    if (![2, 2.25, 4].includes(k)) throw new ProviderError("Kandinsky VSR upscales 2x, 2.25x or 4x", 400);
+    values.scale = `${k}x`;
+    values.upscalerScale = k === 4 ? "4x" : "2x";
+  }
   // Video finishing (Upscale hub): export formats, HDR curves, FPS Boost's m / n, chunked upscaling.
   const finish = videoFinishValues(manifest, input, clip, extra);
   Object.assign(values, finish.values);
@@ -1930,7 +1940,9 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   }
   const outputIds = manifest.outputs.map((o) => o.node);
   // The prompt helper (FLUX 3 Image Klein's upsampler) off, or a layout with boxes it would rewrite: the words as typed.
-  if (PROMPT_HELPER_GRAPHS.has(manifest.id) && (helper === "off" || laidOut)) wf = skipPromptHelper(wf, outputIds);
+  // Kandinsky 6.0's helper runs only when asked (PROMPT_HELPER_OPT_IN).
+  const helperOff = helper === "off" || (helper !== "on" && PROMPT_HELPER_OPT_IN.has(manifest.id));
+  if (PROMPT_HELPER_GRAPHS.has(manifest.id) && (helperOff || laidOut)) wf = skipPromptHelper(wf, outputIds);
   if (dropAnchor) wf = withoutAnchor(wf, b.image2![0].node);
   // LoRA "none": the swap LoRA's loader is linked out (H3 runs with the Turbo LoRA alone).
   if (dropSwapLora && b.lora?.length === 1) wf = bypassNode(wf, b.lora[0].node, "model", outputIds);
