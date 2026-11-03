@@ -1,4 +1,5 @@
 import { FORMAT_INFO, formatList } from "@/lib/av/formats";
+import { keyFormatValues } from "@/lib/av/keying";
 import type {
   Engine,
   GenerationRequest,
@@ -750,8 +751,16 @@ function checkVideoToolOptions(model: ModelDef, op: "bg-remove-video" | "depth-v
     const clicked = !!params.points?.length && routesFor(model, op).some((r) => !!r.map?.points);
     if (o.keepsNamed && !prompt && !clicked) throw new Error("Say what to keep, e.g. “the dog” or “the woman in red”");
     const outputs = o.matteOutputs ?? ["cutout"];
+    // ProRes 4444 and EXR carry the cut-out with its alpha (CorridorKey, VRMBG 3.0 on your GPU): not the mask or the foreground.
+    if (params.format && o.formats?.length) keyFormatValues(params.format, params.matteOutput);
     if (params.matteOutput && !outputs.includes(params.matteOutput)) {
-      throw new Error(params.matteOutput === "matte" ? `${model.name} makes the cut-out only — pick BiRefNet or SAM for an alpha mask` : `${model.name} makes the alpha mask only — pick BiRefNet for a cut-out video`);
+      throw new Error(
+        params.matteOutput === "foreground"
+          ? `${model.name} doesn't make a clean foreground — CorridorKey in Green screen does`
+          : params.matteOutput === "matte"
+            ? `${model.name} makes the cut-out only — pick BiRefNet or SAM for an alpha mask`
+            : `${model.name} makes the alpha mask only — pick BiRefNet for a cut-out video`,
+      );
     }
     return;
   }

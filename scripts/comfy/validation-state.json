@@ -185,6 +185,12 @@
     "error": null,
     "at": "2026-10-29T10:46:02.938Z"
   },
+  "image-matte-feynobg": {
+    "sha256": "1b466b50169056e40c59c629f9c74f041d57fc1da9f45d8bf7b2dacee8e6b296",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'FeyNoBg fine-hair matte (foreground refine on)' not found. The custom node may not be installed. (Node ID '#2')",
+    "at": "2026-11-02T11:07:46.548Z"
+  },
   "image-to-3d-hunyuan3d-21": {
     "sha256": "275a30c4184a8728e919166e72d88913abcf61a85b051a897ecb7249db849a08",
     "validated": true,
@@ -887,11 +893,23 @@
     "error": null,
     "at": "2026-10-23T00:12:21.209Z"
   },
+  "video-key-corridorkey": {
+    "sha256": "05971ce7115c793259dc1e6d88bee9a5815c50f7f6d2ba98132433a9dad5a20d",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'CorridorKey 2.0 (weights downloaded on first run): matte, despilled foreground over black, straight RGBA' not found. The custom node may not be installed. (Node ID '#6')",
+    "at": "2026-11-02T21:14:06.467Z"
+  },
   "video-mask-h3-relay": {
     "sha256": "d5a3fc7046010b54ea070f45acc325602ed5ab5dbe403040e4d6591949084c84",
     "validated": false,
     "error": "HTTP 400: missing_node_type: Node 'H3RelayPrepareSource' not found. The custom node may not be installed. (Node ID '#prepare')",
     "at": "2026-10-27T11:01:36.148Z"
+  },
+  "video-matte-vrmbg3": {
+    "sha256": "bc8e7b99a0f2e29af5355f6fc2823966f18a0012acf2dac1f6c65fdf90b6591a",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'VRMBG 3.0: each frame conditioned on the one before' not found. The custom node may not be installed. (Node ID '#3')",
+    "at": "2026-11-02T11:08:13.090Z"
   },
   "video-mux-audio": {
     "sha256": "68af795bae0c0e89749819173916044e4024a6ce3035f830b48c80e0b6899181",

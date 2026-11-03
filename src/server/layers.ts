@@ -325,7 +325,8 @@ export function jobSteps(input: LayerJobInput, opts: { batchTitle?: string } = {
     }
     case "bg-remove": {
       const model = toolModel(tool, engine, input.modelId);
-      add("cut", base(model, { op: "bg-remove", inputs: { images: [needImage()] }, params: aspectFor(model) }));
+      // Bria's guided cut-out reads what to keep or drop ("keep the shadow"); the others take no words.
+      add("cut", base(model, { op: "bg-remove", ...(model.options.guided && prompt ? { prompt } : {}), inputs: { images: [needImage()] }, params: aspectFor(model) }));
       break;
     }
     case "regional": {

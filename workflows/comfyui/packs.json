@@ -136,7 +136,7 @@
   },
   "ComfyUI-RMBG": {
     "repo": "https://github.com/1038lab/ComfyUI-RMBG",
-    "commit": "229529e0ea63fb7085848225d74f91f6dc164956",
+    "commit": "a66a5e641a54988d80ed6aad18946081c85f309e",
     "registry": { "id": "comfyui-rmbg", "version": "" },
     "requirementsTxt": true,
     "isolated": false,
@@ -305,5 +305,14 @@
     "isolated": false,
     "subdir": null,
     "folders": []
+  },
+  "ComfyUI-CorridorKey2": {
+    "repo": "https://github.com/hashu786/ComfyUI-CorridorKey2",
+    "commit": "d1228b68796786acee92b6497f72a60d70d1a844",
+    "registry": null,
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": ["corridorkey2"]
   }
 }

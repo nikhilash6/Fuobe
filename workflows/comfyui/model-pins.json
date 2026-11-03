@@ -1184,5 +1184,10 @@
   "revision": "2f76ca75e6ee094169de899cc7fc99d6887e2196",
   "sizeBytes": 1386868122,
   "sha256": "5fd960ce3df281e3f3a889d174584d88f96247711480cf96377b12d7e8b6adc5"
+ },
+ "https://huggingface.co/briaai/VRMBG-3.0/resolve/59716e19a6cc97f91311edea190938219c097b76/model.safetensors": {
+  "revision": "59716e19a6cc97f91311edea190938219c097b76",
+  "sizeBytes": 884915688,
+  "sha256": "3100fd296d2991f4859db9d83c43ece45f432659b06db3d79810dad033c62253"
  }
 }

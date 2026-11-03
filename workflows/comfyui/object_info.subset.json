@@ -1,4 +1,112 @@
 {
+  "AILab_FeyNoBg": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE",
+          {
+            "tooltip": "Input image batch to remove background from."
+          }
+        ]
+      },
+      "optional": {
+        "mask_blur": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Gaussian blur radius for softening mask edges."
+          }
+        ],
+        "mask_offset": [
+          "INT",
+          {
+            "default": 0,
+            "min": -64,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Expand (positive) or shrink (negative) the mask boundary in pixels."
+          }
+        ],
+        "invert_output": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Invert the output mask."
+          }
+        ],
+        "refine_foreground": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "Sub-pixel foreground boundary refinement for fine hairs and semi-transparent edges."
+          }
+        ],
+        "unload_model": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Unload model weights from VRAM immediately after execution."
+          }
+        ],
+        "background": [
+          [
+            "Alpha",
+            "Color"
+          ],
+          {
+            "default": "Alpha",
+            "tooltip": "Output format: Alpha for transparent cutout, or Color to composite against solid background."
+          }
+        ],
+        "background_color": [
+          "COLORCODE",
+          {
+            "default": "#222222",
+            "tooltip": "Hex background color used when background mode is set to Color."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image"
+      ],
+      "optional": [
+        "mask_blur",
+        "mask_offset",
+        "invert_output",
+        "refine_foreground",
+        "unload_model",
+        "background",
+        "background_color"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "IMAGE",
+      "MASK",
+      "MASK_IMAGE"
+    ],
+    "name": "AILab_FeyNoBg",
+    "display_name": "FeyNoBg (Background Removal)",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-RMBG",
+    "category": "🧪AILab/🧽RMBG",
+    "output_node": false
+  },
   "AILab_Qwen3ASRSubtitle": {
     "input": {
       "required": {
@@ -646,6 +754,114 @@
     "description": "",
     "python_module": "custom_nodes.ComfyUI-QwenTTS",
     "category": "🧪AILab/🎙️QwenTTS",
+    "output_node": false
+  },
+  "AILab_VRMBG": {
+    "input": {
+      "required": {
+        "images": [
+          "IMAGE",
+          {
+            "tooltip": "Batch of consecutive video frames [B, H, W, C] for temporal background removal."
+          }
+        ]
+      },
+      "optional": {
+        "reset_state": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "Reset temporal prior state at the beginning of this batch. Keep True for standalone clips, or False when feeding consecutive chunks."
+          }
+        ],
+        "mask_blur": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Gaussian blur radius for softening mask edges."
+          }
+        ],
+        "mask_offset": [
+          "INT",
+          {
+            "default": 0,
+            "min": -64,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Expand (positive) or shrink (negative) the mask boundary in pixels."
+          }
+        ],
+        "invert_output": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Invert the output mask."
+          }
+        ],
+        "unload_model": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Unload model weights from VRAM immediately after execution."
+          }
+        ],
+        "background": [
+          [
+            "Alpha",
+            "Color"
+          ],
+          {
+            "default": "Alpha",
+            "tooltip": "Output format: Alpha for transparent cutout, or Color to composite against solid background."
+          }
+        ],
+        "background_color": [
+          "COLORCODE",
+          {
+            "default": "#222222",
+            "tooltip": "Hex background color used when background mode is set to Color."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "images"
+      ],
+      "optional": [
+        "reset_state",
+        "mask_blur",
+        "mask_offset",
+        "invert_output",
+        "unload_model",
+        "background",
+        "background_color"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "IMAGE",
+      "MASK",
+      "MASK_IMAGE"
+    ],
+    "name": "AILab_VRMBG",
+    "display_name": "VRMBG (Video Background Removal)",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-RMBG",
+    "category": "🧪AILab/🧽RMBG",
     "output_node": false
   },
   "AUSBOSS_NODES_CropForInpaint": {
@@ -4041,6 +4257,141 @@
       "null conditioning",
       "clear conditioning"
     ]
+  },
+  "CorridorKey2": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE",
+          {}
+        ],
+        "gamma_space": [
+          [
+            "sRGB",
+            "Linear"
+          ],
+          {}
+        ],
+        "hint_quality": [
+          "FLOAT",
+          {
+            "default": 0.95,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
+          }
+        ],
+        "carry_hint": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "carry_hint_quality": [
+          "FLOAT",
+          {
+            "default": 0.95,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
+          }
+        ],
+        "despill_strength": [
+          "FLOAT",
+          {
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
+          }
+        ],
+        "window": [
+          [
+            "auto",
+            "80/40",
+            "48/24",
+            "24/12",
+            "8/4",
+            "4/2",
+            "2/1",
+            "1/1"
+          ],
+          {
+            "default": "auto"
+          }
+        ],
+        "low_vram": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ],
+        "unload_other_models": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ]
+      },
+      "optional": {
+        "mask": [
+          "MASK",
+          {}
+        ]
+      },
+      "hidden": {
+        "unique_id": "UNIQUE_ID",
+        "prompt": "PROMPT"
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "gamma_space",
+        "hint_quality",
+        "carry_hint",
+        "carry_hint_quality",
+        "despill_strength",
+        "window",
+        "low_vram",
+        "unload_other_models"
+      ],
+      "optional": [
+        "mask"
+      ],
+      "hidden": [
+        "unique_id",
+        "prompt"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "IMAGE",
+      "IMAGE",
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "fg",
+      "matte",
+      "processed",
+      "QC",
+      "cutout"
+    ],
+    "name": "CorridorKey2",
+    "display_name": "CorridorKey 2.0",
+    "description": "CorridorKey 2.0 neural green/blue screen keyer. Works with no hint, a single first-frame hint mask, or one hint mask per frame. Runs at native resolution with temporal Hann windows across the whole batch.",
+    "python_module": "custom_nodes.ComfyUI-CorridorKey2",
+    "category": "CorridorKey",
+    "output_node": false
   },
   "CreateCameraInfo": {
     "input": {

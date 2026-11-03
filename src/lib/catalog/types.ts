@@ -265,10 +265,13 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
  * The open engine's HDR is also written as 10-bit H.264 in BT.2020 with the HLG or PQ (HDR10) curve
  * (core ComfyUI has no H.265 encoder).
  */
-export type VideoFormat = "h264" | "h265_10bit" | "prores_422_hq" | "prores_4444" | "ffv1" | "exr" | "hlg_10bit" | "pq_10bit";
+export type VideoFormat = "h264" | "h265_10bit" | "prores_422_hq" | "prores_4444" | "ffv1" | "exr" | "hlg_10bit" | "pq_10bit" | "webm_alpha";
 
-/** What Remove background makes: the subject on a transparent background, or its black-and-white alpha mask. */
-export type MatteOutput = "cutout" | "matte";
+/**
+ * What Remove background makes: the subject on a transparent background, or its black-and-white alpha mask. A green-screen
+ * key also makes the clean foreground: the subject's colours with the green spill taken out, for a compositor to use with the mask.
+ */
+export type MatteOutput = "cutout" | "matte" | "foreground";
 
 /** Depth map colour maps, in Higgsfield's order (grayscale first: every depth model draws it). */
 export const COLORMAPS = ["grayscale", "turbo", "inferno", "magma", "viridis"] as const;
@@ -750,6 +753,13 @@ export interface ModelOptions {
   matteOutputs?: MatteOutput[];
   /** Remove background keeps only what you name (SAM): words, or points clicked on the first frame, are needed. */
   keepsNamed?: boolean;
+  /**
+   * A keyer for footage shot on a green screen (CorridorKey 2.0, Bria green screen): listed in Video tools → Green
+   * screen, kept out of Remove background's list.
+   */
+  greenScreen?: boolean;
+  /** A cut-out that takes optional words about what to keep or drop (Bria's guided cut-out): the cut-out tools show a box for them. */
+  guided?: boolean;
   /**
    * Frame rates it can reach (params.targetFps): FPS Boost's 24–120, an upscaler's 24 / 30 / 60. Without a
    * default target (`defaults.targetFps`) the clip's own frame rate is the first choice ("Original").

@@ -82,9 +82,9 @@ describe("requirements.json", () => {
     expect(files.filter(([, f]) => new URL(f.url).host === "github.com").map(([k]) => k)).toEqual(["text_encoders/adapter_v12.safetensors"]);
   });
 
-  it("marks exactly the LTX-2.5 files (the model's repo, and Lightricks' Restore and Detail Refine IC-LoRAs) and FLUX 3 Image Klein's as gated", () => {
+  it("marks exactly the LTX-2.5 files (the model's repo, and Lightricks' Restore and Detail Refine IC-LoRAs), FLUX 3 Image Klein's and Bria VRMBG 3.0's as gated", () => {
     const gated = files.filter(([, f]) => f.gated).map(([k]) => k);
-    const gatedUrl = (u: string) => /\/Lightricks\/LTX-2\.5(\/|-22b-IC-LoRA-(Restore|Refine-Details)\/)/.test(u) || u.includes("/black-forest-labs/flux-3-image-klein-comfy/");
+    const gatedUrl = (u: string) => /\/Lightricks\/LTX-2\.5(\/|-22b-IC-LoRA-(Restore|Refine-Details)\/)/.test(u) || u.includes("/black-forest-labs/flux-3-image-klein-comfy/") || u.includes("/briaai/VRMBG-3.0/");
     expect(gated.sort()).toEqual(files.filter(([, f]) => gatedUrl(f.url)).map(([k]) => k).sort());
     expect(gated.length).toBeGreaterThan(0);
   });

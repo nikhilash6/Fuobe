@@ -123,7 +123,7 @@ export function layoutShape(shape: SettingsShape): SettingsShape {
   return { ...shape, enhance: false };
 }
 
-export const MATTE_OUTPUT_LABELS: Record<MatteOutput, string> = { cutout: "Cutout video", matte: "Alpha mask" };
+export const MATTE_OUTPUT_LABELS: Record<MatteOutput, string> = { cutout: "Cutout video", matte: "Alpha mask", foreground: "Clean foreground" };
 export const colormapLabel = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
 
 /**
@@ -135,6 +135,7 @@ export function videoToolNote(model: Pick<ModelDef, "name" | "engine" | "options
   if (what === "matte") {
     const outs = o.matteOutputs ?? ["cutout"];
     if (outs.length > 1) return null;
+    if (outs[0] === "cutout" && o.greenScreen) return `${model.name} makes the cut-out only — CorridorKey on your GPU also makes the mask and the clean foreground.`;
     if (outs[0] === "cutout") return `${model.name} makes the cut-out only — BiRefNet and SAM also make the alpha mask.`;
     return model.engine === "cloud"
       ? "Name what to keep and get its mask, or cut out the whole subject."

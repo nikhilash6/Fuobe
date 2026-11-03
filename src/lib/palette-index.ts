@@ -29,6 +29,7 @@ import {
   VIDEO_COLOR_MATCH_STUDIO,
   VIDEO_DEPTH_STUDIO,
   VIDEO_EDIT_STUDIO,
+  VIDEO_KEY_STUDIO,
   VIDEO_MATTE_STUDIO,
   VIDEO_RELIGHT_STUDIO,
   VIDEO_STUDIO,
@@ -58,6 +59,7 @@ const MODEL_STUDIOS: [string, StudioConfig][] = [
   ["/audio/song", SONG_TOOLS_STUDIO],
   ["/audio/video", FOLEY_STUDIO],
   ["/video-tools", VIDEO_MATTE_STUDIO],
+  ["/video-tools/green-screen", VIDEO_KEY_STUDIO],
   ["/video-tools/relight", VIDEO_RELIGHT_STUDIO],
   ["/video-tools/depth", VIDEO_DEPTH_STUDIO],
   ["/video-tools/join", JOIN_CLIPS_STUDIO],
@@ -85,7 +87,8 @@ const TOOL_PAGES: [string, Operation][] = [
 export function modelHref(m: ModelDef): string {
   const ops = new Set(m.routes.map((r) => r.op));
   const pick = `?model=${encodeURIComponent(m.id)}`;
-  const studio = MODEL_STUDIOS.find(([, c]) => c.kind === m.kind && (c.pickerOps ?? c.ops).some((op) => ops.has(op)));
+  // A green-screen keyer opens in Video tools → Green screen, the other mattes in Remove background (studioCatalog's split).
+  const studio = MODEL_STUDIOS.find(([, c]) => c.kind === m.kind && (c.pickerOps ?? c.ops).some((op) => ops.has(op)) && (!ops.has("bg-remove-video") || !!c.greenScreen === !!m.options.greenScreen));
   if (studio && !m.hidden) return studio[0] + pick;
   if (IN_3D.has(m.id)) return `/image-to-3d${pick}`;
   const app = APPS.find((a) => a.cloud?.modelId === m.id || a.open?.modelId === m.id);

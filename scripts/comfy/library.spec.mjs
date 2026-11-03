@@ -130,6 +130,9 @@
 // Entry field requiredModels: files a loader reads by a name with no extension (DBSLoader's model folder), listed in the
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
+// Keys added with Green screen (nm10-keying). * = the provider fills it:
+//   despill                               (CorridorKey2 despill_strength 0-1, 0.5 = Corridor's default; params.extra.despill)
+//   format*, profile*                     (the cut-out's VHS_VideoCombine: video/webm + yuva420p, or video/ProRes + 4444 for params.format prores_4444)
 // Keys added with Clean up voice (NVIDIA RE-USE, ComfyUI-RE-USE). * = the provider fills it:
 //   reuseModel*                           (REUSELoader model: the file for params.extra.reuseModel voice | laughter, refused in words when
 //                                          GET /models/reuse doesn't list it)
@@ -215,6 +218,7 @@ export const CUSTOM_NODE_REPOS = {
   // nodes (Apache-2.0). Neither is on the validation server; both download their weights from Hugging Face on first run.
   'ComfyUI-QwenTTS': 'https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293',
   'ComfyUI-VoxCPM2': 'https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f',
+  'ComfyUI-CorridorKey2': 'https://github.com/hashu786/ComfyUI-CorridorKey2/tree/d1228b68796786acee92b6497f72a60d70d1a844',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -241,6 +245,10 @@ export const PACK_CLASSES = {
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
   'ComfyUI-QwenTTS': /^AILab_Qwen3TTS(VoiceDesign|VoiceClone|CustomVoice)(_Advanced)?$/,
   'ComfyUI-VoxCPM2': /^VoxCPM2_(TTS|Clone)$/,
+  // Green screen and fine hair (nm10-keying): hashu786's CorridorKey 2.0 nodes, and ComfyUI-RMBG 3.3.0's new nodes (neither
+  // is on the validation server at these commits, so their definitions come from the packs' source at the pinned commits).
+  'ComfyUI-CorridorKey2': /^CorridorKey2(RenderToDisk)?$/,
+  'ComfyUI-RMBG': /^AILab_(VRMBG|FeyNoBg)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -451,6 +459,9 @@ export const KNOWN_MODELS = {
   'dino/model.safetensors': { folder: 'Hi3D', url: 'https://huggingface.co/facebook/dinov2-large/resolve/47b73eefe95e8d44ec3623f8890bd894b6ea2d6c/model.safetensors' },
   'clip/config.json': { folder: 'Hi3D', url: 'https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/config.json' },
   'clip/model.safetensors': { folder: 'Hi3D', url: 'https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/model.safetensors' },
+  // Bria VRMBG 3.0 (nm10-keying): gated with manual approval, placed by hand in models/RMBG/VRMBG-3.0/ (the node never downloads
+  // it). Only the weights file is listed (GET /models lists .safetensors); config.json, model.py and vrmbg3_config.py go beside it.
+  'VRMBG-3.0/model.safetensors': { folder: 'RMBG', url: 'https://huggingface.co/briaai/VRMBG-3.0/resolve/59716e19a6cc97f91311edea190938219c097b76/model.safetensors' },
   // RE-USE (Clean up voice): the NemotronLabs repositories only (OpenMDW-1.1; the older nvidia/RE-USE is non-commercial), at
   // pinned revisions, named so both fit in models/reuse. install-comfyui.sh checks the SHA-256.
   'NemotronLabs-RE-USE.safetensors': { folder: 'reuse', url: 'https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/resolve/31f82f2efad1095034492f236e8dac9239ba713b/model.safetensors' },
@@ -1257,6 +1268,22 @@ export const SPEC = [
     vramGb: 4,
     autoDownloads: ['ComfyUI-RMBG downloads the selected model (BEN2 -> models/RMBG/BEN2) from Hugging Face on first run'],
     notes: 'Custom pack alternative to bg-remove-birefnet. Model choices on node 2: RMBG-2.0 (best, but CC BY-NC 4.0 non-commercial), INSPYRENET, BEN, BEN2 (default). Output RGBA PNG.',
+  },
+  {
+    id: 'image-matte-feynobg',
+    title: 'Fine-hair cut-out (FeyNoBg, ComfyUI-RMBG 3.3.0)',
+    capability: 'bg-remove',
+    handBuilt: 'hand-built/image-matte-feynobg.json',
+    packs: ['ComfyUI-RMBG'],
+    bindings: { image: [b('1', 'image')] },
+    outputs: [{ node: '3', kind: 'image' }],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 4,
+    license: 'FeyNoBg weights: unknown (the Hugging Face repo 1038lab/FeyNobg has no card, no licence tag and no LICENSE file, checked 2026-11-02); ComfyUI-RMBG code GPL-3.0',
+    autoDownloads: ['AILab_FeyNoBg downloads config.json, FeyNobg.safetensors (1.05 GB) and preprocessor_config.json from 1038lab/FeyNobg into models/RMBG/FeyNoBg/ on first run'],
+    notes:
+      'AILab_FeyNoBg (ComfyUI-RMBG 3.3.0): a 263M Swin-L matting model for hair, fur, glass and lace, no trimap; refine_foreground on (sub-pixel edge refinement), background Alpha -> RGBA PNG. ' +
+      'Needs the nobg Python package (the pack\'s requirements.txt: nobg>=0.3.1). The class is recorded from ComfyUI-RMBG\'s source at the pinned commit.',
   },
   {
     id: 'face-swap-reactor',
@@ -2767,6 +2794,69 @@ export const SPEC = [
       'Masks are hard-edged; multiply with the BiRefNet matte for hair. Output under history "images" (animated .webm). Template utility_video_segment_sam3 runs SAM3_Detect per frame instead. ' +
       'Second output (node 12, role "matte", added by the remove-object package) = the black-and-white matte .mp4 of what was kept (MaskToImage -> CreateVideo at the source fps); ' +
       'params.matteOutput ("cutout" | "matte", on a Remove background job: op bg-remove-video) makes the provider drop the other save node, so only the chosen one is encoded.',
+  },
+  {
+    id: 'video-matte-vrmbg3',
+    title: 'Video Background Removal (Bria VRMBG 3.0, temporal, transparent WebM) (ComfyUI-RMBG 3.3.0)',
+    capability: 'bg-remove-video',
+    handBuilt: 'hand-built/video-matte-vrmbg3.json',
+    packs: ['ComfyUI-RMBG'],
+    requiredModels: ['VRMBG-3.0/model.safetensors'],
+    bindings: { video: [b('1', 'file')], format: [b('4', 'format')], profile: [b('4', 'profile')] },
+    outputs: [
+      { node: '4', kind: 'video', role: 'cutout' },
+      { node: '6', kind: 'video', role: 'matte' },
+      { node: '7', kind: 'image', role: 'frames' },
+    ],
+    defaults: { format: 'video/webm', profile: '4444' },
+    limits: { maxWidth: 2048, maxHeight: 2048 },
+    vramGb: 6,
+    license: 'Bria VRMBG-3.0 licence: NON-COMMERCIAL (the card: non-commercial use only, commercial use needs an agreement with Bria AI; gated, Bria approves access by hand); ComfyUI-RMBG code GPL-3.0',
+    notes:
+      'AILab_VRMBG (ComfyUI-RMBG 3.3.0, 2026-10-20): Bria\'s VRMBG 3.0, the model behind fal\'s bria/video/background-removal/v3, so the open matte is the cloud\'s model once Bria grants access. ' +
+      'Each frame is read at 1024x1024 paired with the previous frame\'s RGB times its alpha (reset_state true: the clip starts clean), and the alpha is scaled back to the frame. ' +
+      'Output 0 is the straight RGBA cut-out -> VHS_VideoCombine (video/webm yuva420p, crf 20, the source\'s fps and sound; params.format prores_4444 switches it to video/ProRes profile 4444, ' +
+      'yuva444p10le with alpha): role cutout; output 2 (the matte as an image) -> CreateVideo -> SaveVideo: role matte; node 7 writes the RGBA as half-float OpenEXR frames (input sRGB -> scene-linear): role frames, ' +
+      'kept only for params.format exr (zipped onto the cut-out). params.matteOutput keeps one of cutout / matte (the provider drops the other save node). The whole clip is decoded at once (GetVideoComponents): RAM grows with the length. ' +
+      'The weights are gated: request access at huggingface.co/briaai/VRMBG-3.0, then put config.json, model.safetensors, model.py and vrmbg3_config.py (revision 59716e19) in models/RMBG/VRMBG-3.0/. ' +
+      'model.py is Bria\'s own model code, loaded by the node. The class is recorded from ComfyUI-RMBG\'s source at the pinned commit.',
+  },
+  {
+    id: 'video-key-corridorkey',
+    title: 'Green-screen key: CorridorKey 2.0 with despill, transparent WebM / ProRes 4444 / EXR, in passes (ComfyUI-CorridorKey2 + VHS)',
+    capability: 'bg-remove-video',
+    handBuilt: 'hand-built/video-key-corridorkey.json',
+    packs: ['ComfyUI-CorridorKey2', 'ComfyUI-VideoHelperSuite'],
+    bindings: {
+      video: [b('1', 'video')],
+      framesPerBatch: [b('2', 'frames_per_batch')],
+      despill: [b('6', 'despill_strength')],
+      format: [b('7', 'format')],
+      profile: [b('7', 'profile')],
+    },
+    outputs: [
+      { node: '7', kind: 'video', role: 'cutout' },
+      { node: '9', kind: 'video', role: 'matte' },
+      { node: '11', kind: 'image', role: 'frames' },
+    ],
+    defaults: { framesPerBatch: 48, despill: 0.5, format: 'video/webm', profile: '4444' },
+    limits: { maxWidth: 3840, maxHeight: 2160 },
+    // Corridor: 4 GB up to 1440p and 6 GB for 4K (the node picks a smaller temporal window and its low-VRAM path on a
+    // smaller card); about 6 GB at 1080p in the wrapper's own notes. NVIDIA RTX 30-series or newer (bf16).
+    vramGb: 6,
+    license: 'CorridorKey 2.0 weights: Corridor Key Licence 2.0 (CC BY-NC-SA 4.0 with added terms: free for any lawful use including commercial projects, and what you make is yours; it may NOT be offered as a paid API or inference service, nor resold or repackaged; derivatives stay under the same licence; a commercial software package needs a written agreement with Corridor Digital; organisations above US$20M revenue need a seat per user). The frozen models it builds on keep their own licences: NVIDIA C-RADIOv4-SO400M (NVIDIA Open Model License), Microsoft MoGe-2 ViT-B (MIT), Google DeepMind RVM small (CC-BY 4.0). The ComfyUI nodes (hashu786/ComfyUI-CorridorKey2) are under the same Corridor Key Licence 2.0.',
+    autoDownloads: [
+      'CorridorKey2 downloads about 5.1 GB into models/corridorkey2/ on first run: corridorkey_v2.safetensors (2.66 GB) and foundation_stats.safetensors from nikopueringer/CorridorKey2.0 (its main revision, cf44a8db when checked), NVIDIA C-RADIOv4-SO400M @ c0457f5d (1.72 GB), Microsoft MoGe-2 ViT-B @ ca5f0e07 (0.42 GB) and Google DeepMind RVM small (0.27 GB, md5-checked)',
+    ],
+    notes:
+      'VHS_LoadVideo decodes framesPerBatch frames per pass (VHS_BatchManager, 48 by default) and the three VHS_VideoCombine encodes stay open across passes, so memory stays flat on a long clip. ' +
+      'CorridorKey2 (hashu786/ComfyUI-CorridorKey2, which vendors Corridor\'s CorridorKey 2.0 code unmodified at 485f5e9) keys each pass as one clip at native resolution, with overlapping temporal Hann windows ' +
+      '(window auto: the largest that fits the free VRAM) and no hint, so the model picks the subject; despill 0.5 (Corridor\'s default), input sRGB. Each pass starts its temporal context afresh. ' +
+      'Only the outputs a node reads are computed. Roles: node 7 cutout (output 4, the despilled straight RGBA, as a transparent WebM, VP9 yuva420p, with the clip\'s sound; params.format prores_4444 switches it to ' +
+      'video/ProRes profile 4444, which VHS writes as yuva444p10le with alpha), node 9 matte (output 1 as an H.264 MP4), node 11 frames (the RGBA as half-float OpenEXR, input sRGB -> scene-linear, one file a frame, in every pass). ' +
+      'params.matteOutput keeps cutout or matte; "foreground" feeds node 7 the despilled foreground premultiplied over black (output 2) as H.264 with sound instead. ' +
+      'Node 11 stays only for params.format exr, with the cut-out as its preview, and Fuobe zips every pass\'s frames onto it. ' +
+      'Corridor\'s despill takes out green spill: the key is for green screens. NVIDIA CUDA only (RTX 30-series or newer). The node\'s class is recorded from its source at the pinned commit.',
   },
   {
     id: 'video-depth-da3',
