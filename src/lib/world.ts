@@ -169,10 +169,15 @@ export interface WorldClip {
   made: string;
 }
 
-/** The part of the script that turn k's clip depends on (everything up to k, and the seed). */
+/**
+ * The part of the script that turn k's clip depends on (everything up to k, and the seed), read from the script as the
+ * planner runs it (normalizeWorld): words typed with spaces round them, or a length off the half second, key the same
+ * as the take the server filed for them.
+ */
 export function scriptKey(script: WorldScript, k: number): string {
-  const o = script.opening;
-  return JSON.stringify([script.seed, o.subject ?? "", o.details ?? "", o.perspective ?? "", o.style ?? "", allTurns(script).slice(0, k + 1).map((t) => [t.words, t.action ?? "", t.move, t.seconds])]);
+  const tidy = normalizeWorld(script);
+  const o = tidy.opening;
+  return JSON.stringify([tidy.seed, o.subject ?? "", o.details ?? "", o.perspective ?? "", o.style ?? "", allTurns(tidy).slice(0, k + 1).map((t) => [t.words, t.action ?? "", t.move, t.seconds])]);
 }
 
 /** Whether turn k's clip still matches the script (nothing up to k has changed since it was made). */
@@ -227,22 +232,26 @@ export type TurnState = "done" | "running" | "failed" | "stale" | "none";
 
 /**
  * The clips of the script's turns from the project's takes: per turn, the newest take made from the script as it is now
- * (nothing up to that turn changed since), made after the turn's last Redo from here (`redoAt[k]`, ms). A take that
- * failed or was cancelled is not a clip. Also each turn's state, for the timeline.
+ * (nothing up to that turn changed since), made after the turn's last Redo from here (`redoAt[k]`, ms), and made after
+ * the clips of the turns before it (the world continues from them, so a take older than one of them was filmed from an
+ * earlier chain: this is what keeps a Redo from here after a reload, when `redoAt` is gone). A take that failed or was
+ * cancelled is not a clip. Also each turn's state, for the timeline.
  */
 export function clipsFromTakes(script: WorldScript, takes: readonly WorldTakeLike[], redoAt: Readonly<Record<number, number>> = {}): { clips: (WorldClip | undefined)[]; states: TurnState[] } {
   const n = script.turns.length + 1;
   const clips: (WorldClip | undefined)[] = [];
   const states: TurnState[] = [];
   const sorted = [...takes].filter((t) => t.take?.world && !t.take.world.joined).sort((a, b) => b.createdAt - a.createdAt);
+  let floor = 0;
   for (let k = 0; k < n; k++) {
     const key = scriptKey(script, k);
-    const since = Math.max(0, ...Object.entries(redoAt).filter(([i]) => Number(i) <= k).map(([, at]) => at));
+    const since = Math.max(floor, ...Object.entries(redoAt).filter(([i]) => Number(i) <= k).map(([, at]) => at));
     const mine = sorted.filter((t) => t.take!.world!.turn === k && t.createdAt >= since);
     const current = mine.find((t) => t.take!.world!.made === key && t.status !== "failed" && t.status !== "canceled");
     if (current) {
       const url = current.status === "succeeded" ? current.outputs?.find((o) => !o.kind || o.kind === "video")?.url : undefined;
       clips.push({ generationId: current.id, made: key, ...(url ? { url } : {}) });
+      floor = Math.max(floor, current.createdAt);
       states.push(url ? "done" : current.status === "succeeded" ? "failed" : "running");
       continue;
     }

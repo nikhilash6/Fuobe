@@ -1,7 +1,8 @@
 // World mode (package nm10-hy-nomas-world) in a real browser (the app must be running in demo mode).
 // Usage: node tests/e2e/cinema-world.mjs [appUrl] [--shots=dir]. Exits 1 on the first failure.
 //
-// 1. 1440 px, light, open engine: /cinema/<id>?world=1 opens the World panel; the opening is written, "Run the opening"
+// 1. 1440 px, light, open engine: /cinema/<id>?world=1 opens the World panel; the opening is written (with stray spaces,
+//    which must not leave a finished turn looking changed), "Run the opening"
 //    queues a take that remembers its turn; once its clip lands a turn is added with a camera move, "Preview the path"
 //    draws the camera from above, turn 1 runs, and Export joins the two turns into one film. "Free" and the sound links
 //    show; Redo from here is offered on a finished turn.
@@ -70,8 +71,8 @@ try {
     const ctx = await browser.newContext({ ...DESKTOP, colorScheme: "light" });
     const page = await open(ctx, "open");
     const dlg = page.getByRole("dialog", { name: "World" });
-    await dlg.getByLabel("The world, in words").fill("A stone path through a luminous forest at dusk, blue fireflies between mossy trees, mist on the ground.");
-    await dlg.getByLabel("Who the camera follows").fill("a small orange fox");
+    await dlg.getByLabel("The world, in words").fill("A stone path through a luminous forest at dusk, blue fireflies between mossy trees, mist on the ground. \n");
+    await dlg.getByLabel("Who the camera follows").fill(" a small orange fox ");
     await dlg.getByLabel("What happens first").fill("the fox walks slowly along the path");
     await dlg.getByLabel("Opening camera move").selectOption("zoom_in");
     assert.match(await dlg.innerText(), /free/i);
@@ -84,9 +85,10 @@ try {
     await until(async () => (await items()).find((g) => g.id === first.id && g.status === "succeeded"), "the opening's clip");
     await dlg.getByText("Ready").first().waitFor({ timeout: 30_000 });
     await dlg.getByRole("button", { name: "Redo from here" }).first().waitFor();
+    assert.equal(await dlg.getByText("Changed: run it again").count(), 0, "a finished turn typed with stray spaces stays finished");
 
     await dlg.getByRole("button", { name: "Add a turn" }).click();
-    await dlg.getByLabel("Turn 1: what changes").fill("a wooden bridge crosses a glowing stream ahead");
+    await dlg.getByLabel("Turn 1: what changes").fill("a wooden bridge crosses a glowing stream ahead ");
     await dlg.getByLabel("Turn 1: camera move").selectOption("orbit_90_ccw");
     await dlg.getByRole("button", { name: "Preview the path" }).click();
     await dlg.getByRole("img", { name: /camera's path from above/ }).waitFor();

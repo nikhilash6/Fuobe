@@ -103,22 +103,25 @@ export function WorldPanel(props: WorldPanelProps) {
   }, [script, projectId]);
 
   const w = script ?? newWorld(0);
-  const { clips, states } = useMemo(() => clipsFromTakes(w, takes, redoAt), [w, takes, redoAt]);
-  const next = nextTurn(w, clips);
-  const exported = exportClips(w, clips);
-  const target = next >= 0 ? next : w.turns.length;
-  const input = (k: number, join?: string[]): Omit<CinemaGenerateInput, "brief"> => ({ engine, mode: "video", action: "world", prompt: "", settings, world: { script: w, turn: k, ...(join ? { join } : {}) } });
-  const plan = useMemo(() => planCinema({ ...input(target), brief }, context), [w, target, engine, settings, brief, context]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The script as it runs (words trimmed, lengths on the half second): what is sent, keyed and checked. `w` is what the
+  // fields show while they are edited.
+  const tidy = useMemo(() => normalizeWorld(w), [w]);
+  const { clips, states } = useMemo(() => clipsFromTakes(tidy, takes, redoAt), [tidy, takes, redoAt]);
+  const next = nextTurn(tidy, clips);
+  const exported = exportClips(tidy, clips);
+  const target = next >= 0 ? next : tidy.turns.length;
+  const input = (k: number, join?: string[]): Omit<CinemaGenerateInput, "brief"> => ({ engine, mode: "video", action: "world", prompt: "", settings, world: { script: tidy, turn: k, ...(join ? { join } : {}) } });
+  const plan = useMemo(() => planCinema({ ...input(target), brief }, context), [tidy, target, engine, settings, brief, context]); // eslint-disable-line react-hooks/exhaustive-deps
   const price = demo ? "Placeholder · free" : "Free";
-  const total = worldSeconds(w);
-  const sketch = useMemo(() => pathSketch(allTurns(w).map((t) => ({ move: t.move, seconds: t.seconds }))), [w]);
+  const total = worldSeconds(tidy);
+  const sketch = useMemo(() => pathSketch(allTurns(tidy).map((t) => ({ move: t.move, seconds: t.seconds }))), [tidy]);
 
   const set = (fn: (s: WorldScript) => WorldScript) => setScript((s) => fn(s ?? newWorld()));
   const setTurn = (k: number, patch: Partial<WorldTurn>) =>
     set((s) => (k === 0 ? { ...s, opening: { ...s.opening, ...patch } } : { ...s, turns: s.turns.map((t, i) => (i === k - 1 ? { ...t, ...patch } : t)) }));
 
   const run = async (k: number) => {
-    const problem = engine !== "open" ? "World mode runs on your GPU (open source)" : worldProblem(w, k);
+    const problem = engine !== "open" ? "World mode runs on your GPU (open source)" : worldProblem(tidy, k);
     if (problem) return toast.error(problem);
     setBusy(k);
     try {
@@ -139,7 +142,7 @@ export function WorldPanel(props: WorldPanelProps) {
     if (!exported) return;
     setBusy("export");
     try {
-      await generate.mutateAsync({ input: input(w.turns.length, exported) as CinemaGenerateInput, folderId });
+      await generate.mutateAsync({ input: input(tidy.turns.length, exported) as CinemaGenerateInput, folderId });
       toast.success("Joining the turns into one film — it lands in this scene as a new take", {
         duration: 8000,
         description: "Hy-Nomas makes no sound: add it afterwards.",
@@ -155,7 +158,7 @@ export function WorldPanel(props: WorldPanelProps) {
   const turnCard = (t: WorldTurn, k: number) => {
     const clip = clips[k];
     const state = states[k];
-    const runnable = canRun(w, clips, k);
+    const runnable = canRun(tidy, clips, k);
     const opening = k === 0;
     return (
       <li key={k} className="grid gap-2 rounded-xl border p-3" style={{ borderLeft: `4px solid ${hue(k)}` }}>
@@ -237,7 +240,7 @@ export function WorldPanel(props: WorldPanelProps) {
             </Button>
           )}
           {(clip || state === "stale") && (
-            <Button size="sm" variant="outline" onClick={() => redo(k)} disabled={!canRun(w, clips, k) || busy !== null} title="Films this turn again and the ones after it; the turns before it stay. The same words and move give the same turn: change them for a different one">
+            <Button size="sm" variant="outline" onClick={() => redo(k)} disabled={!runnable || busy !== null} title="Films this turn again and the ones after it; the turns before it stay. The same words and move give the same turn: change them for a different one">
               <RotateCcw className="size-3.5" /> Redo from here
             </Button>
           )}
@@ -277,7 +280,7 @@ export function WorldPanel(props: WorldPanelProps) {
               </span>
             </div>
             <div className="flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
-              {allTurns(w).map((t, k) => (
+              {allTurns(tidy).map((t, k) => (
                 <div key={k} style={{ width: `${(t.seconds / WORLD_LIMITS.maxTotal) * 100}%`, background: hue(k), opacity: states[k] === "done" ? 1 : 0.35 }} />
               ))}
             </div>
@@ -330,14 +333,14 @@ export function WorldPanel(props: WorldPanelProps) {
           <div className="flex flex-wrap items-center gap-2">
             <p className="min-w-0 flex-1 text-[12.5px]">
               <span className="font-medium">{price}</span>
-              <span className="text-muted-foreground"> · Hy-Nomas on your GPU · about {clipSeconds(allTurns(w)[target] ?? w.opening)} s a turn</span>
+              <span className="text-muted-foreground"> · Hy-Nomas on your GPU · about {clipSeconds(allTurns(tidy)[target] ?? tidy.opening)} s a turn</span>
               {plan.blocker && <span className="block truncate text-[12px] text-muted-foreground">{plan.blocker}</span>}
             </p>
             <Button variant="outline" onClick={exportFilm} disabled={!exported || exported.length < 2 || busy !== null || engine !== "open"}>
               {busy === "export" ? <Loader2 className="size-4 animate-spin" /> : <Film className="size-4" />} Export
             </Button>
             {next >= 0 && (
-              <Button onClick={() => run(next)} disabled={!!plan.blocker || !canRun(w, clips, next) || busy !== null}>
+              <Button onClick={() => run(next)} disabled={!!plan.blocker || !canRun(tidy, clips, next) || busy !== null}>
                 {busy === next ? <Loader2 className="size-4 animate-spin" /> : <Clapperboard className="size-4" />} {next === 0 ? "Run the opening" : `Run turn ${next}`}
               </Button>
             )}

@@ -25,7 +25,7 @@ const { prepareWorkflow } = await import("@/server/providers/comfyui");
 const { STUDIO_ROWS } = await import("@/server/gpu/tools");
 const { getModel, getPreset } = await import("@/lib/catalog");
 const { planGeneration } = await import("@/lib/catalog/plan");
-const { planCinema, WORLD_OPEN_ONLY, WORLD_SOUND } = await import("@/lib/catalog/cinema");
+const { planCinema, worldTake, WORLD_OPEN_ONLY, WORLD_SOUND } = await import("@/lib/catalog/cinema");
 const { NODE_PACKS } = await import("@/lib/licences");
 const W = await import("@/lib/world");
 const { parseScript } = await import("@/lib/world-path");
@@ -245,6 +245,34 @@ describe("the turn state", () => {
     // The new take of turn 1 counts again.
     const again = W.clipsFromTakes(s, [...takes, take("d", 1, W.scriptKey(s, 1), "succeeded", 6000)], { 1: 5000 });
     expect(again.clips.map((c) => c?.generationId)).toEqual(["a", "d", undefined]);
+  });
+
+  it("matches a take filed for the tidied script while the fields still hold spaces or an odd length", () => {
+    const typed = { ...s, opening: { ...s.opening, words: `${s.opening.words} \n`, subject: ` ${s.opening.subject ?? "a fox"} ` }, turns: [{ ...s.turns[0], words: ` ${s.turns[0].words} `, seconds: 4.3 }, s.turns[1]] };
+    const tidy = W.normalizeWorld(typed);
+    expect(tidy.turns[0].seconds).toBe(4.5);
+    // The server keys the take from the tidied script (worldTake); the browser keys the script as typed.
+    const filed = worldTake({ world: { script: typed, turn: 1 } })!;
+    const takes = [take("a", 0, worldTake({ world: { script: typed, turn: 0 } })!.made), take("b", 1, filed.made)];
+    const r = W.clipsFromTakes(typed, takes);
+    expect(r.states).toEqual(["done", "done", "none"]);
+    expect(W.nextTurn(typed, r.clips)).toBe(2);
+    expect(W.canRun(typed, r.clips, 2)).toBe(true);
+    expect(W.scriptKey(typed, 1)).toBe(W.scriptKey(tidy, 1));
+  });
+
+  it("keeps a Redo from here after a reload: a later turn's take older than the redone turn's isn't current", () => {
+    const takes = [take("a", 0, W.scriptKey(s, 0), "succeeded", 1000), take("b", 1, W.scriptKey(s, 1), "succeeded", 2000), take("c", 2, W.scriptKey(s, 2), "succeeded", 3000)];
+    expect(W.clipsFromTakes(s, takes).clips.map((c) => c?.generationId)).toEqual(["a", "b", "c"]);
+    // Turn 1 filmed again (no redoAt: the panel was closed or the page reloaded): turn 2's old take no longer counts.
+    const redone = [...takes, take("d", 1, W.scriptKey(s, 1), "running", 4000)];
+    const r = W.clipsFromTakes(s, redone);
+    expect(r.clips.map((c) => c?.generationId)).toEqual(["a", "d", undefined]);
+    expect(r.states).toEqual(["done", "running", "none"]);
+    expect(W.exportClips(s, r.clips)).toBeNull();
+    // A redo that failed leaves the earlier film standing.
+    const failed = W.clipsFromTakes(s, [...takes, take("e", 1, W.scriptKey(s, 1), "failed", 4000)]);
+    expect(failed.clips.map((c) => c?.generationId)).toEqual(["a", "b", "c"]);
   });
 
   it("exports only when every turn has a finished, current clip", () => {
