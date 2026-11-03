@@ -46,6 +46,21 @@ export function rowWidth(count: number, layout: RowLayout = "centred"): string |
 /** The row's own box: a centred row is at most 1000 px across its page; a column row takes its column's width. */
 export const rowSection = (layout: RowLayout = "centred") => cn("w-full", layout === "centred" && "mx-auto max-w-[1000px]");
 
+/**
+ * How wide a card shows (its picture's `sizes`), as the grid lays the cards out: `cap` is the widest the cards' box
+ * gets (left out: a centred row's own cap; a column row with no cap of its own fills its page). Page gutters are 24 px a
+ * side from 640 px (16 px on a phone), gaps 16 px (12 px on a phone).
+ */
+export function rowSizes(count: number, { layout = "centred", cap, maxColumns = 4 }: { layout?: RowLayout; cap?: number; maxColumns?: 2 | 4 } = {}): string {
+  if (count === 1) return "(min-width: 392px) 360px, calc(100vw - 32px)";
+  const cols = maxColumns === 2 ? 2 : Math.min(count, 4);
+  const box = cap ?? (layout === "centred" ? (count === 2 ? 520 : count === 3 ? 760 : 1000) : undefined);
+  const phone = "calc((100vw - 44px) / 2)";
+  const fluid = `calc((100vw - ${48 + 16 * (cols - 1)}px) / ${cols})`;
+  if (!box) return `(min-width: 640px) ${fluid}, ${phone}`;
+  return `(min-width: ${box + 48}px) ${Math.round((box - 16 * (cols - 1)) / cols)}px, (min-width: 640px) ${fluid}, ${phone}`;
+}
+
 /** The row's heading ("Start from an example", "More to try"): a section title on the cards' left edge. */
 export const ROW_HEADING = "mb-4 text-left text-[15px] leading-6 font-medium text-foreground";
 

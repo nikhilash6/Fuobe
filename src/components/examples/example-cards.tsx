@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { useIsMobile } from "@/hooks/use-mobile";
 import { exampleKey, type ExampleCard, type ExampleInput, type ExampleMedia, type ExampleRowData } from "@/lib/examples/types";
 import { hasHdStill } from "@/lib/preset-hd";
-import { ROW_GAP, ROW_GRID, ROW_HEADING, rowColumns, rowSection, rowWidth, type ExampleAspect, type RowLayout } from "./example-row-frame";
+import { ROW_GAP, ROW_GRID, ROW_HEADING, rowColumns, rowSection, rowSizes, rowWidth, type ExampleAspect, type RowLayout } from "./example-row-frame";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 
@@ -225,17 +225,10 @@ export function ExampleCardView({
   );
 }
 
-/** How wide a grid's card shows (its picture's `sizes`), by how many cards it has: as the grid below lays them out. */
-function gridSizes(n: number): string {
-  if (n === 1) return "(min-width: 392px) 360px, calc(100vw - 32px)";
-  if (n === 2) return "(min-width: 640px) 252px, 50vw";
-  if (n === 3) return "(min-width: 640px) 245px, 50vw";
-  return "(min-width: 1032px) 240px, (min-width: 640px) 25vw, 50vw";
-}
-
 /**
  * Cards in a grid: two across a phone, up to four across a desktop. On its own (the Examples sheet) one to three cards
- * stay centred at a card's width; inside a row (`bare`) the row's frame sets the width, so its heading lines up with it.
+ * stay centred at a card's width; inside a row (`bare`) the row's frame sets the width, so its heading lines up with it,
+ * and the row gives the cards' `sizes` (how wide they show) for that width.
  */
 export function ExampleGrid({
   cards,
@@ -244,6 +237,7 @@ export function ExampleGrid({
   aspect,
   bare = false,
   maxColumns,
+  sizes,
   className,
 }: {
   cards: ExampleCard[];
@@ -252,12 +246,14 @@ export function ExampleGrid({
   aspect?: ExampleAspect;
   bare?: boolean;
   maxColumns?: 2 | 4;
+  sizes?: string;
   className?: string;
 }) {
+  const shown = sizes ?? rowSizes(cards.length, { maxColumns });
   return (
     <div data-example-grid className={cn(ROW_GRID, ROW_GAP, rowColumns(cards.length, maxColumns), !bare && rowWidth(cards.length), className)}>
       {cards.map((c, i) => (
-        <ExampleCardView key={c.id} card={c} index={i} active={!!activeId && exampleKey(c) === activeId} onPick={onPick} aspect={aspect} sizes={gridSizes(cards.length)} />
+        <ExampleCardView key={c.id} card={c} index={i} active={!!activeId && exampleKey(c) === activeId} onPick={onPick} aspect={aspect} sizes={shown} />
       ))}
     </div>
   );
@@ -274,6 +270,7 @@ export function ExampleRow({
   aspect,
   layout = "centred",
   maxColumns,
+  maxWidth,
   className,
 }: {
   row: ExampleRowData;
@@ -285,19 +282,23 @@ export function ExampleRow({
   layout?: RowLayout;
   /** 2 keeps two cards across: a row in a narrow box. */
   maxColumns?: 2 | 4;
+  /** A column row's widest, in px: the box it lines up with (a studio's composer, a page's upload box). Left out, it
+   * fills its page's column. */
+  maxWidth?: number;
   className?: string;
 }) {
   const heading = useId();
   const [looking, setLooking] = useState<ExampleCard | null>(null);
   if (!row.cards.length) return null;
   const pick: ExamplePick = (c) => (c.load.via === "look" || !onPick ? setLooking(c) : onPick(c));
+  const sizes = rowSizes(row.cards.length, { layout, cap: maxWidth, maxColumns });
   return (
-    <section aria-labelledby={heading} data-examples className={cn(rowSection(layout), className)}>
+    <section aria-labelledby={heading} data-examples className={cn(rowSection(layout), maxWidth && "mx-auto", className)} style={maxWidth ? { maxWidth } : undefined}>
       <div className={rowWidth(row.cards.length, layout)}>
         <h2 id={heading} className={ROW_HEADING}>
           {row.heading}
         </h2>
-        <ExampleGrid cards={row.cards} activeId={activeId} onPick={pick} aspect={aspect} maxColumns={maxColumns} bare />
+        <ExampleGrid cards={row.cards} activeId={activeId} onPick={pick} aspect={aspect} maxColumns={maxColumns} sizes={sizes} bare />
       </div>
       <ExampleSheet card={looking} onOpenChange={(o) => !o && setLooking(null)} />
     </section>

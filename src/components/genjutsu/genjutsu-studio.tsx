@@ -1077,7 +1077,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
         )}
       </div>
 
-      {examples && !clip && !run && (visitor || (history.isSuccess && !history.data.length)) && <ExampleRow row={examples} layout="column" maxColumns={2} className="mx-auto mt-12 max-w-[640px]" />}
+      {examples && !clip && !run && (visitor || (history.isSuccess && !history.data.length)) && <ExampleRow row={examples} layout="column" maxColumns={2} maxWidth={640} className="mt-12" />}
 
       {run && (
         <RunPanel

@@ -377,6 +377,9 @@ function PromptSuggestions({ suggestions }: { suggestions: string[] }) {
 /** The space between the composer (or what sits right under it) and each section below it. */
 const UNDER_COMPOSER = "mt-10 sm:mt-12";
 
+/** The empty composer's width (its column's max-w-[760px]): the row's cards show at that width's share. */
+const COMPOSER_WIDTH = 760;
+
 /**
  * How long a guest's row waits for the feed's answer before it shows its cards anyway: a slow feed never leaves grey
  * tiles. A guest has no results of their own, so the cards stay.
@@ -411,7 +414,7 @@ function StudioExamples({ row, ready }: { row: ExampleRowData; ready: boolean })
   if (!ready && !(guest && waited)) return skeleton;
   return (
     <Suspense fallback={skeleton}>
-      <ExampleRow row={row} activeId={loader?.activeId} onPick={(c) => loader?.use(c)} layout="column" className={UNDER_COMPOSER} />
+      <ExampleRow row={row} activeId={loader?.activeId} onPick={(c) => loader?.use(c)} layout="column" maxWidth={COMPOSER_WIDTH} className={UNDER_COMPOSER} />
     </Suspense>
   );
 }
