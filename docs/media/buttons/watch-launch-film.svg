@@ -1,17 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="278" height="48" viewBox="0 0 278 48" role="img" aria-label="Watch the launch film, 46 s">
+<svg xmlns="http://www.w3.org/2000/svg" width="314" height="48" viewBox="0 0 314 48" role="img" aria-label="Watch the launch film, 46 s">
   <title>Watch the launch film, 46 s</title>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#26262c"/>
-      <stop offset="1" stop-color="#050506"/>
-    </linearGradient>
-    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.08"/>
-    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#26262c"/><stop offset="1" stop-color="#050506"/></linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.08"/></linearGradient>
   </defs>
-  <rect x="0.5" y="0.5" width="277" height="47" rx="23.5" fill="url(#bg)" stroke="url(#edge)"/>
-  <circle cx="25" cy="24" r="14" fill="#ffffff"/>
-  <path d="M21.6 18.4v11.2l9.2-5.6z" fill="#050506"/>
-  <text x="49" y="29.5" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif" font-size="15.5" font-weight="600" letter-spacing="-0.1">Watch the launch film<tspan fill="#ffffff" fill-opacity="0.55" font-weight="500">  46 s</tspan></text>
+  <rect x="0.5" y="0.5" width="313" height="47" rx="23.5" fill="url(#bg)" stroke="url(#edge)"/>
+  <circle cx="25" cy="24" r="18" fill="#ffffff"/><path d="M21.6 18.6v10.8l8.6-5.4z" fill="#050506"/>
+  <text x="52" y="29.58" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif" font-size="15.5" font-weight="600" letter-spacing="-0.1">Watch the launch film<tspan fill="#ffffff" fill-opacity="0.55" font-weight="500"> 46 s</tspan></text>
+  
 </svg>
