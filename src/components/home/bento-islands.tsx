@@ -109,6 +109,13 @@ export function BentoMotion({ target }: { target: string }) {
 /** The clips' shape (width / height): both tiles play 4:3 renders (scripts/gen-home-bento.mjs). */
 const CLIP_ASPECT = 4 / 3;
 
+/** The width of the copy the tile's still shows (its file is named `<name>-<width>.avif` or `.jpg`), or 0. */
+function stillWidth(el: HTMLElement): number {
+  const src = el.parentElement?.querySelector<HTMLImageElement>("picture img")?.currentSrc ?? "";
+  const m = /-(\d+)\.(?:avif|jpg)(?:\?|$)/.exec(src);
+  return m ? Number(m[1]) : 0;
+}
+
 /**
  * Calls `cb` once the tile's own still (the picture before `el` in its tile) has loaded and been painted, and the
  * browser has a moment: the still is the first thing the tile shows, and the clip never holds it up.
@@ -142,18 +149,25 @@ function afterStill(el: HTMLElement, cb: () => void): () => void {
  * on screen (not only once the whole page has loaded), so it plays in view, at most a few at once, never under reduced
  * motion, Save-Data or Pause previews, and a hover or keyboard focus on its tile still plays it. Its source is set only
  * when it first plays: the narrowest of `clips` at least as wide as the tile shows it on this screen (its box under
- * `object-fit: cover`, times the pixel ratio), and that one stays. The still is that clip's own first frame
+ * `object-fit: cover`, times the pixel ratio) and at least as wide as the copy of the still the browser chose, and that
+ * one stays. The still is that clip's own first frame
  * (scripts/gen-home-bento.mjs), and the clip shows only once it has that frame, so the change from one to the other
  * can't be seen: no sign, no flash, nothing moves. Once started it stays mounted and pauses on its frame. `progress`: a
  * line along the bottom follows the clip.
  */
 export function BentoClip({ id, clips, progress }: { id: string; clips: Sized[]; progress?: boolean }) {
   const [armed, setArmed] = useState(false);
+  // The width of the still the browser chose (its srcset), once it is up: the clip is at least that copy, so the still
+  // and the clip's first frame are the same picture.
+  const [stillW, setStillW] = useState(0);
   const { ref, playing, handlers } = usePreviewPlayback<HTMLSpanElement>(id, armed ? { video: clips[0].src } : {});
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    return afterStill(el, () => setArmed(true));
+    return afterStill(el, () => {
+      setStillW(stillWidth(el));
+      setArmed(true);
+    });
   }, [ref]);
   // The pixels of width the tile needs, kept up to date with its size until the clip starts.
   const [need, setNeed] = useState(0);
@@ -165,7 +179,7 @@ export function BentoClip({ id, clips, progress }: { id: string; clips: Sized[];
     return () => ro.disconnect();
   }, [ref]);
   const [clip, setClip] = useState<string | null>(null);
-  if (playing && !clip) setClip(pickWidth(clips, need).src);
+  if (playing && !clip) setClip(pickWidth(clips, Math.max(need, stillW)).src);
   const started = clip !== null;
   const [ready, setReady] = useState(false);
   const video = useRef<HTMLVideoElement>(null);

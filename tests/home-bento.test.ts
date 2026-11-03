@@ -64,7 +64,7 @@ describe("Home's first screen", () => {
     for (const m of html.matchAll(/(?:src|srcSet)="([^"]+)"/g)) for (const part of m[1].split(", ")) expect(part.split(" ")[0], part).toMatch(versioned);
   });
 
-  it("plays the catwalk and the turning gown in two widths, at the length of their published clips", () => {
+  it("plays the catwalk and the turning gown in four widths, at the length of their published clips", () => {
     const tiles = [
       { tile: bento.video, name: "catwalk", published: "motion-catwalk", seconds: 4 },
       { tile: bento.threeD, name: "rotation", published: "app-3d-rotation", seconds: 3.04 },
@@ -79,10 +79,11 @@ describe("Home's first screen", () => {
         expect(mp4Seconds(file(c.src))).toBeCloseTo(seconds, 1);
         expect(mp4Seconds(file(`/previews/presets/${published}.mp4`))).toBeCloseTo(seconds, 1);
       }
-      // Its poster comes in the same widths (the clip's first frame); the published JPEG for a browser without AVIF.
+      // Its poster comes in the same widths (the clip's first frame); for a browser without AVIF, the 1024 px clip's
+      // first frame as a JPEG.
       expect(tile.poster.avif.map((a) => a.w)).toEqual([...BENTO_CLIP_WIDTHS]);
       for (const a of tile.poster.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/${name}-${a.w}\\.avif\\?v=`));
-      expect(tile.poster.fallback).toMatch(new RegExp(`^/previews/presets/${published}\\.jpg\\?v=`));
+      expect(tile.poster.fallback).toMatch(new RegExp(`^/previews/home/${name}-1024\\.jpg\\?v=`));
     }
   });
 
@@ -109,10 +110,13 @@ describe("Home's first screen", () => {
     expect(pickWidth(clips, 300).w).toBe(640);
     expect(pickWidth(clips, 640).w).toBe(640);
     expect(pickWidth(clips, 641).w).toBe(1024);
-    // Past the widest copy (the render's own size): the widest, never stretched further.
-    expect(pickWidth(clips, 1339).w).toBe(1024);
-    // The widest of each is its master's own width: the clips are 1024 x 768 renders, the before/after pair 1536.
-    for (const t of [bento.video, bento.threeD]) expect(Math.max(...t.clips.map((c) => c.w))).toBe(1024);
+    // A 3x phone (358 px box: 1074) and a 2x laptop (567 px box: 1134) get the 1536 px copy, a 3x tablet the 2048.
+    expect(pickWidth(clips, 1074).w).toBe(1536);
+    expect(pickWidth(clips, 1134).w).toBe(1536);
+    expect(pickWidth(clips, 1728).w).toBe(2048);
+    // Past the widest copy (its 2048 px master): the widest, never stretched further.
+    expect(pickWidth(clips, 2400).w).toBe(2048);
+    for (const t of [bento.video, bento.threeD]) expect(Math.max(...t.clips.map((c) => c.w))).toBe(2048);
     // The before/after pair covers a 3x phone (358 px wide) and the tall tile on a 2x 1920 screen.
     expect(Math.max(...bento.restore.after.avif.map((a) => a.w))).toBeGreaterThanOrEqual(358 * 3);
     expect(Math.max(...(bento.restore.after.tall ?? []).map((a) => a.w))).toBeGreaterThanOrEqual(602);

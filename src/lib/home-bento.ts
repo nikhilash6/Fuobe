@@ -21,7 +21,9 @@ import { templateCover } from "@/lib/template-covers";
 export const BENTO_CLIPS = { video: "motion-catwalk", threeD: "app-3d-rotation" } as const;
 /** Each clip's copies here (scripts/gen-home-bento.mjs): its name, and the widths it and its poster come in. */
 export const BENTO_CLIP_FILES = { video: "catwalk", threeD: "rotation" } as const;
-export const BENTO_CLIP_WIDTHS = [640, 1024] as const;
+export const BENTO_CLIP_WIDTHS = [640, 1024, 1536, 2048] as const;
+/** The width of the JPEG copy of each clip's first frame, for a browser without AVIF. */
+export const BENTO_CLIP_FALLBACK = 1024;
 /** The Image studio's example the image tile shows and opens with (src/lib/examples/plan.json). */
 export const BENTO_IMAGE_EXAMPLE = { id: "image.4", out: "/examples/image/4/out.jpg" };
 /** The app the before/after tile shows and opens: black and white to colour reads at a glance. */
@@ -167,13 +169,16 @@ export async function homeBento(f: BentoFacts) {
     tall: [432, 691].map((w) => ({ src: made(`/previews/home/ba-${side}-tall-${w}.avif`), w })),
     fallback: `/previews/presets/ba/960/${BENTO_BEFORE_AFTER}-${side}.jpg?v=${baV}`,
   });
-  // A moving tile: its poster (the clip's first frame) and its clip, each in every width; the published JPEG poster is
-  // the fallback for a browser without AVIF.
-  const moving = (key: keyof typeof BENTO_CLIPS, fallback: string): BentoMovingTile => {
+  // A moving tile: its poster (the clip's first frame) and its clip, each in every width; for a browser without AVIF, the
+  // 1024 px clip's first frame as a JPEG.
+  const moving = (key: keyof typeof BENTO_CLIPS): BentoMovingTile => {
     const name = BENTO_CLIP_FILES[key];
     return {
       id: BENTO_CLIPS[key],
-      poster: { avif: BENTO_CLIP_WIDTHS.map((w) => ({ src: made(`/previews/home/${name}-${w}.avif`), w })), fallback },
+      poster: {
+        avif: BENTO_CLIP_WIDTHS.map((w) => ({ src: made(`/previews/home/${name}-${w}.avif`), w })),
+        fallback: made(`/previews/home/${name}-${BENTO_CLIP_FALLBACK}.jpg`),
+      },
       clips: BENTO_CLIP_WIDTHS.map((w) => ({ src: made(`/previews/home/${name}-${w}.mp4`), w })),
     };
   };
@@ -201,12 +206,12 @@ export async function homeBento(f: BentoFacts) {
       live: tile("live", "Live edit", "Live edit", "Type it, watch it change", "Open Live edit"),
       canvas: tile("canvas", "Canvas", "Canvas", "Chain any step, end to end", "Open Canvas"),
     },
-    video: moving("video", video.poster),
+    video: moving("video"),
     image: {
       avif: [480, 768].map((w) => ({ src: made(`/previews/home/image-4-${w}.avif`), w })),
       fallback: example(BENTO_IMAGE_EXAMPLE.out),
     } satisfies BentoPicture,
-    threeD: moving("threeD", threeD.poster),
+    threeD: moving("threeD"),
     restore: { before: restoreSide("before"), after: restoreSide("after") },
     wave: { bars: HOME_BENTO_WAVE.bars, seconds: HOME_BENTO_WAVE.seconds },
     live: { frames: BENTO_LIVE_STEPS.map(frame), phrases: livePhrases(demo) },

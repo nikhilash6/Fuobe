@@ -2,6 +2,7 @@
 // (`next build`, then `next start -p <port>`): the weight and layout-shift numbers mean little on a dev server.
 //
 // Usage: node tests/e2e/home-bento.mjs [appUrl] [--shots <dir>] [--weight-only]   (pnpm test:e2e:home)
+//   E2E_BROWSER=webkit or firefox: run it in that engine (tests/e2e/_browser.mjs).
 //   E2E_OWNER_PASSWORD: the studio's password, when it has one; the owner's pass signs in with it. Without one the
 //   studio is the owner's, and the guest's pass is skipped.
 //   --weight-only: only measure what the first screen downloads (to compare another build, such as main's).
@@ -23,8 +24,8 @@
 //    split rests at 50 %, the live words stay), and the tiles keep their stills.
 // 5. Pause previews stops the catwalk and freezes every animation; pressed again, they go on.
 // 6. Weight: what the page downloads before `load` (clips aside), at 390 and 1440, reported; the first screen's own
-//    stills stay under 340 KB (the clips' posters are encoded close to their clips' first frames). The clips are
-//    reported on their own.
+//    stills stay under 420 KB (the clips' posters are encoded close to their clips' first frames, and a 3x phone or a
+//    2x laptop gets the catwalk's 1536 px still). The clips are reported on their own.
 // 7. The composer: /?new=1 brings it into view with the focus; a plain visit stays at the top (no autofocus jump).
 // 8. Every tile is a named link, and Tab reaches them in the grid's reading order with a visible ring.
 import assert from "node:assert/strict";
@@ -56,6 +57,8 @@ const WIDTHS = [
   { w: 1920, h: 1080 },
 ];
 const TILES = ["video", "image", "audio", "threeD", "restore", "numbers", "live", "canvas"];
+/** The widest copy of each clip (scripts/gen-home-bento.mjs). */
+const CLIP_MAX = 2048;
 const HEADLINE = "Make anything: From an idea to a finished film, in one place.";
 
 /** A context as `who`; null when that viewer can't be had here (a guest needs a studio with a password). */
@@ -126,7 +129,7 @@ const layout = (page) =>
  * page offers for it.
  */
 const sharpness = (page) =>
-  page.evaluate(() => {
+  page.evaluate((CLIP_MAX) => {
     const dpr = devicePixelRatio;
     // The copies the browser could choose from for an img: its <picture>'s matching source, or its own srcset, each as
     // its URL and its width. (naturalWidth is no help here: under a w-descriptor it is scaled by the pixel ratio.)
@@ -157,10 +160,10 @@ const sharpness = (page) =>
       const r = v.getBoundingClientRect();
       const need = Math.ceil(Math.max(r.width, (r.height * v.videoWidth) / v.videoHeight) * dpr);
       const what = new URL(v.currentSrc).pathname.split("/").pop();
-      out.push({ what, tile: v.closest("[data-tile]").dataset.tile, has: v.videoWidth, need, max: 1024, ok: v.videoWidth >= Math.min(need, 1024) * 0.98 });
+      out.push({ what, tile: v.closest("[data-tile]").dataset.tile, has: v.videoWidth, need, max: CLIP_MAX, ok: v.videoWidth >= Math.min(need, CLIP_MAX) * 0.98 });
     }
     return out;
-  });
+  }, CLIP_MAX);
 
 // ------------------------------------------------------------------------------------------- 1. every width
 const shots = [];
@@ -527,7 +530,7 @@ for (const v of [WIDTHS[0], WIDTHS[3], WIDTHS[4], WIDTHS[5]]) {
   const r = await weight(v);
   // The whole page's total is reported (main's own script and fonts are most of it: compare with --weight-only on
   // main's build); the first screen's own stills have a budget of their own.
-  check(`weight before load, clips aside: ${r.line}`, weightOnly || r.own < 340 * 1024);
+  check(`weight before load, clips aside: ${r.line}`, weightOnly || r.own < 420 * 1024);
   notes.push(`weight ${r.line}`);
   notes.push(`  first screen's stills: ${r.media.join(" · ")}`);
 }

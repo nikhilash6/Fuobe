@@ -6,8 +6,9 @@
  * published clip was cut from, so the tiles show exactly what the studios show, only sharper.
  *
  * Output (public/previews/home/):
- *   catwalk-{640,1024}.{mp4,avif}         the catwalk clip at two widths, and each one's first frame as its poster
- *   rotation-{640,1024}.{mp4,avif}        the turning gown (the 3D tile), the same way
+ *   catwalk-{640,1024,1536,2048}.{mp4,avif}   the catwalk clip at four widths, and each one's first frame as its poster
+ *   rotation-{640,1024,1536,2048}.{mp4,avif}  the turning gown (the 3D tile), the same way
+ *   catwalk-1024.jpg, rotation-1024.jpg       the 1024 px clips' first frames, for a browser without AVIF
  *   image-4-{480,768}.avif                the Image studio's example 4
  *   ba-{before,after}-{640,960,1280}.avif       Colorize's before and after (4:3)
  *   ba-{before,after}-tall-{432,691}.avif       the same pair, a 3:5 crop for the tall tile
@@ -26,6 +27,9 @@
  * Masters: the full-size renders are not in the repo. With --masters <dir> (or FUOBE_HOME_MASTERS) the clips, their
  * posters and the before/after copies are made from the files in it:
  *   <dir>/motion-catwalk.mp4, <dir>/app-3d-rotation.mp4          the renders the published clips were cut from
+ *   <dir>/motion-catwalk-2048.mkv, <dir>/app-3d-rotation-2048.mkv the same renders upscaled to 2048 x 1536, every frame
+ *                                                                 (SeedVR2 7B, lossless FFV1, BT.709), for the 1536 and
+ *                                                                 2048 px copies
  *   <dir>/app-colorize-before.png, <dir>/app-colorize-after.png  Colorize's pair at full size (1536 x 1152)
  * Without it those files are kept as they are (and versioned), the posters are made again from the clips kept, and so
  * is the rest.
@@ -66,13 +70,20 @@ const BA_APP = "app-colorize";
  * in the frame.
  */
 const BA_TALL = { left: 422, top: 0, width: 691, height: 1152 };
-/** The two clips: their published preset, the name of their copies here, and the CRF each is encoded at. */
+/**
+ * The two clips: their published preset, the name of their copies here, and the CRF each width is encoded at (the
+ * wider copies, made from the 2048 px master, at a higher CRF: their pixels are smaller on the screen).
+ */
 const CLIPS = [
-  { key: "motion-catwalk", name: "catwalk", crf: 24 },
-  { key: "app-3d-rotation", name: "rotation", crf: 23 },
+  { key: "motion-catwalk", name: "catwalk", crf: { 640: 24, 1024: 24, 1536: 28, 2048: 29 } },
+  { key: "app-3d-rotation", name: "rotation", crf: { 640: 23, 1024: 23, 1536: 27, 2048: 28 } },
 ];
 /** The widths each clip and its poster are made at: a tile takes the first at least as wide as its box needs. */
-const CLIP_WIDTHS = [640, 1024];
+const CLIP_WIDTHS = [640, 1024, 1536, 2048];
+/** From this width up, a clip is made from its 2048 px master (`<key>-2048.mkv`) instead of the render itself. */
+const HD_FROM = 1536;
+/** The width of each clip's first frame as a JPEG, the poster for a browser without AVIF (BENTO_CLIP_FALLBACK). */
+const FALLBACK_WIDTH = 1024;
 /** The Canvas board's two pictures (src/lib/home-bento.ts, BENTO_BOARD): the photo going in and a frame of the film. */
 const BOARD_THUMBS = [
   { name: "board-photo.webp", from: "/examples/effect-pearl-earring/1/in-image.jpg" },
@@ -166,7 +177,11 @@ async function main() {
   // Made from the masters when there are any; without them the files already here are kept (and versioned).
   const fromMasters = [
     ...CLIPS.flatMap((c) =>
-      CLIP_WIDTHS.map((w) => ({ name: `${c.name}-${w}.mp4`, clip: true, make: () => encodeClipBuffer(loopAt(master(`${c.key}.mp4`), w).all, c.crf) })),
+      CLIP_WIDTHS.map((w) => ({
+        name: `${c.name}-${w}.mp4`,
+        clip: true,
+        make: () => encodeClipBuffer(loopAt(master(w >= HD_FROM ? `${c.key}-2048.mkv` : `${c.key}.mp4`), w).all, c.crf[w]),
+      })),
     ),
     ...MASTER_STILLS.map((s) => ({
       ...s,
@@ -200,6 +215,11 @@ async function main() {
         return sharp(firstFrame(path.join(OUT_DIR, p.clip))).avif({ quality: POSTER_QUALITY, effort: 6 }).toBuffer();
       },
     })),
+    // For a browser without AVIF: the FALLBACK_WIDTH clip's first frame as a JPEG.
+    ...CLIPS.map((c) => ({
+      name: `${c.name}-${FALLBACK_WIDTH}.jpg`,
+      make: () => sharp(firstFrame(path.join(OUT_DIR, `${c.name}-${FALLBACK_WIDTH}.mp4`))).jpeg({ quality: 85, mozjpeg: true }).toBuffer(),
+    })),
     ...STILLS.map((s) => ({
       ...s,
       make: () => {
@@ -220,7 +240,7 @@ async function main() {
     versions[`/previews/home/${s.name}`] = contentVersion([out]);
   }
   const { wave, seconds } = readWave();
-  console.log(`stills ${(total / 1024).toFixed(1)} KB (clips aside) · waveform ${wave.length} bars over ${seconds.toFixed(2)} s`);
+  console.log(`stills ${(total / 1024).toFixed(1)} KB (clips aside) Â· waveform ${wave.length} bars over ${seconds.toFixed(2)} s`);
   if (DRY) return;
   const source = contentVersion([path.join(PUBLIC, WAVE_SOURCE)]);
   const body = `/**
