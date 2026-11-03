@@ -46,6 +46,7 @@ export type OutputActionId =
   | "edit-speech"
   | "copy-text"
   | "view-3d"
+  | "make-3d"
   | "download"
   | "download-txt"
   | "download-srt"
@@ -93,9 +94,19 @@ export interface ActionContext {
    * (a server render, a share page): as "both".
    */
   engineMode?: "both" | "open" | "cloud";
+  /**
+   * The open engine can run here: Engine mode is open or both and ComfyUI is connected (or placeholder results are on),
+   * for the owner (openEngineReady in src/lib/connections.ts). Make it 3D (quick) needs it: Idol 3D runs on your GPU.
+   */
+  openEngine?: boolean;
 }
 
 const q = (url: string) => encodeURIComponent(url);
+
+/** Make it 3D (quick) on a picture: Image to 3D → Splat on Idol 3D's Quick look, the picture in the slot (idol-5). */
+export function make3dHref(url: string, photo = false): string {
+  return `/image-to-3d?mode=splat&model=oss-idol&quality=quick&image=${q(url)}${photo ? "&photo=1" : ""}`;
+}
 
 /** Every action for output `index` of `g`, in display order. */
 export function outputActions(g: Generation, index: number, ctx: ActionContext = {}): OutputAction[] {
@@ -131,6 +142,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       // A picture drawn from a layout (or one fal's MOSS-Image planned itself) reopens as boxes in the Image studio.
       if (editableLayout(g, index)) link("edit-layout", "Edit layout", editLayoutHref(g, index));
       link("genjutsu", "Animate with Genjutsu", `/genjutsu?mode=motion&image=${q(o.url)}`);
+      // Idol 3D runs on your GPU only (fal's Idol is a choice of its own in Image to 3D): hidden where the open engine
+      // can't run. An upload is likely a photo, so it opens with the looser photo crop on.
+      if (ctx.openEngine && ctx.engineMode !== "cloud") link("make-3d", "Make it 3D (quick)", make3dHref(o.url, g.feature === "upload"));
       out.push({ id: "save-character", label: "Save as character", placement: "menu" });
       break;
     case "video": {

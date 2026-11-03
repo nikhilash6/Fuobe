@@ -30,6 +30,7 @@ import {
   MoreHorizontal,
   Pin,
   Repeat,
+  Rotate3d,
   RotateCcw,
   Share2,
   SlidersHorizontal,
@@ -74,7 +75,7 @@ import { useShare } from "@/components/share/share-provider";
 import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useCreateGeneration, useEngineMode, useGenerationActions, useSaveElement } from "@/lib/api";
+import { useCreateGeneration, useEngineMode, useGenerationActions, useOpenEngine, useSaveElement } from "@/lib/api";
 import { ELEMENT_KINDS, type ElementKind } from "@/lib/catalog/elements";
 import { OPERATION_LABELS, type Generation, type OutputFile } from "@/lib/catalog/types";
 import { downloadName, userTitle } from "@/lib/library";
@@ -110,6 +111,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "edit-speech": TextCursorInput,
   "copy-text": Copy,
   "view-3d": Box,
+  "make-3d": Rotate3d,
   download: Download,
   "download-txt": FileDown,
   "download-srt": FileDown,
@@ -415,7 +417,8 @@ export function TileActions({
 }) {
   const run = useActionRunner(opts);
   const engineMode = useEngineMode();
-  const list = useMemo(() => outputActions(g, index, { ...ctx, engineMode }), [g, index, ctx, engineMode]);
+  const openEngine = useOpenEngine();
+  const list = useMemo(() => outputActions(g, index, { ...ctx, engineMode, openEngine }), [g, index, ctx, engineMode, openEngine]);
   const [saving, setSaving] = useState(false);
   const strip = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
