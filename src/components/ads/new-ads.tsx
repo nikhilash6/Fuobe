@@ -11,6 +11,7 @@ import { AD_VISUAL_MODELS, DRAWN_WORDS_LABEL, DRAWN_WORDS_MODELS, MAX_ADS_PER_PR
 import { useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { formatCost } from "@/lib/format";
+import { RunPlaceChip, useRunPlace } from "@/components/studio/run-place-chip";
 import { toastError } from "@/lib/refusals";
 import { useCreativeActions, useEstimate, useProductActions } from "@/components/marketing/hooks";
 
@@ -48,7 +49,20 @@ function Stepper({ value, onChange, label }: { value: number; onChange: (n: numb
 }
 
 /** Select products (≤10) → "How many ads to create?" (≤20 each, total price first) → Create. */
-export function NewAds({ brand, products, engine, onCreated }: { brand: BrandKit; products: Product[]; engine: "cloud" | "open"; onCreated: (batchId: string) => void }) {
+export function NewAds({
+  brand,
+  products,
+  engine,
+  onEngine,
+  onCreated,
+}: {
+  brand: BrandKit;
+  products: Product[];
+  engine: "cloud" | "open";
+  /** Switching engine from the place chip (the header's switch). */
+  onEngine?: (e: "cloud" | "open") => void;
+  onCreated: (batchId: string) => void;
+}) {
   const { createBatch } = useCreativeActions(brand.id);
   const { remove } = useProductActions();
   const [selected, setSelected] = useState<string[]>(() => products.slice(0, MAX_PRODUCTS_PER_RUN).map((p) => p.id));
@@ -86,7 +100,9 @@ export function NewAds({ brand, products, engine, onCreated }: { brand: BrandKit
       onError: (e) => toastError(e),
     });
   };
-  const price = est.data ? (est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "price unknown" : est.data.costUsd === 0 ? (engine === "open" ? "Free · your GPU" : "Free") : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  // Where the ads are made and their price, as the studios say it.
+  const priced = est.data && !est.data.blocker ? est.data : undefined;
+  const place = useRunPlace({ engine, models: priced ? [priced.modelName] : undefined, costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Ads Studio" });
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border bg-background p-4 sm:p-5">
@@ -199,8 +215,8 @@ export function NewAds({ brand, products, engine, onCreated }: { brand: BrandKit
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-[14px] font-medium tabular-nums">{est.isFetching && !est.data ? "…" : price}</span>
-              <Button size="lg" onClick={create} disabled={createBatch.isPending || !!est.data?.blocker}>
+              <RunPlaceChip place={place} engine={engine} onEngine={onEngine} pending={est.isFetching && !est.data} className="bg-background" />
+              <Button size="lg" onClick={create} disabled={createBatch.isPending || !!est.data?.blocker} title={place?.send ? `Create ${total} ads · ${place.send}` : undefined}>
                 {createBatch.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Create {total} ads
               </Button>
             </div>

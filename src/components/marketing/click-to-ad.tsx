@@ -17,7 +17,8 @@ import { useCoverPlayback } from "@/components/template-cover";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { uploadFile, useLikelyVisitor } from "@/lib/api";
 import { AD_STYLES, END_CARD, KIT_LABELS, type AdStyle, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
-import { formatCost } from "@/lib/format";
+import { RunPlaceChip, useRunPlace } from "@/components/studio/run-place-chip";
+import { IN_BROWSER, mainModel } from "@/lib/run-place";
 import type { StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -281,7 +282,9 @@ export function ClickToAd({ models, starters = [] }: { models: Record<string, Mo
         : withEndCard && motion.overflow.length
           ? motion.overflow[0]
           : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Not available here" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  // Where the video is made and its price (the studios' words); a guest or an account is told it isn't available here.
+  const priced = est.data && !est.data.blocker ? est.data : undefined;
+  const place = useRunPlace({ engine, models: priced?.steps.map((s) => s.modelName), model: mainModel(priced?.steps), costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Click to Ad" });
 
   const writeScript = async () => {
     if (!productId) return;
@@ -355,11 +358,15 @@ export function ClickToAd({ models, starters = [] }: { models: Record<string, Mo
 
         {!product && (
           <section aria-labelledby="c2a-end-card-try" className="min-w-0 space-y-3 rounded-2xl border p-4 sm:p-5">
-            <div>
-              <h3 id="c2a-end-card-try" className="text-[15px] font-semibold">
-                Your ad ends on your brand
-              </h3>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">An animated end card in your brand&apos;s colours and fonts, in five styles. Try one with your words.</p>
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 id="c2a-end-card-try" className="text-[15px] font-semibold">
+                  Your ad ends on your brand
+                </h3>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">An animated end card in your brand&apos;s colours and fonts, in five styles. Try one with your words.</p>
+              </div>
+              {/* Drawn in this browser, for everyone: instant and free. */}
+              <RunPlaceChip place={IN_BROWSER} className="h-7 px-2.5 text-[12px]" />
             </div>
             <div className="grid min-w-0 gap-2 sm:grid-cols-2">
               <input value={sampleBrand} onChange={(e) => setSampleBrand(e.target.value.slice(0, 40))} className="h-11 w-full min-w-0 rounded-xl border bg-background px-3 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Brand name on the end card" placeholder="Brand name" />
@@ -507,8 +514,15 @@ export function ClickToAd({ models, starters = [] }: { models: Record<string, Mo
                 9:16 · up to 12 s · voiceover and captions{withEndCard ? ` · ${END_CARD.seconds} s end card` : ""}
                 {est.data?.steps.length ? ` · ${est.data.steps.length} steps` : ""}
               </p>
-              {cost && <span className="font-mono text-[13px] text-muted-foreground">{cost}</span>}
-              <Button size="lg" onClick={() => void generate()} disabled={visitor} aria-disabled={!!blocker || busy} className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")} title={blocker}>
+              <RunPlaceChip place={place} steps={priced?.steps} engine={engine} onEngine={setEngine} pending={est.isFetching && !est.data} />
+              <Button
+                size="lg"
+                onClick={() => void generate()}
+                disabled={visitor}
+                aria-disabled={!!blocker || busy}
+                className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")}
+                title={blocker ?? (place?.send ? `Generate video · ${place.send}` : undefined)}
+              >
                 {busy ? <Loader2 className="animate-spin" /> : <Wand2 />} Generate video
               </Button>
             </div>

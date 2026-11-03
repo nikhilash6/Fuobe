@@ -10,11 +10,13 @@ import { KINETIC_FEATURE, MadeStrip } from "@/components/motion/made-strip";
 import { MotionPlayer, useMotionInputs, usePlan, useScene } from "@/components/motion/player";
 import { phaseLine, useMotionSave } from "@/components/motion/save";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
+import { RunPlaceChip } from "@/components/studio/run-place-chip";
 import { useIsOwner } from "@/lib/api";
 import type { BrandKit, MarketingTemplate } from "@/lib/catalog/marketing";
 import { SHOWCASE_PRODUCTS } from "@/lib/motion/showcase";
 import type { SizePreset } from "@/lib/motion/sizes";
 import { initialState, ownFiles, templateLengths, templateRecipe, templateSizes, templateWords, type TemplateBrand, type TemplateState } from "@/lib/motion/template";
+import { IN_BROWSER } from "@/lib/run-place";
 import { cn } from "@/lib/utils";
 import { renderRecipe } from "./end-card-motion";
 import { useBrands } from "./hooks";
@@ -132,6 +134,7 @@ export function KineticTemplate({ template: t, onClose, kitId, onKit }: { templa
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-faint px-2 py-0.5 text-[11px] font-medium text-brand-text">
               <Zap className="size-3" /> Instant
             </span>
+            <RunPlaceChip place={IN_BROWSER} className="h-7 px-2.5 text-[12px]" />
           </div>
           <p className="mt-1 text-[13px] text-pretty text-muted-foreground">Your exact words in your brand&apos;s fonts and colours. It plays as you type; saving keeps the clip in Fuobe, ready to download.</p>
         </div>

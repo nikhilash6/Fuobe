@@ -10,6 +10,8 @@ import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration, useGenerationList } from "@/components/av/use-generation";
 import { ACCEPT, LibraryGrid } from "@/components/studio/media-slot";
+import { RunPlaceChip, useOpenRunPlace } from "@/components/studio/run-place-chip";
+import { getModel } from "@/lib/catalog";
 import { loadModelViewer } from "@/components/model3d/model-viewer";
 import { askToSignUp, uploadFile, useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useIsGuest, useIsOwner, useStatus } from "@/lib/api";
 import { ACTIVE_RUNS_CODE } from "@/lib/guest-access";
@@ -535,6 +537,8 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
   const shots = useMemo(() => (ref ? (results.data ?? []).filter((g) => photoOf(g) === ref) : []), [results.data, ref]);
 
   const cloudOnly = mode === "cloud";
+  // Where the angles are made and their price, as the studios say it (the 3D view, then one picture per angle).
+  const place = useOpenRunPlace([getModel(ANY_ANGLE.buildModel)?.name, getModel(ANY_ANGLE.shotModel)?.name].filter((x): x is string => !!x), null);
   const ready = !!view && !!ref;
   // A build that failed takes the angles waiting for it with it.
   const waiting = build?.status === "failed" || build?.status === "canceled" ? null : asked;
@@ -726,10 +730,11 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
           >
             <AngleChips picks={picked} options={options} onToggle={toggle} />
             <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <RunPlaceChip place={place} className="self-center sm:mr-auto" />
               <Button variant="outline" size="lg" className="rounded-full" disabled={!(ready || building) || !!waiting || sending} onClick={() => start("all")}>
                 <LayoutGrid className="size-4" /> All angles
               </Button>
-              <Button size="lg" className="rounded-full" disabled={!(ready || building) || !n || !!waiting || sending} onClick={() => start("picked")}>
+              <Button size="lg" className="rounded-full" disabled={!(ready || building) || !n || !!waiting || sending} onClick={() => start("picked")} title={place?.send || undefined}>
                 {sending || waiting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{" "}
                 {waiting ? "Starts when your 3D view is ready" : n > 1 ? `Make ${n} angles` : "Make this angle"}
               </Button>

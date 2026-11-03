@@ -14,7 +14,8 @@ import { ExampleRow } from "@/components/studio/example-row";
 import { fileToSlot, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
 import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
-import { formatCost } from "@/lib/format";
+import { RunPlaceChip, useRunPlace } from "@/components/studio/run-place-chip";
+import { mainModel } from "@/lib/run-place";
 import { probeBlob, probeUrl } from "@/lib/media-probe";
 import { useAskBeforeUpload, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
@@ -274,7 +275,11 @@ export function AdMultiplier({ models, examples }: { models: Record<string, Mode
   const estBody = useMemo(() => (body && sections ? { ...body, firstFrame: hookOn ? body.video : undefined, lastFrame: ctaOn ? body.video : undefined } : body), [body, sections, hookOn, ctaOn]);
   const est = useEstimate<RunEstimate>("/api/ads/multiplier/estimate", estBody);
   const blocker = !video ? "Upload a reference video" : video.uploading ? "Uploading the video…" : duration == null ? "Reading the video…" : length < MULTIPLIER.minSeconds - 0.05 || length > MULTIPLIER.maxSeconds + 0.05 ? "Video duration: 4-30 seconds" : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  // Where the new versions are made and their price (the studios' words); a guest or an account is told it isn't
+  // available here (its run would be refused), with no price.
+  const priced = est.data && !est.data.blocker ? est.data : undefined;
+  const place = useRunPlace({ engine, models: priced?.steps.map((s) => s.modelName), model: mainModel(priced?.steps), costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Ad Multiplier" });
+  const runLabel = versions > 1 ? `Generate ${versions} versions` : "Generate";
 
   const mention = (n: number) => {
     const tag = `@image_${n}`;
@@ -295,6 +300,7 @@ export function AdMultiplier({ models, examples }: { models: Record<string, Mode
   const missing = mentionedImages(prompt).filter((n) => n > images.length);
 
   const generate = async () => {
+    if (place?.where === "unavailable") return void toast(place.tip, { id: "mult-blocker" });
     if (blocker || !body || !video || !cut) return void toast(blocker ?? "Upload a reference video", { id: "mult-blocker" });
     setBusy(sections ? "Reading the frames…" : "Starting…");
     try {
@@ -482,9 +488,15 @@ export function AdMultiplier({ models, examples }: { models: Record<string, Mode
 
             <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
               <p className="mr-auto text-[12px] text-muted-foreground">{est.data?.steps.length ? est.data.steps.map((s) => s.label).join(" → ") : "New versions keep the reference's length and framing"}</p>
-              {cost && <span className="font-mono text-[13px] text-muted-foreground">{cost}</span>}
-              <Button size="lg" onClick={() => void generate()} aria-disabled={!!blocker || !!busy} className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")} title={blocker}>
-                {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {busy ?? (versions > 1 ? `Generate ${versions} versions` : "Generate")}
+              <RunPlaceChip place={place} steps={priced?.steps} engine={engine} onEngine={setEngine} pending={!!estBody && est.isFetching && !est.data} />
+              <Button
+                size="lg"
+                onClick={() => void generate()}
+                aria-disabled={!!blocker || !!busy}
+                className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")}
+                title={blocker ?? (place?.where === "unavailable" ? place.tip : place?.send ? `${runLabel} · ${place.send}` : undefined)}
+              >
+                {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {busy ?? runLabel}
               </Button>
             </div>
             {blocker && video && <p className="-mt-3 text-right text-[12px] text-muted-foreground">{blocker}</p>}

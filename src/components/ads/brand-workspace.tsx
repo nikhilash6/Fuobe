@@ -150,7 +150,7 @@ export function BrandWorkspace({ brandId }: { brandId: string }) {
                     <BrandKitForm key={brand.id} brand={brand} />
                   </>
                 )}
-                {current === "new" && <NewAds brand={brand} products={products} engine={engine} onCreated={() => setStep("ads")} />}
+                {current === "new" && <NewAds brand={brand} products={products} engine={engine} onEngine={setEngine} onCreated={() => setStep("ads")} />}
                 {current === "ads" &&
                   (creatives.isLoading ? (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

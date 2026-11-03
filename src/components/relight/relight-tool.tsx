@@ -16,7 +16,8 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { askToSignUp, uploadFile, useCreateGeneration, useGenerations, useHydrated, useIsAccount, useIsGuest, useIsOwner, useStatus } from "@/lib/api";
-import { getPreset } from "@/lib/catalog";
+import { RunPlaceChip, useOpenRunPlace } from "@/components/studio/run-place-chip";
+import { getModel, getPreset } from "@/lib/catalog";
 import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { DEFAULT_DEMO, type RelightDemo } from "@/lib/relight/demo";
 import {
@@ -614,6 +615,8 @@ export function RelightTool({ app }: { app?: { name: string; description: string
   const sceneBusy = !!sceneId && sceneRun.data?.status !== "succeeded" && sceneRun.data?.status !== "failed";
   const line = busy ? "Lighting your photo…" : aligning ? "Lining it up…" : sceneBusy ? "Reading the scene…" : photo.uploading ? "Uploading…" : null;
   const keeper = owner || (account && gpu);
+  // Where the lighting is made and its price, as the studios say it: on your GPU, free (an account connects its own).
+  const place = useOpenRunPlace([getModel(RELIGHT_MODEL)?.name ?? "Qwen Image 2.1"], null, { ownGpuOnly: true });
   const changed = anyResult && !current;
   // "Again" only once this viewer has generated on this photo.
   const again = made ? "Generate again" : "Generate";
@@ -805,7 +808,16 @@ export function RelightTool({ app }: { app?: { name: string; description: string
           </details>
 
           <div className="space-y-2">
-            <Button size="lg" className="h-12 w-full rounded-full" onClick={() => void generate()} disabled={busy || !lights.length || photo.uploading}>
+            <div className="flex justify-center">
+              <RunPlaceChip place={place} />
+            </div>
+            <Button
+              size="lg"
+              className="h-12 w-full rounded-full"
+              onClick={() => void generate()}
+              disabled={busy || !lights.length || photo.uploading}
+              title={place?.send ? `Generate lighting · ${place.send}` : undefined}
+            >
               {busy ? <Loader2 className="size-4 animate-spin" /> : current ? <Check className="size-4" /> : <Sparkles className="size-4" />}
               {busy ? "Lighting your photo…" : current ? "Lit with these lights" : changed && made ? "Generate again" : "Generate lighting"}
             </Button>

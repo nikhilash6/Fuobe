@@ -10,9 +10,11 @@ import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { FrameStage, type Frame } from "@/components/remove-object/frame-stage";
 import { fileToSlot, kindOfFile, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
+import { RunPlaceChip, useOpenRunPlace } from "@/components/studio/run-place-chip";
+import { getModel } from "@/lib/catalog";
 import { askToSignUp, useAskBeforeUpload, useCreateGeneration, useGenerations, useIsGuest } from "@/lib/api";
 import { colourChip, ITEMS, normaliseHex, RECOLOR, recolorRequest, SWATCHES } from "@/lib/catalog/recolor";
-import type { PixelPoint } from "@/lib/catalog/types";
+import type { GenerationRequest, PixelPoint } from "@/lib/catalog/types";
 import { toastError } from "@/lib/refusals";
 import { postFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
@@ -246,6 +248,15 @@ export function RecolorTool({ app }: { app: { name: string; description: string 
   const ready = photo && !photo.uploading && (photo.ref || example) ? photo : null;
   const taps = points.filter((p) => p.label !== "negative").length;
   const blocker = !ready ? "Add a photo" : !taps ? "Tap the piece you want in a new colour." : !colours.length ? "Pick a colour" : null;
+  // Where it runs and its price, as the studios say it (one run per colour).
+  let quoteReq: GenerationRequest | null = null;
+  try {
+    if (!blocker && ready?.ref && frame) quoteReq = recolorRequest({ image: ready.ref, points, frame, colour: colours[0], item });
+  } catch {
+    // A colour that can't be read yet: nothing to price.
+  }
+  const place = useOpenRunPlace([getModel(RECOLOR.modelId)?.name ?? "Qwen Image"], quoteReq, { count: colours.length });
+  const runLabel = colours.length > 1 ? `Recolor in ${colours.length} colours` : "Recolor";
 
   const go = async () => {
     if (blocker || !ready || !frame) return void toast(blocker ?? "Add a photo");
@@ -357,9 +368,19 @@ export function RecolorTool({ app }: { app: { name: string; description: string 
               <ColourPicker picked={colours} onPicked={setColours} custom={custom} onCustom={setCustom} />
             </Step>
             <div className="space-y-2">
-              <Button size="lg" className="h-11 w-full rounded-full text-[15px]" onClick={go} disabled={sending || !ready || !frame} aria-describedby="recolor-blocker">
+              <div className="flex justify-center">
+                <RunPlaceChip place={place} />
+              </div>
+              <Button
+                size="lg"
+                className="h-11 w-full rounded-full text-[15px]"
+                onClick={go}
+                disabled={sending || !ready || !frame}
+                aria-describedby="recolor-blocker"
+                title={place?.send ? `${runLabel} · ${place.send}` : undefined}
+              >
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <Palette className="size-4" />}
-                {colours.length > 1 ? `Recolor in ${colours.length} colours` : "Recolor"}
+                {runLabel}
               </Button>
               {blocker && ready && (
                 <p id="recolor-blocker" className="text-center text-[12px] text-muted-foreground" aria-live="polite">
