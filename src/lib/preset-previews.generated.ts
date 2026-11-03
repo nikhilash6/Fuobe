@@ -737,8 +737,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-restore-photo": {
-    "poster": "/previews/presets/app-restore-photo.jpg?v=5baaef30",
-    "video": "/previews/presets/app-restore-photo.mp4?v=2286a129",
+    "poster": "/previews/presets/app-restore-photo.jpg?v=ff182bcb",
+    "video": "/previews/presets/app-restore-photo.mp4?v=225bade3",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "ideogram4+qwen-image-2.1-edit",

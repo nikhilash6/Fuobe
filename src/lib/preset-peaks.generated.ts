@@ -43,7 +43,7 @@ export const PRESET_PEAKS: Record<string, { at: number; from: number; v: string 
   "app-recast": { "at": 3.5625, "from": 0.0208, "v": "91b69f40" },
   "app-relight": { "at": 2.8958, "from": 0.7292, "v": "a3445db0" },
   "app-remove-background": { "at": 2.8958, "from": 0.4792, "v": "5db97a7c" },
-  "app-restore-photo": { "at": 2.8958, "from": 0.3542, "v": "41c1beb0" },
+  "app-restore-photo": { "at": 2.8958, "from": 0.3542, "v": "9335a987" },
   "app-sketch-to-real": { "at": 2.8958, "from": 0.6042, "v": "fd5d0ee7" },
   "app-skin-enhancer": { "at": 2.8958, "from": 0.7292, "v": "0f0775f9" },
   "app-steal-the-look": { "at": 2.8958, "from": 0.3125, "v": "7559c6b2" },

@@ -37,7 +37,7 @@ export const PRESET_BEFORE_AFTER: Record<string, string> = {
   "app-product-shot": "c7b79e1f",
   "app-relight": "f2a277ef",
   "app-remove-background": "e8a5dfec",
-  "app-restore-photo": "b6e32112",
+  "app-restore-photo": "82d15478",
   "app-similarity-score": "933876c5",
   "app-sketch-to-real": "648b3021",
   "app-skin-enhancer": "ab271855",

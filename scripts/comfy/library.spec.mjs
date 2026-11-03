@@ -1272,7 +1272,7 @@ export const SPEC = [
       'VAEEncodeTiled 512/128 -> Conditioning -> KSampler 1 step -> VAEDecodeTiled -> PostProcessing (lab colour from the restored photo). About 8 MP out. ' +
       'Prompt: one of the two instructions the LoRA was trained on, alone (a wrong "Scene:" description painted features that were not there). No turbo LoRA (25 steps sat closer: 0.15 px, face 0.90). ' +
       'One pass only (a second came back crunchy); never with the Consistency or Outfit-Swap LoRA. Faces under about 100 px can come back as a slightly different person. ' +
-      'The open route of the Restore Photo app.',
+      'The open route of the Restore Photo app. RTX 5090: about 70 s a photo at 25 steps, peak about 31 GB.',
   },
   {
     id: 'bg-remove-birefnet',

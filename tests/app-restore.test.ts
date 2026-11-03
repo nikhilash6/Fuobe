@@ -1,13 +1,13 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 
 // Restore Photo on your GPU: one pass of Qwen-Image 2.1 with AusBoss's Restore LoRA at about 2 MP (the same faces, on the
 // picture's own frame), then SeedVR2 enlarges it 2x. Its choice of photo picks the instruction and the LoRA's strength.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-restore-"));
+const tmp = tempDir("fuobe-restore-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -16,7 +16,6 @@ const { planGeneration } = await import("@/lib/catalog/plan");
 const { OWN_ROUTE_APPS, presetRoutes } = await import("@/lib/catalog/preset-recipe-routes");
 const { licenceInfo, workflowLicence } = await import("@/lib/licences");
 const { KNOWN_MODELS, SPEC } = await import("../scripts/comfy/library.spec.mjs");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const ID = "restore-qwen-image-21";
 const APP = "app-restore-photo";
@@ -49,7 +48,7 @@ describe("the restore graph in the library", () => {
     expect(m).toBeDefined();
     expect(read(`${ID}.json`)).toEqual(JSON.parse(fs.readFileSync(path.join(process.cwd(), "scripts/comfy/hand-built", `${ID}.json`), "utf8")));
     expect(m.capability).toBe("edit");
-    expect(m.validated, "stays unvalidated until it runs on a GPU").toBe(false);
+    expect(m.validated, "checked against ComfyUI").toBe(true);
     expect(Object.keys(m.bindings).sort()).toEqual(["filenamePrefix", "image", "loraStrength", "prompt", "scale", "seed", "steps"]);
     expect(m.defaults).toEqual({ steps: 25, scale: 2, loraStrength: 1 });
     expect(m.customNodes).toEqual([]);

@@ -101,7 +101,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-relight": ["19f56bff","0fc4404f"],
   "app-remove-background": ["d97148ab","3d8ff05e"],
   "app-renaissance": ["e9438f88","b94a703a"],
-  "app-restore-photo": ["5baaef30","2286a129"],
+  "app-restore-photo": ["ff182bcb","225bade3"],
   "app-roller-coaster": ["2b16ae65","0302f5ca"],
   "app-sand-worm": ["7ea5c3d0","7c8c12b5"],
   "app-shots": ["fed45e20","3526620d"],
