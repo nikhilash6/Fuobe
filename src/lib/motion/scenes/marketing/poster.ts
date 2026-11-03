@@ -307,8 +307,9 @@ export function posterScene(def: PosterDef): Scene {
         // The person's clip takes the place of the field (and its tonal ghost); without ground light the field has no pools of light.
         if (clip) layers = layers.filter((l) => l.role !== "ground" && l.role !== "atmosphere" && l.role !== "ghost");
         else if (unlit) layers = layers.filter((l) => l.role !== "atmosphere");
-        if (built.grain !== false) layers.push({ role: "grain", nodes: [grain({ w: design.w, h: design.h, seed: recipe.seed, frame: Math.round(t * recipe.fps), dark: ctx.dark, ...(typeof built.grain === "number" && { amount: built.grain }) })] });
-        if (built.vignette !== false && !unlit) layers.push({ role: "finish", nodes: [vignette({ w: design.w, h: design.h, strength: typeof built.vignette === "number" ? built.vignette : 0.14, color: withLightness(pal.ground, 0.08) })] });
+        // The person's own clip keeps its own picture: no grain or vignette over it (its dim and scrim are the only shade).
+        if (built.grain !== false && !clip) layers.push({ role: "grain", nodes: [grain({ w: design.w, h: design.h, seed: recipe.seed, frame: Math.round(t * recipe.fps), dark: ctx.dark, ...(typeof built.grain === "number" && { amount: built.grain }) })] });
+        if (built.vignette !== false && !unlit && !clip) layers.push({ role: "finish", nodes: [vignette({ w: design.w, h: design.h, strength: typeof built.vignette === "number" ? built.vignette : 0.14, color: withLightness(pal.ground, 0.08) })] });
         const fl = flashNode(design.w, design.h, flash);
         if (fl) layers.push({ role: "light", nodes: [fl] });
         const cam = home || locked ? { x: 0, y: 0 } : (built.camera?.(tc) ?? { x: 0, y: 0 });

@@ -203,6 +203,13 @@ try {
   // Covers: every code template's tile shows its versioned cover and clip.
   await page.goto("/marketing", { waitUntil: "load", timeout: 120_000 });
   await page.waitForTimeout(2500);
+  // The strongest covers lead, so some code templates sit after "Show more".
+  for (let i = 0; i < 10; i++) {
+    const more = page.getByRole("button", { name: /^Show more/ });
+    if (!(await more.count())) break;
+    await more.first().click();
+    await page.waitForTimeout(400);
+  }
   const html = await page.content();
   const missing = CODE_TEMPLATES.filter((id) => !new RegExp(`templates/marketing/${id}\\.jpg\\?v=[0-9a-f]{8}`).test(html.replaceAll("%2F", "/").replaceAll("&amp;", "&")));
   check(missing.length === 0, `the ten code templates' tiles show their versioned covers (missing: ${missing.join(", ") || "none"})`);
