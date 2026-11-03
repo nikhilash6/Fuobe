@@ -1,0 +1,115 @@
+{
+  "key": "dbs-d7",
+  "impl": {
+    "branch": "o/dbs-d7 (worktree /home/user/wt/o-dbs-d7, cut from claude/fuobe-parity-4 at fdad177c; commits 0e18c80c WIP, 77540a9e, 68eff96e, a2c30834; a2c30834 not yet pushed by me — coordinator pushes)",
+    "summary": "DBS D7 on the open engine only (samAudioCloud false). Shorts, Mixed Media, Genjutsu, Remove object and Character Swap Studio get an 'Original sound' setting: Everything / Music & effects only / Dialogue only / Lower the music (−30…0 dB slider, default −12). On your GPU, graph A (separate-soundtrack-dbs on oss-dbs-separate) splits the working clip (the selection's cut, the upload when it is the whole clip, Swap Studio's 24 fps copy), then the studio's existing stream-copy mux (oss-mux) takes the chosen stem(s). Everything plans exactly as before on both engines. The cloud offers Everything only; the other choices are listed turned off with 'run on your GPU (open source)', and the servers answer 422 in words if asked. 'Remove only this person's voice' (SAM visual-separate) is not built. Music & effects only is suggested for Character Swap Studio, Genjutsu's Character swap and Remove object's person removal (open engine). Faceless gets 'Use a clip's soundtrack as the bed' (open engine): DBS background stem -> oss-audio-loop (when the clip is shorter than the film) -> oss-mux at the existing -14 dB; the cloud says it runs on your GPU and keeps its generated bed.",
+    "built": [
+      "src/lib/av/original-sound.ts: choices, labels, soundBack() (adds the split step and returns the mux's after/chain/inputs/extra), withSoundExtra, originalSoundProblem, defaultSound, sameSound, soundSummary/soundLine, CLOUD_SOUND_NOTE",
+      "src/components/studio/original-sound-field.tsx: shared shadcn Select + level Slider field, soundBody()",
+      "Shorts: planStitch takes sound (ShortsPlanInput.sound, session settings.sound); API body + zod SoundChoiceSchema (src/server/shorts-schemas.ts); Stitch again takes an optional new choice and saves it (saveSession now writes settings_json); estimate note; studio field; session view shows the Sound line",
+      "Mixed Media: open per-frame render (whose graph keeps the sound) becomes a step, then oss-trim cut -> split -> oss-mux when a choice is made; Smooth passes the choice through the Shorts chain; cloud paths refuse a non-Everything choice; API + UI",
+      "Remove object / Genjutsu: joinWithSound takes the choice (shared); 'sound' now also true when a keeps-sound maker/eraser gets a split choice; Genjutsu's open H3 Character swap muxes over the swap when a choice is made; planFuobeRestyle passes it to Shorts; APIs + UIs (suggested default for person removal / Character swap)",
+      "Character Swap Studio: planAssembly takes sound; assemble route body takes it; assembly stores it (assembly.sound) and 'current' compares it; field in the Assemble stage (stage-review.tsx, not stage-words.tsx as the brief said) defaulting to Music & effects only on the open engine",
+      "Faceless: EpisodeSettings.musicClip {url,name,duration}; resolveModels/buildEpisodeGraph build the split -> loop -> mix chain; SettingsSchema validates it (min 8 s); settings-form MusicClipPicker (MediaSlot, reads the length in the browser)",
+      "docs/research/dbs-separation-7.md §9 D7: as-built note with the CPU verification (research correction)",
+      "tests/original-sound.test.ts (25 tests: every studio x choice x engine, Everything regression, Faceless bed chain, prices free), 2 new API tests in tests/shorts-api.test.ts (Shorts session + Stitch again with sound, Mixed Media render with sound, cloud 422s), tests/e2e/original-sound.mjs browser check"
+    ],
+    "tests": "Verified: pnpm typecheck clean (after next typegen); pnpm lint 0 errors (1 pre-existing warning in scripts/comfy/library.spec.mjs); targeted suites (shorts, shorts-api, shorts-pricing, mixed-media, mixed-shorts-originals, genjutsu, genjutsu-api, remove-object, remove-object-api, swap-studio, swap-studio-api, faceless, faceless-api, original-sound) all pass. One full Vitest on a2c30834: 4974 passed, 7 failed in 6 files — all pre-existing per rule 8 (comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack 'has no cloud route') plus preset-covers, which timed out under load and passes alone (11/11, rule 14). Live CPU ComfyUI (127.0.0.1:8188, DBSLoader present, BSRNN mono) through the repo's workflow JSONs: Shorts case (20 s synthetic H.264+AAC stereo clip, 12 s selection cut, split, background muxed via video-mux-audio-replace onto a stand-in restyled picture) and Remove object case (whole 20 s clip, Lower the music at −18 dB via video-mux-audio): video packets hash identical to the picture given (framemd5), voice + background = source per channel within 3.1e-5, result soundtrack correlates 0.999 with the intended stem/mix (0.65 with the original for Music & effects only), split 0.35–0.4x real time warm (30 s for 12 s, 56 s for 20 s), each mux ~2 s. The Fuobe server-side chain itself ran in demo mode (mock) in the API tests, not against the live ComfyUI. Browser (demo mode, dev on :3417, then stopped and .next deleted): tests/e2e/original-sound.mjs — all checks passed at 1440 and 390 px, light and dark, open and cloud, for Shorts, Mixed Media, Genjutsu (incl. Character swap suggestion), Remove object, Character Swap Studio Assemble, and Faceless's clip bed; no horizontal scroll, no console errors.",
+    "left": [
+      "Cloud routes (SAM Audio 'speech', and 'Remove only this person's voice' via fal-ai/sam-audio/visual-separate) not built: owner's samAudioCloud is false",
+      "Shorts session view shows the sound choice but has no control to change it for Stitch again (the API accepts one)",
+      "Faceless channel defaults (ChannelSettings) don't carry musicClip; it is per episode only. The clip length comes from the browser (no server-side probe)",
+      "Genjutsu's setup code (encodeSetup) doesn't carry the sound choice",
+      "No time estimate for the extra split step is shown in the studios (it's free; the note says the GPU splits the sound first)",
+      "Not verifiable here: GPU video steps, paid fal calls; the real full-studio chains on a GPU",
+      "No GPU board (STUDIO_ROWS) change: the split is optional per run, so studios don't list DBS as required; no new workflow, pack or model pin"
+    ],
+    "docsNotes": "STATUS/ARCHITECTURE not edited. For the docs pass: the studios' 'Original sound' setting (Everything / Music & effects only / Dialogue only / Lower the music) runs on your GPU via DBS before each studio's stream-copy mux (src/lib/av/original-sound.ts); the cloud puts back everything; Faceless 'Use a clip's soundtrack as the bed' (open engine). Brief line numbers were stale (pre-10-30): the Swap Studio UI lives in stage-review.tsx's AssembleStage, not stage-words.tsx; Remove object's sound step is joinWithSound (shared with Genjutsu). Research §9 D7 has an as-built note.",
+    "blocked": ""
+  },
+  "review": {
+    "findings": [
+      {
+        "severity": "low",
+        "area": "Faceless clip bed (src/components/faceless/settings-form.tsx MusicClipPicker)",
+        "issue": "If a valid bed clip is replaced by one that is too short (<8 s) or whose length can't be read, the picker shows the new clip and a warning but never clears settings.musicClip, so the episode still renders with the OLD clip's soundtrack. The slot and the value disagree.",
+        "evidence": "The useEffect only calls onChange on success; the slot's onChange calls onChange(undefined) only when the slot is emptied (v falsy). The value line is hidden while `problem` is set, so the stale value is invisible.",
+        "fix": "Call onChange(undefined) when the length check fails (or when a new upload starts)."
+      },
+      {
+        "severity": "low",
+        "area": "Notes about the split (src/server/shorts.ts notesFor, src/server/mixed-media.ts planInput)",
+        "issue": "The 'Original sound: … your GPU splits the clip's sound first (free)' note can show when no split is planned. Shorts' notesFor checks only separates(engine, sound), not source.hasAudio (planStitch returns early for a silent clip). Mixed Media uses info.hasAudio !== false while planMixed splits only when source.hasAudio is truthy, so an unknown hasAudio gives the note with no split. Genjutsu and Remove object check hasAudio correctly.",
+        "evidence": "Traced by reading the code. In the UIs the field is disabled for a silent clip, but a choice made before switching to a silent clip stays in state and soundBody still sends it."
+      },
+      {
+        "severity": "low",
+        "area": "Faceless clip bed planning (src/lib/catalog/faceless.ts buildEpisodeGraph; src/server/faceless.ts notesFor)",
+        "issue": "The whole bed clip is split even when it is much longer than the film (a 10-minute clip for a 1-minute episode runs DBS on all 10 minutes; there is no trim before the split). The estimate notes run musicPlan on oss-dbs-separate, so they never say the clip is looped with a crossfade.",
+        "evidence": "The music step has inputs.video = clip.url and sourceDuration = clip.duration. notesFor calls musicPlan(getModel(m.music)…) and m.music is SPLIT_MODEL, which has no MUSIC_MAX or durations, so bed = ceil(seconds) and no loop note is made."
+      },
+      {
+        "severity": "low",
+        "area": "Tests",
+        "issue": "API coverage only exists for Shorts and Mixed Media (cloud 422, and the open plan with sound). There are no route tests for Genjutsu, Remove object or Swap Studio assemble with `sound` (the cloud 422, and Swap Studio's 409 'already assembled' being skipped when only the sound choice changes), and none for the Faceless SettingsSchema musicClip (8 s minimum). The 'Everything regression' tests in tests/original-sound.test.ts compare the new code with itself (undefined vs everything). The real regression guard is that the existing exact-plan suites (shorts, mixed-media, genjutsu, remove-object, swap-studio, faceless) pass unchanged, and they do."
+      },
+      {
+        "severity": "info",
+        "area": "Defaults change the open-engine plan for person replacement",
+        "issue": "As the brief asks, Genjutsu Character swap, Remove object's person removal and Swap Studio Assemble now default to Music & effects only on the open engine, which adds a DBS split and a mux by default. The /connect board rows for these studios don't list ComfyUI-DBS. A missing pack is still caught per run by the GPU gate (src/server/gpu/gate.ts), and DBS readiness shows on the Split soundtrack row. Acceptable, but worth a line in the docs pass."
+      },
+      {
+        "severity": "info",
+        "area": "Genjutsu H3 Character swap with a split (src/lib/catalog/genjutsu.ts planCharacterSwap)",
+        "issue": "The swap step becomes a genjutsu-step but keeps its `title` (Mixed Media strips it in the same situation). This is harmless because step features are hidden from the Library. It is a small inconsistency only."
+      }
+    ],
+    "checks": [
+      "Read the review prompt and binding rules. The base is claude/fuobe-parity-4 at fdad177c, the merge base of o/dbs-d7 (a2c30834). The diff is 34 files, +1245/-50.",
+      "Owner rule samAudioCloud=false holds. There is no SAM Audio and no visual-separate in src. The cloud offers Everything only (the choices are listed disabled with 'On your GPU (open source)'). originalSoundProblem gives a 422 in plain words on every server path: Shorts create/estimate, Stitch again, Mixed Media (per frame, frames, smooth), Genjutsu, Remove object, Swap Studio assemble. 'Remove only this person's voice' is not built. Today's cloud behaviour is unchanged.",
+      "Plan wiring traced. soundBack pushes separate-audio (oss-dbs-separate) on the working clip: the trim key when it is a selection, the upload/24 fps copy URL when it is the whole clip. The mux after/chain stay index-aligned ([picture, split] with stem background/voice; [picture, split, split] with voice + audio2 background and backgroundVolumeDb for Lower the music), matching remove-dialogue's muxChain and the dub precedent in chains.ts. There are no step-key collisions (split / split-sN).",
+      "Mux graphs checked. video-mux-audio and video-mux-audio-replace both replace the video's own soundtrack (ConcatenateVideo complete_audio), so makers that keep their sound (Mixed Media's per-frame render, Genjutsu H3, keepsSound erasers) don't leak the original audio into the result.",
+      "Live CPU ComfyUI at 127.0.0.1:8188 has DBSLoader (DBS-TIGER-DnR / DBS-BSRNN-DnR). node scripts/comfy/validate-workflows.mjs separate-soundtrack-dbs video-mux-audio video-mux-audio-replace audio-loop-crossfade video-trim --shared: 5/5 validated. The files the validator rewrote (validation-state.json, object_info.subset.json) were reverted, and the tree is clean. I did not rerun a full CPU separation; the implementer's numbers are in the research note.",
+      "Public sign-up: no new routes. The Shorts stitch, Swap Studio assemble, Faceless, Genjutsu and Remove object run routes were already refused to accounts. The estimate routes already sit in ESTIMATES, and their schemas extend the body schemas (sound included). There is no new file read, fetch or chain path outside the existing pipeline, and no licence data was needed (no new model, pack or workflow; DBS licences come from D1).",
+      "npx next typegen + pnpm typecheck: clean.",
+      "eslint on the changed files: 0 problems.",
+      "Targeted Vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1, --maxWorkers=2): original-sound, shorts, shorts-api, shorts-pricing, mixed-media, mixed-shorts-originals, genjutsu, genjutsu-api, remove-object, remove-object-api, swap-studio, swap-studio-api, faceless, faceless-api, public-signup, remove-dialogue*: 16 files, 399 tests passed.",
+      "Browser check: next dev in demo mode on localhost:3471, then node tests/e2e/original-sound.mjs. All checks passed (Shorts, Mixed Media, Genjutsu including the Character swap suggestion, Remove object, Swap Studio Assemble, Faceless clip bed; open and cloud; 1440 and 390 px; light and dark; no horizontal scroll; no console errors). Server stopped with fuser -k -n tcp 3471, and .next deleted.",
+      "I did not run a full Vitest. The implementer reports 7 failures, all listed as pre-existing under rule 8 plus a preset-covers timeout under rule 14. Not re-verified."
+    ],
+    "verdict": "approve — no blocking issues. The open-engine Original sound choice and the Faceless clip bed are wired correctly and kept on the open engine as the owner's samAudioCloud=false rule requires. Four low findings: the Faceless picker can keep a stale bed clip; split notes can show with no split; long bed clips are split whole; API tests are missing for the Genjutsu, Remove object and Swap Studio routes. They can be fixed in a follow-up."
+  },
+  "fix": {
+    "applied": [
+      "3b37dccd Faceless clip-bed picker (review low #1, confirmed): when a new clip is picked, the old bed is cleared at once (emptied, uploading, or a different file), and a clip whose length can't be read or is under 8 s now clears settings.musicClip too. Before, the episode kept rendering with the clip it replaced (src/components/faceless/settings-form.tsx).",
+      "e7c37064 Split notes (review low #2, confirmed for the case where the header was read): the Shorts note now needs the clip to have sound when its header was read. estimateWith(body, info, read = true); estimateShorts passes read=false because the browser estimate never reads the header, so a split is still forecast there. In Mixed Media the split (note and input.sound) needs hasAudio === true once probed and is forecast when not probed. Test: tests/shorts-api.test.ts 'a clip read as silent gets no split, and no note about one'.",
+      "5ebe3be3 Faceless long bed clip (review low #3, confirmed): a clip longer than the film plus 2 s is first cut on your GPU to ceil(film)+1 s (oss-trim 'music-cut', CPU, free). The DBS split then chains on the cut ([{slot:'video'}], sourceDuration = the cut), so only the part that plays is split. Shorter clips plan as before. The estimate notes now describe the clip bed: 'Your clip's music and effects (N s) loop with a 3-second crossfade…', or 'Only the first X of your clip's sound is used', plus the 600 s loop cap note. The old note read musicPlan on the split model and never mentioned the loop. Tests: tests/original-sound.test.ts (cut step, chain, no cut for a short clip, free), tests/faceless-api.test.ts (loop note, cut note, music part 0, a 5 s clip refused with 400 '8 s or more' by SettingsSchema).",
+      "6136ad83 Route tests (review low #4): Genjutsu POST /api/genjutsu (cloud 422 in words; open object swap with Dialogue only gives one oss-dbs-separate step and an oss-mux final whose chain ends with the voice stem). Remove object POST /api/remove-object (cloud Bria 422; open Paint it with Lower the music at -18 dB gives a split and an oss-mux with backgroundVolumeDb -18). Character Swap Studio assemble, cloud: same takes give 409, a split choice gives 422, an explicit Everything gives 409. Open engine: the 24 fps copy is split, the final takes the background stem, assembly.sound is stored, the same choice again gives 409, and Dialogue only assembles again with the voice stem (the 409 is skipped when only the sound choice changes)."
+    ],
+    "rejected": [
+      "Review info: the person-replacement defaults (Music & effects only) add a DBS step that the /connect board rows don't list. Not changed: the split is optional per run, the GPU gate catches a missing pack per run, and the brief asked for these defaults. It is left as a line for the docs pass.",
+      "Review info: the Genjutsu H3 Character swap step keeps its title once it becomes a genjutsu-step. Harmless (step features are hidden from the Library); left as is.",
+      "Review low #2, unread-header part: when the header hasn't been read (the browser estimate), the note is kept as a forecast, because the real run reads the header and plans the split only when there is sound. Removing it would hide the note on every estimate."
+    ],
+    "checks": [
+      "Branch o/dbs-d7 lists only this package's commits over claude/fuobe-parity-4. Per the coordinator, the base was not merged in this stage, and nothing was pushed.",
+      "npx next typegen + pnpm typecheck: exit 0.",
+      "pnpm lint: exit 0 (0 errors; 1 warning that was already there, in scripts/comfy/library.spec.mjs).",
+      "Targeted Vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1, --maxWorkers=2): original-sound, faceless, faceless-api, genjutsu-api, remove-object-api, swap-studio-api, assist-studio-routes, shorts, shorts-api, mixed-media. 237/238 passed on the first run. The one failure was my own test edit landing in the cloud Swap Studio test instead of the open one. I moved it and reran swap-studio-api alone: 9/9 passed.",
+      "No full Vitest in this stage (the coordinator runs it at FINISH). No browser check: the only UI change is the picker's onChange logic, with no layout change.",
+      "Owner rule samAudioCloud=false still holds: no SAM Audio and no visual-separate; the cloud offers Everything only.",
+      ".next deleted; git status clean."
+    ],
+    "finalSummary": "Open engine (your ComfyUI): Shorts, Mixed Media, Genjutsu, Remove object and Character Swap Studio offer Original sound: Everything, Music & effects only, Dialogue only, or Lower the music. DBS splits the working clip, then the existing stream-copy mux puts back the chosen stem(s). Faceless can use a clip's soundtrack as its music bed: the clip is cut to the film when it is longer, split, looped with a crossfade when it is shorter, and mixed at -14 dB. Its estimate now says which of these happens. Verified: plans and route chains in demo mode (Vitest), and DBS plus the mux on the CPU ComfyUI (implementer's run: Shorts and Remove object cases). Not verified here: the GPU video steps and the full studio chains on a real GPU. Built but not run live: the new Faceless bed-cut step (oss-trim, an existing validated graph). Cloud engine: Everything only, as today. The other choices are listed turned off with 'runs on your GPU (open source)', and every server path answers 422 in words. SAM Audio and 'Remove only this person's voice' are not built (samAudioCloud=false). It needs no key. Public sign-up: no new routes; the run routes were already refused to accounts or run on their own GPU, and the estimates stay in ESTIMATES through priceAs. Guests browse read-only; accounts get the open-engine choices on their own ComfyUI.",
+    "left": [
+      "SAM Audio cloud routes and 'Remove only this person's voice' (samAudioCloud is false)",
+      "The Shorts session view has no control to change the sound choice for Stitch again (the API accepts one)",
+      "Faceless channel defaults don't carry musicClip; the clip length comes from the browser",
+      "The Faceless picker's '· loops with a soft crossfade' hint uses a fixed 60 s threshold rather than the film's length (the estimate notes are exact)",
+      "Genjutsu's setup code doesn't carry the sound choice",
+      "Docs pass: the person-replacement defaults add a DBS step that the /connect board rows don't list",
+      "Needs a GPU: the real full-studio chains"
+    ],
+    "blocked": ""
+  }
+}
