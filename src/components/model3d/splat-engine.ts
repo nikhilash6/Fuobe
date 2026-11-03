@@ -57,26 +57,13 @@ export class SplatEngine {
 
   /** Fetch the file (abortable, its size checked against maxBytes first), then build the splat. */
   async load(url: string, format: string, { signal, maxBytes, onProgress }: { signal?: AbortSignal; maxBytes?: number; onProgress?: (p: number) => void } = {}): Promise<SplatLoadInfo> {
-    const res = await fetch(url, { signal });
-    if (!res.ok) throw new Error(`The splat didn't load (${res.status})`);
-    const length = Number(res.headers.get("content-length")) || 0;
-    if (maxBytes && length > maxBytes) throw new SplatTooBigError(length);
-    const bytes = await readAll(res, length, maxBytes, onProgress);
+    const bytes = await fetchSplat(url, { signal, maxBytes, onProgress });
     if (this.disposed || signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    const mesh = new SplatMesh({ fileBytes: bytes, fileType: FILE_TYPES[format], fileName: `splat.${format}` });
-    await mesh.initialized;
+    const mesh = await buildSplatMesh(bytes, format, this.cutoff);
     if (this.disposed || signal?.aborted) {
       mesh.dispose();
       throw new DOMException("Aborted", "AbortError");
     }
-    // The haze cut-off: a Gaussian fainter than the slider's value isn't drawn (its opacity goes to 0).
-    const cutoff = this.cutoff;
-    mesh.objectModifier = dyno.dynoBlock({ gsplat: dyno.Gsplat }, { gsplat: dyno.Gsplat }, ({ gsplat }) => {
-      if (!gsplat) throw new Error("no splat");
-      const { opacity } = dyno.splitGsplat(gsplat).outputs;
-      return { gsplat: dyno.combineGsplat({ gsplat, opacity: dyno.select(dyno.lessThan(opacity, cutoff), dyno.dynoConst("float", 0), opacity) }) };
-    });
-    mesh.updateGenerator();
     this.mesh = mesh;
     this.scene.add(mesh);
     this.frameObject(mesh.getBoundingBox(true));
@@ -192,6 +179,112 @@ export class SplatEngine {
     // of cards that open and close the viewer would otherwise push out the one that is showing.
     this.renderer.forceContextLoss();
     this.canvas.removeEventListener("webglcontextlost", this.onLost);
+  }
+}
+
+/** Fetch a splat file (abortable; refused past maxBytes, by its length or as it streams). */
+export async function fetchSplat(url: string, { signal, maxBytes, onProgress }: { signal?: AbortSignal; maxBytes?: number; onProgress?: (p: number) => void } = {}): Promise<Uint8Array> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`The splat didn't load (${res.status})`);
+  const length = Number(res.headers.get("content-length")) || 0;
+  if (maxBytes && length > maxBytes) throw new SplatTooBigError(length);
+  return readAll(res, length, maxBytes, onProgress);
+}
+
+/** A splat built from its file, with the haze cut-off: a Gaussian fainter than `cutoff`'s value isn't drawn (its opacity goes to 0). */
+export async function buildSplatMesh(bytes: Uint8Array, format: string, cutoff: dyno.DynoFloat<string>): Promise<SplatMesh> {
+  const mesh = new SplatMesh({ fileBytes: bytes, fileType: FILE_TYPES[format], fileName: `splat.${format}` });
+  await mesh.initialized;
+  mesh.objectModifier = dyno.dynoBlock({ gsplat: dyno.Gsplat }, { gsplat: dyno.Gsplat }, ({ gsplat }) => {
+    if (!gsplat) throw new Error("no splat");
+    const { opacity } = dyno.splitGsplat(gsplat).outputs;
+    return { gsplat: dyno.combineGsplat({ gsplat, opacity: dyno.select(dyno.lessThan(opacity, cutoff), dyno.dynoConst("float", 0), opacity) }) };
+  });
+  mesh.updateGenerator();
+  return mesh;
+}
+
+/**
+ * Splats inside another engine's three.js scene: Cinema Studio's 3D scene props (idol-9). One SparkRenderer draws
+ * every prop in the scene's own render pass, depth-tested against the MoGe mesh or point cloud and sorted with it.
+ * Unlike the viewer's, it writes depth: the scene's post pass reads depth to tell a surface from a hole (what the path
+ * render leaves transparent for Uni3C), so a splat that wrote none would vanish from the render. Spark sorts back to
+ * front, so writing depth hides nothing behind a nearer Gaussian; the faintest edges (under minAlpha) are dropped so
+ * they don't mark a hole as seen. Each prop sits in a group whose scale is its longest side (the splat is centred and
+ * fitted to 1 inside), so the scene sets a prop's place, turn and size on the group.
+ */
+export class SceneSplats {
+  readonly root = new THREE.Group();
+  private spark: SparkRenderer;
+  private props = new Map<string, { group: THREE.Group; mesh: SplatMesh; cutoff: dyno.DynoFloat<string> }>();
+  private disposed = false;
+
+  constructor(renderer: THREE.WebGLRenderer, onDirty: () => void) {
+    this.spark = new SparkRenderer({ renderer, onDirty, depthWrite: true, minAlpha: 1 / 16 });
+    this.root.add(this.spark);
+  }
+
+  /** Load a prop's splat into a new group under `root`; resolves with the group (its transform is the scene's to set). */
+  async add(id: string, url: string, format: string, o: { cutoff: number; signal?: AbortSignal; maxBytes?: number }): Promise<{ group: THREE.Group; splats: number }> {
+    const bytes = await fetchSplat(url, { signal: o.signal, maxBytes: o.maxBytes });
+    if (this.disposed || o.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const cutoff = dyno.dynoFloat(o.cutoff);
+    const mesh = await buildSplatMesh(bytes, format, cutoff);
+    if (this.disposed || o.signal?.aborted) {
+      mesh.dispose();
+      throw new DOMException("Aborted", "AbortError");
+    }
+    const box = mesh.getBoundingBox(true);
+    const center = box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
+    const longest = box.isEmpty() ? 1 : Math.max(...box.getSize(new THREE.Vector3()).toArray(), 1e-3);
+    const fit = new THREE.Group();
+    fit.scale.setScalar(1 / longest);
+    mesh.position.copy(center).multiplyScalar(-1);
+    fit.add(mesh);
+    const group = new THREE.Group();
+    group.name = `prop:${id}`;
+    group.add(fit);
+    this.remove(id);
+    this.props.set(id, { group, mesh, cutoff });
+    this.root.add(group);
+    return { group, splats: mesh.packedSplats?.numSplats ?? 0 };
+  }
+
+  setCutoff(id: string, value: number) {
+    const p = this.props.get(id);
+    if (!p || p.cutoff.value === value) return;
+    p.cutoff.value = value;
+    p.mesh.updateVersion();
+  }
+
+  remove(id: string) {
+    const p = this.props.get(id);
+    if (!p) return;
+    this.props.delete(id);
+    p.group.removeFromParent();
+    p.mesh.dispose();
+  }
+
+  get size() {
+    return this.props.size;
+  }
+
+  /**
+   * Bring the splats up to date for `camera` and wait for their sort (a path render draws each frame once, so the
+   * order must be this frame's, not the last one's). Spark sorts on a worker: wait out a sort already running first.
+   */
+  async settle(scene: THREE.Scene, camera: THREE.Camera) {
+    if (!this.props.size) return;
+    for (let i = 0; this.spark.sorting && i < 200; i++) await new Promise((r) => setTimeout(r, 5));
+    await this.spark.update({ scene, camera });
+    for (let i = 0; this.spark.sorting && i < 200; i++) await new Promise((r) => setTimeout(r, 5));
+  }
+
+  dispose() {
+    this.disposed = true;
+    for (const id of [...this.props.keys()]) this.remove(id);
+    this.root.removeFromParent();
+    this.spark.dispose();
   }
 }
 

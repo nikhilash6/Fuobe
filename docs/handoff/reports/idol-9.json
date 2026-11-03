@@ -1,0 +1,146 @@
+{
+  "key": "idol-9",
+  "impl": {
+    "branch": "o/idol-9",
+    "summary": "Cinema Studio's 3D scene gets props. 'Add a prop' places a splat in the MoGe scene or point cloud: either an existing Idol 3D or TripoSplat result from the Library (on either engine, cloud TripoSplat .ply included) or a picture made into one with Idol 3D (oss-idol) on your GPU. Idol 4's Spark renderer draws the props inside the scene's own three.js graph, depth-tested and sorted with the mesh, and they have move, turn and size handles. Because the props are part of the scene's render, captures, blockouts and the open Fly path render that guides Uni3C all show them. A pixel test on the recorded path confirms this. Commits: 4a8090b8 (already pushed) and 9cb3318b (not pushed).",
+    "built": [
+      "src/lib/scene-props.ts (new, pure): SceneProp and SceneState types; propCandidate (a finished splat result from the Library); placeProp (0.7 x pivotDepth ahead of the camera, longest side 0.35 x pivotDepth, its +z facing the camera, later props set off to the side, Idol 3D's starting haze cut-off 0.05 from idol-4); bringToCamera, turnOver, sizeRange, wrapDeg; serializeSceneState and parseSceneState (bad entries are dropped, values stay finite and in range, at most MAX_PROPS = 4); sceneStateKey; propMakerBlocker (the same rule as make3dOffered, with plain-language reasons for visitors, Paid APIs only, Idol 3D switched off, and no GPU).",
+      "src/components/model3d/splat-engine.ts: SplatEngine.load now uses two shared helpers, fetchSplat and buildSplatMesh (behaviour unchanged). New SceneSplats class: one SparkRenderer with depthWrite:true and minAlpha 1/16, so the scene's post pass doesn't treat splats as holes. Each prop sits in a group with the splat centred and fitted to size 1. It also has a live per-prop cut-off and settle(), which waits for Spark's sort for a given camera. Spark is still imported only by this file.",
+      "src/components/cinema/scene-engine.ts: addProp, updateProp, removeProp, pickProp and handleActive. Spark comes in through a dynamic import of ../model3d/splat-engine when the first prop is added. The handle is three's TransformControls, drawn over the finished frame on screen only, so it never appears in captures or path renders. Sizes stay uniform, and the handle reports changes through onPropChange. recordPath sorts the splats for each frame's camera before drawing it. A new readPixels unbinds PIXEL_PACK_BUFFER before a synchronous read: Spark's async readback had left one bound, which made frame 0 of the path render black (the e2e pixel test caught this). dispose() cleans up the handle and the splats.",
+      "src/components/cinema/video-encode.ts: the draw callbacks may return a promise, so a frame can wait for the sort. The blockout builder's synchronous callers still work.",
+      "src/components/cinema/scene-props.tsx (new): AddPropDialog has two sections. 'From your Library' is a grid of splat results. 'From a picture' has a MediaSlot, Best / Quick look, and 'Make the prop · <price>', priced through the existing POST /api/generations?preview=1 (useRunPreview / priceLine); it uses the photo crop for uploads. MakingWatch places the run's splat in the scene when it lands. PropsPanel lists the props and has the Move / Turn / Size handle modes, Size (log) and Turn sliders, 'In front of the camera', 'Turn over' and Remove, plus a note on what each engine films.",
+      "src/components/cinema/scene-viewer.tsx: the props state is kept per scene take in localStorage (fuobe.cinema.scene.<generationId>) and synced into the engine. Drag-to-look waits while the handle has the pointer. The header shows '· N props'. The desktop aside has a Props section; phones get a Props button with a count badge and a Props sheet. The note under the props says plainly: on the cloud, filming follows the still itself, so props don't show (cloud path = H3 Max on the still); WorldCast films from depth, so props don't show there either; open Uni3C shows them.",
+      "No server, route, DB, graph, pack or manifest changes. Making a prop goes through the existing POST /api/generations with model3dRequest (oss-idol). Accounts and guests get the same server refusals as before (403 own-gpu-tool for 3D), and the UI shows propMakerBlocker's visitor copy."
+    ],
+    "tests": [
+      "tests/scene-props.test.ts (new, 16 tests): Library candidates (spz and ply, never GLB, unfinished or failed runs); placement and facing; second and third props set to the side; bring to camera; turn over and angle wrapping; size range; scene state round trip with a moved, turned and sized prop; malformed entries dropped (including a javascript: URL, NaN and a GLB); clamping and MAX_PROPS; propMakerBlocker for owner, demo, own GPU, visitor, cloud-only, Idol off and no GPU, with a check that visitor copy has no jargon; source checks that recordPath settles the splats, that the handle is drawn only on screen, that splats write depth, and that the single synchronous pixel read unbinds the pack buffer. Passes.",
+      "tests/splat-view.test.ts updated: Spark is still imported only by splat-engine.ts, and only through dynamic imports. The engine's users are now splat-viewer.tsx and cinema/scene-engine.ts. Passes.",
+      "Regression: tests/cinema-scene, cinema-path, camera-path, scene3d, splat-view, scene-props: 113 passed. Full vitest suite not run (stage rule).",
+      "tests/e2e/cinema-props.mjs (new), run against pnpm dev in demo mode on port 3412 with SwiftShader WebGL: all checks passed. At 1440 px dark on the open engine: the path filmed without a prop doesn't fetch Spark; adding the demo Idol 3D splat from the Library fetches Spark and the view changes; dragging the handle moves the prop right; the Size slider sizes it; the path filmed again with the prop has a first frame (832x464) where 13,310 px (3.4%) differ from the plain render, 12,843 of them the splat's violet and 0 in the handle's colours; the prop is still there after a reload. At 1440 px light on cloud: the panel note says the cloud films the still. At 390 px light and dark: the Props sheet and the Add a prop dialog fit the phone, the handle modes and the turn slider work, nothing scrolls sideways, and there were no page or console errors.",
+      "npx tsc --noEmit (after next typegen) and eslint on the changed files: clean."
+    ],
+    "left": [
+      "Idol's predicted camera (IdolCamera) does not set the first orientation yet. No graph or route saves its yaw and pitch: image-to-splat-idol-clean uses IdolCamera only to render the preview still, and nothing in the fal idol-3d mapping keeps the camera. Props start facing the camera, with 'Turn over' and the Turn slider to fix them. To use the prediction, the clean graph would need to output IdolCamera's yaw and pitch (for example as a PreviewAny 'report', like the kept-count) into the splat's meta.camera, and placeProp would then read it. That needs a validated graph change, which belongs in its own package.",
+      "Props are saved in the viewer's browser storage per scene, not on the server, so they don't follow the user to another device. Saving them with the take, for example in the cinema item's take data, would need a server change and an account-scoped check.",
+      "The cloud Fly path (H3 Max camera-controls) and WorldCast film the still or its depth on the server, so they can't include props. The UI says so. Capture (recompose) and Use as blockout do include them on both engines.",
+      "Speed: on SwiftShader each frame of a path render with a prop waits for Spark's sort readback, so an 81-frame render took about 3-4 minutes here (without props it takes seconds). Frame time on a real GPU and on a phone is not measured.",
+      "Gaussians fainter than minAlpha 1/16 are dropped, so faint edges don't mark holes as seen. That makes props' edges slightly crisper than in the splat viewer. Not tuned on a real Idol splat (needs a GPU run).",
+      "Not verified with a real Idol 3D run from a picture: the local ComfyUI is CPU-only with no 3D weights. The demo run (the mock's demo-splat.spz) covers the flow. Clicking a prop in the view to pick it isn't built; props are picked from the list.",
+      "The brief's line numbers ('object' layout at L633) predate idol-4 and main's 10-30 work. The '3D model' label is now in the viewer header's ternary. idol-2's IdolCamera exists only inside the clean graph (library.spec.mjs), not as data. /home/user/ext (idol-sdk, ComfyUI-Idol) was missing in this container, so I worked from the research doc."
+    ],
+    "docsNotes": "docs/ARCHITECTURE.md (Cinema 3D scene): props are splats placed in the scene viewer (src/lib/scene-props.ts pure state; src/components/cinema/scene-props.tsx UI; SceneSplats in src/components/model3d/splat-engine.ts, loaded through a dynamic import from scene-engine.ts when the first prop is added). They write depth so the post pass doesn't treat them as holes, are sorted per frame in recordPath, and their TransformControls handle is drawn on screen only. They are kept per scene in localStorage (fuobe.cinema.scene.<sceneGenerationId>). docs/STATUS.md: idol-9 built; 'Idol's predicted camera sets the first orientation' is still open. FEATURES (docs pass): Cinema 3D scene, 'Add a prop' (from the Library or from a picture with Idol 3D on your GPU); props show in captures, blockouts and open-engine path films, not in cloud path films. docs/research/idol-9.md §9 idol-9 could note: built 2026-11-03; Spark's readRenderTargetPixelsAsync leaves PIXEL_PACK_BUFFER bound, so any synchronous read in the same renderer must unbind it first.",
+    "blocked": ""
+  },
+  "review": {
+    "findings": [
+      {
+        "severity": "medium",
+        "verdict": "PLAUSIBLE (traced through Spark 2.3.1 and three 0.183.2 source; not reproduced in a browser)",
+        "file": "src/components/cinema/scene-engine.ts",
+        "line": 739,
+        "title": "Path frames with a prop can be drawn with the on-screen camera's sort order",
+        "detail": "recordPath's frame() calls splats.settle(path camera), which awaits SparkRenderer.update(). That call's generate() calls setDirty(), and SceneSplats wires onDirty to engine.dirty = true. step() draws the screen whenever dirty is set and does not check `playing`. While the path sort is running (readPause setTimeout, an async GPU readback polled every 4 ms, then the sort worker), the next requestAnimationFrame tick therefore draws the screen with the user's pose. Spark's onBeforeRender (preUpdate: true by default) then calls updateInternal for the screen camera: current becomes the screen's accumulator and sortDirty is set. When the path sort finishes, driveSort() starts a sort for the screen camera straight away. settle()'s second wait loop sees sorting=true and waits for that sort, so the path frame is drawn with ordering sorted by distance from the screen camera. With depthWrite:true, out-of-order Gaussians fail the depth test instead of blending, so the prop looks harsh or patchy in path frames far from the user's pose. That covers the Uni3C guide render and Use as blockout. The race happens on most frames whenever the sort takes longer than a frame, as it does on SwiftShader and on a phone. Each frame also runs a second, wasted sort. The e2e pixel test checks only frame 0, where the path pose is close to the screen pose, so it can't catch this.",
+        "fix": "Don't draw the screen while recording: in step(), skip the draw while `playing` (or while a recordPath is active). Another option is to set the SceneSplats' SparkRenderer autoUpdate to false for the length of recordPath, or to make onDirty a no-op while recording. Then add a check on a late path frame, for example that the prop's pixels in the last frame match a still capture taken from that frame's pose."
+      },
+      {
+        "severity": "low",
+        "verdict": "CONFIRMED (code trace)",
+        "file": "src/components/cinema/scene-viewer.tsx",
+        "line": 330,
+        "title": "A prop made from a picture can be dropped while the toast says it is in the scene",
+        "detail": "madeProp() always shows the success toast 'Your prop is in the scene'. placeCandidate() returns early when the engine or info isn't ready (for example while the scene is reloading), and setProps leaves the list unchanged when it already holds MAX_PROPS. The second case can happen because Add a prop is disabled only while the scene is full, not while a prop is being made. In both cases the prop is not added, but setPickedProp(id) still picks an id that doesn't exist and the success toast still shows. The run's splat stays in the Library, so nothing is lost, but the message is wrong.",
+        "fix": "Have placeCandidate report whether it placed the prop, and show a 'scene is full' or 'try again from Add a prop' message when it didn't. You could also count `making` towards MAX_PROPS."
+      },
+      {
+        "severity": "low",
+        "verdict": "PLAUSIBLE",
+        "file": "src/components/cinema/scene-viewer.tsx",
+        "line": 140,
+        "title": "Props state isn't reloaded when the open take changes without the viewer remounting",
+        "detail": "`props` is read from localStorage only in the useState initialiser, but stateKey follows take.generation.id. workspace.tsx renders <SceneViewer take={openScene}> without a key, and setOpenScene(t) can run while a viewer is open (the 'Your 3D scene is ready → Open' toast action). If that happens, the persist effect writes the previous scene's props under the new scene's key, and the new scene shows the old scene's props. Other viewer state has the same pattern already, so the impact is small.",
+        "fix": "Add key={openScene.generation.id} on <SceneViewer> in workspace.tsx, or reset props when stateKey changes."
+      },
+      {
+        "severity": "low",
+        "verdict": "CONFIRMED (code trace)",
+        "file": "src/components/cinema/scene-engine.ts",
+        "line": 574,
+        "title": "Spark can be created on an engine that has already been disposed",
+        "detail": "addProp's dynamic-import .then() builds a SceneSplats (which creates a SparkRenderer) and adds it to this.scene without checking this.disposed. The check comes after the await. If the viewer closes while the chunk is loading, a SparkRenderer is created for a disposed engine and never disposed. No sort worker starts, because nothing renders, so this is a small GPU and memory leak.",
+        "fix": "Check this.disposed inside .then() before constructing SceneSplats, or dispose it there."
+      },
+      {
+        "severity": "low",
+        "verdict": "CONFIRMED (code trace)",
+        "file": "src/components/cinema/scene-props.tsx",
+        "line": 200,
+        "title": "Keyboard users can't move a prop to an exact place",
+        "detail": "Move uses three's TransformControls, which works only with a pointer. The panel gives keyboard users Size and Turn sliders and 'In front of the camera', so a keyboard user can only place a prop by flying the camera and then bringing the prop to it. The Move / Turn / Size radiogroup also has no arrow-key handling. That matches other radiogroups in the app.",
+        "fix": "Optional: add nudge buttons, or arrow keys while the handle mode is Move, or note it as a follow-up."
+      },
+      {
+        "severity": "low",
+        "verdict": "CONFIRMED",
+        "file": "src/components/cinema/scene-props.tsx",
+        "line": 128,
+        "title": "Price line reads 'Free' before any price is known",
+        "detail": "`priceLine(preview.data) ?? \"Free\"` shows 'Free' while the preview is loading, when no picture has been picked, and when the preview request fails. In demo mode the loaded preview says 'Placeholder · nothing is charged', so the label changes once it loads. The Idol run on the open engine is free anyway, so this is only a wording issue.",
+        "fix": "Show '…' or no price until the preview has loaded."
+      },
+      {
+        "severity": "info",
+        "verdict": "CONFIRMED",
+        "file": "src/lib/scene-props.ts",
+        "line": 157,
+        "title": "The URL check in parseSceneState accepts protocol-relative URLs",
+        "detail": "The pattern ^(\\/|https?:\\/\\/) accepts '//host/x.spz'. The data comes only from this origin's own localStorage, so this isn't exploitable. Rejecting '//' would match what the test says it guards against.",
+        "fix": "Use ^(\\/(?!\\/)|https?:\\/\\/)."
+      }
+    ],
+    "checks": [
+      "Scope: git diff 61d8074e..HEAD (commits 4a8090b8 and 9cb3318b), 9 files. No server, route, DB, graph, pack, manifest, migration or hot-file changes. No Higgsfield code or media, no new model, LoRA or node pack (so no licence data was needed), no analytics.",
+      "Public sign-up: no new route. Making a prop goes through the existing POST /api/generations (oss-idol, open engine), and its price through the existing POST /api/generations?preview=1. Both are already covered by PREVIEWS, priceAs and the 403 own-gpu-tool rule for 3D. propMakerBlocker mirrors make3dOffered (viewer, Paid APIs only, Idol off, no GPU), and its visitor copy has no jargon. Library candidates come from useGenerations, so visitors get EMPTY_LISTS. Props are kept only in this browser's localStorage.",
+      "Engines: the cloud note says plainly that cloud filming (H3 Max on the still) and WorldCast don't show props, and that the open Uni3C path does. No local capability was removed. A cloud TripoSplat .ply from the Library can be placed, as the brief asks.",
+      "Traced Spark 2.3.1 (SparkRenderer.onBeforeRender preUpdate, updateInternal, driveSort, setDirty→onDirty) against SceneEngine.step and recordPath. Result: finding 1.",
+      "Verified three 0.183.2 readRenderTargetPixelsAsync: it binds PIXEL_PACK_BUFFER and leaves it bound while it polls, then binds it again before getBufferSubData. readPixels() unbinding it first is correct and safe. The other synchronous read, in blockout-engine.ts, uses its own renderer, so it isn't affected.",
+      "Checked the placement maths (forward and right vectors for the YXZ yaw, so +z faces the camera), turnOver, wrapDeg, parseSceneState clamping and MAX_PROPS, TransformControls uniform scale and the Euler read-back, the removal-while-loading path in the props effect, the overlay drawn only for the screen (!out && !shot), and dispose order.",
+      "npx vitest run tests/scene-props, splat-view, cinema-scene, cinema-path, camera-path, scene3d, blockout: 7 files, 146 tests passed.",
+      "npx next typegen, then npx tsc --noEmit: clean. eslint on the 7 changed source and test files: clean. The worktree was left unchanged (git status clean).",
+      "The e2e (tests/e2e/cinema-props.mjs) was not re-run: the path render with a prop takes several minutes on SwiftShader. I relied on the implementer's run. Its pixel check covers only frame 0 (see finding 1)."
+    ],
+    "verdict": "approve-with-fixes: the feature is complete against the brief, and IdolCamera orientation is reasonably left open. It follows the sign-up and engine rules, and tests and typecheck pass. Fix finding 1 before merge, because the filmed path and the blockout are this package's main output. The low findings are optional."
+  },
+  "fix": {
+    "applied": [
+      "Finding 1 (medium, path frames sorted for the on-screen camera): confirmed by reading the code. playPath relies on step() drawing, so `playing` couldn't be reused. A new `recording` flag is set for the whole of recordPath and cleared in its finally, and step() doesn't draw the screen while it is set, so Spark never starts a sort for the screen camera while a path frame waits for its own (scene-engine.ts). Covered by a source test in tests/scene-props.test.ts. tests/e2e/cinema-props.mjs now also compares the LAST frame of the path with and without the prop. Measured: 150,135 px changed (38.9%), 147,574 of them the splat's violet, 0 in the handle's colours. The first frame is unchanged: 13,310 px, 12,843 violet, 0 handle.",
+      "Finding 2 (low, success toast when the prop wasn't placed): confirmed. placeCandidate now returns 'placed' | 'not-ready' | 'full'. It checks the count synchronously against propsRef and updates the ref straight away. madeProp shows the success toast only for 'placed'. Otherwise it says the prop is ready in the Library: either remove a prop and add it from Add a prop, or add it from Add a prop. Add a prop counts props being made towards MAX_PROPS (full = props + making), and the full-scene copy says so. Source test added.",
+      "Finding 3 (low, props not reloaded when the take changes): confirmed. Added key={openScene.generation.id} on <SceneViewer> in workspace.tsx, so a scene opened in place of another remounts with its own props. Source test added.",
+      "Finding 4 (low, Spark created on a disposed engine): confirmed. addProp's dynamic-import .then() checks this.disposed before constructing SceneSplats and rejects with AbortError, which the existing catch handles. Source test added.",
+      "Finding 6 (low, 'Free' before a price is known): confirmed. The button reads 'Make the prop' until the preview returns a price, then 'Make the prop · <price>'. The e2e now asserts there is no price before a picture is picked. Source test added.",
+      "Finding 7 (info, protocol-relative URLs): parseSceneState's URL check is now ^(\\/(?!\\/)|https?:\\/\\/). A '//elsewhere.example/x.spz' entry was added to the malformed-entries test."
+    ],
+    "rejected": [
+      "Finding 5 (low, keyboard users can't move a prop to an exact place): not built, and the reviewer marked it optional. Keyboard users already have the Size and Turn sliders and 'In front of the camera' (fly the camera with the keys, then bring the prop to it). The Move / Turn / Size radiogroup behaves like the app's other radiogroups. Nudge buttons or arrow-key moves would be new UI beyond this package's fixes, so this is listed in 'left'."
+    ],
+    "checks": [
+      "Worktree /home/user/wt/o-idol-9 on o/idol-9. Only idol-4 and idol-9 commits after the base, as expected, and claude/fuobe-parity-4 is an ancestor. pnpm install --frozen-lockfile --prefer-offline and npx next typegen: ok.",
+      "pnpm typecheck: exit 0. pnpm lint: exit 0 (5 warnings, 0 errors, none in changed files).",
+      "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: exit 1. 361/368 files and 5817 tests passed, 8 tests failed, all on the known pre-existing list in main-rules: comfy-reuse (1), dop-originals (1), preset-featured (1), soul-runs (2), split-soundtrack (1), plus picker-covers (1) and preset-covers (1), which time out under load. Rerun alone, picker-covers and preset-covers pass (36/36).",
+      "Targeted: tests/scene-props, splat-view, cinema-scene, cinema-path, camera-path, scene3d and blockout: 8 files, 161 tests passed. tests/scene-props has 20 tests (16 before, 4 added).",
+      "e2e: node tests/e2e/cinema-props.mjs against pnpm dev in demo mode (FUOBE_DEMO_MODE=on, port 3412, SwiftShader). 'All props checks passed', including the new last-frame check, 1440 dark/light and 390 light/dark, with no page or console errors. The first run failed only because the e2e still expected 'Make the prop · …' with no picture picked; the e2e was updated for the finding-6 change.",
+      "Dev server stopped by PID, .next deleted, git status clean after commit f8cb42df. Not pushed. docs/handoff/reports/idol-4.json untouched.",
+      "FINISH on o/idol-9 after merging the latest origin/claude/fuobe-parity-4 (clean merge): next typegen 0; pnpm typecheck 0; pnpm lint 0 (5 warnings, none in changed files); FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: 375 files, 5928 passed, 6 failed, 4 skipped. All failures are the known pre-existing ones: comfy-reuse, dop-originals, preset-featured, soul-runs (2), split-soundtrack."
+    ],
+    "finalSummary": "idol-9 (props in Cinema Studio's 3D scene) is finished on o/idol-9. The fix commit is f8cb42df, on top of 4a8090b8 and 9cb3318b. Open engine (your ComfyUI): 'Add a prop' places a Library splat (Idol 3D .spz, or TripoSplat .ply from either engine) or makes one from a picture with Idol 3D (oss-idol). Props render inside the scene's three.js graph with move/turn/size handles, and they show in captures, blockouts and the open Fly path render that feeds Uni3C. Every path frame is now sorted for its own camera, because the screen isn't drawn while a path records. Verified in demo mode on SwiftShader with the mock's demo splat, including pixel checks on the first and last frames. A real Idol 3D run from a picture needs a GPU with the Idol weights and wasn't run here. Cloud engine: Library splats, including cloud TripoSplat .ply, can be placed, and captures and blockouts show them. The cloud Fly path (H3 Max on the still) and WorldCast film the still or its depth, so props don't show there, and the panel says so. Idol 3D isn't hosted, so making a prop from a picture is open-engine only (no cloud substitute), and 'Paid APIs only' refuses it with plain copy. Cloud filming needs a fal/Replicate key as before. Public sign-up: no new routes. Guests see empty Library lists and the plain-language reason why they can't make a prop. Accounts get the existing 403 own-gpu-tool for any 3D run (POST /api/generations), so they can't make props yet. Props are kept per scene only in the viewer's browser storage.",
+    "left": [
+      "Idol's predicted camera (IdolCamera) doesn't set the first orientation yet. The clean graph would need to output its yaw and pitch into the splat's meta (a validated graph change for its own package).",
+      "Props live in browser localStorage per scene, not on the server, so they don't follow the user to another device. Saving them with the take needs a server change with an account-scoped check.",
+      "Keyboard placement (review finding 5): there are no nudge buttons or arrow-key moves for Move. Keyboard users place a prop by flying the camera and using 'In front of the camera', Size and Turn.",
+      "Path render speed with props on a real GPU and on phones is not measured. On SwiftShader each frame waits for Spark's sort, which takes minutes per path.",
+      "minAlpha 1/16 has not been tuned on a real Idol splat. Picking a prop by clicking it in the view isn't built; props are picked from the list.",
+      "The e2e checks that the prop is present and correctly coloured in the first and last path frames. It does not measure whether the sort order is visually right on a real GPU.",
+      "No graphs were added, so workflows/comfyui/requirements.json and its budget are unchanged."
+    ],
+    "blocked": ""
+  }
+}
