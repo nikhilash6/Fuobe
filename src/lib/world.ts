@@ -277,7 +277,7 @@ export function latentsBefore(script: WorldScript, k: number): number {
 
 /** Seconds turn k's clip runs (VAE Decode makes 4 frames per latent frame). */
 export function clipSeconds(t: Pick<WorldTurn, "move" | "seconds">): number {
-  return Math.round(((turnLatents(t) * 4) / WORLD_FPS) * 100) / 100;
+  return Math.round(((turnLatents(t) * 4) / WORLD_FPS) * 10) / 10;
 }
 
 // ---------------------------------------------------------------------------

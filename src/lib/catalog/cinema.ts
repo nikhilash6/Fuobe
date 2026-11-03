@@ -2535,7 +2535,7 @@ function planWorld(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
       ? `The opening on your GPU: Hy-Nomas starts the world from your words, ${clipSeconds(t)} s at 1280 × 704, 24 fps`
       : `Turn ${k} of ${total - 1} on your GPU: Hy-Nomas continues the world from the turns before it, then films this one (${clipSeconds(t)} s at 1280 × 704, 24 fps)`,
   );
-  if (k > 0) notes.push("While ComfyUI still holds the earlier turns only this one is made; after another job it makes them again from the same seed first, which takes longer");
+  if (k > 0) notes.push("While your GPU still holds the earlier turns, only this one is made; after another job it makes them again first (the same world), which takes longer");
   notes.push(WORLD_SOUND);
   const prompt = (k === 0 ? script.opening.words : [t.words, t.action].filter(Boolean).join(" · ")) || "Camera move";
   const request: GenerationRequest = {
