@@ -180,6 +180,12 @@ describe("the scene draws props in its own render", () => {
     expect(engine).toMatch(/if \(!out && !shot && this\.gizmo\?\.object\)/);
   });
 
+  it("reads frames with no pixel-pack buffer bound (Spark's async sort readback leaves one: frame 0 came out black)", () => {
+    const engine = read("src/components/cinema/scene-engine.ts");
+    expect(engine).toMatch(/gl\.bindBuffer\(gl\.PIXEL_PACK_BUFFER, null\);\n\s+this\.renderer\.readRenderTargetPixels/);
+    expect(engine.match(/this\.renderer\.readRenderTargetPixels\(/g)).toHaveLength(1);
+  });
+
   it("props write depth, so the post pass doesn't take them for holes (Uni3C's transparent black)", () => {
     expect(read("src/components/model3d/splat-engine.ts")).toMatch(/new SparkRenderer\(\{ renderer, onDirty, depthWrite: true/);
   });

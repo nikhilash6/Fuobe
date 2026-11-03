@@ -666,6 +666,17 @@ export class SceneEngine {
     return gizmo;
   }
 
+  /**
+   * A render target's pixels, read now. Spark reads its sort keys back with three's readRenderTargetPixelsAsync, which
+   * leaves its pixel-pack buffer bound while it waits: a synchronous read then would land in that buffer and leave
+   * `buf` empty (a black frame in the path render). Unbind it first; three binds its own again before collecting.
+   */
+  private readPixels(target: THREE.WebGLRenderTarget, width: number, height: number, buf: Uint8Array) {
+    const gl = this.renderer.getContext();
+    if (typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext) gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    this.renderer.readRenderTargetPixels(target, 0, 0, width, height, buf);
+  }
+
   /** What the frame shows, rendered at width×height (the frame's ratio), as a PNG. */
   async capture(width: number, height: number): Promise<Blob> {
     if (!this.view || !this.info) throw new Error("The scene isn't ready yet");
@@ -674,7 +685,7 @@ export class SceneEngine {
     try {
       this.draw(out, width, height, width, height, color);
       const buf = new Uint8Array(width * height * 4);
-      this.renderer.readRenderTargetPixels(out, 0, 0, width, height, buf);
+      this.readPixels(out, width, height, buf);
       const img = new ImageData(width, height);
       // WebGL reads bottom-up.
       for (let y = 0; y < height; y++) img.data.set(buf.subarray((height - 1 - y) * width * 4, (height - y) * width * 4), y * width * 4);
@@ -730,7 +741,7 @@ export class SceneEngine {
         stop();
       }
       this.draw(out, width, height, width, height, color, { pose, vFov });
-      this.renderer.readRenderTargetPixels(out, 0, 0, width, height, buf);
+      this.readPixels(out, width, height, buf);
       for (let y = 0; y < height; y++) {
         const src = (height - 1 - y) * width * 4;
         const dst = y * width * 4;
