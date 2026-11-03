@@ -88,7 +88,7 @@ describe("Who sees which ready board", () => {
     for (const s of sections) for (const t of s.items) expect(hasCover(t.id), t.id).toBe(true);
     const films = sections.find((s) => s.key === "effect-films")!;
     expect(films.items.map((t) => t.id)).toEqual(
-      ["pearl-earring", "superstar", "fairytale-castle", "blue-depth", "agamemnon", "dolphin-ride", "skatedog"].filter((id) => hasCover(`effect-chain-${id}`)).map((id) => `effect-chain-${id}`),
+      ["pearl-earring", "monet-muse", "superstar", "fairytale-castle", "blue-depth", "agamemnon", "dolphin-ride", "skatedog", "street-colossus", "fallen-angel"].filter((id) => hasCover(`effect-chain-${id}`)).map((id) => `effect-chain-${id}`),
     );
     // A section with nothing to show is left out; the owner's other templates aren't a visitor's.
     expect(sections.every((s) => s.items.length > 0)).toBe(true);
