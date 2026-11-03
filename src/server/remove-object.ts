@@ -6,12 +6,14 @@ import { getModel } from "@/lib/catalog";
 import { characterLicenceLine, PERSON_REMOVER_LORA } from "@/lib/catalog/character-swap";
 import {
   chooseEraser,
+  getEraser as chooseEraserById,
   paintedPoints,
   pieceSeconds,
   planPieces,
   planMaskPreview,
   planRemoval,
   previewIsEraserMask,
+  previewIsGreen,
   rangeProblem,
   REMOVE,
   removalProblem,
@@ -23,11 +25,17 @@ import {
   type RemoveMode,
   type RemoveRange,
   type RemoveSource,
+  MAX_WINDOW_SEED,
+  REVIEW_EXTRA,
+  rerollControls,
+  rerollProblem,
+  reviewOfOutput,
 } from "@/lib/catalog/remove-object";
 import type { PlanStep } from "@/lib/catalog/shorts";
 import type { Engine, GenParams, Generation, PixelPoint } from "@/lib/catalog/types";
 import { createPipeline } from "./chains";
-import { ConnectComfyError, previewChained } from "./generations";
+import { ConnectComfyError, getGeneration, previewChained } from "./generations";
+import { db } from "./db";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { isOffered, offeredLoras } from "./model-access";
 import { decodePng } from "./png";
@@ -64,6 +72,8 @@ export interface RemovalBody {
   seed?: number;
   /** Original sound (unset = Everything). */
   sound?: SoundChoice;
+  /** H3 Person Removal: how far the person's mask is grown, in pixels. */
+  maskGrow?: number;
 }
 
 const fileUrl = z.string().startsWith("/api/files/").max(500);
@@ -93,6 +103,7 @@ export const RemovalBodySchema = z.object({
   range: z.object({ start: seconds, end: seconds }).optional(),
   seed: z.number().int().min(0).max(2 ** 48).optional(),
   sound: SoundChoiceSchema.optional(),
+  maskGrow: z.number().int().min(REMOVE.maskGrow.min).max(REMOVE.maskGrow.max).optional(),
   /** A client nonce for one submit: a repeat gets the first answer (see once()). */
   requestId: z.string().trim().min(8).max(64).optional(),
 });
@@ -152,12 +163,18 @@ interface Planned {
 }
 
 async function planInput(body: RemovalBody, opts: { probe: boolean; preview?: boolean }): Promise<Planned> {
+  const info = opts.probe ? await probeSource(body.source.url) : {};
+  const painted = body.mode === "paint" && body.engine === "cloud" && opts.probe && body.mask ? await pointsFromPaint(body.mask, { width: info.width ?? body.source.width, height: info.height ?? body.source.height }) : undefined;
+  return planInputNow(body, opts, info, painted);
+}
+
+/** planInput once the clip's header and the paint's points are read (nothing to wait for). */
+function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boolean }, info: Awaited<ReturnType<typeof probeSource>> | Record<string, never>, painted?: PixelPoint[]): Planned {
   mustMatchMode(body.engine);
   const picked = chooseEraser({ engine: body.engine, mode: body.mode, effects: body.effects, modelId: body.modelId, offered: (id) => isOffered(id, body.engine) });
   if ("problem" in picked) throw new ShortsError(picked.problem, 422);
   const eraser = picked.eraser;
   // The header's facts win over what the browser read (the estimate runs before the upload is read).
-  const info = opts.probe ? await probeSource(body.source.url) : {};
   const source: RemoveSource = {
     url: body.source.url,
     duration: info.duration ?? body.source.duration,
@@ -187,7 +204,7 @@ async function planInput(body: RemovalBody, opts: { probe: boolean; preview?: bo
   if (body.mode === "paint") {
     if (!body.mask) throw new ShortsError("Paint over what to remove first");
     // The cloud's tracker takes points, not paint; the open graph reads the mask itself.
-    if (eraser.engine === "cloud") points = opts.probe ? await pointsFromPaint(body.mask, source) : [{ x: 1, y: 1, label: "positive" }];
+    if (eraser.engine === "cloud") points = painted ?? [{ x: 1, y: 1, label: "positive" }];
   }
 
   const notes: string[] = [];
@@ -213,6 +230,8 @@ async function planInput(body: RemovalBody, opts: { probe: boolean; preview?: bo
       notes.push(
         "Qwen-Image 2.1 first makes a clean copy of the part's first frame with the person gone; MiniMax H3 with Akatz Labs' Person Remover LoRA then rebuilds what was behind them, 22 frames at a time from it, and the clip's sound goes back on",
         "People only — for an object, pick Wan 2.1 VACE + SAM 3.1",
+        "Preview the mask first: the person filled green, as H3 will see them — keep every part of them covered (hands, hair, a shadow); grow the mask if an edge shows",
+        "When it's done, each 22-frame window has its own preview: redo a weak one with a new seed, and every window before it is kept exactly",
         "Needs the H3 Relay nodes on your ComfyUI (scripts/comfy/install-comfyui.sh with H3_RELAY=1) and 24 GB of VRAM with offloading (64–128 GB of RAM); the part runs at 24 fps",
         characterLicenceLine("open", "fuobe-character-swap").replace("nodes GPL-3.0", "H3 Relay nodes GPL-3.0"),
       );
@@ -247,6 +266,7 @@ async function planInput(body: RemovalBody, opts: { probe: boolean; preview?: bo
       mask: body.mode === "paint" && eraser.engine === "open" ? body.mask : undefined,
       ...(body.seed !== undefined ? { seed: body.seed } : {}),
       ...(split && body.sound && { sound: body.sound }),
+      ...(eraser.cleanFrame && body.maskGrow !== undefined ? { maskGrow: body.maskGrow } : {}),
     },
   };
 }
@@ -288,6 +308,8 @@ export interface RemovalEstimate {
   notes: string[];
   /** The mask preview's price, or null when this engine and mode have none. */
   previewUsd: number | null;
+  /** The preview is H3 Person Removal's green mask (the person filled green, thresholded and grown). */
+  previewGreen: boolean;
   /**
    * Whether the preview is the mask the eraser works from; false: only how SAM 3.1 reads the words or clicks
    * (Kling O3 edit and Bria find the object themselves).
@@ -296,9 +318,14 @@ export interface RemovalEstimate {
 }
 
 export async function estimateRemoval(body: RemovalBody): Promise<RemovalEstimate> {
-  const { input, eraser, notes } = await planInput(body, { probe: false });
+  return estimateRemovalNow(body);
+}
+
+/** The estimate without waiting (it reads nothing: the browser's facts stand in for the header). */
+export function estimateRemovalNow(body: RemovalBody): RemovalEstimate {
+  const { input, eraser, notes } = planInputNow(body, { probe: false }, {});
   const plan = planRemoval(input);
-  const preview = planMaskPreview({ ...input, prompt: input.prompt, points: input.points });
+  const preview = planMaskPreview(input);
   return {
     ...price(plan.steps, input.source),
     modelId: eraser.id,
@@ -309,6 +336,7 @@ export async function estimateRemoval(body: RemovalBody): Promise<RemovalEstimat
     notes,
     previewUsd: preview ? price(preview, input.source).costUsd : null,
     previewExact: !!preview && previewIsEraserMask(eraser, plan.tracked),
+    previewGreen: previewIsGreen(eraser),
   };
 }
 
@@ -336,3 +364,117 @@ export async function createRemovalPreview(body: RemovalBody): Promise<Generatio
   if (!steps) throw new ShortsError(input.engine === "open" ? "The open engine previews masks of what you type — your paint is the preview here" : "Name, click or paint what to remove first", 422);
   return run(steps).byKey.preview;
 }
+
+// ---------------------------------------------------------------------------
+// "Redo from here": an H3 removal drawn again from one window, the windows before it kept exactly
+
+export const RerollSchema = z.object({
+  /** The removal step that made the windows (the one whose result carries the review). */
+  id: z.string().min(1).max(64),
+  /** The window to draw again (0-based); every window before it is kept. */
+  window: z.number().int().min(0).max(1000),
+  /** Its new seed (blank: a random one). */
+  seed: z.number().int().min(0).max(MAX_WINDOW_SEED).optional(),
+  requestId: z.string().trim().min(8).max(64).optional(),
+});
+export type RerollBody = z.infer<typeof RerollSchema>;
+
+const NOT_FOUND = "We can't find that removal.";
+
+/** The step that puts the sound back on a removal step's video, if the removal had one. */
+function soundStepAfter(g: Generation): Generation | null {
+  const rows = db()
+    .prepare("SELECT id FROM generations WHERE batch_id IS ? AND (depends_on = ? OR depends_on LIKE ?) ORDER BY created_at")
+    .all(g.batchId, g.id, `%"${g.id}"%`) as { id: string }[];
+  for (const r of rows) {
+    const next = getGeneration(r.id);
+    if (next?.op === "mux") return next;
+  }
+  return null;
+}
+
+/** The step that cut the clip's original sound for a removal's mux (when the part isn't the whole clip). */
+function soundCutOf(mux: Generation): Generation | null {
+  const rows = db().prepare("SELECT id FROM generations WHERE batch_id IS ? AND op = 'trim' ORDER BY created_at").all(mux.batchId) as { id: string }[];
+  for (const r of rows) {
+    const g = getGeneration(r.id);
+    if (g && g.id !== mux.id && g.request.step?.label === "Original sound") return g;
+  }
+  return null;
+}
+
+/** A step's request as it was asked, without what belonged to that run only. */
+function askedAgain<T extends object>(request: T): T {
+  const req = { ...request } as T & Record<string, unknown>;
+  for (const k of ["asked", "chainFilled", "chainSkipped", "notice", "chain"]) delete req[k];
+  return req;
+}
+
+/**
+ * Redo an H3 person removal from one window: the same graph sent to the same ComfyUI with H3 Relay's window controls,
+ * so the windows before it come back from their checkpoints exactly, the window is drawn with a new seed and the ones
+ * after it continue from it; then the clip's sound goes back on as before. Returns the new finished video.
+ */
+export async function createRemovalReroll(body: RerollBody): Promise<{ final: Generation; items: Generation[] }> {
+  const erase = getGeneration(body.id);
+  if (!erase || (erase.feature !== REMOVE.feature && erase.feature !== REMOVE.stepFeature)) throw new ShortsError(NOT_FOUND, 404);
+  if (!getEraserCleanFrame(erase.modelId)) throw new ShortsError("Only an H3 person removal can be redone from a window", 422);
+  if (erase.status !== "succeeded") throw new ShortsError("Wait for the removal to finish first", 409);
+  mustMatchMode("open");
+  const out = erase.outputs.find((o) => o.kind === "video");
+  const review = reviewOfOutput(out?.meta);
+  const problem = rerollProblem(review, body.window);
+  if (problem || !review) throw new ShortsError(problem ?? NOT_FOUND, 422);
+  const seed = body.seed ?? Math.floor(Math.random() * 2 ** 32);
+  const controls = rerollControls(review, body.window, seed);
+  if (!controls) throw new ShortsError("The windows before this one weren't saved — redo from the first window", 422);
+
+  // The step as it ran (its chained inputs filled in), without what belongs to that run only.
+  const req = askedAgain(erase.request);
+  const masterSeed = Number(review.seed);
+  const mux = soundStepAfter(erase);
+  // The sound goes back as before: the mux's own audio, or (when that mux never started) the original sound cut again.
+  const audio = mux?.request.inputs?.audio;
+  const cut = mux && !audio ? soundCutOf(mux) : null;
+  if (mux && !audio && !cut) throw new ShortsError("This removal's sound wasn't ready — run the removal again", 409);
+  const was = (erase.request.batchTitle ?? erase.request.title ?? "Remove a person").replace(/ · from window \d+$/, "");
+  const title = `${was} · from window ${body.window + 1}`;
+  const steps: PlanStep[] = [
+    {
+      key: "erase0",
+      request: {
+        ...req,
+        feature: mux ? REMOVE.stepFeature : REMOVE.feature,
+        batchTitle: title,
+        title,
+        params: {
+          ...erase.request.params,
+          ...(Number.isSafeInteger(masterSeed) ? { seed: masterSeed } : {}),
+          extra: { ...erase.request.params?.extra, [REVIEW_EXTRA.controls]: controls, [REVIEW_EXTRA.reuse]: review.reuse },
+        },
+        step: { label: `Redo from window ${body.window + 1} (MiniMax H3)`, index: 0, of: 2 },
+      },
+    },
+  ];
+  if (cut) steps.push({ key: "sound", request: { ...askedAgain(cut.request), batchTitle: title } });
+  if (mux) {
+    steps.push({
+      key: "final",
+      request: {
+        feature: REMOVE.feature,
+        batchTitle: title,
+        title,
+        modelId: mux.modelId,
+        op: "mux",
+        ...(audio ? { inputs: { audio } } : {}),
+        step: { label: "Put the sound back", index: 1, of: 2 },
+      },
+      after: cut ? ["erase0", "sound"] : ["erase0"],
+      chain: cut ? [{ slot: "video" }, { slot: "audio" }] : [{ slot: "video" }],
+    });
+  }
+  const p = run(steps);
+  return { final: p.byKey[mux ? "final" : "erase0"], items: p.items };
+}
+
+const getEraserCleanFrame = (modelId: string) => !!chooseEraserById(modelId)?.cleanFrame;

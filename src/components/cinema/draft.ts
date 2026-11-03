@@ -1,7 +1,13 @@
 import { DURATION, type CinemaAction, type CinemaGenerateInput, type CinemaMode, type DirectorSettings, type GridSize, type GridType } from "@/lib/catalog/cinema";
 import type { Engine, MediaKind } from "@/lib/catalog/types";
+import { takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 
 /** The prompt bar's state (lifted into the workspace so the AI Director and tiles can fill it). */
+
+/** A new move list: the Exact numbers belong to the first move, so a different first move starts from its own defaults. */
+export function withMoves(d: Pick<CinemaDraft, "moves">, moves: string[]): Pick<CinemaDraft, "moves" | "exact"> | Pick<CinemaDraft, "moves"> {
+  return moves[0] === d.moves[0] ? { moves } : { moves, exact: null };
+}
 
 export interface RefItem {
   id: string;
@@ -35,6 +41,8 @@ export interface CinemaDraft {
   imageTool: "still" | "grid";
   prompt: string;
   moves: string[];
+  /** The first move as an exact orbit (N7-7): its numbers while the Exact switch is on. */
+  exact?: ExactOrbit | null;
   refs: RefItem[];
   /** Model picked per mode and engine ("video:cloud" → "kling-3"). */
   models: Partial<Record<`${CinemaMode}:${Engine}`, string>>;
@@ -92,6 +100,7 @@ export function draftToInput(d: CinemaDraft, engine: Engine, settings: DirectorS
     modelId: d.models[`${d.mode}:${engine}`],
     prompt: d.prompt,
     moves: d.mode === "video" ? d.moves : undefined,
+    ...(d.mode === "video" && d.exact && takesExact(d.moves[0]) && { exact: d.exact }),
     settings,
     images: ready.filter((r) => r.kind === "image").map((r) => r.ref),
     videos: ready.filter((r) => r.kind === "video").map((r) => r.ref),

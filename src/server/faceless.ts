@@ -744,9 +744,25 @@ export function withOfferedVideo(s: EpisodeSettings): EpisodeSettings {
   return !id || id === m.video ? s : { ...s, videoModel: id };
 }
 
+/**
+ * An episode's settings with the music bed model Settings → Models & licences offers, as the settings show it: the pick
+ * while it is on, else the engine's default, else the first bed model that is on. A bed switched off after an episode
+ * picked it gives way, rather than stopping the film at its music.
+ */
+export function withOfferedMusic(s: EpisodeSettings): EpisodeSettings {
+  if (!s.music) return s;
+  const m = ENGINE_MODELS[s.engine];
+  const picked = s.musicModel && m.musicChoices.includes(s.musicModel) ? s.musicModel : undefined;
+  const id = firstOn([...(picked ? [picked] : []), m.music, ...m.musicChoices], s.engine);
+  return !id || id === (picked ?? m.music) ? s : { ...s, musicModel: id };
+}
+
+/** An episode's settings with the video and music bed models that are on (withOfferedVideo, withOfferedMusic). */
+export const withOfferedModels = (s: EpisodeSettings): EpisodeSettings => withOfferedMusic(withOfferedVideo(s));
+
 function graphInput(ep: FacelessEpisode, blocks = ep.script.blocks, stillEdits?: StillEdits): GraphInput {
   const genre = genreInfo(ep.channelId ? getChannel(ep.channelId)?.genre : "education");
-  const s = withOfferedVideo(ep.settings);
+  const s = withOfferedModels(ep.settings);
   const narration = ENGINE_MODELS[s.engine].narration;
   let fallbackVoice: string | undefined;
   if (s.engine === "open" && s.voice?.kind !== "sample") {
@@ -860,7 +876,7 @@ function narrationCues(ep: FacelessEpisode): TimedText[] | null {
 function advance(ep: FacelessEpisode): FacelessEpisode {
   const plan = ep.plan!;
   const blocks = ep.script.blocks;
-  const video = getModel(resolveModels(withOfferedVideo(ep.settings), narrationText(blocks).length, getModel).video);
+  const video = getModel(resolveModels(withOfferedModels(ep.settings), narrationText(blocks).length, getModel).video);
   const cues = narrationCues(ep);
   const spoken = cues ? spokenTimes(blocks, cues) : null;
   const timing = spoken ? sceneTiming(blocks, spoken, video, plan.timing) : (plan.timing ?? plannedTiming(blocks, video));
@@ -1240,7 +1256,7 @@ function graphInputSafe(ep: FacelessEpisode): GraphInput {
   try {
     return graphInput(ep);
   } catch {
-    return { feature: ep.kind, title: ep.title, genre: genreInfo(ep.channelId ? getChannel(ep.channelId)?.genre : "education"), settings: withOfferedVideo(ep.settings), blocks: ep.script.blocks, fallbackVoice: "/api/files/placeholder.wav" };
+    return { feature: ep.kind, title: ep.title, genre: genreInfo(ep.channelId ? getChannel(ep.channelId)?.genre : "education"), settings: withOfferedModels(ep.settings), blocks: ep.script.blocks, fallbackVoice: "/api/files/placeholder.wav" };
   }
 }
 
@@ -1352,7 +1368,7 @@ export function estimateEpisode(input: { kind: "faceless" | "explainer"; setting
 /** What the render will do differently from what was asked (nothing that stops it). */
 function notesFor(settings: EpisodeSettings, seconds: number): { notes?: string[] } {
   const notes: string[] = [];
-  const m = resolveModels(withOfferedVideo(settings), 0, getModel);
+  const m = resolveModels(withOfferedModels(settings), 0, getModel);
   const limit = styleRefLimit(settings.engine, getModel);
   if (settings.styleRefs.length > limit) notes.push(`The open-source picture model follows the first ${limit} style references.`);
   if (settings.engine === "open" && settings.styleRefs.length && settings.sourceImages?.length) notes.push("Your style references set the look; the attached images aren't used for the open-source pictures.");
@@ -1520,6 +1536,7 @@ export const SettingsSchema = z.object({
   voice: VoiceSchema.nullable(),
   elements: z.array(z.string().max(60)).max(8),
   videoModel: z.string().max(60).optional(),
+  musicModel: z.string().max(60).optional(),
   resolution: z.string().max(10).optional(),
   auto: z.boolean().optional(),
   brief: BriefLookSchema.optional(),

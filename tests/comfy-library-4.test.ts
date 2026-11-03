@@ -100,6 +100,16 @@ describe("round-4 ComfyUI workflows", () => {
       "minimax-h3-i2v-hq",
       "minimax-h3-flf2v-hq",
       "minimax-h3-orbit",
+      // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu): FastH3 V2 and Trim, unvalidated like the H3 graphs until a GPU run.
+      "minimax-h3-fast-t2v",
+      "minimax-h3-fast-i2v",
+      "minimax-h3-fast-flf2v",
+      "minimax-h3-trim-t2v",
+      // Design a voice (nm10-voice-design): ComfyUI-QwenTTS and ComfyUI-VoxCPM2 aren't on the validation server (tests/voice-design-server.test.ts).
+      "tts-qwen3-design",
+      "tts-qwen3-clone",
+      "tts-voxcpm2",
+      "tts-voxcpm2-clone",
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",
@@ -136,9 +146,10 @@ describe("round-4 ComfyUI workflows", () => {
       // Clean up voice: ComfyUI-RE-USE isn't on the validation server; the pack's own tests run it (comfy-nodes/ComfyUI-RE-USE/tests).
       "voice-clean-reuse",
       "voice-clean-bed-reuse",
+      // Hi3D refine (hi3d-refine): Comfyui-Hi3d-T8 needs an Ampere-or-newer NVIDIA GPU, so it isn't on the validation server.
+      "mesh-refine-hi3d",
       "video-character-swap-h3",
       "video-character-swap-h3-relay",
-      "video-person-remove-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
       "video-regenerate-h3",

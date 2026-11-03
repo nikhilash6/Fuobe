@@ -16,6 +16,7 @@ import {
   ImagePlus,
   Library,
   Loader2,
+  Maximize2,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -31,8 +32,10 @@ import {
   Volume2,
   VolumeX,
   Table,
+  LayoutDashboard,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -74,6 +77,7 @@ import { offered } from "@/lib/model-access";
 import { dualEngine, onEngine } from "@/lib/catalog/engines";
 import {
   CANVAS_TEXT_MAX,
+  cameraPathOf,
   CONCAT_LIMITS,
   CONCAT_MODELS,
   CONCAT_RATIOS,
@@ -92,6 +96,10 @@ import {
   nodeOps,
   OPEN_DUB_HINT,
   OUT,
+  edgeStem,
+  outputPorts,
+  stemOutput,
+  type OutputPortDef,
   TABLE_LIMITS,
   tableRows,
   outputType,
@@ -111,13 +119,22 @@ import {
 } from "@/lib/catalog/canvas";
 import { OPERATION_LABELS, type Engine, type MediaKind, type ModelDef, type OutputFile } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
+import { stemLabel, type StemId } from "@/lib/av/split";
 import { dubResult, languageStage, type DubSessionView, type DubStage } from "@/lib/av/dub";
 import { DUB_LANGUAGES, supportsTarget } from "@/lib/av/languages";
 import { matchSpokenLanguage, spokenLanguageName, spokenLanguageOptions } from "@/lib/speech-languages";
 import { keyCombo } from "@/lib/keys";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
+import { KIND_COLOR } from "@/lib/layout-edit";
+import { readLayout, readsBoxes, type LayoutDraft } from "@/lib/layout-prompt";
+import { layoutCanvas } from "@/lib/catalog/plan";
+import { getModel } from "@/lib/catalog";
+import type { EditorCanvas } from "@/components/studio/layout-editor";
 import { BOARD_NODE_TYPES, type BoardType } from "./board";
+import { ExactOrbitControls } from "@/components/exact-orbit-controls";
+import { PATH_PRESETS } from "@/lib/camera-path";
+import { exactDefaults } from "@/lib/exact-orbit";
 import { NodeIcon, PORT_COLOR, useEditorActions, useEditorGlobals, useEditorSelector, useNodeResults, useNodeView, type EditorSnapshot, type NodeResults } from "./canvas-context";
 
 /** A node on the board: a graph node, or a group, comment pin or drawing (./board.tsx). */
@@ -171,6 +188,50 @@ function OutPort({ type }: { type: PortType }) {
   );
 }
 
+/**
+ * Split soundtrack's outputs: one row per stem, each with its own handle on the right, and the stem to play once the
+ * node has run. A handle the node can't fill here is greyed out, with why.
+ */
+function StemPorts({ ports, outputs, onOpen }: { ports: OutputPortDef[]; outputs: OutputFile[]; onOpen: (index: number) => void }) {
+  return (
+    <div className="border-b py-1" role="list" aria-label="Stems">
+      {ports.map((p) => {
+        const o = stemOutput(outputs, p.stem);
+        return (
+          <div key={p.id} role="listitem" className="relative flex min-h-8 items-center gap-2 pr-3.5 pl-3 text-[11px]" title={p.disabled}>
+            <span className={cn("w-24 shrink-0 font-medium", p.disabled ? "text-subtle-foreground" : o ? "text-foreground" : "text-muted-foreground")}>{p.label}</span>
+            {o ? (
+              <>
+                <audio src={o.url} controls preload="none" aria-label={`${p.label} stem`} className={cn("h-7 w-full min-w-0 flex-1", NO_DRAG)} />
+                <button
+                  onClick={() => onOpen(outputs.indexOf(o))}
+                  className={cn("grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground", NO_DRAG)}
+                  aria-label={`Open ${p.label.toLowerCase()} stem`}
+                  title="Open"
+                >
+                  <Maximize2 className="size-3.5" />
+                </button>
+              </>
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-right text-subtle-foreground">{p.disabled ? "Not available here" : ""}</span>
+            )}
+            <Handle
+              type="source"
+              position={Position.Right}
+              id={p.id}
+              isConnectable={!p.disabled}
+              className={cn("canvas-handle canvas-handle-out", p.disabled && "opacity-40")}
+              style={{ "--port": PORT_COLOR[p.type] } as React.CSSProperties}
+              aria-label={`${p.label} output (${PORT_TYPE_LABEL[p.type]})`}
+              title={p.disabled ?? `${p.label} out — drag to connect`}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Menus: the ⋯ button and right-click show the same items (keyboard users get Rename, Connect and Disconnect)
 
@@ -214,14 +275,21 @@ function portLabel(n: CanvasNode | undefined, handle: string | null | undefined)
 function ConnectItems({ id, kit }: { id: string; kit: MenuKit }) {
   const actions = useEditorActions();
   const graph = actions.getGraph();
+  const { mode } = useEditorGlobals();
   const options: { key: string; label: string; c: Connection }[] = [];
-  for (const t of [...graph.nodes].sort(byBoardPosition)) {
-    if (t.id === id || t.type === "note") continue;
-    const handles = t.type === "output" ? [PREVIEW_IN] : inputPorts(t).map((p) => p.id);
-    for (const h of handles) {
-      const c: Connection = { source: id, sourceHandle: OUT, target: t.id, targetHandle: h };
-      if (graph.edges.some((e) => e.source === id && e.target === t.id && e.targetHandle === h) || connectionError(graph, c)) continue;
-      options.push({ key: `${t.id}:${h}`, label: `${nodeLabel(t)} · ${portLabel(t, h)}`, c });
+  const self = graph.nodes.find((n) => n.id === id);
+  // Split soundtrack offers each of its stems ("Music → Mux · Audio"); every other node its one output.
+  const outs = self ? outputPorts(graph, self, mode).filter((p) => !p.disabled) : [];
+  const many = outs.length > 1;
+  for (const out of outs) {
+    for (const t of [...graph.nodes].sort(byBoardPosition)) {
+      if (t.id === id || t.type === "note") continue;
+      const handles = t.type === "output" ? [PREVIEW_IN] : inputPorts(t).map((p) => p.id);
+      for (const h of handles) {
+        const c: Connection = { source: id, sourceHandle: out.id, target: t.id, targetHandle: h };
+        if (graph.edges.some((e) => e.source === id && (e.sourceHandle ?? OUT) === out.id && e.target === t.id && e.targetHandle === h) || connectionError(graph, c, mode)) continue;
+        options.push({ key: `${out.id}:${t.id}:${h}`, label: `${many ? `${out.label} → ` : ""}${nodeLabel(t)} · ${portLabel(t, h)}`, c });
+      }
     }
   }
   if (!options.length) return <kit.Item disabled>Nothing on the board takes this output</kit.Item>;
@@ -374,6 +442,7 @@ function NodeShell({
   data,
   selected,
   out,
+  outsInBody,
   badge,
   menu = [],
   footer,
@@ -386,6 +455,8 @@ function NodeShell({
   data: CanvasNodeData;
   selected: boolean;
   out?: PortType | null;
+  /** The output handles are drawn in the body (Split soundtrack's stems), not in the header. */
+  outsInBody?: boolean;
   badge?: React.ReactNode;
   menu?: MenuItem[];
   footer?: React.ReactNode;
@@ -440,7 +511,7 @@ function NodeShell({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {out && <OutPort type={out} />}
+            {out && !outsInBody && <OutPort type={out} />}
           </div>
           {children}
           {footer}
@@ -676,6 +747,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
   const model = useMemo(() => nodeModel(node, g.mode), [node, g.mode]);
   const ports = useMemo(() => inputPorts(node), [node]);
   const out = outputType(EMPTY_GRAPH, node);
+  const stems = useMemo(() => (type === "split-soundtrack" ? outputPorts(EMPTY_GRAPH, node, g.mode) : null), [type, node, g.mode]);
   const r = v.results;
   const ops = useMemo(() => nodeOps(node, model), [node, model]);
   const auto = type === "model" && ops.length > 1;
@@ -696,7 +768,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
 
   // Handles change with the model and op: tell React Flow to re-measure them (React Flow measures new nodes itself).
   const updateInternals = useUpdateNodeInternals();
-  const portKey = `${ports.map((p) => p.id).join(",")}|${out}`;
+  const portKey = `${ports.map((p) => p.id).join(",")}|${out}|${stems?.map((p) => `${p.id}${p.disabled ? "-" : ""}`).join(",") ?? ""}`;
   const measuredKey = useRef(portKey);
   useEffect(() => {
     if (measuredKey.current === portKey) return;
@@ -732,7 +804,12 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
         ]),
     ...(running ? [{ label: "Cancel", icon: Square, onSelect: () => actions.cancel(id) }] : []),
     { label: data.pinned ? "Unpin result" : "Pin result", icon: data.pinned ? PinOff : Pin, onSelect: () => actions.update(id, { pinned: !data.pinned }), separatorBefore: !data.pinned },
-    ...(r.outputs.some((x) => ["image", "video", "audio"].includes(x.o.kind)) ? [{ label: "Use result as an input", icon: ImagePlus, onSelect: () => actions.toInput(id) }] : []),
+    // Split soundtrack: one item per stem it made ("Use music as an input").
+    ...(stems
+      ? stems.flatMap((p) => (p.stem && stemOutput(r.outputs.map((x) => x.o), p.stem) ? [{ label: `Use ${p.label.toLowerCase()} as an input`, icon: ImagePlus, onSelect: () => actions.toInput(id, p.stem) }] : []))
+      : r.outputs.some((x) => ["image", "video", "audio"].includes(x.o.kind))
+        ? [{ label: "Use result as an input", icon: ImagePlus, onSelect: () => actions.toInput(id) }]
+        : []),
     ...(r.outputs.length
       ? [
           {
@@ -778,6 +855,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
       data={data}
       selected={!!selected}
       out={out}
+      outsInBody={!!stems}
       menu={menu}
       tone={running ? "running" : r.state === "failed" ? "failed" : undefined}
       badge={
@@ -821,6 +899,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
       }
     >
       {ports.length > 0 && <div className="border-b py-1">{ports.map((p) => <InPort key={p.id} port={p} count={v.counts[p.id] ?? 0} />)}</div>}
+      {stems && <StemPorts ports={stems} outputs={r.state === "succeeded" ? r.outputs.map((x) => x.o) : []} onOpen={(i) => actions.open(id, i)} />}
       <div className="space-y-2 p-3">
         {variants && (
           <div className={cn("inline-grid h-7 grid-cols-2 rounded-full bg-muted p-0.5 text-[12px] font-medium", NO_DRAG)} role="radiogroup" aria-label={`${variants[0]} or ${variants[1]}`}>
@@ -878,7 +957,8 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
             <Table className="size-3.5 shrink-0" /> Runs once per table row: {v.rows === 1 ? "1 run" : `${v.rows} runs`}
           </p>
         )}
-        <Results id={id} r={r} />
+        {/* Split soundtrack plays its stems on their own rows, by their handles. */}
+        {!(stems && r.state === "succeeded") && <Results id={id} r={r} />}
         {error && r.state !== "failed" && (
           <p className={cn("flex items-start gap-1.5 text-[12px] leading-snug", v.runError ? "text-destructive" : "text-warning")}>
             <AlertCircle className="mt-px size-3.5 shrink-0" />
@@ -1178,6 +1258,55 @@ const PromptNode = memo(function PromptNode({ id, type, data, selected }: NodePr
           aria-label={`Text of ${data.label || "Text prompt"}`}
           className={cn("field-sizing-content max-h-60 min-h-20 w-full resize-none rounded-lg bg-muted px-2.5 py-2 text-[13px] leading-snug outline-none placeholder:text-subtle-foreground focus:ring-2 focus:ring-brand-faint", NO_DRAG)}
         />
+      </div>
+    </NodeShell>
+  );
+}, sameNodeProps);
+
+/** "Exact orbit" in the Camera path node's move list: the orbit set by its numbers. */
+const EXACT_PICK = "exact";
+
+/** A Camera path's move: a preset, or an exact orbit by its numbers (the board's node and the phone's card). */
+export function CameraPathFields({ data, onChange, disabled, label }: { data: CanvasNodeData; onChange: (patch: Partial<CanvasNodeData>) => void; disabled?: boolean; label: string }) {
+  const pick = data.orbit ? EXACT_PICK : (data.pathPreset ?? "orbit_360");
+  const { keys } = cameraPathOf(data.orbit ? { data } : { data: { pathPreset: pick } });
+  return (
+    <div className="grid gap-2">
+      <Select
+        value={pick}
+        disabled={disabled}
+        onValueChange={(v) => onChange(v === EXACT_PICK ? { orbit: data.orbit ?? exactDefaults("motion-360-orbit"), pathPreset: undefined, keys: undefined } : { pathPreset: v, orbit: undefined, keys: undefined })}
+      >
+        <SelectTrigger size="sm" className="w-full text-[13px]" aria-label={`Move of ${label}`}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {PATH_PRESETS.map((p) => (
+            <SelectItem key={p.id} value={p.id}>
+              {p.name}
+            </SelectItem>
+          ))}
+          <SelectItem value={EXACT_PICK}>Exact orbit…</SelectItem>
+        </SelectContent>
+      </Select>
+      {data.orbit ? (
+        <ExactOrbitControls compact value={data.orbit} defaults={exactDefaults("motion-360-orbit")} onChange={(orbit) => onChange(orbit ? { orbit } : { orbit: undefined, pathPreset: "orbit_360" })} className="border-0 bg-muted/50 p-2.5" />
+      ) : (
+        <p className="text-[12px] text-muted-foreground">{PATH_PRESETS.find((p) => p.id === pick)?.description}</p>
+      )}
+      <p className="text-[11.5px] text-subtle-foreground">{keys.length} keyframes</p>
+    </div>
+  );
+}
+
+/** Camera path (N7-7): a preset move, or an exact orbit by its numbers, for Fly around nodes to follow. */
+const CameraPathNode = memo(function CameraPathNode({ id, type, data, selected }: NodeProps<FlowNode>) {
+  const actions = useEditorActions();
+  const { readOnly } = useEditorGlobals();
+  return (
+    <NodeShell id={id} type={type as CanvasNodeType} data={data} selected={!!selected} out="path" width={300}>
+      <div className={cn("p-3", NO_DRAG)}>
+        <CameraPathFields data={data} disabled={readOnly} label={data.label || "Camera path"} onChange={(patch) => actions.update(id, patch)} />
       </div>
     </NodeShell>
   );
@@ -1569,18 +1698,21 @@ const CloneVoiceNode = memo(function CloneVoiceNode({ id, data, selected }: Node
 // ---------------------------------------------------------------------------
 // Output preview and notes
 
-type Source = Pick<CanvasNode, "id" | "type" | "data">;
+/** A node feeding an Output node, with the stem it hands on (an edge from a Split soundtrack handle). */
+type Source = Pick<CanvasNode, "id" | "type" | "data"> & { key: string; stem?: StemId };
 
-const sameSources = (a: Source[], b: Source[]) => a.length === b.length && a.every((s, i) => s.id === b[i].id && s.type === b[i].type && s.data === b[i].data);
+const sameSources = (a: Source[], b: Source[]) => a.length === b.length && a.every((s, i) => s.key === b[i].key && s.type === b[i].type && s.data === b[i].data);
 
 /** What feeds an Output node, top to bottom. */
 const selectSources = (s: EditorSnapshot, id: string): Source[] =>
   s.graph.edges
     .filter((e) => e.target === id)
-    .map((e) => s.byId.get(e.source))
-    .filter((n): n is CanvasNode => !!n)
-    .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
-    .map((n) => ({ id: n.id, type: n.type, data: n.data }));
+    .flatMap((e) => {
+      const n = s.byId.get(e.source);
+      return n ? [{ n, stem: edgeStem(n, e.sourceHandle) }] : [];
+    })
+    .sort((a, b) => a.n.position.y - b.n.position.y || a.n.position.x - b.n.position.x)
+    .map(({ n, stem }) => ({ id: n.id, key: stem ? `${n.id}:${stem}` : n.id, type: n.type, data: n.data, ...(stem && { stem }) }));
 
 /** The saved width (templates set one), not React Flow's measured width (that would feed back). */
 const selectWidth = (s: EditorSnapshot, id: string) => s.byId.get(id)?.width;
@@ -1601,9 +1733,12 @@ const OutputNode = memo(function OutputNode({ id, type, data, selected }: NodePr
         ) : (
           <div className={cn("grid gap-2", sources.length > 2 && w >= 540 ? "grid-cols-3" : sources.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
             {sources.map((s) => (
-              <figure key={s.id} className="min-w-0 space-y-1">
+              <figure key={s.key} className="min-w-0 space-y-1">
                 <SourcePreview node={s} />
-                <figcaption className="truncate text-[11px] text-muted-foreground">{nodeLabel(s)}</figcaption>
+                <figcaption className="truncate text-[11px] text-muted-foreground">
+                  {nodeLabel(s)}
+                  {s.stem ? ` · ${stemLabel(s.stem)}` : ""}
+                </figcaption>
               </figure>
             ))}
           </div>
@@ -1617,7 +1752,12 @@ function SourcePreview({ node }: { node: Source }) {
   const actions = useEditorActions();
   const r = useNodeResults(node.id);
   if (isGenerator(node)) {
-    if (r.outputs.length) return <OutputThumb o={r.outputs[0].o} onOpen={() => actions.open(node.id, 0)} large />;
+    // A Split soundtrack stem: that one of its outputs.
+    if (node.stem) {
+      const o = r.state === "succeeded" ? stemOutput(r.outputs.map((x) => x.o), node.stem) : undefined;
+      if (o) return <OutputThumb o={o} onOpen={() => actions.open(node.id, r.outputs.findIndex((x) => x.o === o))} large />;
+      if (r.state === "succeeded") return <div className="grid h-20 place-items-center rounded-lg bg-muted text-[11px] text-muted-foreground">No {stemLabel(node.stem).toLowerCase()} in this result</div>;
+    } else if (r.outputs.length) return <OutputThumb o={r.outputs[0].o} onOpen={() => actions.open(node.id, 0)} large />;
     if (r.state !== "idle") return <Results id={node.id} r={r} compact />;
     return <div className="grid h-20 place-items-center rounded-lg bg-muted text-[11px] text-muted-foreground">Not run yet</div>;
   }
@@ -1754,6 +1894,157 @@ const TableNode = memo(function TableNode({ id, data, selected }: NodeProps<Flow
   );
 }, sameNodeProps);
 
+// ---------------------------------------------------------------------------
+// Layout: boxes for a headline, a product, a price; the image model it feeds draws each in its place
+
+const LayoutEditor = dynamic(() => import("@/components/studio/layout-editor").then((m) => m.LayoutEditor));
+
+const LAYOUT_ASPECTS = ["1:1", "4:5", "3:4", "2:3", "9:16", "16:9", "3:2", "4:3"];
+const EMPTY_LAYOUT: LayoutDraft = { summary: { caption: "", meta: [], canvas: "single" }, items: [], aspect: "1:1" };
+
+/** The first model a node feeds ("node id|model id|aspect ratio"), so the editor draws on the shape that model renders. */
+const downstreamOf = (s: EditorSnapshot, id: string): string => {
+  for (const e of s.graph.edges) {
+    if (e.source !== id) continue;
+    const t = s.byId.get(e.target);
+    if (t?.data.modelId) return `${t.id}|${t.data.modelId}|${t.data.params?.aspectRatio ?? getModel(t.data.modelId)?.defaults?.aspectRatio ?? ""}`;
+  }
+  return "";
+};
+
+/** A canvas of that shape, 1024 px on its longer side in steps of 16 (no image model to ask). */
+function plainCanvas(aspect: string | undefined): EditorCanvas {
+  const r = ratioNum(aspect);
+  const r16 = (v: number) => Math.max(16, Math.round(v / 16) * 16);
+  const width = r >= 1 ? 1024 : r16(1024 * r);
+  const height = r >= 1 ? r16(1024 / r) : 1024;
+  return { width, height, asked: { width, height }, exact: false };
+}
+
+const ratioNum = (aspect: string | undefined) => {
+  const [a, b] = (aspect ?? "1:1").split(":").map(Number);
+  return a > 0 && b > 0 ? a / b : 1;
+};
+
+/** What a Layout node's card and its row in the Nodes list need: the draft, the model it feeds and the shape. */
+function useLayoutNode(id: string, data: CanvasNodeData) {
+  const draft = readLayout(data.layout) ?? EMPTY_LAYOUT;
+  const feeds = useEditorSelector(downstreamOf, id);
+  const [target, modelId, auto] = feeds.split("|");
+  const found = modelId ? getModel(modelId) : undefined;
+  const texts = draft.items.filter((it) => it.label === "text").length;
+  // The picture's shape is the model's (its node's aspect ratio): a square canvas when the model leaves it to "auto".
+  const nodeAspect = auto === "auto" ? "1:1" : auto;
+  return {
+    draft,
+    found,
+    target,
+    model: found?.kind === "image" ? found : undefined,
+    aspect: nodeAspect || draft.aspect || "1:1",
+    summary: draft.items.length ? `${draft.items.length} box${draft.items.length === 1 ? "" : "es"}${texts ? ` · ${texts} with words` : ""}` : "No boxes yet",
+  };
+}
+
+/** The Layout editor for a node (Image studio's editor), sized as the model it feeds renders. */
+function LayoutNodeEditor({ id, data, open, onOpenChange }: { id: string; data: CanvasNodeData; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const actions = useEditorActions();
+  const { draft, model, aspect, target } = useLayoutNode(id, data);
+  const params = useEditorSelector((s, key) => (key ? s.byId.get(key)?.data.params : undefined), target ?? "");
+  if (!open) return null;
+  const aspects = model?.options.aspectRatios?.filter((a) => a !== "auto") ?? LAYOUT_ASPECTS;
+  const canvasFor = (a: string | undefined): EditorCanvas => (model ? layoutCanvas(model, { ...(a && { aspectRatio: a }) }, "t2i") : plainCanvas(a));
+  return (
+    <LayoutEditor
+      open={open}
+      onOpenChange={onOpenChange}
+      layout={draft}
+      caption={draft.summary.caption}
+      aspect={aspect}
+      aspects={aspects}
+      canvasFor={canvasFor}
+      model={model}
+      onDone={(r) => {
+        actions.update(id, { layout: { ...r.layout, summary: { ...r.layout.summary, caption: r.caption.trim() }, ...(r.aspect && { aspect: r.aspect }) } });
+        // A new shape picked in the editor is the picture's: the model it feeds renders it.
+        if (target && model && r.aspect && r.aspect !== aspect) actions.update(target, { params: { ...params, aspectRatio: r.aspect } });
+      }}
+    />
+  );
+}
+
+/** Phones edit in the Nodes list (the board is read-only there): the Layout node's row, with Edit layout. */
+export function LayoutNodeRow({ id, data, className }: { id: string; data: CanvasNodeData; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const { summary, aspect } = useLayoutNode(id, data);
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <p className="min-w-0 truncate text-[13px] text-muted-foreground">
+        {aspect} · {summary}
+      </p>
+      <button type="button" className={className} onClick={() => setOpen(true)}>
+        <LayoutDashboard className="size-3.5" /> Edit layout
+      </button>
+      <LayoutNodeEditor id={id} data={data} open={open} onOpenChange={setOpen} />
+    </div>
+  );
+}
+
+const LayoutNode = memo(function LayoutNode({ id, data, selected }: NodeProps<FlowNode>) {
+  const { readOnly } = useEditorGlobals();
+  const [open, setOpen] = useState(false);
+  const { draft, found, aspect, summary } = useLayoutNode(id, data);
+  return (
+    <>
+      <NodeShell id={id} type="layout" data={data} selected={!!selected} out="text" width={260}>
+        <div className="space-y-2 p-3">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            disabled={readOnly}
+            aria-label={`Edit layout: ${summary}`}
+            className={cn("relative mx-auto block w-full overflow-hidden rounded-md border border-dashed border-border-strong bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none", NO_DRAG)}
+            style={{ aspectRatio: `${ratioNum(aspect)}`, maxWidth: `calc(12rem * ${ratioNum(aspect)})` }}
+          >
+            {draft.items.map((it, i) => (
+              <span
+                key={i}
+                aria-hidden
+                className="absolute overflow-hidden rounded-[2px] border px-0.5 text-left text-[8px] leading-tight text-foreground/80"
+                style={{
+                  left: `${it.box[0] * 100}%`,
+                  top: `${it.box[1] * 100}%`,
+                  width: `${(it.box[2] - it.box[0]) * 100}%`,
+                  height: `${(it.box[3] - it.box[1]) * 100}%`,
+                  borderColor: it.color ?? KIND_COLOR[it.label],
+                  background: `color-mix(in oklab, ${it.color ?? KIND_COLOR[it.label]} 14%, transparent)`,
+                }}
+              >
+                {it.label === "text" ? it.text : ""}
+              </span>
+            ))}
+            {!draft.items.length && <span className="absolute inset-0 grid place-items-center p-2 text-center text-[12px] text-muted-foreground">Draw boxes for a headline, a product, a price</span>}
+          </button>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[12px] text-muted-foreground">
+              {aspect} · {summary}
+            </span>
+            {!readOnly && (
+              <button type="button" className={chip} onClick={() => setOpen(true)}>
+                <LayoutDashboard className="size-3" /> Edit layout
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            {found && !readsBoxes(found) ? "This model reads the layout as words, not exact positions." : "Wire it into an image model's Prompt. With a table, {Column} in a box's words fills row by row."}
+          </p>
+        </div>
+      </NodeShell>
+      {/* Beside the card, not in it: the card's menus and clicks stay out of the editor. */}
+      <LayoutNodeEditor id={id} data={data} open={open} onOpenChange={setOpen} />
+    </>
+  );
+}, sameNodeProps);
+
 export const NODE_TYPES = {
   prompt: PromptNode,
   "image-input": MediaInputNode,
@@ -1768,11 +2059,15 @@ export const NODE_TYPES = {
   tts: GeneratorNode,
   "voice-change": GeneratorNode,
   "clean-voice": GeneratorNode,
+  "split-soundtrack": GeneratorNode,
   "clone-voice": CloneVoiceNode,
   translate: GeneratorNode,
   concat: GeneratorNode,
   restore: GeneratorNode,
+  "fly-around": GeneratorNode,
+  "camera-path": CameraPathNode,
   table: TableNode,
+  layout: LayoutNode,
   output: OutputNode,
   note: NoteNode,
   ...BOARD_NODE_TYPES,

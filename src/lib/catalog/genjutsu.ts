@@ -23,10 +23,14 @@ import {
   anchorModel,
   anchorPrompt,
   ANCHOR_FALLBACK,
+  CHARACTER_QUALITIES,
   CHARACTER_SWAP,
   CLOUD_NO_LORA,
+  characterFinish,
   characterLicenceLine,
   characterQuality,
+  h3Canvas,
+  partFrames,
   cutsInPart,
   partProblem,
   seedProblem,
@@ -59,13 +63,15 @@ import { firstFramePrompt, getShortsPreset, lookFromPreset, planShorts, segmentP
 import { getModel } from "./index";
 import { REPLACED_BY } from "./replaced";
 import { soulLook } from "./soul";
+import { filmSize, SHARPEN_COPY, sharpenPrompt, sharpenSteps, sharpenTierFor, type SharpenTier } from "./sharpen";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
 import { originalSoundProblem, separates, type SoundChoice } from "../av/original-sound";
 
 export type GenjutsuMode = "motion" | "character" | "swap" | "restyle" | "insert";
 /** How you say what changes (Object swap and Insert) or who (Character swap): words, clicks on the first frame, or paint on it. */
 export type GenjutsuTarget = RemoveMode;
-export type GenjutsuQuality = "480p" | "720p" | "768p" | "1080p";
+/** Genjutsu's qualities; 2K and 4K are the Character swap's finishing sizes (sharpen.ts). */
+export type GenjutsuQuality = "480p" | "720p" | "768p" | "1080p" | "2K" | "4K";
 /** Lite ("standard", the cheaper, faster tier of the same Original) or the full Original ("high"). */
 export type GenjutsuTier = "standard" | "high";
 
@@ -318,7 +324,7 @@ export const MAKERS: Maker[] = [
     maxSeconds: CHARACTER_SWAP.maxSeconds,
     minSeconds: CHARACTER_SWAP.minSeconds,
     keepsSound: false,
-    qualities: ["480p", "768p"],
+    qualities: CHARACTER_QUALITIES.cloud,
     h3: { anchor: true },
     promptOptional: true,
   },
@@ -364,7 +370,7 @@ export const MAKERS: Maker[] = [
     source: "original",
     refs: { min: 1, max: 1 },
     keepsSound: true,
-    qualities: ["480p", "768p"],
+    qualities: CHARACTER_QUALITIES.open,
     h3: { anchor: true, maskSwitch: true },
     promptOptional: true,
   },
@@ -378,7 +384,7 @@ export const MAKERS: Maker[] = [
     source: "open",
     refs: { min: 1, max: 1 },
     keepsSound: true,
-    qualities: ["480p", "768p"],
+    qualities: CHARACTER_QUALITIES.open,
     h3: { anchor: false },
     promptOptional: true,
   },
@@ -766,7 +772,8 @@ const px = (q: string) => parseInt(q, 10) || 0;
 /** The resolution a model is asked for: the quality picked, or the nearest it renders (the largest not above, else its smallest). */
 export function qualityFor(m: Maker, quality: string): string | undefined {
   if (!m.qualities?.length) return undefined;
-  if (m.h3) return characterQuality(quality);
+  // H3: its own 480p / 768p, or a finishing size of the 768p swap the engine makes (else the swap's own size).
+  if (m.h3) return m.qualities.includes(quality) ? quality : characterQuality(quality);
   if (m.qualities.includes(quality)) return quality;
   const below = m.qualities.filter((q) => px(q) <= px(quality)).sort((a, b) => px(b) - px(a));
   return below[0] ?? [...m.qualities].sort((a, b) => px(a) - px(b))[0];
@@ -1214,6 +1221,89 @@ export function h3Extra(c: CharacterOptions | undefined): Record<string, unknown
 }
 
 /**
+ * Your GPU's 1080p / 2K / 4K (sharpen.ts): after the 768p swap, the person's mask over the part (SAM 3.1, as the swap
+ * found them), the part at 24 fps and the film's size, then the swap regenerated (start sigma 0.8, never above the
+ * footage's size) and only the character composited over the footage, and the part's own sound put back.
+ */
+function openFinish(input: GenjutsuPlanInput, asked: SharpenTier, quality: string) {
+  const film = filmSize(input.source.width, input.source.height);
+  if (!film) throw new Error(SHARPEN_COPY.noSize);
+  // H3's canvas the swap is made at: your character is redrawn inside the part of it the regenerate keeps.
+  const canvas = h3Canvas(input.source.width!, input.source.height!, quality);
+  const tier = sharpenTierFor("open", asked, film, canvas);
+  if (!tier) throw new Error(SHARPEN_COPY.small);
+  const c = input.character ?? {};
+  const helper = { feature: GENJUTSU.stepFeature, batchTitle: input.title };
+  const base = { feature: GENJUTSU.feature, batchTitle: input.title, title: input.title };
+  const start = r3(input.range.start);
+  const end = r3(input.range.end);
+  const frames = partFrames(end - start);
+  const h3 = h3Extra(c);
+  return (steps: PlanStep[], prompt: string): { final: string; sound: boolean } => {
+    steps.push({
+      key: "mask",
+      request: {
+        ...helper,
+        modelId: SHARPEN_TOOLS.mask,
+        op: "bg-remove-video",
+        prompt: (typeof h3.maskPrompt === "string" && h3.maskPrompt) || "person",
+        inputs: { video: input.source.url },
+        params: {
+          startTime: start,
+          endTime: end,
+          resolution: quality,
+          matteOutput: "matte",
+          ...(input.points?.length ? { points: input.points } : {}),
+          extra: {
+            selection: input.points?.length ? "index" : h3.selection,
+            subjectIndex: input.points?.length ? 0 : h3.subjectIndex,
+            maskPrompt: (typeof h3.maskPrompt === "string" && h3.maskPrompt) || "person",
+            keyFrame: 0,
+            spanFrames: frames,
+            shotFrames: frames,
+          },
+        },
+        step: { label: "Find your character's outline (SAM 3.1)", index: 0, of: 1 },
+      },
+    });
+    steps.push({
+      key: "fit",
+      request: { ...helper, modelId: SHARPEN_TOOLS.fit, op: "trim", inputs: { video: input.source.url }, params: { startTime: start, endTime: end, fps: 24, extra: { ...film } }, step: { label: "The part at 24 fps", index: 0, of: 1 } },
+    });
+    const sound = !!input.source.hasAudio;
+    const made = sharpenSteps({
+      key: "sharpen-",
+      label: "Your character",
+      helper,
+      result: sound ? helper : base,
+      tier,
+      prompt: sharpenPrompt(prompt, c.description),
+      ...(input.seed !== undefined ? { seed: input.seed } : {}),
+      ...(c.sharpenSigma !== undefined ? { sigma: c.sharpenSigma } : {}),
+      frames,
+      take: { after: "swap" },
+      source: { after: "fit", start: 0 },
+      mask: { after: "mask", start: 0 },
+      film,
+      canvas,
+    });
+    steps.push(...made.steps);
+    if (!sound) return { final: made.final, sound: false };
+    // The part's own sound over the whole of it (the composites' slices of it would meet at every window).
+    steps.push({
+      key: "sound",
+      request: { ...base, modelId: SHARPEN_TOOLS.mux, op: "mux", step: { label: "Put the clip's sound back", index: 1200, of: 1000 } },
+      after: [made.final, "fit"],
+      chain: [{ slot: "video" }, { slot: "audio" }],
+    });
+    return { final: "sound", sound: true };
+  };
+}
+
+/** Your GPU's finishing helpers: SAM 3.1's mask of a shot (H3 Relay), the 24 fps fit, the soundtrack. */
+export const SHARPEN_TOOLS = { mask: "oss-h3-person-mask", fit: "oss-fit-clip", mux: "oss-mux" } as const;
+
+/**
  * Character swap on MiniMax H3. Open: one job on the upload (the graph trims the part, finds the person with SAM 3.1,
  * continues window after window up to 30 s and keeps the clip's sound). Cloud: 15 s pieces (5–15 s each), each with
  * its anchor, joined, and the clip's sound put back. The anchor (the part's first frame with the character in it) is
@@ -1227,6 +1317,8 @@ function planCharacterSwap(input: GenjutsuPlanInput): GenjutsuPlan {
   const character = input.references.slice(0, 1);
   if (!character.length) throw new Error(REFS_MISSING.character);
   const quality = characterQuality(input.quality);
+  // 1080p / 2K / 4K: the swap is made at 768p, then finished (your GPU: regenerated and composited; fal: made at that size).
+  const finish = characterFinish(qualityFor(m, input.quality));
   const seed = input.seed !== undefined ? { seed: input.seed } : {};
   const anchorOn = !!m.h3?.anchor && c.anchor !== false;
   const am = anchorModel(m.engine, c.anchorModel);
@@ -1260,11 +1352,11 @@ function planCharacterSwap(input: GenjutsuPlanInput): GenjutsuPlan {
       });
       steps.push(anchorStep("anchor", "frame", { label: `Put your character in it (${am.label})`, index: 0, of: 1 }));
     }
+    const sharpen = finish ? openFinish(input, finish, quality) : null;
     steps.push({
       key: "swap",
       request: {
-        ...base,
-        title: input.title,
+        ...(sharpen ? helper : { ...base, title: input.title }),
         modelId: m.id,
         op: "video-swap",
         prompt: promptWith(anchorOn),
@@ -1282,11 +1374,20 @@ function planCharacterSwap(input: GenjutsuPlanInput): GenjutsuPlan {
       },
       ...(anchorOn ? { after: ["anchor"], chain: [anchorSlot()] } : {}),
     });
-    // The graph keeps the clip's sound; Original sound other than Everything lays the chosen stems over it instead.
-    if (input.source.hasAudio && separates("open", input.sound)) {
-      const swap = steps.find((s) => s.key === "swap")!;
-      swap.request = { ...swap.request, ...helper };
-      const final = joinWithSound(steps, { engine: "open", title: input.title, base, helper, source: input.source, range: input.range, pieces: ["swap"], sound: true, choice: input.sound });
+    // Original sound other than Everything lays the chosen stems over the picture instead of the clip's own sound.
+    const split = !!input.source.hasAudio && separates("open", input.sound);
+    let picture = "swap";
+    if (sharpen) {
+      // The finish puts the part's whole sound back itself; with a split choice it is left silent and the stems go on below.
+      const finishOf = split ? openFinish({ ...input, source: { ...input.source, hasAudio: false } }, finish!, quality) : sharpen;
+      const done = finishOf(steps, promptWith(anchorOn));
+      if (!split) return { steps, final: done.final, pieces: 1, sound: done.sound, tracked: false, anchors: anchorOn ? 1 : 0 };
+      picture = done.final;
+    }
+    if (split) {
+      const last = steps.find((s) => s.key === picture)!;
+      last.request = { ...last.request, ...helper };
+      const final = joinWithSound(steps, { engine: "open", title: input.title, base, helper, source: input.source, range: input.range, pieces: [picture], sound: true, choice: input.sound });
       return { steps, final, pieces: 1, sound: true, tracked: false, anchors: anchorOn ? 1 : 0 };
     }
     return { steps, final: "swap", pieces: 1, sound: false, tracked: false, anchors: anchorOn ? 1 : 0 };
@@ -1323,8 +1424,9 @@ function planCharacterSwap(input: GenjutsuPlanInput): GenjutsuPlan {
         prompt: promptWith(anchorOn),
         inputs: { images: character },
         loras: [lora],
-        params: { duration: callSecs, sourceDuration: secs, resolution: quality, ...seed },
-        step: label("swap the character"),
+        // fal makes 2K and 4K from a 768P base itself: the same call at that size.
+        params: { duration: callSecs, sourceDuration: secs, resolution: finish ?? quality, ...seed },
+        step: label(finish ? `swap the character at ${finish}` : "swap the character"),
       },
       after,
       chain,
@@ -1472,7 +1574,7 @@ export interface GenjutsuSetup {
 }
 
 const MODES = new Set<string>(GENJUTSU_MODES.map((m) => m.id));
-const QUALITIES = new Set<string>(["480p", "720p", "768p", "1080p"]);
+const QUALITIES = new Set<string>(["480p", "720p", "768p", "1080p", "2K", "4K"]);
 const FILE = /^\/api\/files\/[\w./-]{1,200}$/;
 const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.slice(0, max) : undefined);
 const files = (v: unknown, max: number) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && FILE.test(x)).slice(0, max) : []);

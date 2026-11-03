@@ -15,6 +15,7 @@
  */
 import { CHARACTER_SWAP, h3Canvas, HISTORY_CHOICES, WINDOW_CHOICES, whoWords, type SwapLora, type SwapWho } from "./character-swap";
 import { STUDIO_FPS } from "@/lib/av/scene-cuts";
+import { filmSize, type SharpenTier } from "./sharpen";
 import { wholeClipBudget } from "@/lib/av/video-finish";
 import type { Engine, PixelPoint } from "./types";
 import type { SoundChoice } from "../av/original-sound";
@@ -220,6 +221,25 @@ export interface SwapTake {
   frozen?: FrozenTake;
   /** The studio has looked at its finished result (selected it, or left the selection alone). */
   settled?: boolean;
+  /** Its sharper version (Assemble → Finish → Sharpen), shown beside it until it is picked. */
+  finish?: TakeFinish | null;
+}
+
+/**
+ * A take made sharper (sharpen.ts). Your GPU: the take regenerated and only the character composited over the footage.
+ * The cloud: the same segment made again on fal's H3 at 2K or 4K. The assembly uses it once it is picked (`use`).
+ */
+export interface TakeFinish {
+  id: string;
+  createdAt: number;
+  engine: Engine;
+  /** The size asked for, and the size made (your GPU: never above the footage's). */
+  asked: SharpenTier;
+  tier: SharpenTier;
+  genId?: string;
+  stepIds?: string[];
+  /** Picked after comparing: the assembly uses it instead of the take. */
+  use: boolean;
 }
 
 export interface SwapSegment {
@@ -394,24 +414,13 @@ export function clipProblem(c: { name?: string; duration?: number; bytes?: numbe
  * The size the normaliser keeps: the clip's own, on even numbers, at most 2048 px a side (the fit graph's limit;
  * H3 works at 1 MP at most anyway).
  */
-export function normalizedSize(width?: number, height?: number): { width: number; height: number } | null {
-  if (!width || !height) return null;
-  const k = Math.min(1, 2048 / width, 2048 / height);
-  const even = (n: number) => Math.max(2, Math.floor((n * k) / 2) * 2);
-  return { width: even(width), height: even(height) };
-}
+export const normalizedSize = (width?: number, height?: number) => filmSize(width, height, "open");
 
 /**
  * The cloud assembly's frame: the clip's own shape on even numbers within fal merge-videos' 512–2048 px (every piece,
  * the clip's own and H3's 480p / 768p takes, is scaled to it before the join). Null when the clip's size is unknown.
  */
-export function cloudFilmSize(width?: number, height?: number): { width: number; height: number } | null {
-  if (!width || !height) return null;
-  // Down to 2048 on the long side; up towards 512 on the short side (as far as the long side allows).
-  const scale = Math.min(2048 / Math.max(width, height), Math.max(1, 512 / Math.min(width, height)));
-  const even = (n: number) => Math.max(2, Math.round((n * scale) / 2) * 2);
-  return { width: even(width), height: even(height) };
-}
+export const cloudFilmSize = (width?: number, height?: number) => filmSize(width, height, "cloud");
 
 /** Whether the page needs a copy of a clip to play it (the cloud keeps the upload as filmed; your GPU makes its 24 fps copy anyway). */
 export const clipNeedsPreview = (engine: Engine, clip: Pick<SwapClip, "source">) => engine === "cloud" && (clip.source.playable === false || clipExtension(clip.source.name ?? clip.source.url) === "avi");
@@ -1132,6 +1141,11 @@ export interface StudioEstimate {
   transcribe: Record<string, number | null>;
   /** Tracking a whole shot's mask. */
   mask: Record<string, number | null>;
+  /**
+   * Sharpen for each clip: its chosen takes, their seconds, and what each size costs for all of them (null: unknown or
+   * not offered; your GPU: 0).
+   */
+  sharpen: Record<string, { takes: number; seconds: number; costUsd: Partial<Record<SharpenTier, number | null>>; problem?: string }>;
   /** One anchor with each model on this engine. */
   anchors: { id: string; label: string; note: string; costUsd: number | null; offered: boolean }[];
   notes: string[];
@@ -1308,8 +1322,14 @@ export function assemblyPieces(project: SwapProject, clip: SwapClip): { pieces: 
   return { pieces, stale };
 }
 
-/** The takes an assembly is made of (its identity: the same takes need no new assembly). */
-export const assemblyTakes = (pieces: AssemblyPiece[]) => pieces.flatMap((p) => (p.kind === "take" ? [p.take.id] : []));
+/** The sharper version a take is assembled with, when one is picked. */
+export const usedFinish = (take: Pick<SwapTake, "finish">) => (take.finish?.use ? take.finish : null);
+
+/** The takes an assembly is made of (its identity: the same takes, and the same sharper versions, need no new assembly). */
+export const assemblyTakes = (pieces: AssemblyPiece[]) => pieces.flatMap((p) => (p.kind === "take" ? [usedFinish(p.take) ? `${p.take.id}@${usedFinish(p.take)!.id}` : p.take.id] : []));
+
+/** The chosen takes Sharpen works on: every swapped segment's, in the assembly's order. */
+export const chosenTakes = (pieces: AssemblyPiece[]) => pieces.flatMap((p) => (p.kind === "take" ? [p] : []));
 
 // ---------------------------------------------------------------------------
 // From Genjutsu

@@ -1,0 +1,121 @@
+{
+ "key": "dbs-d5",
+ "impl": {
+  "branch": "o/dbs-d5",
+  "summary": "DBS D5 Clean up dialogue is built on both engines and pushed to origin/o/dbs-d5 (6 commits on claude/fuobe-parity-4). Split soundtrack now has a 'Clean up dialogue' task, opened with ?preset=clean-dialogue or the new 'Clean up dialogue' chip on audio and video results. On your GPU it runs the new graph C, soundtrack-remix-dbs, on the new open model oss-dbs-remix: the DBS dialogue with the music and effects at Off / -24 / -18 / -12 dB (default -18), then the stream-copy oss-mux for a video. In the cloud it offers hosted speech cleaners under their own names: VEED Clean Audio, DeepFilterNet 3 (both new catalog models) and ElevenLabs isolation, then merge-audio-video for a video. The cloud has no bed under the voice because samAudioCloud is false. The mixer has a 'Clean dialogue (-18 dB)' preset. 'Fine-tune in the mixer' switches to Split into stems and opens the mixer on that preset. The UI explains how this relates to main's Clean up voice (RE-USE) and links to it. clean-voice.ts is untouched. Graph C was validated on the live CPU ComfyUI (which has ComfyUI-DBS) and run for real on 15 s clips.",
+  "built": [
+   "Research: added a fal-ai/deepfilternet3 record to docs/research/paid-model-apis-3.json, read with fetch-hosted-schemas.py's fal() from fal's OpenAPI. Inputs: audio_url, audio_format, bitrate, sync_mode. Price $0.001/s. Licence MIT OR Apache-2.0, read from the upstream README. Counts bumped.",
+   "Catalog (gen-cloud-models.py, then regenerated): veed-clean-audio (op enhance-voice; audio_url also takes a video; FLAC output; strength slider; $0.0125/min with roundUp) and deepfilternet3 (op enhance-voice; FLAC; $0.001/s; licence recorded).",
+   "Pricing (plan.ts estimateCost): enhance-voice is billed on params.sourceDuration. A minute-billed separate-audio model (ElevenLabs isolation) now uses the clip's length when no duration is set. Pricing.roundUp on a minute price bills whole minutes from whole seconds, at least 1 (VEED's rule).",
+   "Graph C soundtrack-remix-dbs (scripts/comfy/hand-built, library.spec.mjs entry, BINDING_KEYS voiceDb/musicDb/effectsDb): LoadAudio -> DBSLoader -> DBSSeparate -> AudioAdjustVolume x3 -> AudioMerge add x2 -> SaveAudioAdvanced FLAC, plus a PreviewAny report. The build updated manifest.json, requirements.json and validation-state.json; sizeGb was restored to 0 for config.json after the build left it blank.",
+   "ModelDef oss-dbs-remix in models.ts. The mock provider returns one 'voice' track for graph C.",
+   "src/lib/av/clean-dialogue.ts: the planner for both engines and every cleaner, bed levels, VEED and DeepFilterNet price helpers, copy, and cleanDialogueHref.",
+   "Server: tool 'clean-dialogue' in AudioToolBody, plan and preview (an open time estimate from the host's device and DBS model; cloud prices). It works on both engines; Engine mode 'Paid APIs only' keeps the cloud cleaners. Route messages updated.",
+   "UI: src/components/audio-tools/clean-dialogue-panel.tsx and changes to split-tool.tsx: a task picker (Split into stems / Clean up dialogue), a hero per task, the panel, a mixer that opens on a preset, and a Clean dialogue (-18 dB) entry in PRESETS. The price line says 'Checking…' while settings settle so it never shows the last settings' price.",
+   "Chips: 'clean-dialogue' output action on audio results (not music, sfx or its own results) and on video results that carry sound, with its icon in result-actions.tsx.",
+   "GPU pre-flight board: a 'Clean up dialogue' row (/audio/split?preset=clean-dialogue) on oss-dbs-remix + oss-mux.",
+   "Canvas: the Clean up voice node stays RE-USE-only on the cloud, so the new hosted enhance-voice models don't become its cloud default.",
+   "Research doc dbs-separation-7.md: 'as built (D5)' notes and the measured hum and hiss results (§9 D5, §11)."
+  ],
+  "tests": "New tests/clean-dialogue.test.ts (22 tests, passing) covers: plans per engine and cleaner; VEED minute rounding and 1-minute minimum; DeepFilterNet per second; ElevenLabs per minute of the clip; cloud payloads checked against the research schemas; outputs read back; graph C's manifest, bindings, wiring and provider bindings; chips and board row; the demo-mode API run and prices; Engine mode 'Paid APIs only'. Also added a public-sign-up test (tests/public-signup-tools.test.ts): a visitor is priced on its own GPU and only of its own file, and an account's run gets own-gpu-tool. Updated the split-soundtrack preset test. Typecheck and lint pass (one pre-existing warning in library.spec.mjs). Targeted suites pass except the known failure. Full vitest: 4970 passed, 8 failed. 6 are the known pre-existing failures (comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack 'has no cloud route'). clean-voice's Canvas test failed because of this branch and is fixed in the last commit (172/172 related tests pass now). preset-covers failed only under the full run's load and passes on its own; I didn't touch preset files. ComfyUI: graph C validated with validate-workflows.mjs --shared on 127.0.0.1:8188, which has DBSLoader. Three real CPU runs on 15 s mono clips (Mandarin AISHELL speech, so outside DBS's English training data), DBS-BSRNN at 0.36-0.42x real time. Speech under loud music: SI-SDR went from -15.2 to -5.1 dB. Speech over 50+150 Hz hum and pink hiss: -1.6 to 5.2 dB; 50 Hz about 51 dB lower, 150 Hz about 39 dB lower, hiss above 4 kHz only about 10.6 dB lower. A -18 dB bed came out at -17.9 dB against the input music. Browser: new tests/e2e/clean-dialogue.mjs passes all checks at 1440 and 390 px in light and dark: the preset page, the open and cloud panels, no sideways scroll, no console errors, a demo run, the mixer opening on its preset, and the Library chip opening the tool. tests/e2e/split-soundtrack.mjs passes after fixing one stale copy string there. The server was stopped and .next deleted.",
+  "left": [
+   "Not verifiable here: paid VEED, DeepFilterNet 3 and ElevenLabs calls. In demo mode the cloud panel shows 'Placeholder · free', so the real prices are covered by unit tests only.",
+   "fal also lists veed/clean-audio/video, which returns the video with its picture copied, at the same price per minute. It isn't used (no operation fits a video-out cleaner); the cloud video route is VEED audio plus merge-audio-video. A later package could add it.",
+   "No cloud bed under the cleaned voice, because samAudioCloud is false. If the owner allows SAM Audio, add its 'speech' residual plus loudnorm plus compose.",
+   "The open result is mono unless 'Keep it stereo' is on (twice as long).",
+   "Hosted runs (FUOBE_HOSTED_RUNS) were not tested for oss-dbs-remix through /api/generations. The tool itself is own-gpu-tool for accounts at the proxy, so no new server path reads accounts' files.",
+   "Out-of-date points in the brief: main already has an open denoiser (Clean up voice, RE-USE), so the copy points there as well as to the cloud. Its 'Keep music & effects' graph already mixes a DBS bed under a RE-USE voice. The brief's line numbers were stale; code was found by name.",
+   "Test files from the measurement runs are left in ComfyUI's output/d5 folder (the API can't delete them)."
+  ],
+  "docsNotes": "FEATURES and STATUS: Audio → Split soundtrack has a 'Clean up dialogue' task. On your GPU it runs DBS graph C (soundtrack-remix-dbs, oss-dbs-remix) with the music and effects Off or at -24/-18/-12 dB, and a video gets the picture copied. In the cloud it runs VEED Clean Audio ($0.0125/min, whole minutes, at least 1), DeepFilterNet 3 ($0.001/s, MIT OR Apache-2.0) or ElevenLabs isolation ($0.10/min), voice only. 'Clean up dialogue' chip on audio and video results. Mixer preset 'Clean dialogue (-18 dB)'. ARCHITECTURE: src/lib/av/clean-dialogue.ts; tool 'clean-dialogue' in src/server/audio-tools.ts; enhance-voice models are now priced on sourceDuration; Pricing.roundUp applies to minute prices; the Canvas Clean up voice node stays open-only. Models & licences: two new cloud models (DeepFilterNet licence recorded; VEED proprietary). Copy point: Clean up voice (RE-USE) repairs the voice itself, while Clean up dialogue takes music and effects out from under it.",
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "low",
+    "file": "src/components/audio-tools/split-tool.tsx",
+    "line": 715,
+    "summary": "mixPreset is set when the Clean up dialogue task is picked and never cleared, so a plain split after visiting that task opens the mixer on Clean dialogue (−18 dB) instead of Original.",
+    "failure_scenario": "Open /audio/split, click 'Clean up dialogue', then click 'Split into stems' and run a split. The Mixer is given initial=presetMix('clean-dialogue') and starts with music and effects 18 dB down, not the Original mix. pickGoal('split') only calls setGoal and leaves mixPreset alone. Only the 'Fine-tune in the mixer' path should carry the preset. Traced in code, not run."
+   },
+   {
+    "severity": "low",
+    "file": "tests/clean-dialogue.test.ts",
+    "line": 290,
+    "summary": "The API test of the cloud cleaners' prices is guarded by `if (!veed.demo)`. In demo mode, where it runs, the three per-cleaner prices are never asserted.",
+    "failure_scenario": "A regression in how previewAudioTool prices the cloud steps (for example sourceDuration not reaching estimateCost through the route) would still pass this test. The unit-level estimateCost tests do cover the price formulas."
+   },
+   {
+    "severity": "low",
+    "file": "src/lib/catalog/canvas.ts",
+    "line": 443,
+    "summary": "The Canvas Clean up voice node gets no default model on the cloud, but modelChoices() still lists the new cloud enhance-voice models (VEED Clean Audio, DeepFilterNet 3) in its picker, because it filters only by op.",
+    "failure_scenario": "On a 'both' install, switch a Clean up voice node to the cloud and open its model picker: VEED and DeepFilterNet 3 show up even though the node is meant to stay RE-USE-only. They would run correctly, so this is an inconsistency, not a broken run."
+   },
+   {
+    "severity": "info",
+    "file": "docs/research/dbs-separation-7.md",
+    "line": 396,
+    "summary": "Plan §9 D5 also names 'a direct entry in the Audio hub'. There is no Audio hub tab or mode for Clean up dialogue: it is reachable only from Split soundtrack's task picker, ?preset=clean-dialogue, the result chips and the GPU board row. The brief's PLACEMENT does not require a hub entry.",
+    "failure_scenario": "A user browsing the Audio hub's tabs finds no Clean up dialogue entry unless they open Split soundtrack."
+   }
+  ],
+  "checks": [
+   "Read review-prompt.txt, main-rules.md and the implementer's report. Reviewed git diff claude/fuobe-parity-4...o/dbs-d5 (6 commits, 30 files). The branch is on the base, HEAD 86e72cb7 equals origin/o/dbs-d5, and the worktree is clean.",
+   "Owner rule samAudioCloud=false: no SAM Audio route was added. The cloud uses only hosted cleaners under their own names (VEED Clean Audio, DeepFilterNet 3, ElevenLabs isolation). Today's cloud Demucs dub is untouched, and src/lib/av/clean-voice.ts is untouched.",
+   "Cloud payloads against docs/research/paid-model-apis-3.json: veed/clean-audio takes audio_url (audio or video), strength (0–1) and output_format flac, all in the schema. fal-ai/deepfilternet3 takes audio_url and audio_format flac, both in the new record. elevenlabs-voice-isolation already maps video to video_url. Outputs audio.url and audio_file.url are both read by extractMedia (tested).",
+   "Pricing: VEED is $0.0125/min, whole seconds then rounded up to minutes, at least 1. The roundUp minute branch is used only by VEED. DeepFilterNet is $0.001/s on sourceDuration. ElevenLabs isolation now bills the clip's sourceDuration in minutes instead of 60 s, only when no duration is set.",
+   "Graph C soundtrack-remix-dbs: checked DBSSeparate output order on the live /object_info (music, sfx, speech, report), so nodes 4/5/6 take speech/music/sfx correctly. AudioAdjustVolume volume is an INT from −100 to 100, so OFF_DB −100 is valid. Manifest bindings (audio, separationModel, channels, voiceDb, musicDb, effectsDb) match the graph. voiceDb, musicDb and effectsDb are in BINDING_KEYS. The comfyui provider fills separationModel with the host's pick when it is unset (shared DBS path). requirements.json has the entry with ComfyUI-DBS and the 4 weight files.",
+   "node scripts/comfy/validate-workflows.mjs soundtrack-remix-dbs --shared on 127.0.0.1:8188: ✓ (1/1 validated). The validator rewrote validation-state.json and object_info.subset.json in the worktree; those side effects were restored with git checkout, so nothing was left changed.",
+   "Licences: DeepFilterNet 3 has a licence record (MIT OR Apache-2.0) in the catalog. VEED gets the paid-API licence that modelLicence derives for cloud routes. oss-dbs-remix's graph licence is recorded in library.spec/manifest. No LoRA files, Higgsfield media or Higgsfield API use.",
+   "Public sign-up: there is no new route. The tool 'clean-dialogue' rides on /api/audio-tools, which is already in PREVIEWS, priced through priceAs and own-gpu-tool for accounts at the proxy. The new tests/public-signup-tools.test.ts case covers the owner's file being refused to visitors, an account priced on its own GPU, and own-gpu-tool. factsOf reads only the asker's own files.",
+   "Engine mode: 'Paid APIs only' refuses the open remix and keeps the cloud cleaners (tested). The open engine keeps all its capabilities: bed levels, Fast/Best, stereo, and stream-copy mux for video.",
+   "GPU pre-flight board: a 'Clean up dialogue' row on oss-dbs-remix + oss-mux (tested via studioTool).",
+   "Typecheck (next typegen + tsc --noEmit): pass. ESLint on the changed source and test files: clean.",
+   "Full vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2): the run was cut off when my turn ended, before the summary line. Every failure it had reported is a known pre-existing one: comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack 'has no cloud route'. A targeted run afterwards of clean-dialogue, clean-voice, public-signup-tools, public-signup, split-soundtrack, preset-covers and comfy-library-4 gave 208 passed, 1 failed (the known split-soundtrack 'has no cloud route').",
+   "Browser (FUOBE_DEMO_MODE=on, next dev on http://localhost:3917): tests/e2e/clean-dialogue.mjs passed every check at 1440 and 390 px, light and dark. It covers the preset page, the open panel at −18 dB, the open-route note and the Clean up voice link, the cloud panel with all three cleaners, no horizontal scroll, no console errors, a demo run, the mixer opening on its preset, and the Library chip at 390 px. The first attempt timed out while the dev server compiled for the first time; the rerun passed. Server stopped (fuser -k) and .next deleted."
+  ],
+  "verdict": "approve"
+ },
+ "fix": {
+  "applied": [
+   "Review finding 1 (low, split-tool.tsx:715), confirmed in code and fixed: picking 'Split into stems' yourself now clears the mixer preset, so a plain split after visiting Clean up dialogue opens the mixer on Original. Only 'Fine-tune in the mixer' and arriving on ?preset=clean-dialogue carry the Clean dialogue (-18 dB) preset. The rule is the new mixPresetFor in src/lib/av/clean-dialogue.ts, with a unit test, and there is a new browser check in tests/e2e/clean-dialogue.mjs that passes.",
+   "Review finding 2 (low, tests/clean-dialogue.test.ts:290), confirmed and fixed: the API price test now sets a fal.ai key for that test only (a price check never calls fal) and asserts demo=false and the three prices without a guard: VEED 0.013, DeepFilterNet 3 0.002, ElevenLabs 0.003 for the 2 s file. The key is cleared afterwards.",
+   "Review finding 3 (low, canvas.ts:443), confirmed with a probe (the picker listed veed-clean-audio, deepfilternet3 and oss-reuse-voice) and fixed: modelChoices() for the clean-voice node offers only models that run on the open engine, so the picker shows only oss-reuse-voice. Covered by a test beside defaultModelForNode."
+  ],
+  "rejected": [
+   "Review finding 4 (info, an Audio hub entry): not added. The brief's PLACEMENT asks for a preset in Split soundtrack plus result chips, and both are built. The feature is reachable from Split soundtrack's task picker, ?preset=clean-dialogue, the chips on audio and video results, and the GPU pre-flight board row. A new hub mode would need its own route, proxy redirects and hub tests for a task that is part of Split soundtrack."
+  ],
+  "checks": [
+   "Worktree /home/user/wt/o-dbs-d5 on o/dbs-d5: only this package's commits are on claude/fuobe-parity-4, the base is an ancestor, and it was clean at the start (HEAD equal to origin). Ran pnpm install --frozen-lockfile --prefer-offline and npx next typegen.",
+   "pnpm typecheck: exit 0. pnpm lint: exit 0 (one pre-existing warning in scripts/comfy/library.spec.mjs: WAN_NEG_EN unused).",
+   "Targeted: tests/clean-dialogue, clean-voice and split-soundtrack gave 85 passed and 1 failed, the known split-soundtrack 'has no cloud route'.",
+   "Full vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2, exit 1): 4974 passed, 6 failed, 4 skipped. All 6 are the known pre-existing failures from rules item 8: comfy-reuse (pack licence), dop-originals, preset-featured, soul-runs x2, split-soundtrack 'has no cloud route'. An earlier full run was cut off when the usage limit hit, and this is the one complete run.",
+   "Browser (FUOBE_DEMO_MODE=on, next dev on http://localhost:3917): tests/e2e/clean-dialogue.mjs reported 'all checks passed' at 1440 and 390 px in light and dark. That covers the preset page, the open and cloud panels, no horizontal scroll, no console errors, a demo run, the mixer opening on Clean dialogue from 'Fine-tune', the new check that it opens on Original after picking Split into stems by hand, and the Library chip. The first attempt timed out while the dev server compiled for the first time, as in the review; the rerun passed. The server was stopped with fuser -k and .next deleted.",
+   "ComfyUI was not used in this stage (no graph changed), and validation-state.json and object_info.subset.json are untouched. src/lib/av/clean-voice.ts and the other hot files are untouched.",
+   "Committed 11d3901f and pushed to origin/o/dbs-d5. git status is clean."
+  ],
+  "finalSummary": "Clean up dialogue (DBS D5) is in Split soundtrack as its own task, opened by ?preset=clean-dialogue or the 'Clean up dialogue' chip on audio and video results. OPEN ENGINE (your GPU, ComfyUI-DBS): graph C soundtrack-remix-dbs (oss-dbs-remix) gives the DBS dialogue with the music and effects Off or at -24/-18/-12 dB (default -18), and a video gets the picture back through the stream-copy oss-mux. It removes music and effects but not steady hiss or hum; the copy says so and points to Clean up voice (RE-USE) and to the cloud cleaners. Verified: graph C was validated on the live CPU ComfyUI and run on real 15 s clips in the implementation stage (speech under music: SI-SDR -15.2 to -5.1 dB; hum largely removed; hiss only about 10 dB lower), plus the demo-mode run and the browser checks. Needs a GPU, or a ComfyUI with ComfyUI-DBS and its weights. CLOUD ENGINE: hosted cleaners under their own names, the voice alone with no bed under it (samAudioCloud is false). They are VEED Clean Audio ($0.0125/min, whole minutes, at least 1), DeepFilterNet 3 ($0.001/s, MIT OR Apache-2.0 recorded) and ElevenLabs isolation ($0.10/min), with merge-audio-video for a video. Built and unit-tested for plans, payloads against the research schemas and prices (now also through the API). Real calls need a fal.ai key and weren't made. 'Paid APIs only' keeps the cloud cleaners and refuses the open remix. The mixer has a Clean dialogue (-18 dB) preset reached from 'Fine-tune in the mixer', and a plain split now opens on Original. The Canvas Clean up voice node stays on your GPU only (both its default model and its picker). PUBLIC SIGN-UP: no new route. The tool rides on /api/audio-tools, already in PREVIEWS and priced through priceAs. Guests browse and are priced for their own GPU and only of their own file. An account's run of this tool answers own-gpu-tool at the proxy, as main's audio tools do (tests/public-signup-tools.test.ts).",
+  "left": [
+   "Paid VEED, DeepFilterNet 3 and ElevenLabs calls are not verifiable here (no keys). The prices are covered by unit tests and the API preview test with a placeholder key.",
+   "No cloud bed under the cleaned voice while samAudioCloud is false. If the owner allows SAM Audio, add its 'speech' residual plus loudnorm plus compose.",
+   "fal's veed/clean-audio/video (the video with its picture copied) isn't used; the cloud video route is VEED audio plus merge-audio-video.",
+   "No Audio hub tab for Clean up dialogue (see rejected). It lives in Split soundtrack.",
+   "Hosted runs (FUOBE_HOSTED_RUNS) were not exercised for oss-dbs-remix; the tool is own-gpu-tool for accounts.",
+   "Test clips from the implementation stage's measurement runs remain in ComfyUI's output/d5 folder.",
+   "Known pre-existing test failures (rules item 8) remain: comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack 'has no cloud route'."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/dbs-d5"
+  ],
+  "notMerged": [],
+  "conflicts": "requirements.json rebuilt",
+  "checks": "batch of 4 (n7-8, dbs-d5, hosted-catchup, w2s-w4): typecheck 0, lint 0, vitest 5159 passed, 6 failed (main known)",
+  "pushed": true,
+  "head": "85be87db"
+ }
+}

@@ -28,6 +28,8 @@ export const REMOVE = {
   maxBytes: 200 * 1024 * 1024,
   /** Seconds the mask preview looks at. */
   previewSeconds: 2,
+  /** H3 Person Removal's mask expansion in pixels (Akatz's default 5; a larger mask asks H3 to invent more background). */
+  maskGrow: { min: 0, max: 64, default: 5 },
   maxPoints: 12,
   /** What you type: Kling O3 edit takes prompts of up to 2500 characters, and klingPrompt() adds up to 52. */
   maxPromptChars: 2400,
@@ -571,6 +573,8 @@ export interface RemovalPlanInput {
   seed?: number;
   /** Original sound: what of the clip's sound goes back (src/lib/av/original-sound.ts; unset = Everything). */
   sound?: SoundChoice;
+  /** H3 Person Removal: how far the person's mask is grown, in pixels (default REMOVE.maskGrow.default). */
+  maskGrow?: number;
 }
 
 export interface RemovalPlan {
@@ -743,7 +747,13 @@ export function planRemoval(input: RemovalPlanInput): RemovalPlan {
  * and the relay graph scales it back to the part's exact size with a centre crop. The framing stays the clip's: a 16:9
  * part (1344×736) comes back at 2048×1120, within a pixel of its shape; the rounding moves an edge by 1.5% at most.
  */
-export const PERSON_REMOVAL_TOOLS = { fit: "oss-fit-clip", frame: "oss-extract-frame", clean: "oss-qwen-image-21" } as const;
+export const PERSON_REMOVAL_TOOLS = { fit: "oss-fit-clip", frame: "oss-extract-frame", clean: "oss-qwen-image-21", mask: "oss-h3-removal-mask" } as const;
+
+/** A mask expansion within REMOVE.maskGrow, whole pixels (undefined: the graph's default). */
+export function maskGrowOf(v: number | undefined): number | undefined {
+  if (v === undefined || !Number.isFinite(v)) return undefined;
+  return Math.max(REMOVE.maskGrow.min, Math.min(REMOVE.maskGrow.max, Math.round(v)));
+}
 
 /** H3 Relay's Person Removal works at 24 fps (its windows are counted in frames of the clip as it comes in). */
 export const PERSON_REMOVAL_FPS = 24;
@@ -771,6 +781,8 @@ function planPersonRemoval(input: RemovalPlanInput): RemovalPlan {
   const size = h3Canvas(input.source.width ?? 1280, input.source.height ?? 720, "768p");
   const sound = !!input.source.hasAudio;
   const label = (what: string, index: number) => ({ label: what, index, of: 4 });
+  const grow = maskGrowOf(input.maskGrow);
+  const eraseParams = { ...seed, ...(grow !== undefined ? { extra: { maskGrow: grow } } : {}) };
   const steps: PlanStep[] = [
     {
       key: "fit",
@@ -802,7 +814,7 @@ function planPersonRemoval(input: RemovalPlanInput): RemovalPlan {
         modelId: e.id,
         op: "remove-object",
         prompt: targetPhrase(input.prompt ?? "") || "person",
-        ...(input.seed !== undefined ? { params: { ...seed } } : {}),
+        ...(Object.keys(eraseParams).length ? { params: eraseParams } : {}),
         step: label("Remove the person (MiniMax H3)", 3),
       },
       after: ["fit", "clean"],
@@ -912,7 +924,13 @@ export interface PreviewPlanInput {
   range: RemoveRange;
   prompt?: string;
   points?: PixelPoint[];
+  /** The eraser that would run: H3 Person Removal previews its own green mask. */
+  eraser?: Eraser;
+  maskGrow?: number;
 }
+
+/** Whether the mask preview is H3 Person Removal's green mask (the person filled green, thresholded and grown). */
+export const previewIsGreen = (e: Eraser | undefined): boolean => !!e?.cleanFrame && e.engine === "open";
 
 /**
  * Whether the mask preview shows the mask the eraser itself works from (SAM tracks the object for it: the open
@@ -930,6 +948,7 @@ export function previewIsEraserMask(e: Eraser, tracked: boolean): boolean {
  * paint, whose painted overlay is its own preview).
  */
 export function planMaskPreview(input: PreviewPlanInput): PlanStep[] | null {
+  if (previewIsGreen(input.eraser)) return planGreenPreview(input);
   if (input.engine === "open" && input.mode !== "type") return null;
   const words = input.mode === "type" ? targetPhrase(input.prompt ?? "") : "";
   if (input.mode === "type" ? !words : !input.points?.length) return null;
@@ -955,4 +974,163 @@ export function planMaskPreview(input: PreviewPlanInput): PlanStep[] | null {
       chain: [{ slot: "video" }],
     },
   ];
+}
+
+/**
+ * H3 Person Removal, mask first (the model card: "check the saved green-mask preview before running the full removal"):
+ * the first seconds of the part fitted exactly as the removal fits it (24 fps on H3's 32-pixel grid), then the removal
+ * graph's own SAM 3.1 chain (detect, track, threshold 0.5, grow, fill green). Free on your GPU.
+ */
+function planGreenPreview(input: PreviewPlanInput): PlanStep[] {
+  const words = targetPhrase(input.prompt ?? "") || "person";
+  const size = h3Canvas(input.source.width ?? 1280, input.source.height ?? 720, "768p");
+  const end = r3(Math.min(input.range.end, input.range.start + REMOVE.previewSeconds));
+  const grow = maskGrowOf(input.maskGrow);
+  const helper = { feature: REMOVE.stepFeature, batchTitle: input.title };
+  return [
+    {
+      key: "cut",
+      request: {
+        ...helper,
+        modelId: PERSON_REMOVAL_TOOLS.fit,
+        op: "trim",
+        inputs: { video: input.source.url },
+        params: { startTime: r3(input.range.start), endTime: end, fps: PERSON_REMOVAL_FPS, extra: { width: size.width, height: size.height } },
+        step: { label: "Fit the first seconds", index: 0, of: 2 },
+      },
+    },
+    {
+      key: "preview",
+      request: {
+        feature: REMOVE.previewFeature,
+        batchTitle: input.title,
+        title: `Green mask · ${words}`,
+        modelId: PERSON_REMOVAL_TOOLS.mask,
+        op: "bg-remove-video",
+        prompt: words,
+        params: { duration: r3(end - input.range.start), extra: { maskPrompt: words, ...(grow !== undefined ? { maskGrow: grow } : {}) } },
+        step: { label: "Green mask preview", index: 1, of: 2 },
+      },
+      after: ["cut"],
+      chain: [{ slot: "video" }],
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Window review and "Redo from here" (H3 Person Removal on your GPU)
+
+/** params.extra keys of a reroll (set by the server from the run it redoes, never taken from a request). */
+export const REVIEW_EXTRA = { controls: "windowControls", reuse: "reuseInputs" } as const;
+
+/** One finished window of an H3 removal, as H3 Relay's Review Windows reports it. */
+export interface ReviewWindow {
+  index: number;
+  /** The window's first frame in the part (24 fps). */
+  start: number;
+  frames: number;
+  seed: string;
+  /** H3 Relay's checkpoint of the window (ComfyUI's output/__h3_removal_cache). */
+  recordId?: string;
+  /** Came back from its checkpoint (an earlier window kept exactly). */
+  reused?: boolean;
+  /** A small preview of the window (512 px), and its first frame. */
+  video?: string;
+  poster?: string;
+}
+
+/** What a removal step keeps so it can be redone from a window (generation output meta "review"). */
+export interface RemovalReview {
+  runId: string;
+  configKey: string;
+  /** The master seed (later windows count up from it). */
+  seed: string;
+  total: number;
+  windows: ReviewWindow[];
+  /** The ComfyUI input names and save prefix the run used: a reroll sends the same graph, or the Relay starts over. */
+  reuse: { video: string; image: string; prefix: string };
+}
+
+/** The highest seed a window takes (H3 Relay: unsigned 64-bit; Fuobe keeps to what JSON numbers hold exactly). */
+export const MAX_WINDOW_SEED = 2 ** 48;
+
+/**
+ * H3 Relay's window_controls for "Redo from here": every window before `from` locked to its checkpoint (kept exactly),
+ * window `from` drawn again with `seed`, the ones after it drawn again from the master seed's schedule (they continue
+ * from the new window). Null when a window before `from` has no checkpoint (it can't be kept).
+ */
+export function rerollControls(review: Pick<RemovalReview, "configKey" | "windows">, from: number, seed: number): string | null {
+  const windows: Record<string, { seed: string; locked: boolean; record_id?: string }> = {};
+  for (let i = 0; i < from; i++) {
+    const w = review.windows.find((x) => x.index === i);
+    if (!w?.recordId) return null;
+    windows[String(i)] = { seed: w.seed, locked: true, record_id: w.recordId };
+  }
+  windows[String(from)] = { seed: String(Math.max(0, Math.floor(seed))), locked: false };
+  return JSON.stringify({ config_key: review.configKey, windows });
+}
+
+/** Why a window can't be redone, or null. */
+export function rerollProblem(review: RemovalReview | null | undefined, from: number): string | null {
+  if (!review || !review.windows.length) return "This removal has no window previews to redo from — run it again on your ComfyUI";
+  if (!Number.isInteger(from) || from < 0 || from >= review.total) return "Pick one of the removal's windows";
+  for (let i = 0; i < from; i++) if (!review.windows.find((x) => x.index === i)?.recordId) return `Window ${i + 1} wasn't saved, so the windows before this one can't be kept — redo from window ${i + 1}`;
+  return null;
+}
+
+/** ComfyUI output folder names H3 Relay writes previews under, and the input / prefix names a reroll reuses. */
+const SAFE_NAME = /^(?!.*\.\.)[\w][\w ./()-]{0,199}$/;
+const SAFE_PREFIX = /^fuobe\/[\w-]{1,80}$/;
+
+/** The inputs and prefix a reroll sends again, when each is a plain ComfyUI name (else null: the reroll starts over). */
+export function reuseOf(v: unknown): RemovalReview["reuse"] | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  if (typeof r.video !== "string" || typeof r.image !== "string" || typeof r.prefix !== "string") return null;
+  if (!SAFE_NAME.test(r.video) || !SAFE_NAME.test(r.image) || !SAFE_PREFIX.test(r.prefix)) return null;
+  return { video: r.video, image: r.image, prefix: r.prefix };
+}
+
+/** The artifact keys a window's preview and poster are kept under (output meta.artifacts). */
+export const windowArtifact = (index: number, what: "video" | "poster") => `window-${String(index + 1).padStart(3, "0")}${what === "poster" ? "-poster" : ""}`;
+
+/**
+ * H3 Relay's review run (GET /h3_relay/removal/previews: run_id, config_key, seed, total, segments with record_id,
+ * seed, start, frames, reused and video / poster files in ComfyUI's output folder) as Fuobe keeps it: the review, and
+ * the window previews' links (`view` makes a ComfyUI /view link of a file) to keep as the result's artifacts.
+ */
+export function reviewOfRun(run: unknown, reuse: RemovalReview["reuse"], view: (f: { filename: string; subfolder: string; type: string }) => string): { review: RemovalReview; artifacts: Record<string, string> } | null {
+  if (!run || typeof run !== "object") return null;
+  const r = run as Record<string, unknown>;
+  if (typeof r.run_id !== "string" || typeof r.config_key !== "string" || !Array.isArray(r.segments)) return null;
+  const artifacts: Record<string, string> = {};
+  const file = (f: unknown) => {
+    if (!f || typeof f !== "object") return undefined;
+    const x = f as Record<string, unknown>;
+    if (typeof x.filename !== "string" || !SAFE_NAME.test(x.filename) || typeof x.subfolder !== "string" || !x.subfolder.startsWith("__h3_removal_cache/")) return undefined;
+    return view({ filename: x.filename, subfolder: x.subfolder, type: "output" });
+  };
+  const windows: ReviewWindow[] = [];
+  for (const s of r.segments as Record<string, unknown>[]) {
+    if (!s || typeof s !== "object" || typeof s.index !== "number") continue;
+    const w: ReviewWindow = { index: s.index, start: Number(s.start ?? 0), frames: Number(s.frames ?? 0), seed: String(s.seed ?? "") };
+    if (typeof s.record_id === "string" && /^[0-9a-f]{32}$/.test(s.record_id)) w.recordId = s.record_id;
+    if (s.reused === true) w.reused = true;
+    const video = file(s.video);
+    const poster = file(s.poster);
+    if (video) artifacts[(w.video = windowArtifact(w.index, "video"))] = video;
+    if (poster) artifacts[(w.poster = windowArtifact(w.index, "poster"))] = poster;
+    windows.push(w);
+  }
+  windows.sort((a, b) => a.index - b.index);
+  const total = Number(r.total ?? windows.length);
+  return { review: { runId: r.run_id, configKey: r.config_key, seed: String(r.seed ?? ""), total: Number.isFinite(total) ? total : windows.length, windows, reuse }, artifacts };
+}
+
+/** The review a removal step's output carries (meta.review), with each window's preview links from meta.artifacts. */
+export function reviewOfOutput(meta: Record<string, unknown> | undefined): (RemovalReview & { links: Record<string, string> }) | null {
+  const r = meta?.review as RemovalReview | undefined;
+  if (!r || !Array.isArray(r.windows) || typeof r.configKey !== "string") return null;
+  const links = (meta?.artifacts && typeof meta.artifacts === "object" ? meta.artifacts : {}) as Record<string, string>;
+  return { ...r, links };
 }

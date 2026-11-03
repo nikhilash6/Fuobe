@@ -11,6 +11,7 @@ FAMILIES = {
     "lipsync": ["lipsync", "lipsyncOffset"],
     "continuity": ["continuity"],
     "palette": ["paletteFit", "paletteCover"],
+    "background": ["bgDiff", "bgPsnr"],
 }
 
 METRICS = {
@@ -29,6 +30,8 @@ METRICS = {
     "continuity": {"label": "Shot continuity", "better": "higher", "unit": "cosine between consecutive shots"},
     "paletteFit": {"label": "Palette distance", "better": "lower", "unit": "mean ΔE76 to the nearest palette colour"},
     "paletteCover": {"label": "Palette used", "better": "higher", "unit": "share of the palette's colours"},
+    "bgDiff": {"label": "Background change vs the source", "better": "lower", "unit": "mean abs error 0–1 on the frame's outer ring"},
+    "bgPsnr": {"label": "Background PSNR vs the source", "better": "higher", "unit": "dB on the frame's outer ring"},
 }
 
 # Weights, each pinned to a Hugging Face revision. "commercial" says whether the model itself may be used

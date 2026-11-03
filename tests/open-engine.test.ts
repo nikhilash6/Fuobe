@@ -10,6 +10,7 @@ import { resample, tracksFor } from "@/lib/motion-paths";
 import { ANGLES_FIELDS, ANGLES_ORIGINAL } from "@/lib/catalog/open-tools";
 import { H3_BEST_GRAPH } from "@/lib/comfy-variants";
 import { QWEN21_SPEED_GRAPH } from "@/lib/qwen21-speed";
+import { H3_TIER_GRAPH } from "@/lib/gpu/h3-tier";
 
 describe("motion paths (Wan-Move draw to video)", () => {
   it("resamples a path to evenly spaced points, one per frame", () => {
@@ -86,7 +87,8 @@ const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/
 const workflowById = new Map(manifest.workflows.map((w) => [w.id, w]));
 /** Settings the ComfyUI provider consumes itself instead of writing them into a binding. */
 // promptHelper: FLUX 3 Image Klein's Prompt helper, which the provider reads to take the helper's branch out (skipPromptHelper).
-const PROVIDER_PARAMS = new Set(["wordsPerCaption", "paletteWeights", "cues", "promptHelper"]);
+// hi3dRefine: read by the server (Refine detail · Hi3D 1.0 adds the refine step after the model, src/server/chains.ts), not the graph.
+const PROVIDER_PARAMS = new Set(["wordsPerCaption", "paletteWeights", "cues", "promptHelper", "hi3dRefine"]);
 
 describe("round-3 open models", () => {
   it.each(Object.entries(ROUND3_MODELS))("%s routes to its validated workflow", (id, want) => {
@@ -138,6 +140,10 @@ describe("round-3 open models", () => {
             if (p === "quality" && H3_BEST_GRAPH[wid]) continue;
             // Qwen-Image 2.1's Speed and GPU pick the graph that runs too (src/lib/qwen21-speed.ts).
             if ((p === "speed" || p === "gpu") && QWEN21_SPEED_GRAPH[wid]) continue;
+            // QMA · 96 views' camera settings become its LoRA's words in the planner (src/lib/qma.ts, promptFormat "qma").
+            if (m.options.promptFormat === "qma" && ["horizontal_angle", "vertical_angle", "zoom"].includes(p)) continue;
+            // MiniMax H3's GPU tier picks the FastH3 graph that runs (src/lib/gpu/h3-tier.ts).
+            if (p === "gpuTier" && H3_TIER_GRAPH[wid]) continue;
             if (!PROVIDER_PARAMS.has(p) && p !== "cameraMotion" && !(m.id === ANGLES_ORIGINAL && (ANGLES_FIELDS as readonly string[]).includes(p))) expect(keys, `${m.id} → ${wid}: ${p}`).toContain(p);
           }
         }

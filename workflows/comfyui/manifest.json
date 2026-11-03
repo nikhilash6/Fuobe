@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-01T22:02:19.203Z",
+  "generatedAt": "2026-11-02T15:11:05.081Z",
   "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
   "comfyuiVersion": "0.41.0",
   "workflowTemplatesVersion": "0.11.86",
@@ -3753,6 +3753,154 @@
       "notes": "Uses the Wan 2.2 I2V high/low experts. High->low switch at step 10 (end_at_step of node 84 / start_at_step of node 87, not a binding). Start and end images should share the output aspect ratio."
     },
     {
+      "id": "wan22-inbetween-anisora",
+      "title": "Keyframe animation: Wan 2.2 14B first/last-frame in-betweens with AniSora 3.2, every Nth frame per gap, one video",
+      "capability": "keyframes",
+      "file": "wan22-inbetween-anisora.json",
+      "source": "hand-built (scripts/comfy/hand-built/wan22-inbetween-anisora.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "p1",
+            "input": "text"
+          }
+        ],
+        "negativePrompt": [
+          {
+            "node": "9",
+            "input": "text"
+          }
+        ],
+        "image": [
+          {
+            "node": "k1",
+            "input": "image"
+          }
+        ],
+        "endImage": [
+          {
+            "node": "k2",
+            "input": "image"
+          }
+        ],
+        "width": [
+          {
+            "node": "f1",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "f1",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "f1",
+            "input": "length"
+          }
+        ],
+        "fps": [
+          {
+            "node": "video",
+            "input": "fps"
+          }
+        ],
+        "seed": [
+          {
+            "node": "h1",
+            "input": "noise_seed"
+          }
+        ],
+        "shift": [
+          {
+            "node": "3",
+            "input": "shift"
+          },
+          {
+            "node": "6",
+            "input": "shift"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "save",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "save",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1280,
+        "height": 720,
+        "frames": 33,
+        "fps": 24,
+        "shift": 5,
+        "frameStep": 4
+      },
+      "limits": {
+        "maxWidth": 1280,
+        "maxHeight": 1280,
+        "maxFrames": 81,
+        "dimensionMultiple": 16
+      },
+      "models": [
+        {
+          "file": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+          "sizeGb": 14.29
+        },
+        {
+          "file": "Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/AniSora/Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors",
+          "sizeGb": 0.63
+        },
+        {
+          "file": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+          "sizeGb": 14.29
+        },
+        {
+          "file": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+          "sizeGb": 1.23
+        },
+        {
+          "file": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "sizeGb": 6.74
+        },
+        {
+          "file": "wan_2.1_vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sizeGb": 0.25
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-VideoHelperSuite",
+          "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+        }
+      ],
+      "vramGb": 24,
+      "license": "Apache-2.0 (Wan 2.2 I2V A14B, lightx2v 4-step LoRA, bilibili Index-AniSora V3.2; Kijai's AniSora extraction states no licence of its own)",
+      "validated": true,
+      "notes": "One Wan 2.2 FLF2V pass per pair of neighbouring keyframes, all sharing one set of loaders: the high-noise expert with AniSora 3.2 (strength 1) and the low-noise expert with the lightx2v 4-step LoRA (strength 1), ModelSamplingSD3 shift 5 on both, KSamplerAdvanced 4 steps at CFG 1, euler / simple, high 0-2 with leftover noise, low 2-end; umt5 fp8, Wan 2.1 VAE, Wan's standard negative words. Each pass has its own length (4n + 1, 17-81 frames), words and seed. VHS_SelectEveryNthImage keeps every Nth frame (1-4) counted back from the next keyframe (skip_first_images = ((length - 2) mod N) + 1), so each pose is on screen and no joint shows a frame twice; keyframe 1 (ImageFromBatch of pass 1) goes in front; BatchImagesNode joins them in order and CreateVideo plays them at 24 fps (snappier, the passes are made at 16 fps) or 16 fps (true time). About 24 GB of VRAM at 720p; RAM for the decoded frames grows with the total length.",
+      "expand": "keyframes"
+    },
+    {
       "id": "wan22-fun-camera-14b",
       "title": "Wan 2.2 14B Fun Camera Control (image to video)",
       "capability": "camera-motion",
@@ -5287,6 +5435,12 @@
             "input": "strength"
           }
         ],
+        "vae": [
+          {
+            "node": "136",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "174",
@@ -5342,6 +5496,13 @@
           "folder": "loras",
           "url": "https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/43a74557ac3f6539db8e0f2a959d03feb7a81480/minimax_h3_turbo_v4_step600_ema.safetensors",
           "sizeGb": 0.78
+        },
+        {
+          "file": "minimax_h3_sol_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors",
+          "sizeGb": 1.99,
+          "optional": true
         }
       ],
       "customNodes": [
@@ -5355,9 +5516,9 @@
         }
       ],
       "vramGb": 32,
-      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT",
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT · Sol-H3-VAE (Efficient-Large-Model; the optional fast decoder): licence unconfirmed, no licence tag on its model page; its card says code Apache-2.0 and weights under the MiniMax H3 Community License",
       "validated": false,
-      "notes": "Text to video with sound: MiniMaxH3ImageToVideo with no frames given, the fl2va pruned int8 model with the turbo v4 LoRA at 1.0 (MiniMaxH3TurboLoRA, MiniMaxH3TurboSampler), BasicScheduler simple 8 steps, H3SLAAttention (sparsity 0.85, block 64, int8 QK; needs Triton) and H3AdaLNLoRAFix (port), CFG 1. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
+      "notes": "Text to video with sound: MiniMaxH3ImageToVideo with no frames given, the fl2va pruned int8 model with the turbo v4 LoRA at 1.0 (MiniMaxH3TurboLoRA, MiniMaxH3TurboSampler), BasicScheduler simple 8 steps, H3SLAAttention (sparsity 0.85, block 64, int8 QK; needs Triton) and H3AdaLNLoRAFix (port), CFG 1. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). Fast decode (vae = minimax_h3_sol_vae_int8_convrot, 1.99 GB, optional): Sol-H3-VAE, a 24-layer whole-clip decoder distilled from the H3 VAE (its card: 12.5 s -> 5.0 s for a 5 s 768p clip on an RTX 5090, 45.4 dB PSNR against the stock decoder); the core VAELoader reads it from ComfyUI master 0df1646a (2026-10-28, #17411) on, and its memory grows with the clip (about 24 GiB at 720p for 5 s, the card). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
     },
     {
       "id": "minimax-h3-i2v",
@@ -5414,6 +5575,12 @@
             "input": "strength"
           }
         ],
+        "vae": [
+          {
+            "node": "136",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "174",
@@ -5469,6 +5636,13 @@
           "folder": "loras",
           "url": "https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/43a74557ac3f6539db8e0f2a959d03feb7a81480/minimax_h3_turbo_v4_step600_ema.safetensors",
           "sizeGb": 0.78
+        },
+        {
+          "file": "minimax_h3_sol_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors",
+          "sizeGb": 1.99,
+          "optional": true
         }
       ],
       "customNodes": [
@@ -5482,9 +5656,9 @@
         }
       ],
       "vramGb": 32,
-      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT",
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT · Sol-H3-VAE (Efficient-Large-Model; the optional fast decoder): licence unconfirmed, no licence tag on its model page; its card says code Apache-2.0 and weights under the MiniMax H3 Community License",
       "validated": false,
-      "notes": "Image to video with sound: image = the first frame (MiniMaxH3ImageToVideo first_frame), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
+      "notes": "Image to video with sound: image = the first frame (MiniMaxH3ImageToVideo first_frame), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). Fast decode (vae = minimax_h3_sol_vae_int8_convrot, 1.99 GB, optional): Sol-H3-VAE, a 24-layer whole-clip decoder distilled from the H3 VAE (its card: 12.5 s -> 5.0 s for a 5 s 768p clip on an RTX 5090, 45.4 dB PSNR against the stock decoder); the core VAELoader reads it from ComfyUI master 0df1646a (2026-10-28, #17411) on, and its memory grows with the clip (about 24 GiB at 720p for 5 s, the card). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
     },
     {
       "id": "minimax-h3-flf2v",
@@ -5547,6 +5721,12 @@
             "input": "strength"
           }
         ],
+        "vae": [
+          {
+            "node": "136",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "174",
@@ -5602,6 +5782,13 @@
           "folder": "loras",
           "url": "https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/43a74557ac3f6539db8e0f2a959d03feb7a81480/minimax_h3_turbo_v4_step600_ema.safetensors",
           "sizeGb": 0.78
+        },
+        {
+          "file": "minimax_h3_sol_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors",
+          "sizeGb": 1.99,
+          "optional": true
         }
       ],
       "customNodes": [
@@ -5615,9 +5802,9 @@
         }
       ],
       "vramGb": 32,
-      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT",
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT · Sol-H3-VAE (Efficient-Large-Model; the optional fast decoder): licence unconfirmed, no licence tag on its model page; its card says code Apache-2.0 and weights under the MiniMax H3 Community License",
       "validated": false,
-      "notes": "Start and end frame to video with sound: image = the first frame, endImage = the last (cover-cropped to the canvas), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
+      "notes": "Start and end frame to video with sound: image = the first frame, endImage = the last (cover-cropped to the canvas), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). Fast decode (vae = minimax_h3_sol_vae_int8_convrot, 1.99 GB, optional): Sol-H3-VAE, a 24-layer whole-clip decoder distilled from the H3 VAE (its card: 12.5 s -> 5.0 s for a 5 s 768p clip on an RTX 5090, 45.4 dB PSNR against the stock decoder); the core VAELoader reads it from ComfyUI master 0df1646a (2026-10-28, #17411) on, and its memory grows with the clip (about 24 GiB at 720p for 5 s, the card). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
     },
     {
       "id": "minimax-h3-t2v-hq",
@@ -5660,6 +5847,12 @@
           {
             "node": "124",
             "input": "steps"
+          }
+        ],
+        "vae": [
+          {
+            "node": "136",
+            "input": "vae_name"
           }
         ],
         "filenamePrefix": [
@@ -5710,13 +5903,20 @@
           "folder": "text_encoders",
           "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
           "sizeGb": 15.69
+        },
+        {
+          "file": "minimax_h3_sol_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors",
+          "sizeGb": 1.99,
+          "optional": true
         }
       ],
       "customNodes": [],
       "vramGb": 32,
-      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0",
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · Sol-H3-VAE (Efficient-Large-Model; the optional fast decoder): licence unconfirmed, no licence tag on its model page; its card says code Apache-2.0 and weights under the MiniMax H3 Community License",
       "validated": false,
-      "notes": "Text to video with sound, the sharper setting: the fl2va pruned int8 model without the turbo LoRA, BasicScheduler simple 20 steps, KSamplerSelect res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-t2v. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
+      "notes": "Text to video with sound, the sharper setting: the fl2va pruned int8 model without the turbo LoRA, BasicScheduler simple 20 steps, KSamplerSelect res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-t2v. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). Fast decode (vae = minimax_h3_sol_vae_int8_convrot, 1.99 GB, optional): Sol-H3-VAE, a 24-layer whole-clip decoder distilled from the H3 VAE (its card: 12.5 s -> 5.0 s for a 5 s 768p clip on an RTX 5090, 45.4 dB PSNR against the stock decoder); the core VAELoader reads it from ComfyUI master 0df1646a (2026-10-28, #17411) on, and its memory grows with the clip (about 24 GiB at 720p for 5 s, the card)."
     },
     {
       "id": "minimax-h3-i2v-hq",
@@ -5767,6 +5967,12 @@
             "input": "steps"
           }
         ],
+        "vae": [
+          {
+            "node": "136",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "174",
@@ -5815,13 +6021,20 @@
           "folder": "text_encoders",
           "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
           "sizeGb": 15.69
+        },
+        {
+          "file": "minimax_h3_sol_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors",
+          "sizeGb": 1.99,
+          "optional": true
         }
       ],
       "customNodes": [],
       "vramGb": 32,
-      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0",
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · Sol-H3-VAE (Efficient-Large-Model; the optional fast decoder): licence unconfirmed, no licence tag on its model page; its card says code Apache-2.0 and weights under the MiniMax H3 Community License",
       "validated": false,
-      "notes": "Image to video with sound, the sharper setting: image = the first frame, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-i2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
+      "notes": "Image to video with sound, the sharper setting: image = the first frame, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-i2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). Fast decode (vae = minimax_h3_sol_vae_int8_convrot, 1.99 GB, optional): Sol-H3-VAE, a 24-layer whole-clip decoder distilled from the H3 VAE (its card: 12.5 s -> 5.0 s for a 5 s 768p clip on an RTX 5090, 45.4 dB PSNR against the stock decoder); the core VAELoader reads it from ComfyUI master 0df1646a (2026-10-28, #17411) on, and its memory grows with the clip (about 24 GiB at 720p for 5 s, the card)."
     },
     {
       "id": "minimax-h3-flf2v-hq",
@@ -5878,6 +6091,12 @@
             "input": "steps"
           }
         ],
+        "vae": [
+          {
+            "node": "136",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "174",
@@ -5926,13 +6145,20 @@
           "folder": "text_encoders",
           "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
           "sizeGb": 15.69
+        },
+        {
+          "file": "minimax_h3_sol_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors",
+          "sizeGb": 1.99,
+          "optional": true
         }
       ],
       "customNodes": [],
       "vramGb": 32,
-      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0",
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · Sol-H3-VAE (Efficient-Large-Model; the optional fast decoder): licence unconfirmed, no licence tag on its model page; its card says code Apache-2.0 and weights under the MiniMax H3 Community License",
       "validated": false,
-      "notes": "Start and end frame to video with sound, the sharper setting: image = the first frame, endImage = the last, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-flf2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
+      "notes": "Start and end frame to video with sound, the sharper setting: image = the first frame, endImage = the last, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-flf2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). Fast decode (vae = minimax_h3_sol_vae_int8_convrot, 1.99 GB, optional): Sol-H3-VAE, a 24-layer whole-clip decoder distilled from the H3 VAE (its card: 12.5 s -> 5.0 s for a 5 s 768p clip on an RTX 5090, 45.4 dB PSNR against the stock decoder); the core VAELoader reads it from ComfyUI master 0df1646a (2026-10-28, #17411) on, and its memory grows with the clip (about 24 GiB at 720p for 5 s, the card)."
     },
     {
       "id": "minimax-h3-orbit",
@@ -6044,6 +6270,479 @@
       "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · pablodawson's 360 Orbit LoRA under the same MiniMax H3 Community License",
       "validated": false,
       "notes": "A camera orbit around one frozen instant: image (LoadImage 138) is both the first and the last frame of MiniMaxH3ImageToVideo. The fl2va pruned int8 model with pablodawson's 360 Orbit LoRA (minimax_h3_flf2v_lora_v1, LoraLoaderModelOnly at 1.0), MiniMaxH3SigmaShift 12 / 3, BasicScheduler simple 28 steps, KSamplerSelect res_multistep, CFG 1; core nodes only. 73 frames (3.04 s) is the LoRA's training length. The prompt reads best in the LoRA's own caption style: one frozen instant, the camera in one continuous 360-degree orbit, everything holding its place, camera parallax the only movement. The LoRA was trained without sound; the graph still decodes H3's audio. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With the Orbit LoRA (0.16 GB)."
+    },
+    {
+      "id": "minimax-h3-fast-t2v",
+      "title": "MiniMax H3 Text to Video + Audio on a 16 GB GPU (FastH3 V2, 8 steps)",
+      "capability": "t2v",
+      "file": "minimax-h3-fast-t2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-fast-t2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "124",
+            "input": "steps"
+          }
+        ],
+        "unet": [
+          {
+            "node": "127",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "steps": 8,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-Comfy/resolve/ec1e3aa374a91c57b0b94a1623b7e657c0498cf2/diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
+          "sizeGb": 22.13
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-8-Step-V2-NVFP4-Comfy/resolve/994a40beb8c8f15739e4f0fad96aec101bb7123c/diffusion_models/fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors",
+          "sizeGb": 13.61,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 16,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · FastH3 V2 and FastH3 Trim (FastVideo): MiniMax H3 Community License",
+      "validated": false,
+      "notes": "Text to Video with sound on FastVideo's FastH3 8-Step V2 (DMD2, step 1300; FastVideo/FastVideo-FastH3-Comfy @ ec1e3aa3), as Comfy-Org's FastH3 template: MiniMaxH3ImageToVideo with no frames, UNETLoader (unet: the pruned int8 ConvRot file, 22.13 GB, or the NVFP4 file, 13.61 GB, for Blackwell) -> MiniMaxH3SigmaShift 10 / 3 -> ModelAttentionBackend \"comfy kitchen attention\" (INT8 attention, listed on NVIDIA and AMD GPUs only, so a CPU ComfyUI refuses the value) -> BlockSparseAttention vsa 10% from 20% of the steps, BasicScheduler simple 8 steps, KSamplerSelect res_multistep, CFG 1; core nodes only (ComfyUI 0.36 or later). FastVideo: fits 16 GB, not 12 GB, in its tests; the int8 file is partly offloaded under 24 GB. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: the FastH3 diffusion file, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB; every FastH3 template pairs it with every diffusion file; offloaded after encoding), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
+    },
+    {
+      "id": "minimax-h3-fast-i2v",
+      "title": "MiniMax H3 Image to Video + Audio on a 16 GB GPU (FastH3 V2, 8 steps)",
+      "capability": "i2v",
+      "file": "minimax-h3-fast-i2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-fast-i2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "138",
+            "input": "image"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "124",
+            "input": "steps"
+          }
+        ],
+        "unet": [
+          {
+            "node": "127",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "steps": 8,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-Comfy/resolve/ec1e3aa374a91c57b0b94a1623b7e657c0498cf2/diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
+          "sizeGb": 22.13
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-8-Step-V2-NVFP4-Comfy/resolve/994a40beb8c8f15739e4f0fad96aec101bb7123c/diffusion_models/fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors",
+          "sizeGb": 13.61,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 16,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · FastH3 V2 and FastH3 Trim (FastVideo): MiniMax H3 Community License",
+      "validated": false,
+      "notes": "Image to Video with sound on FastVideo's FastH3 8-Step V2 (DMD2, step 1300; FastVideo/FastVideo-FastH3-Comfy @ ec1e3aa3), as Comfy-Org's FastH3 template: MiniMaxH3ImageToVideo with first_frame, UNETLoader (unet: the pruned int8 ConvRot file, 22.13 GB, or the NVFP4 file, 13.61 GB, for Blackwell) -> MiniMaxH3SigmaShift 10 / 3 -> ModelAttentionBackend \"comfy kitchen attention\" (INT8 attention, listed on NVIDIA and AMD GPUs only, so a CPU ComfyUI refuses the value) -> BlockSparseAttention vsa 10% from 20% of the steps, BasicScheduler simple 8 steps, KSamplerSelect res_multistep, CFG 1; core nodes only (ComfyUI 0.36 or later). FastVideo: fits 16 GB, not 12 GB, in its tests; the int8 file is partly offloaded under 24 GB. FastVideo's card says FL2VA was not distilled; Comfy-Org's image-to-video template runs it, so a start frame is followed less closely than on minimax-h3-i2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: the FastH3 diffusion file, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB; every FastH3 template pairs it with every diffusion file; offloaded after encoding), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
+    },
+    {
+      "id": "minimax-h3-fast-flf2v",
+      "title": "MiniMax H3 Start + End Frame to Video + Audio on a 16 GB GPU (FastH3 V2, 8 steps)",
+      "capability": "flf2v",
+      "file": "minimax-h3-fast-flf2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-fast-flf2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "138",
+            "input": "image"
+          }
+        ],
+        "endImage": [
+          {
+            "node": "140",
+            "input": "image"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "124",
+            "input": "steps"
+          }
+        ],
+        "unet": [
+          {
+            "node": "127",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "steps": 8,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-Comfy/resolve/ec1e3aa374a91c57b0b94a1623b7e657c0498cf2/diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
+          "sizeGb": 22.13
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-8-Step-V2-NVFP4-Comfy/resolve/994a40beb8c8f15739e4f0fad96aec101bb7123c/diffusion_models/fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors",
+          "sizeGb": 13.61,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 16,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · FastH3 V2 and FastH3 Trim (FastVideo): MiniMax H3 Community License",
+      "validated": false,
+      "notes": "Start + End Frame to Video with sound on FastVideo's FastH3 8-Step V2 (DMD2, step 1300; FastVideo/FastVideo-FastH3-Comfy @ ec1e3aa3), as Comfy-Org's FastH3 template: MiniMaxH3ImageToVideo with first_frame and last_frame, UNETLoader (unet: the pruned int8 ConvRot file, 22.13 GB, or the NVFP4 file, 13.61 GB, for Blackwell) -> MiniMaxH3SigmaShift 10 / 3 -> ModelAttentionBackend \"comfy kitchen attention\" (INT8 attention, listed on NVIDIA and AMD GPUs only, so a CPU ComfyUI refuses the value) -> BlockSparseAttention vsa 10% from 20% of the steps, BasicScheduler simple 8 steps, KSamplerSelect res_multistep, CFG 1; core nodes only (ComfyUI 0.36 or later). FastVideo: fits 16 GB, not 12 GB, in its tests; the int8 file is partly offloaded under 24 GB. FastVideo's card says FL2VA was not distilled; Comfy-Org's image-to-video template runs it, so a start frame is followed less closely than on minimax-h3-i2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: the FastH3 diffusion file, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB; every FastH3 template pairs it with every diffusion file; offloaded after encoding), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
+    },
+    {
+      "id": "minimax-h3-trim-t2v",
+      "title": "MiniMax H3 Text to Video + Audio on an 8-12 GB GPU (FastH3 Trim, 8 steps, experimental)",
+      "capability": "t2v",
+      "file": "minimax-h3-trim-t2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-trim-t2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "124",
+            "input": "steps"
+          }
+        ],
+        "unet": [
+          {
+            "node": "127",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "steps": 8,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "fastvideo_fasth3_trim_8step_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_int8_convrot.safetensors",
+          "sizeGb": 18.92
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "fastvideo_fasth3_trim_8step_fp8.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_fp8.safetensors",
+          "sizeGb": 19.68,
+          "optional": true
+        },
+        {
+          "file": "fastvideo_fasth3_trim_8step_nvfp4.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_nvfp4.safetensors",
+          "sizeGb": 11.89,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 12,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · FastH3 V2 and FastH3 Trim (FastVideo): MiniMax H3 Community License",
+      "validated": false,
+      "notes": "Text to video with sound on FastVideo's FastH3 Trim (FastVideo/FastVideo-FastH3-Trim-Comfy @ f66c13dc, 2026-10-06): 42 of H3's 50 blocks with a shared rank-16 timestep basis, 8-step DMD2 (checkpoint 300), experimental and below FastH3 V2 in quality. The FastH3 template's graph with unet = the Trim file: int8 ConvRot (18.92 GB, the default, any recent NVIDIA card), fp8 (19.68 GB, Ada and newer, for a PyTorch without CUDA 13) or NVFP4 (11.89 GB, Blackwell); MiniMaxH3SigmaShift 10 / 3, Comfy Kitchen attention, BlockSparseAttention vsa 10%, BasicScheduler simple 8 steps, res_multistep, CFG 1. vramGb 12 is the int8 / fp8 file partly offloaded; the 8 GB figure is FastVideo's test with the NVFP4 file and memory capped at 8 GB on an RTX 4090 (82 s for 5 s at 480p). FastVideo's timings (5 s with sound): RTX 5090 13.4 s at 480p, 35.4 s at 768p; RTX 4090 43.9 s / 132.8 s; none measured here. Text to video only: the Trim cards name eight-step text-to-video and no frame conditioning. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: the FastH3 diffusion file, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB; every FastH3 template pairs it with every diffusion file; offloaded after encoding), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
     },
     {
       "id": "infinitetalk-native",
@@ -6738,7 +7437,275 @@
       "customNodes": [],
       "vramGb": 8,
       "validated": true,
-      "notes": "Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers (\"[Instrumental]\" or empty for instrumental). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4)."
+      "notes": "Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers; \"[Instrumental]\" when there are no words (in place of the template sample lyrics). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4)."
+    },
+    {
+      "id": "music-minimax-3",
+      "title": "MiniMax Music 3: full songs with vocals up to 5 minutes (caption + lyrics)",
+      "capability": "music",
+      "file": "music-minimax-3.json",
+      "source": "hand-built (scripts/comfy/hand-built/music-minimax-3.json)",
+      "bindings": {
+        "tags": [
+          {
+            "node": "4",
+            "input": "caption"
+          }
+        ],
+        "lyrics": [
+          {
+            "node": "4",
+            "input": "lyrics"
+          }
+        ],
+        "duration": [
+          {
+            "node": "4",
+            "input": "max_duration"
+          }
+        ],
+        "seed": [
+          {
+            "node": "4",
+            "input": "seed"
+          },
+          {
+            "node": "7",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "7",
+            "input": "steps"
+          }
+        ],
+        "tiledDecode": [
+          {
+            "node": "10",
+            "input": "switch"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "11",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "11",
+          "kind": "audio"
+        }
+      ],
+      "defaults": {
+        "steps": 30,
+        "duration": 120,
+        "tiledDecode": false
+      },
+      "limits": {
+        "maxDurationSec": 300
+      },
+      "models": [
+        {
+          "file": "minimax_music3_dit_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/diffusion_models/minimax_music3_dit_int8_convrot.safetensors",
+          "sizeGb": 2.5
+        },
+        {
+          "file": "minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+          "sizeGb": 9.2
+        },
+        {
+          "file": "minimax_music3_dav.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/vae/minimax_music3_dav.safetensors",
+          "sizeGb": 0.22
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 24,
+      "license": "MiniMax-Music3 Community License (MiniMaxAI/MiniMax-Music3 @ 1b525ccb: MIT-style grant with the notice kept and an Acceptable Use Policy; a commercial product must show \"MiniMax-Music3\" in its interface; MiniMax's written authorisation above US$20M yearly revenue); the Comfy-Org repack @ 9e364ccd is tagged Apache-2.0",
+      "validated": true,
+      "notes": "From the core template audio_minimax_music_3 from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: int8 DiT, MP3 V0. tags = the caption (style, mood, vocals, arrangement; the template suggests Global Metadata, Vocal Details and Arrangement), lyrics with section tags on lines of their own ([Intro] [Verse] [Pre-Chorus] [Chorus] [Post-Chorus] [Bridge] [Instrumental] [Solo] [Outro]); \"[Instrumental]\" when there are no words. duration = max_duration, an upper bound (the model can end the song earlier; 9,000 acoustic frames at 25 fps = 5 min). KSampler 30 steps, cfg 1.7, euler / simple and the encoder's cfg_scale 1.7 / top_k 50, as the template. 32 kHz stereo. The template's Tiled decode switch (VAEDecodeAudioTiled 1536 / 64): less VRAM for long songs, a small risk of seams; tiledDecode true for songs over 120 s. VRAM 24 GB, the card's figure: under 24 GB at full precision and about 22 GB with CPU offload; its 8 GB figure streams the language model layer by layer (diffusers group offload), which the core node does not do (ComfyUI's own partial loading may still fit smaller cards). Files: DiT int8 2.5 GB (fp16 4.91, fp32 9.83), pruned int8 encoder 9.2 GB (pruned bf16 16.71, full bf16 18.47), DAV VAE 0.22 GB."
+    },
+    {
+      "id": "music-yue2-song",
+      "title": "YuE2 3B: lyrics to song (style + lyrics, ABC planning)",
+      "capability": "music",
+      "file": "music-yue2-song.json",
+      "source": "hand-built (scripts/comfy/hand-built/music-yue2-song.json)",
+      "bindings": {
+        "tags": [
+          {
+            "node": "2",
+            "input": "style"
+          },
+          {
+            "node": "3",
+            "input": "style"
+          }
+        ],
+        "lyrics": [
+          {
+            "node": "2",
+            "input": "lyrics"
+          },
+          {
+            "node": "3",
+            "input": "lyrics"
+          }
+        ],
+        "duration": [
+          {
+            "node": "3",
+            "input": "max_duration"
+          }
+        ],
+        "seed": [
+          {
+            "node": "2",
+            "input": "seed"
+          },
+          {
+            "node": "3",
+            "input": "seed"
+          },
+          {
+            "node": "6",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "6",
+            "input": "steps"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "8",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "8",
+          "kind": "audio"
+        }
+      ],
+      "defaults": {
+        "steps": 32,
+        "duration": 120
+      },
+      "limits": {
+        "maxDurationSec": 300
+      },
+      "models": [
+        {
+          "file": "yue2_3b_int8_convrot.safetensors",
+          "folder": "checkpoints",
+          "url": "https://huggingface.co/Comfy-Org/YuE2/resolve/main/checkpoints/yue2_3b_int8_convrot.safetensors",
+          "sizeGb": 3.96
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 12,
+      "license": "CC-BY-NC-4.0 (m-a-p/YuE2-3B @ 8f24312f weights; the Comfy-Org/YuE2 repack @ 2f76ca75 is tagged the same)",
+      "validated": true,
+      "notes": "From the core template audio_yue2_text2music from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: MP3 V0. tags = the style (language, genre, vocal, tempo, instruments), lyrics with section tags ([Verse] [Chorus] [Bridge] [Outro]); only the words to be sung. YuE2 Generate ABC plans melody and chords (\"full\") before the song; YuE2 Generate Music makes the tokens and the seconds the empty latent takes. duration = max_duration, an upper bound reduced for long prompts. KSampler 32 steps, cfg 1, dpm_2 / sgm_uniform, as the template. Checkpoint int8 3.96 GB (bf16 7.8 GB). VRAM is not published: 12 GB is Fuobe's estimate for the int8 checkpoint."
+    },
+    {
+      "id": "music-yue2-cover",
+      "title": "YuE2 3B: a cover of a song (its melody, new style and lyrics)",
+      "capability": "music",
+      "file": "music-yue2-cover.json",
+      "source": "hand-built (scripts/comfy/hand-built/music-yue2-cover.json)",
+      "bindings": {
+        "audio": [
+          {
+            "node": "9",
+            "input": "audio"
+          }
+        ],
+        "tags": [
+          {
+            "node": "3",
+            "input": "style"
+          }
+        ],
+        "lyrics": [
+          {
+            "node": "3",
+            "input": "lyrics"
+          }
+        ],
+        "duration": [
+          {
+            "node": "3",
+            "input": "max_duration"
+          }
+        ],
+        "seed": [
+          {
+            "node": "3",
+            "input": "seed"
+          },
+          {
+            "node": "6",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "6",
+            "input": "steps"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "8",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "8",
+          "kind": "audio"
+        }
+      ],
+      "defaults": {
+        "steps": 32,
+        "duration": 300
+      },
+      "limits": {
+        "maxDurationSec": 300
+      },
+      "models": [
+        {
+          "file": "yue2_3b_int8_convrot.safetensors",
+          "folder": "checkpoints",
+          "url": "https://huggingface.co/Comfy-Org/YuE2/resolve/main/checkpoints/yue2_3b_int8_convrot.safetensors",
+          "sizeGb": 3.96
+        },
+        {
+          "file": "sheetsage2_bf16.safetensors",
+          "folder": "audio_encoders",
+          "url": "https://huggingface.co/Comfy-Org/YuE2/resolve/main/audio_encoders/sheetsage2_bf16.safetensors",
+          "sizeGb": 1.39
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 12,
+      "license": "CC-BY-NC-4.0 (m-a-p/YuE2-3B @ 8f24312f and m-a-p/SheetSage2 @ b83c3d79 weights; the Comfy-Org/YuE2 repack @ 2f76ca75 is tagged the same)",
+      "validated": true,
+      "notes": "From the core template audio_yue2_music_cover from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: MP3 V0. audio = the song to cover (LoadAudio). SheetSage2 transcribes its melody to ABC (\"melody\" mode, the template's), which YuE2 sings with the new style and lyrics: lyrics close to the original's phrasing and syllable count fit the melody best. The source audio is not YuE2's conditioning, only its melody. SheetSage2 bf16 1.39 GB. VRAM is not published: 12 GB is Fuobe's estimate for the int8 checkpoint and SheetSage2."
     },
     {
       "id": "v2a-mmaudio",
@@ -6987,6 +7954,262 @@
       "autoDownloads": [
         "IndexTeam/IndexTTS-2 must be in custom_nodes/ComfyUI-IndexTTS2/checkpoints (gpt.pth 3.48 GB, s2mel.pth 1.2 GB, qwen0.6bemo4-merge 1.19 GB, config.yaml, bpe.model, ...); w2v-bert-2.0, MaskGCT semantic codec, CAMPPlus and BigVGAN are fetched from Hugging Face on first run"
       ]
+    },
+    {
+      "id": "tts-qwen3-design",
+      "title": "Qwen3-TTS 1.7B voice design (a new voice from a description)",
+      "capability": "voice-design",
+      "file": "tts-qwen3-design.json",
+      "source": "hand-built (scripts/comfy/hand-built/tts-qwen3-design.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "1",
+            "input": "text"
+          }
+        ],
+        "voiceDescription": [
+          {
+            "node": "1",
+            "input": "instruct"
+          }
+        ],
+        "seed": [
+          {
+            "node": "1",
+            "input": "seed"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "2",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "2",
+          "kind": "audio"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxDurationSec": 300
+      },
+      "models": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI-QwenTTS",
+          "repo": "https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293"
+        }
+      ],
+      "vramGb": 8,
+      "license": "Qwen3-TTS weights Apache-2.0 (Qwen); ComfyUI-QwenTTS code GPL-3.0",
+      "validated": false,
+      "notes": "AILab_Qwen3TTSVoiceDesign_Advanced(text = the line, instruct = the voice in words, model_size 1.7B, language Auto, do_sample true so each seed is a different take: top_p 1.0, top_k 50, temperature 0.9, repetition_penalty 1.05 as fal sends; max_new_tokens 4096 = about 5 minutes at 12 Hz; unload_models false keeps it loaded for the next take). The Basic node samples greedily (do_sample false): every take would be the same. 10 languages (Auto, Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, Russian, Italian). Install the pack with its requirements.txt (transformers >= 4.57, torch >= 2.9.1). A designed voice is reused by cloning the chosen take (tts-qwen3-clone with the take and its line as reference_text). Output MP3 V0.",
+      "autoDownloads": [
+        "ComfyUI-QwenTTS downloads Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign (whole repository at its current revision; 5ecdb67327fd37bb2e042aab12ff7391903235d3 when this was written: model.safetensors 3.83 GB + speech_tokenizer 0.68 GB) into models/tts/Qwen3-TTS/Qwen3-TTS-12Hz-1.7B-VoiceDesign on first run (models/TTS/Qwen3-TTS when no tts folder is registered: ComfyUI-VoxCPM2 registers models/tts)"
+      ],
+      "validationError": "HTTP 400: missing_node_type: Node 'Qwen3-TTS voice design' not found. The custom node may not be installed. (Node ID '#1')"
+    },
+    {
+      "id": "tts-qwen3-clone",
+      "title": "Qwen3-TTS 1.7B voice clone (a short sample, optionally its transcript)",
+      "capability": "tts",
+      "file": "tts-qwen3-clone.json",
+      "source": "hand-built (scripts/comfy/hand-built/tts-qwen3-clone.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "2",
+            "input": "target_text"
+          }
+        ],
+        "audio": [
+          {
+            "node": "1",
+            "input": "audio"
+          }
+        ],
+        "voiceTranscript": [
+          {
+            "node": "2",
+            "input": "reference_text"
+          }
+        ],
+        "seed": [
+          {
+            "node": "2",
+            "input": "seed"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "3",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "3",
+          "kind": "audio"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxDurationSec": 300
+      },
+      "models": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI-QwenTTS",
+          "repo": "https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293"
+        }
+      ],
+      "vramGb": 8,
+      "license": "Qwen3-TTS weights Apache-2.0 (Qwen); ComfyUI-QwenTTS code GPL-3.0",
+      "validated": false,
+      "notes": "AILab_Qwen3TTSVoiceClone_Advanced(target_text = the line, reference_audio = the voice sample, reference_text = what the sample says (a closer clone), x_vector_only false with a transcript; the pack refuses an empty reference_text otherwise, so without one the provider turns x_vector_only on (a timbre-only clone), model_size 1.7B, do_sample true, the same sampling as the design graph). A saved voice from Design a voice passes its take and the take's line. Output MP3 V0. Get consent for cloned voices.",
+      "autoDownloads": [
+        "ComfyUI-QwenTTS downloads Qwen/Qwen3-TTS-12Hz-1.7B-Base (whole repository at its current revision; fd4b254389122332181a7c3db7f27e918eec64e3 when this was written: model.safetensors 3.86 GB + speech_tokenizer 0.68 GB) into models/tts/Qwen3-TTS/Qwen3-TTS-12Hz-1.7B-Base on first run (models/TTS/Qwen3-TTS when no tts folder is registered: ComfyUI-VoxCPM2 registers models/tts)"
+      ],
+      "validationError": "HTTP 400: missing_node_type: Node 'Qwen3-TTS voice clone' not found. The custom node may not be installed. (Node ID '#2')"
+    },
+    {
+      "id": "tts-voxcpm2",
+      "title": "VoxCPM2 TTS with voice design (48 kHz, 30 languages)",
+      "capability": "voice-design",
+      "file": "tts-voxcpm2.json",
+      "source": "hand-built (scripts/comfy/hand-built/tts-voxcpm2.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "1",
+            "input": "text"
+          }
+        ],
+        "voiceDescription": [
+          {
+            "node": "1",
+            "input": "voice_description"
+          }
+        ],
+        "seed": [
+          {
+            "node": "1",
+            "input": "seed"
+          }
+        ],
+        "device": [
+          {
+            "node": "1",
+            "input": "device"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "2",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "2",
+          "kind": "audio"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxDurationSec": 300
+      },
+      "models": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI-VoxCPM2",
+          "repo": "https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f"
+        }
+      ],
+      "vramGb": 8,
+      "license": "VoxCPM2 weights Apache-2.0 (OpenBMB); ComfyUI-VoxCPM2 code Apache-2.0",
+      "validated": false,
+      "notes": "VoxCPM2_TTS(voice_description = the voice in words, wrapped in parentheses before the text by the node; text = the line; model VoxCPM2, lora None, cfg 2.0, 10 timesteps, max_tokens 4096, normalize_text true, dtype auto, device cuda). device is a combo of what the GPU has (cuda, mps, cpu): bound to the server's first torch device (/system_stats), cuda when it can't say. 48 kHz output, 30 languages. The pack also trains LoRAs (VoxCPM_LoraTrainer) and loads them (lora_name): not wired yet. Install the pack with its requirements.txt (voxcpm, funasr, modelscope).",
+      "autoDownloads": [
+        "ComfyUI-VoxCPM2 downloads openbmb/VoxCPM2 (whole repository; 32279effe8c19989596f05d353d1447f51d9e915 when this was written: model.safetensors 4.58 GB, audiovae.pth 0.38 GB) into models/tts/VoxCPM/VoxCPM2 on first run"
+      ],
+      "validationError": "HTTP 400: missing_node_type: Node 'VoxCPM2 TTS (voice design)' not found. The custom node may not be installed. (Node ID '#1')"
+    },
+    {
+      "id": "tts-voxcpm2-clone",
+      "title": "VoxCPM2 voice clone (controllable from a clip, ultimate with its transcript; 48 kHz)",
+      "capability": "tts",
+      "file": "tts-voxcpm2-clone.json",
+      "source": "hand-built (scripts/comfy/hand-built/tts-voxcpm2-clone.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "2",
+            "input": "text"
+          }
+        ],
+        "audio": [
+          {
+            "node": "1",
+            "input": "audio"
+          }
+        ],
+        "voiceTranscript": [
+          {
+            "node": "2",
+            "input": "prompt_text"
+          }
+        ],
+        "seed": [
+          {
+            "node": "2",
+            "input": "seed"
+          }
+        ],
+        "device": [
+          {
+            "node": "2",
+            "input": "device"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "3",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "3",
+          "kind": "audio"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxDurationSec": 300
+      },
+      "models": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI-VoxCPM2",
+          "repo": "https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f"
+        }
+      ],
+      "vramGb": 8,
+      "license": "VoxCPM2 weights Apache-2.0 (OpenBMB); ComfyUI-VoxCPM2 code Apache-2.0",
+      "validated": false,
+      "notes": "VoxCPM2_Clone(reference_audio = the voice sample, at most 50 s; prompt_text = what it says: given, the closest (\"ultimate\") clone, empty, the \"controllable\" clone; text = the line; the same model settings as tts-voxcpm2, denoiser and ASR off, 3 retries on a babbling or silent take). A saved voice from Design a voice passes its take and the take's line, so it is cloned the ultimate way. Output MP3 V0. Get consent for cloned voices.",
+      "autoDownloads": [
+        "ComfyUI-VoxCPM2 downloads openbmb/VoxCPM2 (whole repository; 32279effe8c19989596f05d353d1447f51d9e915 when this was written: model.safetensors 4.58 GB, audiovae.pth 0.38 GB) into models/tts/VoxCPM/VoxCPM2 on first run"
+      ],
+      "validationError": "HTTP 400: missing_node_type: Node 'VoxCPM2 voice clone' not found. The custom node may not be installed. (Node ID '#2')"
     },
     {
       "id": "tts-dialogue-chatterbox",
@@ -12506,6 +13729,123 @@
       "notes": "Storyboard's next frame on your GPU: the qwen-image-21-edit graph with akhaliq/Qwen-Image-2.1-Next-Scene-LoRA @ 67ce88cd (next_scene_step2500, the card's recommended diffusers/ComfyUI conversion) at 0.7, the card's clean-chain recipe: strength 0.7 or less and a 0.5 px Gaussian blur on each chained input (ImageBlur radius 1, sigma 0.5 on the previous panel), 28 steps (the card's usage), cfg 1, euler, simple. image = the previous panel, image2 = an optional character reference (left out when not given). The prompt starts \"Next Scene:\" with the camera move first (promptPrefix adds it when missing). Trained at 512 px on Sintel and Tears of Steel frame pairs: strongest on filmic scenes and establishing shots, static portraits are out of scope (card). storyboard-qwen-edit-2509-next-scene stays the classic choice on your GPU, and the cloud keeps Qwen-Image-Edit 2509 + its next-scene LoRA on fal (Qwen-Image 2.1 is not hosted). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
+      "id": "qwen-image-21-qma",
+      "title": "QMA Camera Angles (Qwen-Image 2.1 + the QMA LoRA, 96 views)",
+      "capability": "edit",
+      "file": "qwen-image-21-qma.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-qma.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "32",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "32",
+            "input": "steps"
+          }
+        ],
+        "cfg": [
+          {
+            "node": "32",
+            "input": "cfg"
+          }
+        ],
+        "megapixels": [
+          {
+            "node": "20",
+            "input": "megapixels"
+          }
+        ],
+        "loraStrength": [
+          {
+            "node": "60",
+            "input": "strength_model"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 30,
+        "cfg": 3,
+        "loraStrength": 1,
+        "megapixels": 1
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "qwen-image-2.1-qma-camera-angles.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/gribbliest/qwen-image-2.1-qma-camera-angles/resolve/13007eec2648c09529e930164c2ccc9c8c12428c/qwen-image-2.1-qma-camera-angles.safetensors",
+          "sizeGb": 0.32
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; QMA Camera Angles LoRA by gribbliest @ 13007eec: Apache-2.0 on its card (no LICENSE file), an adapter of Qwen-Image 2.1, so non-commercial through its base; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": true,
+      "notes": "Re-shoots a picture from one of 96 cameras: the qwen-image-21-edit graph with gribbliest/qwen-image-2.1-qma-camera-angles @ 13007eec (rank 64, 319 MB) at strength 1.0 and the card's settings: the source scaled to about 1 MP (ImageScaleToTotalPixels, lanczos, 32 px steps; megapixels 0.6 = the card's 768 px preview), one reference on TextEncodeQwenImage21 (resolution 0, its latent), QwenImage21Cache, KSampler 30 steps, CFG 3 (the card; the encoder's empty negative), euler, simple. Prompt: \"<qma> {azimuth} {elevation} {distance}\" then any edit words; Fuobe writes it from the run's camera (horizontal_angle / vertical_angle / zoom, snapped to the nearest view). Directions are the original camera's: \"right side view\" = the camera swings 90° to its own right. Open engine only: fal's Qwen-Image 2.1 takes no LoRAs. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
       "id": "qwen-image-21-t2i-small",
       "title": "Qwen-Image 2.1 Text to Image on a 16 GB GPU (Zen Image Edit: Qwen3.5-0.8B encoder + fusion adapter)",
       "capability": "t2i",
@@ -16161,6 +17501,116 @@
       "notes": "CPU OK, about 1.7 GiB on CUDA. audio = an audio file or a video (LoadAudio reads a video's soundtrack without decoding frames). DBSLoader model DBS-BSRNN-DnR (fast: 18.9 MB, 9.07 dB SI-SDR on DnR v2, the CPU default) or DBS-TIGER-DnR (best: 4.1 MB, 10.13 dB, about 3x slower on a CPU, the CUDA default); device auto. Measured on a 4-CPU host (torch 2.14.1+cpu, 10-20 s clips): DBS-BSRNN 0.17-0.33x real time per channel, DBS-TIGER 0.08-0.09x. DBSSeparate channels mono (the mean of the channels, the official usage) or each channel (stereo stems: every channel separated on its own, 2x the time); output_sample_rate input. ComfyUI saves audio as mono or stereo only (a 5.1 waveform comes out as scrambled stereo three times as long), so the provider splits a file with more than 2 channels in mono and makes its background from music + effects (node 4 rewired to AudioMerge add) rather than the original minus the speech. Outputs in order: voice (speech), music, effects (sfx), background = original minus speech (AudioMerge subtract: with mono it keeps the original stereo image at mono cost; AudioMerge scales the whole result down when it peaks over 1.0), and the pack's JSON report (model, device, rates, windows, seconds, times real time). Voice + background add up to the source, except on a loud master where AudioMerge had to lower the background to fit under full scale (FLAC holds no more). Voice is first, so a chain without a stem takes the dialogue. Trained on synthetic English mixes (DnR v2): dialogue separates well (15-16 dB), music against effects less so (5.7-7.8 dB). Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved (recorded as information)."
     },
     {
+      "id": "soundtrack-remix-dbs",
+      "title": "Remix a soundtrack: dialogue, music and effects at set levels (DBS, ComfyUI-DBS)",
+      "capability": "separate-audio",
+      "file": "soundtrack-remix-dbs.json",
+      "source": "hand-built (scripts/comfy/hand-built/soundtrack-remix-dbs.json)",
+      "bindings": {
+        "audio": [
+          {
+            "node": "1",
+            "input": "audio"
+          }
+        ],
+        "separationModel": [
+          {
+            "node": "2",
+            "input": "model"
+          }
+        ],
+        "channels": [
+          {
+            "node": "3",
+            "input": "channels"
+          }
+        ],
+        "voiceDb": [
+          {
+            "node": "4",
+            "input": "volume"
+          }
+        ],
+        "musicDb": [
+          {
+            "node": "5",
+            "input": "volume"
+          }
+        ],
+        "effectsDb": [
+          {
+            "node": "6",
+            "input": "volume"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "9",
+          "kind": "audio",
+          "stem": "voice"
+        },
+        {
+          "node": "10",
+          "kind": "text",
+          "role": "report"
+        }
+      ],
+      "defaults": {
+        "separationModel": "DBS-BSRNN-DnR",
+        "channels": "mono",
+        "voiceDb": 0,
+        "musicDb": -18,
+        "effectsDb": -18
+      },
+      "limits": {},
+      "models": [
+        {
+          "file": "DBS-BSRNN-DnR/model.safetensors",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/model.safetensors",
+          "sizeGb": 0.02
+        },
+        {
+          "file": "DBS-BSRNN-DnR/config.json",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "DBS-TIGER-DnR/model.safetensors",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/model.safetensors",
+          "sizeGb": 0.004
+        },
+        {
+          "file": "DBS-TIGER-DnR/config.json",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/config.json",
+          "sizeGb": 0
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-DBS",
+          "repo": "https://github.com/hiroki-abe-58/ComfyUI-DBS/tree/f656e53434b5485c148a2866fbd6ddc6b6152ed6"
+        }
+      ],
+      "vramGb": 0,
+      "license": "DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)",
+      "validated": true,
+      "notes": "CPU OK, about 1.7 GiB on CUDA. Graph A's split (LoadAudio reads a video's soundtrack too), then AudioAdjustVolume on the speech (voiceDb), music (musicDb) and sfx (effectsDb) stems (whole dB, -100..100; -100 leaves a stem at 1e-5, below 16-bit FLAC's floor) and AudioMerge add twice, saved as one FLAC with the input's length, starting at 0, so it goes back on a picture with video-mux-audio-replace. AudioMerge scales the whole mix down when it peaks over 1.0 (a crude limiter). channels mono gives a mono mix; each channel keeps stereo at twice the time. A source with more than 2 channels is split in mono (ComfyUI saves mono or stereo only). The output is tagged as the voice stem (the cleaned dialogue), so a chain takes it. DBS removes music and sound effects, not steady noise: hiss and hum stay with the dialogue or the effects (unmeasured, §11).",
+      "buildWarnings": [
+        "model DBS-BSRNN-DnR/config.json: https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/config.json -> no size (HTTP 200)"
+      ]
+    },
+    {
       "id": "voice-clean-reuse",
       "title": "Clean up voice: noise, echo, clipping and codec damage removed from speech (NVIDIA RE-USE, ComfyUI-RE-USE)",
       "capability": "enhance-voice",
@@ -17496,6 +18946,163 @@
       "license": "Tencent Hunyuan 3D 2.1 Community License (territory EXCLUDES the EU, UK and South Korea)",
       "validated": true,
       "notes": "Template 3d_hunyuan3d-v2.1. Shape only (no Hunyuan3D-Paint in the native nodes): clay previews or a separate texture step. Feed a background-removed image (bg-remove-birefnet)."
+    },
+    {
+      "id": "mesh-refine-hi3d",
+      "title": "Refine a 3D model's geometry from its photo (Hi3D 1.0, 512 / 1024 / 1536; geometry-only GLB)",
+      "capability": "refine-3d",
+      "file": "mesh-refine-hi3d.json",
+      "source": "hand-built (scripts/comfy/hand-built/mesh-refine-hi3d.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "2",
+            "input": "image"
+          }
+        ],
+        "model3d": [
+          {
+            "node": "5",
+            "input": "mesh_file"
+          }
+        ],
+        "meshResolution": [
+          {
+            "node": "6",
+            "input": "resolution"
+          }
+        ],
+        "steps": [
+          {
+            "node": "6",
+            "input": "steps"
+          }
+        ],
+        "seed": [
+          {
+            "node": "6",
+            "input": "seed"
+          }
+        ],
+        "cpuOffload": [
+          {
+            "node": "1",
+            "input": "cpu_offload"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "7",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "7",
+          "kind": "model3d"
+        }
+      ],
+      "defaults": {
+        "steps": 25
+      },
+      "limits": {},
+      "models": [
+        {
+          "file": "birefnet.safetensors",
+          "folder": "background_removal",
+          "url": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors",
+          "sizeGb": 0.44
+        },
+        {
+          "file": "hi3d/model_index.json",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/model_index.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "hi3d/scheduler/scheduler_config.json",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/scheduler/scheduler_config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "hi3d/vae/config.json",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/vae/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "hi3d/vae/model.safetensors",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/vae/model.safetensors",
+          "sizeGb": 0.38
+        },
+        {
+          "file": "hi3d/transformer_512/config.json",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_512/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "hi3d/transformer_512/model.safetensors",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_512/model.safetensors",
+          "sizeGb": 3.68
+        },
+        {
+          "file": "hi3d/transformer_1024/config.json",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_1024/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "hi3d/transformer_1024/model.safetensors",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_1024/model.safetensors",
+          "sizeGb": 3.68
+        },
+        {
+          "file": "dino/config.json",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/facebook/dinov2-large/resolve/47b73eefe95e8d44ec3623f8890bd894b6ea2d6c/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "dino/model.safetensors",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/facebook/dinov2-large/resolve/47b73eefe95e8d44ec3623f8890bd894b6ea2d6c/model.safetensors",
+          "sizeGb": 1.22
+        },
+        {
+          "file": "clip/config.json",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "clip/model.safetensors",
+          "folder": "Hi3D",
+          "url": "https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/model.safetensors",
+          "sizeGb": 1.71
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "Comfyui-Hi3d-T8",
+          "repo": "https://github.com/T8mars/Comfyui-Hi3d-T8/tree/73848490976e6a9b0c735ce02984c03866a495e7"
+        }
+      ],
+      "vramGb": 24,
+      "license": "Hi3D Open License Agreement 1.0 (Hi3D v1.0 weights and vendored code by OCEANO HK HOLDING LIMITED: commercial use permitted; above 200,000 monthly active users or USD 1,000,000 monthly revenue, notify the licensor and apply for a separate licence within 60 days; the app must show \"Powered by Hi3D 1.0\" linking to http://hi3d.ai/); T8star's ComfyUI nodes MIT; DINOv2-L Apache-2.0, CLIP ViT-L/14 MIT (OpenAI); BiRefNet MIT",
+      "validated": false,
+      "notes": "Hi3D v1.0 (Sparc3D's refinement stage; docs/research/hi3d-refine.json) through T8star's Comfyui-Hi3d-T8 0.5.1: LoadImage -> core BiRefNet RemoveBackground -> InvertMask (Hi3D reads mask 1 as transparent, so the subject stays and the background goes) -> Hi3DRefine with the coarse GLB (Hi3DLoadMesh reads it from ComfyUI's input folder, where Fuobe uploads it) and Hi3DModelLoader (models/Hi3D with hi3d/, dino/, clip/; sequential CPU offload on, SDPA attention, which needs no flash-attn build) -> SaveGLB. Resolution 512 runs one pass (transformer_512), 1024 two and 1536 three (transformer_1024), 25 scheduler steps each. Output: geometry only (no texture, material or vertex colour), recentred at unit radius, not guaranteed watertight; the Fuobe server finishes it like any image-to-3D GLB (web GLB + CPU turntable). Needs Linux or Windows with an NVIDIA GPU of compute capability 8.0+ and CUDA 12 (official stack: CUDA 12.0-12.5, torch 2.5.0+cu124, flash-attn 2.7.4.post1, spconv-cu120 2.3.6; the pack keeps ComfyUI's torch and pins spconv-cu126 2.3.8, with an SDPA attention option). No CPU path. 1536 is validated upstream only on a 96 GB H20; the pack's author ran 512-1536 on a 24 GB laptop RTX 5090 with offload (vramGb is an estimate). Not yet run end to end through Fuobe. Weights: 7.73 GB Hi3D + 1.22 GB DINOv2-L + 1.71 GB CLIP ViT-L/14 at pinned revisions.",
+      "buildWarnings": [
+        "model hi3d/transformer_512/config.json: https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_512/config.json -> no size (HTTP 200)",
+        "model hi3d/transformer_1024/config.json: https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_1024/config.json -> no size (HTTP 200)",
+        "model clip/config.json: https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/config.json -> no size (HTTP 200)"
+      ],
+      "validationError": "HTTP 400: missing_node_type: Node 'Hi3D Model Loader' not found. The custom node may not be installed. (Node ID '#1')"
     },
     {
       "id": "tryon-flux2-klein-4b",
@@ -19695,6 +21302,12 @@
             "node": "save",
             "input": "filename_prefix"
           }
+        ],
+        "windowControls": [
+          {
+            "node": "review",
+            "input": "window_controls"
+          }
         ]
       },
       "outputs": [
@@ -19707,10 +21320,11 @@
         "steps": 12,
         "loraStrength": 1,
         "maskGrow": 5,
-        "maskPrompt": "person",
         "windowFrames": "22",
+        "maskPrompt": "person",
         "historyFrames": "18",
-        "lora": "H3-Person-Remover-V1.safetensors"
+        "lora": "H3-Person-Remover-V1.safetensors",
+        "windowControls": "{}"
       },
       "limits": {
         "maxDurationSec": 60,
@@ -19762,9 +21376,68 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its video and audio VAEs, the packaged Qwen3-VL text encoder, Akatz Labs' Person Remover V1 LoRA): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · SAM 3.1 under Meta's SAM License (commercial use allowed under its terms) · H3 Relay nodes GPL-3.0 (Sendy Software LLC and contributors; vendored Context Loop and Spectrum GPL-3.0); the graph is H3 Relay's example workflow (GPL-3.0 repository)",
-      "validated": false,
-      "notes": "H3 Relay's toolkit H3-Person-Removal.api.json at e2a7665b (Akatz Labs' tool ships the same file). Changed: the clean first frame goes through an ImageScale (centre crop) to the video's exact size, so an edit that came back a little larger or smaller still fits; SAM 3.1's words default to \"person\"; the save prefix. video = the part already fitted to 24 fps on the 32-pixel grid (oss-fit-clip), image = the clean first frame (the app makes it with Qwen-Image-Edit from the part's first frame). 22-frame windows with 18 of history, 12 steps, er_sde / simple, CFG 1, LoRA 1.0, mask grown 5 px, seed 904234 by default (Akatz's settings). The output is silent: the app puts the clip's sound back. Needs the h3-relay pack (H3_RELAY=1) and FFmpeg.",
-      "validationError": "HTTP 400: missing_node_type: Node 'H3RelayAppendWindow' not found. The custom node may not be installed. (Node ID '#append')"
+      "validated": true,
+      "notes": "H3 Relay's toolkit H3-Person-Removal.api.json at e2a7665b (Akatz Labs' tool ships the same file). Changed: the clean first frame goes through an ImageScale (centre crop) to the video's exact size, so an edit that came back a little larger or smaller still fits; SAM 3.1's words default to \"person\"; the save prefix. video = the part already fitted to 24 fps on the 32-pixel grid (oss-fit-clip), image = the clean first frame (the app makes it with Qwen-Image-Edit from the part's first frame). 22-frame windows with 18 of history, 12 steps, er_sde / simple, CFG 1, LoRA 1.0, mask grown 5 px, seed 904234 by default (Akatz's settings). The output is silent: the app puts the clip's sound back. Needs the h3-relay pack (H3_RELAY=1) and FFmpeg. windowControls = H3 Relay's Review Windows controls (originals o/person-remover-plus): {config_key, windows: {index: {seed, locked, record_id}}}; locked windows come back exactly from the checkpoints the Relay keeps in ComfyUI's output/__h3_removal_cache, the first unlocked one is drawn again with its seed (Redo from here). The provider reads the run's window previews from /h3_relay/removal/previews."
+    },
+    {
+      "id": "video-person-remove-h3-mask",
+      "title": "Remove a person, mask first: SAM 3.1 finds who you name, thresholds and grows the mask and fills it green over the clip, as H3 Person Removal sees it (core nodes)",
+      "capability": "person-mask",
+      "file": "video-person-remove-h3-mask.json",
+      "source": "hand-built (scripts/comfy/hand-built/video-person-remove-h3-mask.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "source",
+            "input": "file"
+          }
+        ],
+        "maskPrompt": [
+          {
+            "node": "subject",
+            "input": "text"
+          }
+        ],
+        "maskGrow": [
+          {
+            "node": "grow_mask",
+            "input": "expand"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "save",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "save",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "maskGrow": 5,
+        "maskPrompt": "person"
+      },
+      "limits": {
+        "maxDurationSec": 10,
+        "maxFrames": 240
+      },
+      "models": [
+        {
+          "file": "sam3.1_multiplex_fp16.safetensors",
+          "folder": "checkpoints",
+          "url": "https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors",
+          "sizeGb": 1.75
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 6,
+      "license": "SAM 3.1 under Meta's SAM License (commercial use allowed under its terms); the chain is H3 Relay's Person Removal example (GPL-3.0 repository)",
+      "validated": true,
+      "notes": "The SAM 3.1 part of video-person-remove-h3-relay, node for node (detect 0.4 with 2 refinements, track 0.5 with 1 object and detection every 12 frames, threshold 0.5, grow maskGrow px, green 0x00FF00), saved as a video instead of sampled. video = the first seconds of the part, fitted to 24 fps on the 32-pixel grid like the removal (oss-fit-clip). Needs nothing but SAM 3.1."
     },
     {
       "id": "video-character-swap-h3-segment",
@@ -21086,6 +22759,150 @@
       "notes": "Subject or product splat (3D Angles, 3D Jutsu props, a splat alternative to TRELLIS.2 spins). The official template 3d_triposplat_image_to_gaussian_splat (2026-06-02) with the UI-only live-preview patch removed and a 75-frame H.264 orbit (RenderSplat + CreateCameraInfo orbit yaw 35, pitch 30, distance 2.5; role turntable, 25 fps). Subject only: BiRefNet cuts it out first (cutout false = use the image's own alpha). Output 1 (role splat): splatFormat spz (Niantic, gzip, ~10x smaller, base colour), ply (full spherical harmonics) or ksplat, saved by SaveGLB under that extension. ComfyUI serves all three as application/octet-stream, so Fuobe goes by the extension: spz and ply are saved as 3D models (model/x-spz, model/ply), ksplat as a .bin file, and each output records its format. cutout is true by default (manifest defaults). numGaussians up to 1,048,576 (262,144 by default); seed drives both the sampler and the decoder. RenderSplat also takes a look_at camera, so a view picked in the browser can be rendered on the server. 3.78 GB of weights (TripoSplat 0.74, DINOv3 ViT-H 1.68, TripoSplat VAE decoder 0.58, FLUX.2 VAE 0.34, BiRefNet 0.44)."
     },
     {
+      "id": "image-to-splat-idol",
+      "title": "Image to a Gaussian splat of one object (Idol on the TripoSplat core nodes) + an orbit video",
+      "capability": "splat",
+      "file": "image-to-splat-idol.json",
+      "source": "hand-built (scripts/comfy/hand-built/image-to-splat-idol.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "99",
+            "input": "image"
+          }
+        ],
+        "cutout": [
+          {
+            "node": "88:35",
+            "input": "switch"
+          }
+        ],
+        "numGaussians": [
+          {
+            "node": "88:55",
+            "input": "num_gaussians"
+          }
+        ],
+        "steps": [
+          {
+            "node": "88:6",
+            "input": "steps"
+          }
+        ],
+        "cfg": [
+          {
+            "node": "88:6",
+            "input": "cfg"
+          }
+        ],
+        "sampler": [
+          {
+            "node": "88:6",
+            "input": "sampler_name"
+          }
+        ],
+        "photoCrop": [
+          {
+            "node": "88:104",
+            "input": "switch"
+          }
+        ],
+        "seed": [
+          {
+            "node": "88:6",
+            "input": "seed"
+          },
+          {
+            "node": "88:55",
+            "input": "seed"
+          }
+        ],
+        "splatFormat": [
+          {
+            "node": "92",
+            "input": "format"
+          }
+        ],
+        "orbitFrames": [
+          {
+            "node": "75",
+            "input": "frames"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "51",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "42",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "51",
+          "kind": "model3d",
+          "role": "splat"
+        },
+        {
+          "node": "42",
+          "kind": "video",
+          "role": "turntable"
+        }
+      ],
+      "defaults": {
+        "steps": 50,
+        "cfg": 4,
+        "numGaussians": 262144,
+        "orbitFrames": 75,
+        "splatFormat": "spz",
+        "cutout": true,
+        "photoCrop": false
+      },
+      "limits": {
+        "maxGaussians": 1048576
+      },
+      "models": [
+        {
+          "file": "dino_v3_vit_h.safetensors",
+          "folder": "clip_vision",
+          "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/clip_vision/dino_v3_vit_h.safetensors",
+          "sizeGb": 1.68
+        },
+        {
+          "file": "flux2-vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "idol_decoder_fp16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/vae/idol_decoder_fp16.safetensors",
+          "sizeGb": 0.58
+        },
+        {
+          "file": "idol_fp16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/diffusion_models/idol_fp16.safetensors",
+          "sizeGb": 0.74
+        },
+        {
+          "file": "birefnet.safetensors",
+          "folder": "background_removal",
+          "url": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors",
+          "sizeGb": 0.44
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 8,
+      "license": "Apache-2.0 (speridlabs/idol weights; the ComfyUI files are nynxz/Idol's conversion, Apache-2.0); Idol is VAST-AI-Research's TripoSplat architecture (MIT, code and weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a \"Built with DINOv3\" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT",
+      "validated": true,
+      "notes": "Idol 3D (Speridlabs): one object from one picture -> a Gaussian splat (role splat) + a 75-frame orbit video (role turntable). A copy of image-to-splat-triposplat with the same node ids. Reference settings (idol-sdk sampler.py L43-70): 50 Euler steps, simple schedule; Idol's CFG weight 3 in its (1+w)cond - w*uncond form is ComfyUI cfg 4.0, and its rescale_t 3 is TripoSplat's built-in shift 3 (comfy/supported_models.py), so no ModelSamplingSD3. Quick look (set by the page as params.extra): 20 dpmpp_2m steps, cfg 4, 65,536 Gaussians, the ComfyUI-Idol README's \"faster trade-off\" and \"fast preview\"; quality unmeasured. Photo crop (photoCrop, default false): TripoSplatPreprocessImage is Idol's \"synthetic\" 1.2 crop; scaled to 720 and centred on a black 1024 canvas (88:101-103) the object spans 600 px, where Idol's \"real\" 1.7 crop gives 602 px. ComfySwitchNode 88:104 picks it; its inputs are lazy, so the branch not taken does not run. Not yet compared with IdolPreprocessImage \"real\". About half the Gaussians are near-transparent: RenderSplat thresholds 0.05; the saved file is not pruned without the ComfyUI-Idol pack. 1.32 GB of new weights (idol_fp16 0.74, idol_decoder_fp16 0.58) plus the shared 2.46 GB (DINOv3 ViT-H 1.68, FLUX.2 VAE 0.34, BiRefNet 0.44). VRAM: vendor peak 7.2 GB in the SDK; unmeasured in ComfyUI."
+    },
+    {
       "id": "wan21-i2v-uni3c-path",
       "title": "Fly path: a still filmed along a camera path, Wan 2.1 I2V guided by Uni3C on a browser render of the path (core nodes)",
       "capability": "camera-path",
@@ -21848,6 +23665,253 @@
       "validated": false,
       "notes": "rdh9616's \"Open-H3 Regenerate 2K - Draft Video\" example (ComfyUI-Open-H3-Regenerate at 9b686c5) without the note, the three PreviewAny nodes and OpenH3VideoToPrompt: the prompt goes straight into CLIPTextEncode 16, so nothing calls a server from inside the graph. curve_name \"none\" (the tensors of the Sharp curve branches are zero in the blocks checked), so the curve table is never read (\"(model's own table)\": no 21 GB ref2va file needed). A Video Slice (29) in front cuts the 15 s window a longer clip is regenerated in (startTime, duration; 0 = the whole clip). Prepare Draft (11) resamples to 24 fps, cover-crops to draftSize (768p for H3 drafts, 576p for other models; a portrait clip gets the preset turned, and any other shape is cropped to 16:9, since the upscale always targets 16:9 or 9:16) and cuts frames (round(seconds x 24), at most 360 = 15 s per pass); Save Refined Latent (24) and Finish (26) read its frame count. The LBH upscaler puts the latent on the target grid (resolution: 1080p (1920x1080) | 2k (2560x1440) | 4k (3840x2160), 4K via 2K), the refine re-noises it to startSigma (0 = the release 0.909 grid; Close 0.7, Balanced 0.8) and runs steps (3, or 2 = Faster) Euler steps at CFG 1 with Sol-Attn sparse attention and the audio held as encoded silence; the refined latent is saved before decoding (output/open_h3_latents/, redo a failed decode with rdh's \"Decode Saved Latent\" graph) and decoded by the fast H3 VAE decoder (tiled H3 VAE fallback). Finish trims the padding, crops 1088 -> 1080 and 2176 -> 2160 and cuts the draft's own sound to length, which CreateVideo muxes back at 24 fps. Measured by the pack's author: about 3 min per 5 s at 2K on a 72 GB RTX PRO 5000 (9.5 min with dense attention); 22 s on a B200 (NVIDIA); a community run reached about 1080p on 32 GB with a lossy LoRA. The packs were tested by their author on ComfyUI 0.42.0.",
       "validationError": "HTTP 400: missing_node_type: Node 'Open-H3 Regenerate LoRA (curve branches off)' not found. The custom node may not be installed. (Node ID '#3')"
+    },
+    {
+      "id": "video-composite-mask",
+      "title": "Put only the swapped character back over the original footage: the 768p swap, then the regenerated one, each through the approved mask (grown, feathered), with the footage's sound (core nodes, no model)",
+      "capability": "composite",
+      "file": "video-composite-mask.json",
+      "source": "hand-built (scripts/comfy/hand-built/video-composite-mask.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "source",
+            "input": "file"
+          }
+        ],
+        "video2": [
+          {
+            "node": "regen",
+            "input": "file"
+          }
+        ],
+        "video3": [
+          {
+            "node": "take",
+            "input": "file"
+          }
+        ],
+        "mask": [
+          {
+            "node": "mask",
+            "input": "file"
+          }
+        ],
+        "startTime": [
+          {
+            "node": "source_slice",
+            "input": "start_time"
+          }
+        ],
+        "windowStart": [
+          {
+            "node": "regen_slice",
+            "input": "start_time"
+          }
+        ],
+        "takeStart": [
+          {
+            "node": "take_slice",
+            "input": "start_time"
+          }
+        ],
+        "maskStart": [
+          {
+            "node": "mask_slice",
+            "input": "start_time"
+          }
+        ],
+        "duration": [
+          {
+            "node": "source_slice",
+            "input": "duration"
+          },
+          {
+            "node": "regen_slice",
+            "input": "duration"
+          },
+          {
+            "node": "take_slice",
+            "input": "duration"
+          },
+          {
+            "node": "mask_slice",
+            "input": "duration"
+          }
+        ],
+        "canvasWidth": [
+          {
+            "node": "take_scaled",
+            "input": "width"
+          },
+          {
+            "node": "take_mask_img",
+            "input": "width"
+          }
+        ],
+        "canvasHeight": [
+          {
+            "node": "take_scaled",
+            "input": "height"
+          },
+          {
+            "node": "take_mask_img",
+            "input": "height"
+          }
+        ],
+        "takeX": [
+          {
+            "node": "base",
+            "input": "x"
+          }
+        ],
+        "takeY": [
+          {
+            "node": "base",
+            "input": "y"
+          }
+        ],
+        "regionWidth": [
+          {
+            "node": "regen_mask_img",
+            "input": "width"
+          }
+        ],
+        "regionHeight": [
+          {
+            "node": "regen_mask_img",
+            "input": "height"
+          }
+        ],
+        "regenWidth": [
+          {
+            "node": "regen_scaled",
+            "input": "width"
+          },
+          {
+            "node": "regen_trim",
+            "input": "width"
+          }
+        ],
+        "regenHeight": [
+          {
+            "node": "regen_scaled",
+            "input": "height"
+          },
+          {
+            "node": "regen_trim",
+            "input": "height"
+          }
+        ],
+        "trimX": [
+          {
+            "node": "regen_trim",
+            "input": "x"
+          }
+        ],
+        "trimY": [
+          {
+            "node": "regen_trim",
+            "input": "y"
+          }
+        ],
+        "regenX": [
+          {
+            "node": "composite",
+            "input": "x"
+          }
+        ],
+        "regenY": [
+          {
+            "node": "composite",
+            "input": "y"
+          }
+        ],
+        "maskGrow": [
+          {
+            "node": "take_grow",
+            "input": "expand"
+          },
+          {
+            "node": "regen_grow",
+            "input": "expand"
+          }
+        ],
+        "feather": [
+          {
+            "node": "take_feather",
+            "input": "left"
+          },
+          {
+            "node": "take_feather",
+            "input": "top"
+          },
+          {
+            "node": "take_feather",
+            "input": "right"
+          },
+          {
+            "node": "take_feather",
+            "input": "bottom"
+          },
+          {
+            "node": "regen_feather",
+            "input": "left"
+          },
+          {
+            "node": "regen_feather",
+            "input": "top"
+          },
+          {
+            "node": "regen_feather",
+            "input": "right"
+          },
+          {
+            "node": "regen_feather",
+            "input": "bottom"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "save",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "save",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "duration": 3,
+        "startTime": 0,
+        "maskGrow": 8,
+        "windowStart": 0,
+        "canvasWidth": 320,
+        "canvasHeight": 180,
+        "takeStart": 0,
+        "maskStart": 0,
+        "takeX": 0,
+        "takeY": 0,
+        "regionWidth": 316,
+        "regionHeight": 180,
+        "regenWidth": 316,
+        "regenHeight": 179,
+        "trimX": 0,
+        "trimY": 0,
+        "regenX": 2,
+        "regenY": 0,
+        "feather": 12
+      },
+      "limits": {},
+      "models": [],
+      "customNodes": [],
+      "vramGb": 0,
+      "license": "n/a (no model; ComfyUI core)",
+      "validated": true,
+      "notes": "Character Swap Studio's Sharpen and Genjutsu's Character swap at 1080p / 2K / 4K on your GPU: a swap was redrawn by video-regenerate-h3, and only the character goes back over the footage, so the background and the sound stay as filmed. video = the footage at 24 fps and the film's size (the studio's 24 fps copy, or Genjutsu's part fitted by video-fit-clip), video3 = the 768p swap (H3's canvas), video2 = its regenerate, mask = the approved whole-shot mask from video-mask-h3-relay (H3's canvas, white = the person). Each LoadVideo goes through a Video Slice of the same duration (one composite window of at most 3 s, because every stream is decoded as float32, about 25 MB a frame at 1080p) from its own start (startTime, takeStart, windowStart, maskStart). Two layers, each through the mask scaled to it, grown (maskGrow) and feathered (feather): first the swap stretched back over the region of the footage its canvas covers (canvasWidth x canvasHeight at takeX, takeY), then the regenerate over the centre region its 16:9 / 9:16 draft kept (regionWidth x regionHeight; the mask is centre-cropped to it), less the rows its finish trims at 1080p and 4K (1080 of 1088, 2160 of 2176; the columns for a tall clip): the regenerate is laid over regenWidth x regenHeight at regenX, regenY and the mask cut to the same rows (CropMask at trimX, trimY), so a character reaching past that region keeps the 768p swap there rather than the original person. Fuobe works the regions out from the film's size and H3's canvas. CreateVideo takes the footage's own sound and rate (a silent clip stays silent). Run end to end on ComfyUI 0.41.0 (CPU): a 320x180 24 fps clip with sound, a 224x128 swap, a 384x216 regenerate and a 224x128 box mask, a 1.5 s window from 0.5 s: 36 frames and 1.5 s of AAC, the regenerate only inside the feathered box; the same with a silent clip gives video only."
     },
     {
       "id": "video-sdr-to-hdr-exr",

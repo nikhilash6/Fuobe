@@ -1,0 +1,37 @@
+{
+  "1": {
+    "class_type": "VoxCPM2_TTS",
+    "inputs": {
+      "voice_description": "A warm, gravelly male narrator in his sixties, unhurried.",
+      "text": "Hello! This is the voice you described, saying its first line.",
+      "model_name": "VoxCPM2",
+      "lora_name": "None",
+      "cfg_value": 2,
+      "inference_timesteps": 10,
+      "max_tokens": 4096,
+      "normalize_text": true,
+      "seed": 42,
+      "force_offload": false,
+      "dtype": "auto",
+      "device": "cuda",
+      "torch_compile": false
+    },
+    "_meta": {
+      "title": "VoxCPM2 TTS (voice design)"
+    }
+  },
+  "2": {
+    "class_type": "SaveAudioMP3",
+    "inputs": {
+      "audio": [
+        "1",
+        0
+      ],
+      "filename_prefix": "fuobe/tts-voxcpm2",
+      "quality": "V0"
+    },
+    "_meta": {
+      "title": "Save MP3"
+    }
+  }
+}

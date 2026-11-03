@@ -1,12 +1,15 @@
 import "server-only";
+import { HI3D_CHAIN_PARAM, HI3D_MODEL, HI3D_OP, HI3D_PARAM } from "@/lib/av/hi3d";
 import type Anthropic from "@anthropic-ai/sdk";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { keyTimes, type InbetweenTiming, type PlaybackFps, type Speed } from "@/lib/inbetween";
 import { getModel, modelsFor } from "@/lib/catalog";
 import { offeredModels } from "../model-access";
 import { dualEngine, runsOn } from "@/lib/catalog/engines";
 import { pricingAt } from "@/lib/catalog/promo";
 import { currentModelId } from "@/lib/catalog/replaced";
+import { LAYOUT_PARAM, parseLayout } from "@/lib/layout-prompt";
 import { OPERATION_LABELS, type ChainSlot, type GenerationRequest, type MediaKind, type ModelDef, type Operation } from "@/lib/catalog/types";
 import { type PlannedJob, totalCost } from "@/lib/assist";
 import { STORYBOARD_MODELS } from "@/lib/catalog/storyboard";
@@ -21,10 +24,13 @@ import { engineMode } from "../settings";
 import { readRef } from "../storage";
 import { katanaTool } from "../katana";
 import { createStoryboard, estimateStoryboard } from "../storyboard";
+import { nearestAspect } from "../marketing";
+import { LAYOUT_NODE_LIMITS } from "@/lib/catalog/canvas";
 import { CONTEXT_TOOLS } from "./context-tools";
 import { defineTool, type JobPlace, type ResultContent, type ToolContext, type ToolDef, type ToolOutcome } from "./define";
 // Fills STUDIO_ROUTES with the studio modules (Layers, Shorts, dub, Faceless, Ads, Captions).
 import "./studio-routes";
+import { SKILL_TOOLS } from "./skill-tools";
 import { STUDIO_TOOLS } from "./studio-tools";
 
 export type { ToolContext, ToolOutcome };
@@ -96,7 +102,7 @@ const searchModels = defineTool({
       .string()
       .optional()
       .describe(
-        "Operation id to filter by, e.g. t2i, edit, t2v, i2v, flf2v, ref2v, extend, lipsync, avatar, tts, upscale-image, layers, text-layers, trim, transcribe, captions, mux, separate-audio, translate, write, image-to-3d.",
+        "Operation id to filter by, e.g. t2i, edit, t2v, i2v, flf2v, ref2v, extend, lipsync, avatar, tts, upscale-image, layers, text-layers, trim, transcribe, captions, mux, separate-audio, translate, write, image-to-3d, refine-3d, splat.",
       ),
     query: z.string().optional().describe("Words to match in the model name, vendor or description, e.g. 'kling', 'cheap', 'photoreal'."),
   }),
@@ -257,7 +263,7 @@ const Job = z.object({
     .string()
     .optional()
     .describe(
-      "Operation id (t2i, edit, t2v, i2v, flf2v, ref2v, extend, tts, layers, transcribe, translate, write, trim, captions, mux, separate-audio, image-to-3d…). Usually inferred from the inputs; set it when ambiguous.",
+      "Operation id (t2i, edit, t2v, i2v, flf2v, ref2v, extend, tts, layers, transcribe, translate, write, trim, captions, mux, separate-audio, image-to-3d, refine-3d, splat…). Usually inferred from the inputs; set it when ambiguous.",
     ),
   images: z.array(ref).optional().describe("Input images: the image to edit, the start frame, or references, in order."),
   end_image: ref.optional().describe("End frame (first-and-last-frame video)."),
@@ -265,6 +271,13 @@ const Job = z.object({
   audio: ref.optional().describe("Input audio (lipsync, avatar, transcribe, separate-audio, mux; for voice-change the recording to re-voice)."),
   background_audio: ref.optional().describe("Mux: a second track mixed under the audio — the background stem from separate-audio, or a music bed."),
   voice_audio: ref.optional().describe("A recording of the voice to speak with (voice-cloning text to speech) or to change into (voice-change)."),
+  model3d: ref
+    .optional()
+    .describe("A 3D model (.glb) to work on: rig-3d rigs it; refine-3d (oss-hi3d-refine, Hi3D 1.0, the user's GPU only) refines its geometry from the photo in images (the photo it was made from)."),
+  mesh_resolution: z
+    .union([z.literal(512), z.literal(1024), z.literal(1536)])
+    .optional()
+    .describe("refine-3d: Hi3D's detail, 512 (one pass), 1024 (two, the default) or 1536 (three). On an open image-to-3d model, setting it also refines the model after it is built. The result is geometry only."),
   aspect_ratio: z.string().optional().describe("e.g. 16:9, 9:16, 1:1 — one the model lists."),
   resolution: z.string().optional().describe("e.g. 1080p, 2K — one the model lists."),
   duration: z.number().optional().describe("Seconds, for video and music — one the model lists."),
@@ -278,6 +291,21 @@ const Job = z.object({
   end_time: z.number().optional().describe("Trim: where the kept part ends, in seconds."),
   num_layers: z.number().int().optional().describe("Layers: how many layers to split the image into."),
   system: z.string().optional().describe("Write: extra instructions for the writer (tone, format, length)."),
+  layout: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe(
+      "Image models that place boxes (MOSS-Image, FLUX.3, Ideogram 4.5): a pixel layout draft {width, height, bbox_coord_space: \"abs\", bbox_format: \"xyxy\", summary: {caption, meta, canvas}, items: [{label: object|character|text, caption, text, bbox: [x_min, y_min, x_max, y_max]}]} (the layout-poster skill). Fuobe compiles it for the model at the size it renders; other models read it as sentences.",
+    ),
+  keyframe_times: z.array(z.number()).optional().describe("Keyframes (2–10 images in order): each image's time in seconds, the first at 0."),
+  gaps: z
+    .array(z.object({ frames: z.number().int(), speed: z.number().int().optional(), words: z.string().optional() }))
+    .optional()
+    .describe(
+      "Keyframe animation (fuobe-animation): one entry per gap between neighbouring images: frames drawn (4n + 1, 17–81), speed (keep every Nth frame, 1–4; the cloud keeps every frame), and what happens in that gap.",
+    ),
+  playback_fps: z.number().int().optional().describe("Keyframe animation: 24 (snappier, the default on the GPU) or 16 (true time; the cloud plays at 16)."),
+  still_mouth: z.boolean().optional().describe("Keyframe animation: keep the character's mouth still between poses."),
   after: z
     .number()
     .int()
@@ -322,7 +350,7 @@ function toRequest(job: JobInput, engine?: "cloud" | "open"): GenerationRequest 
 }
 
 /** A job as the request it names, before a retired model or operation is moved (toRequest). */
-function asRequest(j: JobInput): GenerationRequest {
+export function asRequest(j: JobInput): GenerationRequest {
   const inputs = {
     ...(j.images?.length && { images: j.images }),
     ...(j.end_image && { endImage: j.end_image }),
@@ -330,8 +358,21 @@ function asRequest(j: JobInput): GenerationRequest {
     ...(j.audio && { audio: j.audio }),
     ...(j.background_audio && { audio2: j.background_audio }),
     ...(j.voice_audio && { voiceAudio: j.voice_audio }),
+    ...(j.model3d && { model3d: j.model3d }),
   };
   const shots = j.shots && j.shots > 1 ? shotList(getModel(currentModelId(j.model_id)), j.shots) : undefined;
+  // A layout draft (the layout-poster skill): read on its own canvas, compiled by the plan for the model it runs on.
+  // Up to 64 boxes (as a Canvas Layout node); its own shape becomes the run's only as the nearest one the model lists.
+  const parsed = j.layout ? parseLayout(j.layout)?.draft : undefined;
+  const layout = parsed && { ...parsed, items: parsed.items.slice(0, LAYOUT_NODE_LIMITS.boxes) };
+  const layoutAspect = layout?.aspect && nearestAspect(layout.aspect, getModel(currentModelId(j.model_id))?.options.aspectRatios);
+  const extra = {
+    ...(j.system && { system: j.system }),
+    ...(layout && { [LAYOUT_PARAM]: layout }),
+    // Hi3D: the refine's own resolution, or on an image-to-3D model the refine step after it.
+    ...(j.mesh_resolution && { [j.model_id === HI3D_MODEL || j.op === HI3D_OP ? HI3D_PARAM : HI3D_CHAIN_PARAM]: j.mesh_resolution }),
+  };
+  const animation = animationOf(j);
   return {
     feature: "assist",
     modelId: j.model_id,
@@ -341,7 +382,7 @@ function asRequest(j: JobInput): GenerationRequest {
     negativePrompt: j.negative_prompt,
     inputs: Object.keys(inputs).length ? inputs : undefined,
     params: {
-      aspectRatio: j.aspect_ratio,
+      aspectRatio: j.aspect_ratio ?? layoutAspect,
       resolution: j.resolution,
       duration: shots ? undefined : j.duration,
       numOutputs: j.outputs ? Math.max(1, Math.min(4, j.outputs)) : undefined,
@@ -353,9 +394,27 @@ function asRequest(j: JobInput): GenerationRequest {
       endTime: j.end_time,
       numLayers: j.num_layers,
       ...(shots && { shots }),
-      ...(j.system && { extra: { system: j.system } }),
+      ...(j.keyframe_times?.length && { keyframeTimes: j.keyframe_times }),
+      ...((Object.keys(extra).length || animation) && { extra: { ...extra, ...animation } }),
+      ...(animation?.inbetween?.gaps && !j.keyframe_times?.length && { keyframeTimes: keyTimes({ ...animation.inbetween, fps: animation.inbetween.fps ?? (j.engine === "cloud" ? 16 : 24) }) }),
     },
   };
+}
+
+/** A keyframe animation's timing from a job (gaps, playback rate, still mouth), as the request carries it. */
+function animationOf(j: JobInput): { inbetween?: InbetweenTiming; stillMouth?: true } | undefined {
+  if (!j.gaps?.length && !j.playback_fps && !j.still_mouth) return undefined;
+  // Without a rate the engine's own plays it (24 fps on the GPU, 16 in the cloud: src/lib/inbetween.ts requestTiming).
+  // A rate with no gaps rides alone: the gaps then come from the keyframe times at that rate.
+  const inbetween = j.gaps?.length
+    ? ({
+        gaps: j.gaps.map((g) => ({ frames: g.frames, speed: (g.speed ?? 1) as Speed, ...(g.words?.trim() && { prompt: g.words.trim() }) })),
+        ...(j.playback_fps && { fps: j.playback_fps as PlaybackFps }),
+      } as InbetweenTiming)
+    : j.playback_fps
+      ? ({ fps: j.playback_fps as PlaybackFps } as InbetweenTiming)
+      : undefined;
+  return { ...(inbetween && { inbetween }), ...(j.still_mouth && { stillMouth: true as const }) };
 }
 
 /** Where an earlier job's result goes in a later one, by what it is and what the later job does. */
@@ -365,7 +424,7 @@ function slotFor(kind: MediaKind, op: Operation | undefined): ChainSlot {
   // tts clones the earlier audio's voice; voice-change re-voices the earlier audio (its target voice is voice_audio);
   // a join takes it as one of its clips.
   if (kind === "audio") return { slot: op === "tts" ? "voiceAudio" : op === "audio-join" ? "audios" : "audio" };
-  // A mesh goes on to be rigged.
+  // A mesh goes on to be rigged or refined.
   if (kind === "model3d") return { slot: "model3d" };
   return { slot: "images", position: "first" };
 }
@@ -546,8 +605,9 @@ const storyboard = defineTool({
 export const TOOLS: ToolDef<any>[] = [searchModels, listElementsTool, listRecent, checkGenerations, generate, storyboard, defineTool(katanaTool)];
 export const getTool = (name: string) => TOOLS.find((t) => t.name === name);
 
-// Skills, memory and project sources; then whole studios (layers, restyle, dub, faceless, ads, captions).
-TOOLS.push(...CONTEXT_TOOLS, ...STUDIO_TOOLS);
+// Skills, memory and project sources; then whole studios (layers, restyle, dub, faceless, ads, captions); then saved
+// skills that run by themselves (run_skill).
+TOOLS.push(...CONTEXT_TOOLS, ...STUDIO_TOOLS, ...SKILL_TOOLS);
 
 /** The approval card's heading for one gated call. */
 export function cardTitle(name: string, input: unknown): string {
@@ -567,10 +627,11 @@ export function apiSchema(schema: z.ZodType): Anthropic.Beta.BetaTool.InputSchem
     if (!node || typeof node !== "object") return node;
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(node)) {
-      if (["$schema", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "maxItems", "minItems", "multipleOf"].includes(k)) continue;
+      if (["$schema", "propertyNames", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "maxItems", "minItems", "multipleOf"].includes(k)) continue;
       out[k] = k === "properties" ? Object.fromEntries(Object.entries(v as object).map(([p, s]) => [p, walk(s)])) : walk(v);
     }
-    if (out.type === "object") out.additionalProperties = false;
+    // A map (a skill's values by input id) says what its values are; every other object is closed.
+    if (out.type === "object" && (out.additionalProperties === undefined || out.additionalProperties === true || out.properties)) out.additionalProperties = false;
     return out;
   };
   return walk(json) as Anthropic.Beta.BetaTool.InputSchema;
@@ -587,12 +648,13 @@ export function apiTools(): Anthropic.Beta.BetaTool[] {
 
 const describeIssues = (issues: { path: PropertyKey[]; message: string }[]) => `Invalid input: ${issues.map((i) => `${i.path.map(String).join(".")} ${i.message}`).join("; ")}`;
 
-/** The error a tool call's arguments would get, or null when they're valid. */
-export function validateInput(name: string, input: unknown): string | null {
+/** The error a tool call's arguments would get, or null when they're valid (with a chat's context, its own check too). */
+export function validateInput(name: string, input: unknown, ctx?: ToolContext): string | null {
   const tool = getTool(name);
   if (!tool) return `Unknown tool ${name}`;
   const parsed = tool.schema.safeParse(input);
-  return parsed.success ? null : describeIssues(parsed.error.issues);
+  if (!parsed.success) return describeIssues(parsed.error.issues);
+  return ctx && tool.check ? tool.check(parsed.data, ctx) : null;
 }
 
 /**

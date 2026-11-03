@@ -14,10 +14,12 @@
  * to swap is said in words) and no history (a continuing segment starts from the previous take's last frame); the
  * assembly scales every piece to one frame and joins them at 24 fps.
  */
-import { anchorAspect, anchorModel, anchorPrompt, swapLoraRef } from "./character-swap";
+import { anchorAspect, anchorModel, anchorPrompt, h3Canvas, swapLoraRef } from "./character-swap";
+import { CLOUD_TIERS, SHARPEN_COPY, sharpenPrompt, sharpenSteps, type SharpenTier } from "./sharpen";
 import { MASK_TRACKER } from "./remove-object";
 import type { PlanStep } from "./shorts";
 import {
+  approvedMask,
   at,
   cloudFilmSize,
   enginePrompt,
@@ -322,6 +324,8 @@ export interface SegmentPlanInput {
   previous?: { master?: string; video?: string; frames: number } | null;
   /** Your GPU: how many of this take's last frames its master keeps (masterKeep; all of them when unset). */
   keep?: number;
+  /** The cloud: a size fal makes from a 768P base (2K, 4K) instead of the shot's own (Sharpen's new version). */
+  resolution?: "2K" | "4K";
 }
 
 /** H3's whole seconds for a cloud call (5–15). */
@@ -403,6 +407,7 @@ export function planSegmentTake(p: SegmentPlanInput): { steps: PlanStep[]; final
     chain.push({ slot: "images", position: "last" });
   }
   const text = enginePrompt(p.prompt, "cloud", shot.who, { swapPictures: boundary && !!p.anchor });
+  const size = p.resolution ? ` at ${p.resolution}` : "";
   steps.push({
     key: "swap",
     request: {
@@ -413,8 +418,8 @@ export function planSegmentTake(p: SegmentPlanInput): { steps: PlanStep[]; final
       prompt: text,
       inputs: { images: [project.character.image, ...(p.anchor ? [p.anchor] : [])] },
       loras: [swapLoraRef(shot.settings.lora === "v1" ? "v1" : "v1.5")],
-      params: { duration: cloudCallSeconds(frames), sourceDuration: at(frames), resolution: quality, seed: seg.seed },
-      step: { label: `${label} · swap`, index: of - 2, of },
+      params: { duration: cloudCallSeconds(frames), sourceDuration: at(frames), resolution: p.resolution ?? quality, seed: seg.seed },
+      step: { label: `${label} · swap${size}`, index: of - 2, of },
     },
     after,
     chain,
@@ -440,6 +445,7 @@ export function frozenTakePlan(
   take: SwapTake,
   numbers: { shot: number; segment: number; take: number },
   previous: SegmentPlanInput["previous"],
+  resolution?: SegmentPlanInput["resolution"],
 ): { steps: PlanStep[]; final: string } {
   const f = take.frozen;
   if (!f) throw new Error("This take wasn't queued from the studio — queue the segment again");
@@ -458,6 +464,64 @@ export function frozenTakePlan(
     mask: f.mask,
     previous,
     ...(f.keep !== undefined ? { keep: f.keep } : {}),
+    ...(resolution ? { resolution } : {}),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Assemble → Finish → Sharpen (sharpen.ts)
+
+export interface FinishPlanInput {
+  project: SwapProject;
+  clip: SwapClip;
+  shot: SwapShot;
+  seg: SwapSegment;
+  take: SwapTake;
+  numbers: { shot: number; segment: number; take: number };
+  /** The size made (sharpenTierFor: never above the film on your GPU; 2K or 4K on the cloud). */
+  tier: SharpenTier;
+  /** Your GPU: the take's video. */
+  video?: string;
+  /** The cloud: what the take continued from (as when it was made). */
+  previous?: SegmentPlanInput["previous"];
+}
+
+/**
+ * A chosen take made sharper, on the engine it was made on. Your GPU: its video regenerated at the tier (start sigma 0.8,
+ * the take's words and seed) and only the character put back over the clip's 24 fps copy through the mask it was made
+ * with (the shot's approved one). The cloud: the same segment made again on fal's H3 at 2K or 4K, with the words, LoRA,
+ * references and seed it was queued with.
+ */
+export function planTakeFinish(p: FinishPlanInput): { steps: PlanStep[]; final: string } {
+  const { project, clip, shot, seg, take } = p;
+  const f = take.frozen;
+  if (!f) throw new Error("This take wasn't queued from the studio — queue the segment again");
+  const label = `Shot ${p.numbers.shot} · segment ${p.numbers.segment} · take ${p.numbers.take}`;
+  if (take.engine === "cloud") {
+    if (!CLOUD_TIERS.includes(p.tier)) throw new Error("The cloud makes 2K or 4K");
+    return frozenTakePlan(project, clip, shot, seg, take, p.numbers, p.previous ?? null, p.tier as "2K" | "4K");
+  }
+  const mask = f.mask ?? approvedMask(shot, "open")?.pieces[0]?.url ?? null;
+  if (!mask) throw new Error(SHARPEN_COPY.noMask);
+  if (!p.video) throw new Error(`${label} has no video yet`);
+  const film = normalizedSize(clip.source.width, clip.source.height);
+  if (!film) throw new Error(SHARPEN_COPY.noSize);
+  const title = `Character Swap · ${clip.name}`;
+  return sharpenSteps({
+    key: "",
+    label,
+    helper: helper(title),
+    result: { ...helper(title), title: `${label} · ${p.tier}` },
+    tier: p.tier,
+    prompt: sharpenPrompt(take.prompt, project.character.description),
+    seed: take.seed,
+    frames: f.end - f.start,
+    take: { url: p.video },
+    source: { url: workingClip(clip, "open"), start: at(f.shotStart + f.start) },
+    // The mask covers the shot from its first frame.
+    mask: { url: mask, start: at(f.start) },
+    film,
+    canvas: h3Canvas(film.width, film.height, qualityFor(f.settings.renderMp)),
   });
 }
 

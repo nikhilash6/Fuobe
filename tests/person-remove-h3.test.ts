@@ -138,9 +138,8 @@ describe("H3 person removal: the graph", () => {
     expect(PERSON_REMOVER_LORA.url).toBe("https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA/resolve/fe136b3dc93aea993b9f194d48ea9859fdc2de14/H3-Person-Remover-V1.safetensors");
   });
 
-  it("is in the library with its pinned files, its pack and its licence; not validated here (the pack isn't installed)", () => {
-    expect(entry).toMatchObject({ capability: "remove-object", validated: false, vramGb: 24 });
-    expect(entry.validationError).toMatch(/missing_node_type/);
+  it("is in the library with its pinned files, its pack and its licence; validated against a ComfyUI with the H3 Relay pack", () => {
+    expect(entry).toMatchObject({ capability: "remove-object", validated: true, vramGb: 24 });
     expect(entry.customNodes).toEqual([{ name: "h3-relay", repo: "https://github.com/akatz-ai/h3-relay/tree/e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220" }]);
     expect(nodePack("h3-relay")?.licence.name).toBe("GPL-3.0");
     const lora = entry.models.find((m) => m.file === "H3-Person-Remover-V1.safetensors")!;

@@ -1,0 +1,157 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "yue2_3b_int8_convrot.safetensors"
+    },
+    "_meta": {
+      "title": "Load YuE2 3B (int8)"
+    }
+  },
+  "3": {
+    "class_type": "YuE2GenerateMusic",
+    "inputs": {
+      "clip": [
+        "1",
+        1
+      ],
+      "style": "English, warm female vocal, contemporary pop, 96 BPM, piano, rounded electric bass, restrained drums",
+      "lyrics": "[Verse]\nMorning light across the window\n\n[Chorus]\nRun with me into the sunlight",
+      "abc": [
+        "11",
+        0
+      ],
+      "seed": 0,
+      "mode": "melody",
+      "max_duration": 360.0,
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 100,
+      "repetition_penalty": 1.2
+    },
+    "_meta": {
+      "title": "YuE2 Generate Music (the source song's melody)"
+    }
+  },
+  "4": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "3",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Negative (zero)"
+    }
+  },
+  "5": {
+    "class_type": "EmptyYuE2LatentAudio",
+    "inputs": {
+      "seconds": [
+        "3",
+        1
+      ],
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Empty YuE2 latent (the song's seconds)"
+    }
+  },
+  "6": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "3",
+        0
+      ],
+      "negative": [
+        "4",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ],
+      "seed": 0,
+      "steps": 32,
+      "cfg": 1.0,
+      "sampler_name": "dpm_2",
+      "scheduler": "sgm_uniform",
+      "denoise": 1.0
+    },
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "7": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "6",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "VAE Decode Audio"
+    }
+  },
+  "8": {
+    "class_type": "SaveAudioAdvanced",
+    "inputs": {
+      "audio": [
+        "7",
+        0
+      ],
+      "filename_prefix": "fuobe/music-yue2-cover",
+      "format": "mp3",
+      "format.quality": "V0"
+    },
+    "_meta": {
+      "title": "Save Audio (MP3 V0)"
+    }
+  },
+  "9": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "yue2_reference_song.flac"
+    },
+    "_meta": {
+      "title": "Load the song to cover"
+    }
+  },
+  "10": {
+    "class_type": "AudioEncoderLoader",
+    "inputs": {
+      "audio_encoder_name": "sheetsage2_bf16.safetensors"
+    },
+    "_meta": {
+      "title": "Load SheetSage2"
+    }
+  },
+  "11": {
+    "class_type": "SheetSage2AudioToABC",
+    "inputs": {
+      "audio_encoder": [
+        "10",
+        0
+      ],
+      "audio": [
+        "9",
+        0
+      ],
+      "mode": "melody"
+    },
+    "_meta": {
+      "title": "SheetSage2: the song's melody as ABC"
+    }
+  }
+}

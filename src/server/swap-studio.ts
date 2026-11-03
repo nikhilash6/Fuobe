@@ -2,12 +2,13 @@ import "server-only";
 import { originalSoundProblem, sameSound, soundOf, type SoundChoice } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
-import { ANCHOR_MODELS, anchorModel, characterLicenceLine, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
+import { ANCHOR_MODELS, anchorModel, CHARACTER_SWAP, characterLicenceLine, h3Canvas, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
 import { scalePoints } from "@/lib/catalog/remove-object";
 import type { PlanStep } from "@/lib/catalog/shorts";
 import {
   assemblyPieces,
   assemblyTakes,
+  chosenTakes,
   clipNeedsPreview,
   clipProblem,
   currentSegments,
@@ -40,12 +41,17 @@ import {
   type SwapSegment,
   type SwapShot,
   type SwapTake,
+  type TakeFinish,
   type TranscriptCue,
+  usedFinish,
 } from "@/lib/catalog/swap-studio";
 import { applyEdit, EditError, type SwapEdit } from "@/lib/catalog/swap-studio-edit";
-import { cloudMaskCut, frozenTakePlan, planAnchor, planAssembly, planMask, planNormalize, planPreview, planTranscribe, STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
+import { cloudMaskCut, frozenTakePlan, planAnchor, planAssembly, planMask, planNormalize, planPreview, planTakeFinish, planTranscribe, STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
+import { REGEN_MODEL } from "@/lib/catalog/regenerate";
+import { COMPOSITE_MODEL, filmSize, SHARPEN_COPY, SHARPEN_TIERS, sharpenOptions, sharpenTierFor, type SharpenTier } from "@/lib/catalog/sharpen";
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
 import { ACCESS_PLACE } from "@/lib/model-access";
+import { silenceWriter } from "./canvas";
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { cancelGeneration, getGeneration, previewChained } from "./generations";
@@ -166,7 +172,7 @@ function projectGenIds(p: SwapProject): string[] {
       for (const a of s.anchors) ids.push(a.genId, ...(a.stepIds ?? []));
       for (const g of s.segments ?? []) {
         for (const a of g.anchors) ids.push(a.genId, ...(a.stepIds ?? []));
-        for (const t of g.takes) ids.push(t.genId, ...(t.stepIds ?? []));
+        for (const t of g.takes) ids.push(t.genId, ...(t.stepIds ?? []), t.finish?.genId, ...(t.finish?.stepIds ?? []));
       }
     }
   }
@@ -288,20 +294,22 @@ function launchWaiting(project: SwapProject, clip: SwapClip, shot: SwapShot, loo
   return out === items ? shot : { ...shot, segments: out };
 }
 
+/** What a take continues from: the segment right before it (your GPU continues from it alone; the cloud from its last frame). */
+function previousOf(shot: SwapShot, take: SwapTake, look: Look): { master?: string; video?: string; frames: number } | null {
+  if (!take.frozen || take.frozen.history <= 0) return null;
+  const items = shot.segments ?? [];
+  const dep = take.dependencies[take.dependencies.length - 1];
+  const before = items.find((g) => g.id === dep?.segmentId);
+  const prev = before?.takes.find((t) => t.id === dep?.takeId);
+  const g = look(prev?.genId);
+  if (!before || !prev || !g) throw new Error("the take it continues from is gone");
+  // Your GPU's master holds the take's last `keep` frames (masterKeep); the cloud's take is the segment's length.
+  return { master: masterOutput(g)?.url, video: mainOutput(g)?.url, frames: prev.frozen?.keep ?? before.end - before.start };
+}
+
 /** Start one take's generations (its segments-before are made). */
 function launchTake(project: SwapProject, clip: SwapClip, shot: SwapShot, seg: SwapSegment, take: SwapTake, shotIndex: number, segIndex: number, look: Look): SwapTake {
-  const items = shot.segments ?? [];
-  let previous: { master?: string; video?: string; frames: number } | null = null;
-  if (take.frozen && take.frozen.history > 0) {
-    // The segment right before it (your GPU continues from it alone; the cloud from its last frame).
-    const dep = take.dependencies[take.dependencies.length - 1];
-    const before = items.find((g) => g.id === dep?.segmentId);
-    const prev = before?.takes.find((t) => t.id === dep?.takeId);
-    const g = look(prev?.genId);
-    if (!before || !prev || !g) throw new Error("the take it continues from is gone");
-    // Your GPU's master holds the take's last `keep` frames (masterKeep); the cloud's take is the segment's length.
-    previous = { master: masterOutput(g)?.url, video: mainOutput(g)?.url, frames: prev.frozen?.keep ?? before.end - before.start };
-  }
+  const previous = previousOf(shot, take, look);
   const plan = frozenTakePlan(project, clip, shot, seg, take, { shot: shotIndex + 1, segment: segIndex + 1, take: seg.takes.findIndex((t) => t.id === take.id) + 1 }, previous);
   const pipe = run(plan.steps);
   return { ...take, state: "launched", waitsOn: undefined, genId: pipe.byKey[plan.final].id, stepIds: pipe.items.map((g) => g.id) };
@@ -530,6 +538,8 @@ export const EditSchema = z.discriminatedUnion("type", [
     decision: decision.optional(),
     notes: text(SWAP_STUDIO.maxNotesChars).optional(),
     remove: z.boolean().optional(),
+    /** Use its sharper version in the assembly (or the take itself again). */
+    finishUse: z.boolean().optional(),
   }),
   z.object({ type: z.literal("anchor-import"), clipId: id, shotId: id, segmentId: id.optional(), url: fileUrl }),
   z.object({ type: z.literal("remove-anchor"), clipId: id, shotId: id, segmentId: id.optional(), anchorId: id }),
@@ -553,6 +563,14 @@ export async function editProject(projectId: string, body: EditBody): Promise<Sw
     if (edit.type === "engine" && edit.engine !== p.engine) {
       mustMatchMode(edit.engine);
       after.engine = edit.engine;
+    }
+    // Only a sharper version that came out can be picked for the assembly.
+    if (edit.type === "take" && edit.finishUse) {
+      const clip = mustClip(p, edit.clipId);
+      const t = currentSegments(mustShot(clip, edit.shotId))
+        .find((g) => g.id === edit.segmentId)
+        ?.takes.find((k) => k.id === edit.takeId);
+      if (!t?.finish || look(t.finish.genId)?.status !== "succeeded") throw new ShortsError("Only a finished sharper version can be used", 422);
     }
     // Only a take that came out can be chosen.
     if (edit.type === "take" && edit.select) {
@@ -998,23 +1016,147 @@ export function assemble(projectId: string, clipId: string, sound?: SoundChoice)
   if (p.engine === "open" && !clip.normalized?.url) throw new ShortsError("The clip is still being prepared at 24 fps — wait for it", 409);
   const existing: Record<string, string> = {};
   const videoOf = (piece: Extract<(typeof found.pieces)[number], { kind: "take" }>) => {
-    const g = look(piece.take.genId);
+    // A sharper version picked after comparing goes in instead of the take.
+    const finish = usedFinish(piece.take);
+    const g = look(finish?.genId ?? piece.take.genId);
     const url = g?.status === "succeeded" ? mainOutput(g)?.url : undefined;
-    if (!url) throw new ShortsError("A chosen take's video is missing — make it again", 422);
+    if (!url) throw new ShortsError(finish ? "A chosen take's sharper version is missing — use the take, or sharpen it again" : "A chosen take's video is missing — make it again", 422);
     existing[`take-${piece.take.id}`] = g!.id;
     return url;
   };
   const plan = planAssembly({ engine: p.engine, clip, pieces: found.pieces, videoOf, ...(choice && { sound: choice }) });
+  // A silent clip's cloud assembly ends on its silence: the WAV is written now (silenceRef, as Genjutsu and Canvas do).
+  const withSilence = silenceWriter();
   // The takes count as steps already made: a demo join of real takes is refused.
-  const pipe = run(plan.steps, existing);
+  const pipe = run(
+    plan.steps.map((s) => ({ ...s, request: withSilence(s.request) })),
+    existing,
+  );
   const assembly = { genId: pipe.byKey[plan.final].id, stepIds: pipe.items.map((g) => g.id), takes, createdAt: Date.now(), ...(choice && { sound: choice }) };
   return mutate(projectId, (cur) => mapClip(cur, clipId, (c) => ({ ...c, assembly })));
 }
 
 // ---------------------------------------------------------------------------
+// Assemble → Finish → Sharpen (src/lib/catalog/sharpen.ts)
+
+export const SharpenSchema = z.object({ clipId: id, tier: z.enum(SHARPEN_TIERS) });
+
+/** The generations of a take's sharper version (its steps and its result). */
+const finishIds = (f: TakeFinish | null | undefined): string[] => (f ? [...(f.stepIds ?? []), ...(f.genId ? [f.genId] : [])] : []);
+
+/** H3's canvas a film's takes are made at: your GPU redraws the character inside the part of it the regenerate keeps. */
+const sharpenCanvas = (film: { width: number; height: number } | null) => (film ? h3Canvas(film.width, film.height, CHARACTER_SWAP.defaultQuality) : undefined);
+
+/** A take's sharper version being made, or made: a new Sharpen at the same size doesn't make it again. */
+const finishLive = (t: SwapTake, tier: SharpenTier, look: Look) => {
+  const st = look(t.finish?.genId)?.status;
+  return !!t.finish && t.finish.tier === tier && !!st && st !== "failed" && st !== "canceled";
+};
+
+/** Each chosen take's Sharpen steps at a size (your GPU: from the take's video; the cloud: from what it continued from). */
+function finishPlans(p: SwapProject, clip: SwapClip, tier: SharpenTier, look: Look, stand = false) {
+  const found = assemblyPieces(p, clip);
+  if ("problem" in found) throw new ShortsError(found.problem === "Confirm the clip's shots first" ? found.problem : SHARPEN_COPY.none, 422);
+  return chosenTakes(found.pieces).map((piece) => {
+    const si = clip.shots.findIndex((s) => currentSegments(s).some((g) => g.id === piece.segmentId));
+    const shot = clip.shots[si];
+    const items = currentSegments(shot);
+    const gi = items.findIndex((g) => g.id === piece.segmentId);
+    const seg = items[gi];
+    const take = piece.take;
+    if (take.engine !== p.engine) throw new ShortsError(`Shot ${si + 1}, segment ${gi + 1}'s take was made on the ${take.engine === "open" ? "open engine" : "cloud"} — make it again on this engine to sharpen it`, 422);
+    const g = look(take.genId);
+    const video = stand ? "/api/files/placeholder-take.mp4" : g?.status === "succeeded" ? mainOutput(g)?.url : undefined;
+    let previous: ReturnType<typeof previousOf> = null;
+    if (take.engine === "cloud") previous = stand && take.frozen?.history ? { video: "/api/files/placeholder-take.mp4", frames: take.frozen.history } : previousOf(shot, take, look);
+    const plan = planTakeFinish({ project: p, clip, shot, seg, take, numbers: { shot: si + 1, segment: gi + 1, take: seg.takes.findIndex((t) => t.id === take.id) + 1 }, tier, video, previous });
+    return { shot, seg, take, plan, seconds: (seg.end - seg.start) / SWAP_STUDIO.fps };
+  });
+}
+
+/**
+ * Sharpen: every chosen take of the clip made sharper at a size (sharpen.ts), each a version beside its take until it is
+ * picked in Takes & review. Your GPU: regenerated and composited, never above the size the clip is joined at; the cloud:
+ * made again at 2K or 4K on fal's H3. Everything is checked (and priced) before the first one starts.
+ */
+export async function sharpenClip(projectId: string, body: z.infer<typeof SharpenSchema>): Promise<SwapProject> {
+  const p = advanceProject(projectId);
+  mustMatchMode(p.engine);
+  const clip = mustClip(p, body.clipId);
+  const look = lookup();
+  const film = filmSize(clip.source.width, clip.source.height, p.engine);
+  const canvas = sharpenCanvas(film);
+  const tier = sharpenTierFor(p.engine, body.tier, film, canvas);
+  if (!tier) throw new ShortsError(sharpenOptions(p.engine, film, canvas).find((o) => o.tier === body.tier)?.reason ?? SHARPEN_COPY.small, 422);
+  if (p.engine === "open") {
+    mustOffer(REGEN_MODEL, "open");
+    mustOffer(COMPOSITE_MODEL, "open");
+  } else mustOffer(STUDIO_MODELS.cloud.swap, "cloud");
+  if (p.engine === "open" && !clip.normalized?.url) throw new ShortsError("The clip is still being prepared at 24 fps — wait for it", 409);
+  let plans: ReturnType<typeof finishPlans>;
+  try {
+    plans = finishPlans(p, clip, tier, look);
+  } catch (e) {
+    if (e instanceof ShortsError) throw e;
+    throw new ShortsError((e as Error).message, 422);
+  }
+  const todo = plans.filter((x) => !finishLive(x.take, tier, look));
+  if (!todo.length) throw new ShortsError(`Every chosen take already has a ${tier} version — compare them in Takes & review`, 409);
+  let demo: boolean | null = null;
+  for (const x of todo) {
+    const priced = price(x.plan.steps);
+    if (priced.problem) throw new ShortsError(priced.problem, 422);
+    if (demo !== null && demo !== priced.demo) throw new ShortsError("Some takes would run as a demo and others for real — connect the missing provider in Settings", 422);
+    demo = priced.demo;
+  }
+  // A version still being made at another size is replaced: it is stopped first (nothing would show it or stop it after).
+  for (const x of todo) for (const gid of finishIds(x.take.finish)) if (ACTIVE.has(look(gid)?.status ?? "")) await cancelGeneration(gid).catch(() => undefined);
+  const made = new Map<string, TakeFinish>();
+  for (const x of todo) {
+    const pipe = run(x.plan.steps);
+    made.set(x.take.id, { id: uid("finish-"), createdAt: Date.now(), engine: p.engine, asked: body.tier, tier, genId: pipe.byKey[x.plan.final].id, stepIds: pipe.items.map((g) => g.id), use: false });
+  }
+  return mutate(projectId, (cur) =>
+    mapClip(cur, clip.id, (c) => ({
+      ...c,
+      shots: c.shots.map((s) => (s.segments ? { ...s, segments: s.segments.map((g) => ({ ...g, takes: g.takes.map((t) => (made.has(t.id) ? { ...t, finish: made.get(t.id)! } : t)) })) } : s)),
+    })),
+  );
+}
+
+/** Sharpen's price for a clip: every chosen take at each size the engine offers (stand-ins where a take isn't made). */
+function sharpenEstimate(p: SwapProject, clip: SwapClip, look: Look): { estimate: StudioEstimate["sharpen"][string]; demo: boolean } | null {
+  const found = assemblyPieces(p, clip);
+  if ("problem" in found) return null;
+  const takes = chosenTakes(found.pieces);
+  const seconds = Math.round(takes.reduce((n, t) => n + (t.end - t.start) / SWAP_STUDIO.fps, 0) * 100) / 100;
+  const film = filmSize(clip.source.width, clip.source.height, p.engine);
+  const costUsd: Partial<Record<SharpenTier, number | null>> = {};
+  let demo = false;
+  let problem: string | undefined;
+  for (const o of sharpenOptions(p.engine, film, sharpenCanvas(film))) {
+    if (!o.available) continue;
+    try {
+      let cost: number | null = 0;
+      for (const x of finishPlans(p, clip, o.tier, look, true)) {
+        const r = price(x.plan.steps);
+        if (r.problem) throw new Error(r.problem);
+        if (r.demo) demo = true;
+        cost = add(cost, r.costUsd);
+      }
+      costUsd[o.tier] = cost;
+    } catch (e) {
+      costUsd[o.tier] = null;
+      problem ??= (e as Error).message;
+    }
+  }
+  return { estimate: { takes: takes.length, seconds, costUsd, ...(problem ? { problem } : {}) }, demo };
+}
+
+// ---------------------------------------------------------------------------
 // Stopping other jobs
 
-export const StopSchema = z.object({ kind: z.enum(["mask", "anchor", "assembly", "normalize", "transcribe"]), clipId: id, shotId: id.optional(), segmentId: id.optional(), jobId: id.optional() });
+export const StopSchema = z.object({ kind: z.enum(["mask", "anchor", "assembly", "normalize", "transcribe", "finish"]), clipId: id, shotId: id.optional(), segmentId: id.optional(), jobId: id.optional() });
 
 export async function stopJob(projectId: string, body: z.infer<typeof StopSchema>): Promise<SwapProject> {
   const p = mustProject(projectId);
@@ -1023,6 +1165,8 @@ export async function stopJob(projectId: string, body: z.infer<typeof StopSchema
   if (body.kind === "assembly") ids = [...(clip.assembly?.stepIds ?? []), clip.assembly?.genId];
   if (body.kind === "normalize") ids = [clip.normalized?.genId];
   if (body.kind === "transcribe") ids = [clip.transcript?.genId];
+  // Sharpen: every sharper version of the clip still being made.
+  if (body.kind === "finish") ids = clip.shots.flatMap((s) => currentSegments(s).flatMap((g) => g.takes.flatMap((t) => finishIds(t.finish))));
   if (body.kind === "mask" || body.kind === "anchor") {
     const shot = mustShot(clip, body.shotId ?? "");
     const seg = body.segmentId ? currentSegments(shot).find((g) => g.id === body.segmentId) : undefined;
@@ -1080,7 +1224,7 @@ export function estimateProject(projectId: string): StudioEstimate {
   const p = advanceProject(projectId);
   const look = lookup();
   const engine = p.engine;
-  const out: StudioEstimate = { engine, demo: false, free: engine === "open", segments: {}, problems: {}, shots: {}, project: { costUsd: 0, segments: 0 }, assembly: {}, transcribe: {}, mask: {}, anchors: [], notes: [] };
+  const out: StudioEstimate = { engine, demo: false, free: engine === "open", segments: {}, problems: {}, shots: {}, project: { costUsd: 0, segments: 0 }, assembly: {}, transcribe: {}, mask: {}, sharpen: {}, anchors: [], notes: [] };
   const track = (r: { demo: boolean }) => {
     if (r.demo) out.demo = true;
   };
@@ -1140,6 +1284,11 @@ export function estimateProject(projectId: string): StudioEstimate {
       const a = price(planAssembly({ engine, clip: working, pieces, videoOf: () => "/api/files/placeholder-take.mp4" }).steps);
       track(a);
       out.assembly[clip.id] = a.costUsd;
+    }
+    const sharp = sharpenEstimate(p, working, look);
+    if (sharp) {
+      if (sharp.demo) out.demo = true;
+      out.sharpen[clip.id] = sharp.estimate;
     }
   }
   const sample = p.clips[0];

@@ -27,7 +27,7 @@ import { openInStudio } from "@/components/swap-studio/hooks";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
-import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterOptions, type CharacterQuality } from "@/lib/catalog/character-swap";
+import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterChoice, type CharacterOptions } from "@/lib/catalog/character-swap";
 import {
   chooseMaker,
   decodeSetup,
@@ -59,7 +59,7 @@ import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
-import { CharacterControls, CharacterFacts } from "./character-panel";
+import { CharacterControls, CharacterFacts, qualityOff } from "./character-panel";
 import { useDescribeCharacter, useGenjutsuEstimate, useGenjutsuRun, useTranscribeClip, waitForGeneration, type GenjutsuBody } from "./hooks";
 import { LookPicker, type LookSource } from "./look-picker";
 import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
@@ -127,8 +127,8 @@ export function GenjutsuStudio() {
   const [points, setPoints] = useState<PixelPoint[]>([]);
   const [pointLabel, setPointLabel] = useState<"positive" | "negative">("positive");
   const [paint, setPaint] = useState<Paint | null>(null);
-  // Character swap: its quality (H3's 480p / 768p), its settings, the seed, and a part longer than 15 s.
-  const [charQuality, setCharQuality] = useState<CharacterQuality>(CHARACTER_SWAP.defaultQuality);
+  // Character swap: its quality (H3's 480p / 768p, or 1080p / 2K / 4K from the 768p swap), its settings, the seed.
+  const [charQuality, setCharQuality] = useState<CharacterChoice>(CHARACTER_SWAP.defaultQuality);
   const [character, setCharacter] = useState<CharacterOptions>({});
   const [seed, setSeed] = useState("");
   const [longPart, setLongPart] = useState(false);
@@ -191,7 +191,8 @@ export function GenjutsuStudio() {
   const cut = cutWarning(partCuts);
   const seedNumber = seedOf(seed);
   // Character swap's H3 makers take H3's two qualities; the other makers (Recast, P-Video…) Genjutsu's own.
-  const askedQuality = isCharacter && maker?.h3 ? charQuality : quality;
+  // A size this engine can't make worth it (your GPU's 4K) is asked as 2K, as the picker shows it.
+  const askedQuality = isCharacter && maker?.h3 ? (qualityOff(engine, charQuality) ? "2K" : charQuality) : quality;
 
   // "Describe my character" (the engine's text model) and "Use the clip's words" (one transcription of the clip; any
   // part takes its own lines from it, so it is kept per clip).
@@ -296,7 +297,7 @@ export function GenjutsuStudio() {
     if (s.engine && engineMode === "both") setEngine(s.engine);
     if (s.tier) setTier(s.tier);
     if (s.mode === "character") {
-      if (s.quality === "480p" || s.quality === "768p") setCharQuality(s.quality);
+      if (s.quality && ([...CHARACTER_SWAP.qualities, ...CHARACTER_SWAP.finishes] as string[]).includes(s.quality)) setCharQuality(s.quality as CharacterChoice);
       if (s.quality && (GENJUTSU.qualities as string[]).includes(s.quality)) setQuality(s.quality);
       setCharacter(s.character ?? {});
     } else if (s.quality) setQuality(s.quality);

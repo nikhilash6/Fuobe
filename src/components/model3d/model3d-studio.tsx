@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { FailedTile, PendingTile } from "@/components/studio/feed";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
@@ -17,18 +18,23 @@ import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useCreateGeneration, useEngine, useGenerations, useHydrated, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
+  IDOL_QUALITIES,
   MAX_3D_PROMPT,
   MODEL3D_FEATURE,
+  MODEL3D_FILM_FEATURE,
   MODEL3D_MODES,
   MODELS_3D,
   RIG_MODEL,
   SIDE_LABELS,
   SIDES_HINT,
   VIEW_SIDES,
+  idolPhotoFor,
+  isIdol,
   model3dBlocker,
   model3dFor,
   model3dRequest,
   modeOf,
+  type IdolQuality,
   type Model3dInput,
   type Model3dMode,
   type ViewSide,
@@ -39,6 +45,8 @@ import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useRunPreview } from "./hooks";
 import { ModelCard } from "./model-card";
+import { RefineOption } from "./refine-option";
+import { HI3D_MODEL, withRefine, type Hi3dResolution } from "@/lib/av/hi3d";
 
 /**
  * A model's name, the notices its results carry ("Built with DINOv3") and, for open models, the licence the
@@ -76,6 +84,59 @@ function UrlModel({ onModel, onMode, onRig }: { onModel: (mode: Model3dMode, eng
     else if (MODEL3D_MODES.some((m) => m.id === mode)) onMode(mode as Model3dMode);
   }, [id, mode, onModel, onMode, onRig]);
   return null;
+}
+
+/**
+ * Idol 3D's settings: Best or Quick look (labelled by steps and Gaussians), and "It's a photo", which gives the object
+ * Idol's looser crop.
+ */
+function IdolSettings({ quality, onQuality, photo, onPhoto }: { quality: IdolQuality; onQuality: (q: IdolQuality) => void; photo: boolean; onPhoto: (v: boolean) => void }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const move = (from: number, by: number) => {
+    const i = (from + by + IDOL_QUALITIES.length) % IDOL_QUALITIES.length;
+    onQuality(IDOL_QUALITIES[i].id);
+    refs.current[i]?.focus();
+  };
+  return (
+    <div className="mt-3 space-y-3">
+      <div>
+        <div role="radiogroup" aria-label="Quality" className="grid grid-cols-2 gap-0.5 rounded-full bg-muted p-0.5">
+          {IDOL_QUALITIES.map((q, i) => (
+            <button
+              key={q.id}
+              ref={(el) => {
+                refs.current[i] = el;
+              }}
+              type="button"
+              role="radio"
+              aria-checked={quality === q.id}
+              tabIndex={quality === q.id ? 0 : -1}
+              onClick={() => onQuality(q.id)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                  e.preventDefault();
+                  move(i, 1);
+                } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  move(i, -1);
+                }
+              }}
+              className={cn("h-8 rounded-full px-3 text-[13px] font-medium", quality === q.id ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground")}
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[12px] text-muted-foreground">{IDOL_QUALITIES.find((q) => q.id === quality)?.hint}</p>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <Label htmlFor="m3d-idol-photo" className="text-[13px] font-normal">
+          It&apos;s a photo (looser crop)
+        </Label>
+        <Switch id="m3d-idol-photo" checked={photo} onCheckedChange={onPhoto} />
+      </div>
+    </div>
+  );
 }
 
 /** The five modes as one row of pills (wrapping on a phone); arrow keys move between them. */
@@ -129,7 +190,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const create = useCreateGeneration();
-  const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d"], limit: 24 });
+  const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d", MODEL3D_FILM_FEATURE], limit: 24 });
   const [mode, setMode] = useState<Model3dMode>("image");
   const router = useRouter();
   // A mode picked here goes in the URL (?mode=), so a reload or a shared link opens it again (UrlModel reads it).
@@ -142,11 +203,27 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const hydrated = useHydrated();
   const engineKnown = statusKnown && hydrated;
   const [photo, setPhoto] = useState<SlotValue | null>(null);
+  // Idol 3D (Splat): Best or Quick look, kept per mode and engine like the model pick, and whether the picture is a
+  // photo, which belongs to the picture (shared by every mode). A picture uploaded or dropped here, or an earlier upload
+  // picked from the library, is taken for a photo; a result made here for a render or a generated image.
+  const [idolQualities, setIdolQualities] = useState<Record<string, IdolQuality>>({});
+  const [idolPhoto, setIdolPhoto] = useState(true);
+  // The last value the drop gave (an upload reports twice: uploading, then done, from one closure).
+  const lastPhoto = useRef<SlotValue | null>(null);
+  const takePhoto = (v: SlotValue | null) => {
+    const prev = lastPhoto.current;
+    lastPhoto.current = v;
+    setPhoto(v);
+    const asPhoto = idolPhotoFor(v, prev);
+    if (asPhoto !== undefined) setIdolPhoto(asPhoto);
+  };
   const [views, setViews] = useState<Partial<Record<ViewSide, SlotValue | null>>>({});
   const [text, setText] = useState("");
   const [object, setObject] = useState("");
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [rigHint, setRigHint] = useState(false);
+  // Refine detail · Hi3D 1.0 (open engine, From an image and From several images): the resolution, or off.
+  const [refine, setRefine] = useState<Hi3dResolution | null>(null);
   const showRigHint = useCallback(() => setRigHint(true), []);
   const fromUrl = useCallback(
     (m: Model3dMode, e: Engine, id: string) => {
@@ -161,24 +238,41 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const wanted = picked[`${mode}:${engine}`];
   const modelId = model3dFor(mode, engine, wanted && choices.some((m) => m.id === wanted) ? wanted : choices[0]?.id);
   const sides = Object.fromEntries(VIEW_SIDES.flatMap((s) => (views[s] ? [[s, views[s]!.ref]] : []))) as Partial<Record<ViewSide, string>>;
-  const input: Model3dInput = { engine, mode, modelId: modelId ?? undefined, photo: photo?.ref, views: sides, prompt: mode === "text" ? text : mode === "objects" ? object : undefined };
+  const idol = mode === "splat" && isIdol(modelId);
+  const idolQuality = idolQualities[`${mode}:${engine}`] ?? "best";
+  const setIdolQuality = (q: IdolQuality) => setIdolQualities((p) => ({ ...p, [`${mode}:${engine}`]: q }));
+  const input: Model3dInput = {
+    engine,
+    mode,
+    modelId: modelId ?? undefined,
+    photo: photo?.ref,
+    views: sides,
+    prompt: mode === "text" ? text : mode === "objects" ? object : undefined,
+    ...(idol && { quality: idolQuality, photoCrop: idolPhoto }),
+  };
   const uploading = !!photo?.uploading || VIEW_SIDES.some((s) => views[s]?.uploading);
   // A guest or an account reads why the button is off, not a step on an upload that is off too.
   const blocker = visitor ? "Image to 3D isn't available here" : (model3dBlocker(input) ?? (uploading ? "Uploading…" : null));
   // The price before anything is attached: placeholders stand in for the files and the words.
   const priced: GenerationRequest | null = modelId
-    ? model3dRequest({ ...input, photo: input.photo ?? PLACEHOLDER, views: { front: PLACEHOLDER, left: PLACEHOLDER, ...sides }, prompt: input.prompt?.trim() || "an object" })
+    ? model3dRequest({ ...input, photo: input.photo || PLACEHOLDER, views: { front: PLACEHOLDER, left: PLACEHOLDER, ...sides }, prompt: input.prompt?.trim() || "an object" })
     : null;
   const preview = useRunPreview(engineKnown ? priced : null);
   // A free run (open weights) is free on a self-hosted Fuobe: a guest or an account reads that, not "your ComfyUI".
   const free = !!preview.data && !preview.data.demo && (preview.data.engine === "open" || preview.data.costUsd === 0);
   const price = visitor && free ? "Not available here" : priceLine(preview.data);
   const cloudAllowed = engineMode !== "open";
+  // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on.
+  const refineAllowed = !visitor && engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
+  const refining = refineAllowed && engine === "open" && (mode === "image" || mode === "multi") && refine !== null ? refine : null;
   const go = () => {
     if (visitor) return;
     if (blocker) return void toast(blocker, { id: "3d-blocker" });
-    create.mutate(model3dRequest(input), {
-      onSuccess: () => toast.success(mode === "splat" ? "Making your splat" : mode === "text" && engine === "open" ? "Drawing the object, then building it in 3D" : "Building your 3D model"),
+    create.mutate(withRefine(model3dRequest(input), engine, refining), {
+      onSuccess: () =>
+        toast.success(
+          mode === "splat" ? "Making your splat" : mode === "text" && engine === "open" ? "Drawing the object, then building it in 3D" : refining ? "Building your 3D model, then refining its detail" : "Building your 3D model",
+        ),
       onError: (e) => toastError(e),
     });
   };
@@ -255,7 +349,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
               <MediaDrop
                 kind="image"
                 value={photo}
-                onChange={setPhoto}
+                onChange={takePhoto}
                 title={mode === "objects" ? "Add a photo" : "Add a photo of the object"}
                 hint={mode === "objects" ? "A room, a shelf, a street: anything with the object in it" : "One object, plain background, well lit"}
                 compact
@@ -318,6 +412,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {!licence && info[modelId]?.notices.length > 0 && <p className="text-[12px] font-medium">{info[modelId].notices.join(" · ")}</p>}
                 {licence && licence.notices.length > 0 && <p className="text-[12px] text-muted-foreground">{licence.notices.join(" · ")}</p>}
               </div>
+              {!idol && (mode === "image" || mode === "multi") && <RefineOption engine={engine} value={refine} onChange={setRefine} openAllowed={refineAllowed} onUseGpu={() => setEngine("open")} />}
+              {idol && <IdolSettings quality={idolQuality} onQuality={setIdolQuality} photo={idolPhoto} onPhoto={setIdolPhoto} />}
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
               </Button>
@@ -325,13 +421,17 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {visitor ? blocker : <>{blocker ? `${blocker} · ` : ""}{preview.isError ? (preview.error as Error).message : (price ?? "Working out the price…")}</>}
               </p>
               <p className="mt-1 text-[12px] text-muted-foreground">
-                {mode === "splat"
+                {idol
                   ? engine === "open"
-                    ? "Cuts the subject out and comes with an orbit video."
-                    : "Cuts the subject out, ready to download."
-                  : engine === "open"
-                    ? "Comes with a turntable video of your model."
-                    : "Download your model, or record a turntable right here."}
+                    ? "Idol cuts the object out, builds the splat and renders an orbit video on your GPU. One object per picture."
+                    : "Idol cuts the object out and builds the splat, ready to download. One object per picture."
+                  : mode === "splat"
+                    ? engine === "open"
+                      ? "Cuts the subject out and comes with an orbit video."
+                      : "Cuts the subject out, ready to download."
+                    : engine === "open"
+                      ? "Comes with a turntable video of your model."
+                      : "Download your model, or record a turntable right here."}
               </p>
             </>
           )}
@@ -351,7 +451,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((g) => (
-              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} />
+              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />
             ))}
           </div>
         )}
@@ -369,9 +469,27 @@ function retryOf(g: Generation): GenerationRequest {
   return r;
 }
 
-function ResultCard({ g, info, cloudAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean }) {
+function ResultCard({ g, info, cloudAllowed, refineAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed: boolean }) {
   const create = useCreateGeneration();
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
-  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} />;
+  if (g.kind === "video") return <FilmCard g={g} />;
+  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} />;
+}
+
+/** A photoreal orbit filmed from a model ("Film it photoreal"): the clip, to watch and download. */
+function FilmCard({ g }: { g: Generation }) {
+  const video = g.outputs.find((o) => o.kind === "video");
+  if (!video) return null;
+  return (
+    <article className="overflow-hidden rounded-2xl border bg-card">
+      <video src={video.url} controls playsInline preload="metadata" className="aspect-[4/3] w-full bg-muted object-contain" aria-label="Photoreal orbit" />
+      <div className="flex items-center justify-between gap-2 p-3">
+        <p className="min-w-0 truncate text-[13px] font-medium">Photoreal orbit</p>
+        <a href={video.url} download="photoreal orbit.mp4" className="shrink-0 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          Download
+        </a>
+      </div>
+    </article>
+  );
 }
