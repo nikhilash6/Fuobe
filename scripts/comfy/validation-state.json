@@ -539,6 +539,12 @@
     "error": null,
     "at": "2026-10-22T23:27:26.367Z"
   },
+  "steam-it-qwen-image-21": {
+    "sha256": "e2b94b6cf0105022ee0b93d25e9072eaef8892cf0581d6b296ff14d2aa8ec3e2",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T08:52:10.530Z"
+  },
   "still-to-clip": {
     "sha256": "cd21914faa22195c7cf3fd4346c20ba1306d434bf565456ac6bfaa24743d08e3",
     "validated": true,

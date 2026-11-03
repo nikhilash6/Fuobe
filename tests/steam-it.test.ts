@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 import type { Generation, GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow } from "@/lib/comfy";
 
@@ -12,7 +12,7 @@ import type { ComfyWorkflow } from "@/lib/comfy";
  */
 
 vi.setConfig({ testTimeout: 60_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-steam-it-"));
+const dir = tempDir("fuobe-steam-it-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -29,7 +29,6 @@ const { buildLicenceList } = await import("@/lib/licences");
 const { guestRead } = await import("@/lib/guest-access");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const LIBRARY = path.join(process.cwd(), "workflows/comfyui");
 const WORKFLOW = "steam-it-qwen-image-21";
@@ -112,9 +111,9 @@ describe("Steam It app", () => {
     expect(m.tagline).toMatch(/20 GB GPU · non-commercial weights$/);
   });
 
-  it("the library entry: hand-built, Qwen-Image 2.1 + SAM 3.1 + the AusBoss crop and stitch, listed as not validated", () => {
+  it("the library entry: hand-built, Qwen-Image 2.1 + SAM 3.1 + the AusBoss crop and stitch, validated on a GPU", () => {
     const wf = loadManifest().workflows.find((w) => w.id === WORKFLOW)!;
-    expect(wf).toMatchObject({ capability: "edit", file: `${WORKFLOW}.json`, validated: false, vramGb: 20, defaults: { steps: 25 } });
+    expect(wf).toMatchObject({ capability: "edit", file: `${WORKFLOW}.json`, validated: true, vramGb: 20, defaults: { steps: 25 } });
     expect(wf.source).toBe(`hand-built (scripts/comfy/hand-built/${WORKFLOW}.json)`);
     expect(wf.models.map((m) => `${m.folder}/${m.file}`)).toEqual([
       "diffusion_models/qwen_image_2.1_int8_convrot.safetensors",

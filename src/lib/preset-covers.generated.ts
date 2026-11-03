@@ -113,6 +113,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-skin-enhancer": ["f9f37dff","3a38d871"],
   "app-social-media-icon": "18684f2a",
   "app-steal-the-look": ["ca80e6f0","4e7613f4"],
+  "app-steam-it": ["806c61d4","d69b26ec"],
   "app-sticker-match-cut": ["81e600e9","fa3010a3"],
   "app-sticker-pack": ["2d0a9d8e","3e8ecffb"],
   "app-storm-creature": ["c7f6909e","eea9c059"],

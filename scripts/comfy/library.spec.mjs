@@ -3312,7 +3312,8 @@ export const SPEC = [
       'and on a flat-lay or a hanger) -> GrowMask 16 px on the full picture, so a hem or a sleeve can settle past its old outline and the paste-back follows the same mask -> Crop For Inpaint (context 1.3, ' +
       'blend 8 px, multiple 32, 2 MP, bicubic) -> TextEncodeQwenImage21 with the crop as image 1 (resolution 0) and the app\'s instruction as the prompt -> VAEEncode of the crop + SetLatentNoiseMask -> ' +
       'QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> SplitImageWithAlpha -> Stitch Inpaint (classic, no colour match): every pixel outside the grown mask and its 8 px blend is the upload\'s own. ' +
-      'No clothing found: the empty mask selects the whole picture and the stitch gives it back unchanged. The prompt names only the finished state (smooth, pressed fabric) and what stays the same.',
+      'No clothing found: the empty mask selects the whole picture and the stitch gives it back unchanged. The prompt names only the finished state (smooth, pressed fabric) and what stays the same. ' +
+      'RTX 5090: about 75 s a photo at 2048x1536 (25 steps), peak 26.5 GB.',
   },
   // ---- Owner's SOTA image families: Ideogram 4 -------------------------------------------
   {

@@ -42,6 +42,7 @@ export const PRESET_BEFORE_AFTER: Record<string, string> = {
   "app-sketch-to-real": "648b3021",
   "app-skin-enhancer": "ab271855",
   "app-steal-the-look": "47a07392",
+  "app-steam-it": "2028110d",
   "app-sticker-pack": "338816db",
   "app-style-snap": "4c8fdb8e",
   "app-style-transfer": "3bedd5a5",

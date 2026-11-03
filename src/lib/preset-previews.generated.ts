@@ -829,6 +829,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "ideogram4+qwen-image-2.1-edit",
     "variant": "lean-json"
   },
+  "app-steam-it": {
+    "poster": "/previews/presets/app-steam-it.jpg?v=806c61d4",
+    "video": "/previews/presets/app-steam-it.mp4?v=d69b26ec",
+    "run": "comfyui-previews-2026-10",
+    "engine": "comfyui",
+    "model": "ideogram4+qwen-image-2.1-edit",
+    "variant": "lean-json"
+  },
   "app-sticker-match-cut": {
     "poster": "/previews/presets/app-sticker-match-cut.jpg?v=81e600e9",
     "video": "/previews/presets/app-sticker-match-cut.mp4?v=fa3010a3",
