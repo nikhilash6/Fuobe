@@ -292,6 +292,12 @@ describe("accounts never see or change the owner's library", () => {
       records: ["/api/assist/t1", "/api/assist/projects/p1"],
       changes: [["PATCH", "/api/assist/t1"], ["DELETE", "/api/assist/t1"], ["POST", "/api/assist/projects"], ["POST", "/api/assist/memory"]],
     },
+    // Skills W6: a skill's run history and its fixes are the owner's; so are the suggestions' answers.
+    skills: {
+      lists: [],
+      records: ["/api/assist/skills/s1/history", "/api/assist/skills/s1/fixes"],
+      changes: [["POST", "/api/assist/skills/suggestions"], ["POST", "/api/assist/skills/s1/fixes"]],
+    },
     brands: { lists: ["/api/brands", "/api/products"], records: ["/api/brands/b1"], changes: [["POST", "/api/brands"], ["DELETE", "/api/brands/b1"], ["POST", "/api/products"]] },
   };
 
