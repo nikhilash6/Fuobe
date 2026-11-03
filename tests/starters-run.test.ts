@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // Every starter runs as it comes, on a fresh install in demo mode: the owner's tap makes the Cinema project or the
 // element, Assist's starters plan and run on the offline planner, Storyboard's price and run, and Cinema's shot 1
@@ -10,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.setConfig({ testTimeout: 120_000 });
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {}, after: () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-starters-run-"));
+const dir = tempDir("fuobe-starters-run-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -31,11 +30,6 @@ const estimateRoute = await import("@/app/api/storyboards/estimate/route");
 beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
-});
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const post = (url: string, body?: unknown) => new Request(`http://localhost${url}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
