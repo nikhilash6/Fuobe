@@ -11,7 +11,7 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { StarterSection } from "@/components/starters/starter-section";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { useEngine, useIsOwner, useLikelyVisitor } from "@/lib/api";
 import { GENRE_IDEAS, GENRES, MAX_IDEA, MAX_SCRIPT, wordCount, youtubeKind, YOUTUBE_ERROR, type FacelessGenre } from "@/lib/catalog/faceless";
 import { starterShown, type StarterCardData } from "@/lib/starters/types";
@@ -30,7 +30,8 @@ const STEPS = [
 ];
 
 /** starters: the ready channels (src/lib/starters/catalog.ts): first while you have no channels, one row under yours after. */
-export function FacelessHome({ starters = [] }: { starters?: StarterCardData[] }) {
+export function FacelessHome({ starters: given = [] }: { starters?: StarterCardData[] }) {
+  const { starters } = useStarters("faceless", given);
   const router = useRouter();
   const [engine, setEngine] = useEngine();
   const [genre, setGenre] = useState<FacelessGenre>("education");
@@ -202,7 +203,7 @@ export function FacelessHome({ starters = [] }: { starters?: StarterCardData[] }
           </div>
         </div>
 
-        {!channels.isLoading && !hasChannels && <StarterSection starters={starters} />}
+        {!channels.isLoading && !hasChannels && <StarterSection surface="faceless" starters={given} />}
 
         {(channels.isLoading || hasChannels || !readyShown) && (
           <section aria-labelledby="channels-title" className="space-y-4">
@@ -230,7 +231,7 @@ export function FacelessHome({ starters = [] }: { starters?: StarterCardData[] }
           </section>
         )}
 
-        {hasChannels && <StarterSection starters={starters} row />}
+        {hasChannels && <StarterSection surface="faceless" starters={given} row />}
 
         <section aria-label="How it works" className="grid gap-3 sm:grid-cols-3">
           {STEPS.map((s, i) => (

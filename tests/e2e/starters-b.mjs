@@ -24,12 +24,13 @@ const check = (name, ok, detail = "") => {
 
 /** Each studio, the heading of its starters, how many it has, and whether visitors see them yet (a real cover). */
 const SURFACES = [
-  { path: "/faceless", heading: "Start from a ready channel", n: 3, covered: false, first: "faceless.boat-hotels" },
-  { path: "/content-factory", heading: "Start from a ready series", n: 3, covered: false, first: "cf.underwater-fashion-week" },
-  { path: "/explainer", heading: "Start from a ready explainer", n: 3, covered: false, first: "ex.couture-400-hours" },
+  // words: a cover-less starter's name and composer words, which a visitor's page must not carry.
+  { path: "/faceless", heading: "Start from a ready channel", n: 3, covered: false, first: "faceless.boat-hotels", words: ["Hotels you reach by boat", "Only by Boat"] },
+  { path: "/content-factory", heading: "Start from a ready series", n: 3, covered: false, first: "cf.underwater-fashion-week", words: ["Fashion week, underwater", "Paris fashion week was held underwater"] },
+  { path: "/explainer", heading: "Start from a ready explainer", n: 3, covered: false, first: "ex.couture-400-hours", words: ["A couture gown in 400 hours", "takes 400 hours to make"] },
   // An ad and a video ad wait for their own covers (a plain product shot isn't what they make).
-  { path: "/ads", heading: "Start from a ready brand", n: 2, covered: false, first: "ads.maison-verre" },
-  { path: "/marketing/click-to-ad", heading: "Start from a ready product", n: 2, covered: false, first: "c2a.eau-de-verre" },
+  { path: "/ads", heading: "Start from a ready brand", n: 2, covered: false, first: "ads.maison-verre", words: ["Maison Verre perfume", "Studio Marlow leather"] },
+  { path: "/marketing/click-to-ad", heading: "Start from a ready product", n: 2, covered: false, first: "c2a.eau-de-verre", words: ["Perfume video ad", "Handbag video ad"] },
   { path: "/marketing", heading: "Start from a ready shoot", n: 2, covered: true, first: "mk.perfume-moss", tryIn: "/apps/app-product-shot?example=app-product-shot.1" },
 ];
 
@@ -86,8 +87,25 @@ try {
           check(`${tag}: ${s.path} visitor cards say See how it works`, (await section.getByText("See how it works").count()) === s.n && !/Use template|No cover yet/.test(await section.innerText()));
           const firstCard = await cards.first().evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
           check(`${tag}: ${s.path} starters sit near the top`, firstCard < (size === "390" ? 2200 : 1400), `${Math.round(firstCard)} px`);
+          // The first card's title is clear of the docked composer (nothing lies over it).
+          const hidden = await cards
+            .first()
+            .locator("h3")
+            .first()
+            .evaluate((h) => {
+              h.scrollIntoView({ block: "nearest" });
+              const r = h.getBoundingClientRect();
+              const at = document.elementFromPoint(r.left + Math.min(r.width / 2, 40), r.top + r.height / 2);
+              return !at || !h.closest("article")?.contains(at);
+            })
+            .catch(() => true);
+          check(`${tag}: ${s.path} first starter card is clear of the composer`, !hidden);
         } else {
           check(`${tag}: ${s.path} shows a visitor no starter without its cover`, n === 0 && !/No cover yet|Use template/.test(t) && !t.includes(s.heading));
+          // Nor in the page's data: a cover-less starter's words never reach a visitor.
+          const html = await (await ctx.request.get(`${app}${s.path}`)).text();
+          const leak = s.words.find((w) => html.includes(w));
+          check(`${tag}: ${s.path} sends a visitor none of a cover-less starter's words`, !leak, leak);
         }
         if (!owner) check(`${tag}: no model or engine words on ${s.path}`, !ENGINE_WORDS.test(n ? await section.innerText() : ""), (t.match(ENGINE_WORDS) ?? [""])[0]);
         check(`${tag}: no sideways scroll on ${s.path}`, (await sideways()) <= 1, `${await sideways()} px`);
@@ -124,9 +142,12 @@ try {
           }
           check(`${tag}: no sideways scroll on ${s.first}'s page`, (await sideways()) <= 1, `${await sideways()} px`);
         } else {
-          await page.getByText("This starter isn't here.").waitFor({ timeout: 30_000 }).catch(() => {});
-          const pt = await text();
-          check(`${tag}: ${s.first} (no cover yet) isn't shown to a visitor`, /This starter isn.t here/.test(pt) && !/The steps/i.test(pt));
+          // A real 404, with none of its words in what is sent.
+          const r = await ctx.request.get(`${app}${s.path}/start/${s.first}`);
+          const html = await r.text();
+          const leak = s.words.find((w) => html.includes(w));
+          check(`${tag}: ${s.first} (no cover yet) is a 404 for a visitor, with none of its words`, r.status() === 404 && !leak, `${r.status()} ${leak ?? ""}`);
+          check(`${tag}: ${s.first}'s page shows a visitor no steps`, !/The steps/i.test(await text()));
         }
         await shot(`${name}-start`);
       }

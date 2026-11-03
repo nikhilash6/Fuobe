@@ -95,7 +95,7 @@ export function assertStarters(list: Starter[] = STARTERS): void {
       if (!EXAMPLE_MEDIA[seed.kit.product.image.src]) throw new Error(`Starter ${s.id}: ${seed.kit.product.image.src} isn't a published example file`);
       if (seed.open.to === "marketing" && !TEMPLATE_INDEX.get(seed.open.template)) throw new Error(`Starter ${s.id}: no Marketing template ${seed.open.template}`);
     }
-    if (s.coverFrom && !presetCover(s.coverFrom)) throw new Error(`Starter ${s.id}: no preset cover ${s.coverFrom}`);
+    if (s.coverFrom && (!presetCover(s.coverFrom) || !PRESET_PEAKS[s.coverFrom])) throw new Error(`Starter ${s.id}: no preset cover with a finished frame ${s.coverFrom}`);
     if (s.tryIn) {
       if (!getPreset(s.tryIn.app)) throw new Error(`Starter ${s.id}: no app ${s.tryIn.app}`);
       if (exampleSurfaceOf(s.tryIn.example) !== `app:${s.tryIn.app}`) throw new Error(`Starter ${s.id}: ${s.tryIn.example} isn't an example of ${s.tryIn.app}`);
@@ -110,14 +110,17 @@ assertStarters();
 
 export const getStarter = (id: string): Starter | undefined => STARTERS.find((s) => s.id === id);
 
-/** A preset's cover as a starter's, resting on its peak frame (the finished shot) where it has one. */
+/**
+ * A preset's cover as a starter's: its peak frame alone (the finished shot), never its clip. The clip is the app's
+ * before → after reveal, which opens on the plain photo and wipes across it: a starter shows what it makes.
+ */
 function presetAsCover(id: string): TemplateCover | undefined {
   const c = presetCover(id);
-  if (!c) return undefined;
   const peak = PRESET_PEAKS[id];
-  const poster = peak && c.video ? `/previews/presets/peak/${id}.jpg?v=${peak.v}` : c.poster;
-  const thumb = peak && c.video ? thumbOf(poster) : c.thumb;
-  return { poster, thumb, ...(c.video && { video: c.video }), ...(peak && c.video && { at: peak.at }), frames: [{ src: poster, thumb }] };
+  if (!c || !peak) return undefined;
+  const poster = `/previews/presets/peak/${id}.jpg?v=${peak.v}`;
+  const thumb = thumbOf(poster);
+  return { poster, thumb, frames: [{ src: poster, thumb }] };
 }
 
 /** A starter's real cover: its own (starters/<id>), else the preset cover that shows the same thing. */
@@ -156,16 +159,32 @@ export function starterCard(s: Starter): StarterCardData {
   };
 }
 
-/** A surface's starters as cards, covered first, then by rank (a visitor's list drops the ones with no cover). */
-export function starterCards(surface: StarterSurface): StarterCardData[] {
+/**
+ * A surface's starters as cards, covered first, then by rank. A page's props (prerendered, the same for everyone) get
+ * only the covered ones: a starter with no cover yet is the owner's, who loads the rest from GET /api/starters, so its
+ * words never reach a visitor's page. `all`: every one (that route's answer).
+ */
+export function starterCards(surface: StarterSurface, { all = false }: { all?: boolean } = {}): StarterCardData[] {
   return STARTERS.filter((s) => s.surface === surface)
     .map(starterCard)
+    .filter((c) => all || !!c.cover)
     .sort((a, b) => Number(!a.cover) - Number(!b.cover) || a.rank - b.rank);
 }
 
-/** The composers' fills of a surface, by starter id (small: the page gets them all). */
-export function starterFills(surface: "content-factory" | "explainer"): Record<string, StarterFill> {
-  return Object.fromEntries(STARTERS.flatMap((s) => (s.surface === surface && s.seed.kind === "fill" ? [[s.id, s.seed.fill] as const] : [])));
+/** The composers' fills of a surface, by starter id (small: the page gets them all), the covered ones unless `all`. */
+export function starterFills(surface: "content-factory" | "explainer", { all = false }: { all?: boolean } = {}): Record<string, StarterFill> {
+  return Object.fromEntries(STARTERS.flatMap((s) => (s.surface === surface && s.seed.kind === "fill" && (all || starterCover(s)) ? [[s.id, s.seed.fill] as const] : [])));
+}
+
+/** Studios whose starters speak through a narrator (Faceless, Content Factory, Explainer). */
+const NARRATED: ReadonlySet<StarterSurface> = new Set(["faceless", "content-factory", "explainer"]);
+
+/**
+ * A narrated starter's narrator sample: a short neutral read, published at /starters/<id>/<v>/voice.m4a once it is made
+ * (the open engine's narrator clones a voice, and a starter must run as it is). Until the file is there, nothing.
+ */
+export function starterVoice(s: Pick<Starter, "id" | "surface">): StarterSample | undefined {
+  return NARRATED.has(s.surface) ? { src: `/starters/${s.id}/1/voice.m4a`, name: "Narrator" } : undefined;
 }
 
 /** Every starter page of a surface, prerendered. */

@@ -17,7 +17,7 @@ import { NarratorChip } from "@/components/faceless/narrator";
 import { StyleArt } from "@/components/faceless/style-art";
 import { SelfHostNote } from "@/components/self-host-note";
 import { StarterParam } from "@/components/starters/starter-param";
-import { StarterSection } from "@/components/starters/starter-section";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { uploadFile, useEngine, useHydrated, useIsOwner, useLikelyVisitor } from "@/lib/api";
 import {
@@ -71,7 +71,8 @@ function chipTrigger(className?: string) {
  * starters: the ready series (src/lib/starters/catalog.ts), right under the composer while you have none, one row under
  * yours after; fills: what each one puts in the composer.
  */
-export function ContentFactoryHome({ voices, starters = [], fills = {} }: { voices: PickerData["voices"]; starters?: StarterCardData[]; fills?: Record<string, StarterFill> }) {
+export function ContentFactoryHome({ voices, starters: given = [], fills: givenFills = {} }: { voices: PickerData["voices"]; starters?: StarterCardData[]; fills?: Record<string, StarterFill> }) {
+  const { starters, fills } = useStarters("content-factory", given, givenFills);
   const router = useRouter();
   const [engine, setEngine] = useEngine();
   const [mode, setMode] = useState<"here" | "claude">("here");
@@ -121,6 +122,7 @@ export function ContentFactoryHome({ voices, starters = [], fills = {} }: { voic
   }, [gone]);
 
   const view = seriesId ? series.data : undefined;
+  const briefFolded = !view && !hasSeries;
   const preset = getPreset(view?.reference?.presetId ?? presetId);
   const brief = view ? view.brief : (preset?.brief ?? null);
   const reading = view?.analysis?.status === "reading";
@@ -196,16 +198,19 @@ export function ContentFactoryHome({ voices, starters = [], fills = {} }: { voic
   /** A ready series in the composer: its trending style, its idea, its length; the style brings its own look. */
   const fill = (id: string) => {
     const f = fills[id];
-    if (f?.kind !== "content-factory") return;
+    if (f?.kind !== "content-factory") return false;
     choosePreset(f.presetId);
     setPrompt(f.prompt);
     setLength(f.length);
     setEpisodes(f.episodes);
+    // Open source narration clones a voice: the starter's own narrator, while it has one.
+    if (engine === "open" && f.voiceSample) setVoice({ kind: "sample", url: f.voiceSample, name: "Narrator" });
     setMode("here");
     requestAnimationFrame(() => {
       promptRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
       promptRef.current?.focus({ preventScroll: true });
     });
+    return true;
   };
 
   const blocker = !prompt.trim() ? "Say what the video is about" : reading ? "The reference is still being read — a moment" : !brief ? "Add a reference or pick a preset" : null;
@@ -488,6 +493,9 @@ export function ContentFactoryHome({ voices, starters = [], fills = {} }: { voic
 
           {brief && !reading && (
             <BriefCard
+              // A preset's brief, before there are any series, is one line: the ready series sit right under the composer.
+              key={briefFolded ? "folded" : "open"}
+              folded={briefFolded}
               className="mt-4"
               brief={brief}
               note={view?.analysis?.note}
@@ -505,7 +513,7 @@ export function ContentFactoryHome({ voices, starters = [], fills = {} }: { voic
           )}
         </div>
 
-        {!list.isLoading && !hasSeries && <StarterSection starters={starters} onFill={fill} />}
+        {!list.isLoading && !hasSeries && <StarterSection surface="content-factory" starters={given} onFill={fill} />}
 
         <section id="presets" aria-labelledby="presets-title" className="scroll-mt-16 space-y-4">
           <div>
@@ -546,7 +554,7 @@ export function ContentFactoryHome({ voices, starters = [], fills = {} }: { voic
           </section>
         )}
 
-        {hasSeries && <StarterSection starters={starters} onFill={fill} row />}
+        {hasSeries && <StarterSection surface="content-factory" starters={given} onFill={fill} row />}
 
         <section aria-label="How it works" className="grid gap-3 sm:grid-cols-3">
           {STEPS.map((s, i) => (

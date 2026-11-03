@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MODELS } from "@/lib/catalog/models";
 import { guestRead, isLibraryChange } from "@/lib/guest-access";
-import { recordForPath, unknownStarterPage } from "@/lib/record-pages";
-import { assertStarters, STARTERS, starterCards, starterFills, starterIds, starterOn, type Starter } from "@/lib/starters/catalog";
-import { STARTER_IDS } from "@/lib/starters/ids";
+import { hiddenStarterPage, recordForPath, unknownStarterPage } from "@/lib/record-pages";
+import { assertStarters, STARTERS, starterCards, starterCover, starterFills, starterIds, starterOn, starterVoice, type Starter } from "@/lib/starters/catalog";
+import { STARTER_IDS, starterCovered } from "@/lib/starters/ids";
 import { STARTER_SURFACES, starterHref, starterShown, type StarterSurface } from "@/lib/starters/types";
 import { sampleFile } from "@/server/canvas-samples";
 import { exampleStat } from "@/server/example-files";
@@ -84,9 +84,10 @@ describe("the starters catalog", () => {
       if (s.surface === "ads" || s.surface === "click-to-ad") expect(s.coverFrom, s.id).toBeUndefined();
       if (s.surface === "marketing") {
         expect(card.cover, s.id).toBeTruthy();
-        // It rests on the finished shot, and plays the clip.
+        // The finished shot alone: never the app's before → after clip, which opens on the plain photo.
         expect(card.cover!.poster, s.id).toMatch(/^\/previews\/presets\/peak\/app-[a-z-]+\.jpg\?v=[0-9a-f]{8}$/);
-        expect(card.cover!.video, s.id).toMatch(/\?v=[0-9a-f]{8}$/);
+        expect(card.cover!.video, s.id).toBeUndefined();
+        expect(card.cover!.at, s.id).toBeUndefined();
       }
       // A product's photo shows on its page; words show as words; a visitor goes on to the app that makes the same.
       if (s.seed.kind === "product") {
@@ -98,9 +99,12 @@ describe("the starters catalog", () => {
     }
   });
 
-  it("lists a surface's cards covered first, then by rank; a visitor sees only covered ones", () => {
+  it("gives a page only the covered starters; the owner's list (all) has every one, covered first, then by rank", () => {
     for (const surface of SURFACES) {
-      const cards = starterCards(surface);
+      // The prerendered page's props: no starter without its real cover, so its words never reach a visitor.
+      expect(starterCards(surface).every((c) => !!c.cover), surface).toBe(true);
+      expect(starterCards(surface).map((c) => c.id)).toEqual(starterCards(surface, { all: true }).filter((c) => c.cover).map((c) => c.id));
+      const cards = starterCards(surface, { all: true });
       expect(cards.map((c) => c.id).sort()).toEqual(starterIds(surface).sort());
       const covered = cards.map((c) => !!c.cover);
       expect(covered, surface).toEqual([...covered].sort((a, b) => Number(b) - Number(a)));
@@ -114,13 +118,26 @@ describe("the starters catalog", () => {
   });
 
   it("fills Content Factory and Explainer from the address, and makes the others on the server", () => {
-    for (const c of [...starterCards("content-factory"), ...starterCards("explainer")]) {
+    for (const c of [...starterCards("content-factory", { all: true }), ...starterCards("explainer", { all: true })]) {
       expect(c.use.kind, c.id).toBe("fill");
       if (c.use.kind === "fill") expect(c.use.href).toBe(`${STARTER_SURFACES[c.surface].base}?starter=${encodeURIComponent(c.id)}`);
     }
-    for (const surface of ["faceless", "ads", "click-to-ad", "marketing"] as const) for (const c of starterCards(surface)) expect(c.use.kind, c.id).toBe("create");
-    expect(Object.keys(starterFills("content-factory")).sort()).toEqual(starterIds("content-factory").sort());
-    expect(Object.keys(starterFills("explainer")).sort()).toEqual(starterIds("explainer").sort());
+    for (const surface of ["faceless", "ads", "click-to-ad", "marketing"] as const) for (const c of starterCards(surface, { all: true })) expect(c.use.kind, c.id).toBe("create");
+    for (const surface of ["content-factory", "explainer"] as const) {
+      expect(Object.keys(starterFills(surface, { all: true })).sort()).toEqual(starterIds(surface).sort());
+      // A page's fills, like its cards, are the covered starters' only.
+      expect(Object.keys(starterFills(surface)).sort()).toEqual(starterCards(surface).map((c) => c.id).sort());
+    }
+  });
+
+  it("gives every narrated starter its own narrator sample's place, versioned, and none to the others", () => {
+    for (const s of STARTERS) {
+      const v = starterVoice(s);
+      if (s.surface === "faceless" || s.surface === "content-factory" || s.surface === "explainer") expect(v?.src, s.id).toBe(`/starters/${s.id}/1/voice.m4a`);
+      else expect(v, s.id).toBeUndefined();
+    }
+    // Read like Fuobe's other sample files once published, never by a path that steps out of public/.
+    expect(sampleFile("/starters/x/../../package.json")).toBeNull();
   });
 });
 
@@ -135,6 +152,16 @@ describe("who may use a starter", () => {
     }
   });
 
+  it("keeps a starter with no cover yet the owner's: the proxy's 404 for others matches the catalog's covers", () => {
+    for (const s of STARTERS) {
+      expect(starterCovered(s.id), s.id).toBe(!!starterCover(s));
+      expect(hiddenStarterPage(starterHref(s)), s.id).toBe(!starterCover(s));
+      expect(hiddenStarterPage(`${starterHref(s)}/`), s.id).toBe(!starterCover(s));
+    }
+    expect(hiddenStarterPage("/explainer/start/nope.x")).toBe(false);
+    expect(hiddenStarterPage("/faceless/abc/new")).toBe(false);
+  });
+
   it("answers a real 404 for a starter page that isn't that studio's (the proxy's client-safe id list matches the catalog)", () => {
     for (const surface of SURFACES) expect([...STARTER_IDS[surface]].sort(), surface).toEqual(starterIds(surface).sort());
     expect(unknownStarterPage("/ads/start/faceless.boat-hotels")).toBe(true);
@@ -147,12 +174,14 @@ describe("who may use a starter", () => {
   it("makes a starter for the owner only: an account's POST is a library change", () => {
     for (const s of STARTERS) expect(isLibraryChange("POST", `/api/starters/${s.id}`), s.id).toBe(true);
     expect(isLibraryChange("GET", "/api/starters/faceless.boat-hotels")).toBe(false);
+    // The owner's list of every starter (with the cover-less ones) is closed to guests and accounts.
+    expect(guestRead("/api/starters")).toEqual({ kind: "closed" });
   });
 });
 
 describe("a starter's card", () => {
   const covered = starterCards("marketing")[0];
-  const bare = starterCards("faceless").find((c) => !c.cover);
+  const bare = starterCards("faceless", { all: true }).find((c) => !c.cover);
 
   it("shows a visitor the cover, the steps in a few words and how it works; the owner a Use template", () => {
     const visitor = tile({ s: covered, owner: false, busy: false, onUse: () => {} });

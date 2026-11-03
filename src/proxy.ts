@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { APPS } from "@/lib/catalog/apps";
 import { modeHref, type HubKind } from "@/lib/hubs";
-import { recordForPath, unknownHubMode, unknownStarterPage } from "@/lib/record-pages";
+import { hiddenStarterPage, recordForPath, unknownHubMode, unknownStarterPage } from "@/lib/record-pages";
 import { countsAsView, SHARE_VIEW_HEADER, shareRoute } from "@/lib/share";
 import {
   ACCOUNT_LIBRARY_MESSAGE,
@@ -365,6 +365,8 @@ export function proxy(request: NextRequest) {
   const open = publicSignup(request.headers.get("host") ?? request.nextUrl.host);
   const viewer = viewerOf(request, open);
   if (viewer?.kind === "owner") return pass(request);
+  // A starter with no real cover yet is the owner's: anyone else gets a real 404, not its words.
+  if ((viewer || open) && read && hiddenStarterPage(pathname)) return notFound(request);
   if (viewer?.kind === "account") return account(request, viewer.account);
   if (open) return guest(request);
   if (pathname.startsWith("/api/")) {

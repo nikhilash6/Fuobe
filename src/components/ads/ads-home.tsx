@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from "@/components/ui/skeleton";
 import { BrandStart } from "@/components/brand/brand-dialog";
 import { SelfHostNote } from "@/components/self-host-note";
-import { StarterSection } from "@/components/starters/starter-section";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { ExampleRow } from "@/components/studio/example-row";
 import { useIsOwner, useIsVisitor } from "@/lib/api";
 import { ResearchLabel } from "@/components/brand/research-progress";
@@ -104,7 +104,8 @@ function DeleteBrand({ brand, onClose }: { brand: BrandKit | null; onClose: () =
  * examples: "More to try" (exampleRow(), from the page), while there are no brands of one's own.
  * starters: the ready brand kits (src/lib/starters/catalog.ts), first while there are no brands, one row under them after.
  */
-export function AdsHome({ examples, starters = [] }: { examples?: ExampleRowData | null; starters?: StarterCardData[] }) {
+export function AdsHome({ examples, starters: given = [] }: { examples?: ExampleRowData | null; starters?: StarterCardData[] }) {
+  const { starters } = useStarters("ads", given);
   const router = useRouter();
   const { engine, setEngine } = useMarketingEngine();
   const brands = useBrands();
@@ -133,7 +134,7 @@ export function AdsHome({ examples, starters = [] }: { examples?: ExampleRowData
           </div>
         </section>
 
-        {!brands.isLoading && !hasBrands && <StarterSection starters={starters} className="mt-12" />}
+        {!brands.isLoading && !hasBrands && <StarterSection surface="ads" starters={given} className="mt-12" />}
 
         {!!moreToTry?.cards.length && (visitor || (brands.isSuccess && !brands.data.length)) && <ExampleRow row={moreToTry} className="mt-12" />}
 
@@ -167,7 +168,7 @@ export function AdsHome({ examples, starters = [] }: { examples?: ExampleRowData
           </section>
         )}
 
-        {hasBrands && <StarterSection starters={starters} row className="mt-12" />}
+        {hasBrands && <StarterSection surface="ads" starters={given} row className="mt-12" />}
 
         <section className="mt-12 grid gap-4 md:grid-cols-2">
           <Link href="/ads/multiplier" className={cn("group flex items-center gap-4 rounded-2xl border bg-background p-4 transition-shadow hover:shadow-soft")}>

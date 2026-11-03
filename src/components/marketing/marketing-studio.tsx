@@ -340,6 +340,7 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
   const brands = useBrands();
   const brandId = savedBrand && brands.data?.some((b) => b.id === savedBrand) ? savedBrand : null;
   const products = useProducts();
+  const noProducts = products.isSuccess && !products.data.length;
 
   const pickTemplate = (t: MarketingTemplate) => {
     setDraft((d) => withTemplate(d, t));
@@ -430,14 +431,16 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
         <ProductParam products={products.data} onProduct={(p) => set({ product: productChoice(p) })} />
       </Suspense>
       <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-4 pb-10 sm:px-6">
-        <div className="pt-6 pb-2 text-center sm:pt-10">
+        {/* With no products yet, the ready shoots come first: a lower hero keeps them above the docked composer. */}
+        <div className={cn("pt-6 pb-2 text-center", noProducts ? "sm:pt-6" : "sm:pt-10")}>
           <h2 className="font-heading text-display text-balance">Turn a product into ready-to-post content</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">
             Product shots, motion, UGC presenters, ads, posters and listings — from Fuobe&apos;s templates, on {engine === "open" ? (visitor ? "open-source models" : "your own GPU, free") : "Fuobe Marketing Image or partner models in the cloud"}.
           </p>
-          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Marketing Studio isn&apos;t available here.</SelfHostNote>}
         </div>
-        {products.isSuccess && !products.data.length && <StarterSection starters={starters} className="mt-6 mb-4" />}
+        {noProducts && <StarterSection surface="marketing" starters={starters} center compact className="mt-6 mb-4" />}
+        {/* Under the ready shoots, so it doesn't read as an answer to them. */}
+        {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl text-center">Marketing Studio isn&apos;t available here.</SelfHostNote>}
         <div role="tablist" aria-label="View" className="mx-auto mt-4 flex w-fit rounded-full bg-muted p-0.5">
           {(["templates", "generations"] as const).map((t) => (
             <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("h-8 rounded-full px-4 text-[13px] font-medium text-muted-foreground", tab === t && "bg-background text-foreground shadow-soft")}>
@@ -447,17 +450,21 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
         </div>
         <div className="mt-6">
           {tab === "templates" ? (
-            <TemplateGallery
-              category={category}
-              onCategory={setCategory}
-              media={media}
-              onMedia={(m) => {
-                setMedia(m);
-                if (m !== "all" && m !== kind) setDraft((d) => withTemplate(d, null, m === "image" ? "product-standalone" : "motion-hyper"));
-              }}
-              selected={draft.templateId ?? undefined}
-              onPick={pickTemplate}
-            />
+            <>
+              {/* Once there are products of your own, the ready shoots are one row above the templates. */}
+              {!!products.data?.length && <StarterSection surface="marketing" starters={starters} row center className="mb-12" />}
+              <TemplateGallery
+                category={category}
+                onCategory={setCategory}
+                media={media}
+                onMedia={(m) => {
+                  setMedia(m);
+                  if (m !== "all" && m !== kind) setDraft((d) => withTemplate(d, null, m === "image" ? "product-standalone" : "motion-hyper"));
+                }}
+                selected={draft.templateId ?? undefined}
+                onPick={pickTemplate}
+              />
+            </>
           ) : (
             <RunsList
               feature="marketing"
@@ -474,7 +481,6 @@ export function MarketingStudio({ models, starters = [] }: { models: Record<stri
             />
           )}
         </div>
-        {tab === "templates" && !!products.data?.length && <StarterSection starters={starters} row className="mt-12" />}
       </div>
 
       {/* Docked composer */}

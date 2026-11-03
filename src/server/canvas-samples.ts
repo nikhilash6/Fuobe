@@ -16,8 +16,8 @@ import { absolutePath, contentTypeFor, getAsset, saveFile } from "./storage";
 
 const PUBLIC_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "public");
 
-/** Where a template's sample may come from: Fuobe's published example inputs, its samples and its preview covers. */
-const FOLDERS = ["/examples/", "/samples/", "/previews/presets/"];
+/** Where a sample may come from: Fuobe's published example inputs, its samples, its preview covers and its starters' files. */
+const FOLDERS = ["/examples/", "/samples/", "/previews/presets/", "/starters/"];
 
 /** The file on disk a sample names, or null: a plain path under one of FOLDERS, never one that steps out of public/. */
 export function sampleFile(src: string): string | null {

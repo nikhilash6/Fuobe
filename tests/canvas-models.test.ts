@@ -67,7 +67,7 @@ describe("Canvas templates' models", () => {
   it("every template plans on the open engine with these models, for free", () => {
     for (const t of CANVAS_TEMPLATES) {
       const plan = planCanvas(t.build("open"), { engineMode: "open" });
-      for (const e of plan.errors) expect(e.message, t.id).toMatch(/^(Add (an image|an audio clip|a video|a voice sample) to|Waiting on)/);
+      for (const e of plan.errors) expect(e.message, t.id).toMatch(/^(Row \d+: )?(Add (an image|an audio clip|a video|a voice sample) to|Waiting on)/);
       expect(plan.costUsd, t.id).toBe(0);
     }
   });

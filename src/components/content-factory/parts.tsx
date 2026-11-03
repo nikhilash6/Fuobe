@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, Copy, Film, Info, Loader2, Pencil, RotateCcw, Sparkles, Terminal, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Copy, Film, Info, Loader2, Pencil, RotateCcw, Sparkles, Terminal, X } from "lucide-react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
@@ -135,24 +135,39 @@ const EDITABLE: { key: EditableKey; label: string }[] = [
 ];
 
 /** What every episode follows: format, hook, pacing, shots, narrator, music and captions — with the reading's note, and an editor. */
-export function BriefCard({ brief, note, onSave, saving, className }: { brief: StyleBrief; note?: string; onSave?: (b: StyleBrief) => void; saving?: boolean; className?: string }) {
+/**
+ * The style brief every episode follows, with Edit. `folded`: it starts as one line that opens on a tap (Content
+ * Factory's home while there are no series yet, so its ready series stay near the composer).
+ */
+export function BriefCard({ brief, note, onSave, saving, className, folded = false }: { brief: StyleBrief; note?: string; onSave?: (b: StyleBrief) => void; saving?: boolean; className?: string; folded?: boolean }) {
   const [draft, setDraft] = useState<StyleBrief | null>(null);
+  const [open, setOpen] = useState(!folded);
   const id = useId();
+  const shut = !open && !draft;
   return (
-    <section aria-labelledby={`${id}-t`} className={cn("rounded-2xl border bg-background p-4 text-left", className)}>
+    <section aria-labelledby={`${id}-t`} className={cn("rounded-2xl border bg-background text-left", shut ? "px-4 py-2.5" : "p-4", className)}>
       <div className="flex items-center gap-2">
         <Sparkles className="size-4 shrink-0 text-brand-text" />
         <h3 id={`${id}-t`} className="text-[14px] font-medium">
           Style brief
         </h3>
-        <span className="text-[12px] text-muted-foreground">every episode follows it</span>
-        {onSave && !draft && (
-          <Button variant="ghost" size="sm" className="ml-auto h-7 rounded-full" onClick={() => setDraft(brief)}>
-            <Pencil /> Edit
-          </Button>
+        <span className="min-w-0 truncate text-[12px] text-muted-foreground">every episode follows it</span>
+        {!draft && (
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {onSave && !shut && (
+              <Button variant="ghost" size="sm" className="h-7 rounded-full" onClick={() => setDraft(brief)}>
+                <Pencil /> Edit
+              </Button>
+            )}
+            {folded && (
+              <Button variant="ghost" size="sm" className="h-7 rounded-full" aria-expanded={open} aria-controls={`${id}-b`} onClick={() => setOpen((v) => !v)}>
+                {open ? "Hide" : "Show"} <ChevronDown className={cn("transition-transform", open && "rotate-180")} />
+              </Button>
+            )}
+          </div>
         )}
       </div>
-      {note && (
+      {note && !shut && (
         <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-warning/10 px-2.5 py-2 text-[12px] text-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0 text-warning" />
           <span className="min-w-0">{note}</span>
@@ -207,7 +222,7 @@ export function BriefCard({ brief, note, onSave, saving, className }: { brief: S
           </div>
         </form>
       ) : (
-        <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-[13px] leading-snug sm:grid-cols-2">
+        <ul id={`${id}-b`} hidden={shut} className="mt-3 grid gap-x-6 gap-y-1.5 text-[13px] leading-snug sm:grid-cols-2">
           {[...briefLines(brief), `Look: ${brief.look}`].map((l) => {
             const [k, ...v] = l.split(": ");
             return (

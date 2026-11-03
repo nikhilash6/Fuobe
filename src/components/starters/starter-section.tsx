@@ -1,18 +1,39 @@
 "use client";
 
 import { ArrowRight, Loader2, Plus } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { StepFlow } from "@/components/canvas/template-card";
 import { useEngine, useIsOwner } from "@/lib/api";
 import { responseError, toastError } from "@/lib/refusals";
-import { STARTER_SURFACES, starterHref, starterShown, type StarterCardData } from "@/lib/starters/types";
+import { STARTER_SURFACES, starterHref, starterShown, type OwnerStarters, type StarterCardData, type StarterFill, type StarterSurface } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { StarterCard } from "./starter-card";
 import { StarterIcon } from "./starter-icon";
 import { StepsGlyph } from "./steps-glyph";
+
+/**
+ * A studio's starters for the viewer: the covered ones its page was given (everyone's), and for the owner every one,
+ * loaded once from GET /api/starters (a starter with no cover yet never reaches a visitor's page). `fills`: what each
+ * one puts in its composer (Content Factory, Explainer), the owner's with the starter's narrator sample.
+ */
+export function useStarters(surface: StarterSurface, starters: StarterCardData[], fills: Record<string, StarterFill> = {}) {
+  const owner = useIsOwner();
+  const q = useQuery({
+    queryKey: ["starters", surface],
+    queryFn: async (): Promise<OwnerStarters> => {
+      const res = await fetch(`/api/starters?surface=${encodeURIComponent(surface)}`);
+      if (!res.ok) throw new Error("Starters didn't load");
+      return (await res.json()) as OwnerStarters;
+    },
+    enabled: owner,
+    staleTime: 5 * 60_000,
+  });
+  const mine = owner ? q.data : undefined;
+  return { owner, starters: mine?.starters ?? starters, fills: mine ? { ...fills, ...mine.fills } : fills };
+}
 
 /**
  * The owner's "Use template": a starter made on the server (POST /api/starters/<id>) opens where it answers; one that
@@ -52,9 +73,11 @@ export function useStarterUse(onFill?: (id: string) => void) {
 }
 
 /** One starter as a card: the whole card opens its page; the owner's action makes or fills it. */
-export function StarterTile({ s, owner, busy, onUse }: { s: StarterCardData; owner: boolean; busy: boolean; onUse: () => void }) {
+export function StarterTile({ s, owner, busy, onUse, wide, compact }: { s: StarterCardData; owner: boolean; busy: boolean; onUse: () => void; wide?: boolean; compact?: boolean }) {
   return (
     <StarterCard
+      wide={wide}
+      compact={compact}
       coverKey={s.coverKey}
       cover={s.cover}
       hue={s.hue}
@@ -86,13 +109,18 @@ export function StarterTile({ s, owner, busy, onUse }: { s: StarterCardData; own
  * `row`: one short row (the first three, "See all" for the rest), under the person's own work; a snap scroller on a phone.
  */
 export function StarterSection({
-  starters,
+  surface: surfaceId,
+  starters: given,
   row = false,
   onFill,
   className,
   headingLevel = "h2",
   narrow = false,
+  center = false,
+  compact = false,
 }: {
+  surface: StarterSurface;
+  /** The covered starters the page was given; the owner's view adds the rest (useStarters). */
   starters: StarterCardData[];
   row?: boolean;
   onFill?: (id: string) => void;
@@ -100,20 +128,26 @@ export function StarterSection({
   headingLevel?: "h2" | "h3";
   /** In a narrow column (Explainer's history): two cards a row at most. */
   narrow?: boolean;
+  /** Under a centred hero: the section centred, at the width of its cards. */
+  center?: boolean;
+  /** On a phone, each card as a thumbnail beside its words (Marketing Studio's, above its docked composer). */
+  compact?: boolean;
 }) {
   // Until the viewer is known to be the owner, the page is a visitor's: only starters with their real cover show.
-  const owner = useIsOwner();
+  const { owner, starters } = useStarters(surfaceId, given);
   const { use, busy } = useStarterUse(onFill);
   const [all, setAll] = useState(false);
   const shown = starters.filter((s) => starterShown(s, !owner));
   if (!shown.length) return null;
-  const surface = STARTER_SURFACES[shown[0].surface];
+  const surface = STARTER_SURFACES[surfaceId];
   const items = row && !all ? shown.slice(0, 3) : shown;
-  // Two cards or fewer: two columns at most, so no column stands empty beside them.
+  // Two cards or fewer: two columns at most, so no column stands empty beside them, with wider, lower covers.
   const few = items.length <= 2;
   const H = headingLevel;
+  // A snap row on a phone reaches the screen's edges: it steps out of the page's 16 px gutter and snaps back inside it.
+  const snap = row && !all && items.length > 1;
   return (
-    <section id="starters" aria-labelledby="starters-title" className={cn("scroll-mt-20", className)}>
+    <section id="starters" aria-labelledby="starters-title" className={cn("scroll-mt-20", center && few && !narrow && "mx-auto w-full lg:max-w-[880px]", className)}>
       <div className="mb-3 flex flex-wrap items-end gap-x-3 gap-y-1">
         <div className="min-w-0 flex-1">
           <H id="starters-title" className="font-heading text-[24px] leading-tight">
@@ -132,11 +166,11 @@ export function StarterSection({
           "grid grid-cols-1 gap-4 sm:grid-cols-2",
           !narrow && !few && "lg:grid-cols-3",
           !narrow && few && "lg:max-w-[880px]",
-          row && !all && "-mx-3 flex snap-x snap-mandatory overflow-x-auto px-3 pb-1 sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 [&>*]:w-[78%] [&>*]:shrink-0 [&>*]:snap-start sm:[&>*]:w-auto",
+          snap && "-mx-4 flex scroll-px-4 snap-x snap-mandatory overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:scroll-px-0 sm:overflow-visible sm:px-0 sm:pb-0 [&>*]:w-[78%] [&>*]:shrink-0 [&>*]:snap-start sm:[&>*]:w-auto",
         )}
       >
         {items.map((s) => (
-          <StarterTile key={s.id} s={s} owner={owner} busy={busy === s.id} onUse={() => void use(s)} />
+          <StarterTile key={s.id} s={s} owner={owner} busy={busy === s.id} onUse={() => void use(s)} wide={few && !narrow} compact={compact} />
         ))}
       </div>
     </section>

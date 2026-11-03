@@ -355,7 +355,7 @@ describe("canvas templates", () => {
     expect(graphEngine(g)).toBe(engine);
     const plan = planCanvas(g, { engineMode: engine });
     // Only the empty upload nodes need the user.
-    for (const e of plan.errors) expect(e.message).toMatch(/^(Add (an image|an audio clip|a video|a voice sample) to|Waiting on)/);
+    for (const e of plan.errors) expect(e.message).toMatch(/^(Row \d+: )?(Add (an image|an audio clip|a video|a voice sample) to|Waiting on)/);
     if (!plan.errors.length) expect(plan.steps.length).toBe(g.nodes.filter(isGenerator).length);
     if (engine === "open") expect(plan.costUsd).toBe(0);
   });

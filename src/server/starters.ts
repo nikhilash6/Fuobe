@@ -1,9 +1,11 @@
 import "server-only";
 import type { Engine } from "@/lib/catalog/types";
-import { getStarter, type StarterProduct } from "@/lib/starters/catalog";
+import type { NarratorVoice } from "@/lib/catalog/faceless";
+import { getStarter, starterCards, starterFills, starterVoice, type Starter, type StarterProduct } from "@/lib/starters/catalog";
+import type { OwnerStarters, StarterFill, StarterSurface } from "@/lib/starters/types";
 import { createManualBrand, createProduct, listBrands, listProducts, updateProduct } from "./brand";
 import { adoptSample } from "./canvas-samples";
-import { createChannel } from "./faceless";
+import { createChannel, listChannels, updateChannel } from "./faceless";
 
 /**
  * The owner's "Use template" on a starter that is made here (POST /api/starters/<id>): a Faceless channel set up for
@@ -43,6 +45,33 @@ async function brandAndProduct(kit: StarterProduct): Promise<{ brandId: string; 
   return { brandId: brand.id, productId: product.id };
 }
 
+/** The narrator a starter speaks with until its own sample is published: Fuobe's clean voice sample, a calm 8 s read. */
+const NARRATOR_FALLBACK = "/samples/clean-voice/clean.m4a";
+
+/**
+ * The starter's narrator sample as a stored file (made once): its own once published, else Fuobe's clean voice sample,
+ * so a narrated starter runs on the open engine as it is. Undefined for a starter with no narrator.
+ */
+function narrator(s: Pick<Starter, "id" | "surface">): (NarratorVoice & { kind: "sample" }) | undefined {
+  const v = starterVoice(s);
+  if (!v) return undefined;
+  const url = adoptSample(v.src) ?? adoptSample(NARRATOR_FALLBACK);
+  return url ? { kind: "sample", url, name: v.name } : undefined;
+}
+
+/** Every starter of a surface for the owner (GET /api/starters?surface=), the fills with their narrator sample. */
+export function startersForOwner(surface: StarterSurface): OwnerStarters {
+  const starters = starterCards(surface, { all: true });
+  const fills: Record<string, StarterFill> = {};
+  if (surface === "content-factory" || surface === "explainer") {
+    for (const [id, f] of Object.entries(starterFills(surface, { all: true }))) {
+      const voice = narrator({ id, surface });
+      fills[id] = voice ? { ...f, voiceSample: voice.url } : f;
+    }
+  }
+  return { starters, fills };
+}
+
 /** Make the starter and say where it opens. */
 export async function createFromStarter(id: string, engine: Engine): Promise<{ href: string }> {
   const s = getStarter(id);
@@ -50,13 +79,21 @@ export async function createFromStarter(id: string, engine: Engine): Promise<{ h
   const seed = s.seed;
   if (seed.kind === "fill") throw new StarterError("That starter opens in its studio: nothing to make here");
   if (seed.kind === "faceless") {
-    const channel = await createChannel({
-      idea: seed.channel.idea,
-      genre: seed.channel.genre,
-      engine,
-      name: seed.channel.name,
-      settings: { styleId: seed.episode.styleId, length: seed.episode.length },
-    });
+    // On the open engine the narrator clones a voice: the starter's own sample, while it is published.
+    const voice = engine === "open" ? narrator(s) : undefined;
+    // The channel made before from this starter (same name and idea) opens again, rather than a second one.
+    const known = listChannels().find((c) => c.name === seed.channel.name && c.idea === seed.channel.idea);
+    const channel = known
+      ? voice && known.settings.voice?.kind !== "sample"
+        ? await updateChannel(known.id, { settings: { voice } })
+        : known
+      : await createChannel({
+          idea: seed.channel.idea,
+          genre: seed.channel.genre,
+          engine,
+          name: seed.channel.name,
+          settings: { styleId: seed.episode.styleId, length: seed.episode.length, ...(voice && { voice }) },
+        });
     return { href: `/faceless/${channel.id}/new?starter=${encodeURIComponent(s.id)}` };
   }
   const { brandId, productId } = await brandAndProduct(seed.kit);

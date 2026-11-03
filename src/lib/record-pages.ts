@@ -7,7 +7,7 @@
  * Pure, so the route table is tested without a server.
  */
 import { HUB_MODES, type HubKind } from "./hubs";
-import { STARTER_IDS } from "./starters/ids";
+import { STARTER_IDS, starterCovered } from "./starters/ids";
 import type { StarterSurface } from "./starters/types";
 
 export type RecordKind = "cinema" | "canvas" | "assist-project" | "layers" | "shorts" | "brand" | "element" | "channel" | "episode" | "explainer" | "series" | "swap-project";
@@ -67,6 +67,17 @@ export function recordForPath(pathname: string): RecordRef | null {
 export function unknownStarterPage(pathname: string): boolean {
   const m = STARTER_PAGE.exec(pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname);
   return !!m && !STARTER_IDS[STARTER_BASE[m[1]]].includes(decode(m[2]));
+}
+
+/**
+ * A starter page whose starter has no real cover yet: the owner's alone until its cover is made. The proxy answers
+ * anyone else a real 404, so its words never reach a visitor (the page itself is prerendered for the owner).
+ */
+export function hiddenStarterPage(pathname: string): boolean {
+  const m = STARTER_PAGE.exec(pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname);
+  if (!m) return false;
+  const id = decode(m[2]);
+  return STARTER_IDS[STARTER_BASE[m[1]]].includes(id) && !starterCovered(id);
 }
 
 /** /audio/<mode>, /video-tools/<mode> and /upscale/<mode> with a mode the hub doesn't have. */

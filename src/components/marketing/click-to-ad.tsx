@@ -327,7 +327,7 @@ export function ClickToAd({ models, starters = [] }: { models: Record<string, Mo
         <Suspense fallback={null}>
           <ProductParam products={products.data} onProduct={choose} />
         </Suspense>
-        {products.isSuccess && !products.data.length && <StarterSection starters={starters} className="pb-3" />}
+        {products.isSuccess && !products.data.length && <StarterSection surface="click-to-ad" starters={starters} className="pb-3" />}
 
         <Step n={1} title="Your product" hint="Paste the product's own page, or pick one you saved." done={!!product}>
           <AddFromLink limit={1} withBrand placeholder="https://yourshop.com/products/…" onAdded={(ps, extra) => ps[0] && choose(ps[0], extra.brand)} disabled={visitor} />
@@ -530,7 +530,7 @@ export function ClickToAd({ models, starters = [] }: { models: Record<string, Mo
           />
         </div>
 
-        {!!products.data?.length && <StarterSection starters={starters} row className="pt-8" />}
+        {!!products.data?.length && <StarterSection surface="click-to-ad" starters={starters} row className="pt-8" />}
       </div>
     </div>
   );

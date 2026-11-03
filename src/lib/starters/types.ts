@@ -57,9 +57,19 @@ export interface StarterCardData {
  * The composer a "fill" starter loads (Content Factory, Explainer): small enough to pass to the page, read when the
  * page opens with `?starter=<id>` or when the owner taps "Use template" on its card.
  */
-export type StarterFill =
+export type StarterFill = (
   | { kind: "content-factory"; presetId: string; prompt: string; length: number; episodes: number }
-  | { kind: "explainer"; prompt: string; styleId: string; duration: "auto" | number; aspect: "9:16" | "16:9"; voice?: string };
+  | { kind: "explainer"; prompt: string; styleId: string; duration: "auto" | number; aspect: "9:16" | "16:9"; voice?: string }
+) & {
+  /** The starter's narrator sample, stored for the owner (/api/files/…): the open engine's narrator clones a voice. */
+  voiceSample?: string;
+};
+
+/** GET /api/starters?surface=: every starter of a surface, for the owner (a page's props carry only covered ones). */
+export interface OwnerStarters {
+  starters: StarterCardData[];
+  fills: Record<string, StarterFill>;
+}
 
 /** The starter's page (`<base>/start/<id>`). */
 export const starterHref = (s: Pick<StarterCardData, "id" | "surface">) => `${STARTER_SURFACES[s.surface].base}/start/${s.id}`;
