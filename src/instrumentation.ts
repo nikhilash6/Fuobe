@@ -2,10 +2,13 @@
  * Runs once when the server starts: start the generation runner right away, so jobs that were in
  * flight before a restart keep advancing (and live updates flow) even when the UI only lists them.
  * Also empties what has been in the Trash for 30 days (then daily), starts Assist's scheduled tasks and Character
- * Swap Studio's sweep.
+ * Swap Studio's sweep. On SIGTERM or SIGINT, ends the live-updates streams and stops these runners, so the server
+ * stops at once (src/server/shutdown.ts).
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs" || process.env.NEXT_PHASE === "phase-production-build") return;
+  const { drainOnSignals } = await import("./server/shutdown");
+  drainOnSignals();
   const { ensureRunner } = await import("./server/generations");
   ensureRunner();
   const { ensureTrashPurge } = await import("./server/library");
