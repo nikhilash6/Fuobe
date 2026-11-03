@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-02T15:11:05.081Z",
+  "generatedAt": "2026-11-03T01:54:46.619Z",
   "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
   "comfyuiVersion": "0.41.0",
   "workflowTemplatesVersion": "0.11.86",
@@ -22901,6 +22901,147 @@
       "license": "Apache-2.0 (speridlabs/idol weights; the ComfyUI files are nynxz/Idol's conversion, Apache-2.0); Idol is VAST-AI-Research's TripoSplat architecture (MIT, code and weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a \"Built with DINOv3\" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT",
       "validated": true,
       "notes": "Idol 3D (Speridlabs): one object from one picture -> a Gaussian splat (role splat) + a 75-frame orbit video (role turntable). A copy of image-to-splat-triposplat with the same node ids. Reference settings (idol-sdk sampler.py L43-70): 50 Euler steps, simple schedule; Idol's CFG weight 3 in its (1+w)cond - w*uncond form is ComfyUI cfg 4.0, and its rescale_t 3 is TripoSplat's built-in shift 3 (comfy/supported_models.py), so no ModelSamplingSD3. Quick look (set by the page as params.extra): 20 dpmpp_2m steps, cfg 4, 65,536 Gaussians, the ComfyUI-Idol README's \"faster trade-off\" and \"fast preview\"; quality unmeasured. Photo crop (photoCrop, default false): TripoSplatPreprocessImage is Idol's \"synthetic\" 1.2 crop; scaled to 720 and centred on a black 1024 canvas (88:101-103) the object spans 600 px, where Idol's \"real\" 1.7 crop gives 602 px. ComfySwitchNode 88:104 picks it; its inputs are lazy, so the branch not taken does not run. Not yet compared with IdolPreprocessImage \"real\". About half the Gaussians are near-transparent: RenderSplat thresholds 0.05; the saved file is not pruned without the ComfyUI-Idol pack. 1.32 GB of new weights (idol_fp16 0.74, idol_decoder_fp16 0.58) plus the shared 2.46 GB (DINOv3 ViT-H 1.68, FLUX.2 VAE 0.34, BiRefNet 0.44). VRAM: vendor peak 7.2 GB in the SDK; unmeasured in ComfyUI."
+    },
+    {
+      "id": "image-to-mesh-idol",
+      "title": "Image to a rough vertex-coloured 3D mesh (Idol splat -> core Extract Mesh from Splat, GLB, no textures) + an orbit video",
+      "capability": "image-to-3d",
+      "file": "image-to-mesh-idol.json",
+      "source": "hand-built (scripts/comfy/hand-built/image-to-mesh-idol.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "99",
+            "input": "image"
+          }
+        ],
+        "cutout": [
+          {
+            "node": "88:35",
+            "input": "switch"
+          }
+        ],
+        "numGaussians": [
+          {
+            "node": "88:55",
+            "input": "num_gaussians"
+          }
+        ],
+        "steps": [
+          {
+            "node": "88:6",
+            "input": "steps"
+          }
+        ],
+        "cfg": [
+          {
+            "node": "88:6",
+            "input": "cfg"
+          }
+        ],
+        "sampler": [
+          {
+            "node": "88:6",
+            "input": "sampler_name"
+          }
+        ],
+        "photoCrop": [
+          {
+            "node": "88:104",
+            "input": "switch"
+          }
+        ],
+        "seed": [
+          {
+            "node": "88:6",
+            "input": "seed"
+          },
+          {
+            "node": "88:55",
+            "input": "seed"
+          }
+        ],
+        "orbitFrames": [
+          {
+            "node": "75",
+            "input": "frames"
+          }
+        ],
+        "meshResolution": [
+          {
+            "node": "93",
+            "input": "resolution"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "51",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "42",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "51",
+          "kind": "model3d",
+          "role": "mesh"
+        },
+        {
+          "node": "42",
+          "kind": "video",
+          "role": "turntable"
+        }
+      ],
+      "defaults": {
+        "steps": 50,
+        "cfg": 4,
+        "numGaussians": 262144,
+        "orbitFrames": 75,
+        "cutout": true,
+        "photoCrop": false
+      },
+      "limits": {},
+      "models": [
+        {
+          "file": "dino_v3_vit_h.safetensors",
+          "folder": "clip_vision",
+          "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/clip_vision/dino_v3_vit_h.safetensors",
+          "sizeGb": 1.68
+        },
+        {
+          "file": "flux2-vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "idol_decoder_fp16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/vae/idol_decoder_fp16.safetensors",
+          "sizeGb": 0.58
+        },
+        {
+          "file": "idol_fp16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/diffusion_models/idol_fp16.safetensors",
+          "sizeGb": 0.74
+        },
+        {
+          "file": "birefnet.safetensors",
+          "folder": "background_removal",
+          "url": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors",
+          "sizeGb": 0.44
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 8,
+      "license": "Apache-2.0 (speridlabs/idol weights; the ComfyUI files are nynxz/Idol's conversion, Apache-2.0); Idol is VAST-AI-Research's TripoSplat architecture (MIT, code and weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a \"Built with DINOv3\" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT",
+      "validated": true,
+      "notes": "Idol 3D quick mesh: image-to-splat-idol (same node ids, Best settings: 50 Euler steps, cfg 4, 262,144 Gaussians; photoCrop the looser photo crop) with the splat file replaced by core SplatToMesh 93 (\"Extract Mesh from Splat\", comfy_extras/nodes_gaussian_splat.py): a density grid of meshResolution along the longest axis (384 by default, 64-768 in steps of 16; memory and time grow with its cube), kernel 5, no smoothing, level 0.4, components under 500 vertices dropped, and Gaussians under min_opacity 0.02 ignored, which leaves out the near-transparent haze. SaveGLB 51 writes one self-contained binary GLB (role mesh): vertex colours (COLOR_0) under an unlit material (KHR_materials_unlit), no UVs, no textures, no PBR. The 75-frame orbit video (role turntable) is the splat's, thresholded at 0.05; after the job the Fuobe server finishes the GLB like every image-to-3D route (web GLB, pivot at the bottom) and, when Chromium and ffmpeg are there, replaces that video with a turntable of the mesh itself. Mesh quality from Idol splats is unmeasured (idol-9.md §11; scripts/eval/cases/mesh.json). Same weights as image-to-splat-idol (1.32 GB of Idol files plus the shared 2.46 GB). VRAM: vendor peak 7.2 GB in the SDK for the splat; SplatToMesh's own peak at 384 unmeasured."
     },
     {
       "id": "wan21-i2v-uni3c-path",

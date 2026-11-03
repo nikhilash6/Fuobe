@@ -4932,6 +4932,33 @@ export const SPEC = [
       'VRAM: vendor peak 7.2 GB in the SDK; unmeasured in ComfyUI.',
   },
   {
+    // idol-7 (docs/research/idol-9.md §2.1, §2.4, §9): Idol's splat turned into a rough vertex-coloured mesh by core SplatToMesh.
+    id: 'image-to-mesh-idol',
+    title: 'Image to a rough vertex-coloured 3D mesh (Idol splat -> core Extract Mesh from Splat, GLB, no textures) + an orbit video',
+    capability: 'image-to-3d',
+    handBuilt: 'hand-built/image-to-mesh-idol.json',
+    bindings: {
+      image: [b('99', 'image')], cutout: [b('88:35', 'switch')], numGaussians: [b('88:55', 'num_gaussians')], steps: [b('88:6', 'steps')], cfg: [b('88:6', 'cfg')],
+      sampler: [b('88:6', 'sampler_name')], photoCrop: [b('88:104', 'switch')],
+      seed: [b('88:6', 'seed'), b('88:55', 'seed')], orbitFrames: [b('75', 'frames')], meshResolution: [b('93', 'resolution')],
+    },
+    outputs: [{ node: '51', kind: 'model3d', role: 'mesh' }, { node: '42', kind: 'video', role: 'turntable' }],
+    defaults: { cutout: true, photoCrop: false },
+    vramGb: 8,
+    license:
+      'Apache-2.0 (speridlabs/idol weights; the ComfyUI files are nynxz/Idol\'s conversion, Apache-2.0); Idol is VAST-AI-Research\'s TripoSplat architecture (MIT, code and weights); ' +
+      'the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; ' +
+      'the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT',
+    notes:
+      'Idol 3D quick mesh: image-to-splat-idol (same node ids, Best settings: 50 Euler steps, cfg 4, 262,144 Gaussians; photoCrop the looser photo crop) with the splat file replaced by core SplatToMesh 93 ' +
+      '("Extract Mesh from Splat", comfy_extras/nodes_gaussian_splat.py): a density grid of meshResolution along the longest axis (384 by default, 64-768 in steps of 16; memory and time grow with its cube), ' +
+      'kernel 5, no smoothing, level 0.4, components under 500 vertices dropped, and Gaussians under min_opacity 0.02 ignored, which leaves out the near-transparent haze. ' +
+      'SaveGLB 51 writes one self-contained binary GLB (role mesh): vertex colours (COLOR_0) under an unlit material (KHR_materials_unlit), no UVs, no textures, no PBR. ' +
+      'The 75-frame orbit video (role turntable) is the splat\'s, thresholded at 0.05; after the job the Fuobe server finishes the GLB like every image-to-3D route (web GLB, pivot at the bottom) ' +
+      'and, when Chromium and ffmpeg are there, replaces that video with a turntable of the mesh itself. Mesh quality from Idol splats is unmeasured (idol-9.md §11; scripts/eval/cases/mesh.json). ' +
+      'Same weights as image-to-splat-idol (1.32 GB of Idol files plus the shared 2.46 GB). VRAM: vendor peak 7.2 GB in the SDK for the splat; SplatToMesh\'s own peak at 384 unmeasured.',
+  },
+  {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).
     id: 'wan21-i2v-uni3c-path',
     title: 'Fly path: a still filmed along a camera path, Wan 2.1 I2V guided by Uni3C on a browser render of the path (core nodes)',
