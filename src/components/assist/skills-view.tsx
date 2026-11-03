@@ -33,10 +33,11 @@ import { SKILL_LIMITS, SKILL_NAME_RE, skillSlug, type Skill, type SkillSummary }
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
 import { radioKeys } from "@/components/studio/radio-keys";
-import { useRecipe, useRecipeActions, useSkill, useSkillActions, useSkills, type RecipeFailure, type SkillForm } from "./hooks";
+import { useRecipe, useRecipeActions, useSkill, useSkillActions, useSkills, useStepFixes, type RecipeFailure, type SkillForm } from "./hooks";
 import { RunSkillDialog } from "./run-skill-dialog";
 import { RailButton } from "./shell";
 import { SKILL_ICONS, SkillIcon } from "./skill-icon";
+import { SkillHistorySection, SuggestFix } from "./skill-upkeep";
 import { AssistVisitorNote } from "./visitor-note";
 
 /**
@@ -287,9 +288,12 @@ function RecipeStatus({ skill }: { skill: Skill }) {
   const recipe = useRecipe(skill.name, !!skill.recipe);
   const actions = useRecipeActions();
   const [busy, setBusy] = useState(false);
+  const canCheck = skill.source === "user";
+  // W6: a step that keeps failing, was replaced or is switched off gets Suggest a fix.
+  const fixes = useStepFixes(skill.name, !!skill.recipe && canCheck).data ?? [];
   const v = recipe.data;
   if (!skill.recipe || !v) return null;
-  const recheck = Object.values(v.recheck).flat();
+  const recheck = [...Object.values(v.recheck).flat(), ...fixes.map((f) => f.why)];
   const recheckNow = async () => {
     setBusy(true);
     try {
@@ -303,7 +307,6 @@ function RecipeStatus({ skill }: { skill: Skill }) {
       setBusy(false);
     }
   };
-  const canCheck = skill.source === "user";
   return (
     <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", recheck.length || v.why ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
       {recheck.length || v.why ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
@@ -313,6 +316,7 @@ function RecipeStatus({ skill }: { skill: Skill }) {
           {busy && <Loader2 className="animate-spin" />} {v.ready.length ? "Re-check" : "Check it (free)"}
         </Button>
       )}
+      {canCheck && <SuggestFix name={skill.name} fixes={fixes} />}
     </div>
   );
 }
@@ -379,6 +383,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
                   </ul>
                 </div>
               )}
+              {owner && s.source === "user" && s.recipe && <SkillHistorySection name={s.name} />}
             </div>
             <DialogFooter className="mx-0 mb-0 flex-row flex-wrap items-center gap-2 border-t px-5 py-3 sm:justify-between">
               <div className="flex flex-wrap gap-1.5">

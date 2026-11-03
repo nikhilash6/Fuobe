@@ -16,6 +16,7 @@ import { PageShell } from "@/components/page-shell";
 import { useShare } from "@/components/share/share-provider";
 import { SharedLinks } from "@/components/share/shared-links";
 import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
+import { SkillSuggestionCard } from "@/components/skills/skill-suggestion";
 import { downloadUrl, ForeverConfirmProvider, useConfirmForever } from "@/components/studio/result-actions";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { Viewer } from "@/components/studio/viewer";
@@ -229,6 +230,8 @@ function Inner() {
   const pathname = usePathname();
   const tab = TABS.find((t) => t.id === sp.get("tab")) ?? TABS[0];
   const folderId = sp.get("folder") ?? undefined;
+  // One run's results (a skill's History links here: /library?batch=<id>).
+  const batchId = sp.get("batch") ?? undefined;
   const trash = tab.id === "trash";
   const uploadsTab = tab.id === "uploads";
   // A guest or an account sees its own runs only; an account with neither its own GPU nor its own key can't add files yet.
@@ -262,10 +265,11 @@ function Inner() {
       // The Trash shows everything in it, helper steps too: deleting a Shorts session trashes its steps, and they can come back.
       ...(trash && { trashed: true, steps: true }),
       ...(folderId && !trash && (subtree ? { folderIds: subtree } : { folderId })),
+      ...(batchId && !trash && { batchId }),
       ...(dq && { q: dq }),
       ...filterFields(filters),
     }),
-    [tab, trash, folderId, subtree, dq, filters],
+    [tab, trash, folderId, subtree, batchId, dq, filters],
   );
   // Pinned results sit above the rest of the view (not in the Trash or Uploads); the Pinned filter shows only them.
   const split = !trash && !uploadsTab && !sharedTab && !filters.pinned;
@@ -679,7 +683,17 @@ function Inner() {
 
       {!uploadsTab && !sharedTab && !missingFolder && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <FilterBar value={filters} onChange={setFilters} facets={facets.data} subfolders={!!folder?.folders} scoped={!!folderId || tab.id !== "all" || !!dq} trash={trash} />
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {batchId && !trash && (
+              <span className="inline-flex h-8 items-center gap-1 rounded-full bg-muted pr-1 pl-3 text-[13px] font-medium">
+                One run
+                <button type="button" onClick={() => go({ batch: undefined })} aria-label="Show everything" className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
+                  <X className="size-3.5" />
+                </button>
+              </span>
+            )}
+            <FilterBar value={filters} onChange={setFilters} facets={facets.data} subfolders={!!folder?.folders} scoped={!!folderId || !!batchId || tab.id !== "all" || !!dq} trash={trash} />
+          </div>
           {trash && (
             <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
               <span>Items stay here for {TRASH_DAYS} days.</span>
@@ -692,6 +706,9 @@ function Inner() {
           )}
         </div>
       )}
+
+      {/* A chain made often lately that no skill has yet: "Save it as a skill?" (the owner's, in All only). */}
+      {skillBuilder && tab.id === "all" && !folderId && !batchId && !dq && <SkillSuggestionCard onMake={(list) => skillBuilder.open(list)} />}
 
       {sharedTab ? (
         <SharedLinks />

@@ -42,7 +42,7 @@ let n = 0;
 /** One stored row, as the runner leaves a finished generation. */
 function row(o: { request: Record<string, unknown>; after?: string[]; at: number; provider?: string; feature?: string; status?: string; batch?: string }): string {
   const id = `g${++n}`.padEnd(12, "x");
-  const req = { feature: o.feature ?? "image", ...o.request };
+  const req: Record<string, unknown> = { feature: o.feature ?? "image", ...o.request };
   db()
     .prepare(
       `INSERT INTO generations (id, batch_id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at, depends_on)
@@ -97,7 +97,7 @@ describe("shapeOf", () => {
         { key: "scene", kind: "generate" as const, after: ["cutout"], chain: [{ slot: "images" as const, position: "first" as const }], request: { feature: "skill", modelId: "nano-banana-pro", op: "edit" } },
       ],
     };
-    expect(shapeOfRecipe(recipe)!.key).toBe(shapeOf([node("x", "birefnet-cloud", "bg-remove"), node("y", "nano-banana-pro", "edit", ["x"])]).key);
+    expect(shapeOfRecipe(recipe as unknown as Parameters<typeof shapeOfRecipe>[0])!.key).toBe(shapeOf([node("x", "birefnet-cloud", "bg-remove"), node("y", "nano-banana-pro", "edit", ["x"])]).key);
     expect(shapeOfRecipe({ steps: [{ key: "c", kind: "tool", tool: "add_captions", input: {} }] })).toBeNull();
   });
 });

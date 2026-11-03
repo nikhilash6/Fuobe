@@ -20,7 +20,7 @@ import type {
 import type { ConnectorView } from "@/lib/assist-connectors";
 import type { ScheduleRule, ScheduleSkill, ScheduleView } from "@/lib/assist-schedule";
 import type { Engine, Generation } from "@/lib/catalog/types";
-import type { RecipeEstimate, RecipeRun, RecipeView, VerifyResult } from "@/lib/recipe";
+import type { RecipeEstimate, RecipeRun, RecipeView, SkillHistory, SkillSuggestion, StepFix, VerifyResult } from "@/lib/recipe";
 import type { DraftRefusal, Naming, SkillDraft } from "@/lib/recipe-builder";
 import { responseError } from "@/lib/refusals";
 
@@ -229,6 +229,78 @@ export function useRecipeActions() {
         void qc.invalidateQueries({ queryKey: ["assist-skills"] });
       }
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Suggestions, run history and fixes (W6). Under ["assist-skills", …]: saving a skill refreshes them.
+
+/** Chains made often lately that no saved skill has (the Library's card): the owner's only. */
+export function useSkillSuggestions(enabled: boolean) {
+  return useHydrationSafe(
+    useQuery({
+      queryKey: ["assist-skills", "suggestions"],
+      enabled,
+      staleTime: 5 * 60_000,
+      retry: false,
+      queryFn: async () => (await json<{ items: SkillSuggestion[] }>(await fetch("/api/assist/skills/suggestions"))).items,
+    }),
+  );
+}
+
+export function useSuggestionActions() {
+  const qc = useQueryClient();
+  return {
+    /** "Not now" (a week) or "Don't suggest this": the card goes at once. */
+    dismiss: async (shape: string, action: "later" | "dismiss") => {
+      qc.setQueryData<SkillSuggestion[]>(["assist-skills", "suggestions"], (old) => old?.filter((s) => s.shape !== shape));
+      try {
+        await send("/api/assist/skills/suggestions", "POST", { shape, action });
+      } finally {
+        void qc.invalidateQueries({ queryKey: ["assist-skills", "suggestions"] });
+      }
+    },
+  };
+}
+
+/** A skill's runs: counts, success rate, spend and the last 10. */
+export function useSkillHistory(name: string | null, enabled = true) {
+  return useHydrationSafe(
+    useQuery({
+      queryKey: ["assist-skill-history", name],
+      enabled: !!name && enabled,
+      retry: false,
+      staleTime: 15_000,
+      queryFn: async () => json<SkillHistory>(await fetch(`/api/assist/skills/${name}/history`)),
+    }),
+  );
+}
+
+/** The steps of a skill that need a fix, with the models that could take their place. */
+export function useStepFixes(name: string | null, enabled = true) {
+  return useHydrationSafe(
+    useQuery({
+      queryKey: ["assist-skill-fixes", name],
+      enabled: !!name && enabled,
+      retry: false,
+      queryFn: async () => (await json<{ items: StepFix[] }>(await fetch(`/api/assist/skills/${name}/fixes`))).items,
+    }),
+  );
+}
+
+/** Use the picked model in a step: saved once its plan and the free dry run pass. */
+export function useApplyFix() {
+  const qc = useQueryClient();
+  return async (name: string, step: string, modelId: string) => {
+    try {
+      const r = await recipeCall<VerifyResult>(`/api/assist/skills/${name}/fixes`, { step, modelId });
+      qc.setQueryData(["assist-recipe", name], r.view);
+      return r;
+    } finally {
+      void qc.invalidateQueries({ queryKey: ["assist-recipe", name] });
+      void qc.invalidateQueries({ queryKey: ["assist-skill-fixes", name] });
+      void qc.invalidateQueries({ queryKey: ["assist-skills"] });
+    }
   };
 }
 

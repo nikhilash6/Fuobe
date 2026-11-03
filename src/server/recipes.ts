@@ -1196,8 +1196,9 @@ function withModel(recipe: Recipe, key: string, modelId: string): Recipe {
     ...recipe,
     steps: recipe.steps.map((s) => {
       if (s.kind !== "generate" || s.key !== key) return s;
-      const { engine: _engine, ...request } = s.request;
-      return { ...s, request: { ...request, modelId } as typeof s.request };
+      const request: Record<string, unknown> = { ...s.request, modelId };
+      delete request.engine;
+      return { ...s, request: request as typeof s.request };
     }),
   };
 }
