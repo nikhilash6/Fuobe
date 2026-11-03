@@ -1,6 +1,7 @@
 import "server-only";
 import { getPreset, MODELS } from "@/lib/catalog";
 import { CHARACTER_LORAS, characterLora, MINIMAX_H3_LICENCE } from "@/lib/catalog/character-swap";
+import { PIKA_FLEX_LORAS } from "@/lib/catalog/pika-flex";
 import { REGEN_FILES, REGEN_LORA } from "@/lib/catalog/regenerate";
 import { onEngine, providerEngine } from "@/lib/catalog/engines";
 import { LORA_LIBRARY, MOTION_EFFECT_LORAS } from "@/lib/catalog/lora-library.generated";
@@ -261,7 +262,7 @@ function regenLoraLicence(): LicenceInfo {
 }
 
 /** A Character swap LoRA's licence as the list shows it (its own recorded terms, its pinned model card). */
-function characterLoraLicence(l: (typeof CHARACTER_LORAS)[number]): LicenceInfo {
+function characterLoraLicence(l: Pick<(typeof CHARACTER_LORAS)[number], "licence" | "url">): LicenceInfo {
   const { name, class: cls, url, excludes, notices, note } = l.licence;
   return { name, class: cls, url: modelCardOf(l.url) ?? url, note, ...(excludes && { excludes }), ...(notices?.length && { notices }) };
 }
@@ -355,6 +356,8 @@ function loraRows(access: ModelAccess): LoraInfo[] {
   }
   // The LoRAs the Character swap's graphs load (and fal's route takes): Akatz Labs' swap LoRA and lightx2v's Turbo.
   for (const l of CHARACTER_LORAS) rows.push({ file: l.file, name: l.name, group: "adapter", base: "MiniMax H3", licence: characterLoraLicence(l), on: !access.loras.includes(l.file) });
+  // Pika H3 Flex's two adapters (MiniMax H3 on your GPU: Fast · Pika Flex, References, Talk from a voice clip).
+  for (const l of PIKA_FLEX_LORAS) rows.push({ file: l.file, name: l.name, group: "adapter", base: "MiniMax H3", licence: characterLoraLicence(l), on: !access.loras.includes(l.file) });
   // The refiner LoRA Open-H3 Regenerate's graph loads (and a run downloads).
   rows.push({ file: REGEN_LORA.file, name: REGEN_FILES[0].item, group: "adapter", base: "MiniMax H3", licence: regenLoraLicence(), on: !access.loras.includes(REGEN_LORA.file) });
   return rows;
@@ -373,7 +376,7 @@ export function knownSwitch(kind: "model" | "provider" | "pack" | "lora", id: st
     case "pack":
       return NODE_PACKS.some((p) => p.name === id);
     case "lora":
-      return LORA_LIBRARY.some((e) => e.file === id) || Object.values(OSS_LORAS).some((refs) => refs.some((r) => r.file === id)) || !!characterLora(id) || id === REGEN_LORA.file;
+      return LORA_LIBRARY.some((e) => e.file === id) || Object.values(OSS_LORAS).some((refs) => refs.some((r) => r.file === id)) || !!characterLora(id) || id === REGEN_LORA.file || PIKA_FLEX_LORAS.some((l) => l.file === id);
   }
 }
 

@@ -113,6 +113,9 @@ export interface Draft {
   params: GenParams;
   slots: Partial<Record<SlotKey, SlotValue | null>>;
   refs: SlotValue[];
+  /** References mode (MiniMax H3 on your GPU, Pika H3 Flex): reference clips and voice or music clips, in order. */
+  refClips?: SlotValue[];
+  refAudios?: SlotValue[];
   presetId?: string;
   presetOptions: Record<string, string>;
   /** Motions/effects: strength of the preset, and an optional second one mixed in (Mix). */

@@ -27,6 +27,9 @@ import { presetRoutes } from "./preset-recipe-routes";
 
 export { pricingAt } from "./promo";
 
+/** Operations that make a video from words and stills only: an attached clip has no place in them. */
+const MAKES_FROM_STILLS = new Set<Operation>(["t2v", "i2v", "flf2v", "keyframes", "ref2v", "avatar"]);
+
 /** Infer the operation from what the user attached. */
 export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op" | "inputs" | "params">): Operation {
   if (req.op) return req.op;
@@ -461,7 +464,22 @@ export function planGeneration(
   } else if (params.multiShot === "auto" && model.options.multiShot?.mode === "prompt") {
     prompt = `${prompt.replace(/[.\s]+$/, "")}. Multi-shot sequence: tell it in several distinct shots with clean cuts between them.`;
   }
+  const inferred = op === undefined;
   op = op ?? inferOperation(model, req);
+  if (model.kind === "video" && inferred) {
+    // What the run would drop without a word: a clip on an operation that makes a new video from words and stills (MiniMax H3
+    // in Lipsync & avatars makes a new talking clip, it doesn't re-sync one), or reference clips and sound beside an end frame.
+    if (req.inputs?.video && MAKES_FROM_STILLS.has(op)) {
+      throw new Error(
+        routesFor(model, "avatar").length && !routesFor(model, "lipsync").length
+          ? `${model.name} makes a new talking video from a portrait and the voice; it doesn't re-sync an existing clip. Add a portrait instead of the video, or pick another model`
+          : `${model.name} can't take a video here. Remove it, or pick another model`,
+      );
+    }
+    if (op === "flf2v" && ((req.inputs?.videos?.length ?? 0) || (req.inputs?.audios?.length ?? 0))) {
+      throw new Error("Reference clips and sound can't go with an end frame. Remove the end frame, or the clips and sound");
+    }
+  }
   // Reference clips and video elements on a model that bills them with the output (Kling 4.0, Pricing.clipInput): priced
   // at the least they bill (twice the output) until the server reads their length (params.clipSeconds).
   if (model.pricing?.clipInput && req.inputs?.videos?.length && params.clipSeconds === undefined) params = { ...params, clipSeconds: 0 };

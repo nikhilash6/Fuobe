@@ -114,9 +114,12 @@ export interface ManifestWorkflow {
   /**
    * The provider rewrites the graph before submitting ("captions": one segment per caption cue;
    * "timeline": one loader per audio clip, each placed at its start time; "videos" / "audios": one loader
-   * per clip of a join, src/lib/av/joins.ts).
+   * per clip of a join, src/lib/av/joins.ts; "references": one loader per reference image, clip and audio clip of
+   * MiniMax H3's Ref2VA graph, src/lib/h3-references.ts).
    */
-  expand?: "captions" | "timeline" | "videos" | "audios" | "keyframes";
+  expand?: "captions" | "timeline" | "videos" | "audios" | "keyframes" | "references";
+  /** Classes the app adds to the graph per run (the References clip loaders): the GPU pre-flight counts them as the graph's. */
+  runtimeNodes?: string[];
   validated: boolean;
   /** What ComfyUI answered when it last refused this graph. */
   validationError?: string;

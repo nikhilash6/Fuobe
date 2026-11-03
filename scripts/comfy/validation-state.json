@@ -341,6 +341,30 @@
     "error": "HTTP 400: missing_node_type: Node 'Hi3D Model Loader' not found. The custom node may not be installed. (Node ID '#1')",
     "at": "2026-11-02T15:11:18.633Z"
   },
+  "minimax-h3-flex-flf2v": {
+    "sha256": "a76ec6135a539210a9589118f1859746864ba13dded68f5f5fb1ab585a3995c3",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T10:49:21.229Z"
+  },
+  "minimax-h3-flex-i2v": {
+    "sha256": "17a0af634b6e376bd7962b31425328d513fe5994cafd2fffd2bc7791a9cb2ab9",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T10:49:20.882Z"
+  },
+  "minimax-h3-flex-ref2va": {
+    "sha256": "5e23b463861266c45b5d47c74d07a24498ef91e305488b94797eb761c1154766",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T10:49:22.296Z"
+  },
+  "minimax-h3-flex-t2v": {
+    "sha256": "ac3aba6022c2642eb895cb2e8572a4507d242f3b1962be4603a90656a95cfe28",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T10:49:20.705Z"
+  },
   "mixed-media-zimage-frames": {
     "sha256": "0e78a2602566f88e12a48711caa67d604a6d4455031e71b08f9b3cd030778387",
     "validated": true,

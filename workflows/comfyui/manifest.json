@@ -6272,6 +6272,436 @@
       "notes": "A camera orbit around one frozen instant: image (LoadImage 138) is both the first and the last frame of MiniMaxH3ImageToVideo. The fl2va pruned int8 model with pablodawson's 360 Orbit LoRA (minimax_h3_flf2v_lora_v1, LoraLoaderModelOnly at 1.0), MiniMaxH3SigmaShift 12 / 3, BasicScheduler simple 28 steps, KSamplerSelect res_multistep, CFG 1; core nodes only. 73 frames (3.04 s) is the LoRA's training length. The prompt reads best in the LoRA's own caption style: one frozen instant, the camera in one continuous 360-degree orbit, everything holding its place, camera parallax the only movement. The LoRA was trained without sound; the graph still decodes H3's audio. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With the Orbit LoRA (0.16 GB)."
     },
     {
+      "id": "minimax-h3-flex-t2v",
+      "title": "MiniMax H3 Text to Video + Audio (Pika H3 Flex, 6 steps)",
+      "capability": "t2v",
+      "file": "minimax-h3-flex-t2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-flex-t2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "sizeGb": 20.97
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "pika_h3_flex_fl2va_comfy_bf16.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Pika-Labs/Pika-H3-Flex/resolve/3ff166447d5edb1406107ab8370c42000ce173e4/comfy/loras/pika_h3_flex_fl2va_comfy_bf16.safetensors",
+          "sizeGb": 1.96
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 32,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · Pika H3 Flex FL2VA and Ref2VA adapters: Model Derivatives of MiniMax H3 under the MiniMax H3 Community License, Copyright © 2026 Mellis, Inc. (keep Pika's NOTICE and LICENSE with the files) · Pika's example code Apache-2.0",
+      "validated": true,
+      "notes": "Text to video with sound (FL2VA with no frames). The fl2va pruned int8 model with Pika's FL2VA adapter; core nodes only. Pika H3 Flex's sampling contract, as Comfy-Org's video_pika_h3_flex templates: the adapter at a fixed 1.0 (LoraLoaderModelOnly), KSamplerSelect lcm (fresh noise at every step), ManualSigmas 1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0 (the knots 1000/750/500/250/100/40/0 at video shift 12, so no MiniMaxH3SigmaShift node; audio shift 3 is the model's own), BasicGuider (CFG 1). 6 steps; Pika: generic 6-step Euler is not equivalent, and stacking another speed LoRA (Turbo, Lightning) breaks the output. Native 480p or 768p in 11 aspect ratios (21:9 to 9:21), 24 fps, 5-15 s on the 17n+5 grid (124 frames = 5.17 s, 362 = 15.08 s), 32 kHz stereo. Pika: \"an end-to-end ComfyUI render has not been verified as part of this upload\"; tested by Pika on an H100 80 GB (consumer VRAM unpublished). The file names are Pika's (comfy/loras at 3ff16644); Comfy-Org's templates name a repack (pika_h3_flex_*_v1_bf16, 128 bytes larger) of the same adapters. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With Pika's FL2VA adapter (1.96 GB)."
+    },
+    {
+      "id": "minimax-h3-flex-i2v",
+      "title": "MiniMax H3 Image to Video + Audio (Pika H3 Flex, 6 steps)",
+      "capability": "i2v",
+      "file": "minimax-h3-flex-i2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-flex-i2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "138",
+            "input": "image"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "sizeGb": 20.97
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "pika_h3_flex_fl2va_comfy_bf16.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Pika-Labs/Pika-H3-Flex/resolve/3ff166447d5edb1406107ab8370c42000ce173e4/comfy/loras/pika_h3_flex_fl2va_comfy_bf16.safetensors",
+          "sizeGb": 1.96
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 32,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · Pika H3 Flex FL2VA and Ref2VA adapters: Model Derivatives of MiniMax H3 under the MiniMax H3 Community License, Copyright © 2026 Mellis, Inc. (keep Pika's NOTICE and LICENSE with the files) · Pika's example code Apache-2.0",
+      "validated": true,
+      "notes": "Image to video with sound: image = the first frame. The fl2va pruned int8 model with Pika's FL2VA adapter; core nodes only. Pika H3 Flex's sampling contract, as Comfy-Org's video_pika_h3_flex templates: the adapter at a fixed 1.0 (LoraLoaderModelOnly), KSamplerSelect lcm (fresh noise at every step), ManualSigmas 1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0 (the knots 1000/750/500/250/100/40/0 at video shift 12, so no MiniMaxH3SigmaShift node; audio shift 3 is the model's own), BasicGuider (CFG 1). 6 steps; Pika: generic 6-step Euler is not equivalent, and stacking another speed LoRA (Turbo, Lightning) breaks the output. Native 480p or 768p in 11 aspect ratios (21:9 to 9:21), 24 fps, 5-15 s on the 17n+5 grid (124 frames = 5.17 s, 362 = 15.08 s), 32 kHz stereo. Pika: \"an end-to-end ComfyUI render has not been verified as part of this upload\"; tested by Pika on an H100 80 GB (consumer VRAM unpublished). The file names are Pika's (comfy/loras at 3ff16644); Comfy-Org's templates name a repack (pika_h3_flex_*_v1_bf16, 128 bytes larger) of the same adapters. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With Pika's FL2VA adapter (1.96 GB)."
+    },
+    {
+      "id": "minimax-h3-flex-flf2v",
+      "title": "MiniMax H3 Start + End Frame to Video + Audio (Pika H3 Flex, 6 steps)",
+      "capability": "flf2v",
+      "file": "minimax-h3-flex-flf2v.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-flex-flf2v.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "138",
+            "input": "image"
+          }
+        ],
+        "endImage": [
+          {
+            "node": "140",
+            "input": "image"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "sizeGb": 20.97
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "pika_h3_flex_fl2va_comfy_bf16.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Pika-Labs/Pika-H3-Flex/resolve/3ff166447d5edb1406107ab8370c42000ce173e4/comfy/loras/pika_h3_flex_fl2va_comfy_bf16.safetensors",
+          "sizeGb": 1.96
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 32,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · Pika H3 Flex FL2VA and Ref2VA adapters: Model Derivatives of MiniMax H3 under the MiniMax H3 Community License, Copyright © 2026 Mellis, Inc. (keep Pika's NOTICE and LICENSE with the files) · Pika's example code Apache-2.0",
+      "validated": true,
+      "notes": "Start and end frame to video with sound: image = the first frame, endImage = the last. The fl2va pruned int8 model with Pika's FL2VA adapter; core nodes only. Pika H3 Flex's sampling contract, as Comfy-Org's video_pika_h3_flex templates: the adapter at a fixed 1.0 (LoraLoaderModelOnly), KSamplerSelect lcm (fresh noise at every step), ManualSigmas 1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0 (the knots 1000/750/500/250/100/40/0 at video shift 12, so no MiniMaxH3SigmaShift node; audio shift 3 is the model's own), BasicGuider (CFG 1). 6 steps; Pika: generic 6-step Euler is not equivalent, and stacking another speed LoRA (Turbo, Lightning) breaks the output. Native 480p or 768p in 11 aspect ratios (21:9 to 9:21), 24 fps, 5-15 s on the 17n+5 grid (124 frames = 5.17 s, 362 = 15.08 s), 32 kHz stereo. Pika: \"an end-to-end ComfyUI render has not been verified as part of this upload\"; tested by Pika on an H100 80 GB (consumer VRAM unpublished). The file names are Pika's (comfy/loras at 3ff16644); Comfy-Org's templates name a repack (pika_h3_flex_*_v1_bf16, 128 bytes larger) of the same adapters. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With Pika's FL2VA adapter (1.96 GB)."
+    },
+    {
+      "id": "minimax-h3-flex-ref2va",
+      "title": "MiniMax H3 References to Video + Audio (Pika H3 Flex Ref2VA: up to 9 images, 3 clips, 3 audio clips; 6 steps)",
+      "capability": "ref2v",
+      "file": "minimax-h3-flex-ref2va.json",
+      "source": "hand-built (scripts/comfy/hand-built/minimax-h3-flex-ref2va.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "131",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "150",
+            "input": "image"
+          }
+        ],
+        "width": [
+          {
+            "node": "131",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "131",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "131",
+            "input": "length"
+          }
+        ],
+        "seed": [
+          {
+            "node": "129",
+            "input": "noise_seed"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "174",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "174",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 362,
+        "dimensionMultiple": 32,
+        "maxImages": 9,
+        "maxVideos": 3,
+        "maxAudios": 3,
+        "maxReferences": 12,
+        "maxReferenceGroupSec": 15
+      },
+      "models": [
+        {
+          "file": "minimax_h3_video_vae_int8_convrot.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+          "sizeGb": 20.97
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "pika_h3_flex_ref2va_comfy_bf16.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Pika-Labs/Pika-H3-Flex/resolve/3ff166447d5edb1406107ab8370c42000ce173e4/comfy/loras/pika_h3_flex_ref2va_comfy_bf16.safetensors",
+          "sizeGb": 1.96
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-VideoHelperSuite",
+          "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+        }
+      ],
+      "vramGb": 32,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · Pika H3 Flex FL2VA and Ref2VA adapters: Model Derivatives of MiniMax H3 under the MiniMax H3 Community License, Copyright © 2026 Mellis, Inc. (keep Pika's NOTICE and LICENSE with the files) · Pika's example code Apache-2.0",
+      "validated": true,
+      "notes": "References to video with sound: core MiniMaxH3ReferenceToVideo on the ref2va pruned int8 model with Pika's Ref2VA adapter. The graph holds Image 1 (LoadImage 150 → ref_images.ref_image_0); the provider adds the rest per run (expandH3References): up to 9 images (LoadImage → ref_images.ref_image_N), 3 clips (VHS_LoadVideo at 24 fps, up to 15 s → ref_videos.ref_video_N, and the clip's own sound → ref_video_audios.ref_video_audio_N) and 3 standalone audio clips (LoadAudio → ref_audios.ref_audio_N), 12 files in all, at least one image or clip; a request with no image takes node 150 out. Each clip or audio clip 2-15 s, each group at most 15 s combined; a clip's own sound is not counted as an audio file. The prompt cites them in order: <Picture 1>, <Video 1>, <Audio 1> (the studio writes Image 1, Clip 1, Voice 1 and the server turns them into these tags). ref_image_size stays match (the template's; max keeps a 2048 px short edge for stronger identity and is several times slower). Pika H3 Flex's sampling contract, as Comfy-Org's video_pika_h3_flex templates: the adapter at a fixed 1.0 (LoraLoaderModelOnly), KSamplerSelect lcm (fresh noise at every step), ManualSigmas 1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0 (the knots 1000/750/500/250/100/40/0 at video shift 12, so no MiniMaxH3SigmaShift node; audio shift 3 is the model's own), BasicGuider (CFG 1). 6 steps; Pika: generic 6-step Euler is not equivalent, and stacking another speed LoRA (Turbo, Lightning) breaks the output. Native 480p or 768p in 11 aspect ratios (21:9 to 9:21), 24 fps, 5-15 s on the 17n+5 grid (124 frames = 5.17 s, 362 = 15.08 s), 32 kHz stereo. Pika: \"an end-to-end ComfyUI render has not been verified as part of this upload\"; tested by Pika on an H100 80 GB (consumer VRAM unpublished). The file names are Pika's (comfy/loras at 3ff16644); Comfy-Org's templates name a repack (pika_h3_flex_*_v1_bf16, 128 bytes larger) of the same adapters. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). Files: ref2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With Pika's Ref2VA adapter (1.96 GB). VideoHelperSuite loads the clips (runtimeNodes, so the GPU pre-flight asks for it).",
+      "expand": "references",
+      "runtimeNodes": [
+        "VHS_LoadVideo"
+      ]
+    },
+    {
       "id": "minimax-h3-fast-t2v",
       "title": "MiniMax H3 Text to Video + Audio on a 16 GB GPU (FastH3 V2, 8 steps)",
       "capability": "t2v",

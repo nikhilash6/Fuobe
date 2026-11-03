@@ -172,7 +172,7 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
     const core = new Set();
     const byPack = {};
     for (const n of wf.customNodes) byPack[n.name] ??= new Set();
-    for (const cls of new Set(Object.values(graph).map((n) => n.class_type))) {
+    for (const cls of new Set([...Object.values(graph).map((n) => n.class_type), ...(wf.runtimeNodes ?? [])])) {
       const owner = ownerOf(cls, wf);
       if (!owner) continue;
       if (owner === 'core') core.add(cls);

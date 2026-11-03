@@ -614,9 +614,9 @@ const open: ModelDef[] = [
   }),
 
   // ---------------- Video
-  // MiniMax H3: text, image and start + end frame to video with its own sound, on the fl2va model. Fast runs larryvrh's
-  // turbo v4 LoRA (8 steps) with SLA attention; Best (params.extra.quality) runs the 20-step graph without them
-  // (resolveWorkflowId). The prompt is wrapped in H3's own layout on the server (promptFormat; src/lib/h3-prompt.ts), and
+  // MiniMax H3: text, image and start + end frame to video with its own sound, on the fl2va model. Standard runs larryvrh's
+  // turbo v4 LoRA (8 steps) with SLA attention; Sharper ("best", params.extra.quality) runs the 20-step graph without them,
+  // Pika Flex ("flex") Pika's post-trained adapter in 6 steps (resolveWorkflowId). References (ref2v) run Pika H3 Flex Ref2VA. The prompt is wrapped in H3's own layout on the server (promptFormat; src/lib/h3-prompt.ts), and
   // the canvas and frame count follow H3's grid (the provider). The graphs are not validated yet (validated: false).
   o({
     id: "oss-minimax-h3",
@@ -630,6 +630,10 @@ const open: ModelDef[] = [
       comfy("t2v", "minimax-h3-t2v", "turbo v4 LoRA, 8 steps"),
       comfy("i2v", "minimax-h3-i2v", "turbo v4 LoRA, 8 steps; the clip takes the start frame's shape"),
       comfy("flf2v", "minimax-h3-flf2v", "turbo v4 LoRA, 8 steps; the clip takes the start frame's shape"),
+      // References (Pika H3 Flex Ref2VA, 6 steps): up to 9 images, 3 clips and 3 voice or music clips, cited in order.
+      comfy("ref2v", "minimax-h3-flex-ref2va", "Pika H3 Flex, 6 steps: up to 9 images, 3 clips and 3 voice or music clips"),
+      // Talk from a voice clip (Lipsync & avatars, Fuobe Speak): one image + the voice as references; a new clip, not a re-sync.
+      comfy("avatar", "minimax-h3-flex-ref2va", "Talk from a voice clip: a new clip of the portrait speaking with this voice (2-15 s), not a re-sync of existing footage"),
     ],
     options: {
       aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"],
@@ -639,13 +643,19 @@ const open: ModelDef[] = [
       endFrame: true,
       audio: "always",
       promptFormat: "minimax-h3",
+      // References mode (Pika H3 Flex Ref2VA): Pika's limits, 12 files in all (src/lib/h3-references.ts).
+      maxImages: 9,
+      maxVideos: 3,
+      maxAudios: 3,
       controls: [
         {
           param: "quality",
           label: "Quality",
-          values: ["fast", "best"],
+          values: ["fast", "best", "flex"],
           default: "fast",
-          labels: { fast: "Fast · 8 steps", best: "Best · 20 steps, about 2.3x longer" },
+          labels: { fast: "Standard · 8 steps", best: "Sharper · 20 steps, about 2.3x longer", flex: "Fast · Pika Flex (6 steps)" },
+          // References and Talk from a voice clip always run Pika H3 Flex: the chip shows on words and frames only.
+          ops: { fast: ["t2v", "i2v", "flf2v"], best: ["t2v", "i2v", "flf2v"], flex: ["t2v", "i2v", "flf2v"] },
         },
         // On a card under 32 GB the run picks FastH3 V2 or Trim by itself (src/server/h3-gpu.ts); this picks one on any card.
         H3_GPU_TIER,
@@ -654,6 +664,8 @@ const open: ModelDef[] = [
       ],
     },
     defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },
+    engineNote:
+      "Pika H3 Flex (Quality → Fast · Pika Flex, References with images, clips and voice or music clips, and Talk from a voice clip) runs on your GPU only: no cloud service offers it, so the cloud runs MiniMax H3 as hosted, without Flex",
   }),
   o({
     id: "oss-ltx25",

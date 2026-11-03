@@ -596,6 +596,13 @@ export const ATTRIBUTIONS: Attribution[] = [
     licence: "Apache-2.0",
     url: "https://github.com/OpenMOSS/MOSS-Image",
   },
+  {
+    for: "the Pika H3 Flex modes of MiniMax H3 on your GPU (Fast · Pika Flex, References, Talk from a voice clip)",
+    text: "Pika H3 Flex FL2VA and Ref2VA adapters, copyright © 2026 Mellis, Inc.",
+    licence: "MiniMax H3 Community License",
+    url: "https://huggingface.co/Pika-Labs/Pika-H3-Flex",
+    note: "Model Derivatives of MiniMax H3 (copyright © 2026 MiniMax). Pika's NOTICE and LICENSE stay with the files; Pika's example code is Apache-2.0.",
+  },
 ];
 
 /** The parts of a LoRA's licence snapshot the class needs (src/lib/catalog/types.ts LoraLicence). */
