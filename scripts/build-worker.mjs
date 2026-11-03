@@ -6,13 +6,15 @@
 //     studio can't add to it; a worker refuses a graph with any other node;
 //   - input-rules.json: a rule for each node input that could name a file, a folder, a download or code, from the
 //     catalog's own values (scripts/lib/worker-catalog.mjs). A worker refuses a value outside its rule, and a link
-//     into it.
+//     into it;
+//   - file-pins.json: the SHA-256 of every model file the catalog names. A worker reports a file only when its own
+//     hash matches.
 // `pnpm build` runs it first. No new dependency.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { allowedNodeList, inputRules, missingRules, readCatalog } from "./lib/worker-catalog.mjs";
+import { allowedNodeList, filePins, inputRules, missingRules, readCatalog } from "./lib/worker-catalog.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "bin/lib/worker/dist");
@@ -38,5 +40,7 @@ const rules = inputRules(catalog);
 const missing = missingRules(rules, nodes);
 if (missing.length) throw new Error(`These allowed inputs have no rule: ${missing.join(", ")}. Give each a literal value in the catalog.`);
 write("input-rules.json", rules);
+const pins = filePins(catalog);
+write("file-pins.json", { files: pins });
 const ruled = Object.values(rules.inputs).reduce((n, r) => n + Object.keys(r).length, 0);
-console.log(`worker: ${SOURCES.length} modules, ${nodes.length} allowed node types, ${ruled} input rules -> ${path.relative(root, out)}`);
+console.log(`worker: ${SOURCES.length} modules, ${nodes.length} allowed node types, ${ruled} input rules, ${Object.keys(pins).length} file hashes -> ${path.relative(root, out)}`);

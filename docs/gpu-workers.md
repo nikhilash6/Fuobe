@@ -164,6 +164,11 @@ Before its ComfyUI gets a graph, the worker checks all of these. The studio cann
 5. Every model file that the graph names is one that the worker verified, by its exact name. A file with the same
    name in another folder does not count.
 
+The worker reports a model file only when its SHA-256 matches the hash that the catalog pins for it
+(`bin/lib/worker/dist/file-pins.json`, from `requirements.json` and `model-pins.json`). A file that has no pinned hash
+is not reported, so no job that needs it comes to the worker. The worker keeps the hashes it computed, so a restart
+does not read the files again.
+
 After each job, the worker deletes the job's inputs and results from its folders and deletes the prompt from its
 ComfyUI's history. At start, it empties its folders.
 

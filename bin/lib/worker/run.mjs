@@ -40,8 +40,8 @@ export function localPause(control, gpu, comfyTrouble, now) {
 }
 
 /**
- * Run until `signal` aborts. `deps`: { fetch, now, sleep, readGpu, log, home, requirements, ComputerRunner, rules }
- * (rules: the built input rules, read from dist/ when not given).
+ * Run until `signal` aborts. `deps`: { fetch, now, sleep, readGpu, log, home, requirements, ComputerRunner, rules, pins }
+ * (rules and pins: the built input rules and file hashes, read from dist/ when not given).
  */
 export async function runWorker(cfg, deps) {
   const now = deps.now ?? Date.now;
@@ -74,7 +74,7 @@ export async function runWorker(cfg, deps) {
 
   async function scan() {
     packs = packFolders(cfg.comfyDir, index);
-    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json")), nodePacks: packs.map(({ name, commit }) => ({ name, commit })) };
+    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json"), deps.pins), nodePacks: packs.map(({ name, commit }) => ({ name, commit })) };
     invHash = inventoryHash(inv);
   }
   await scan();

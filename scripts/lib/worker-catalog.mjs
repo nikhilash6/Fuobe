@@ -4,13 +4,14 @@
 //   - allowedNodes: every node type the catalog's workflows and the graph builders use.
 //   - inputRules: a rule for each node input that could name a file, a folder, a download or code, taken from the
 //     catalog's own values. The worker refuses a value outside its rule, and a link from another node into it.
+//   - filePins: the SHA-256 of every model file the catalog names, from requirements.json and model-pins.json.
 import fs from "node:fs";
 import path from "node:path";
 import { loaderInput, MODEL_EXT, pathNamed, TEXT_NAME, valueProblem } from "../../bin/lib/worker/rules.mjs";
 
 const SKIP = new Set(["requirements.json", "manifest.json", "model-pins.json"]);
 
-/** The catalog: its workflow graphs by file name, its manifest and its requirement index. */
+/** The catalog: its workflow graphs by file name, its manifest, its requirement index and its model pins. */
 export function readCatalog(root) {
   const dir = path.join(root, "workflows/comfyui");
   const read = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
@@ -21,7 +22,8 @@ export function readCatalog(root) {
       graphs[f] = read(f);
     } catch {}
   }
-  return { graphs, manifest: read("manifest.json"), requirements: read("requirements.json") };
+  const pinsFile = path.join(dir, "model-pins.json");
+  return { graphs, manifest: read("manifest.json"), requirements: read("requirements.json"), pins: fs.existsSync(pinsFile) ? read("model-pins.json") : {} };
 }
 
 const nodesOf = (graph) => Object.entries(graph ?? {}).filter(([, n]) => n && typeof n === "object" && typeof n.class_type === "string");
@@ -185,3 +187,13 @@ export function missingRules(rules, allowed) {
   return REQUIRED_RULES.filter(([cls, input]) => allowed.includes(cls) && !rules.inputs[cls]?.[input]).map(([cls, input]) => `${cls}.${input}`);
 }
 
+/** The SHA-256 of every model file the catalog names ("folder/file" → hex), from its index or its model pins. */
+export function filePins(catalog) {
+  const pins = catalog.pins ?? {};
+  const out = {};
+  for (const f of Object.values(catalog.requirements.files ?? {})) {
+    const sha = f.sha256 ?? pins[f.url]?.sha256 ?? pins[f.pinnedUrl]?.sha256;
+    if (typeof sha === "string" && /^[0-9a-f]{64}$/.test(sha)) out[`${f.folder}/${f.file}`] = sha;
+  }
+  return Object.fromEntries(Object.keys(out).sort().map((k) => [k, out[k]]));
+}

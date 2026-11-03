@@ -1,11 +1,23 @@
 // What this worker has (docs/gpu-workers.md): the model files in its model folders that the studio's catalog names,
-// each checked by folder, name and exact size, and by SHA-256 where the catalog pins one; and its ComfyUI's node packs
-// with their commits. Hashes are cached by path, size and modified time, so a restart doesn't read hundreds of GB again.
+// each checked by folder, name, exact size and SHA-256 (every file the catalog names has its hash pinned in the
+// worker's build: dist/file-pins.json); and its ComfyUI's node packs with their commits. Hashes are cached by path,
+// size and modified time, so a restart doesn't read hundreds of GB again.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const KINDS = /\.(safetensors|gguf)$/i;
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+/** The SHA-256 of every model file the catalog names ("folder/file" → hex), built into this worker. */
+export function filePins(file = path.join(here, "dist", "file-pins.json")) {
+  try {
+    const p = JSON.parse(fs.readFileSync(file, "utf8")).files;
+    return p && typeof p === "object" ? p : {};
+  } catch {
+    return {};
+  }
+}
 
 function sha256File(file) {
   return new Promise((resolve, reject) => {
@@ -60,9 +72,10 @@ function gitCommit(dir) {
 
 /**
  * The verified files: for every file the catalog names, found in one of the model folders under its folder with the
- * exact size (and the pinned SHA-256, when there is one). A file of the wrong size isn't reported at all.
+ * exact size and its pinned SHA-256 (`pins`, else the index's own). A file with no pinned hash, of the wrong size or
+ * with another hash isn't reported at all, so no job that needs it comes here.
  */
-export async function modelFiles(modelDirs, index, cacheFile) {
+export async function modelFiles(modelDirs, index, cacheFile, pins = filePins()) {
   const cache = (() => {
     try {
       return JSON.parse(fs.readFileSync(cacheFile, "utf8"));
@@ -72,7 +85,8 @@ export async function modelFiles(modelDirs, index, cacheFile) {
   })();
   const out = [];
   for (const f of Object.values(index.files ?? {})) {
-    if (!KINDS.test(f.file) && !(f.sha256 && /\.pth$/i.test(f.file))) continue;
+    const want = pins[`${f.folder}/${f.file}`] ?? f.sha256;
+    if (typeof want !== "string" || !/^[0-9a-f]{64}$/.test(want)) continue;
     for (const root of modelDirs ?? []) {
       const p = path.join(root, f.folder, f.file);
       let st;
@@ -82,12 +96,9 @@ export async function modelFiles(modelDirs, index, cacheFile) {
         continue;
       }
       if (!st.isFile() || st.size !== f.sizeBytes) continue;
-      let sha = null;
-      if (f.sha256) {
-        const key = `${p}|${st.size}|${st.mtimeMs}`;
-        sha = cache[key] ?? (cache[key] = await sha256File(p));
-        if (sha !== f.sha256) continue;
-      }
+      const key = `${p}|${st.size}|${st.mtimeMs}`;
+      const sha = cache[key] ?? (cache[key] = await sha256File(p));
+      if (sha !== want) continue;
       out.push({ folder: f.folder, name: f.file, size: st.size, sha256: sha });
       break;
     }

@@ -2,7 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { graphCheck, vetGraph } from "../bin/lib/worker/checks.mjs";
 import { loaderInput, pathProblem } from "../bin/lib/worker/rules.mjs";
-import { allowedNodeList, inputRules, missingRules, readCatalog } from "../scripts/lib/worker-catalog.mjs";
+import { allowedNodeList, filePins, inputRules, missingRules, readCatalog } from "../scripts/lib/worker-catalog.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 process.env.FUOBE_DATA_DIR = tempDir("fuobe-worker-rules-");
@@ -16,6 +16,7 @@ const catalog = readCatalog(root) as unknown as {
   graphs: Record<string, Graph>;
   manifest: { workflows: { id: string; file: string }[] };
   requirements: { files: Record<string, { folder: string; file: string }> };
+  pins: Record<string, unknown>;
 };
 const rules = inputRules(catalog);
 const allowed = new Set(allowedNodeList(root, catalog));
@@ -152,6 +153,13 @@ describe("the worker's input rules", () => {
     const text = "Scene 2: 50% off, wait.. C:/ isn't a path here ~ http://x";
     expect(check({ "1": { class_type: "CLIPTextEncode", inputs: { text, clip: ["2", 0] } } })).toBeNull();
     expect(check({ "1": { class_type: "StringConcatenate", inputs: { string_a: text, string_b: text, delimiter: "" } } })).toBeNull();
+  });
+
+  it("pins a SHA-256 for nearly every model file the catalog names", () => {
+    const pins = filePins(catalog);
+    const all = Object.keys(catalog.requirements.files);
+    expect(Object.keys(pins).length / all.length).toBeGreaterThan(0.9);
+    for (const sha of Object.values(pins)) expect(sha).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 

@@ -1,13 +1,16 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { inputRules } from "../bin/lib/worker/checks.mjs";
 import { comfyArgs, comfyEnv, OFFLINE_ENV, OwnComfy } from "../bin/lib/worker/comfy.mjs";
-import { nodePacks, packFolders } from "../bin/lib/worker/inventory.mjs";
+import { modelFiles, nodePacks, packFolders } from "../bin/lib/worker/inventory.mjs";
 import { minVramBytesFor, needsOf, VRAM_TOLERANCE } from "@/lib/lanes";
 import type { RequirementIndex } from "@/lib/gpu/types";
 import { tempDir } from "./helpers/temp-dir";
+
+const sha = (data: string) => crypto.createHash("sha256").update(data).digest("hex");
 
 /** A port nothing listens on (the system picks it). */
 const freePort = () =>
@@ -37,6 +40,35 @@ describe("the worker's node packs", () => {
     expect(nodePacks(comfyDir, index).map((p) => p.name).sort()).toEqual(["ComfyUI-QwenASR", "ComfyUI-RMBG", "ComfyUI-VideoHelperSuite"]);
     const args = comfyArgs({ port: 8190, workDir: "/w" }, found.map((p) => p.folder));
     expect(args.slice(args.indexOf("--whitelist-custom-nodes") + 1)).toEqual(["ComfyUI-QwenASR", "comfyui-rmbg", "comfyui-videohelpersuite"]);
+  });
+});
+
+describe("the worker's model files", () => {
+  it("reports a file only when its SHA-256 matches the pinned one, whatever its size says", async () => {
+    const models = tempDir("fuobe-worker-models-");
+    fs.mkdirSync(path.join(models, "loras"));
+    fs.mkdirSync(path.join(models, "vae"));
+    fs.writeFileSync(path.join(models, "loras", "good.safetensors"), "hello");
+    fs.writeFileSync(path.join(models, "loras", "swapped.safetensors"), "jello");
+    fs.writeFileSync(path.join(models, "loras", "unpinned.safetensors"), "hello");
+    fs.writeFileSync(path.join(models, "vae", "net.pth"), "weights");
+    const index = {
+      files: {
+        a: { folder: "loras", file: "good.safetensors", sizeBytes: 5 },
+        b: { folder: "loras", file: "swapped.safetensors", sizeBytes: 5 },
+        c: { folder: "loras", file: "unpinned.safetensors", sizeBytes: 5 },
+        d: { folder: "vae", file: "net.pth", sizeBytes: 7, sha256: sha("weights") },
+      },
+    };
+    const pins = { "loras/good.safetensors": sha("hello"), "loras/swapped.safetensors": sha("hello") };
+    const cache = path.join(models, "hash-cache.json");
+    const found = await modelFiles([models], index, cache, pins);
+    expect(found).toEqual([
+      { folder: "loras", name: "good.safetensors", size: 5, sha256: sha("hello") },
+      { folder: "vae", name: "net.pth", size: 7, sha256: sha("weights") },
+    ]);
+    // The hashes are kept, so the next start reads nothing again.
+    expect(Object.keys(JSON.parse(fs.readFileSync(cache, "utf8")))).toHaveLength(3);
   });
 });
 
