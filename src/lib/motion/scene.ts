@@ -78,6 +78,8 @@ export interface Scene {
   name: string;
   durations: { min: number; max: number; default: number };
   sizes: SizeSpec[];
+  /** The type pairing its words are set in (scenes built on the poster kit). */
+  pairing?: string;
   plan(input: SceneInput): ScenePlan;
 }
 

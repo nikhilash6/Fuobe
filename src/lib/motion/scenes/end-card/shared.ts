@@ -7,7 +7,7 @@
  * layout's pieces. Through the hold a slow push-in keeps the card alive and comes to rest on the last frame.
  */
 
-import { contrast, luminance, readableOn, themeFrom, type AdTheme } from "@/components/ads/layout";
+import { contrast, fontString, luminance, readableOn, themeFrom, type AdTheme } from "@/components/ads/layout";
 import { about, group, mixHex, multiply, translate, type DisplayList, type DisplayNode, type Matrix, type TextNode, type TextRun } from "../../display";
 import { curve } from "../../ease";
 import { layoutText, type Measure, type TextLayout } from "../../layout";
@@ -25,7 +25,7 @@ export type EndCardVariant = (typeof END_CARD_VARIANTS)[number];
 export const END_CARD_VARIANT_NAMES: Record<EndCardVariant, string> = { "draw-on": "Draw-on", rise: "Rise", iris: "Iris", split: "Split", glint: "Glint" };
 
 /** The card's lengths (seconds), as Click to Ad's end card allows. */
-export const END_CARD_DURATIONS = { min: 2, max: 3, default: 2.5 } as const;
+export const END_CARD_DURATIONS = { min: 2, max: 5, default: 2.5 } as const;
 
 export interface EndCardContent {
   /** Shown when there is no logo. */
@@ -96,17 +96,21 @@ export function endCardRest(p: { theme: AdTheme; content: EndCardContent; logo: 
   const inner = Math.min(W - 2 * m, Math.round(S * 1.1));
   const { ink, pill, label: labelColour } = cardColours(t, p.colors ?? []);
   const gap = V * 0.04;
-  const logoH = V * 0.15;
+  // The mark is the hero: the logo as wide as the margins allow (up to a fifth of the height), or the name huge.
+  const logoH = V * 0.2;
   const letters = p.letters ?? true;
   const brandText = p.content.brand.trim();
-  const name = !p.logo && brandText ? layoutText({ text: brandText, family: t.heading, weight: 800, width: inner, maxLines: 2, max: S * 0.1, min: S * 0.06, lineHeight: 1.05, letters }, p.measure) : null;
-  const head = layoutText({ text: p.content.product, family: t.heading, weight: 700, width: inner, maxLines: 2, max: S * 0.068, min: S * 0.045, letters }, p.measure);
-  const ctaSize = S * 0.045;
+  // One line where it fits (a name is never broken for size), two only when it must.
+  const name1 = !p.logo && brandText ? layoutText({ text: brandText, family: t.heading, weight: 800, width: inner, maxLines: 1, max: S * 0.16, min: S * 0.07, lineHeight: 1.05, letters }, p.measure) : null;
+  const name = name1 && name1.overflow ? layoutText({ text: brandText, family: t.heading, weight: 800, width: inner, maxLines: 2, max: S * 0.16, min: S * 0.06, lineHeight: 1.05, letters }, p.measure) : name1;
+  // The product's line about half the mark's size, the call to action a hairline-outlined tag about half of that.
+  const head = layoutText({ text: p.content.product, family: t.heading, weight: 600, width: inner, maxLines: 2, max: S * 0.066, min: S * 0.04, letters }, p.measure);
+  const ctaSize = S * 0.036;
   const ctaText = p.content.cta?.trim();
-  const label = ctaText ? layoutText({ text: ctaText, family: t.body, weight: 700, width: inner - ctaSize * 2.4, maxLines: 1, max: ctaSize, min: S * 0.03 }, p.measure) : null;
+  const label = ctaText ? layoutText({ text: ctaText, family: t.body, weight: 600, width: inner - ctaSize * 2.4, maxLines: 1, max: ctaSize, min: S * 0.026 }, p.measure) : null;
   const siteText = p.content.website?.trim();
-  const site = siteText ? layoutText({ text: siteText, family: t.body, weight: 500, width: inner, maxLines: 1, max: S * 0.032, min: S * 0.024 }, p.measure) : null;
-  const ctaH = label ? label.size * 2.3 : 0;
+  const site = siteText ? layoutText({ text: siteText, family: t.body, weight: 500, width: inner, maxLines: 1, max: S * 0.028, min: S * 0.022 }, p.measure) : null;
+  const ctaH = label ? label.size * 2.2 : 0;
   const top = p.logo ? logoH : name ? name.lines.length * name.size * 1.05 : 0;
   const headH = head.lines.length * head.size * 1.12;
   const siteH = site ? site.size * 1.12 : 0;
@@ -143,7 +147,9 @@ export function endCardRest(p: { theme: AdTheme; content: EndCardContent; logo: 
     y += gap * 1.4;
     const bw = Math.min(inner, label.width + label.size * 2.4);
     const bx = (W - bw) / 2;
-    cta = { x: bx, y, w: bw, h: ctaH, r: ctaH / 2, color: pill, label: { field: "cta", layout: label, cx: bx + bw / 2, y: y + (ctaH - label.size * 1.12) / 2, color: labelColour } };
+    // A hairline-outlined tag in the words' colour, its label in the same colour on the brand colour.
+    void labelColour;
+    cta = { x: bx, y, w: bw, h: ctaH, r: ctaH / 2, color: pill, label: { field: "cta", layout: label, cx: bx + bw / 2, y: y + (ctaH - label.size * 1.12) / 2, color: ink } };
     y += ctaH;
   }
   const siteBlock: TextBlock | undefined = site ? { field: "website", layout: site, cx: W / 2, y: y + (above ? siteGap : 0), color: ink } : undefined;
@@ -242,7 +248,8 @@ export function letterRuns(b: TextBlock, each: (letter: number, count: number) =
 /** The logo as drawn at rest. */
 export const logoImage = (r: NonNullable<EndCardRest["logo"]>, opacity = 1): DisplayNode => ({ type: "image", id: "logo", src: "logo", x: r.x, y: r.y, w: r.w, h: r.h, ...(opacity < 1 && { opacity }) });
 
-export const pillRect = (c: NonNullable<EndCardRest["cta"]>): DisplayNode => ({ type: "rect", id: "cta.pill", x: c.x, y: c.y, w: c.w, h: c.h, r: c.r, fill: c.color });
+/** The call to action's tag: a hairline outline in the words' colour (never a heavy web button). */
+export const pillRect = (c: NonNullable<EndCardRest["cta"]>): DisplayNode => ({ type: "rect", id: "cta.pill", x: c.x, y: c.y, w: c.w, h: c.h, r: c.r, fill: "rgba(0,0,0,0)", stroke: { paint: c.color, width: Math.max(1.5, c.h * 0.035) } });
 
 /** The card at rest: what the still card draws, in the same order. */
 export function restNodes(r: EndCardRest): DisplayNode[] {
@@ -253,6 +260,54 @@ export function restNodes(r: EndCardRest): DisplayNode[] {
   if (r.cta) nodes.push(pillRect(r.cta), lineRuns(r.cta.label));
   if (r.site) nodes.push(lineRuns(r.site));
   return nodes;
+}
+
+/**
+ * The light the card sits in (the still card draws it too): a soft pool of light high in the middle, the corners
+ * falling away into a deeper shade of the brand colour, a faint glow behind the mark, fine rings opening from one
+ * corner and a fine grain, so the ground is never a flat fill. Behind it the brand's name runs in rows of giant
+ * tonal type cropped by the edges, and a hairline frame sits inside the margin. Every piece is a gradient, a hairline or
+ * a faint tone: the words' colours read on the brand colour as before.
+ */
+export function cardField(r: EndCardRest, seed = 7, name = "", drift = 0): DisplayNode[] {
+  const { w, h } = r;
+  const S = Math.min(w, h);
+  const a = r.theme.accent;
+  const dark = luminance(a) < 0.18;
+  const light = mixHex(a, "#ffffff", dark ? 0.16 : 0.22);
+  const deep = mixHex(a, "#000000", dark ? 0.55 : 0.32);
+  const mark = markBox(r);
+  const mx = mark ? mark.x + mark.w / 2 : w / 2;
+  const my = mark ? mark.y + mark.h / 2 : h * 0.4;
+  const rgba = (hex: string, al: number) => `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${al})`;
+  const rows: DisplayNode[] = [];
+  const word = name.trim();
+  if (word) {
+    // One whole word, filled a step lighter than the brand colour (never a hairline), wider than the card's middle and
+    // centred, standing on the bottom edge so the edge crops its foot (every letter shows whole across); it drifts by
+    // `drift` (design units) while the card plays and sits centred at rest. Its width is estimated from its length
+    // (it is decoration: only roughly centred).
+    const unit = Math.max(1, [...word].length * 48);
+    const foot = r.site ? r.site.y + r.site.layout.height : r.cta ? r.cta.y + r.cta.h : r.headline.y + r.headline.layout.height;
+    // Whole: the word is sized to stand in the room under the stack with only the foot of its letters cropped (accents
+    // and all), never a cut-off fragment.
+    const size = Math.min(S * 0.6, ((w * 0.86) / unit) * 100, Math.max(S * 0.12, (h - foot - S * 0.06) / 0.92));
+    const font = fontString(r.theme.heading, size, 700);
+    const y0 = Math.max(foot + S * 0.06, h - size * 0.92);
+    const width = (unit * size) / 100;
+    const tone = mixHex(a, dark ? "#ffffff" : "#000000", dark ? 0.05 : 0.045);
+    const runs: TextRun[] = [{ text: word, gap: "", font, x: (w - width) / 2 + drift, y: y0, fill: tone }];
+    rows.push({ type: "text", field: "brand", runs, decor: true });
+  }
+  // A warm orb of the words' own colour behind the mark: one light source the card is lit by.
+  const orb = Math.max(S * 0.5, Math.min(w, h) * 0.7);
+  return [
+    { type: "rect", id: "card.light", x: 0, y: 0, w, h, fill: { kind: "radial", cx: w / 2, cy: h * 0.28, r0: 0, r1: Math.hypot(w, h) * 0.55, stops: [{ at: 0, color: rgba(light, 0.85) }, { at: 0.55, color: rgba(light, 0.18) }, { at: 1, color: rgba(light, 0) }] } },
+    { type: "rect", id: "card.corners", x: 0, y: 0, w, h, fill: { kind: "radial", cx: w / 2, cy: h * 0.45, r0: S * 0.4, r1: Math.hypot(w, h) * 0.62, stops: [{ at: 0, color: rgba(deep, 0) }, { at: 1, color: rgba(deep, 0.8) }] } },
+    { type: "rect", id: "card.glow", x: mx - orb, y: my - orb, w: orb * 2, h: orb * 2, fill: { kind: "radial", cx: mx, cy: my, r0: 0, r1: orb, stops: [{ at: 0, color: rgba(mixHex(r.ink, "#ffb46b", 0.25), 0.26) }, { at: 0.4, color: rgba(r.ink, 0.1) }, { at: 1, color: rgba(r.ink, 0) }] } },
+    ...rows,
+    { type: "grain", seed, frame: 0, amount: dark ? 0.035 : 0.045, size: 1.25, blend: dark ? "screen" : "overlay", x: 0, y: 0, w, h },
+  ];
 }
 
 /** The mark at the top of the block: the logo, else the brand's name, else nothing. */
@@ -322,6 +377,10 @@ export interface StyleFrame {
 
 export interface StyleBuild {
   cues: Cue[];
+  /** What this style leaves on the card at rest (its own mark of difference), drawn from when it settles. */
+  keep?: DisplayNode[];
+  /** Whether a band of light crosses the mark once the card has settled (default on). */
+  sweep?: boolean;
   /**
    * How far (seconds, on a 2.5 s card) the card is already into its motion on its first frame: the cut from the ad
    * lands on movement, never on an empty frame.
@@ -387,10 +446,34 @@ export function endCardScene(variant: EndCardVariant, build: (c: StyleContext) =
       };
       const cx = design.w / 2;
       const cy = design.h / 2;
+      const field = cardField(rest, input.recipe.seed, content.brand);
+      // The hollow name drifts across while the card moves, home by the time it settles.
+      const S0 = Math.min(design.w, design.h);
+      const fieldAt = (t: number) => {
+        const u = settled > 0 ? Math.min(1, t / settled) : 1;
+        const dx = -S0 * 0.12 * (1 - u) ** 2;
+        return Math.abs(dx) < 0.05 ? field : cardField(rest, input.recipe.seed, content.brand, dx);
+      };
+      const keep = style.keep ?? [];
       const homeExtra = extra?.(last, last, design.w);
       const homeMoved = !!homeExtra && (homeExtra.zoom !== 1 || homeExtra.x !== 0 || homeExtra.y !== 0 || homeExtra.roll !== 0);
-      const restList: DisplayList = { w: design.w, h: design.h, background: theme.accent, nodes: homeMoved ? [group(restNodes(rest), { id: "camera", transform: multiply(translate(homeExtra.x, homeExtra.y), about(cx, cy, homeExtra.zoom, homeExtra.roll)) })] : restNodes(rest) };
+      const restList: DisplayList = { w: design.w, h: design.h, background: theme.accent, nodes: [...field, ...keep, ...(homeMoved ? [group(restNodes(rest), { id: "camera", transform: multiply(translate(homeExtra.x, homeExtra.y), about(cx, cy, homeExtra.zoom, homeExtra.roll)) })] : restNodes(rest))] };
       const still = graded(restList, last);
+      // One band of light across the mark after it settles.
+      const markB = markBox(rest);
+      const sweepFrom = settled + 0.05;
+      const sweepDur = Math.min(0.7, Math.max(0, last - 0.05 - sweepFrom));
+      const sweepOn = style.sweep !== false && !!markB && sweepDur > 0.25;
+      const swept = (t: number, nodes: DisplayNode[]): DisplayNode[] => {
+        if (!sweepOn || !markB || t < sweepFrom || t >= sweepFrom + sweepDur) return nodes;
+        const u = curve("move")((t - sweepFrom) / sweepDur);
+        const bw = Math.max(markB.h * 0.6, markB.w * 0.18);
+        const x = markB.x - bw + (markB.w + 2 * bw) * u;
+        const pad = 4;
+        const band: DisplayNode = { type: "rect", x: x - bw / 2, y: markB.y - markB.h, w: bw, h: markB.h * 3, fill: { kind: "linear", x0: x - bw / 2, y0: 0, x1: x + bw / 2, y1: 0, stops: [{ at: 0, color: "rgba(255,255,255,0)" }, { at: 0.5, color: "rgba(255,255,255,0.6)" }, { at: 1, color: "rgba(255,255,255,0)" }] } };
+        const lit = group([...markNodes(rest).map((n): DisplayNode => (n.type === "text" || n.type === "image" ? { ...n, decor: true } : n)), group([band], { blend: "source-atop", transform: [1, 0, -0.3, 1, (markB.y + markB.h / 2) * 0.3, 0] })], { id: "sweep", isolate: { x: markB.x - pad, y: markB.y - pad, w: markB.w + 2 * pad, h: markB.h + 2 * pad } });
+        return [...nodes, lit];
+      };
       const drift = curve("drift");
       const camera = (t: number, nodes: DisplayNode[]): DisplayNode[] => {
         const tc = clock ? clock(t) : t;
@@ -412,9 +495,9 @@ export function endCardScene(variant: EndCardVariant, build: (c: StyleContext) =
         overflow: rest.overflow,
         evaluate: (t) => {
           if (t >= last) return still;
-          if (t >= settled) return graded({ ...restList, nodes: camera(t, restNodes(rest)) }, t);
+          if (t >= settled) return graded({ ...restList, nodes: [...fieldAt(t), ...keep, ...camera(t, swept(t, restNodes(rest)))] }, t);
           const f = style.frame(t, tl);
-          return graded({ w: design.w, h: design.h, background: style.background ?? theme.accent, nodes: [...(f.under ?? []), ...camera(t, f.nodes), ...(f.over ?? [])] }, t);
+          return graded({ w: design.w, h: design.h, background: style.background ?? theme.accent, nodes: [...(f.under ?? []), ...fieldAt(t), ...camera(t, f.nodes), ...(f.over ?? [])] }, t);
         },
         still: (t) => t >= last,
       };
@@ -438,4 +521,72 @@ export function wipe(children: DisplayNode[], box: { x: number; y: number; w: nu
   return group(children, {
     mask: { kind: "linear", x0: edge - feather, y0: 0, x1: edge, y1: 0, stops: [{ at: 0, color: "rgba(0,0,0,1)" }, { at: 1, color: "rgba(0,0,0,0)" }], bounds: { x: box.x - feather, y: box.y - feather, w: box.w + 2 * feather, h: box.h + 2 * feather } },
   });
+}
+
+/** A colour at an alpha (hex in), for the details below. */
+const tint = (hex: string, a: number) => `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+
+
+/**
+ * What each style leaves on the card at rest, so the five end on five different cards: Draw-on its drawn corners,
+ * Rise a rule under the name, Iris a soft ring round the mark, Split a seam of light down the middle, Glint a star of
+ * light on the mark. Hairlines and light only: the words read as before.
+ */
+export function keepFor(variant: EndCardVariant, r: EndCardRest): DisplayNode[] {
+  const S = Math.min(r.w, r.h);
+  const hair = Math.max(1, S * 0.0022);
+  const mark = markBox(r);
+  const ink = r.ink.startsWith("#") && r.ink.length === 7 ? r.ink : "#ffffff";
+  switch (variant) {
+    case "draw-on": {
+      // Two fine rules flanking the product's name (a jeweller's label), clear of its letters.
+      const b = r.headline;
+      if (!b.layout.lines.length) return [];
+      const y = b.y + b.layout.lineHeight / 2;
+      const half = b.layout.width / 2;
+      const gap = S * 0.035;
+      const L = Math.min(S * 0.09, Math.max(0, r.w / 2 - half - gap - r.margin));
+      if (L < S * 0.03) return [];
+      const d = `M${b.cx - half - gap - L} ${y}H${b.cx - half - gap}M${b.cx + half + gap} ${y}H${b.cx + half + gap + L}`;
+      return [{ type: "path", id: "keep.rules", d, stroke: { paint: tint(ink, 0.75), width: hair, cap: "butt" } }];
+    }
+    case "rise": {
+      const b = r.headline;
+      const y = b.y + b.layout.height + S * 0.025;
+      const w = Math.max(S * 0.3, b.layout.width * 0.7);
+      return [{ type: "rect", id: "keep.rule", x: b.cx - w / 2, y, w, h: hair, fill: tint(ink, 0.8) }];
+    }
+    case "iris": {
+      if (!mark) return [];
+      const cx = mark.x + mark.w / 2;
+      const cy = mark.y + mark.h / 2;
+      // A fine oval round the mark alone: it clears every other line of words by 24 units or more and stays inside the
+      // frame (never through the product's name, the tag or the address).
+      const below = r.headline.layout.lines.length ? r.headline.y : r.cta ? r.cta.y : r.h - r.margin;
+      const room = Math.max(0, below - S * 0.022 - cy);
+      const rx = Math.min(r.w / 2 - S * 0.03, mark.w / 2 + S * 0.06);
+      const ry = Math.min(room, Math.max(mark.h / 2 + S * 0.03, rx * 0.36));
+      if (ry < mark.h / 2 + S * 0.012) return [];
+      return [{ type: "ellipse", id: "keep.ring", cx, cy, rx, ry, stroke: { paint: tint(ink, 0.35), width: Math.max(1.5, hair) } }];
+    }
+    case "split": {
+      // A pair of fine vertical rules either side of the stack, where the panels parted.
+      const top = mark ? mark.y : r.headline.y;
+      const bottom = r.site ? r.site.y + r.site.layout.height : r.cta ? r.cta.y + r.cta.h : r.headline.y + r.headline.layout.height;
+      const x0 = Math.max(r.margin * 0.6, r.w / 2 - r.inner / 2 - S * 0.02);
+      const x1 = r.w - x0;
+      const mid = (top + bottom) / 2;
+      const L = Math.min(S * 0.16, (bottom - top) * 0.5);
+      return [{ type: "path", id: "keep.seams", d: `M${x0} ${mid - L / 2}V${mid + L / 2}M${x1} ${mid - L / 2}V${mid + L / 2}`, stroke: { paint: tint(ink, 0.55), width: hair } }];
+    }
+    case "glint": {
+      if (!mark) return [];
+      // A soft diagonal sheen of warm light behind the mark, where the glint passed (no star).
+      const cx = mark.x + mark.w * 0.62;
+      const cy = mark.y + mark.h / 2;
+      const bw = Math.max(mark.h * 1.4, S * 0.12);
+      const sheen: DisplayNode = { type: "rect", id: "keep.sheen", x: cx - bw / 2, y: cy - mark.h * 0.85, w: bw, h: mark.h * 1.7, fill: { kind: "linear", x0: cx - bw / 2, y0: 0, x1: cx + bw / 2, y1: 0, stops: [{ at: 0, color: "rgba(255,236,200,0)" }, { at: 0.5, color: "rgba(255,236,200,0.14)" }, { at: 1, color: "rgba(255,236,200,0)" }] } };
+      return [group([sheen], { transform: [1, 0, -0.36, 1, cy * 0.36, 0] })];
+    }
+  }
 }

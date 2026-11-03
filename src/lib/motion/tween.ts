@@ -36,11 +36,15 @@ export function stagger(i: number, n: number, each: number, total = Infinity): n
   return i * Math.min(each, total / (n - 1));
 }
 
-/** What a timing rule calls a moving thing (tests/motion-timing.test.ts checks each kind's limits). */
-export type EventKind = "enter" | "pop" | "fade" | "draw" | "move" | "camera" | "exit";
+/**
+ * What a timing rule calls a moving thing (tests/motion-timing.test.ts checks each kind's limits). `hero` is the
+ * entrance of type taller than a quarter of the frame (it may take up to 1 s); `slam` is the short accelerating hit of
+ * a stomp (0.12–0.3 s).
+ */
+export type EventKind = "enter" | "hero" | "slam" | "pop" | "fade" | "draw" | "move" | "camera" | "exit";
 
-/** How a group of events is spaced: words (40–80 ms), elements (80–140 ms) or letters (20–50 ms). */
-export type StaggerUnit = "letters" | "words" | "elements";
+/** How a group of events is spaced: letters (20–50 ms), words (40–80 ms), lines (80–200 ms) or elements (80–140 ms). */
+export type StaggerUnit = "letters" | "words" | "lines" | "elements";
 
 export interface MotionEvent {
   /** Stable name ("headline.line.1", "cta.pill"). */
@@ -94,6 +98,8 @@ export function linearProgress(tl: Timeline, id: string, t: number): number {
 /** Limits per kind, in seconds: an entrance 350–700 ms, nothing that moves under 200 ms. */
 export const DURATION_LIMITS: Record<EventKind, [number, number]> = {
   enter: [0.35, 0.7],
+  hero: [0.35, 1],
+  slam: [0.12, 0.3],
   pop: [0.35, 0.7],
   fade: [0.2, 1.5],
   draw: [0.2, 1.5],
@@ -105,6 +111,7 @@ export const DURATION_LIMITS: Record<EventKind, [number, number]> = {
 export const STAGGER_LIMITS: Record<StaggerUnit, [number, number]> = {
   letters: [0.02, 0.05],
   words: [0.04, 0.08],
+  lines: [0.08, 0.2],
   elements: [0.08, 0.14],
 };
 

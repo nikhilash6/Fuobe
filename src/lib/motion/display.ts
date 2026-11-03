@@ -54,7 +54,15 @@ export interface Stroke {
   join?: CanvasLineJoin;
 }
 
-export type Blend = "source-over" | "multiply" | "screen" | "overlay" | "lighter" | "source-atop";
+export type Blend = "source-over" | "multiply" | "screen" | "overlay" | "lighter" | "source-atop" | "destination-in" | "destination-out" | "soft-light" | "hard-light" | "color-dodge";
+
+/** A box in design units (or, for an image's crop, in shares 0–1 of the picture). */
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 /** What a group is clipped to: a (rounded) rectangle, an ellipse, or a closed path (path data in design units). */
 export type ClipShape = { type: "rect"; x: number; y: number; w: number; h: number; r?: number } | { type: "ellipse"; cx: number; cy: number; rx: number; ry: number } | { type: "path"; d: string };
@@ -75,6 +83,18 @@ export interface GroupNode {
   isolate?: { x: number; y: number; w: number; h: number };
   /** A soft wipe: only what lies where the gradient is opaque shows (drawn on its own layer). */
   mask?: Gradient & { bounds: { x: number; y: number; w: number; h: number } };
+  /**
+   * A blur in design units (a CSS blur's radius) on its own layer: the browser's gaussian where the canvas filters,
+   * else Fuobe's step-down blur (halved, then scaled back up), so it works in every browser. Glows, soft shadows,
+   * depth of field and blur-ins use it, on cached groups, so it costs once and not every frame.
+   */
+  soften?: number;
+  /**
+   * Drawn once into a bitmap and reused while `key` stays the same (ghost type, glows, extrusions, halftone, shadows):
+   * `bounds` is everything the children draw, in the group's own units (with room for `soften`). The key must change
+   * whenever what the children draw changes; the group's transform and opacity may change freely.
+   */
+  cache?: { key: string; bounds: Box };
   children: DisplayNode[];
 }
 
@@ -127,6 +147,13 @@ export interface TextRun {
   dir?: "ltr" | "rtl";
   opacity?: number;
   transform?: Matrix;
+  /** An outline round the letters (hollow and outline type); with fill "transparent" only the outline is drawn. */
+  stroke?: { paint: Paint; width: number };
+  /**
+   * What is drawn in place of `text` for this frame only (a letter cycling before it locks, in a scramble). `text`
+   * stays the typed letter; at rest nothing is ever swapped.
+   */
+  shown?: string;
 }
 
 export interface TextNode {
@@ -135,6 +162,11 @@ export interface TextNode {
   field: string;
   runs: TextRun[];
   opacity?: number;
+  /**
+   * A decorative copy of the field (a ghost, a glow, an echo, an extrusion, a colour split): never the readable words,
+   * so it may bleed off the frame; checks of readable text skip it.
+   */
+  decor?: boolean;
 }
 
 export interface ImageNode {
@@ -146,7 +178,13 @@ export interface ImageNode {
   y: number;
   w: number;
   h: number;
+  /** The part of the picture drawn, in shares (0–1) of its width and height (all of it when absent). */
+  crop?: Box;
   opacity?: number;
+  /** A photograph laid to the frame's edge as a ground or a panel: it may run under what covers the frame's edges (a tile's chips); words never do. */
+  bleed?: boolean;
+  /** A decorative copy of a picture (a reflection, a duotone ghost): never the picture itself. */
+  decor?: boolean;
   smoothing?: boolean;
 }
 
@@ -164,7 +202,28 @@ export interface VideoNode {
   opacity?: number;
 }
 
-export type DisplayNode = GroupNode | RectNode | EllipseNode | PathNode | TextNode | ImageNode | VideoNode;
+/**
+ * Film grain over a box: seeded mono noise tiles (made once per seed), the tile and its offset picked by `frame`, so a
+ * frame always gets the same grain and neighbouring frames differ. Blended (overlay on light grounds, screen on dark).
+ */
+export interface GrainNode {
+  type: "grain";
+  seed: number;
+  /** Which tile and offset (frames on twos: floor(frame / 2)). */
+  frame: number;
+  /** Alpha of the noise layer (0.03–0.06 reads as film, more as dirt). */
+  amount: number;
+  /** One grain's size in design units (1–1.5 at 1080). */
+  size: number;
+  blend: Blend;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  opacity?: number;
+}
+
+export type DisplayNode = GroupNode | RectNode | EllipseNode | PathNode | TextNode | ImageNode | VideoNode | GrainNode;
 
 export interface DisplayList {
   /** Design size. */
@@ -181,12 +240,16 @@ export const videoNodeOf = (list: DisplayList): VideoNode | undefined => (list.n
 
 export const group = (children: DisplayNode[], o: Omit<GroupNode, "type" | "children"> = {}): GroupNode => ({ type: "group", ...o, children });
 
-/** Every text node in a list, in drawing order (tests read the fields from it). */
-export function textNodes(nodes: readonly DisplayNode[]): TextNode[] {
+/**
+ * Every text node in a list that carries readable words, in drawing order (tests read the fields from it). Decorative
+ * copies (ghosts, glows, echoes) are left out unless `decor` is set.
+ */
+export function textNodes(nodes: readonly DisplayNode[], o: { decor?: boolean } = {}): TextNode[] {
   const out: TextNode[] = [];
   for (const n of nodes) {
-    if (n.type === "text") out.push(n);
-    else if (n.type === "group") out.push(...textNodes(n.children));
+    if (n.type === "text") {
+      if (o.decor || !n.decor) out.push(n);
+    } else if (n.type === "group") out.push(...textNodes(n.children, o));
   }
   return out;
 }

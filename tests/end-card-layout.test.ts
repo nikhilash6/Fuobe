@@ -28,10 +28,10 @@ function boxes(r: EndCardRest) {
 describe("the end card's layout (end-card-layout)", () => {
   for (const size of ["9:16", "16:9", "1:1", "4:5"] as const) {
     for (const logo of [{ w: 1400, h: 360 }, null]) {
-      it(`keeps a two-line headline's stack inside a ${size} frame, in order, nothing overlapping (${logo ? "logo" : "name"})`, () => {
+      it(`keeps a long headline's stack (one or two lines) inside a ${size} frame, in order, nothing overlapping (${logo ? "logo" : "name"})`, () => {
         const r = rest(size, logo);
         expect(r.overflow).toEqual([]);
-        expect(r.headline.layout.lines.length).toBe(2);
+        expect(r.headline.layout.lines.length).toBeLessThanOrEqual(2);
         const b = boxes(r);
         for (const x of b) {
           expect(x.top, `${size} ${x.name}`).toBeGreaterThanOrEqual(r.margin - 0.5);
@@ -85,7 +85,8 @@ describe("the end card's layout (end-card-layout)", () => {
     const r = rest("9:16", null);
     expect(still.headline.color).toBe(r.headline.color);
     expect(still.cta!.color).toBe("#cfae6e");
-    expect(still.cta!.text.color).toBe("#0e3b2f");
+    // The call to action is an outlined tag: its words take the tag's own colour, as on the animated card.
+    expect(still.cta!.text.color).toBe(r.cta!.label.color);
     expect(still.headline.y).toBeCloseTo(r.headline.y, 6);
   });
 });

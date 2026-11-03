@@ -1,5 +1,5 @@
 import { END_CARD } from "@/lib/catalog/marketing";
-import { endCardRest, restNodes, type EndCardContent, type TextBlock } from "@/lib/motion/scenes/end-card/shared";
+import { cardField, endCardRest, restNodes, type EndCardContent, type TextBlock } from "@/lib/motion/scenes/end-card/shared";
 import { designSize } from "@/lib/motion/sizes";
 import type { AdPlan, AdTheme, Measure, TextBox } from "../ads/layout";
 import { ensureFont, loadImage, measureText } from "../ads/render";
@@ -82,7 +82,7 @@ export async function renderEndCard(canvas: HTMLCanvasElement, input: EndCardInp
   const rest = endCardRest({ theme: input.theme, content: input.content, logo: logo ? { w: logo.naturalWidth || 400, h: logo.naturalHeight || 120 } : null, measure: measureText, size, colors: input.colors });
   const images = new Map<string, CanvasImageSource>();
   if (logo) images.set("logo", logo);
-  drawDisplayList(ctx, { w: size.w, h: size.h, background: input.theme.accent, nodes: restNodes(rest) }, { images });
+  drawDisplayList(ctx, { w: size.w, h: size.h, background: input.theme.accent, nodes: [...cardField(rest, 7, input.content.brand), ...restNodes(rest)] }, { images });
 }
 
 /** The full-size card as a PNG, ready to upload. */

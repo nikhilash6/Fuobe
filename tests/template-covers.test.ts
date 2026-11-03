@@ -131,10 +131,10 @@ describe("the template covers manifest", () => {
         lines.push(`  ${JSON.stringify(key)}: ${JSON.stringify(gen.slimEntry(key, { poster: e.poster, ...(e.video && { video: e.video }), ...(e.at && { at: e.at }), ...(e.frames && { frames: e.frames }) }))}`);
       }
     }
-    // The studios' tiles (246, with Keyframes → animation, Outfit lookbook, Music video and Marketing's four code-drawn
+    // The studios' tiles (254, with Keyframes → animation, Outfit lookbook, Music video and Marketing's twelve code-drawn
     // templates), Fuobe Soul's looks (139), AI Influencer's types (9), the empty pages' examples (6) and the studios'
     // ready-made starters with a cover of their own (24).
-    expect(lines).toHaveLength(246 + 139 + 9 + 6 + 24);
+    expect(lines).toHaveLength(254 + 139 + 9 + 6 + 24);
     const text = `{\n${lines.join(",\n")}\n}`;
     expect(text.length).toBeLessThan(37_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);

@@ -8,7 +8,7 @@
 import { luminance } from "@/components/ads/layout";
 import { group, mixHex, roundRectPath, withAlpha, type DisplayNode } from "../../display";
 import { linearProgress, progress, type Cue } from "../../tween";
-import { blockCentre, deepGround, endCardScene, entering, letterRuns, lineRuns, markBox, markNodes, pillRect, wipe } from "./shared";
+import { blockCentre, deepGround, endCardScene, entering, letterRuns, lineRuns, markBox, markNodes, pillRect, wipe, keepFor } from "./shared";
 
 const ANGLE = (20 * Math.PI) / 180;
 
@@ -30,6 +30,8 @@ export default endCardScene("glint", ({ rest }) => {
 
   return {
     cues,
+    keep: keepFor("glint", rest),
+    sweep: false,
     lead: 0.06,
     signature: 0.12,
     background: ground,

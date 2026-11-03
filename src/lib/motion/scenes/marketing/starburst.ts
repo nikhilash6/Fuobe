@@ -1,141 +1,153 @@
 /**
- * Retro Starburst: 24 rays in two kit colours turn slowly behind the product the whole clip long. The product drops in
- * with a squash and a half turn that springs square onto a disc of light, and then sways and floats while it holds,
- * well inside the disc; an optional sticker badge pops on with a tilt where it covers none of the product; and the
- * headline, set big, lands on a full-width band at the foot that slides in at a slight tilt, so it reads on any ray.
- * Without a product the logo (or the name) takes its place.
+ * Retro Starburst: a collage poster. On bright paper, rays in a blush tint of the brand turn steadily round a point
+ * behind the product and a halftone of the brand's colour fades in from the far corner (never under the brand). The
+ * headline pops in word by word as a justified stack in a chunky display face with a solid extruded side in a deep
+ * tone of its own ink. The product drops in front of the words on its own shadow, a squiggle draws under the last
+ * line with one sparkle at its start, and the badge lands as a sticker with a white keyline, a little off true,
+ * wiggling once in the hold. The brand, the address, a corner note and an index arrow sit on the corners.
  */
 
-import { contrast } from "@/components/ads/layout";
-import { about, group, mixHex, multiply, translate, type DisplayNode } from "../../display";
-import { lineRuns } from "../end-card/shared";
-import { badgeSpot, contactShadow, ev, fitBox, heroOf, holdFloat, logoNode, marketingScene, MIN_BODY, MIN_HEAD, readable, risingLines, setText, spread, starPath, textBlock } from "./kit";
+import { group, type DisplayNode } from "../../display";
+import { ensureContrast, mixOk, toLab, withLightness } from "../../color";
+import { extrude, floorShadow } from "../../fx/depth";
+import { halftone, keyline, rotation, squiggle } from "../../fx/overlays";
+import { badgeSpot, fitBox, logoNode, starPath } from "./kit";
+import { brandSign, capBand, fitLines, footRow, litField, metaInk, moveLines, posterScene, signIn, signNodes, stackLanded, toneOf, topSite } from "./poster";
 
-const RAYS = 24;
-
-/** The rays as one path: every other wedge of a full turn, from (cx, cy) out to radius r, turned by `rot`. */
-export function raysPath(cx: number, cy: number, r: number, rot: number, n = RAYS): string {
-  const parts: string[] = [];
-  const step = (Math.PI * 2) / n;
-  for (let i = 0; i < n; i += 2) {
-    const a = rot + i * step;
-    const b = a + step;
-    parts.push(`M${cx.toFixed(1)} ${cy.toFixed(1)}L${(cx + Math.cos(a) * r).toFixed(1)} ${(cy + Math.sin(a) * r).toFixed(1)}L${(cx + Math.cos(b) * r).toFixed(1)} ${(cy + Math.sin(b) * r).toFixed(1)}Z`);
+/** Rays round (cx, cy): `n` wedges out to radius R, turned by `a` radians. */
+function rays(cx: number, cy: number, R: number, n: number, a: number): string {
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const a0 = a + (i * 2 * Math.PI) / n;
+    const a1 = a0 + Math.PI / n;
+    d += `M${cx.toFixed(1)} ${cy.toFixed(1)}L${(cx + Math.cos(a0) * R).toFixed(1)} ${(cy + Math.sin(a0) * R).toFixed(1)}L${(cx + Math.cos(a1) * R).toFixed(1)} ${(cy + Math.sin(a1) * R).toFixed(1)}Z`;
   }
-  return parts.join("");
+  return d;
 }
 
-/** The band's tilt (radians): a poster's slant, square enough to read. */
-const TILT = -0.035;
-
-export default marketingScene({
+export default posterScene({
   id: "marketing/starburst",
   name: "Retro Starburst",
+  pairing: "T8",
   look: "brand",
   build(c) {
-    const { S, safe, palette: pal, design, recipe } = c;
-    const hero = heroOf(c);
-    // The headline is the hero type: big, on a band that runs off both edges.
-    const head = setText(c, c.field("headline"), { weight: 800, width: safe.w * 0.9, maxLines: 2, max: S * (c.tall ? 0.16 : c.wide ? 0.11 : 0.13), min: S * MIN_HEAD, lineHeight: 1.0 });
-    const badge = setText(c, c.field("badge"), { weight: 800, width: S * 0.2, maxLines: 2, max: S * 0.056, min: S * MIN_BODY, lineHeight: 1.0 });
-    const bandPad = S * (c.tall ? 0.05 : 0.04);
-    const bandH = head ? head.height + bandPad * 2 : 0;
-    const gapB = S * 0.06;
-    // The disc: as big as the room over the band allows; the product holds inside 70 % of it.
-    const roomH = safe.h - (head ? bandH + gapB : 0);
-    const R = Math.min(safe.w * 0.5, roomH * 0.5);
-    const stackH = 2 * R + (head ? gapB + bandH : 0);
-    const top = safe.y + Math.max(0, (safe.h - stackH) / 2);
-    const centre: [number, number] = [design.w / 2, top + R];
-    const hold = { x: centre[0] - R * 0.7, y: centre[1] - R * 0.7, w: R * 1.4, h: R * 1.4 };
-    const img = hero ? fitBox(hero, hold, hero.src === "product") : null;
-    const bandY = top + 2 * R + gapB;
-    const name = !hero ? setText(c, recipe.brand.name, { weight: 800, width: R * 1.3, maxLines: 2, max: S * 0.13, min: S * MIN_HEAD, lineHeight: 1.04 }) : null;
-    const dark = pal.look === "dark";
-    // The rays: the brand's second colour over the brand colour (Brand colour); a rich tint of the bolder kit colour on
-    // the light and dark looks.
-    const rayColour = pal.look === "brand" ? pal.mark : mixHex(pal.ground, pal.mark, pal.look === "light" ? 0.34 : 0.3);
-    const apart = (x: string) => Math.min(contrast(x, rayColour), contrast(x, pal.ground));
-    const discColour = pal.look === "brand" ? mixHex(pal.ground, "#ffffff", 0.18) : dark ? mixHex(pal.ground, pal.mark, 0.22) : "#ffffff";
-    const nameB = name ? textBlock("brand", name, { y: centre[1] - name.height / 2, color: readable(discColour, pal.ink, pal.highlight.fill), cx: centre[0] }) : null;
-    // The band stands apart from both the rays and the ground: the highlight, a paper white or a deep shade, whichever
-    // does best against the nearer of the two.
-    const deepBand = mixHex(pal.ground, "#000000", 0.45);
-    const bandFill = [pal.highlight.fill, mixHex("#ffffff", pal.ground, 0.06), deepBand].reduce((best, x) => (apart(x) > apart(best) + 0.2 ? x : best));
-    const headB = head ? textBlock("headline", head, { y: bandY + bandPad, color: readable(bandFill, bandFill === pal.highlight.fill ? pal.highlight.ink : pal.ground, pal.ink, pal.mark), cx: design.w / 2 }) : null;
-    const reach = Math.hypot(design.w, design.h);
-    // The badge: a sticker by the product where it covers none of it.
-    const product = hero?.src === "product" ? (c.input.outlines?.product ?? null) : null;
-    const spot = img ? badgeSpot(img, product, S * 0.13, { x: safe.x, y: safe.y, w: safe.w, h: bandY - safe.y }) : { cx: centre[0] + R * 0.62, cy: centre[1] - R * 0.62, r: S * 0.12, cover: 0 };
-    const bR = spot.r;
-    const badgeFill = pal.look === "brand" ? pal.ink : pal.mark;
-    const badgeB = badge ? textBlock("badge", badge, { y: spot.cy - badge.height / 2, color: readable(badgeFill, pal.ground, pal.highlight.ink), cx: spot.cx }) : null;
+    const { S, safe, pal, design } = c;
+    const side = c.wide;
+    const prod = c.recipe.media?.product ? c.input.images?.product : undefined;
+    const outline = prod ? (c.input.outlines?.product ?? null) : null;
+    const signH = S * (c.cover ? 0.056 : 0.044);
+    const sign = brandSign(c, { maxW: S * 0.34, h: signH, x: safe.x, y: safe.y, min: S * (c.cover ? 0.056 : 0.03) });
+    const metaSize = S * (c.cover ? 0.024 : 0.02);
+    const site = topSite(c, sign, metaSize);
+    const row = footRow(c, 2.4);
+    const footH = metaSize * 1.1 + S * 0.05;
+    const headTop = safe.y + (sign?.h ?? 0) + S * 0.05;
+    const headW = side ? safe.w * 0.56 : safe.w;
+    const head = fitLines(c, "headline", c.field("headline"), { x: safe.x, top: headTop, room: side ? safe.h * 0.8 : (safe.y + safe.h - headTop) * 0.5, anchor: 0, width: headW, maxLines: 3, max: S * (side ? 0.17 : 0.2), min: S * 0.08, preset: "pop-in", leading: 0.92, fill: 0.95, ratio: 1.35, gap: 0.24, wordSpace: 0.3, stack: true });
+    const headB = head ? head.band : { x: safe.x, y: headTop, w: 0, h: 0 };
+    // The product: under the words (beside them on a wide frame), standing on the safe area's foot, never over a letter.
+    const prodTop = headB.y + headB.h + S * 0.07;
+    const box = side ? { x: safe.x + safe.w * 0.56, y: safe.y, w: safe.w * 0.44, h: safe.h - footH } : { x: safe.x + safe.w * 0.08, y: prodTop, w: safe.w * 0.9, h: safe.y + safe.h - footH - prodTop };
+    const img = prod ? fitBox(prod, box, true) : c.input.logo ? fitBox(c.input.logo, { ...box, y: box.y + box.h * 0.5, h: box.h * 0.35 }) : null;
+    const bR = S * (c.cover ? 0.12 : 0.1);
+    const lowBounds = side ? { x: safe.x, y: headB.y + headB.h + S * 0.02, w: safe.w * 0.56, h: safe.y + safe.h - (headB.y + headB.h + S * 0.02) } : { x: safe.x, y: headB.y + headB.h + S * 0.02, w: safe.w, h: safe.y + safe.h - (headB.y + headB.h + S * 0.02) };
+    const spot = img ? badgeSpot(img, outline, bR, lowBounds.h > bR * 2 ? lowBounds : { x: safe.x, y: safe.y, w: safe.w, h: safe.h }, 0.5) : { cx: safe.x + safe.w - bR, cy: safe.y + safe.h - bR, r: bR, cover: 0 };
+    const badge = c.set("badge", c.field("badge"), { role: "accent", x: spot.cx - spot.r * 0.75, y: 0, width: spot.r * 1.5, maxLines: 2, max: spot.r * 0.62, min: S * 0.035, align: "centre", preset: "pop-in" });
+    const badgeSet = badge ? c.set("badge", c.field("badge"), { role: "accent", x: spot.cx - spot.r * 0.75, y: spot.cy - capBand(badge).h / 2, width: spot.r * 1.5, maxLines: 2, max: badge.size, min: badge.size, align: "centre", preset: "pop-in" }) : null;
 
-    const k = spread(c, 1.7, 2.4);
-    const dropAt = 0.3 * k;
-    const bandAt = 1.15 * k;
-    const events = [
-      ev("rays", "fade", 0, 0.6, "enter"),
-      ev("halo", "enter", 0.15 * k, 0.7, "enter"),
-      ev("drop", "pop", dropAt, 0.65, "pop"),
-      ev("spin", "enter", dropAt, 0.7, "settle"),
-      ev("shadow", "fade", dropAt + 0.25, 0.5, "enter"),
-      ...(badge ? [ev("badge", "pop", 0.85 * k, 0.55, "pop")] : []),
-      ...(head ? [ev("band", "enter", bandAt, 0.6, "snap"), ...head.lines.map((_, i) => ev(`head.${i}`, "enter", bandAt + 0.12 + i * 0.09, 0.55, "glide", { group: "head", unit: "elements" }))] : []),
-    ];
-    const holdFrom = dropAt + 0.7;
-    // The rays turn the whole clip long and stop on the last frame's angle.
-    const turn = (t: number) => -0.2 + (Math.min(t, c.last) / Math.max(1, c.last)) * 0.2;
+    const k = c.spread(3.2, 1.6);
+    // The words cut up line by line; the one stomp is the sticker's.
+    const headPlans = head ? moveLines(c, head, { in: "pop-in", at: 0.03, hero: true }, "headline", 0.14) : [];
+    const headDone = headPlans.length ? stackLanded(headPlans) : 0.8;
+    c.ev("halftone", "fade", 0, 1.2, "glide");
+    c.ev("product", "hero", headDone - 0.15, 0.85, "settle");
+    c.ev("squiggle", "draw", headDone + 0.2 * k, 0.55, "draw");
+    c.ev("sticker", "pop", headDone + 0.45 * k, 0.65, "land");
+    const badgePlan = badgeSet ? c.move(badgeSet, { in: "pop-in", at: headDone + 0.55 * k }) : null;
+    const signPlan = signIn(c, sign, "brand", 0.2);
+    const sitePlan = site ? c.move(site, { in: "fade-rise", at: 0.35, rate: 26 }) : null;
+    const wiggleAt = Math.min(c.last - 1.6, (badgePlan?.settled ?? headDone + 0.8) + 0.6);
+    c.ev("wiggle", "move", wiggleAt, 0.8, "linear");
+
+    const rayCx = img ? img.x + img.w / 2 : design.w / 2;
+    const rayCy = img ? img.y + img.h * 0.45 : design.h / 2;
+    const R = Math.hypot(design.w, design.h);
+    // Rays in a blush tint of the brand (never grey); the extruded side a deep tone of the words' own ink.
+    const rayFill = c.dark ? toneOf(pal, 0.14) : mixOk(pal.paper, pal.brand[0], 0.16);
+    const side3d = withLightness(pal.ink, Math.min(0.32, toLab(pal.ink).L * 0.62));
+    const stickerFill = pal.accent;
+    const stickerInk = ensureContrast(withLightness(pal.ink, 0.28), stickerFill, 4.5);
 
     return {
-      events,
-      overflow: [...(head?.overflow ? ["headline"] : []), ...(badge?.overflow ? ["badge"] : []), ...(name?.overflow ? ["brand"] : [])],
-      signature: dropAt + 0.25,
-      frame(t, P, Lp) {
-        const r = P("rays");
-        const under: DisplayNode[] = [{ type: "path", d: raysPath(centre[0], centre[1], reach, turn(t)), fill: rayColour, ...(r < 1 && { opacity: r }) }];
-        const nodes: DisplayNode[] = [];
-        const h = P("halo");
-        if (h > 0) {
-          const hr = R * (0.6 + 0.4 * h);
-          nodes.push({ type: "ellipse", cx: centre[0], cy: centre[1], rx: hr, ry: hr, fill: discColour, ...(h < 1 && { opacity: h }) });
+      overflow: [...(head?.overflow ? ["headline"] : []), ...(badgeSet?.overflow ? ["badge"] : []), ...(sign?.overflow ? ["brand"] : []), ...(site?.overflow ? ["website"] : []), ...row.overflow],
+      signature: headDone + 0.6,
+      camera: (t) => ({ x: 0, y: 14 * (1 - Math.min(1, t / c.last)) ** 2 }),
+      draw(t, kit) {
+        // The rays turn a steady 8° a second.
+        const turn = t * ((8 * Math.PI) / 180);
+        const field: DisplayNode[] = c.dark ? [{ type: "rect", x: 0, y: 0, w: design.w, h: design.h, fill: { kind: "radial", cx: rayCx, cy: rayCy, r0: 0, r1: R * 0.7, stops: [{ at: 0, color: mixOk(pal.ground, pal.accent, 0.12) }, { at: 1, color: mixOk(pal.ground, "#000000", 0.18) }] } }] : litField(c, t, { from: "tl" });
+        const atmosphere: DisplayNode[] = [group([{ type: "path", d: rays(rayCx, rayCy, R, 18, turn), fill: rayFill }], { opacity: 0.6 })];
+        const texture: DisplayNode[] = [];
+        const hp = kit.P("halftone");
+        if (hp > 0) texture.push(group([halftone({ box: { x: design.w * 0.2, y: design.h * 0.4, w: design.w * 0.8, h: design.h * 0.6 }, spacing: S * 0.026, angle: 45, origin: [design.w, design.h], reach: S * 0.75, color: pal.brand[0], alpha: 0.18, key: `sb|${design.w}x${design.h}|${pal.brand[0]}` })], { opacity: hp }));
+        const hero: DisplayNode[] = [];
+        if (head) {
+          head.sets.forEach((s, i) => {
+            const words = kit.type(headPlans[i], { fill: pal.ink });
+            if (t >= headPlans[i].settled) {
+              const face = words.find((n) => n.type === "text");
+              if (face && face.type === "text") hero.push(extrude({ face, color: side3d, depth: 12, step: Math.max(1, s.size * 0.01), angle: 45, key: `sb|${s.text}|${s.size}`, bounds: capBand(s) }));
+            }
+            hero.push(...words);
+          });
         }
-        // While it holds: a slow sway and float, still again on the last frame.
-        const fl = holdFloat(t, holdFrom, c.last, S * 0.014, 0.045);
-        if (img && hero) {
-          const sh = P("shadow");
-          if (sh > 0 && hero.src === "product") nodes.push(contactShadow(centre[0], img.y + img.h, img.w * 0.8, discColour, 0.4, sh));
-          const d = P("drop");
-          const lin = Lp("drop");
-          if (lin > 0) {
-            // Squash on landing: wide and short as it hits, springing back to its shape.
-            const over = d - 1;
-            const sx = 1 + over * 0.9;
-            const sy = 1 - over * 0.9;
-            const foot = img.y + img.h;
-            const m = multiply(translate(0, -(1 - Math.min(1, d)) * S * 0.45 + fl.dy), multiply(about(centre[0], foot, sx, fl.roll, sy), about(centre[0], img.y + img.h / 2, 0.7 + 0.3 * Math.min(1, d), (1 - P("spin")) * -0.35)));
-            const pic: DisplayNode = hero.src === "logo" ? logoNode(c, img, pal.ink) : { type: "image", src: hero.src, x: img.x, y: img.y, w: img.w, h: img.h };
-            nodes.push(group([pic], { transform: m, ...(lin < 0.15 && { opacity: lin / 0.15 }) }));
-          }
-        } else if (nameB) {
-          const d = P("drop");
-          if (Lp("drop") > 0) nodes.push(group([lineRuns(nameB)], { transform: multiply(translate(0, fl.dy), about(centre[0], centre[1], 0.6 + 0.4 * d, (1 - P("spin")) * -0.5 + fl.roll)) }));
+        const subject: DisplayNode[] = [];
+        const pl = kit.L("product");
+        if (img && pl > 0) {
+          const p = kit.P("product");
+          // It slides in from the right with a small turn that settles, fully there from its first frame.
+          const dx = (1 - p) * S * 0.3;
+          const turnIn = rotation((1 - p) * 4, img.x + img.w / 2, img.y + img.h);
+          const pic: DisplayNode = prod ? { type: "image", src: "product", ...img } : logoNode(c, img, pal.ink);
+          // A cut-out sticker: a paper keyline round the product and its shadow on the ground.
+          const kw = Math.max(5, S * 0.007);
+          const kb = { x: img.x - kw * 2, y: img.y - kw * 2, w: img.w + kw * 4, h: img.h + kw * 4 };
+          // The keyline: the cut-out stamped round itself in a ring, filled with paper (drawn once and reused).
+          const ring = Array.from({ length: 12 }, (_, i): DisplayNode => ({ type: "image", src: "product", decor: true, x: img.x + Math.cos((i * Math.PI) / 6) * kw, y: img.y + Math.sin((i * Math.PI) / 6) * kw, w: img.w, h: img.h }));
+          const cut: DisplayNode[] = prod ? [group([...ring, group([{ type: "rect", ...kb, fill: pal.paper }], { blend: "source-atop" })], { isolate: kb, cache: { key: `sb-key|${img.w.toFixed(0)}x${img.h.toFixed(0)}|${pal.paper}`, bounds: kb } }), pic] : [pic];
+          subject.push(floorShadow({ cx: img.x + img.w / 2, y: img.y + img.h, width: img.w * 0.9, ground: pal.ground, strength: 0.5 * Math.min(1, pl * 2), key: `sb|${img.w.toFixed(0)}` }), group(cut, { transform: [turnIn[0], turnIn[1], turnIn[2], turnIn[3], turnIn[4] + dx, turnIn[5]] }));
         }
-        if (badgeB) {
-          const b = P("badge");
-          if (Lp("badge") > 0) nodes.push(group([{ type: "path", d: starPath(spot.cx, spot.cy, bR, bR * 0.84, 16), fill: badgeFill }, lineRuns(badgeB)], { transform: about(spot.cx, spot.cy, Math.max(0, b), 0.14 * b - 0.4 * (1 - b)) }));
+        const overlay: DisplayNode[] = [];
+        const sq = kit.P("squiggle");
+        if (sq > 0 && head) {
+          const ls = head.sets[head.sets.length - 1];
+          const last = ls.lines[0];
+          // From the line's first letter to its last, 0.12 em clear of the extruded side's lowest point; one sparkle at its start.
+          const sy = last.baseline + ls.size * 0.12 * 2 + ls.size * 0.06;
+          // It runs to the headline's right edge (one device: no sparkle).
+          overlay.push(squiggle({ x: last.ink.x, y: sy, w: headB.x + headB.w - last.ink.x, amp: ls.size * 0.06, seed: c.seed, color: pal.accent, width: Math.max(3, ls.size * 0.035), p: sq }));
         }
-        if (headB) {
-          const band = P("band");
-          const lin = Lp("band");
-          if (lin > 0) {
-            // The band runs off both edges, sliding in from the left; the words rise on it.
-            const over = S * 0.2;
-            const children: DisplayNode[] = [{ type: "rect", x: -over - (1 - band) * (design.w + over), y: bandY, w: design.w + 2 * over, h: bandH, fill: bandFill }, ...risingLines(headB, (i) => P(`head.${i}`))];
-            nodes.push(group(children, { transform: about(design.w / 2, bandY + bandH / 2, 1, TILT) }));
-          }
+        const sl = kit.L("sticker");
+        if (sl > 0) {
+          const sp = kit.P("sticker");
+          const disc: DisplayNode = { type: "path", d: starPath(spot.cx, spot.cy, spot.r, spot.r * 0.86, 14), fill: stickerFill };
+          const content: DisplayNode[] = badgePlan ? kit.type(badgePlan, { fill: stickerInk }) : [];
+          // A wiggle in the hold (±4°, back to true).
+          const wl = kit.L("wiggle");
+          const wig = wl > 0 && wl < 1 ? 4 * Math.sin(wl * Math.PI * 3) * (1 - wl) : 0;
+          const sticker = group([group(keyline([disc], Math.max(4, S * 0.007))), disc, ...content], { transform: rotation(-8 + (1 - sp) * 25 + wig, spot.cx, spot.cy) });
+          overlay.push(group([sticker], { transform: [sp, 0, 0, sp, spot.cx - sp * spot.cx, spot.cy - sp * spot.cy] }));
         }
-        return { under, nodes };
+        const meta = [...signNodes(c, kit, sign, signPlan, "brand", safe.x, safe.y, pal.ink), ...(sitePlan ? kit.type(sitePlan, { fill: metaInk(pal), caret: pal.accent }) : []), ...row.draw(kit, metaInk(pal), pal.ink)];
+        return [
+          { role: "ground", nodes: field },
+          { role: "atmosphere", nodes: atmosphere },
+          { role: "texture", nodes: texture },
+          { role: "hero", nodes: hero },
+          { role: "subject", nodes: subject },
+          { role: "overlay", nodes: overlay },
+          { role: "meta", nodes: meta },
+        ];
       },
     };
   },

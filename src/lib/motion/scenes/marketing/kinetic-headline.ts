@@ -1,146 +1,141 @@
 /**
- * Kinetic Headline: the promise sets word by word on a beat. Each word lands with a spring and the words the person
- * marked with *stars* get a swatch in the kit's highlight colour (a lone star is part of the words and is drawn). The
- * camera leans in as each new line starts and keeps a slow push while the words are read. Then the words lift away and
- * the piece resolves to the logo with the Draw-on end card: on a dark brand colour the ground is that colour already,
- * so the card simply sets on it; otherwise the brand colour opens out from the middle of the frame.
+ * Kinetic Headline: a wide, confident statement set as a justified stack, each line fitted to the full width on its
+ * own, cut in letter by letter from under its line on a lit two-tone field. A giant filled ghost of the same words,
+ * one tonal step from the ground, drifts behind it, cropped by the frame; the words the person marked with *stars* get
+ * a skewed highlighter that wipes in just before they land. The brand and the address sit on the top corners, a corner
+ * note and an index arrow on the bottom ones, and the call to action lands in a tilted pill above them. Through the
+ * hold the type plane pushes in, the ghost drifts and a band of light crosses the words twice. The last frame is the
+ * poster.
  */
 
-import { group, translate, type DisplayNode, type TextRun } from "../../display";
-import { sample, type Key } from "../../tween";
-import drawOn from "../end-card/draw-on";
-import { glyphTop, lineLeft } from "../end-card/shared";
-import { ev, groundLight, marked, marketingScene, MIN_HEAD, setText, textBlock } from "./kit";
+import { group, translate, type DisplayNode } from "../../display";
+import { highlighter } from "../../fx/overlays";
+import { asDecor, bands, brandSign, fitLines, footRow, ghostSpan, litField, markColor, metaInk, moveLines, pillOn, posterScene, shadowed, stackLanded, topSite } from "./poster";
+import { ensureContrast, fieldStops, mixOk } from "../../color";
+import { marked } from "./kit";
 
-/** The end card's share of the clip. */
-const CARD = 2.3;
-
-export default marketingScene({
+export default posterScene({
   id: "marketing/kinetic-headline",
   name: "Kinetic Headline",
-  look: "light",
+  pairing: "T1",
+  look: "dark",
   build(c) {
-    const { S, safe, palette: pal, design, recipe, pace } = c;
-    const typed = c.field("headline") || recipe.brand.name.trim();
+    const { S, safe, pal, design } = c;
+    const typed = c.field("headline") || c.recipe.brand.name.trim();
     const m = marked(typed);
     const lead = m.text.length - m.text.trimStart().length;
     const text = m.text.trim();
     const marks = m.marks.map(([a, b]) => [a - lead, b - lead] as const);
-    const flushLeft = recipe.controls?.align === "left";
-    const width = c.wide ? Math.min(safe.w, S * 1.45) : safe.w;
-    const L = setText(c, text, { weight: 800, width, maxLines: c.tall ? 5 : c.wide ? 3 : 4, max: S * (c.tall ? 0.17 : c.wide ? 0.13 : 0.145), min: S * MIN_HEAD, lineHeight: 1.08 });
-    const y = L ? safe.y + (safe.h - L.height) / 2 - S * 0.02 : safe.y;
-    const left = (design.w - width) / 2;
-    const block = L ? textBlock("headline", L, { y, color: pal.ink, ...(flushLeft ? { left, width } : { cx: design.w / 2 }) }) : null;
+    const centred = c.recipe.controls?.align === "centre";
+    const align = centred ? "centre" : "left";
 
-    // The words in reading order, each with where it sits and whether it's marked.
-    interface Word {
-      line: number;
-      text: string;
-      gap: string;
-      x: number;
-      y: number;
-      w: number;
-      hot: boolean;
-    }
-    const words: Word[] = [];
-    if (block && L) {
+    // The top corner row: the brand (left), the address (right).
+    const markH = S * (c.cover ? 0.058 : 0.046);
+    const sign = brandSign(c, { maxW: S * 0.36, h: markH, x: safe.x, y: safe.y, min: S * (c.cover ? 0.05 : 0.03) });
+    const metaSize = S * (c.cover ? 0.024 : 0.02);
+    const site = topSite(c, sign, metaSize);
+
+    // The bottom corner row stands on the safe line; the call to action sits just above it.
+    const ctaSize = S * (c.cover ? 0.056 : 0.044);
+    const ctaPad = { x: ctaSize * 0.6, y: ctaSize * 0.35 };
+    const foot = S * (c.cover ? 0.024 : 0.02) * 1.1;
+    const ctaY = safe.y + safe.h - foot - S * 0.05 - ctaSize * 1.2 - ctaPad.y;
+    const cta = c.set("cta", c.field("cta"), { role: "body", weight: 600, x: centred ? design.w / 2 - safe.w * 0.4 : safe.x + ctaPad.x, y: ctaY, width: safe.w * 0.8 - ctaPad.x * 2, maxLines: 1, max: ctaSize, min: ctaSize * 0.75, align: centred ? "centre" : "left" });
+
+    // The hero fills the room between, every line fitted to the width, its centre near 45 % of the height.
+    const b = bands(c, { topRow: sign?.h ?? metaSize, gap: S * 0.06 });
+    const bottom = (cta ? ctaY - ctaPad.y : b.bottom) - S * 0.06;
+    const width = c.wide ? safe.w * 0.6 : safe.w;
+    const hero = fitLines(c, "headline", text, { x: centred ? design.w / 2 - width / 2 : safe.x, top: b.top, room: bottom - b.top, centre: c.wide ? (b.top + bottom) / 2 : design.h * 0.45, width, maxLines: c.wide ? 3 : 4, max: c.wide ? design.h * 0.3 : S * 0.5, min: S * 0.1, align, preset: "cut-rise-glyph", fill: 0.995, ratio: 1.7, gap: 0.1, stack: true });
+
+    const k = c.spread(3.2, 1.6);
+    // From the first frames: the first glyph is under way by 0.07 s. After it lands, two bands of light cross it.
+    const plans = hero ? moveLines(c, hero, { in: "cut-rise-glyph", at: 0.03, hero: true, loop: "light-sweep", loopAt: 1.9, loopEvery: 1.8 }, "headline", 0.12) : [];
+    const landed = plans.length ? stackLanded(plans) : 0.8;
+
+    // Marked words: a highlighter under each, wiping in 70 ms before its line lands.
+    const marksAt: { li: number; x: number; w: number; capTop: number; baseline: number; key: string }[] = [];
+    if (hero) {
       let at = 0;
-      L.lines.forEach((line, i) => {
-        const x0 = lineLeft(block, i);
-        const top = glyphTop(block, i);
-        for (const w of line.words) {
+      hero.sets.forEach((set, li) => {
+        set.words.forEach((w, wi) => {
           at += w.gap.length;
           const a = at;
-          const b = at + w.text.length;
-          at = b;
-          words.push({ line: i, text: w.text, gap: w.gap, x: x0 + w.x, y: top, w: w.w, hot: marks.some(([p, q]) => p < b && q > a) });
-        }
+          const e = at + w.text.length;
+          at = e;
+          if (!marks.some(([p, q]) => p < e && q > a)) return;
+          const line = set.lines[w.line];
+          marksAt.push({ li, x: w.x, w: w.w, capTop: line.y + set.cap.top, baseline: line.baseline, key: `${li}.${wi}` });
+        });
       });
     }
+    marksAt.forEach((mk, j) => c.ev(`mark.${j}`, "draw", Math.max(0.1, (plans[mk.li]?.settled ?? landed) - 0.07 - 0.4 + 0.12 * j), 0.4, "snap"));
 
-    // The end card: the logo (or the name), the call to action and the address, drawn by the Draw-on style.
-    const T0 = recipe.duration - CARD;
-    const card = drawOn.plan({
-      ...c.input,
-      recipe: { ...recipe, scene: "end-card/draw-on", duration: CARD, fields: { brand: recipe.brand.name, product: "", ...(c.field("cta") && { cta: c.field("cta") }), ...(c.field("website") && { website: c.field("website") }) } },
-    });
-    const exitAt = T0 - 0.45;
-    const read = Math.max(0.7, 0.28 * exitAt);
-    const n = Math.max(1, words.length);
-    const pop = 0.5 * pace;
-    const beat = n > 1 ? Math.min(0.42 * pace, Math.max(0.09, (exitAt - read - pop - 0.12) / (n - 1))) : 0;
-    const events = words.flatMap((w, i) => {
-      const s = 0.12 + i * beat;
-      return [ev(`word.${i}`, "pop", s, pop, "pop"), ...(w.hot ? [ev(`mark.${i}`, "draw", s + 0.05, 0.36, "snap")] : [])];
-    });
-    events.push(ev("words.exit", "exit", exitAt, 0.4, "exit"), ev("panel", "enter", exitAt + 0.05, 0.5, "move"));
-    for (const e of card.timeline.events) events.push({ ...e, id: `card.${e.id}`, start: Math.round((e.start + T0) * 1e6) / 1e6 });
+    const metaAt = Math.min(landed + 0.1 * k, c.room - 1);
+    const signPlan = sign?.set ? c.move(sign.set, { in: "word-lift", at: 0.2 }) : null;
+    if (sign && !sign.set) c.ev("brand", "enter", 0.2, 0.5, "glide");
+    const sitePlan = site ? c.move(site, { in: "fade-rise", at: 0.35, rate: 26 }) : null;
+    const ctaAt = metaAt + 0.1 * k;
+    const ctaPlan = cta ? c.move(cta, { in: "word-lift", at: ctaAt + 0.04 }) : null;
+    if (cta) c.ev("pill", "pop", ctaAt, 0.5, "pop");
+    const row = footRow(c, metaAt + 0.2);
 
-    // The camera leans in a little as each line starts, and follows it.
-    const lines = L?.lines.length ?? 0;
-    const firstOf = (line: number) => words.findIndex((w) => w.line === line);
-    const zoom: Key[] = [{ t: 0, v: 1 }];
-    const pan: Key[] = [{ t: 0, v: 0 }];
-    for (let k = 1; k < lines; k++) {
-      const s = 0.12 + firstOf(k) * beat;
-      const mid = block && L ? glyphTop(block, k) + L.size / 2 - (y + L.height / 2) : 0;
-      zoom.push({ t: s - 0.05, v: zoom[zoom.length - 1].v }, { t: s + 0.55, v: 1 + 0.025 * k, ease: "move" });
-      pan.push({ t: s - 0.05, v: pan[pan.length - 1].v }, { t: s + 0.55, v: -mid * 0.12, ease: "move" });
-    }
+    // The ghost: the brand's name (never an echo of the hero's words), set across the frame behind the first lines,
+    // filled one faint step from the ground, so it reads as texture and never as another line of the headline.
+    const ghostWord = c.recipe.brand.name.trim() || (hero ? hero.sets[0].text.trim() : "");
+    const ghostTop = hero ? Math.max(b.top - S * 0.06, hero.band.y - S * 0.04) / design.h : 0.2;
+    const stops = fieldStops(pal);
+    // The call to action: a paper tag with the hero's ink (never a third hue), level.
+    const pillFill = pal.paper;
+    const pillInk = mixOk(pal.night, pal.brand[0], 0.35);
+    const heroInk = pal.ink;
+    // The bar covers the marked words' whole cap band in one colour the words read on at 4.5:1 (never a glyph split
+    // between two colours).
+    const knock = false;
+    const markInk = ensureContrast(markColor(c, pal.ground, heroInk), heroInk, 4.5);
+    const ghostGround = mixOk(stops.dark, stops.light, 0.45);
 
-    // A slow push while the words are read, up to the moment they leave.
-    const z0 = zoom[zoom.length - 1];
-    if (exitAt > z0.t + 0.3) zoom.push({ t: exitAt, v: z0.v + 0.03, ease: "move" });
-    const cardGround = card.evaluate(0).background;
-    const same = typeof cardGround === "string" && cardGround.toLowerCase() === pal.ground.toLowerCase();
-    const R = Math.hypot(design.w, design.h) / 2 + 2;
-    const size = L?.size ?? S * 0.1;
-    // The card's ground gets the same slow light and falloff as the words' ground, so it never reads as a flat fill.
-    const lit = recipe.look?.light === false ? null : same ? groundLight(c) : typeof cardGround === "string" ? groundLight(c, { ground: cardGround, look: "brand" }) : null;
     return {
-      events,
-      breath: false,
-      cuts: [T0],
-      overflow: [...(L?.overflow ? ["headline"] : []), ...card.overflow.filter((f) => f !== "product")],
-      signature: 0.12 + Math.min(n - 1, 2) * beat + pop * 0.6,
-      camera: (t) => ({ zoom: sample(zoom, t), x: 0, y: sample(pan, t) }),
-      frame(t, P, Lp) {
-        if (t >= T0) {
-          const list = card.evaluate(t >= c.last ? card.rest : t - T0);
-          const glow = lit ? lit(t) : [];
-          // A card that opened out of the middle lights up as it lands; on the scene's own ground the light carries on.
-          const fade = same ? 1 : Math.min(1, (t - T0) / 0.5);
-          const light: DisplayNode[] = !glow.length ? [] : fade < 1 ? [group(glow, { opacity: fade })] : glow;
-          return { nodes: [], over: [{ type: "rect", x: 0, y: 0, w: design.w, h: design.h, fill: list.background }, ...light, ...list.nodes] };
+      overflow: [...(hero?.overflow ? ["headline"] : []), ...(cta?.overflow ? ["cta"] : []), ...(site?.overflow ? ["website"] : []), ...(sign?.overflow ? ["brand"] : []), ...row.overflow],
+      signature: landed + 0.5,
+      camera: (t) => ({ x: 26 * (1 - Math.min(1, t / c.last)) ** 2, y: 0 }),
+      draw(t, kit) {
+        const field = litField(c, t, { from: "tr", stops });
+        const ghostNodes: DisplayNode[] = ghostWord ? [ghostSpan(c, { field: "headline", text: ghostWord, top: ghostTop, t, ground: ghostGround, span: 1.04 })] : [];
+
+        const heroNodes: DisplayNode[] = [];
+        if (hero) {
+          const words = hero.sets.flatMap((s, i) => kit.type(plans[i], { fill: heroInk, sweep: "#ffffff", sweepAlpha: 0.5 }));
+          if (t >= landed) heroNodes.push(...shadowed(c, words, hero.size, hero.band, `kh|${text}|${hero.size}`));
+          const knocks: DisplayNode[] = [];
+          marksAt.forEach((mk, j) => {
+            const hl = highlighter({ capTop: mk.capTop, baseline: mk.baseline, x: mk.x, w: mk.w, color: markInk, seed: c.seed, p: kit.P(`mark.${j}`), key: mk.key, cover: 1.14, skew: -3 });
+            if (!hl) return;
+            heroNodes.push(hl);
+            if (knock && hl.type === "path") knocks.push(group(asDecor(kit.type(plans[mk.li], { fill: pal.paper })), { clip: { type: "path", d: hl.d } }));
+          });
+          heroNodes.push(...words, ...knocks);
         }
-        const swatches: DisplayNode[] = [];
-        const runs: TextRun[] = [];
-        words.forEach((w, i) => {
-          const p = P(`word.${i}`);
-          if (p <= 0 && Lp(`word.${i}`) <= 0) return;
-          const appear = Math.min(1, Lp(`word.${i}`) * 5);
-          const s = 1.32 - 0.32 * p;
-          const cx = w.x + w.w / 2;
-          const cy = w.y + size / 2;
-          if (w.hot) {
-            const q = P(`mark.${i}`);
-            if (q > 0) {
-              const pad = size * 0.14;
-              const full = w.w + pad * 2;
-              const rtl = L?.dir === "rtl";
-              swatches.push({ type: "rect", x: rtl ? w.x - pad + full * (1 - q) : w.x - pad, y: w.y - size * 0.06, w: full * q, h: size * 1.12, r: size * 0.12, fill: pal.highlight.fill });
-            }
+        const overlay: DisplayNode[] = [];
+        if (cta && ctaPlan && kit.L("pill") > 0) overlay.push(pillOn(cta, kit.type(ctaPlan, { fill: pillInk }), pillFill, { deg: 0, p: kit.P("pill") }));
+        const meta: DisplayNode[] = [];
+        if (sign) {
+          if (signPlan) meta.push(...kit.type(signPlan, { fill: pal.ink }));
+          else {
+            const p = kit.P("brand");
+            const lin = kit.L("brand");
+            if (lin > 0) meta.push(group(sign.nodes(safe.x, safe.y, pal.ink), { ...(p < 1 && { transform: translate(0, (1 - p) * S * 0.02) }), ...(lin < 0.5 && { opacity: lin / 0.5 }) }));
           }
-          const fill = w.hot && P(`mark.${i}`) > 0.35 ? pal.highlight.ink : pal.ink;
-          runs.push({ text: w.text, gap: w.gap, font: L!.font, x: w.x, y: w.y - (1 - p) * size * 0.12, fill, ...(appear < 1 && { opacity: appear }), ...(Math.abs(s - 1) > 1e-4 && { transform: [s, 0, 0, s, cx - s * cx, cy - s * cy] }), ...(L!.dir === "rtl" && { dir: "rtl" as const }) });
-        });
-        const e = P("words.exit");
-        const content: DisplayNode[] = [...swatches, { type: "text", field: "headline", runs }];
-        const nodes: DisplayNode[] = e > 0 ? [group(content, { transform: translate(0, -e * S * 0.06), opacity: 1 - e })] : content;
-        const rise = P("panel");
-        const over: DisplayNode[] = rise > 0 && !same ? [{ type: "ellipse", cx: design.w / 2, cy: design.h / 2, rx: R * rise, ry: R * rise, fill: cardGround }] : [];
-        return { nodes, over };
+        }
+        if (sitePlan) meta.push(...kit.type(sitePlan, { fill: metaInk(pal), caret: pal.accent }));
+        meta.push(...row.draw(kit, metaInk(pal), pal.ink));
+        return [
+          { role: "ground", nodes: field },
+          { role: "ghost", nodes: ghostNodes },
+          { role: "hero", nodes: heroNodes },
+          { role: "overlay", nodes: overlay },
+          { role: "meta", nodes: meta },
+        ];
       },
     };
   },

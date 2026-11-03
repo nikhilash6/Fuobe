@@ -10,10 +10,12 @@ import { KINETIC_FEATURE, MadeStrip } from "@/components/motion/made-strip";
 import { MotionPlayer, useMotionInputs, usePlan, useScene } from "@/components/motion/player";
 import { phaseLine, useMotionSave } from "@/components/motion/save";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
+import { preloadKineticFaces } from "@/components/motion/kinetic-fonts";
 import { RunPlaceChip } from "@/components/studio/run-place-chip";
 import { useIsOwner } from "@/lib/api";
 import type { BrandKit, MarketingTemplate } from "@/lib/catalog/marketing";
-import { SHOWCASE_PRODUCT_THUMBS, SHOWCASE_PRODUCTS } from "@/lib/motion/showcase";
+import { sceneFamilies } from "@/lib/motion/registry";
+import { SHOWCASE_PHOTOS, SHOWCASE_PRODUCT_THUMBS, SHOWCASE_PRODUCTS } from "@/lib/motion/showcase";
 import type { SizePreset } from "@/lib/motion/sizes";
 import { initialState, ownFiles, templateLengths, templateRecipe, templateSizes, templateWords, type TemplateBrand, type TemplateState } from "@/lib/motion/template";
 import { IN_BROWSER } from "@/lib/run-place";
@@ -36,17 +38,29 @@ const PREVIEW_WIDTH: Record<SizePreset, string> = {
   "16:9": "max-w-full",
 };
 
-const SAMPLES: { id: keyof typeof SHOWCASE_PRODUCTS; label: string }[] = [
-  { id: "perfume", label: "Sample: perfume bottle" },
-  { id: "heel", label: "Sample: red heel" },
-  { id: "serum", label: "Sample: serum bottle" },
-  { id: "nightSerum", label: "Sample: night serum" },
-  { id: "lipstick", label: "Sample: lipstick" },
-  { id: "card", label: "Sample: metal card" },
-  { id: "headphones", label: "Sample: headphones" },
-];
+/** Fuobe's own sample pictures, by the kind of picture a template shows (a small tile each; a piece gets the full one). */
+const product = (id: keyof typeof SHOWCASE_PRODUCTS, label: string) => ({ url: SHOWCASE_PRODUCTS[id], thumb: SHOWCASE_PRODUCT_THUMBS[id], label });
+const SAMPLES: Record<"product" | "photo", { url: string; thumb: string; label: string }[]> = {
+  product: [
+    product("perfume", "Sample: perfume bottle"),
+    product("heel", "Sample: red heel"),
+    product("serum", "Sample: serum bottle"),
+    product("nightSerum", "Sample: night serum"),
+    product("lipstick", "Sample: lipstick"),
+    product("card", "Sample: metal card"),
+    product("headphones", "Sample: headphones"),
+  ],
+  photo: [
+    { url: SHOWCASE_PHOTOS.portrait, thumb: SHOWCASE_PHOTOS.portrait, label: "Sample: portrait" },
+    { url: SHOWCASE_PHOTOS.gown, thumb: SHOWCASE_PHOTOS.gown, label: "Sample: gold gown" },
+    { url: SHOWCASE_PHOTOS.dunes, thumb: SHOWCASE_PHOTOS.dunes, label: "Sample: red dress in the dunes" },
+    { url: SHOWCASE_PHOTOS.night, thumb: SHOWCASE_PHOTOS.night, label: "Sample: evening lights" },
+  ],
+};
 
-export function PicturePicker({ value, onChange, owner }: { value: string | null | undefined; onChange: (url: string | null) => void; owner: boolean }) {
+export function PicturePicker({ kind = "product", value, onChange, owner }: { kind?: "product" | "photo"; value: string | null | undefined; onChange: (url: string | null) => void; owner: boolean }) {
+  const samples = SAMPLES[kind];
+  const fallback = samples[0].url;
   const [own, setOwn] = useState<SlotValue | null>(null);
   const [product, setProduct] = useState<ProductChoice | null>(null);
   const tile = (on: boolean) => cn("relative size-14 shrink-0 overflow-hidden rounded-xl bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring", on && "ring-2 ring-primary ring-offset-2 ring-offset-background");
@@ -54,10 +68,10 @@ export function PicturePicker({ value, onChange, owner }: { value: string | null
     <div className="min-w-0">
       <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Picture</p>
       <div role="group" aria-label="Picture" className="flex min-w-0 flex-wrap items-center gap-2">
-        {SAMPLES.map((s) => (
-          <button key={s.id} type="button" aria-pressed={value === SHOWCASE_PRODUCTS[s.id]} aria-label={s.label} onClick={() => onChange(SHOWCASE_PRODUCTS[s.id])} className={tile(value === SHOWCASE_PRODUCTS[s.id])}>
+        {samples.map((s) => (
+          <button key={s.url} type="button" aria-pressed={value === s.url} aria-label={s.label} onClick={() => onChange(s.url)} className={tile(value === s.url)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={SHOWCASE_PRODUCT_THUMBS[s.id]} alt="" className="size-full object-contain p-1" />
+            <img src={s.thumb} alt="" className={cn("size-full", kind === "photo" ? "object-cover" : "object-contain p-1")} />
           </button>
         ))}
         {owner ? (
@@ -65,7 +79,7 @@ export function PicturePicker({ value, onChange, owner }: { value: string | null
             value={product}
             onChange={(p) => {
               setProduct(p);
-              onChange(p?.images[0] ?? SHOWCASE_PRODUCTS.perfume);
+              onChange(p?.images[0] ?? fallback);
             }}
           />
         ) : (
@@ -75,12 +89,12 @@ export function PicturePicker({ value, onChange, owner }: { value: string | null
             value={own}
             onChange={(v) => {
               setOwn(v);
-              if (!v) onChange(SHOWCASE_PRODUCTS.perfume);
+              if (!v) onChange(fallback);
               else if (!v.uploading && v.ref.startsWith("/api/files/")) onChange(v.ref);
             }}
           />
         )}
-        <p className="min-w-0 basis-full text-[11px] text-muted-foreground">A cut-out on a clear background traces best; a photo gets a frame.</p>
+        <p className="min-w-0 basis-full text-[11px] text-muted-foreground">{kind === "photo" ? "A photo fills its panel; the middle stays in view." : "A cut-out on a clear background traces best; a photo gets a frame."}</p>
       </div>
     </div>
   );
@@ -109,6 +123,8 @@ export function KineticTemplate({ template: t, onClose, kitId, onKit }: { templa
   const recipe = useMemo(() => templateRecipe(t, state), [t, state]);
   const inputs = useMotionInputs(recipe);
   const scene = useScene(recipe.scene);
+  // The template's own faces are asked for while the page renders, so the first frame already has its type.
+  preloadKineticFaces(sceneFamilies(recipe.scene));
   const plan = usePlan(scene, recipe, inputs);
   const sizes = templateSizes(t);
   const lengths = templateLengths(t);
@@ -157,7 +173,7 @@ export function KineticTemplate({ template: t, onClose, kitId, onKit }: { templa
 
         <div className="min-w-0 space-y-4">
           <TemplateFields fields={fields} values={state.fields} onChange={(key, value) => setState((s) => ({ ...s, fields: { ...s.fields, [key]: value } }))} overflow={overflow} />
-          {t.picture === "product" && <PicturePicker value={state.product} onChange={(url) => setState((s) => ({ ...s, product: url }))} owner={owner} />}
+          {t.picture && <PicturePicker kind={t.picture} value={state.product} onChange={(url) => setState((s) => ({ ...s, product: url }))} owner={owner} />}
           {owner ? (
             <OwnerBrand
               value={state.brand}

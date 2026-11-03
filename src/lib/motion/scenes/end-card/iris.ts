@@ -7,35 +7,41 @@
 
 import { about, group, withAlpha, type DisplayNode } from "../../display";
 import { linearProgress, progress, type Cue } from "../../tween";
-import { blockCentre, deepGround, endCardScene, entering, letterRuns, lineRuns, markBox, markNodes, openingGround, pillRect } from "./shared";
+import { blockCentre, deepGround, endCardScene, entering, letterRuns, lineRuns, markBox, markNodes, openingGround, pillRect, keepFor } from "./shared";
 
 export default endCardScene("iris", ({ rest, second }) => {
   const { headline, cta, site } = rest;
   const mark = markBox(rest);
-  const cues: Cue[] = [{ id: "iris", kind: "move", at: 0, dur: 0.65, curve: "glide" }];
+  const cues: Cue[] = [{ id: "iris", kind: "move", at: 0, dur: 0.45, curve: "glide" }];
   if (mark) cues.push({ id: "mark", kind: "enter", at: 0.15, dur: 0.5, curve: "settle" });
   if (headline.layout.lines.length) cues.push({ id: "headline", kind: "enter", at: 0.3, dur: 0.5, curve: "glide" });
   if (site) cues.push({ id: "site", kind: "fade", at: 0.5, dur: 0.35, curve: "enter" });
   if (cta) cues.push({ id: "cta", kind: "pop", at: 0.5, dur: 0.4, curve: "pop" });
-  const ground = openingGround(rest.theme, second);
+  // It opens out of the deep shade of the brand colour (never a flat second colour in the corners).
+  const ground = deepGround(rest.theme);
+  void openingGround;
+  void second;
   // On a deep ground a fine rim in the words' colour draws the circle's edge.
-  const rim = ground === deepGround(rest.theme) && ground !== second ? rest.ink : null;
+  const rim = rest.ink;
   const S = Math.min(rest.w, rest.h);
 
   return {
     cues,
+    keep: keepFor("iris", rest),
     lead: 0.06,
     signature: 0.14,
     background: ground,
     frame(t, tl) {
       const P = (id: string) => progress(tl, id, t);
       const under: DisplayNode[] = [];
-      const R = Math.hypot(rest.w / 2, rest.h / 2) + 4;
+      // It opens past the corners with a wide feathered edge (no hard wedge in a corner).
+      const feather = S * 0.04;
+      const R = Math.hypot(rest.w / 2, rest.h / 2) + feather;
       const open = P("iris");
       const r = open * R;
       if (r > 0.5) {
         // A soft edge a few units wide.
-        const edge = Math.max(0, (r - 3) / r);
+        const edge = Math.max(0, (r - feather) / r);
         under.push({
           type: "ellipse",
           id: "iris",

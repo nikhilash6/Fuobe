@@ -19,9 +19,9 @@ import { measure } from "./helpers/motion";
 const CODE = TEMPLATES.filter(isCodeTemplate);
 
 describe("the catalog's code-drawn templates", () => {
-  it("are the six switched templates and the four new ones", () => {
+  it("are the switched templates and the ones drawn for Kinetic", () => {
     expect(CODE.map((t) => t.id).sort()).toEqual(
-      ["ms-kinetic-headline", "m2-line-reveal", "ms-logo-sting", "ms-feature-cards", "ms-dashboard-zoom", "m2-retro-starburst", "m2-offer-badge", "ms-big-number", "ms-five-star-quote", "ms-end-card"].sort(),
+      ["ms-kinetic-headline", "m2-line-reveal", "ms-logo-sting", "ms-feature-cards", "ms-dashboard-zoom", "m2-retro-starburst", "m2-offer-badge", "ms-big-number", "ms-five-star-quote", "ms-end-card", "m2-midnight-drop", "m2-nocturne", "m2-season-finale", "m2-prism-stage", "mm-marquee", "mm-runway-titles", "ms-stat-stack", "ms-kind-words"].sort(),
     );
     // Scenes, not type, stay on the video models.
     for (const id of ["m2-sticker-pop", "m2-paper-parade", "m2-comic-panels", "m2-grid-shuffle", "ms-device-float"]) expect(isCodeTemplate(TEMPLATES.find((t) => t.id === id))).toBe(false);
@@ -111,8 +111,8 @@ describe("a template's recipe", () => {
   it("is listed by the template's name and its first words, without the highlight's stars", () => {
     const head = CODE.find((t) => t.id === "ms-kinetic-headline")!;
     const w = templateWords(head, initialState(head));
-    expect(w.title).toBe("Kinetic Headline · Invoices that chase themselves.");
-    expect(w.prompt).toBe("Lumen Labs · Invoices that chase themselves. · Start free · lumenlabs.io");
+    expect(w.title).toBe("Kinetic Headline · SHIP IT TONIGHT.");
+    expect(w.prompt).toBe("Lumen Labs · SHIP IT TONIGHT. · Start free · lumenlabs.io · Release 4.0");
     // A star that marks nothing is part of the words.
     const s = initialState(head);
     expect(templateWords(head, { ...s, fields: { ...s.fields, headline: "Rated 5* by *guests*" } }).title).toBe("Kinetic Headline · Rated 5* by guests");

@@ -12,7 +12,7 @@ import { VariantPicker, type VariantChoice } from "@/components/motion/variant-p
 import { END_CARD } from "@/lib/catalog/marketing";
 import type { Engine } from "@/lib/catalog/types";
 import { DEFAULT_EXPORT, type Recipe } from "@/lib/motion/recipe";
-import { loadScene } from "@/lib/motion/registry";
+import { loadScene, sceneFamilies } from "@/lib/motion/registry";
 import { END_CARD_VARIANT_NAMES, END_CARD_VARIANTS, type EndCardVariant } from "@/lib/motion/scenes/end-card/shared";
 import type { SizeSpec } from "@/lib/motion/sizes";
 import type { EndCardInput } from "./end-card";
@@ -81,7 +81,7 @@ export function useEndCardMotion(card: EndCardInput, colors: readonly string[], 
 
 /** Renders a recipe's clip here, in the brand's own fonts (a font that didn't load stops it). */
 export async function renderRecipe(recipe: Recipe, inputs: MotionInputs, o: { formats: ("mp4" | "webm")[]; signal?: AbortSignal; onProgress?: (done: number, total: number) => void }): Promise<RenderResult> {
-  await fontsReady([recipe.brand.fonts.heading, recipe.brand.fonts.body], { strict: true, text: [...Object.values(recipe.fields), recipe.brand.name].join(" ") });
+  await fontsReady([recipe.brand.fonts.heading, recipe.brand.fonts.body, ...sceneFamilies(recipe.scene)], { strict: true, text: [...Object.values(recipe.fields), recipe.brand.name].join(" ") });
   const scene = await loadScene(recipe.scene);
   return renderClip(scene, recipe, { sources: inputs.sources, logo: inputs.logo, images: inputs.images, outlines: inputs.outlines, measure: measureText, formats: o.formats, signal: o.signal, onProgress: (d, n) => o.onProgress?.(d, n) });
 }

@@ -4,7 +4,7 @@ import { Pause, Play, Repeat } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { measureText } from "@/components/ads/render";
 import type { Recipe } from "@/lib/motion/recipe";
-import { loadScene } from "@/lib/motion/registry";
+import { loadScene, sceneFamilies } from "@/lib/motion/registry";
 import type { LogoInfo, Outline, Scene, ScenePlan } from "@/lib/motion/scene";
 import { previewSize, type SizeSpec } from "@/lib/motion/sizes";
 import { cn } from "@/lib/utils";
@@ -38,20 +38,21 @@ export function useMotionInputs(recipe: Recipe | null): MotionInputs {
   const productUrl = recipe?.media?.product || null;
   const heading = recipe?.brand.fonts.heading;
   const body = recipe?.brand.fonts.body;
+  const faces = sceneFamilies(recipe?.scene).join("|");
   const text = recipe ? Object.values(recipe.fields).join(" ") : "";
   const [state, setState] = useState<MotionInputs>({ ready: false, sources: EMPTY_SOURCES, logo: null, version: 0 });
   useEffect(() => {
     let live = true;
     void (async () => {
       const loaded = await loadMotionInputs({ logo: logoUrl, product: productUrl });
-      await fontsReady([heading, body], { text }).catch(() => undefined);
+      await fontsReady([heading, body, ...(faces ? faces.split("|") : [])], { text }).catch(() => undefined);
       if (!live) return;
       setState((s) => ({ ready: true, ...loaded, version: s.version + 1 }));
     })();
     return () => {
       live = false;
     };
-  }, [logoUrl, productUrl, heading, body, text]);
+  }, [logoUrl, productUrl, heading, body, faces, text]);
   return state;
 }
 

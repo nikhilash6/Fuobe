@@ -91,7 +91,22 @@ function oldstyle(family: string, weight: number): boolean {
   return out;
 }
 
-/** A text's width in a CSS font; `measureText.oldstyle` tells whether a face's default figures are old-style. */
+/** Where a text's ink lies when drawn at (0, 0) with textBaseline "top": its top and bottom, its left and right. */
+function box(text: string, font: string): { top: number; bottom: number; left: number; right: number } {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return { top: 0, bottom: 10, left: 0, right: text.length * 10 };
+  measureCtx.font = font;
+  const base = measureCtx.textBaseline;
+  measureCtx.textBaseline = "top";
+  const m = measureCtx.measureText(text);
+  measureCtx.textBaseline = base;
+  return { top: -m.actualBoundingBoxAscent, bottom: m.actualBoundingBoxDescent, left: -m.actualBoundingBoxLeft, right: m.actualBoundingBoxRight };
+}
+
+/**
+ * A text's width in a CSS font; `measureText.oldstyle` tells whether a face's default figures are old-style, and
+ * `measureText.box` where its ink lies (for clips and alignment that hug the letters).
+ */
 export const measureText = Object.assign(
   (text: string, font: string) => {
     measureCtx ??= document.createElement("canvas").getContext("2d");
@@ -99,7 +114,7 @@ export const measureText = Object.assign(
     measureCtx.font = font;
     return measureCtx.measureText(text).width;
   },
-  { oldstyle },
+  { oldstyle, box },
 );
 
 function rounded(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

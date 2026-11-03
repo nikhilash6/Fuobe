@@ -23,7 +23,7 @@ afterAll(() => {
 const CODE = TEMPLATES.filter(isCodeTemplate);
 
 describe("code-drawn templates on the server", () => {
-  it("are the ten Kinetic templates", () => expect(CODE).toHaveLength(10));
+  it("are the eighteen Kinetic templates", () => expect(CODE).toHaveLength(18));
 
   for (const t of CODE) {
     const input = { engine: "cloud" as const, format: t.format, templateId: t.id, prompt: "A bottle on a plinth" };

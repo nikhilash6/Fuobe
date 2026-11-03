@@ -8,7 +8,7 @@ import { loadMotionInputs } from "@/components/motion/inputs";
 import { drawFrame, renderClip } from "@/components/motion/render";
 import { TEMPLATES } from "@/lib/catalog/marketing";
 import type { Recipe } from "@/lib/motion/recipe";
-import { loadScene } from "@/lib/motion/registry";
+import { loadScene, sceneFamilies } from "@/lib/motion/registry";
 import { SHOWCASES, showcaseRecipe } from "@/lib/motion/showcase";
 import { exportSize } from "@/lib/motion/sizes";
 
@@ -30,7 +30,7 @@ const b64 = async (b: Blob) => {
 
 async function prepare(recipe: Recipe) {
   const inputs = await loadMotionInputs({ logo: recipe.brand.logo, product: recipe.media?.product });
-  await fontsReady([recipe.brand.fonts.heading, recipe.brand.fonts.body], { strict: true, text: Object.values(recipe.fields).join(" ") + recipe.brand.name });
+  await fontsReady([recipe.brand.fonts.heading, recipe.brand.fonts.body, ...sceneFamilies(recipe.scene)], { strict: true, text: Object.values(recipe.fields).join(" ") + recipe.brand.name });
   const scene = await loadScene(recipe.scene);
   return { inputs, scene };
 }

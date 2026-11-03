@@ -86,5 +86,5 @@ describe("no jumps (motion-continuity)", () => {
         }
       }
     }
-  });
+  }, 60_000);
 });

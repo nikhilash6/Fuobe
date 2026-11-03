@@ -154,6 +154,7 @@ describe("proxy matcher (C13)", () => {
     expect(matches("/next.svg")).toBe(false);
     expect(matches("/samples/demo-model.glb")).toBe(false);
     expect(matches("/vendor/meshopt_decoder.js")).toBe(false);
+    expect(matches("/fonts/kinetic/anton.woff2")).toBe(false);
     expect(matches("/previews/presets/effect-set-on-fire.jpg")).toBe(false);
     expect(matches("/previews/presets/motion-fpv-drone.mp4")).toBe(false);
     expect(matches("/favicon.ico")).toBe(false);

@@ -17,6 +17,8 @@ interface Item {
   kind: "text" | "image";
   what: string;
   alpha: number;
+  /** A photograph laid to the frame's edge (it may run under the chips). */
+  bleed?: boolean;
   box: { x0: number; y0: number; x1: number; y1: number };
 }
 
@@ -33,13 +35,15 @@ function items(nodes: readonly DisplayNode[], m: Matrix = IDENTITY, alpha = 1, o
     const a = alpha * (n.opacity ?? 1);
     if (n.type === "group") items(n.children, n.transform ? multiply(m, n.transform) : m, a, out);
     else if (n.type === "text") {
+      // Decorative copies (ghosts, glows, shadows) are not the words.
+      if (n.decor) continue;
       for (const r of n.runs) {
         if (!r.text.trim()) continue;
         const size = Number(/(\d+(\.\d+)?)px/.exec(r.font)![1]);
         const rm = r.transform ? multiply(m, r.transform) : m;
         out.push({ kind: "text", what: `${n.field} "${r.text}"`, alpha: a * (r.opacity ?? 1), box: boxOf(rm, r.x, r.y, measure(r.text, r.font), size) });
       }
-    } else if (n.type === "image") out.push({ kind: "image", what: n.src, alpha: a, box: boxOf(m, n.x, n.y, n.w, n.h) });
+    } else if (n.type === "image" && !n.decor) out.push({ kind: "image", what: n.src, alpha: a, box: boxOf(m, n.x, n.y, n.w, n.h), bleed: !!n.bleed });
   }
   return out;
 }
@@ -76,6 +80,8 @@ describe("a code-drawn template's cover", () => {
       const found = items(c.plan.evaluate(c.rest).nodes);
       expect(found.some((i) => i.kind === "text") || found.some((i) => i.what === "logo"), c.id).toBe(true);
       for (const i of found) {
+        // A photograph laid to the edge is the ground: it runs under the chips (the words on it never do).
+        if (i.bleed) continue;
         const tag = `${c.id} ${i.what}`;
         expect(i.box.y0, tag).toBeGreaterThanOrEqual(h * TILE_CHIPS.top - 1);
         expect(i.box.y1, tag).toBeLessThanOrEqual(h * (1 - TILE_CHIPS.bottom) + 1);

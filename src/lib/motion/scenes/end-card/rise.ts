@@ -6,9 +6,9 @@
 
 import { about, group, multiply, translate, type DisplayNode } from "../../display";
 import { progress, type Cue } from "../../tween";
-import { blockCentre, endCardScene, entering, lineRuns, markBox, markNodes, pillRect } from "./shared";
+import { blockCentre, deepGround, endCardScene, entering, lineRuns, markBox, markNodes, pillRect, keepFor } from "./shared";
 
-export default endCardScene("rise", ({ rest, second }) => {
+export default endCardScene("rise", ({ rest }) => {
   const { headline, cta, site } = rest;
   const mark = markBox(rest);
   const items = [mark && "mark", headline.layout.lines.length && "headline", cta && "cta"].filter(Boolean) as string[];
@@ -20,10 +20,12 @@ export default endCardScene("rise", ({ rest, second }) => {
 
   return {
     cues,
+    keep: keepFor("rise", rest),
     // The panel is about a quarter of the way up on the first frame.
     lead: 0.055,
     signature: 0.075,
-    background: second,
+    // It rises out of the brand colour's own deep shade (no band of a second colour across the top).
+    background: deepGround(rest.theme),
     frame(t, tl) {
       const P = (id: string) => progress(tl, id, t);
       const lift = S * 0.1;

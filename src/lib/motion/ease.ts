@@ -154,13 +154,16 @@ export const hold: Ease = (p) => (p >= 1 ? 1 : 0);
 export const SPRINGS = {
   pop: { stiffness: 420, damping: 26 },
   settle: { stiffness: 180, damping: 20 },
+  land: { stiffness: 300, damping: 18 },
 } as const satisfies Record<string, SpringOptions>;
 
 /**
  * Fuobe's named curves: the only ones scenes use by name. enter: a soft expo-out for arrivals; glide: a gentler
  * cubic-out for headlines and wide moves (the motion stays visible through its window); exit: leaving; move: an in-place
  * move; pop: a button or badge, about 7 % past its size and back; settle: logos and large type; snap: small, UI-like
- * moves; draw: strokes; drift: a slow camera that comes to rest on the last frame.
+ * moves; draw: strokes; drift: a slow camera that comes to rest on the last frame. decel: a soft arrival with a long
+ * glide (quiet serif lines, quotes); roll: digits rolling to their value; whip: a fast in-place swap or camera whip;
+ * land: a sticker or pill landing with a bigger bounce (playful looks only); slam: accelerating into an impact (stomps).
  */
 export const CURVES = {
   enter: bezier(0.16, 1, 0.3, 1),
@@ -172,6 +175,11 @@ export const CURVES = {
   settle: spring(SPRINGS.settle),
   snap: bezier(0.2, 0, 0, 1),
   draw: bezier(0.45, 0, 0.2, 1),
+  decel: bezier(0.05, 0.7, 0.1, 1),
+  roll: bezier(0.23, 1, 0.32, 1),
+  whip: bezier(0.83, 0, 0.17, 1),
+  land: spring(SPRINGS.land),
+  slam: expo.in,
   linear,
 } satisfies Record<string, Ease>;
 

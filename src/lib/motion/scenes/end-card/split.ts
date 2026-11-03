@@ -4,26 +4,29 @@
  * draws under the call to action and the pill grows up from it, its round ends kept, with its label.
  */
 
-import { group, type DisplayNode } from "../../display";
+import { group, mixHex, type DisplayNode } from "../../display";
 import { linearProgress, progress, type Cue } from "../../tween";
-import { endCardScene, entering, lineRuns, markBox, markNodes, shadeOf, wordRuns } from "./shared";
+import { endCardScene, entering, lineRuns, markBox, markNodes, wordRuns, keepFor } from "./shared";
 
 export default endCardScene("split", ({ rest, second }) => {
   const { headline, cta, site } = rest;
   const mark = markBox(rest);
   const words = headline.layout.lines.reduce((n, l) => n + l.words.length, 0);
   const slots = Math.min(words, 8);
-  const cues: Cue[] = [{ id: "panels", kind: "move", at: 0, dur: 0.55, curve: "move" }];
+  const cues: Cue[] = [{ id: "panels", kind: "move", at: 0, dur: 0.6, curve: "whip" }];
   if (mark) cues.push({ id: "mark", kind: "enter", at: 0.15, dur: 0.5, curve: "settle" });
   for (let s = 0; s < slots; s++) cues.push({ id: `headline.word.${s}`, kind: "enter", at: 0.28 + s * 0.065, dur: 0.45, curve: "glide", stagger: { group: "headline", unit: "words", index: s, each: 0.065 } });
   if (cta) cues.push({ id: "cta.line", kind: "draw", at: 0.48, dur: 0.2, curve: "draw" }, { id: "cta.fill", kind: "move", at: 0.6, dur: 0.3, curve: "snap" });
   if (site) cues.push({ id: "site", kind: "fade", at: 0.55, dur: 0.35, curve: "enter" });
-  const left = second;
-  const right = shadeOf(second);
+  // Both halves one colour (one deep shade of the brand colour): only the seam tells them apart.
+  const left = mixHex(rest.theme.accent, "#000000", 0.2);
+  const right = left;
+  void second;
   const S = Math.min(rest.w, rest.h);
 
   return {
     cues,
+    keep: keepFor("split", rest),
     lead: 0.05,
     signature: 0.3,
     frame(t, tl) {
@@ -72,6 +75,9 @@ export default endCardScene("split", ({ rest, second }) => {
       if (open < 1) {
         over.push({ type: "rect", id: "panel.left", x: -open * rest.w * 0.5, y: 0, w: rest.w * 0.5 + (1 - open), h: rest.h, fill: left });
         over.push({ type: "rect", id: "panel.right", x: rest.w * 0.5 + open * rest.w * 0.5, y: 0, w: rest.w * 0.5, h: rest.h, fill: right });
+        // A rule of the words' colour on each inner edge, the light catching them as they whip apart.
+        const edge = Math.max(2, S * 0.004);
+        over.push({ type: "rect", id: "panel.edge.left", x: rest.w * 0.5 - open * rest.w * 0.5 - edge, y: 0, w: edge, h: rest.h, fill: rest.ink }, { type: "rect", id: "panel.edge.right", x: rest.w * 0.5 + open * rest.w * 0.5, y: 0, w: edge, h: rest.h, fill: rest.ink });
       }
       return { nodes, over };
     },

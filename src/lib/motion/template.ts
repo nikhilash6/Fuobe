@@ -7,7 +7,7 @@
 import { FORMATS, KINETIC_SIZES, type MarketingTemplate } from "@/lib/catalog/marketing";
 import { unmarked } from "./marks";
 import { DEFAULT_EXPORT, type Recipe } from "./recipe";
-import { SHOWCASE_BRANDS, SHOWCASE_PRODUCTS, SHOWCASES } from "./showcase";
+import { SHOWCASE_BRANDS, SHOWCASE_PHOTOS, SHOWCASE_PRODUCTS, SHOWCASES } from "./showcase";
 import type { SizePreset } from "./sizes";
 
 export interface TemplateBrand {
@@ -54,8 +54,9 @@ export function templateScene(t: MarketingTemplate, controls: Record<string, str
 
 /** The showcase brand a template opens with. */
 export function showcaseBrand(t: MarketingTemplate): TemplateBrand {
-  const b = SHOWCASE_BRANDS[SHOWCASES[t.id]?.brand ?? "lumen"];
-  return { name: b.name, colors: [...b.colors], fonts: { ...b.fonts }, logo: b.logo };
+  const s = SHOWCASES[t.id];
+  const b = SHOWCASE_BRANDS[s?.brand ?? "lumen"];
+  return { name: b.name, colors: [...(s?.colors ?? b.colors)], fonts: { ...b.fonts }, logo: b.logo };
 }
 
 /** The state a template opens in: its showcase words and choices, and the person's own brand when they set one. */
@@ -73,7 +74,7 @@ export function initialState(t: MarketingTemplate, brand?: TemplateBrand | null)
     size: s?.size && sizes.includes(s.size) ? s.size : sizes[0],
     duration: lengths.default,
     brand: brand ?? showcaseBrand(t),
-    product: t.picture === "product" ? (s?.product ? SHOWCASE_PRODUCTS[s.product] : SHOWCASE_PRODUCTS.perfume) : null,
+    product: t.picture === "product" ? (s?.product ? SHOWCASE_PRODUCTS[s.product] : SHOWCASE_PRODUCTS.perfume) : t.picture === "photo" ? SHOWCASE_PHOTOS[s?.photo ?? "portrait"] : null,
   };
 }
 
@@ -96,7 +97,7 @@ export function templateRecipe(t: MarketingTemplate, s: TemplateState): Recipe {
   const logo = s.brand.logo && !(endCard && s.controls.mark === "name") ? s.brand.logo : undefined;
   const controls: Record<string, string> = { template: t.id };
   for (const g of t.easy ?? []) if (!g.scene && s.controls[g.id]) controls[g.id] = s.controls[g.id];
-  const product = t.picture === "product" && s.product ? s.product : undefined;
+  const product = t.picture && s.product ? s.product : undefined;
   return {
     v: 1,
     scene,

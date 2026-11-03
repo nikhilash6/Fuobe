@@ -1,164 +1,208 @@
 /**
- * Dashboard Zoom: a designed dashboard panel rises, its grid fades up, the bars grow one by one, a trend line draws over
- * them and its last point pops, while the key number rolls up to the value the person typed (figure by figure, in
- * tabular cells, with their own separators) and the camera pushes in from a slight angle to rest square on the panel.
- * The panel carries the brand (its logo, else its name) in its header, and the number is set in lining figures (a face
- * whose default figures are old-style hands the number to the body face). The beats spread over the clip's length, and
- * the push runs the whole clip long. The last frame shows the typed number exactly.
+ * Dashboard Zoom: the key number is the hero, set huge above the evidence in the product face with tabular figures
+ * (the typed separators at their own width), rolling up column by column to exactly what was typed. Under it the label
+ * cuts up, and a glass panel rises from its foot with the chart: gridlines, a dashed comparison line at 25 %, and the
+ * main line in the brand's colour drawing across after the number lands, its area filling in and its last point
+ * pulsing once. A lit field of the brand's hue with a light from the top left sits behind a fine grid. The brand, the
+ * address, a corner note and an index sit on the corners. Through the hold the type plane pushes in.
  */
 
-import { about, group, multiply, translate, withAlpha, mixHex, type DisplayNode } from "../../display";
-import { rngRange } from "../../random";
-import { lineRuns } from "../end-card/shared";
-import { centreFigures, counterLayout, counterNode, ev, figureFamily, logoNode, marketingScene, MIN_BODY, readable, setText, shadowOf, spread, textBlock } from "./kit";
+import { about, group, type DisplayNode } from "../../display";
+import { contrastOf, fieldStops, mixOk, toLab, withLightness } from "../../color";
+import { rgba } from "../../fx/background";
+import { twoShadow } from "../../fx/depth";
+import { asDecor, bands, brandSign, capBand, footRow, litField, metaInk, posterScene, signIn, signNodes, toneOf, topSite } from "./poster";
 
-/** An open smooth curve through points (Catmull–Rom as cubic Béziers), and its length. */
-export function smoothOpenPath(pts: [number, number][]): { d: string; length: number } {
-  const n = pts.length;
-  const parts = [`M${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`];
-  let length = 0;
-  for (let i = 0; i < n - 1; i++) {
-    const p0 = pts[Math.max(0, i - 1)];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[Math.min(n - 1, i + 2)];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    parts.push(`C${c1[0].toFixed(2)} ${c1[1].toFixed(2)} ${c2[0].toFixed(2)} ${c2[1].toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`);
-    let px = p1[0];
-    let py = p1[1];
-    for (let k = 1; k <= 10; k++) {
-      const t = k / 10;
-      const u = 1 - t;
-      const x = u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0];
-      const y = u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1];
-      length += Math.hypot(x - px, y - py);
-      px = x;
-      py = y;
-    }
+/** A smooth rising line through seeded points (a sparkline), as path data, and its rough length. */
+function sparkline(x: number, y: number, w: number, h: number, seed: number, lift = 1): { d: string; area: string; length: number; end: [number, number]; pts: [number, number][] } {
+  const n = 9;
+  const pts: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1);
+    // Mostly rising (a quarter of the noise of before, so it never dips against an "up" label).
+    const noise = Math.sin(i * 1.7 + seed) * 0.07 + Math.sin(i * 0.9 + seed * 0.3) * 0.05;
+    pts.push([x + u * w, y + h - (0.12 + 0.75 * lift * u ** 1.3 + noise * (1 - u * 0.6)) * h * 0.85]);
   }
-  return { d: parts.join(""), length };
+  let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  let length = 0;
+  for (let i = 1; i < n; i++) {
+    const [x0, y0] = pts[i - 1];
+    const [x1, y1] = pts[i];
+    const mx = (x0 + x1) / 2;
+    d += `C${mx.toFixed(1)} ${y0.toFixed(1)} ${mx.toFixed(1)} ${y1.toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+    length += Math.hypot(x1 - x0, y1 - y0) * 1.08;
+  }
+  const area = `${d}L${(x + w).toFixed(1)} ${(y + h).toFixed(1)}L${x.toFixed(1)} ${(y + h).toFixed(1)}Z`;
+  return { d, area, length, end: pts[n - 1], pts };
 }
 
-const BARS = 12;
-
-export default marketingScene({
+export default posterScene({
   id: "marketing/stat-dashboard",
   name: "Dashboard Zoom",
+  pairing: "T7",
   look: "dark",
   build(c) {
-    const { S, safe, palette: pal, design, recipe } = c;
-    const panel = c.wide ? { x: safe.x + safe.w * 0.05, y: safe.y, w: safe.w * 0.9, h: safe.h } : c.tall ? { x: safe.x, y: safe.y + safe.h * 0.07, w: safe.w, h: safe.h * 0.8 } : { x: safe.x, y: safe.y, w: safe.w, h: safe.h };
-    const P0 = S * 0.055;
-    const inner = panel.w - 2 * P0;
-    const ink = pal.surfaceInk;
-    const quiet = readable(pal.surface, mixHex(ink, pal.surface, 0.28), ink);
-    // The header: the logo (at most this tall), else the name.
-    const logo = c.input.logo;
-    const logoH = S * 0.07;
-    const logoBox = logo ? (() => {
-      const s = Math.min((inner * 0.6) / logo.w, logoH / logo.h);
-      return { x: panel.x + P0, y: panel.y + P0, w: logo.w * s, h: logo.h * s };
-    })() : null;
-    const brand = !logo ? setText(c, recipe.brand.name, { family: "body", weight: 700, width: inner * 0.7, maxLines: 1, max: S * 0.038, min: S * MIN_BODY }) : null;
+    const { S, safe, pal, design } = c;
+    const side = c.wide;
+    const signH = S * (c.cover ? 0.058 : 0.046);
+    const sign = brandSign(c, { maxW: S * 0.36, h: signH, x: safe.x, y: safe.y, min: S * (c.cover ? 0.05 : 0.03) });
+    const metaSize = S * (c.cover ? 0.024 : 0.02);
+    const site = topSite(c, sign, metaSize);
+    const b = bands(c, { topRow: sign?.h ?? metaSize, gap: S * 0.06 });
+    const foot = metaSize * 1.1 + S * 0.05;
     const statText = c.field("stat", "0");
-    const stat = centreFigures(counterLayout("stat", statText, figureFamily(c, 800), 800, inner, S * (c.wide ? 0.15 : 0.16), S * 0.07, c.measure), c.measure);
-    const label = setText(c, c.field("label"), { family: "body", weight: 500, width: inner, maxLines: 2, max: S * 0.042, min: S * MIN_BODY, lineHeight: 1.25 });
-    const headTop = panel.y + P0;
-    const statTop = headTop + (logoBox ? logoBox.h + S * 0.045 : brand ? brand.size * 1.2 + S * 0.045 : 0);
-    const labelTop = statTop + stat.size * 1.12 + S * 0.012;
-    const chartTop = labelTop + (label ? label.height : 0) + S * 0.06;
-    const chartBottom = panel.y + panel.h - P0;
-    const chartH = Math.max(S * 0.12, chartBottom - chartTop);
-    const numberInk = readable(pal.surface, pal.accent, ink);
-    const brandB = brand ? textBlock("brand", brand, { y: headTop, color: quiet, left: panel.x + P0, width: inner * 0.7 }) : null;
-    const labelB = label ? textBlock("label", label, { y: labelTop, color: quiet, left: panel.x + P0, width: inner }) : null;
+    // The number: the hero, in the product face with fixed-width figures, filling the width (the left column on a wide frame).
+    const numW = side ? safe.w * 0.52 : safe.w;
+    // Proportional figures at rest (a fixed-width "1" leaves holes in a settled number).
+    const stat0 = c.set("stat", statText, { role: "hero", weight: 800, x: safe.x, y: b.top, width: numW, maxLines: 1, max: side ? design.h * 0.3 : S * 0.36, min: S * 0.08, preset: "odometer", tracking: -0.01, leading: 0.95 });
+    const lift = stat0 ? stat0.lines[0].y + stat0.cap.top - b.top : 0;
+    const labelSize = S * (c.cover ? 0.05 : 0.042);
+    const label0 = c.set("label", c.field("label"), { role: "body", weight: 500, x: safe.x, y: 0, width: numW, maxLines: 2, max: labelSize, min: S * 0.03, leading: 1.2 });
+    const labelH = label0 ? capBand(label0).h : 0;
+    const statH = stat0 ? capBand(stat0).h : 0;
+    // Wide: the number and label centred in the left column, the panel in the right. Tall: number, label, then the panel to the foot.
+    const blockH = statH + (label0 ? S * 0.05 + labelH : 0);
+    const statTop = side ? b.top + Math.max(0, (b.bottom - foot - b.top - blockH) * 0.5) : b.top;
+    const stat = stat0 ? c.set("stat", statText, { role: "hero", weight: 800, x: safe.x, y: statTop - lift, width: numW, maxLines: 1, max: stat0.size, min: stat0.size, preset: "odometer", tracking: -0.01, leading: 0.95 }) : null;
+    const statBand = stat ? capBand(stat) : { x: safe.x, y: statTop, w: 0, h: 0 };
+    const label = label0 ? c.set("label", c.field("label"), { role: "body", weight: 500, x: safe.x, y: statBand.y + statBand.h + S * 0.05 - (label0.lines[0].y + label0.cap.top - label0.lines[0].y), width: numW, maxLines: 2, max: label0.size, min: label0.size, leading: 1.2 }) : null;
+    const below = label ? label.lines[label.lines.length - 1].baseline + label.size * 0.3 : statBand.y + statBand.h;
+    const panel = side ? { x: safe.x + safe.w * 0.58, y: b.top, w: safe.w * 0.42, h: b.bottom - foot - b.top } : { x: safe.x, y: below + S * 0.06, w: safe.w, h: Math.max(S * 0.25, safe.y + safe.h - foot - S * 0.02 - below - S * 0.06) };
+    const pad = S * 0.05;
+    const chart = { x: panel.x + pad * 1.3, y: panel.y + pad * 1.2, w: panel.w - pad * 2.3, h: panel.h - pad * 2.4 };
+    const spark = sparkline(chart.x, chart.y, chart.w, chart.h, c.seed);
+    const shadowSeries = sparkline(chart.x, chart.y, chart.w, chart.h, c.seed + 3, 0.6);
 
-    // The data: a seeded climb, the last bar the highest.
-    const values = Array.from({ length: BARS }, (_, i) => Math.min(1, Math.max(0.14, 0.24 + 0.62 * (i / (BARS - 1)) ** 1.25 + rngRange(-0.09, 0.09, recipe.seed, "bar", i))));
-    values[BARS - 1] = 1;
-    const slot = inner / BARS;
-    const barW = slot * 0.56;
-    const bars = values.map((v, i) => ({ x: panel.x + P0 + i * slot + (slot - barW) / 2, h: v * chartH * 0.86 }));
-    const pts = bars.map((b, i) => [b.x + barW / 2, chartBottom - b.h - chartH * 0.08 - rngRange(0, 0.05, recipe.seed, "pt", i) * chartH] as [number, number]);
-    const line = smoothOpenPath(pts);
-    const area = `${line.d}L${pts[BARS - 1][0]} ${chartBottom}L${pts[0][0]} ${chartBottom}Z`;
-    const barColour = mixHex(pal.surface, pal.mark2, pal.look === "light" ? 0.32 : 0.45);
-    const grid = mixHex(pal.surface, ink, 0.1);
+    const k = c.spread(3.4, 1.5);
+    const statPlan = stat ? c.move(stat, { in: "odometer", at: 0.03, hero: true, loop: "light-sweep", loopAt: 2.6, loopEvery: 1.8 }) : null;
+    const landed = statPlan?.settled ?? 1.4;
+    // The panel rises at once and the line draws while the number is still rolling, so number and evidence land
+    // together; the change pops in as a tag on the line's last point.
+    c.ev("panel", "enter", 0.1, 0.6, "glide");
+    c.ev("grid", "draw", 0.25, 0.6, "draw");
+    const sparkAt = Math.max(0.6, landed - 0.7);
+    c.ev("spark", "draw", sparkAt, 0.9, "draw");
+    c.ev("ghost", "fade", sparkAt - 0.1, 0.7, "glide");
+    c.ev("area", "fade", sparkAt + 0.4, 0.7, "glide");
+    c.ev("dot", "pop", sparkAt + 0.9, 0.5, "pop");
+    c.ev("change", "pop", sparkAt + 1.02, 0.4, "pop");
+    const labelPlan = label ? c.move(label, { in: "cut-rise", at: Math.min(landed - 0.3, 1.0 * k) }) : null;
+    const signPlan = signIn(c, sign, "brand", 0.2);
+    const sitePlan = site ? c.move(site, { in: "fade-rise", at: 0.35, rate: 26 }) : null;
+    const row = footRow(c, landed + 0.3);
 
-    const k = spread(c, 1.95);
-    const events = [
-      ev("panel", "enter", 0.08, 0.65, "enter"),
-      ev("grid", "fade", 0.35 * k, 0.5, "enter"),
-      ...bars.map((_, i) => ev(`bar.${i}`, "enter", 0.5 * k + i * 0.08, 0.5, "enter", { group: "bars", unit: "elements" })),
-      ev("line", "draw", 0.75 * k, 1.2, "draw"),
-      ev("area", "fade", 0.75 * k + 0.9, 0.6, "enter"),
-      ev("dot", "pop", 0.75 * k + 1.05, 0.4, "pop"),
-      ev("count", "move", 0.45 * k, Math.min(2.2, 1.5 * k), "linear"),
-      ev("brand", "fade", 0.3, 0.4, "enter"),
-      ...(label ? [ev("label", "enter", 0.62 * k, 0.45, "glide")] : []),
-      ev("push", "camera", 0, c.last, "drift"),
-    ];
-    const shadow = shadowOf(pal.ground, pal.look === "light" ? 0.14 : 0.45);
-    // Pulses 1.6 s apart from when the point lands, the last one done before the last frame.
-    const dotEnd = 0.75 * k + 1.45;
-    const pulse = (t: number): number => {
-      if (t <= dotEnd) return 0;
-      const n = Math.floor((t - dotEnd) / 1.6);
-      return dotEnd + (n + 1) * 1.6 > c.last ? 0 : ((t - dotEnd) % 1.6) / 1.6;
-    };
+    // Glass: a lighter tone of the ground at 78 %, a hairline of light along its top edge.
+    const surface = c.dark ? mixOk(fieldStops(pal).dark, mixOk(pal.paper, pal.brand[0], 0.5), 0.14) : mixOk(pal.ground, pal.paper, 0.85);
+    const edge = c.dark ? mixOk(pal.ground, pal.paper, 0.26) : mixOk(pal.paper, pal.brand[0], 0.25);
+    // The line: the brand's own colour, lifted until it reads on the panel.
+    const b0 = pal.brand[0];
+    const lineColor = contrastOf(b0, surface) >= 3 ? b0 : withLightness(b0, toLab(surface).L < 0.5 ? 0.68 : 0.42);
+    const stops = fieldStops(pal);
+    const ticks = 4;
+    // The change the label names ("up 38%"): its figure, as typed, in a tag pinned to the line's last point (a copy of
+    // the label's words, so it is decorative), with a drawn arrow for the direction.
+    const pct = /(\p{Nd}+(?:[.,]\p{Nd}+)?\s?%)/u.exec(c.field("label"))?.[1] ?? "";
+    const tagSize = S * (c.cover ? 0.034 : 0.03);
+    const tag = pct ? c.set("label", pct, { role: "figures", weight: 700, x: 0, y: 0, width: S * 0.4, maxLines: 1, max: tagSize, min: tagSize }) : null;
+    const tagW = tag ? tag.ink.w + tagSize * 2.2 : 0;
+    const tagH = tagSize * 1.9;
+    const tagX = Math.min(chart.x + chart.w - tagW, spark.end[0] - tagW / 2);
+    const tagY = Math.max(panel.y + S * 0.02, spark.end[1] - tagH - S * 0.045);
+    const tagSet = tag ? c.set("label", pct, { role: "figures", weight: 700, x: tagX + tagSize * 1.5, y: tagY + (tagH - tagSize) / 2 - tagSize * 0.05, width: S * 0.4, maxLines: 1, max: tagSize, min: tagSize }) : null;
+    const labelInk = c.dark ? mixOk(pal.paper, pal.ground, 0.2) : metaInk(pal);
 
     return {
-      events,
-      overflow: [...(stat.overflow ? ["stat"] : []), ...(label?.overflow ? ["label"] : []), ...(brand?.overflow ? ["brand"] : [])],
-      signature: 0.75 * k + 0.7,
-      camera: () => ({ zoom: 1, x: 0, y: 0 }),
-      frame(t, P, Lp) {
-        // The push: from a little farther out and turned, square on the panel at rest.
-        const push = P("push");
-        const cam = multiply(translate(0, (1 - push) * S * 0.05), about(design.w / 2, panel.y + panel.h * 0.4, 0.88 + 0.12 * push, -0.035 * (1 - push)));
-        const pe = P("panel");
-        const children: DisplayNode[] = [
-          { type: "rect", x: panel.x, y: panel.y + S * 0.02, w: panel.w, h: panel.h, r: S * 0.04, fill: shadow },
-          { type: "rect", x: panel.x, y: panel.y, w: panel.w, h: panel.h, r: S * 0.04, fill: pal.surface },
+      overflow: [...(stat?.overflow ? ["stat"] : []), ...(label?.overflow ? ["label"] : []), ...(sign?.overflow ? ["brand"] : []), ...(site?.overflow ? ["website"] : []), ...row.overflow],
+      signature: landed + 0.2,
+      camera: (t) => ({ x: 0, y: 24 * (1 - Math.min(1, t / c.last)) ** 2 }),
+      draw(t, kit) {
+        const field = litField(c, t, { from: "tl", stops, light: withLightness(pal.brand[0], 0.6), lightAlpha: c.dark ? 0.3 : 0.2 });
+        // A fine grid in a tone of the ground.
+        const cell = S * 0.09;
+        let gd = "";
+        for (let x = (design.w % cell) / 2; x <= design.w; x += cell) gd += `M${x.toFixed(1)} 0V${design.h}`;
+        for (let y = (design.h % cell) / 2; y <= design.h; y += cell) gd += `M0 ${y.toFixed(1)}H${design.w}`;
+        const atmosphere: DisplayNode[] = [group([{ type: "path", d: gd, stroke: { paint: toneOf(pal, 0.14), width: 1 } }], { opacity: 0.16, cache: { key: `grid|${design.w}x${design.h}|${pal.ground}`, bounds: { x: 0, y: 0, ...design } } })];
+        const lin = kit.L("panel");
+        const p = kit.P("panel");
+        const plate: DisplayNode = { type: "rect", ...panel, r: S * 0.035, fill: rgba(surface, 0.78), stroke: { paint: edge, width: Math.max(1, S * 0.0015) } };
+        const sheen: DisplayNode = { type: "rect", ...panel, r: S * 0.035, fill: { kind: "linear", x0: 0, y0: panel.y, x1: 0, y1: panel.y + panel.h * 0.5, stops: [{ at: 0, color: rgba("#ffffff", c.dark ? 0.08 : 0.4) }, { at: 1, color: rgba("#ffffff", 0) }] } };
+        // The glass's own hairline edge is its rim (no separate top line).
+        const inside: DisplayNode[] = [];
+        const gp = kit.P("grid");
+        if (gp > 0) {
+          let g = "";
+          for (let i = 0; i <= ticks; i++) {
+            const y = chart.y + (chart.h * i) / ticks;
+            g += `M${chart.x.toFixed(1)} ${y.toFixed(1)}H${(chart.x + chart.w * gp).toFixed(1)}`;
+          }
+          inside.push({ type: "path", d: g, stroke: { paint: rgba(pal.ink, 0.1), width: Math.max(1, S * 0.0012) } });
+        }
+        // The comparison: dashed, at 25 %.
+        const gh = kit.P("ghost");
+        if (gh > 0) {
+          let dd = "";
+          const n = 28;
+          // A dashed line drawn as short pieces along the second series' points.
+          const ends = shadowSeries.pts;
+          for (let i = 0; i < n; i += 2) {
+            const u0 = i / n;
+            const u1 = (i + 1) / n;
+            const at = (u: number) => {
+              const f = u * (ends.length - 1);
+              const j = Math.min(ends.length - 2, Math.floor(f));
+              const r = f - j;
+              return [ends[j][0] + (ends[j + 1][0] - ends[j][0]) * r, ends[j][1] + (ends[j + 1][1] - ends[j][1]) * r];
+            };
+            const [ax, ay] = at(u0);
+            const [bx, by] = at(u1);
+            dd += `M${ax.toFixed(1)} ${ay.toFixed(1)}L${bx.toFixed(1)} ${by.toFixed(1)}`;
+          }
+          inside.push({ type: "path", d: dd, stroke: { paint: rgba(pal.ink, 0.25 * gh), width: Math.max(1.5, S * 0.003), cap: "round" } });
+        }
+        const ar = kit.P("area");
+        if (ar > 0) inside.push(group([{ type: "path", d: spark.area, fill: { kind: "linear", x0: chart.x, y0: 0, x1: chart.x + chart.w, y1: 0, stops: [{ at: 0, color: rgba(lineColor, 0.05) }, { at: 0.8, color: rgba(lineColor, 0.2) }, { at: 0.93, color: rgba(lineColor, 0.16) }, { at: 1, color: rgba(lineColor, 0) }] } }], { opacity: ar }));
+        const sp = kit.P("spark");
+        if (sp > 0) inside.push({ type: "path", d: spark.d, stroke: { paint: lineColor, width: Math.max(3, S * 0.007), trim: sp, length: spark.length, cap: "round", join: "round" } });
+        if (sp >= 1) {
+          const dl = kit.L("dot");
+          const ring = dl > 0 && dl < 1 ? [{ type: "ellipse" as const, cx: spark.end[0], cy: spark.end[1], rx: S * (0.015 + 0.05 * dl), ry: S * (0.015 + 0.05 * dl), stroke: { paint: rgba(lineColor, 0.6 * (1 - dl)), width: Math.max(1.5, S * 0.003) } }] : [];
+          inside.push(...ring, { type: "ellipse", cx: spark.end[0], cy: spark.end[1], rx: S * 0.03, ry: S * 0.03, fill: rgba(lineColor, 0.22) }, { type: "ellipse", cx: spark.end[0], cy: spark.end[1], rx: S * 0.013, ry: S * 0.013, fill: lineColor });
+        }
+        const ch = kit.L("change");
+        if (tagSet && ch > 0) {
+          const q = kit.P("change");
+          const ax = tagX + tagSize * 0.75;
+          const ay = tagY + tagH / 2;
+          const a = tagSize * 0.32;
+          const tagNodes: DisplayNode[] = [
+            { type: "rect", x: tagX, y: tagY, w: tagW, h: tagH, r: tagH / 2, fill: lineColor },
+            { type: "path", d: `M${(ax - a).toFixed(1)} ${(ay + a * 0.6).toFixed(1)}L${ax.toFixed(1)} ${(ay - a * 0.7).toFixed(1)}L${(ax + a).toFixed(1)} ${(ay + a * 0.6).toFixed(1)}Z`, fill: surface },
+            ...asDecor([{ type: "text", field: "label", runs: [{ text: pct, gap: "", font: tagSet.font, x: tagSet.lines[0].x, y: tagSet.lines[0].y, fill: surface }] }]),
+          ];
+          inside.push(group(tagNodes, { ...(q < 1 && { transform: about(tagX + tagW / 2, tagY + tagH, 0.85 + 0.15 * q) }), ...(ch < 0.5 && { opacity: ch / 0.5 }) }));
+        }
+        const reveal = Math.min(1, lin * 1.25);
+        const subject: DisplayNode[] =
+          lin > 0
+            ? [
+                group([...twoShadow({ nodes: [plate], size: panel.h, ground: pal.ground, bounds: panel, key: `dz|${panel.w.toFixed(0)}x${panel.h.toFixed(0)}` }), plate, sheen, ...inside], {
+                  transform: [1, 0, 0, 1, 0, (1 - p) * S * 0.04],
+                  ...(reveal < 1 && { clip: { type: "rect", x: panel.x - S * 0.1, y: panel.y + panel.h * (1 - reveal) - S * 0.05, w: panel.w + S * 0.2, h: panel.h * reveal + S * 0.2 } }),
+                }),
+              ]
+            : [];
+        const hero: DisplayNode[] = [];
+        if (statPlan && stat) hero.push(...kit.type(statPlan, { fill: pal.ink, sweep: "#ffffff", sweepAlpha: 0.45 }));
+        if (labelPlan) hero.push(...kit.type(labelPlan, { fill: labelInk }));
+        const meta = [...signNodes(c, kit, sign, signPlan, "brand", safe.x, safe.y, pal.ink), ...(sitePlan ? kit.type(sitePlan, { fill: metaInk(pal), caret: lineColor }) : []), ...row.draw(kit, metaInk(pal), pal.ink)];
+        return [
+          { role: "ground", nodes: field },
+          { role: "atmosphere", nodes: atmosphere },
+          { role: "subject", nodes: subject, push: -0.025, z: 1 },
+          { role: "hero", nodes: hero },
+          { role: "meta", nodes: meta },
         ];
-        // Window dots, top right.
-        for (let i = 0; i < 3; i++) children.push({ type: "ellipse", cx: panel.x + panel.w - P0 - i * S * 0.03, cy: headTop + S * 0.017, rx: S * 0.008, ry: S * 0.008, fill: grid });
-        const g = P("grid");
-        if (g > 0) for (let i = 0; i < 4; i++) children.push({ type: "rect", x: panel.x + P0, y: chartBottom - (i / 3) * chartH * 0.92, w: inner, h: Math.max(1.5, S * 0.002), fill: grid, opacity: g });
-        bars.forEach((b, i) => {
-          const q = P(`bar.${i}`);
-          if (q <= 0) return;
-          const h = b.h * q;
-          children.push({ type: "rect", x: b.x, y: chartBottom - h, w: barW, h, r: Math.min(barW * 0.22, h / 2), fill: i === BARS - 1 ? pal.highlight.fill : barColour });
-        });
-        const a = P("area");
-        if (a > 0) children.push({ type: "path", d: area, fill: { kind: "linear", x0: 0, y0: chartTop, x1: 0, y1: chartBottom, stops: [{ at: 0, color: withAlpha(pal.mark, 0.32) }, { at: 1, color: withAlpha(pal.mark, 0) }] }, opacity: a });
-        const l = P("line");
-        if (l > 0) children.push({ type: "path", d: line.d, stroke: { paint: pal.mark, width: S * 0.0065, trim: l, length: line.length, cap: "round", join: "round" } });
-        const dot = P("dot");
-        if (Lp("dot") > 0) {
-          const end = pts[BARS - 1];
-          const r = S * 0.014 * Math.max(0, dot);
-          children.push({ type: "ellipse", cx: end[0], cy: end[1], rx: r * 1.9, ry: r * 1.9, fill: withAlpha(pal.mark, 0.25) }, { type: "ellipse", cx: end[0], cy: end[1], rx: r, ry: r, fill: pal.mark });
-          // The live point keeps a slow pulse while the piece holds (none on the last frame).
-          const ph = pulse(t);
-          if (ph > 0 && ph < 1) children.push({ type: "ellipse", cx: end[0], cy: end[1], rx: S * 0.014 * (1.9 + 3.2 * ph), ry: S * 0.014 * (1.9 + 3.2 * ph), stroke: { paint: pal.mark, width: Math.max(1.5, S * 0.003) }, opacity: 0.55 * (1 - ph) });
-        }
-        if (logoBox) {
-          const b = P("brand");
-          if (b > 0) children.push(b < 1 ? group([logoNode(c, logoBox, quiet)], { opacity: b }) : logoNode(c, logoBox, quiet));
-        } else if (brandB) {
-          const b = P("brand");
-          if (b > 0) children.push({ ...lineRuns(brandB), ...(b < 1 && { opacity: b }) });
-        }
-        if (Lp("count") > 0) children.push(counterNode(stat, panel.x + P0, statTop, numberInk, Lp("count")));
-        if (labelB) {
-          const q = P("label");
-          if (q > 0) children.push(group([lineRuns(labelB)], { transform: translate(0, (1 - q) * S * 0.02), ...(q < 1 && { opacity: q }) }));
-        }
-        const lin = Lp("panel");
-        return { nodes: lin > 0 ? [group([group(children, { transform: translate(0, (1 - pe) * S * 0.08), ...(lin < 0.35 && { opacity: lin / 0.35 }) })], { transform: cam })] : [] };
       },
     };
   },

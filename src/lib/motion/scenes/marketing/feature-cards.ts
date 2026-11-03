@@ -1,121 +1,154 @@
 /**
- * Feature Cards: the headline rises, then up to three rounded cards fly in from near the camera (bigger, tilted, from
- * below) and settle into a stack, one beat apart, each ticking its check as it lands; the headline drifts less than the
- * cards, so the stack reads in depth, and the camera keeps a slow drift the whole clip long. The brand signs off at the
- * foot (its logo, else its name). Each card carries one benefit, set exactly as typed, its lines kept even. A tall frame
- * stacks them, bigger, and centres the whole; a wide one sets them side by side.
+ * Feature Cards: a big headline set as a justified stack (each line fitted to the width, broken after its clause),
+ * cutting up line by line; then three numbered benefits land one after another. The numbers are the design: 01 02 03
+ * in the hero face down the left, each with a rule drawing out to its card. The cards are one system: frosted glass
+ * with a bright top edge and a contact and an ambient shadow, each as wide as its words, the first a few degrees off
+ * true, sliding in from the right with its benefit riding inside (never over its number). A lit two-tone field of
+ * the brand's hue sits under everything; the brand, the address, a corner note and an index arrow sit on the corners.
+ * Through the hold the type plane pushes in.
  */
 
-import { about, group, multiply, translate, type DisplayNode } from "../../display";
-import { lineRuns } from "../end-card/shared";
-import { brandMark, ev, marketingScene, MIN_BODY, MIN_HEAD, risingLines, setText, shadowOf, spread, textBlock } from "./kit";
-import type { TextLayout } from "../../layout";
+import { group, type DisplayNode } from "../../display";
+import { contrastOf, fieldStops, mixOk } from "../../color";
+import { twoShadow } from "../../fx/depth";
+import { rotation } from "../../fx/overlays";
+import { asDecor, bands, brandSign, capBand, fitLines, footRow, ghost, litField, metaInk, moveLines, posterScene, signIn, signNodes, stackLanded, topSite } from "./poster";
+import type { TypePlan } from "../../type/animate";
+import type { TypeSet } from "../../type/glyphs";
+import { fontOf } from "../../type/faces";
 
-export const FEATURE_FIELDS = ["point1", "point2", "point3"] as const;
+interface Card {
+  i: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  deg: number;
+  set: TypeSet;
+}
 
-export default marketingScene({
+/** Each card swings in from a slight tilt (alternating) and settles level: never tilted at rest. */
+const TILTS = [-3, 2, -1.5];
+
+export default posterScene({
   id: "marketing/feature-cards",
   name: "Feature Cards",
-  look: "light",
+  pairing: "T7",
+  look: "brand",
   build(c) {
-    const { S, safe, palette: pal, design } = c;
-    const row = c.wide;
-    // A tall frame has room to spare: everything a size up.
-    // Set at a scale (a tall frame has room to spare: everything a size up), then a step down while the whole does not
-    // fit over the sign-off.
-    const points = FEATURE_FIELDS.map((f) => ({ field: f, text: c.field(f) })).filter((p) => p.text);
-    const set = (g: number) => {
-      const head = setText(c, c.field("headline"), { weight: 800, width: row ? Math.min(safe.w, S * 1.4) : safe.w, maxLines: c.tall ? 3 : 2, max: S * (row ? 0.085 : 0.1 * g), min: S * MIN_HEAD, lineHeight: 1.06 });
-      // The brand signs the stack off at the foot.
-      const mark = brandMark(c, { maxW: S * (row ? 0.36 : 0.52), h: S * (row ? 0.07 : 0.08 * g), color: pal.ink, minName: 0.04 });
-      const footH = mark ? mark.h + S * 0.055 : 0;
-      const pad = S * 0.042 * g;
-      const badge = S * 0.074 * g;
-      const gap = S * (row ? 0.032 : 0.03 * g);
-      const cardW = row ? (safe.w - gap * (Math.max(1, points.length) - 1)) / Math.max(1, points.length) : Math.min(safe.w, S * 0.96);
-      const textW = row ? cardW - 2 * pad : cardW - 3 * pad - badge;
-      const texts: { field: string; L: TextLayout | null }[] = points.map((p) => ({ field: p.field, L: setText(c, p.text, { family: "body", weight: 700, width: textW, maxLines: row ? 4 : 2, max: S * 0.05 * g, min: S * MIN_BODY, lineHeight: 1.22 }) }));
-      const textHs = texts.map((t) => t.L?.height ?? 0);
-      const cardH = row ? badge + pad * 0.7 + Math.max(0, ...textHs) + 2 * pad : 0;
-      const heights = texts.map((_, i) => (row ? cardH : Math.max(badge, textHs[i]) + 2 * pad));
-      const stackH = row ? cardH : heights.reduce((s, h) => s + h, 0) + gap * Math.max(0, heights.length - 1);
-      const headGap = S * 0.07 * g;
-      const total = (head ? head.height + headGap : 0) + stackH;
-      return { g, head, mark, footH, pad, badge, gap, cardW, textW, texts, cardH, heights, headGap, total };
-    };
-    let L = set(c.tall ? 1.22 : 1);
-    for (let i = 0; i < 4 && L.total + L.footH > safe.h; i++) L = set(L.g * 0.9);
-    const { head, mark, footH, pad, badge, gap, cardW, textW, texts, cardH, heights, headGap, total, g } = L;
-    // Centred in what the sign-off leaves.
-    const top = safe.y + Math.max(0, (safe.h - footH - total) / 2);
-    const footY = safe.y + safe.h - (mark?.h ?? 0);
-    const headB = head ? textBlock("headline", head, { y: top, color: pal.ink, cx: design.w / 2 }) : null;
-    let y = top + (head ? head.height + headGap : 0);
-    const left0 = row ? safe.x : (design.w - cardW) / 2;
-    const cards = texts.map((t, i) => {
-      const box = row ? { x: left0 + i * (cardW + gap), y, w: cardW, h: cardH } : { x: left0, y, w: cardW, h: heights[i] };
-      if (!row) y += heights[i] + gap;
-      const bx = box.x + pad + badge / 2;
-      const by = row ? box.y + pad + badge / 2 : box.y + box.h / 2;
-      const tx = row ? box.x + pad : box.x + 2 * pad + badge;
-      const ty = row ? box.y + pad + badge + pad * 0.7 : box.y + (box.h - (t.L?.height ?? 0)) / 2;
-      const block = t.L ? textBlock(t.field, t.L, { y: ty, color: pal.surfaceInk, left: tx, width: textW }) : null;
-      return { box, badge: { cx: bx, cy: by, r: badge / 2 }, block };
+    const { S, safe, pal, design } = c;
+    const side = c.wide;
+    const signH = S * (c.cover ? 0.058 : 0.046);
+    const sign = brandSign(c, { maxW: S * 0.36, h: signH, x: safe.x, y: safe.y, min: S * (c.cover ? 0.05 : 0.03) });
+    const metaSize = S * (c.cover ? 0.024 : 0.02);
+    const site = topSite(c, sign, metaSize);
+    const b = bands(c, { topRow: sign?.h ?? metaSize, gap: S * 0.06 });
+    const foot = metaSize * 1.1 + S * 0.05;
+    const bottom = b.bottom - foot;
+    const points = ["point1", "point2", "point3"].map((k) => ({ key: k, text: c.field(k) })).filter((p) => p.text);
+    const n = Math.max(1, points.length);
+    const headW = side ? safe.w * 0.44 : safe.w;
+    // The cards keep room for their words at a readable size; the headline takes the rest.
+    const minCard = S * 0.1;
+    const cardRoom = side ? 0 : n * minCard + (n - 1) * S * 0.03 + S * 0.07;
+    const head = fitLines(c, "headline", c.field("headline"), { x: safe.x, top: b.top, room: side ? bottom - b.top : bottom - b.top - cardRoom, anchor: side ? 0.45 : 0, width: headW, maxLines: 3, max: S * (side ? 0.18 : 0.26), min: S * 0.07, preset: "cut-rise", fill: 0.98, ratio: 1.5, gap: 0.14, stack: true });
+    const headBottom = head ? head.band.y + head.band.h + head.size * 0.25 : b.top;
+    const colX = side ? safe.x + safe.w * 0.5 : safe.x;
+    const colW = side ? safe.w * 0.5 : safe.w;
+    const cardsTop = side ? b.top : headBottom + S * 0.07;
+    const gapY = S * 0.03;
+    const cardH = Math.min(S * 0.15, Math.max(minCard, (bottom - cardsTop - gapY * (n - 1)) / n));
+    // The cards spread down to the foot (their gaps open up when there's room).
+    const spread = side ? gapY : Math.max(gapY, Math.min(S * 0.08, (bottom - cardsTop - n * cardH) / Math.max(1, n - 1)));
+    const numSize = Math.min(cardH * 0.7, S * 0.13);
+    const numFont = fontOf(c.pairing.hero.family, numSize, c.pairing.hero.weight);
+    const numW = Math.max(c.measure("00", numFont), c.measure("03", numFont)) + S * 0.04;
+    const cardX = colX + numW;
+    const padX = S * 0.045;
+    const pointMax = Math.min(S * (c.cover ? 0.05 : 0.045), cardH * 0.3);
+    const cards: Card[] = [];
+    points.forEach((p, i) => {
+      const y = cardsTop + i * (cardH + spread);
+      const maxW = colW - numW;
+      const textX = cardX + padX;
+      const opts = { role: "body" as const, weight: 600, x: textX, width: maxW - 2 * padX, maxLines: 2, min: S * 0.03, leading: 1.15, tracking: 0, preset: "word-lift" as const };
+      const set = c.set(p.key, p.text, { ...opts, y: 0, max: pointMax });
+      if (!set) return;
+      const h = capBand(set).h;
+      const placed = c.set(p.key, p.text, { ...opts, y: y + (cardH - h) / 2 - set.cap.top, max: set.size, min: set.size })!;
+      // One width for every card (the column's), the words flush left inside.
+      const w = maxW;
+      cards.push({ i, x: cardX, y, w, h: cardH, deg: TILTS[i] ?? 0, set: placed });
     });
 
-    // The beats, spread over the length: the headline, the cards one by one, the sign-off.
-    const k = spread(c, 2.6);
-    const lines = head?.lines.length ?? 0;
-    const cardAt = 0.15 + (lines ? 0.35 + lines * 0.09 : 0) * k;
-    const fly = 0.62;
-    const each = Math.min(0.45, 0.14 * k * k);
-    const landed = cardAt + each * Math.max(0, cards.length - 1) + fly;
-    const events = [
-      ...Array.from({ length: lines }, (_, i) => ev(`head.${i}`, "enter", 0.15 + i * 0.09, 0.55, "glide", { group: "head", unit: "elements" })),
-      ...cards.map((_, i) => ev(`card.${i}`, "enter", cardAt + i * each, fly, "enter")),
-      ...cards.map((_, i) => ev(`check.${i}`, "draw", cardAt + i * each + fly * 0.7, 0.35, "draw")),
-      ev("pan", "camera", 0, c.last, "drift"),
-      ...(mark ? [ev("brand", "enter", landed + 0.25 * k, 0.6, "glide")] : []),
-    ];
-    const tilt = (i: number) => (i % 2 ? 0.07 : -0.08);
-    const shadow = shadowOf(pal.ground, pal.look === "light" ? 0.1 : 0.32);
-    const radius = S * 0.034 * g;
+    const k = c.spread(3.2, 1.6);
+    const headPlans = head ? moveLines(c, head, { in: "cut-rise", at: 0.03, hero: true }, "headline", 0.12) : [];
+    const headDone = headPlans.length ? stackLanded(headPlans) : 0.6;
+    // Each card enters as one piece with its words already in it (never an empty box), a short slide from the right
+    // that swings level; they follow one another closely.
+    const cardAt = (i: number) => Math.max(0.5, headDone - 0.3) + i * 0.1 * k;
+    cards.forEach((_, i) => {
+      c.ev(`card.${i}`, "enter", cardAt(i), 0.4, "settle");
+      c.ev(`num.${i}`, "enter", cardAt(i) - 0.05, 0.45, "glide");
+    });
+    const cardPlans: TypePlan[] = cards.map((cd, i) => c.move(cd.set, { in: "fade-rise", at: cardAt(i), intensity: 0 }, `${cd.set.field}`));
+    const lastCard = cardPlans.length ? Math.max(...cardPlans.map((p) => p.settled)) : headDone;
+    const signPlan = signIn(c, sign, "brand", 0.2);
+    const sitePlan = site ? c.move(site, { in: "fade-rise", at: 0.35, rate: 26 }) : null;
+    const row = footRow(c, lastCard + 0.1);
+
+    const frosted = pal.look !== "light";
+    const glass = frosted ? "rgba(255,255,255,0.1)" : mixOk(pal.paper, "#ffffff", 0.7);
+    const edge = frosted ? "rgba(255,255,255,0.4)" : mixOk(pal.brand[0], pal.paper, 0.6);
+    const stops = fieldStops(pal);
+    // Paper on the frosted glass where it reads at 4.5:1, else the kit's ink.
+    const textInk = frosted && contrastOf(pal.paper, mixOk(pal.ground, "#ffffff", 0.12)) >= 4.5 ? pal.paper : pal.ink;
+    // Where each numeral's capitals sit in its em box (to centre the card on them).
+    const numBox = c.measure.box?.("03", numFont);
+    const numMid = numBox ? (numBox.top + numBox.bottom) / 2 : numSize * 0.55;
+    const count = String(cards.length).padStart(2, "0");
 
     return {
-      events,
-      overflow: [...(head?.overflow ? ["headline"] : []), ...(mark?.overflow ? ["brand"] : []), ...texts.filter((t) => t.L?.overflow).map((t) => t.field)],
-      signature: cardAt + each + fly * 0.45,
-      frame(_t, P, Lp) {
-        // The slow drift: the cards travel a little farther than the headline (depth), home on the last frame.
-        const pan = (1 - P("pan")) * S * 0.05;
-        const nodes: DisplayNode[] = [];
-        if (headB) nodes.push(group(risingLines(headB, (i) => P(`head.${i}`)), { transform: translate(pan * 0.35, 0) }));
-        cards.forEach((card, i) => {
-          const q = P(`card.${i}`);
-          const lin = Lp(`card.${i}`);
-          if (lin <= 0) return;
-          const { box } = card;
-          const ccx = box.x + box.w / 2;
-          const ccy = box.y + box.h / 2;
-          const u = 1 - q;
-          // From near the camera: bigger, tilted, from below (beside, on a wide frame), then down into the stack.
-          const m = multiply(translate(pan + (row ? 0 : u * S * 0.05 * (i % 2 ? 1 : -1)), u * S * (row ? 0.22 : 0.3)), about(ccx, ccy, 1 + 0.16 * u, tilt(i) * u));
-          const check = P(`check.${i}`);
-          const r = card.badge.r;
-          const children: DisplayNode[] = [
-            { type: "rect", x: box.x, y: box.y + S * 0.014 + u * S * 0.02, w: box.w, h: box.h, r: radius, fill: shadow },
-            { type: "rect", x: box.x, y: box.y, w: box.w, h: box.h, r: radius, fill: pal.surface },
-            { type: "ellipse", cx: card.badge.cx, cy: card.badge.cy, rx: r, ry: r, fill: pal.highlight.fill },
-          ];
-          if (check > 0) {
-            const d = `M${card.badge.cx - r * 0.42} ${card.badge.cy + r * 0.02}L${card.badge.cx - r * 0.1} ${card.badge.cy + r * 0.34}L${card.badge.cx + r * 0.45} ${card.badge.cy - r * 0.3}`;
-            children.push({ type: "path", d, stroke: { paint: pal.highlight.ink, width: r * 0.2, trim: check, length: r * 1.3, cap: "round", join: "round" } });
+      overflow: [...(head?.overflow ? ["headline"] : []), ...cards.filter((cd) => cd.set.overflow).map((cd) => cd.set.field), ...(sign?.overflow ? ["brand"] : []), ...(site?.overflow ? ["website"] : []), ...row.overflow],
+      signature: cardAt(1) + 0.5,
+      camera: (t) => ({ x: 0, y: 24 * (1 - Math.min(1, t / c.last)) ** 2 }),
+      draw(t, kit) {
+        const field = litField(c, t, { from: "tr", stops, light: mixOk(pal.brand[1], "#ffffff", 0.3), lightAlpha: 0.2 });
+        // Behind the cards: the count as a giant tonal numeral bleeding off the right edge, so the glass has depth.
+        const ghosts: DisplayNode[] = cards.length && !side ? [ghost(c, { field: "index", lines: [count], size: cardH * 2.6, x: design.w + cardH * 0.25, align: "right", y: cards[0].y - cardH * 0.2, t, weight: c.pairing.hero.weight })] : [];
+        const hero: DisplayNode[] = head ? head.sets.flatMap((_, i) => kit.type(headPlans[i], { fill: pal.ink })) : [];
+        const subject: DisplayNode[] = [];
+        const numerals: DisplayNode[] = [];
+        cards.forEach((cd, i) => {
+          // The number in the hero face, rising into place, a rule drawing out from it to the card.
+          const nl = kit.L(`num.${i}`);
+          if (nl > 0) {
+            const np = kit.P(`num.${i}`);
+            const label = String(i + 1).padStart(2, "0");
+            const ny = cd.y + cd.h / 2 - numMid;
+            numerals.push(group(asDecor([{ type: "text", field: `index.${i}`, runs: [{ text: label, gap: "", font: numFont, x: colX, y: ny, fill: pal.accent }] }]), { transform: [1, 0, 0, 1, 0, (1 - np) * numSize * 0.4], clip: { type: "rect", x: colX - S * 0.02, y: ny - numSize * 0.1, w: numW + S * 0.04, h: numSize * 1.25 } }));
           }
-          if (card.block) children.push(lineRuns(card.block));
-          nodes.push(group(children, { transform: m, ...(lin < 0.3 && { opacity: lin / 0.3 }) }));
+          const lin = kit.L(`card.${i}`);
+          if (lin <= 0) return;
+          const p = kit.P(`card.${i}`);
+          // In from the right, a short way (never across its number), its words riding inside.
+          const dx = (1 - p) * cd.w * 0.12;
+          const box = { x: cd.x, y: cd.y, w: cd.w, h: cd.h };
+          const plate: DisplayNode = { type: "rect", ...box, r: S * 0.026, fill: glass, stroke: { paint: edge, width: Math.max(1, S * 0.0015) } };
+          const sheen: DisplayNode = { type: "rect", ...box, r: S * 0.026, fill: { kind: "linear", x0: box.x, y0: box.y, x1: box.x + box.w * 0.35, y1: box.y + box.h, stops: [{ at: 0, color: frosted ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.6)" }, { at: 0.45, color: "rgba(255,255,255,0)" }, { at: 1, color: "rgba(255,255,255,0)" }] } };
+          const words = kit.type(cardPlans[i], { fill: textInk });
+          const shadows = twoShadow({ nodes: [{ ...plate, fill: "#000000" }], size: cd.h, ground: pal.ground, bounds: box, key: `fc|${cd.w.toFixed(0)}x${cd.h.toFixed(0)}` });
+          const rot = rotation(cd.deg * (1 - p), cd.x + cd.w / 2, cd.y + cd.h / 2);
+          subject.push(group([...shadows, plate, sheen, ...words], { transform: dx ? [rot[0], rot[1], rot[2], rot[3], rot[4] + dx, rot[5]] : rot, ...(lin < 0.15 && { opacity: lin / 0.15 }) }));
         });
-        if (mark) nodes.push(...mark.draw(design.w / 2, footY, P("brand"), Lp("brand")));
-        return { nodes };
+        const meta = [...signNodes(c, kit, sign, signPlan, "brand", safe.x, safe.y, pal.ink), ...(sitePlan ? kit.type(sitePlan, { fill: metaInk(pal), caret: pal.accent }) : []), ...row.draw(kit, metaInk(pal), pal.ink)];
+        return [
+          { role: "ground", nodes: field },
+          { role: "ghost", nodes: asDecor(ghosts) },
+          { role: "hero", nodes: [...hero, ...numerals] },
+          { role: "overlay", nodes: subject },
+          { role: "meta", nodes: meta },
+        ];
       },
     };
   },

@@ -155,6 +155,12 @@ function atomsOf(text: string): Atom[] {
 
 type Width = (i: number, j: number) => number;
 
+/** Little joining words a line should not end on (English). */
+const WEAK = /^(a|an|the|of|for|to|in|on|at|by|and|or|nor|but|with|from|into|as|that|which|who|whose|minus|plus|than|your|our|my|their|its|is|are|&)$/i;
+
+/** A word that ends a clause (a comma, a dash, a colon): the best place for a line to end. */
+const CLAUSE = /[,;:—–]$/;
+
 /** Fewest lines that hold the atoms a..b (inclusive) at this width, or Infinity when one atom is wider than the box. */
 function greedyCount(a: number, b: number, width: number, w: Width): number {
   let lines = 1;
@@ -173,17 +179,24 @@ function greedyCount(a: number, b: number, width: number, w: Width): number {
  * The break of atoms a..b into exactly `n` lines whose widths are closest to each other (least squares), a line of one
  * lone word costing more when there are words enough to keep each line at two or more.
  */
-function balancedBreaks(a: number, b: number, n: number, width: number, w: Width): number[] {
+function balancedBreaks(a: number, b: number, n: number, width: number, w: Width, weak: (atom: number) => boolean = () => false, clause: (atom: number) => boolean = () => false): number[] {
   if (n <= 1) return [a];
   const avg = w(a, b) / n;
   const count = b - a + 1;
-  const lone = count >= 2 * n ? (avg * 0.4) ** 2 : 0;
+  // A lone word on a line (a widow at the start or end of a rag) costs more than an uneven line, less than a line
+  // ending on a joining word.
+  const lone = count >= 2 * n ? (avg * 0.6) ** 2 : 0;
+  // A line that ends on a little joining word ("for", "the", "and") reads as cut off: it costs as much as a lone word.
+  // A line that ends on a clause's punctuation ("Month-end,") reads best: it earns back nearly as much.
+  const dangling = (avg * 1.6) ** 2;
+  const bonus = (avg * 0.42) ** 2;
+  const end = (j: number) => (j < count - 1 ? (weak(a + j) ? dangling : clause(a + j) ? -bonus : 0) : 0);
   // cost[l][j]: the best l + 1 lines ending at atom a + j; from[l][j]: where the last of them starts.
   const cost = Array.from({ length: n }, () => new Float64Array(count).fill(Infinity));
   const from = Array.from({ length: n }, () => new Int32Array(count).fill(-1));
   for (let j = 0; j < count; j++) {
     const lw = w(a, a + j);
-    if (lw <= width) cost[0][j] = (lw - avg) ** 2 + (j === 0 ? lone : 0);
+    if (lw <= width) cost[0][j] = (lw - avg) ** 2 + (j === 0 ? lone : 0) + end(j);
   }
   for (let l = 1; l < n; l++) {
     for (let j = l; j < count; j++) {
@@ -192,7 +205,7 @@ function balancedBreaks(a: number, b: number, n: number, width: number, w: Width
         if (prev === Infinity) continue;
         const lw = w(a + i, a + j);
         if (lw > width) continue;
-        const c = prev + (lw - avg) ** 2 + (i === j ? lone : 0);
+        const c = prev + (lw - avg) ** 2 + (i === j ? lone : 0) + end(j);
         if (c < cost[l][j]) {
           cost[l][j] = c;
           from[l][j] = i;
@@ -266,7 +279,24 @@ export function layoutText(spec: TextSpec, measure: Measure): TextLayout {
     const fits = total <= spec.maxLines && Number.isFinite(total);
     if (!fits && !last) return null;
     // Too long even at the smallest size: every line still laid out (nothing cut), and flagged.
-    const starts = paras.flatMap(([a, b], k) => (fits ? balancedBreaks(a, b, counts[k], spec.width, w) : greedyStarts(a, b, spec.width, w)));
+    const weak = (j: number) => WEAK.test(text.slice(atoms[j].start, atoms[j].end));
+    const clause = (j: number) => CLAUSE.test(text.slice(atoms[j].start, atoms[j].end));
+    // A line may end on a little joining word only when there is no other way: one more line (while the box allows it)
+    // is tried first.
+    const endsWeak = (st: number[], b: number) => st.some((s0, i) => i > 0 && s0 - 1 <= b && weak(s0 - 1));
+    let spare = spec.maxLines - total;
+    const starts = paras.flatMap(([a, b], k) => {
+      if (!fits) return greedyStarts(a, b, spec.width, w);
+      let st = balancedBreaks(a, b, counts[k], spec.width, w, weak, clause);
+      if (spare > 0 && endsWeak(st, b)) {
+        const more = balancedBreaks(a, b, counts[k] + 1, spec.width, w, weak, clause);
+        if (more.length === counts[k] + 1 && !endsWeak(more, b)) {
+          st = more;
+          spare--;
+        }
+      }
+      return st;
+    });
     const lines: LineLayout[] = starts.map((s, k) => {
       const e = (k + 1 < starts.length ? starts[k + 1] : atoms.length) - 1;
       const lineStart = atoms[s].start;

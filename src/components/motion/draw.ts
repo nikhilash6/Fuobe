@@ -1,8 +1,9 @@
 "use client";
 
-import { IDENTITY, multiply, type ClipShape, type DisplayList, type DisplayNode, type Gradient, type Matrix, type Paint, type Stroke } from "@/lib/motion/display";
+import { IDENTITY, multiply, type Box, type ClipShape, type DisplayList, type DisplayNode, type GrainNode, type Gradient, type GroupNode, type Matrix, type Paint, type Stroke } from "@/lib/motion/display";
 import { cssFilter, GRAIN_GAIN, GRAIN_TILE, grainOffset, grainScale, grainTile, gradePixels, type Finish } from "@/lib/motion/finish";
 import type { LogoInfo, LogoPath } from "@/lib/motion/scene";
+import { GRAIN_SIZE, grainPick, grainTile as filmGrainTile } from "@/lib/motion/fx/finish";
 
 /**
  * The only code that turns a Kinetic Motion display list into canvas calls: the live preview, the export and the covers
@@ -102,6 +103,202 @@ function layerFor(target: AnyCanvas, depth: number): { canvas: AnyCanvas; ctx: C
   return { canvas: c, ctx: c.getContext("2d") as Ctx };
 }
 
+// ---------------------------------------------------------------------------
+// Soft blur for `soften`: the canvas's gaussian where it filters, else halved step by step and scaled back up with
+// smoothing (Safari has no canvas filter). Cached groups pay for it once.
+
+const scratch: AnyCanvas[] = [];
+function scratchCanvas(i: number, w: number, h: number): { canvas: AnyCanvas; ctx: Ctx } {
+  let c = scratch[i];
+  if (!c || c.width < w || c.height < h) c = scratch[i] = makeCanvas(Math.max(w, c?.width ?? 0), Math.max(h, c?.height ?? 0));
+  const ctx = c.getContext("2d") as Ctx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.clearRect(0, 0, w, h);
+  return { canvas: c, ctx };
+}
+
+/**
+ * Blur a region of a canvas in place, as a gaussian of `r` pixels (a CSS blur's radius). Where the canvas filters,
+ * the browser's own gaussian does it on a copy; elsewhere (Safari) the region is halved step by step to about a
+ * 3.5 r box and scaled back up with smoothing, which looks the same at a glance. Both run once per cached bitmap.
+ */
+export function softenRegion(target: AnyCanvas, box: { x: number; y: number; w: number; h: number }, r: number): void {
+  if (r < 0.5 || box.w < 1 || box.h < 1) return;
+  const tctx0 = target.getContext("2d") as Ctx;
+  if (canFilter(tctx0)) {
+    const copy = scratchCanvas(0, box.w, box.h);
+    copy.ctx.drawImage(target, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+    tctx0.save();
+    tctx0.setTransform(1, 0, 0, 1, 0, 0);
+    tctx0.globalAlpha = 1;
+    tctx0.globalCompositeOperation = "source-over";
+    tctx0.clearRect(box.x, box.y, box.w, box.h);
+    tctx0.beginPath();
+    tctx0.rect(box.x, box.y, box.w, box.h);
+    tctx0.clip();
+    tctx0.filter = `blur(${r}px)`;
+    tctx0.drawImage(copy.canvas, 0, 0, box.w, box.h, box.x, box.y, box.w, box.h);
+    tctx0.filter = "none";
+    tctx0.restore();
+    return;
+  }
+  const levels = Math.max(1, Math.min(8, Math.round(Math.log2(3.5 * r))));
+  const sizes: [number, number][] = [[box.w, box.h]];
+  for (let i = 1; i <= levels; i++) sizes.push([Math.max(1, Math.ceil(sizes[i - 1][0] / 2)), Math.max(1, Math.ceil(sizes[i - 1][1] / 2))]);
+  const tctx = target.getContext("2d") as Ctx;
+  let prev: { canvas: AnyCanvas; x: number; y: number; w: number; h: number } = { canvas: target, x: box.x, y: box.y, w: box.w, h: box.h };
+  const chain: AnyCanvas[] = [];
+  for (let i = 1; i <= levels; i++) {
+    const [w, h] = sizes[i];
+    const s = scratchCanvas(i, w, h);
+    s.ctx.imageSmoothingEnabled = true;
+    s.ctx.imageSmoothingQuality = "low";
+    s.ctx.drawImage(prev.canvas, prev.x, prev.y, prev.w, prev.h, 0, 0, w, h);
+    chain.push(s.canvas);
+    prev = { canvas: s.canvas, x: 0, y: 0, w, h };
+  }
+  for (let i = levels - 1; i >= 1; i--) {
+    const [w, h] = sizes[i];
+    const [sw, sh] = sizes[i + 1];
+    const c = chain[i - 1];
+    const ctx = c.getContext("2d") as Ctx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(chain[i], 0, 0, sw, sh, 0, 0, w, h);
+    ctx.restore();
+  }
+  tctx.save();
+  tctx.setTransform(1, 0, 0, 1, 0, 0);
+  tctx.globalAlpha = 1;
+  tctx.globalCompositeOperation = "source-over";
+  tctx.clearRect(box.x, box.y, box.w, box.h);
+  tctx.imageSmoothingEnabled = true;
+  tctx.imageSmoothingQuality = "high";
+  tctx.drawImage(chain[0], 0, 0, sizes[1][0], sizes[1][1], box.x, box.y, box.w, box.h);
+  tctx.restore();
+}
+
+// Cached groups: drawn once into a bitmap per key and scale, then placed with the group's transform.
+interface Cached {
+  canvas: AnyCanvas;
+  pad: number;
+  k: number;
+  pixels: number;
+}
+const cached = new Map<string, Cached>();
+let cachedPixels = 0;
+const CACHE_PIXELS = 48e6;
+
+/** Forget every cached bitmap (fonts arrived, so letters drawn with a stand-in face must be drawn again). */
+export function clearMotionCache(): void {
+  cached.clear();
+  cachedPixels = 0;
+}
+if (typeof document !== "undefined") document.fonts?.addEventListener?.("loadingdone", clearMotionCache);
+
+const hasMissingImage = (nodes: readonly DisplayNode[], src: Sources): boolean => nodes.some((c) => (c.type === "image" && !src.images.has(c.src)) || (c.type === "group" && hasMissingImage(c.children, src)));
+
+function drawCached(ctx: Ctx, n: GroupNode, gm: Matrix, a: number, src: Sources, depth: number): boolean {
+  const c = n.cache!;
+  if (hasMissingImage(n.children, src)) return false;
+  const det = Math.sqrt(Math.abs(gm[0] * gm[3] - gm[1] * gm[2]));
+  if (!(det > 0)) return true;
+  // Quarter-octave buckets, so a scale animation reuses a few bitmaps instead of making one a frame.
+  const k = 2 ** (Math.round(Math.log2(det) * 4) / 4);
+  const key = `${c.key}|${k.toFixed(4)}|${n.soften ?? 0}`;
+  let hit = cached.get(key);
+  if (hit) {
+    cached.delete(key);
+    cached.set(key, hit);
+  } else {
+    const pad = 2;
+    const w = Math.min(4096, Math.ceil(c.bounds.w * k) + 2 * pad);
+    const h = Math.min(4096, Math.ceil(c.bounds.h * k) + 2 * pad);
+    if (w <= 2 * pad || h <= 2 * pad) return true;
+    const canvas = makeCanvas(w, h);
+    const l = canvas.getContext("2d") as Ctx;
+    const base: Matrix = [k, 0, 0, k, pad - c.bounds.x * k, pad - c.bounds.y * k];
+    l.save();
+    if (n.clip) {
+      setMatrix(l, base);
+      clipTo(l, n.clip);
+    }
+    for (const child of n.children) drawNode(l, child, base, 1, src, depth + 1);
+    l.restore();
+    if (n.soften) softenRegion(canvas, { x: 0, y: 0, w, h }, n.soften * k);
+    hit = { canvas, pad, k, pixels: w * h };
+    cached.set(key, hit);
+    cachedPixels += hit.pixels;
+    for (const [old, v] of cached) {
+      if (cachedPixels <= CACHE_PIXELS || cached.size <= 1) break;
+      cached.delete(old);
+      cachedPixels -= v.pixels;
+    }
+  }
+  ctx.save();
+  setMatrix(ctx, gm);
+  ctx.globalAlpha = a;
+  ctx.globalCompositeOperation = n.blend ?? "source-over";
+  ctx.imageSmoothingEnabled = true;
+  const scale = 1 / hit.k;
+  ctx.drawImage(hit.canvas, c.bounds.x - hit.pad * scale, c.bounds.y - hit.pad * scale, hit.canvas.width * scale, hit.canvas.height * scale);
+  ctx.restore();
+  return true;
+}
+
+// Grain tiles: made once per seed and tile from the pure noise (fx/finish.ts).
+const filmGrainTiles = new Map<string, AnyCanvas>();
+function filmGrainCanvas(seed: number, tile: number): AnyCanvas {
+  const key = `${seed}|${tile}`;
+  let c = filmGrainTiles.get(key);
+  if (!c) {
+    const v = filmGrainTile(seed, tile);
+    c = makeCanvas(GRAIN_SIZE, GRAIN_SIZE);
+    const g = c.getContext("2d") as Ctx;
+    const img = g.createImageData(GRAIN_SIZE, GRAIN_SIZE);
+    for (let i = 0; i < v.length; i++) {
+      img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v[i];
+      img.data[i * 4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    if (filmGrainTiles.size > 24) filmGrainTiles.clear();
+    filmGrainTiles.set(key, c);
+  }
+  return c;
+}
+
+function drawGrain(ctx: Ctx, n: GrainNode, m: Matrix, alpha: number) {
+  const a = alpha * n.amount * (n.opacity ?? 1);
+  if (a <= 0.001) return;
+  const pick = grainPick(n.seed, n.frame);
+  const tile = filmGrainCanvas(n.seed, pick.tile);
+  const span = GRAIN_SIZE * n.size;
+  ctx.save();
+  setMatrix(ctx, m);
+  ctx.beginPath();
+  ctx.rect(n.x, n.y, n.w, n.h);
+  ctx.clip();
+  ctx.globalAlpha = a;
+  ctx.globalCompositeOperation = n.blend;
+  ctx.imageSmoothingEnabled = false;
+  const ox = n.x - ((pick.ox * n.size) % span);
+  const oy = n.y - ((pick.oy * n.size) % span);
+  for (let y = oy; y < n.y + n.h; y += span) for (let x = ox; x < n.x + n.w; x += span) ctx.drawImage(tile, x, y, span, span);
+  ctx.restore();
+}
+
+const sizeOf = (img: CanvasImageSource): { w: number; h: number } => {
+  const i = img as unknown as { naturalWidth?: number; naturalHeight?: number; videoWidth?: number; videoHeight?: number; width?: unknown; height?: unknown };
+  const w = i.naturalWidth || i.videoWidth || (typeof i.width === "number" ? i.width : 0);
+  const h = i.naturalHeight || i.videoHeight || (typeof i.height === "number" ? i.height : 0);
+  return { w, h };
+};
+
 function paintOf(ctx: Ctx, p: Paint): string | CanvasGradient {
   if (typeof p === "string") return p;
   const g: Gradient = p;
@@ -151,6 +348,14 @@ function stroke(ctx: Ctx, s: Stroke, length: number, draw: () => void) {
   ctx.setLineDash([]);
 }
 
+const clampBox = (b: { x: number; y: number; w: number; h: number }, W: number, H: number) => {
+  const x0 = Math.max(0, Math.floor(b.x));
+  const y0 = Math.max(0, Math.floor(b.y));
+  const x1 = Math.min(W, Math.ceil(b.x + b.w));
+  const y1 = Math.min(H, Math.ceil(b.y + b.h));
+  return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
+};
+
 /** The device-pixel box of a design-unit box under a matrix (clamped to the canvas). */
 function deviceBox(m: Matrix, b: { x: number; y: number; w: number; h: number }, W: number, H: number) {
   const pts = [
@@ -173,10 +378,17 @@ function drawNode(ctx: Ctx, n: DisplayNode, m: Matrix, alpha: number, src: Sourc
       const gm = n.transform ? multiply(m, n.transform) : m;
       const a = alpha * (n.opacity ?? 1);
       if (a <= 0.001) return;
-      const bounds = n.isolate ?? n.mask?.bounds;
-      if (bounds) {
+      if (n.cache && !n.mask && !n.isolate && drawCached(ctx, n, gm, a, src, depth)) return;
+      const filter = !!n.blur && canFilter(ctx);
+      // Our own blur where asked for (soften), and where the canvas can't filter.
+      const soft = n.soften ?? (n.blur && !filter ? n.blur : 0);
+      const bounds: Box | undefined = n.isolate ?? n.mask?.bounds ?? (soft ? n.cache?.bounds : undefined);
+      if (bounds || soft) {
         const target = ctx.canvas as AnyCanvas;
-        const box = deviceBox(gm, bounds, target.width, target.height);
+        const det = Math.sqrt(Math.abs(gm[0] * gm[3] - gm[1] * gm[2]));
+        const spread = soft ? Math.ceil(soft * det * 3) : 0;
+        const raw = bounds ? deviceBox(gm, bounds, target.width, target.height) : { x: 0, y: 0, w: target.width, h: target.height };
+        const box = soft && bounds ? clampBox({ x: raw.x - spread, y: raw.y - spread, w: raw.w + 2 * spread, h: raw.h + 2 * spread }, target.width, target.height) : raw;
         if (!box.w || !box.h) return;
         const layer = layerFor(target, depth);
         const l = layer.ctx;
@@ -192,16 +404,17 @@ function drawNode(ctx: Ctx, n: DisplayNode, m: Matrix, alpha: number, src: Sourc
           setMatrix(l, gm);
           clipTo(l, n.clip);
         }
-        if (n.blur && canFilter(l)) l.filter = `blur(${n.blur * Math.sqrt(Math.abs(gm[0] * gm[3] - gm[1] * gm[2]))}px)`;
+        if (filter) l.filter = `blur(${n.blur! * det}px)`;
         for (const c of n.children) drawNode(l, c, gm, 1, src, depth + 1);
         l.filter = "none";
         if (n.mask) {
           setMatrix(l, gm);
           l.globalCompositeOperation = "destination-in";
           l.fillStyle = paintOf(l, n.mask);
-          l.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
+          l.fillRect(n.mask.bounds.x, n.mask.bounds.y, n.mask.bounds.w, n.mask.bounds.h);
         }
         l.restore();
+        if (soft) softenRegion(layer.canvas, box, soft * det);
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = a;
@@ -216,7 +429,7 @@ function drawNode(ctx: Ctx, n: DisplayNode, m: Matrix, alpha: number, src: Sourc
         clipTo(ctx, n.clip);
       }
       if (n.blend) ctx.globalCompositeOperation = n.blend;
-      if (n.blur && canFilter(ctx)) ctx.filter = `blur(${n.blur * Math.sqrt(Math.abs(gm[0] * gm[3] - gm[1] * gm[2]))}px)`;
+      if (filter) ctx.filter = `blur(${n.blur! * Math.sqrt(Math.abs(gm[0] * gm[3] - gm[1] * gm[2]))}px)`;
       for (const c of n.children) drawNode(ctx, c, gm, a, src, depth);
       ctx.restore();
       return;
@@ -281,8 +494,18 @@ function drawNode(ctx: Ctx, n: DisplayNode, m: Matrix, alpha: number, src: Sourc
         ctx.globalAlpha = ra;
         ctx.font = r.font;
         ctx.direction = r.dir ?? "ltr";
-        ctx.fillStyle = paintOf(ctx, r.fill);
-        ctx.fillText(r.text, r.x, r.y);
+        const shown = r.shown ?? r.text;
+        if (r.fill !== "transparent") {
+          ctx.fillStyle = paintOf(ctx, r.fill);
+          ctx.fillText(shown, r.x, r.y);
+        }
+        if (r.stroke) {
+          ctx.strokeStyle = paintOf(ctx, r.stroke.paint);
+          ctx.lineWidth = r.stroke.width;
+          ctx.lineJoin = "round";
+          ctx.setLineDash([]);
+          ctx.strokeText(shown, r.x, r.y);
+        }
       }
       ctx.direction = "ltr";
       return;
@@ -308,9 +531,15 @@ function drawNode(ctx: Ctx, n: DisplayNode, m: Matrix, alpha: number, src: Sourc
       ctx.globalAlpha = alpha * (n.opacity ?? 1);
       ctx.imageSmoothingEnabled = n.smoothing ?? true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, n.x, n.y, n.w, n.h);
+      if (n.crop) {
+        const { w, h } = sizeOf(img);
+        if (w && h) ctx.drawImage(img, n.crop.x * w, n.crop.y * h, n.crop.w * w, n.crop.h * h, n.x, n.y, n.w, n.h);
+      } else ctx.drawImage(img, n.x, n.y, n.w, n.h);
       return;
     }
+    case "grain":
+      drawGrain(ctx, n, m, alpha);
+      return;
   }
 }
 

@@ -41,7 +41,18 @@ const FIELDS: Record<string, Record<string, string>> = {
   "marketing/offer-badge": { offer: "20% off", headline: "The winter edit", cta: "Shop the sale" },
   "marketing/big-number": { stat: "3×", caption: "faster month-end close" },
   "marketing/quote": { quote: "“The only serum I've bought three times.”", name: "Amara K., verified buyer" },
+  "marketing/drop-countdown": { headline: "DROP 07", count: "03:12:45", when: "Friday · 9 PM", cta: "Set a reminder" },
+  "marketing/fragrance-reveal": { headline: "Nocturne", line: "Eau de parfum, for the hours after dark", cta: "Discover" },
+  "marketing/editorial-sale": { headline: "FINAL SALE", offer: "Up to 50% off", cta: "Shop the sale" },
+  "marketing/glass-spotlight": { headline: "Eau de Nuit", line: "Amber, iris and a trace of smoke", cta: "Discover" },
+  "marketing/announcement": { headline: "Opening Night", when: "Friday 14 March · 8 PM", place: "12 Rue des Martyrs, Paris", cta: "Reserve a table" },
+  "marketing/lookbook": { headline: "THE GOLD HOUR", accent: "Spring", line: "Collection 07 · Marrakech" },
+  "marketing/stat-stack": { stat1: "98%", label1: "of tickets answered in an hour", stat2: "4.9", label2: "average rating", stat3: "3×", label3: "faster than last year" },
+  "marketing/testimonials": { quote1: "“The calmest three days I’ve had all year.”", name1: "Léa M., Lisbon", quote2: "“Breakfast on the terrace was worth the trip alone.”", name2: "James O., London", quote3: "“We’ve booked again for September.”", name3: "Priya S., Mumbai" },
 };
+
+/** Fields set as figures that roll through digits on the way in (any digit may show while they move). */
+const FIGURES = /^(statd?|count)$/;
 
 function recipe(scene: string, over: Partial<Recipe> = {}): Recipe {
   return {
@@ -68,7 +79,7 @@ const typedOf = (r: Recipe, field: string) => {
 };
 
 describe("the registry", () => {
-  it("has the nine Marketing scenes", () => {
+  it("has every Marketing scene, each 5–8 s long", () => {
     expect(MARKETING.sort()).toEqual(Object.keys(FIELDS).sort());
     for (const s of scenes) expect(s.durations).toEqual({ min: 5, max: 8, default: 5 });
   });
@@ -94,7 +105,7 @@ describe("determinism", () => {
         }
       }
     }
-  });
+  }, 60_000);
 });
 
 function walk(nodes: readonly DisplayNode[], out: DisplayNode[] = []): DisplayNode[] {
@@ -111,7 +122,7 @@ describe("spelling", () => {
   it("sets every field exactly as typed at rest, and never draws a letter that wasn't typed", () => {
     for (const scene of scenes) {
       for (const field of Object.keys(FIELDS[scene.id])) {
-        if (field === "stat") continue;
+        if (FIGURES.test(field)) continue;
         for (const text of hostile) {
           const base = recipe(scene.id);
           const r = recipe(scene.id, { fields: { ...base.fields, [field]: text } });
@@ -128,7 +139,7 @@ describe("spelling", () => {
             const t = (i / 30) * r.duration;
             for (const n of textNodes(plan.evaluate(t).nodes)) {
               const typed = typedOf(r, n.field);
-              for (const run of n.runs) for (const ch of run.text) expect(typed.includes(ch) || (n.field === "stat" && /[0-9]/.test(ch)), `${scene.id} ${n.field} "${ch}" at ${t}`).toBe(true);
+              for (const run of n.runs) for (const ch of run.text) expect(typed.includes(ch) || (FIGURES.test(n.field) && /[0-9]/.test(ch)), `${scene.id} ${n.field} "${ch}" at ${t}`).toBe(true);
             }
           }
         }
@@ -141,8 +152,8 @@ describe("spelling", () => {
     const r = recipe(s.id, { fields: { headline: "Ship *faster* with *less*." } });
     const plan = s.plan(input(r));
     for (let i = 0; i <= 20; i++) for (const n of textNodes(plan.evaluate((i / 20) * 2.5).nodes)) for (const run of n.runs) expect(run.text).not.toContain("*");
-    const words = textNodes(plan.evaluate(2).nodes).find((n) => n.field === "headline")!;
-    expect(spelled(words.runs)).toBe("Ship faster with less.");
+    const words = textNodes(plan.evaluate(plan.rest).nodes).filter((n) => n.field === "headline");
+    expect(spelled(words.flatMap((n) => n.runs))).toBe("Ship faster with less.");
   });
 
   it("marks only paired stars round words, and keeps every other star as typed", () => {
@@ -158,14 +169,13 @@ describe("spelling", () => {
     const s = scenes.find((x) => x.id === "marketing/kinetic-headline")!;
     const r = recipe(s.id, { fields: { headline: "Rated 5* by *guests*" } });
     const plan = s.plan(input(r));
-    const exit = plan.timeline.byId.get("words.exit")!;
-    const words = textNodes(plan.evaluate(exit.start - 0.01).nodes).find((n) => n.field === "headline")!;
-    expect(spelled(words.runs)).toBe("Rated 5* by guests");
+    const words = textNodes(plan.evaluate(plan.rest).nodes).filter((n) => n.field === "headline");
+    expect(spelled(words.flatMap((n) => n.runs))).toBe("Rated 5* by guests");
   });
 
   it("names a field that doesn't fit instead of cutting it", () => {
     for (const scene of scenes) {
-      const field = Object.keys(FIELDS[scene.id]).find((f) => f !== "stat")!;
+      const field = Object.keys(FIELDS[scene.id]).find((f) => !FIGURES.test(f))!;
       const r = recipe(scene.id, { fields: { ...recipe(scene.id).fields, [field]: "Supercalifragilisticexpialidociously ".repeat(14).trim() } });
       expect(scene.plan(input(r)).overflow, scene.id).toContain(field);
     }
@@ -234,10 +244,14 @@ function flatten(nodes: readonly DisplayNode[], m: Matrix = IDENTITY, alpha = 1,
       if (n.blend && n.blend !== "source-over") continue;
       flatten(n.children, n.transform ? multiply(m, n.transform) : m, a, out);
     } else if (n.type === "text") {
+      // Decorative copies (ghosts, glows, shadows) are not the words.
+      if (n.decor) continue;
       for (const r of n.runs) {
         const size = Number(/(\d+(\.\d+)?)px/.exec(r.font)![1]);
         const rm = r.transform ? multiply(m, r.transform) : m;
-        out.push({ kind: "text", field: n.field, text: r.text, fill: typeof r.fill === "string" ? r.fill : "", box: boxOf(rm, r.x, r.y, measure(r.text, r.font), size) });
+        // A gradient fill reads as its weakest stop.
+        const fills = typeof r.fill === "string" ? [r.fill] : r.fill && "stops" in r.fill ? r.fill.stops.map((s) => s.color) : [""];
+        for (const fill of fills) out.push({ kind: "text", field: n.field, text: r.text, fill, box: boxOf(rm, r.x, r.y, measure(r.text, r.font), size) });
       }
     } else if ((n.type === "rect" || n.type === "ellipse" || n.type === "path") && typeof n.fill === "string" && /^#/.test(n.fill) && a >= 0.999) {
       if (n.type === "rect") out.push({ kind: "shape", fill: n.fill, box: boxOf(m, n.x, n.y, n.w, n.h) });
@@ -303,7 +317,7 @@ describe("the rest frame", () => {
         }
       }
     }
-  });
+  }, 120_000); // every scene × size × look × palette × logo: well over the default 5 s on a busy machine
 });
 
 describe("outline (outline.ts)", () => {

@@ -12,20 +12,28 @@ export interface ShowcaseBrand {
   name: string;
   colors: string[];
   fonts: { heading: string; body: string };
-  /** Its lockup (symbol and wordmark as outlines, in one colour), drawn by Fuobe: /previews/kinetic/marks/…svg. */
-  logo: string;
+  /** Its lockup (symbol and wordmark as outlines, in one colour), drawn by Fuobe: /previews/kinetic/marks/…svg. None: its name is set in type. */
+  logo?: string;
 }
 
-export const SHOWCASE_BRANDS = {
-  ardent: { name: "Maison Ardent", colors: ["#2f3b2c", "#c9a46a"], fonts: { heading: "Playfair Display", body: "Inter" }, logo: "/previews/kinetic/marks/ardent.svg?v=9d6992d9" },
+const BRANDS = {
+  ardent: { name: "Maison Ardent", colors: ["#4a1424", "#e9b8aa"], fonts: { heading: "Playfair Display", body: "Inter" }, logo: "/previews/kinetic/marks/ardent.svg?v=9d6992d9" },
   lumen: { name: "Lumen Labs", colors: ["#3d5afe", "#9fe7ff"], fonts: { heading: "Space Grotesk", body: "Inter" }, logo: "/previews/kinetic/marks/lumen.svg?v=5383c502" },
-  ledgerly: { name: "Ledgerly", colors: ["#0f5c5a", "#f4b860"], fonts: { heading: "Space Grotesk", body: "Inter" }, logo: "/previews/kinetic/marks/ledgerly.svg?v=04360c5d" },
+  ledgerly: { name: "Ledgerly", colors: ["#1f3fd1", "#ffb547"], fonts: { heading: "Space Grotesk", body: "Inter" }, logo: "/previews/kinetic/marks/ledgerly.svg?v=04360c5d" },
   vesper: { name: "Vesper", colors: ["#c8102e", "#f4b43c"], fonts: { heading: "Fraunces", body: "Manrope" }, logo: "/previews/kinetic/marks/vesper.svg?v=7c2c68c7" },
-  sora: { name: "Sora Skin", colors: ["#b5532f", "#e9b872"], fonts: { heading: "Fraunces", body: "Manrope" }, logo: "/previews/kinetic/marks/sora.svg?v=0b4eecd2" },
+  sora: { name: "Sora Skin", colors: ["#6b1430", "#f6cdd2"], fonts: { heading: "Fraunces", body: "Manrope" }, logo: "/previews/kinetic/marks/sora.svg?v=0b4eecd2" },
   aurele: { name: "Aurèle", colors: ["#0e3b2f", "#cfae6e"], fonts: { heading: "Cormorant Garamond", body: "Manrope" }, logo: "/previews/kinetic/marks/aurele.svg?v=55ea21a5" },
+  kova: { name: "KOVA", colors: ["#ff5a1f", "#16120f"], fonts: { heading: "Archivo Black", body: "Inter" } },
+  noor: { name: "Atelier Noor", colors: ["#17120d", "#d8b26e"], fonts: { heading: "Bodoni Moda", body: "Inter" } },
+  halden: { name: "Halden", colors: ["#16110f", "#e5432c"], fonts: { heading: "DM Serif Display", body: "Inter" } },
+  halcyon: { name: "Halcyon Hotels", colors: ["#123049", "#e2bd78"], fonts: { heading: "Cormorant Garamond", body: "Manrope" } },
+  lune: { name: "Bar Lune", colors: ["#1c1236", "#ffb36b"], fonts: { heading: "Fraunces", body: "Outfit" } },
+  orbit: { name: "Orbit", colors: ["#1b2a63", "#ff7a59"], fonts: { heading: "Space Grotesk", body: "Inter" } },
 } satisfies Record<string, ShowcaseBrand>;
 
-export type ShowcaseBrandId = keyof typeof SHOWCASE_BRANDS;
+export const SHOWCASE_BRANDS: Record<keyof typeof BRANDS, ShowcaseBrand> = BRANDS;
+
+export type ShowcaseBrandId = keyof typeof BRANDS;
 
 /**
  * Fuobe's own sample products, cut out (with their versions): objects made for the showcase brands, in their
@@ -52,11 +60,22 @@ export const SHOWCASE_PRODUCT_THUMBS: Record<keyof typeof SHOWCASE_PRODUCTS, str
   headphones: "/previews/kinetic/products/thumbs/lumen-headphones.webp?v=0d3422a9",
 };
 
+/** Fuobe's own sample photographs, for templates that fill a panel or the frame with one (with their versions). */
+export const SHOWCASE_PHOTOS = {
+  portrait: "/previews/kinetic/photos/portrait-soft.webp?v=d5a8ad5a",
+  dunes: "/previews/kinetic/photos/red-dunes.webp?v=55df7331",
+  gown: "/previews/kinetic/photos/gold-gown.webp?v=27ae6c3f",
+  night: "/previews/kinetic/photos/night-lights.webp?v=4234c952",
+} as const;
+
 export interface Showcase {
   brand: ShowcaseBrandId;
+  /** The brand's colours for this piece, when it shows the brand in another of its palettes (its own by default). */
+  colors?: string[];
   fields: Record<string, string>;
   controls: Record<string, string>;
   product?: keyof typeof SHOWCASE_PRODUCTS;
+  photo?: keyof typeof SHOWCASE_PHOTOS;
   size: SizePreset;
   /** The scene, when a choice picks it (the end card's style). */
   scene?: string;
@@ -69,16 +88,24 @@ export interface Showcase {
 
 /** Each code-drawn template's showcase, by template id. */
 export const SHOWCASES: Record<string, Showcase> = {
-  "ms-kinetic-headline": { brand: "lumen", size: "9:16", fields: { headline: "Invoices that *chase* themselves.", cta: "Start free", website: "lumenlabs.io" }, controls: { pace: "punchy", look: "dark", align: "centre" }, poster: "words.exit" },
-  "m2-line-reveal": { brand: "ardent", size: "9:16", product: "perfume", fields: { headline: "Quietly exceptional.", cta: "Discover the scent" }, controls: { pace: "calm", look: "light", line: "fine" } },
-  "ms-logo-sting": { brand: "lumen", size: "4:5", fields: { tagline: "Software that ships itself" }, controls: { pace: "punchy", look: "dark" } },
-  "ms-feature-cards": { brand: "ledgerly", size: "4:5", fields: { headline: "Month-end, minus the panic", point1: "Invoices that chase themselves", point2: "Payroll in two taps", point3: "Books that close on Friday" }, controls: { pace: "calm", look: "light" } },
-  "ms-dashboard-zoom": { brand: "ledgerly", size: "4:5", fields: { stat: "$1,284,000", label: "Revenue this quarter, up 38%" }, controls: { pace: "calm", look: "dark" } },
-  "m2-retro-starburst": { brand: "vesper", size: "9:16", product: "heel", fields: { headline: "Made to be noticed.", badge: "New!" }, controls: { pace: "punchy", look: "brand" } },
-  "m2-offer-badge": { brand: "sora", size: "9:16", product: "serum", fields: { offer: "20% off", headline: "The gifting edit", cta: "Shop the edit" }, controls: { pace: "punchy", look: "light" } },
-  "ms-big-number": { brand: "ledgerly", size: "4:5", fields: { stat: "3×", caption: "faster month-end close" }, controls: { pace: "punchy", look: "brand" } },
-  "ms-five-star-quote": { brand: "sora", size: "4:5", fields: { quote: "“The only serum I’ve ever bought three times.”", name: "Amara K., verified buyer" }, controls: { pace: "calm", look: "light" } },
+  "ms-kinetic-headline": { brand: "lumen", size: "9:16", fields: { headline: "SHIP IT *TONIGHT.*", cta: "Start free", website: "lumenlabs.io", note: "Release 4.0" }, controls: { pace: "punchy", look: "dark", align: "left" } },
+  "m2-line-reveal": { brand: "ardent", size: "9:16", product: "perfume", fields: { headline: "Quietly exceptional.", cta: "Discover the scent", website: "maison-ardent.com", note: "Est. 1987" }, controls: { pace: "calm", look: "light", line: "fine" } },
+  "ms-logo-sting": { brand: "lumen", size: "4:5", fields: { tagline: "Software that ships itself", website: "lumenlabs.io", note: "Est. 2019" }, controls: { pace: "punchy", look: "dark" } },
+  "ms-feature-cards": { brand: "ledgerly", colors: ["#4a1020", "#f2c4c0"], size: "4:5", fields: { headline: "Month-end, minus the panic", point1: "Invoices that chase themselves", point2: "Payroll in two taps", point3: "Books that close on Friday", website: "ledgerly.app", note: "Built for finance teams" }, controls: { pace: "calm", look: "brand" } },
+  "ms-dashboard-zoom": { brand: "ledgerly", size: "4:5", fields: { stat: "$1,284,000", label: "Revenue this quarter, up 38%", website: "ledgerly.app", note: "Q3 2026" }, controls: { pace: "calm", look: "dark" } },
+  "m2-retro-starburst": { brand: "vesper", size: "9:16", product: "heel", fields: { headline: "Made to be noticed.", badge: "New!", website: "vesper-shoes.com", note: "SS26" }, controls: { pace: "punchy", look: "light" } },
+  "m2-offer-badge": { brand: "sora", size: "9:16", product: "serum", fields: { offer: "20% off", headline: "THE GIFTING EDIT", cta: "Shop the edit", website: "soraskin.co", note: "Until 24 Dec" }, controls: { pace: "punchy", look: "brand" } },
+  "ms-big-number": { brand: "ledgerly", size: "4:5", fields: { stat: "3×", caption: "*faster* month-end close, every month", website: "ledgerly.app", note: "2026 report" }, controls: { pace: "punchy", look: "light" } },
+  "ms-five-star-quote": { brand: "sora", size: "4:5", photo: "portrait", fields: { quote: "“The only serum I’ve ever bought three times.”", name: "Amara K., verified buyer", website: "soraskin.co", note: "Verified reviews" }, controls: { pace: "calm", look: "light" } },
   "ms-end-card": { brand: "aurele", size: "9:16", scene: "end-card/draw-on", fields: { product: "Le Sérum Nuit", cta: "Discover the ritual", website: "aurele-paris.com" }, controls: { style: "draw-on", mark: "logo" } },
+  "m2-midnight-drop": { brand: "kova", size: "9:16", fields: { headline: "DROP 07", count: "03:12:45", when: "Friday · 9 PM", cta: "Set a reminder", website: "kova.store", note: "Season 07" }, controls: { pace: "punchy", look: "dark" } },
+  "m2-nocturne": { brand: "ardent", size: "9:16", product: "perfume", fields: { headline: "Nocturne", line: "Eau de parfum, for the hours after dark", cta: "Discover", website: "maison-ardent.com", note: "Est. 1987" }, controls: { pace: "calm", look: "dark" } },
+  "m2-season-finale": { brand: "halden", size: "4:5", photo: "dunes", fields: { headline: "FINAL SALE", offer: "Up to 50% off", cta: "Shop the sale", website: "halden-studio.com", note: "SS26 Collection" }, controls: { pace: "punchy", look: "light" } },
+  "m2-prism-stage": { brand: "aurele", colors: ["#2a1d4a", "#cfd3e0"], size: "4:5", product: "nightSerum", fields: { headline: "Eau de Nuit", line: "Amber, iris and a trace of smoke", cta: "Discover", website: "aurele-paris.com", note: "Est. 1924" }, controls: { pace: "calm", look: "dark" } },
+  "mm-marquee": { brand: "lune", size: "9:16", photo: "night", fields: { headline: "Opening Night", when: "Friday 14 March · 8 PM", place: "12 Rue des Martyrs, Paris", cta: "Reserve a table", website: "barlune.fr", note: "Doors at 7:30" }, controls: { pace: "calm", look: "dark" } },
+  "mm-runway-titles": { brand: "noor", size: "4:5", photo: "gown", fields: { headline: "THE GOLD HOUR", accent: "Spring", line: "Collection 07 · Marrakech", website: "ateliernoor.com", note: "SS26" }, controls: { pace: "calm", look: "dark" } },
+  "ms-stat-stack": { brand: "orbit", size: "4:5", fields: { stat1: "98%", label1: "of tickets answered in *an hour*", stat2: "4.9", label2: "average rating from 12,000 teams", stat3: "3×", label3: "faster than last year", website: "orbit.help", note: "2026 report" }, controls: { pace: "punchy", look: "dark" } },
+  "ms-kind-words": { brand: "halcyon", size: "4:5", fields: { quote1: "“The calmest three days I’ve had all year.”", name1: "Léa M., Lisbon", quote2: "“Breakfast on the terrace was worth the trip alone.”", name2: "James O., London", quote3: "“We’ve booked again for September.”", name3: "Priya S., Mumbai", website: "halcyonhotels.com", note: "Guest reviews" }, controls: { pace: "calm", look: "dark" } },
 };
 
 /**
@@ -99,8 +126,8 @@ export function showcaseRecipe(id: string, scene: string, duration = 5, o: { cov
     fps: 30,
     duration,
     fields: s.brand === "aurele" ? { brand: b.name, ...s.fields } : { ...s.fields },
-    brand: { name: b.name, colors: [...b.colors], fonts: { ...b.fonts }, ...(logo && { logo }) },
-    ...(s.product && { media: { product: SHOWCASE_PRODUCTS[s.product] } }),
+    brand: { name: b.name, colors: [...(s.colors ?? b.colors)], fonts: { ...b.fonts }, ...(logo && { logo }) },
+    ...((s.product || s.photo) && { media: { product: s.product ? SHOWCASE_PRODUCTS[s.product] : SHOWCASE_PHOTOS[s.photo!] } }),
     controls: { template: id, ...s.controls, ...(o.cover && { cover: "tile" }) },
     export: DEFAULT_EXPORT,
   };

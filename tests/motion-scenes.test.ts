@@ -24,7 +24,7 @@ const cp = (...c: number[]) => String.fromCodePoint(...c);
 describe("the registry", () => {
   it("has the five end-card styles", () => {
     expect(END_CARD_IDS.sort()).toEqual(END_CARD_VARIANTS.map((v) => `end-card/${v}`).sort());
-    for (const s of scenes) expect(s.durations).toEqual({ min: 2, max: 3, default: 2.5 });
+    for (const s of scenes) expect(s.durations).toEqual({ min: 2, max: 5, default: 2.5 });
   });
 });
 
@@ -133,14 +133,15 @@ describe("timing (motion-timing)", () => {
             }
           }
           expect(duration - plan.settled, `${scene.id} ${duration}s hold`).toBeGreaterThanOrEqual(1);
-          // The last frame is the rest frame; through the hold only the camera moves, coming home on the last frame.
+          // The last frame is the rest frame; through the hold only the camera moves (the card's light and texture stay
+          // put under it), coming home on the last frame.
           expect(plan.rest).toBeCloseTo((Math.round(duration * r.fps) - 1) / r.fps, 9);
           const still = plan.evaluate(plan.rest);
           for (const t of [plan.settled + 0.01, (plan.settled + plan.rest) / 2, plan.rest - 1 / r.fps]) {
             const held = plan.evaluate(t);
-            expect(held.nodes).toHaveLength(1);
-            const cam = held.nodes[0];
-            expect(cam.type === "group" && cam.id === "camera" && JSON.stringify(cam.children)).toBe(JSON.stringify(still.nodes));
+            const cam = held.nodes[held.nodes.length - 1];
+            expect(cam.type === "group" && cam.id === "camera").toBe(true);
+            expect(JSON.stringify(cam.type === "group" ? [...held.nodes.slice(0, -1), ...cam.children.filter((n) => !(n.type === "group" && n.id === "sweep"))] : null)).toBe(JSON.stringify(still.nodes));
           }
           expect(JSON.stringify(plan.evaluate(duration))).toBe(JSON.stringify(still));
           expect(plan.still(plan.rest)).toBe(true);

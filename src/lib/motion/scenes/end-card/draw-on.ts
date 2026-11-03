@@ -7,7 +7,7 @@
 
 import { about, group, translate, type DisplayNode } from "../../display";
 import { linearProgress, progress, type Cue } from "../../tween";
-import { endCardScene, letterRuns, lineLeft, lineRun, lineRuns, logoImage, logoPaths, pillRect, wipe } from "./shared";
+import { endCardScene, letterRuns, lineLeft, lineRun, lineRuns, logoImage, logoPaths, pillRect, wipe, keepFor } from "./shared";
 
 export default endCardScene("draw-on", ({ rest, input }) => {
   const { logo, brand, headline, cta, site } = rest;
@@ -34,6 +34,7 @@ export default endCardScene("draw-on", ({ rest, input }) => {
 
   return {
     cues,
+    keep: keepFor("draw-on", rest),
     lead: 0.1,
     signature: 0.2,
     frame(t, tl) {
