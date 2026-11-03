@@ -1,4 +1,5 @@
 import { exrWorkflow } from "@/lib/av/video-finish";
+import { idolViewsGraph } from "@/lib/av/idol-views";
 import { qwen21Graph } from "@/lib/qwen21-speed";
 import { H3_TIER_PARAM, tierGraphFor } from "@/lib/gpu/h3-tier";
 
@@ -115,5 +116,6 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   if (cover && r.audio && r.has(cover)) endpoint = cover;
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
-  return endpoint;
+  // Idol 3D's four views ("Make the other sides from the front"): the view graph, which needs the ComfyUI-Idol pack.
+  return idolViewsGraph(endpoint, r.extra, r.has);
 }

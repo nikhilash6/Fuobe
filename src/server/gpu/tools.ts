@@ -2,6 +2,7 @@ import "server-only";
 import { FLY_MODELS } from "@/lib/catalog/fly-around";
 import { DUB_STEP_MODELS } from "@/lib/av/dub";
 import { HI3D_MODEL } from "@/lib/av/hi3d";
+import { IDOL_VIEWS_WORKFLOW } from "@/lib/av/idol-views";
 import { SPLIT_MODEL } from "@/lib/av/split";
 import { BED_MUX_MODEL, VOICE_FIRST_MODELS } from "@/lib/av/voice-first";
 import { BURN_MODELS } from "@/lib/av/captions";
@@ -164,6 +165,8 @@ export interface StudioRowDef {
   config?: StudioConfig;
   /** A studio with graphs of its own (Character swap). */
   workflows?: string[];
+  /** What such a studio makes (video unless said). */
+  kind?: string;
   /**
    * A tool that runs open models' operations in steps (Split soundtrack, Cinema's fly path, the turnaround): their graphs
    * and LoRAs together, with the LoRAs a step adds itself (the turnaround's Angles LoRA). The first names the tool.
@@ -201,6 +204,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: HI3D_MODEL, op: "refine-3d" },
     ],
   },
+  // idol-8: From several images' "Make the other sides from the front": Idol 3D's four views, which need the ComfyUI-Idol pack.
+  { href: "/image-to-3d?mode=multi", label: "Other sides from one picture", group: "Images", kind: "image", workflows: [IDOL_VIEWS_WORKFLOW] },
   // MiniMax H3's references (Pika H3 Flex Ref2VA) need the Ref2VA partition and Pika's adapter: a row of their own, so the
   // Video row stays what text, image and frame clips need.
   { href: "/video", label: "Video", group: "Video", config: S.VIDEO_STUDIO, skipOps: ["ref2v"] },
@@ -442,7 +447,7 @@ export function studioTool(row: StudioRowDef): Tool | null {
   if (row.workflows) {
     const segment = row.workflows[row.workflows.length - 1];
     const loras = [...graphLoras(segment, {}), ...row.workflows.flatMap((w) => regenerateGraphLoras(w))];
-    return { ref: `studio:${row.href}`, name: row.label, kind: "video", workflows: row.workflows.filter((w) => !!loadIndex().workflows[w]), loras: loras.map(loraNeed) };
+    return { ref: `studio:${row.href}`, name: row.label, kind: row.kind ?? "video", workflows: row.workflows.filter((w) => !!loadIndex().workflows[w]), loras: loras.map(loraNeed) };
   }
   const c = row.config;
   const id = c?.defaultModels.open;
