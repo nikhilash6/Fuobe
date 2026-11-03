@@ -214,6 +214,33 @@ describe("the Library's sweep", () => {
     expect(Array.isArray((await res.json()).items)).toBe(true);
   });
 
+  it("counts only chains that finished and worked, and hands Make a skill the newest one that did", () => {
+    const at = Date.UTC(2027, 0, 15, 12);
+    const chain = (t: number, o: { last?: string; first?: string; retry?: boolean } = {}) => {
+      const a = row({ at: t, status: o.first, request: { modelId: "birefnet-cloud", op: "bg-remove" } });
+      const b = row({ at: t + 1, after: [a], status: o.last, request: { modelId: "seedream-5-pro", op: "edit" } });
+      // A step made again after it failed (a retry) is the chain's step.
+      const again = o.retry ? row({ at: t + 2, after: [a], request: { modelId: "seedream-5-pro", op: "edit" } }) : undefined;
+      return again ? [a, again] : [a, b];
+    };
+    const pick = (t: number) => recipes.sweepSuggestions(t).find((s) => s.labels.join() === "Background removal,Image edit");
+    chain(at - 5 * DAY);
+    chain(at - 4 * DAY);
+    // Failed (the last step, or the first so the next never ran) or still running: not one of the times.
+    chain(at - 3 * DAY, { last: "failed" });
+    chain(at - 3 * DAY + 100, { first: "failed", last: "failed" });
+    chain(at - 3 * DAY + 200, { first: "canceled", last: "canceled" });
+    expect(pick(at)).toBeUndefined();
+    const third = chain(at - 2 * DAY);
+    chain(at - DAY, { last: "failed" });
+    chain(at - DAY / 2, { last: "running" });
+    chain(at - DAY / 3, { last: "queued" });
+    expect(pick(at)).toMatchObject({ count: 3, ids: third });
+    // A failed step made again counts, with the rows that worked.
+    const retried = chain(at - DAY / 4, { last: "failed", retry: true });
+    expect(pick(at)).toMatchObject({ count: 4, ids: retried });
+  });
+
   it("keeps \"suggestions\" from being a skill's name", () => {
     expect(() => skills.createSkill({ name: "suggestions", title: "S", description: "d", body: "b" })).toThrow(/reserved/);
   });

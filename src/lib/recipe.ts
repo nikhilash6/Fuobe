@@ -399,7 +399,7 @@ export function compile(recipe: Recipe, values: RecipeValues, o: CompileOptions)
       request: {
         ...s.request,
         batchTitle: o.title.slice(0, 200),
-        skill: { name: o.skill, run: o.run },
+        skill: { name: o.skill, run: o.run, step: s.key },
         ...(s.label && { step: { label: s.label, index: i, of: n } }),
         ...(o.demo && { demo: true, feature: SKILL_CHECK_FEATURE }),
       },
@@ -970,7 +970,7 @@ export interface DagShape {
 }
 
 /** Helper rows a shape never counts (a studio's own steps, the evaluation harness, a skill's dry run). */
-const isShapeHelper = (feature: string | undefined) => !!feature && isHelperFeature(feature);
+export const isShapeHelper = (feature: string | undefined) => !!feature && isHelperFeature(feature);
 
 const OP_WORDS: Record<string, string> = Object.fromEntries(Object.entries(OPERATION_LABELS));
 
@@ -1097,6 +1097,8 @@ export interface StepFix {
   modelId: string;
   modelName: string;
   why: string;
+  /** Why is its recent runs (it keeps failing), which a re-check doesn't change; else its model moved or is off. */
+  failing?: boolean;
   candidates: FixCandidate[];
 }
 
@@ -1106,13 +1108,16 @@ export interface SkillUse {
   last: number;
 }
 
+/** Words too common to tell skills apart (a chat's first message is matched word by word). */
+const COMMON_WORDS = new Set(["an", "and", "as", "at", "be", "by", "can", "do", "for", "from", "get", "in", "into", "is", "it", "make", "me", "my", "new", "of", "on", "or", "our", "please", "some", "the", "this", "that", "to", "we", "with", "you", "your"]);
+
 /**
  * Skills in the order Assist should see them: those matching the words first (by how many words match), then the
  * most used, then the most recently used, then as listed. `now` and the 30-day half-life keep an old favourite from
  * outranking what's used this week forever.
  */
 export function rankSkills<T extends { name: string; title: string; description: string; whenToUse?: string }>(list: T[], o: { query?: string; uses?: Map<string, SkillUse>; now?: number } = {}): T[] {
-  const words = (o.query ?? "").toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  const words = [...new Set((o.query ?? "").toLowerCase().split(/[^\p{L}\p{N}-]+/u))].filter((w) => w.length > 1 && !COMMON_WORDS.has(w));
   const now = o.now ?? Date.now();
   const score = (s: T) => {
     const hay = `${s.name} ${s.title} ${s.description} ${s.whenToUse ?? ""}`.toLowerCase();

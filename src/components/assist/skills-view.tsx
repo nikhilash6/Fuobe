@@ -293,7 +293,10 @@ function RecipeStatus({ skill }: { skill: Skill }) {
   const fixes = useStepFixes(skill.name, !!skill.recipe && canCheck).data ?? [];
   const v = recipe.data;
   if (!skill.recipe || !v) return null;
-  const recheck = [...Object.values(v.recheck).flat(), ...fixes.map((f) => f.why)];
+  const recheck = [...Object.values(v.recheck).flat(), ...fixes.filter((f) => !f.failing).map((f) => f.why)];
+  // A step that keeps failing in its runs: a re-check doesn't change its history, so it's said apart, with Suggest a fix.
+  const failing = fixes.filter((f) => f.failing).map((f) => f.why);
+  const warn = recheck.length > 0 || failing.length > 0 || !!v.why;
   const recheckNow = async () => {
     setBusy(true);
     try {
@@ -308,9 +311,9 @@ function RecipeStatus({ skill }: { skill: Skill }) {
     }
   };
   return (
-    <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", recheck.length || v.why ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
-      {recheck.length || v.why ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
-      <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a re-check: ${recheck[0]}` : v.line)}</span>
+    <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", warn ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
+      {warn ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
+      <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a re-check: ${recheck[0]}` : failing.length ? `Keeps failing: ${failing[0]}` : v.line)}</span>
       {canCheck && !v.why && (recheck.length > 0 || !v.ready.length) && (
         <Button variant="outline" size="xs" className="h-6 rounded-full px-2 text-[12px]" onClick={() => void recheckNow()} disabled={busy}>
           {busy && <Loader2 className="animate-spin" />} {v.ready.length ? "Re-check" : "Check it (free)"}

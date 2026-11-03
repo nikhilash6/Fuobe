@@ -22,6 +22,7 @@ import {
   RECIPE_LIMITS,
   recipeProblems,
   RecipeSchema,
+  isShapeHelper,
   shapeOf,
   shapeOfRecipe,
   SKILL_CHECK_FEATURE,
@@ -51,7 +52,7 @@ import { planSteps } from "./assist/studio-tools";
 import { executeTool, getTool, planFor, validateInput } from "./assist/tools";
 import { createPipeline } from "./chains";
 import { llmSeesImages, llmText } from "./enhance";
-import { cancelGeneration, createGenerations, currentRequest, getGeneration, previewChained, stampRequests } from "./generations";
+import { cancelGeneration, createGenerations, currentRequest, getGeneration, previewChained, stampRequests, waitedOnFailure } from "./generations";
 import { trashGenerations } from "./library";
 import { db } from "./db";
 import { isOffered, modelLicence, offeredModels } from "./model-access";
@@ -988,6 +989,7 @@ interface SweepRow {
   id: string;
   feature: string;
   provider: string;
+  status: string;
   created_at: number;
   depends_on: string | null;
   request_json: string;
@@ -1001,15 +1003,17 @@ const ONE_INPUTS = ["endImage", "video", "audio", "audio2", "voiceAudio"] as con
 /**
  * Group the owner's chains of the last SUGGEST_RULE.days days by shape (shapeOf) and keep the shapes made
  * SUGGEST_RULE.runs times or more. Only the owner's own runs count (an account's stay out of the owner's lists), and
- * never a skill's own runs, a helper row or a canceled one. A chain is the rows linked by depends_on, or by a result
- * handed on by hand (its file is another step's input, as the skill builder links them).
+ * never a skill's own runs or a helper row. A chain is the rows linked by depends_on, or by a result handed on by hand
+ * (its file is another step's input, as the skill builder links them). Only a finished chain counts, and only when it
+ * worked: a step that failed or was stopped must have been made again in it (a retry), and its shape and rows are the
+ * steps that succeeded, so Make a skill is handed rows the builder can repeat.
  */
 export function sweepSuggestions(now = Date.now()): SkillSuggestion[] {
   const rows = db()
     .prepare(
-      `SELECT g.id, g.feature, g.provider, g.created_at, g.depends_on, g.request_json, g.outputs_json FROM generations g
+      `SELECT g.id, g.feature, g.provider, g.status, g.created_at, g.depends_on, g.request_json, g.outputs_json FROM generations g
        LEFT JOIN generation_trash t ON t.generation_id = g.id
-       WHERE t.deleted_at IS NULL AND g.created_at >= ? AND g.created_at <= ? AND g.status != 'canceled'
+       WHERE t.deleted_at IS NULL AND g.created_at >= ? AND g.created_at <= ?
          AND json_extract(g.request_json, '$.account') IS NULL AND json_extract(g.request_json, '$.skill') IS NULL
        ORDER BY g.created_at DESC LIMIT ${SWEEP_ROWS}`,
     )
@@ -1060,7 +1064,13 @@ export function sweepSuggestions(now = Date.now()): SkillSuggestion[] {
     chains.set(root, [...(chains.get(root) ?? []), n]);
   }
   const groups = new Map<string, { labels: string[]; runs: { ids: string[]; last: number; demo: boolean }[] }>();
-  for (const chain of chains.values()) {
+  const statusOf = (n: ShapeNode) => byId.get(n.id)!.status;
+  for (const all of chains.values()) {
+    // Still running: it counts once it has finished.
+    if (all.some((n) => statusOf(n) === "queued" || statusOf(n) === "running")) continue;
+    const chain = all.filter((n) => statusOf(n) === "succeeded");
+    const done = (n: ShapeNode) => chain.some((o) => o.modelId === n.modelId && o.op === n.op);
+    if (all.some((n) => statusOf(n) !== "succeeded" && !isShapeHelper(n.feature) && !done(n))) continue;
     const shape = shapeOf(chain);
     if (shape.steps < 2) continue;
     const ids = chain.map((n) => n.id);
@@ -1144,6 +1154,8 @@ interface HistoryRow {
   error: string | null;
   model: string | null;
   run: string | null;
+  /** The recipe step that made the row (older rows have none). */
+  step: string | null;
 }
 
 /** The owner's runs of a skill (its stamp in request_json), newest first; a skill's own dry runs don't count. */
@@ -1151,7 +1163,8 @@ function historyRows(name: string, limit = 2000): HistoryRow[] {
   return db()
     .prepare(
       `SELECT g.id, g.batch_id, g.status, g.cost_usd, g.favorite, g.created_at, g.provider, g.engine, g.error,
-              json_extract(g.request_json, '$.modelId') AS model, json_extract(g.request_json, '$.skill.run') AS run
+              json_extract(g.request_json, '$.modelId') AS model, json_extract(g.request_json, '$.skill.run') AS run,
+              json_extract(g.request_json, '$.skill.step') AS step
        FROM generations g
        WHERE json_extract(g.request_json, '$.skill.name') = ? AND g.feature != ? AND json_extract(g.request_json, '$.account') IS NULL
        ORDER BY g.created_at DESC LIMIT ?`,
@@ -1215,31 +1228,44 @@ export function skillHistory(name: string, limit = 10): SkillHistory {
 const FIX_CONSIDER = 16;
 const FIX_SHOW = 6;
 
-/** A recipe with one step's model swapped (its engine left to the new model). */
+/**
+ * A recipe with one step's model swapped. A step kept on one engine (for what only that engine does) stays there when
+ * the new model also runs on both; otherwise its engine is left to the new model.
+ */
 function withModel(recipe: Recipe, key: string, modelId: string): Recipe {
+  const next = getModel(modelId);
   return {
     ...recipe,
     steps: recipe.steps.map((s) => {
       if (s.kind !== "generate" || s.key !== key) return s;
       const request: Record<string, unknown> = { ...s.request, modelId };
-      delete request.engine;
+      const pinned = s.request.engine;
+      if (!(pinned && dualEngine(next) && next!.engines!.includes(pinned))) delete request.engine;
       return { ...s, request: request as typeof s.request };
     }),
   };
 }
 
+/** A waiting step's failure that an earlier step caused (advanceDependents: waitedOnFailure, or an input that fell short). */
+const UPSTREAM = waitedOnFailure().replace(/ didn't finish$/, " ");
+const upstreamFailure = (error: string | null) => !!error && (error === waitedOnFailure() || error.startsWith(UPSTREAM));
+
 /** Why a step needs a fix: it failed in 2 of the last 5 runs, it was moved by REPLACED_BY, or it's switched off. */
-function stepTrouble(s: Recipe["steps"][number], lastRuns: { rows: HistoryRow[] }[]): string | null {
+function stepTrouble(s: Recipe["steps"][number], lastRuns: { rows: HistoryRow[] }[]): { why: string; failing?: boolean } | null {
   if (s.kind !== "generate") return null;
   const r = replacedBy(s.request.modelId);
-  if (r) return `${r.was} was replaced by ${getModel(r.id)?.name ?? r.id}`;
+  if (r) return { why: `${r.was} was replaced by ${getModel(r.id)?.name ?? r.id}` };
   const id = currentModelId(s.request.modelId);
   const m = getModel(id);
-  if (!m) return `Fuobe has no model “${s.request.modelId}” anymore`;
+  if (!m) return { why: `Fuobe has no model “${s.request.modelId}” anymore` };
   const engines = dualEngine(m) ? (s.request.engine ? [s.request.engine] : (m.engines ?? ENGINES)) : [undefined];
-  if (!engines.some((e) => isOffered(id, e))) return `${m.name} is switched off in Settings → Models & licences`;
-  const failed = lastRuns.filter((run) => run.rows.some((row) => row.status === "failed" && row.model !== null && currentModelId(row.model) === id)).length;
-  if (failed >= 2) return `${m.name} failed in ${failed} of the last ${lastRuns.length} runs`;
+  if (!engines.some((e) => isOffered(id, e))) return { why: `${m.name} is switched off in Settings → Models & licences` };
+  // A step's own failure only: a step failed by what an earlier one did ("An earlier step didn't finish", or made too
+  // little) never ran, so it isn't blamed. A row says which step made it; an older row without that is matched by model.
+  const ownFailure = (row: HistoryRow) =>
+    row.status === "failed" && !upstreamFailure(row.error) && (row.step !== null ? row.step === s.key : row.model !== null && currentModelId(row.model) === id);
+  const failed = lastRuns.filter((run) => run.rows.some(ownFailure)).length;
+  if (failed >= 2) return { why: `${m.name} failed in ${failed} of the last ${lastRuns.length} runs`, failing: true };
   return null;
 }
 
@@ -1256,8 +1282,9 @@ export function stepFixes(name: string): StepFix[] {
   const out: StepFix[] = [];
   for (const s of recipe.steps) {
     if (s.kind !== "generate") continue;
-    const why = stepTrouble(s, lastRuns);
-    if (!why) continue;
+    const trouble = stepTrouble(s, lastRuns);
+    if (!trouble) continue;
+    const { why, failing } = trouble;
     const was = getModel(s.request.modelId);
     const id = currentModelId(s.request.modelId);
     const m = getModel(id) ?? was;
@@ -1287,7 +1314,7 @@ export function stepFixes(name: string): StepFix[] {
         if (candidates.length >= FIX_SHOW) break;
       }
     }
-    out.push({ key: s.key, label: s.label ?? (op ? (OPERATION_LABELS[op] ?? op) : s.key), modelId: s.request.modelId, modelName: was?.name ?? m?.name ?? s.request.modelId, why, candidates });
+    out.push({ key: s.key, label: s.label ?? (op ? (OPERATION_LABELS[op] ?? op) : s.key), modelId: s.request.modelId, modelName: was?.name ?? m?.name ?? s.request.modelId, why, ...(failing && { failing }), candidates });
   }
   return out;
 }

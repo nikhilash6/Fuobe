@@ -227,6 +227,8 @@ export function useRecipeActions() {
         throw e;
       } finally {
         void qc.invalidateQueries({ queryKey: ["assist-skills"] });
+        // A re-check can move a step to what replaced it: what needs a fix is read again.
+        void qc.invalidateQueries({ queryKey: ["assist-skill-fixes", name] });
       }
     },
   };

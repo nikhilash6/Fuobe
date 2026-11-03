@@ -164,9 +164,9 @@ describe("running a recipe", () => {
     expect(run.ids).toHaveLength(3);
     const rows = run.ids.map(rowOf);
     expect(new Set(rows.map((r) => r.batch_id))).toEqual(new Set([run.batchId]));
-    for (const r of rows) {
+    for (const [i, r] of rows.entries()) {
       const req = JSON.parse(r.request_json);
-      expect(req.skill).toEqual({ name: "lamp", run: run.batchId });
+      expect(req.skill).toEqual({ name: "lamp", run: run.batchId, step: ["cutout", "scene", "spin"][i] });
       expect(req.batchTitle).toBe("Lamp turntable");
       expect(req.demo).toBeUndefined();
     }
@@ -570,5 +570,54 @@ describe("run history, fixes and use (W6)", () => {
     const { chatFacts } = await import("@/server/assist/context");
     const index = chatFacts({ engine: "cloud", autoApprove: false, projectId: null, skills: [] }).filter((f) => f.section === "skills");
     expect(index[0].key).toBe("hist");
+  });
+
+  it("puts a skill that matches the chat's words first in Assist's skills index, ahead of the most used", async () => {
+    skills.createSkill({ name: "gig-poster", title: "Gig poster", description: "A bold gig poster for a band night.", body: "# Poster" });
+    const { chatFacts } = await import("@/server/assist/context");
+    const index = (words?: string) => chatFacts({ engine: "cloud", autoApprove: false, projectId: null, skills: [], words }).filter((f) => f.section === "skills").map((f) => f.key);
+    expect(index()[0]).toBe("hist");
+    expect(index("Make us a gig poster for our band night, please")[0]).toBe("gig-poster");
+    // Common words alone match nothing.
+    expect(index("make it for me with the")[0]).toBe("hist");
+  });
+
+  it("blames only the step that failed, not the steps after it that never ran", async () => {
+    makeSkill("hist-up", lamp(), "Upstream lamp");
+    const { waitedOnFailure } = await import("@/server/generations");
+    const at = Date.now() + 120_000;
+    let n = 0;
+    const insert = (run: string, step: string, model: string, status: string, error: string | null) =>
+      db()
+        .prepare(
+          `INSERT INTO generations (id, batch_id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at, error)
+           VALUES (?, ?, 'skill', ?, 'cloud', 'fal', 'edit', 'image', ?, ?, '[]', ?, ?, ?)`,
+        )
+        .run(`up${++n}`.padEnd(12, "x"), run, model, status, JSON.stringify({ feature: "skill", modelId: model, skill: { name: "hist-up", run, step } }), at + n, at + n, error);
+    for (const run of ["uprun1", "uprun2"]) {
+      insert(run, "cutout", "birefnet-cloud", "succeeded", null);
+      insert(run, "scene", "nano-banana-pro", "failed", "The provider refused it");
+      insert(run, "spin", "kling-3", "failed", waitedOnFailure());
+    }
+    const fixes = recipes.stepFixes("hist-up");
+    expect(fixes.map((f) => [f.key, f.why, f.failing])).toEqual([["scene", "Nano Banana Pro failed in 2 of the last 2 runs", true]]);
+  });
+
+  it("keeps a step on the engine it was kept on when the fix runs on both", async () => {
+    const pinned = soul();
+    (pinned.steps[0].request as Record<string, unknown>).engine = "open";
+    makeSkill("soul-pinned", pinned, "Pinned portrait");
+    expect((await recipes.verifyRecipe("soul-pinned", "plan")).view.ready).toEqual(["open"]);
+    changeAccess([{ kind: "model", id: "fuobe-soul", on: false }]);
+    try {
+      const [fix] = recipes.stepFixes("soul-pinned");
+      const pick = fix.candidates.find((c) => c.modelId === "fuobe-soul-hd");
+      expect(pick).toMatchObject({ engine: "open" });
+      const done = await recipes.applyFix("soul-pinned", "portrait", "fuobe-soul-hd");
+      expect(done.view.recipe.steps[0]).toMatchObject({ request: { modelId: "fuobe-soul-hd", engine: "open" } });
+      expect(done.view.engines).toEqual(["open"]);
+    } finally {
+      changeAccess([{ kind: "model", id: "fuobe-soul", on: true }]);
+    }
   });
 });

@@ -222,7 +222,7 @@ describe("fill and compile", () => {
     expect(c.steps[1]).toMatchObject({ after: ["cutout"], chain: [{ slot: "images", position: "first" }] });
     for (const s of c.steps) {
       expect(s.request.batchTitle).toBe("Lamp turntable");
-      expect(s.request.skill).toEqual({ name: "lamp-turntable", run: "run123" });
+      expect(s.request.skill).toEqual({ name: "lamp-turntable", run: "run123", step: s.key });
       expect(s.request.demo).toBeUndefined();
       expect(s.request.feature).toBe("skill");
     }
