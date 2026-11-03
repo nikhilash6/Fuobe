@@ -360,6 +360,58 @@ Graph `image-to-views-idol` (needs the pack): the Idol graph → `IdolCamera` �
 
 Place an Idol splat in the MoGe scene viewer (`src/components/cinema/scene-viewer.tsx`, layout `object` at L633) with move, scale and turn handles, using idol-4's renderer inside the scene. Idol's predicted camera can set the first orientation.
 
+## Results (pending a GPU run)
+
+_Package idol-3 (2026-11-03) built the measurement; no numbers yet. This machine has no GPU, so only the case file and demo runs were checked here, and demo numbers are never results. §3 and §7.2 stay the vendor's until this section has a run._
+
+**The suite.** `scripts/eval/cases/splat.json` (`pnpm eval:validate`), 11 single objects with your own pictures in `scripts/eval/local/splat/` (never committed; the file names are in `scripts/eval/README.md`, "Your own inputs"): three generated product renders (bottle, sneaker, headphones), three photos tagged `photo` (mug, handbag, figurine), a stylised character, a person (made up, or someone who agreed), two with thin parts (chair, plant) and glass with chrome. Three seeds each (1001, 2002, 3003), so the promote rule's three results per case hold. The input picture is each case's reference.
+
+| Variant | Model | Settings | Runs on |
+|---|---|---|---|
+| `idol-best` (the candidate) | `oss-idol` | 50 euler, cfg 4, 262,144 Gaussians (`IDOL_PRESETS.best`) | every case |
+| `idol-quick` | `oss-idol` | 20 dpmpp_2m, cfg 4, 65,536 (`IDOL_PRESETS.quick`) | every case |
+| `triposplat-today` | `oss-triposplat` | its graph's defaults: 20 dpmpp_2m, cfg 3, 262,144 | every case |
+| `idol-photo-crop` | `oss-idol` | Best with `photoCrop` on (`cropMode` real on the clean graph) | the 3 photos |
+| `triposplat-cloud` | fal `tripo3d/triposplat` (`triposplat`), labelled TripoSplat | fal's defaults | cloud runs only; about $0.05 a job, under the spend cap |
+
+TripoSplat at Idol's sampler (50 euler, cfg 4), which would tell the weights from the settings, is not in the suite yet: `image-to-splat-triposplat` binds `steps` and `cfg` but not `sampler`, and adding the binding changes a workflow contract that `tests/comfy-library-4.test.ts` pins. Until it lands, a win for `idol-best` may be its 50 Euler steps rather than its weights.
+
+**What is measured.** The orbit video (role `turntable`) is the scored and reviewed output; the `.spz` stays with each job.
+
+| Number | What it decides |
+|---|---|
+| `style` (DINOv2 ViT-S/14, Apache-2.0: the orbit's frames against the input picture) | the main metric: how much of the object survives every angle. Picks the default and the Quick settings |
+| `drift`, `driftMax`, `warp` (temporal) | that the winner doesn't turn less smoothly (bands 0.004 drift, 0.002 warp) |
+| `aesthetic` (LAION v2) | that the winner doesn't look worse (band 0.15) |
+| blind ratings (`pnpm eval:review`) | for each pair of variants a rule compares: at least 6 per case, or every such pair the review offered when it offered fewer (3 per case for one reviewer at 3 seeds), and at least 55 % of the non-tie ratings to the winner |
+| `haze` (share of Gaussians under opacity 0.05 in the saved file), `gaussians` | whether TripoSplat's files carry Idol's haze (§2.4), so the splat viewer's opacity cut-off (idol-4) knows which models need it. On a ComfyUI with ComfyUI-Idol, Idol's file is pruned at 0.05 by its clean graph, so its haze there is near zero by design |
+| `seconds`, `vramGb` (from ComfyUI's `/system_stats` and `/history`) | the time and peak memory on that GPU, to replace "unmeasured in ComfyUI" in the manifest notes and the vendor's figures in §3 |
+
+**The commands** (a Fuobe connected to a ComfyUI on an 8–16 GB GPU with both models' weights; `scripts/eval/README.md`, "The splat suite"):
+
+```bash
+pnpm eval:setup --download --dinov2                       # the metrics venv, with DINOv2 fetched now
+pnpm eval:run --suite splat --engine open --variants idol-best,idol-quick,triposplat-today,idol-photo-crop --dry-run
+pnpm eval:run --suite splat --engine open --variants idol-best,idol-quick,triposplat-today,idol-photo-crop \
+  --label "<GPU>, driver <version>, ComfyUI <version>"
+pnpm eval:review latest                                   # rate every pair blind
+pnpm eval:report latest
+pnpm eval:compare latest:triposplat-today latest:idol-best --per-case
+pnpm eval:compare latest:idol-best latest:idol-quick --per-case
+pnpm eval:promote latest --against triposplat-today       # decision 1 only: Idol Best against TripoSplat today
+pnpm eval:run --suite splat --engine cloud --variants triposplat-cloud   # optional: priced before it starts (about $0.05 a job in the catalog today)
+```
+
+**What each result changes** (the suite's `decides` field; a person makes each change in its own reviewed commit, with this section filled in):
+
+1. **Splat mode's open default** (`MODELS_3D.splat.open` in `src/lib/av/model3d.ts`, TripoSplat first today): Idol 3D goes first only if `idol-best` scores at least as well as `triposplat-today` on style in at least 8 of the 11 cases, stays within the aesthetic and temporal bands on the suite's means, and takes at least 55 % of the non-tie blind ratings of their pairs, with at least 6 per case or every such pair the review offered when it offered fewer (3 per case for one reviewer at 3 seeds). `pnpm eval:promote latest --against triposplat-today` checks the per-case part; without `--against` it also weighs Idol Quick and the photo crop, which is not this decision. TripoSplat at Idol's sampler should run first (above).
+2. **Idol's Quick look** (`IDOL_PRESETS.quick`): stays at 20 dpmpp_2m and 65,536 Gaussians while `idol-quick` is within 0.02 style of `idol-best` on the suite's mean and Best takes no more than 70 % of their non-tie ratings; otherwise the next run tries 30 steps or 131,072 Gaussians.
+3. **The photo crop** (on for uploads today): stays on only if `idol-photo-crop` scores at least as well as `idol-best` on style in at least 2 of the 3 photos and takes at least 55 % of their non-tie ratings; otherwise it starts off.
+
+| Run | GPU, driver, ComfyUI | Graphs (core or clean) | Results |
+|---|---|---|---|
+| _pending_ | | | |
+
 ## 10. Risks
 
 - **The "~2 s" expectation will not hold in Fuobe.** The fastest published time is 3.4 s on a B300 through the compiled SDK; consumer cards are 14–46 s there, and about 22–26 s on an RTX 5090 in ComfyUI. Label presets by steps and Gaussians.

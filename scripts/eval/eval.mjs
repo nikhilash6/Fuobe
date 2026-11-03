@@ -19,7 +19,7 @@ import { serveReview, writeReview } from "./lib/review.mjs";
 import { suiteFromSkill, suitePath } from "./lib/from-skill.mjs";
 import { DEFAULT_CLOUD_CAP, money, runEval } from "./lib/run.mjs";
 import { connect } from "./lib/server.mjs";
-import { listRuns, readJsonl, resolveRun } from "./lib/store.mjs";
+import { listRuns, readJson, readJsonl, resolveRun } from "./lib/store.mjs";
 
 const list = (v) => (v ? String(v).split(",").map((s) => s.trim()).filter(Boolean) : undefined);
 const num = (v, name) => {
@@ -166,7 +166,9 @@ const root = (values, env) => resultsDir(env, values.out);
 async function score(dir, v, ctx) {
   if (v["no-metrics"]) return null;
   ctx.note("Scoring the outputs…");
-  const r = await scoreRun(dir, { metrics: v.metrics, device: v.device, clipModel: v["clip-model"], styleModel: v["style-model"], identityModel: v["identity-model"], faceDetector: v["face-detector"], commercialOnly: v["commercial-only"], force: v.force, log: ctx.note, env: ctx.env });
+  // The suite's own style embedder (defaults.styleModel, kept in run.json) unless --style-model names one.
+  const styleModel = v["style-model"] ?? readJson(path.join(dir, "run.json"))?.styleModel;
+  const r = await scoreRun(dir, { metrics: v.metrics, device: v.device, clipModel: v["clip-model"], styleModel, identityModel: v["identity-model"], faceDetector: v["face-detector"], commercialOnly: v["commercial-only"], force: v.force, log: ctx.note, env: ctx.env });
   if (!r.ok) ctx.note(`Not scored: ${r.reason}. Timing and cost are in the report; pnpm eval:report ${path.basename(dir)} scores it later.`);
   return r;
 }

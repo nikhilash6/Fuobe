@@ -108,6 +108,7 @@ export function expandJobs(suite, opts) {
           let skip = null;
           if (kase.engines && !kase.engines.includes(engine)) skip = `runs on ${kase.engines.join(" / ")} only`;
           else if (variant.engines && !variant.engines.includes(engine)) skip = `the ${variantName} variant runs on ${variant.engines.join(" / ")} only`;
+          else if (variant.tags && !variant.tags.some((t) => kase.tags?.includes(t))) skip = `the ${variantName} variant runs on cases tagged ${variant.tags.join(" or ")} only`;
           else if (!target && !variant.models && !kase.models && !kase.variantModels?.[variantName]) skip = `${suite.suite} has no ${engine} target`;
           else if (!modelId) skip = `none of ${candidates.join(", ")} is on this Fuobe`;
           else if (missing.length) skip = `missing local input${missing.length > 1 ? "s" : ""} ${missing.join(", ")} (see scripts/eval/README.md → Your own inputs)`;

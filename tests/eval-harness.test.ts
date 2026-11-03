@@ -474,6 +474,52 @@ describe("the runner on the demo provider", () => {
     ]);
   });
 
+  it("runs the splat suite: Idol 3D's Best and Quick against TripoSplat on the orbit video, the photo crop on photos only", async () => {
+    const r = await cli(["run", "--suite", "splat", "--engine", "demo", "--cases", "splat/photo-mug,splat/bottle", "--seeds", "1001", "--variants", "all", "--no-metrics"]);
+    expect(r.code, r.stderr).toBe(0);
+    const runDir = path.join(results, runIdFrom(r.stderr));
+    expect(JSON.parse(fs.readFileSync(path.join(runDir, "run.json"), "utf8"))).toMatchObject({ suite: "splat", kind: "video", candidate: "idol-best", styleModel: "dinov2" });
+    const rows = store.latestJobs(runDir);
+    const done = rows.filter((x) => x.status === "succeeded");
+    expect(done.map((x) => `${x.caseId} ${x.variant}`).sort()).toEqual(
+      ["idol-best", "idol-quick", "idol-photo-crop", "triposplat-today"].map((v) => `splat/photo-mug ${v}`).concat(["idol-best", "idol-quick", "triposplat-today"].map((v) => `splat/bottle ${v}`)).sort(),
+    );
+    // The demo's splat is its mesh alone (a real open run adds the orbit video, which the scorer and the blind review read).
+    for (const row of done) expect((row.outputs as { kind: string }[]).map((o) => o.kind)).toEqual(["model3d"]);
+    expect(rows.filter((x) => x.status === "skipped").map((x) => [x.caseId, x.variant, x.skip])).toEqual(
+      expect.arrayContaining([
+        ["splat/bottle", "idol-photo-crop", "the idol-photo-crop variant runs on cases tagged photo only"],
+        ["splat/bottle", "triposplat-cloud", "the triposplat-cloud variant runs on cloud only"],
+      ]),
+    );
+    const suite = cases.loadSuite("splat") as unknown as { decides: string };
+    expect(suite.decides).toMatch(/MODELS_3D\.splat\.open.*IDOL_PRESETS\.quick.*photo crop/s);
+    type Job = { variant: string; skip?: string; request: { modelId: string; op?: string; params: { extra?: Record<string, unknown> } } };
+    const all = ["idol-best", "idol-quick", "triposplat-today", "idol-photo-crop", "triposplat-cloud"];
+    const open = plan.expandJobs(suite, { engine: "open", variants: all, cases: ["splat/photo-mug"], seeds: [1], exists: () => true }) as unknown as Job[];
+    expect(open.map((j) => [j.variant, j.request.modelId, j.request.op, j.request.params.extra ?? null, j.skip ?? null])).toEqual([
+      ["idol-best", "oss-idol", "splat", { steps: 50, sampler: "euler", cfg: 4, numGaussians: 262144 }, null],
+      ["idol-quick", "oss-idol", "splat", { steps: 20, sampler: "dpmpp_2m", cfg: 4, numGaussians: 65536 }, null],
+      ["triposplat-today", "oss-triposplat", "splat", null, null],
+      ["idol-photo-crop", "oss-idol", "splat", { steps: 50, sampler: "euler", cfg: 4, numGaussians: 262144, photoCrop: true, cropMode: "real" }, null],
+      ["triposplat-cloud", "oss-idol", "splat", null, "the triposplat-cloud variant runs on cloud only"],
+    ]);
+    // No Idol on the cloud: only fal's TripoSplat runs there, as itself.
+    const cloud = plan.expandJobs(suite, { engine: "cloud", variants: ["triposplat-cloud", "idol-best"], cases: ["splat/bottle"], seeds: [1], exists: () => true }) as unknown as Job[];
+    expect(cloud.map((j) => [j.variant, j.request.modelId, j.skip ?? null])).toEqual([
+      ["triposplat-cloud", "triposplat", null],
+      ["idol-best", "", "the idol-best variant runs on open / demo only"],
+    ]);
+    // Idol's presets in the suite are the ones the page sends.
+    const { IDOL_PRESETS } = await import("@/lib/av/model3d");
+    expect(open[0].request.params.extra).toEqual(IDOL_PRESETS.best);
+    expect(open[1].request.params.extra).toEqual(IDOL_PRESETS.quick);
+    // A variant limited to tags no case has is refused.
+    const bad = path.join(dir, "bad-tags.json");
+    fs.writeFileSync(bad, JSON.stringify({ suite: "bad-tags", title: "x", description: "x", original: "x", kind: "video", targets: { demo: { models: ["x"] } }, variants: { a: {}, b: { tags: ["photo"] } }, cases: [{ id: "x/1", title: "x", inputs: { images: ["fixtures/start-frame.png"] } }] }));
+    expect(() => cases.loadSuite(bad)).toThrow(/variants\.b\.tags: no case is tagged photo/);
+  });
+
   it("runs Fuobe Cinema's Director and camera-move cases, and plans its cloud variants", async () => {
     const r = await cli(["run", "--suite", "cinema", "--engine", "demo", "--cases", "cinema/director-noir,cinema/move-dolly-in", "--no-metrics"]);
     expect(r.code, r.stderr).toBe(0);
