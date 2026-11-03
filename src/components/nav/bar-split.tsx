@@ -65,15 +65,18 @@ export function useHoverIntent(open: boolean, onOpen: () => void, onClose: () =>
     if (!open) byHover.current = false;
   }, [open]);
 
+  // `now`: open without the rest (another of the bar's grouped menus is open: moving along the bar switches at once).
   const enter = useCallback(
-    (e: React.PointerEvent) => {
+    (e: React.PointerEvent, now = false) => {
       if (!canHover(e)) return;
       cancel();
       if (openRef.current || off) return;
-      timer.current = setTimeout(() => {
+      const go = () => {
         byHover.current = true;
         onOpen();
-      }, HOVER_OPEN_MS);
+      };
+      if (now) go();
+      else timer.current = setTimeout(go, HOVER_OPEN_MS);
     },
     [cancel, onOpen, off],
   );
@@ -141,7 +144,11 @@ export function BarSplitMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [offset, setOffset] = useState(0);
-  const { launcherOpen, setLauncherOpen } = useNavUi();
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+  const { openMenu, setOpenMenu } = useNavUi();
   const pill = useRef<HTMLDivElement>(null);
   const nameLink = useRef<HTMLAnchorElement>(null);
   const chevron = useRef<HTMLButtonElement>(null);
@@ -166,6 +173,13 @@ export function BarSplitMenu({
     },
     [panel],
   );
+  // A grouped menu opened (Studios, Apps …): this one closes, quietly (focus is the other menu's now).
+  useEffect(() => {
+    if (openMenu && openRef.current) {
+      quietClose.current = true;
+      setOpen(false);
+    }
+  }, [openMenu]);
   // Opened from the name with ArrowDown: once the menu has taken focus, its first row gets it.
   useEffect(() => {
     if (!open || !focusFirst.current) return;
@@ -177,10 +191,10 @@ export function BarSplitMenu({
     open,
     useCallback(() => {
       fromName.current = false;
-      // One panel at a time: the Studios launcher, open from a click, gives way (focus stays where it is).
-      if (launcherOpen) setLauncherOpen(false);
+      // One panel at a time: an open grouped menu gives way (focus stays where it is).
+      if (openMenu) setOpenMenu(null);
       show(true, false);
-    }, [show, launcherOpen, setLauncherOpen]),
+    }, [show, openMenu, setOpenMenu]),
     useCallback(() => {
       quietClose.current = true;
       show(false);
@@ -196,6 +210,7 @@ export function BarSplitMenu({
         if (o) {
           hover.pin();
           fromName.current = false;
+          if (openMenu) setOpenMenu(null);
         }
         show(o);
       }}
@@ -228,6 +243,7 @@ export function BarSplitMenu({
             focusFirst.current = true;
             fromName.current = true;
             hover.pin();
+            if (openMenu) setOpenMenu(null);
             show(true);
           }}
         >

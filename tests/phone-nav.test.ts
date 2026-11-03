@@ -186,7 +186,8 @@ describe("the tab bar", () => {
 
 describe("the Studios sheet", () => {
   const sheet = (props: { group?: (typeof LAUNCHER_GROUPS)[number]["id"] } = {}) => createElement(StudiosSheet, { ...props, onSearch: () => {} });
-  const tiles = (html: string) => hrefs(html).filter((h) => h !== "/" && h !== "/library");
+  // The grid ends on a See all tile (/studios): the family's whole set.
+  const tiles = (html: string) => hrefs(html).filter((h) => h !== "/" && h !== "/library" && h !== "/studios");
 
   it("shows every studio, Apps and the Sound modes (33 tiles, 28 studios), in launcher order, each with a real cover", () => {
     const html = at("/", () => sheet());
@@ -197,7 +198,8 @@ describe("the Studios sheet", () => {
     for (const e of all) {
       expect(e.cover, e.id).toBeTruthy();
       expect(covers[e.cover!], e.id).toBeTruthy();
-      expect(html, e.id).toContain(`src="${covers[e.cover!].thumb}"`);
+      // A tile shows the 96 px copy.
+      expect(html, e.id).toContain(`src="${covers[e.cover!].mini ?? covers[e.cover!].thumb}"`);
     }
   });
 

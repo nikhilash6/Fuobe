@@ -262,3 +262,28 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     expect(templateCover("examples", "storyboard-heist", { "examples/storyboard-heist": gen.slimEntry("examples/storyboard-heist", board) } as never)?.frames).toHaveLength(6);
   });
 });
+
+describe("a template cover that rests on its peak", () => {
+  it("plays only the finished scene around it: a hover and every loop start just before the peak, never at the clip's start", async () => {
+    const { PEAK_WINDOW, templatePreview } = await import("@/lib/template-covers");
+    const cover = (k: string) => templateCover(k.split("/")[0] as TemplateGroup, k.split("/")[1]);
+    const rests = Object.keys(TEMPLATE_COVERS).filter((k) => cover(k)?.at !== undefined);
+    const withPeak = rests.filter((k) => cover(k)!.poster.startsWith("/previews/presets/peak/"));
+    expect(withPeak.length).toBeGreaterThan(0);
+    // Every Canvas ready board's cover is an effect's peak.
+    expect(rests.filter((k) => k.startsWith("canvas/")).every((k) => withPeak.includes(k))).toBe(true);
+    // A reveal (its poster is the clip's last frame) still plays from the start up to it.
+    for (const key of rests.filter((k) => !withPeak.includes(k))) expect(templatePreview(cover(key)!).rest, key).toEqual({ src: cover(key)!.poster, at: cover(key)!.at, from: 0 });
+    for (const key of withPeak) {
+      const [group, id] = key.split("/") as [TemplateGroup, string];
+      const c = templateCover(group, id)!;
+      const rest = templatePreview(c).rest!;
+      expect(rest.at, key).toBe(c.at);
+      expect(rest.from, key).toBeCloseTo(Math.max(0, c.at! - PEAK_WINDOW.before), 3);
+      expect(rest.from, key).toBeGreaterThan(0);
+      expect(rest.until, key).toBeCloseTo(c.at! + PEAK_WINDOW.after, 3);
+      // Each canvas clip is 4 s long and its peak is within it.
+      if (group === "canvas") expect(c.at!, key).toBeLessThan(4);
+    }
+  });
+});

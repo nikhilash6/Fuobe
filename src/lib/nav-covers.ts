@@ -5,6 +5,7 @@
 import "server-only";
 import { coverFraming, type CoverFraming } from "./cover-framing";
 import { coverIds } from "./nav-model";
+import { hasMini, miniOf } from "./preset-cards";
 import { presetCover } from "./preset-covers";
 
 export interface NavCover {
@@ -12,6 +13,8 @@ export interface NavCover {
   thumb: string;
   /** The full still, for the 4:3 cards. */
   poster: string;
+  /** Its 96 px copy, for the launcher's rows and the phone's tiles (a preset's own poster only). */
+  mini?: string;
   /** How it sits in a square tile or pill (cover-framing.ts), when it isn't centred there. */
   framing?: CoverFraming;
 }
@@ -29,7 +32,8 @@ export function navCovers(): NavCovers {
     const c = presetCover(id);
     if (!c) throw new Error(`The navigation names ${id}, which has no cover`);
     const framing = coverFraming(c.poster);
-    out[id] = { thumb: c.thumb, poster: c.poster, ...(framing && { framing }) };
+    const mini = hasMini(c.poster) ? miniOf(c.poster) : undefined;
+    out[id] = { thumb: c.thumb, poster: c.poster, ...(mini && { mini }), ...(framing && { framing }) };
   }
   cached = out;
   return out;

@@ -24,7 +24,9 @@ Turning it off signs out every account at once, and guests are sent to sign in a
 A guest can open every page: galleries, presets, the studios, Layers, Cinema, Image to 3D and
 Settings, read-only. The pages get the catalog and status reads they need (`/api/status`,
 `/api/models`, `/api/search-index`, `/api/comfyui`, `/api/settings/models`, curated moodboards,
-built-in skills). The owner's library stays private: the lists come back empty, and other reads of
+built-in skills), and the bar's menus read `/nav-menus/apps`, `/nav-menus/motions` and
+`/nav-menus/canvas`: static files made at build time that hold what a visitor may see only (no model
+names, no template without a real cover). The owner's library stays private: the lists come back empty, and other reads of
 it (files, uploads, projects, settings values, tokens) answer 401 "Sign up to see your library".
 
 Every change a guest sends (generate, upload, save a setting, create a project…) answers 401. The

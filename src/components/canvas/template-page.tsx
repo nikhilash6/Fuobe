@@ -14,7 +14,7 @@ import { shownTo, type TemplateDetail, type TemplateInput } from "@/lib/canvas-s
 import { templateCover } from "@/lib/template-covers";
 import { toastError } from "@/lib/refusals";
 import { NodeIcon } from "./node-icon";
-import { ModelLine, Schematic } from "./template-card";
+import { CoverPlaceholder, ModelLine, Schematic } from "./template-card";
 import { useCanvasActions } from "./use-canvas";
 
 function Input({ input }: { input: TemplateInput }) {
@@ -127,8 +127,8 @@ export function TemplatePage({ t }: { t: TemplateDetail }) {
                 <CoverArt cover={cover} sizes="(max-width: 1024px) 100vw, 820px" playing={playing} asked={asked} />
               )
             ) : (
-              <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, oklch(0.62 0.12 ${t.hue} / 0.14), transparent 70%)` }}>
-                <Schematic outline={t.byEngine[engine].outline} className="p-6" />
+              <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, oklch(0.62 0.12 ${t.hue} / 0.22), oklch(0.62 0.12 ${t.hue} / 0.06) 75%)` }}>
+                <CoverPlaceholder icon={t.icon} steps={t.flow} />
               </div>
             )}
             {owner && !cover && <span className="absolute top-3 right-3 rounded-full bg-background/90 px-2 py-0.5 text-[11px] font-medium text-muted-foreground shadow-soft">No cover yet</span>}

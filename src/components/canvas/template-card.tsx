@@ -7,11 +7,12 @@ import { StarterCard } from "@/components/starters/starter-card";
 // Types only: the catalog (models, templates) stays on the server; the pages pass slim template cards.
 import type { CanvasNodeType, Outline } from "@/lib/catalog/canvas";
 import type { Engine } from "@/lib/catalog/types";
-import type { TemplateCardData } from "@/lib/canvas-sections";
+import type { TemplateCardData, TemplateModels } from "@/lib/canvas-sections";
 import { offered, type AccessSummary } from "@/lib/model-access";
 import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 import { NodeIcon } from "./node-icon";
+import { useTemplateModels } from "./use-canvas";
 
 const BOX = { w: 280, h: 150 };
 
@@ -73,10 +74,10 @@ export function Schematic({ outline: o, className, labeled = false }: { outline:
   );
 }
 
-/** A starter's steps as a few words on dark glass ("Photo › Scene › Film"), over its cover's corner. */
+/** A starter's steps as a few words ("Photo › Scene › Film"): a small muted line under its title, never over its cover. */
 export function StepFlow({ steps, className }: { steps: string[]; className?: string }) {
   return (
-    <span className={cn("pointer-events-none inline-flex items-center gap-0.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] leading-5 font-medium text-white backdrop-blur-sm", className)} aria-hidden>
+    <span data-step-flow className={cn("pointer-events-none inline-flex flex-wrap items-center gap-0.5 text-[12px] leading-4 font-medium text-muted-foreground", className)} aria-hidden>
       {steps.map((s, i) => (
         <Fragment key={s}>
           {i > 0 && <ChevronRight className="size-3 opacity-70" />}
@@ -87,15 +88,34 @@ export function StepFlow({ steps, className }: { steps: string[]; className?: st
   );
 }
 
+/**
+ * A card that has no cover yet, as the owner sees it (a visitor never gets one): its tint and its icon large in the middle
+ * (and its steps under it, on its page), instead of the board in miniature.
+ */
+export function CoverPlaceholder({ icon, steps }: { icon: string; steps?: string[] }) {
+  return (
+    <div className="flex size-full flex-col items-center justify-center gap-2 text-foreground/70">
+      <span className="grid size-12 place-items-center rounded-2xl bg-background/80 shadow-soft">
+        <NodeIcon name={icon} className="size-6" />
+      </span>
+      {steps && <StepFlow steps={steps} className="justify-center" />}
+    </div>
+  );
+}
+
 /** The model names a card shows as this install offers them: a model that is off shows the one its node falls back to. */
-export function offeredNames({ models, ifOff }: TemplateCardData["byEngine"][Engine], access: AccessSummary | undefined, engine: Engine): string[] {
+export function offeredNames({ models, ifOff }: TemplateModels[Engine], access: AccessSummary | undefined, engine: Engine): string[] {
   if (!ifOff || !access) return models;
   return [...new Set(models.map((m) => ifOff.find((x) => x.name === m && !offered(access, x.id, engine))?.instead ?? m))];
 }
 
-/** The owner's line under a card or a template's steps: the models it runs on, and free on the owner's GPU. */
+/**
+ * The owner's line under a card or a template's steps: the models it runs on, and free on the owner's GPU. The names
+ * come from the owner's own request (useTemplateModels), never with the page: a line's height is kept while they load.
+ */
 export function ModelLine({ t, engine, access, className }: { t: TemplateCardData; engine: Engine; access?: AccessSummary; className?: string }) {
-  const models = offeredNames(t.byEngine[engine], access, engine);
+  const on = useTemplateModels().data?.[t.id]?.[engine];
+  const models = on ? offeredNames(on, access, engine) : [];
   return (
     <p className={cn("flex items-start gap-1.5 text-[12px] text-muted-foreground", className)}>
       {engine === "open" ? <Cpu className="mt-px size-3.5 shrink-0" /> : <Cloud className="mt-px size-3.5 shrink-0" />}
@@ -113,14 +133,13 @@ export function ModelLine({ t, engine, access, className }: { t: TemplateCardDat
  */
 export function TemplateCard({ t, engine, onUse, busy, access, owner = false }: { t: TemplateCardData; engine: Engine; onUse?: () => void; busy: boolean; access?: AccessSummary; owner?: boolean }) {
   const cover = templateCover("canvas", t.id);
-  const { outline } = t.byEngine[engine];
   return (
     <StarterCard
       coverKey={`canvas/${t.id}`}
       cover={cover}
       hue={t.hue}
       flow={<StepFlow steps={t.flow} />}
-      overlay={<Schematic outline={outline} className="p-4" />}
+      overlay={<CoverPlaceholder icon={t.icon} />}
       icon={<NodeIcon name={t.icon} className="size-4" />}
       title={t.name}
       description={t.description}

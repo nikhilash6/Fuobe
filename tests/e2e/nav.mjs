@@ -79,14 +79,19 @@ try {
       order.push(f?.name ?? "");
       if (i > 0 && !f?.ring) rings = false;
     }
-    // Create, Studios and Motions & effects are a link to their page, then their menu's chevron.
-    const want = ["Skip to content", "Fuobe home", "Create", "Create menu", /^Studios, [0-9]+ studios$/, "Studios menu", "Apps", "Motions & effects", "Motions & effects menu", "Canvas", "Assist", "Library", /^Search/, "New creation"];
+    // Create, Studios, Apps, Motions & effects and Canvas are a link to their page, then their menu's chevron.
+    const want = ["Skip to content", "Fuobe home", "Create", "Create menu", /^Studios, [0-9]+ studios$/, "Studios menu", "Apps", "Apps menu", "Motions & effects", "Motions & effects menu", "Canvas", "Canvas menu", "Assist", "Library", /^Search/, "New creation"];
+    for (let i = order.length; i < want.length; i++) {
+      await p.keyboard.press("Tab");
+      order.push((await focused(p))?.name ?? "");
+    }
     const ok = want.every((w, i) => (typeof w === "string" ? order[i] === w : w.test(order[i])));
-    check(ok, "Tab order: Skip, wordmark, Create (+ menu), Studios (+ menu), Apps, Motions & effects (+ menu), Canvas, Assist, Library, Search, New creation", order.join(" › "));
+    check(ok, "Tab order: Skip, wordmark, Create, Studios, Apps, Motions & effects, Canvas (each + menu), Assist, Library, Search, New creation", order.join(" › "));
     check(rings, "every bar stop shows a focus ring");
-    // The search field is 280 px from 1440 (an lg rule must not win over it) and its name is the words it shows.
-    const field = await p.locator('[data-top-bar] button[aria-keyshortcuts="/ Meta+K Control+K"]').evaluate((b) => ({ w: b.getBoundingClientRect().width, text: b.innerText.trim(), label: b.getAttribute("aria-label") }));
-    check(field.w >= 270 && field.text.startsWith("Search studios, apps, effects…") && !field.label, "search field: 280 px at 1440, its name is its visible words", JSON.stringify(field));
+    // The search field is 220 px from 1440 (280 from 1600; an lg rule must not win over it), says "Search Fuobe" on one line
+    // until 1600, and its name is the words it shows.
+    const field = await p.locator('[data-top-bar] button[aria-keyshortcuts="/ Meta+K Control+K"]').evaluate((b) => ({ w: b.getBoundingClientRect().width, h: b.querySelector("span").getBoundingClientRect().height, text: b.innerText.trim(), label: b.getAttribute("aria-label") }));
+    check(field.w >= 215 && field.w <= 225 && field.text.startsWith("Search Fuobe") && field.h < 30 && !field.label, "search field: 220 px at 1440, one line, its name is its visible words", JSON.stringify(field));
     // Hovering the bar loads no routes ahead; opening the launcher loads its own.
     const reqs = [];
     p.on("request", (r) => r.headers()["next-router-prefetch"] && reqs.push(r.url()));
@@ -115,6 +120,11 @@ try {
     await p.keyboard.press("Enter");
     await panel.waitFor({ state: "visible" });
     check((await trigger.getAttribute("aria-expanded")) === "true", "launcher: Enter opens it (aria-expanded)");
+    // The panel's body is a chunk of its own: on a page this fresh it may still be on its way, and focus moves in when
+    // its links arrive (within a second; a warmed or idle page has it already).
+    const t0 = Date.now();
+    await p.waitForFunction(() => !!document.activeElement?.closest("#studios-launcher"), null, { timeout: 1000 }).catch(() => {});
+    check(Date.now() - t0 < 1000, "launcher: focus moves into it within a second of a cold open", `${Date.now() - t0} ms`);
     const first = await focused(p);
     check(/^Cinema Studio/.test(first?.name ?? ""), "launcher: focus starts on Cinema Studio", first?.name);
     await p.keyboard.press("ArrowRight");
@@ -284,10 +294,11 @@ try {
     await p.waitForTimeout(350);
     const tiles = sheet.locator("ul").first().getByRole("link");
     const seen = await inView(tiles);
-    if (size.height >= 844) check(seen.length === 33 && seen.every(Boolean), `${label}: the Studios sheet shows all 33 without scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
-    else check(seen.length === 33, `${label}: the Studios sheet lists all 33 (it scrolls inside at this height)`, String(seen.length));
+    // 33 tiles and the closing See all.
+    if (size.height >= 844) check(seen.length === 34 && seen.every(Boolean), `${label}: the Studios sheet shows all 33 and See all without scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
+    else check(seen.length === 34, `${label}: the Studios sheet lists all 33 and See all (it scrolls inside at this height)`, String(seen.length));
     await sheet.getByRole("button", { name: /^Film/ }).tap();
-    check((await sheet.locator("ul").first().getByRole("link").count()) === 8, `${label}: the Film chip shows 8`);
+    check((await sheet.locator("ul").first().getByRole("link").count()) === 9, `${label}: the Film chip shows 8 and See all`);
     if (size.height >= 844) await shot(p, "phone-studios-sheet-film-390");
     await tabs.locator('[data-tab="library"]').tap();
     const went = await (p.waitForURL((u) => new URL(u).pathname === "/library", { timeout: 20_000 }).then(() => sheet.waitFor({ state: "detached", timeout: 5_000 }))).then(() => true, () => false);

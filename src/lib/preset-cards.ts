@@ -184,8 +184,10 @@ export interface PresetPreview {
    * Shown at rest instead of the poster: the clip's peak frame (preset-peaks.generated.ts, onPeak), where the clip
    * starts (`at`, in seconds) when it plays by itself, so nothing jumps. Its loop comes back to `from`, just before
    * the change starts, and a hover starts there. Home's cards and the preset header; the galleries keep their posters.
+   * `until`: the loop goes back to `from` from here instead of the clip's end (a template cover plays only the finished
+   * scene, never the photo it started from); the clip's last stretch, where it fades back, is never shown either.
    */
-  rest?: { src: string; at: number; from: number };
+  rest?: { src: string; at: number; from: number; until?: number };
   scene: PreviewScene;
   move?: CameraMove;
   fx?: PreviewFx;
@@ -410,6 +412,11 @@ export const isCover = (p: Pick<PresetPreview, "move" | "fx">) => !p.move && !p.
  * with the poster's version (?v=), which the generators hash from both files.
  */
 export const thumbOf = (poster: string) => poster.replace(/\/([^/]+)$/, "/thumbs/$1");
+
+/** A preset poster's 96 px copy (mini/ next to it, the same version): the menus' rows and the phone's tiles (pnpm eval:covers). */
+export const miniOf = (poster: string) => poster.replace(/\/([^/]+)$/, "/mini/$1");
+/** Whether a poster has a mini copy: a preset's own poster (/previews/presets/<id>.jpg), not a peak frame or a template's. */
+export const hasMini = (poster: string) => /^\/previews\/presets\/[^/]+\.jpg(\?|$)/.test(poster);
 
 /** The card resting on its clip's peak frame (preset-peaks.generated.ts) when it has one, else as it is. */
 export function onPeak(card: PresetCardData): PresetCardData {

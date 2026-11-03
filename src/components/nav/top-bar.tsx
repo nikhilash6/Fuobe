@@ -2,7 +2,7 @@
 
 import { ChevronDown, MoreHorizontal, Plus, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { IntentLink } from "@/components/intent-link";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
@@ -11,7 +11,6 @@ import { area, areaOfPath, areaPageOf, type AreaId } from "@/lib/nav-areas";
 import { activeEntry, entry, type NavEntry } from "@/lib/nav-model";
 import { isPlainClick, useTappedTab } from "@/lib/use-tapped-tab";
 import { cn } from "@/lib/utils";
-import { BarSplitMenu } from "./bar-split";
 import { CoverThumb, NavIcon } from "./cover-thumb";
 import { CreateMenu } from "./create-menu";
 import { MENU_ROW_2, NavMenuItem, ROW_LINE, rowName, SeeAllRow } from "./nav-row";
@@ -19,7 +18,10 @@ import { useViewerKind } from "./nav-ui";
 import { useSearchPalette } from "./search-context";
 import { BarPills } from "./status-chips";
 import { NavPrefetcher, warmNav } from "./nav-prefetch";
-import { LauncherScrim, StudiosLauncher } from "./studios-launcher";
+import type { FetchedMegaId } from "@/lib/mega-menus";
+import { queueIdlePrefetch } from "@/lib/idle-prefetch";
+import { prefetchMenus } from "./mega-data";
+import { MegaLauncher, MegaScrim, preloadMegaPanel } from "./mega-launcher";
 import { ViewerSlot } from "./viewer-slot";
 
 export { prefetchHrefs } from "./nav-prefetch";
@@ -28,7 +30,8 @@ export { prefetchHrefs } from "./nav-prefetch";
  * The top bar (md and up): the wordmark, Create, Studios (the launcher), Apps, Motions & effects, Canvas, Assist and
  * Library; search; New creation; who is looking. 56 px on every page. What doesn't fit moves into More, by CSS alone
  * (nothing is measured, so nothing moves after the first paint):
- *   1440 and up   everything, search 280 px, a guest's Log in
+ *   1600 and up   everything, search 280 px, a guest's Log in
+ *   1440-1599     the same, search 220 px (Apps, Motions & effects and Canvas each carry a chevron)
  *   1280-1439     Canvas and Assist in More, search 200 px
  *   1024-1279     Apps and Motions & effects in More too
  *   768-1023      the same, search and New creation as icon buttons
@@ -55,6 +58,8 @@ export function barActive(pathname: string): {
   apps: boolean;
   motions: boolean;
   canvas: boolean;
+  /** /canvas itself (the Canvas item's own page). */
+  canvasHome: boolean;
   assist: boolean;
   library: boolean;
   page: AreaId | undefined;
@@ -67,6 +72,7 @@ export function barActive(pathname: string): {
     apps: area === "apps",
     motions: area === "motions",
     canvas: e?.id === "canvas",
+    canvasHome: pathname === "/canvas",
     assist: e?.id === "assist",
     library: e?.kind === "library",
     page: pathname ? areaPageOf(pathname) : undefined,
@@ -99,37 +105,6 @@ function useOn(): (e: NavEntry) => boolean {
 }
 
 const MOTIONS_AREA_HREF = area("motions").href;
-
-function MotionsItems() {
-  const on = useOn();
-  return (
-    <>
-      {pick(["motions", "effects"]).map((e) => (
-        <RichItem key={e.id} e={e} current={on(e)} />
-      ))}
-      <SeeAllRow href={MOTIONS_AREA_HREF} name="See all motions & effects" className="mt-1" />
-    </>
-  );
-}
-
-/** Motions & effects: its name goes to the page with both; the menu holds the two preset galleries, with their covers. */
-function MotionsMenu({ active, onTap }: { active: Active; onTap?: (href: string) => void }) {
-  return (
-    <BarSplitMenu
-      href={MOTIONS_AREA_HREF}
-      label="Motions & effects"
-      name="Motions & effects menu"
-      active={active.motions}
-      current={active.page === "motions"}
-      panel="more"
-      onTap={onTap}
-      className="hidden xl:inline-flex"
-      contentClassName="w-80 p-1.5"
-    >
-      <MotionsItems />
-    </BarSplitMenu>
-  );
-}
 
 function MoreItems() {
   const on = useOn();
@@ -194,14 +169,11 @@ function BarLinks({ active, onTap }: { active: Active; onTap?: (href: string) =>
   return (
     <>
       <CreateMenu active={active.create} current={active.page === "create"} onTap={onTap} />
-      <StudiosLauncher active={active.studios} current={active.page === "studios"} onTap={onTap} />
-      <IntentLink href="/apps" onClick={tap("/apps")} aria-current={cur(active.apps)} className={cn(BAR_ITEM, "hidden xl:inline-flex")}>
-        Apps
-      </IntentLink>
-      <MotionsMenu active={active} onTap={onTap} />
-      <IntentLink href="/canvas" onClick={tap("/canvas")} aria-current={cur(active.canvas)} className={cn(BAR_ITEM, "hidden min-[1440px]:inline-flex")}>
-        Canvas
-      </IntentLink>
+      <MegaLauncher id="studios" active={active.studios} current={active.page === "studios"} onTap={onTap} />
+      {/* /apps is the area's own page (its name is marked); an app's page marks the item. */}
+      <MegaLauncher id="apps" active={active.apps && active.page !== "apps"} current={active.page === "apps"} onTap={onTap} className="hidden xl:inline-flex" />
+      <MegaLauncher id="motions" active={active.motions} current={active.page === "motions"} onTap={onTap} className="hidden xl:inline-flex" />
+      <MegaLauncher id="canvas" active={active.canvas && !active.canvasHome} current={active.canvasHome} onTap={onTap} className="hidden min-[1440px]:inline-flex" />
       <IntentLink href="/assist" eager onClick={tap("/assist")} aria-current={cur(active.assist)} className={cn(BAR_ITEM, "hidden min-[1440px]:inline-flex")}>
         Assist
       </IntentLink>
@@ -234,14 +206,15 @@ function SearchField() {
       className={cn(
         "nav-focus inline-flex h-10 shrink-0 items-center gap-2 rounded-[10px] text-[13.5px] [@media(pointer:coarse)]:h-11 text-muted-foreground motion-safe:transition-colors",
         "w-10 justify-center nav-hover:bg-[var(--nav-hi)] nav-hover:text-foreground active:bg-[var(--nav-press)] [@media(pointer:coarse)]:w-11",
-        "lg:max-[1439.98px]:w-[200px] lg:justify-start lg:border lg:border-input lg:bg-background/60 lg:px-3 lg:nav-hover:border-border-strong lg:nav-hover:bg-background lg:active:bg-background min-[1440px]:w-[280px]",
+        "lg:max-[1439.98px]:w-[200px] lg:justify-start lg:border lg:border-input lg:bg-background/60 lg:px-3 lg:nav-hover:border-border-strong lg:nav-hover:bg-background lg:active:bg-background min-[1440px]:max-[1599.98px]:w-[220px] min-[1600px]:w-[280px]",
       )}
     >
       <Search aria-hidden className="size-[18px] shrink-0 lg:size-4" />
-      {/* Its name is the words it shows: "Search Fuobe" to 1439 px, the longer line from 1440 (sr-only below lg). */}
-      <span className="sr-only min-w-0 flex-1 truncate text-left lg:not-sr-only">
-        <span className="min-[1440px]:hidden">Search Fuobe</span>
-        <span className="hidden min-[1440px]:inline">Search studios, apps, effects…</span>
+      {/* Its name is the words it shows: "Search Fuobe" to 1599 px, the longer line from 1600 where the field is 280 px
+          wide (sr-only below lg). One line always: not-sr-only would let it wrap. */}
+      <span className="sr-only min-w-0 flex-1 truncate text-left lg:not-sr-only lg:whitespace-nowrap">
+        <span className="min-[1600px]:hidden">Search Fuobe</span>
+        <span className="hidden min-[1600px]:inline">Search studios, apps, effects…</span>
       </span>
       <Kbd aria-hidden className="hidden lg:inline-flex [@media(hover:none)]:hidden">
         /
@@ -281,6 +254,36 @@ function RightCluster() {
   );
 }
 
+/**
+ * Once the page has loaded and the browser is idle: the panels' body (its own chunk) and the data (no pictures) of the
+ * grouped menus whose item the bar shows at this width, so the first open never waits for them. A phone loads none
+ * (its sheet asks when it shows one).
+ */
+function MenuPrefetch() {
+  useEffect(() => {
+    if (!window.matchMedia("(min-width: 768px)").matches) return;
+    const ids: FetchedMegaId[] = [];
+    if (window.matchMedia("(min-width: 1280px)").matches) ids.push("apps", "motions");
+    if (window.matchMedia("(min-width: 1440px)").matches) ids.push("canvas");
+    let cancel = () => {};
+    const go = () => {
+      const body = queueIdlePrefetch("nav", "mega-panel", preloadMegaPanel);
+      const data = prefetchMenus(ids);
+      cancel = () => {
+        body();
+        data();
+      };
+    };
+    if (document.readyState === "complete") go();
+    else window.addEventListener("load", go, { once: true });
+    return () => {
+      window.removeEventListener("load", go);
+      cancel();
+    };
+  }, []);
+  return null;
+}
+
 /** The bar. Hidden below md and in print; same height on every page, full-screen studios included. */
 export function TopBar() {
   return (
@@ -307,8 +310,9 @@ export function TopBar() {
           <RightCluster />
         </div>
       </header>
-      <LauncherScrim />
+      <MegaScrim />
       <NavPrefetcher />
+      <MenuPrefetch />
     </>
   );
 }

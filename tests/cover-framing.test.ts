@@ -129,7 +129,9 @@ describe("the Canvas templates (16:9)", () => {
     expect(art("effect-chain-agamemnon")).toContain(style("50% 0%"));
     expect(art("effect-chain-dolphin-ride")).toContain(style("50% 30%"));
     expect(art("effect-chain-pearl-earring")).toContain(style("50% 0%"));
-    expect(art("effect-chain-skatedog")).toContain("aspect-[4/3]");
+    // Skatedog fills its 16:9 tile from its lower part (the person, the dog, both boards): no bars at the sides.
+    expect(art("effect-chain-skatedog")).toContain(style("50% 80%"));
+    expect(art("effect-chain-skatedog")).not.toContain("aspect-[4/3]");
     expect(art("effect-chain-superstar")).not.toContain("object-position");
   });
 });

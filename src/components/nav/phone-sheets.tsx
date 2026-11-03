@@ -3,14 +3,15 @@
 import { usePathname } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Dialog as SheetPrimitive } from "radix-ui";
-import { ArrowRight, Search, XIcon } from "lucide-react";
+import { ArrowRight, XIcon } from "lucide-react";
 import { IntentLink } from "@/components/intent-link";
 import { AccountSections } from "@/components/nav/account-menu";
 import { CreateList } from "@/components/nav/create-menu";
 import { PHONE_QUERY, useNavUi, type NavSheet } from "@/components/nav/nav-ui";
 import { useSearchPalette } from "@/components/nav/search-context";
 import { ComputerNoteBlock } from "@/components/nav/status-chips";
-import { StudiosSheet } from "@/components/nav/studios-sheet";
+import { FamilySwitch, StudiosSheet } from "@/components/nav/studios-sheet";
+import { MEGA_AREAS, type MegaId } from "@/lib/mega-menus";
 import { warmNav } from "@/components/nav/nav-prefetch";
 import { area } from "@/lib/nav-areas";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,7 @@ import { cn } from "@/lib/utils";
 const TITLES: Record<NavSheet, string> = { studios: "Studios", create: "Create", you: "You" };
 
 /** "See all" in a sheet's header: the area's own page, with covers and lines. */
-const SEE_ALL: Partial<Record<NavSheet, string>> = { studios: area("studios").href, create: area("create").href };
+const SEE_ALL: Partial<Record<NavSheet, string>> = { create: area("create").href };
 
 /** A drag down this far on the sheet's top (handle and title) closes it, in px. */
 const SWIPE_CLOSE = 56;
@@ -77,7 +78,14 @@ function YouSheet() {
  * it, and focus goes back to what opened it.
  */
 export function PhoneSheets() {
-  const { sheet, setSheet, sheetGroup } = useNavUi();
+  const { sheet, setSheet, sheetGroup, sheetFamily } = useNavUi();
+  // The Studios sheet's family (Studios, Apps, Motions & effects, Canvas): where openArea() asked, then as switched.
+  const [family, setFamily] = useState<MegaId>(sheetFamily);
+  const [askedFamily, setAskedFamily] = useState({ sheet, sheetFamily });
+  if (askedFamily.sheet !== sheet || askedFamily.sheetFamily !== sheetFamily) {
+    setAskedFamily({ sheet, sheetFamily });
+    if (sheet === "studios") setFamily(sheetFamily);
+  }
   const search = useSearchPalette();
   // The body on screen: the open sheet's, and the last one's while the sheet slides away.
   const [shown, setShown] = useState<NavSheet>(sheet ?? "studios");
@@ -157,7 +165,7 @@ export function PhoneSheets() {
               if (a && !e.metaKey && !e.ctrlKey && !e.shiftKey && a.getAttribute("target") !== "_blank") close();
             }}
             className={cn(
-              "fixed inset-x-0 bottom-[var(--chrome-bottom,0px)] z-50 flex max-h-[calc(100dvh-var(--chrome-bottom,0px)-2.5rem)] flex-col gap-2.5 rounded-t-[22px] border-t border-border bg-popover pt-2 pr-[env(safe-area-inset-right)] pb-3 pl-[env(safe-area-inset-left)] text-popover-foreground shadow-heavy outline-none md:hidden",
+              "fixed inset-x-0 bottom-[var(--chrome-bottom,0px)] z-50 flex max-h-[calc(100dvh-var(--chrome-bottom,0px)-2.5rem)] data-[sheet=studios]:h-[calc(100dvh-var(--chrome-bottom,0px)-2.5rem)] flex-col gap-2.5 rounded-t-[22px] border-t border-border bg-popover pt-2 pr-[env(safe-area-inset-right)] pb-3 pl-[env(safe-area-inset-left)] text-popover-foreground shadow-heavy outline-none md:hidden",
               // No tab bar under it in a full-screen studio: it keeps clear of the home indicator itself.
               "[html[data-fullscreen-studio]_&]:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
               "motion-safe:duration-200 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:slide-in-from-bottom-10 motion-safe:data-closed:animate-out motion-safe:data-closed:fade-out-0 motion-safe:data-closed:slide-out-to-bottom-10",
@@ -175,8 +183,11 @@ export function PhoneSheets() {
               onPointerCancel={() => (drag.current = null)}
             >
               <span aria-hidden className="mx-auto h-1 w-10 rounded-full bg-border-strong" />
-              <div className="flex items-center gap-3 pr-2 pl-4">
-                <SheetPrimitive.Title className="font-heading text-[28px] leading-none font-normal text-foreground">{TITLES[shown]}</SheetPrimitive.Title>
+              <div className={cn("flex items-center pr-2", shown === "studios" ? "gap-1 pl-3" : "gap-3 pl-4")}>
+                <SheetPrimitive.Title className={cn("font-heading text-[28px] leading-none font-normal text-foreground", shown === "studios" && "sr-only")}>
+                  {shown === "studios" ? MEGA_AREAS[family].label : TITLES[shown]}
+                </SheetPrimitive.Title>
+                {shown === "studios" && <FamilySwitch family={family} onFamily={setFamily} />}
                 {SEE_ALL[shown] && (
                   // A link in the sheet: following it closes the sheet (onClickCapture above).
                   <IntentLink
@@ -188,21 +199,10 @@ export function PhoneSheets() {
                     <ArrowRight aria-hidden className="size-4" />
                   </IntentLink>
                 )}
-                {shown === "studios" && (
-                  // In a full-screen studio Search is in the sheet's shortcuts instead.
-                  <button
-                    type="button"
-                    onClick={openSearch}
-                    aria-label="Search everything"
-                    className="nav-row grid size-11 shrink-0 place-items-center rounded-full text-brand-text [html[data-fullscreen-studio]_&]:hidden"
-                  >
-                    <Search className="size-[18px]" aria-hidden />
-                  </button>
-                )}
                 <SheetPrimitive.Close
                   className={cn(
                     "nav-row grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground nav-hover:text-foreground",
-                    !SEE_ALL[shown] && "ml-auto",
+                    !SEE_ALL[shown] && shown !== "studios" && "ml-auto",
                   )}
                 >
                   <XIcon className="size-5" aria-hidden />
@@ -212,7 +212,7 @@ export function PhoneSheets() {
             </div>
             {shown === "studios" ? (
               // Opened again for another group while open: it starts over on that chip.
-              <StudiosSheet key={sheetGroup ?? "all"} group={sheetGroup} onSearch={openSearch} />
+              <StudiosSheet key={`${family}:${family === sheetFamily ? (sheetGroup ?? "all") : "all"}`} family={family} group={family === sheetFamily ? sheetGroup : undefined} onSearch={openSearch} />
             ) : shown === "create" ? (
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-1">
                 <CreateList variant="sheet" onNavigate={close} />

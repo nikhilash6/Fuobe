@@ -34,7 +34,7 @@ vi.mock("@/lib/api", async (load) => ({
 
 const { modalityForKey, modalityForPointer } = await import("@/components/nav/input-modality");
 const { columnMove, CreateList } = await import("@/components/nav/create-menu");
-const { LauncherColumns } = await import("@/components/nav/studios-launcher");
+const { LauncherColumns } = await import("@/components/nav/mega-panel");
 const { AccountSections } = await import("@/components/nav/account-menu");
 const { NavUiProvider } = await import("@/components/nav/nav-ui");
 const { navCovers } = await import("@/lib/nav-covers");

@@ -290,7 +290,11 @@ describe("covers from masters", () => {
     const pub = path.join(dir, "restamp-public");
     const presets = path.join(pub, "previews", "presets");
     fs.mkdirSync(path.join(presets, "thumbs"), { recursive: true });
-    for (const [f, bytes] of [["app-relight.jpg", "a"], ["thumbs/app-relight.jpg", "b"], ["effect-flame-on.jpg", "c"], ["thumbs/effect-flame-on.jpg", "d"], ["effect-flame-on.mp4", "e"]]) fs.writeFileSync(path.join(presets, f), bytes);
+    fs.mkdirSync(path.join(presets, "mini"), { recursive: true });
+    for (const [f, bytes] of [["app-relight.jpg", "a"], ["thumbs/app-relight.jpg", "b"], ["mini/app-relight.jpg", "b2"], ["effect-flame-on.jpg", "c"], ["thumbs/effect-flame-on.jpg", "d"], ["mini/effect-flame-on.jpg", "d2"], ["effect-flame-on.mp4", "e"]]) fs.writeFileSync(path.join(presets, f), bytes);
+    // Each mini is listed as made from its poster as it is (the minis list next to this public dir).
+    const minis = { "app-relight": sha8(path.join(presets, "app-relight.jpg")), "effect-flame-on": sha8(path.join(presets, "effect-flame-on.jpg")) };
+    fs.writeFileSync(path.join(pub, "preset-minis.generated.ts"), `export const PRESET_MINIS: Record<string, string> = ${JSON.stringify(minis)};\n`);
     const manifest = path.join(dir, "restamp", "manifest.ts");
     const meta = { run: "r", engine: "comfyui", model: "m", variant: "v" };
     writeManifest(
@@ -341,7 +345,8 @@ describe("covers from masters", () => {
       manifest,
     );
     const unwritten = fs.readFileSync(manifest, "utf8");
-    const thumbs = ["/previews/presets/thumbs/app-headshot.jpg", "/previews/presets/thumbs/app-relight.jpg"];
+    // Each poster's 320 px copy and its 96 px one (the menus' rows).
+    const thumbs = ["/previews/presets/thumbs/app-headshot.jpg", "/previews/presets/mini/app-headshot.jpg", "/previews/presets/thumbs/app-relight.jpg", "/previews/presets/mini/app-relight.jpg"];
 
     // A dry run lists the copies it would make, and makes none.
     expect(versionCovers({ publicDir: pub, manifest, dryRun: true })).toMatchObject({ changed: 2, thumbs, unversioned: [] });
@@ -350,7 +355,8 @@ describe("covers from masters", () => {
     expect(fs.readFileSync(manifest, "utf8")).toBe(unwritten);
     // Then it makes them before hashing, so each version is of the poster and its new small copy.
     expect(versionCovers({ publicDir: pub, manifest })).toMatchObject({ changed: 2, thumbs, unversioned: [] });
-    for (const f of [thumb, newThumb]) expect(fs.readFileSync(f).subarray(0, 2), f).toEqual(Buffer.from([0xff, 0xd8]));
+    const minis = ["app-relight", "app-headshot"].map((id) => path.join(presets, "mini", `${id}.jpg`));
+    for (const f of [thumb, newThumb, ...minis]) expect(fs.readFileSync(f).subarray(0, 2), f).toEqual(Buffer.from([0xff, 0xd8]));
     const m = readManifest(manifest);
     expect(m["app-relight"].poster).toBe(`/previews/presets/app-relight.jpg?v=${sha8(poster, thumb)}`);
     expect(m["app-headshot"].poster).toBe(`/previews/presets/app-headshot.jpg?v=${sha8(path.join(presets, "app-headshot.jpg"), newThumb)}`);

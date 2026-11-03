@@ -44,7 +44,9 @@ const ROWS: [file: string, label: string][] = [
   ["src/components/ads/ad-editor.tsx", 'aria-label="Format"'],
   ["src/components/studio/media-slot.tsx", 'aria-label="Kind"'],
   ["src/components/genjutsu/look-picker.tsx", 'aria-label="Where the look comes from"'],
-  ["src/components/nav/studios-sheet.tsx", 'aria-label="Show the studios for one goal"'],
+  // The sheet's group chips (the label names the family shown) and its family switch.
+  ["src/components/nav/studios-sheet.tsx", '"Show the studios for one goal"'],
+  ["src/components/nav/studios-sheet.tsx", 'aria-label="What to show"'],
   ["src/components/nav/search-palette.tsx", 'aria-label="Show the studios for one goal"'],
 ];
 

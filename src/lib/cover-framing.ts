@@ -30,8 +30,8 @@ export const COVER_FRAMING: Record<string, CoverFraming> = {
   "effect-agamemnon": { focus: "50% 0%" },
   "effect-dolphin-ride": { focus: "50% 30%" },
   "effect-pearl-earring": { focus: "50% 0%" },
-  // Canvas templates (16:9): content over the whole height.
-  "effect-skatedog": { fit: "whole" },
+  // Canvas templates (16:9): the lower part (the person, the dog and both boards; the sky is let go).
+  "effect-skatedog": { focus: "50% 80%" },
   // The navigation's square tiles and pills: a reference inset at the right, a lineup across the frame.
   "app-steal-the-look": { focus: "80% 25%" },
   "app-outfit-swap": { focus: "85% 25%" },
@@ -40,7 +40,7 @@ export const COVER_FRAMING: Record<string, CoverFraming> = {
 };
 
 /** The preset id of a preset cover's URL: its poster, peak frame or small copy (with or without its version). */
-const PRESET_COVER = /^\/previews\/presets\/(?:peak\/)?(?:thumbs\/)?([a-z0-9-]+)\.(?:jpg|mp4)(?:\?|$)/;
+const PRESET_COVER = /^\/previews\/presets\/(?:peak\/)?(?:thumbs\/|mini\/)?([a-z0-9-]+)\.(?:jpg|mp4)(?:\?|$)/;
 
 /** A cover's framing by its URL (a still or a clip), or undefined: a cover of the tile's shape, or one centred. */
 export function coverFraming(url: string | undefined): CoverFraming | undefined {

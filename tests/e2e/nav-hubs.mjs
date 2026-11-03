@@ -65,11 +65,15 @@ try {
     await openRoute(p, `${app}/image`);
     const items = [
       { name: "Create", href: "/create", chevron: "Create menu", seeAll: "See all of Create" },
-      { name: /^Studios, \d+ studios$/, href: "/studios", chevron: "Studios menu", seeAll: "See all studios" },
-      { name: "Motions & effects", href: "/motions-and-effects", chevron: "Motions & effects menu", seeAll: "See all motions & effects" },
+      { name: /^Studios, \d+ studios$/, href: "/studios", chevron: "Studios menu", seeAll: "See all studios", panel: "#studios-launcher", hover: true },
+      { name: "Apps", href: "/apps", chevron: "Apps menu", seeAll: "See all apps", panel: "#apps-launcher", hover: true },
+      { name: "Motions & effects", href: "/motions-and-effects", chevron: "Motions & effects menu", seeAll: "See all motions and effects", panel: "#motions-launcher", hover: true },
+      { name: "Canvas", href: "/canvas", chevron: "Canvas menu", seeAll: "See all of Canvas", panel: "#canvas-launcher", hover: true },
     ];
+    // The grouped menus (a panel under the bar) and Create (a menu).
     const seeAllIn = (it) =>
-      (it.href === "/studios" ? p.locator("#studios-launcher").getByRole("link", { name: it.seeAll, exact: true }) : p.getByRole("menu").getByRole("menuitem", { name: it.seeAll, exact: true }));
+      (it.panel ? p.locator(it.panel).getByRole("link", { name: it.seeAll, exact: true }) : p.getByRole("menu").getByRole("menuitem", { name: it.seeAll, exact: true }));
+    const anyPanel = () => p.locator("[data-mega-panel]:visible").count().then((n) => n > 0);
     for (const it of items) {
       await openRoute(p, `${app}/image`, { settleMs: 300 });
       await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).click();
@@ -79,12 +83,12 @@ try {
       const current = await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).getAttribute("aria-current");
       const others = await bar(p).locator('[data-bar-split] a[aria-current="page"]').count();
       check(current === "page" && others === 1, `${it.href}: its name is aria-current=page, and no other split item's`, `${current}, ${others}`);
-      check((await p.getByRole("menu").count()) === 0 && !(await p.locator("#studios-launcher").isVisible().catch(() => false)), `${it.href}: following the name opens no menu`);
+      check((await p.getByRole("menu").count()) === 0 && !(await anyPanel()), `${it.href}: following the name opens no menu`);
     }
 
     // The chevron: click opens, Esc closes and gives focus back to it.
     await openRoute(p, `${app}/image`, { settleMs: 300 });
-    for (const name of ["Create menu", "Motions & effects menu"]) {
+    for (const name of ["Create menu"]) {
       const chev = bar(p).getByRole("button", { name, exact: true });
       await chev.click();
       const menu = p.getByRole("menu");
@@ -95,15 +99,18 @@ try {
       await menu.waitFor({ state: "detached" }).catch(() => {});
       check(await chev.evaluate((b) => b === document.activeElement), `${name}: Esc closes it and focus goes back to the chevron`);
     }
-    {
-      const chev = bar(p).getByRole("button", { name: "Studios menu", exact: true });
-      const panel = p.locator("#studios-launcher");
+    for (const it of items.filter((x) => x.panel)) {
+      const chev = bar(p).getByRole("button", { name: it.chevron, exact: true });
+      const panel = p.locator(it.panel);
       await chev.click();
       await panel.waitFor({ state: "visible" });
-      check(/^Cinema Studio/.test(await activeName(p)), "Studios menu: the chevron opens the launcher on Cinema Studio", await activeName(p));
+      await p.waitForFunction(() => document.activeElement?.closest("[data-mega-panel]"), null, { timeout: 5_000 }).catch(() => {});
+      const at = await p.evaluate(() => [document.activeElement?.getAttribute("data-col"), document.activeElement?.getAttribute("data-row")].join(","));
+      const first = it.href === "/studios" ? /^Cinema Studio/.test(await activeName(p)) : at === "0,0";
+      check(first && pathOf(p) === "/image", `${it.chevron}: the chevron opens the panel on its first lead card`, `${at} ${await activeName(p)}`);
       await p.keyboard.press("Escape");
       await panel.waitFor({ state: "hidden" });
-      check(await chev.evaluate((b) => b === document.activeElement), "Studios menu: Esc closes it and focus goes back to the chevron");
+      check(await chev.evaluate((b) => b === document.activeElement), `${it.chevron}: Esc closes it and focus goes back to the chevron`);
     }
 
     // ArrowDown on a name opens its menu on the first row.
@@ -112,20 +119,21 @@ try {
       await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).focus();
       await p.keyboard.press("ArrowDown");
       await p.waitForTimeout(250);
+      // A fetched menu's links may come a moment later: focus moves in once they are there.
+      if (it.panel) await p.waitForFunction(() => document.activeElement?.closest("[data-mega-panel]"), null, { timeout: 5_000 }).catch(() => {});
       const role = await activeRole(p);
       const name = await activeName(p);
-      const ok = it.href === "/studios" ? /^Cinema Studio/.test(name) : role === "menuitem";
+      const at = await p.evaluate(() => [document.activeElement?.getAttribute("data-col"), document.activeElement?.getAttribute("data-row")].join(","));
+      const ok = it.panel ? at === "0,0" : role === "menuitem";
       check(ok && pathOf(p) === "/image", `${it.href}: ArrowDown on the name opens the menu on its first row`, `${role} ${name}`);
       await p.keyboard.press("Escape");
-      if (it.href !== "/studios") {
-        await p.waitForTimeout(150);
-        const back = await bar(p).getByRole("link", { name: it.name, exact: true }).evaluate((a) => a === document.activeElement);
-        check(back, `${it.href}: Esc after ArrowDown on the name gives focus back to the name`);
-      }
+      await p.waitForTimeout(150);
+      const back = await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).evaluate((a) => a === document.activeElement);
+      check(back, `${it.href}: Esc after ArrowDown on the name gives focus back to the name`);
     }
 
-    // A mouse resting on Create or Motions & effects opens its menu after a moment, leaves focus in the prompt being
-    // typed, and leaving closes it. The Studios launcher (it spans the page) opens by a click or a key only.
+    // A mouse resting on any item with a menu opens it after a moment, leaves focus in the prompt being typed, and
+    // leaving closes it.
     await openRoute(p, `${app}/image`, { settleMs: 300 });
     const prompt = p.locator("main textarea").first();
     for (const it of items) {
@@ -134,11 +142,11 @@ try {
       const box = await label.boundingBox();
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await p.waitForTimeout(120);
-      const early = it.href === "/studios" ? await p.locator("#studios-launcher").isVisible().catch(() => false) : (await p.getByRole("menu").count()) > 0;
+      const early = it.panel ? await anyPanel() : (await p.getByRole("menu").count()) > 0;
       await p.waitForTimeout(450);
-      const late = it.href === "/studios" ? await p.locator("#studios-launcher").isVisible().catch(() => false) : (await p.getByRole("menu").count()) > 0;
-      if (it.href === "/studios") {
-        check(!early && !late, "/studios: resting the mouse on Studios opens nothing (the launcher opens by a click or a key)", `${early} → ${late}`);
+      const late = it.panel ? await anyPanel() : (await p.getByRole("menu").count()) > 0;
+      if (it.panel && !it.hover) {
+        check(!early && !late, `${it.href}: resting the mouse on it opens nothing (its panel opens by a click or a key)`, `${early} → ${late}`);
       } else {
         check(!early && late, `${it.href}: resting the mouse on it opens its menu after a moment, not at once`, `${early} → ${late}`);
         check((await seeAllIn(it).count()) === 1, `${it.href}: the menu has its See all`);
@@ -147,7 +155,10 @@ try {
       check(kept, `${it.href}: resting on it leaves focus in the prompt`, await activeName(p));
       await p.mouse.move(700, 800);
       await p.waitForTimeout(600);
-      const gone = it.href === "/studios" ? !(await p.locator("#studios-launcher").isVisible().catch(() => false)) : (await p.getByRole("menu").count()) === 0;
+      // Away from the item and its panel (a full-width panel reaches down the page): the bar's far left.
+      if (it.hover && it.panel) await p.mouse.move(6, 28);
+      await p.waitForTimeout(it.hover ? 400 : 0);
+      const gone = it.panel ? !(await anyPanel()) : (await p.getByRole("menu").count()) === 0;
       check(gone, `${it.href}: moving the mouse away closes it`);
     }
 
@@ -166,12 +177,12 @@ try {
     }
 
     // On an area's own page, resting on its name opens nothing over it.
-    for (const it of items.filter((x) => x.href !== "/studios")) {
+    for (const it of items.filter((x) => !x.panel || x.hover)) {
       await openRoute(p, app + it.href, { settleMs: 300 });
-      const box = await bar(p).getByRole("link", { name: it.name, exact: true }).boundingBox();
+      const box = await bar(p).getByRole("link", { name: it.name, exact: typeof it.name === "string" }).boundingBox();
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await p.waitForTimeout(700);
-      check((await p.getByRole("menu").count()) === 0, `${it.href}: resting on its own name there opens nothing`);
+      check((await p.getByRole("menu").count()) === 0 && !(await anyPanel()), `${it.href}: resting on its own name there opens nothing`);
       await p.mouse.move(700, 800);
     }
 
@@ -274,7 +285,8 @@ try {
       if (tab === "Studios") {
         const tiles = sheet.locator("ul").first().getByRole("link");
         const seen = await tiles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => r.top >= 0 && r.bottom <= innerHeight));
-        check(seen.length === 33 && seen.every(Boolean), "phone Studios sheet: all 33 tiles fit 390x844 with See all in the header", `${seen.filter(Boolean).length}/${seen.length}`);
+        // 33 studio tiles and the See all tile that ends the grid.
+        check(seen.length === 34 && seen.every(Boolean), "phone Studios sheet: all 33 tiles and See all fit 390x844", `${seen.filter(Boolean).length}/${seen.length}`);
         check((await sheet.getByRole("button", { name: "Search everything" }).count()) === 1, "phone Studios sheet: Search everything is an icon button");
         if (shots) await p.screenshot({ path: path.join(shots, "phone-studios-sheet-390.png") });
       }

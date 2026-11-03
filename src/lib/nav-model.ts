@@ -230,7 +230,7 @@ const TOOL_COPY: Record<string, { what: string; keywords: string; cover?: string
   "audio-dialogue": { what: "A conversation, one voice each", keywords: "conversation podcast two speakers multi voice" },
   "audio-voice-change": { what: "Swap the voice, keep the timing", keywords: "voice changer convert speech to speech" },
   "audio-design": { what: "A new voice from a few words", keywords: "voice design create custom new voice describe" },
-  "audio-translate": { what: "Your video in another language", keywords: "dub dubbing localize translate lip sync", cover: "app-asmr-promo", label: "Translate & dub", short: "Translate" },
+  "audio-translate": { what: "Dub into any language", keywords: "dub dubbing localize translate lip sync", cover: "app-asmr-promo", label: "Translate & dub", short: "Translate" },
   "audio-transcribe": { what: "Words from any clip", keywords: "subtitles text speech to text srt vtt captions" },
   "audio-clean": { what: "Remove noise and echo", keywords: "denoise podcast mic fix reverb enhance speech", cover: "app-clean-up-voice", short: "Clean up" },
   "audio-split": { what: "Voice and music apart", keywords: "stems karaoke separate vocals instrumental" },
@@ -639,7 +639,7 @@ export function activeEntry(pathname: string, search: URLSearchParams): NavEntry
 }
 
 /** Whether an entry shows its "New" badge now (the browser's clock). */
-export function isNew(e: NavEntry, now: number = Date.now()): boolean {
+export function isNew(e: Pick<NavEntry, "newUntil">, now: number = Date.now()): boolean {
   return !!e.newUntil && now < Date.parse(e.newUntil);
 }
 

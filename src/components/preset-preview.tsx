@@ -288,6 +288,9 @@ const CLIP_ASPECT = 4 / 3;
 /** When the clips' shared cycle began (performance.now()), set by the first clip ready to play by itself (Clip). */
 let cycleStart: number | undefined;
 
+/** The end of an effect clip that a loop ending early (rest.until) never reaches (s): where it fades back to its photo. */
+export const CLIP_TAIL = 0.4;
+
 /**
  * A real cover's clip, mounted only while it plays (a browser allows a page only so many live
  * players, a phone fewer), over the poster until its first frame is ready. The poster is that
@@ -337,6 +340,30 @@ function Clip({ src, rest, asked, place, focus }: { src: string; rest?: Preview[
     const t = setTimeout(() => setDue(true), untilPlace(place!, now - cycleStart));
     return () => clearTimeout(t);
   }, [ready, due, place]);
+  // A loop that ends before the clip does (rest.until): back to rest.from from there, checked on every frame shown where
+  // the browser says when one is (requestVideoFrameCallback), else on each time update. The clip's last stretch
+  // (CLIP_TAIL), where an effect fades back to its photo, is never shown.
+  const until = rest?.until;
+  const from = rest?.from ?? 0;
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || until === undefined) return;
+    const end = () => Math.min(until, Number.isFinite(v.duration) && v.duration > 0 ? v.duration - CLIP_TAIL : until);
+    const check = () => {
+      if (v.currentTime >= end()) v.currentTime = from;
+    };
+    if (typeof v.requestVideoFrameCallback === "function") {
+      let id = 0;
+      const tick = () => {
+        check();
+        id = v.requestVideoFrameCallback(tick);
+      };
+      id = v.requestVideoFrameCallback(tick);
+      return () => v.cancelVideoFrameCallback(id);
+    }
+    v.addEventListener("timeupdate", check);
+    return () => v.removeEventListener("timeupdate", check);
+  }, [until, from]);
   const seeks = start > 0;
   return (
     <video

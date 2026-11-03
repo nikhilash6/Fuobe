@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
 import { CANVAS_TEMPLATES, isGenerator, planCanvas } from "@/lib/catalog/canvas";
 import { firstTemplates, moreTemplates, TEMPLATE_SECTIONS, templateSections, type Viewing } from "@/lib/canvas-sections";
-import { canvasIntro, templateCards, templateDetail, templateIds } from "@/lib/canvas-template-cards";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { canvasIntro, templateCards, templateDetail, templateIds, templateModels } from "@/lib/canvas-template-cards";
 import { guestRead, isLibraryChange } from "@/lib/guest-access";
 import { templateCover } from "@/lib/template-covers";
 
@@ -12,7 +13,13 @@ import { templateCover } from "@/lib/template-covers";
 // Visitors see a board only once its real cover exists, and never the model names or the engine words.
 
 const { TemplateCard } = await import("@/components/canvas/template-card");
-const html = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(TemplateCard as FC<Record<string, unknown>>, props));
+// The model names come from the owner's own request (useTemplateModels), as if it had answered.
+const MODELS = templateModels();
+const html = (props: Record<string, unknown>) => {
+  const qc = new QueryClient();
+  qc.setQueryData(["canvas-template-models"], MODELS);
+  return renderToStaticMarkup(createElement(QueryClientProvider, { client: qc }, createElement(TemplateCard as FC<Record<string, unknown>>, props)));
+};
 
 const cards = templateCards();
 const hasCover = (id: string) => !!templateCover("canvas", id);
@@ -128,13 +135,13 @@ describe("A template's card", () => {
     expect(h).toContain("/previews/presets/peak/effect-pearl-earring.jpg?v=");
     expect(h).not.toContain("Use template");
     expect(h).not.toMatch(ENGINE_WORDS);
-    for (const m of t.byEngine.open.models) expect(h).not.toContain(m);
+    for (const m of MODELS[t.id].open.models) expect(h).not.toContain(m);
   });
 
   it("for the owner: Use template, the models it runs on, and No cover yet where visitors see nothing", () => {
     const h = html({ t, engine: "open", busy: false, owner: true, onUse: () => {} });
     expect(h).toContain("Use template");
-    expect(h).toContain(t.byEngine.open.models[0]);
+    expect(h).toContain(MODELS[t.id].open.models[0]);
     expect(h).toContain("free on your GPU");
     expect(h).not.toContain("No cover yet");
     expect(html({ t: blank, engine: "open", busy: false, owner: true, onUse: () => {} })).toContain(hasCover("script-film") ? "Use template" : "No cover yet");
@@ -167,7 +174,9 @@ describe("A template's page and the first screen's strip", () => {
 
   it("the strip is one real effect film: its first frame, its peak and its clip, each at a versioned URL", () => {
     const intro = canvasIntro()!;
-    expect(intro.photo.src).toMatch(/^\/previews\/presets\/effect-pearl-earring\.jpg\?v=[0-9a-f]{8}$/);
+    // Agamemnon: a man in a white shirt on a hillside, then a bronze-armoured king (the photo and the scene differ at a glance).
+    expect(intro.templateId).toBe("effect-chain-agamemnon");
+    expect(intro.photo.src).toMatch(/^\/previews\/presets\/effect-agamemnon\.jpg\?v=[0-9a-f]{8}$/);
     expect(intro.film.poster).toMatch(/\?v=[0-9a-f]{8}$/);
     expect(intro.film.video).toMatch(/\.mp4\?v=[0-9a-f]{8}$/);
     expect(canvasIntro("script-film")).toBeUndefined();
@@ -176,5 +185,52 @@ describe("A template's page and the first screen's strip", () => {
   it("is open to guests (a page), while making a board stays the owner's", () => {
     expect(guestRead("/canvas/start/effect-chain-pearl-earring")).toEqual({ kind: "pass" });
     expect(isLibraryChange("POST", "/api/canvases")).toBe(true);
+  });
+});
+
+describe("A template's cover on its card", () => {
+  const covered = cards.filter((c) => hasCover(c.id));
+  // The boards with no cover yet, and one made up (every board may have its cover by now).
+  const bare = [...cards.filter((c) => !hasCover(c.id)), { ...cards[0], id: "effect-chain-not-yet" }];
+  // The cover box: the card's first 16:9 box, up to the card's body.
+  const coverBox = (h: string) => h.slice(h.indexOf("aspect-[16/9]"), h.indexOf("<h3"));
+
+  it("shows the finished scene whole: nothing over it but the icon badge, the steps under the title", () => {
+    for (const t of covered) {
+      const h = html({ t, engine: "open", busy: false });
+      expect(coverBox(h), t.id).not.toContain("data-step-flow");
+      expect(h.slice(h.indexOf("<h3")), t.id).toContain("data-step-flow");
+      expect(coverBox(h), t.id).not.toContain("bg-black/60");
+    }
+  });
+
+  it("for the owner, one without a cover is a tinted panel with its icon and No cover yet, its steps under the title as on every card", () => {
+    for (const t of bare) {
+      const h = html({ t, engine: "open", busy: false, owner: true, onUse: () => {} });
+      expect(h, t.id).toContain("No cover yet");
+      expect(h, t.id).toContain("data-no-cover");
+      expect(h, t.id).not.toContain("<svg viewBox=");
+      // The same line as a covered card's, so a row of cards keeps one height.
+      expect(h.slice(h.indexOf("<h3")), t.id).toContain("data-step-flow");
+    }
+  });
+
+  it("a visitor never gets one without a cover, and the model line is the owner's", () => {
+    const shown = templateSections(cards, visitor).flatMap((s) => s.items);
+    expect(shown.every((t) => hasCover(t.id))).toBe(true);
+    for (const t of cards.filter((c) => !hasCover(c.id))) expect(shown.map((x) => x.id)).not.toContain(t.id);
+    for (const t of shown) {
+      const h = html({ t, engine: "open", busy: false });
+      for (const m of [...MODELS[t.id].open.models, ...MODELS[t.id].cloud.models]) expect(h, `${t.id}: ${m}`).not.toContain(m);
+      expect(h).not.toMatch(/Fuobe DoP|Qwen|free on your GPU/);
+    }
+  });
+
+  it("the page's data holds no model name (the owner's line asks for them: GET /api/canvases/template-models, closed to visitors)", () => {
+    const data = JSON.stringify(templateCards());
+    const names = new Set(Object.values(MODELS).flatMap((m) => [...m.open.models, ...m.cloud.models]));
+    expect(names.size).toBeGreaterThan(0);
+    for (const n of names) expect(data, n).not.toContain(`"${n}"`);
+    expect(guestRead("/api/canvases/template-models")).toEqual({ kind: "closed" });
   });
 });

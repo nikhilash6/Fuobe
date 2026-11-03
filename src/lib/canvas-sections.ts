@@ -14,7 +14,7 @@ export const TEMPLATE_SECTIONS = [
 
 export type TemplateSectionKey = Exclude<(typeof TEMPLATE_SECTIONS)[number]["key"], "">;
 
-/** A template as the list shows it: its board outline and model names per engine (the model names are the owner's). */
+/** A template as the list shows it: its board outline per engine (no model names: those are the owner's, TemplateModels). */
 export interface TemplateCardData {
   id: string;
   name: string;
@@ -27,9 +27,14 @@ export interface TemplateCardData {
   flow: string[];
   /** false: no ready board of its own: the owner's "More templates" only. */
   starter?: false;
-  /** ifOff: a model's name and the one its node falls back to when the model is off on this install. */
-  byEngine: Record<Engine, { outline: Outline; models: string[]; ifOff?: { id: string; name: string; instead: string }[] }>;
+  byEngine: Record<Engine, { outline: Outline }>;
 }
+
+/**
+ * A template's model names per engine, for the owner only (GET /api/canvases/template-models): never in a page's data.
+ * ifOff: a model's name and the one its node falls back to when the model is off on this install.
+ */
+export type TemplateModels = Record<Engine, { models: string[]; ifOff?: { id: string; name: string; instead: string }[] }>;
 
 /** An input of a template's board, as its page shows it. */
 export interface TemplateInput {

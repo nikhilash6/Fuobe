@@ -9,6 +9,9 @@ import { previewFor, toPresetCard } from "@/lib/preset-card-data";
 import { isCover, onPeak, presetCard } from "@/lib/preset-cards";
 import { coverPreview, presetCover, thumbOf } from "@/lib/preset-covers";
 import { HOME_BENTO_MEDIA } from "@/lib/home-bento.generated";
+import { hasMini, miniOf } from "@/lib/preset-cards";
+import { PRESET_MINIS } from "@/lib/preset-minis.generated";
+import { contentVersion } from "../scripts/eval/lib/covers.mjs";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
 import { PRESET_HD } from "@/lib/preset-hd.generated";
@@ -84,8 +87,22 @@ describe("the preset covers manifest", () => {
     for (const [id, v] of Object.entries(PRESET_BEFORE_AFTER)) expect(v, id).toBe(versionOf(...beforeAfterFiles(id).map(fileOf)));
   });
 
+  it("has a mini copy (the menus' rows) of every preset's own poster, made from that poster as it is now", () => {
+    const own = entries.filter(([, e]) => hasMini(e.poster));
+    for (const [id, e] of own) {
+      const poster = path.join(root, "public", e.poster.split("?")[0]);
+      expect(fs.existsSync(path.join(root, "public", miniOf(e.poster).split("?")[0])), id).toBe(true);
+      // Made again when the poster changes (pnpm eval:covers): an old mini would show under the new version for a year.
+      expect(PRESET_MINIS[id], id).toBe(contentVersion([poster]));
+    }
+    expect(Object.keys(PRESET_MINIS).sort()).toEqual(own.map(([id]) => id).sort());
+  });
+
   it("leaves no cover file in public/previews that no entry names (with its poster's small copy for the pickers, and its clip's peak frame and its small copy and its HD before/after for Home)", () => {
-    const named = new Set(entries.flatMap(([, e]) => [e.poster, thumbOf(e.poster), e.video].filter((u): u is string => !!u).map((u) => u.split("?")[0])));
+    // A preset's own poster also has its 96 px copy for the menus' rows (mini/).
+    const named = new Set(
+      entries.flatMap(([, e]) => [e.poster, thumbOf(e.poster), hasMini(e.poster) ? miniOf(e.poster) : undefined, e.video].filter((u): u is string => !!u).map((u) => u.split("?")[0])),
+    );
     for (const id of Object.keys(PRESET_PEAKS)) for (const f of [`/previews/presets/peak/${id}.jpg`, thumbOf(`/previews/presets/peak/${id}.jpg`)]) named.add(f);
     for (const id of Object.keys(PRESET_BEFORE_AFTER)) for (const f of beforeAfterFiles(id)) named.add(f);
     // The larger copies (scripts/gen-preset-hd.mjs, tests/preset-hd.test.ts).
@@ -190,10 +207,15 @@ describe("the preset covers manifest", () => {
       "components/preset-header.tsx",
       "components/studio/preset-chips.tsx",
       "lib/canvas-template-cards.ts",
+      "lib/home-bento.ts",
+      "lib/mega-menus.server.ts",
       "lib/nav-covers.ts",
       "lib/palette-index.ts",
+      "lib/starters/catalog.ts",
     ]);
     expect(fs.readFileSync(path.join(root, "src", "lib", "nav-covers.ts"), "utf8")).toMatch(/^import "server-only";$/m);
+    // The bar's fetched menus are built on the server and served as static files (/nav-menus/<id>).
+    expect(fs.readFileSync(path.join(root, "src", "lib", "mega-menus.server.ts"), "utf8")).toMatch(/^import "server-only";$/m);
     // Client code takes the covers' type only (the covers come as props).
     for (const f of importers(/^import (?!type )[^;]*from "[^"]*nav-covers";/m)) expect(sources.find((s) => s.file === f)!.text, f).not.toMatch(/^["']use client["'];?$/m);
     // The index is server code: the prerendered route, and Home's showcase (server-only) for model links.

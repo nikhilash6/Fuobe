@@ -32,7 +32,8 @@ vi.mock("@/lib/api", async (load) => ({
 }));
 
 const { TopBar, barActive, prefetchHrefs } = await import("@/components/nav/top-bar");
-const { LauncherColumns, launcherCurrent, launcherMove, LAUNCHER_ID } = await import("@/components/nav/studios-launcher");
+const { launcherCurrent, launcherMove, LAUNCHER_ID } = await import("@/components/nav/mega-launcher");
+const { LauncherColumns } = await import("@/components/nav/mega-panel");
 const { CREATE_HREFS, createColumns } = await import("@/components/nav/create-menu");
 const { AccountSections } = await import("@/components/nav/account-menu");
 const { avatarDot, refillWords } = await import("@/components/nav/status-chips");
@@ -162,12 +163,14 @@ describe("the launcher's columns", () => {
       for (const e of [c.lead, ...c.rest]) {
         const cover = covers[e.cover!];
         expect(cover, e.id).toBeDefined();
-        expect(html).toContain(`src="${cover.thumb.replaceAll("&", "&amp;")}"`);
+        // The lead card shows the 320 px copy (and the poster by its srcset); a row the 96 px one.
+        expect(html).toContain(`src="${(e === c.lead ? cover.thumb : (cover.mini ?? cover.thumb)).replaceAll("&", "&amp;")}"`);
       }
       // The lead's 4:3 card picks the poster on sharp screens.
       expect(html).toContain(`${covers[c.lead.cover!].poster} 512w`);
     }
-    expect(count(html, 'loading="eager"')).toBe(33);
+    // The six lead cards load as the panel warms; a row's picture when the row shows (lazy).
+    expect(count(html, 'loading="eager"')).toBe(6);
     expect(count(html, 'alt=""')).toBe(33);
   });
 
@@ -369,14 +372,14 @@ describe("split items: the name goes to the area page, the chevron opens the men
   /** The opening tag of the link to `href` in the bar's markup. */
   const linkTo = (html: string, href: string) => anchors(html).find((a) => a.href === href)?.tag ?? "";
 
-  it("gives Create, Studios and Motions & effects a link to their page and a named chevron, in one pill", () => {
+  it("gives Create, Studios, Apps, Motions & effects and Canvas a link to their page and a named chevron, in one pill", () => {
     const html = render(createElement(TopBar));
-    for (const href of ["/create", "/studios", "/motions-and-effects"]) expect(linkTo(html, href), href).not.toBe("");
+    for (const href of ["/create", "/studios", "/apps", "/motions-and-effects", "/canvas"]) expect(linkTo(html, href), href).not.toBe("");
     expect(linkTo(html, "/studios")).toContain(`aria-label="Studios, ${studioCount()} studios"`);
-    for (const name of ["Create menu", "Studios menu", "Motions &amp; effects menu"]) expect(html, name).toContain(`aria-label="${name}"`);
+    for (const name of ["Create menu", "Studios menu", "Apps menu", "Motions &amp; effects menu", "Canvas menu"]) expect(html, name).toContain(`aria-label="${name}"`);
     // The Studios chevron is still the launcher's disclosure button (search hands focus back to it).
     expect(html).toMatch(/<button[^>]*aria-label="Studios menu"[^>]*aria-expanded="false"[^>]*data-studios-trigger/);
-    expect(count(html, "data-bar-split")).toBe(3);
+    expect(count(html, "data-bar-split")).toBe(5);
   });
 
   it("marks the name on its own page and the pill inside its area, never both items", () => {
@@ -395,7 +398,7 @@ describe("split items: the name goes to the area page, the chevron opens the men
   });
 
   it("links the launcher's header to every studio with previews", async () => {
-    const { LauncherPanel } = await import("@/components/nav/studios-launcher");
+    const { LauncherPanel } = await import("@/components/nav/mega-panel");
     const html = render(createElement(LauncherPanel, { onClose: () => {}, onSearch: () => {} }));
     expect(linkTo(html, "/studios")).not.toBe("");
     expect(words(html)).toContain("See all");

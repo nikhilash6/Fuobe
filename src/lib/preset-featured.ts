@@ -9,9 +9,9 @@ import { interleaveByCategory } from "@/lib/preset-cards";
 const ORDER: Record<"app" | "motion" | "effect", string[]> = {
   app: [
     `
-      app-behind-the-scenes app-relight app-macroshot-product app-sketch-to-real app-age-shift app-makeup-studio
+      app-behind-the-scenes app-relight app-macroshot-product app-color-grading app-age-shift app-makeup-studio
       app-angles app-shots app-match-lighting app-match-colors app-product-shot app-bullet-time-scene
-      app-bullet-time-splash app-chameleon app-outfit-swap app-tap-to-recolor app-steal-the-look app-outfit-shot app-color-grading
+      app-bullet-time-splash app-chameleon app-outfit-swap app-tap-to-recolor app-steal-the-look app-outfit-shot app-sketch-to-real
       app-video-face-swap app-video-background-remover app-clean-up-voice app-breakdown
     `,
     `

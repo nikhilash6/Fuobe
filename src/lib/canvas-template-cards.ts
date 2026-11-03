@@ -6,25 +6,30 @@ import { EXAMPLE_MEDIA } from "@/lib/examples/media.generated";
 import plan from "@/lib/examples/plan.json";
 import { presetCover } from "@/lib/preset-covers";
 import { templateCover } from "@/lib/template-covers";
-import type { CanvasIntro, TemplateCardData, TemplateDetail, TemplateInput } from "@/lib/canvas-sections";
+import type { CanvasIntro, TemplateCardData, TemplateDetail, TemplateInput, TemplateModels } from "@/lib/canvas-sections";
 
 /**
- * One template's board outline and model names on an engine, with the name a node falls back to when its model is
- * switched off in Models & licences (the card swaps it in the browser, as the board the server makes does).
+ * One template's model names on an engine, with the name a node falls back to when its model is switched off in Models
+ * & licences (the card swaps it in the browser, as the board the server makes does).
  */
-function forEngine(t: CanvasTemplate, engine: Engine): TemplateCardData["byEngine"][Engine] {
+function modelsOn(t: CanvasTemplate, engine: Engine): TemplateModels[Engine] {
   const graph = t.build(engine);
   const nameOf = (id?: string) => getModel(id ?? "")?.name;
   const names = graph.nodes.filter(isGenerator).map((n) => nameOf(n.data.modelId));
   const without = t.build(engine, () => false).nodes;
-  const ifOff: NonNullable<TemplateCardData["byEngine"][Engine]["ifOff"]> = [];
+  const ifOff: NonNullable<TemplateModels[Engine]["ifOff"]> = [];
   for (const n of graph.nodes) {
     const id = n.data.modelId;
     const name = nameOf(id);
     const instead = nameOf(without.find((x) => x.id === n.id)?.data.modelId);
     if (id && name && instead && instead !== name && !ifOff.some((x) => x.id === id)) ifOff.push({ id, name, instead });
   }
-  return { outline: outline(graph), models: [...new Set(names.filter((m): m is string => !!m))], ...(ifOff.length && { ifOff }) };
+  return { models: [...new Set(names.filter((m): m is string => !!m))], ...(ifOff.length && { ifOff }) };
+}
+
+/** Every template's model names, by id: the owner's (GET /api/canvases/template-models), never in a page's data. */
+export function templateModels(): Record<string, TemplateModels> {
+  return Object.fromEntries(CANVAS_TEMPLATES.map((t) => [t.id, { cloud: modelsOn(t, "cloud"), open: modelsOn(t, "open") }]));
 }
 
 function card(t: CanvasTemplate): TemplateCardData {
@@ -38,7 +43,7 @@ function card(t: CanvasTemplate): TemplateCardData {
     rank: t.rank,
     flow: t.flow,
     ...(t.starter === false && { starter: false as const }),
-    byEngine: { cloud: forEngine(t, "cloud"), open: forEngine(t, "open") },
+    byEngine: { cloud: { outline: outline(t.build("cloud")) }, open: { outline: outline(t.build("open")) } },
   };
 }
 
@@ -98,10 +103,16 @@ export function templateDetail(id: string): TemplateDetail | undefined {
 export const templateIds = () => CANVAS_TEMPLATES.map((t) => t.id);
 
 /**
+ * The board "What's a canvas?" shows: one whose photo and finished scene look nothing alike (a man in a white shirt on
+ * a hillside becomes a bronze-armoured king before his army), so the three tiles show what a board does.
+ */
+export const CANVAS_INTRO = "effect-chain-agamemnon";
+
+/**
  * "What's a canvas?": one real effect film in three tiles, the photo that went in, the scene it became and the moving
  * shot. The photo is the clip's first frame (the effect's own cover), the scene its peak (the template's cover).
  */
-export function canvasIntro(templateId = "effect-chain-pearl-earring"): CanvasIntro | undefined {
+export function canvasIntro(templateId = CANVAS_INTRO): CanvasIntro | undefined {
   const film = templateCover("canvas", templateId);
   const photo = presetCover(templateId.replace(/^effect-chain-/, "effect-"));
   if (!film?.video || !photo) return undefined;
