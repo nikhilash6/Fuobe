@@ -167,9 +167,12 @@ describe("other tab bars switch without a round trip", () => {
     // the route's skeleton after the tap.
     const page = src("src/components/studio/studio-page.tsx");
     const lazy = page.split("\n").filter((l) => /^const \w+ = dynamic\(\(\) => import\("@\/components\/examples\/example-cards"\)/.test(l));
-    expect(lazy.length).toBe(3);
+    expect(lazy.length).toBe(2);
     for (const line of lazy) expect(line).toMatch(/\{ loading: /);
-    expect(page).toMatch(/loading: ExampleCardsPlaceholder \}/);
+    // The row is a lazy() under its own Suspense boundary, whose fallback is the row's skeleton (the same heading and cards).
+    expect(page).toMatch(/^const ExampleRow = lazy\(\(\) => import\("@\/components\/examples\/example-cards"\)/m);
+    expect(page).toMatch(/<Suspense fallback=\{skeleton\}>\s*<ExampleRow /);
+    expect(page).toMatch(/const skeleton = <ExampleRowSkeleton /);
   });
 });
 

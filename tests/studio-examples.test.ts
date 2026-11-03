@@ -137,7 +137,8 @@ describe("the studios' examples", () => {
         const code = read(...f);
         expect(code, f.join("/")).toMatch(/^import type \{ ExampleRowData \} from "@\/lib\/examples\/types";$/m);
         expect(code, f.join("/")).not.toMatch(/from "@\/lib\/(studio-examples|examples\/catalog)"/);
-        expect(code, `${s}: ${f.join("/")}`).toContain("<ExampleRow row={examples}");
+        // Ads Studio's row leaves out the cards its own ready brands already show (moreToTry, from its examples).
+        expect(code, `${s}: ${f.join("/")}`).toMatch(/<ExampleRow row=\{(examples|moreToTry)\}/);
       }
     }
   });
@@ -161,7 +162,10 @@ describe("the studios' examples", () => {
 
   it("shows only once the feed is known to be empty, and a loaded example goes to its own studio's composer", () => {
     const page = read("components", "studio", "studio-page.tsx");
-    expect(page).toMatch(/\{feed\.isSuccess && !hasItems && !!examples\?\.cards\.length && <StudioExamples /);
+    // Its skeleton until the feed has answered; the cards then (a guest's after FEED_WAIT_MS at most), never for results.
+    expect(page).toMatch(/\{!hasItems && !!examples\?\.cards\.length && <StudioExamples row=\{examples\} ready=\{!feed\.isPending\} \/>\}/);
+    expect(page).toMatch(/if \(!ready && !\(guest && waited\)\) return skeleton;/);
+    expect(page).toMatch(/if \(ready \|\| !guest\) return;/);
     expect(read("components", "studio", "composer.tsx")).toMatch(/bridgeRef\.pick = pickPreset;/);
     // Its own studio's composer, not a hidden studio's (one left earlier stays in the page).
     expect(page).toMatch(/document\.querySelectorAll<HTMLElement>\("\[data-studio\] \[data-composer\]"\)\]\.find\(\(el\) => el\.offsetParent !== null\)/);
