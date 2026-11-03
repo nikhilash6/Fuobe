@@ -3,7 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { getModel } from "@/lib/catalog";
 import type { Generation } from "@/lib/catalog/types";
-import { FINAL_3D, MODELS_3D, finalBuildHref, model3dView, modeOf } from "@/lib/av/model3d";
+import { FINAL_3D, MODELS_3D, finalBuildHref, linkedPhoto, model3dView, modeOf, readModel3dLink } from "@/lib/av/model3d";
+import { make3dHref } from "@/lib/output-actions";
 import { offered, type AccessSummary } from "@/lib/model-access";
 
 /**
@@ -66,15 +67,27 @@ describe("Build the final with TRELLIS.2", () => {
     expect(card).toContain("finalBuildHref(g, view, finalAllowed)");
     expect(card).toContain("{FINAL_3D.note}");
     expect(studio).toContain('const finalAllowed = !visitor && engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");');
-    expect(studio).toContain('params.get("image")');
+    expect(studio).toContain("readModel3dLink(params)");
     expect(studio).toContain("onImage={fromImage}");
     // A second click on the same link still fills the form (the URL doesn't change, so UrlModel can't).
     expect(card).toContain("onClick={() => view.photo && onFinal?.(view.photo)}");
     expect(studio).toContain("onFinal={toFinal}");
     expect(studio).toContain("if (found) fromUrl(found.mode, found.engine, FINAL_3D.model);");
-    // ?image= leaves Idol's "It's a photo" as it is: the picture is usually the user's own upload.
+    // The final's ?image= leaves Idol's "It's a photo" as it is: the picture is usually the user's own upload. Only Make it
+    // 3D's link (Idol 3D, idol-5) sets it.
+    expect(studio).toContain("onImage(link.image, linkedPhoto(link))");
     const fromImage = studio.slice(studio.indexOf("const fromImage = useCallback"), studio.indexOf("const fromUrl = useCallback"));
     expect(fromImage).toContain("setPhoto(v);");
-    expect(fromImage).not.toContain("setIdolPhoto");
+    expect(fromImage.indexOf("if (asPhoto === undefined) return;")).toBeGreaterThan(-1);
+    expect(fromImage.indexOf("setIdolPhoto")).toBeGreaterThan(fromImage.indexOf("if (asPhoto === undefined) return;"));
+  });
+
+  it("hands the picture over without saying whether it is a photo; Make it 3D's link still does", () => {
+    const final = readModel3dLink(new URL(href(result("oss-idol"))!, "http://x").searchParams);
+    expect(final.image).toBe(PHOTO);
+    expect(linkedPhoto(final)).toBeUndefined();
+    const make3d = (photo: boolean) => readModel3dLink(new URL(make3dHref(PHOTO, photo), "http://x").searchParams);
+    expect(linkedPhoto(make3d(false))).toBe(false);
+    expect(linkedPhoto(make3d(true))).toBe(true);
   });
 });

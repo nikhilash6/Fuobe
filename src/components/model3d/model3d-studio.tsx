@@ -35,6 +35,7 @@ import {
   readModel3dLink,
   linkedIdolQuality,
   linkedPicture,
+  linkedPhoto,
   model3dFor,
   model3dRequest,
   modeOf,
@@ -96,8 +97,7 @@ function UrlModel({
     if (link.model) onModel(link.model.mode, link.model.engine, link.model.id, link.quality);
     else if (link.rig) onRig();
     else if (link.mode) onMode(link.mode);
-    // Only Make it 3D's link (Idol 3D) says whether the picture is a photo; the others leave "It's a photo" as it is.
-    if (link.image) onImage(link.image, link.model && isIdol(link.model.id) ? !!link.photo : undefined);
+    if (link.image) onImage(link.image, linkedPhoto(link));
   }, [params, onModel, onMode, onRig, onImage]);
   return null;
 }

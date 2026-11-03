@@ -600,3 +600,11 @@ export function readModel3dLink(sp: Pick<URLSearchParams, "get">): Model3dLink {
   }
   return out;
 }
+
+/**
+ * Whether an Image to 3D link's picture sets Idol's "It's a photo": only Make it 3D's link (it names Idol 3D) says what
+ * the picture is. Other links with ?image= (an Idol 3D result's "Build the final with TRELLIS.2") leave it as it is.
+ */
+export function linkedPhoto(link: Model3dLink): boolean | undefined {
+  return link.image && link.model && isIdol(link.model.id) ? !!link.photo : undefined;
+}
