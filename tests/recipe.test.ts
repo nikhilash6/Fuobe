@@ -68,7 +68,9 @@ describe("the recipe format", () => {
 
   it("refuses what isn't a recipe: a version, caps, an empty graph, bad JSON", () => {
     expect(parseRecipe("{")).toEqual({ ok: false, error: "recipe.json isn't valid JSON" });
-    expect(parseRecipe(JSON.stringify({ ...lamp(), fuobeRecipe: 2 }))).toMatchObject({ ok: false, error: expect.stringContaining("fuobeRecipe") });
+    expect(parseRecipe(JSON.stringify({ ...lamp(), fuobeRecipe: 3 }))).toMatchObject({ ok: false, error: expect.stringContaining("fuobeRecipe") });
+    // Version 2 (W7: step references) loads; version 1 files still do.
+    expect(parseRecipe(JSON.stringify({ ...lamp(), fuobeRecipe: 2 }))).toMatchObject({ ok: true });
     expect(parseRecipe(JSON.stringify({ ...lamp(), steps: [] }))).toMatchObject({ ok: false, error: expect.stringContaining("a recipe needs a step") });
     const many = Array.from({ length: RECIPE_LIMITS.params + 1 }, (_, i) => ({ id: `p${i}`, label: `P ${i}`, type: "text" }));
     expect(parseRecipe(JSON.stringify({ ...lamp(), params: many }))).toMatchObject({ ok: false, error: expect.stringContaining("at most 12 inputs") });

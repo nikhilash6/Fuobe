@@ -612,6 +612,19 @@ export const MIGRATIONS: string[] = [
   // skill's name, one set of its inputs as text (a file is its /api/files/… URL) and the file inputs that take the
   // newest upload of their kind when the run starts. NULL: a request, as before.
   `ALTER TABLE assist_schedules ADD COLUMN skill_json TEXT;`,
+  // originals (o/w2s-w7): a run of a skill that spans studios (Skills W7): its values, and each step's status, generation
+  // ids and studio page as the runner moves it on (src/server/skill-runs.ts), so a run survives a restart.
+  `CREATE TABLE IF NOT EXISTS skill_runs (
+    id TEXT PRIMARY KEY,
+    skill TEXT NOT NULL,
+    status TEXT NOT NULL,
+    values_json TEXT NOT NULL,
+    state_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS skill_runs_skill ON skill_runs (skill, created_at);
+  CREATE INDEX IF NOT EXISTS skill_runs_status ON skill_runs (status);`,
 ];
 
 /**

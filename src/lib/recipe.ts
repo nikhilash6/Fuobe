@@ -6,8 +6,14 @@
  * A recipe has typed inputs (`params`) and either a graph of generate steps (one `createPipeline`) or one call of a
  * gated Assist tool (`dub_video`, `add_captions`…). A string that is exactly `"{{id}}"` takes the input with its type;
  * `{{id}}` inside a longer string inserts its text. Unknown or unused placeholders are refused when the recipe is
- * saved (`recipeProblems`), never at run time. Step outputs travel only through `after` and `chain`, exactly as
- * createPipeline takes them.
+ * saved (`recipeProblems`), never at run time. Within a graph of generate steps, outputs travel through `after` and
+ * `chain`, exactly as createPipeline takes them.
+ *
+ * Version 2 (package W7, skills that span studios) adds `{{steps.<key>.output}}`: a whole field of a step's input that
+ * takes an earlier step's first output of the kind the field takes, so tool steps can sit anywhere in the order ("dub,
+ * then captions, then a 9:16 cut"). Such a recipe runs in parts (`compile` → `staged`): each graph of generate steps
+ * joined by `after` is one createPipeline, each tool step one call, and a part starts once the steps it takes from have
+ * finished (src/server/skill-runs.ts). Version 1 files load and run as before.
  *
  * Pure and browser-safe: the Run form validates a row and parses a CSV with it, the server compiles the requests
  * (src/server/recipes.ts). Nothing here reads the catalog: the server checks models, prices and engines.
@@ -33,6 +39,9 @@ const STEP_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/;
 const PLACEHOLDER = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
 const EXACT = /^\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+/** A step reference (version 2): a whole field taking an earlier step's output. */
+const STEP_REF = /^\{\{\s*steps\.([A-Za-z0-9][A-Za-z0-9_-]{0,39})\.output\s*\}\}$/;
+const ANY_STEP_REF = /\{\{\s*steps\./;
 const ELEMENT = /^@[\p{L}\p{N}_-]{1,40}$/u;
 
 /** A media input: a file saved in Fuobe or a public http(s) link (read through remote-fetch.ts). */
@@ -152,8 +161,11 @@ const VerifiedEngineSchema = z.object({
 });
 export type VerifiedEngine = z.infer<typeof VerifiedEngineSchema>;
 
+/** The newest recipe format: version 2 has step references ({{steps.<key>.output}}); version 1 files still load. */
+export const RECIPE_VERSION = 2;
+
 export const RecipeSchema = z.object({
-  fuobeRecipe: z.literal(1),
+  fuobeRecipe: z.union([z.literal(1), z.literal(2)]),
   params: z.array(ParamSchema).max(RECIPE_LIMITS.params, `at most ${RECIPE_LIMITS.params} inputs`),
   steps: z.array(StepSchema).min(1, "a recipe needs a step").max(RECIPE_LIMITS.steps, `at most ${RECIPE_LIMITS.steps} steps`),
   checks: z.record(z.string(), CheckSchema).optional(),
@@ -208,6 +220,155 @@ const stepBody = (s: RecipeStep): unknown => (s.kind === "tool" ? s.input : s.re
 export function leafKeys(recipe: Pick<Recipe, "steps">): Set<string> {
   const fed = new Set(recipe.steps.flatMap((s) => (s.kind === "generate" ? asList(s.after) : [])));
   return new Set(recipe.steps.filter((s) => !fed.has(s.key)).map((s) => s.key));
+}
+
+// ---------------------------------------------------------------------------
+// Step references (version 2)
+
+/** The text that puts an earlier step's output in a field: `{{steps.<key>.output}}`. */
+export const stepRef = (key: string): string => `{{steps.${key}.output}}`;
+
+/** The step a whole-field reference names, or null. */
+export const refKey = (v: unknown): string | null => (typeof v === "string" ? (STEP_REF.exec(v)?.[1] ?? null) : null);
+
+export interface StepRefAt {
+  key: string;
+  path: (string | number)[];
+}
+
+/** Every step reference in a value, with its path; `loose` collects strings that mention one without being one. */
+export function stepRefs(v: unknown, path: (string | number)[] = [], out: StepRefAt[] = [], loose?: (string | number)[][]): StepRefAt[] {
+  if (typeof v === "string") {
+    const key = refKey(v);
+    if (key) out.push({ key, path });
+    else if (loose && ANY_STEP_REF.test(v)) loose.push(path);
+  } else if (Array.isArray(v)) v.forEach((x, i) => stepRefs(x, [...path, i], out, loose));
+  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) stepRefs(x, [...path, k], out, loose);
+  return out;
+}
+
+/** What each studio tool makes, for a later step that takes its output (its first output of the field's kind). */
+export const TOOL_MAKES: Record<string, MediaKind> = {
+  dub_video: "video",
+  add_captions: "video",
+  restyle_footage: "video",
+  restore_video: "video",
+  remove_person: "video",
+  blockout_film: "video",
+  fly_around: "video",
+  faceless_episode: "video",
+  katana: "video",
+  split_layers: "image",
+  create_ads: "image",
+  create_storyboard: "image",
+};
+
+/**
+ * The kind of file a field takes, from its name (a request's `inputs.images`, a tool's `video`): null when the name
+ * doesn't say, and the step's first file of any kind fills it.
+ */
+export function fieldKind(path: (string | number)[], tool?: string): "image" | "video" | "audio" | null {
+  const key = [...path].reverse().find((p): p is string => typeof p === "string") ?? "";
+  // Katana's reference is the edit to copy (a clip); elsewhere a reference is a picture.
+  if (key === "reference" && tool === "katana") return "video";
+  if (/^(video|videos|footage|clip|clips)$/i.test(key)) return "video";
+  if (/^(audio|audios|audio2|voiceAudio|voice_sample|music|sound)$/i.test(key)) return "audio";
+  if (/^(image|images|endImage|end_image|photos?|product_image|first_frame|depth|references?|logo|mask)$/i.test(key)) return "image";
+  return null;
+}
+
+/** Whether a recipe runs in parts (version 2): a step reference anywhere, or a tool step beside other steps. */
+export function isStaged(recipe: Pick<Recipe, "steps">): boolean {
+  return recipe.steps.some((s) => stepRefs(stepBody(s)).length > 0) || (recipe.steps.some((s) => s.kind === "tool") && recipe.steps.length > 1);
+}
+
+/**
+ * The parts a staged recipe runs in: each graph of generate steps joined by `after` (one createPipeline), each tool step
+ * alone, in the order of their first step; `needs` are the steps whose outputs a part takes ({{steps.<key>.output}}).
+ */
+export function recipeParts(recipe: Pick<Recipe, "steps">): { keys: string[]; needs: string[] }[] {
+  const keys = recipe.steps.map((s) => s.key);
+  const group = new Map(keys.map((k) => [k, k]));
+  const root = (k: string): string => {
+    let r = k;
+    while (group.get(r) !== r) r = group.get(r)!;
+    return r;
+  };
+  for (const s of recipe.steps) {
+    if (s.kind !== "generate") continue;
+    for (const a of asList(s.after)) {
+      const other = recipe.steps.find((t) => t.key === a);
+      if (other?.kind === "generate") group.set(root(a), root(s.key));
+    }
+  }
+  const parts = new Map<string, { keys: string[]; needs: string[] }>();
+  for (const s of recipe.steps) {
+    const r = root(s.key);
+    const part = parts.get(r) ?? { keys: [], needs: [] };
+    part.keys.push(s.key);
+    for (const ref of stepRefs(stepBody(s))) if (!part.needs.includes(ref.key)) part.needs.push(ref.key);
+    parts.set(r, part);
+  }
+  return [...parts.values()];
+}
+
+/** Why a step's reference can't be filled as written (version 2), or null. `makes` names what a generate step makes. */
+function refProblems(recipe: Recipe, makes?: (s: GenerateStep) => MediaKind | undefined): string[] {
+  const out: string[] = [];
+  const v1 = recipe.fuobeRecipe === 1;
+  recipe.steps.forEach((s, i) => {
+    const loose: (string | number)[][] = [];
+    const refs = stepRefs(stepBody(s), [], [], loose);
+    if (loose.length) out.push(`Step “${s.key}”: a step's output fills a whole field ({{steps.<key>.output}} alone, not inside other words)`);
+    if (refs.length && v1) out.push(`Step “${s.key}” takes another step's output: that needs "fuobeRecipe": 2`);
+    for (const r of refs) {
+      const j = recipe.steps.findIndex((t) => t.key === r.key);
+      if (j < 0) {
+        out.push(`Step “${s.key}” uses {{steps.${r.key}.output}}, but there's no step “${r.key}”`);
+        continue;
+      }
+      if (j >= i) {
+        out.push(`Step “${s.key}” uses the output of “${r.key}”, which comes ${j === i ? "from itself" : "after it"}: a step takes only from earlier steps`);
+        continue;
+      }
+      const from = recipe.steps[j];
+      const wants = fieldKind(r.path, s.kind === "tool" ? s.tool : undefined);
+      const made = from.kind === "tool" ? TOOL_MAKES[from.tool] : (recipe.checks?.[from.key]?.kind ?? makes?.(from));
+      if (wants && made && made !== wants) out.push(`Step “${s.key}” takes ${wants === "image" ? "an image" : `a${wants === "audio" ? "n" : ""} ${wants}`} from “${r.key}”, which makes ${made === "image" ? "an image" : made === "audio" ? "audio" : `a ${made}`}`);
+      if (from.kind === "tool" && from.tool === "dub_video" && from.input.review !== false) {
+        out.push(`“${r.key}” waits for you to review its lines in Translate & dub before it makes a video: set "review": false so “${s.key}” can take it`);
+      }
+    }
+    if (s.kind === "generate") {
+      for (const a of asList(s.after)) {
+        if (recipe.steps.find((t) => t.key === a)?.kind === "tool") out.push(`Step “${s.key}” waits for the studio step “${a}”: put {{steps.${a}.output}} in its input instead`);
+      }
+    }
+  });
+  // A part that takes from a step in its own pipeline, or parts that wait for each other.
+  if (!out.length) {
+    const parts = recipeParts(recipe);
+    const partOf = new Map(parts.flatMap((p, i) => p.keys.map((k) => [k, i] as const)));
+    for (const p of parts) {
+      const own = p.needs.find((k) => p.keys.includes(k));
+      if (own) out.push(`“${own}” runs in the same pipeline as the step that takes its output: chain them with "after" instead`);
+    }
+    if (!out.length) {
+      const done = new Set<number>();
+      let moved = true;
+      while (moved) {
+        moved = false;
+        parts.forEach((p, i) => {
+          if (done.has(i) || p.needs.some((k) => !done.has(partOf.get(k)!))) return;
+          done.add(i);
+          moved = true;
+        });
+      }
+      const stuck = parts.flatMap((p, i) => (done.has(i) ? [] : p.keys));
+      if (stuck.length) out.push(`These steps wait for each other in a loop: ${stuck.map((k) => `“${k}”`).join(", ")}`);
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -369,7 +530,14 @@ export interface CompiledStep {
   chain?: ChainSlot[];
 }
 
-export type Compiled = { kind: "pipeline"; steps: CompiledStep[]; checks: Record<string, FilledCheck> } | { kind: "tool"; key: string; tool: string; input: Record<string, unknown>; checks: Record<string, FilledCheck> };
+/** One part of a staged run: a pipeline of generate steps, or one tool call; `needs` are the steps it takes from. */
+export type CompiledPart = ({ kind: "pipeline"; steps: CompiledStep[] } | { kind: "tool"; key: string; tool: string; input: Record<string, unknown>; label?: string }) & { needs: string[] };
+
+export type Compiled =
+  | { kind: "pipeline"; steps: CompiledStep[]; checks: Record<string, FilledCheck> }
+  | { kind: "tool"; key: string; tool: string; input: Record<string, unknown>; checks: Record<string, FilledCheck> }
+  /** Version 2: parts that start as the steps they take from finish ({{steps.<key>.output}} still in their inputs). */
+  | { kind: "staged"; parts: CompiledPart[]; checks: Record<string, FilledCheck> };
 
 export interface CompileOptions {
   /** The skill's name and this run's id: the server-set stamp on every request. */
@@ -387,25 +555,49 @@ export const SKILL_CHECK_FEATURE = "skill-check";
 /** One run of a recipe: a pipeline of generate steps, or one tool call. Values are checked first (checkValues). */
 export function compile(recipe: Recipe, values: RecipeValues, o: CompileOptions): Compiled {
   const { steps, checks } = fill(recipe, values);
+  const n = steps.length;
+  const generate = (s: GenerateStep): CompiledStep => ({
+    key: s.key,
+    request: {
+      ...s.request,
+      batchTitle: o.title.slice(0, 200),
+      skill: { name: o.skill, run: o.run },
+      ...(s.label && { step: { label: s.label, index: steps.indexOf(s), of: n } }),
+      ...(o.demo && { demo: true, feature: SKILL_CHECK_FEATURE }),
+    },
+    ...(s.after !== undefined && { after: s.after }),
+    ...(s.chain && { chain: s.chain as ChainSlot[] }),
+  });
+  if (isStaged(recipe)) {
+    const byKey = new Map(steps.map((s) => [s.key, s]));
+    const parts = recipeParts(recipe).map((p): CompiledPart => {
+      const first = byKey.get(p.keys[0])!;
+      if (first.kind === "tool") return { kind: "tool", key: first.key, tool: first.tool, input: first.input, ...(first.label && { label: first.label }), needs: p.needs };
+      return { kind: "pipeline", steps: p.keys.map((k) => generate(byKey.get(k) as GenerateStep)), needs: p.needs };
+    });
+    return { kind: "staged", parts, checks };
+  }
   const tool = steps.find((s): s is ToolStep => s.kind === "tool");
   if (tool) return { kind: "tool", key: tool.key, tool: tool.tool, input: tool.input, checks };
-  const n = steps.length;
-  return {
-    kind: "pipeline",
-    checks,
-    steps: (steps as GenerateStep[]).map((s, i) => ({
-      key: s.key,
-      request: {
-        ...s.request,
-        batchTitle: o.title.slice(0, 200),
-        skill: { name: o.skill, run: o.run },
-        ...(s.label && { step: { label: s.label, index: i, of: n } }),
-        ...(o.demo && { demo: true, feature: SKILL_CHECK_FEATURE }),
-      },
-      ...(s.after !== undefined && { after: s.after }),
-      ...(s.chain && { chain: s.chain as ChainSlot[] }),
-    })),
-  };
+  return { kind: "pipeline", checks, steps: (steps as GenerateStep[]).map(generate) };
+}
+
+/**
+ * A part's input with each step reference filled: `pick(key, kind)` gives that step's first output of the kind the
+ * field takes (null: any kind); a reference it can't fill throws, naming the step and what was missing.
+ */
+export function fillRefs<T>(v: T, pick: (key: string, kind: "image" | "video" | "audio" | null) => string | undefined, tool?: string, path: (string | number)[] = []): T {
+  if (typeof v === "string") {
+    const key = refKey(v);
+    if (!key) return v;
+    const kind = fieldKind(path, tool);
+    const url = pick(key, kind);
+    if (!url) throw new Error(`“${key}” made no ${kind ?? "file"} for the next step`);
+    return url as T;
+  }
+  if (Array.isArray(v)) return v.map((x, i) => fillRefs(x, pick, tool, [...path, i])) as T;
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fillRefs(x, pick, tool, [...path, k])])) as T;
+  return v;
 }
 
 // ---------------------------------------------------------------------------
@@ -416,7 +608,7 @@ export function compile(recipe: Recipe, values: RecipeValues, o: CompileOptions)
  * a count that varies on a step others wait for, duplicate ids and keys, a tool step that isn't alone, a graph
  * createPipeline would refuse, and inputs whose default, example or options don't fit their type.
  */
-export function recipeProblems(recipe: Recipe): string[] {
+export function recipeProblems(recipe: Recipe, o: { makes?: (s: GenerateStep) => MediaKind | undefined } = {}): string[] {
   const out: string[] = [];
   const ids = recipe.params.map((p) => p.id);
   const keys = recipe.steps.map((s) => s.key);
@@ -437,9 +629,10 @@ export function recipeProblems(recipe: Recipe): string[] {
   }
   for (const p of recipe.params) if (!used.has(p.id)) out.push(`The input “${p.label}” ({{${p.id}}}) isn't used by any step`);
 
-  // One tool step alone (a tool feeding later steps is W7's orchestrator).
+  // Version 1: one tool step alone. Version 2: tool steps anywhere, and every step reference fits (refProblems).
   const tools = recipe.steps.filter((s) => s.kind === "tool");
-  if (tools.length && recipe.steps.length > 1) out.push(`The tool step “${tools[0].key}” must be the recipe's only step (a tool that feeds other steps isn't supported yet)`);
+  if (recipe.fuobeRecipe === 1 && tools.length && recipe.steps.length > 1) out.push(`The tool step “${tools[0].key}” must be the recipe's only step in a version 1 recipe (set "fuobeRecipe": 2 to run it with other steps)`);
+  out.push(...refProblems(recipe, o.makes));
 
   // The graph, as createPipeline checks it.
   const keySet = new Set(keys);
@@ -814,13 +1007,20 @@ export const RECIPE_MARKDOWN_MAX = 20_000;
  */
 export function recipeMarkdown(recipe: Recipe, skill?: { name: string }): string {
   const keys = recipe.steps.map((s) => s.key);
-  const tool = recipe.steps.find((s): s is ToolStep => s.kind === "tool");
-  const gen = tool ? null : generateCall(recipe);
+  const staged = isStaged(recipe);
+  const tool = staged ? undefined : recipe.steps.find((s): s is ToolStep => s.kind === "tool");
+  const gen = tool || staged ? null : generateCall(recipe);
   const call = tool ? JSON.stringify({ tool: tool.tool, input: tool.input }, null, 2) : gen?.json;
   const values = Object.fromEntries(recipe.params.map((p) => [p.id, `{{${p.id}}}`]));
   const build = (withCall: boolean) => {
     const shown = withCall && !!call;
-    const how = tool ? `call the studio tool \`${tool.tool}\` the same way` : call ? "make the same `generate` call" : "run the steps with `generate`, in order";
+    const how = staged
+      ? "run the steps in order (`generate` or the studio tool each names), waiting for each step's result and passing it on where a step says {{steps.<key>.output}}"
+      : tool
+        ? `call the studio tool \`${tool.tool}\` the same way`
+        : call
+          ? "make the same `generate` call"
+          : "run the steps with `generate`, in order";
     return [
       "## Run it",
       "",
@@ -926,7 +1126,39 @@ export interface RecipeRun {
   href?: string;
   /** A tool run that couldn't start after the rows before it had (each tool call stands alone). */
   error?: string;
+  /** A skill that spans studios (version 2): its run's id (its progress in the skill's dialog), and the steps that wait. */
+  run?: string;
+  waiting?: string[];
 }
+
+/** One step of a skill run that spans studios, as its progress shows it (src/server/skill-runs.ts). */
+export interface SkillRunStep {
+  key: string;
+  label: string;
+  /** The studio a tool step runs in ("Translate & dub"), when it opened one. */
+  studio?: string;
+  status: "waiting" | "running" | "done" | "failed";
+  ids: string[];
+  /** The studio's page for this step's job, when it gave one. */
+  href?: string;
+  error?: string;
+}
+
+export interface SkillRunView {
+  id: string;
+  skill: string;
+  engine: RecipeEngine;
+  status: "running" | "done" | "failed";
+  /** Which step failed and why. */
+  error?: string;
+  demo?: boolean;
+  steps: SkillRunStep[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** "Dub · done → Captions · running → 9:16 cut · waiting". */
+export const runLine = (steps: Pick<SkillRunStep, "label" | "status">[]): string => steps.map((s) => `${s.label} · ${s.status}`).join(" → ");
 
 export interface EngineCheck {
   engine: RecipeEngine;
