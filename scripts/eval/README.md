@@ -523,6 +523,7 @@ pnpm eval:run --suite splat --engine open --variants idol-best,idol-quick,tripos
 pnpm eval:review latest                                           # the orbits, blind: Idol Best against each of the others
 pnpm eval:report latest                                           # the ratings per pair
 pnpm eval:compare latest:triposplat-today latest:idol-best --per-case
+pnpm eval:promote latest --against triposplat-today              # decision 1: Idol Best against TripoSplat today only
 pnpm eval:run --suite splat --engine cloud --variants triposplat-cloud   # optional: fal's TripoSplat, about $0.05 a job
 ```
 

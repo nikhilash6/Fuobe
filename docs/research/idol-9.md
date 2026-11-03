@@ -355,7 +355,7 @@ TripoSplat at Idol's sampler (50 euler, cfg 4), which would tell the weights fro
 | `style` (DINOv2 ViT-S/14, Apache-2.0: the orbit's frames against the input picture) | the main metric: how much of the object survives every angle. Picks the default and the Quick settings |
 | `drift`, `driftMax`, `warp` (temporal) | that the winner doesn't turn less smoothly (bands 0.004 drift, 0.002 warp) |
 | `aesthetic` (LAION v2) | that the winner doesn't look worse (band 0.15) |
-| blind ratings (`pnpm eval:review`) | at least 6 per case, at least 55 % of the non-tie ratings to the winner |
+| blind ratings (`pnpm eval:review`) | for each pair of variants a rule compares: at least 6 per case, or every such pair the review offered when it offered fewer (3 per case for one reviewer at 3 seeds), and at least 55 % of the non-tie ratings to the winner |
 | `haze` (share of Gaussians under opacity 0.05 in the saved file), `gaussians` | whether TripoSplat's files carry Idol's haze (§2.4), so the splat viewer's opacity cut-off (idol-4) knows which models need it. On a ComfyUI with ComfyUI-Idol, Idol's file is pruned at 0.05 by its clean graph, so its haze there is near zero by design |
 | `seconds`, `vramGb` (from ComfyUI's `/system_stats` and `/history`) | the time and peak memory on that GPU, to replace "unmeasured in ComfyUI" in the manifest notes and the vendor's figures in §3 |
 
@@ -370,13 +370,13 @@ pnpm eval:review latest                                   # rate every pair blin
 pnpm eval:report latest
 pnpm eval:compare latest:triposplat-today latest:idol-best --per-case
 pnpm eval:compare latest:idol-best latest:idol-quick --per-case
-pnpm eval:promote latest
+pnpm eval:promote latest --against triposplat-today       # decision 1 only: Idol Best against TripoSplat today
 pnpm eval:run --suite splat --engine cloud --variants triposplat-cloud   # optional: priced before it starts (about $0.05 a job in the catalog today)
 ```
 
 **What each result changes** (the suite's `decides` field; a person makes each change in its own reviewed commit, with this section filled in):
 
-1. **Splat mode's open default** (`MODELS_3D.splat.open` in `src/lib/av/model3d.ts`, TripoSplat first today): Idol 3D goes first only if `idol-best` scores at least as well as `triposplat-today` on style in at least 8 of the 11 cases, stays within the aesthetic and temporal bands on the suite's means, and takes at least 55 % of the non-tie blind ratings with at least 6 per case. TripoSplat at Idol's sampler should run first (above).
+1. **Splat mode's open default** (`MODELS_3D.splat.open` in `src/lib/av/model3d.ts`, TripoSplat first today): Idol 3D goes first only if `idol-best` scores at least as well as `triposplat-today` on style in at least 8 of the 11 cases, stays within the aesthetic and temporal bands on the suite's means, and takes at least 55 % of the non-tie blind ratings of their pairs, with at least 6 per case or every such pair the review offered when it offered fewer (3 per case for one reviewer at 3 seeds). `pnpm eval:promote latest --against triposplat-today` checks the per-case part; without `--against` it also weighs Idol Quick and the photo crop, which is not this decision. TripoSplat at Idol's sampler should run first (above).
 2. **Idol's Quick look** (`IDOL_PRESETS.quick`): stays at 20 dpmpp_2m and 65,536 Gaussians while `idol-quick` is within 0.02 style of `idol-best` on the suite's mean and Best takes no more than 70 % of their non-tie ratings; otherwise the next run tries 30 steps or 131,072 Gaussians.
 3. **The photo crop** (on for uploads today): stays on only if `idol-photo-crop` scores at least as well as `idol-best` on style in at least 2 of the 3 photos and takes at least 55 % of their non-tie ratings; otherwise it starts off.
 
