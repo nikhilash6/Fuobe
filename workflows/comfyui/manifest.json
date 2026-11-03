@@ -23348,7 +23348,7 @@
         "numGaussians": 262144,
         "orbitFrames": 96,
         "meshDetail": 384,
-        "frontYaw": 0,
+        "frontYaw": 90,
         "splatFormat": "spz",
         "cutout": true,
         "photoCrop": false
@@ -23391,8 +23391,8 @@
       "customNodes": [],
       "vramGb": 10,
       "license": "Apache-2.0 (speridlabs/Idol weights, via nynxz/Idol; built on TripoSplat, MIT, VAST-AI-Research); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a \"Built with DINOv3\" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT",
-      "validated": false,
-      "notes": "One photo of one person or product -> a vertex-coloured GLB (main output, no role: the server makes its web GLB), the splat (role splat, .spz), a 4 s orbit of the splat (role orbit: the server skips its mesh turntable) and a front still (the poster). image-to-splat-triposplat with Idol's files and reference sampler (50 euler steps, cfg 4; the shift 3 is built into the TripoSplat model class). BiRefNet cut-out (cutout false = the image's own alpha), then TripoSplatPreprocessImage = Idol's \"synthetic\" 1.2 crop; photoCrop true scales it to 720 px on a black 1024 square, about Idol's \"real\" 1.7 crop (core nodes, not run). SplatToMesh (meshDetail = its grid, 384 by default; min_opacity 0.05 drops Idol's faint halo, which RenderSplat's opacity_threshold 0.05 also hides in the clip and still; the .spz keeps it: no core node prunes a splat). frontYaw turns the orbit's start and the still to the subject's front (calibrated on the GPU). Backdrop #ece4da, the middle of the server turntable's studio sweep. New weights 1.32 GB (idol_fp16 0.74, idol_decoder_fp16 0.58); with TripoSplat's shared DINOv3 ViT-H, FLUX.2 VAE and BiRefNet 3.78 GB. VRAM unmeasured (vendor peak 7.2 GB for Idol, plus the mesh grid). Not validated: no /prompt server was used."
+      "validated": true,
+      "notes": "One photo of one person or product -> a vertex-coloured GLB (main output, no role: the server makes its web GLB), the splat (role splat, .spz), a 4 s orbit of the splat (role orbit: the server skips its mesh turntable) and a front still (the poster). image-to-splat-triposplat with Idol's files and reference sampler (50 euler steps, cfg 4; the shift 3 is built into the TripoSplat model class). BiRefNet cut-out (cutout false = the image's own alpha), then TripoSplatPreprocessImage = Idol's \"synthetic\" 1.2 crop; photoCrop true scales it to 720 px on a black 1024 square, about Idol's \"real\" 1.7 crop (core nodes, not run). SplatToMesh (meshDetail = its grid, 384 by default; min_opacity 0.05 drops Idol's faint halo, which RenderSplat's opacity_threshold 0.05 also hides in the clip and still; the .spz keeps it: no core node prunes a splat). frontYaw turns the orbit's start and the still to the subject's front (calibrated on the GPU). Backdrop #ece4da, the middle of the server turntable's studio sweep. New weights 1.32 GB (idol_fp16 0.74, idol_decoder_fp16 0.58); with TripoSplat's shared DINOv3 ViT-H, FLUX.2 VAE and BiRefNet 3.78 GB. On an RTX 5090 a photo takes about 3.5 min with its orbit clip; the first run peaked at 12.7 GB on the card. frontYaw 90 turns the orbit and the still to the front."
     },
     {
       "id": "image-to-splat-idol",

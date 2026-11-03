@@ -5186,7 +5186,7 @@ export const SPEC = [
       'SplatToMesh (meshDetail = its grid, 384 by default; min_opacity 0.05 drops Idol\'s faint halo, which RenderSplat\'s opacity_threshold 0.05 also hides in the clip and still; ' +
       'the .spz keeps it: no core node prunes a splat). frontYaw turns the orbit\'s start and the still to the subject\'s front (calibrated on the GPU). ' +
       'Backdrop #ece4da, the middle of the server turntable\'s studio sweep. New weights 1.32 GB (idol_fp16 0.74, idol_decoder_fp16 0.58); with TripoSplat\'s shared ' +
-      'DINOv3 ViT-H, FLUX.2 VAE and BiRefNet 3.78 GB. VRAM unmeasured (vendor peak 7.2 GB for Idol, plus the mesh grid). Not validated: no /prompt server was used.',
+      'DINOv3 ViT-H, FLUX.2 VAE and BiRefNet 3.78 GB. On an RTX 5090 a photo takes about 3.5 min with its orbit clip; the first run peaked at 12.7 GB on the card. frontYaw 90 turns the orbit and the still to the front.',
   },
   {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).

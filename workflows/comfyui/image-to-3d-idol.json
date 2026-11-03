@@ -142,7 +142,7 @@
   "79": {
     "inputs": {
       "mode": "orbit",
-      "mode.yaw": 0,
+      "mode.yaw": 90,
       "mode.pitch": 10,
       "mode.distance": 2.6,
       "target_x": 0,
@@ -161,7 +161,7 @@
   "80": {
     "inputs": {
       "mode": "orbit",
-      "mode.yaw": 0,
+      "mode.yaw": 90,
       "mode.pitch": 5,
       "mode.distance": 2.4,
       "target_x": 0,

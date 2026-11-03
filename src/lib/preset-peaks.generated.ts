@@ -37,6 +37,7 @@ export const PRESET_PEAKS: Record<string, { at: number; from: number; v: string 
   "app-outfit-shot": { "at": 2.8958, "from": 0.4375, "v": "80181bdf" },
   "app-outfit-swap": { "at": 2.8958, "from": 0.4375, "v": "4a199b3d" },
   "app-packshot": { "at": 2.8958, "from": 0.4375, "v": "6400e1f9" },
+  "app-photo-to-3d": { "at": 2.1042, "from": 0.7708, "v": "054ebc64" },
   "app-product-360": { "at": 2.6042, "from": 0.0208, "v": "bcf239e2" },
   "app-product-shot": { "at": 2.8958, "from": 0.6458, "v": "46133020" },
   "app-rap-god": { "at": 2.7708, "from": 0.0208, "v": "43855f9a" },

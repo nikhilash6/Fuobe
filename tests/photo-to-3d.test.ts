@@ -78,7 +78,7 @@ describe("the graph (image-to-3d-idol)", () => {
       { node: "42", kind: "video", role: "orbit" },
       { node: "77", kind: "image" },
     ]);
-    expect(entry.defaults).toMatchObject({ steps: 50, cfg: 4, numGaussians: 262144, orbitFrames: 96, meshDetail: 384, frontYaw: 0, cutout: true, photoCrop: false, splatFormat: "spz" });
+    expect(entry.defaults).toMatchObject({ steps: 50, cfg: 4, numGaussians: 262144, orbitFrames: 96, meshDetail: 384, frontYaw: 90, cutout: true, photoCrop: false, splatFormat: "spz" });
     expect(entry.models.map((m) => m.file).sort()).toEqual(
       ["birefnet.safetensors", "dino_v3_vit_h.safetensors", "flux2-vae.safetensors", "idol_decoder_fp16.safetensors", "idol_fp16.safetensors"].sort(),
     );
@@ -100,14 +100,14 @@ describe("the graph (image-to-3d-idol)", () => {
   it("binds the photo and the settings a request sends", async () => {
     const { workflow } = await prepareWorkflow(
       "image-to-3d-idol",
-      { prompt: "", images: ["p.png"], seed: 7, extra: { photoCrop: true, meshDetail: 256, frontYaw: 90 } },
+      { prompt: "", images: ["p.png"], seed: 7, extra: { photoCrop: true, meshDetail: 256, frontYaw: 180 } },
       { generationId: "gen-i3", op: "image-to-3d", upload: async () => "x" },
     );
     expect(workflow["99"].inputs.image).toBe("p.png");
     expect(workflow["88:104"].inputs.switch).toBe(true);
     expect(workflow["60"].inputs.resolution).toBe(256);
-    expect(workflow["79"].inputs["mode.yaw"]).toBe(90);
-    expect(workflow["80"].inputs["mode.yaw"]).toBe(90);
+    expect(workflow["79"].inputs["mode.yaw"]).toBe(180);
+    expect(workflow["80"].inputs["mode.yaw"]).toBe(180);
     expect(workflow["88:6"].inputs.seed).toBe(7);
     expect(workflow["88:55"].inputs.seed).toBe(7);
   });
@@ -233,6 +233,6 @@ describe("turn with taps", () => {
   it("adds the model's front and keeps the angle in 0-359", () => {
     expect(m3d.turnOrbit("right", 180)).toBe("90deg 75deg 130%");
     expect(m3d.turnOrbit("front", -90)).toBe("270deg 75deg 130%");
-    expect(m3d.FRONT_YAW["oss-idol-3d"]).toBe(0);
+    expect(m3d.FRONT_YAW["oss-idol-3d"]).toBe(90);
   });
 });

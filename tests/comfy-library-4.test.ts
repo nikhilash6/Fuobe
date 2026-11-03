@@ -157,8 +157,6 @@ describe("round-4 ComfyUI workflows", () => {
       "video-character-swap-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
-      // Photo to 3D: Idol's graph waits for its first run (no /prompt server was used to build it).
-      "image-to-3d-idol",
       // Any Angle's two graphs: run end to end on the GPU, they wait for their /prompt check while that ComfyUI is busy
       // rendering (the app stays the owner's until then: src/server/any-angle-live.ts).
       "any-angle-3d",

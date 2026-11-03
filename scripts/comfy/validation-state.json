@@ -197,6 +197,12 @@
     "error": null,
     "at": "2026-10-17T21:02:04.747Z"
   },
+  "image-to-3d-idol": {
+    "sha256": "6acf330600f067bd2a218ff1fc7013328afb66c3eaf653e813cdb66a8e64ef3d",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T12:30:52.275Z"
+  },
   "image-to-3d-pixal3d": {
     "sha256": "581d29c7322dbb089db04cef398428c1ec3ba13208f020a39eaadb8d23ce5a6f",
     "validated": true,

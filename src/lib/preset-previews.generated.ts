@@ -657,6 +657,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "ideogram4+qwen-image-2.1-edit",
     "variant": "lean-json"
   },
+  "app-photo-to-3d": {
+    "poster": "/previews/presets/app-photo-to-3d.jpg?v=f6a87fa7",
+    "video": "/previews/presets/app-photo-to-3d.mp4?v=92d02fe2",
+    "run": "app-photo-to-3d-cover",
+    "engine": "comfyui",
+    "model": "oss-idol-3d",
+    "variant": "orbit"
+  },
   "app-pixel-game": {
     "poster": "/previews/presets/app-pixel-game.jpg?v=2cfe5862",
     "run": "comfyui-previews-2026-10",

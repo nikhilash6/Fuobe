@@ -26,7 +26,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       app-nano-strike app-burning-sunset app-upscale app-expression-edit app-commercial-faces app-expand-image
       app-ad-creative app-bullet-time-white app-giant-product app-restore-photo app-talking-photo app-nano-theft
       app-gtai app-melting-doodle app-remove-background app-change-background app-text-edit app-asmr-add-on
-      app-this-is-fine app-yes-kiss app-click-to-ad app-unboxing-video app-image-to-3d app-truck-ad app-fridge-ad
+      app-this-is-fine app-yes-kiss app-click-to-ad app-unboxing-video app-image-to-3d app-photo-to-3d app-truck-ad app-fridge-ad
       app-asmr-classic app-asmr-host app-outfit-vending app-style-transfer app-figurine app-recast app-hug app-3d-render
       app-j-magazine app-mascot app-rap-god app-mugshot app-vectorize app-similarity-score
     `,
@@ -34,7 +34,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       app-3d-figure app-idol app-60s-cafe app-hook-frame app-kick-ad app-graffiti-ad app-volcano-ad app-simlife
       app-pixel-game app-brick-cube app-micro-beasts app-paint-app app-social-media-icon app-victory-card app-comic-book
       app-glitter-sticker app-mukbang app-roller-coaster app-banana-eating app-sticker-pack app-plushies
-      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi app-photo-to-3d
+      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi
     `,
   ],
   motion: [

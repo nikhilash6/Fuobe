@@ -784,7 +784,7 @@ export const APPS: Preset[] = [
     icon: "Rotate3d",
     hue: 265,
     badges: ["new"],
-    inputs: [{ key: "image", label: "Photo", hint: "One person or one product, whole and on its own", accept: "image", required: true }],
+    inputs: [{ key: "image", label: "Photo", hint: "One product or one outfit, whole and on its own", accept: "image", required: true }],
     prompt: "",
     cloud: null,
     open: { modelId: "oss-idol-3d", op: "image-to-3d" },
