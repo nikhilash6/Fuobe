@@ -17,6 +17,8 @@ export interface FeedFilter {
   limit?: number;
   models?: string[];
   statuses?: GenerationStatus[];
+  /** One run's rows (a batch): a skill's History links to its run here. Shows its helper steps too, as the server does. */
+  batchId?: string;
   /** createdAt range: since ≤ t < until. */
   since?: number;
   until?: number;
@@ -59,6 +61,7 @@ export function filterToSearch(f: FeedFilter, before?: string | number): URLSear
   if (f.q?.trim()) qs.set("q", f.q.trim());
   if (f.models?.length) qs.set("models", f.models.join(","));
   if (f.statuses?.length) qs.set("statuses", f.statuses.join(","));
+  if (f.batchId) qs.set("batch", f.batchId);
   if (f.since) qs.set("since", String(f.since));
   if (f.until) qs.set("until", String(f.until));
   if (f.folderId) qs.set("folder", f.folderId);
@@ -83,13 +86,14 @@ export function matchesFilter(g: Generation, f: FeedFilter): boolean {
   if (f.favorites && !g.favorite) return false;
   if (f.models?.length && !f.models.includes(g.modelId)) return false;
   if (f.statuses?.length && !f.statuses.includes(g.status)) return false;
+  if (f.batchId && g.batchId !== f.batchId) return false;
   if (f.since && g.createdAt < f.since) return false;
   if (f.until && g.createdAt >= f.until) return false;
   if (f.folderId && g.folderId !== f.folderId) return false;
   if (f.folderIds?.length && !f.folderIds.includes(g.folderId ?? "")) return false;
   if (f.pinned !== undefined && !!g.pinnedAt !== f.pinned) return false;
   if (f.reviews?.length && !f.reviews.includes(g.review ?? "none")) return false;
-  if (!f.steps && !f.features?.length && isHelperFeature(g.feature)) return false;
+  if (!f.steps && !f.features?.length && !f.batchId && isHelperFeature(g.feature)) return false;
   const q = f.q?.trim().toLowerCase();
   if (q && !`${g.prompt ?? ""}\n${g.request.prompt ?? ""}`.toLowerCase().includes(q)) return false;
   return true;

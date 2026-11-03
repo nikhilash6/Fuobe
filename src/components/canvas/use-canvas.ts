@@ -52,7 +52,7 @@ export function useCanvasActions() {
   const qc = useQueryClient();
   const refresh = () => void qc.invalidateQueries({ queryKey: ["canvases"], exact: true });
   return {
-    create: async (body: { name?: string; templateId?: string; engine?: Engine; graph?: CanvasGraph }) => {
+    create: async (body: { name?: string; templateId?: string; engine?: Engine; graph?: CanvasGraph; skill?: string }) => {
       const c = await json<Canvas>(await send("/api/canvases", "POST", body));
       refresh();
       return c;

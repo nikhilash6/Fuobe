@@ -90,6 +90,21 @@ describe("a built-in skill opens for a guest and an account", () => {
   });
 });
 
+describe("skill suggestions are the owner's", () => {
+  it("passes the Library's read to the route marked as a guest's, which answers none; history and fixes stay closed", async () => {
+    for (const cookie of [undefined, account]) {
+      const r = proxy(req("/api/assist/skills/suggestions", { cookie }));
+      expect(passed(r)).toBe(true);
+      expect(toldGuest(r)).toBe(true);
+      for (const p of ["/api/assist/skills/s1/history", "/api/assist/skills/s1/fixes"]) expect(proxy(req(p, { cookie })).status, p).toBe(cookie ? 403 : 401);
+    }
+    expect(toldGuest(proxy(req("/api/assist/skills/suggestions", { cookie: owner })))).toBe(false);
+    const route = await import("@/app/api/assist/skills/suggestions/route");
+    const r = await route.GET(new Request("http://localhost:3000/api/assist/skills/suggestions", { headers: { [access.GUEST_HEADER]: "1" } }));
+    expect(await r.json()).toEqual({ items: [] });
+  });
+});
+
 describe("Assist is the owner's", () => {
   const changes: [string, string][] = [
     ["POST", "/api/assist"],
@@ -98,10 +113,13 @@ describe("Assist is the owner's", () => {
     ["POST", "/api/assist/skills"],
     ["POST", "/api/assist/skills/upload"],
     ["POST", "/api/assist/skills/draft"],
-    // Save as skill from a chat (W3) drafts and names through these two.
+    // Save as skill from a chat (W3), and from a canvas (W5, { canvas }), drafts and names through these two.
     ["POST", "/api/assist/skills/draft/name"],
     ["PATCH", "/api/assist/skills/ad-multiplier"],
     ["POST", "/api/assist/skills/product-photoshoot/run"],
+    // Skills W6: "Don't suggest this" / "Not now", and a fix for a skill's step.
+    ["POST", "/api/assist/skills/suggestions"],
+    ["POST", "/api/assist/skills/s1/fixes"],
     ["POST", "/api/assist/memory"],
     ["POST", "/api/assist/memory/import"],
     ["POST", "/api/assist/projects"],

@@ -764,6 +764,15 @@ declare global {
 }
 
 /**
+ * originals (o/dbs-d9): the device comfyDevice last read for the main ComfyUI, without asking it (an Assist card is planned
+ * synchronously); undefined when it hasn't been asked yet.
+ */
+export function comfyDeviceSeen(): string | undefined {
+  const url = baseUrl("main");
+  return url ? globalThis.__fuobeComfyDevice?.get(url)?.type : undefined;
+}
+
+/**
  * The connected ComfyUI's first torch device type ("cuda" for NVIDIA and ROCm, "cpu", "mps"…), from GET /system_stats
  * (devices[0], as Settings' test reads it), kept for a minute; undefined when the server doesn't say or can't be reached.
  */
@@ -1845,12 +1854,19 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     const canvas = lightningCanvas(manifest.capability, values, ctx.media?.(String(values.image ?? "")));
     if (canvas) values.sigmas = lightningSigmas(canvas.width, canvas.height);
   }
-  // Hi3D's refine: the mesh to refine is needed, and the resolution is one the model takes (512, 1024, 1536).
+  // Hi3D's refine: the mesh to refine is needed, and the resolution is one the model takes (512, 1024, 1536). Other graphs
+  // bind meshResolution to their own grid (Idol 3D quick mesh: SplatToMesh, 64-768).
   if (b.model3d && !values.model3d) throw new ProviderError("Add the 3D model to refine");
-  if (b.meshResolution && extra[HI3D_PARAM] !== undefined) {
+  if (b.model3d && b.meshResolution && extra[HI3D_PARAM] !== undefined) {
     const r = strictHi3dResolution(extra[HI3D_PARAM]);
     if (r === null) throw new ProviderError("Hi3D refines at 512, 1024 or 1536");
     extra[HI3D_PARAM] = r;
+  }
+  // SplatToMesh's grid (Idol 3D quick mesh) takes 64-768 in steps of 16: a value from Canvas or Assist is kept to that.
+  if (!b.model3d && b.meshResolution && extra[HI3D_PARAM] !== undefined) {
+    const n = Number(extra[HI3D_PARAM]);
+    if (Number.isFinite(n)) extra[HI3D_PARAM] = Math.min(768, Math.max(64, Math.round(n / 16) * 16));
+    else delete extra[HI3D_PARAM];
   }
   // H3 Person Removal's window review (H3 Relay's Review Windows): "Redo from here" sends the same graph again with
   // window controls that lock the windows before it to their checkpoints. The Relay keeps those only while the graph,

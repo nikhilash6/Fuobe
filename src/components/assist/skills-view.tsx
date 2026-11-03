@@ -33,10 +33,12 @@ import { SKILL_LIMITS, SKILL_NAME_RE, skillSlug, type Skill, type SkillSummary }
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
 import { radioKeys } from "@/components/studio/radio-keys";
-import { useRecipe, useRecipeActions, useSkill, useSkillActions, useSkills, type RecipeFailure, type SkillForm } from "./hooks";
+import { useRecipe, useRecipeActions, useSkill, useSkillActions, useSkills, useStepFixes, type RecipeFailure, type SkillForm } from "./hooks";
 import { RunSkillDialog } from "./run-skill-dialog";
+import { SkillRuns } from "./skill-runs";
 import { RailButton } from "./shell";
 import { SKILL_ICONS, SkillIcon } from "./skill-icon";
+import { SkillHistorySection, SuggestFix } from "./skill-upkeep";
 import { AssistVisitorNote } from "./visitor-note";
 
 /**
@@ -287,9 +289,15 @@ function RecipeStatus({ skill }: { skill: Skill }) {
   const recipe = useRecipe(skill.name, !!skill.recipe);
   const actions = useRecipeActions();
   const [busy, setBusy] = useState(false);
+  const canCheck = skill.source === "user";
+  // W6: a step that keeps failing, was replaced or is switched off gets Suggest a fix.
+  const fixes = useStepFixes(skill.name, !!skill.recipe && canCheck).data ?? [];
   const v = recipe.data;
   if (!skill.recipe || !v) return null;
-  const recheck = Object.values(v.recheck).flat();
+  const recheck = [...Object.values(v.recheck).flat(), ...fixes.filter((f) => !f.failing).map((f) => f.why)];
+  // A step that keeps failing in its runs: a re-check doesn't change its history, so it's said apart, with Suggest a fix.
+  const failing = fixes.filter((f) => f.failing).map((f) => f.why);
+  const warn = recheck.length > 0 || failing.length > 0 || !!v.why;
   const recheckNow = async () => {
     setBusy(true);
     try {
@@ -303,16 +311,16 @@ function RecipeStatus({ skill }: { skill: Skill }) {
       setBusy(false);
     }
   };
-  const canCheck = skill.source === "user";
   return (
-    <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", recheck.length || v.why ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
-      {recheck.length || v.why ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
-      <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a re-check: ${recheck[0]}` : v.line)}</span>
+    <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", warn ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
+      {warn ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
+      <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a re-check: ${recheck[0]}` : failing.length ? `Keeps failing: ${failing[0]}` : v.line)}</span>
       {canCheck && !v.why && (recheck.length > 0 || !v.ready.length) && (
         <Button variant="outline" size="xs" className="h-6 rounded-full px-2 text-[12px]" onClick={() => void recheckNow()} disabled={busy}>
           {busy && <Loader2 className="animate-spin" />} {v.ready.length ? "Re-check" : "Check it (free)"}
         </Button>
       )}
+      {canCheck && <SuggestFix name={skill.name} fixes={fixes} />}
     </div>
   );
 }
@@ -358,6 +366,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
               </div>
             </DialogHeader>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {owner && s.recipe && <SkillRuns name={s.name} />}
               {s.whenToUse && (
                 <div className="mb-4 rounded-xl bg-muted/60 px-4 py-3 text-[13px]">
                   <p className="font-medium">When Assist uses it</p>
@@ -379,6 +388,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
                   </ul>
                 </div>
               )}
+              {owner && s.source === "user" && s.recipe && <SkillHistorySection name={s.name} />}
             </div>
             <DialogFooter className="mx-0 mb-0 flex-row flex-wrap items-center gap-2 border-t px-5 py-3 sm:justify-between">
               <div className="flex flex-wrap gap-1.5">

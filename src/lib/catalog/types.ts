@@ -1233,9 +1233,11 @@ export interface GenerationRequest {
   batchTitle?: string;
   /**
    * Server-set: made by a run of a skill's recipe (src/lib/recipe.ts): the skill's name and the run's id (its batch), so
-   * a run's history can be read back. Stripped from API input, like chainFilled.
+   * a run's history can be read back; `step` is the recipe step's key, so a failure is laid at the step that failed;
+   * `check` marks a free dry run's studio rows (they keep their studio's feature, not skill-check), which a skill's
+   * history and use leave out as they do skill-check rows. Stripped from API input, like chainFilled.
    */
-  skill?: { name: string; run: string };
+  skill?: { name: string; run: string; step?: string; check?: true };
   /**
    * Server-set: run on the demo provider whatever Settings → Demo mode says (a recipe's free dry run): chooseRoute
    * returns the demo route, and a waiting step runs as a demo after demo steps even with Demo mode off. Stripped from

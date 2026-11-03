@@ -201,6 +201,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: HI3D_MODEL, op: "refine-3d" },
     ],
   },
+  // idol-7: Image to 3D's quick mesh (From an image, Idol 3D quick mesh): Idol's splat turned into a vertex-coloured mesh.
+  { href: "/image-to-3d?model=oss-idol-mesh", label: "Image to 3D, quick mesh", group: "Images", steps: [{ modelId: "oss-idol-mesh", op: "image-to-3d" }] },
   // MiniMax H3's references (Pika H3 Flex Ref2VA) need the Ref2VA partition and Pika's adapter: a row of their own, so the
   // Video row stays what text, image and frame clips need.
   { href: "/video", label: "Video", group: "Video", config: S.VIDEO_STUDIO, skipOps: ["ref2v"] },

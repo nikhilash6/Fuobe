@@ -459,7 +459,7 @@ describe("MCP", () => {
     const init = (await rpc("initialize", { protocolVersion: "2025-11-25" })) as { result: { instructions: string; serverInfo: { version: string } } };
     expect(init.result.instructions).toMatch(/katana/);
     expect(init.result.instructions).toMatch(/href/);
-    expect(init.result.serverInfo.version).toBe("1.3.0");
+    expect(init.result.serverInfo.version).toBe("1.4.0");
   });
 
   it("estimate_job says where the job opens, or why it runs in the Library", async () => {

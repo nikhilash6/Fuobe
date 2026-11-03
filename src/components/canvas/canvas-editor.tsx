@@ -26,7 +26,7 @@ import {
   type OnNodeDrag,
   type Viewport,
 } from "@xyflow/react";
-import { ChevronDown, ChevronLeft, Check, Cloud, Cpu, LayoutGrid, List, Loader2, Play, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
+import { BookmarkPlus, ChevronDown, ChevronLeft, Check, Cloud, Cpu, LayoutGrid, List, Loader2, Play, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -42,7 +42,8 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { fileToSlot } from "@/components/studio/media-slot";
 import { Viewer } from "@/components/studio/viewer";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useElements, useEngine, useStatus, type EngineMode } from "@/lib/api";
+import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
+import { useElements, useEngine, useIsVisitor, useStatus, type EngineMode } from "@/lib/api";
 import { getModel } from "@/lib/catalog";
 import { stemLabel, type StemId } from "@/lib/av/split";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
@@ -1238,6 +1239,14 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     .filter(Boolean)
     .join(" · ");
 
+  // ---- Save as skill (W5): the board as it stands is saved first, then drafted on the server
+  const skillBuilder = useSkillBuilder();
+  const visitor = useIsVisitor();
+  const saveAsSkill = async () => {
+    await save();
+    skillBuilder?.openCanvas(id, latest.current.pageId);
+  };
+
   // ---- what the header and the palette call: stable, so they skip the re-render a keystroke causes
   const uiHandlers = useRef<{
     run: typeof run;
@@ -1245,9 +1254,10 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     switchEngine: typeof switchEngine;
     rename: typeof rename;
     addAtCenter: typeof addAtCenter;
+    saveAsSkill: typeof saveAsSkill;
   } | null>(null);
   useLayoutEffect(() => {
-    uiHandlers.current = { run, runSelection, switchEngine, rename, addAtCenter };
+    uiHandlers.current = { run, runSelection, switchEngine, rename, addAtCenter, saveAsSkill };
   });
   const ui = useMemo<HeaderUi>(
     () => ({
@@ -1256,6 +1266,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
       switchEngine: (e) => uiHandlers.current!.switchEngine(e),
       rename: (v) => void uiHandlers.current!.rename(v),
       addAtCenter: (p) => uiHandlers.current!.addAtCenter(p),
+      saveAsSkill: () => void uiHandlers.current!.saveAsSkill(),
     }),
     [],
   );
@@ -1279,6 +1290,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
             selectedCount={isMobile ? 0 : selected.length}
             running={runM.isPending}
             canRun={generators.length > 0}
+            canSaveSkill={!!skillBuilder && !visitor}
             mode={mode}
             ui={ui}
           />
@@ -1493,6 +1505,7 @@ interface HeaderUi {
   switchEngine: (e: Engine) => void;
   rename: (name: string) => void;
   addAtCenter: (p: PaletteItem) => void;
+  saveAsSkill: () => void;
 }
 
 const EditorHeader = memo(function EditorHeader({
@@ -1506,6 +1519,7 @@ const EditorHeader = memo(function EditorHeader({
   selectedCount,
   running,
   canRun,
+  canSaveSkill,
   mode,
   ui,
 }: {
@@ -1519,6 +1533,7 @@ const EditorHeader = memo(function EditorHeader({
   selectedCount: number;
   running: boolean;
   canRun: boolean;
+  canSaveSkill: boolean;
   mode: EngineMode;
   ui: HeaderUi;
 }) {
@@ -1605,6 +1620,14 @@ const EditorHeader = memo(function EditorHeader({
               <DropdownMenuItem disabled={mode === "open"} onSelect={() => ui.switchEngine("cloud")}>
                 <Cloud /> Switch all to cloud
               </DropdownMenuItem>
+              {canSaveSkill && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => ui.saveAsSkill()}>
+                    <BookmarkPlus /> Save as skill…
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

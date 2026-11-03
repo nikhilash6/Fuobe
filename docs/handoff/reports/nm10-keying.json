@@ -179,5 +179,15 @@
    "The pre-flight board has no 'NVIDIA only' marker, so a Mac or AMD GPU sees CorridorKey 2.0 as runnable until the node refuses. Its notes say CUDA only.",
    "docsNotes from the implementer still apply. Update the names: CorridorKey 2.0 through hashu786/ComfyUI-CorridorKey2 for CREDITS.md and the scripts/comfy/README section."
   ]
+ },
+ "merge": {
+  "merged": [
+   "o/nm10-keying"
+  ],
+  "notMerged": [],
+  "conflicts": "library.spec, studio-context (voiceFirst + greenScreen), licences regex, packs (ComfyUI-RMBG newer pin a66a5e64), manifest; requirements regenerated",
+  "checks": "batch of 6 (n7-11, o12 re-merge, pika-flex, keying, rtx-video, speech-edit): typecheck 0, lint 0, vitest 5612 passed, 8 failed (6 main known + blockout and moderation-hook load timeouts, 41/41 alone); requirements budget raised to 288/36 KB (a150159e); each merge checked by an independent verifier",
+  "pushed": true,
+  "head": "a150159e"
  }
 }

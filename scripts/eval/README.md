@@ -79,6 +79,7 @@ harness measures what a user gets.
 | `pnpm eval:validate` | Checks every case file, and that the generated suites match the research |
 | `pnpm eval:setup` | Creates the metrics venv with uv (`--identity`, `--download`, `--dinov2`, `--torch-backend`) |
 | `pnpm eval:trash <runId>` | Moves the run's generations to the Trash of the Fuobe it ran on (`--dry-run` counts them). The run's folder here keeps its outputs and scores |
+| `pnpm eval:from-skill <name>` | Writes a suite that runs a saved skill with the examples it was made from, one case per engine it runs on, to `local/cases/skill-<name>.json` ([Skills](#saved-skills)) |
 
 Every command takes `--json`. Runs are named by id, by path, or as `latest`, `latest~1` (the run
 before) and so on. `pnpm eval:<command> --help` lists each command's options.
@@ -129,6 +130,7 @@ One JSON file per Original in `cases/`. Later Original packages add their own fi
 | `marketing` | Fuobe Marketing Image, Fuobe Try-On, the AI Influencer sheet and Instadump (O10) | 7: a Standalone product shot (the product-shot graph on your GPU; hosted Qwen-Image-Edit in the cloud), an ad's picture, a poster without a product, a try-on, the builder's sheet (through `/api/influencer`), an Instadump photo from a selfie | `original`, `partner` (cloud: GPT Image 2.5, Nano Banana Pro, Ideogram 3.0, FASHN) | clip, aesthetic, style (the product), identity (try-on, Instadump) |
 | `turnaround` | Turnaround video (N7-6) | 4 through `/api/turnaround`: four views, the front and the back (sides drawn by the Angles app), the front alone, a sheet alone (a front drawn from it) | `default` (Frames on your GPU, H3 Max references in the cloud), `keyframes` (cloud: FLUX 3 Max), `camera` (cloud: H3 Max camera controls) | identity of 8 sampled frames against the views, temporal, clip |
 | `separation` | Soundtrack separation (DBS D4): Split soundtrack, Remove dialogue, the dub's voice split | 7 synthetic 12 s mixes with known stems (dialogue centred and panned left, a mains hum, tape hiss, a master at −0.1 dBFS, a loud master whose music and effects reach full scale, the same mix inside a video) and your own clip for the blind review | `bsrnn-mono` (DBS-BSRNN, the fast stereo bed), `bsrnn-stereo`, `tiger-mono`, `tiger-stereo` (each channel), `dbs-dub` and `melband` (the dub's first step, Qwen3-ASR 0.6B), `demucs` (cloud), and Clean up dialogue: `clean-dialogue` (open, the bed at −18 dB), `clean-veed` and `clean-deepfilternet` (cloud) | separation, wer |
+| `mesh` | Idol 3D quick mesh (idol-7): Idol's splat meshed by core Extract Mesh from Splat, in From an image on your GPU | 4 of your pictures: a rendered product, a product photo and a figurine (photo crop on), a generated character | `idol-mesh` (the 384 grid), `fine-grid` (512), `trellis2` (TRELLIS.2 for reference) | style against the picture, temporal, aesthetic; score the server's turntable of the GLB (Chromium and ffmpeg on the server) and open the GLBs too |
 
 `soul.json`, `soul-cinema.json`, `soul-hex.json`, `dop.json`, `dop-mix.json`, `dop-mixed-media.json` and `separation.json` are **generated** from the research. They come from
 `docs/research/higgsfield-image-studios.json` (the look ids) and
@@ -236,6 +238,29 @@ starts. A training the server would run as a demo (no fal.ai key or AI-Toolkit c
 mode On) is skipped with its case, so a "trained" result is always a trained LoRA. The look case runs
 the trained style as the board's own look (`"presetId": "own-style"`), as a trained moodboard does in
 the app.
+
+## Saved skills
+
+A skill saved with a recipe (Skills → Make a skill, or Save as skill in Assist) can be regression-tested like an
+Original. `pnpm eval:from-skill <name>` reads the skill's recipe from the Fuobe it talks to and writes
+`scripts/eval/local/cases/skill-<name>.json` (git-ignored, since it names your own files):
+
+- one case per engine the skill runs on. Each sends the skill's run route (`POST /api/assist/skills/<name>/run`)
+  that engine and the recipe's examples, and is priced first by the skill's estimate route, so `--max-usd` caps a
+  cloud run as it does any other;
+- a media input with no example, and every media input of a `--engine demo` run, takes a fixture instead;
+- the recipe's checks (kind, takes, shape, length, sound, look) go into the case's note, and the result is scored
+  by its kind (`aesthetic` for a picture, `temporal` for a clip).
+
+```bash
+pnpm eval:from-skill lamp-turntable
+pnpm eval:run --suite skill-lamp-turntable --engine demo     # free
+pnpm eval:run --suite skill-lamp-turntable --engine cloud --max-usd 2
+pnpm eval:compare latest~1 latest --fail-on aesthetic         # after a model change
+```
+
+A skill that runs a studio tool (Translate & dub, Katana, Captions) isn't measured yet: its steps run inside the
+studio. Write the suite again after you change the skill.
 
 ## The case format
 

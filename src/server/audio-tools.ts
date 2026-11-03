@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { planJoin, planLoop, CROSSFADE_MAX, JOIN_MAX_CLIPS, LOOP_MAX_SECONDS, type AudioToolPreview, type ToolPlan } from "@/lib/av/audio-tools";
-import { CLOUD_ONLY_PROBLEM, DBS_MODELS, dbsChannelsFor, hostPick, missingDbs, planRemux, planSplit, splitTime } from "@/lib/av/split";
+import { CLOUD_ONLY_PROBLEM, DBS_MODELS, dbsChannelsFor, hostPick, missingDbs, planRemux, planSplit, REMIX_MAX_DB, splitTime } from "@/lib/av/split";
 import { CLOUD_ONLY_REMOVE_PROBLEM, LOWER_MAX_DB, LOWER_MIN_DB, NO_SOUND_PROBLEM, planRemoveDialogue, removeDialogueTime } from "@/lib/av/remove-dialogue";
 import { planCleanDialogue } from "@/lib/av/clean-dialogue";
 import { CLOUD_ONLY_CLEAN_PROBLEM, missingReuse, NO_REUSE_PACK, planClean, planTime, tooLongProblem } from "@/lib/av/clean-voice";
@@ -58,6 +58,8 @@ export const AudioToolBody = z.discriminatedUnion("tool", [
     /** Fast (DBS-BSRNN) or Best (DBS-TIGER); unset = the host's pick. */
     quality: z.enum(["fast", "best"]).optional(),
     stereo: z.boolean().optional(),
+    /** originals (o/dbs-d9): one mix at these levels (whole dB; -100 = left out) instead of four stems (graph C). */
+    remix: z.object({ voiceDb: z.number().int().min(-100).max(REMIX_MAX_DB), musicDb: z.number().int().min(-100).max(REMIX_MAX_DB), effectsDb: z.number().int().min(-100).max(REMIX_MAX_DB) }).optional(),
     /** What the browser decoded (the server reads WAV / FLAC / MP3 headers itself). */
     channels: z.number().int().positive().max(64).optional(),
     sourceDuration: z.number().positive().max(36_000).optional(),
@@ -186,7 +188,12 @@ function factsOf(url: string, gone = "That audio file is gone — add it again")
   return { ...(duration && { duration }), ...(info.channels && { channels: info.channels }), hasAudio: info.hasAudio };
 }
 
-async function plan(body: AudioToolRequest): Promise<ToolPlan & { engine: Engine; split?: ClipFacts; headerChannels?: number }> {
+/** What a run would do (the page's preview, Assist's and MCP's split_soundtrack / remove_dialogue cards), without starting it. */
+export type AudioToolPlan = ToolPlan & { engine: Engine; split?: ClipFacts; headerChannels?: number };
+const plan = async (body: AudioToolRequest): Promise<AudioToolPlan> => planAudioTool(body);
+
+/** Synchronous: a header read at most (storedMedia, cached); throws AudioToolError with what's in the way. */
+export function planAudioTool(body: AudioToolRequest): AudioToolPlan {
   const mode = engineMode();
   // Split soundtrack and Remove dialogue run on the open engine only: an install set to paid APIs only says why, whichever
   // engine was asked for.
@@ -281,7 +288,8 @@ export async function previewAudioTool(body: AudioToolRequest): Promise<AudioToo
     if (installed && !installed.includes(DBS_MODELS[quality])) throw new AudioToolError(missingDbs(DBS_MODELS[quality], installed));
     const { duration: seconds, channels } = p.split ?? {};
     Object.assign(out, { hostPick: pick, ...(device && { device }), ...(installed && { installed: installed.map((m) => (m === DBS_MODELS.best ? "best" : "fast")) }), ...(p.headerChannels && { channels: p.headerChannels }) });
-    const mode = dbsChannelsFor((body.tool === "split" || body.tool === "clean-dialogue") && body.stereo ? "each channel" : "mono", channels);
+    const stereo = body.tool === "split" ? (body.stereo ?? !!body.remix) : body.tool === "clean-dialogue" && body.stereo;
+    const mode = dbsChannelsFor(stereo ? "each channel" : "mono", channels);
     if (seconds) out.estimate = (body.tool === "remove-dialogue" ? removeDialogueTime : splitTime)({ seconds, quality, mode, channels, device });
   }
   if (body.tool === "clean") {

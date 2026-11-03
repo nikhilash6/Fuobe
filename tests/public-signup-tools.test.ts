@@ -259,6 +259,11 @@ describe("the routes: a visitor's price is its own GPU's, and the owner's charac
     expect(await account.json()).toMatchObject({ steps: 1, costUsd: 0, demo: false, channels: 2 });
     const owner = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), auth.createSession().value));
     expect(await owner.json()).toMatchObject({ steps: 1, demo: true, channels: 2 });
+    // A remix (the levels Assist's split_soundtrack sends) is priced the same way: the asker's own file on its own GPU.
+    const remix = (media: string) => ({ ...body(media), remix: { voiceDb: -100, musicDb: -6, effectsDb: 0 } });
+    expect((await audioTools.POST(call("/api/audio-tools?preview=1", remix(owners), cookie))).status).toBe(422);
+    const mixed = await audioTools.POST(call("/api/audio-tools?preview=1", remix(wav("mine2.wav", who.id)), cookie));
+    expect(await mixed.json()).toMatchObject({ steps: 1, costUsd: 0, demo: false });
   });
 
   it("prices a visitor's Clean up voice on its own GPU without asking any GPU, never a demo, and only of its own file", async () => {

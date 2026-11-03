@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
-import type { DraftSource } from "@/components/assist/hooks";
+import { sourceKey, type DraftSource } from "@/components/assist/hooks";
 
 /**
  * "Make a skill" from anywhere under the studio layout (the result ⋯ menu in the Library, the feeds and the viewer; the
@@ -13,6 +13,8 @@ interface SkillBuilderApi {
   open: (ids: string[]) => void;
   /** Draft a skill from an Assist chat: the plans that ran in it (W3, "Save as skill"). */
   openChat: (thread: string) => void;
+  /** Draft a skill from a canvas page, saved first (W5, the canvas's "Save as skill"). */
+  openCanvas: (canvas: string, page?: string) => void;
 }
 
 const Ctx = createContext<SkillBuilderApi | null>(null);
@@ -27,11 +29,12 @@ export function SkillBuilderProvider({ children }: { children: React.ReactNode }
   // After a menu has closed and handed focus back, so the dialog keeps it.
   const open = useCallback((list: string[]) => void setTimeout(() => list.length && setSource({ generations: [...new Set(list)] }), 0), []);
   const openChat = useCallback((thread: string) => void setTimeout(() => setSource({ thread }), 0), []);
-  const api = useMemo(() => ({ open, openChat }), [open, openChat]);
+  const openCanvas = useCallback((canvas: string, page?: string) => void setTimeout(() => setSource({ canvas, ...(page && { page }) }), 0), []);
+  const api = useMemo(() => ({ open, openChat, openCanvas }), [open, openChat, openCanvas]);
   return (
     <Ctx.Provider value={api}>
       {children}
-      {source && <SkillBuilder key={"thread" in source ? `chat:${source.thread}` : source.generations.join(",")} source={source} onClose={() => setSource(null)} />}
+      {source && <SkillBuilder key={sourceKey(source)} source={source} onClose={() => setSource(null)} />}
     </Ctx.Provider>
   );
 }

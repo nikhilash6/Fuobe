@@ -212,7 +212,7 @@ describe("draftFromThread", () => {
     expect(draft!.notes.join(" ")).toMatch(/An earlier try of a step was left out/);
   });
 
-  it("refuses a generate result passed into a studio call, as the studio call really answered", async () => {
+  it("writes a generate result passed into a studio call as a step reference, as the studio call really answered", async () => {
     // A clip made in the chat, then captioned in the chat: both calls run through the agent, approved on their cards.
     const t = await chatRun("open", [
       { id: "toolu_clip", name: "generate", input: { summary: "Clip", jobs: [{ model_id: "kling-3", op: "i2v", prompt: "the lamp turns", images: [photo], duration: 5 }] } },
@@ -221,8 +221,30 @@ describe("draftFromThread", () => {
     await chatRun("open", [{ id: "toolu_caps", name: "add_captions", input: { video: made.outputs[0].url, translate_to: "Spanish" } }], t);
     await settle(threadIds(t));
     const { draft, refusals } = builder.draftFromThread(t);
-    expect(refusals).toEqual([{ id: expect.any(String), title: "Captions in Spanish", reason: builder.STUDIO_WAIT }]);
-    expect(draft!.recipe.steps.map((s) => s.kind)).toEqual(["generate"]);
+    expect(refusals).toEqual([]);
+    // Recipe version 2 (W7): the captions step takes the clip step's new result on every run.
+    expect(draft!.recipe.fuobeRecipe).toBe(2);
+    expect(draft!.recipe.steps.map((s) => s.kind)).toEqual(["generate", "tool"]);
+    const [clipStep, caps] = draft!.recipe.steps;
+    expect(caps).toMatchObject({ tool: "add_captions", input: { video: `{{steps.${clipStep.key}.output}}`, translate_to: "Spanish" } });
+    // The clip is no input of its own: only the clip step's photo is.
+    expect(draft!.candidates.filter((c) => c.kind === "media").map((c) => c.type)).toEqual(["image"]);
+    expect(recipes.allProblems({ ...draft!.recipe, params: [] })).toEqual([]);
+  });
+
+  it("writes a studio step's result passed into another studio call as a step reference", async () => {
+    // Dubbed in one go, then the dub captioned: the chain the skill reruns with a new clip.
+    const t = await chatRun("open", [{ id: "toolu_dub", name: "dub_video", input: { video: clip, languages: ["Spanish"], review: false } }]);
+    const [dubbed] = await settle(threadIds(t), 110_000);
+    const out = dubbed.outputs.find((o) => o.kind === "video")!.url;
+    await chatRun("open", [{ id: "toolu_caps2", name: "add_captions", input: { video: out } }], t);
+    await settle(threadIds(t), 110_000);
+    const { draft, refusals } = builder.draftFromThread(t);
+    expect(refusals).toEqual([]);
+    expect(draft!.recipe.steps.map((s) => s.kind === "tool" && s.tool)).toEqual(["dub_video", "add_captions"]);
+    const [dub, caps] = draft!.recipe.steps;
+    expect(caps).toMatchObject({ input: { video: `{{steps.${dub.key}.output}}` } });
+    expect(draft!.candidates.filter((c) => c.kind === "media")).toEqual([expect.objectContaining({ type: "video", example: clip, at: [{ step: dub.key, path: ["video"] }] })]);
   });
 
   /** Each studio tool as it really answers (a studio that opened, Katana's final cut), run through the agent in demo mode. */

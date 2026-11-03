@@ -93,7 +93,9 @@ async function pool(items, n, fn) {
  */
 export const routeResult = (answer, how) => {
   const stitch = Array.isArray(answer?.stitches) ? answer.stitches.at(-1) : undefined;
-  const items = answer?.items ?? (stitch ? (answer.segments ?? []).flatMap((s) => (s.takes ?? []).map((t) => ({ id: t.look }))) : []);
+  // A saved skill's run (POST /api/assist/skills/<name>/run): its rows in step order, the last one a step nothing waits for.
+  const skillRows = Array.isArray(answer?.runs) ? answer.runs.flatMap((r) => (r.ids ?? []).map((id) => ({ id }))) : null;
+  const items = answer?.items ?? skillRows ?? (stitch ? (answer.segments ?? []).flatMap((s) => (s.takes ?? []).map((t) => ({ id: t.look }))) : []);
   const final = answer?.final ?? (stitch?.final ? { id: stitch.final } : items.at(-1));
   if (how === "all") return items.length ? items : [final].filter(Boolean);
   if (how === "last") return [items.at(-1) ?? final].filter(Boolean);
@@ -457,7 +459,10 @@ async function price(client, job, inputs, ctx) {
     const route = job.submit.estimate === false ? null : (job.submit.estimate ?? `${job.submit.route}/estimate`);
     if (!route) return { studio: true, costUsd: null, demo: ctx.engine === "demo", modelId: job.model.id };
     const e = await client.request("POST", route, { json: body });
-    return { studio: true, costUsd: e.costUsd ?? e.totalUsd ?? null, demo: e.demo ?? ctx.engine === "demo", modelId: e.modelId ?? job.model.id, ...(e.modelName && { modelName: e.modelName }), ...(Array.isArray(e.providers) && { providers: e.providers }), notes: e.notes };
+    // A saved skill's estimate (RecipeEstimate): its total, or why it can't run.
+    if (Array.isArray(e.runs) && e.runnable === false) throw new Error([...(e.errors ?? []), ...e.runs.flatMap((r) => r.errors ?? [])][0] ?? "it can't run");
+    const skillTotal = Array.isArray(e.runs) ? e.total : undefined;
+    return { studio: true, costUsd: e.costUsd ?? e.totalUsd ?? skillTotal ?? null, demo: e.demo ?? ctx.engine === "demo", modelId: e.modelId ?? job.model.id, ...(e.modelName && { modelName: e.modelName }), ...(Array.isArray(e.providers) && { providers: e.providers }), notes: e.notes };
   }
   const p = await client.request("POST", "/api/generations", { json: { ...job.request, inputs }, query: { preview: 1 } });
   return { ...p, ...(p.model?.id && { modelId: p.model.id, modelName: p.model.name }) };

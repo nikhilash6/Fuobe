@@ -51,9 +51,9 @@ describe("MCP server", () => {
     expect(await rpc("tools/call", { name: "rm_rf" })).toMatchObject({ error: { code: -32602 } });
   });
 
-  it("serves run_skill (W3): listed, priced by estimate_job, and named in the instructions of version 1.3.0", async () => {
+  it("serves run_skill (W3): listed, priced by estimate_job, and named in the instructions (since version 1.3.0)", async () => {
     const init = (await rpc("initialize", { protocolVersion: "2025-06-18" })) as { result: { serverInfo: { version: string }; instructions: string } };
-    expect(init.result.serverInfo.version).toBe("1.3.0");
+    expect(init.result.serverInfo.version).toBe("1.4.0");
     expect(init.result.instructions).toMatch(/run_skill/);
     const r = (await rpc("tools/list")) as { result: { tools: { name: string; description: string; inputSchema: { properties: Record<string, { enum?: string[] } & Record<string, unknown>> }; annotations: { readOnlyHint: boolean; openWorldHint: boolean } }[] } };
     const run = r.result.tools.find((t) => t.name === "run_skill")!;
