@@ -173,7 +173,7 @@ export function HomeBento({ bento }: { bento: Bento }) {
       <div className={s.grid}>
         <Tile tile={tiles.video} area={s.video} bigMeta>
           <Pic pic={bento.video.poster} sizes={SIZES.video} fetchPriority="high" />
-          <BentoClip id={bento.video.id} clips={bento.video.clips} progress glyph />
+          <BentoClip id={bento.video.id} clips={bento.video.clips} progress />
           <span aria-hidden className={s.badge}>
             <Video className="size-3.5" /> Video
           </span>

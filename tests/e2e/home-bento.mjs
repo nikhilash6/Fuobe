@@ -13,14 +13,18 @@
 //    contact sheet of them all.
 // 1b. Sharp at every width and pixel ratio (1x, 2x, 3x): every picture on the first screen is at least as wide as its
 //    box shows it (object-fit: cover, times the ratio), up to the widest copy there is, and so is each clip once it
-//    plays.
+//    plays. No play sign on a tile that plays by itself, at any moment from the first paint until both clips play, and
+//    nothing shifts as a clip takes over from its still.
+// 1c. The swap: each tile's still is its clip's first frame (the clip at frame 0 over it differs by under 3 levels in
+//    255 on average), at 390@3x and 1440@2x.
 // 2. Layout shift under 0.01 at 390 and 1440, through a load and a scroll to the bottom and back.
 // 3. Every tile's link answers 200, and the numbers tile opens every studio (the launcher; a phone's sheet).
 // 4. Reduced motion and Save-Data: no clip is fetched or played, nothing moves by itself (the headline is still, the
 //    split rests at 50 %, the live words stay), and the tiles keep their stills.
 // 5. Pause previews stops the catwalk and freezes every animation; pressed again, they go on.
 // 6. Weight: what the page downloads before `load` (clips aside), at 390 and 1440, reported; the first screen's own
-//    stills stay under 300 KB. The clips it fetches after load are reported on their own.
+//    stills stay under 340 KB (the clips' posters are encoded close to their clips' first frames). The clips are
+//    reported on their own.
 // 7. The composer: /?new=1 brings it into view with the focus; a plain visit stays at the top (no autofocus jump).
 // 8. Every tile is a named link, and Tab reaches them in the grid's reading order with a visible ring.
 import assert from "node:assert/strict";
@@ -208,14 +212,41 @@ if (!weightOnly)
     }
   }
 
+/**
+ * Watches the first screen from the first paint: every play sign seen on a tile that plays by itself (the video and 3D
+ * tiles), when each clip first showed, and every layout shift, with its time.
+ */
+const watchSwap = () => {
+  window.__signs = [];
+  window.__shown = {};
+  window.__shifts2 = [];
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) if (!e.hadRecentInput) window.__shifts2.push({ v: e.value, at: Math.round(e.startTime) });
+  }).observe({ type: "layout-shift", buffered: true });
+  const look = () => {
+    for (const t of ["video", "threeD"]) {
+      const tile = document.querySelector(`#home-bento [data-tile=${t}]`);
+      if (!tile) continue;
+      for (const el of tile.querySelectorAll("svg.lucide-play, [class*=play-glyph]")) {
+        const st = getComputedStyle(el);
+        if (el.getBoundingClientRect().width > 0 && st.visibility !== "hidden" && Number(st.opacity) > 0) window.__signs.push({ t, at: Math.round(performance.now()) });
+      }
+      if (!window.__shown[t] && tile.querySelector("video[data-ready]")) window.__shown[t] = Math.round(performance.now());
+    }
+    if (performance.now() < 15_000 && !(window.__shown.video && window.__shown.threeD)) requestAnimationFrame(look);
+  };
+  requestAnimationFrame(look);
+};
+
 // ------------------------------------------------------------------------------------------- 1b. sharp at every ratio
 if (!weightOnly)
   for (const v of WIDTHS)
     for (const dpr of [1, 2, 3]) {
       const ctx = await browser.newContext({ ...(v.phone ? PHONE : {}), viewport: { width: v.w, height: v.h }, deviceScaleFactor: dpr });
       const page = await ctx.newPage();
+      await page.addInitScript(watchSwap);
       await open(page);
-      // The clips start after load, once on screen: wait until each has its first frame.
+      // The clips start once their tile's still is up and on screen: wait until each has its first frame.
       await page
         .waitForFunction(() => [...document.querySelectorAll("#home-bento [data-tile] video")].filter((x) => x.videoWidth > 0).length >= 2, null, { timeout: 12_000 })
         .catch(() => {});
@@ -229,8 +260,62 @@ if (!weightOnly)
         (bad.length ? bad : clips).map((x) => `${x.tile} ${x.what} ${x.has} for ${x.need} (max ${x.max})`).join("; "),
       );
       sharpNotes.push(`${v.w}@${dpr}x: ${s.map((x) => `${x.tile} ${x.what} ${x.has}/${x.need}`).join(", ")}`);
+      const w = await page.evaluate(() => ({ signs: window.__signs, shown: window.__shown, shifts: window.__shifts2, load: Math.round(performance.getEntriesByType("navigation")[0]?.loadEventEnd ?? 0) }));
+      check(`no play sign at ${v.w}@${dpr}x on the tiles that play by themselves`, w.signs.length === 0, JSON.stringify(w.signs.slice(0, 3)));
+      // Nothing shifts as a clip takes over from its still (from 100 ms before it shows to 600 ms after).
+      const atSwap = w.shifts.filter((x) => Object.values(w.shown).some((t) => x.at >= t - 100 && x.at <= t + 600));
+      check(`no layout shift at the swap at ${v.w}@${dpr}x`, atSwap.length === 0 && Object.keys(w.shown).length === 2, `${JSON.stringify(w.shown)} load ${w.load}; ${JSON.stringify(atSwap)}`);
+      if (dpr === 2 || (v.phone && dpr === 3)) notes.push(`clips shown at ${v.w}@${dpr}x: video ${w.shown.video} ms, 3D ${w.shown.threeD} ms (load ${w.load} ms)`);
       await ctx.close();
     }
+
+// ------------------------------------------------------------------------------------------- 1c. the swap
+/** How far the clip at frame 0 is from the still under it: the tile's clip area shot with the clip shown and hidden. */
+async function swapDiff(page, tile) {
+  const clip = page.locator(`#home-bento [data-tile=${tile}] .hb-clip`);
+  await page.evaluate(async (tile) => {
+    const v = document.querySelector(`#home-bento [data-tile=${tile}] video`);
+    v.pause();
+    v.currentTime = 0;
+    await new Promise((r) => (v.seeking ? v.addEventListener("seeked", r, { once: true }) : r()));
+    // Then two frames of the page, so the seeked frame is on screen (a paused clip presents no further frames).
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 100))));
+    // The line along the bottom follows the clip: out of both shots.
+    for (const el of document.querySelectorAll(`#home-bento [data-tile=${tile}] .hb-progress`)) el.style.visibility = "hidden";
+  }, tile);
+  const withClip = await clip.screenshot({ animations: "disabled" });
+  await page.evaluate((tile) => (document.querySelector(`#home-bento [data-tile=${tile}] video`).style.visibility = "hidden"), tile);
+  const still = await clip.screenshot({ animations: "disabled" });
+  const sharp = createRequire(path.join(root, "package.json"))("sharp");
+  const [a, b] = await Promise.all([withClip, still].map((x) => sharp(x).removeAlpha().raw().toBuffer()));
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
+  return { diff: sum / a.length, withClip, still };
+}
+if (!weightOnly)
+  for (const [v, dpr] of [
+    [WIDTHS[0], 3],
+    [WIDTHS[4], 2],
+  ]) {
+    const ctx = await browser.newContext({ ...(v.phone ? PHONE : {}), viewport: { width: v.w, height: v.h }, deviceScaleFactor: dpr });
+    const page = await ctx.newPage();
+    await open(page);
+    await page.waitForFunction(() => document.querySelectorAll("#home-bento [data-tile] video[data-ready]").length >= 2, null, { timeout: 12_000 }).catch(() => {});
+    for (const tile of ["video", "threeD"]) {
+      if (!(await page.locator(`#home-bento [data-tile=${tile}] video[data-ready]`).count())) {
+        check(`the swap at ${v.w}@${dpr}x, ${tile}: its clip plays`, false);
+        continue;
+      }
+      const src = await page.evaluate((tile) => new URL(document.querySelector(`#home-bento [data-tile=${tile}] video`).currentSrc).pathname.split("/").pop(), tile);
+      const r = await swapDiff(page, tile);
+      check(`the swap at ${v.w}@${dpr}x, ${tile}: the still is ${src}'s first frame`, r.diff < 3, `mean difference ${r.diff.toFixed(2)} of 255`);
+      if (shotsDir) {
+        fs.writeFileSync(path.join(shotsDir, `swap-${tile}-${v.w}@${dpr}x-clip.png`), r.withClip);
+        fs.writeFileSync(path.join(shotsDir, `swap-${tile}-${v.w}@${dpr}x-still.png`), r.still);
+      }
+    }
+    await ctx.close();
+  }
 
 // ------------------------------------------------------------------------------------------- 2. layout shift
 async function cls(v) {
@@ -352,7 +437,7 @@ if (!weightOnly) {
     return v && !v.paused && v.currentTime > 0.2;
   }, null, { timeout: 8000 }).catch(() => {});
   const before = await playing();
-  check("the catwalk plays by itself after load", !!before && !before.paused, JSON.stringify(before));
+  check("the catwalk plays by itself", !!before && !before.paused, JSON.stringify(before));
   await page.getByRole("button", { name: "Pause previews" }).click();
   await page.waitForTimeout(400);
   const after = await page.evaluate(() => ({
@@ -383,7 +468,7 @@ async function weight(v) {
   await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
   const reqs = new Map();
   let loaded = false;
-  // The clips come after load: every byte of a video response, counted as it arrives (a clip may come in ranges).
+  // The clips come once their stills are up: every byte of a video response, counted as it arrives (a clip may come in ranges).
   const clips = new Map();
   cdp.on("Network.responseReceived", (e) => reqs.set(e.requestId, { url: e.response.url, type: e.type, mime: e.response.mimeType, bytes: 0, done: false }));
   cdp.on("Network.dataReceived", (e) => {
@@ -434,7 +519,7 @@ async function weight(v) {
     total,
     own,
     clipBytes,
-    line: `${v.w}@${viewportOpts(v).deviceScaleFactor}x: ${kb(total)} (${Object.entries(by).map(([k, n]) => `${k} ${kb(n)}`).join(", ")}); the first screen's own stills ${kb(own)}; clips after load ${kb(clipBytes)} (${clipLine || "none"})`,
+    line: `${v.w}@${viewportOpts(v).deviceScaleFactor}x: ${kb(total)} (${Object.entries(by).map(([k, n]) => `${k} ${kb(n)}`).join(", ")}); the first screen's own stills ${kb(own)}; clips ${kb(clipBytes)} (${clipLine || "none"})`,
     media,
   };
 }
@@ -442,7 +527,7 @@ for (const v of [WIDTHS[0], WIDTHS[3], WIDTHS[4], WIDTHS[5]]) {
   const r = await weight(v);
   // The whole page's total is reported (main's own script and fonts are most of it: compare with --weight-only on
   // main's build); the first screen's own stills have a budget of their own.
-  check(`weight before load, clips aside: ${r.line}`, weightOnly || r.own < 300 * 1024);
+  check(`weight before load, clips aside: ${r.line}`, weightOnly || r.own < 340 * 1024);
   notes.push(`weight ${r.line}`);
   notes.push(`  first screen's stills: ${r.media.join(" · ")}`);
 }

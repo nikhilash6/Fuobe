@@ -6,7 +6,7 @@
  * published clip was cut from, so the tiles show exactly what the studios show, only sharper.
  *
  * Output (public/previews/home/):
- *   catwalk-{640,1024}.{mp4,avif}         the catwalk clip at two widths, and its first frame as the video tile's poster
+ *   catwalk-{640,1024}.{mp4,avif}         the catwalk clip at two widths, and each one's first frame as its poster
  *   rotation-{640,1024}.{mp4,avif}        the turning gown (the 3D tile), the same way
  *   image-4-{480,768}.avif                the Image studio's example 4
  *   ba-{before,after}-{640,960,1280}.avif       Colorize's before and after (4:3)
@@ -16,13 +16,19 @@
  *
  * The clips: the published clip's own cut (scripts/eval/lib/covers.mjs: its first CLIP_SECONDS at CLIP_FPS, looped
  * the same way), made again from the full-size render instead of the 512 px copy, in H.264 High (a CRF per clip,
- * faststart, no sound). Each tile picks the width its box needs on the screen it is on (bento-islands.tsx).
+ * faststart, no sound), tagged BT.709 so every browser shows its colours the same way. Each tile picks the width its
+ * box needs on the screen it is on (bento-islands.tsx).
+ *
+ * The posters: each clip's own first frame, decoded from the encoded file the way a browser shows it (BT.709, limited
+ * range), at POSTER_QUALITY: the tile shows it until its clip plays, and the clip takes over on that same frame, so the
+ * swap can't be seen. They are made again from the clips on every run, with or without masters.
  *
  * Masters: the full-size renders are not in the repo. With --masters <dir> (or FUOBE_HOME_MASTERS) the clips, their
  * posters and the before/after copies are made from the files in it:
  *   <dir>/motion-catwalk.mp4, <dir>/app-3d-rotation.mp4          the renders the published clips were cut from
  *   <dir>/app-colorize-before.png, <dir>/app-colorize-after.png  Colorize's pair at full size (1536 x 1152)
- * Without it those files are kept as they are (and versioned); only the rest is made again.
+ * Without it those files are kept as they are (and versioned), the posters are made again from the clips kept, and so
+ * is the rest.
  *
  * The waveform: the Clean up voice sample decoded to 8 kHz mono, its loudness (RMS) in WAVE_BARS equal slices, scaled
  * so the loudest is 1, with a floor of WAVE_FLOOR so a pause still shows a bar. It is keyed by the sample's own
@@ -84,6 +90,10 @@ const MASTER_STILLS = ["before", "after"].flatMap((side) => [
 ]);
 /** AVIF quality: the copies sit under a dark shade, and each tile takes one at least as wide as it shows. */
 const QUALITY = 55;
+/** The clips' posters: close enough to the clip's own first frame that the swap from one to the other can't be seen. */
+const POSTER_QUALITY = 65;
+/** The colours every clip is tagged with (libx264 takes them as its own options): its poster is decoded the same way. */
+const BT709 = ["-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709", "-color_range", "tv"];
 /** The board's pictures show at 36 to 56 px: a 168 px square covers them on a 3x screen. */
 const THUMB = 168;
 
@@ -96,8 +106,8 @@ const ffmpeg = (args, input) => {
 
 /**
  * A clip's loop at `width`, cut as covers.mjs encode() cuts the published one: decoded at CLIP_FPS, its first
- * CLIP_SECONDS (and the frames the crossfade takes back), looped without a seam unless it loops already. Returns the
- * y4m stream of it and of its first frame alone (the poster).
+ * CLIP_SECONDS (and the frames the crossfade takes back), looped without a seam unless it loops already. Returns its
+ * y4m stream.
  */
 function loopAt(src, width) {
   const seconds = CLIP_SECONDS + LOOP_FADE / CLIP_FPS;
@@ -106,7 +116,7 @@ function loopAt(src, width) {
   const cut = frames.slice(0, CLIP_SECONDS * CLIP_FPS);
   const looped = loopsAlready(cut, luma) ? cut : seamless(frames, Math.min(LOOP_FADE, Math.floor(frames.length / 4)));
   const stream = (list) => Buffer.concat([Buffer.from(`${header}\n`, "latin1"), ...list.flatMap((fr) => [Buffer.from("FRAME\n"), fr])]);
-  return { all: stream(looped), first: stream([looped[0]]), frames: looped.length };
+  return { all: stream(looped), frames: looped.length };
 }
 
 /** H.264 High, the published clip's loop, muted, its index at the front so it starts before it has all loaded. */
@@ -121,7 +131,12 @@ function encodeClipBuffer(y4m, crf) {
 }
 
 function encodeClip(y4m, crf, out) {
-  ffmpeg(["-v", "error", "-y", "-f", "yuv4mpegpipe", "-i", "-", "-an", "-c:v", "libx264", "-profile:v", "high", "-preset", "slow", "-tune", "film", "-crf", String(crf), "-g", String(2 * CLIP_FPS), "-pix_fmt", "yuv420p", "-map_metadata", "-1", "-movflags", "+faststart", out], y4m);
+  ffmpeg(["-v", "error", "-y", "-f", "yuv4mpegpipe", "-i", "-", "-an", "-c:v", "libx264", "-profile:v", "high", "-preset", "slow", "-tune", "film", "-crf", String(crf), "-g", String(2 * CLIP_FPS), "-pix_fmt", "yuv420p", ...BT709, "-map_metadata", "-1", "-movflags", "+faststart", out], y4m);
+}
+
+/** A clip's first frame as a PNG, decoded from the encoded file as a browser shows it. */
+function firstFrame(file) {
+  return ffmpeg(["-v", "error", "-i", file, "-frames:v", "1", "-vf", "scale=in_color_matrix=bt709:in_range=tv:flags=accurate_rnd+full_chroma_int+lanczos,format=rgb24", "-c:v", "png", "-f", "image2pipe", "-"]);
 }
 
 /** The sample's loudness in `bars` slices, 0..1, the loudest 1, none under `floor`. */
@@ -151,15 +166,7 @@ async function main() {
   // Made from the masters when there are any; without them the files already here are kept (and versioned).
   const fromMasters = [
     ...CLIPS.flatMap((c) =>
-      CLIP_WIDTHS.flatMap((w) => {
-        let loop;
-        const at = () => (loop ??= loopAt(master(`${c.key}.mp4`), w));
-        const poster = () => ffmpeg(["-v", "error", "-f", "yuv4mpegpipe", "-i", "-", "-frames:v", "1", "-c:v", "png", "-f", "image2pipe", "-"], at().first);
-        return [
-          { name: `${c.name}-${w}.mp4`, clip: true, make: () => encodeClipBuffer(at().all, c.crf) },
-          { name: `${c.name}-${w}.avif`, make: () => sharp(poster()).avif({ quality: QUALITY, effort: 6 }).toBuffer() },
-        ];
-      }),
+      CLIP_WIDTHS.map((w) => ({ name: `${c.name}-${w}.mp4`, clip: true, make: () => encodeClipBuffer(loopAt(master(`${c.key}.mp4`), w).all, c.crf) })),
     ),
     ...MASTER_STILLS.map((s) => ({
       ...s,
@@ -183,7 +190,16 @@ async function main() {
     }
     if (!DRY) versions[`/previews/home/${s.name}`] = contentVersion([out]);
   }
+  // Each clip's poster, from the clip as it is now (just made, or kept).
+  const posters = CLIPS.flatMap((c) => CLIP_WIDTHS.map((w) => ({ name: `${c.name}-${w}.avif`, clip: `${c.name}-${w}.mp4` })));
   const jobs = [
+    ...posters.map((p) => ({
+      ...p,
+      make: () => {
+        // A dry run writes no clip: it reads the one already here.
+        return sharp(firstFrame(path.join(OUT_DIR, p.clip))).avif({ quality: POSTER_QUALITY, effort: 6 }).toBuffer();
+      },
+    })),
     ...STILLS.map((s) => ({
       ...s,
       make: () => {

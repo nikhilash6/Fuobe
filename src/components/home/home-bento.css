@@ -506,35 +506,6 @@
   text-transform: uppercase;
   pointer-events: none;
 }
-.hb-play-glyph {
-  position: absolute;
-  left: 50%;
-  top: 42%;
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  margin: -32px 0 0 -32px;
-  border-radius: 999px;
-  background: rgb(13 13 15 / 55%);
-  border: 1px solid rgb(255 255 255 / 35%);
-  backdrop-filter: blur(6px);
-  pointer-events: none;
-  transition: opacity 0.4s ease;
-}
-.hb-play-glyph svg {
-  margin-left: 3px;
-}
-.hb-play-glyph[data-on] {
-  opacity: 0;
-}
-@container (min-width: 460px) {
-  .hb-play-glyph {
-    width: 76px;
-    height: 76px;
-    margin: -38px 0 0 -38px;
-  }
-}
 .hb-progress {
   position: absolute;
   inset: auto 0 0;
@@ -1120,8 +1091,7 @@
 /* Reduced motion: whatever data-play says, nothing moves by itself, and a hover doesn't lift a tile. */
 @media (prefers-reduced-motion: reduce) {
   .hb-tile,
-  .hb-frame,
-  .hb-play-glyph {
+  .hb-frame {
     transition: none;
   }
   .hb-tile:hover {

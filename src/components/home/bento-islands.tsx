@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useNavUi } from "@/components/nav/nav-ui";
 import { usePreviewPlayback, usePreviewsPaused } from "@/components/preset-preview";
@@ -15,7 +15,7 @@ import { s } from "./home-bento-classes";
  * tile and the numbers tile's launcher. Everything else on it is HTML from the server.
  */
 
-/** Whether the page has loaded (the clips wait for it) and whether the first screen may move now (BentoMotion). */
+/** Whether the page has loaded (the first screen's animations wait for it) and whether it may move now (BentoMotion). */
 const motion = (() => {
   let loaded = false;
   let play = false;
@@ -41,7 +41,6 @@ const motion = (() => {
   };
 })();
 
-const useLoaded = () => useSyncExternalStore(motion.subscribe, motion.loaded, () => false);
 const usePlay = () => useSyncExternalStore(motion.subscribe, motion.play, () => false);
 
 /** Runs `cb` once the page has loaded and the browser is idle: the first screen's stills come first. */
@@ -111,16 +110,51 @@ export function BentoMotion({ target }: { target: string }) {
 const CLIP_ASPECT = 4 / 3;
 
 /**
- * A tile's clip, over its still: it joins the site's playback rules (preset-preview.tsx) once the page has loaded, so
- * it plays in view, at most a few at once, never under reduced motion, Save-Data or Pause previews, and a hover or
- * keyboard focus on its tile still plays it. Its source is set only when it first plays: the narrowest of `clips` at
- * least as wide as the tile shows it on this screen (its box under `object-fit: cover`, times the pixel ratio), and
- * that one stays. Once started it stays mounted and pauses on its frame. `progress`: a line along the bottom follows
- * the clip; `glyph`: a play sign until it plays.
+ * Calls `cb` once the tile's own still (the picture before `el` in its tile) has loaded and been painted, and the
+ * browser has a moment: the still is the first thing the tile shows, and the clip never holds it up.
  */
-export function BentoClip({ id, clips, progress, glyph }: { id: string; clips: Sized[]; progress?: boolean; glyph?: boolean }) {
-  const loaded = useLoaded();
-  const { ref, playing, handlers } = usePreviewPlayback<HTMLSpanElement>(id, loaded ? { video: clips[0].src } : {});
+function afterStill(el: HTMLElement, cb: () => void): () => void {
+  const img = el.parentElement?.querySelector<HTMLImageElement>("picture img");
+  let raf = 0;
+  let idle = 0;
+  const go = () => {
+    raf = requestAnimationFrame(() => {
+      if (typeof requestIdleCallback === "function") idle = requestIdleCallback(cb, { timeout: 600 });
+      else idle = window.setTimeout(cb, 100);
+    });
+  };
+  if (!img || (img.complete && img.naturalWidth > 0)) go();
+  else {
+    img.addEventListener("load", go, { once: true });
+    img.addEventListener("error", go, { once: true });
+  }
+  return () => {
+    img?.removeEventListener("load", go);
+    img?.removeEventListener("error", go);
+    cancelAnimationFrame(raf);
+    if (typeof cancelIdleCallback === "function") cancelIdleCallback(idle);
+    clearTimeout(idle);
+  };
+}
+
+/**
+ * A tile's clip, over its still: it joins the site's playback rules (preset-preview.tsx) as soon as the tile's still is
+ * on screen (not only once the whole page has loaded), so it plays in view, at most a few at once, never under reduced
+ * motion, Save-Data or Pause previews, and a hover or keyboard focus on its tile still plays it. Its source is set only
+ * when it first plays: the narrowest of `clips` at least as wide as the tile shows it on this screen (its box under
+ * `object-fit: cover`, times the pixel ratio), and that one stays. The still is that clip's own first frame
+ * (scripts/gen-home-bento.mjs), and the clip shows only once it has that frame, so the change from one to the other
+ * can't be seen: no sign, no flash, nothing moves. Once started it stays mounted and pauses on its frame. `progress`: a
+ * line along the bottom follows the clip.
+ */
+export function BentoClip({ id, clips, progress }: { id: string; clips: Sized[]; progress?: boolean }) {
+  const [armed, setArmed] = useState(false);
+  const { ref, playing, handlers } = usePreviewPlayback<HTMLSpanElement>(id, armed ? { video: clips[0].src } : {});
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    return afterStill(el, () => setArmed(true));
+  }, [ref]);
   // The pixels of width the tile needs, kept up to date with its size until the clip starts.
   const [need, setNeed] = useState(0);
   useEffect(() => {
@@ -184,11 +218,6 @@ export function BentoClip({ id, clips, progress, glyph }: { id: string; clips: S
   return (
     <span ref={ref} aria-hidden className={s.clip} onPointerEnter={handlers.onPointerEnter} onPointerLeave={handlers.onPointerLeave}>
       {clip && <video ref={video} src={clip} muted loop playsInline preload="auto" data-ready={ready || undefined} onLoadedData={() => setReady(true)} />}
-      {glyph && (
-        <span className={s.playGlyph} data-on={(playing && ready) || undefined}>
-          <Play className="size-6" fill="#fff" stroke="#fff" />
-        </span>
-      )}
       {progress && (
         <span className={s.progress}>
           <i ref={bar} />
