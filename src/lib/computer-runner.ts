@@ -292,7 +292,7 @@ export class ComputerRunner {
     if (this.jobsApi === undefined) this.jobsApi = await this.read("/api/jobs").then(() => true, () => false);
     const history = async () => (await this.read<Record<string, HistoryEntryLike>>(`/history/${promptId}`))[promptId];
     if (this.jobsApi) {
-      const res = await this.deps.local(`${this.base}${readPath(`/api/jobs/${promptId}`)}`, { credentials: "omit", cache: "no-store" });
+      const res = await fetchWithin(`${this.base}${readPath(`/api/jobs/${promptId}`)}`, LOOK_MS, { credentials: "omit", cache: "no-store" }, this.deps.local);
       if (res.status === 404) return prefix ? this.whereByQueue(promptId) : { s: "absent" };
       if (!res.ok) throw Object.assign(new Error(`ComfyUI answered HTTP ${res.status}`), { status: res.status });
       const j = (await res.json()) as { status?: string };
