@@ -1,108 +1,118 @@
 {
-  "key": "idol-6",
-  "impl": {
-    "branch": "o/idol-6",
-    "summary": "Idol 3D results from your own GPU (request.modelId 'oss-idol') with a source picture now have a 'Build the final with TRELLIS.2' button, with 'A textured, riggable .glb · 16 GB GPU' under it. The button links to /image-to-3d?mode=image&model=oss-trellis2&image=<the result's picture>. Image to 3D now reads ?image= and fills the photo from it. The button is hidden when TRELLIS.2 is switched off in Settings → Models & licences (offered(), the same check the studio's picker uses), when engine mode is Paid APIs only, and for visitors. fal Idol results ('idol-3d') never get it. Two signed commits on o/idol-6 (9ed6da4f, de535d63); not pushed.",
-    "built": [
-      "src/lib/av/model3d.ts: new FINAL_3D constant (model oss-trellis2, the label and the note) and a pure finalBuildHref(g, view, allowed) that returns the link only for oss-idol results with a photo when allowed is true",
-      "src/components/model3d/model-card.tsx: new finalAllowed prop. The outline button links to the final build, with the note under it, below the action row. The other buttons (Rig & animate, Animate the spin, Film it photoreal, Refine, Print-ready, Retexture) are unchanged",
-      "src/components/model3d/model3d-studio.tsx: UrlModel now reads ?image= and calls a stable fromImage callback. It fills the photo slot and turns Idol's photo crop off, since the picture comes from a Fuobe result. finalAllowed = !visitor && engineMode !== 'cloud' && offered(access, 'oss-trellis2', 'open'), passed through ResultCard to ModelCard",
-      "Plan items already there: oss-idol and oss-trellis2 in MODELS_3D, model3dView().photo, offered()/useModelAccess, and ?model= / ?mode= handling. The ?image= support (idol-5's, not built yet; there is no o/idol-5 branch) was added here in a general form that idol-5 can reuse (e.g. ?mode=splat&model=oss-idol&image=…)"
-    ],
-    "tests": [
-      "tests/idol-final.test.ts (new, 6 tests): the exact href and that it parses back to mode=image / model=oss-trellis2 / the same picture, and that modeOf maps it to image on the open engine. No link for: an oss-idol result without a picture, fal idol-3d, oss-triposplat, oss-trellis2, oss-pixal3d, triposplat, trellis-2, or when not allowed. Model access: offered() with oss-trellis2 off hides the link, another model off does not. FINAL_3D names a real open model in MODELS_3D whose tagline says 16 GB GPU. A source check that the card and studio are wired",
-      "Targeted run: tests/idol-final, idol, model3d, account-idol — 62/62 pass",
-      "tsc --noEmit clean (needed NODE_OPTIONS=--max-old-space-size=8192; the default heap ran out of memory). eslint clean on the changed files",
-      "Browser check, demo mode (FUOBE_DEMO_MODE=on, port 3462): new script tests/e2e/idol-final.mjs, run at 1440 and 390 px in light and dark, all passing. Only the Idol card shows the button (the TRELLIS.2 card does not). The note is visible. Clicking opens From an image with TRELLIS.2 picked and the same picture filled in. No sideways scroll, no page or console errors. Server stopped and .next deleted afterwards",
-      "No full vitest suite run, as this stage says"
-    ],
-    "left": [
-      "Model access was not toggled live in the browser; only the unit test covers it",
-      "No GPU run: the final TRELLIS.2 build itself is the existing oss-trellis2 route (16 GB GPU), unchanged and not exercised here",
-      "Accounts still can't start 3D (own-gpu-tool). The button is hidden for visitors, so nothing changes on the server",
-      "The changed files were already failing prettier --check before this package (the repo has no prettier config), so I did not reformat them"
-    ],
-    "docsNotes": [
-      "The brief was out of date in two places. The oss-trellis2 note in MODELS_3D now reads 'A dependable second choice, with a turntable video' (Pixal3D is the first choice), so the card uses the brief's 'A textured, riggable .glb · 16 GB GPU' from FINAL_3D rather than the catalog note. model3d.ts L39 no longer holds that line",
-      "Image to 3D now accepts ?image=<url> to fill the photo (alongside ?model= and ?mode=). This is worth a line in ARCHITECTURE/STATUS where the Image to 3D link parameters are listed, and idol-5 can use it",
-      "STATUS: idol-6 is done (Draft then final on Idol 3D results from your own GPU; open engine only; no Idol draft on the cloud)"
-    ],
-    "blocked": ""
-  },
-  "review": {
-    "findings": [
-      {
-        "severity": "low",
-        "file": "src/components/model3d/model3d-studio.tsx",
-        "line": 98,
-        "title": "Clicking 'Build the final with TRELLIS.2' a second time with the same link does nothing",
-        "detail": "UrlModel only acts when the values in the URL change: the ?image= effect depends on [image, onImage] and the ?model= effect on [id, mode, ...]. The button sits on the same /image-to-3d page. Say the user clicks it on result A, then changes the photo or the mode by hand, then clicks the same card again. The URL is the same, so neither effect runs and the form keeps what the user changed, so the click looks like it did nothing. Clicking a different Idol card works, because its image changes. ?model= links already behaved this way before this package, so this is not a regression of existing behaviour, but it is the main repeat flow of this new button. Found by reading the code; not reproduced in a browser.",
-        "verified": "Traced: fromImage and fromUrl are stable useCallbacks, and the effects' deps are strings taken from useSearchParams."
-      },
-      {
-        "severity": "low",
-        "file": "src/components/model3d/model3d-studio.tsx",
-        "line": 244,
-        "title": "?image= turns Idol's photo crop off on the wrong premise",
-        "detail": "fromImage calls setIdolPhoto(false), with the comment 'a Fuobe result's, so Idol's photo crop stays off'. But model3dView(g).photo is request.inputs.images[0], the Idol run's source picture. That is normally the user's own upload: the e2e script uses /api/uploads, and idolPhotoFor counts uploads as photos. This has no effect on the TRELLIS.2 final, since the crop only applies in Splat mode. It is wrong if the user then switches to Splat with Idol, or if idol-5 reuses ?image= as the report suggests (?mode=splat&model=oss-idol&image=...): an uploaded photo would get the synthetic crop. A better choice is to leave the switch as it is, or to set it with idolPhotoFor.",
-        "verified": "Read model3dView (photo: g.request.inputs?.images?.[0]) and idolPhotoFor in src/lib/av/model3d.ts."
-      },
-      {
-        "severity": "info",
-        "file": "tests/idol-final.test.ts",
-        "line": 57,
-        "title": "The card and studio wiring is tested only by matching source text",
-        "detail": "The access, visitor and Paid-APIs-only gating in the studio is checked by an exact source-text match of the finalAllowed line. The pure finalBuildHref and offered() are unit-tested properly, and the browser script covers the visible flow in demo mode. A refactor that keeps behaviour would break the string test, and a behaviour change that keeps the text would pass it. The engineMode 'cloud' case and the visitor case have no behavioural test. This is acceptable for a P2 small package."
-      },
-      {
-        "severity": "info",
-        "file": "src/components/model3d/model3d-studio.tsx",
-        "line": 92,
-        "title": "?image= is taken as given (no /api/files check)",
-        "detail": "Any value of ?image= becomes the photo's ref and preview. Main's studio-page and color-grade already do the same; only live-edit-app checks with fileParam (/api/files/ only). Only the owner can run 3D: visitors are blocked in the UI, and the server answers own-gpu-tool for accounts. An <img src> does not run javascript: URLs. So this is not exploitable here and is not a new class of problem. Checking with a fileParam-style pattern would be tidier."
-      }
-    ],
-    "checks": [
-      "Read the stage prompt, main-rules.md, the implementer report, the full diff claude/fuobe-parity-4...o/idol-6 (2 commits, 5 files) and the code around it: model3dView().photo, idolPhotoFor, modeOf, the studio's photo state, the UrlModel effects, and the single ModelCard caller (ResultCard).",
-      "Brief coverage: the button and its note show only for oss-idol results with a source picture; the href is /image-to-3d?mode=image&model=oss-trellis2&image=<photo>; ?image= support was added; the button hides when oss-trellis2 is off through offered(access, 'oss-trellis2', 'open'), the same check the picker uses; it also hides for visitors and in Paid APIs only. No Idol draft on the cloud: fal idol-3d never gets it. Rig & animate, Animate the spin and the other buttons are untouched (the new block is added after the action row).",
-      "Checked against idol-9.md §7.2 / §9 idol-6: it matches ('oss-trellis2 on the same picture ... not an Idol substitute'). The implementer's note is right that the catalog's oss-trellis2 note changed, so FINAL_3D carries the brief's text.",
-      "Public sign-up: no new route, server path or price check. The button is hidden for visitors, and accounts still get own-gpu-tool for 3D, so there is no new path to the install's GPU or keys. No new model, LoRA, node pack or graph, so no licence data, pre-flight or ASSET_REFS work is needed. No Higgsfield code or media, no analytics. The visible copy is owner-only.",
-      "npx vitest run tests/idol-final.test.ts tests/model3d.test.ts tests/idol.test.ts: 3 files, 60/60 pass.",
-      "eslint on the 3 changed source files and the new test: clean.",
-      "npx next typegen, then tsc --noEmit with an 8 GB heap: clean (exit 0). Before typegen, tsc showed only LayoutProps/PageProps/RouteContext errors, which typegen fixes. Removed the .next folder typegen made; git status is clean.",
-      "Did not re-run the browser script (tests/e2e/idol-final.mjs). Read it: it covers 1440/390 px, light and dark, console errors, sideways scroll, and the link landing on TRELLIS.2 with the picture.",
-      "Made no edits, commits or pushes."
-    ],
-    "verdict": "approve: the brief is met, typecheck, lint and targeted tests are clean, and nothing regresses. There are two low findings (a second click on an unchanged link does nothing; ?image= turns Idol's photo crop off on a wrong premise), worth fixing before idol-5 reuses ?image=, but neither blocks."
-  },
-  "fix": {
-    "applied": [
-      "Review finding 1 (low, confirmed): clicking 'Build the final with TRELLIS.2' a second time with the same link did nothing, because UrlModel only reacts when the URL changes. ModelCard now takes an onFinal callback; the link's onClick calls it with the result's picture, and the studio's toFinal picks From an image / open engine / oss-trellis2 (via modeOf(FINAL_3D.model)) and fills the photo on every click. The link still navigates, so a new tab or a reload works as before. Wired through ResultCard.",
-      "Review finding 2 (low, confirmed): ?image= turned Idol's 'It's a photo' crop off on a wrong premise (model3dView().photo is the Idol run's source picture, usually the user's own upload). fromImage now fills the photo only and leaves the switch as it is.",
-      "tests/idol-final.test.ts: wiring checks for onClick/onFinal/toFinal and that fromImage no longer touches setIdolPhoto (they pass in the full vitest run).",
-      "tests/e2e/idol-final.mjs: removes the photo by hand and clicks the same link again, then checks the photo slot refills; checks the photo slot itself (the Idol card shows the same picture, so the old img-count check passed on the card alone); counts Idol cards rather than assuming one, so reruns against the same demo data pass; the note check is scoped to the card.",
-      "Commit e16347ea 'Image to 3D: Build the final with TRELLIS.2 fills the form on every click' on o/idol-6 (on top of 9ed6da4f, de535d63). Not pushed."
-    ],
-    "rejected": [
-      "Finding 3 (info, source-text wiring test): kept. finalBuildHref and offered() have behavioural unit tests and the browser script covers the visible flow. A component-render test would need a React test harness this suite doesn't use for these studios. I added to the source checks; I didn't replace them.",
-      "Finding 4 (info, ?image= not checked against /api/files): no change. Only the owner can start 3D (visitors are hidden in the UI, and accounts get 403 own-gpu-tool on the server). An <img src> doesn't run javascript: URLs, and main's studio-page and color-grade take ?image= the same way. So it isn't exploitable here, and it isn't a new class of problem."
-    ],
-    "checks": [
-      "Branch check: claude/fuobe-parity-4..o/idol-6 lists only this package's commits. The base is an ancestor, so no merge was needed.",
-      "pnpm install --frozen-lockfile --prefer-offline: exit 0. npx next typegen: exit 0.",
-      "pnpm typecheck (NODE_OPTIONS=--max-old-space-size=8192): exit 0.",
-      "pnpm lint: exit 0 (0 errors; 5 warnings, all in files this package doesn't touch: scripts/comfy/library.spec.mjs, src/components/studio/composer.tsx, src/server/elements.ts).",
-      "Targeted: npx vitest run tests/idol-final.test.ts tests/model3d.test.ts tests/idol.test.ts: 60/60 pass, run before I added the new wiring assertions to an existing test case.",
-      "Full: FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: exit 1, 5481 passed, 6 failed in 5 files: comfy-reuse (1), dop-originals (1), preset-featured (1), soul-runs (2), split-soundtrack (1). This is exactly the known pre-existing list in main-rules.md and has nothing to do with this package. idol-final passed in this run.",
-      "Browser, demo mode (FUOBE_DEMO_MODE=on, http://localhost:3462): node tests/e2e/idol-final.mjs passes at 1440 and 390 px in light and dark. Only Idol drafts show the button, with the note on the card. A click opens From an image on TRELLIS.2 with the photo slot filled. After the photo is removed by hand, a second click on the same link fills it again. No sideways scroll, no page or console errors (Hydration errors not filtered). Server stopped, .next deleted, git status clean."
-    ],
-    "finalSummary": "idol-6 is complete. On a finished Idol 3D result from your own GPU (oss-idol) that has a source picture, the card offers 'Build the final with TRELLIS.2', with 'A textured, riggable .glb · 16 GB GPU' under it. It opens Image to 3D → From an image on TRELLIS.2 with the same picture, and it now does that on every click, including a repeat click on the same link. ?image= fills the picture and no longer flips Idol's photo crop. Open engine (your ComfyUI): the button and the hand-off are built and checked in demo mode. The TRELLIS.2 build itself is the existing oss-trellis2 route (16 GB GPU) and was not run on a GPU here. Cloud engine: there is no Idol draft on the cloud, so the fal idol-3d result never shows the button, and Paid APIs only hides it. The button is also hidden when TRELLIS.2 is switched off in Settings → Models & licences. No key is needed. Public sign-up: guests and other visitors don't see the button. Accounts still can't start 3D (403 own-gpu-tool), and no server path was added. Commits on o/idol-6: 9ed6da4f, de535d63, e16347ea (not pushed).",
-    "left": [
-      "No GPU run of the TRELLIS.2 final (existing oss-trellis2 route, 16 GB GPU).",
-      "Model access was not switched off live in the browser; only the unit test covers that.",
-      "Docs follow-ups from the implementation stage still stand. Image to 3D accepts ?image=<url> (alongside ?model= and ?mode=), and ARCHITECTURE/STATUS should say so. STATUS should mark idol-6 done. idol-5 can reuse ?image=.",
-      "Full vitest has 6 failures, all on the known pre-existing list (comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack)."
-    ],
-    "blocked": ""
-  }
+ "key": "idol-6",
+ "impl": {
+  "branch": "o/idol-6",
+  "summary": "Idol 3D results from your own GPU (request.modelId 'oss-idol') with a source picture now have a 'Build the final with TRELLIS.2' button, with 'A textured, riggable .glb · 16 GB GPU' under it. The button links to /image-to-3d?mode=image&model=oss-trellis2&image=<the result's picture>. Image to 3D now reads ?image= and fills the photo from it. The button is hidden when TRELLIS.2 is switched off in Settings → Models & licences (offered(), the same check the studio's picker uses), when engine mode is Paid APIs only, and for visitors. fal Idol results ('idol-3d') never get it. Two signed commits on o/idol-6 (9ed6da4f, de535d63); not pushed.",
+  "built": [
+   "src/lib/av/model3d.ts: new FINAL_3D constant (model oss-trellis2, the label and the note) and a pure finalBuildHref(g, view, allowed) that returns the link only for oss-idol results with a photo when allowed is true",
+   "src/components/model3d/model-card.tsx: new finalAllowed prop. The outline button links to the final build, with the note under it, below the action row. The other buttons (Rig & animate, Animate the spin, Film it photoreal, Refine, Print-ready, Retexture) are unchanged",
+   "src/components/model3d/model3d-studio.tsx: UrlModel now reads ?image= and calls a stable fromImage callback. It fills the photo slot and turns Idol's photo crop off, since the picture comes from a Fuobe result. finalAllowed = !visitor && engineMode !== 'cloud' && offered(access, 'oss-trellis2', 'open'), passed through ResultCard to ModelCard",
+   "Plan items already there: oss-idol and oss-trellis2 in MODELS_3D, model3dView().photo, offered()/useModelAccess, and ?model= / ?mode= handling. The ?image= support (idol-5's, not built yet; there is no o/idol-5 branch) was added here in a general form that idol-5 can reuse (e.g. ?mode=splat&model=oss-idol&image=…)"
+  ],
+  "tests": [
+   "tests/idol-final.test.ts (new, 6 tests): the exact href and that it parses back to mode=image / model=oss-trellis2 / the same picture, and that modeOf maps it to image on the open engine. No link for: an oss-idol result without a picture, fal idol-3d, oss-triposplat, oss-trellis2, oss-pixal3d, triposplat, trellis-2, or when not allowed. Model access: offered() with oss-trellis2 off hides the link, another model off does not. FINAL_3D names a real open model in MODELS_3D whose tagline says 16 GB GPU. A source check that the card and studio are wired",
+   "Targeted run: tests/idol-final, idol, model3d, account-idol — 62/62 pass",
+   "tsc --noEmit clean (needed NODE_OPTIONS=--max-old-space-size=8192; the default heap ran out of memory). eslint clean on the changed files",
+   "Browser check, demo mode (FUOBE_DEMO_MODE=on, port 3462): new script tests/e2e/idol-final.mjs, run at 1440 and 390 px in light and dark, all passing. Only the Idol card shows the button (the TRELLIS.2 card does not). The note is visible. Clicking opens From an image with TRELLIS.2 picked and the same picture filled in. No sideways scroll, no page or console errors. Server stopped and .next deleted afterwards",
+   "No full vitest suite run, as this stage says"
+  ],
+  "left": [
+   "Model access was not toggled live in the browser; only the unit test covers it",
+   "No GPU run: the final TRELLIS.2 build itself is the existing oss-trellis2 route (16 GB GPU), unchanged and not exercised here",
+   "Accounts still can't start 3D (own-gpu-tool). The button is hidden for visitors, so nothing changes on the server",
+   "The changed files were already failing prettier --check before this package (the repo has no prettier config), so I did not reformat them"
+  ],
+  "docsNotes": [
+   "The brief was out of date in two places. The oss-trellis2 note in MODELS_3D now reads 'A dependable second choice, with a turntable video' (Pixal3D is the first choice), so the card uses the brief's 'A textured, riggable .glb · 16 GB GPU' from FINAL_3D rather than the catalog note. model3d.ts L39 no longer holds that line",
+   "Image to 3D now accepts ?image=<url> to fill the photo (alongside ?model= and ?mode=). This is worth a line in ARCHITECTURE/STATUS where the Image to 3D link parameters are listed, and idol-5 can use it",
+   "STATUS: idol-6 is done (Draft then final on Idol 3D results from your own GPU; open engine only; no Idol draft on the cloud)"
+  ],
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "low",
+    "file": "src/components/model3d/model3d-studio.tsx",
+    "line": 98,
+    "title": "Clicking 'Build the final with TRELLIS.2' a second time with the same link does nothing",
+    "detail": "UrlModel only acts when the values in the URL change: the ?image= effect depends on [image, onImage] and the ?model= effect on [id, mode, ...]. The button sits on the same /image-to-3d page. Say the user clicks it on result A, then changes the photo or the mode by hand, then clicks the same card again. The URL is the same, so neither effect runs and the form keeps what the user changed, so the click looks like it did nothing. Clicking a different Idol card works, because its image changes. ?model= links already behaved this way before this package, so this is not a regression of existing behaviour, but it is the main repeat flow of this new button. Found by reading the code; not reproduced in a browser.",
+    "verified": "Traced: fromImage and fromUrl are stable useCallbacks, and the effects' deps are strings taken from useSearchParams."
+   },
+   {
+    "severity": "low",
+    "file": "src/components/model3d/model3d-studio.tsx",
+    "line": 244,
+    "title": "?image= turns Idol's photo crop off on the wrong premise",
+    "detail": "fromImage calls setIdolPhoto(false), with the comment 'a Fuobe result's, so Idol's photo crop stays off'. But model3dView(g).photo is request.inputs.images[0], the Idol run's source picture. That is normally the user's own upload: the e2e script uses /api/uploads, and idolPhotoFor counts uploads as photos. This has no effect on the TRELLIS.2 final, since the crop only applies in Splat mode. It is wrong if the user then switches to Splat with Idol, or if idol-5 reuses ?image= as the report suggests (?mode=splat&model=oss-idol&image=...): an uploaded photo would get the synthetic crop. A better choice is to leave the switch as it is, or to set it with idolPhotoFor.",
+    "verified": "Read model3dView (photo: g.request.inputs?.images?.[0]) and idolPhotoFor in src/lib/av/model3d.ts."
+   },
+   {
+    "severity": "info",
+    "file": "tests/idol-final.test.ts",
+    "line": 57,
+    "title": "The card and studio wiring is tested only by matching source text",
+    "detail": "The access, visitor and Paid-APIs-only gating in the studio is checked by an exact source-text match of the finalAllowed line. The pure finalBuildHref and offered() are unit-tested properly, and the browser script covers the visible flow in demo mode. A refactor that keeps behaviour would break the string test, and a behaviour change that keeps the text would pass it. The engineMode 'cloud' case and the visitor case have no behavioural test. This is acceptable for a P2 small package."
+   },
+   {
+    "severity": "info",
+    "file": "src/components/model3d/model3d-studio.tsx",
+    "line": 92,
+    "title": "?image= is taken as given (no /api/files check)",
+    "detail": "Any value of ?image= becomes the photo's ref and preview. Main's studio-page and color-grade already do the same; only live-edit-app checks with fileParam (/api/files/ only). Only the owner can run 3D: visitors are blocked in the UI, and the server answers own-gpu-tool for accounts. An <img src> does not run javascript: URLs. So this is not exploitable here and is not a new class of problem. Checking with a fileParam-style pattern would be tidier."
+   }
+  ],
+  "checks": [
+   "Read the stage prompt, main-rules.md, the implementer report, the full diff claude/fuobe-parity-4...o/idol-6 (2 commits, 5 files) and the code around it: model3dView().photo, idolPhotoFor, modeOf, the studio's photo state, the UrlModel effects, and the single ModelCard caller (ResultCard).",
+   "Brief coverage: the button and its note show only for oss-idol results with a source picture; the href is /image-to-3d?mode=image&model=oss-trellis2&image=<photo>; ?image= support was added; the button hides when oss-trellis2 is off through offered(access, 'oss-trellis2', 'open'), the same check the picker uses; it also hides for visitors and in Paid APIs only. No Idol draft on the cloud: fal idol-3d never gets it. Rig & animate, Animate the spin and the other buttons are untouched (the new block is added after the action row).",
+   "Checked against idol-9.md §7.2 / §9 idol-6: it matches ('oss-trellis2 on the same picture ... not an Idol substitute'). The implementer's note is right that the catalog's oss-trellis2 note changed, so FINAL_3D carries the brief's text.",
+   "Public sign-up: no new route, server path or price check. The button is hidden for visitors, and accounts still get own-gpu-tool for 3D, so there is no new path to the install's GPU or keys. No new model, LoRA, node pack or graph, so no licence data, pre-flight or ASSET_REFS work is needed. No Higgsfield code or media, no analytics. The visible copy is owner-only.",
+   "npx vitest run tests/idol-final.test.ts tests/model3d.test.ts tests/idol.test.ts: 3 files, 60/60 pass.",
+   "eslint on the 3 changed source files and the new test: clean.",
+   "npx next typegen, then tsc --noEmit with an 8 GB heap: clean (exit 0). Before typegen, tsc showed only LayoutProps/PageProps/RouteContext errors, which typegen fixes. Removed the .next folder typegen made; git status is clean.",
+   "Did not re-run the browser script (tests/e2e/idol-final.mjs). Read it: it covers 1440/390 px, light and dark, console errors, sideways scroll, and the link landing on TRELLIS.2 with the picture.",
+   "Made no edits, commits or pushes."
+  ],
+  "verdict": "approve: the brief is met, typecheck, lint and targeted tests are clean, and nothing regresses. There are two low findings (a second click on an unchanged link does nothing; ?image= turns Idol's photo crop off on a wrong premise), worth fixing before idol-5 reuses ?image=, but neither blocks."
+ },
+ "fix": {
+  "applied": [
+   "Review finding 1 (low, confirmed): clicking 'Build the final with TRELLIS.2' a second time with the same link did nothing, because UrlModel only reacts when the URL changes. ModelCard now takes an onFinal callback; the link's onClick calls it with the result's picture, and the studio's toFinal picks From an image / open engine / oss-trellis2 (via modeOf(FINAL_3D.model)) and fills the photo on every click. The link still navigates, so a new tab or a reload works as before. Wired through ResultCard.",
+   "Review finding 2 (low, confirmed): ?image= turned Idol's 'It's a photo' crop off on a wrong premise (model3dView().photo is the Idol run's source picture, usually the user's own upload). fromImage now fills the photo only and leaves the switch as it is.",
+   "tests/idol-final.test.ts: wiring checks for onClick/onFinal/toFinal and that fromImage no longer touches setIdolPhoto (they pass in the full vitest run).",
+   "tests/e2e/idol-final.mjs: removes the photo by hand and clicks the same link again, then checks the photo slot refills; checks the photo slot itself (the Idol card shows the same picture, so the old img-count check passed on the card alone); counts Idol cards rather than assuming one, so reruns against the same demo data pass; the note check is scoped to the card.",
+   "Commit e16347ea 'Image to 3D: Build the final with TRELLIS.2 fills the form on every click' on o/idol-6 (on top of 9ed6da4f, de535d63). Not pushed."
+  ],
+  "rejected": [
+   "Finding 3 (info, source-text wiring test): kept. finalBuildHref and offered() have behavioural unit tests and the browser script covers the visible flow. A component-render test would need a React test harness this suite doesn't use for these studios. I added to the source checks; I didn't replace them.",
+   "Finding 4 (info, ?image= not checked against /api/files): no change. Only the owner can start 3D (visitors are hidden in the UI, and accounts get 403 own-gpu-tool on the server). An <img src> doesn't run javascript: URLs, and main's studio-page and color-grade take ?image= the same way. So it isn't exploitable here, and it isn't a new class of problem."
+  ],
+  "checks": [
+   "Branch check: claude/fuobe-parity-4..o/idol-6 lists only this package's commits. The base is an ancestor, so no merge was needed.",
+   "pnpm install --frozen-lockfile --prefer-offline: exit 0. npx next typegen: exit 0.",
+   "pnpm typecheck (NODE_OPTIONS=--max-old-space-size=8192): exit 0.",
+   "pnpm lint: exit 0 (0 errors; 5 warnings, all in files this package doesn't touch: scripts/comfy/library.spec.mjs, src/components/studio/composer.tsx, src/server/elements.ts).",
+   "Targeted: npx vitest run tests/idol-final.test.ts tests/model3d.test.ts tests/idol.test.ts: 60/60 pass, run before I added the new wiring assertions to an existing test case.",
+   "Full: FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: exit 1, 5481 passed, 6 failed in 5 files: comfy-reuse (1), dop-originals (1), preset-featured (1), soul-runs (2), split-soundtrack (1). This is exactly the known pre-existing list in main-rules.md and has nothing to do with this package. idol-final passed in this run.",
+   "Browser, demo mode (FUOBE_DEMO_MODE=on, http://localhost:3462): node tests/e2e/idol-final.mjs passes at 1440 and 390 px in light and dark. Only Idol drafts show the button, with the note on the card. A click opens From an image on TRELLIS.2 with the photo slot filled. After the photo is removed by hand, a second click on the same link fills it again. No sideways scroll, no page or console errors (Hydration errors not filtered). Server stopped, .next deleted, git status clean."
+  ],
+  "finalSummary": "idol-6 is complete. On a finished Idol 3D result from your own GPU (oss-idol) that has a source picture, the card offers 'Build the final with TRELLIS.2', with 'A textured, riggable .glb · 16 GB GPU' under it. It opens Image to 3D → From an image on TRELLIS.2 with the same picture, and it now does that on every click, including a repeat click on the same link. ?image= fills the picture and no longer flips Idol's photo crop. Open engine (your ComfyUI): the button and the hand-off are built and checked in demo mode. The TRELLIS.2 build itself is the existing oss-trellis2 route (16 GB GPU) and was not run on a GPU here. Cloud engine: there is no Idol draft on the cloud, so the fal idol-3d result never shows the button, and Paid APIs only hides it. The button is also hidden when TRELLIS.2 is switched off in Settings → Models & licences. No key is needed. Public sign-up: guests and other visitors don't see the button. Accounts still can't start 3D (403 own-gpu-tool), and no server path was added. Commits on o/idol-6: 9ed6da4f, de535d63, e16347ea (not pushed).",
+  "left": [
+   "No GPU run of the TRELLIS.2 final (existing oss-trellis2 route, 16 GB GPU).",
+   "Model access was not switched off live in the browser; only the unit test covers that.",
+   "Docs follow-ups from the implementation stage still stand. Image to 3D accepts ?image=<url> (alongside ?model= and ?mode=), and ARCHITECTURE/STATUS should say so. STATUS should mark idol-6 done. idol-5 can reuse ?image=.",
+   "Full vitest has 6 failures, all on the known pre-existing list (comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack)."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/idol-6"
+  ],
+  "notMerged": [],
+  "conflicts": "model-card imports; model3d-studio ?image= handling unified with idol-5's (fromImage(url, asPhoto)); follow-up 2f7d3db2 (linkedPhoto)",
+  "checks": "batch of 7 (dbs-d7, idol-5, idol-2, idol-6, n7-9, kandinsky6, n7-10): typecheck 0, lint 0, vitest 5788 passed, 6 failed (main known); each merge checked by an independent verifier; n7-10 + Pika Flex interaction fixed in 64900624",
+  "pushed": true,
+  "head": "64900624"
+ }
 }

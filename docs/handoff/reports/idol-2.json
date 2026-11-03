@@ -1,129 +1,139 @@
 {
-  "key": "idol-2",
-  "impl": {
-    "branch": "o/idol-2 (worktree /home/user/wt/o-idol-2; 3 commits on claude/fuobe-parity-4 @ f5b4776b, pushed to origin/o/idol-2)",
-    "summary": "Idol 3D can now save cleaned splat files and use Idol's own crop through the ComfyUI-Idol pack (Nynxz, pinned at 4d3a4f67, Apache-2.0). The pack is pinned in CUSTOM_NODE_REPOS, PACK_CLASSES, install-comfyui.sh NODES, packs.json and requirements.json, and it has a NODE_PACKS licence row. A new graph, image-to-splat-idol-clean, does three things: IdolPreprocessImage replaces TripoSplatPreprocessImage and the core photo crop (cropMode synthetic or real, using Fuobe's cut-out mask); IdolPruneSplat after the decoder feeds both the saved file and the orbit video; and IdolCamera with a 1-frame RenderSplat saves the input-view still, which becomes the card's poster. A PreviewAny reports how many Gaussians were kept. The provider asks GET /object_info/IdolPruneSplat on that worker. The answer is cached for a minute per address. If the server can't be reached, nothing is cached. The cache is cleared when /prompt refuses the clean graph. When the class is there and the pack isn't switched off in Settings → Models & licences, the clean graph runs. Otherwise idol-1's core graph runs, unchanged, and its splat is marked meta.pruned false. 'It's a photo' maps to cropMode real. A new Advanced → 'Trim spikes' switch (open engine only) sends maxScale 0.05. The result card shows 'Cleaned: N Gaussians kept'. Only the owner sees 'Not cleaned: install ComfyUI-Idol…'. Verified: unit tests, the build, and the browser. Not verified here: a /prompt check of the clean graph with the pack installed, which is the owner's step. No splat was run (no GPU, no weights).",
-    "built": [
-      "scripts/comfy/hand-built/image-to-splat-idol-clean.json: a copy of image-to-splat-idol. 88:2 and 88:101-104 are removed. New nodes: 88:110 IdolPreprocessImage {image [99,0], mode 'synthetic', mask [88:35,0], erode_radius 1, size 1024}; 88:111 IdolPruneSplat {splat [88:55,0], min_opacity 0.05, max_scale 0}; 88:112 IdolCamera {samples [88:6,0]}; 88:113 RenderSplat (1 frame, 1024, #000000, opacity_threshold 0, from the pruned splat and IdolCamera's camera); 93 SaveImage; 94 PreviewAny {source [88:111,1]}. 88:24 now takes its image from 88:110, and 92 and 75 take the pruned splat. Everything else is identical to idol-1's graph (tested).",
-      "library.spec.mjs: CUSTOM_NODE_REPOS 'ComfyUI-Idol' at the pin. PACK_CLASSES /^Idol(PreprocessImage|Camera|PruneSplat)$/. Header comment for the new keys. A spec entry 'image-to-splat-idol-clean' with packs ['ComfyUI-Idol'], idol-1's bindings minus photoCrop plus cropMode (88:110.mode), minOpacity and maxScale (88:111), outputs 51 splat / 42 turntable / 93 image role 'preview' / 94 text role 'report', defaults {spz, cutout true, cropMode synthetic, minOpacity 0.05, maxScale 0}, and idol-1's licence string plus '; ComfyUI-Idol nodes Apache-2.0'. build-library.mjs BINDING_KEYS gains cropMode, minOpacity and maxScale.",
-      "Build: npm run build for both Idol ids. The manifest gains only the new entry: same 5 models and sizes, customNodes ComfyUI-Idol, validated false. idol-1's entry is byte-identical. requirements.json lists the workflow with packs {ComfyUI-Idol: 3 classes} and the pack pin. packs.json pins ComfyUI-Idol with registry null and requirementsTxt false (the repository has no requirements.txt, only a pyproject with dependencies []). model-pins.json needed no change (no new files). The validator's object_info.subset.json and validation-state.json rewrites were reverted, as for the other pack entries. scripts/comfy/README.md has a new row.",
-      "install-comfyui.sh NODES: [ComfyUI-Idol] at the pin, with the comment the brief asked for (Apache-2.0, no Python dependencies, no model code, 3 AI-assisted commits on 2026-10-30, not in the Comfy Registry, main ComfyUI only, core fallback).",
-      "src/lib/licences.ts NODE_PACKS: a ComfyUI-Idol row (Apache-2.0, commercial) after ComfyUI-DBS, with the brief's note.",
-      "src/lib/av/model3d.ts: IDOL_WORKFLOWS, IDOL_PACK, IDOL_PACK_CLASS, IDOL_TRIM_SPIKES (0.05). idolExtra(engine, quality, photoCrop, trimSpikes) sends maxScale on the open engine only; fal has no pruning. idolGraphValues(extra, has) maps photoCrop to cropMode real or synthetic for the clean graph, maps cropMode to the photo switch for the core graph, clamps minOpacity and maxScale to 0-1, and drops keys the graph doesn't bind. idolKept() reads the count. idolCleanLine() gives the card's line. Model3dInput.trimSpikes and Model3dView.clean are new.",
-      "src/server/providers/comfyui.ts: comfyHasClass(cls, worker, maxAgeMs=60s) uses the same oneAsk and per-address cache as comfyDevice and comfyDbsModels. It returns undefined on someone's computer or when the server can't be reached, and forgetComfyClass() clears the answer. PrepareContext.idolPack is new. prepareWorkflow swaps image-to-splat-idol to -clean when idolPack() returns true and maps the Idol values. In submit, idolPack returns false when Settings switches the ComfyUI-Idol pack off; otherwise it asks /object_info (model-access is imported dynamically to avoid an import cycle). A refused /prompt for the clean graph clears the cached answer. collectOutputs does three new things: the clean graph's PreviewAny count goes on the splat as meta.kept, with pruned true and no separate text output; the core Idol graph's splat gets pruned false; TripoSplat is unchanged.",
-      "UI: model3d-studio.tsx IdolSettings has an Advanced disclosure with a labelled 'Trim spikes' Switch and a hint. It appears on the open engine only and is kept in page state. model-card.tsx shows 'Cleaned: N Gaussians kept' for a clean splat, and 'Not cleaned: install ComfyUI-Idol on your ComfyUI for cleaner splat files.' for a core one, the latter to the owner only (useIsOwner). The input-view still becomes the poster through model3dView's existing image fallback.",
-      "Research correction: idol-9.md §5.2 and idol-9.json now say that api.comfy.org/nodes/comfyui-idol answers with a different author's pack (PedroMarinhoDev/ComfyUI-Idol 1.0.0, flagged, ComfyUI >= 0.43.0). Nynxz's pack is still not in the Registry, so Fuobe pins its repository by commit."
-    ],
-    "tests": [
-      "New: tests/idol-clean.test.ts, 17 tests. They cover: the spec, PACK_CLASSES, CUSTOM_NODE_REPOS and BINDING_KEYS; the manifest entry (customNodes, models equal to idol-1's, defaults, bindings, outputs); the requirements and packs.json pins; the install-comfyui.sh NODES grep; the NODE_PACKS row and the workflow licence (idol-1's plus the pack's, the DINOv3 notice, the same flags); the graph wiring, with the pack nodes' inputs checked against the inputs the pack declares (idol-9.md §5.1) and every other node equal to idol-1's; the provider picking the clean graph on true and the core graph on false, undefined, a rejection or no ctx; the photoCrop -> cropMode, Trim spikes -> max_scale and clamping mappings; idolGraphValues; comfyHasClass against a stand-in HTTP ComfyUI (cache, forget, maxAge); collectOutputs for clean, core and TripoSplat; model3dView.clean and the poster; Trim spikes on the open engine only.",
-      "Changed: tests/model3d.test.ts. The Idol collectOutputs expectation now includes pruned:false on the core graph's splat. tests/comfy-library-4.test.ts: added image-to-splat-idol-clean to the unvalidated list, the only edit allowed there.",
-      "Targeted runs pass (17 files, 538 tests): idol-clean, idol, model3d, account-idol, comfy-library-4/7/notes, gpu-requirements, licences, model-access(-listings/-studios), comfy-install, comfy-dbs, outputs, canvas, model3d-runner.",
-      "tsc --noEmit is clean. pnpm typecheck OOMs at the default heap, so I ran tsc with --max-old-space-size=6144. eslint on the changed files: 0 errors, 1 warning that was already on the base (WAN_NEG_EN).",
-      "Full vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2): 6 failed | 5396 passed | 4 skipped. All 6 are the known failures from main: comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack.",
-      "ComfyUI (shared CPU server 0.41.0, nothing installed or restarted): npm run build validated both entries' graphs. The build expects the pack classes through PACK_CLASSES. node validate-workflows.mjs image-to-splat-idol-clean --shared answered 'missing_node_type Idol Preprocess Image', as expected without the pack. GET /object_info/IdolPruneSplat on the server returns {}.",
-      "Browser (FUOBE_DEMO_MODE=on, pnpm dev -p 3462, Playwright, 1440 light and 390 dark): /image-to-3d?model=oss-idol shows Advanced · edges -> Trim spikes; the switch toggles and the summary reads 'trimming spikes'. ?model=idol-3d has no Advanced and no Trim spikes, but keeps the photo switch. Two seeded splat results show 'Cleaned: 131,072 Gaussians kept' with the input-view poster, and 'Not cleaned: install ComfyUI-Idol…' (the demo viewer is the owner). No horizontal overflow and no console errors. The server was stopped, .next and the data dir deleted, and typegen re-run."
-    ],
-    "left": [
-      "The owner's step: install ComfyUI-Idol at 4d3a4f67 on a ComfyUI and /prompt-check image-to-splat-idol-clean there, then mark it validated. Also compare the core photo crop with IdolPreprocessImage 'real'. Nothing here installed or ran the pack, by the owner's rule.",
-      "No real run (no GPU, no Idol weights). The kept count, the pruned file size, the still from IdolCamera and Trim spikes' effect are all unmeasured.",
-      "tests/comfy-library-4.test.ts: added 'image-to-splat-idol-clean' to its exact list of unvalidated ids (the allowed edit).",
-      "Deviation from the brief: the still's output role is 'preview', not 'poster', and the count's role is 'report'. ManifestOutput's role union and comfy-library-4's ROLES list (a hot file) have no 'poster', and every role must be in that list. model3dView already uses any image output as the poster.",
-      "Pack detection on someone's computer (Fuobe tab relay) returns undefined, so those runs use the core graph. Accounts can't run 3D models anyway.",
-      "When the pack has gone, a refused /prompt for the clean graph only clears the cache: that one run fails with ComfyUI's missing-node message, and the next run uses the core graph. There is no automatic retry.",
-      "Settings → Models & licences: oss-idol's route facts list only the core workflow, so the ComfyUI-Idol pack row counts 0 models. Switching the pack off makes Idol use the core graph instead of turning oss-idol off. This is deliberate, so the fallback keeps working.",
-      "TripoSplat has no pruning, as the brief asked: wait for idol-3."
-    ],
-    "docsNotes": [
-      "STATUS / FEATURES: Image to 3D -> Splat -> Idol 3D on your GPU saves a cleaned splat (about half the Gaussians, the near-transparent haze, dropped) and uses Idol's own crop for photos when the ComfyUI has the ComfyUI-Idol nodes. Otherwise it runs the core-node graph as before. Advanced -> Trim spikes (open engine only). The card shows 'Cleaned: N Gaussians kept' and the view the model saw as its poster.",
-      "Models & licences / self-hosting: the ComfyUI-Idol pack (Nynxz, Apache-2.0, no Python dependencies) is pinned at 4d3a4f67 in install-comfyui.sh. Do not install 'comfyui-idol' from the Comfy Registry: that id is a different author's flagged pack.",
-      "Brief out of date: the line numbers predate main's 10-30 work. CUSTOM_NODE_REPOS ends near L210 and PACK_CLASSES near L235. The ComfyUI-DBS NODE_PACKS row is at ~L494. install-comfyui.sh NODES runs to L51. The 'L776-787 pattern' is comfyDevice / comfyDbsModels / comfyReuseModels at ~L728-850, and the swap happens in prepareWorkflow after resolveWorkflowId. model3dView's poster is at model3d.ts ~L315. The brief's CLOUD RULE 'Idol is not hosted' was already superseded by idol-1: fal hosts speridlabs/idol, but it has no pruning or max_scale field, so Trim spikes stays open-only.",
-      "Research corrections: idol-9.md §5.2 and idol-9.json (the Registry id comfyui-idol now belongs to PedroMarinhoDev's pack)."
-    ],
-    "blocked": ""
+ "key": "idol-2",
+ "impl": {
+  "branch": "o/idol-2 (worktree /home/user/wt/o-idol-2; 3 commits on claude/fuobe-parity-4 @ f5b4776b, pushed to origin/o/idol-2)",
+  "summary": "Idol 3D can now save cleaned splat files and use Idol's own crop through the ComfyUI-Idol pack (Nynxz, pinned at 4d3a4f67, Apache-2.0). The pack is pinned in CUSTOM_NODE_REPOS, PACK_CLASSES, install-comfyui.sh NODES, packs.json and requirements.json, and it has a NODE_PACKS licence row. A new graph, image-to-splat-idol-clean, does three things: IdolPreprocessImage replaces TripoSplatPreprocessImage and the core photo crop (cropMode synthetic or real, using Fuobe's cut-out mask); IdolPruneSplat after the decoder feeds both the saved file and the orbit video; and IdolCamera with a 1-frame RenderSplat saves the input-view still, which becomes the card's poster. A PreviewAny reports how many Gaussians were kept. The provider asks GET /object_info/IdolPruneSplat on that worker. The answer is cached for a minute per address. If the server can't be reached, nothing is cached. The cache is cleared when /prompt refuses the clean graph. When the class is there and the pack isn't switched off in Settings → Models & licences, the clean graph runs. Otherwise idol-1's core graph runs, unchanged, and its splat is marked meta.pruned false. 'It's a photo' maps to cropMode real. A new Advanced → 'Trim spikes' switch (open engine only) sends maxScale 0.05. The result card shows 'Cleaned: N Gaussians kept'. Only the owner sees 'Not cleaned: install ComfyUI-Idol…'. Verified: unit tests, the build, and the browser. Not verified here: a /prompt check of the clean graph with the pack installed, which is the owner's step. No splat was run (no GPU, no weights).",
+  "built": [
+   "scripts/comfy/hand-built/image-to-splat-idol-clean.json: a copy of image-to-splat-idol. 88:2 and 88:101-104 are removed. New nodes: 88:110 IdolPreprocessImage {image [99,0], mode 'synthetic', mask [88:35,0], erode_radius 1, size 1024}; 88:111 IdolPruneSplat {splat [88:55,0], min_opacity 0.05, max_scale 0}; 88:112 IdolCamera {samples [88:6,0]}; 88:113 RenderSplat (1 frame, 1024, #000000, opacity_threshold 0, from the pruned splat and IdolCamera's camera); 93 SaveImage; 94 PreviewAny {source [88:111,1]}. 88:24 now takes its image from 88:110, and 92 and 75 take the pruned splat. Everything else is identical to idol-1's graph (tested).",
+   "library.spec.mjs: CUSTOM_NODE_REPOS 'ComfyUI-Idol' at the pin. PACK_CLASSES /^Idol(PreprocessImage|Camera|PruneSplat)$/. Header comment for the new keys. A spec entry 'image-to-splat-idol-clean' with packs ['ComfyUI-Idol'], idol-1's bindings minus photoCrop plus cropMode (88:110.mode), minOpacity and maxScale (88:111), outputs 51 splat / 42 turntable / 93 image role 'preview' / 94 text role 'report', defaults {spz, cutout true, cropMode synthetic, minOpacity 0.05, maxScale 0}, and idol-1's licence string plus '; ComfyUI-Idol nodes Apache-2.0'. build-library.mjs BINDING_KEYS gains cropMode, minOpacity and maxScale.",
+   "Build: npm run build for both Idol ids. The manifest gains only the new entry: same 5 models and sizes, customNodes ComfyUI-Idol, validated false. idol-1's entry is byte-identical. requirements.json lists the workflow with packs {ComfyUI-Idol: 3 classes} and the pack pin. packs.json pins ComfyUI-Idol with registry null and requirementsTxt false (the repository has no requirements.txt, only a pyproject with dependencies []). model-pins.json needed no change (no new files). The validator's object_info.subset.json and validation-state.json rewrites were reverted, as for the other pack entries. scripts/comfy/README.md has a new row.",
+   "install-comfyui.sh NODES: [ComfyUI-Idol] at the pin, with the comment the brief asked for (Apache-2.0, no Python dependencies, no model code, 3 AI-assisted commits on 2026-10-30, not in the Comfy Registry, main ComfyUI only, core fallback).",
+   "src/lib/licences.ts NODE_PACKS: a ComfyUI-Idol row (Apache-2.0, commercial) after ComfyUI-DBS, with the brief's note.",
+   "src/lib/av/model3d.ts: IDOL_WORKFLOWS, IDOL_PACK, IDOL_PACK_CLASS, IDOL_TRIM_SPIKES (0.05). idolExtra(engine, quality, photoCrop, trimSpikes) sends maxScale on the open engine only; fal has no pruning. idolGraphValues(extra, has) maps photoCrop to cropMode real or synthetic for the clean graph, maps cropMode to the photo switch for the core graph, clamps minOpacity and maxScale to 0-1, and drops keys the graph doesn't bind. idolKept() reads the count. idolCleanLine() gives the card's line. Model3dInput.trimSpikes and Model3dView.clean are new.",
+   "src/server/providers/comfyui.ts: comfyHasClass(cls, worker, maxAgeMs=60s) uses the same oneAsk and per-address cache as comfyDevice and comfyDbsModels. It returns undefined on someone's computer or when the server can't be reached, and forgetComfyClass() clears the answer. PrepareContext.idolPack is new. prepareWorkflow swaps image-to-splat-idol to -clean when idolPack() returns true and maps the Idol values. In submit, idolPack returns false when Settings switches the ComfyUI-Idol pack off; otherwise it asks /object_info (model-access is imported dynamically to avoid an import cycle). A refused /prompt for the clean graph clears the cached answer. collectOutputs does three new things: the clean graph's PreviewAny count goes on the splat as meta.kept, with pruned true and no separate text output; the core Idol graph's splat gets pruned false; TripoSplat is unchanged.",
+   "UI: model3d-studio.tsx IdolSettings has an Advanced disclosure with a labelled 'Trim spikes' Switch and a hint. It appears on the open engine only and is kept in page state. model-card.tsx shows 'Cleaned: N Gaussians kept' for a clean splat, and 'Not cleaned: install ComfyUI-Idol on your ComfyUI for cleaner splat files.' for a core one, the latter to the owner only (useIsOwner). The input-view still becomes the poster through model3dView's existing image fallback.",
+   "Research correction: idol-9.md §5.2 and idol-9.json now say that api.comfy.org/nodes/comfyui-idol answers with a different author's pack (PedroMarinhoDev/ComfyUI-Idol 1.0.0, flagged, ComfyUI >= 0.43.0). Nynxz's pack is still not in the Registry, so Fuobe pins its repository by commit."
+  ],
+  "tests": [
+   "New: tests/idol-clean.test.ts, 17 tests. They cover: the spec, PACK_CLASSES, CUSTOM_NODE_REPOS and BINDING_KEYS; the manifest entry (customNodes, models equal to idol-1's, defaults, bindings, outputs); the requirements and packs.json pins; the install-comfyui.sh NODES grep; the NODE_PACKS row and the workflow licence (idol-1's plus the pack's, the DINOv3 notice, the same flags); the graph wiring, with the pack nodes' inputs checked against the inputs the pack declares (idol-9.md §5.1) and every other node equal to idol-1's; the provider picking the clean graph on true and the core graph on false, undefined, a rejection or no ctx; the photoCrop -> cropMode, Trim spikes -> max_scale and clamping mappings; idolGraphValues; comfyHasClass against a stand-in HTTP ComfyUI (cache, forget, maxAge); collectOutputs for clean, core and TripoSplat; model3dView.clean and the poster; Trim spikes on the open engine only.",
+   "Changed: tests/model3d.test.ts. The Idol collectOutputs expectation now includes pruned:false on the core graph's splat. tests/comfy-library-4.test.ts: added image-to-splat-idol-clean to the unvalidated list, the only edit allowed there.",
+   "Targeted runs pass (17 files, 538 tests): idol-clean, idol, model3d, account-idol, comfy-library-4/7/notes, gpu-requirements, licences, model-access(-listings/-studios), comfy-install, comfy-dbs, outputs, canvas, model3d-runner.",
+   "tsc --noEmit is clean. pnpm typecheck OOMs at the default heap, so I ran tsc with --max-old-space-size=6144. eslint on the changed files: 0 errors, 1 warning that was already on the base (WAN_NEG_EN).",
+   "Full vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2): 6 failed | 5396 passed | 4 skipped. All 6 are the known failures from main: comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack.",
+   "ComfyUI (shared CPU server 0.41.0, nothing installed or restarted): npm run build validated both entries' graphs. The build expects the pack classes through PACK_CLASSES. node validate-workflows.mjs image-to-splat-idol-clean --shared answered 'missing_node_type Idol Preprocess Image', as expected without the pack. GET /object_info/IdolPruneSplat on the server returns {}.",
+   "Browser (FUOBE_DEMO_MODE=on, pnpm dev -p 3462, Playwright, 1440 light and 390 dark): /image-to-3d?model=oss-idol shows Advanced · edges -> Trim spikes; the switch toggles and the summary reads 'trimming spikes'. ?model=idol-3d has no Advanced and no Trim spikes, but keeps the photo switch. Two seeded splat results show 'Cleaned: 131,072 Gaussians kept' with the input-view poster, and 'Not cleaned: install ComfyUI-Idol…' (the demo viewer is the owner). No horizontal overflow and no console errors. The server was stopped, .next and the data dir deleted, and typegen re-run."
+  ],
+  "left": [
+   "The owner's step: install ComfyUI-Idol at 4d3a4f67 on a ComfyUI and /prompt-check image-to-splat-idol-clean there, then mark it validated. Also compare the core photo crop with IdolPreprocessImage 'real'. Nothing here installed or ran the pack, by the owner's rule.",
+   "No real run (no GPU, no Idol weights). The kept count, the pruned file size, the still from IdolCamera and Trim spikes' effect are all unmeasured.",
+   "tests/comfy-library-4.test.ts: added 'image-to-splat-idol-clean' to its exact list of unvalidated ids (the allowed edit).",
+   "Deviation from the brief: the still's output role is 'preview', not 'poster', and the count's role is 'report'. ManifestOutput's role union and comfy-library-4's ROLES list (a hot file) have no 'poster', and every role must be in that list. model3dView already uses any image output as the poster.",
+   "Pack detection on someone's computer (Fuobe tab relay) returns undefined, so those runs use the core graph. Accounts can't run 3D models anyway.",
+   "When the pack has gone, a refused /prompt for the clean graph only clears the cache: that one run fails with ComfyUI's missing-node message, and the next run uses the core graph. There is no automatic retry.",
+   "Settings → Models & licences: oss-idol's route facts list only the core workflow, so the ComfyUI-Idol pack row counts 0 models. Switching the pack off makes Idol use the core graph instead of turning oss-idol off. This is deliberate, so the fallback keeps working.",
+   "TripoSplat has no pruning, as the brief asked: wait for idol-3."
+  ],
+  "docsNotes": [
+   "STATUS / FEATURES: Image to 3D -> Splat -> Idol 3D on your GPU saves a cleaned splat (about half the Gaussians, the near-transparent haze, dropped) and uses Idol's own crop for photos when the ComfyUI has the ComfyUI-Idol nodes. Otherwise it runs the core-node graph as before. Advanced -> Trim spikes (open engine only). The card shows 'Cleaned: N Gaussians kept' and the view the model saw as its poster.",
+   "Models & licences / self-hosting: the ComfyUI-Idol pack (Nynxz, Apache-2.0, no Python dependencies) is pinned at 4d3a4f67 in install-comfyui.sh. Do not install 'comfyui-idol' from the Comfy Registry: that id is a different author's flagged pack.",
+   "Brief out of date: the line numbers predate main's 10-30 work. CUSTOM_NODE_REPOS ends near L210 and PACK_CLASSES near L235. The ComfyUI-DBS NODE_PACKS row is at ~L494. install-comfyui.sh NODES runs to L51. The 'L776-787 pattern' is comfyDevice / comfyDbsModels / comfyReuseModels at ~L728-850, and the swap happens in prepareWorkflow after resolveWorkflowId. model3dView's poster is at model3d.ts ~L315. The brief's CLOUD RULE 'Idol is not hosted' was already superseded by idol-1: fal hosts speridlabs/idol, but it has no pruning or max_scale field, so Trim spikes stays open-only.",
+   "Research corrections: idol-9.md §5.2 and idol-9.json (the Registry id comfyui-idol now belongs to PedroMarinhoDev's pack)."
+  ],
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "low",
+    "file": "src/components/model3d/model3d-studio.tsx",
+    "line": 171,
+    "title": "Trim spikes does nothing when the ComfyUI lacks ComfyUI-Idol, and nothing says so",
+    "detail": "The Advanced -> Trim spikes switch appears on the open engine whatever the server has. idolExtra sends maxScale 0.05. When prepareWorkflow falls back to image-to-splat-idol (no pack, the pack switched off in Settings, or a run on someone's computer, where comfyHasClass returns undefined), idolGraphValues drops maxScale because the core graph doesn't bind it. The run goes ahead without trimming while the summary still reads 'trimming spikes'. The owner only learns about it afterwards from the card's 'Not cleaned' line. Traced in src/lib/av/model3d.ts idolGraphValues (the has(k) guard) and prepareWorkflow L1757-1762; the test 'runs the core graph without the pack...' covers the fallback.",
+    "verified": "traced",
+    "suggestion": "Add a short hint under the switch, such as 'Needs the ComfyUI-Idol nodes on your ComfyUI' (owner only), or hide the switch when the server has said it lacks the class."
+   },
+   {
+    "severity": "low",
+    "file": "src/components/model3d/model-card.tsx",
+    "line": 132,
+    "title": "'Not cleaned: install ComfyUI-Idol' also shows when the pack is installed but was not used",
+    "detail": "collectOutputs marks every core-graph splat pruned:false. The core graph also runs when the owner switched ComfyUI-Idol off in Settings -> Models & licences, and when the run went through the Fuobe tab relay (computerScope -> comfyHasClass undefined). In both cases the owner is told to install a pack they already have. This is owner-only status text, so no visitor rule is broken.",
+    "verified": "traced",
+    "suggestion": "Word it so it fits every case ('Not cleaned: this run used the core nodes; ComfyUI-Idol makes cleaner files'), or record why on meta (no-pack, switched-off, computer)."
+   },
+   {
+    "severity": "low",
+    "file": "src/server/providers/comfyui.ts",
+    "line": 2346,
+    "title": "The submit-time wiring of idolPack has no test",
+    "detail": "tests/idol-clean.test.ts injects idolPack straight into prepareWorkflow and tests comfyHasClass on its own. Nothing tests the submit closure: Settings pack-off returns false before /object_info is asked, and a refused /prompt for the clean graph calls forgetComfyClass. Both are short and read correctly, but a regression there would go unnoticed.",
+    "verified": "read tests/idol-clean.test.ts (L61, L177-245)",
+    "suggestion": "Add one comfyProvider.submit test with a stand-in ComfyUI. Pack switched off: assert the core graph is posted and no /object_info request is made. /prompt answers 400: assert the next comfyHasClass asks again."
+   },
+   {
+    "severity": "nit",
+    "file": "src/components/model3d/model3d-studio.tsx",
+    "line": 174,
+    "title": "With the switch off, the Advanced summary reads 'Advanced · edges'",
+    "detail": "With Trim spikes off, the disclosure summary is 'Advanced · edges', which doesn't tell the reader anything. 'Advanced' alone, or '· spikes kept', would read better.",
+    "verified": "read",
+    "suggestion": "Show the state only when the switch is on."
+   }
+  ],
+  "checks": [
+   "Read the diff claude/fuobe-parity-4...o/idol-2 (19 files, 3 commits). The branch is on the base tip f5b4776b and origin/o/idol-2 = 2651353d. The worktree is clean.",
+   "Hand-built graphs compared node by node: the clean graph removes 88:2 and 88:101-104 and adds 88:110-113, 93 and 94. 88:24, 92 and 75 are rewired to 88:110 / 88:111. Everything else is identical to image-to-splat-idol.json. The inputs match idol-9.md §5.1: IdolPreprocessImage mode / mask / erode_radius / size; IdolPruneSplat min_opacity / max_scale and count at output 1; IdolCamera samples -> LOAD3D_CAMERA.",
+   "Live CPU ComfyUI (read only): PreviewAny's input is 'source' (output_node true). RenderSplat takes an optional camera_info of type LOAD3D_CAMERA, and frames 1 gives a still. GET /object_info/IdolPruneSplat returns {}, which confirms comfyHasClass's 'absent' case.",
+   "Manifest: the bindings of image-to-splat-idol-clean match the spec (cropMode 88:110.mode, minOpacity / maxScale 88:111, filenamePrefix 51/42/93). Its defaults and outputs (splat / turntable / preview / report) are right. idol-1's entry is unchanged. requirements.json and packs.json pin ComfyUI-Idol at 4d3a4f67 with the 3 classes. The NODE_PACKS row is present (Apache-2.0, commercial), and the workflow licence adds the pack.",
+   "Provider: the swap happens before the manifest loads. meta.workflowId = manifest.id, so poll's collectOutputs gets the clean manifest: kept and pruned go on the splat, the report text is not a file, and the still becomes the poster through model3dView. prepareWorkflow has a single caller (submit). fal: idolExtra sends no maxScale, and the cloud card shows no clean line. A client can only send cropMode real or synthetic, and minOpacity / maxScale are clamped to 0-1.",
+   "Public sign-up: no new route or file-reading path. 3D is still closed to accounts (own-gpu-tool). The owner-only 'Not cleaned' line is gated by useIsOwner. Visitors see only 'Cleaned: N Gaussians kept'. No Higgsfield code, media or API in the diff; the research doc's mentions predate this branch. Hot files: only tests/comfy-library-4.test.ts, with the allowed edit (the id added to the unvalidated list).",
+   "bash -n scripts/comfy/install-comfyui.sh: OK.",
+   "Targeted Vitest (idol-clean, idol, model3d, comfy-library-4, licences, gpu-requirements, account-idol, comfy-install): 8 files, 165 tests, all pass.",
+   "eslint on the changed src and test files: clean. tsc --noEmit (6 GB heap): exit 0.",
+   "No dev server started, no packs installed and ComfyUI not restarted. I left the worktree's existing .next in place, since this review didn't create it."
+  ],
+  "verdict": "pass: no correctness, security or sign-up-rule problems found. The clean graph's wiring, the fallback to idol-1's graph, the licence data and the pins all check out. The four findings are low or nit (UX copy and one test gap) and can be fixed later."
+ },
+ "fix": {
+  "applied": [
+   "Merged origin/claude/fuobe-parity-4 (23bfafd5, o12-training-kit) into o/idol-2 with no conflicts; merge commit amended to carry the trailer; build-requirements.mjs re-run with no diff.",
+   "Review finding 1 (low, confirmed): Trim spikes did nothing on a ComfyUI without the pack and nothing said so. IdolSettings now shows the owner only (useIsOwner) the line 'Needs the ComfyUI-Idol nodes on your ComfyUI; without them the file is saved untrimmed.' Visitors see the plain product hint only.",
+   "Review finding 2 (low, confirmed): the owner-only card line said 'install ComfyUI-Idol' even when the pack was switched off in Settings or the run went through the tab relay. It now reads 'Not cleaned: this run used the core nodes. With ComfyUI-Idol installed and switched on, splat files come out cleaner.', which is true in every case.",
+   "Review finding 3 (low, confirmed): added two comfyProvider.submit tests in tests/idol-clean.test.ts against the stand-in ComfyUI, which now also takes or refuses POST /prompt. (a) With ComfyUI-Idol switched off via changeAccess, the core graph is posted and /object_info is never asked. (b) With the pack there, the clean graph is posted with max_scale 0.05. A 400 from /prompt for the clean graph drops the cached answer, so the next run asks again and falls back to the core graph.",
+   "Review finding 4 (nit, confirmed): the Advanced summary now reads 'Advanced' alone when the switch is off and 'Advanced · trimming spikes' when it is on (it used to say '· edges').",
+   "Commit 31ee72e0 'Image to 3D: Trim spikes says what it needs on your ComfyUI, and the uncleaned card line fits every case'."
+  ],
+  "rejected": [],
+  "checks": {
+   "typegen": "npx next typegen: exit 0",
+   "typecheck": "NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck: exit 0",
+   "lint": "pnpm lint: exit 0 (0 errors, 5 warnings, none from this package's changes)",
+   "vitestTargeted": "tests/idol-clean.test.ts: 19/19 pass",
+   "vitestFull": "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: exit 1. Test files: 5 failed, 337 passed (342). Tests: 6 failed, 5417 passed, 4 skipped (5427). All 6 failures are the known ones in RULES item 8: comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack. A first attempt at this run was killed by the background time limit before it finished. It was restarted, and that is the one complete run reported here.",
+   "browser": "None in this stage. The copy changes are owner-only text and a summary tweak, and the card is unchanged otherwise. .next was deleted.",
+   "gitStatus": "clean",
+   "pushedSha": "31ee72e0c5ebe84660e505a7488425244c1d0757 (origin/o/idol-2)",
+   "finalMerge": "Merged origin/claude/fuobe-parity-4 at 11e187bf (conflicts in model3d-studio.tsx kept both sides: Refine option and Idol settings with Trim spikes; manifest.json generatedAt only; requirements.json taken from the base and regenerated), then at 03e49f2d (no conflicts, requirements.json regenerated with no diff). After the last merge: typegen 0, typecheck 0, lint 0; full vitest 7 failed | 5494 passed | 4 skipped. Six are the known failures from main (comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack). preset-covers timed out under load and passes alone (11/11)."
   },
-  "review": {
-    "findings": [
-      {
-        "severity": "low",
-        "file": "src/components/model3d/model3d-studio.tsx",
-        "line": 171,
-        "title": "Trim spikes does nothing when the ComfyUI lacks ComfyUI-Idol, and nothing says so",
-        "detail": "The Advanced -> Trim spikes switch appears on the open engine whatever the server has. idolExtra sends maxScale 0.05. When prepareWorkflow falls back to image-to-splat-idol (no pack, the pack switched off in Settings, or a run on someone's computer, where comfyHasClass returns undefined), idolGraphValues drops maxScale because the core graph doesn't bind it. The run goes ahead without trimming while the summary still reads 'trimming spikes'. The owner only learns about it afterwards from the card's 'Not cleaned' line. Traced in src/lib/av/model3d.ts idolGraphValues (the has(k) guard) and prepareWorkflow L1757-1762; the test 'runs the core graph without the pack...' covers the fallback.",
-        "verified": "traced",
-        "suggestion": "Add a short hint under the switch, such as 'Needs the ComfyUI-Idol nodes on your ComfyUI' (owner only), or hide the switch when the server has said it lacks the class."
-      },
-      {
-        "severity": "low",
-        "file": "src/components/model3d/model-card.tsx",
-        "line": 132,
-        "title": "'Not cleaned: install ComfyUI-Idol' also shows when the pack is installed but was not used",
-        "detail": "collectOutputs marks every core-graph splat pruned:false. The core graph also runs when the owner switched ComfyUI-Idol off in Settings -> Models & licences, and when the run went through the Fuobe tab relay (computerScope -> comfyHasClass undefined). In both cases the owner is told to install a pack they already have. This is owner-only status text, so no visitor rule is broken.",
-        "verified": "traced",
-        "suggestion": "Word it so it fits every case ('Not cleaned: this run used the core nodes; ComfyUI-Idol makes cleaner files'), or record why on meta (no-pack, switched-off, computer)."
-      },
-      {
-        "severity": "low",
-        "file": "src/server/providers/comfyui.ts",
-        "line": 2346,
-        "title": "The submit-time wiring of idolPack has no test",
-        "detail": "tests/idol-clean.test.ts injects idolPack straight into prepareWorkflow and tests comfyHasClass on its own. Nothing tests the submit closure: Settings pack-off returns false before /object_info is asked, and a refused /prompt for the clean graph calls forgetComfyClass. Both are short and read correctly, but a regression there would go unnoticed.",
-        "verified": "read tests/idol-clean.test.ts (L61, L177-245)",
-        "suggestion": "Add one comfyProvider.submit test with a stand-in ComfyUI. Pack switched off: assert the core graph is posted and no /object_info request is made. /prompt answers 400: assert the next comfyHasClass asks again."
-      },
-      {
-        "severity": "nit",
-        "file": "src/components/model3d/model3d-studio.tsx",
-        "line": 174,
-        "title": "With the switch off, the Advanced summary reads 'Advanced · edges'",
-        "detail": "With Trim spikes off, the disclosure summary is 'Advanced · edges', which doesn't tell the reader anything. 'Advanced' alone, or '· spikes kept', would read better.",
-        "verified": "read",
-        "suggestion": "Show the state only when the switch is on."
-      }
-    ],
-    "checks": [
-      "Read the diff claude/fuobe-parity-4...o/idol-2 (19 files, 3 commits). The branch is on the base tip f5b4776b and origin/o/idol-2 = 2651353d. The worktree is clean.",
-      "Hand-built graphs compared node by node: the clean graph removes 88:2 and 88:101-104 and adds 88:110-113, 93 and 94. 88:24, 92 and 75 are rewired to 88:110 / 88:111. Everything else is identical to image-to-splat-idol.json. The inputs match idol-9.md §5.1: IdolPreprocessImage mode / mask / erode_radius / size; IdolPruneSplat min_opacity / max_scale and count at output 1; IdolCamera samples -> LOAD3D_CAMERA.",
-      "Live CPU ComfyUI (read only): PreviewAny's input is 'source' (output_node true). RenderSplat takes an optional camera_info of type LOAD3D_CAMERA, and frames 1 gives a still. GET /object_info/IdolPruneSplat returns {}, which confirms comfyHasClass's 'absent' case.",
-      "Manifest: the bindings of image-to-splat-idol-clean match the spec (cropMode 88:110.mode, minOpacity / maxScale 88:111, filenamePrefix 51/42/93). Its defaults and outputs (splat / turntable / preview / report) are right. idol-1's entry is unchanged. requirements.json and packs.json pin ComfyUI-Idol at 4d3a4f67 with the 3 classes. The NODE_PACKS row is present (Apache-2.0, commercial), and the workflow licence adds the pack.",
-      "Provider: the swap happens before the manifest loads. meta.workflowId = manifest.id, so poll's collectOutputs gets the clean manifest: kept and pruned go on the splat, the report text is not a file, and the still becomes the poster through model3dView. prepareWorkflow has a single caller (submit). fal: idolExtra sends no maxScale, and the cloud card shows no clean line. A client can only send cropMode real or synthetic, and minOpacity / maxScale are clamped to 0-1.",
-      "Public sign-up: no new route or file-reading path. 3D is still closed to accounts (own-gpu-tool). The owner-only 'Not cleaned' line is gated by useIsOwner. Visitors see only 'Cleaned: N Gaussians kept'. No Higgsfield code, media or API in the diff; the research doc's mentions predate this branch. Hot files: only tests/comfy-library-4.test.ts, with the allowed edit (the id added to the unvalidated list).",
-      "bash -n scripts/comfy/install-comfyui.sh: OK.",
-      "Targeted Vitest (idol-clean, idol, model3d, comfy-library-4, licences, gpu-requirements, account-idol, comfy-install): 8 files, 165 tests, all pass.",
-      "eslint on the changed src and test files: clean. tsc --noEmit (6 GB heap): exit 0.",
-      "No dev server started, no packs installed and ComfyUI not restarted. I left the worktree's existing .next in place, since this review didn't create it."
-    ],
-    "verdict": "pass: no correctness, security or sign-up-rule problems found. The clean graph's wiring, the fallback to idol-1's graph, the licence data and the pins all check out. The four findings are low or nit (UX copy and one test gap) and can be fixed later."
-  },
-  "fix": {
-    "applied": [
-      "Merged origin/claude/fuobe-parity-4 (23bfafd5, o12-training-kit) into o/idol-2 with no conflicts; merge commit amended to carry the trailer; build-requirements.mjs re-run with no diff.",
-      "Review finding 1 (low, confirmed): Trim spikes did nothing on a ComfyUI without the pack and nothing said so. IdolSettings now shows the owner only (useIsOwner) the line 'Needs the ComfyUI-Idol nodes on your ComfyUI; without them the file is saved untrimmed.' Visitors see the plain product hint only.",
-      "Review finding 2 (low, confirmed): the owner-only card line said 'install ComfyUI-Idol' even when the pack was switched off in Settings or the run went through the tab relay. It now reads 'Not cleaned: this run used the core nodes. With ComfyUI-Idol installed and switched on, splat files come out cleaner.', which is true in every case.",
-      "Review finding 3 (low, confirmed): added two comfyProvider.submit tests in tests/idol-clean.test.ts against the stand-in ComfyUI, which now also takes or refuses POST /prompt. (a) With ComfyUI-Idol switched off via changeAccess, the core graph is posted and /object_info is never asked. (b) With the pack there, the clean graph is posted with max_scale 0.05. A 400 from /prompt for the clean graph drops the cached answer, so the next run asks again and falls back to the core graph.",
-      "Review finding 4 (nit, confirmed): the Advanced summary now reads 'Advanced' alone when the switch is off and 'Advanced · trimming spikes' when it is on (it used to say '· edges').",
-      "Commit 31ee72e0 'Image to 3D: Trim spikes says what it needs on your ComfyUI, and the uncleaned card line fits every case'."
-    ],
-    "rejected": [],
-    "checks": {
-      "typegen": "npx next typegen: exit 0",
-      "typecheck": "NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck: exit 0",
-      "lint": "pnpm lint: exit 0 (0 errors, 5 warnings, none from this package's changes)",
-      "vitestTargeted": "tests/idol-clean.test.ts: 19/19 pass",
-      "vitestFull": "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: exit 1. Test files: 5 failed, 337 passed (342). Tests: 6 failed, 5417 passed, 4 skipped (5427). All 6 failures are the known ones in RULES item 8: comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack. A first attempt at this run was killed by the background time limit before it finished. It was restarted, and that is the one complete run reported here.",
-      "browser": "None in this stage. The copy changes are owner-only text and a summary tweak, and the card is unchanged otherwise. .next was deleted.",
-      "gitStatus": "clean",
-      "pushedSha": "31ee72e0c5ebe84660e505a7488425244c1d0757 (origin/o/idol-2)",
-      "finalMerge": "Merged origin/claude/fuobe-parity-4 at 11e187bf (conflicts in model3d-studio.tsx kept both sides: Refine option and Idol settings with Trim spikes; manifest.json generatedAt only; requirements.json taken from the base and regenerated), then at 03e49f2d (no conflicts, requirements.json regenerated with no diff). After the last merge: typegen 0, typecheck 0, lint 0; full vitest 7 failed | 5494 passed | 4 skipped. Six are the known failures from main (comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack). preset-covers timed out under load and passes alone (11/11)."
-    },
-    "finalSummary": "Idol 3D on the open engine (your ComfyUI) runs image-to-splat-idol-clean when the server reports IdolPruneSplat and the ComfyUI-Idol pack is not switched off in Settings → Models & licences. That gives Idol's own crop (synthetic, or real for 'It's a photo'), a pruned splat, an input-view poster and a 'Cleaned: N Gaussians kept' line. Otherwise idol-1's core graph runs unchanged, and the owner sees a 'Not cleaned' hint. Advanced → Trim spikes (max_scale 0.05) is open-engine only. The owner is now told it needs the pack. Cloud engine: fal's speridlabs/idol is unchanged, with no pruning and no Trim spikes. Verified: unit tests, including the new submit-path tests (Settings off, cache dropped on a refused /prompt), plus typecheck and lint. Built but not verified: the clean graph with the pack installed (/prompt check), the kept count, the trimming effect and the still. These need a GPU, Idol weights and ComfyUI-Idol at 4d3a4f67, which is the owner's step. No keys are needed. Public sign-up: guests browse the studio read-only and see only plain copy. Accounts still can't run any 3D model (403 own-gpu-tool). The pack hints are owner-only, and no new route or file-reading path was added.",
-    "left": [
-      "Owner step: install ComfyUI-Idol at 4d3a4f67 on a GPU ComfyUI, /prompt-check image-to-splat-idol-clean and mark it validated. Compare the core photo crop with IdolPreprocessImage 'real'.",
-      "No real splat run. The kept count, the pruned file size, the IdolCamera still and Trim spikes' effect are unmeasured.",
-      "tests/comfy-library-4.test.ts: image-to-splat-idol-clean was added to its exact unvalidated list (the allowed hot-file edit, from the implement stage).",
-      "When the pack disappears after being cached, that one run fails with ComfyUI's missing-node message, and the next run uses the core graph. There is no automatic retry.",
-      "Runs through the Fuobe tab relay always use the core graph, because pack detection there returns undefined.",
-      "Output roles are 'preview' and 'report', not 'poster', because ManifestOutput has no 'poster' role. model3dView already uses the image as the poster."
-    ],
-    "blocked": ""
-  }
+  "finalSummary": "Idol 3D on the open engine (your ComfyUI) runs image-to-splat-idol-clean when the server reports IdolPruneSplat and the ComfyUI-Idol pack is not switched off in Settings → Models & licences. That gives Idol's own crop (synthetic, or real for 'It's a photo'), a pruned splat, an input-view poster and a 'Cleaned: N Gaussians kept' line. Otherwise idol-1's core graph runs unchanged, and the owner sees a 'Not cleaned' hint. Advanced → Trim spikes (max_scale 0.05) is open-engine only. The owner is now told it needs the pack. Cloud engine: fal's speridlabs/idol is unchanged, with no pruning and no Trim spikes. Verified: unit tests, including the new submit-path tests (Settings off, cache dropped on a refused /prompt), plus typecheck and lint. Built but not verified: the clean graph with the pack installed (/prompt check), the kept count, the trimming effect and the still. These need a GPU, Idol weights and ComfyUI-Idol at 4d3a4f67, which is the owner's step. No keys are needed. Public sign-up: guests browse the studio read-only and see only plain copy. Accounts still can't run any 3D model (403 own-gpu-tool). The pack hints are owner-only, and no new route or file-reading path was added.",
+  "left": [
+   "Owner step: install ComfyUI-Idol at 4d3a4f67 on a GPU ComfyUI, /prompt-check image-to-splat-idol-clean and mark it validated. Compare the core photo crop with IdolPreprocessImage 'real'.",
+   "No real splat run. The kept count, the pruned file size, the IdolCamera still and Trim spikes' effect are unmeasured.",
+   "tests/comfy-library-4.test.ts: image-to-splat-idol-clean was added to its exact unvalidated list (the allowed hot-file edit, from the implement stage).",
+   "When the pack disappears after being cached, that one run fails with ComfyUI's missing-node message, and the next run uses the core graph. There is no automatic retry.",
+   "Runs through the Fuobe tab relay always use the core graph, because pack detection there returns undefined.",
+   "Output roles are 'preview' and 'report', not 'poster', because ManifestOutput has no 'poster' role. model3dView already uses the image as the poster."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/idol-2"
+  ],
+  "notMerged": [],
+  "conflicts": "install-comfyui.sh and library.spec.mjs (both kept), model3d-studio.tsx (Idol settings + Make it 3D hint); requirements regenerated",
+  "checks": "batch of 7 (dbs-d7, idol-5, idol-2, idol-6, n7-9, kandinsky6, n7-10): typecheck 0, lint 0, vitest 5788 passed, 6 failed (main known); each merge checked by an independent verifier; n7-10 + Pika Flex interaction fixed in 64900624",
+  "pushed": true,
+  "head": "64900624"
+ }
 }

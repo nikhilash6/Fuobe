@@ -1,150 +1,160 @@
 {
-  "key": "n7-9-worldcast-worker",
-  "impl": {
-    "branch": "o/n7-9-worldcast-worker",
-    "summary": "WorldCast now sits behind the Fly path, Turnaround / Fly around and the exact orbits on the open engine. It runs as a worker on the owner's GPU, with WORLDCAST_URL set in Settings → Open-source engine beside the isolated worker. While the worker answers, the buttons plan this run: MoGe 2 depth, a SAM 3.1 person mask for the still and for each view, then one WorldCast case. If no worker answers, the run stays on Uni3C or Frames and says \"Runs on Uni3C: add a WorldCast worker (48 GB+) for sides that match your photos\" (Turnaround says \"Runs on Frames: …\"). Fuobe builds each case itself: a 480×832 centre crop, 81 OpenCV camera-to-world poses plus the pixel intrinsic, render.mp4 and render_mask.mp4 at 15 fps from the server's point-cloud splat, the anchors with their masks, and ring cameras for the anchors. Correction: WorldCast's anchor names say where the camera stands, not which side of the body you see. The demo case's aligned cameras and its crops show this, so the person's own right side is WorldCast's left_side (270°). worldcastAnchor and its test were fixed to match, and a correction note was added to the research doc. Accounts and guests never reach the worker: accountRun answers own-gpu-tool, and visitors get no worker wording. This package added no new routes or migrations. Five signed commits, pushed.",
-    "built": [
-      "src/lib/worldcast.ts: the pure case builder. WORLDCAST_RUN (81 frames, 15 fps, 480×832, 50 steps, cfg 5, shift 2), worldcastLayout/readLayout, imageSlots, worldcastCrop/worldcastFov, cam_info (c2w), alignedAnchors (w2c ring cameras, first_frame included), anchorsMeta, the multipart parts and caseProblem checks. WORLDCAST and worldcastAnchor moved here from turnaround.ts (still re-exported there) to avoid an import cycle, and the side → view mapping is corrected: front→front 0°, right→left_side 270° (signed −90°), back→back 180°, left→right_side 90°.",
-      "src/server/worldcast.ts: the worker client. Health check with a 60 s cache (refreshWorldcast / worldcastAnswers / worldcastDepths), submitCase as multipart, jobStatus, jobVideo / jobVideoUrl, cancelJob, and submitDepth / jobDepthUrl. It refuses to run inside an account's tenant. src/server/worldcast-on.ts gives the planners their context: true, false, or undefined for visitors or when WorldCast is switched off.",
-      "src/server/worldcast-case.ts: builds the case on the server with sharp. It crops the still and binarises its mask, crops the MoGe depth the same way, builds the point cloud with the cropped field of view, runs framePoses for 81 frames, then splatFrame with the new hole-mask output and two ffmpeg encodes. Each anchor keeps its whole picture plus a 0/255 mask.",
-      "A new ProviderId 'worldcast' with an adapter in src/server/providers/worldcast.ts (inputs held as data URIs until submit; endpoint 'cases' or 'depth/<model>'; poll, cancel and test). providerEngine maps it to the open engine, and its routes take their licence from ModelDef.licence. WorldCast runs time out after 3 hours instead of 45 minutes.",
-      "Catalog (all hidden, open engine): oss-worldcast (Apache-2.0, with the SpatialVID academic-only note), oss-depth-pro (Apple research licence, non-commercial), oss-vggt-omega (FAIR Noncommercial, gated) and oss-person-mask. Each has its row and switch in Models & licences.",
-      "A new ComfyUI graph, image-person-mask-sam3 (core SAM3_Detect + MaskToImage, the pinned sam3.1_multiplex_fp16), built through scripts/comfy and validated with /prompt on the live CPU ComfyUI. It is in manifest.json, validation-state.json and requirements.json; the regenerated object_info.subset.json was reverted to the base's because every node class was already in it.",
-      "src/lib/catalog/worldcast-plan.ts: worldcastSteps (depth → masks → main, with chain slots placed by `at`), worldcastFallback, worldcastNote, WORLDCAST_AFTER (FPS Boost / RIFE to 24 fps and the upscalers in Upscale) and WORLDCAST_DEPTH (MoGe 2 by default; Depth Pro or VGGT-Omega through the worker's POST /depth).",
-      "Fly around (planFlyAround(input, ctx)) is used by DoP exact orbits, Cinema exact orbits, Image to 3D's Film it photoreal and Assist's fly_around. It takes WorldCast with ctx.worldcast, plus new optional `sides` and `depth` inputs in FlyAroundSchema. The server blocks Depth Pro or VGGT-Omega when the worker doesn't list them.",
-      "Turnaround: a new open-engine route 'worldcast', offered and chosen by default only when the worker answers. The front view is the first frame and every side with a picture becomes an anchor; drawn sides are added only when asked. Frames says the fallback line, and the GPU line reads 48 GB. Cinema's Turnaround take passes the same context.",
-      "Cinema's Fly path: planPath plans WorldCast with ctx.worldcast and needs no browser recording. scene-viewer skips the recording, and PathOptions shows 'About 5.4 s · portrait 480 × 832, 81 frames at 15 fps with WorldCast'. The project GET returns context.worldcast to the owner only.",
-      "Settings: a WorldCast worker URL field beside the isolated worker, in settings-form LocalComfy and in OwnerServerComfy (advanced or hosted). Save & test runs through the ComfyUI provider's test with focus worldcastUrl. Also covered: address validation (connections.ts), the hosted-page address refusal, and the install hosts (gpu/hosts.ts).",
-      "docs/workers/worldcast.md: the contract, written like tribe-v2.md. It covers GET /health, POST /cases (multipart parts table), POST /depth, GET /jobs/{id}, GET /jobs/{id}/video, DELETE /jobs/{id}, the side→anchor table, how Fuobe prepares a case, and the no_padding_black crop rules read from demo_case/ and the pipeline: background blacked out, crop tight to the mask's bounding box, mask 0/255 at the same size.",
-      "workers/worldcast/: server.py (FastAPI; imports WorldCast @ 7ccf2e0d from its own clone and virtualenv with demo.py's exact anchor-drop wiring; lays the case out like demo_case/ and cuts the no_padding_black crops; one job at a time; cancel; Depth Pro through apple/ml-depth-pro when installed), requirements.txt and a README. The README covers pinned installs (torch 2.8.0+cu128, transformers 5.8.1, ly56/worldcast @ 27635f27, Wan2.1-I2V-14B-720P @ 8823af45, both checkpoint byte sizes), running demo_case_traj5.json first, the environment variables and the licences."
-    ],
-    "tests": "Verified by tests. New files: tests/worldcast-case.test.ts (layout and side map, slots, crop and FOV, cam_info conventions, the ring cameras checked against the demo's geometry, multipart parts, refusals), tests/worldcast-worker.test.ts (the client and provider against a stand-in worker: health and cache, submit, poll, download, the worker's errors passed on, 404 and unknown status, bad ids, cancel, depth jobs, refusing an account's run, worker unreachable) and tests/worldcast-plan.test.ts (step chains; Fly around, Turnaround and Cinema Fly path with a worker, without one, and for visitors; the ModelDefs' visibility and licences; accountRun → own-gpu-tool; visitors get no context; the server case built with real sharp and ffmpeg, checked by ffprobe at 480×832, 15/1 fps, 81 frames). Updated tests: turnaround.test.ts (the corrected side map), catalog.test.ts (the worker counts as the open engine), no-higgsfield.test.ts (KNOWN providers include worldcast) and qma-angles.test.ts (ROUTES_ON.open). Full Vitest ran once with FUOBE_ACCOUNT_DISK_FREE_GB=1 and --maxWorkers=2: 11 failed, 5397 passed, 4 skipped. Four of the 11 failures were mine (no-higgsfield, qma-angles, and two in comfy-library-notes because the graph note mentioned the package id); I fixed them and they pass when rerun alone. moderation-hook failed under load and passed when rerun alone. The other 6 failures are the known ones from main: comfy-reuse, dop-originals, preset-featured, soul-runs (2) and split-soundtrack. Typecheck is clean after npx next typegen. The graph passed /prompt validation on the live CPU ComfyUI. The browser check tests/e2e/worldcast.mjs passed 50/50 against pnpm dev in demo mode on the open engine, with a stand-in worker, at 1440 and 390 px in light and dark: the Settings row renders, Tab reaches the field, Save & test turns green, nothing scrolls sideways, the Turnaround dialog shows and selects the WorldCast route with a worker and the Frames fallback line without one, a finger drag scrolls the dialog at 390 px, the planner answers both ways through the API, and there were no console or page errors. The server was stopped and .next deleted. Nothing ran on a GPU and WorldCast itself was never run: its code was only read, at the pinned commit.",
-    "left": [
-      "GPU only, not verifiable here: any real WorldCast run (48 GB+, the 82 GB base, run time unknown), whether the reference server works end to end, quality with MoGe depth and ring-guessed anchor cameras (versus Depth Pro / VGGT-Omega, or no aligned cameras), and whether Fuobe's c2w path and splat render match WorldCast's training distribution closely enough. The worker README says to run demo_case_traj5.json first.",
-      "VGGT-Omega is recorded (ModelDef, licence, switch, a 'vggt-omega' slot in the contract) but the reference server doesn't run it: its gated code and API weren't read. Depth Pro's worker code follows apple/ml-depth-pro's documented API and was never run.",
-      "Depth Anything 3 metric-large was not built: MoGe 2, already pinned, is the default. DA3 metric-large isn't pinned (the base only has mono_large) and would need a new graph and model pin.",
-      "Canvas's Fly around node stays on Uni3C: its step mapping counts each step's inputs.images, so WorldCast's slot layout needs its own mapping there. Image to 3D's browser render isn't used by WorldCast, which renders from MoGe depth instead.",
-      "Fly around and Cinema's Fly path have no named views in their UIs yet, so on those routes WorldCast films from the still alone (first-frame anchor only; no body anchors, so no first-frame anchor either: the pipeline skips anchors). The Turnaround route is the one that uses the views. FlyAroundSchema accepts `sides` for API callers.",
-      "When WorldCast is the route, the Turnaround dialog still offers Shape (Portrait / Landscape), though WorldCast is always portrait. pathTake still records the Uni3C length (81/16 s) for a WorldCast Fly-path take.",
-      "No GPU pre-flight row was added: WorldCast isn't a ComfyUI graph and isn't a new page. The person-mask graph does reach requirements.json. A 'WorldCast worker' line on /connect could follow.",
-      "tests/comfy-library-4.test.ts was not edited: the new graph is validated."
-    ],
-    "docsNotes": "These notes are for the docs pass. STATUS.md: N7-9 is built; WorldCast is behind the three buttons on the open engine while a worker answers (WORLDCAST_URL), it is GPU-only with no cloud route, and the anchors are named by where the camera stands. ARCHITECTURE.md: a new provider 'worldcast' (src/server/providers/worldcast.ts), src/server/worldcast.ts, worldcast-case.ts, worldcast-on.ts, src/lib/worldcast.ts, src/lib/catalog/worldcast-plan.ts, the image-person-mask-sam3 graph, and the docs/workers/worldcast.md contract. SELF-HOSTING / DEVELOPMENT: the WORLDCAST_URL env and setting, and workers/worldcast/README.md. FEATURES.md: Fly path, Turnaround and exact orbits film with WorldCast on a 48 GB+ GPU. CREDITS.md: PixCtrol/WorldCast (Apache-2.0), plus Depth Pro and VGGT-Omega as optional and non-commercial. Research correction made in new-models-7.md §3.11 (left/right). Where the brief was out of date: worldcast_pipeline.py's crop logic is in _encode_per_view_nopad as well as L842-869 (which loads the render and camera); DA3 metric-large is not pinned at the base (only mono_large); the turnaround's side map at the base (right→right_side) contradicted the demo case's geometry; the Settings 'isolated worker URL' row lives in settings-form.tsx LocalComfy and connect-choice.tsx OwnerServerComfy.",
-    "blocked": ""
-  },
-  "review": {
-    "findings": [
-      {
-        "severity": "medium",
-        "verdict": "PLAUSIBLE",
-        "file": "src/server/worldcast-case.ts",
-        "line": 84,
-        "summary": "Anchor pictures go to the worker at full size, and the worker cuts its no_padding_black crop at that size. The anchors' VAE latents and token counts grow with the upload. WorldCast was trained on crops about 540 x 1320 (the demo's body_view_*.png are cut from 768 x 1344 frames).",
-        "failure_scenario": "A Turnaround with a 4000 x 6000 phone photo as the back view: buildCase sends the whole picture (sharp .rotate().removeAlpha(), no resize). server.py nopad() crops it to the person box, about 2500 x 5000. worldcast_pipeline._encode_per_view_nopad VAE-encodes that at its natural size rounded up to 16 and adds about 49k tokens for one anchor next to the 14B DiT. Likely result: CUDA OOM on a 48-80 GB card, or a run far outside the training distribution. Fix: scale each anchor and its mask so the person crop is about the first frame's scale (for example a long side of at most 1344 px) in buildCase, or in nopad() before saving."
-      },
-      {
-        "severity": "medium",
-        "verdict": "CONFIRMED",
-        "file": "src/lib/catalog/fly-around.ts",
-        "line": 131,
-        "summary": "Fly around, the DoP / Cinema exact orbits and Cinema's Fly path send WorldCast no anchors at all. Without a body view the pipeline also drops the first-frame anchor, so these routes run the released anchor-drop checkpoint with no anchor tokens. That mode was never trained.",
-        "failure_scenario": "planFlyAround(..., {worldcast:true}) without `sides` (always the case from the UIs) gives worldcastSteps anchors []. caseParts sends anchors \"[]\", and server.py write_case returns anchors=\"\". In worldcast_pipeline.py WorldCast_prepare_viewpoint_anchors.process, L443 `if not viewpoint_anchors_path: return {}` skips everything, including use_first_frame_anchor (an empty anchors dir also returns {} at L473, before the first frame is added). WorldCast's 'front' is by definition the first frame's camera (demo body_views_meta: front = source_frame 0, azimuth 0). The still, whose SAM mask is already computed, can always be sent as the 'front' anchor. That gives the trained first_frame + front slots, and zero-fill takes the rest."
-      },
-      {
-        "severity": "medium",
-        "verdict": "CONFIRMED",
-        "file": "docs/workers/worldcast.md",
-        "line": 1,
-        "summary": "The worker contract and the reference server have no authentication. On hosted pages, Settings offers an https://... address for the worker. Anyone who can reach it can queue jobs on the owner's 48 GB+ GPU or cancel the owner's jobs. The 512 MB upload cap is only checked against the Content-Length header.",
-        "failure_scenario": "The owner of a hosted install exposes the worker at https://gpu.example:8190, as the hosted placeholder suggests. A stranger POSTs /cases or /depth in a loop and holds the single job queue. A chunked request has no Content-Length, so it skips read_form's MAX_UPLOAD check and the whole body is read into memory. ComfyUI has comfyToken for this, and the worker has nothing. Fix: a secret worldcastToken setting sent as a Bearer header, checked by server.py, plus README guidance to bind 127.0.0.1 or put the worker behind a tunnel."
-      },
-      {
-        "severity": "low",
-        "verdict": "CONFIRMED",
-        "file": "src/server/worldcast-on.ts",
-        "line": 16,
-        "summary": "worldcastContext only checks that oss-worldcast is switched on. If the admin switches off a helper step (oss-person-mask, or oss-scene-moge) in Models & licences, the move is blocked instead of falling back to Uni3C / Frames.",
-        "failure_scenario": "WorldCast is on and the worker answers, and the admin switches off 'SAM 3.1 person mask'. src/server/fly-around.ts plan() finds the off step and returns 'This move is switched off on this studio' for every exact orbit and Fly around. Uni3C would still run."
-      },
-      {
-        "severity": "low",
-        "verdict": "CONFIRMED",
-        "file": "src/lib/catalog/cinema.ts",
-        "line": 2200,
-        "summary": "pathTake reads plan.steps[0] and records the Uni3C length (PATH_FRAMES / PATH_FPS, about 5.06 s) for a WorldCast Fly-path take. WorldCast's steps[0] is the depth step, and its clip is 5.4 s at 15 fps.",
-        "failure_scenario": "A Fly-path take filmed with WorldCast is saved with duration 5.0625 and the keys taken from input.path (the fallback), not the planned cameraPath. The implementer listed this under 'left'."
-      },
-      {
-        "severity": "low",
-        "verdict": "PLAUSIBLE",
-        "file": "src/lib/catalog/worldcast-plan.ts",
-        "line": 41,
-        "summary": "The brief asks to offer RIFE to 24 fps and the existing upscalers after a WorldCast clip. The build only adds a note string (WORLDCAST_AFTER), with no action or pre-filled step.",
-        "failure_scenario": "After a WorldCast run the person reads 'In Upscale, FPS Boost (RIFE) takes the clip to 24 fps…'. They have to move the clip to Upscale by hand, and no button sends it there."
-      },
-      {
-        "severity": "low",
-        "verdict": "CONFIRMED",
-        "file": "src/components/settings-form.tsx",
-        "line": 493,
-        "summary": "Rule 2 lists owner Settings sections as hot files, and this one was edited. The change is a small field insertion (WorldcastField in LocalComfy) that the brief asked for explicitly. The owner should confirm it.",
-        "failure_scenario": "On a merge conflict in settings-form.tsx, rule 2 says to take the base's version, and that drops the WorldCast worker URL field from Settings → Open-source engine. The OwnerServerComfy copy in connect-choice.tsx stays."
-      },
-      {
-        "severity": "low",
-        "verdict": "CONFIRMED",
-        "file": "src/server/gpu/tools.ts",
-        "line": 88,
-        "summary": "The GPU pre-flight board can't see the WorldCast worker: STUDIO_ROWS counts only comfyui and local routes, and /connect has no 'WorldCast worker' line. The UI also still offers Turnaround Shape (Portrait / Landscape) on the portrait-only WorldCast route. The implementer acknowledged both.",
-        "failure_scenario": "The owner's /connect board shows Turnaround as Ready while the WorldCast worker is down. The worker's state only appears as the fallback note in the dialog."
-      }
-    ],
-    "checks": [
-      "Read the stage prompt and main-rules.md. Reviewed git diff claude/fuobe-parity-4...o/n7-9-worldcast-worker (5 commits, 60 files) and the code around it. HEAD 3958bc0b equals origin/o/n7-9-worldcast-worker (pushed). Commits are SSH-signed (not verifiable locally: no allowedSignersFile), and the messages are neutral 'Area: result'. The worktree is clean.",
-      "Cloned PixCtrol/WorldCast @ 7ccf2e0d into the scratchpad and read it as data only, running none of its code. Checked server.py against demo.py: the anchor-drop wiring (BANK_CONFIG, ANCHOR_PRIORITY, ANCHOR_K, use_first_frame_anchor, zero-fill, plucker), the load_pipeline / load_checkpoint / build_bank / build_anchor_adapter calls and the pipe() kwargs all match, and progress_bar_cmd exists in __call__. The anchors / no_padding_black / person_mask layout matches _encode_per_view_nopad and resolve_semantic_anchor_paths. The aligned-camera file path matches _find_nopadblack_aligned_file.",
-      "Checked the implementer's left/right correction against the demo data. In anchors_aligned_camera_info.json (w2c), inv(right_side) has translation (+0.288, −0.034, 0.225), which matches cam_info frame 28.6 (stored c2w), and inv(left_side) is (−0.298, …), which matches frame 65. The flatring cam_info is self-consistent as c2w. In first_frame.png the boy faces image-right, and body_view_right_side.png shows his face. So right_side is the camera moved to its own right, and a front-facing person's own right side is left_side. worldcastAnchor's corrected map (right→left_side 270°/−90°, left→right_side 90°) is right, and keyPose (+azimuth → +x) puts the ring cameras on the matching sides.",
-      "Checked render_mask polarity by extracting frame 20 of the demo flatring render.mp4 / render_mask.mp4 with ffmpeg: white is where the render is empty, so 255 = hole, matching splatFrame's new holes output. cam_info c2w 'as stored' with invert_camera_extrinsic off matches demo.py.",
-      "Public sign-up: accountRun('acct', 'worldcast') answers own-gpu-tool, and a hosted-run pool submit refuses non-comfyui providers. worldcastContext gives undefined for a tenant, ownGpu or visitor (priceAs). The worker client's guard() throws inside a tenant. The Cinema project GET sends context.worldcast to the owner only. isInstallHost now includes the worker's host, so an account can't link it. No new routes, migrations or ASSET_REFS tables. FlyAroundSchema.sides is only used on the owner's WorldCast path.",
-      "Licences recorded as data: oss-worldcast (Apache-2.0 + SpatialVID note), oss-depth-pro (Apple research, commercial false), oss-vggt-omega (FAIR NC, gated); oss-person-mask takes the manifest's SAM licence through comfyFacts. routeLicence covers the worldcast provider through ModelDef.licence. No Higgsfield API, code or media; no LoRA files or preview media committed.",
-      "The person-mask graph: SAM3_Detect / MaskToImage inputs match the live CPU ComfyUI's /object_info at 127.0.0.1:8188. The manifest bindings (image node 1, prompt node 3 text, threshold node 4, filenamePrefix node 6) match the JSON. requirements.json and validation-state.json have the new entry with the pinned sam3.1 checkpoint.",
-      "npx next typegen && tsc --noEmit: clean.",
-      "Targeted Vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1). worldcast-case, worldcast-worker, worldcast-plan, turnaround, catalog, no-higgsfield, qma-angles and comfy-library-notes: 316/316 passed. account-tenant, camera-path, cinema-path, connections, fly-around, licences, model-access(-listings, -studios), public-signup(-tools, -visitors), settings-read, turnaround-api, connect-card-studios, request-body-limits and hosted-runs: 244/244 passed. The full suite and the browser check tests/e2e/worldcast.mjs were not re-run in this review.",
-      "Not verifiable here: any real WorldCast run on a GPU (48 GB+, an 82 GB base), quality with MoGe depth and ring-guessed anchor cameras, and the Depth Pro worker path."
-    ],
-    "verdict": "changes-requested: the build is sound and the left/right correction is right (verified against the demo case's cameras and images). Before merge, fix the two medium WorldCast-input issues: scale the anchors to training size, and send the still as the 'front' anchor so the Fly around / exact orbit / Fly path routes are not anchor-less. Also add a worker token, or document that the worker must not be exposed. The low findings can follow."
-  },
-  "fix": {
-    "applied": [
-      "Medium (Fly around, the exact orbits and Cinema's Fly path sent no anchors, so the pipeline dropped every anchor, the first frame's included, which the checkpoint was never trained for). Confirmed. worldcastSteps now always sends the still as the 'front' anchor (with its own mask-front SAM step) when no front view is given. Turnaround is unchanged because it already sent the front. Tests: Fly around with and without named sides, and Cinema's Fly path layout is ['front'] (tests/worldcast-plan.test.ts).",
-      "Medium (anchors were sent at full photo size, outside WorldCast's training scale, with a risk of running out of memory). Confirmed as plausible. buildCase now scales each anchor and its mask to a longest side of ANCHOR_MAX_SIDE = 1344 px (the demo's 768 × 1344 source frames) and never enlarges them. Test: a 2000 × 3000 view and a 500 × 750 mask both arrive at 896 × 1344. docs/workers/worldcast.md says the same.",
-      "Medium (the worker had no authentication, and a chunked upload got past the 512 MB cap). Confirmed. New secret setting worldcastToken (env WORLDCAST_TOKEN, src/server/settings.ts). The client sends Authorization: Bearer on every call, and the provider puts the header on the clip and depth downloads. server.py checks WORLDCAST_TOKEN on every route with hmac.compare_digest and answers 401 without it. It answers 411 to a request with no Content-Length, keeps the 413 cap, and warns when it listens beyond localhost without a token. The README and the contract document all of this. Test: the stand-in worker sees no header without a token, then 'Bearer s3cret' on health, submit, status and cancel, and the download output carries the header (tests/worldcast-worker.test.ts).",
-      "Low (switching off a helper step blocked the move instead of falling back). Confirmed. worldcastContext and worldcastContextNow now need oss-worldcast, oss-person-mask and oss-scene-moge all switched on. With any of them off, the buttons quietly keep their Uni3C / Frames run. Test: each one switched off in turn gives an undefined context.",
-      "Low (pathTake recorded the Uni3C length for a WorldCast take). Confirmed. pathTake now reads the film step (the last one) for a WorldCast plan and records 81/15 s with the planned cameraPath. Test in worldcast-plan.test.ts.",
-      "Low (RIFE was offered only as text). Partly addressed: every finished video already has the generic 'Upscale' next step (src/lib/output-actions.ts, /upscale/video?video=…), which holds FPS Boost (RIFE) and the upscalers. The WORLDCAST_AFTER note now points at that button."
-    ],
-    "rejected": [
-      "Low: settings-form.tsx is a hot file (rule 2). The brief explicitly asked for the field, and it stays a small insertion. No change. This needs the owner's confirmation and is listed under left.",
-      "Low: GPU pre-flight row and Turnaround Shape on the WorldCast route. WorldCast is not a new studio page or ComfyUI graph, so STUDIO_ROWS has no row type for an outside worker. The person-mask graph already reaches requirements.json. Hiding Shape is a UI polish that the implementer and reviewer both listed as follow-up. Left for later, not changed."
-    ],
-    "checks": [
-      "Worktree case (1): the branch had only this package's 5 commits, and the base is an ancestor. pnpm install --frozen-lockfile succeeded.",
-      "npx next typegen, then NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck: exit 0.",
-      "pnpm lint: exit 0 (0 errors, 5 warnings that were already there in unrelated files).",
-      "Targeted tests: worldcast-plan, worldcast-case, worldcast-worker, turnaround, fly-around, cinema-path, settings-read and connections all passed (worldcast-plan + worldcast-worker 19/19 after the fixes; the 8-file set passed before the last two tests were added).",
-      "Full suite, run once after the container restart (FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2): 7 failed, 5404 passed, 4 skipped. The failures are the known ones from main: comfy-reuse, dop-originals, preset-featured, soul-runs (2) and split-soundtrack. preset-covers also failed under load and passed 11/11 when rerun alone (rule 8).",
-      "server.py parses (ast). It was never run here, and WorldCast was never run.",
-      "Committed eae55317 with the trailer and pushed it to origin/o/n7-9-worldcast-worker (HEAD equals the remote). .next was removed and the worktree is clean."
-    ],
-    "finalSummary": "Open engine: when the owner's WorldCast worker (WORLDCAST_URL, and WORLDCAST_TOKEN if it is exposed) answers and WorldCast, the SAM 3.1 person mask and MoGe 2 are all switched on, Fly around, the exact orbits, Cinema's Fly path and Turnaround plan these steps: MoGe 2 depth, SAM masks, then one WorldCast case. The still is now always the front anchor. Anchors are scaled to the demo's scale, and the worker calls are authenticated. Otherwise the buttons run Uni3C / Frames, with the fallback line when only the worker is missing, and with no line when WorldCast or a step it needs is switched off. What was verified: case building, the client against a stand-in worker, plans, licences, and the earlier browser checks. What needs a GPU: any real WorldCast run (48 GB+, an 82 GB base), the reference server end to end, the Depth Pro path, and quality. Cloud engine: no WorldCast route, by the owner's GPU-only rule; the cloud's existing H3 routes are unchanged. Guests and accounts: they never reach the worker. accountRun answers own-gpu-tool, the context is undefined for a tenant, own-GPU run or visitor, the client refuses inside a tenant, and visitors see no worker wording.",
-    "left": [
-      "Everything on a GPU: a real WorldCast run, its memory use with 1344 px anchors, quality with MoGe depth and ring-guessed anchor cameras, and the Depth Pro / VGGT-Omega worker paths. VGGT-Omega is recorded but the reference server does not implement it.",
-      "The owner should confirm the small WorldCastField insertion in settings-form.tsx (rule 2, hot file). The OwnerServerComfy copy in connect-choice.tsx does not depend on it.",
-      "WORLDCAST_TOKEN is settable through the environment (or the settings key worldcast.token) but has no Settings field yet, to keep the hot settings form unchanged.",
-      "There is no 'WorldCast worker' row on the /connect GPU pre-flight board. Turnaround still shows Shape (Portrait / Landscape) on the portrait-only WorldCast route.",
-      "Fly around and Cinema's Fly path have no UI for naming the subject's other views yet: they send the still as the front anchor only (API callers can pass `sides`). Canvas's Fly around node stays on Uni3C.",
-      "The browser check tests/e2e/worldcast.mjs was not rerun: this fix stage changed no UI. Only the wording of the after-run note changed.",
-      "tests/comfy-library-4.test.ts was not edited."
-    ],
-    "blocked": ""
-  }
+ "key": "n7-9-worldcast-worker",
+ "impl": {
+  "branch": "o/n7-9-worldcast-worker",
+  "summary": "WorldCast now sits behind the Fly path, Turnaround / Fly around and the exact orbits on the open engine. It runs as a worker on the owner's GPU, with WORLDCAST_URL set in Settings → Open-source engine beside the isolated worker. While the worker answers, the buttons plan this run: MoGe 2 depth, a SAM 3.1 person mask for the still and for each view, then one WorldCast case. If no worker answers, the run stays on Uni3C or Frames and says \"Runs on Uni3C: add a WorldCast worker (48 GB+) for sides that match your photos\" (Turnaround says \"Runs on Frames: …\"). Fuobe builds each case itself: a 480×832 centre crop, 81 OpenCV camera-to-world poses plus the pixel intrinsic, render.mp4 and render_mask.mp4 at 15 fps from the server's point-cloud splat, the anchors with their masks, and ring cameras for the anchors. Correction: WorldCast's anchor names say where the camera stands, not which side of the body you see. The demo case's aligned cameras and its crops show this, so the person's own right side is WorldCast's left_side (270°). worldcastAnchor and its test were fixed to match, and a correction note was added to the research doc. Accounts and guests never reach the worker: accountRun answers own-gpu-tool, and visitors get no worker wording. This package added no new routes or migrations. Five signed commits, pushed.",
+  "built": [
+   "src/lib/worldcast.ts: the pure case builder. WORLDCAST_RUN (81 frames, 15 fps, 480×832, 50 steps, cfg 5, shift 2), worldcastLayout/readLayout, imageSlots, worldcastCrop/worldcastFov, cam_info (c2w), alignedAnchors (w2c ring cameras, first_frame included), anchorsMeta, the multipart parts and caseProblem checks. WORLDCAST and worldcastAnchor moved here from turnaround.ts (still re-exported there) to avoid an import cycle, and the side → view mapping is corrected: front→front 0°, right→left_side 270° (signed −90°), back→back 180°, left→right_side 90°.",
+   "src/server/worldcast.ts: the worker client. Health check with a 60 s cache (refreshWorldcast / worldcastAnswers / worldcastDepths), submitCase as multipart, jobStatus, jobVideo / jobVideoUrl, cancelJob, and submitDepth / jobDepthUrl. It refuses to run inside an account's tenant. src/server/worldcast-on.ts gives the planners their context: true, false, or undefined for visitors or when WorldCast is switched off.",
+   "src/server/worldcast-case.ts: builds the case on the server with sharp. It crops the still and binarises its mask, crops the MoGe depth the same way, builds the point cloud with the cropped field of view, runs framePoses for 81 frames, then splatFrame with the new hole-mask output and two ffmpeg encodes. Each anchor keeps its whole picture plus a 0/255 mask.",
+   "A new ProviderId 'worldcast' with an adapter in src/server/providers/worldcast.ts (inputs held as data URIs until submit; endpoint 'cases' or 'depth/<model>'; poll, cancel and test). providerEngine maps it to the open engine, and its routes take their licence from ModelDef.licence. WorldCast runs time out after 3 hours instead of 45 minutes.",
+   "Catalog (all hidden, open engine): oss-worldcast (Apache-2.0, with the SpatialVID academic-only note), oss-depth-pro (Apple research licence, non-commercial), oss-vggt-omega (FAIR Noncommercial, gated) and oss-person-mask. Each has its row and switch in Models & licences.",
+   "A new ComfyUI graph, image-person-mask-sam3 (core SAM3_Detect + MaskToImage, the pinned sam3.1_multiplex_fp16), built through scripts/comfy and validated with /prompt on the live CPU ComfyUI. It is in manifest.json, validation-state.json and requirements.json; the regenerated object_info.subset.json was reverted to the base's because every node class was already in it.",
+   "src/lib/catalog/worldcast-plan.ts: worldcastSteps (depth → masks → main, with chain slots placed by `at`), worldcastFallback, worldcastNote, WORLDCAST_AFTER (FPS Boost / RIFE to 24 fps and the upscalers in Upscale) and WORLDCAST_DEPTH (MoGe 2 by default; Depth Pro or VGGT-Omega through the worker's POST /depth).",
+   "Fly around (planFlyAround(input, ctx)) is used by DoP exact orbits, Cinema exact orbits, Image to 3D's Film it photoreal and Assist's fly_around. It takes WorldCast with ctx.worldcast, plus new optional `sides` and `depth` inputs in FlyAroundSchema. The server blocks Depth Pro or VGGT-Omega when the worker doesn't list them.",
+   "Turnaround: a new open-engine route 'worldcast', offered and chosen by default only when the worker answers. The front view is the first frame and every side with a picture becomes an anchor; drawn sides are added only when asked. Frames says the fallback line, and the GPU line reads 48 GB. Cinema's Turnaround take passes the same context.",
+   "Cinema's Fly path: planPath plans WorldCast with ctx.worldcast and needs no browser recording. scene-viewer skips the recording, and PathOptions shows 'About 5.4 s · portrait 480 × 832, 81 frames at 15 fps with WorldCast'. The project GET returns context.worldcast to the owner only.",
+   "Settings: a WorldCast worker URL field beside the isolated worker, in settings-form LocalComfy and in OwnerServerComfy (advanced or hosted). Save & test runs through the ComfyUI provider's test with focus worldcastUrl. Also covered: address validation (connections.ts), the hosted-page address refusal, and the install hosts (gpu/hosts.ts).",
+   "docs/workers/worldcast.md: the contract, written like tribe-v2.md. It covers GET /health, POST /cases (multipart parts table), POST /depth, GET /jobs/{id}, GET /jobs/{id}/video, DELETE /jobs/{id}, the side→anchor table, how Fuobe prepares a case, and the no_padding_black crop rules read from demo_case/ and the pipeline: background blacked out, crop tight to the mask's bounding box, mask 0/255 at the same size.",
+   "workers/worldcast/: server.py (FastAPI; imports WorldCast @ 7ccf2e0d from its own clone and virtualenv with demo.py's exact anchor-drop wiring; lays the case out like demo_case/ and cuts the no_padding_black crops; one job at a time; cancel; Depth Pro through apple/ml-depth-pro when installed), requirements.txt and a README. The README covers pinned installs (torch 2.8.0+cu128, transformers 5.8.1, ly56/worldcast @ 27635f27, Wan2.1-I2V-14B-720P @ 8823af45, both checkpoint byte sizes), running demo_case_traj5.json first, the environment variables and the licences."
+  ],
+  "tests": "Verified by tests. New files: tests/worldcast-case.test.ts (layout and side map, slots, crop and FOV, cam_info conventions, the ring cameras checked against the demo's geometry, multipart parts, refusals), tests/worldcast-worker.test.ts (the client and provider against a stand-in worker: health and cache, submit, poll, download, the worker's errors passed on, 404 and unknown status, bad ids, cancel, depth jobs, refusing an account's run, worker unreachable) and tests/worldcast-plan.test.ts (step chains; Fly around, Turnaround and Cinema Fly path with a worker, without one, and for visitors; the ModelDefs' visibility and licences; accountRun → own-gpu-tool; visitors get no context; the server case built with real sharp and ffmpeg, checked by ffprobe at 480×832, 15/1 fps, 81 frames). Updated tests: turnaround.test.ts (the corrected side map), catalog.test.ts (the worker counts as the open engine), no-higgsfield.test.ts (KNOWN providers include worldcast) and qma-angles.test.ts (ROUTES_ON.open). Full Vitest ran once with FUOBE_ACCOUNT_DISK_FREE_GB=1 and --maxWorkers=2: 11 failed, 5397 passed, 4 skipped. Four of the 11 failures were mine (no-higgsfield, qma-angles, and two in comfy-library-notes because the graph note mentioned the package id); I fixed them and they pass when rerun alone. moderation-hook failed under load and passed when rerun alone. The other 6 failures are the known ones from main: comfy-reuse, dop-originals, preset-featured, soul-runs (2) and split-soundtrack. Typecheck is clean after npx next typegen. The graph passed /prompt validation on the live CPU ComfyUI. The browser check tests/e2e/worldcast.mjs passed 50/50 against pnpm dev in demo mode on the open engine, with a stand-in worker, at 1440 and 390 px in light and dark: the Settings row renders, Tab reaches the field, Save & test turns green, nothing scrolls sideways, the Turnaround dialog shows and selects the WorldCast route with a worker and the Frames fallback line without one, a finger drag scrolls the dialog at 390 px, the planner answers both ways through the API, and there were no console or page errors. The server was stopped and .next deleted. Nothing ran on a GPU and WorldCast itself was never run: its code was only read, at the pinned commit.",
+  "left": [
+   "GPU only, not verifiable here: any real WorldCast run (48 GB+, the 82 GB base, run time unknown), whether the reference server works end to end, quality with MoGe depth and ring-guessed anchor cameras (versus Depth Pro / VGGT-Omega, or no aligned cameras), and whether Fuobe's c2w path and splat render match WorldCast's training distribution closely enough. The worker README says to run demo_case_traj5.json first.",
+   "VGGT-Omega is recorded (ModelDef, licence, switch, a 'vggt-omega' slot in the contract) but the reference server doesn't run it: its gated code and API weren't read. Depth Pro's worker code follows apple/ml-depth-pro's documented API and was never run.",
+   "Depth Anything 3 metric-large was not built: MoGe 2, already pinned, is the default. DA3 metric-large isn't pinned (the base only has mono_large) and would need a new graph and model pin.",
+   "Canvas's Fly around node stays on Uni3C: its step mapping counts each step's inputs.images, so WorldCast's slot layout needs its own mapping there. Image to 3D's browser render isn't used by WorldCast, which renders from MoGe depth instead.",
+   "Fly around and Cinema's Fly path have no named views in their UIs yet, so on those routes WorldCast films from the still alone (first-frame anchor only; no body anchors, so no first-frame anchor either: the pipeline skips anchors). The Turnaround route is the one that uses the views. FlyAroundSchema accepts `sides` for API callers.",
+   "When WorldCast is the route, the Turnaround dialog still offers Shape (Portrait / Landscape), though WorldCast is always portrait. pathTake still records the Uni3C length (81/16 s) for a WorldCast Fly-path take.",
+   "No GPU pre-flight row was added: WorldCast isn't a ComfyUI graph and isn't a new page. The person-mask graph does reach requirements.json. A 'WorldCast worker' line on /connect could follow.",
+   "tests/comfy-library-4.test.ts was not edited: the new graph is validated."
+  ],
+  "docsNotes": "These notes are for the docs pass. STATUS.md: N7-9 is built; WorldCast is behind the three buttons on the open engine while a worker answers (WORLDCAST_URL), it is GPU-only with no cloud route, and the anchors are named by where the camera stands. ARCHITECTURE.md: a new provider 'worldcast' (src/server/providers/worldcast.ts), src/server/worldcast.ts, worldcast-case.ts, worldcast-on.ts, src/lib/worldcast.ts, src/lib/catalog/worldcast-plan.ts, the image-person-mask-sam3 graph, and the docs/workers/worldcast.md contract. SELF-HOSTING / DEVELOPMENT: the WORLDCAST_URL env and setting, and workers/worldcast/README.md. FEATURES.md: Fly path, Turnaround and exact orbits film with WorldCast on a 48 GB+ GPU. CREDITS.md: PixCtrol/WorldCast (Apache-2.0), plus Depth Pro and VGGT-Omega as optional and non-commercial. Research correction made in new-models-7.md §3.11 (left/right). Where the brief was out of date: worldcast_pipeline.py's crop logic is in _encode_per_view_nopad as well as L842-869 (which loads the render and camera); DA3 metric-large is not pinned at the base (only mono_large); the turnaround's side map at the base (right→right_side) contradicted the demo case's geometry; the Settings 'isolated worker URL' row lives in settings-form.tsx LocalComfy and connect-choice.tsx OwnerServerComfy.",
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "medium",
+    "verdict": "PLAUSIBLE",
+    "file": "src/server/worldcast-case.ts",
+    "line": 84,
+    "summary": "Anchor pictures go to the worker at full size, and the worker cuts its no_padding_black crop at that size. The anchors' VAE latents and token counts grow with the upload. WorldCast was trained on crops about 540 x 1320 (the demo's body_view_*.png are cut from 768 x 1344 frames).",
+    "failure_scenario": "A Turnaround with a 4000 x 6000 phone photo as the back view: buildCase sends the whole picture (sharp .rotate().removeAlpha(), no resize). server.py nopad() crops it to the person box, about 2500 x 5000. worldcast_pipeline._encode_per_view_nopad VAE-encodes that at its natural size rounded up to 16 and adds about 49k tokens for one anchor next to the 14B DiT. Likely result: CUDA OOM on a 48-80 GB card, or a run far outside the training distribution. Fix: scale each anchor and its mask so the person crop is about the first frame's scale (for example a long side of at most 1344 px) in buildCase, or in nopad() before saving."
+   },
+   {
+    "severity": "medium",
+    "verdict": "CONFIRMED",
+    "file": "src/lib/catalog/fly-around.ts",
+    "line": 131,
+    "summary": "Fly around, the DoP / Cinema exact orbits and Cinema's Fly path send WorldCast no anchors at all. Without a body view the pipeline also drops the first-frame anchor, so these routes run the released anchor-drop checkpoint with no anchor tokens. That mode was never trained.",
+    "failure_scenario": "planFlyAround(..., {worldcast:true}) without `sides` (always the case from the UIs) gives worldcastSteps anchors []. caseParts sends anchors \"[]\", and server.py write_case returns anchors=\"\". In worldcast_pipeline.py WorldCast_prepare_viewpoint_anchors.process, L443 `if not viewpoint_anchors_path: return {}` skips everything, including use_first_frame_anchor (an empty anchors dir also returns {} at L473, before the first frame is added). WorldCast's 'front' is by definition the first frame's camera (demo body_views_meta: front = source_frame 0, azimuth 0). The still, whose SAM mask is already computed, can always be sent as the 'front' anchor. That gives the trained first_frame + front slots, and zero-fill takes the rest."
+   },
+   {
+    "severity": "medium",
+    "verdict": "CONFIRMED",
+    "file": "docs/workers/worldcast.md",
+    "line": 1,
+    "summary": "The worker contract and the reference server have no authentication. On hosted pages, Settings offers an https://... address for the worker. Anyone who can reach it can queue jobs on the owner's 48 GB+ GPU or cancel the owner's jobs. The 512 MB upload cap is only checked against the Content-Length header.",
+    "failure_scenario": "The owner of a hosted install exposes the worker at https://gpu.example:8190, as the hosted placeholder suggests. A stranger POSTs /cases or /depth in a loop and holds the single job queue. A chunked request has no Content-Length, so it skips read_form's MAX_UPLOAD check and the whole body is read into memory. ComfyUI has comfyToken for this, and the worker has nothing. Fix: a secret worldcastToken setting sent as a Bearer header, checked by server.py, plus README guidance to bind 127.0.0.1 or put the worker behind a tunnel."
+   },
+   {
+    "severity": "low",
+    "verdict": "CONFIRMED",
+    "file": "src/server/worldcast-on.ts",
+    "line": 16,
+    "summary": "worldcastContext only checks that oss-worldcast is switched on. If the admin switches off a helper step (oss-person-mask, or oss-scene-moge) in Models & licences, the move is blocked instead of falling back to Uni3C / Frames.",
+    "failure_scenario": "WorldCast is on and the worker answers, and the admin switches off 'SAM 3.1 person mask'. src/server/fly-around.ts plan() finds the off step and returns 'This move is switched off on this studio' for every exact orbit and Fly around. Uni3C would still run."
+   },
+   {
+    "severity": "low",
+    "verdict": "CONFIRMED",
+    "file": "src/lib/catalog/cinema.ts",
+    "line": 2200,
+    "summary": "pathTake reads plan.steps[0] and records the Uni3C length (PATH_FRAMES / PATH_FPS, about 5.06 s) for a WorldCast Fly-path take. WorldCast's steps[0] is the depth step, and its clip is 5.4 s at 15 fps.",
+    "failure_scenario": "A Fly-path take filmed with WorldCast is saved with duration 5.0625 and the keys taken from input.path (the fallback), not the planned cameraPath. The implementer listed this under 'left'."
+   },
+   {
+    "severity": "low",
+    "verdict": "PLAUSIBLE",
+    "file": "src/lib/catalog/worldcast-plan.ts",
+    "line": 41,
+    "summary": "The brief asks to offer RIFE to 24 fps and the existing upscalers after a WorldCast clip. The build only adds a note string (WORLDCAST_AFTER), with no action or pre-filled step.",
+    "failure_scenario": "After a WorldCast run the person reads 'In Upscale, FPS Boost (RIFE) takes the clip to 24 fps…'. They have to move the clip to Upscale by hand, and no button sends it there."
+   },
+   {
+    "severity": "low",
+    "verdict": "CONFIRMED",
+    "file": "src/components/settings-form.tsx",
+    "line": 493,
+    "summary": "Rule 2 lists owner Settings sections as hot files, and this one was edited. The change is a small field insertion (WorldcastField in LocalComfy) that the brief asked for explicitly. The owner should confirm it.",
+    "failure_scenario": "On a merge conflict in settings-form.tsx, rule 2 says to take the base's version, and that drops the WorldCast worker URL field from Settings → Open-source engine. The OwnerServerComfy copy in connect-choice.tsx stays."
+   },
+   {
+    "severity": "low",
+    "verdict": "CONFIRMED",
+    "file": "src/server/gpu/tools.ts",
+    "line": 88,
+    "summary": "The GPU pre-flight board can't see the WorldCast worker: STUDIO_ROWS counts only comfyui and local routes, and /connect has no 'WorldCast worker' line. The UI also still offers Turnaround Shape (Portrait / Landscape) on the portrait-only WorldCast route. The implementer acknowledged both.",
+    "failure_scenario": "The owner's /connect board shows Turnaround as Ready while the WorldCast worker is down. The worker's state only appears as the fallback note in the dialog."
+   }
+  ],
+  "checks": [
+   "Read the stage prompt and main-rules.md. Reviewed git diff claude/fuobe-parity-4...o/n7-9-worldcast-worker (5 commits, 60 files) and the code around it. HEAD 3958bc0b equals origin/o/n7-9-worldcast-worker (pushed). Commits are SSH-signed (not verifiable locally: no allowedSignersFile), and the messages are neutral 'Area: result'. The worktree is clean.",
+   "Cloned PixCtrol/WorldCast @ 7ccf2e0d into the scratchpad and read it as data only, running none of its code. Checked server.py against demo.py: the anchor-drop wiring (BANK_CONFIG, ANCHOR_PRIORITY, ANCHOR_K, use_first_frame_anchor, zero-fill, plucker), the load_pipeline / load_checkpoint / build_bank / build_anchor_adapter calls and the pipe() kwargs all match, and progress_bar_cmd exists in __call__. The anchors / no_padding_black / person_mask layout matches _encode_per_view_nopad and resolve_semantic_anchor_paths. The aligned-camera file path matches _find_nopadblack_aligned_file.",
+   "Checked the implementer's left/right correction against the demo data. In anchors_aligned_camera_info.json (w2c), inv(right_side) has translation (+0.288, −0.034, 0.225), which matches cam_info frame 28.6 (stored c2w), and inv(left_side) is (−0.298, …), which matches frame 65. The flatring cam_info is self-consistent as c2w. In first_frame.png the boy faces image-right, and body_view_right_side.png shows his face. So right_side is the camera moved to its own right, and a front-facing person's own right side is left_side. worldcastAnchor's corrected map (right→left_side 270°/−90°, left→right_side 90°) is right, and keyPose (+azimuth → +x) puts the ring cameras on the matching sides.",
+   "Checked render_mask polarity by extracting frame 20 of the demo flatring render.mp4 / render_mask.mp4 with ffmpeg: white is where the render is empty, so 255 = hole, matching splatFrame's new holes output. cam_info c2w 'as stored' with invert_camera_extrinsic off matches demo.py.",
+   "Public sign-up: accountRun('acct', 'worldcast') answers own-gpu-tool, and a hosted-run pool submit refuses non-comfyui providers. worldcastContext gives undefined for a tenant, ownGpu or visitor (priceAs). The worker client's guard() throws inside a tenant. The Cinema project GET sends context.worldcast to the owner only. isInstallHost now includes the worker's host, so an account can't link it. No new routes, migrations or ASSET_REFS tables. FlyAroundSchema.sides is only used on the owner's WorldCast path.",
+   "Licences recorded as data: oss-worldcast (Apache-2.0 + SpatialVID note), oss-depth-pro (Apple research, commercial false), oss-vggt-omega (FAIR NC, gated); oss-person-mask takes the manifest's SAM licence through comfyFacts. routeLicence covers the worldcast provider through ModelDef.licence. No Higgsfield API, code or media; no LoRA files or preview media committed.",
+   "The person-mask graph: SAM3_Detect / MaskToImage inputs match the live CPU ComfyUI's /object_info at 127.0.0.1:8188. The manifest bindings (image node 1, prompt node 3 text, threshold node 4, filenamePrefix node 6) match the JSON. requirements.json and validation-state.json have the new entry with the pinned sam3.1 checkpoint.",
+   "npx next typegen && tsc --noEmit: clean.",
+   "Targeted Vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1). worldcast-case, worldcast-worker, worldcast-plan, turnaround, catalog, no-higgsfield, qma-angles and comfy-library-notes: 316/316 passed. account-tenant, camera-path, cinema-path, connections, fly-around, licences, model-access(-listings, -studios), public-signup(-tools, -visitors), settings-read, turnaround-api, connect-card-studios, request-body-limits and hosted-runs: 244/244 passed. The full suite and the browser check tests/e2e/worldcast.mjs were not re-run in this review.",
+   "Not verifiable here: any real WorldCast run on a GPU (48 GB+, an 82 GB base), quality with MoGe depth and ring-guessed anchor cameras, and the Depth Pro worker path."
+  ],
+  "verdict": "changes-requested: the build is sound and the left/right correction is right (verified against the demo case's cameras and images). Before merge, fix the two medium WorldCast-input issues: scale the anchors to training size, and send the still as the 'front' anchor so the Fly around / exact orbit / Fly path routes are not anchor-less. Also add a worker token, or document that the worker must not be exposed. The low findings can follow."
+ },
+ "fix": {
+  "applied": [
+   "Medium (Fly around, the exact orbits and Cinema's Fly path sent no anchors, so the pipeline dropped every anchor, the first frame's included, which the checkpoint was never trained for). Confirmed. worldcastSteps now always sends the still as the 'front' anchor (with its own mask-front SAM step) when no front view is given. Turnaround is unchanged because it already sent the front. Tests: Fly around with and without named sides, and Cinema's Fly path layout is ['front'] (tests/worldcast-plan.test.ts).",
+   "Medium (anchors were sent at full photo size, outside WorldCast's training scale, with a risk of running out of memory). Confirmed as plausible. buildCase now scales each anchor and its mask to a longest side of ANCHOR_MAX_SIDE = 1344 px (the demo's 768 × 1344 source frames) and never enlarges them. Test: a 2000 × 3000 view and a 500 × 750 mask both arrive at 896 × 1344. docs/workers/worldcast.md says the same.",
+   "Medium (the worker had no authentication, and a chunked upload got past the 512 MB cap). Confirmed. New secret setting worldcastToken (env WORLDCAST_TOKEN, src/server/settings.ts). The client sends Authorization: Bearer on every call, and the provider puts the header on the clip and depth downloads. server.py checks WORLDCAST_TOKEN on every route with hmac.compare_digest and answers 401 without it. It answers 411 to a request with no Content-Length, keeps the 413 cap, and warns when it listens beyond localhost without a token. The README and the contract document all of this. Test: the stand-in worker sees no header without a token, then 'Bearer s3cret' on health, submit, status and cancel, and the download output carries the header (tests/worldcast-worker.test.ts).",
+   "Low (switching off a helper step blocked the move instead of falling back). Confirmed. worldcastContext and worldcastContextNow now need oss-worldcast, oss-person-mask and oss-scene-moge all switched on. With any of them off, the buttons quietly keep their Uni3C / Frames run. Test: each one switched off in turn gives an undefined context.",
+   "Low (pathTake recorded the Uni3C length for a WorldCast take). Confirmed. pathTake now reads the film step (the last one) for a WorldCast plan and records 81/15 s with the planned cameraPath. Test in worldcast-plan.test.ts.",
+   "Low (RIFE was offered only as text). Partly addressed: every finished video already has the generic 'Upscale' next step (src/lib/output-actions.ts, /upscale/video?video=…), which holds FPS Boost (RIFE) and the upscalers. The WORLDCAST_AFTER note now points at that button."
+  ],
+  "rejected": [
+   "Low: settings-form.tsx is a hot file (rule 2). The brief explicitly asked for the field, and it stays a small insertion. No change. This needs the owner's confirmation and is listed under left.",
+   "Low: GPU pre-flight row and Turnaround Shape on the WorldCast route. WorldCast is not a new studio page or ComfyUI graph, so STUDIO_ROWS has no row type for an outside worker. The person-mask graph already reaches requirements.json. Hiding Shape is a UI polish that the implementer and reviewer both listed as follow-up. Left for later, not changed."
+  ],
+  "checks": [
+   "Worktree case (1): the branch had only this package's 5 commits, and the base is an ancestor. pnpm install --frozen-lockfile succeeded.",
+   "npx next typegen, then NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck: exit 0.",
+   "pnpm lint: exit 0 (0 errors, 5 warnings that were already there in unrelated files).",
+   "Targeted tests: worldcast-plan, worldcast-case, worldcast-worker, turnaround, fly-around, cinema-path, settings-read and connections all passed (worldcast-plan + worldcast-worker 19/19 after the fixes; the 8-file set passed before the last two tests were added).",
+   "Full suite, run once after the container restart (FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2): 7 failed, 5404 passed, 4 skipped. The failures are the known ones from main: comfy-reuse, dop-originals, preset-featured, soul-runs (2) and split-soundtrack. preset-covers also failed under load and passed 11/11 when rerun alone (rule 8).",
+   "server.py parses (ast). It was never run here, and WorldCast was never run.",
+   "Committed eae55317 with the trailer and pushed it to origin/o/n7-9-worldcast-worker (HEAD equals the remote). .next was removed and the worktree is clean."
+  ],
+  "finalSummary": "Open engine: when the owner's WorldCast worker (WORLDCAST_URL, and WORLDCAST_TOKEN if it is exposed) answers and WorldCast, the SAM 3.1 person mask and MoGe 2 are all switched on, Fly around, the exact orbits, Cinema's Fly path and Turnaround plan these steps: MoGe 2 depth, SAM masks, then one WorldCast case. The still is now always the front anchor. Anchors are scaled to the demo's scale, and the worker calls are authenticated. Otherwise the buttons run Uni3C / Frames, with the fallback line when only the worker is missing, and with no line when WorldCast or a step it needs is switched off. What was verified: case building, the client against a stand-in worker, plans, licences, and the earlier browser checks. What needs a GPU: any real WorldCast run (48 GB+, an 82 GB base), the reference server end to end, the Depth Pro path, and quality. Cloud engine: no WorldCast route, by the owner's GPU-only rule; the cloud's existing H3 routes are unchanged. Guests and accounts: they never reach the worker. accountRun answers own-gpu-tool, the context is undefined for a tenant, own-GPU run or visitor, the client refuses inside a tenant, and visitors see no worker wording.",
+  "left": [
+   "Everything on a GPU: a real WorldCast run, its memory use with 1344 px anchors, quality with MoGe depth and ring-guessed anchor cameras, and the Depth Pro / VGGT-Omega worker paths. VGGT-Omega is recorded but the reference server does not implement it.",
+   "The owner should confirm the small WorldCastField insertion in settings-form.tsx (rule 2, hot file). The OwnerServerComfy copy in connect-choice.tsx does not depend on it.",
+   "WORLDCAST_TOKEN is settable through the environment (or the settings key worldcast.token) but has no Settings field yet, to keep the hot settings form unchanged.",
+   "There is no 'WorldCast worker' row on the /connect GPU pre-flight board. Turnaround still shows Shape (Portrait / Landscape) on the portrait-only WorldCast route.",
+   "Fly around and Cinema's Fly path have no UI for naming the subject's other views yet: they send the still as the front anchor only (API callers can pass `sides`). Canvas's Fly around node stays on Uni3C.",
+   "The browser check tests/e2e/worldcast.mjs was not rerun: this fix stage changed no UI. Only the wording of the after-run note changed.",
+   "tests/comfy-library-4.test.ts was not edited."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/n7-9-worldcast-worker"
+  ],
+  "notMerged": [],
+  "conflicts": "validation-state and manifest unions; requirements regenerated",
+  "checks": "batch of 7 (dbs-d7, idol-5, idol-2, idol-6, n7-9, kandinsky6, n7-10): typecheck 0, lint 0, vitest 5788 passed, 6 failed (main known); each merge checked by an independent verifier; n7-10 + Pika Flex interaction fixed in 64900624",
+  "pushed": true,
+  "head": "64900624"
+ }
 }

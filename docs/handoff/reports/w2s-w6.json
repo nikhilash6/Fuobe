@@ -1,157 +1,167 @@
 {
-  "key": "w2s-w6",
-  "impl": {
-    "branch": "o/w2s-w6",
-    "summary": "Skills W6 is built on o/w2s-w6 (7 signed commits, pushed, worktree clean). The Library now suggests a skill for a chain you keep making. Saved skills get a run history, a 'Suggest a fix' action, and use-based ranking in Assist. A new `pnpm eval:from-skill` command writes a harness suite for a skill. Already there before this package (from W1/W2): the skill stamp in request_json, needsRecheck (REPLACED_BY and switched-off reasons), builder.open(ids), the eval and skill-check helper features, and the server's ?batch= list option. None of W6 itself existed.",
-    "built": [
-      "src/lib/recipe.ts: shapeOf, shapeOfRecipe, shapeWords, rankSkills, SUGGEST_RULE (3 runs in 14 days) and the types for suggestions, history and fixes.",
-      "shapeOf groups a chain by its sorted model ids, ops and chain slots. It ignores prompts, inputs and helper or eval rows, and counts several takes of one step once.",
-      "src/server/recipes.ts, sweepSuggestions and skillSuggestions: chains are linked by depends_on and also by a result handed on by hand (its output file is the next step's input). This makes hand-made composer chains count, because the brief's depends_on alone would miss them; the links match how W2's linkByFile builds recipes.",
-      "The sweep counts only the owner's own runs and leaves out skill runs, canceled rows and trashed rows. It runs at most once a day and its result is cached in the settings row skills.suggestions (JSON; no migration). That row also holds dismissals and 'Not now' put-offs (7 days).",
-      "Shapes that a saved recipe skill already has are filtered out when the list is read.",
-      "dismissSuggestion handles 'Don't suggest this' and 'Not now'.",
-      "skillHistory: runs grouped by the skill.run stamp, with run count, success rate, spend, last run, favourites and the last 10 runs; the skill's own dry runs are left out.",
-      "stepFixes: a step is flagged when it failed in 2 of its last 5 finished runs, was moved by REPLACED_BY, or is switched off. Candidates come from offeredModels(modelsFor) (same op and kind, switched on), each priced as the whole run would be, marked demo when that price is a placeholder.",
-      "applyFix: takes only an offered candidate, runs W1's plan check and free dry run, then saves. Nothing is ever swapped automatically.",
-      "src/server/skill-uses.ts: skillUses(), use counts per skill, cached for 60 seconds. It is a separate module to avoid an import cycle with assist/tools.",
-      "New routes: GET/POST /api/assist/skills/suggestions (a guest or account gets {items: []}; POST is owner-only through isAssistChange), GET /api/assist/skills/[name]/history, and GET/POST /api/assist/skills/[name]/fixes. 'suggestions' is now a reserved skill name (skills.ts RESERVED and the builder's freeName).",
-      "Assist: chatFacts ranks the SKILL_INDEX list with rankSkills, using the chat's word match (new optional ChatInfo.words), use count and recency. list_skills ranks the same way.",
-      "UI: the 'Save it as a skill?' card in the Library's All view, under the filters (owner only, full width at 390 px): Make a skill opens the W2 builder with the newest run's rows; Not now and Don't suggest this hide it; it says when it was made from demo results. In src/components/skills/skill-suggestion.tsx.",
-      "UI: the History section under Files in the skill dialog, and 'Suggest a fix' on the 'Needs a re-check' line with a dialog that prices each candidate and runs Check and save. In src/components/assist/skill-upkeep.tsx; skills-view.tsx has only small edits.",
-      "Library: a /library?batch=<id> filter with a 'One run' chip. FeedFilter.batchId was added, plus its matchesFilter and filterToSearch handling.",
-      "Evaluation: `pnpm eval:from-skill <name>` (scripts/eval/lib/from-skill.mjs plus a from-skill command in eval.mjs) writes scripts/eval/local/cases/skill-<name>.json. It has one case per engine, submitted to the skill's run and estimate routes with the recipe's examples (fixtures for a demo run or a missing example); the recipe's checks go into the case note, and metrics are chosen by output kind.",
-      "The harness's routeResult and price() now read a skill run's answer and estimate. The usage line in bin/lib/commands.mjs, docs/cli.md and scripts/eval/README.md (new 'Saved skills' section) are updated."
-    ],
-    "tests": [
-      "New tests/skill-suggest.test.ts (9 tests, passing): one shape for the same chain with different prompts and inputs; helper and eval rows ignored; the 3-in-14-days threshold; hand-made chains count; account runs left out; the demo flag; the once-a-day sweep; Not now and Don't suggest this; no suggestion for a shape a saved skill has; trashed rows; the reserved name.",
-      "tests/recipes.test.ts: 25 tests passing. 4 new: history from the skill stamp; fix candidates for a switched-off step share op and kind, are switched on, and save after the checks; a fix offered after 2 failed runs; ranking puts the used skill first, and list_skills and the context index follow it.",
-      "New tests/eval-from-skill.test.ts (3 tests, passing): the command writes the suite and the harness runs it end to end on the demo provider through the skill's routes.",
-      "Targeted runs passing: public-signup and public-signup-visitors (50; new routes added to both files), assist-skills, assist-skill-tools, recipe-builder and recipe (98), the library tests (71), eval-harness, eval-api and the CLI tests (125).",
-      "Typecheck (after next typegen) and eslint on the changed files are clean.",
-      "Browser: tests/e2e/skills-upkeep.mjs against pnpm dev in demo mode passed every check at 1440 and 390 px, light and dark: the card (text, demo note, three buttons, full width on a phone, absent outside All), the History section, no sideways scroll, and no console errors. The flows also passed: History's Open link leads to the 'One run' Library view, Make a skill opens the builder, Suggest a fix saves a new model, and Not now hides the card for good. The dev server was stopped and .next deleted.",
-      "Full Vitest run (--maxWorkers=2) was still running when the report was requested, so it has no final count. So far only tests/split-soundtrack.test.ts has failed, 1 test, which is on the list of known failures from main."
-    ],
-    "left": [
-      "Finish the full Vitest run: only a partial result was in when this report was written.",
-      "A skill whose recipe runs a studio tool (dub, Katana, Captions) is not measured by eval:from-skill, and such a recipe has no shape, so it never hides a suggestion.",
-      "The sweep reads at most 5000 rows from the 14-day window.",
-      "Use counts and the sweep use json_extract on generations with no index. This is fine at current sizes; a large install may want an index (a migration).",
-      "The suggestions list is fixed for the day once the Library has opened; a fresh sweep is available server-side but has no button.",
-      "A Re-check does not refresh the fixes list, only Check and save does.",
-      "The Suggest a fix dialog was checked in the browser only at 1440 light."
-    ],
-    "docsNotes": [
-      "ARCHITECTURE: add Skills W6. That covers lib/recipe.ts (shapeOf, shapeOfRecipe, rankSkills, SUGGEST_RULE) and server/recipes.ts (sweep, suggestions, history, fixes).",
-      "It also covers server/skill-uses.ts, the routes /api/assist/skills/suggestions and /api/assist/skills/[name]/{history,fixes}, components skills/skill-suggestion.tsx and assist/skill-upkeep.tsx, and the Library's ?batch= filter.",
-      "'suggestions' is now a reserved skill name next to upload, new and draft (the ARCHITECTURE line names only 'draft').",
-      "The skills.suggestions settings row holds the dismissed shapes, the put-offs and the day's sweep.",
-      "Public sign-up: suggestions answer {items: []} to guests and accounts; history and fixes are closed to them (401 or 403); POST suggestions and POST fixes answer assist-owner.",
-      "STATUS: W6 is built, and verified in demo mode and the browser; there was no live-model or GPU run of eval:from-skill.",
-      "docs/cli.md and scripts/eval/README.md are already updated."
-    ],
-    "blocked": ""
-  },
-  "review": {
-    "findings": [
-      {
-        "severity": "medium",
-        "file": "src/server/recipes.ts",
-        "line": 565,
-        "title": "Suggest a fix also blames the steps after the one that failed",
-        "detail": "stepTrouble counts a step as failing when any row in the run with the same model id failed. When a step fails, advanceDependents fails every step waiting on it with \"An earlier step didn't finish\" (generations.ts waitedOnFailure), so those downstream steps are flagged too and the user is offered model swaps for steps that never ran. The match is also by model id rather than by the row's own `step` stamp (request_json.step, which compileRun writes), so two steps on the same model are both blamed for one step's failure.",
-        "verified": "A scratch vitest (deleted afterwards) used a 2-step skill (cut: birefnet-cloud → place: gpt-image-2) with 2 runs. In each run only 'cut' really failed and 'place' failed with \"An earlier step didn't finish\". stepFixes returned [[\"cut\",\"…failed in 2 of the last 2 runs\"],[\"place\",\"GPT Image 2 failed in 2 of the last 2 runs\"]]. The new recipes.test case only inserts failures of the last step, so it misses this.",
-        "fix": "Count failures per step key (json_extract '$.step') and leave out rows whose error is waitedOnFailure(). Add a test with an upstream failure."
-      },
-      {
-        "severity": "medium",
-        "file": "src/server/recipes.ts",
-        "line": 336,
-        "title": "Failed or still-running chains count toward a suggestion, and Make a skill can be handed one",
-        "detail": "The sweep keeps every status except 'canceled', and the suggestion's ids are the newest run's rows whatever their status. A failed attempt therefore counts as one of the '3 times'. If the newest chain has a failed row or is still running, Make a skill opens the builder with it, and the builder refuses that step (\"It didn't finish, so there's nothing to repeat\" / \"It's still running\"). The user sees the card and clicks Make a skill, and the step they wanted is missing or refused. The newest run should be the newest chain that fully succeeded, and only succeeded chains (or at least only those with a succeeded leaf) should count.",
-        "verified": "A scratch vitest (deleted afterwards) made 3 finished chains plus a 4th, newer chain whose last row failed. skillSuggestions gave count 4 with ids = the failed chain. draftFromGenerations(ids) returned refusals [{id:'rv-b3…', reason:\"It didn't finish, so there's nothing to repeat\"}].",
-        "fix": "Base the count on chains whose rows all succeeded (or skip failed rows) and pick ids from the newest succeeded chain. Add a test."
-      },
-      {
-        "severity": "low",
-        "file": "src/server/assist/agent.ts",
-        "line": 1334,
-        "title": "Assist's context index never uses word match: ChatInfo.words is never passed",
-        "detail": "The brief asks for both list_skills and the context index to be ranked by word match, use count and recency. chatFacts now calls rankSkills with query c.words, but the only caller (contextFor in agent.ts) never sets `words`. The context index is therefore ranked only by use and recency. The implementer's report claims it uses the chat's word match.",
-        "verified": "grep: chatFacts( is called only in agent.ts:1334, without words. The recipes.test check also calls chatFacts without words.",
-        "fix": "Pass the thread's first user message (or title) as words in contextFor, and add a test where a word-matching skill outranks a used one in the index."
-      },
-      {
-        "severity": "low",
-        "file": "src/components/assist/skills-view.tsx",
-        "line": 296,
-        "title": "A failing-history reason shows as 'Needs a re-check', which a Re-check can't clear",
-        "detail": "The why texts from fixes (e.g. 'X failed in 2 of the last 5 runs') are merged into the recheck list. The line then reads 'Needs a re-check: …' with a Re-check button. A passing demo re-check doesn't change the run history, so the line stays until more successful runs push the failures out, and the fixes query isn't refreshed after a Re-check (the implementer's 'left' list notes this).",
-        "verified": "Traced: recheck = [...v.recheck, ...fixes.map(f => f.why)]. useRecipeActions().verify doesn't invalidate ['assist-skill-fixes', name].",
-        "fix": "Show failing-step reasons with their own wording (e.g. 'Keeps failing: …') next to Suggest a fix, and invalidate the fixes query after verify."
-      },
-      {
-        "severity": "low",
-        "file": "src/server/recipes.ts",
-        "line": 548,
-        "title": "applyFix drops a step's pinned engine",
-        "detail": "withModel deletes request.engine on the swapped step. A step pinned to one engine of a dual-engine model (e.g. kept on the open engine for its LoRAs or custom nodes) loses that pin after a fix, so the skill may now also run, or be priced, on the cloud. This only matters when the pick is a dual-engine model. Keeping the engine when the new model supports it would follow the each-engine-does-all-it-can rule.",
-        "verified": "Read the code; no test covers it.",
-        "fix": "Keep request.engine when the candidate supports that engine."
-      },
-      {
-        "severity": "info",
-        "file": "docs/handoff (report)",
-        "line": 0,
-        "title": "Report accuracy: 6 commits, not 7",
-        "detail": "claude/fuobe-parity-4..o/w2s-w6 has 6 commits, all signed (gpgsig present), with neutral messages. The report says 7.",
-        "verified": "git rev-list",
-        "fix": "None needed in code."
-      }
-    ],
-    "checks": [
-      "Read main-rules.md, the review prompt and the implementer's report. Reviewed git diff claude/fuobe-parity-4...o/w2s-w6 (29 files) with the code around it: recipes.ts sweep, suggestions, history and fixes; lib/recipe.ts shapeOf and rankSkills; skill-uses.ts; the 3 new routes; guest-access/proxy behaviour; library-view, skill-suggestion, skill-upkeep and skills-view; the eval from-skill script and the run.mjs changes.",
-      "Base is up to date: merge-base equals claude/fuobe-parity-4 (03e49f2d). No hot or off-limits files touched, no migration, no analytics, no Higgsfield code or media. Commit messages are neutral and signed.",
-      "Public sign-up: GET /api/assist/skills/suggestions goes through the proxy as a guest skill path and the route answers {items: []} for guests and accounts. GET history and fixes are refused to visitors (401 for guests, 403 for accounts). The POSTs are assist-owner through isAssistChange. The sweep, history and use counts leave out rows that carry $.account. No new run path or file read for accounts. The owner-only fixes pricing is not a visitor price check.",
-      "Scratch vitest (deleted): a suggestion made from 3 demo createPipeline chains → draftFromGenerations(newest ids) → saveDraft → the suggestion disappears (PASS: the builder's recipe has the same shape as the sweep's).",
-      "Scratch vitest (deleted): newest chain failed → Make a skill ids refused by the builder (finding 2). Upstream failure → downstream step also offered a fix (finding 1).",
-      "Targeted: skill-suggest, recipes, eval-from-skill, public-signup and public-signup-visitors: 5 files, 87 tests passed.",
-      "npx next typegen && tsc --noEmit: exit 0. eslint on the changed ts/tsx/mjs files: exit 0.",
-      "Browser: ran tests/e2e/skills-upkeep.mjs against pnpm dev (FUOBE_DEMO_MODE=on, fresh data dir, http://localhost:3417). All checks passed at 1440 and 390 px, light and dark, and in the flows (Open → One run, Make a skill, Suggest a fix saved, Not now), with no console errors. Looked at the screenshots of the 390-dark card and the Suggest a fix dialog. Server stopped (fuser -k) and .next deleted.",
-      "Full Vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1, --maxWorkers=2): 5493 passed, 6 failed, 4 skipped. All 6 failures are on the known list from main: comfy-reuse, dop-originals, preset-featured, soul-runs (2) and split-soundtrack.",
-      "Worktree left clean (scratch tests removed, no edits or commits)."
-    ],
-    "verdict": "changes-requested: The package is mostly sound and complete against the brief. Suggestions, history, Suggest a fix, Assist ranking, eval:from-skill and the batch filter are built, sign-up rules hold, and typecheck, lint, the browser checks and the full suite are clean apart from failures already known on main. Two verified medium bugs should be fixed before merge: (1) Suggest a fix blames steps that only failed because an earlier step did (match by step key, skip waitedOnFailure rows); (2) failed or running chains count toward a suggestion and can be the rows Make a skill is handed, which the builder then refuses. Also wire ChatInfo.words in agent.ts so the context index really uses word match, as the brief asks."
-  },
-  "fix": {
-    "applied": [
-      "Finding 1 (medium): Suggest a fix blamed downstream steps. Each pipeline step's stamp now carries its recipe step key (request_json skill.step, set in compile() in src/lib/recipe.ts, type in src/lib/catalog/types.ts). stepTrouble (src/server/recipes.ts) counts a failure only on the step that made the row, and leaves out failures an earlier step caused (waitedOnFailure, or 'An earlier step …' shortfalls). Older rows without a step key still match by model id. New test in tests/recipes.test.ts: with cut-out ok, scene failed and spin failed by 'An earlier step didn't finish', only 'scene' is offered a fix.",
-      "Finding 2 (medium): failed or running chains counted, and Make a skill could get them. The sweep now reads every status. It skips a chain that still has a queued or running row, and a chain with a failed or canceled step that wasn't made again (a retry with the same model and op). A counted chain's shape and ids are its succeeded rows only. New test in tests/skill-suggest.test.ts covers failed last step, failed first step, canceled, running and queued chains (none count), the newest succeeded chain's ids, and a retried chain counting with its working rows.",
-      "Finding 3 (low): ChatInfo.words was never passed. contextFor in src/server/assist/agent.ts now passes the chat's first user message (firstWords). rankSkills now splits on punctuation and ignores a small set of common words, so a whole sentence doesn't match every skill. New test: a skill that matches the words outranks the most used one in the context index, and common words alone change nothing.",
-      "Finding 4 (low): a failing-history reason showed as 'Needs a re-check'. StepFix has a new 'failing' flag. skills-view shows such a reason as 'Keeps failing: …' with Suggest a fix (no Re-check button for it). Replaced and switched-off reasons stay on the re-check line. useRecipeActions().verify now invalidates ['assist-skill-fixes', name].",
-      "Finding 5 (low): applyFix dropped a pinned engine. withModel keeps request.engine when the new model is dual-engine and runs on that engine; otherwise it drops it as before. New test: a fuobe-soul step pinned to the open engine is switched off, fixed to fuobe-soul-hd, and stays on the open engine.",
-      "Tests updated for the new stamp field: tests/recipe.test.ts and tests/recipes.test.ts expect {name, run, step}."
-    ],
-    "rejected": [
-      "Finding 6 (info, the report said 7 commits but there were 6): this is report accuracy only, with no code change. The branch now has 7 commits, counting this fix."
-    ],
-    "checks": [
-      "Worktree /home/user/wt/o-w2s-w6 on o/w2s-w6: clean at start, claude/fuobe-parity-4 is an ancestor, and it holds only this package's commits.",
-      "Confirmed findings 1, 2, 3 and 5 by reading the code (stepTrouble matched by model id; the sweep kept failed and running rows; contextFor did not pass words; withModel deleted engine). Finding 4 was confirmed in skills-view and hooks.",
-      "npx next typegen, then tsc --noEmit (NODE_OPTIONS=--max-old-space-size=6144; the default heap ran out of memory): exit 0.",
-      "eslint on the changed files: exit 0.",
-      "Targeted Vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1, --maxWorkers=2): 12 files, 267 tests passed. Files: assist-context, assist-schedules, assist-skill-tools, assist-skills, cli-run, recipe, recipes, skill-suggest, recipe-builder, eval-from-skill, public-signup and public-signup-visitors. The full suite was not run, as instructed (the orchestrator runs it).",
-      "Browser: tests/e2e/skills-upkeep.mjs passed every check against next dev on http://localhost:3418 (FUOBE_DEMO_MODE=on, fresh data dir). That covers 1440 and 390 px, light and dark: the card, History, no sideways scroll, Make a skill, Suggest a fix saved, Not now, and no console errors. Server stopped, .next deleted, scratch data dir removed.",
-      "Commit ae6e4911 is signed and pushed to origin/o/w2s-w6. git status is clean.",
-      "After merging the latest claude/fuobe-parity-4 (clean, no conflicts): next typegen, typecheck and lint exit 0; full Vitest 5635 passed, 6 failed, 4 skipped. The 6 failures are all known from main: comfy-reuse, dop-originals, preset-featured, soul-runs (2), split-soundtrack."
-    ],
-    "finalSummary": "Skills W6 on o/w2s-w6 now has fixes for the review's two medium findings and three low findings. (1) Suggest a fix blames only the step that failed: each run's rows record their recipe step, and failures caused by an earlier step are ignored. (2) A suggestion counts only finished chains that worked (a retried step counts), and Make a skill gets the newest such chain's rows, which the builder accepts. (3) Assist's skills index ranks the skills that match the chat's first words first, ignoring common words. (4) A step that keeps failing says 'Keeps failing: …' next to Suggest a fix, not 'Needs a re-check', and a Re-check refreshes the fixes list. (5) A fix keeps a step on the engine it was kept on when the new model runs there. Engines: all of W6 is server-side logic and UI. Suggestions, history, fixes and ranking work on both engines' rows and on demo rows. Fix candidates are priced on whichever engine's plan check passes (the open engine is free). A pinned open-engine step keeps its LoRA and custom-node capability after a fix. Verified: in demo mode only, by unit tests and the browser script. No GPU or key run (eval:from-skill against a live model still needs one). Public sign-up is unchanged from the implementation: guests and accounts get {items: []} from suggestions; history and fixes are refused to them (401/403); POSTs are owner-only. The sweep, history and use counts leave out account rows.",
-    "left": [
-      "The full Vitest suite was not run in this stage (the orchestrator runs it).",
-      "The 'Keeps failing: …' wording is covered by unit tests only: the browser script doesn't make failing runs.",
-      "Rows made before this fix have no step key, so their failures still match by model id. Downstream 'An earlier step' failures are now ignored for them too.",
-      "Carried over from the implementation: tool recipes have no shape and eval:from-skill doesn't measure them; the sweep reads at most 5000 rows; json_extract on generations has no index; there is no button for a fresh sweep; Suggest a fix was browser-checked at 1440 light only.",
-      "Docs pass: also note request_json skill.step (the recipe step key) next to the skill stamp in ARCHITECTURE."
-    ],
-    "blocked": ""
-  }
+ "key": "w2s-w6",
+ "impl": {
+  "branch": "o/w2s-w6",
+  "summary": "Skills W6 is built on o/w2s-w6 (7 signed commits, pushed, worktree clean). The Library now suggests a skill for a chain you keep making. Saved skills get a run history, a 'Suggest a fix' action, and use-based ranking in Assist. A new `pnpm eval:from-skill` command writes a harness suite for a skill. Already there before this package (from W1/W2): the skill stamp in request_json, needsRecheck (REPLACED_BY and switched-off reasons), builder.open(ids), the eval and skill-check helper features, and the server's ?batch= list option. None of W6 itself existed.",
+  "built": [
+   "src/lib/recipe.ts: shapeOf, shapeOfRecipe, shapeWords, rankSkills, SUGGEST_RULE (3 runs in 14 days) and the types for suggestions, history and fixes.",
+   "shapeOf groups a chain by its sorted model ids, ops and chain slots. It ignores prompts, inputs and helper or eval rows, and counts several takes of one step once.",
+   "src/server/recipes.ts, sweepSuggestions and skillSuggestions: chains are linked by depends_on and also by a result handed on by hand (its output file is the next step's input). This makes hand-made composer chains count, because the brief's depends_on alone would miss them; the links match how W2's linkByFile builds recipes.",
+   "The sweep counts only the owner's own runs and leaves out skill runs, canceled rows and trashed rows. It runs at most once a day and its result is cached in the settings row skills.suggestions (JSON; no migration). That row also holds dismissals and 'Not now' put-offs (7 days).",
+   "Shapes that a saved recipe skill already has are filtered out when the list is read.",
+   "dismissSuggestion handles 'Don't suggest this' and 'Not now'.",
+   "skillHistory: runs grouped by the skill.run stamp, with run count, success rate, spend, last run, favourites and the last 10 runs; the skill's own dry runs are left out.",
+   "stepFixes: a step is flagged when it failed in 2 of its last 5 finished runs, was moved by REPLACED_BY, or is switched off. Candidates come from offeredModels(modelsFor) (same op and kind, switched on), each priced as the whole run would be, marked demo when that price is a placeholder.",
+   "applyFix: takes only an offered candidate, runs W1's plan check and free dry run, then saves. Nothing is ever swapped automatically.",
+   "src/server/skill-uses.ts: skillUses(), use counts per skill, cached for 60 seconds. It is a separate module to avoid an import cycle with assist/tools.",
+   "New routes: GET/POST /api/assist/skills/suggestions (a guest or account gets {items: []}; POST is owner-only through isAssistChange), GET /api/assist/skills/[name]/history, and GET/POST /api/assist/skills/[name]/fixes. 'suggestions' is now a reserved skill name (skills.ts RESERVED and the builder's freeName).",
+   "Assist: chatFacts ranks the SKILL_INDEX list with rankSkills, using the chat's word match (new optional ChatInfo.words), use count and recency. list_skills ranks the same way.",
+   "UI: the 'Save it as a skill?' card in the Library's All view, under the filters (owner only, full width at 390 px): Make a skill opens the W2 builder with the newest run's rows; Not now and Don't suggest this hide it; it says when it was made from demo results. In src/components/skills/skill-suggestion.tsx.",
+   "UI: the History section under Files in the skill dialog, and 'Suggest a fix' on the 'Needs a re-check' line with a dialog that prices each candidate and runs Check and save. In src/components/assist/skill-upkeep.tsx; skills-view.tsx has only small edits.",
+   "Library: a /library?batch=<id> filter with a 'One run' chip. FeedFilter.batchId was added, plus its matchesFilter and filterToSearch handling.",
+   "Evaluation: `pnpm eval:from-skill <name>` (scripts/eval/lib/from-skill.mjs plus a from-skill command in eval.mjs) writes scripts/eval/local/cases/skill-<name>.json. It has one case per engine, submitted to the skill's run and estimate routes with the recipe's examples (fixtures for a demo run or a missing example); the recipe's checks go into the case note, and metrics are chosen by output kind.",
+   "The harness's routeResult and price() now read a skill run's answer and estimate. The usage line in bin/lib/commands.mjs, docs/cli.md and scripts/eval/README.md (new 'Saved skills' section) are updated."
+  ],
+  "tests": [
+   "New tests/skill-suggest.test.ts (9 tests, passing): one shape for the same chain with different prompts and inputs; helper and eval rows ignored; the 3-in-14-days threshold; hand-made chains count; account runs left out; the demo flag; the once-a-day sweep; Not now and Don't suggest this; no suggestion for a shape a saved skill has; trashed rows; the reserved name.",
+   "tests/recipes.test.ts: 25 tests passing. 4 new: history from the skill stamp; fix candidates for a switched-off step share op and kind, are switched on, and save after the checks; a fix offered after 2 failed runs; ranking puts the used skill first, and list_skills and the context index follow it.",
+   "New tests/eval-from-skill.test.ts (3 tests, passing): the command writes the suite and the harness runs it end to end on the demo provider through the skill's routes.",
+   "Targeted runs passing: public-signup and public-signup-visitors (50; new routes added to both files), assist-skills, assist-skill-tools, recipe-builder and recipe (98), the library tests (71), eval-harness, eval-api and the CLI tests (125).",
+   "Typecheck (after next typegen) and eslint on the changed files are clean.",
+   "Browser: tests/e2e/skills-upkeep.mjs against pnpm dev in demo mode passed every check at 1440 and 390 px, light and dark: the card (text, demo note, three buttons, full width on a phone, absent outside All), the History section, no sideways scroll, and no console errors. The flows also passed: History's Open link leads to the 'One run' Library view, Make a skill opens the builder, Suggest a fix saves a new model, and Not now hides the card for good. The dev server was stopped and .next deleted.",
+   "Full Vitest run (--maxWorkers=2) was still running when the report was requested, so it has no final count. So far only tests/split-soundtrack.test.ts has failed, 1 test, which is on the list of known failures from main."
+  ],
+  "left": [
+   "Finish the full Vitest run: only a partial result was in when this report was written.",
+   "A skill whose recipe runs a studio tool (dub, Katana, Captions) is not measured by eval:from-skill, and such a recipe has no shape, so it never hides a suggestion.",
+   "The sweep reads at most 5000 rows from the 14-day window.",
+   "Use counts and the sweep use json_extract on generations with no index. This is fine at current sizes; a large install may want an index (a migration).",
+   "The suggestions list is fixed for the day once the Library has opened; a fresh sweep is available server-side but has no button.",
+   "A Re-check does not refresh the fixes list, only Check and save does.",
+   "The Suggest a fix dialog was checked in the browser only at 1440 light."
+  ],
+  "docsNotes": [
+   "ARCHITECTURE: add Skills W6. That covers lib/recipe.ts (shapeOf, shapeOfRecipe, rankSkills, SUGGEST_RULE) and server/recipes.ts (sweep, suggestions, history, fixes).",
+   "It also covers server/skill-uses.ts, the routes /api/assist/skills/suggestions and /api/assist/skills/[name]/{history,fixes}, components skills/skill-suggestion.tsx and assist/skill-upkeep.tsx, and the Library's ?batch= filter.",
+   "'suggestions' is now a reserved skill name next to upload, new and draft (the ARCHITECTURE line names only 'draft').",
+   "The skills.suggestions settings row holds the dismissed shapes, the put-offs and the day's sweep.",
+   "Public sign-up: suggestions answer {items: []} to guests and accounts; history and fixes are closed to them (401 or 403); POST suggestions and POST fixes answer assist-owner.",
+   "STATUS: W6 is built, and verified in demo mode and the browser; there was no live-model or GPU run of eval:from-skill.",
+   "docs/cli.md and scripts/eval/README.md are already updated."
+  ],
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "medium",
+    "file": "src/server/recipes.ts",
+    "line": 565,
+    "title": "Suggest a fix also blames the steps after the one that failed",
+    "detail": "stepTrouble counts a step as failing when any row in the run with the same model id failed. When a step fails, advanceDependents fails every step waiting on it with \"An earlier step didn't finish\" (generations.ts waitedOnFailure), so those downstream steps are flagged too and the user is offered model swaps for steps that never ran. The match is also by model id rather than by the row's own `step` stamp (request_json.step, which compileRun writes), so two steps on the same model are both blamed for one step's failure.",
+    "verified": "A scratch vitest (deleted afterwards) used a 2-step skill (cut: birefnet-cloud → place: gpt-image-2) with 2 runs. In each run only 'cut' really failed and 'place' failed with \"An earlier step didn't finish\". stepFixes returned [[\"cut\",\"…failed in 2 of the last 2 runs\"],[\"place\",\"GPT Image 2 failed in 2 of the last 2 runs\"]]. The new recipes.test case only inserts failures of the last step, so it misses this.",
+    "fix": "Count failures per step key (json_extract '$.step') and leave out rows whose error is waitedOnFailure(). Add a test with an upstream failure."
+   },
+   {
+    "severity": "medium",
+    "file": "src/server/recipes.ts",
+    "line": 336,
+    "title": "Failed or still-running chains count toward a suggestion, and Make a skill can be handed one",
+    "detail": "The sweep keeps every status except 'canceled', and the suggestion's ids are the newest run's rows whatever their status. A failed attempt therefore counts as one of the '3 times'. If the newest chain has a failed row or is still running, Make a skill opens the builder with it, and the builder refuses that step (\"It didn't finish, so there's nothing to repeat\" / \"It's still running\"). The user sees the card and clicks Make a skill, and the step they wanted is missing or refused. The newest run should be the newest chain that fully succeeded, and only succeeded chains (or at least only those with a succeeded leaf) should count.",
+    "verified": "A scratch vitest (deleted afterwards) made 3 finished chains plus a 4th, newer chain whose last row failed. skillSuggestions gave count 4 with ids = the failed chain. draftFromGenerations(ids) returned refusals [{id:'rv-b3…', reason:\"It didn't finish, so there's nothing to repeat\"}].",
+    "fix": "Base the count on chains whose rows all succeeded (or skip failed rows) and pick ids from the newest succeeded chain. Add a test."
+   },
+   {
+    "severity": "low",
+    "file": "src/server/assist/agent.ts",
+    "line": 1334,
+    "title": "Assist's context index never uses word match: ChatInfo.words is never passed",
+    "detail": "The brief asks for both list_skills and the context index to be ranked by word match, use count and recency. chatFacts now calls rankSkills with query c.words, but the only caller (contextFor in agent.ts) never sets `words`. The context index is therefore ranked only by use and recency. The implementer's report claims it uses the chat's word match.",
+    "verified": "grep: chatFacts( is called only in agent.ts:1334, without words. The recipes.test check also calls chatFacts without words.",
+    "fix": "Pass the thread's first user message (or title) as words in contextFor, and add a test where a word-matching skill outranks a used one in the index."
+   },
+   {
+    "severity": "low",
+    "file": "src/components/assist/skills-view.tsx",
+    "line": 296,
+    "title": "A failing-history reason shows as 'Needs a re-check', which a Re-check can't clear",
+    "detail": "The why texts from fixes (e.g. 'X failed in 2 of the last 5 runs') are merged into the recheck list. The line then reads 'Needs a re-check: …' with a Re-check button. A passing demo re-check doesn't change the run history, so the line stays until more successful runs push the failures out, and the fixes query isn't refreshed after a Re-check (the implementer's 'left' list notes this).",
+    "verified": "Traced: recheck = [...v.recheck, ...fixes.map(f => f.why)]. useRecipeActions().verify doesn't invalidate ['assist-skill-fixes', name].",
+    "fix": "Show failing-step reasons with their own wording (e.g. 'Keeps failing: …') next to Suggest a fix, and invalidate the fixes query after verify."
+   },
+   {
+    "severity": "low",
+    "file": "src/server/recipes.ts",
+    "line": 548,
+    "title": "applyFix drops a step's pinned engine",
+    "detail": "withModel deletes request.engine on the swapped step. A step pinned to one engine of a dual-engine model (e.g. kept on the open engine for its LoRAs or custom nodes) loses that pin after a fix, so the skill may now also run, or be priced, on the cloud. This only matters when the pick is a dual-engine model. Keeping the engine when the new model supports it would follow the each-engine-does-all-it-can rule.",
+    "verified": "Read the code; no test covers it.",
+    "fix": "Keep request.engine when the candidate supports that engine."
+   },
+   {
+    "severity": "info",
+    "file": "docs/handoff (report)",
+    "line": 0,
+    "title": "Report accuracy: 6 commits, not 7",
+    "detail": "claude/fuobe-parity-4..o/w2s-w6 has 6 commits, all signed (gpgsig present), with neutral messages. The report says 7.",
+    "verified": "git rev-list",
+    "fix": "None needed in code."
+   }
+  ],
+  "checks": [
+   "Read main-rules.md, the review prompt and the implementer's report. Reviewed git diff claude/fuobe-parity-4...o/w2s-w6 (29 files) with the code around it: recipes.ts sweep, suggestions, history and fixes; lib/recipe.ts shapeOf and rankSkills; skill-uses.ts; the 3 new routes; guest-access/proxy behaviour; library-view, skill-suggestion, skill-upkeep and skills-view; the eval from-skill script and the run.mjs changes.",
+   "Base is up to date: merge-base equals claude/fuobe-parity-4 (03e49f2d). No hot or off-limits files touched, no migration, no analytics, no Higgsfield code or media. Commit messages are neutral and signed.",
+   "Public sign-up: GET /api/assist/skills/suggestions goes through the proxy as a guest skill path and the route answers {items: []} for guests and accounts. GET history and fixes are refused to visitors (401 for guests, 403 for accounts). The POSTs are assist-owner through isAssistChange. The sweep, history and use counts leave out rows that carry $.account. No new run path or file read for accounts. The owner-only fixes pricing is not a visitor price check.",
+   "Scratch vitest (deleted): a suggestion made from 3 demo createPipeline chains → draftFromGenerations(newest ids) → saveDraft → the suggestion disappears (PASS: the builder's recipe has the same shape as the sweep's).",
+   "Scratch vitest (deleted): newest chain failed → Make a skill ids refused by the builder (finding 2). Upstream failure → downstream step also offered a fix (finding 1).",
+   "Targeted: skill-suggest, recipes, eval-from-skill, public-signup and public-signup-visitors: 5 files, 87 tests passed.",
+   "npx next typegen && tsc --noEmit: exit 0. eslint on the changed ts/tsx/mjs files: exit 0.",
+   "Browser: ran tests/e2e/skills-upkeep.mjs against pnpm dev (FUOBE_DEMO_MODE=on, fresh data dir, http://localhost:3417). All checks passed at 1440 and 390 px, light and dark, and in the flows (Open → One run, Make a skill, Suggest a fix saved, Not now), with no console errors. Looked at the screenshots of the 390-dark card and the Suggest a fix dialog. Server stopped (fuser -k) and .next deleted.",
+   "Full Vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1, --maxWorkers=2): 5493 passed, 6 failed, 4 skipped. All 6 failures are on the known list from main: comfy-reuse, dop-originals, preset-featured, soul-runs (2) and split-soundtrack.",
+   "Worktree left clean (scratch tests removed, no edits or commits)."
+  ],
+  "verdict": "changes-requested: The package is mostly sound and complete against the brief. Suggestions, history, Suggest a fix, Assist ranking, eval:from-skill and the batch filter are built, sign-up rules hold, and typecheck, lint, the browser checks and the full suite are clean apart from failures already known on main. Two verified medium bugs should be fixed before merge: (1) Suggest a fix blames steps that only failed because an earlier step did (match by step key, skip waitedOnFailure rows); (2) failed or running chains count toward a suggestion and can be the rows Make a skill is handed, which the builder then refuses. Also wire ChatInfo.words in agent.ts so the context index really uses word match, as the brief asks."
+ },
+ "fix": {
+  "applied": [
+   "Finding 1 (medium): Suggest a fix blamed downstream steps. Each pipeline step's stamp now carries its recipe step key (request_json skill.step, set in compile() in src/lib/recipe.ts, type in src/lib/catalog/types.ts). stepTrouble (src/server/recipes.ts) counts a failure only on the step that made the row, and leaves out failures an earlier step caused (waitedOnFailure, or 'An earlier step …' shortfalls). Older rows without a step key still match by model id. New test in tests/recipes.test.ts: with cut-out ok, scene failed and spin failed by 'An earlier step didn't finish', only 'scene' is offered a fix.",
+   "Finding 2 (medium): failed or running chains counted, and Make a skill could get them. The sweep now reads every status. It skips a chain that still has a queued or running row, and a chain with a failed or canceled step that wasn't made again (a retry with the same model and op). A counted chain's shape and ids are its succeeded rows only. New test in tests/skill-suggest.test.ts covers failed last step, failed first step, canceled, running and queued chains (none count), the newest succeeded chain's ids, and a retried chain counting with its working rows.",
+   "Finding 3 (low): ChatInfo.words was never passed. contextFor in src/server/assist/agent.ts now passes the chat's first user message (firstWords). rankSkills now splits on punctuation and ignores a small set of common words, so a whole sentence doesn't match every skill. New test: a skill that matches the words outranks the most used one in the context index, and common words alone change nothing.",
+   "Finding 4 (low): a failing-history reason showed as 'Needs a re-check'. StepFix has a new 'failing' flag. skills-view shows such a reason as 'Keeps failing: …' with Suggest a fix (no Re-check button for it). Replaced and switched-off reasons stay on the re-check line. useRecipeActions().verify now invalidates ['assist-skill-fixes', name].",
+   "Finding 5 (low): applyFix dropped a pinned engine. withModel keeps request.engine when the new model is dual-engine and runs on that engine; otherwise it drops it as before. New test: a fuobe-soul step pinned to the open engine is switched off, fixed to fuobe-soul-hd, and stays on the open engine.",
+   "Tests updated for the new stamp field: tests/recipe.test.ts and tests/recipes.test.ts expect {name, run, step}."
+  ],
+  "rejected": [
+   "Finding 6 (info, the report said 7 commits but there were 6): this is report accuracy only, with no code change. The branch now has 7 commits, counting this fix."
+  ],
+  "checks": [
+   "Worktree /home/user/wt/o-w2s-w6 on o/w2s-w6: clean at start, claude/fuobe-parity-4 is an ancestor, and it holds only this package's commits.",
+   "Confirmed findings 1, 2, 3 and 5 by reading the code (stepTrouble matched by model id; the sweep kept failed and running rows; contextFor did not pass words; withModel deleted engine). Finding 4 was confirmed in skills-view and hooks.",
+   "npx next typegen, then tsc --noEmit (NODE_OPTIONS=--max-old-space-size=6144; the default heap ran out of memory): exit 0.",
+   "eslint on the changed files: exit 0.",
+   "Targeted Vitest (FUOBE_ACCOUNT_DISK_FREE_GB=1, --maxWorkers=2): 12 files, 267 tests passed. Files: assist-context, assist-schedules, assist-skill-tools, assist-skills, cli-run, recipe, recipes, skill-suggest, recipe-builder, eval-from-skill, public-signup and public-signup-visitors. The full suite was not run, as instructed (the orchestrator runs it).",
+   "Browser: tests/e2e/skills-upkeep.mjs passed every check against next dev on http://localhost:3418 (FUOBE_DEMO_MODE=on, fresh data dir). That covers 1440 and 390 px, light and dark: the card, History, no sideways scroll, Make a skill, Suggest a fix saved, Not now, and no console errors. Server stopped, .next deleted, scratch data dir removed.",
+   "Commit ae6e4911 is signed and pushed to origin/o/w2s-w6. git status is clean.",
+   "After merging the latest claude/fuobe-parity-4 (clean, no conflicts): next typegen, typecheck and lint exit 0; full Vitest 5635 passed, 6 failed, 4 skipped. The 6 failures are all known from main: comfy-reuse, dop-originals, preset-featured, soul-runs (2), split-soundtrack."
+  ],
+  "finalSummary": "Skills W6 on o/w2s-w6 now has fixes for the review's two medium findings and three low findings. (1) Suggest a fix blames only the step that failed: each run's rows record their recipe step, and failures caused by an earlier step are ignored. (2) A suggestion counts only finished chains that worked (a retried step counts), and Make a skill gets the newest such chain's rows, which the builder accepts. (3) Assist's skills index ranks the skills that match the chat's first words first, ignoring common words. (4) A step that keeps failing says 'Keeps failing: …' next to Suggest a fix, not 'Needs a re-check', and a Re-check refreshes the fixes list. (5) A fix keeps a step on the engine it was kept on when the new model runs there. Engines: all of W6 is server-side logic and UI. Suggestions, history, fixes and ranking work on both engines' rows and on demo rows. Fix candidates are priced on whichever engine's plan check passes (the open engine is free). A pinned open-engine step keeps its LoRA and custom-node capability after a fix. Verified: in demo mode only, by unit tests and the browser script. No GPU or key run (eval:from-skill against a live model still needs one). Public sign-up is unchanged from the implementation: guests and accounts get {items: []} from suggestions; history and fixes are refused to them (401/403); POSTs are owner-only. The sweep, history and use counts leave out account rows.",
+  "left": [
+   "The full Vitest suite was not run in this stage (the orchestrator runs it).",
+   "The 'Keeps failing: …' wording is covered by unit tests only: the browser script doesn't make failing runs.",
+   "Rows made before this fix have no step key, so their failures still match by model id. Downstream 'An earlier step' failures are now ignored for them too.",
+   "Carried over from the implementation: tool recipes have no shape and eval:from-skill doesn't measure them; the sweep reads at most 5000 rows; json_extract on generations has no index; there is no button for a fresh sweep; Suggest a fix was browser-checked at 1440 light only.",
+   "Docs pass: also note request_json skill.step (the recipe step key) next to the skill stamp in ARCHITECTURE."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/w2s-w6"
+  ],
+  "notMerged": [],
+  "conflicts": "none (overlaps with W5 auto-merged)",
+  "checks": "batch of 6 (dbs-d9, idol-7, w2s-w5, w2s-w6, w2s-w7, idol-4): typecheck 0, lint 0, vitest 5907 passed, 8 failed (6 main known + preset-covers and reuse-pack-pin load timeouts, 13/13 alone); each merge but idol-4 checked by an independent verifier (idol-4 merged by hand after: one conflict, its tests 99/99); W5/W6/W7 joined by follow-ups 642a167e, bef8778e, 22378b4b, 739a0c1d",
+  "pushed": true,
+  "head": "148f2459"
+ }
 }
