@@ -11,8 +11,8 @@
  *
  * Runs under plain Node too: only erasable TypeScript.
  */
-import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createHash, createHmac, randomUUID } from "node:crypto";
+import { appendFileSync, readFileSync } from "node:fs";
 import http from "node:http";
 import type { Duplex } from "node:stream";
 import { pathToFileURL } from "node:url";
@@ -73,6 +73,13 @@ export interface LocalComfyOptions {
   oldLiveNodes?: boolean;
   /** Nothing ever starts: prompts wait in the queue (a stuck ComfyUI). */
   stall?: boolean;
+  /**
+   * A worker's guard (bin/lib/worker/comfy_guard.py) with this key: any request whose Host isn't 127.0.0.1:<port> or
+   * that lacks the key is 403; GET /fuobe-worker/hello signs a challenge with the key and names this process.
+   */
+  workerGuard?: string;
+  /** Each prompt posted adds a line to this file (a count that outlives the process, for a test in another one). */
+  countFile?: string;
 }
 
 /** One live render the stand-in made (for the bookkeeping checks). */
@@ -216,6 +223,13 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
   const sizes = new Map<string, { w: number; h: number }>();
   let server: http.Server;
   let generation = 0;
+  let currentStep = 0;
+  /** A worker's guard (opts.workerGuard): the request names this ComfyUI exactly and carries the key. */
+  const guardPort = () => {
+    const a = server.address();
+    return typeof a === "object" && a ? a.port : 0;
+  };
+  const guardOk = (req: http.IncomingMessage) => String(req.headers.host ?? "") === `127.0.0.1:${guardPort()}` && req.headers["x-fuobe-worker-key"] === opts.workerGuard;
 
   const send = (clientId: string | undefined, payload: Buffer, binary = false) => {
     for (const [id, set] of sockets) if (!clientId || id === clientId) for (const s of set) s.write(frame(binary ? 2 : 1, payload));
@@ -327,11 +341,15 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
   function run(job: Job) {
     if (isLiveGraph(job.graph)) return runLive(job);
     running = job;
+    currentStep = 0;
     const gen = generation;
     const alive = () => gen === generation && running === job;
     const steps = opts.steps ?? 4;
     const stepMs = job.ms !== undefined ? job.ms / steps : opts.stepMs;
     const node = Object.keys(job.graph).find((k) => /KSampler|Sampler/.test(job.graph[k].class_type)) ?? Object.keys(job.graph)[0] ?? "1";
+    // ComfyUI's own timestamps (ms) on the start and the end, as its history keeps them.
+    const started = Date.now();
+    const begin: [string, Record<string, unknown>] = ["execution_start", { prompt_id: job.id, timestamp: started }];
     event(job.clientId, "execution_start", { prompt_id: job.id });
     event(job.clientId, "executing", { node, prompt_id: job.id });
     let step = 0;
@@ -340,6 +358,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       if (job.fail === "never") return;
       if (step < steps) {
         step++;
+        currentStep = step;
         event(job.clientId, "progress", { value: step, max: steps, prompt_id: job.id, node });
         if (job.preview) {
           const meta = Buffer.from(JSON.stringify({ prompt_id: job.id, node_id: node, image_type: "image/png" }));
@@ -353,7 +372,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       if (job.fail === "oom") {
         const err = { prompt_id: job.id, node_id: node, node_type: "KSampler", exception_message: "Allocation on device 0 would exceed allowed memory. (out of memory)", exception_type: "torch.OutOfMemoryError" };
         event(job.clientId, "execution_error", err);
-        return finish(job, { prompt: [job.number, job.id, job.graph, {}, []], outputs: {}, status: { status_str: "error", completed: false, messages: [["execution_error", err]] } });
+        return finish(job, { prompt: [job.number, job.id, job.graph, {}, []], outputs: {}, status: { status_str: "error", completed: false, messages: [begin, ["execution_error", { ...err, timestamp: Date.now() }]] } });
       }
       // A meta-batch's first passes save nothing and queue the next pass (a new prompt id, the same prefix).
       const passes = opts.metaBatch ?? 0;
@@ -363,7 +382,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       event(job.clientId, "executed", { node: outputNode(job.graph), prompt_id: job.id, output: outputs[outputNode(job.graph)] ?? {} });
       event(job.clientId, "executing", { node: null, prompt_id: job.id });
       event(job.clientId, "execution_success", { prompt_id: job.id });
-      finish(job, { prompt: [job.number, job.id, job.graph, {}, []], outputs, status: { status_str: "success", completed: true, messages: [["execution_success", { prompt_id: job.id }]] } });
+      finish(job, { prompt: [job.number, job.id, job.graph, {}, []], outputs, status: { status_str: "success", completed: true, messages: [begin, ["execution_success", { prompt_id: job.id, timestamp: Date.now() }]] } });
     };
     timer = setTimeout(next, opts.latencyMs);
   }
@@ -406,6 +425,23 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
       const entry: LocalComfyLog = { method: req.method ?? "GET", path: url.pathname + url.search, at: Date.now(), ...(origin && { origin }) };
       log.push(entry);
+      // The stand-in's own count (never a ComfyUI route) stays readable for a test in another process.
+      if (opts.workerGuard && url.pathname !== "/__fake/stats") {
+        const deny = () => {
+          entry.status = 403;
+          res.writeHead(403);
+          res.end();
+        };
+        if (String(req.headers.host ?? "") !== `127.0.0.1:${guardPort()}`) return deny();
+        if (req.method === "GET" && url.pathname === "/fuobe-worker/hello" && req.headers["x-fuobe-worker-key"] === undefined) {
+          const challenge = String(req.headers["x-fuobe-worker-challenge"] ?? "");
+          if (!/^[0-9a-f]{16,128}$/.test(challenge)) return deny();
+          entry.status = 200;
+          res.writeHead(200, { "content-type": "application/json" });
+          return res.end(JSON.stringify({ proof: createHmac("sha256", opts.workerGuard).update(challenge).digest("hex"), pid: process.pid }));
+        }
+        if (!guardOk(req)) return deny();
+      }
       const headers: Record<string, string> = {};
       if (opts.cors === "off" && opts.connect && origin === opts.connect) {
         Object.assign(headers, { "Access-Control-Allow-Origin": opts.connect, Vary: "Origin", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "content-type" });
@@ -435,7 +471,12 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       };
       if (req.method === "OPTIONS") return reply(200, "");
       // The stand-in's own count, for a test driving it from another process (never a ComfyUI route).
-      if (url.pathname === "/__fake/stats") return reply(200, { posts, uploads: inputs.size, history: history.size, pid: process.pid });
+      if (url.pathname === "/__fake/stats") return reply(200, { posts, uploads: inputs.size, history: history.size, pid: process.pid, running: running?.id ?? null, step: running ? currentStep : null });
+      // ComfyUI's own: unload models and free memory.
+      if (url.pathname === "/free" && req.method === "POST") {
+        entry.body = JSON.parse(body.toString("utf8") || "{}");
+        return reply(200, {});
+      }
       const p = url.pathname;
       if (p === "/system_stats" || p === "/api/system_stats") {
         const argv = ["main.py", ...(opts.cors === "off" ? [] : ["--enable-cors-header", opts.cors]), "--base-directory", "C:\\Users\\someone\\private"];
@@ -483,6 +524,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
         }
         entry.prompt = json;
         posts++;
+        if (opts.countFile) appendFileSync(opts.countFile, `prompt ${json.prompt_id ?? "?"}\n`);
         const fail = opts.failNext;
         opts.failNext = undefined;
         if (fail === "missing_node") {
@@ -589,6 +631,10 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
     log.push({ method: "WS", path: url.pathname + url.search, ...(origin && { origin }) });
     const key = req.headers["sec-websocket-key"];
     if (url.pathname !== "/ws" || typeof key !== "string") return socket.destroy();
+    if (opts.workerGuard && !guardOk(req)) {
+      socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+      return socket.destroy();
+    }
     // ComfyUI's own check applies to the socket too when the setting is off.
     if (opts.cors === "off" && origin && new URL(origin).host !== String(req.headers.host ?? "")) {
       socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
@@ -701,7 +747,9 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
 
 // Run on its own: node tests/helpers/fake-local-comfy.ts --port 3371 --cors http://127.0.0.1:3370
 // [--has workflows/comfyui/requirements.json]: everything that index names is installed. [--guard 1]: Fuobe's guard answers.
-// [--connect <origin>]: Fuobe Connect is installed, trusting that origin.
+// [--connect <origin>]: Fuobe Connect is installed, trusting that origin. [--worker-guard 1]: a worker's guard, with the
+// key in FUOBE_WORKER_GUARD_KEY (as a worker starts its ComfyUI). [--count-file <path>]: a line for each prompt posted.
+// [--fail-next oom|never]: what the first prompt does. [--outputs video,audio]: what a job saves.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const arg = (name: string) => {
     const i = process.argv.indexOf(`--${name}`);
@@ -709,6 +757,23 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   const index = arg("has");
   const has = index ? (JSON.parse(readFileSync(index, "utf8")) as IndexLike) : undefined;
-  const fake = await startLocalComfy({ cors: arg("cors") ?? "off", steps: Number(arg("steps") ?? 8), stepMs: Number(arg("step-ms") ?? 250), portable: arg("portable") === "1", guard: arg("guard") === "1", ...(arg("connect") && { connect: arg("connect") }), has }, Number(arg("port") ?? 3371));
+  const workerGuard = arg("worker-guard") === "1" ? process.env.FUOBE_WORKER_GUARD_KEY : undefined;
+  if (arg("worker-guard") === "1" && !workerGuard) throw new Error("No key for the worker's guard");
+  const fake = await startLocalComfy(
+    {
+      cors: arg("cors") ?? "off",
+      steps: Number(arg("steps") ?? 8),
+      stepMs: Number(arg("step-ms") ?? 250),
+      portable: arg("portable") === "1",
+      guard: arg("guard") === "1",
+      ...(arg("connect") && { connect: arg("connect") }),
+      ...(workerGuard && { workerGuard }),
+      ...(arg("count-file") && { countFile: arg("count-file") }),
+      ...(arg("fail-next") && { failNext: arg("fail-next") as LocalComfyOptions["failNext"] }),
+      ...(arg("outputs") && { outputs: arg("outputs")!.split(",") as LocalComfyOptions["outputs"] }),
+      has,
+    },
+    Number(arg("port") ?? 3371),
+  );
   console.log(`fake ComfyUI on ${fake.url} (cross-site setting: ${fake.opts.cors})`);
 }

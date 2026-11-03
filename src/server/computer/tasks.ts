@@ -701,7 +701,7 @@ export function failTask(t: TaskRow, error: string): void {
 /** The tab let go of a task it hadn't sent yet (the tab closes): another tab or computer may take it at once. */
 export function release(t: TaskRow): void {
   if (t.state === "sending" && !t.sent_at) {
-    setTask(t.id, { state: "waiting", device: null, lease_hash: null });
+    setTask(t.id, { state: "waiting", device: null, lease_hash: null, ...(t.pools && { worker_id: null }) });
     rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
   } else setTask(t.id, { lease_hash: null });
 }
