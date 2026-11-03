@@ -53,7 +53,9 @@ describe("gallery covers", () => {
       expect(lead!.type === "group" && lead!.opacity, id).toBe(1);
       expect(p.evaluate(COVER_LEAD + 0.01).nodes.some((n) => n.type === "group" && n.id === "lead"), id).toBe(false);
       // The tile's still is the rest frame, unchanged.
-      const plain = await plan({ ...r, controls: { ...r.controls, cover: undefined } as Recipe["controls"] });
+      const controls = { ...r.controls };
+      delete controls.cover;
+      const plain = await plan({ ...r, controls });
       expect(p.evaluate(p.rest).nodes.length).toBeGreaterThan(0);
       expect(plain.evaluate(0).nodes.some((n) => n.type === "group" && n.id === "lead")).toBe(false);
     }
