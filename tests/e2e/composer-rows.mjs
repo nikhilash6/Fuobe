@@ -2,8 +2,10 @@
 // a row, at 390, 768 and 1440 px, in light and dark, the row sits a fixed step below the composer (or the suggestions
 // right under it), its heading is on the cards' left edge with a fixed step to the cards, and the row lines up with the
 // composer's column. On the pages where the row is a section of its own (Genjutsu, Katana, Ads Studio…) the heading is
-// on the cards' edge and the row stays inside the page. After load no card is grey or empty and no skeleton is left; while
-// the cards' code loads, the skeleton has the row's heading and the cards' place, so nothing moves when they arrive.
+// on the cards' edge, the row stays inside the page and lines up with the box above it (Cinema: with the page's title).
+// The cards' pictures in a line of the grid share one top. After load no card is grey or empty and no skeleton is left;
+// while the cards' code loads (on /image, and on /video whose captions wrap to different lengths), the skeleton has the
+// row's heading and the cards' place and pictures, so nothing moves when they arrive.
 // Usage: node tests/e2e/composer-rows.mjs <appUrl> [--shots <dir>] [--account] [--owner <password>] [--engine webkit]
 //   (--account signs up a new account first: the app needs FUOBE_PUBLIC_SIGNUP=1; --owner signs in with the password;
 //   --engine runs it in WebKit, Safari's engine, or Firefox instead of Chromium.)
@@ -54,6 +56,12 @@ const STUDIOS = [
 ];
 /** Pages whose row is a section of its own under an upload box or a project list. */
 const SECTIONS = ["/genjutsu", "/katana", "/image-to-3d", "/layers", "/cinema", "/ads", "/ads/multiplier", "/character-swap"];
+/** Section pages whose row takes the width of the box right above it (an upload box, a hero). */
+const BOXED = new Set(["/genjutsu", "/image-to-3d", "/layers", "/ads"]);
+/** Section pages whose row takes the page's own width: its edge is the page title's. */
+const TITLED = new Set(["/cinema"]);
+/** Pages whose loading state is checked: every card the same lines (/image), and captions of different lengths (/video). */
+const LOADING = ["/image", "/video"];
 const SIZES = [
   { name: "390", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
   { name: "768", viewport: { width: 768, height: 1024 } },
@@ -116,7 +124,20 @@ function measure() {
     }
   }
   const firstCard = grid?.firstElementChild;
+  // Each card's picture top (its first child: the card's picture, or the skeleton's), and whether the pictures in each
+  // line of the grid share one top.
+  const cards = grid ? [...grid.children] : [];
+  const pictures = cards.map((c) => box(c.firstElementChild)?.t ?? null);
+  const lines = new Map();
+  cards.forEach((c, i) => {
+    const key = Math.round(box(c).t);
+    lines.set(key, [...(lines.get(key) ?? []), pictures[i]]);
+  });
+  const misaligned = [...lines.values()].filter((tops) => Math.max(...tops) - Math.min(...tops) > 1.5).map((tops) => tops.map(Math.round).join("/"));
   return {
+    pictures,
+    misaligned,
+    title: box(document.querySelector("h1")),
     loading: !!section?.hasAttribute("data-examples-loading"),
     headingText: heading?.textContent?.trim() ?? "",
     headingAlign: heading ? getComputedStyle(heading).textAlign : "",
@@ -187,8 +208,17 @@ for (const size of SIZES) {
       } else {
         check(`${label}: clear space above the row`, m.previous && m.heading.t - m.previous.b >= 32, m.previous ? `${Math.round(m.heading.t - m.previous.b)} px` : "nothing above");
         check(`${label}: the row stays inside the page`, m.grid.l >= 15 && m.grid.r <= m.page.w - 15, `${m.grid.l}-${m.grid.r}`);
+        if (BOXED.has(url))
+          check(
+            `${label}: the row lines up with the box above it`,
+            m.previous && near(m.grid.l, m.previous.l) && near(m.grid.r, m.previous.r),
+            m.previous ? `row ${Math.round(m.grid.l)}-${Math.round(m.grid.r)}, box ${Math.round(m.previous.l)}-${Math.round(m.previous.r)}` : "nothing above",
+          );
+        if (TITLED.has(url)) check(`${label}: the row starts at the page title's edge`, near(m.grid.l, m.title?.l), `${m.grid.l} vs ${m.title?.l}`);
       }
       const filled = await cardsFilled(page);
+      const lined = await page.evaluate(measure);
+      check(`${label}: the pictures in each line of cards share one top`, !lined.misaligned.length, lined.misaligned.join(", ") || "");
       check(`${label}: no grey or empty card after load`, filled.cards > 0 && !filled.empty.length && !filled.skeletons, `${filled.cards} cards, empty ${filled.empty.join(",") || "none"}, skeletons ${filled.skeletons}`);
       if (shots && (url === "/image" || url === "/genjutsu")) {
         await page.evaluate(() => {
@@ -200,10 +230,10 @@ for (const size of SIZES) {
       }
     }
 
-    // The loading state on /image: hold every script that starts after the feed answers (the cards' code among them),
-    // once, until the skeleton is measured.
-    {
-      const label = `/image loading (${size.name}, ${scheme})`;
+    // The loading state on /image and /video: hold every script that starts after the feed answers (the cards' code among
+    // them), once, until the skeleton is measured.
+    for (const url of LOADING) {
+      const label = `${url} loading (${size.name}, ${scheme})`;
       const held = await context.newPage();
       let hold = false;
       let fed = false;
@@ -220,7 +250,7 @@ for (const size of SIZES) {
         if (!released) hold = true;
       });
       // Not "load": when the feed answers first, the held scripts can be ones the load event waits for.
-      await held.goto(`${app}/image`, { waitUntil: "commit", timeout: 60_000 });
+      await held.goto(`${app}${url}`, { waitUntil: "commit", timeout: 60_000 });
       await held.locator("[data-examples-loading], [data-examples]").first().waitFor({ timeout: 30_000 }).catch(() => {});
       for (let waited = 0; !fed && waited < 15_000; waited += 250) await held.waitForTimeout(250);
       await held.waitForTimeout(1500);
@@ -229,7 +259,7 @@ for (const size of SIZES) {
       if (!before.heading) console.log(`skip ${label}: no row (results shown)`);
       else {
         check(`${label}: the skeleton has the row's heading`, loading ? before.headingText.length > 0 : true, before.headingText);
-        if (shots && loading) await held.screenshot({ path: path.join(shots, `image-loading-${tag}-${size.name}-${scheme}.png`) });
+        if (shots && loading) await held.screenshot({ path: path.join(shots, `${url.slice(1)}-loading-${tag}-${size.name}-${scheme}.png`) });
         hold = false;
         released = true;
         waiting.splice(0).forEach((r) => r());
@@ -242,6 +272,12 @@ for (const size of SIZES) {
           near(before.heading.t, after.heading.t) && near(before.grid.t, after.grid.t) && near(before.grid.l, after.grid.l) && near(before.grid.r, after.grid.r) && near(before.firstCard?.w, after.firstCard?.w),
           `heading ${Math.round(before.heading.t)}->${Math.round(after.heading.t)}, grid ${Math.round(before.grid.l)}-${Math.round(before.grid.r)} -> ${Math.round(after.grid.l)}-${Math.round(after.grid.r)}`,
         );
+        if (loading)
+          check(
+            `${label}: each card's picture stays where its skeleton was`,
+            before.pictures.length === after.pictures.length && before.pictures.every((t, i) => near(t, after.pictures[i])),
+            `${before.pictures.map(Math.round).join("/")} -> ${after.pictures.map(Math.round).join("/")}`,
+          );
         if (!loading) console.log(`note ${label}: the cards were already there (no skeleton seen)`);
       }
       hold = false;

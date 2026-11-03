@@ -3,7 +3,7 @@
 import { Images, UserRoundPlus } from "lucide-react";
 import Link from "next/link";
 import { useStudio } from "@/components/studio/studio-context";
-import { ROW_HEADING } from "@/components/examples/example-row-frame";
+import { ROW_GAP, ROW_HEADING } from "@/components/examples/example-row-frame";
 import { SOUL_MODEL_IDS } from "@/lib/catalog/soul-cards";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +24,7 @@ export function SoulPresetCards({ className }: { className?: string }) {
   return (
     <section aria-label="Make your own Soul look" className={cn("w-full", className)}>
       <p className={ROW_HEADING}>Make your own Soul look</p>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className={cn("grid sm:grid-cols-2", ROW_GAP)}>
         <Link href="/character-sheet" className={card}>
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-faint text-brand-text">
             <UserRoundPlus className="size-5" />

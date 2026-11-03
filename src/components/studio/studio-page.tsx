@@ -377,29 +377,38 @@ function PromptSuggestions({ suggestions }: { suggestions: string[] }) {
 /** The space between the composer (or what sits right under it) and each section below it. */
 const UNDER_COMPOSER = "mt-10 sm:mt-12";
 
-/** How long the row waits for the feed's answer before it shows its cards anyway: a slow feed never leaves grey tiles. */
+/**
+ * How long a guest's row waits for the feed's answer before it shows its cards anyway: a slow feed never leaves grey
+ * tiles. A guest has no results of their own, so the cards stay.
+ */
 const FEED_WAIT_MS = 3000;
+
+/** The cards' code, fetched as soon as the row's skeleton draws: the feed and the code load side by side. */
+const preloadExampleCards = () => void import("@/components/examples/example-cards").catch(() => {});
 
 /**
  * "Start from an example" under the empty composer (src/lib/examples): each card loads its own files, words and settings
  * into this composer. Hidden while a motion or effect is picked: its own examples are in its card above the composer.
  * The row fills the composer's column, so its heading and cards line up with the composer. Until the feed has answered
- * (`ready`, or FEED_WAIT_MS at most) and while the cards' code loads, its skeleton holds the same place.
+ * (`ready`; for a guest FEED_WAIT_MS at most) and while the cards' code loads, its skeleton holds the same place. A
+ * signed-in viewer waits for the feed: with results of their own, the cards (and their covers) are never fetched.
  */
 function StudioExamples({ row, ready }: { row: ExampleRowData; ready: boolean }) {
   const { draft, config } = useStudio();
   const loader = useContext(ExamplesCtx);
+  const guest = useIsGuest();
   const [waited, setWaited] = useState(false);
+  useEffect(preloadExampleCards, []);
   useEffect(() => {
-    if (ready) return;
+    if (ready || !guest) return;
     const timer = setTimeout(() => setWaited(true), FEED_WAIT_MS);
     return () => clearTimeout(timer);
-  }, [ready]);
+  }, [ready, guest]);
   if (draft.presetId && draft.presetId !== config.preset?.id) return null;
   // An app's page shows its examples in its card above the composer.
   if (config.preset && row.cards.some((c) => c.load.via !== "look")) return null;
   const skeleton = <ExampleRowSkeleton row={row} layout="column" className={UNDER_COMPOSER} />;
-  if (!ready && !waited) return skeleton;
+  if (!ready && !(guest && waited)) return skeleton;
   return (
     <Suspense fallback={skeleton}>
       <ExampleRow row={row} activeId={loader?.activeId} onPick={(c) => loader?.use(c)} layout="column" className={UNDER_COMPOSER} />
@@ -635,9 +644,10 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
       </div>
 
       {/* What sits under the empty composer, in the composer's own column: its suggestions right under it, then each
-          section a clear step below. Hidden, not unmounted, while Live is on: the page around the panel keeps its state. */}
-      <div className={cn("px-4 pb-10 sm:px-6 sm:pb-16", (live || hasItems) && "hidden")}>
-        <div data-under-composer className="mx-auto flex w-full max-w-[760px] min-w-0 flex-col">
+          section a clear step below; the space under them only when there is something. Hidden, not unmounted, while Live
+          is on: the page around the panel keeps its state. */}
+      <div className={cn("px-4 sm:px-6", (live || hasItems) && "hidden")}>
+        <div data-under-composer className="mx-auto flex w-full max-w-[760px] min-w-0 flex-col pb-10 empty:hidden sm:pb-16">
           {/* Examples that load into the composer take the suggestions' place: they come first on a phone. */}
           {!hasItems && config.suggestions && !examples?.cards.some((c) => c.load.via !== "look") && <PromptSuggestions suggestions={config.suggestions} />}
           {!hasItems && config.signature && <SoulPresetCards className={UNDER_COMPOSER} />}

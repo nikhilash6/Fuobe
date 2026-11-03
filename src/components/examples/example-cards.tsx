@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { useIsMobile } from "@/hooks/use-mobile";
 import { exampleKey, type ExampleCard, type ExampleInput, type ExampleMedia, type ExampleRowData } from "@/lib/examples/types";
 import { hasHdStill } from "@/lib/preset-hd";
-import { ROW_GAP, ROW_HEADING, rowColumns, rowSection, rowWidth, type ExampleAspect, type RowLayout } from "./example-row-frame";
+import { ROW_GAP, ROW_GRID, ROW_HEADING, rowColumns, rowSection, rowWidth, type ExampleAspect, type RowLayout } from "./example-row-frame";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 
@@ -243,6 +243,7 @@ export function ExampleGrid({
   onPick,
   aspect,
   bare = false,
+  maxColumns,
   className,
 }: {
   cards: ExampleCard[];
@@ -250,10 +251,11 @@ export function ExampleGrid({
   onPick: ExamplePick;
   aspect?: ExampleAspect;
   bare?: boolean;
+  maxColumns?: 2 | 4;
   className?: string;
 }) {
   return (
-    <div data-example-grid className={cn("grid", ROW_GAP, rowColumns(cards.length), !bare && rowWidth(cards.length), className)}>
+    <div data-example-grid className={cn(ROW_GRID, ROW_GAP, rowColumns(cards.length, maxColumns), !bare && rowWidth(cards.length), className)}>
       {cards.map((c, i) => (
         <ExampleCardView key={c.id} card={c} index={i} active={!!activeId && exampleKey(c) === activeId} onPick={onPick} aspect={aspect} sizes={gridSizes(cards.length)} />
       ))}
@@ -271,6 +273,7 @@ export function ExampleRow({
   onPick,
   aspect,
   layout = "centred",
+  maxColumns,
   className,
 }: {
   row: ExampleRowData;
@@ -280,6 +283,8 @@ export function ExampleRow({
   aspect?: ExampleAspect;
   /** "column" under a studio's composer (the row fills the composer's column), "centred" as a section of its own. */
   layout?: RowLayout;
+  /** 2 keeps two cards across: a row in a narrow box. */
+  maxColumns?: 2 | 4;
   className?: string;
 }) {
   const heading = useId();
@@ -292,7 +297,7 @@ export function ExampleRow({
         <h2 id={heading} className={ROW_HEADING}>
           {row.heading}
         </h2>
-        <ExampleGrid cards={row.cards} activeId={activeId} onPick={pick} aspect={aspect} bare />
+        <ExampleGrid cards={row.cards} activeId={activeId} onPick={pick} aspect={aspect} maxColumns={maxColumns} bare />
       </div>
       <ExampleSheet card={looking} onOpenChange={(o) => !o && setLooking(null)} />
     </section>

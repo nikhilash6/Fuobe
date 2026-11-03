@@ -433,7 +433,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
           )}
         </Panel>
       </div>
-      {examples && (visitor || (results.isSuccess && !items.length)) && <ExampleRow row={examples} className="mt-12" />}
+      {examples && (visitor || (results.isSuccess && !items.length)) && <ExampleRow row={examples} layout="column" className="mx-auto mt-12 max-w-[880px]" />}
       <section id="your-3d-models" className="mx-auto mt-12 max-w-[880px] scroll-mt-6" aria-labelledby="models3d">
         {(results.isLoading || items.length > 0) && (
           <h3 id="models3d" className="mb-3 font-heading text-[22px]">

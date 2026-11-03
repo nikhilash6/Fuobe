@@ -18,11 +18,21 @@ export type RowLayout = "column" | "centred";
 /** A card's shape: 4:3, or 3:4 on the vertical studios. */
 export type ExampleAspect = "4/3" | "3/4";
 
-/** The cards' columns: two across a phone, up to four across a larger screen. */
-export function rowColumns(count: number): string {
+/**
+ * The cards' columns: two across a phone, up to four across a larger screen (`max` 2 keeps two across: a row in a
+ * narrow box, where four would leave each card too small).
+ */
+export function rowColumns(count: number, max: 2 | 4 = 4): string {
   if (count === 1) return "grid-cols-1";
+  if (max === 2) return "grid-cols-2";
   return cn("grid-cols-2", count === 3 ? "sm:grid-cols-3" : count > 3 && "sm:grid-cols-4");
 }
+
+/**
+ * The cards' grid. Their tops line up: each card keeps its own height (a one-line caption is shorter) and is never
+ * stretched to the row's, where a button would centre its picture lower than its neighbour's.
+ */
+export const ROW_GRID = "grid items-start";
 
 /** The cards' width: one card is never wider than 360 px; a centred row of two or three keeps them card-sized. */
 export function rowWidth(count: number, layout: RowLayout = "centred"): string | undefined {
@@ -97,7 +107,7 @@ export function ExampleRowSkeleton({
         <p aria-hidden className={ROW_HEADING}>
           {row.heading}
         </p>
-        <div aria-hidden className={cn("grid", ROW_GAP, rowColumns(n))}>
+        <div aria-hidden className={cn(ROW_GRID, ROW_GAP, rowColumns(n))}>
           {row.cards.map((c) => (
             <CardSkeleton key={c.id} card={c} aspect={aspect} />
           ))}

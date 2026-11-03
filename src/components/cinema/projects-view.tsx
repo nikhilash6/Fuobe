@@ -229,7 +229,8 @@ export function CinemaProjects({ examples, starters: given = [] }: { examples?: 
           ) : (
             <EmptyProjects onCreate={onCreate} />
           )}
-          {examples && <ExampleRow row={examples} className="mt-12" />}
+          {/* On the page's own width: its heading sits under the page's title. */}
+          {examples && <ExampleRow row={examples} layout="column" className="mt-12" />}
         </div>
       ) : (
         <div key="cards" className={GRID}>

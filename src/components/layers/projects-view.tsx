@@ -311,7 +311,7 @@ function ProjectsInner({ examples }: { examples?: ExampleRowData | null }) {
         </section>
 
         {/* What it makes, while there are no projects of one's own to show (a guest or an account never has any). */}
-        {examples && (visitor || (projects.isSuccess && !items.length)) && <ExampleRow row={examples} className="mt-12" />}
+        {examples && (visitor || (projects.isSuccess && !items.length)) && <ExampleRow row={examples} layout="column" className="mx-auto mt-12 max-w-[820px]" />}
 
         <section className={cn("mt-14", visitor && "hidden")} aria-labelledby="my-projects">
           <h2 id="my-projects" className="font-heading text-[24px]">
