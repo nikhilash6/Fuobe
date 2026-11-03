@@ -150,13 +150,25 @@ async function runFound(input: RunSkill, ctx: ToolContext, found: { recipe: Reci
   const out = await runRecipe(found.name, body, asked);
   const ids = out.runs.flatMap((r) => r.ids);
   const href = out.runs.find((r) => r.href && r.href !== "/library")?.href;
+  const waiting = [...new Set(out.runs.flatMap((r) => r.waiting ?? []))];
   return {
     content: JSON.stringify({
       skill: found.name,
       engine: out.engine,
-      runs: out.runs.map((r) => ({ started: r.ids, ...(r.batchId && { batch: r.batchId }), ...(r.href && { href: r.href }), ...(r.error && { error: r.error }) })),
+      runs: out.runs.map((r) => ({
+        started: r.ids,
+        ...(r.run && { run: r.run }),
+        ...(r.waiting?.length && { waiting: r.waiting }),
+        ...(r.batchId && { batch: r.batchId }),
+        ...(r.href && { href: r.href }),
+        ...(r.error && { error: r.error }),
+      })),
       ...(out.demo && { demo: true }),
-      note: href ? "The skill's studio job opens at href; its results appear there and in the Library." : "Each run's steps start by themselves as the ones they wait for finish; results appear in the Library.",
+      note: waiting.length
+        ? `It spans studios: the first step has started, and ${waiting.join(", ")} start${waiting.length === 1 ? "s" : ""} by ${waiting.length === 1 ? "itself" : "themselves"} when the steps before finish (minutes, not seconds). Tell the user it's running and that its progress is under the skill in Skills; don't start the waiting steps yourself.`
+        : href
+          ? "The skill's studio job opens at href; its results appear there and in the Library."
+          : "Each run's steps start by themselves as the ones they wait for finish; results appear in the Library.",
     }),
     items: ids.length ? [{ id: "", role: "generations", ids }] : undefined,
   };

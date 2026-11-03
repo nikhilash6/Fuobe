@@ -172,6 +172,17 @@ function Loaded({ view, onClose, examples, intro }: { view: RecipeView; onClose:
       const r = await actions.run(name, JSON.parse(key) as typeof body);
       const started = r.runs.filter((x) => !x.error);
       const failed = r.runs.filter((x) => x.error);
+      // A skill that spans studios: its later steps start by themselves; the toast opens the run's progress.
+      const waiting = [...new Set(started.flatMap((x) => x.waiting ?? []))];
+      if (started.some((x) => x.run)) {
+        const title = failed.length ? `Started ${started.length} of ${r.runs.length} runs` : started.length > 1 ? `Started ${started.length} runs` : "Started the run";
+        (failed.length ? toast.warning : toast.success)(title, {
+          description: failed.length ? failed[0].error : `${waiting.length ? `${waiting.join(", ")} start${waiting.length === 1 ? "s" : ""} by ${waiting.length === 1 ? "itself" : "themselves"} when the step before is done.` : `${view.title}: same steps, new take.`}${r.demo ? " A demo run — no provider connected." : ""}`,
+          action: { label: "See progress", onClick: () => router.push(`/assist/skills?skill=${encodeURIComponent(name)}`) },
+        });
+        onClose();
+        return;
+      }
       const href = started[0]?.href ?? "/library";
       const studio = href.startsWith("/library") ? "Library" : href.startsWith("/video-tools/captions") ? "Captions" : "the studio";
       const title = failed.length ? `Started ${started.length} of ${r.runs.length} runs` : started.length > 1 ? `Started ${started.length} runs` : "Started the run";

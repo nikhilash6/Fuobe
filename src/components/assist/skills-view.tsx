@@ -35,6 +35,7 @@ import { refusalShown, toastError } from "@/lib/refusals";
 import { radioKeys } from "@/components/studio/radio-keys";
 import { useRecipe, useRecipeActions, useSkill, useSkillActions, useSkills, type RecipeFailure, type SkillForm } from "./hooks";
 import { RunSkillDialog } from "./run-skill-dialog";
+import { SkillRuns } from "./skill-runs";
 import { RailButton } from "./shell";
 import { SKILL_ICONS, SkillIcon } from "./skill-icon";
 import { AssistVisitorNote } from "./visitor-note";
@@ -358,6 +359,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
               </div>
             </DialogHeader>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {owner && s.recipe && <SkillRuns name={s.name} />}
               {s.whenToUse && (
                 <div className="mb-4 rounded-xl bg-muted/60 px-4 py-3 text-[13px]">
                   <p className="font-medium">When Assist uses it</p>

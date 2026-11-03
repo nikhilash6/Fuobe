@@ -152,6 +152,15 @@ describe("a skill that spans studios, in demo mode", () => {
     expect(lib.runLine(done.steps)).toBe("Dub · done → Captions · done → 9:16 cut · done");
   });
 
+  it("run_skill's result names the run and says which steps wait, so the agent doesn't start them itself", async () => {
+    const out = await executeTool("run_skill", { name: "spanish-short", values: { video: clip } }, { engine: "cloud" });
+    expect(out.isError).toBeFalsy();
+    const body = JSON.parse(out.content as string) as { runs: { run: string; waiting: string[]; href: string }[]; note: string };
+    expect(body.runs[0]).toMatchObject({ run: expect.any(String), waiting: ["Captions", "9:16 cut"], href: expect.stringContaining("dub=") });
+    expect(body.note).toMatch(/Captions, 9:16 cut start by themselves when the steps before finish/);
+    expect((await finish(body.runs[0].run)).status).toBe("done");
+  });
+
   it("a failed dub fails the steps after it, and says which step failed and why", async () => {
     const out = await recipes.runRecipe("spanish-short", { values: { video: clip } }, "cloud");
     const id = out.runs[0].run!;

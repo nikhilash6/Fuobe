@@ -127,7 +127,7 @@ describe("proxy with public sign-up on", () => {
     const list = proxy(req("/api/generations?limit=40"));
     expect(list.status).toBe(200);
     expect(await list.json()).toEqual({ items: [] });
-    for (const p of ["/api/files/outputs/a.png", "/api/settings", "/api/auth/tokens", "/api/generations/abc", "/api/layers/abc", "/api/uploads", "/api/assist/t1"]) {
+    for (const p of ["/api/files/outputs/a.png", "/api/settings", "/api/auth/tokens", "/api/generations/abc", "/api/layers/abc", "/api/uploads", "/api/assist/t1", "/api/assist/skills/s1/runs"]) {
       const r = proxy(req(p));
       expect(r.status, p).toBe(401);
       expect(r.headers.get(access.GUEST_HEADER), p).toBe("1");
@@ -289,8 +289,9 @@ describe("accounts never see or change the owner's library", () => {
     storyboards: { lists: [], records: ["/api/storyboards"], changes: [["POST", "/api/storyboards"]] },
     assist: {
       lists: ["/api/assist/projects", "/api/assist/memory"],
-      records: ["/api/assist/t1", "/api/assist/projects/p1"],
-      changes: [["PATCH", "/api/assist/t1"], ["DELETE", "/api/assist/t1"], ["POST", "/api/assist/projects"], ["POST", "/api/assist/memory"]],
+      // A skill's runs that span studios (W7) are the owner's, and so is running a skill.
+      records: ["/api/assist/t1", "/api/assist/projects/p1", "/api/assist/skills/s1/runs"],
+      changes: [["PATCH", "/api/assist/t1"], ["DELETE", "/api/assist/t1"], ["POST", "/api/assist/projects"], ["POST", "/api/assist/memory"], ["POST", "/api/assist/skills/s1/run"]],
     },
     brands: { lists: ["/api/brands", "/api/products"], records: ["/api/brands/b1"], changes: [["POST", "/api/brands"], ["DELETE", "/api/brands/b1"], ["POST", "/api/products"]] },
   };
