@@ -1,11 +1,22 @@
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { comfyArgs } from "../bin/lib/worker/comfy.mjs";
+import { comfyArgs, comfyEnv, OFFLINE_ENV, OwnComfy } from "../bin/lib/worker/comfy.mjs";
 import { nodePacks, packFolders } from "../bin/lib/worker/inventory.mjs";
 import { minVramBytesFor, needsOf, VRAM_TOLERANCE } from "@/lib/lanes";
 import type { RequirementIndex } from "@/lib/gpu/types";
 import { tempDir } from "./helpers/temp-dir";
+
+/** A port nothing listens on (the system picks it). */
+const freePort = () =>
+  new Promise<number>((resolve) => {
+    const s = net.createServer();
+    s.listen(0, "127.0.0.1", () => {
+      const port = (s.address() as net.AddressInfo).port;
+      s.close(() => resolve(port));
+    });
+  });
 
 describe("the worker's node packs", () => {
   it("are found whatever the case of their folder, and ComfyUI gets the folder's own name", () => {
@@ -25,6 +36,62 @@ describe("the worker's node packs", () => {
     expect(nodePacks(comfyDir, index).map((p) => p.name).sort()).toEqual(["ComfyUI-QwenASR", "ComfyUI-RMBG", "ComfyUI-VideoHelperSuite"]);
     const args = comfyArgs({ port: 8190, workDir: "/w" }, found.map((p) => p.folder));
     expect(args.slice(args.indexOf("--whitelist-custom-nodes") + 1)).toEqual(["ComfyUI-QwenASR", "comfyui-rmbg", "comfyui-videohelpersuite"]);
+  });
+});
+
+describe("its own ComfyUI's environment", () => {
+  const pc = {
+    SystemRoot: "C:\\Windows",
+    Path: "C:\\Windows\\system32;C:\\ffmpeg\\bin",
+    TEMP: "C:\\Temp",
+    USERPROFILE: "C:\\Users\\me",
+    CUDA_VISIBLE_DEVICES: "0",
+    HF_HOME: "D:\\hf",
+    HF_TOKEN: "hf_secret",
+    OPENAI_API_KEY: "sk-secret",
+    FUOBE_WORKER_TOKEN: "fuobe_wkr_secret",
+    AWS_SECRET_ACCESS_KEY: "secret",
+    PYTHONPATH: "C:\\elsewhere",
+    HF_HUB_OFFLINE: "0",
+  };
+
+  it("holds only what ComfyUI needs, with downloads and installs off", () => {
+    const env = comfyEnv(pc);
+    expect(env).toEqual({ SystemRoot: "C:\\Windows", Path: "C:\\Windows\\system32;C:\\ffmpeg\\bin", TEMP: "C:\\Temp", USERPROFILE: "C:\\Users\\me", CUDA_VISIBLE_DEVICES: "0", HF_HOME: "D:\\hf", ...OFFLINE_ENV });
+    expect(OFFLINE_ENV).toEqual({ HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1", HF_DATASETS_OFFLINE: "1", PIP_NO_INDEX: "1" });
+  });
+
+  it("adds the PC owner's own variables from worker.json, but never a worker setting, and never turns downloads on", () => {
+    const env = comfyEnv(pc, { COMFY_FLAG: "x", FUOBE_WORKER_TOKEN: "t", PIP_NO_INDEX: "0", HF_HUB_OFFLINE: "0" });
+    expect(env.COMFY_FLAG).toBe("x");
+    expect(env.FUOBE_WORKER_TOKEN).toBeUndefined();
+    expect(env.PIP_NO_INDEX).toBe("1");
+    expect(env.HF_HUB_OFFLINE).toBe("1");
+  });
+
+  it("is what the process it starts gets", async () => {
+    const dir = tempDir("fuobe-worker-env-");
+    const port = await freePort();
+    const out = path.join(dir, "env.json");
+    const script = `require("fs").writeFileSync(${JSON.stringify(out)}, JSON.stringify(process.env)); require("http").createServer((q, s) => s.end("{}")).listen(${port}, "127.0.0.1");`;
+    const c = new OwnComfy({ port, workDir: dir, comfyDir: dir, comfyEnv: { COMFY_FLAG: "x" }, comfyCommand: [process.execPath, "-e", script] }, { env: { ...process.env, OPENAI_API_KEY: "sk-secret", FUOBE_WORKER_TOKEN: "fuobe_wkr_secret" } });
+    try {
+      await c.start();
+      const seen = JSON.parse(fs.readFileSync(out, "utf8")) as Record<string, string>;
+      expect(seen.OPENAI_API_KEY).toBeUndefined();
+      expect(seen.FUOBE_WORKER_TOKEN).toBeUndefined();
+      expect(seen.COMFY_FLAG).toBe("x");
+      expect(seen.HF_HUB_OFFLINE).toBe("1");
+      expect(seen.TRANSFORMERS_OFFLINE).toBe("1");
+      expect(seen.PIP_NO_INDEX).toBe("1");
+      // Nothing else of this process's, but what Windows itself needs in every new process (Node adds these when missing).
+      const windows = process.platform === "win32" ? ["HOMEDRIVE", "HOMEPATH", "LOGONSERVER", "PATH", "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "USERDOMAIN", "USERNAME", "USERPROFILE", "WINDIR"] : [];
+      const allowed = new Set([...Object.keys(comfyEnv(process.env, { COMFY_FLAG: "x" })).map((k) => k.toUpperCase()), ...windows]);
+      const extra = Object.keys(seen).filter((k) => !k.startsWith("=") && !allowed.has(k.toUpperCase()) && k in process.env);
+      expect(extra).toEqual([]);
+    } finally {
+      await c.stop();
+    }
   });
 });
 

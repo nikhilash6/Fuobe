@@ -71,7 +71,12 @@ The worker always starts and stops its own ComfyUI process. It never uses a Comf
 - gets the model folders through `extra_model_paths.yaml`;
 - starts with `--disable-metadata` and `--disable-auto-launch`;
 - loads only the custom node packs that the worker found (`--disable-all-custom-nodes --whitelist-custom-nodes …`).
-  The worker finds a pack whatever the case of its folder name, and gives ComfyUI the folder name as it is on disk.
+  The worker finds a pack whatever the case of its folder name, and gives ComfyUI the folder name as it is on disk;
+- gets only the environment variables that it needs: the system's own, `PATH`, the temp folder, the user folders
+  (for model caches) and the graphics card's settings. Your keys, tokens and other settings do not reach it. To add a
+  variable, put it in `comfyEnv` in `worker.json` (for example `{ "comfyEnv": { "MY_SETTING": "1" } }`);
+- loads models only from this PC: `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_DATASETS_OFFLINE=1` and
+  `PIP_NO_INDEX=1` are always set. A node that downloads its model on its first run needs that model on the PC first.
 
 **The port guard.** Before each start, the worker binds the port itself and releases it at once. If the bind fails,
 another program is using the port. The worker then does not start ComfyUI, pauses itself (its state says "port-busy")

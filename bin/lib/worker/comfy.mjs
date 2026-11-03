@@ -65,13 +65,55 @@ export function comfyArgs(cfg, packs = []) {
   ];
 }
 
+/**
+ * What ComfyUI's process needs from this PC's environment, by name: the system's own variables, where things are
+ * (PATH, the temp folder, the user's folders for model caches) and the graphics card's settings. Nothing else reaches
+ * it: no keys, no tokens, no other program's settings.
+ */
+const PASS = new Set([
+  "SYSTEMROOT", "WINDIR", "SYSTEMDRIVE", "COMSPEC", "PATHEXT", "PATH", "TEMP", "TMP", "TMPDIR", "OS",
+  "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
+  "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "HOME", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "ALLUSERSPROFILE",
+  "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMMONPROGRAMW6432",
+  "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "LD_LIBRARY_PATH",
+  "PYTHONIOENCODING", "PYTHONUTF8", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+  "HF_HOME", "HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE", "TRANSFORMERS_CACHE", "TORCH_HOME",
+]);
+/** The graphics card's and its libraries' settings. */
+const PASS_PREFIX = /^(CUDA_|CUDNN_|NVIDIA_|PYTORCH_CUDA_)/;
+
+/** Set for every start: models load only from what is on this PC, and nothing installs or downloads at run time. */
+export const OFFLINE_ENV = { HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1", HF_DATASETS_OFFLINE: "1", PIP_NO_INDEX: "1" };
+
+/**
+ * ComfyUI's environment: the variables it needs from this PC's (`env`), then the PC owner's own `comfyEnv` from
+ * worker.json (never a FUOBE_ variable), then the offline settings, which nothing overrides.
+ * @param {Record<string, string | undefined>} [env]
+ * @param {Record<string, unknown>} [extra]
+ * @returns {Record<string, string>}
+ */
+export function comfyEnv(env = process.env, extra = {}) {
+  const out = {};
+  for (const [k, v] of Object.entries(env)) {
+    if (typeof v !== "string") continue;
+    const name = k.toUpperCase();
+    if (PASS.has(name) || PASS_PREFIX.test(name)) out[k] = v;
+  }
+  for (const [k, v] of Object.entries(extra && typeof extra === "object" ? extra : {})) {
+    if (/^FUOBE_/i.test(k) || typeof v !== "string") continue;
+    out[k] = v;
+  }
+  return { ...out, ...OFFLINE_ENV };
+}
+
 /** At most this many restarts an hour; then the worker pauses itself ("comfy-crashes"). */
 export const MAX_RESTARTS_AN_HOUR = 3;
 
 export class OwnComfy {
   /**
-   * @param cfg the worker's settings (comfyDir, workDir, port, modelDirs; `comfyCommand` replaces the whole command, for tests)
-   * @param o { now, log, fetch, folderNames }
+   * @param cfg the worker's settings (comfyDir, workDir, port, modelDirs, comfyEnv; `comfyCommand` replaces the whole
+   *   command, for tests)
+   * @param o { now, log, fetch, folderNames, env (this PC's environment, for tests) }
    */
   constructor(cfg, o = {}) {
     this.cfg = cfg;
@@ -113,7 +155,8 @@ export class OwnComfy {
     this.starts.push((this.o.now ?? Date.now)());
     this.expectExit = false;
     this.ready = false;
-    const child = spawn(cmd[0], cmd.slice(1), { cwd: this.cfg.comfyDir || this.cfg.workDir, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    const env = comfyEnv(this.o.env ?? process.env, this.cfg.comfyEnv);
+    const child = spawn(cmd[0], cmd.slice(1), { cwd: this.cfg.comfyDir || this.cfg.workDir, env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     this.child = child;
     const log = fs.createWriteStream(path.join(this.cfg.workDir, "comfyui.log"), { flags: "a" });
     child.stdout.pipe(log);
