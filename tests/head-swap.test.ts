@@ -1,11 +1,11 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-head-swap-"));
+const dir = tempDir("fuobe-head-swap-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -59,9 +59,6 @@ afterAll(async () => {
   globalThis.__fuobeTestGpuPort = undefined;
   globalThis.__fuobeTestDiskFree = undefined;
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => resetRates());
 
@@ -115,7 +112,7 @@ describe("its graph", () => {
     expect(fs.readFileSync(path.join(root, "scripts/comfy/hand-built", `${WF}.json`), "utf8").replace(/\r\n/g, "\n")).toBe(
       fs.readFileSync(path.join(root, "workflows/comfyui", `${WF}.json`), "utf8").replace(/\r\n/g, "\n"),
     );
-    expect(entry).toMatchObject({ file: `${WF}.json`, validated: false, customNodes: [{ name: "ComfyUI-KJNodes" }] });
+    expect(entry).toMatchObject({ file: `${WF}.json`, validated: true, customNodes: [{ name: "ComfyUI-KJNodes" }] });
     expect(entry.models.map((m) => `${m.folder}/${m.file}`).sort()).toEqual(
       [
         "checkpoints/sam3.1_multiplex_fp16.safetensors",

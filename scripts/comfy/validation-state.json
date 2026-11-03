@@ -161,6 +161,12 @@
     "error": null,
     "at": "2026-10-17T21:02:06.175Z"
   },
+  "head-swap-qwen-image-21": {
+    "sha256": "1bc874f1ec9af58e44784bbcf2c49c4f5616f746dd909baa76419c04fadd78ac",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T09:40:16.333Z"
+  },
   "hidream-i1-dev-t2i": {
     "sha256": "19c70e814c0c92a3a503bad43fe5cd2db46bc25551651cb181952d033a801d11",
     "validated": true,

@@ -16,7 +16,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
     `,
     `
       app-hairstyle-try-on app-fuobe-angles app-any-angle app-product-placement app-link-to-video-ad app-style-snap app-steam-it app-urban-cuts
-      app-signboard app-j-poster app-giallo-horror app-face-swap app-character-swap app-headshot-generator
+      app-signboard app-j-poster app-giallo-horror app-face-swap app-head-swap app-character-swap app-headshot-generator
       app-skin-enhancer app-zooms app-what-s-next app-packshot app-billboard-ad app-macro-scene app-asmr-promo
       app-ai-stylist app-colorize app-bring-to-life app-dance app-clipcut app-sticker-match-cut app-latex app-sand-worm
       app-storm-creature app-renaissance app-3d-rotation app-ghoulgao app-object-remover
@@ -34,7 +34,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       app-3d-figure app-idol app-60s-cafe app-hook-frame app-kick-ad app-graffiti-ad app-volcano-ad app-simlife
       app-pixel-game app-brick-cube app-micro-beasts app-paint-app app-social-media-icon app-victory-card app-comic-book
       app-glitter-sticker app-mukbang app-roller-coaster app-banana-eating app-sticker-pack app-plushies
-      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi app-head-swap
+      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi
     `,
   ],
   motion: [

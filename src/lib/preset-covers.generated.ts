@@ -59,6 +59,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-graffiti-ad": ["a3b5d3a5","50248ef9"],
   "app-gtai": "e60da9e5",
   "app-hairstyle-try-on": ["2b40a74a","ecf56f9d"],
+  "app-head-swap": ["70948922","18351528"],
   "app-headshot-generator": ["fb0c720c","0fa7351c"],
   "app-hook-frame": ["9d8d6d0a","f332fb96"],
   "app-hug": ["9f77905b","d1b7d94e"],

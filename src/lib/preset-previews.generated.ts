@@ -409,6 +409,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "ideogram4+qwen-image-2.1-edit",
     "variant": "lean-json"
   },
+  "app-head-swap": {
+    "poster": "/previews/presets/app-head-swap.jpg?v=70948922",
+    "video": "/previews/presets/app-head-swap.mp4?v=18351528",
+    "run": "comfyui-previews-2026-10",
+    "engine": "comfyui",
+    "model": "ideogram4+qwen-image-2.1-edit",
+    "variant": "lean-json"
+  },
   "app-headshot-generator": {
     "poster": "/previews/presets/app-headshot-generator.jpg?v=fb0c720c",
     "video": "/previews/presets/app-headshot-generator.mp4?v=0fa7351c",

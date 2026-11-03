@@ -18,6 +18,7 @@ export const PRESET_BEFORE_AFTER: Record<string, string> = {
   "app-game-dump": "2ff43566",
   "app-glitter-sticker": "4108730f",
   "app-hairstyle-try-on": "462dac27",
+  "app-head-swap": "5731fab5",
   "app-headshot-generator": "82657960",
   "app-hook-frame": "74645f95",
   "app-japanese-show": "4c72c59b",

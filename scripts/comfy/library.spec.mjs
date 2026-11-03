@@ -5519,6 +5519,6 @@ export const SPEC = [
       "the V1.1 \"alternative\" file copies expression better at about 1 degree more head-pose error. Paste-back (pasteBack, on by default): SAM 3.1 finds the head (\"head\") on the swap and on the shot scaled to the swap's size, " +
       'the two masks are joined (ImageCompositeMasked of the mask images, so old long hair goes too), grown by maskGrow and blurred by maskBlur (GrowMaskWithBlur), and only that area comes from the swap: ' +
       "every other pixel is the shot's, which removes Qwen 2.1's colour and detail drift over the whole picture. pasteBack false returns the whole swap (the switch is lazy, SAM does not run). " +
-      "No head found: the shot comes back unchanged. BFS's own workflow runs the Pruna 8-step LoRA with deis_2m (RES4LYF); this graph keeps core samplers.",
+      "No head found: the shot comes back unchanged. BFS's own workflow runs the Pruna 8-step LoRA with deis_2m (RES4LYF); this graph keeps core samplers. RTX 5090: about 130 s a photo warm, about 250 s when the models load, peak about 28 GB.",
   },
 ];
