@@ -4956,7 +4956,7 @@ export const SPEC = [
       'kernel 5, no smoothing, level 0.4, components under 500 vertices dropped, and Gaussians under min_opacity 0.02 ignored, which leaves out the near-transparent haze. ' +
       'SaveGLB 51 writes one self-contained binary GLB (the model output, no role): vertex colours (COLOR_0) under an unlit material (KHR_materials_unlit), no UVs, no textures, no PBR. ' +
       'The 75-frame orbit video (role turntable) is the splat\'s, thresholded at 0.05; after the job the Fuobe server finishes the GLB like every image-to-3D route (web GLB, pivot at the bottom) ' +
-      'and, when Chromium and ffmpeg are there, replaces that video with a turntable of the mesh itself. Mesh quality from Idol splats is unmeasured (idol-9.md §11; scripts/eval/cases/mesh.json). ' +
+      'and, when Chromium and ffmpeg are there, replaces that video with a turntable of the mesh itself. Mesh quality from Idol splats is unmeasured: a rough mesh to rig or to refine, not a finished asset. ' +
       'Same weights as image-to-splat-idol (1.32 GB of Idol files plus the shared 2.46 GB). VRAM: vendor peak 7.2 GB in the SDK for the splat; SplatToMesh\'s own peak at 384 unmeasured.',
   },
   {
