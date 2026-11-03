@@ -2,6 +2,7 @@ import "server-only";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import {
+  H3_TURBO_4STEP_LORA,
   h3TwoKRequests,
   isH3Source,
   needsSmoothing,
@@ -172,10 +173,17 @@ export function createRegenerateRun(
   }
 }
 
+/** Whether the 2K draft may keep its latent: its graph loads the Turbo 4-step LoRA, which Settings may switch off. */
+export function keepsH3Latent(): boolean {
+  return !offeredLoras([H3_TURBO_4STEP_LORA]).dropped.length;
+}
+
 /**
  * MiniMax H3 at 2K on your GPU (n7-10): each take is drafted at 768p, then redrawn at 2K by Open-H3 Regenerate
- * (h3TwoKRequests). A text-to-video draft keeps its latent and the finish loads it by the draft's id; a take from a start
- * frame is finished from its clip. Returns the finished takes first, then their drafts. `create` is createGenerations.
+ * (h3TwoKRequests). A text-to-video draft keeps its latent (unless its Turbo 4-step LoRA is switched off); when the finish
+ * starts, the server loads that latent if it is on the ComfyUI the finish runs on (generations.ts latentHandOff), and
+ * redraws the draft's clip otherwise. Words that come from an earlier step reach the finish too. Returns the finished takes
+ * first, then their drafts. `create` is createGenerations.
  */
 export function createH3TwoKRun(
   original: GenerationRequest,
@@ -188,14 +196,21 @@ export function createH3TwoKRun(
   if (off) throw new Error(off);
   const batchId = opts.batchId ?? nanoid(10);
   const takes = Math.max(1, Math.min(4, Math.round(original.params?.numOutputs ?? 1)));
+  // An earlier step that writes the words (a Canvas or Assist text node): the finish waits for it too, and redraws from them.
+  const deps = opts.dependsOn === undefined ? [] : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
+  const words = deps.flatMap((id, i) => (original.chain?.[i]?.slot === "prompt" ? [{ id, slot: original.chain[i] }] : []));
+  const keepLatent = keepsH3Latent();
   const finished: Generation[] = [];
   const drafts: Generation[] = [];
   try {
     for (let i = 0; i < takes; i++) {
-      const { draft, finish, fromLatent } = h3TwoKRequests(original, op);
+      const { draft, finish } = h3TwoKRequests(original, op, { keepLatent });
       const [d] = create(draft, { ...opts, batchId });
       drafts.push(d);
-      const [f] = create({ ...finish, params: { ...finish.params, extra: { ...finish.params?.extra, ...(fromLatent ? { latentFrom: d.id } : {}) } } }, { batchId, dependsOn: d.id });
+      const [f] = create(
+        { ...finish, chain: [...(finish.chain ?? []), ...words.map((w) => w.slot)], finishOf: d.id },
+        { batchId, dependsOn: words.length ? [d.id, ...words.map((w) => w.id)] : d.id },
+      );
       finished.push(f);
     }
   } catch (e) {

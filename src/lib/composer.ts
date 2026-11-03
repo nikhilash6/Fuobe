@@ -14,6 +14,7 @@ import { keyTimes, totalSeconds, type InbetweenTiming } from "./inbetween";
 import { FACE_MOSAIC_MODELS } from "./catalog/open-tools";
 import { pricingOn, type PriceClock } from "./catalog/promo";
 import { soulPostStep } from "./catalog/soul";
+import { studioResolutions } from "./catalog/regenerate";
 import { appModels, ownRoute, presetRoutes, type HasModel, type RecipePreset } from "./catalog/preset-recipe-routes";
 import { COLORMAPS, type Engine, type GenParams, type InputSlot, type MatteOutput, type MediaKind, type ModelDef, type Operation, type Preset, type PresetRoute, type VideoFormat } from "./catalog/types";
 import { formatCost } from "./format";
@@ -91,7 +92,8 @@ export function settingsShape(
   const shaped = routes.length > 0 && routes.every((r) => r.unsized || r.followsImage);
   return {
     aspect: !sized || shaped || op === "i2v" || op === "flf2v" ? null : many(o.aspectRatios),
-    resolution: sized ? many(o.resolutions) : null,
+    // With the tiers a finishing pass reaches (MiniMax H3's 2K on your GPU: a 768p draft redrawn by Open-H3 Regenerate).
+    resolution: sized ? many(studioResolutions(o)) : null,
     duration: params.shots ? null : many(o.durations),
     count: (kind === "image" || kind === "video") && !single,
     draft: !!o.draft,

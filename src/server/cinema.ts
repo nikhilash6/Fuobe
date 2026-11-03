@@ -716,6 +716,8 @@ export function finishTake(projectId: string, generationId: string): Generation[
   if (!row || !g) throw new CinemaError("That take isn't in this project", 404);
   const finish = finishIn2k(g, engineMode());
   if (!finish) throw new CinemaError("Finish in 2K is for finished MiniMax H3 takes made below 2K", 422);
+  // Once per take: a 2K finish under way or made (this action's, or the 2K run's own finish of its draft) isn't repeated.
+  if (finishedIn2k(generationId)) throw new CinemaError("This take already has a 2K finish", 409);
   const project = getProject(projectId);
   let cost = 0;
   try {
@@ -739,6 +741,16 @@ export function finishTake(projectId: string, generationId: string): Generation[
   }
   recordTakes(projectId, made, row.folder_id, parse<ItemMeta>(row.meta_json, {}).take);
   return made;
+}
+
+/** Whether a take has a 2K finish that hasn't failed (request.finishOf; one in the Trash doesn't count). */
+function finishedIn2k(generationId: string): boolean {
+  return !!db()
+    .prepare(
+      `SELECT 1 FROM generations g LEFT JOIN generation_trash t ON t.generation_id = g.id
+       WHERE json_extract(g.request_json, '$.finishOf') = ? AND g.status NOT IN ('failed', 'canceled') AND t.deleted_at IS NULL LIMIT 1`,
+    )
+    .get(generationId);
 }
 
 export function setTiles(projectId: string, generationId: string, tiles: CinemaTile[]): CinemaItem {

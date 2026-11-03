@@ -7,7 +7,7 @@
  * Nobody hosts the open model, so Regenerate · creative is GPU-only: the cloud engine says it runs on your GPU, and
  * Engine mode "Paid APIs only" hides it (the owner's rule of 10-30).
  */
-import type { ChainSlot, Generation, GenerationRequest, LoraRef } from "./types";
+import type { ChainSlot, Generation, GenerationRequest, LoraRef, ModelOptions } from "./types";
 
 export const REGEN_MODEL = "oss-h3-regenerate";
 export const REGEN_WORKFLOW = "video-regenerate-h3";
@@ -214,7 +214,7 @@ export function regenFinishSteps(o: FinishStepsInput): { steps: FinishStep[]; fi
 
 /** Edit video's results get "Enhance (H3 regenerate)" (a clip of at most 15 s, one pass). */
 export const ENHANCE_FEATURES = new Set(["video-edit"]);
-export const ENHANCE_LABEL = "Enhance (H3 regenerate) · 1080p";
+export const ENHANCE_LABEL = "Enhance (H3 regenerate) · 1080p · on your GPU";
 
 /** Whether a finished video result gets "Enhance (H3 regenerate)": an Edit video result up to 15 s (unknown counts). */
 export function canEnhance(g: Pick<Generation, "feature" | "status" | "request">, o: { kind: string; meta?: Record<string, unknown> }, engineMode?: "both" | "open" | "cloud"): boolean {
@@ -250,6 +250,15 @@ export const REGEN_LATENT_WORKFLOW = "video-regenerate-h3-latent";
 /** Regenerate's tier for a 2K take (the shorter edge: 2560 x 1440). */
 export const H3_FINISH_TIER = "1440p";
 
+/**
+ * The tiers the Video studio and Cinema offer for a model: its own, then the ones a finishing pass reaches
+ * (ModelOptions.finishTiers: MiniMax H3's 2K on your GPU). Every other tier picker reads `resolutions` alone.
+ */
+export function studioResolutions(o: Pick<ModelOptions, "resolutions" | "finishTiers"> | undefined): string[] | undefined {
+  if (!o?.finishTiers?.length) return o?.resolutions;
+  return [...(o.resolutions ?? []), ...o.finishTiers.filter((t) => !o.resolutions?.includes(t))];
+}
+
 /** Whether a request asks the open MiniMax H3 model for its 2K tier. */
 export function wantsH3TwoK(modelId: string | undefined, resolution: string | undefined): boolean {
   return modelId === H3_OPEN_MODEL && /^(2k|1440p)$/i.test(resolution ?? "");
@@ -261,18 +270,42 @@ export const latentPrefixFor = (generationId: string) => `fuobe_h3_${generationI
 export const latentFileFor = (generationId: string) => `${latentPrefixFor(generationId)}_00001.safetensors`;
 
 /**
- * The two steps of an open MiniMax H3 take at 2K: the take at 768p, then Open-H3 Regenerate at 2K from it, from the same
- * words, near the draft (sigma 0.8) with the 768p preset. Text to video drafts on the graph that keeps its latent, and the
- * finish starts from that latent (the server names it after the draft); a take from a start frame is finished from its clip.
+ * Server-only flags of the 2K hand-off (params.extra), never taken from a client (the request schemas drop them):
+ * `latentDraft` makes a text-to-video draft keep its 768p latent, `latentFrom` names the run whose latent a finish loads.
+ * The server checks both again when the run starts (src/server/generations.ts latentHandOff).
  */
-export function h3TwoKRequests(original: GenerationRequest, op: string): { draft: GenerationRequest; finish: GenerationRequest; fromLatent: boolean } {
-  const fromLatent = op === "t2v";
+export const LATENT_EXTRA = ["latentDraft", "latentFrom"] as const;
+
+/** lightx2v's FL2V Turbo 4-step v1.2 LoRA, which the 768p draft that keeps its latent loads itself (rdh's "Prompt to 2K"). */
+export const H3_TURBO_4STEP_LORA: LoraRef = {
+  file: "minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors",
+  url: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/3ec17a324ced54151364f24f8b5fb6bf7e26414f/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors",
+  version: "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+  licence: { commercial: true, hostedOk: true, snapshotDate: "2026-10-30", name: "Apache-2.0" },
+};
+
+/** Its licence as Settings → Models & licences shows it (Apache-2.0 in its card at the pinned revision). */
+export const H3_TURBO_4STEP_INFO = {
+  name: "MiniMax H3 FL2V Turbo 4-step v1.2 (lightx2v)",
+  url: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/blob/3ec17a324ced54151364f24f8b5fb6bf7e26414f/README.md",
+  note: "Apache-2.0 at the pinned revision (3ec17a3); the current card no longer states a licence. MiniMax H3 at 2K drafts with it on your GPU",
+} as const;
+
+/**
+ * The two steps of an open MiniMax H3 take at 2K: the take at 768p, then Open-H3 Regenerate at 2K from it, from the same
+ * words, near the draft (sigma 0.8) with the 768p preset. Text to video drafts on the graph that keeps its latent (unless
+ * `keepLatent` is false: its Turbo 4-step LoRA is switched off), and the finish may start from that latent: the server
+ * decides when it starts (the draft's latent must be on the ComfyUI the finish runs on). Otherwise, and for a take from a
+ * start frame, the finish redraws the draft's clip.
+ */
+export function h3TwoKRequests(original: GenerationRequest, op: string, o: { keepLatent?: boolean } = {}): { draft: GenerationRequest; finish: GenerationRequest; fromLatent: boolean } {
+  const fromLatent = op === "t2v" && o.keepLatent !== false;
   const params = original.params ?? {};
   const draft: GenerationRequest = {
     ...original,
     op: op as GenerationRequest["op"],
     params: { ...params, resolution: "768p", numOutputs: 1, extra: { ...params.extra, ...(fromLatent ? { latentDraft: true } : {}) } },
-    step: { label: "768p draft", index: 0, of: 2 },
+    step: { label: H3_DRAFT_STEP, index: 0, of: 2 },
   };
   const finish: GenerationRequest = {
     feature: original.feature,
@@ -284,10 +317,17 @@ export function h3TwoKRequests(original: GenerationRequest, op: string): { draft
     ...(original.demo && { demo: true }),
     params: { resolution: H3_FINISH_TIER, numOutputs: 1, ...(params.duration ? { sourceDuration: params.duration } : {}), extra: { startSigma: REGEN_FINISH_SIGMA, draftFrom: "h3" } },
     chain: [{ slot: "video" }],
-    step: { label: "Finished in 2K", index: 1, of: 2 },
+    step: { label: H3_FINISH_STEP, index: 1, of: 2 },
   };
   return { draft, finish, fromLatent };
 }
+
+/** The step names of a 2K take: the draft, and the take finished from it. */
+export const H3_DRAFT_STEP = "768p draft";
+export const H3_FINISH_STEP = "Finished in 2K";
+
+/** Said under a 2K run's price on your GPU (previews and the plan). */
+export const H3_2K_STEPS_NOTE = "Each take is drafted at 768p, then redrawn at 2K by Open-H3 Regenerate on your GPU";
 
 /** The open H3 takes "Finish in 2K" offers to finish (a take from your GPU, made below 2K). */
 export function canFinishOpen(g: Pick<Generation, "engine" | "modelId" | "status" | "kind" | "request">, engineMode?: "both" | "open" | "cloud"): boolean {
@@ -300,10 +340,12 @@ export function canFinishOpen(g: Pick<Generation, "engine" | "modelId" | "status
  * your GPU is redrawn at 2K by Open-H3 Regenerate (free), from its saved latent when its draft kept one. null: not offered.
  */
 export function finishIn2k(g: Pick<Generation, "id" | "engine" | "provider" | "modelId" | "status" | "request" | "kind" | "outputs" | "op" | "feature">, engineMode?: "both" | "open" | "cloud"): { request: GenerationRequest; label: string; perSecond: number | null } | null {
-  if (canRerender(g, engineMode)) return { request: rerenderRequest(g), label: "Finish in 2K", perSecond: RERENDER[g.modelId].perSecond["2K"] };
+  if (canRerender(g, engineMode)) return { request: { ...rerenderRequest(g), finishOf: g.id }, label: "Finish in 2K", perSecond: RERENDER[g.modelId].perSecond["2K"] };
   if (!canFinishOpen(g, engineMode)) return null;
   const video = g.outputs.find((o) => o.kind === "video")?.url;
   if (!video) return null;
+  // The draft's latent when it kept one: the server uses it only if it is still on the ComfyUI this finish runs on, and
+  // redraws the clip otherwise.
   const latent = g.request.params?.extra?.latentDraft === true;
   return {
     request: {
@@ -313,10 +355,16 @@ export function finishIn2k(g: Pick<Generation, "id" | "engine" | "provider" | "m
       ...(g.request.prompt?.trim() ? { prompt: g.request.prompt.trim() } : {}),
       inputs: { video },
       params: { resolution: H3_FINISH_TIER, numOutputs: 1, extra: { startSigma: REGEN_FINISH_SIGMA, ...(latent ? { latentFrom: g.id, draftFrom: "h3" } : {}) } },
+      finishOf: g.id,
     },
     label: "Finish in 2K",
     perSecond: null,
   };
+}
+
+/** The takes a list already finishes in 2K (a finish under way or made): "Finish in 2K" isn't offered on them again. */
+export function finishedTakes(list: Pick<Generation, "status" | "request">[]): Set<string> {
+  return new Set(list.flatMap((g) => (g.request.finishOf && g.status !== "failed" && g.status !== "canceled" ? [g.request.finishOf] : [])));
 }
 
 /** The note for a clip that isn't 16:9 or 9:16. */
@@ -344,6 +392,8 @@ export const REGEN_COPY = {
   off: "Regenerate isn't available right now. Pick Restore · faithful to sharpen the clip instead.",
   gpuOnly: "Runs on your GPU (open source)",
   prompt: "Describe the clip: what is in it, how it moves, the light. Regenerate redraws it from these words",
+  /** A 2K finish whose draft's saved copy is gone from the GPU (a retry redraws the draft's clip instead). */
+  latentGone: "The 768p draft's saved copy isn't on this GPU any more. Press Retry to finish it from the draft's clip.",
 } as const;
 
 /** The two finishing choices Upscale → Video shows side by side on the open engine. */
@@ -367,8 +417,11 @@ export const REGEN_LORA: LoraRef = {
 };
 
 /** The LoRA files a Regenerate graph loads itself, so a run downloads the ones ComfyUI lacks before it starts. */
-export function regenerateGraphLoras(endpoint: string): LoraRef[] {
-  return endpoint === REGEN_WORKFLOW || endpoint === "video-regenerate-h3-latent" ? [REGEN_LORA] : [];
+export function regenerateGraphLoras(endpoint: string, extra?: Record<string, unknown>): LoraRef[] {
+  if (endpoint === REGEN_WORKFLOW || endpoint === REGEN_LATENT_WORKFLOW) return [REGEN_LORA];
+  // The 2K tier's 768p draft that keeps its latent (MiniMax H3's text to video with latentDraft) loads the Turbo 4-step LoRA.
+  if (endpoint === H3_LATENT_DRAFT_WORKFLOW || (endpoint === "minimax-h3-t2v" && extra?.latentDraft === true)) return [H3_TURBO_4STEP_LORA];
+  return [];
 }
 
 /** The new files and their licences, as the research recorded them (§2.4, §2.5). */

@@ -59,15 +59,15 @@ import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
 import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
 import { chainedRefine } from "@/lib/av/hi3d";
-import { createH3TwoKRun, createRegenerateRun } from "./regenerate";
+import { createH3TwoKRun, createRegenerateRun, keepsH3Latent, regenSwitchedOff } from "./regenerate";
 import { createVoiceFirstRun, voiceFirstPlanFor } from "./voice-first";
 import { BED_NOTES, VOICE_FIRST_LABEL } from "@/lib/av/voice-first";
-import { REGEN_MODEL, regenerateGraphLoras, wantsH3TwoK } from "@/lib/catalog/regenerate";
+import { H3_2K_STEPS_NOTE, h3TwoKRequests, REGEN_COPY, REGEN_MODEL, regenerateGraphLoras, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
 import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
-import { comfyLoraFiles, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, probeComfy, relayFile, type OwnGpu } from "./providers/comfyui";
+import { comfyLoraFiles, comfyPlace, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, probeComfy, relayFile, type OwnGpu } from "./providers/comfyui";
 import { accountById, accountGpu, gpuLink, type AccountGpu } from "./auth";
 import { accountEngineMode, accountKey, paidAllowed } from "./account-keys";
 import { addKeyMessage, isCloudProvider, keyRemovedMessage, type CloudProvider } from "@/lib/your-keys";
@@ -841,7 +841,7 @@ function prepare(original: GenerationRequest) {
 }
 
 /** The LoRA files a graph loads itself (not injected), so a run downloads the ones ComfyUI lacks before it starts. */
-const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined) => [...h3GraphLoras(endpoint, extra), ...restoreGraphLoras(endpoint, extra), ...regenerateGraphLoras(endpoint)];
+const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined) => [...h3GraphLoras(endpoint, extra), ...restoreGraphLoras(endpoint, extra), ...regenerateGraphLoras(endpoint, extra)];
 
 /** Operations whose clip length is the duration picked (made, or added by extend), not an input video's. */
 const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "extend", "keyframes"]);
@@ -866,8 +866,14 @@ export function previewGeneration(asked: GenerationRequest) {
     if (voiced.costUsd !== null) post += voiced.costUsd;
     notes.push(...voiced.notes);
   }
+  // MiniMax H3 at 2K on your GPU: each take's Open-H3 Regenerate finish is planned and priced beside its draft.
+  const twoK = h3TwoKExtra(moved.request, plan.model, plan.op);
+  if (twoK) {
+    if (twoK.costUsd !== null) post += twoK.costUsd;
+    notes.push(...twoK.notes);
+  }
   // A clean-voice step whose price isn't known leaves the run's price unknown too, never the main step's alone.
-  const priceUnknown = cost === null || voiced?.costUsd === null;
+  const priceUnknown = cost === null || voiced?.costUsd === null || twoK?.costUsd === null;
   return {
     model: plan.model,
     op: plan.op,
@@ -876,8 +882,9 @@ export function previewGeneration(asked: GenerationRequest) {
     demo,
     providerId,
     costUsd: priceUnknown || cost === null ? null : post ? Math.round((cost * plan.jobs + post) * 1000) / 1000 : cost * plan.jobs,
-    // The other steps the run makes beside its own model (Clean the voice first's), so a policy and a price see them all.
-    ...(voiced?.steps.length && { steps: voiced.steps }),
+    // The other steps the run makes beside its own model (Clean the voice first's, a 2K take's finish), so a policy and a
+    // price see them all.
+    ...((voiced?.steps.length || twoK?.steps.length) && { steps: [...(voiced?.steps ?? []), ...(twoK?.steps ?? [])] }),
     // The engine it runs on (a Fuobe Original picks one per request).
     engine: plan.model.engine,
     // What the route runs (the evaluation harness records it): the provider endpoint, the final prompt and the LoRAs it loads.
@@ -890,6 +897,24 @@ export function previewGeneration(asked: GenerationRequest) {
     // MiniMax H3's GPU tier and the card's file as decided for this run: the GPU pre-flight checks the graph and file it picks.
     ...(h3 && { h3 }),
     plan: { end: plan.end },
+  };
+}
+
+/**
+ * The finishes MiniMax H3's 2K tier adds on your GPU (createH3TwoKRun): one Open-H3 Regenerate pass per take, checked
+ * (the refiner LoRA's switch, the finish's own plan) and priced as the run makes them.
+ */
+function h3TwoKExtra(req: GenerationRequest, model: ModelDef, op: Operation): { costUsd: number | null; notes: string[]; steps: { model: string; op: string }[] } | null {
+  if (!wantsH3TwoK(model.id, req.params?.resolution)) return null;
+  const off = regenSwitchedOff();
+  if (off) throw new Error(off);
+  const takes = Math.max(1, Math.min(4, Math.round(req.params?.numOutputs ?? 1)));
+  const { finish } = h3TwoKRequests(req, op, { keepLatent: keepsH3Latent() });
+  const p = previewChained(finish, 1);
+  return {
+    costUsd: p.costUsd === null ? null : Math.round(p.costUsd * takes * 10000) / 10000,
+    notes: [H3_2K_STEPS_NOTE],
+    steps: Array.from({ length: takes }, () => ({ model: p.model.id, op: p.op })),
   };
 }
 
@@ -964,7 +989,7 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   const asked = stampTenant(given, opts);
   // A retired model or operation (a retry, an old script, a saved project) runs on what replaced it, and says so.
   const moved = currentRequest(asked);
-  const original = moved.request;
+  const original = withFinishOf(moved.request, opts.dependsOn);
   // Open models make multi-shot films shot by shot, then join the clips. A Fuobe Original is taken on the engine it runs
   // on (Fuobe DoP's Frames mode is a GPU chain).
   // A model (or an Original's engine asked for) switched off in Settings → Models & licences is refused here, before a
@@ -1444,7 +1469,8 @@ async function advanceDependents(): Promise<void> {
       if (model?.routes.some((x) => x.provider === "llm")) await probeLocal();
       // Filled with the slots that have an input; stored with its whole chain (and what was skipped) for a retry.
       const filled = withChainInputs({ ...request, chain: slots }, values as string[]);
-      const original: GenerationRequest = { ...filled, chain: request.chain, chainFilled: true };
+      // A 2K finish names the draft it waits for as the latent to load (never an id stored before: a retried draft is new).
+      const original: GenerationRequest = latentFromDependency({ ...filled, chain: request.chain, chainFilled: true }, allIds.filter(keep), slots, deps);
       const prepared = asRun(() => prepare(original));
       const mode = chainMode(prepared, deps as Pick<Row, "provider">[], original);
       if (mode.error) throw new Error(mode.error);
@@ -1468,6 +1494,65 @@ async function advanceDependents(): Promise<void> {
       if (!handedOff) submitting().delete(r.id);
     }
   }
+}
+
+/** A chained 2K finish finishes the run its clip comes from (a retried draft is a new run: read again when it is created). */
+function withFinishOf(req: GenerationRequest, dependsOn: string | string[] | undefined): GenerationRequest {
+  if (!req.finishOf || dependsOn === undefined) return req;
+  const deps = Array.isArray(dependsOn) ? dependsOn : [dependsOn];
+  const at = slotsFor(req, deps.length).findIndex((s) => s.slot === "video");
+  return at >= 0 && deps[at] !== req.finishOf ? { ...req, finishOf: deps[at] } : req;
+}
+
+/**
+ * MiniMax H3's 2K finish (Open-H3 Regenerate chained after its 768p draft): the draft it waits for, when that draft kept
+ * its latent, is the latent it may load (latentHandOff checks it again when it starts). Any other latentFrom is dropped.
+ */
+function latentFromDependency(req: GenerationRequest, ids: string[], slots: ChainSlot[], deps: (Pick<Row, "request_json"> | undefined)[]): GenerationRequest {
+  if (req.modelId !== REGEN_MODEL) return req;
+  const at = slots.findIndex((s) => s.slot === "video");
+  let draft: GenerationRequest | undefined;
+  try {
+    draft = at >= 0 && deps[at] ? (JSON.parse(deps[at]!.request_json) as GenerationRequest) : undefined;
+  } catch {}
+  const { latentFrom: _stored, ...extra } = req.params?.extra ?? {};
+  void _stored;
+  const latentFrom = draft?.params?.extra?.latentDraft === true ? ids[at] : undefined;
+  if (!latentFrom && _stored === undefined) return req;
+  return { ...req, params: { ...req.params, extra: { ...extra, ...(latentFrom && { latentFrom }) } } };
+}
+
+/**
+ * The 2K hand-off as the run starts, on the ComfyUI it runs on (never trusted from the request; package n7-10). A draft
+ * keeps its latent only where one stays between jobs (not the owner's workers) and while its Turbo 4-step LoRA is on. A
+ * finish loads a latent only from a run of the same account (or the owner's own) that kept one on this same ComfyUI,
+ * and that no earlier finish found gone; otherwise it redraws its clip.
+ */
+export function latentHandOff(extra: Record<string, unknown> | undefined, account: string | undefined): Record<string, unknown> | undefined {
+  if (!extra || (extra.latentDraft === undefined && extra.latentFrom === undefined)) return extra;
+  const out = { ...extra };
+  const place = comfyPlace();
+  if (out.latentDraft !== undefined && !(out.latentDraft === true && place && keepsH3Latent())) delete out.latentDraft;
+  if (out.latentFrom !== undefined && !(typeof out.latentFrom === "string" && place && keptLatent(out.latentFrom, account, place))) delete out.latentFrom;
+  return out;
+}
+
+/** Whether run `id` kept its 768p latent on `place` for this account (the owner: undefined), and it is still there. */
+function keptLatent(id: string, account: string | undefined, place: string): boolean {
+  const row = db().prepare("SELECT status, request_json, external_meta_json FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "request_json" | "external_meta_json"> | undefined;
+  if (!row || row.status !== "succeeded" || accountOf(row) !== account) return false;
+  try {
+    const req = JSON.parse(row.request_json) as GenerationRequest;
+    const meta = JSON.parse(row.external_meta_json ?? "{}") as { latentAt?: unknown };
+    if (req.params?.extra?.latentDraft !== true || meta.latentAt !== place) return false;
+  } catch {
+    return false;
+  }
+  // A finish that found it gone (someone's computer reports that after the fact): the next one redraws the clip.
+  const gone = db()
+    .prepare("SELECT 1 FROM generations WHERE status = 'failed' AND error = ? AND json_extract(request_json, '$.params.extra.latentFrom') = ? LIMIT 1")
+    .get(REGEN_COPY.latentGone, id);
+  return !gone;
 }
 
 const statusOf = (id: string) => (db().prepare("SELECT status FROM generations WHERE id = ?").get(id) as Pick<Row, "status"> | undefined)?.status;
@@ -1672,6 +1757,11 @@ async function submitNow(
   submitting().add(id);
   /** Why the run failed, once it has: its files still waiting to be sent are not sent. */
   let failed: { error: unknown } | undefined;
+  // MiniMax H3's 2K hand-off, decided here, on the ComfyUI this run goes to.
+  if (providerId === "comfyui") {
+    const extra = latentHandOff(plan.params.extra, req.account);
+    if (extra !== plan.params.extra) plan = { ...plan, params: { ...plan.params, extra } };
+  }
   try {
     // An account's run on its own ComfyUI and keys only (asAccount): outside it, nothing is sent.
     const adapter = adapterFor(providerId, req.account);

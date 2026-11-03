@@ -7,6 +7,7 @@ import { DOP_MODEL, LTX25_HOSTED } from "./dop";
 import { dualEngine, onEngine } from "./engines";
 import { localOnly, needsToken, triggerOf } from "./loras";
 import { QMA_MODEL, qmaLabel, qmaView } from "@/lib/qma";
+import { studioResolutions } from "./regenerate";
 import { ANGLES_2511_LORA } from "./open-tools";
 import { composeShots, estimateCost, planGeneration, routesFor } from "./plan";
 import { soulRecipe } from "./soul";
@@ -625,7 +626,7 @@ export const H3_2K_TIER = "2K";
 
 /** Cinema's video tiers for a model: 480p / 720p / 1080p, and 2K for the MiniMax H3 models that offer it. */
 export function videoResolutionsFor(model: Pick<ModelDef, "family" | "options"> | undefined): string[] {
-  const twoK = !!model && (model.family === "minimax-h3" || model.family === "hailuo") && (model.options.resolutions ?? []).some((r) => r.toLowerCase() === "2k");
+  const twoK = !!model && (model.family === "minimax-h3" || model.family === "hailuo") && (studioResolutions(model.options) ?? []).some((r) => r.toLowerCase() === "2k");
   return twoK ? [...VIDEO_RESOLUTIONS, H3_2K_TIER] : VIDEO_RESOLUTIONS;
 }
 
@@ -1380,21 +1381,23 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
     notes.push(`${model.name} doesn't make ${ar} — using ${params.aspectRatio}`);
   } else if (o.aspectRatios?.length || ar) params.aspectRatio = ar;
   const res = input.resolution;
-  if (res && o.resolutions?.length) {
-    if (o.resolutions.includes(res)) params.resolution = res;
-    else if (IMAGE_TIER[res] && o.resolutions.includes(IMAGE_TIER[res])) {
+  // A video's tiers include the ones a finishing pass reaches (MiniMax H3's 2K on your GPU), as the Resolution chip shows them.
+  const tiers = (kind === "video" ? studioResolutions(o) : o.resolutions) ?? [];
+  if (res && tiers.length) {
+    if (tiers.includes(res)) params.resolution = res;
+    else if (IMAGE_TIER[res] && tiers.includes(IMAGE_TIER[res])) {
       params.resolution = IMAGE_TIER[res];
       if (res === "4K") notes.push(`${model.name} makes up to about 2 megapixels (its ${params.resolution} size)`);
-    } else if (kind === "video" && videoTier(o.resolutions, res)) {
-      const tier = videoTier(o.resolutions, res)!;
+    } else if (kind === "video" && videoTier(tiers, res)) {
+      const tier = videoTier(tiers, res)!;
       params.resolution = tier;
       if (tier.toLowerCase() !== res.toLowerCase()) {
         notes.push(tierHeight(tier)! < tierHeight(res)! ? `${model.name} renders up to ${tier} here` : `${model.name} renders at ${tier} here`);
       }
     } else {
       const order = kind === "video" ? VIDEO_RESOLUTIONS : [...IMAGE_RESOLUTIONS, "0.5K", "1.5K", "720p", "1080p"];
-      const below = o.resolutions.filter((r) => order.indexOf(r) <= order.indexOf(res) && order.indexOf(r) >= 0);
-      params.resolution = below.sort((a, b) => order.indexOf(b) - order.indexOf(a))[0] ?? o.resolutions[0];
+      const below = tiers.filter((r) => order.indexOf(r) <= order.indexOf(res) && order.indexOf(r) >= 0);
+      params.resolution = below.sort((a, b) => order.indexOf(b) - order.indexOf(a))[0] ?? tiers[0];
       notes.push(`${model.name} renders up to ${params.resolution} here`);
     }
   }

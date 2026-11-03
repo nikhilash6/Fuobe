@@ -25,8 +25,14 @@ const { setSetting } = await import("@/server/settings");
 const gens = await import("@/server/generations");
 const { createRegenerateRun } = await import("@/server/regenerate");
 const { saveFile } = await import("@/server/storage");
+const { db } = await import("@/server/db");
 const { runAsTenant } = await import("@/server/tenant");
 const cinema = await import("@/server/cinema");
+const mk = await import("@/server/marketing");
+const { pickerData } = await import("@/lib/catalog/faceless");
+const { settingsShape } = await import("@/lib/composer");
+const { accessList, knownSwitch, readAccess, saveAccess } = await import("@/server/model-access");
+const { GenerationRequestSchema } = await import("@/server/request-schema");
 const finishRoute = await import("@/app/api/cinema/projects/[id]/items/[generationId]/finish/route");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -107,6 +113,11 @@ describe("the 768p draft that keeps its latent, and the 2K finish from it", () =
     expect(resolveWorkflowId("video-regenerate-h3", req({ latentFrom: "g1" }, "upscale-video"))).toBe("video-regenerate-h3-latent");
     expect(resolveWorkflowId("video-regenerate-h3", req({}, "upscale-video"))).toBe("video-regenerate-h3");
     expect(R.regenerateGraphLoras(R.REGEN_LATENT_WORKFLOW)).toEqual([R.REGEN_LORA]);
+    // The draft that keeps its latent loads the Turbo 4-step LoRA itself, so a run downloads it (or an account's GPU is
+    // checked for it) like the refiner.
+    expect(R.regenerateGraphLoras(R.H3_LATENT_DRAFT_WORKFLOW)).toEqual([R.H3_TURBO_4STEP_LORA]);
+    expect(R.regenerateGraphLoras("minimax-h3-t2v", { latentDraft: true })).toEqual([R.H3_TURBO_4STEP_LORA]);
+    expect(R.regenerateGraphLoras("minimax-h3-t2v", {})).toEqual([]);
   });
 
   it("has a row on the GPU pre-flight board with both graphs and the refiner LoRA", async () => {
@@ -114,7 +125,7 @@ describe("the 768p draft that keeps its latent, and the 2K finish from it", () =
     const row = STUDIO_ROWS.find((r) => r.label === "MiniMax H3 in 2K")!;
     const tool = studioTool(row)!;
     expect(tool.workflows).toEqual([R.H3_LATENT_DRAFT_WORKFLOW, R.REGEN_LATENT_WORKFLOW]);
-    expect(tool.loras.map((l) => l.file)).toContain(R.REGEN_LORA.file);
+    expect(tool.loras.map((l) => l.file)).toEqual(expect.arrayContaining([R.REGEN_LORA.file, R.H3_TURBO_4STEP_LORA.file]));
   });
 
   it("pins the Turbo 4-step v1.2 file at 3ec17a3 with its size and SHA-256", () => {
@@ -139,7 +150,10 @@ describe("MiniMax H3 at 2K on your GPU", () => {
       expect(d).toMatchObject({ modelId: "oss-minimax-h3", op: "t2v" });
       expect(d.request.params).toMatchObject({ resolution: "768p", numOutputs: 1, extra: { latentDraft: true } });
       expect(f).toMatchObject({ modelId: R.REGEN_MODEL, op: "upscale-video" });
-      expect(f.request.params).toMatchObject({ resolution: "1440p", extra: { startSigma: 0.8, draftFrom: "h3", latentFrom: d.id } });
+      expect(f.request.params).toMatchObject({ resolution: "1440p", extra: { startSigma: 0.8, draftFrom: "h3" } });
+      // The latent to load is decided when the finish starts, from the draft it waits for (never an id stored now).
+      expect(f.request.params?.extra?.latentFrom).toBeUndefined();
+      expect(f.request.finishOf).toBe(d.id);
       expect(f.request.prompt).toBe("A lighthouse in a storm");
     }
     const png = saveFile({ data: Buffer.from("89504e470d0a1a0a", "hex"), contentType: "image/png", source: "upload" }).url;
@@ -214,6 +228,34 @@ describe("Finish in 2K", () => {
     const again = await finishRoute.POST(json("POST"), params({ id: project.id, generationId: items[0].id }));
     expect(again.status).toBe(422);
     expect((await finishRoute.POST(json("POST"), params({ id: project.id, generationId: "nope" }))).status).toBe(404);
+    // Once per take: a second Finish in 2K is refused while the first is under way or made.
+    const twice = await finishRoute.POST(json("POST"), params({ id: project.id, generationId: g.id }));
+    expect(twice.status).toBe(409);
+    expect((await twice.json()).error).toBe("This take already has a 2K finish");
+    expect(R.finishedTakes(cinema.listItems(project.id))).toEqual(new Set([g.id]));
+  });
+
+  it("answers a repeated request id with the first finish, and offers it again once that finish failed", async () => {
+    const project = cinema.createProject({ name: "Harbour" });
+    const [g] = gens.createGenerations({ feature: "cinema", modelId: "oss-minimax-h3", op: "t2v", prompt: "A harbour at dawn", params: { resolution: "768p", duration: 5 } });
+    cinema.addItems(project.id, [g.id]);
+    expect(await settle(g.id)).toMatchObject({ status: "succeeded" });
+    const send = () => finishRoute.POST(json("POST", { requestId: "finish-nonce-0001" }), params({ id: project.id, generationId: g.id }));
+    const [a, b] = await Promise.all([send(), send()]);
+    expect([a.status, b.status]).toEqual([201, 201]);
+    const [first, second] = [(await a.json()).items, (await b.json()).items];
+    expect(second.map((x: Generation) => x.id)).toEqual(first.map((x: Generation) => x.id));
+    expect(first[0].request.finishOf).toBe(g.id);
+    expect((await finishRoute.POST(json("POST", { requestId: "../x" }), params({ id: project.id, generationId: g.id }))).status).toBe(400);
+    // A finish that failed doesn't count.
+    db().prepare("UPDATE generations SET status = 'failed' WHERE id = ?").run(first[0].id);
+    expect((await finishRoute.POST(json("POST", { requestId: "finish-nonce-0002" }), params({ id: project.id, generationId: g.id }))).status).toBe(201);
+  });
+
+  it("isn't offered on a 2K run's own 768p draft", () => {
+    const made = gens.createGenerations({ feature: "cinema", modelId: "oss-minimax-h3", op: "t2v", prompt: "A lighthouse", params: { resolution: "2K", duration: 5 } });
+    const draft = made.find((x) => x.modelId === "oss-minimax-h3")!;
+    expect(R.finishedTakes(made)).toEqual(new Set([draft.id]));
   });
 });
 
@@ -272,5 +314,99 @@ describe("Edit video · Enhance (H3 regenerate)", () => {
       expect(run(ownersClip)).toEqual([R.REGEN_MODEL]);
     });
     runAsTenant({ kind: "account", id: "acct-b" }, () => expect(run(mine)).toEqual([R.REGEN_MODEL]));
+  });
+});
+
+describe("2K stays where it is offered (review 1)", () => {
+  const h3 = () => getModel("oss-minimax-h3")!;
+
+  it("keeps MiniMax H3's own tiers at 768p; only the Video studio and Cinema add the 2K finish", () => {
+    expect(h3().options.resolutions).toEqual(["768p"]);
+    expect(h3().options.finishTiers).toEqual(["2K"]);
+    expect(R.studioResolutions(h3().options)).toEqual(["768p", "2K"]);
+    expect(settingsShape(h3(), "t2v", "video", true).resolution).toEqual(["768p", "2K"]);
+    expect(videoResolutionsFor(h3())).toContain("2K");
+    // A model without finishing tiers keeps its own list as it is.
+    const ltx = getModel("oss-ltx25")!;
+    expect(R.studioResolutions(ltx.options)).toBe(ltx.options.resolutions);
+  });
+
+  it("Ad Multiplier's open hook and CTA stay at 768p whatever quality is asked", () => {
+    const frame = saveFile({ data: Buffer.from("89504e470d0a1a0a", "hex"), contentType: "image/png", source: "upload" }).url;
+    const clip = saveFile({ data: Buffer.from("89504e470d0a1a0a", "hex"), contentType: "video/mp4", name: "ad.mp4", source: "upload" }).url;
+    for (const quality of ["480p", "720p", "1080p"] as const) {
+      const plan = mk.planMultiplier({ engine: "open", video: clip, duration: 12, mode: "sections", hook: "Wait for it", cta: "Shop today", quality, firstFrame: frame, lastFrame: frame }, {});
+      const clips = plan.steps.filter((x) => x.key === "hook" || x.key === "cta");
+      expect(clips.map((x) => x.key)).toEqual(["hook", "cta"]);
+      for (const c of clips) expect(c.request).toMatchObject({ modelId: "oss-minimax-h3", params: { resolution: "768p" } });
+    }
+  });
+
+  it("Faceless's Quality control has no 2K (MiniMax H3 offers one tier there, so no control shows)", () => {
+    const open = pickerData(getModel).videoModels.find((m) => m.id === "oss-minimax-h3");
+    expect(open?.resolutions).toEqual(["768p"]);
+    // (fal's hosted MiniMax H3 renders 2K itself and keeps it, as before.)
+    for (const m of pickerData(getModel).videoModels.filter((x) => x.engine === "open")) expect(m.resolutions, m.id).not.toContain("2K");
+  });
+});
+
+describe("the 2K run's other pieces (review 4 to 8)", () => {
+  it("lists the Turbo 4-step v1.2 LoRA in Settings → Models & licences, Apache-2.0 at 3ec17a3, with a switch the draft honours", () => {
+    const row = accessList().loras.find((l) => l.file === R.H3_TURBO_4STEP_LORA.file)!;
+    expect(row).toMatchObject({ name: "MiniMax H3 FL2V Turbo 4-step v1.2 (lightx2v)", group: "adapter", base: "MiniMax H3", on: true });
+    expect(row.licence).toMatchObject({ name: "Apache-2.0", class: "commercial" });
+    expect(row.licence.url).toContain("3ec17a324ced54151364f24f8b5fb6bf7e26414f");
+    expect(row.licence.note).toMatch(/current card no longer states a licence/);
+    expect(knownSwitch("lora", R.H3_TURBO_4STEP_LORA.file)).toBe(true);
+    const was = readAccess();
+    saveAccess({ ...was, loras: [...was.loras, R.H3_TURBO_4STEP_LORA.file] });
+    try {
+      expect(accessList().loras.find((l) => l.file === R.H3_TURBO_4STEP_LORA.file)?.on).toBe(false);
+      // Off: the 2K tier still runs; its draft runs on H3's own graph and the finish redraws the draft's clip.
+      const made = gens.createGenerations({ feature: "video", modelId: "oss-minimax-h3", op: "t2v", prompt: "A lighthouse", params: { resolution: "2K", duration: 5 } });
+      const draft = made.find((x) => x.modelId === "oss-minimax-h3")!;
+      expect(draft.request.params?.extra?.latentDraft).toBeUndefined();
+    } finally {
+      saveAccess(was);
+    }
+  });
+
+  it("chains words from an earlier step into the finish too", () => {
+    const [write] = gens.createGenerations({ feature: "canvas", modelId: "oss-text-llm", op: "write", prompt: "A storm over a lighthouse" });
+    const made = gens.createGenerations({ feature: "canvas", modelId: "oss-minimax-h3", op: "t2v", prompt: "{text}", chain: [{ slot: "prompt" }], params: { resolution: "2K", duration: 5 } }, { dependsOn: write.id });
+    const finish = made.find((x) => x.modelId === R.REGEN_MODEL)!;
+    const draft = made.find((x) => x.modelId === "oss-minimax-h3")!;
+    expect(finish.request.chain).toEqual([{ slot: "video" }, { slot: "prompt" }]);
+    expect(finish.request.prompt).toBe("{text}");
+    const deps = db().prepare("SELECT depends_on FROM generations WHERE id = ?").get(finish.id) as { depends_on: string };
+    expect(JSON.parse(deps.depends_on)).toEqual([draft.id, write.id]);
+  });
+
+  it("plans and prices each take's finish in a preview, as the run makes it", () => {
+    const p = gens.previewGeneration({ feature: "video", modelId: "oss-minimax-h3", op: "t2v", prompt: "A lighthouse", params: { resolution: "2K", duration: 5, numOutputs: 2 } });
+    expect(p.steps).toEqual([
+      { model: R.REGEN_MODEL, op: "upscale-video" },
+      { model: R.REGEN_MODEL, op: "upscale-video" },
+    ]);
+    expect(p.notes).toContain(R.H3_2K_STEPS_NOTE);
+    expect(p.costUsd).toBe(0);
+    // 768p is the model alone.
+    expect(gens.previewGeneration({ feature: "video", modelId: "oss-minimax-h3", op: "t2v", prompt: "x", params: { resolution: "768p", duration: 5 } }).steps).toBeUndefined();
+  });
+
+  it("says on Edit video's Enhance item that it runs on your GPU", () => {
+    expect(R.ENHANCE_LABEL).toBe("Enhance (H3 regenerate) · 1080p · on your GPU");
+  });
+
+  it("never takes the 2K hand-off's flags from a client", () => {
+    const parsed = GenerationRequestSchema.parse({
+      feature: "video",
+      modelId: R.REGEN_MODEL,
+      inputs: { video: "/api/files/x.mp4" },
+      params: { resolution: "1440p", extra: { latentFrom: "someonesDraft", latentDraft: true, startSigma: 0.8 } },
+      finishOf: "x",
+    });
+    expect(parsed.params?.extra).toEqual({ startSigma: 0.8 });
+    expect(parsed).not.toHaveProperty("finishOf");
   });
 });

@@ -70,8 +70,7 @@ describe("MiniMax H3 on your GPU: the catalog entry", () => {
     expect(h3.options).toMatchObject({
       aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"],
       durations: [3, 5, 10, 15],
-      // 2K (n7-10): a 768p draft finished by Open-H3 Regenerate (tests/regenerate-more-api.test.ts).
-      resolutions: ["768p", "2K"],
+      resolutions: ["768p"],
       seed: true,
       endFrame: true,
       audio: "always",
