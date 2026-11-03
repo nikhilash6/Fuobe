@@ -2095,6 +2095,25 @@ const open: ModelDef[] = [
       ],
     },
   }),
+  // idol-7 (docs/research/idol-9.md §9): Idol's splat turned into a rough vertex-coloured mesh by core SplatToMesh, in From an
+  // image. Nobody hosts it (fal's speridlabs/idol gives a splat only), so it is open-engine only.
+  o({
+    id: "oss-idol-mesh",
+    name: "Idol 3D quick mesh",
+    vendor: "Speridlabs",
+    family: "idol",
+    kind: "model3d",
+    tagline: "A rough vertex-coloured .glb from one picture, no textures · 8 GB GPU · Apache-2.0 · Built with DINOv3",
+    badges: ["new"],
+    routes: [comfy("image-to-3d", "image-to-mesh-idol", "Idol splat → core Extract Mesh from Splat → vertex-coloured .glb + a 3 s orbit")],
+    options: {
+      seed: true,
+      maxImages: 1,
+      sliders: [{ param: "meshResolution", label: "Mesh detail", min: 128, max: 768, step: 64, default: 384 }],
+      controls: [HI3D_REFINE_CONTROL],
+    },
+    engineNote: "Runs on your GPU only: no cloud service makes this mesh.",
+  }),
   // Round 4 (r4/cinema-3d): Cinema Studio's "Create 3D scene". The mesh is in the photo's own camera space
   // (glTF axes, metres), so the viewer starts where the photo was taken.
   o({

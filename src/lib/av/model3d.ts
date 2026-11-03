@@ -45,6 +45,7 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
       { id: "oss-pixal3d", note: "Most faithful to your photo, with a turntable video" },
       { id: "oss-trellis2", note: "A dependable second choice, with a turntable video" },
       { id: "oss-hunyuan3d-21", note: "The shape only, without colour" },
+      { id: "oss-idol-mesh", note: "Rough mesh, vertex colours, no textures · 8 GB GPU" },
     ],
   },
   multi: {

@@ -4942,7 +4942,8 @@ export const SPEC = [
       sampler: [b('88:6', 'sampler_name')], photoCrop: [b('88:104', 'switch')],
       seed: [b('88:6', 'seed'), b('88:55', 'seed')], orbitFrames: [b('75', 'frames')], meshResolution: [b('93', 'resolution')],
     },
-    outputs: [{ node: '51', kind: 'model3d', role: 'mesh' }, { node: '42', kind: 'video', role: 'turntable' }],
+    // The mesh has no role, as every image-to-3D graph's GLB (the server's finish and the viewer take it as the model).
+    outputs: [{ node: '51', kind: 'model3d' }, { node: '42', kind: 'video', role: 'turntable' }],
     defaults: { cutout: true, photoCrop: false },
     vramGb: 8,
     license:
@@ -4953,7 +4954,7 @@ export const SPEC = [
       'Idol 3D quick mesh: image-to-splat-idol (same node ids, Best settings: 50 Euler steps, cfg 4, 262,144 Gaussians; photoCrop the looser photo crop) with the splat file replaced by core SplatToMesh 93 ' +
       '("Extract Mesh from Splat", comfy_extras/nodes_gaussian_splat.py): a density grid of meshResolution along the longest axis (384 by default, 64-768 in steps of 16; memory and time grow with its cube), ' +
       'kernel 5, no smoothing, level 0.4, components under 500 vertices dropped, and Gaussians under min_opacity 0.02 ignored, which leaves out the near-transparent haze. ' +
-      'SaveGLB 51 writes one self-contained binary GLB (role mesh): vertex colours (COLOR_0) under an unlit material (KHR_materials_unlit), no UVs, no textures, no PBR. ' +
+      'SaveGLB 51 writes one self-contained binary GLB (the model output, no role): vertex colours (COLOR_0) under an unlit material (KHR_materials_unlit), no UVs, no textures, no PBR. ' +
       'The 75-frame orbit video (role turntable) is the splat\'s, thresholded at 0.05; after the job the Fuobe server finishes the GLB like every image-to-3D route (web GLB, pivot at the bottom) ' +
       'and, when Chromium and ffmpeg are there, replaces that video with a turntable of the mesh itself. Mesh quality from Idol splats is unmeasured (idol-9.md §11; scripts/eval/cases/mesh.json). ' +
       'Same weights as image-to-splat-idol (1.32 GB of Idol files plus the shared 2.46 GB). VRAM: vendor peak 7.2 GB in the SDK for the splat; SplatToMesh\'s own peak at 384 unmeasured.',

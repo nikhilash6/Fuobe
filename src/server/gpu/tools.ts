@@ -194,6 +194,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: HI3D_MODEL, op: "refine-3d" },
     ],
   },
+  // idol-7: Image to 3D's quick mesh (From an image, Idol 3D quick mesh): Idol's splat turned into a vertex-coloured mesh.
+  { href: "/image-to-3d?model=oss-idol-mesh", label: "Image to 3D, quick mesh", group: "Images", steps: [{ modelId: "oss-idol-mesh", op: "image-to-3d" }] },
   { href: "/video", label: "Video", group: "Video", config: S.VIDEO_STUDIO },
   // Keyframe animation (Fuobe Animation): Frames mode's Animation style, every gap in one graph on Wan 2.2 with AniSora.
   { href: "/video?model=fuobe-animation", label: "Keyframe animation", group: "Video", steps: [{ modelId: "fuobe-animation", op: "keyframes" }] },
