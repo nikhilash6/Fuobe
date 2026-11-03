@@ -1,23 +1,29 @@
 "use client";
 
-import { Box, Clapperboard, Download, ImageIcon, Loader2, Pause, PersonStanding, Play, Rotate3d, Sparkles, Video } from "lucide-react";
+import { Box, Camera, Clapperboard, Download, ImageIcon, Loader2, Paintbrush, Pause, PersonStanding, Play, Printer, Rotate3d, Sparkles, Video, Wand2 } from "lucide-react";
 import Link from "next/link";
-import { createElement, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { uploadFile, useHydrated } from "@/lib/api";
-import { animateSpinHref, animationName, model3dView, stillOf, type Model3dView } from "@/lib/av/model3d";
+import { uploadFile, useEngine, useHydrated } from "@/lib/api";
+import { animateSpinHref, animationName, model3dView, photorealAngle, photorealBody, stillOf, type Model3dView } from "@/lib/av/model3d";
+import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
+import { useFlyAround } from "@/components/fly-around-run";
 import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { loadModelViewer, TURNTABLE_BACKDROP, useViewerSrc, viewerLook } from "./model-viewer";
 import type { Model3dInfo } from "./model3d-studio";
+import { RetextureDialog } from "./retexture-dialog";
 import { RigDialog } from "./rig-dialog";
+import { PrintDialog } from "./print-dialog";
+import { PoweredByHi3d, RefineDialog } from "./refine-option";
+import { HI3D_NOTICE, canRefine, isRefined } from "@/lib/av/hi3d";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { recordableType, recordTurntable } from "./turntable";
 
 /** Downloads besides the main file, by the name the provider gave them. */
-const FORMAT_LABEL: Record<string, string> = { rigged: "Rigged .glb", walking: "Walk .glb", running: "Run .glb", fbx: ".fbx", splat: "Splat" };
+const FORMAT_LABEL: Record<string, string> = { rigged: "Rigged .glb", walking: "Walk .glb", running: "Run .glb", fbx: ".fbx", splat: "Splat", points: "Points .glb" };
 const formatLabel = (k: string) => FORMAT_LABEL[k] ?? `.${k}`;
 
 /** What the viewer shows of a rig: the result itself, or one of Meshy's walk and run cycles. */
@@ -37,7 +43,7 @@ function rigClips(g: Generation, view: Model3dView): { key: string; label: strin
  * plays its animation). A splat shows its orbit video or picture with the file to download. Then the turntable,
  * Animate the spin and Rig & animate.
  */
-export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean }) {
+export function ModelCard({ g, info, cloudAllowed, refineAllowed = false }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean; refineAllowed?: boolean }) {
   const view = model3dView(g);
   // "preview": the turntable or the still (a splat with an orbit video: the video). "3d": the viewer (a splat: its picture).
   const [show, setShow] = useState<"preview" | "3d">("preview");
@@ -49,6 +55,9 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
   const [recording, setRecording] = useState<number | null>(null);
   const [recorded, setRecorded] = useState<{ url: string; saved?: string } | null>(null);
   const [rigging, setRigging] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [retexturing, setRetexturing] = useState(false);
   const pendingRecord = useRef(false);
   // "View in 3D" unmounts itself: focus moves to the viewer once it's there.
   const focusViewer = useRef(false);
@@ -87,6 +96,33 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
   // From words on the open engine: the Z-Image still the model was built from (a helper step the page hides).
   const drawn = stillOf(g);
   const name = (g.modelName ?? "model").replace(/[^\w .-]+/g, "");
+  // "Film it photoreal" (N7-7): the photo filmed going round the model. Cloud: from the photo along the orbit. Your GPU:
+  // the model recorded here along the same orbit guides the camera (a splat hands its own orbit video).
+  const [engine] = useEngine();
+  const [filming, setFilming] = useState<number | null>(null);
+  const pendingFilm = useRef(false);
+  const photorealStand = engine === "open" ? "/api/files/placeholder.mp4" : undefined;
+  const photoreal = photorealBody(view, engine, photorealStand, drawn);
+  const fly = useFlyAround(photoreal && !view.rigged && (view.glb || view.turntable) ? photoreal : null);
+  const photoSrc = view.photo ?? drawn;
+  const recordFilm = async (el: HTMLElement) => {
+    setFilming(0);
+    try {
+      const blob = await recordTurntable(el as Parameters<typeof recordTurntable>[0], { onProgress: setFilming, frames: PATH_FRAMES, fps: PATH_FPS, angle: (i) => photorealAngle(i) });
+      const asset = await uploadFile(new File([blob], `${name} orbit render.webm`, { type: "video/webm" }));
+      const body = photorealBody({ photo: photoSrc }, "open", asset.url);
+      if (body) {
+        await fly.run.mutateAsync(body);
+        toast.success("Filming the photoreal orbit — it shows up with your 3D models");
+      }
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setFilming(null);
+    }
+  };
+  // The viewer's load listener starts the latest one.
+  const startFilm = useEffectEvent((el: HTMLElement) => void recordFilm(el));
   const label = g.modelName ?? "3D";
   // Behind the viewer: the studio sweep the server's turntable and poster are on, so opening 3D doesn't jump.
   const backdrop = view.material ? TURNTABLE_BACKDROP : undefined;
@@ -122,6 +158,10 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
         pendingRecord.current = false;
         void startRecording(viewer);
       }
+      if (pendingFilm.current) {
+        pendingFilm.current = false;
+        void startFilm(viewer);
+      }
     };
     // A model that can't load won't record either. (A web GLB that fails falls back to the original first.)
     const onError = () => void (onOriginal && (pendingRecord.current = false));
@@ -134,7 +174,7 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
   }, [viewer, startRecording, onOriginal]);
   const switchTo = (v: "preview" | "3d") => {
     // A recording asked for before the model loaded is off once the 3D view is closed.
-    if (v === "preview") pendingRecord.current = false;
+    if (v === "preview") pendingRecord.current = pendingFilm.current = false;
     setShow(v);
   };
   // Recording needs the 3D view: open it and start once the model has loaded.
@@ -143,8 +183,25 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
     pendingRecord.current = true;
     setShow("3d");
   };
+  const film = () => {
+    if (engine === "cloud" || !view.glb) {
+      const body = photorealBody(view, engine, engine === "open" ? view.turntable : undefined, drawn);
+      if (body) fly.run.mutate(body, { onSuccess: () => void toast.success("Filming the photoreal orbit — it shows up with your 3D models") });
+      return;
+    }
+    if (viewer && loaded) return void recordFilm(viewer);
+    pendingFilm.current = true;
+    setShow("3d");
+  };
+  const canFilm = !!photoreal && !view.rigged && (engine === "cloud" || (view.glb ? canRecord && !failed : !!view.turntable));
+  const filmBusy = filming !== null || fly.run.isPending;
   const spin = view.rigged ? null : animateSpinHref(view, recorded?.saved);
-  const notices = info[g.modelId]?.notices ?? [];
+  // Hi3D's results: geometry only, and "Powered by Hi3D 1.0" (linked, as its licence asks) instead of the plain notice.
+  const refined = isRefined(g);
+  const notices = (info[g.modelId]?.notices ?? []).filter((n) => !(refined && n === HI3D_NOTICE));
+  // "Refine this mesh": a finished mesh (not a splat or a rig) with the photo, or the drawn still, it was made from.
+  const refineFrom = view.photo ?? drawn;
+  const refinable = canRefine({ glb: view.glb, photo: refineFrom, splat: view.splat, rigged: view.rigged, refined, openAllowed: refineAllowed }) && g.op !== "splat";
   // A rigged result rigs its source model again with another animation.
   const rigSource = view.rigged ? (g.request.inputs?.model3d ?? view.glb) : view.glb;
   // The radio buttons in the corner: the preview and the 3D view, a rig's clips, or a splat's video and picture.
@@ -326,6 +383,35 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
               <PersonStanding className="size-3.5" /> {view.rigged ? "Another animation" : "Rig & animate"}
             </Button>
           )}
+          {refinable && (
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setRefining(true)}>
+              <Wand2 className="size-3.5" /> Refine this mesh
+            </Button>
+          )}
+          {view.glb && !view.splat && g.op !== "splat" && !view.rigged && (
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setPrinting(true)}>
+              <Printer className="size-3.5" /> Print-ready
+            </Button>
+          )}
+          {view.glb && !view.rigged && !view.splat && g.op !== "splat" && (
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setRetexturing(true)}>
+              <Paintbrush className="size-3.5" /> Retexture
+            </Button>
+          )}
+          {canFilm && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              onClick={film}
+              disabled={filmBusy || !!fly.preview.data?.blocker}
+              title={fly.preview.data?.blocker ?? (engine === "open" ? "The photo filmed going round the model, on your GPU" : "The photo filmed going round the model, in the cloud")}
+            >
+              {filmBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
+              {filming !== null ? `Recording the orbit… ${Math.round(filming * 100)}%` : "Film it photoreal"}
+              {filming === null && fly.price && <span className="text-muted-foreground">· {fly.price}</span>}
+            </Button>
+          )}
           {spin && (
             <Button asChild size="sm" className="rounded-full">
               <Link href={spin} prefetch={false}>
@@ -334,9 +420,23 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
             </Button>
           )}
         </div>
-        {notices.length > 0 && <p className="text-[11px] text-muted-foreground">{notices.join(" · ")}</p>}
+        {refined && <p className="text-[12px] text-muted-foreground">Geometry only: no colour or texture. Set its real size in Print-ready.</p>}
+        {(notices.length > 0 || refined) && (
+          <p className="text-[11px] text-muted-foreground">
+            {notices.join(" · ")}
+            {refined && (
+              <>
+                {notices.length > 0 && " · "}
+                <PoweredByHi3d />
+              </>
+            )}
+          </p>
+        )}
       </div>
+      {refinable && refining && view.glb && refineFrom && <RefineDialog glb={view.glb} photo={refineFrom} open={refining} onOpenChange={setRefining} feature={g.feature} />}
+      {printing && view.glb && <PrintDialog glb={view.glb} name={name} open={printing} onOpenChange={setPrinting} refined={refined} />}
       {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} />}
+      {view.glb && retexturing && <RetextureDialog glb={view.glb} open={retexturing} onOpenChange={setRetexturing} cloudAllowed={cloudAllowed} />}
     </article>
   );
 }

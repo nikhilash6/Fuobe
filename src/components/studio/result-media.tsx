@@ -40,9 +40,12 @@ export function MediaThumb({
     return <TileVideo output={output} poster={videoPoster(g, output)} autoPlay={autoPlay} className={cn("size-full", object, className)} />;
   }
   if (output.kind === "audio") {
+    // A song's stem (vocals, drums…) says which track it is.
+    const stem = typeof output.meta?.stem === "string" && output.meta.stem.trim() ? output.meta.stem.trim() : null;
     return (
       <div className={cn("flex size-full flex-col items-center justify-center gap-3 bg-brand-faint p-4 text-brand-text", className)}>
         <AudioLines className="size-8" />
+        {stem && <span className="max-w-full truncate text-[13px] font-medium first-letter:uppercase">{stem}</span>}
         <audio src={output.url} controls className="w-full max-w-64" onClick={(e) => e.stopPropagation()} />
       </div>
     );

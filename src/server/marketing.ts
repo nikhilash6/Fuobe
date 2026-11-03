@@ -48,7 +48,9 @@ import {
 } from "@/lib/catalog/marketing";
 import { dualEngine } from "@/lib/catalog/engines";
 import { routesFor } from "@/lib/catalog/plan";
-import { themeFrom } from "@/components/ads/layout";
+import { themeFrom, type AdLayout } from "@/components/ads/layout";
+import { adDraft } from "@/lib/layout-surfaces";
+import { LAYOUT_PARAM } from "@/lib/layout-prompt";
 import type { ChainSlot, Engine, GenerationRequest, ModelDef, Operation } from "@/lib/catalog/types";
 import { getBrand, getProduct } from "./brand";
 import { createPipeline, type PipelineStep } from "./chains";
@@ -99,6 +101,8 @@ export const MarketingBody = z.object({
   voiceSample: FILE.optional(),
   script: z.string().max(2000).optional(),
   website: z.string().max(300).optional(),
+  /** "Words drawn by the model" (formats with words): the headline and button drawn in place from a layout. */
+  drawnWords: z.boolean().optional(),
 });
 export type MarketingInput = z.infer<typeof MarketingBody>;
 
@@ -304,7 +308,9 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     }
   }
   // Models switched off in Settings → Models & licences aren't picked while another choice is on.
-  const listed = formatModels(f, input.engine, { product: hasProduct, avatar: !!input.avatar });
+  // "Words drawn by the model": only where the format has words, on a picture.
+  const drawn = !!input.drawnWords && !!f.text && f.pipeline === "image";
+  const listed = formatModels(f, input.engine, { product: hasProduct, avatar: !!input.avatar }, drawn);
   // A choice listed only to say it runs on your GPU (the Original's Standalone shot in the cloud) is refused in its words.
   const elsewhere = listed.find((c) => c.unavailable && c.id === input.modelId);
   if (elsewhere) throw new PlanError(`${need(elsewhere.id).name} makes ${f.name} shots on your GPU only (${elsewhere.unavailable}): switch to your GPU, or pick another model`);
@@ -319,13 +325,13 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
   if (f.pipeline === "image") {
     const modelId = input.modelId && choices.some((c) => c.id === input.modelId) ? input.modelId : choices[0].id;
     const model = need(modelId);
-    const onTop = wordsOnTop(input.engine, modelId);
+    const onTop = wordsOnTop(input.engine, modelId, drawn);
     const refs = [
       ...(f.product !== "none" ? productImages.slice(0, 1) : []),
       ...(input.avatar && f.avatar !== "none" ? [input.avatar] : []),
       ...(input.reference ? [input.reference] : []),
       // The logo as a reference lets a partner model draw it; otherwise it is set on top in the browser.
-      ...(!onTop && f.text && brand?.logo && !isSvg(brand.logo) ? [brand.logo] : []),
+      ...(!onTop && !drawn && f.text && brand?.logo && !isSvg(brand.logo) ? [brand.logo] : []),
     ];
     const max = model.options.maxImages ?? (supportsOp(model, "edit") ? 1 : 0);
     let images = refs.slice(0, Math.max(0, max));
@@ -336,6 +342,10 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
       op = "edit";
     }
     if (op === "t2i") images = [];
+    // Words drawn by the model: the brand's own logo goes after the photos to a model with room for it, so the layout's
+    // logo box is the real logo (a model that draws from words alone gets no logo box: it would make one up).
+    const drawnLogo = drawn && op === "edit" && images.length > 0 && images.length < max ? rasterLogo(brand) : undefined;
+    if (drawnLogo) images = [...images, drawnLogo];
     const headline = input.headline?.trim() || (tpl?.headline ? fill(tpl.headline, product, brand) : "");
     const cta = input.cta?.trim() || (tpl?.cta ? fill(tpl.cta, product, brand) : "");
     const person = input.avatar ? "the person from the reference photo (same face, hair, skin tone and build)" : "a natural-looking model who suits the product";
@@ -353,9 +363,11 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
       scene,
       productLine(product),
       hasProduct && op === "edit" && KEEP_PRODUCT,
+      drawnLogo && "The last reference image is the brand's logo: place it as it is, in its box",
       input.reference && "Use the last reference photo for the setting and light",
       prompt,
-      textLine(f, onTop, headline, cta, brand),
+      // Drawn words come from the layout's text boxes, in their places.
+      !drawn && textLine(f, onTop, headline, cta, brand),
       brandText,
     );
     // bria-product-shot and Product Photography take the scene alone.
@@ -365,6 +377,24 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     meta.overlay = onTop && f.text && (headline || cta) ? { headline: headline || undefined, cta: cta || undefined } : null;
     // Words set in the browser go on one picture per run: a batch is that many runs (runsFor), each composed.
     const batch = meta.overlay ? 1 : Math.min(input.batch ?? 1, f.batch);
+    // The copy's places as the browser would set them (frame for posters, overlay for the rest), drawn by the model.
+    const layout =
+      drawn && (headline || cta)
+        ? adDraft({
+            ratio: aspect ?? f.defaultAspect,
+            layout: overlayLayout(f.id) as AdLayout,
+            content: { headline, cta: cta || undefined },
+            brand,
+            mode: "words",
+            logo: !!drawnLogo,
+            product: product ? `${product.name}${product.description ? `, ${product.description.replace(/\s+/g, " ").trim().slice(0, 160)}` : ""}` : scene || prompt || "The subject of the picture",
+            caption: "",
+            meta: [f.id === "poster" ? "poster" : "advertising", "graphic design"],
+          })
+        : undefined;
+    if (drawn && !layout) notes.push("Add a headline or a button to have them drawn in place");
+    if (layout) notes.push(`${model.name} draws your headline and button in their places, so the lettering is the model's, not your brand fonts`);
+    if (layout && hasProduct && op === "t2i") notes.push(`${model.name} draws your product from its name and description, not from your photo`);
     if (onTop && f.text) notes.push("Your headline is set over the picture in your brand fonts, so the words come out exact");
     // On the user's GPU a Standalone shot of one product photo is cut out and relit into the scene (White_to_Scene).
     const productShot = open && modelId === MARKETING_IMAGE_MODEL && f.id === "product-standalone" && op === "edit" && images.length === 1;
@@ -386,7 +416,7 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
             op,
             prompt: model.options.promptless ? undefined : scenePrompt.slice(0, MAX_PROMPT),
             inputs: images.length ? { images } : undefined,
-            params: { aspectRatio: aspect, numOutputs: batch, ...(palette && { palette }), ...(productShot && { extra: { productShot: true } }) },
+            params: { aspectRatio: aspect, numOutputs: batch, ...(palette && { palette }), ...((productShot || layout) && { extra: { ...(productShot && { productShot: true }), ...(layout && { [LAYOUT_PARAM]: layout }) } }) },
             title,
             batchTitle: title,
           },

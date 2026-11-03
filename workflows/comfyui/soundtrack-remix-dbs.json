@@ -5,7 +5,7 @@
       "audio": "input.wav"
     },
     "_meta": {
-      "title": "Soundtrack to remix (audio, or a video with sound)"
+      "title": "Soundtrack to clean (audio, or a video with sound)"
     }
   },
   "2": {
@@ -56,7 +56,7 @@
         "3",
         0
       ],
-      "volume": 0
+      "volume": -18
     },
     "_meta": {
       "title": "Music level (dB)"
@@ -69,7 +69,7 @@
         "3",
         1
       ],
-      "volume": 0
+      "volume": -18
     },
     "_meta": {
       "title": "Effects level (dB)"
@@ -121,6 +121,18 @@
     },
     "_meta": {
       "title": "The remix"
+    }
+  },
+  "10": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "3",
+        3
+      ]
+    },
+    "_meta": {
+      "title": "DBS report"
     }
   }
 }

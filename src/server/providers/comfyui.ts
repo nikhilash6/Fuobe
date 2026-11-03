@@ -40,6 +40,7 @@ import {
   type ManifestOutput,
   type ManifestWorkflow,
 } from "@/lib/comfy";
+import { HI3D_PARAM, strictHi3dResolution } from "@/lib/av/hi3d";
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
@@ -52,6 +53,8 @@ import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
 import { dbsChannelsFor, dbsModelFor, dbsSurroundBed, installedDbs, surroundSource, type DbsModel } from "@/lib/av/split";
 import { installedReuse, NO_REUSE_PACK, rateFor, reuseFileFor, STRENGTH_DB, type ReuseModel } from "@/lib/av/clean-voice";
 import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins";
+import { expandInbetweenWorkflow, type InbetweenPass } from "@/lib/av/inbetween-graph";
+import { gapPrompt, requestTiming, type InbetweenTiming } from "@/lib/inbetween";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
 import { exportValues, framesPerPass, hdrColorSpace, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
 import { guessKind } from "@/lib/catalog/payload";
@@ -62,7 +65,8 @@ import { STUDIO_WORKFLOWS } from "@/lib/catalog/swap-studio-plan";
 import { maskGraph, segmentGraph, type MaskGraphOptions, type SegmentGraphOptions } from "@/lib/swap-studio-graphs";
 import { RESTORE_EXTRA_KEYS, restoreGraph, restoreJob, type RestoreJob } from "@/lib/restore-graph";
 import { getMaker, makerPrompt, OPEN_TARGET_PROBLEM, ORIGINALS, swapTarget } from "@/lib/catalog/genjutsu";
-import { CLICK_OPEN_PROBLEM, HAND_OFF, REMOVE_SCENE, targetPhrase } from "@/lib/catalog/remove-object";
+import { CLICK_OPEN_PROBLEM, HAND_OFF, REMOVE_SCENE, REVIEW_EXTRA, reuseOf, reviewOfRun, targetPhrase, type RemovalReview } from "@/lib/catalog/remove-object";
+import { H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
 import type { GenInput, MediaKind, ModelRoute, Operation } from "@/lib/catalog/types";
 import { imageSize } from "@/lib/image-size";
 import { probeMedia, type MediaInfo } from "@/lib/media-probe";
@@ -71,7 +75,7 @@ import { getSetting, isCandidate, savedSetting } from "../settings";
 import { decodePng, encodePng } from "../png";
 import { probeAvi } from "../avi-probe";
 import { probeWebm } from "../webm-probe";
-import { adoptFile, readRef, scratchDir } from "../storage";
+import { adoptFile, contentTypeFor, readRef, saveFile, scratchDir } from "../storage";
 import { CONNECT_GPU_MESSAGE } from "@/lib/guest-access";
 import { discardBody, fetchPublic, RemoteFetchError } from "../remote-fetch";
 import { zipToFile } from "../zip";
@@ -446,7 +450,7 @@ function forget(promptId: string) {
 // Outputs
 
 type HistoryFile = { filename: string; subfolder: string; type: string };
-type HistoryEntry = {
+export type HistoryEntry = {
   prompt?: [number, string, ComfyWorkflow, ...unknown[]];
   status?: { status_str?: string; completed?: boolean; messages?: [string, Record<string, unknown>][] };
   outputs?: Record<string, Record<string, unknown>>;
@@ -1168,7 +1172,11 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
 const OVER_LIMIT: Record<string, (s: number) => string> = {
   "still-motion": (s) => `Ken Burns on the open engine makes up to ${s} s per clip — split a longer move into pieces`,
   "audio-loop": (s) => `Loops on the open engine run up to ${s / 60} minutes (${s} s)`,
+  music: (s) => `This model writes songs up to ${s % 60 ? `${s} s` : `${s / 60} minutes`} on your GPU: pick a shorter length`,
 };
+
+/** Songs longer than this decode in tiles on your GPU (MiniMax Music 3's switch). */
+export const TILED_SONG_SECONDS = 120;
 
 /**
  * Turn a canonical request into the exact ComfyUI prompt: picks the workflow variant, maps Fuobe's inputs
@@ -1208,6 +1216,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     images: input.images?.length ?? 0,
     format: input.format,
     audio2: !!audio2 || !!extra.audio2,
+    audio: !!input.audio,
     extra,
     has: (id) => loadManifest().workflows.some((w) => w.id === id),
   });
@@ -1237,6 +1246,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     video3: clips[2],
     video4: clips[3],
     audio: input.audio,
+    // A 3D model to work on (Hi3D's refine reads the coarse GLB from ComfyUI's input folder, where it was uploaded).
+    model3d: input.model3d,
     seed: input.seed !== undefined && input.seed >= 0 ? input.seed : randomSeed(),
   };
   // A multi-view 3D model: each photo goes to its side.
@@ -1399,6 +1410,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     values.tracks = JSON.stringify(tracksFor(paths, Number(values.width ?? d.width ?? 832), Number(values.height ?? d.height ?? 480), frames));
   }
   if (b.tags && !b.prompt) values.tags = input.prompt;
+  // MiniMax Music 3: a song over 2 minutes decodes in tiles (much less VRAM), as the template's Tiled decode switch offers.
+  if (b.tiledDecode && extra.tiledDecode === undefined) values.tiledDecode = Number(values.duration ?? d.duration ?? 0) > TILED_SONG_SECONDS;
   if (b.description && !extra.description) values.description = input.prompt;
   if (b.numLayers && input.numLayers) values.numLayers = Math.max(1, Math.min(Number(manifest.limits?.maxLayers ?? 10), Math.round(input.numLayers)));
 
@@ -1615,6 +1628,22 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   const keepRole: string | undefined = ctx.op === "bg-remove-video" ? input.matteOutput : undefined;
 
   if (b.filenamePrefix) values.filenamePrefix = `fuobe/${ctx.generationId}`;
+  // Keyframe animation: every gap's timing and words (src/lib/inbetween.ts); the graph is rewritten for the keyframes below.
+  let inbetween: InbetweenPass[] | null = null;
+  if (manifest.expand === "keyframes") {
+    let timing: InbetweenTiming;
+    try {
+      timing = requestTiming(extra, images.length, input.keyframeTimes, "open");
+    } catch (e) {
+      throw new ProviderError((e as Error).message);
+    }
+    const stillMouth = extra.stillMouth === true;
+    const seed = Number(values.seed);
+    inbetween = timing.gaps.map((g, i) => ({ frames: g.frames, speed: g.speed, prompt: gapPrompt(input.prompt, g, stillMouth), seed: seed + i }));
+    Object.assign(values, { fps: timing.fps, frames: timing.gaps[0].frames, prompt: inbetween[0].prompt, image: images[0], endImage: images[1] });
+    delete extra.inbetween;
+    delete extra.stillMouth;
+  }
   const cues = manifest.expand === "captions" ? captionCues(input, extra) : [];
   delete extra.cues;
   delete extra.wordsPerCaption;
@@ -1671,6 +1700,30 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (b.sigmas && LIGHTNING_GRAPHS.has(manifest.id) && extra.sigmas === undefined) {
     const canvas = lightningCanvas(manifest.capability, values, ctx.media?.(String(values.image ?? "")));
     if (canvas) values.sigmas = lightningSigmas(canvas.width, canvas.height);
+  }
+  // Hi3D's refine: the mesh to refine is needed, and the resolution is one the model takes (512, 1024, 1536).
+  if (b.model3d && !values.model3d) throw new ProviderError("Add the 3D model to refine");
+  if (b.meshResolution && extra[HI3D_PARAM] !== undefined) {
+    const r = strictHi3dResolution(extra[HI3D_PARAM]);
+    if (r === null) throw new ProviderError("Hi3D refines at 512, 1024 or 1536");
+    extra[HI3D_PARAM] = r;
+  }
+  // H3 Person Removal's window review (H3 Relay's Review Windows): "Redo from here" sends the same graph again with
+  // window controls that lock the windows before it to their checkpoints. The Relay keeps those only while the graph,
+  // its input files and its save prefix are the same, so a reroll names the original run's inputs and prefix (set by
+  // the server from that run, on the studio's own ComfyUI only: never an account's, a link's or a computer's).
+  let reviewInputs: RemovalReview["reuse"] | undefined;
+  if (manifest.id === H3_REMOVAL_WORKFLOW) {
+    const reuse = reuseOf(extra[REVIEW_EXTRA.reuse]);
+    delete extra[REVIEW_EXTRA.reuse];
+    const controls = extra[REVIEW_EXTRA.controls];
+    if (controls !== undefined && (typeof controls !== "string" || controls.length > 131_072)) delete extra[REVIEW_EXTRA.controls];
+    const own = !ownGpu() && !computerScope() && !tenantAccount();
+    if (reuse && own) Object.assign(values, { video: reuse.video, image: reuse.image, filenamePrefix: reuse.prefix });
+    // Only the studio's own ComfyUI keeps a review (its previews are fetched from there; nothing else can be redone).
+    if (own && typeof values.video === "string" && typeof values.image === "string" && typeof values.filenamePrefix === "string") {
+      reviewInputs = { video: values.video, image: values.image, prefix: values.filenamePrefix };
+    }
   }
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
   // SeedVR2's `scale` multiplies the picture before one diffusion pass over all of it, and its graph is made for up to
@@ -1820,6 +1873,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       throw new ProviderError((e as Error).message);
     }
   }
+  // Keyframe animation: one pass per gap on the shared loaders, every keyframe loaded once.
+  if (inbetween) {
+    try {
+      wf = expandInbetweenWorkflow(wf, images, inbetween);
+    } catch (e) {
+      throw new ProviderError((e as Error).message);
+    }
+  }
   // Joins of more clips than the template binds: one loader per clip, in one prompt.
   try {
     if (manifest.expand === "videos" && clips.length > 2) wf = expandVideoJoinWorkflow(wf, clips);
@@ -1840,7 +1901,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     manifest,
     workflow: wf,
     // The seed the graph drew with (one Fuobe picked when none was asked): its pictures keep it, so Edit layout redraws the same one.
-    meta: { workflowId: manifest.id, nodeCount: Object.keys(wf).length, prefix: `fuobe/${ctx.generationId}`, ...(metaBatch ? { metaBatch: true } : {}), ...(b.seed && typeof values.seed === "number" ? { seed: values.seed } : {}) },
+    meta: {
+      workflowId: manifest.id,
+      nodeCount: Object.keys(wf).length,
+      prefix: `fuobe/${ctx.generationId}`,
+      ...(metaBatch ? { metaBatch: true } : {}),
+      ...(b.seed && typeof values.seed === "number" ? { seed: values.seed } : {}),
+      ...(reviewInputs ? { reviewInputs } : {}),
+    },
   };
 }
 
@@ -1941,6 +2009,55 @@ async function followMetaBatch(prefix: string, manifest: ManifestWorkflow | unde
     if (files.length) return files;
   }
   return null;
+}
+
+/** A window preview H3 Relay writes (a 512 px clip or still): anything bigger isn't kept. */
+const WINDOW_PREVIEW_MAX_BYTES = 64 * 2 ** 20;
+
+/**
+ * H3 Person Removal: H3 Relay's review of the run (each window's checkpoint, seed and preview) on the video it made, as
+ * meta.review plus the previews as meta.artifacts. The previews are copied from ComfyUI here, with its token, into the
+ * generation's files (a local or LAN ComfyUI isn't fetched by link later, and raw ComfyUI links never reach a page). A
+ * preview that can't be copied is left out; the window can still be redone. Nothing when the Relay didn't report a run
+ * (an older pack), the inputs can't be sent again, or the run wasn't on the studio's own ComfyUI.
+ */
+export async function withRemovalReview(entry: HistoryEntry, outputs: ComfyOutput[], reuseMeta: unknown, worker: ComfyWorker, generationId: string): Promise<ComfyOutput[]> {
+  if (ownGpu() || computerScope() || tenantAccount()) return outputs;
+  const reuse = reuseOf(reuseMeta);
+  const runs = Object.values(entry.outputs ?? {}).flatMap((ui) => (Array.isArray(ui?.h3_removal_run) ? ui.h3_removal_run : []));
+  const runId = runs.find((r): r is string => typeof r === "string" && /^[0-9a-f]{32}$/.test(r));
+  const at = outputs.findIndex((o) => o.kind === "video");
+  if (!reuse || !runId || at < 0) return outputs;
+  try {
+    const run = await comfyJson<unknown>(`/h3_relay/removal/previews?${new URLSearchParams({ workflow_id: "", node_id: "review", run_id: runId })}`, worker);
+    const read = reviewOfRun(run, reuse, (f) => `/view?${new URLSearchParams(f)}`);
+    if (!read) return outputs;
+    const kept: Record<string, string> = {};
+    for (const [key, view] of Object.entries(read.artifacts)) {
+      try {
+        const res = await comfyFetch(view, {}, worker);
+        const size = Number(res.headers.get("content-length") ?? 0);
+        if (!res.ok || size > WINDOW_PREVIEW_MAX_BYTES) {
+          discardBody(res);
+          continue;
+        }
+        const data = Buffer.from(await res.arrayBuffer());
+        if (!data.length || data.length > WINDOW_PREVIEW_MAX_BYTES) continue;
+        const name = new URLSearchParams(view.split("?")[1]).get("filename") ?? undefined;
+        const type = res.headers.get("content-type");
+        const contentType = type && type !== "application/octet-stream" ? type.split(";")[0] : contentTypeFor(name ?? "", "application/octet-stream");
+        kept[key] = saveFile({ data, contentType, name, source: "generation", generationId: generationId || undefined }).url;
+      } catch {
+        // this window shows no preview
+      }
+    }
+    const review = { ...read.review, windows: read.review.windows.map((w) => ({ ...w, video: w.video && kept[w.video] ? w.video : undefined, poster: w.poster && kept[w.poster] ? w.poster : undefined })) };
+    const o = outputs[at];
+    const artifacts = { ...((o.meta?.artifacts as Record<string, string> | undefined) ?? {}), ...kept };
+    return outputs.map((x, i) => (i === at ? { ...x, meta: { ...x.meta, review, artifacts } } : x));
+  } catch {
+    return outputs;
+  }
 }
 
 /** Upload a file to a worker's input folder; returns the name LoadImage / LoadAudio / LoadVideo take there. */
@@ -2271,6 +2388,7 @@ export const comfyProvider: ProviderAdapter = {
       }
       const seed = typeof meta.seed === "number" ? meta.seed : undefined;
       if (seed !== undefined) outputs = outputs.map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, seed } } : o));
+      if (manifest?.id === H3_REMOVAL_WORKFLOW) outputs = await withRemovalReview(entry, outputs, meta.reviewInputs, worker, String(meta.generationId ?? String(meta.prefix ?? "").replace(/^fuobe\//, "")));
       return { state: "succeeded" as const, outputs: await withLayerBoxes(outputs) };
     };
     const isDone = (e: HistoryEntry | undefined): e is HistoryEntry => !!e && (!!e.status?.completed || e.status?.status_str === "success" || e.status?.status_str === "error");

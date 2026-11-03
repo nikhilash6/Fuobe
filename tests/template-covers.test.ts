@@ -99,7 +99,8 @@ describe("the template covers manifest", () => {
         lines.push(`  ${JSON.stringify(key)}: ${JSON.stringify(gen.slimEntry(key, { poster: e.poster, ...(e.video && { video: e.video }), ...(e.at && { at: e.at }), ...(e.frames && { frames: e.frames }) }))}`);
       }
     }
-    expect(lines).toHaveLength(229);
+    // 229 + Keyframes → animation (inbetweening).
+    expect(lines).toHaveLength(230);
     const text = `{\n${lines.join(",\n")}\n}`;
     expect(text.length).toBeLessThan(36_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);

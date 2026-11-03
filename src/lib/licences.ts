@@ -111,7 +111,7 @@ export function licenceTerms(text: string): { flags: LicenceFlag[]; excludes?: s
   const noWeights = /^(n\/a|no model)\b/i.test(text.trim());
   const nonCommercial = /NON-COMMERCIAL/.test(text) || /^CC-BY-NC/.test(text.trim());
   const excludes = /\bEXCLUDES\s+([^);]+)/.exec(text)?.[1].trim();
-  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Terms of Use|free below|below US\$/i.test(text);
+  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Hi3D Open License|Terms of Use|free below|below US\$/i.test(text);
   const flags: LicenceFlag[] = [];
   if (nonCommercial) flags.push("non-commercial");
   if (excludes) flags.push("territory");
@@ -292,7 +292,11 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /IndexTTS-2 Model Use License/, name: "bilibili IndexTTS-2 Model Use License", class: "conditions" },
   { re: /Llama 3\.1 Community License/, name: "Llama 3.1 Community License", class: "conditions", url: "https://www.llama.com/llama3_1/license/" },
   { re: /DINOv3 License/, name: "DINOv3 License", class: "conditions" },
+  // Hi3D 1.0 (hi3d-refine): commercial use; above 200,000 monthly users or US$1M monthly revenue a separate licence, and
+  // "Powered by Hi3D 1.0" shown with its results.
+  { re: /Hi3D Open License/, name: "Hi3D Open License Agreement 1.0", class: "conditions", url: "https://huggingface.co/hi3d-official/Hi3Dv1.0/blob/d502e938cbedc6e87aba8884614c5ca6d177a4b6/LICENSE" },
   // Before SAM's: the H3 workflows' text names both, and the territory catch is the one that counts.
+  { re: /MiniMax-Music3 Community License/, name: "MiniMax-Music3 Community License", class: "conditions", url: "https://huggingface.co/MiniMaxAI/MiniMax-Music3/blob/1b525ccb685ae809f33027c51c351eeb5833cf72/LICENSE" },
   { re: /MiniMax H3 Community License/, name: "MiniMax H3 Community License", class: "regions", url: "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE" },
   { re: /SAM License/, name: "Meta SAM License", class: "conditions" },
   { re: /OpenRAIL\+\+-M/, name: "CreativeML OpenRAIL++-M", class: "conditions" },
@@ -535,6 +539,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "LBH-123-AI's H3 latent upscaler nodes (the Open-H3 Regenerate nodes call them by name); MIT code, copyright (c) 2026 LBH-123-AI. Its upscaler weights are Apache-2.0",
   }),
+  // Hi3D 1.0 mesh refinement (hi3d-refine), opt-in in install-comfyui.sh (HI3D=1).
+  pack("Comfyui-Hi3d-T8", "https://github.com/T8mars/Comfyui-Hi3d-T8/tree/73848490976e6a9b0c735ce02984c03866a495e7", {
+    name: "MIT",
+    class: "conditions",
+    url: SPDX("MIT"),
+    note: "T8star's Hi3D nodes (model loader, mesh loader, refine); MIT code. The Hi3D code it vendors and the Hi3D weights are under the Hi3D Open License Agreement 1.0: commercial use, a separate licence above 200,000 monthly users or US$1M monthly revenue, and \"Powered by Hi3D 1.0\" shown with its results",
+  }),
   // Clean up voice: Fuobe's own pack, in this repository at its pinned commit (comfy-nodes/ComfyUI-RE-USE).
   pack("ComfyUI-RE-USE", "https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE", {
     name: "MIT",
@@ -578,6 +589,12 @@ export const ATTRIBUTIONS: Attribution[] = [
     licence: "OpenMDW-1.1",
     url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE",
     note: "Trained in part on WSJ (LDC) and an internal NVIDIA set (model card). The older nvidia/RE-USE repository is non-commercial (NSCLv1); Fuobe uses only the NemotronLabs repositories.",
+  },
+  {
+    for: "The Layout Poster skill and Plan layout",
+    text: "Adapted from MOSS-Image's prompt-enhancer skill and its layout reference (commit 2b46b1e), copyright OpenMOSS",
+    licence: "Apache-2.0",
+    url: "https://github.com/OpenMOSS/MOSS-Image",
   },
 ];
 

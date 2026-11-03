@@ -12,7 +12,10 @@ import { SHORTS_MODELS } from "@/lib/catalog/shorts";
 import type { ChainSlot, Engine, GenerationRequest, Operation } from "@/lib/catalog/types";
 import { TOOL_MODELS } from "@/lib/layers";
 import { planCinema } from "@/lib/catalog/cinema";
+import { FLY_VIEWS_MAX, planFlyAround } from "@/lib/catalog/fly-around";
+import { PATH_PRESETS } from "@/lib/camera-path";
 import { createPipeline, type PipelineStep } from "../chains";
+import { getEraser, planRemoval, REMOVE, removalTitle } from "@/lib/catalog/remove-object";
 import { blockoutFromFile, cinemaContext } from "../cinema-generate";
 import { db } from "../db";
 import { chooseRoute, ConnectComfyError, createGenerations, outputKind, previewChained } from "../generations";
@@ -160,6 +163,14 @@ const RestoreInput = z.object({
   resolution: z.enum(["720p", "1080p"]).optional().describe("Cloud size (default 720p)."),
 });
 
+const RemovePersonInput = z.object({
+  video: ref.describe("The clip to remove someone from."),
+  who: z.string().max(200).describe("Who to remove, as SAM 3.1 should find them: 'the man in the grey shirt', 'the woman on the left'."),
+  start: z.number().min(0).max(3600).optional().describe("Seconds into the clip where the part starts (default 0)."),
+  end: z.number().min(0).max(3600).optional().describe("Seconds where it ends (default the clip's end; up to 60 s at a time)."),
+  mask_grow: z.number().int().min(0).max(64).optional().describe("Grow the person's mask by this many pixels (default 5): more covers hands, hair and shadows, but H3 invents more background."),
+});
+
 const BlockoutInput = z.object({
   video: ref.describe("The grey-box blockout: a render from Blender, Unreal, Cinema 4D… (MP4 or MOV for the cloud), 2–60 s. It sets the camera, blocking and timing."),
   depth: ref.optional().describe("Your GPU: the blockout's depth pass (near = bright). Without it Depth Anything 3 reads the depth from the grey box."),
@@ -188,6 +199,7 @@ const BlockoutInput = z.object({
 export type LayersToolInput = z.infer<typeof LayersInput>;
 export type BlockoutToolInput = z.infer<typeof BlockoutInput>;
 export type RestoreToolInput = z.infer<typeof RestoreInput>;
+export type RemovePersonToolInput = z.infer<typeof RemovePersonInput>;
 export type RestyleToolInput = z.infer<typeof RestyleInput>;
 export type DubToolInput = z.infer<typeof DubInput>;
 export type FacelessToolInput = z.infer<typeof FacelessInput>;
@@ -203,6 +215,7 @@ export const STUDIO_ROUTES: {
   create_ads?: StudioRoute<AdsToolInput>;
   add_captions?: StudioRoute<CaptionsToolInput>;
   restore_video?: StudioRoute<RestoreToolInput>;
+  remove_person?: StudioRoute<RemovePersonToolInput>;
 } = {};
 
 // ---------------------------------------------------------------------------
@@ -711,6 +724,41 @@ const restoreVideo = defineTool({
 });
 
 /**
+ * A clip Remove a person can't read (its length and size unknown): the same H3 removal as separate steps in the Library,
+ * on the part asked for (else up to a minute from its start), without its sound.
+ */
+function removePersonSteps(i: RemovePersonToolInput): PipelineStep[] {
+  const start = i.start ?? 0;
+  const plan = planRemoval({
+    engine: "open",
+    mode: "type",
+    eraser: getEraser("oss-h3-person-remove")!,
+    title: removalTitle({ mode: "type", prompt: i.who }),
+    source: { url: i.video, hasAudio: false },
+    range: { start, end: i.end ?? start + REMOVE.maxSeconds },
+    prompt: i.who,
+    ...(i.mask_grow !== undefined && { maskGrow: i.mask_grow }),
+  });
+  return plan.steps.map((s) => ({ key: s.key, request: { ...s.request, feature: s.request.feature ?? "assist" }, ...(s.after?.length && { after: s.after, chain: s.chain }) }));
+}
+
+/** Remove a person (o/person-remover-plus): Video tools → Remove a person, H3 Person Removal on your GPU. */
+const removePerson = defineTool({
+  name: "remove_person",
+  description:
+    "Remove a person from a video and rebuild the scene behind them — Fuobe's Remove a person (Video tools → Remove a person): MiniMax H3 with Akatz Labs' Person Remover LoRA on your GPU (open source, free), from a clean first frame Qwen-Image 2.1 makes, in 22-frame windows; the clip's sound is kept. " +
+    "It runs on your GPU only (24 GB with offloading and the H3 Relay nodes). In the studio the user can check the green mask first and redo any weak window. For objects, or on the cloud, use generate with a remove-object model. Gated by the same approval card as generate.",
+  schema: RemovePersonInput,
+  gated: true,
+  title: (i) => `Remove · ${i.who.slice(0, 60)}`,
+  place: (i, ctx) => placeFor(STUDIO_ROUTES.remove_person, i, ctx),
+  plan: (i, ctx) => planVia("remove_person", STUDIO_ROUTES.remove_person, i, ctx, () => planSteps("remove_person", removePersonSteps(i))),
+  async run(i, ctx) {
+    return runVia(STUDIO_ROUTES.remove_person, i, ctx, "Started removing the person", () => startPipeline("Remove a person", removePersonSteps(i), removalTitle({ mode: "type", prompt: i.who })));
+  },
+});
+
+/**
  * Blockout to film (package blockout-film): Cinema's Blockout plan (src/lib/catalog/cinema.ts planBlockout), run as a
  * pipeline in the Library: one call or shots cut at the beats and joined in the cloud, 81-frame depth windows on the GPU.
  */
@@ -777,10 +825,73 @@ const blockoutFilm = defineTool({
   },
 });
 
-export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, blockoutFilm];
+// ---------------------------------------------------------------------------
+// Fly around (build plan N7-7): a still filmed along an exact camera path
+
+export const FlyAroundToolInput = z.object({
+  image: ref.describe("The still to film: the clip's first frame (a character, a product, a scene)."),
+  views: z.array(ref).max(FLY_VIEWS_MAX).optional().describe("Cloud only: other pictures of the same subject from other sides; MiniMax H3 Max takes them as references (the path then goes in words)."),
+  preset: z
+    .enum(PATH_PRESETS.map((p) => p.id) as [string, ...string[]])
+    .optional()
+    .describe(`A ready move: ${PATH_PRESETS.map((p) => `${p.id} (${p.name})`).join(", ")}. Leave it out to give the orbit's numbers instead.`),
+  degrees: z.number().min(30).max(360).optional().describe("An exact orbit: how far round the subject, 30–360° (default 360)."),
+  direction: z.enum(["cw", "ccw"]).optional().describe("An exact orbit's direction seen from above: cw moves the camera round to the left, ccw to the right (default ccw)."),
+  tilt: z.number().min(0).max(20).optional().describe("An exact orbit's height tilt, 0–20°: the ring rises over the first half turn and dips below eye level over the second."),
+  pulse: z.boolean().optional().describe("An exact orbit moves 25% in and out twice on the way round."),
+  prompt: z.string().max(1500).optional().describe("Motion words: what the subject does while the camera moves (the camera's own move is set by the path)."),
+  duration: z.number().min(1).max(15).optional().describe("Cloud only: seconds (default 5). Your GPU always films about 5 s."),
+});
+export type FlyAroundToolInput = z.infer<typeof FlyAroundToolInput>;
+
+/** The fly-around's steps as a pipeline in the Library (src/lib/catalog/fly-around.ts). */
+function flyAroundSteps(i: FlyAroundToolInput, ctx: ToolContext): PipelineStep[] {
+  const engine = engineOf(ctx);
+  const exact = !i.preset || i.degrees !== undefined || i.direction !== undefined || i.tilt !== undefined || i.pulse !== undefined;
+  const plan = planFlyAround({
+    engine,
+    image: i.image,
+    views: i.views,
+    ...(exact ? { orbit: { degrees: i.degrees ?? 360, direction: i.direction ?? "ccw", tilt: i.tilt ?? 0, pulse: i.pulse ? 0.25 : 0 } } : { preset: i.preset }),
+    prompt: i.prompt,
+    duration: i.duration,
+    feature: "fly-around",
+  });
+  if (plan.blocker) throw new Error(plan.blocker);
+  return plan.steps.map((s) => ({ key: s.key, request: s.request, ...(s.after?.length && { after: s.after }) }));
+}
+
+const flyAround = defineTool({
+  name: "fly_around",
+  description:
+    "Film a still along an exact camera path: an orbit set by numbers (degrees, direction seen from above, a height tilt, a radius pulse) or a ready move (Orbit 360°, arcs, a tilted ring, a figure of eight, dollies, trucks) — Fuobe's Fly around. " +
+    "In the cloud MiniMax H3 Max camera controls follows the path as keyframes from the still (5 s at 768P is $0.40 at list price); with other views of the subject, MiniMax H3 Max takes them as references and the path goes in words. " +
+    "On your GPU MoGe 2 measures the still's depth, the studio renders the path through it, and Wan 2.1 with Uni3C films the still along that render: free, about 5 s, a large GPU (about 48 GB). Gated by the same approval card as generate.",
+  schema: FlyAroundToolInput,
+  gated: true,
+  title: (i) => (i.preset ? `Fly around: ${PATH_PRESETS.find((p) => p.id === i.preset)?.name ?? i.preset}` : `Fly around: ${i.degrees ?? 360}°`),
+  plan: (i, ctx) => {
+    try {
+      return planSteps("fly_around", flyAroundSteps(i, ctx));
+    } catch (e) {
+      return [{ tool: "fly_around", modelId: "fly-around", modelName: "Fly around", kind: "video", op: "camera-path", prompt: "Fly around", count: 0, costUsd: 0, demo: false, atomic: true, error: (e as Error).message }];
+    }
+  },
+  async run(i, ctx) {
+    let steps: PipelineStep[];
+    try {
+      steps = flyAroundSteps(i, ctx);
+    } catch (e) {
+      return { content: JSON.stringify({ error: (e as Error).message }), isError: true };
+    }
+    return startPipeline("Fly around", steps, "Fly around");
+  },
+});
+
+export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, removePerson, blockoutFilm, flyAround];
 
 /** For tests: the fallback pipelines, as they would be created. */
-export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests, blockout: blockoutSteps };
+export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests, blockout: blockoutSteps, flyAround: flyAroundSteps };
 
 // ---------------------------------------------------------------------------
 // originals (o/dbs-d9): Split soundtrack and Remove dialogue in one call (docs/research/dbs-separation-7.md §8 and §9 D9).
@@ -931,7 +1042,7 @@ async function runSoundtrack(name: string, href: string, build: () => { body: Au
         costUsd: preview.costUsd,
         ...(preview.estimate && !preview.demo && { takes: `${durationWords(preview.estimate)} on your GPU` }),
         demo: preview.demo || undefined,
-        note: "It runs in the background: check_generations on the result gives the output URLs (a split's audio outputs carry meta.stem: voice, music, effects or background; a mix is the one audio output).",
+        note: "It runs in the background: check_generations on the result gives the output URLs (a split's audio outputs carry meta.stem: voice, music, effects or background; a mix is the one audio output, tagged meta.stem voice whatever levels it has, with a short text report beside it).",
       }),
       items: [
         { id: "", role: "tool", text: `${name}: started${preview.estimate && !preview.demo ? ` (${durationWords(preview.estimate)})` : ""}`, href },
@@ -948,7 +1059,7 @@ const STEM_WORDS: Record<string, string> = { voice: "voice (the dialogue)", musi
 function splitReturns(o: SplitOutcome): string {
   if (o.kind === "stems") return "four stems on the result: voice (the dialogue), music, effects, background (music & effects)";
   if (o.kind === "stem") return `the ${STEM_WORDS[o.stem]} stem of the result (it holds all four stems; pick meta.stem ${o.stem})`;
-  return `one mixed file: ${remixWords(o.levels)}`;
+  return `one mixed file: ${remixWords(o.levels)} (the result's audio output; it carries meta.stem voice whatever it holds, and a text report comes with it)`;
 }
 
 const splitSoundtrack = defineTool({

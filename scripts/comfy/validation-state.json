@@ -209,6 +209,12 @@
     "error": null,
     "at": "2026-10-26T00:46:07.467Z"
   },
+  "image-to-splat-idol": {
+    "sha256": "f5230e116764047049fd2b7f7dde07372c3c64b2967219e719ea5114599ba228",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:03:11.136Z"
+  },
   "image-to-splat-triposplat": {
     "sha256": "cb65f4660b4d5fef3c0544146ed51b7d3acf059f3190a102dccf8166908f5413",
     "validated": true,
@@ -329,6 +335,12 @@
     "error": null,
     "at": "2026-10-16T20:57:26.738Z"
   },
+  "mesh-refine-hi3d": {
+    "sha256": "e0c498e66fc81e427e624fa4ca1e7101819cf0a69a87b1680d225470e2ce75b9",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Hi3D Model Loader' not found. The custom node may not be installed. (Node ID '#1')",
+    "at": "2026-11-02T15:11:18.633Z"
+  },
   "mixed-media-zimage-frames": {
     "sha256": "0e78a2602566f88e12a48711caa67d604a6d4455031e71b08f9b3cd030778387",
     "validated": true,
@@ -342,10 +354,28 @@
     "at": "2026-10-30T09:40:38.592Z"
   },
   "music-ace-step-15": {
-    "sha256": "a64cd8f69aaad6969b547e9c9b8354444cf938325c153ac7a253daae2d1b0ac7",
+    "sha256": "ddfe9b5459aab53ddd05a8a767fcd75d48c572574e4898198200067a3e53a5d8",
     "validated": true,
     "error": null,
-    "at": "2026-10-16T20:57:26.870Z"
+    "at": "2026-11-02T10:31:18.795Z"
+  },
+  "music-minimax-3": {
+    "sha256": "c3f2541a0d072413bca9e17a32b08bd7a984174b08cc0a5839d2570e904876ea",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T23:40:28.816Z"
+  },
+  "music-yue2-cover": {
+    "sha256": "3f16ba0d5a1c318fffe8716310586275082468492fb501d8bc37083dca7cf7d6",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T23:40:28.886Z"
+  },
+  "music-yue2-song": {
+    "sha256": "4311ddb267a42f406956c3f81e9080aee7a85f4b6de470727fb0574e57424607",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T23:40:28.854Z"
   },
   "ocr-lines-qwen35": {
     "sha256": "2cc591a75dbc160f91475e1f0e06c4a6a321adf6ad3a90b92648eea456322705",
@@ -459,7 +489,7 @@
     "sha256": "446a72103ae501fe15e3f8a196a9321d378990e8a4eddef268f7b1defb5aed35",
     "validated": true,
     "error": null,
-    "at": "2026-11-02T11:18:01.057Z"
+    "at": "2026-10-29T17:59:49.683Z"
   },
   "sfx-hunyuan-foley": {
     "sha256": "54a10b4f9586f3e65c0f9cd1bcedf02d1842e3bf73df9dd98304eef0f07b212a",
@@ -498,10 +528,10 @@
     "at": "2026-10-17T21:02:06.266Z"
   },
   "soundtrack-remix-dbs": {
-    "sha256": "af4e32587e3b53a8206aae43e36f62a359b5a25ecc03ff63e5002377bfb4a114",
+    "sha256": "8803a5ae3775ded826060cc936e43ff9634a5346f2cb74d807a7cb5e4036dd6f",
     "validated": true,
     "error": null,
-    "at": "2026-11-02T11:18:01.187Z"
+    "at": "2026-11-02T01:03:50.001Z"
   },
   "speech-translate-gemma4": {
     "sha256": "baf609432b57514c43d2f91630b9ae3cb916e9fe8dab47ac02c6c9b64ded643a",
@@ -851,11 +881,17 @@
     "error": null,
     "at": "2026-10-18T07:29:29.488Z"
   },
+  "video-person-remove-h3-mask": {
+    "sha256": "c8ce77df965d4b14506a3e2f437ffb2d540a4c83d0725483d814c183fcd7704c",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:07:56.582Z"
+  },
   "video-person-remove-h3-relay": {
     "sha256": "5ba6ab867836433b4af7b00e507c1bc031483afebb8680e10a9d41903c6de2f0",
-    "validated": false,
-    "error": "HTTP 400: missing_node_type: Node 'H3RelayAppendWindow' not found. The custom node may not be installed. (Node ID '#append')",
-    "at": "2026-10-27T09:34:44.790Z"
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:07:56.475Z"
   },
   "video-reframe-wan22-fun-vace": {
     "sha256": "3d97f02a5da7badd11df1f1334de2924b4fc930c8976597b25c231d342b629de",
@@ -976,6 +1012,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T20:57:21.514Z"
+  },
+  "wan22-inbetween-anisora": {
+    "sha256": "d39f4f7dd0eb49cf3369724ce11edc7c2b94f96342ea9b604d12625328f20d61",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:08:20.854Z"
   },
   "wan22-s2v-14b": {
     "sha256": "1b554529206f27dd9ebddf4a6ef60ad666e550fc64ed72c222f57bb1dacf7720",

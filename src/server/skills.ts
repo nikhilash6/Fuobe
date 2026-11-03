@@ -299,9 +299,25 @@ export function updateSkill(name: string, patch: Partial<SkillInput>): Skill {
 
 /**
  * Keep the skill lists of projects and chats in step with a rename (`to`) or a delete (`to` null):
- * a project whose only skill went away would otherwise have no skills at all.
+ * a project whose only skill went away would otherwise have no skills at all. A scheduled task that runs the skill
+ * follows a rename; a delete pauses it with the reason, as a deleted project does.
  */
 function renameSkillRefs(from: string, to: string | null): void {
+  const tasks = db()
+    .prepare("SELECT id, prompt, skill_json FROM assist_schedules WHERE skill_json IS NOT NULL AND (CASE WHEN json_valid(skill_json) THEN json_extract(skill_json, '$.name') END) = ?")
+    .all(from) as { id: string; prompt: string; skill_json: string }[];
+  for (const t of tasks) {
+    if (to) {
+      // The task's prompt is its skill in words ("/name Input: value · …"): it names the skill as it's called now.
+      const prompt = t.prompt === `/${from}` || t.prompt.startsWith(`/${from} `) ? `/${to}${t.prompt.slice(from.length + 1)}` : t.prompt;
+      db().prepare("UPDATE assist_schedules SET skill_json = ?, prompt = ? WHERE id = ?").run(JSON.stringify({ ...JSON.parse(t.skill_json), name: to }), prompt, t.id);
+    } else {
+      // The last result becomes the reason (not the last run's chat, which the page would read instead).
+      db()
+        .prepare("UPDATE assist_schedules SET paused = 1, last_thread_id = NULL, last_status = 'failed', last_text = 'Paused: its skill was deleted', updated_at = ? WHERE id = ?")
+        .run(Date.now(), t.id);
+    }
+  }
   const like = `%${JSON.stringify(from)}%`;
   for (const [table, key] of [
     ["assist_projects", "id"],

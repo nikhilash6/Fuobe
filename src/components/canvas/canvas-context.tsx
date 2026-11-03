@@ -2,8 +2,11 @@
 
 import {
   AtSign,
+  Orbit,
+  Rotate3d,
   AudioLines,
   AudioWaveform,
+  Split,
   Building2,
   Castle,
   Clapperboard,
@@ -19,6 +22,7 @@ import {
   Gem,
   ImageIcon,
   Languages,
+  LayoutDashboard,
   MessageSquareText,
   Mic2,
   MonitorPlay,
@@ -53,10 +57,12 @@ import {
   type RunReason,
 } from "@/lib/catalog/canvas";
 import type { Engine, Generation, GenerationStatus, ModelDef, Operation, OutputFile } from "@/lib/catalog/types";
+import type { StemId } from "@/lib/av/split";
 import type { EngineMode } from "@/lib/api";
 
 export const ICONS: Record<string, LucideIcon> = {
   Type,
+  LayoutDashboard,
   ImageIcon,
   Film,
   AudioLines,
@@ -75,9 +81,13 @@ export const ICONS: Record<string, LucideIcon> = {
   GalleryHorizontal,
   Columns3,
   AudioWaveform,
+  Split,
   UserRound,
   Languages,
   Table,
+  // Camera path and Fly around (N7-7)
+  Orbit,
+  Rotate3d,
   // Blockout to film
   Box,
   // Effects 2.0 chains (src/lib/catalog/canvas.ts EFFECT_CHAINS)
@@ -107,6 +117,7 @@ export const PORT_COLOR: Record<PortType, string> = {
   audio: "var(--chart-3)",
   element: "var(--chart-1)",
   voice: "var(--chart-3)",
+  path: "var(--chart-1)",
 };
 
 export type NodeState = GenerationStatus | "idle";
@@ -345,8 +356,8 @@ export interface EditorActions {
   patchClip: (nodeId: string, clipId: string, patch: Partial<ClipSettings>) => void;
   cancel: (id: string) => void;
   open: (id: string, index?: number) => void;
-  /** Add an input node holding this node's first output, wired nowhere yet. */
-  toInput: (id: string) => void;
+  /** Add an input node holding this node's first output (or, on Split soundtrack, one stem), wired nowhere yet. */
+  toInput: (id: string, stem?: StemId) => void;
   /**
    * Add an input node holding a file made for this node elsewhere (an open-engine dub), below it; `takeOver` moves
    * the node's outgoing connections onto it.

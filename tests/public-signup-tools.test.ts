@@ -28,6 +28,7 @@ const { encodePng } = await import("@/server/png");
 const { createElement } = await import("@/server/elements");
 const turnaround = await import("@/app/api/turnaround/route");
 const turnaroundEstimate = await import("@/app/api/turnaround/estimate/route");
+const flyAround = await import("@/app/api/fly-around/route");
 const audioTools = await import("@/app/api/audio-tools/route");
 const { STUDIO_ROWS, studioOthers, studioTool, toolFor } = await import("@/server/gpu/tools");
 const { loadIndex } = await import("@/server/gpu/index-file");
@@ -115,7 +116,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     for (const p of ["/api/turnaround/estimate", "/api/turnaround?preview=1", "/api/audio-tools?preview=1"]) expect(passed(proxy(req(p, { method: "POST" }))), p).toBe(true);
     // Signing up wouldn't run these (an account's own GPU or key doesn't either): the account's answer, not the card.
-    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/shorts/sessions", "/api/katana", "/api/marketing/runs", "/api/layers/l1/jobs"]) {
+    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/shorts/sessions", "/api/katana", "/api/marketing/runs", "/api/layers/l1/jobs", "/api/layout/plan"]) {
       const r = proxy(req(p, { method: "POST" }));
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.GUEST_HEADER), p).toBeNull();
@@ -153,7 +154,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     const cookie = auth.createSession(a.id).value;
     auth.setAccountGpu(a.id, { url: "https://gpu.example" });
     expect(passed(proxy(req("/api/generations", { method: "POST", cookie })))).toBe(true);
-    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/cinema/projects/p1/generate"]) {
+    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/cinema/projects/p1/generate", "/api/layout/plan"]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
@@ -166,6 +167,35 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     const owner = auth.createSession().value;
     for (const p of ["/api/turnaround", "/api/turnaround/estimate", "/api/audio-tools", "/api/audio-tools/export?offset=0"]) expect(passed(proxy(req(p, { method: "POST", cookie: owner }))), p).toBe(true);
+  });
+});
+
+describe("Fly around (N7-7) under the sign-up rules", () => {
+  it("opens its price check to guests and accounts, and answers its run with own-gpu-tool", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    expect(access.isPriceCheck("POST", "/api/fly-around", "?preview=1")).toBe(true);
+    expect(access.isPriceCheck("POST", "/api/fly-around", "")).toBe(false);
+    const a = newAccount();
+    auth.setAccountGpu(a.id, { url: "https://gpu.example" });
+    const cookie = auth.createSession(a.id).value;
+    for (const c of [undefined, cookie]) {
+      expect(passed(proxy(req("/api/fly-around?preview=1", { method: "POST", cookie: c })))).toBe(true);
+      const r = proxy(req("/api/fly-around", { method: "POST", cookie: c }));
+      expect(r.status).toBe(403);
+      expect((await r.json()).code).toBe("own-gpu-tool");
+    }
+    expect(passed(proxy(req("/api/fly-around", { method: "POST", cookie: auth.createSession().value })))).toBe(true);
+  });
+
+  it("prices a visitor's fly-around for its own GPU, never a demo", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    const image = png("fly.png");
+    const account = auth.createSession(newAccount().id).value;
+    for (const cookie of [undefined, account]) {
+      const r = await flyAround.POST(call("/api/fly-around?preview=1", { engine: "open", image, orbit: { degrees: 90, direction: "cw" } }, cookie));
+      expect(r.status).toBe(200);
+      expect(await r.json()).toMatchObject({ engine: "open", demo: false, costUsd: 0, steps: 2 });
+    }
   });
 });
 
@@ -258,6 +288,28 @@ describe("the routes: a visitor's price is its own GPU's, and the owner's charac
     } finally {
       asked.mockRestore();
     }
+  });
+});
+
+describe("Clean up dialogue (DBS D5) on /api/audio-tools", () => {
+  it("prices a visitor's run on its own GPU, never a demo, only of its own file; the cloud cleaners use the install's keys, so a run is own-gpu-tool", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    const who = newAccount();
+    const cookie = auth.createSession(who.id).value;
+    const owners = wav();
+    const body = (media: string, engine = "open") => ({ tool: "clean-dialogue", engine, media, kind: "audio", name: "Take" });
+    for (const c of [undefined, cookie]) {
+      const r = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), c));
+      expect(r.status).toBe(422);
+      expect((await r.json()).error).toBe("That audio file is gone — add it again");
+    }
+    const account = await audioTools.POST(call("/api/audio-tools?preview=1", body(wav("mine.wav", who.id)), cookie));
+    expect(await account.json()).toMatchObject({ steps: 1, costUsd: 0, demo: false, channels: 2 });
+    const owner = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), auth.createSession().value));
+    expect(await owner.json()).toMatchObject({ steps: 1, demo: true });
+    const run = proxy(req("/api/audio-tools", { method: "POST", cookie }));
+    expect(run.status).toBe(403);
+    expect((await run.json()).code).toBe("own-gpu-tool");
   });
 });
 

@@ -15,6 +15,8 @@ import { clock, type ToolPlan } from "./audio-tools";
 
 export const SPLIT_FEATURE = "audio-split";
 export const SPLIT_MODEL = "oss-dbs-separate";
+/** originals (o/dbs-d9): graph C's model (soundtrack-remix-dbs), the one Clean up dialogue runs on (src/lib/av/clean-dialogue.ts OPEN_MODEL): a split with levels. */
+export const REMIX_MODEL = "oss-dbs-remix";
 /** Putting a mix back on its video: the open stream-copy mux, or fal's merge on the cloud. */
 export const REMUX_FEATURE = "audio-split-remux";
 export const REMUX_MODELS: Record<Engine, string> = {
@@ -268,11 +270,12 @@ export function planSplit(i: SplitInput): SplitPlan {
   const mode = dbsChannelsFor((i.stereo ?? !!remix) ? "each channel" : "mono", i.channels);
   const name = i.name?.trim();
   const title = `${remix ? `Mix (${remixWords(remix)})` : "Split"} · ${name || (i.kind === "video" ? "video soundtrack" : "soundtrack")}`;
-  const extra: Record<string, unknown> = { channels: mode, ...(remix && { remix: true, ...remix }) };
+  // Graph C's levels are always all three, given (its own defaults keep the music and effects at -18 dB).
+  const extra: Record<string, unknown> = { channels: mode, ...(remix && { voiceDb: remix.voiceDb, musicDb: remix.musicDb, effectsDb: remix.effectsDb }) };
   if (i.quality) extra.separationModel = DBS_MODELS[i.quality];
   if (i.channels && i.channels > 0) extra.sourceChannels = Math.round(i.channels);
   const request: GenerationRequest = {
-    modelId: SPLIT_MODEL,
+    modelId: remix ? REMIX_MODEL : SPLIT_MODEL,
     op: "separate-audio",
     feature: SPLIT_FEATURE,
     batchTitle: title,
@@ -399,7 +402,15 @@ export const PRESETS: { id: string; label: string; mix: Mix }[] = [
     label: "Music under dialogue (−12 dB)",
     mix: { voice: on(), music: off(), effects: off(), background: on(-12) },
   },
+  // Clean up dialogue (D5): the dialogue clear, the music and effects kept quietly under it.
+  {
+    id: "clean-dialogue",
+    label: "Clean dialogue (−18 dB)",
+    mix: { voice: on(), music: off(), effects: off(), background: on(-18) },
+  },
 ];
+/** The mix a preset id names, or the original. */
+export const presetMix = (id: string | null | undefined): Mix => PRESETS.find((p) => p.id === id)?.mix ?? ORIGINAL_MIX;
 
 /** The preset a mix is, if any (levels within 0.5 dB, solo off). */
 export function presetOf(mix: Mix): string | null {

@@ -100,8 +100,30 @@
    "comfy": "native templates since ComfyUI 0.36 (2026-09-15)",
    "released": "2026-09-15",
    "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-8-Step-V2",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "revision": "3da2ddfe1954d9cda4c05b643dc0f26007a655c5",
+   "comfyRepack": {
+    "repo": "FastVideo/FastVideo-FastH3-Comfy",
+    "revision": "ec1e3aa374a91c57b0b94a1623b7e657c0498cf2",
+    "files": {
+     "fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors": 22128378696,
+     "fastvideo_fasth3_8step_v2_pruned_bf16.safetensors": 44080000000
+    }
+   },
+   "comfyRepackNvfp4": {
+    "repo": "FastVideo/FastVideo-FastH3-8-Step-V2-NVFP4-Comfy",
+    "revision": "994a40beb8c8f15739e4f0fad96aec101bb7123c",
+    "files": {
+     "fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors": 13612462670
+    }
+   },
+   "scope": "FastVideo's card: t2va only, FL2VA and Ref2VA not distilled; Comfy-Org's video_fastvideo_fasth3_i2v template (workflow_templates c067929d) runs t2va and fl2va through the 'First Last Frame to Video (FastVideo FastH3)' subgraph",
+   "fuobeGraphs": [
+    "minimax-h3-fast-t2v",
+    "minimax-h3-fast-i2v",
+    "minimax-h3-fast-flf2v"
+   ]
   },
   {
    "name": "FastH3 Trim (42-block pruned H3, 8 steps)",
@@ -112,8 +134,19 @@
    "comfy": "native template 'FastVideo FastH3: Text to Video' (ComfyUI >= 0.36); T2V only named",
    "released": "2026-10-06",
    "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "revision": "f66c13dc17391dd4da99242a407918b92bf7d5fc",
+   "files": {
+    "fastvideo_fasth3_trim_8step_nvfp4.safetensors": 11894623166,
+    "fastvideo_fasth3_trim_8step_fp8.safetensors": 19683522390,
+    "fastvideo_fasth3_trim_8step_int8_convrot.safetensors": 18924757904,
+    "fastvideo_fasth3_trim_8step_bf16.safetensors": 37490000000
+   },
+   "frameConditioning": "not offered: the Trim cards (FastVideo-FastH3-Trim-8-Step @ 9edcb651, -NVFP4 @ cae9ceb6) name eight-step text-to-video only and no GPU here to test first-frame conditioning",
+   "fuobeGraphs": [
+    "minimax-h3-trim-t2v"
+   ]
   },
   {
    "name": "MiniMax H3 PTD LoRAs (Ref2VA 4 / 8 step) + RefAsymOPD",
@@ -447,14 +480,29 @@
   {
    "name": "Sol-H3-VAE (distilled H3 decoder)",
    "area": "decoder speed",
-   "licence": "unconfirmed (HF tag empty)",
+   "licence": "unconfirmed (HF tag empty); the card says code Apache-2.0 and weights under the MiniMax-H3 license",
    "vram": "2K decode 14.5 s -> 0.89 s on GB200",
    "hosted": [],
-   "comfy": "core loader, ComfyUI PR #17411 (merged 2026-10-28; master only)",
+   "comfy": "core VAELoader from master 0df1646a (#17411, 2026-10-28); no new node; not in v0.43.2",
    "released": "2026-10-16 (repo)",
    "url": "https://huggingface.co/Efficient-Large-Model/Sol-H3-VAE",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "revision": "6a8a33fc61e092281f32bf28cde236760e2caaa4",
+   "files": {
+    "sol_h3_vae.safetensors": 6471256328
+   },
+   "sameBytesAs": "Efficient-Large-Model/Open-H3-Regenerate-2K vae_fast/fast_h3_vae_noncausal_24l.safetensors (sha256 8658f1e85b5997c4ba716406a2f148bfa36cf97d4d5fcd402c7bd341f54e77a1)",
+   "comfyRepack": {
+    "repo": "Comfy-Org/MiniMax-H3",
+    "revision": "912b6e38b2092ec4d2e86d24183e0d59ea059d48",
+    "files": {
+     "minimax_h3_sol_vae_int8_convrot.safetensors": 1988306504,
+     "minimax_h3_sol_vae_fp16.safetensors": 3600000000
+    }
+   },
+   "memory": "card: about 24 GiB at 720p and 48 GiB at 2K for 5 s with a CUDA graph",
+   "fuobeOption": "oss-minimax-h3 Options → Decoder 'Fast decode' (full model only, off by default): built (H3_DECODER, the full graphs' decode slot, the pinned int8 repack) but held back (H3_FAST_DECODE_OFFERED false) until the library validates on a ComfyUI with #17411"
   },
   {
    "name": "ComfyUI core H3 latent upscaler",
@@ -478,7 +526,8 @@
    "released": "2026-10-13",
    "url": "https://comfyui-wiki.com/en/news/2026-10-13-lightvae",
    "inFuobe": false,
-   "confirmed": false
+   "confirmed": false,
+   "note": "Not built: Sol-H3-VAE loads with the core VAELoader on the new pin, so no alternative was needed (nm10-h3-any-gpu)."
   },
   {
    "name": "Spark-H3 / Veda sparse attention",
@@ -490,7 +539,8 @@
    "released": "2026-10-03 / 2026-10-11",
    "url": "https://comfyui-wiki.com/en/news/2026-10-11-spark-h3",
    "inFuobe": false,
-   "confirmed": true
+   "confirmed": true,
+   "note": "Not built (nm10-h3-any-gpu): both are custom node packs not installed on the validation server; an \"Experimental speed\" switch waits for them. The FastH3 graphs already use the core BlockSparseAttention (vsa)."
   },
   {
    "name": "FLUX 3 Image Klein (+ Base, prompt upsampler)",
@@ -693,8 +743,8 @@
   {
    "name": "MiniMax Music 3",
    "area": "songs with vocals up to 5 min",
-   "licence": "MiniMax-Music3 Community License (permissive with notice); Comfy-Org repack tagged Apache-2.0",
-   "vram": "< 24 GB full precision; ~22 GB with offload; 8 GB with layer streaming",
+   "licence": "MiniMax-Music3 Community License (LICENSE @ 1b525ccb read 2026-11-01: MIT-style grant with notice; Acceptable Use Policy; a commercial product shows \"MiniMax-Music3\" in its interface; written authorisation above US$20M yearly revenue; hosted services keep safeguards). HF licence tag empty. Comfy-Org repack @ 9e364ccd tagged Apache-2.0",
+   "vram": "< 24 GB full precision; ~22 GB with CPU offload; 8 GB with diffusers' layer streaming (group offload), which the ComfyUI core node does not do (not measured)",
    "hosted": [
     {
      "provider": "fal",
@@ -704,19 +754,19 @@
    "comfy": "native core (template audio_minimax_music_3)",
    "released": "2026-08-07 (weights)",
    "url": "https://huggingface.co/MiniMaxAI/MiniMax-Music3",
-   "inFuobe": false,
+   "inFuobe": true,
    "confirmed": true
   },
   {
    "name": "YuE2-3B",
    "area": "lyrics-to-song, covers, LoRA training",
    "licence": "CC-BY-NC-4.0",
-   "vram": "not stated",
+   "vram": "not published (unverified)",
    "hosted": [],
-   "comfy": "native (v0.36, templates 2026-09-14) + community trainer/encoder",
+   "comfy": "native core (YuE2GenerateABC / YuE2GenerateMusic / EmptyYuE2LatentAudio, SheetSage2AudioToABC for covers; templates audio_yue2_text2music, audio_yue2_music_cover); Comfy-Org/YuE2 @ 2f76ca75: int8 3.96 GB, bf16 7.8 GB, SheetSage2 bf16 1.39 GB (CC-BY-NC-4.0)",
    "released": "2026-09-09",
    "url": "https://huggingface.co/m-a-p/YuE2-3B",
-   "inFuobe": false,
+   "inFuobe": true,
    "confirmed": true
   },
   {
@@ -749,7 +799,7 @@
    "comfy": "no",
    "released": "2026-09-14 .. 2026-10-30",
    "url": "https://fal.ai/models/mureka/v9/generate/song",
-   "inFuobe": false,
+   "inFuobe": true,
    "confirmed": true
   },
   {
@@ -770,7 +820,7 @@
    "comfy": "no",
    "released": "2026-09-14 / 2026-09-19",
    "url": "https://fal.ai/models/elevenlabs/music/v2.5",
-   "inFuobe": false,
+   "inFuobe": true,
    "confirmed": true
   },
   {
@@ -1008,12 +1058,12 @@
    "name": "Hi3D v1.0",
    "area": "mesh refinement",
    "licence": "Hi3D Open License Agreement 1.0",
-   "vram": "see hi3d-refine brief",
+   "vram": "see docs/research/hi3d-refine.json",
    "hosted": [],
-   "comfy": "t8star/Hi3d-Comfy (community)",
-   "released": "2026-10-16",
+   "comfy": "T8mars/Comfyui-Hi3d-T8 (community, Registry hi3d-t8; t8star/Hi3d-Comfy is its weights repo). Corrected 2026-11-02 by hi3d-refine",
+   "released": "2026-10-23",
    "url": "https://huggingface.co/hi3d-official/Hi3Dv1.0",
-   "inFuobe": false,
+   "inFuobe": true,
    "confirmed": true
   },
   {
@@ -3968,6 +4018,3247 @@
    "notes": "Nine premade voices (voice enum) or a cloned voice (speaker_voice_embedding_file_url from clone-voice; voice is then ignored). Its own prompt field is a style hint for a premade voice, not a voice design.",
    "sourceUrl": "https://fal.ai/models/fal-ai/qwen-3-tts/text-to-speech/1.7b/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/qwen-3-tts/text-to-speech/1.7b"
+  },
+  {
+   "family": "h3-lite",
+   "model": "MiniMax H3 Lite",
+   "title": "MiniMax H3 Lite",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v+flf2v+ref2v",
+   "provider": "replicate",
+   "endpoint": "minimax/h3-lite",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "first_frame_image",
+    "endImage": "last_frame_image",
+    "images": "reference_image_urls",
+    "video": "reference_video_urls",
+    "audio": "reference_audio_urls",
+    "duration": "duration",
+    "aspectRatio": "ratio",
+    "resolution": "resolution"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "Text prompt for generation"
+    },
+    "first_frame_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "First frame image for video generation. The output video will have the same aspect ratio as this image."
+    },
+    "last_frame_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "Last frame image for video generation. The final frame of the output video will match this image."
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 9 reference images."
+    },
+    "reference_video_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 3 reference videos."
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 3 reference audio clips."
+    },
+    "duration": {
+     "type": "enum",
+     "values": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "valueType": "integer",
+     "required": false,
+     "default": 5,
+     "desc": "Output duration in seconds."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "Output resolution."
+    },
+    "ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Output aspect ratio. Ignored for image-to-video, which uses the aspect ratio of the input image."
+    }
+   },
+   "version": "df0b0d5fa519ac9fbb06d6c2c824f1f41a71d5d1836c1a8f0495705370fce500",
+   "versionDate": "2026-10-29",
+   "price": "480P output: $0.025 per second of output video; 768P output: $0.04 per second of output video",
+   "output": "output",
+   "sourceUrl": "https://replicate.com/minimax/h3-lite",
+   "apiUrl": "https://api.replicate.com/v1/models/minimax/h3-lite/predictions"
+  },
+  {
+   "family": "h3-highspeed",
+   "model": "MiniMax H3 HighSpeed",
+   "title": "MiniMax H3 HighSpeed",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v+flf2v+ref2v",
+   "provider": "replicate",
+   "endpoint": "minimax/h3-highspeed",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "first_frame_image",
+    "endImage": "last_frame_image",
+    "images": "reference_image_urls",
+    "video": "reference_video_urls",
+    "audio": "reference_audio_urls",
+    "duration": "duration",
+    "aspectRatio": "ratio"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "Text prompt for generation"
+    },
+    "first_frame_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "First frame image for video generation. The output video will have the same aspect ratio as this image."
+    },
+    "last_frame_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "Last frame image for video generation. The final frame of the output video will match this image."
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 9 reference images."
+    },
+    "reference_video_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 3 reference videos."
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 3 reference audio clips."
+    },
+    "duration": {
+     "type": "enum",
+     "values": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "valueType": "integer",
+     "required": false,
+     "default": 5,
+     "desc": "Output duration in seconds."
+    },
+    "ratio": {
+     "type": "enum",
+     "values": [
+      "adaptive",
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Output aspect ratio. Required for text-to-video; adaptive for image-to-video."
+    }
+   },
+   "version": "b86d4aad81903a69e89f509f4bf8d0a6244ec6c3d0d2e048c01579e20255162a",
+   "versionDate": "2026-10-29",
+   "price": ": $0.06 per second of output video",
+   "output": "output",
+   "sourceUrl": "https://replicate.com/minimax/h3-highspeed",
+   "apiUrl": "https://api.replicate.com/v1/models/minimax/h3-highspeed/predictions"
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Lip Sync",
+   "title": "MiniMax H3 Max Lip Sync",
+   "vendor": "MiniMax",
+   "operation": "avatar",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/lip-sync/image-to-video",
+   "keyFields": {
+    "image": "image_url",
+    "audio": "audio_url",
+    "resolution": "resolution",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Image to animate. The aspect ratio must be between 0.4 and 2.5."
+    },
+    "audio_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Audio to synchronize the mouth movements to, at least 5 seconds long. Supports up to 15 minutes. The output video matches the supplied audio duration."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P",
+      "2K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "Output resolution. Uses the supported aspect ratio nearest the image."
+    },
+    "enable_transcription": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Transcribe the supplied audio to guide lip synchronization. When disabled, synchronize to the audio without a transcript."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2147483647,
+     "desc": "Random seed; selected randomly if omitted."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Enable content safety checks."
+    }
+   },
+   "price": "Billing is calculated per second of generated video. Video costs $0.05 per second at 480p, $0.08 per second at 768p, $0.16 per second at 1080p, and $0.32 per second at 2K. A 1.2x multiplier is added to videos over 15 seconds. A 5-second video at 768p costs $0.40. A 30-second video at 768p costs $2.88.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/lip-sync/image-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/lip-sync/image-to-video",
+   "notes": "Image (aspect 0.4-2.5) + 5 s to 15 min of audio; the video is as long as the audio. Billed per second, x1.2 over 15 s."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Relight",
+   "title": "MiniMax H3 Max Relight",
+   "vendor": "MiniMax",
+   "operation": "relight-video",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/relight",
+   "keyFields": {
+    "video": "video_url",
+    "image": "reference_image_url",
+    "resolution": "resolution",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "desc": "Source video up to 15 seconds long. Converted to constant 24 fps and trimmed at the end to the closest 17n+5 frame count, with at least 56 frames (about 2.33 seconds) remaining. The output matches this prepared video's frame count and duration."
+    },
+    "reference_image_url": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "desc": "Sphere render showing the target lighting."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P",
+      "2K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "Output video resolution. 480P and 768P generate natively; 1080P and 2K (1440p) use latent upscaling and refinement from 768P."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "adaptive",
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Output video aspect ratio."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for video generation."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Enable safety checking."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Return video as a data URI."
+    }
+   },
+   "price": "Billing is calculated per second of generated video, which matches the source video length. Video costs $0.05 per second at 480p, $0.08 per second at 768p, $0.16 per second at 1080p, and $0.32 per second at 2K. A 5-second video at 768p costs $0.40.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/relight",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/relight",
+   "notes": "reference_image_url is a render of a lit sphere showing the target light (Fuobe draws it in the browser from its light presets). Source up to 15 s, resampled to 24 fps and trimmed to 17n+5 frames, at least 56."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Insert Video",
+   "title": "MiniMax H3 Max Insert Video",
+   "vendor": "MiniMax",
+   "operation": "insert-moment",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/insert-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "video": "video_url",
+    "images": "reference_image_urls",
+    "videos": "reference_video_urls",
+    "startTime": "start_time",
+    "endTime": "resume_time",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "minLength": 1
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 50000
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 9,
+     "required": false
+    },
+    "reference_video_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false
+    },
+    "start_time": {
+     "type": "number",
+     "required": true,
+     "minimum": 1.625,
+     "maximum": 60
+    },
+    "resume_time": {
+     "type": "number",
+     "required": true,
+     "maximum": 60,
+     "minimumExclusive": 1.625
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 13
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480p",
+      "768p"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768p"
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2147483647
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": true
+    },
+    "color_match": {
+     "type": "boolean",
+     "required": false,
+     "default": true
+    }
+   },
+   "price": "Your request will cost $0.05 per second of generated scene at 480p or $0.06 per second at 768p. Only the newly generated scene duration is billed, not the full output video. The first 4,096 reference tokens are included; additional reference tokens cost $0.02 per 1,000 tokens, prorated.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/insert-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/insert-video",
+   "notes": "A new scene of `duration` seconds generated between start_time and resume_time of the clip (both within 60 s, start at least 1.625 s); only the new scene is billed."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max 16-bit Pixel",
+   "title": "MiniMax H3 Max 16-bit Pixel",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/16bit-pixel",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49815,
+     "desc": "Describe the scene, action, camera and sound. The 16-bit pixel style is applied automatically.",
+     "examples": [
+      "A young bicycle courier pedals through a sunlit flower market. Medium side view, steady tracking camera, measured pedaling. Bicycle chain clicks and gentle market ambience."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use pixel artwork for the most consistent style. When provided, its aspect ratio determines the output canvas."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/16bit-pixel",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/16bit-pixel",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Hand-drawn",
+   "title": "MiniMax H3 Max Hand-drawn",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/hand-drawn",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49868,
+     "desc": "Describe the scene, action, camera and sound. The Hand drawn style is applied automatically.",
+     "examples": [
+      "A weary office worker watches his neck stretch upward as a tiny bird lands on his head. Medium locked shot, exaggerated surprise. Soft wing flutters and distant city ambience, no speech."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use pencil artwork for the most consistent look; the image's aspect ratio determines the output canvas."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/hand-drawn",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/hand-drawn",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Low Poly",
+   "title": "MiniMax H3 Max Low Poly",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/low-poly",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49914,
+     "desc": "Describe the scene, action, camera and sound. The retro low-poly 3D style is applied automatically.",
+     "examples": [
+      "A woman in a red coat runs across a rainy rooftop at night, jumps over a low ventilation duct and keeps running. A helicopter searchlight sweeps the buildings behind her. The camera tracks alongside her."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use low-poly or retro 3D artwork for the most consistent look; the image's aspect ratio determines the output canvas."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/low-poly",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/low-poly",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Retro Toon 70s",
+   "title": "MiniMax H3 Max Retro Toon 70s",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/retro-toon-70s",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49864,
+     "desc": "Describe the scene, action, camera and sound. The retro 1970s hand-painted animation style is applied automatically.",
+     "examples": [
+      "A lone warrior with a broadsword stands on a windswept rocky ridge at sunset as an enormous dragon glides past below him. Wide heroic shot. Wind and the slow beat of dragon wings, no speech."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use painted-style artwork for the most consistent look; the image's aspect ratio determines the output canvas."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/retro-toon-70s",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/retro-toon-70s",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max VHS",
+   "title": "MiniMax H3 Max VHS",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/vhs",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed",
+    "damageLevel": "damage_level"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49910,
+     "desc": "Describe the scene, action, camera and sound. VHS style and tape damage are applied automatically.",
+     "examples": [
+      "A camcorder explores an abandoned shopping mall at midnight. A lone carousel starts turning beneath flickering fluorescent lights. Handheld push-in, mechanical creaks and distant music."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use a 4:3 image for the classic VHS frame; the image's aspect ratio determines the output canvas."
+    },
+    "damage_level": {
+     "type": "enum",
+     "values": [
+      "light",
+      "medium",
+      "heavy"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "medium",
+     "desc": "Tape wear: light adds subtle analog noise, medium adds visible damage, and heavy adds strong tracking errors and distortion."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/vhs",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/vhs",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max-turbo",
+   "model": "MiniMax H3 Max Turbo",
+   "title": "MiniMax H3 Max Turbo",
+   "vendor": "MiniMax",
+   "operation": "t2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max-turbo/text-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed",
+    "aspectRatio": "aspect_ratio"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 50000,
+     "desc": "Text prompt for video generation",
+     "examples": [
+      "A white kitten chases a butterfly across a sunlit garden. Gentle camera tracking, natural movement, soft afternoon light filtering through the leaves."
+     ]
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 0.92,
+     "maximum": 15,
+     "desc": "Video length in seconds. The output can run up to about 0.7 s longer than requested. Use at least 2 s with target_audio_url."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "The native generation resolution, or 1080P latent refinement from a native 768P source."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. A random seed is selected when omitted."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the safety checker will be enabled."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Return the generated video as base64 instead of a CDN URL."
+    },
+    "prompt_expansion_mode": {
+     "type": "string",
+     "required": true,
+     "default": "balanced",
+     "desc": "How much effort to spend rewriting the prompt before generation. 'disabled' skips prompt expansion. 'balanced' returns in about a second. 'quality' spends up to ~30s on a richer prompt.",
+     "examples": [
+      "disabled"
+     ]
+    },
+    "target_audio_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Optional URL of an audio clip at least 2 seconds long (maximum 15 MB) to pin to the generated soundtrack. Longer clips are trimmed to the generated video's length, keeping the beginning. The original audio replaces the output soundtrack, padded with silence if shorter than the video, without changing playback speed. Exceptionally high sample rates may be resampled to 96 kHz. Accepts an HTTP(S) URL or a base64 data URI."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "The aspect ratio of the generated video."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Through October 31, 2026, the 35% promotional discount applies: $0.01625 at 480p, $0.026 at 768p, and $0.052 at 1080p per second. From November 1 through November 15, 2026, get 30% off standard rates: $0.0175 at 480p, $0.028 at 768p, and $0.056 at 1080p per second. During the November promotion, 5 seconds of video at 768p costs $0.14. From November 16, 2026, standard rates are $0.025, $0.04, and $0.08 per second at 480p, 768p, and 1080p, respectively. Contact your sales representative to discuss permanent discounted pricing.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max-turbo/text-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max-turbo/text-to-video"
+  },
+  {
+   "family": "h3-max-turbo",
+   "model": "MiniMax H3 Max Turbo",
+   "title": "MiniMax H3 Max Turbo",
+   "vendor": "MiniMax",
+   "operation": "i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max-turbo/image-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed",
+    "image": "image_url",
+    "endImage": "end_image_url"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 50000,
+     "desc": "Text prompt for video generation",
+     "examples": [
+      "The camera slowly pulls back from the scene, revealing the full landscape as clouds drift overhead and light shifts across the terrain."
+     ]
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 0.92,
+     "maximum": 15,
+     "desc": "Video length in seconds. The output can run up to about 0.7 s longer than requested. Use at least 2 s with target_audio_url."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "The native generation resolution, or 1080P latent refinement from a native 768P source."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. A random seed is selected when omitted."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the safety checker will be enabled."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Return the generated video as base64 instead of a CDN URL."
+    },
+    "prompt_expansion_mode": {
+     "type": "string",
+     "required": true,
+     "default": "balanced",
+     "desc": "How much effort to spend rewriting the prompt before generation. 'disabled' skips prompt expansion. 'balanced' returns in about a second. 'quality' spends up to ~30s on a richer prompt.",
+     "examples": [
+      "disabled"
+     ]
+    },
+    "target_audio_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Optional URL of an audio clip at least 2 seconds long (maximum 15 MB) to pin to the generated soundtrack. Longer clips are trimmed to the generated video's length, keeping the beginning. The original audio replaces the output soundtrack, padded with silence if shorter than the video, without changing playback speed. Exceptionally high sample rates may be resampled to 96 kHz. Accepts an HTTP(S) URL or a base64 data URI."
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional URL of the image to use as the first frame. When provided, the output canvas follows this image. If only end_image_url is provided, the canvas follows that last frame instead. If both images are omitted, the request is handled as text-to-video (16:9 by default).",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_inputs/hailuo23/pro_i2v_in.jpg"
+     ]
+    },
+    "end_image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional URL of the image to use as the last frame. It may be provided alone for end-only keyframe generation; in that case the output canvas follows this image."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Through October 31, 2026, the 35% promotional discount applies: $0.01625 at 480p, $0.026 at 768p, and $0.052 at 1080p per second. From November 1 through November 15, 2026, get 30% off standard rates: $0.0175 at 480p, $0.028 at 768p, and $0.056 at 1080p per second. During the November promotion, 5 seconds of video at 768p costs $0.14. From November 16, 2026, standard rates are $0.025, $0.04, and $0.08 per second at 480p, 768p, and 1080p, respectively. Contact your sales representative to discuss permanent discounted pricing.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max-turbo/image-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max-turbo/image-to-video"
+  },
+  {
+   "family": "h3-max-turbo",
+   "model": "MiniMax H3 Max Turbo",
+   "title": "MiniMax H3 Max Turbo",
+   "vendor": "MiniMax",
+   "operation": "ref2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max-turbo/reference-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed",
+    "aspectRatio": "aspect_ratio",
+    "images": "reference_image_urls",
+    "video": "reference_video_urls",
+    "audio": "reference_audio_urls"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 50000,
+     "desc": "Text prompt for video generation. Refer to reference assets by their modality and order in the reference lists: Image 1, Image 2, Video 1, Audio 1, and so on.",
+     "examples": [
+      "Image 1 is the female protagonist. Image 2 is her small dog. Keep the woman and dog consistent with their respective reference images while they walk together through a sunlit garden."
+     ]
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 9,
+     "required": false,
+     "desc": "URLs of subject/style reference images, referenced in the prompt as Image 1, Image 2, and so on. Reference images, videos, and audio clips must add up to at most 12 files.",
+     "examples": [
+      [
+       "https://storage.googleapis.com/falserverless/example_inputs/hailuo23/pro_i2v_in.jpg"
+      ]
+     ]
+    },
+    "reference_video_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false,
+     "desc": "URLs of motion/reference video clips (2-15 seconds each, combined duration at most 15 seconds), referenced in the prompt as Video 1, Video 2, and so on. Reference images, videos, and audio clips must add up to at most 12 files."
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false,
+     "desc": "URLs of reference audio clips (2-15 seconds each, combined duration at most 15 seconds), referenced in the prompt as Audio 1, Audio 2, and so on. Images, videos, and audio can be provided individually or together. Reference images, videos, and audio clips must add up to at most 12 files."
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 0.92,
+     "maximum": 15,
+     "desc": "Video length in seconds. The output can run up to about 0.7 s longer than requested."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "The native generation resolution, or 1080P latent refinement from a native 768P source."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. A random seed is selected when omitted."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the safety checker will be enabled."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Return the generated video as base64 instead of a CDN URL."
+    },
+    "prompt_expansion_mode": {
+     "type": "string",
+     "required": true,
+     "default": "balanced",
+     "desc": "How much effort to spend rewriting the prompt before generation. 'disabled' skips prompt expansion. 'balanced' returns in about a second. 'quality' spends up to ~30s on a richer prompt.",
+     "examples": [
+      "disabled"
+     ]
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "adaptive",
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "adaptive",
+     "desc": "The aspect ratio of the generated video."
+    },
+    "reference_conditions": {
+     "type": "array",
+     "items": "object",
+     "itemSchema": {
+      "url": {
+       "type": "string",
+       "required": false,
+       "minLength": 1,
+       "desc": "URL of the reference media."
+      },
+      "type": {
+       "type": "enum",
+       "values": [
+        "image",
+        "video",
+        "audio"
+       ],
+       "valueType": "string",
+       "required": false,
+       "desc": "Reference modality. Cross-modality list order is semantic."
+      }
+     },
+     "itemRequired": [
+      "type",
+      "url"
+     ],
+     "maxItems": 12,
+     "required": false,
+     "desc": "Ordered reference list; cross-modality order is semantic and is preserved end-to-end. Do not combine with reference_*_urls."
+    }
+   },
+   "price": "Billing is calculated per second of output video, plus reference inputs beyond the included allowance. Video costs $0.05 per second at 480p, $0.08 per second at 768p, and $0.16 per second at 1080p. A 5-second 768p clip costs $0.40 before additional reference charges. The first 4,096 reference tokens are included; additional reference tokens cost $0.016 per 1K tokens.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max-turbo/reference-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max-turbo/reference-to-video",
+   "notes": "Billed at H3 Max's own rates ($0.05-0.16/s), not Turbo's; references (images, clips, audio) add up to 12 files."
+  },
+  {
+   "family": "h3-max-turbo",
+   "model": "MiniMax H3 Max Turbo",
+   "title": "MiniMax H3 Max Turbo",
+   "vendor": "MiniMax",
+   "operation": "extend",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max-turbo/extend-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "video": "video_url",
+    "audio": "reference_audio_urls",
+    "duration": "duration",
+    "resolution": "resolution",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "desc": "URL of the video to extend. Must be 1.625 s to 60 s long, up to 50 MB, aspect ratio between 0.4 and 2.5.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_inputs/flux-3-red-panda.mp4"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 50000,
+     "desc": "What happens next. Describe the continuation, not the source.",
+     "examples": [
+      "The red panda keeps walking along the log, then looks up at a bird."
+     ]
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false,
+     "desc": "Optional audio references for the continuation (2–15 seconds each, 15 seconds combined). The full extended video retains its original source soundtrack, and its ending still conditions the transition. These clips guide the newly generated audio instead of using that soundtrack as an audio reference. Assign each clip a role in the prompt, such as 'Audio 1 for the voice' and 'Audio 2 for background music'."
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Automatically enhance the prompt using the source video to help keep the continuation consistent. May increase processing time."
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 0.71,
+     "maximum": 15,
+     "desc": "Seconds of new footage to add. The continuation clip also includes 1.625 seconds from the source's ending and may be longer because of frame rounding."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P",
+      "2K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "Output video resolution."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "auto",
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "auto",
+     "desc": "Output aspect ratio. 'auto' follows the source video. Other values crop the video to fit the selected ratio."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Seed for the continuation. Random when omitted."
+    },
+    "output": {
+     "type": "enum",
+     "values": [
+      "extended",
+      "continuation"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "extended",
+     "desc": "'extended' returns the source and new footage as one video. 'continuation' returns a clip that starts with a 1.625-second repeat of the source's ending, then shows the new footage."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Moderate the source video and the prompt."
+    }
+   },
+   "price": "Billing is calculated per second of newly generated video. Your request will cost $0.025 per second at 480p, $0.04 per second at 768p, $0.08 per second at 1080p, and $0.16 per second at 2K. Billing applies to the requested continuation duration, not the original video.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max-turbo/extend-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max-turbo/extend-video",
+   "notes": "Source 1.625-60 s, up to 50 MB; duration is the seconds added, and only they are billed."
+  },
+  {
+   "family": "vidu",
+   "model": "Vidu Q4",
+   "title": "Vidu Q4",
+   "vendor": "Shengshu",
+   "operation": "i2v",
+   "provider": "fal",
+   "endpoint": "fal-ai/vidu/q4/image-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": false,
+     "default": "",
+     "maxLength": 5000,
+     "desc": "Text prompt for video generation, max 5000 characters",
+     "examples": [
+      "The woman turns toward the camera and smiles, then the shot cuts to a close-up as she says: \"Let's go.\""
+     ]
+    },
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL or base64 data URI of the image to use as the first frame. Supports png, jpeg, jpg and webp up to 50 MB.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/web-examples/vidu/stylish_woman.webp"
+     ]
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 3,
+     "maximum": 16,
+     "desc": "Duration of the video in seconds (3-16)"
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for reproducibility. If None, a random seed is chosen."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "540p",
+      "720p",
+      "1080p",
+      "2K",
+      "4K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "720p",
+     "desc": "Output video resolution"
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "price": "Billing is calculated per second of video generated: $0.0315 at 540p, $0.0665 at 720p, $0.084 at 1080p, $0.133 at 2K, and $0.273 at 4K. For example, a 5-second video at 720p costs $0.3325.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/fal-ai/vidu/q4/image-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/vidu/q4/image-to-video"
+  },
+  {
+   "family": "vidu",
+   "model": "Vidu Q4",
+   "title": "Vidu Q4",
+   "vendor": "Shengshu",
+   "operation": "ref2v",
+   "provider": "fal",
+   "endpoint": "fal-ai/vidu/q4/reference-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "images": "reference_image_urls",
+    "audios": "reference_audio_urls",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "resolution": "resolution",
+    "generateAudio": "audio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Text prompt for video generation, max 5000 characters. Refer to references by their position in the lists: [@reference_image_1], [@reference_image_2], ... for images and [reference_audio_1], [reference_audio_2], ... for audio clips.",
+     "examples": [
+      "[@reference_image_1] walks along the beach at sunset holding [@reference_image_2], then turns to the camera and speaks in the voice of [reference_audio_1]."
+     ]
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "desc": "URLs or base64 data URIs of up to 12 reference images (png, jpeg, jpg, webp) used to keep subjects consistent.",
+     "examples": [
+      [
+       "https://storage.googleapis.com/falserverless/web-examples/vidu/new-examples/reference1.png",
+       "https://storage.googleapis.com/falserverless/web-examples/vidu/new-examples/reference2.png"
+      ]
+     ]
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "desc": "URLs or base64 data URIs of up to 3 mp3 reference audio clips (3-12 seconds each, max 50 MB) used to keep voices consistent."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 3,
+     "maximum": 16,
+     "desc": "Duration of the video in seconds (3-16)"
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for reproducibility. If None, a random seed is chosen."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "16:9",
+      "9:16",
+      "4:3",
+      "3:4",
+      "1:1"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "The aspect ratio of the output video"
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "540p",
+      "720p",
+      "1080p",
+      "2K",
+      "4K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "720p",
+     "desc": "Output video resolution"
+    },
+    "audio": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Whether to generate audio (dialogue and sound effects) with the video. When false, the output video is silent."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "price": "Billing is calculated per second of video generated: $0.0315 at 540p, $0.0665 at 720p, $0.084 at 1080p, $0.133 at 2K, and $0.273 at 4K. Enabling audio does not change the price. For example, a 5-second video at 720p costs $0.3325.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/fal-ai/vidu/q4/reference-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/vidu/q4/reference-to-video",
+   "notes": "fal exposes up to 12 reference images and 3 mp3 voice clips (3-12 s), sound on request; Vidu's own 15 images and 4K references are not all in fal's schema."
+  },
+  {
+   "family": "v7",
+   "model": "Meshy 7 Retexture",
+   "title": "Meshy 7 Retexture",
+   "vendor": "Meshy",
+   "operation": "retexture-3d",
+   "provider": "fal",
+   "endpoint": "meshy/v7/retexture",
+   "keyFields": {
+    "model3d": "model_url",
+    "prompt": "text_style_prompt",
+    "image": "image_style_url"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "model_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL or base64 data URI of a 3D model to texture. Supports .glb, .gltf, .obj, .fbx, .stl formats. Can be a publicly accessible URL or data URI with MIME type application/octet-stream.",
+     "examples": [
+      "https://v3b.fal.media/files/b/penguin/DId89qXLu6BXu09RFAwAV_model.glb"
+     ]
+    },
+    "text_style_prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "maxLength": 600,
+     "desc": "Describe your desired texture style using text. Maximum 600 characters. Required if image_style_url is not provided.",
+     "examples": [
+      "red and black chest"
+     ]
+    },
+    "image_style_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "2D image to guide the texturing process. Supports .jpg, .jpeg, and .png formats. Required if text_style_prompt is not provided. If both are provided, image_style_url takes precedence."
+    },
+    "texture_resolution": {
+     "type": "enum",
+     "values": [
+      "2k",
+      "4k",
+      "8k"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "2k",
+     "desc": "Base color resolution: 2k (2048), 4k (4096), or 8k (8192). 4k and 8k require Meshy 6 or 7. At 8k, PBR maps are 4k and no emission map is generated."
+    },
+    "enable_original_uv": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Use the original UV mapping of the model instead of generating new UVs. If the model has no original UV, output quality may be reduced."
+    },
+    "enable_pbr": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Generate PBR Maps (metallic, roughness, normal) in addition to base color."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, input data will be checked for safety before processing."
+    }
+   },
+   "price": "Your request will cost $0.30 per retextured model at 2K or 4K resolution, or $0.45 at 8K resolution. PBR maps are included at no extra cost.",
+   "output": "model_glb.url",
+   "sourceUrl": "https://fal.ai/models/meshy/v7/retexture",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=meshy/v7/retexture"
+  },
+  {
+   "family": "v6",
+   "model": "Meshy 6 Retexture",
+   "title": "Meshy 6 Retexture",
+   "vendor": "Meshy",
+   "operation": "retexture-3d",
+   "provider": "fal",
+   "endpoint": "meshy/v6/retexture",
+   "keyFields": {
+    "model3d": "model_url",
+    "prompt": "text_style_prompt",
+    "image": "image_style_url"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "model_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL or base64 data URI of a 3D model to texture. Supports .glb, .gltf, .obj, .fbx, .stl formats. Can be a publicly accessible URL or data URI with MIME type application/octet-stream.",
+     "examples": [
+      "https://v3b.fal.media/files/b/penguin/DId89qXLu6BXu09RFAwAV_model.glb"
+     ]
+    },
+    "text_style_prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "maxLength": 600,
+     "desc": "Describe your desired texture style using text. Maximum 600 characters. Required if image_style_url is not provided.",
+     "examples": [
+      "red and black chest"
+     ]
+    },
+    "image_style_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "2D image to guide the texturing process. Supports .jpg, .jpeg, and .png formats. Required if text_style_prompt is not provided. If both are provided, image_style_url takes precedence."
+    },
+    "texture_resolution": {
+     "type": "enum",
+     "values": [
+      "2k",
+      "4k",
+      "8k"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "2k",
+     "desc": "Base color resolution: 2k (2048), 4k (4096), or 8k (8192). 4k and 8k require Meshy 6 or 7. At 8k, PBR maps are 4k and no emission map is generated."
+    },
+    "enable_original_uv": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Use the original UV mapping of the model instead of generating new UVs. If the model has no original UV, output quality may be reduced."
+    },
+    "enable_pbr": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Generate PBR Maps (metallic, roughness, normal) in addition to base color."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, input data will be checked for safety before processing."
+    }
+   },
+   "price": "Your request will cost $0.30 per retextured model at 2K or 4K resolution, or $0.45 at 8K resolution. PBR maps are included at no extra cost.",
+   "output": "model_glb.url",
+   "sourceUrl": "https://fal.ai/models/meshy/v6/retexture",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=meshy/v6/retexture"
+  },
+  {
+   "family": "p2",
+   "model": "Tripo P2",
+   "title": "Tripo P2",
+   "vendor": "Tripo",
+   "operation": "image-to-3d",
+   "provider": "fal",
+   "endpoint": "tripo3d/p2/image-to-3d",
+   "keyFields": {
+    "image": "image_url"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL of the input image for 3D model creation.",
+     "examples": [
+      "https://v3b.fal.media/files/b/zebra/3osHJDI8IZ2wl6sGtEUeB_image.png"
+     ]
+    },
+    "face_limit": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 48,
+     "maximum": 50000,
+     "desc": "Maximum number of faces for the generated mesh. Quad meshes support up to 25,000 faces."
+    },
+    "texture": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate textures for the model."
+    },
+    "pbr": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate PBR material maps. Enabling PBR also enables textures."
+    },
+    "model_seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Seed for geometry generation reproducibility."
+    },
+    "texture_seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Seed for texture generation reproducibility."
+    },
+    "texture_quality": {
+     "type": "enum",
+     "values": [
+      "fast",
+      "standard",
+      "detailed",
+      "extreme"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "standard",
+     "desc": "Texture quality level."
+    },
+    "texture_version": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "v3.5-20260815",
+      "v3.0-20250812",
+      "v2.5-20250123"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Texture model version. The fast quality requires v3.5-20260815."
+    },
+    "delight": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Remove baked-in lighting before texturing with v3.5-20260815."
+    },
+    "auto_size": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Auto-scale the model to real-world dimensions in meters."
+    },
+    "export_uv": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate UV coordinates for the model."
+    },
+    "export_orientation": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "+x",
+      "-x",
+      "-y",
+      "+y"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Optional forward axis for the exported model."
+    },
+    "quad": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Generate quad mesh topology instead of triangles."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "price": "Billing is calculated per generated 3D model. Each request costs $1.00 without textures, $1.10 with fast or standard textures, $1.20 with detailed textures, or $1.30 with extreme textures. PBR enables textures and uses the selected texture rate. Quad topology adds no extra charge. For example, 10 models with standard textures cost $11.00. To generate without textures, set both texture and pbr to false.",
+   "output": "model_mesh.url",
+   "sourceUrl": "https://fal.ai/models/tripo3d/p2/image-to-3d",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=tripo3d/p2/image-to-3d"
+  },
+  {
+   "family": "idol",
+   "model": "Idol",
+   "title": "Sperid Labs Idol",
+   "vendor": "Speridlabs",
+   "operation": "image-to-splat",
+   "provider": "fal",
+   "endpoint": "speridlabs/idol",
+   "falCategory": "image-to-3d",
+   "status": "active",
+   "keyFields": {
+    "image": "image_url",
+    "numGaussians": "num_gaussians",
+    "steps": "num_inference_steps",
+    "cfg": "guidance_scale",
+    "seed": "seed",
+    "imageType": "image_type"
+   },
+   "inputs": {
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL of the image of a single object to convert into a 3D Gaussian splat.",
+     "examples": [
+      "https://raw.githubusercontent.com/VAST-AI-Research/TripoSplat/36b6deb0a1613e43c6910de441cb57d50352e44a/static/example_inputs/building_stone_house.webp"
+     ]
+    },
+    "image_type": {
+     "type": "enum",
+     "values": [
+      "synthetic",
+      "real"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "synthetic",
+     "desc": "Kind of input image. `synthetic` for renders and generated images (tight crop), `real` for photographs (looser crop)."
+    },
+    "num_gaussians": {
+     "type": "integer",
+     "required": false,
+     "default": 262144,
+     "minimum": 32768,
+     "maximum": 1048576,
+     "desc": "Target number of Gaussians in the output splat. Rounded down to a multiple of 32."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 50,
+     "minimum": 1,
+     "maximum": 50,
+     "desc": "Number of sampling steps. Fewer are faster but lose some detail."
+    },
+    "guidance_scale": {
+     "type": "number",
+     "required": false,
+     "default": 3,
+     "minimum": 0,
+     "maximum": 10,
+     "desc": "Classifier-free guidance: how strictly the object follows the image."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for reproducibility. If None, a random seed is generated."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Enable safety checking of the input image."
+    }
+   },
+   "output": "model_mesh.url",
+   "price": "Price: $0.1 per generations",
+   "pricing": {
+    "usd": 0.1,
+    "unit": "request"
+   },
+   "license": "Apache-2.0 (speridlabs/idol weights); TripoSplat's architecture (MIT); DINOv3 image encoder under the DINOv3 License (\"Built with DINOv3\")",
+   "notes": "Idol (TripoSplat's architecture, retrained by Speridlabs): one image of one object -> model_mesh, a 3D Gaussian splat (.ply), model_glb (a coloured point cloud of the splat centres, for standard 3D viewers), preprocessed_image (the cut-out it saw) and the predicted camera. num_inference_steps 1-50 (default 50), num_gaussians 32,768-1,048,576 (default 262,144), guidance_scale 0-10 (default 3, Idol's own weight: ComfyUI cfg 4), image_type synthetic | real. No sampler choice and no output format choice.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/speridlabs/idol",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=speridlabs/idol",
+   "capability": "splat",
+   "fetched": "2026-11-02"
+  },
+  {
+   "family": "minimax-music",
+   "model": "MiniMax Music 3",
+   "title": "MiniMax Music 3",
+   "vendor": "MiniMax",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "minimax/music-3",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics",
+    "duration": "duration",
+    "seed": "seed"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "Music description: style, mood, vocals, instrumentation and arrangement. For precise control use a Structured Caption with global metadata (genre, BPM, key, emotional progression), vocal details, and a section-by-section arrangement.",
+     "examples": [
+      "Genre: acoustic pop. BPM: 96. Key: C major. Warm and intimate, building gently into the chorus. Vocals: soft female lead, close and breathy, light stacked harmonies in the chorus. Arrangement: fingerpicked guitar and soft piano; brushed drums and upright bass enter in the chorus."
+     ]
+    },
+    "lyrics": {
+     "type": "string",
+     "required": true,
+     "desc": "The lyrics to sing. Structure tags such as [intro], [verse], [pre-chorus], [chorus], [post-chorus], [bridge], [instrumental], [solo] and [outro] must each be on their own line; text on the same line as a leading tag is dropped by the model's input contract.",
+     "examples": [
+      "[verse]\nMorning light filtering through the pine\nEvery quiet street is yours and mine\n[chorus]\nSoftly the world begins to breathe"
+     ]
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 60,
+     "minimum": 1,
+     "maximum": 300,
+     "desc": "Upper bound on the generated audio length in seconds. The model may stop earlier; the actual duration is returned in the output."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for reproducibility. If not provided, a random seed will be used."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 30,
+     "minimum": 1,
+     "maximum": 100,
+     "desc": "Number of flow-matching Euler steps per 8-second denoising chunk. More steps improve quality at the cost of speed.",
+     "examples": [
+      30
+     ]
+    },
+    "guidance_scale": {
+     "type": "number",
+     "required": false,
+     "default": 1.7,
+     "minimum": 0,
+     "maximum": 20,
+     "desc": "Classifier-free guidance scale of the flow-matching stage.",
+     "examples": [
+      1.7
+     ]
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "duration",
+    "audio",
+    "seed"
+   ],
+   "price": "Price: $0.002 per seconds",
+   "license": "MiniMax-Music3 Community License (MiniMaxAI/MiniMax-Music3 @ 1b525ccb, LICENSE read 2026-11-01): an MIT-style grant with the notice kept, use within the law and its Acceptable Use Policy (Exhibit A); commercial products show \"MiniMax-Music3\" in their interface and need MiniMax's written authorisation above US$20M yearly revenue; a hosted service keeps safeguards against infringing outputs. The Comfy-Org repack (Comfy-Org/MiniMax-Music-3 @ 9e364ccd) is tagged Apache-2.0 on Hugging Face; the weights' own licence is the one above",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/minimax/music-3",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/music-3",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9.5",
+   "title": "Mureka 9.5",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/v9.5/generate/song",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics",
+    "duration": "duration"
+   },
+   "inputs": {
+    "lyrics": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Lyrics to sing, up to 5,000 characters. Provide this for lyrics-to-song generation; otherwise provide prompt for prompt-to-song generation."
+    },
+    "styles": {
+     "nullable": true,
+     "type": "array",
+     "items": "string",
+     "minItems": 1,
+     "required": false,
+     "desc": "One or more musical genres for prompt-to-song generation. This cannot be used when lyrics is provided.",
+     "examples": [
+      [
+       "pop",
+       "rock"
+      ]
+     ]
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 2000,
+     "desc": "Describe the desired song, mood, instrumentation, and vocals. Required when lyrics is omitted, up to 2,000 characters. With lyrics, it acts as a music-style control and supports up to 1,024 characters.",
+     "examples": [
+      "A bright summer love song with a catchy chorus"
+     ]
+    },
+    "gender": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "female",
+      "male"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Preferred vocal gender for lyrics-to-song generation. An uploaded or cloned voice takes precedence."
+    },
+    "reference_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Reference-music ID returned by /files/upload with purpose='reference'."
+    },
+    "vocal_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Voice ID returned by /voice/clone."
+    },
+    "melody_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Melody ID returned by /files/upload with purpose='melody'. This cannot be combined with prompt, reference_id, or vocal_id."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    },
+    "duration": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 120,
+     "maximum": 300,
+     "desc": "Target song duration in seconds. If omitted, the model determines the duration automatically. The length of the lyrics also affects the target duration."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated song. When you provide lyrics, your request will cost $0.15 per song; when you provide only a prompt without lyrics, it will cost $0.50 per song. Each request returns one song. For $1 you can generate about 6 songs from your own lyrics or 2 songs from a prompt alone.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9.5/generate/song",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9.5/generate/song",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9",
+   "title": "Mureka 9",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/v9/generate/song",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics"
+   },
+   "inputs": {
+    "lyrics": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Lyrics to sing, up to 5,000 characters. Provide this for lyrics-to-song generation; otherwise provide prompt for prompt-to-song generation."
+    },
+    "styles": {
+     "nullable": true,
+     "type": "array",
+     "items": "string",
+     "minItems": 1,
+     "required": false,
+     "desc": "One or more musical genres for prompt-to-song generation. This cannot be used when lyrics is provided.",
+     "examples": [
+      [
+       "pop",
+       "rock"
+      ]
+     ]
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 2000,
+     "desc": "Describe the desired song, mood, instrumentation, and vocals. Required when lyrics is omitted, up to 2,000 characters. With lyrics, it acts as a music-style control and supports up to 1,024 characters.",
+     "examples": [
+      "A bright summer love song with a catchy chorus"
+     ]
+    },
+    "gender": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "female",
+      "male"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Preferred vocal gender for lyrics-to-song generation. An uploaded or cloned voice takes precedence."
+    },
+    "reference_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Reference-music ID returned by /files/upload with purpose='reference'."
+    },
+    "vocal_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Voice ID returned by /voice/clone."
+    },
+    "melody_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Melody ID returned by /files/upload with purpose='melody'. This cannot be combined with prompt, reference_id, or vocal_id."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated song. When you provide lyrics, your request will cost $0.045 per song; when you provide only a prompt without lyrics, it will cost $0.30 per song. Each request returns one song. For $1 you can generate about 22 songs from your own lyrics or 3 songs from a prompt alone.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9/generate/song",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9/generate/song",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9.5 Instrumental",
+   "title": "Mureka 9.5 Instrumental",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/v9.5/generate/instrumental",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Description of the desired instrumental. Provide exactly one of prompt or instrumental_id."
+    },
+    "instrumental_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Instrumental ID returned by /files/upload with purpose='instrumental'. Provide exactly one of instrumental_id or prompt."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated instrumental track. Your request will cost $0.15 per track, and each request returns one track. For $1 you can generate about 6 instrumental tracks.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9.5/generate/instrumental",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9.5/generate/instrumental",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9 Instrumental",
+   "title": "Mureka 9 Instrumental",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/v9/generate/instrumental",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Description of the desired instrumental. Provide exactly one of prompt or instrumental_id."
+    },
+    "instrumental_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Instrumental ID returned by /files/upload with purpose='instrumental'. Provide exactly one of instrumental_id or prompt."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated instrumental track. Your request will cost $0.045 per track, and each request returns one track. For $1 you can generate about 22 instrumental tracks.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9/generate/instrumental",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9/generate/instrumental",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9.5 Soundtrack",
+   "title": "Mureka 9.5 Soundtrack",
+   "vendor": "Mureka",
+   "operation": "v2a",
+   "provider": "fal",
+   "endpoint": "mureka/v9.5/generate/soundtrack",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "image_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Image ID returned by /files/upload with purpose='soundtrack'. Provide exactly one of image_id or video_id."
+    },
+    "video_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Video ID returned by /files/upload with purpose='soundtrack'. Provide exactly one of image_id or video_id."
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Optional description of the desired soundtrack style and mood."
+    },
+    "audio_start": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Start time of the soundtrack audio in milliseconds. If only audio_start is specified, generation starts there and continues for the video duration, stopping at the end of the song if the remaining audio is shorter. The soundtrack audio segment must be at least 3 seconds long, and a 1-second fade-in is added at the beginning."
+    },
+    "audio_end": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "End time of the soundtrack audio in milliseconds. If both audio_start and audio_end are specified, generation uses those times. If audio_end exceeds the song duration, generation stops at the end of the song. The soundtrack audio segment must be at least 3 seconds long, and a 1-second fade-out is added at the end."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated soundtrack. Your request will cost $0.10 per soundtrack, and each request returns one track. For $1 you can generate 10 soundtracks.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9.5/generate/soundtrack",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9.5/generate/soundtrack",
+   "capability": "v2a",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9 Soundtrack",
+   "title": "Mureka 9 Soundtrack",
+   "vendor": "Mureka",
+   "operation": "v2a",
+   "provider": "fal",
+   "endpoint": "mureka/v9/generate/soundtrack",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "image_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Image ID returned by /files/upload with purpose='soundtrack'. Provide exactly one of image_id or video_id."
+    },
+    "video_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Video ID returned by /files/upload with purpose='soundtrack'. Provide exactly one of image_id or video_id."
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Optional description of the desired soundtrack style and mood."
+    },
+    "audio_start": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Start time of the soundtrack audio in milliseconds. If only audio_start is specified, generation starts there and continues for the video duration, stopping at the end of the song if the remaining audio is shorter. The soundtrack audio segment must be at least 3 seconds long, and a 1-second fade-in is added at the beginning."
+    },
+    "audio_end": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "End time of the soundtrack audio in milliseconds. If both audio_start and audio_end are specified, generation uses those times. If audio_end exceeds the song duration, generation stops at the end of the song. The soundtrack audio segment must be at least 3 seconds long, and a 1-second fade-out is added at the end."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated soundtrack. Your request will cost $0.10 per soundtrack, whether it is guided by an image or a video. Each request returns one soundtrack. For $1 you can generate 10 soundtracks.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9/generate/soundtrack",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9/generate/soundtrack",
+   "capability": "v2a",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 8 Extend",
+   "title": "Mureka 8 Extend",
+   "vendor": "Mureka",
+   "operation": "song-extend",
+   "provider": "fal",
+   "endpoint": "mureka/v8/song/extend",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "lyrics": "lyrics",
+    "songId": "song_id",
+    "uploadId": "upload_audio_id",
+    "extendAt": "extend_at"
+   },
+   "inputs": {
+    "song_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Generated song ID from song_id in a /generate/song response. Provide exactly one of song_id or upload_audio_id."
+    },
+    "upload_audio_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Audio ID returned by /files/upload with purpose='audio'. Provide exactly one of song_id or upload_audio_id."
+    },
+    "lyrics": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 3000,
+     "desc": "Lyrics for the extended section, up to 3,000 characters."
+    },
+    "extend_at": {
+     "type": "integer",
+     "required": true,
+     "minimum": 0,
+     "desc": "Timestamp in milliseconds where extension begins."
+    },
+    "extend_type": {
+     "type": "enum",
+     "values": [
+      "tail",
+      "head"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "tail",
+     "desc": "Direction of extension: append to the tail or prepend to the head."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Price: $0.004 per requests",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v8/song/extend",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v8/song/extend",
+   "capability": "song-extend",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 8 Remix",
+   "title": "Mureka 8 Remix",
+   "vendor": "Mureka",
+   "operation": "song-remix",
+   "provider": "fal",
+   "endpoint": "mureka/v8/song/remix",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics",
+    "songId": "song_id",
+    "uploadId": "upload_audio_id"
+   },
+   "inputs": {
+    "song_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Generated song ID from song_id in a /generate/song response. Provide exactly one of song_id or upload_audio_id."
+    },
+    "upload_audio_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Audio ID returned by /files/upload with purpose='remix'. Provide exactly one of song_id or upload_audio_id."
+    },
+    "lyrics": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Complete lyrics for the remixed song, up to 5,000 characters."
+    },
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Control the remix's genre, mood, instrumentation, and arrangement with a prompt, up to 1,024 characters."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per remixed song. Your request will cost $0.20 per song, and each request returns one song. For $1 you can remix about 5 songs.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v8/song/remix",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v8/song/remix",
+   "capability": "song-remix",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka stems",
+   "title": "Mureka stems",
+   "vendor": "Mureka",
+   "operation": "song-stems",
+   "provider": "fal",
+   "endpoint": "mureka/api/song/stem",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "audio": "audio_url"
+   },
+   "inputs": {
+    "model": {
+     "type": "enum",
+     "values": [
+      "audio-separation-1",
+      "audio-separation-2",
+      "audio-separation-3"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "audio-separation-3",
+     "desc": "Stem-separation model, which determines available stems and MIDI output."
+    },
+    "audio_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Public HTTPS URL or data URI for an MP3 or M4A song to separate, up to 10 MB."
+    }
+   },
+   "output": "zip_url",
+   "outputFields": [
+    "midi_zip_url",
+    "zip_url"
+   ],
+   "price": "Billing is calculated per separated song and depends on the selected model. With audio-separation-1, your request will cost $0.06 per song; with audio-separation-3 (the default), $0.20 per song; and with audio-separation-2, $0.70 per song.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/song/stem",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/song/stem",
+   "capability": "song-stems",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka file upload",
+   "title": "Mureka file upload",
+   "vendor": "Mureka",
+   "operation": "upload",
+   "provider": "fal",
+   "endpoint": "mureka/api/files/upload",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "file": "file_url",
+    "purpose": "purpose"
+   },
+   "inputs": {
+    "file_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Public HTTPS URL or data URI of the file to upload."
+    },
+    "purpose": {
+     "type": "enum",
+     "values": [
+      "reference",
+      "melody",
+      "instrumental",
+      "voice",
+      "audio",
+      "remix",
+      "soundtrack",
+      "lyrics-video"
+     ],
+     "valueType": "string",
+     "required": true,
+     "desc": "Intended use of the uploaded file. The returned ID can only be used in parameters that accept this purpose."
+    }
+   },
+   "output": "id",
+   "outputFields": [
+    "id",
+    "bytes",
+    "purpose",
+    "created_at",
+    "filename"
+   ],
+   "price": "Billing is calculated per uploaded file. Your request will cost $0.01 per upload. For $1 you can upload 100 files.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/files/upload",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/files/upload",
+   "capability": "upload",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka song edit",
+   "title": "Mureka song edit",
+   "vendor": "Mureka",
+   "operation": "song-edit",
+   "provider": "fal",
+   "endpoint": "mureka/api/song/edit",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "lyrics": "lyrics",
+    "songId": "song_id",
+    "uploadId": "upload_audio_id"
+   },
+   "inputs": {
+    "song_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Generated song ID from song_id in a /generate/song response. Provide exactly one of song_id or upload_audio_id."
+    },
+    "upload_audio_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Audio ID returned by /files/upload with purpose='audio'. Provide exactly one of song_id or upload_audio_id."
+    },
+    "lyrics": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 3000,
+     "desc": "Replacement lyrics for the selected region."
+    },
+    "edit_start": {
+     "type": "integer",
+     "required": true,
+     "minimum": 0,
+     "desc": "Start of the region to rewrite in milliseconds."
+    },
+    "edit_end": {
+     "type": "integer",
+     "required": true,
+     "minimum": 0,
+     "desc": "End of the region to rewrite in milliseconds. The region must be at least three seconds long."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per edit. Your request will cost $0.10 per edited region, and each request returns one edited song. For $1 you can run 10 edits.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/song/edit",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/song/edit",
+   "capability": "song-edit",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka voice clone",
+   "title": "Mureka voice clone",
+   "vendor": "Mureka",
+   "operation": "voice-clone",
+   "provider": "fal",
+   "endpoint": "mureka/api/voice/clone",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "audio": "audio_url"
+   },
+   "inputs": {
+    "audio_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Public HTTPS URL or data URI for an MP3 or M4A vocal sample between 15 and 30 seconds and smaller than 10 MB."
+    },
+    "description": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "maxLength": 1024,
+     "desc": "Optional text describing the cloned voice."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "vocal_id",
+    "description",
+    "created_at"
+   ],
+   "price": "Billing is calculated per cloned voice. Your request will cost $5.00 per voice clone.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/voice/clone",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/voice/clone",
+   "capability": "voice-clone",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka lyrics",
+   "title": "Mureka lyrics",
+   "vendor": "Mureka",
+   "operation": "write",
+   "provider": "fal",
+   "endpoint": "mureka/api/generate/lyrics",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "desc": "Topic, theme, or title to use when writing the lyrics.",
+     "examples": [
+      "Embrace of Night"
+     ]
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics",
+    "title"
+   ],
+   "price": "Billing is calculated per request. Your request will cost $0.009 per set of generated lyrics. For $1 you can generate about 111 sets of lyrics.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/generate/lyrics",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/generate/lyrics",
+   "capability": "write",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka song (versioned)",
+   "title": "Mureka song (versioned)",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/api/generate/song",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics",
+    "duration": "duration"
+   },
+   "inputs": {
+    "lyrics": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Lyrics to sing, up to 5,000 characters. Provide this for lyrics-to-song generation; otherwise provide prompt for prompt-to-song generation."
+    },
+    "styles": {
+     "nullable": true,
+     "type": "array",
+     "items": "string",
+     "minItems": 1,
+     "required": false,
+     "desc": "One or more musical genres for prompt-to-song generation. This cannot be used when lyrics is provided.",
+     "examples": [
+      [
+       "pop",
+       "rock"
+      ]
+     ]
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 2000,
+     "desc": "Describe the desired song, mood, instrumentation, and vocals. Required when lyrics is omitted, up to 2,000 characters. With lyrics, it acts as a music-style control and supports up to 1,024 characters.",
+     "examples": [
+      "A bright summer love song with a catchy chorus"
+     ]
+    },
+    "gender": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "female",
+      "male"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Preferred vocal gender for lyrics-to-song generation. An uploaded or cloned voice takes precedence."
+    },
+    "reference_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Reference-music ID returned by /files/upload with purpose='reference'."
+    },
+    "vocal_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Voice ID returned by /voice/clone."
+    },
+    "melody_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Melody ID returned by /files/upload with purpose='melody'. This cannot be combined with prompt, reference_id, or vocal_id."
+    },
+    "model": {
+     "type": "enum",
+     "values": [
+      "mureka-7.6",
+      "mureka-o2",
+      "mureka-8",
+      "mureka-9",
+      "mureka-9.5"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "mureka-9.5",
+     "desc": "The model to use for song generation."
+    },
+    "duration": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 120,
+     "maximum": 300,
+     "desc": "Target song duration in seconds. Supported only by model 9.5. If omitted, the model determines the duration automatically. The length of the lyrics also affects the target duration."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated song and depends on the selected model and whether you provide lyrics. With lyrics, your request will cost $0.03 per song with mureka-7.6, $0.045 with mureka-o2, mureka-8 and mureka-9, and $0.15 with mureka-9.5 (the default). With only a prompt, it will cost $0.30 per song with mureka-7.6, mureka-o2, mureka-8 and mureka-9, and $0.50 with mureka-9.5. Each request returns one song.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/generate/song",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/generate/song",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "elevenlabs",
+   "model": "ElevenLabs Music v2.5",
+   "title": "ElevenLabs Music v2.5",
+   "vendor": "ElevenLabs",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "elevenlabs/music/v2.5",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "duration": "music_length_ms"
+   },
+   "inputs": {
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "maxLength": 4100,
+     "desc": "The text prompt describing the music to generate",
+     "examples": [
+      "Mysterious original soundtrack, themes of jungle, rainforest, nature, woodwinds, busy rhythmic tribal percussion."
+     ]
+    },
+    "composition_plan": {
+     "nullable": true,
+     "type": "object",
+     "fields": {
+      "chunks": {
+       "type": "array",
+       "items": "object",
+       "itemSchema": {
+        "text": {
+         "type": "string",
+         "required": false,
+         "desc": "The text to generate for this chunk. Can start with an optional section name in square brackets, e.g. [Verse 1], followed by lyric lines, plus inline directions in curly braces, e.g. {scratching}. Section names must be between 1 and 100 characters. At most 30 lines are allowed, each at most 200 characters.",
+         "examples": [
+          "[Verse 1]\nNeon rain on empty streets\nI keep walking to the beat"
+         ]
+        },
+        "duration_ms": {
+         "type": "integer",
+         "required": false,
+         "minimum": 3000,
+         "maximum": 120000,
+         "desc": "The duration of the chunk in milliseconds. Must be between 3000ms and 120000ms."
+        },
+        "negative_styles": {
+         "nullable": true,
+         "type": "array",
+         "items": "string",
+         "required": false,
+         "desc": "The styles and musical directions that should not be present in this chunk. Leaving this empty is a good default; only set it to explicitly avoid a particular style or direction."
+        },
+        "positive_styles": {
+         "type": "array",
+         "items": "string",
+         "required": false,
+         "desc": "The styles and musical directions that should be present in this chunk. Use English for best results. The styles of the first chunk matter most as they set the overall tone and genre; later chunks can add nuance, progression or change direction.",
+         "examples": [
+          [
+           "synthwave",
+           "analog drum machine",
+           "great production quality"
+          ]
+         ]
+        },
+        "context_adherence": {
+         "nullable": true,
+         "type": "enum",
+         "values": [
+          "low",
+          "medium",
+          "high"
+         ],
+         "valueType": "string",
+         "required": false,
+         "desc": "How closely this chunk follows the context of its surrounding chunks. Low adherence lets the model deviate and be more creative, high adherence keeps it consistent with the surrounding context."
+        },
+        "audio_reference": {
+         "nullable": true,
+         "type": "object",
+         "fields": {
+          "start_ms": {
+           "type": "integer",
+           "required": false,
+           "default": 0,
+           "minimum": 0,
+           "desc": "Offset into the clip where the referenced window starts, in milliseconds."
+          },
+          "strength": {
+           "nullable": true,
+           "type": "enum",
+           "values": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+           ],
+           "valueType": "string",
+           "required": false,
+           "desc": "How strongly the model follows the reference. Low lets it deviate and be more creative, high keeps it close to the reference."
+          },
+          "end_ms": {
+           "nullable": true,
+           "type": "integer",
+           "required": false,
+           "minimumExclusive": 0,
+           "desc": "Offset into the clip where the referenced window ends, in milliseconds. Defaults to 30000ms after start_ms, or the end of the clip if it is shorter. The window must be at most 30000ms long."
+          },
+          "audio_url": {
+           "type": "string",
+           "required": false,
+           "desc": "URL of the audio clip to use as the style reference.",
+           "examples": [
+            "https://storage.googleapis.com/falserverless/example_outputs/elevenlabs/music_generated.mp3"
+           ]
+          }
+         },
+         "required": false,
+         "desc": "An audio clip whose style conditions this chunk. The reference on the first chunk matters most: it influences every later chunk, so condition from the first chunk to style the whole song."
+        }
+       },
+       "itemRequired": [
+        "text",
+        "duration_ms",
+        "positive_styles"
+       ],
+       "minItems": 1,
+       "maxItems": 30,
+       "required": false,
+       "desc": "The chunks that make up the generation, in order. At most 30 chunks, totalling between 3000ms and 600000ms."
+      }
+     },
+     "required": false,
+     "desc": "The chunk-based composition plan for the music"
+    },
+    "music_length_ms": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 3000,
+     "maximum": 600000,
+     "desc": "The length of the song to generate in milliseconds. Used only in conjunction with prompt. Must be between 3000ms and 600000ms. Optional - if not provided, the model will choose a length based on the prompt."
+    },
+    "force_instrumental": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If true, guarantees that the generated song will be instrumental. If false, the song may or may not be instrumental depending on the prompt. Can only be used with prompt."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed to initialize the music generation process. Can only be used with composition_plan. The same seed with the same parameters gives more consistent results, but exact reproducibility is not guaranteed."
+    },
+    "output_format": {
+     "type": "enum",
+     "values": [
+      "mp3_22050_32",
+      "mp3_24000_48",
+      "mp3_44100_32",
+      "mp3_44100_64",
+      "mp3_44100_96",
+      "mp3_44100_128",
+      "mp3_44100_192",
+      "mp3_48000_128",
+      "mp3_48000_192",
+      "mp3_48000_240",
+      "mp3_48000_320",
+      "pcm_8000",
+      "pcm_16000",
+      "pcm_22050",
+      "pcm_24000",
+      "pcm_32000",
+      "pcm_44100",
+      "pcm_48000",
+      "ulaw_8000",
+      "alaw_8000",
+      "opus_48000_32",
+      "opus_48000_64",
+      "opus_48000_96",
+      "opus_48000_128",
+      "opus_48000_192"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "mp3_48000_192",
+     "desc": "Output format of the generated audio. Formatted as codec_sample_rate_bitrate. So an mp3 with 22.05kHz sample rate at 32kbs is represented as mp3_22050_32. Note that the μ-law format (sometimes written mu-law, often approximated as u-law) is commonly used for Twilio audio inputs."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "audio"
+   ],
+   "price": "Your request will cost $0.6 per output audio minute. The audio will be rounded up to the closest minute. For instance, a generation with 30 seconds output will be billed as 1 minute.",
+   "license": "Proprietary hosted API; billed per output minute, rounded up; lyrics go in a composition plan of timed chunks (recorded, not sent)",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/elevenlabs/music/v2.5",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=elevenlabs/music/v2.5",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "lyria",
+   "model": "Lyria 3.5",
+   "title": "Lyria 3.5",
+   "vendor": "Google",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "google/lyria-3.5",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "lyricsInPrompt": "prompt"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "The text prompt describing the music you want to generate. Include genre, mood, instrumentation, tempo, vocals, and structure for best results. Lyria 3.5 supports full-length songs up to a few minutes — use timestamps or duration hints in your prompt to control song length, e.g. 'a 2-minute track' or section markers like '[0:00-0:30] Intro: ...' / '[0:30-1:00] Verse: ...'. Supports English, German, Spanish, French, Hindi, Japanese, Korean, and Portuguese.",
+     "examples": [
+      "An uplifting pop song with driving electric guitar, energetic drums, and a catchy chorus singing 'Rise up and shine today'. 120 BPM. Two minutes long with a verse-chorus-verse-chorus-bridge-chorus structure."
+     ]
+    },
+    "negative_prompt": {
+     "type": "string",
+     "required": false,
+     "default": "",
+     "desc": "Negative prompting is not supported by Lyria 3.5."
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional image URL to use as visual inspiration for music generation. The model will create music that matches the mood and theme of the image.",
+     "examples": [
+      "https://v3b.fal.media/files/b/0a93b559/qjT9o0CId1B65PbD6Yp06_9c94501900464c5aa98f302fa4b00375.png"
+     ]
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "audio",
+    "lyrics"
+   ],
+   "price": "Price: $0.1 per generations",
+   "license": "Proprietary hosted API; lyrics and section timings go in the prompt (its description says so)",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/google/lyria-3.5",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=google/lyria-3.5",
+   "capability": "music",
+   "fetched": "2026-11-01"
   }
  ]
 }

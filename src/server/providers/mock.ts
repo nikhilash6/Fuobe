@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { cueText, parseCues, type Cue } from "@/lib/cues";
-import { HAND_OFF } from "@/lib/catalog/remove-object";
+import { H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
+import { HAND_OFF, windowArtifact } from "@/lib/catalog/remove-object";
 import { OPERATION_OUTPUT, type MediaKind, type Operation } from "@/lib/catalog/types";
 import { spectralColor } from "@/lib/scene3d";
 import type { ProviderAdapter, RemoteOutput } from "./types";
@@ -294,9 +295,9 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
     }
     case "separate-audio": {
       const stem = (name: string, wav: Buffer): DemoOutput => ({ url: toDataUri(wav, "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { stem: name, demo: true } });
-      // A split with levels (graph C): one mix of the stems.
-      if (meta.remix) return [{ url: toDataUri(demoWav(3, [220, 392], 3), "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { demo: true } }];
       // A dialogue / music / effects split (DBS) returns those three and the music-and-effects bed, voice first.
+      // A remix of the split at set levels (DBS graph C, Clean up dialogue): one track, the clean dialogue.
+      if (meta.remix) return [stem("voice", demoWav(3, [220, 330], 3))];
       const stems: DemoOutput[] = meta.threeStems
         ? [stem("voice", demoWav(3, [220, 330], 3)), stem("music", demoWav(3, [262, 392])), stem("effects", demoWav(3, [90, 140], 7)), stem("background", demoWav(3, [110, 165]))]
         : [stem("voice", demoWav(3, [220, 330], 3)), stem("background", demoWav(3, [110, 165]))];
@@ -324,6 +325,12 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
       return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", splat: true } }];
     case "rig-3d":
       return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", rigged: true } }];
+    // Hi3D's refine: the demo mesh, geometry only as the real one is.
+    case "refine-3d":
+      return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", refined: true, geometryOnly: true } }];
+    // A retexture comes back as the demo mesh (a real one is the same model with its new textures).
+    case "retexture-3d":
+      return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", retextured: true } }];
     case "ocr":
       return [demoOcr(brief)];
     // As many frames as were asked for (max_frames), 4 without a count.
@@ -334,6 +341,16 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
     // The face mosaic (O11): a demo picture; no masks, so the browser has nothing to pixelate.
     case "face-mosaic":
       return [{ url: svgUri(demoSvg(brief || "pixelated faces", ar, 6)), kind: "image", contentType: "image/svg+xml", meta: { demo: true } }];
+    // A song's stems (Mureka): its vocals and instruments, one track each.
+    case "song-stems":
+      return (
+        [
+          ["vocals", [330, 495]],
+          ["drums", [90, 140]],
+          ["bass", [55, 82]],
+          ["other", [262, 392]],
+        ] as const
+      ).map(([stem, tones]) => ({ url: toDataUri(demoWav(3, [tones[0], tones[1]]), "audio/wav"), kind: "audio" as const, contentType: "audio/wav", meta: { stem, demo: true } }));
     // The same tone, as long as the loop was asked to be (or the clips joined end to end).
     case "audio-loop":
       return [{ url: toDataUri(demoWav(clamp(Math.round(Number(meta.duration ?? 12)), 4, 30)), "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { demo: true } }];
@@ -341,7 +358,7 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
       return [{ url: toDataUri(demoWav(clamp(3 * Number(meta.clips ?? 2), 4, 30), [330, 495]), "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { demo: true } }];
     case "remove-object":
       return [
-        { url: `sample:${sampleClip(ar)}`, kind: "video", contentType: "video/mp4", meta: { demo: true } },
+        { url: `sample:${sampleClip(ar)}`, kind: "video", contentType: "video/mp4", meta: { demo: true, ...(meta.h3Review ? demoRemovalReview(ar) : {}) } },
         // The painted eraser also hands the window's last tracked mask to the next window.
         ...(meta.lastMask ? [{ url: svgUri(demoMaskSvg(ar)), kind: "image" as const, contentType: "image/svg+xml", meta: { role: "mask", demo: true } }] : []),
       ];
@@ -354,6 +371,7 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
         ...(meta.master ? [{ url: `sample:${sampleClip(ar)}`, kind: "video" as const, contentType: "video/mp4", meta: { role: "master", demo: true } }] : []),
       ];
     case "video-insert":
+    case "insert-moment":
     case "restore-video":
     case "keyframes":
     case "still-motion":
@@ -381,6 +399,15 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
   if (kind === "text") return [textOutput(`Demo text for: ${brief || "your request"}`, null, { demo: true })];
   if (kind === "model3d") return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true } }];
   return [{ url: `sample:${sampleClip(ar)}`, kind: "video", contentType: "video/mp4", ...(meta.draft ? { draftId: `demo_draft_${nanoid(8)}` } : {}) }];
+}
+
+/** A demo of H3 Relay's window review: three 22-frame windows, each with a still and a checkpoint. */
+function demoRemovalReview(ar: string): Record<string, unknown> {
+  const hex = (n: number, len: number) => String(n).repeat(len).slice(0, len);
+  const windows = [0, 1, 2].map((index) => ({ index, start: index * 22, frames: 22, seed: String(904234 + index), recordId: hex(index + 1, 32), poster: windowArtifact(index, "poster") }));
+  const artifacts: Record<string, string> = {};
+  for (const w of windows) artifacts[w.poster] = svgUri(demoSvg(`window ${w.index + 1}`, ar, w.index));
+  return { review: { runId: hex(9, 32), configKey: hex(8, 64), seed: "904234", total: 3, windows, reuse: { video: "fuobe_demo0001.mp4", image: "fuobe_demo0002.png", prefix: "fuobe/demo" } }, artifacts };
 }
 
 export const mockProvider: ProviderAdapter = {
@@ -422,12 +449,14 @@ export const mockProvider: ProviderAdapter = {
         firstFrame: route.provider === "comfyui" && route.endpoint === "video-segment-resample",
         // Character Swap Studio's segment graph: the take and its lossless master (video-character-swap-h3-segment).
         master: route.provider === "comfyui" && route.endpoint === "video-character-swap-h3-segment",
+        // H3 Person Removal: each window's preview and checkpoint, so "Redo from here" can be tried (H3 Relay's review).
+        h3Review: route.provider === "comfyui" && route.endpoint === H3_REMOVAL_WORKFLOW,
         // A stem split that also transcribes (ComfyUI's dub-prepare-separate-transcribe).
         transcript: route.op === "separate-audio" && route.provider === "comfyui" && route.endpoint.includes("transcribe"),
         // A dialogue / music / effects split (ComfyUI's separate-soundtrack-dbs): four stems.
         threeStems: route.op === "separate-audio" && route.endpoint === "separate-soundtrack-dbs",
-        // originals (o/dbs-d9): the same split with levels (graph C, soundtrack-remix-dbs): one mix.
-        remix: route.op === "separate-audio" && route.endpoint === "separate-soundtrack-dbs" && input.extra?.remix === true,
+        // DBS graph C (soundtrack-remix-dbs): one remixed track.
+        remix: route.op === "separate-audio" && route.endpoint === "soundtrack-remix-dbs",
       },
       payload: { demo: true, ...input },
     };

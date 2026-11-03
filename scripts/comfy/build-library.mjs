@@ -128,10 +128,16 @@ export const BINDING_KEYS = new Set([
   'gridPrompt', 'sheetPrompt',
   // av-tools (Wave B, see library.spec.mjs header)
   'frameIndex',
+  // nm10-music3 (see library.spec.mjs header)
+  'tiledDecode',
   // comfyui-oss-4 additions (see library.spec.mjs header)
   'maskPrompt', 'maskGrow', 'skipPass2', 'supersample', 'zoomStart', 'zoomEnd', 'panStartX', 'panStartY', 'panEndX', 'panEndY',
   'easeInOut', 'chunkFrames', 'crossfade', 'headroomDb', 'fadeCurve', 'format', 'profile', 'peakNits', 'resolutionLevel', 'fovX',
   'decimation', 'cutout', 'numGaussians', 'splatFormat', 'orbitFrames', 'frameWidth',
+  // hi3d-refine (see library.spec.mjs header)
+  'model3d', 'meshResolution', 'cpuOffload',
+  // idol-1 (docs/research/idol-9.md §5.5): Idol 3D's looser photo crop (the sampler key is MOSS-Image's)
+  'photoCrop',
   // round 4 (engine seams, see library.spec.mjs header)
   'curveMode', 'filterSpeckle', 'colorPrecision',
   // remove-object package (round 4)
@@ -141,7 +147,7 @@ export const BINDING_KEYS = new Set([
   // Fuobe Soul (Originals O2): image to image at Soul's tier
   'megapixels',
   // Genjutsu's Character swap (Originals O5): MiniMax H3 with the h3_character_swap / H3 Relay packs
-  'quality', 'selection', 'subjectIndex', 'positiveCoords', 'negativeCoords', 'audioGuide', 'useMask', 'windowFrames', 'historyFrames',
+  'quality', 'selection', 'subjectIndex', 'positiveCoords', 'negativeCoords', 'audioGuide', 'useMask', 'windowFrames', 'historyFrames', 'windowControls',
   // Character Swap Studio (o/h3-studio): continuation history from the previous take's master, masks on any frame spliced into a version
   'historyVideo', 'historyStart', 'historyLength', 'keyFrame', 'spanFrames', 'tailStart', 'tailFrames', 'prevMask',
   // Originals O11: Fuobe Speak's InfiniteTalk recipe on kijai's wrapper, the face mosaic
@@ -160,6 +166,8 @@ export const BINDING_KEYS = new Set([
   'takeStart', 'maskStart', 'takeX', 'takeY', 'regionWidth', 'regionHeight', 'regenWidth', 'regenHeight', 'regenX', 'regenY', 'trimX', 'trimY', 'feather',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
+  // Clean up dialogue (DBS graph C, docs/research/dbs-separation-7.md §4.4): each stem's level in the remix
+  'voiceDb', 'musicDb', 'effectsDb',
   // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
   'invertDepth',
   // Design a voice (nm10-voice-design): the voice in words, and what a voice sample says (Qwen3-TTS / VoxCPM2 clones)
@@ -168,8 +176,6 @@ export const BINDING_KEYS = new Set([
   'device',
   // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
-  // originals (o/dbs-d9): graph C's stem levels (soundtrack-remix-dbs, Adjust Audio Volume in whole dB)
-  'voiceDb', 'musicDb', 'effectsDb',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.
@@ -329,7 +335,7 @@ async function main() {
     }
 
     // Every media input must be bound, otherwise the workflow references a template example asset.
-    const FILE_INPUTS = { LoadImage: 'image', LoadImageMask: 'image', LoadVideo: 'file', VHS_LoadVideo: 'video', LoadAudio: 'audio', VHS_LoadAudioUpload: 'audio', AUSBOSS_NODES_ImageCropRotatePad: 'image' };
+    const FILE_INPUTS = { LoadImage: 'image', LoadImageMask: 'image', LoadVideo: 'file', VHS_LoadVideo: 'video', LoadAudio: 'audio', VHS_LoadAudioUpload: 'audio', AUSBOSS_NODES_ImageCropRotatePad: 'image', Hi3DLoadMesh: 'mesh_file' };
     const boundTargets = new Set(Object.values(bindings).flat().map((t) => `${t.node}.${t.input}`));
     for (const [nid, n] of Object.entries(graph)) {
       const inp = FILE_INPUTS[n.class_type];

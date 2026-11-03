@@ -13,9 +13,16 @@ import { QMA_MODEL } from "@/lib/qma";
 import { getModel, getPreset, MODELS, supportsOp } from "./index";
 import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
+import { isSpeed, keyTimes, timingFor, timingProblem, type GapTiming, type InbetweenTiming } from "@/lib/inbetween";
 import { estimateCost, inferOperation, planGeneration, routesFor, type Plan } from "./plan";
 import { replacedBy, replacementOf } from "./replaced";
 import { REGEN_COPY, REGEN_MODEL } from "./regenerate";
+import { CLOUD_ONLY_PROBLEM, CLOUD_SPLIT_PROBLEM, SPLIT_MODEL, STEMS, type StemId } from "@/lib/av/split";
+import { compileWords, LAYOUT_PARAM, readLayout, type LayoutDraft } from "@/lib/layout-prompt";
+import { fillLayout, layoutPlaceholders } from "@/lib/layout-surfaces";
+import { FLY_MODELS, flyKeys, planFlyAround } from "./fly-around";
+import type { CameraKey } from "@/lib/camera-path";
+import type { ExactOrbit } from "@/lib/exact-orbit";
 import {
   OPERATION_LABELS,
   OPERATION_OUTPUT,
@@ -33,7 +40,7 @@ import {
 // Graph types (stored as JSON in the canvases table)
 
 /** What travels along an edge. A voice is an audio sample to speak with (Clone Voice). */
-export type PortType = "text" | "image" | "video" | "audio" | "element" | "voice";
+export type PortType = "text" | "image" | "video" | "audio" | "element" | "voice" | "path";
 
 export const PORT_TYPE_LABEL: Record<PortType, string> = {
   text: "Text",
@@ -42,6 +49,7 @@ export const PORT_TYPE_LABEL: Record<PortType, string> = {
   audio: "Audio",
   element: "Element",
   voice: "Voice",
+  path: "Camera path",
 };
 
 export type CanvasNodeType =
@@ -58,11 +66,15 @@ export type CanvasNodeType =
   | "tts"
   | "voice-change"
   | "clean-voice"
+  | "split-soundtrack"
   | "clone-voice"
   | "translate"
   | "concat"
   | "restore"
   | "table"
+  | "layout"
+  | "camera-path"
+  | "fly-around"
   | "output"
   | "note";
 
@@ -112,6 +124,14 @@ export interface CanvasNodeData {
   rows?: string[][];
   /** Translate (video) on the open engine: the Translate & dub session it started (its result comes back from there). */
   dubId?: string;
+  /** Layout: its boxes, one row per box (src/lib/layout-prompt.ts), drawn in the Layout editor. */
+  layout?: LayoutDraft;
+  /** Camera path (N7-7): a preset (camera-path PATH_PRESETS), an exact orbit's numbers, or keys; the first set wins. */
+  pathPreset?: string;
+  orbit?: ExactOrbit;
+  keys?: CameraKey[];
+  /** Fly around: the clip's length in seconds (the cloud; your GPU always films about 5 s). */
+  duration?: number;
 }
 
 export interface CanvasNode {
@@ -238,16 +258,21 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   "voice-change": { type: "voice-change", label: "Change voice", group: "Utilities", icon: "AudioWaveform", ops: ["voice-change"], description: "Say a recording again in another voice, keeping its timing" },
   // NVIDIA RE-USE on the open engine only (nothing like it is hosted on fal or Replicate): hidden on a cloud-only install.
   "clean-voice": { type: "clean-voice", label: "Clean up voice", group: "Utilities", icon: "AudioLines", ops: ["enhance-voice"], description: "Remove noise, echo and room sound from speech" },
+  // DBS on the open engine only (nothing like it is hosted; src/lib/av/split.ts): four output handles, one per stem.
+  "split-soundtrack": { type: "split-soundtrack", label: "Split soundtrack", group: "Utilities", icon: "Split", ops: ["separate-audio"], description: "Dialogue, music and effects from any soundtrack, each on its own output" },
   "clone-voice": { type: "clone-voice", label: "Clone voice", group: "Inputs", icon: "UserRound", description: "A voice sample (or one of your saved voices) to speak with" },
   translate: { type: "translate", label: "Translate", group: "Utilities", icon: "Languages", ops: ["translate", "dub"], variants: ["text", "video"], description: "Translate a text, or dub a video into another language" },
   concat: { type: "concat", label: "Assemble film", group: "Utilities", icon: "Film", ops: ["concat"], description: "Up to 50 clips in one film: trim and mute each, pick the frame" },
   restore: { type: "restore", label: "Restore & colourise", group: "Utilities", icon: "Palette", ops: ["restore-video"], description: "Old or black-and-white footage, cleaned and in colour" },
   table: { type: "table", label: "Table", group: "Inputs", icon: "Table", description: "Rows of words: what it feeds runs once per row" },
+  layout: { type: "layout", label: "Layout", group: "Inputs", icon: "LayoutDashboard", description: "Boxes for a headline, a product, a price: the image model draws each in its place" },
+  "camera-path": { type: "camera-path", label: "Camera path", group: "Inputs", icon: "Orbit", description: "A move round the subject: a preset or an exact orbit" },
+  "fly-around": { type: "fly-around", label: "Fly around", group: "Generate", icon: "Rotate3d", ops: ["camera-path"], description: "A still filmed along a camera path, with other views if you have them" },
   output: { type: "output", label: "Output", group: "Output", icon: "MonitorPlay", description: "Preview what's connected, side by side" },
   note: { type: "note", label: "Sticky note", group: "Output", icon: "StickyNote", description: "A note on the board (not run)" },
 };
 
-export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "clean-voice", "translate", "concat", "restore"]);
+export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "clean-voice", "split-soundtrack", "translate", "concat", "restore", "fly-around"]);
 export const isGenerator = (n: Pick<CanvasNode, "type">) => GENERATOR_TYPES.has(n.type);
 
 /** Entries of the Add-node palette (several entries can make the same node type). */
@@ -291,11 +316,15 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("tts"), id: "tts", keywords: "voice speech narration clone" },
   { ...pick("voice-change"), id: "voice-change", keywords: "voice changer speech to speech revoice convert" },
   { ...pick("clean-voice"), id: "clean-voice", keywords: "denoise enhance speech noise clean up voice echo reverb podcast" },
+  { ...pick("split-soundtrack"), id: "split-soundtrack", keywords: "separate stems dialogue music effects soundtrack remove vocals speech isolate dbs" },
   { ...pick("clone-voice"), id: "clone-voice", keywords: "voice sample clone my voice speaker" },
   { ...pick("translate"), id: "translate", data: { mediaKind: "text" }, keywords: "language translate dub localize subtitles" },
   { ...pick("concat"), id: "concat", keywords: "concatenate join merge stitch edit trim mute film assemble" },
   { ...pick("restore"), id: "restore", keywords: "restore colourise colorize archive old footage black and white film scan vhs" },
   { ...pick("table"), id: "table", data: { columns: ["Subject"], rows: [[""], [""], [""]] }, keywords: "rows batch spreadsheet list variations csv grid" },
+  { ...pick("layout"), id: "layout", data: { layout: { summary: { caption: "", meta: [], canvas: "single" }, items: [], aspect: "1:1" } }, keywords: "layout boxes poster text placement composition headline price moss" },
+  { ...pick("camera-path"), id: "camera-path", data: { pathPreset: "orbit_360" }, keywords: "orbit arc camera move path keyframes exact turnaround" },
+  { ...pick("fly-around"), id: "fly-around", keywords: "orbit fly around turnaround camera path 360 spin product" },
   { ...pick("output"), id: "output", keywords: "preview compare result" },
   { ...pick("note"), id: "note", keywords: "comment annotation" },
 ];
@@ -322,6 +351,8 @@ export function paletteItems(mode: "both" | "open" | "cloud" = "both", engine?: 
   if (hit) return hit;
   // Clean up voice has no cloud route: a cloud-only install doesn't offer it at all.
   const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice")).map((p): PaletteItem => {
+    // Split soundtrack runs on your GPU only (DBS is hosted nowhere): a cloud board or a cloud-only install says so.
+    if (p.type === "split-soundtrack" && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? CLOUD_ONLY_PROBLEM : CLOUD_SPLIT_PROBLEM };
     const fixed = p.data?.modelId ? getModel(p.data.modelId) : undefined;
     if (fixed && !runsOn(fixed, "cloud") && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? GPU_ONLY_INSTALL : GPU_ONLY_ENTRY };
     if (mode === "both" || !isGenerator(p) || defaultModelForNode({ type: p.type, data: p.data ?? {} }, mode)) return p;
@@ -348,12 +379,16 @@ export function nodeLabel(n: Pick<CanvasNode, "type" | "data">): string {
 
 /**
  * Ops the canvas can't feed (masks, browser-only tools, multi-speaker scripts, draft finishing, and
- * inputs it has no port for: a 3D model to rig, a list of audio clips to join).
+ * inputs it has no port for: a 3D model to rig or retexture, a list of audio clips to join, the two points of an
+ * inserted moment).
  */
-const UNSUPPORTED_OPS = new Set<Operation>(["grade", "inpaint", "finalize", "dialogue", "rig-3d", "audio-join", "composite"]);
+const UNSUPPORTED_OPS = new Set<Operation>(["grade", "inpaint", "finalize", "dialogue", "rig-3d", "retexture-3d", "audio-join", "composite", "insert-moment"]);
 
-/** Models that only run on a painted mask or clicked points (VACE inpaint, Bria's point eraser): the canvas has neither. */
-const needsMarks = (m: ModelDef) => !!(m.options.requires?.mask || m.options.requires?.points);
+/**
+ * Models that only run on a painted mask or clicked points (VACE inpaint, Bria's point eraser), or on a light picked on a
+ * sphere (H3 Max relight): the canvas has none of these.
+ */
+const needsMarks = (m: ModelDef) => !!(m.options.requires?.mask || m.options.requires?.points || m.options.lightSphere);
 
 /** Preferred defaults; anything missing falls back to the first catalog model for that op and engine. */
 const PREFERRED: Partial<Record<Operation, Partial<Record<Engine, string>>>> = {
@@ -437,10 +472,16 @@ const KIND_OP: Record<MediaKind, Operation> = { image: "t2i", video: "t2v", audi
 /** The model a new generator node starts with. */
 export function defaultModelForNode(n: Pick<CanvasNode, "type" | "data">, engine: Engine): ModelDef | undefined {
   if (n.type === "concat") return getModel(CONCAT_MODELS[engine]);
+  // Split soundtrack: only a model that makes its stems, never another separator in its place (none on the cloud).
+  if (n.type === "split-soundtrack") return splitModels().find((m) => runsOn(m, engine));
+  if (n.type === "fly-around") return getModel(FLY_MODELS[engine]);
   if (n.type === "model") {
     const kind = n.data.mediaKind ?? "image";
     return defaultModelFor(n.data.op ?? KIND_OP[kind], engine) ?? MODELS.find((m) => m.engine === engine && !m.hidden && m.kind === kind);
   }
+  // Clean up voice is RE-USE, on your GPU only: the hosted cleaners (VEED, DeepFilterNet 3: Clean up dialogue's cloud
+  // engine) share its op but are other tools, so the node doesn't take one of them on the cloud.
+  if (n.type === "clean-voice" && engine === "cloud") return undefined;
   const op = nodeOps(n)[0];
   // The Upscale node's Regenerate choice starts on Open-H3 Regenerate (on the cloud the entry is disabled: paletteItems).
   const fixed = n.data.modelId === REGEN_MODEL ? getModel(REGEN_MODEL) : undefined;
@@ -471,14 +512,19 @@ export function modelChoices(n: Pick<CanvasNode, "type" | "data">): ModelDef[] {
     return MODELS.filter((m) => !m.hidden && (!kind || m.kind === kind) && !needsMarks(m) && m.routes.some((r) => !UNSUPPORTED_OPS.has(r.op)));
   }
   if (n.type === "concat") return Object.values(CONCAT_MODELS).flatMap((id) => getModel(id) ?? []);
+  if (n.type === "split-soundtrack") return splitModels();
+  if (n.type === "fly-around") return [FLY_MODELS.cloud, FLY_MODELS.open].flatMap((id) => getModel(id) ?? []);
   const ops = nodeOps(n);
-  return MODELS.filter((m) => ops.some((op) => supportsOp(m, op)) && (!m.hidden || ops.includes("frame")) && !needsMarks(m));
+  // Clean up voice offers only what runs on your GPU (RE-USE): the hosted cleaners share its op but are Clean up
+  // dialogue's cloud engine (defaultModelForNode).
+  const own = (m: ModelDef) => n.type !== "clean-voice" || runsOn(m, "open");
+  return MODELS.filter((m) => ops.some((op) => supportsOp(m, op)) && (!m.hidden || ops.includes("frame")) && !needsMarks(m) && own(m));
 }
 
 // ---------------------------------------------------------------------------
 // Ports
 
-export type InputPortId = "prompt" | "elements" | "images" | "endImage" | "video" | "videos" | "audio" | "voice";
+export type InputPortId = "prompt" | "elements" | "images" | "endImage" | "video" | "videos" | "audio" | "voice" | "path";
 
 export interface PortDef {
   id: InputPortId;
@@ -491,7 +537,7 @@ export interface PortDef {
 export const OUT = "out";
 export const PREVIEW_IN = "in";
 
-const INPUT_ORDER: InputPortId[] = ["prompt", "elements", "images", "endImage", "video", "videos", "audio", "voice"];
+const INPUT_ORDER: InputPortId[] = ["prompt", "elements", "images", "endImage", "video", "videos", "audio", "voice", "path"];
 
 /** Which inputs each operation reads. */
 const OP_PORTS: Partial<Record<Operation, InputPortId[]>> = {
@@ -567,6 +613,13 @@ export function inputPorts(n: Pick<CanvasNode, "type" | "data">): PortDef[] {
   // Clone voice: the sample can come from another node (a recording, a generated voice) instead of a file.
   if (n.type === "clone-voice") return [{ id: "audio", label: "Sample", type: "audio", multiple: false }];
   if (n.type === "output") return [];
+  // Fly around: the still (then any other views of the subject), the path, and motion words.
+  if (n.type === "fly-around")
+    return [
+      { id: "prompt", label: "Motion words", type: "text", multiple: true },
+      { id: "images", label: "Still, then views", type: "image", multiple: true },
+      { id: "path", label: "Camera path", type: "path", multiple: false },
+    ];
   if (!isGenerator(n)) return [];
   const model = n.data.modelId ? getModel(n.data.modelId) : undefined;
   const all = nodeOps(n, model);
@@ -599,6 +652,7 @@ export function inputPorts(n: Pick<CanvasNode, "type" | "data">): PortDef[] {
     videos: { id: "videos", label: "Clips", type: "video", multiple: true },
     audio: { id: "audio", label: "Audio", type: "audio", multiple: false },
     voice: { id: "voice", label: "Voice", type: "voice", multiple: false },
+    path: { id: "path", label: "Camera path", type: "path", multiple: false },
   };
   return INPUT_ORDER.filter((id) => ids.has(id)).map((id) => defs[id]);
 }
@@ -609,9 +663,11 @@ const toPortType = (k: MediaKind | undefined): PortType | null => (k === "image"
 
 /** The type of a node's output handle (null = no output handle). */
 export function outputType(_graph: CanvasGraph, n: CanvasNode): PortType | null {
-  if (n.type === "prompt" || n.type === "table") return "text";
+  if (n.type === "prompt" || n.type === "table" || n.type === "layout") return "text";
   if (n.type === "clone-voice") return "voice";
   if (n.type === "element") return "element";
+  if (n.type === "camera-path") return "path";
+  if (n.type === "fly-around") return "video";
   if (MEDIA_INPUT_TYPE[n.type]) return MEDIA_INPUT_TYPE[n.type]!;
   if (!isGenerator(n)) return null;
   // Never inferred from the inputs (that would walk the whole upstream graph): a chosen or fixed op, else the model's kind.
@@ -627,9 +683,96 @@ export function outputType(_graph: CanvasGraph, n: CanvasNode): PortType | null 
   return toPortType(n.data.mediaKind ?? "image");
 }
 
+// ---------------------------------------------------------------------------
+// Output handles: one OUT per node, except Split soundtrack (DBS D8), whose four handles each carry one stem
+// into the next node's chain (ChainSlot.stem, read by pickOutput on the server).
+
+export interface OutputPortDef {
+  /** The handle id an edge saves as its sourceHandle. */
+  id: string;
+  label: string;
+  type: PortType;
+  /** Split soundtrack: the stem this handle carries. */
+  stem?: StemId;
+  /** Why nothing can be taken from this handle here (the node's model can't make that stem, or can't run here). */
+  disabled?: string;
+}
+
+/**
+ * Split soundtrack's handles, in the order the node shows them. Dialogue is OUT itself, so an edge drawn or saved without
+ * a handle (OUT, null) takes the dialogue, the stem a chain without one takes anyway; "voice" is read as OUT too.
+ */
+export const SPLIT_HANDLES: { id: string; stem: StemId; label: string }[] = STEMS.map((s) => ({ id: s.id === "voice" ? OUT : s.id, stem: s.id, label: s.label }));
+
+/**
+ * The stems each separator the node may run makes (the open engine's DBS: all four). Only these models are offered: the
+ * cloud has none while DBS is hosted nowhere, and Demucs (a music separator) is never put in its place.
+ */
+export const SPLIT_STEMS: Record<string, readonly StemId[]> = {
+  [SPLIT_MODEL]: ["voice", "music", "effects", "background"],
+};
+
+const splitModels = (): ModelDef[] => Object.keys(SPLIT_STEMS).flatMap((id) => getModel(id) ?? []);
+
+/** A Split soundtrack handle's id as stored (OUT for Dialogue, also for "voice" and no handle), or undefined when it has none such. */
+export function splitHandle(handle: string | null | undefined): string | undefined {
+  if (!handle || handle === "voice") return OUT;
+  return SPLIT_HANDLES.some((h) => h.id === handle) ? handle : undefined;
+}
+
+/** The stem an edge out of a Split soundtrack node carries (undefined for any other node, or a handle it doesn't have). */
+export function edgeStem(source: Pick<CanvasNode, "type"> | undefined, handle: string | null | undefined): StemId | undefined {
+  if (source?.type !== "split-soundtrack") return undefined;
+  const id = splitHandle(handle);
+  return SPLIT_HANDLES.find((h) => h.id === id)?.stem;
+}
+
+/** The names a separator may give each stem (as the server's pickOutput reads them). */
+const STEM_NAMES: Record<StemId, string[]> = {
+  voice: ["voice", "vocals", "speech", "target"],
+  music: ["music"],
+  effects: ["effects", "sfx"],
+  background: ["background", "accompaniment", "instrumental", "residual", "no_vocals"],
+};
+
+/** A result's output for one stem (meta.stem), as the next step takes it; without a stem, the first audio. */
+export function stemOutput<T extends { kind: string; meta?: Record<string, unknown> }>(outputs: readonly T[], stem: StemId | undefined): T | undefined {
+  const audio = outputs.filter((o) => o.kind === "audio");
+  if (!stem) return audio[0];
+  return audio.find((o) => typeof o.meta?.stem === "string" && STEM_NAMES[stem].includes(o.meta.stem.toLowerCase()));
+}
+
+/**
+ * Why a Split soundtrack node can't run on this install (it runs on your GPU only), or null. A node with no model yet,
+ * or one the catalog no longer has, isn't an engine problem: describeNode asks for a model and its edges stay.
+ */
+export function splitProblem(n: Pick<CanvasNode, "data">, mode: "both" | Engine = "both"): string | null {
+  if (mode === "cloud") return CLOUD_ONLY_PROBLEM;
+  const model = nodeModel(n, mode);
+  // A separator that isn't one of the node's (a cloud one such as Demucs, or a two-stem open one) is told to pick DBS.
+  return model && !SPLIT_STEMS[model.id] ? `${model.name} can't split a soundtrack into its stems — pick ${splitModels()[0]?.name ?? "another model"}` : null;
+}
+
+/** A node's output handles: OUT with its type, Split soundtrack's four stems, or none. */
+export function outputPorts(graph: CanvasGraph, n: CanvasNode, mode: "both" | Engine = "both"): OutputPortDef[] {
+  if (n.type === "split-soundtrack") {
+    // Only the install shuts the handles (a cloud-only one): a node still missing its model keeps its edges, and a
+    // separator that makes fewer stems shuts the ones it doesn't make.
+    const why = mode === "cloud" ? CLOUD_ONLY_PROBLEM : undefined;
+    const model = nodeModel(n, mode);
+    const stems = model && SPLIT_STEMS[model.id];
+    return SPLIT_HANDLES.map((h) => {
+      const disabled = why ?? (model && stems && !stems.includes(h.stem) ? `${model.name} doesn't make a ${h.label.toLowerCase()} stem` : undefined);
+      return { id: h.id, label: h.label, type: "audio" as const, stem: h.stem, ...(disabled && { disabled }) };
+    });
+  }
+  const type = outputType(graph, n);
+  return type ? [{ id: OUT, label: PORT_TYPE_LABEL[type], type }] : [];
+}
+
 /** Which ports accept which types: a voice input also takes plain audio (a sample straight from a file or a model). */
 export function acceptsType(port: PortDef | "preview", type: PortType): boolean {
-  if (port === "preview") return type !== "element";
+  if (port === "preview") return type !== "element" && type !== "path";
   return port.type === type || (port.type === "voice" && type === "audio");
 }
 
@@ -722,14 +865,18 @@ export interface Connection {
 }
 
 /** Why this edge can't be drawn, or null when it can. */
-export function connectionError(graph: CanvasGraph, c: Connection): string | null {
+export function connectionError(graph: CanvasGraph, c: Connection, mode: "both" | Engine = "both"): string | null {
   const nodes = nodeMap(graph);
   const s = nodes.get(c.source);
   const t = nodes.get(c.target);
   if (!s || !t) return "That node no longer exists";
   if (s.id === t.id) return "A node can't feed itself";
-  const type = outputType(graph, s);
-  if (!type || (c.sourceHandle && c.sourceHandle !== OUT)) return `${nodeLabel(s)} has no output`;
+  // Split soundtrack: one of its four stems (Dialogue for OUT or no handle); every other node: OUT.
+  const handle = s.type === "split-soundtrack" ? splitHandle(c.sourceHandle) : !c.sourceHandle || c.sourceHandle === OUT ? OUT : undefined;
+  const out = handle ? outputPorts(graph, s, mode).find((p) => p.id === handle) : undefined;
+  if (!out) return `${nodeLabel(s)} has no ${s.type === "split-soundtrack" && c.sourceHandle ? `${c.sourceHandle} ` : ""}output`;
+  if (out.disabled) return out.disabled;
+  const type = out.type;
   if (t.type === "output") {
     if (c.targetHandle && c.targetHandle !== PREVIEW_IN) return "Unknown input";
     if (!acceptsType("preview", type)) return "Elements go into a model's Elements input";
@@ -741,7 +888,7 @@ export function connectionError(graph: CanvasGraph, c: Connection): string | nul
     if (t.type === "concat" && graph.edges.filter((e) => e.target === t.id && e.source !== s.id).length >= CONCAT_LIMITS.clips) return `Assemble film takes up to ${CONCAT_LIMITS.clips} clips`;
     // Rows from a table: one table per node, and Join clips can't take a clip per row (the concatenator can).
     if (graph.nodes.some((n) => n.type === "table")) {
-      const withEdge: CanvasGraph = { ...graph, edges: [...graph.edges, { id: "", source: s.id, target: t.id, sourceHandle: OUT, targetHandle: c.targetHandle ?? null }] };
+      const withEdge: CanvasGraph = { ...graph, edges: [...graph.edges, { id: "", source: s.id, target: t.id, sourceHandle: handle, targetHandle: c.targetHandle ?? null }] };
       const rows = rowsFeeding(withEdge, t);
       if (rows && "error" in rows) return rows.error;
       if (rows && t.type === "join") return "Join clips takes one clip per input. Assemble film joins a clip per row";
@@ -764,9 +911,10 @@ export function singleInput(graph: CanvasGraph, target: string, targetHandle?: s
 
 type Source =
   | { kind: "text"; text: string }
+  | { kind: "layout"; draft: LayoutDraft }
   | { kind: "media"; url: string }
   | { kind: "element"; handle: string }
-  | { kind: "node"; nodeId: string };
+  | { kind: "node"; nodeId: string; stem?: StemId };
 
 const SLOT: Record<InputPortId, ChainSlot["slot"] | null> = {
   prompt: "prompt",
@@ -777,6 +925,7 @@ const SLOT: Record<InputPortId, ChainSlot["slot"] | null> = {
   videos: "videos",
   audio: "audio",
   voice: "voiceAudio",
+  path: null,
 };
 
 type InputKey = "endImage" | "video" | "audio" | "voiceAudio";
@@ -852,18 +1001,24 @@ export interface NodeDescription extends Partial<NodeRequest> {
   error?: string;
 }
 
-function sourceOf(graph: CanvasGraph, s: CanvasNode): Source | { error: string } {
+/** What a node hands on along an edge (`handle`: the edge's sourceHandle, which picks a Split soundtrack stem). */
+function sourceOf(graph: CanvasGraph, s: CanvasNode, handle?: string | null): Source | { error: string } {
   if (s.type === "prompt") return { kind: "text", text: (s.data.text ?? "").trim() };
   // A table is read row by row (rowRequest); read whole, it is its first row.
   if (s.type === "table") {
     const first = tableRows(s)[0];
     return first ? { kind: "text", text: rowText(first) } : { error: `Fill in a row of “${nodeLabel(s)}”` };
   }
+  // A layout goes in whole: the request carries it and the plan compiles it for the model at the size it renders.
+  if (s.type === "layout") {
+    const draft = readLayout(s.data.layout);
+    return draft?.items.length ? { kind: "layout", draft } : { error: `Draw a box in “${nodeLabel(s)}”: Edit layout` };
+  }
   if (s.type === "clone-voice") {
     // A sample wired in wins over the node's own file (a recording, a generated voice).
     const e = graph.edges.find((x) => x.target === s.id && x.targetHandle === "audio");
     const from = e && graph.nodes.find((n) => n.id === e.source);
-    if (from && from.type !== "clone-voice") return sourceOf(graph, from);
+    if (from && from.type !== "clone-voice") return sourceOf(graph, from, e.sourceHandle);
     return s.data.url ? { kind: "media", url: s.data.url } : { error: `Add a voice sample to “${nodeLabel(s)}”: record, upload or pick a saved voice` };
   }
   if (MEDIA_INPUT_TYPE[s.type]) {
@@ -871,7 +1026,10 @@ function sourceOf(graph: CanvasGraph, s: CanvasNode): Source | { error: string }
     return s.data.url ? { kind: "media", url: s.data.url } : { error: `Add ${what} to “${nodeLabel(s)}”` };
   }
   if (s.type === "element") return s.data.handle ? { kind: "element", handle: s.data.handle } : { error: `Pick an element in “${nodeLabel(s)}”` };
-  if (isGenerator(s)) return { kind: "node", nodeId: s.id };
+  if (isGenerator(s)) {
+    const stem = edgeStem(s, handle);
+    return { kind: "node", nodeId: s.id, ...(stem && { stem }) };
+  }
   return { error: `${nodeLabel(s)} has no output` };
 }
 
@@ -943,6 +1101,10 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
   if (n.type !== "model" && op && !supportsOp(model, op)) return { error: `${model.name} can't do ${OPERATION_LABELS[op].toLowerCase()} — pick another model` };
   if ((op === "translate" || op === "dub") && !n.data.params?.targetLanguage) return { error: op === "dub" ? "Pick a language to dub into" : "Pick a language to translate into" };
   if (n.type === "concat") return concatRequest(graph, n, model);
+  if (n.type === "fly-around") return flyAroundRequest(graph, n, model);
+  // Keyframe animation: a table wired in is its gaps' timing (one row per gap), not a run per row.
+  const timingTable = model.options.inbetween ? timingTableOf(graph, n) : undefined;
+  if (timingTable) return inbetweenRequest(graph, n, model, timingTable);
   if (!single) {
     const rows = rowsFeeding(graph, n);
     if (rows && "error" in rows) return rows;
@@ -955,6 +1117,7 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
   const deps: string[] = [];
   const texts: string[] = [];
   const handles: string[] = [];
+  const layouts: LayoutDraft[] = [];
   let generatedText = 0;
 
   for (const port of ports) {
@@ -967,13 +1130,14 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
       const s = nodes.get(e.source)!;
       const type = outputType(graph, s);
       if (!type || !acceptsType(port, type)) return { error: `${nodeLabel(s)} can't go into ${port.label}` };
-      const src = sourceOf(graph, s);
+      const src = sourceOf(graph, s, e.sourceHandle);
       if ("error" in src) return src;
       list.push(src);
     }
     if (port.id === "prompt") {
       for (const src of list) {
         if (src.kind === "text" && src.text) texts.push(src.text);
+        if (src.kind === "layout") layouts.push(src.draft);
         if (src.kind === "node") {
           generatedText++;
           chain.push({ slot: "prompt" });
@@ -1007,11 +1171,17 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
     if (!field || !src) continue;
     if (src.kind === "media") inputs[field] = src.url;
     else if (src.kind === "node") {
-      chain.push({ slot: SLOT[port.id]! });
+      // A stem from Split soundtrack: the step takes that one of its outputs (pickOutput's meta.stem).
+      chain.push({ slot: SLOT[port.id]!, ...(src.stem && { stem: src.stem }) });
       deps.push(src.nodeId);
     }
   }
   if (generatedText > 1) return { error: "Connect one generated text at a time — join the others into one text model" };
+  if (layouts.length > 1) return { error: "Connect one layout at a time" };
+  // A picture model takes the layout itself (params.extra.layout: planLayout compiles it for that model at the size it
+  // renders, prompt rewriting off); anything else reads it as sentences.
+  const layout = layouts[0] && model.kind === "image" ? layouts[0] : undefined;
+  if (layouts[0] && !layout) texts.push(compileWords(layouts[0]));
   // A voice wired into a model that only speaks preset voices: say which ones clone.
   if (!model.options.voiceClone && graph.edges.some((e) => e.target === n.id && e.targetHandle === "voice")) {
     const cloners = MODELS.filter((m) => !m.hidden && m.options.voiceClone && op && supportsOp(m, op) && m.engine === model.engine).map((m) => m.name);
@@ -1031,6 +1201,8 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
 
   const params: GenParams = { ...n.data.params };
   for (const k of Object.keys(params) as (keyof GenParams)[]) if (params[k] === undefined || params[k] === "") delete params[k];
+  // The node's aspect ratio is the picture's (the Layout editor draws on it and sets it), so the boxes land where drawn.
+  if (layout) params.extra = { ...params.extra, [LAYOUT_PARAM]: layout };
   const request: GenerationRequest = {
     feature: "canvas",
     modelId: model.id,
@@ -1046,11 +1218,66 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
 }
 
 // ---------------------------------------------------------------------------
+// Keyframe animation on the Canvas: keyframe images into an In-between node (Fuobe Animation), and a table of its gaps
+
+/** The "Keyframes → animation" table's columns: one row per gap between two keyframes. */
+export const TIMING_COLUMNS = ["Frames", "Speed", "Words"];
+
+/** The table wired straight into an In-between node, if any. */
+function timingTableOf(graph: CanvasGraph, n: CanvasNode): CanvasNode | undefined {
+  const nodes = nodeMap(graph);
+  return incoming(graph, n.id)
+    .map((e) => nodes.get(e.source))
+    .find((s): s is CanvasNode => s?.type === "table");
+}
+
+/**
+ * A timing table's rows as gaps: a "Frames" (or "Length") column, a "Speed" column (1–4, "×2" reads as 2) and a "Words"
+ * column, found by name (else in that order). Missing cells take the defaults.
+ */
+export function timingFromTable(t: Pick<CanvasNode, "data">): Partial<InbetweenTiming> {
+  const columns = (t.data.columns ?? []).map((c) => c.trim().toLowerCase());
+  const at = (re: RegExp, fallback: number) => {
+    const i = columns.findIndex((c) => re.test(c));
+    return i >= 0 ? i : fallback < columns.length ? fallback : -1;
+  };
+  const fi = at(/^(frames?|length)/, 0);
+  const si = at(/^(speed|every)/, 1);
+  const wi = at(/^(words?|prompt|action|what)/, 2);
+  const num = (v: string | undefined) => Number(String(v ?? "").replace(/[^\d.]/g, ""));
+  const gaps = tableRows(t).map((r): GapTiming => {
+    const frames = fi >= 0 ? num(r[fi]) : NaN;
+    const speed = si >= 0 ? num(r[si]) : 1;
+    const words = wi >= 0 ? r[wi] : "";
+    return { frames: Number.isFinite(frames) && frames > 0 ? frames : 33, speed: isSpeed(speed) ? speed : 1, ...(words && { prompt: words }) };
+  });
+  return { gaps };
+}
+
+function inbetweenRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, table: CanvasNode): NodeRequest | { error: string } {
+  const without: CanvasGraph = { ...graph, edges: graph.edges.filter((e) => !(e.source === table.id && e.target === n.id)) };
+  const made = buildRequest(without, n, model, true);
+  if ("error" in made) return made;
+  const keys = (made.request.inputs?.images?.length ?? 0) + (made.request.chain?.filter((c) => c.slot === "images").length ?? 0);
+  const asked = timingFromTable(table);
+  if (keys >= 2 && (asked.gaps?.length ?? 0) !== keys - 1) return { error: `${keys} keyframes have ${keys - 1} gaps — give “${nodeLabel(table)}” one row per gap` };
+  const fps = (made.request.params?.extra?.inbetween as Partial<InbetweenTiming> | undefined)?.fps;
+  const timing = timingFor(keys, { ...asked, ...(fps && { fps }) }, model.engine);
+  const problem = keys >= 2 ? timingProblem(timing, keys, model.engine) : null;
+  if (problem) return { error: problem };
+  const params: GenParams = { ...made.request.params, extra: { ...made.request.params?.extra, inbetween: timing }, ...(keys >= 2 && { keyframeTimes: keyTimes(timing) }) };
+  return { ...made, request: { ...made.request, op: "keyframes", params } };
+}
+
+// ---------------------------------------------------------------------------
 // Tables: the node a table feeds runs once per filled row (and so does every node after it, until a Video
 // concatenator joins the rows into one film). "{Column}" in that node's prompt takes the row's cell; otherwise the
 // row's cells, joined, are its connected text.
 
 export const TABLE_LIMITS = { rows: 50, columns: 8, cell: 2000, column: 40 } as const;
+
+/** A Layout node holds up to this many boxes. */
+export const LAYOUT_NODE_LIMITS = { boxes: 64 } as const;
 
 /** A table's filled rows (a row with at least one cell written), each with one cell per column. */
 export function tableRows(t: Pick<CanvasNode, "data">): string[][] {
@@ -1080,6 +1307,8 @@ export function tablesFeeding(graph: CanvasGraph): (n: Pick<CanvasNode, "id" | "
   const feed = (n: Pick<CanvasNode, "id" | "type" | "data">): RowsFeed => {
     if (n.type === "table") return { table: n as CanvasNode, rows: tableRows(n) };
     if (!isGenerator(n) || n.type === "concat" || visiting.has(n.id)) return null;
+    // An In-between node reads its table as timing and makes one film: nothing after it runs per row.
+    if (n.data.modelId && getModel(n.data.modelId)?.options.inbetween) return null;
     const known = memo.get(n.id);
     if (known !== undefined) return known;
     visiting.add(n.id);
@@ -1124,7 +1353,10 @@ function rowRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, b: { tab
   const columns = (b.table.data.columns ?? []).map((c) => c.trim());
   const own = n.data.prompt ?? "";
   const direct = graph.edges.some((e) => e.source === b.table.id && e.target === n.id);
-  const named = direct && columns.some((c) => c && own.includes(`{${c}}`));
+  // Layouts wired into this node: "{Column}" in their words fills from each row too (one layout, a batch of posters).
+  const layoutIds = graph.edges.filter((e) => e.target === n.id && e.targetHandle === "prompt" && nodes.get(e.source)?.type === "layout").map((e) => e.source);
+  const layoutNames = new Set(layoutIds.flatMap((id) => layoutPlaceholders(readLayout(nodes.get(id)!.data.layout) ?? { summary: { caption: "", meta: [], canvas: "single" }, items: [] })));
+  const named = direct && columns.some((c) => c && (own.includes(`{${c}}`) || layoutNames.has(c)));
   const feeds = tablesFeeding(graph);
   const perRow = (id: string) => {
     const r = feeds(nodes.get(id)!);
@@ -1136,7 +1368,12 @@ function rowRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, b: { tab
     const prompt = named ? columns.reduce((p, c, j) => (c ? p.replaceAll(`{${c}}`, cells[j]) : p), own) : own;
     const rowGraph: CanvasGraph = {
       ...graph,
-      nodes: graph.nodes.map((x) => (x.id === b.table.id ? { ...x, type: "prompt" as const, data: { text: named ? "" : rowText(cells) } } : x.id === n.id ? { ...x, data: { ...x.data, prompt } } : x)),
+      nodes: graph.nodes.map((x) => {
+        if (x.id === b.table.id) return { ...x, type: "prompt" as const, data: { text: named ? "" : rowText(cells) } };
+        if (x.id === n.id) return { ...x, data: { ...x.data, prompt } };
+        const d = direct && layoutIds.includes(x.id) ? readLayout(x.data.layout) : null;
+        return d ? { ...x, data: { ...x.data, layout: fillLayout(d, columns, cells) } } : x;
+      }),
     };
     const r = buildRequest(rowGraph, rowGraph.nodes.find((x) => x.id === n.id)!, model, true);
     if ("error" in r) return { error: `Row ${i + 1}: ${r.error}` };
@@ -1307,6 +1544,96 @@ function concatRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef): Node
   return { request: final.request, deps, steps };
 }
 
+/** A Camera path node's keys (a preset, an exact orbit or keys) and their words; none when it has nothing set. */
+export function cameraPathOf(n: Pick<CanvasNode, "data">): { keys: CameraKey[]; label: string } {
+  return flyKeys(pathInputOf(n));
+}
+
+/** What a Camera path node holds, as the planner takes it: the orbit's numbers, a preset, or keys. */
+function pathInputOf(n: Pick<CanvasNode, "data">) {
+  const d = n.data;
+  return d.orbit ? { orbit: d.orbit } : d.pathPreset ? { preset: d.pathPreset } : { keys: d.keys };
+}
+
+/**
+ * Fly around (N7-7): the still (the first image, top to bottom; any more are other views of the subject) filmed along the
+ * connected Camera path, as src/lib/catalog/fly-around.ts plans it. Cloud: H3 Max camera-controls, or with views H3 Max
+ * reference-to-video. Your GPU: MoGe 2's depth of the still, then Wan 2.1 + Uni3C along the server's render of the path.
+ */
+function flyAroundRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef): NodeRequest | { error: string } {
+  const nodes = nodeMap(graph);
+  const into = (port: InputPortId) =>
+    incoming(graph, n.id)
+      .filter((e) => e.targetHandle === port && nodes.has(e.source))
+      .map((e) => nodes.get(e.source)!)
+      .sort(byPosition);
+  const pathNode = into("path")[0];
+  if (!pathNode) return { error: "Connect a Camera path" };
+  if (pathNode.type !== "camera-path") return { error: `${nodeLabel(pathNode)} can't go into Camera path` };
+  const { keys } = cameraPathOf(pathNode);
+  if (keys.length < 2) return { error: `Pick a move in “${nodeLabel(pathNode)}”` };
+  const words: string[] = [];
+  for (const s of into("prompt")) {
+    const src = sourceOf(graph, s);
+    if ("error" in src) return src;
+    if (src.kind !== "text") return { error: "Fly around takes typed words: connect a Text prompt" };
+    if (src.text) words.push(src.text);
+  }
+  const pictures: Source[] = [];
+  for (const s of into("images")) {
+    if (outputType(graph, s) !== "image") return { error: `${nodeLabel(s)} can't go into Still, then views` };
+    const src = sourceOf(graph, s);
+    if ("error" in src) return src;
+    pictures.push(src);
+  }
+  if (!pictures.length) return { error: "Connect the still to film" };
+  const urlOf = (src: Source) => (src.kind === "media" ? src.url : PLACEHOLDER.image);
+  const plan = planFlyAround({
+    engine: model.engine,
+    image: urlOf(pictures[0]),
+    views: pictures.slice(1).map(urlOf),
+    // The node's own numbers or move (not only its keys): with views, the cloud turns the camera from their words.
+    ...pathInputOf(pathNode),
+    prompt: words.join(". ") || undefined,
+    duration: n.data.duration,
+    resolution: n.data.params?.resolution,
+    feature: "canvas",
+    title: nodeLabel(n),
+  });
+  if (plan.blocker) return { error: plan.blocker };
+  // Pictures from other nodes go in as chain slots, in board order; the planner's stand-ins for them come out.
+  const deps: string[] = [];
+  const fromNodes = pictures.flatMap((src) => (src.kind === "node" ? [src.nodeId] : []));
+  for (const id of fromNodes) if (!deps.includes(id)) deps.push(id);
+  const steps: NodeStep[] = plan.steps.map((st) => {
+    // A step takes as many pictures as the planner gave it (the depth and the film: the still; references: all of them).
+    const taken = st.request.inputs?.images?.length ?? 0;
+    const mine = pictures.slice(0, taken);
+    const slots: ChainSlot[] = [];
+    const from: StepSource[] = [];
+    let literal = false;
+    for (const src of mine) {
+      if (src.kind === "node") {
+        slots.push({ slot: "images", position: literal ? "last" : "first" });
+        from.push({ node: src.nodeId });
+      } else literal = true;
+    }
+    for (const [i, c] of (st.request.chain ?? []).entries()) {
+      slots.push(c);
+      from.push({ step: st.after![i] });
+    }
+    const images = mine.flatMap((src) => (src.kind === "media" ? [src.url] : []));
+    const inputs = { ...st.request.inputs, images: images.length ? images : undefined };
+    return {
+      key: st.key,
+      request: { ...st.request, feature: st.key === "main" ? "canvas" : CANVAS_STEP_FEATURE, inputs, ...(slots.length ? { chain: slots } : { chain: undefined }) },
+      from,
+    };
+  });
+  const main = steps.find((st) => st.key === "main")!;
+  return { request: main.request, deps, steps };
+}
+
 /** A Translate node set to video with no cloud model allowed: where the open engine dubs. */
 export const OPEN_DUB_HINT = "Dubbing a video on a canvas runs on the cloud (ElevenLabs Dubbing, HeyGen). On the open engine it's made in Translate & dub, where you check the translation before it's spoken: start it from here";
 
@@ -1320,6 +1647,12 @@ export function describeNode(graph: CanvasGraph, n: CanvasNode, ctx: DescribeCon
   const mode = ctx.engineMode ?? "both";
   // A Fuobe Original as it runs on the node's engine (its routes, its price).
   const model = nodeModel(n, mode);
+  // Split soundtrack runs on your GPU only: a cloud-only install says so, and a node on another separator is told to
+  // pick DBS (a node with no model asks for one below).
+  if (n.type === "split-soundtrack") {
+    const why = splitProblem(n, mode);
+    if (why) return { ...(model && { model }), costUsd: null, error: why };
+  }
   // Dubbing has no open model: an open-only install says where it dubs instead. The concatenator's tools are
   // picked by engine, not by model.
   if (!model) {
@@ -1734,9 +2067,12 @@ export function cleanGraph(graph: CanvasGraph): CanvasGraph {
   const g: CanvasGraph = { ...graph, nodes, edges: [] };
   const ids = new Set(nodes.map((n) => n.id));
   const seen = new Set<string>();
-  for (const e of graph.edges) {
-    if (!ids.has(e.source) || !ids.has(e.target)) continue;
-    const key = `${e.source}|${e.sourceHandle ?? ""}|${e.target}|${e.targetHandle ?? ""}`;
+  const types = new Map(nodes.map((n) => [n.id, n.type]));
+  for (const edge of graph.edges) {
+    if (!ids.has(edge.source) || !ids.has(edge.target)) continue;
+    // A Split soundtrack edge saved as "voice" (or with no handle) is its Dialogue handle, OUT.
+    const e = types.get(edge.source) === "split-soundtrack" && edge.sourceHandle && edge.sourceHandle !== OUT && splitHandle(edge.sourceHandle) === OUT ? { ...edge, sourceHandle: OUT } : edge;
+    const key = `${e.source}|${e.sourceHandle && e.sourceHandle !== OUT ? e.sourceHandle : ""}|${e.target}|${e.targetHandle ?? ""}`;
     if (seen.has(key)) continue;
     const without = { ...g, edges: g.edges };
     if (connectionError(without, e)) continue;
@@ -1891,7 +2227,52 @@ const BLOCKOUT_OPEN = tpl(
   ],
 );
 
+/** Keyframes → animation: three keyframes and a table of their two gaps into one In-between node (Fuobe Animation). */
+const keyframesAnimation = tpl(
+      [
+        { id: "key1", type: "image-input", x: 0, y: 0, data: { label: "Keyframe 1" } },
+        { id: "key2", type: "image-input", x: 0, y: ROW, data: { label: "Keyframe 2" } },
+        { id: "key3", type: "image-input", x: 0, y: ROW * 2, data: { label: "Keyframe 3" } },
+        {
+          id: "timing",
+          type: "table",
+          x: COL,
+          y: ROW * 2 + 40,
+          data: { label: "Gaps (frames, speed ×1–×4, words)", columns: TIMING_COLUMNS, rows: [["37", "1", "she turns toward us"], ["17", "3", "she waves"]] },
+        },
+        {
+          id: "animate",
+          type: "model",
+          x: COL * 2,
+          y: ROW - 40,
+          data: { mediaKind: "video", label: "In-between", op: "keyframes", prompt: "A character animation, clean lines", params: { aspectRatio: "16:9", extra: { stillMouth: true } } },
+          models: { cloud: "fuobe-animation", open: "fuobe-animation" },
+        },
+        { id: "out", type: "output", x: COL * 3, y: ROW - 20, data: { label: "Animation" } },
+      ],
+      [
+        ["key1", "animate", "images"],
+        ["key2", "animate", "images"],
+        ["key3", "animate", "images"],
+        ["timing", "animate", "prompt"],
+        ["animate", "out"],
+      ],
+    );
+
 export const CANVAS_TEMPLATES: CanvasTemplate[] = [
+  {
+    id: "keyframes-animation",
+    name: "Keyframes → animation",
+    description: "Your keyframes in, the in-betweens drawn, one animation: a table times each gap",
+    icon: "Sparkles",
+    hue: 320,
+    // Fuobe Animation runs on both engines: the node takes the template's.
+    build: (engine) => {
+      const g = keyframesAnimation(engine);
+      for (const n of g.nodes) if (n.id === "animate") n.data.engine = engine;
+      return g;
+    },
+  },
   {
     id: "image-animate",
     name: "Image → Animate",

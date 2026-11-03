@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Engine, Generation, GenInput } from "@/lib/catalog/types";
 
 // DBS D9 (docs/research/dbs-separation-7.md §8 and §9 D9): Assist's and MCP's split_soundtrack and remove_dialogue. What
-// a call returns (stems, one stem, one remix), graph C (soundtrack-remix-dbs) as the remix's variant, the open engine
+// a call returns (stems, one stem, one remix), graph C (soundtrack-remix-dbs, Clean up dialogue's oss-dbs-remix) for a remix, the open engine
 // only (the cloud refuses: samAudioCloud is false), price first (estimate_job), and the offline planner's suggestions.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-soundtrack-tools-"));
 process.env.FUOBE_DATA_DIR = dir;
@@ -23,6 +23,7 @@ const gens = await import("@/server/generations");
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
 const { resolveWorkflowId } = await import("@/lib/comfy-variants");
 const split = await import("@/lib/av/split");
+const { getModel } = await import("@/lib/catalog");
 const { CLOUD_ONLY_REMOVE_PROBLEM, CLOUD_REMOVE_PROBLEM } = await import("@/lib/av/remove-dialogue");
 
 beforeAll(() => setSetting("demoMode", "auto"));
@@ -110,13 +111,17 @@ describe("what split_soundtrack returns (splitOutcome)", () => {
   it("a remix plan: one job with the levels, every channel of a stereo source", () => {
     const p = split.planSplit({ engine: "open", media: "/api/files/a.wav", kind: "audio", channels: 2, seconds: 10, remix: { voiceDb: 0, musicDb: -12, effectsDb: -100 } });
     expect(p.mode).toBe("each channel");
-    expect(p.steps[0].request.params?.extra).toMatchObject({ remix: true, voiceDb: 0, musicDb: -12, effectsDb: -100, channels: "each channel" });
+    // Graph C's model (Clean up dialogue's), with all three levels given (the graph's own defaults are -18 dB under the dialogue).
+    expect(p.steps[0].request.modelId).toBe("oss-dbs-remix");
+    expect(p.steps[0].request.params?.extra).toEqual({ voiceDb: 0, musicDb: -12, effectsDb: -100, channels: "each channel", sourceChannels: 2 });
     expect(p.steps[0].request.title).toBe("Mix (Dialogue + Music −12 dB) · soundtrack");
     // A mono source stays one pass; asked for mono, a stereo one too.
     expect(split.planSplit({ engine: "open", media: "/api/files/a.wav", kind: "audio", channels: 1, remix: { voiceDb: 0, musicDb: 0, effectsDb: 0 } }).mode).toBe("mono");
     expect(split.planSplit({ engine: "open", media: "/api/files/a.wav", kind: "audio", channels: 2, stereo: false, remix: { voiceDb: 0, musicDb: 0, effectsDb: 0 } }).mode).toBe("mono");
     // Without levels: as the Audio hub's plan (mono, four stems).
-    expect(split.planSplit({ engine: "open", media: "/api/files/a.wav", kind: "audio", channels: 2 }).steps[0].request.params?.extra).toEqual({ channels: "mono", sourceChannels: 2 });
+    const plain = split.planSplit({ engine: "open", media: "/api/files/a.wav", kind: "audio", channels: 2 }).steps[0].request;
+    expect(plain.params?.extra).toEqual({ channels: "mono", sourceChannels: 2 });
+    expect(plain.modelId).toBe(split.SPLIT_MODEL);
   });
 });
 
@@ -124,14 +129,13 @@ describe("graph C runs for a remix (soundtrack-remix-dbs)", () => {
   const has = () => true;
   const req = (extra: Record<string, unknown>) => ({ op: "separate-audio", clips: 0, images: 0, audio2: false, extra, has });
 
-  it("is separate-soundtrack-dbs's variant for params.extra.remix", () => {
-    expect(resolveWorkflowId("separate-soundtrack-dbs", req({ remix: true }))).toBe("soundtrack-remix-dbs");
-    expect(resolveWorkflowId("separate-soundtrack-dbs", req({}))).toBe("separate-soundtrack-dbs");
-    expect(resolveWorkflowId("separate-soundtrack-dbs", { ...req({ remix: true }), has: () => false })).toBe("separate-soundtrack-dbs");
+  it("runs on graph C's own model (oss-dbs-remix), not as a variant of the four-stem split", () => {
+    expect(getModel("oss-dbs-remix")?.routes.find((r) => r.provider === "comfyui")?.endpoint).toBe("soundtrack-remix-dbs");
+    expect(resolveWorkflowId("separate-soundtrack-dbs", req({ voiceDb: 0, musicDb: -12, effectsDb: -100 }))).toBe("separate-soundtrack-dbs");
   });
 
   it("binds the levels to Adjust Audio Volume and the DBS rules to the loader and the split", async () => {
-    const input: GenInput = { seed: 1, audio: "film.wav", extra: { remix: true, voiceDb: -6, musicDb: -100, effectsDb: 3, channels: "each channel", separationModel: "DBS-TIGER-DnR" } };
+    const input: GenInput = { seed: 1, audio: "film.wav", extra: { voiceDb: -6, musicDb: -100, effectsDb: 3, channels: "each channel", separationModel: "DBS-TIGER-DnR" } };
     const { workflow } = await prepareWorkflow("soundtrack-remix-dbs", input, {
       generationId: "gen1",
       op: "separate-audio",
@@ -144,13 +148,19 @@ describe("graph C runs for a remix (soundtrack-remix-dbs)", () => {
     expect(workflow["2"].inputs.model).toBe("DBS-TIGER-DnR");
     expect(workflow["3"].inputs.channels).toBe("each channel");
     expect([workflow["4"].inputs.volume, workflow["5"].inputs.volume, workflow["6"].inputs.volume]).toEqual([-6, -100, 3]);
-    expect(workflow["9"]).toMatchObject({ class_type: "SaveAudioAdvanced", inputs: { format: "flac" } });
+    expect(workflow["9"]).toMatchObject({ class_type: "SaveAudioAdvanced", inputs: { format: "flac", filename_prefix: "fuobe/gen1" } });
+    expect(workflow["10"]).toMatchObject({ class_type: "PreviewAny" });
   });
 
   it("is in the manifest, validated, with its pack and the four DBS files on the GPU pre-flight's index", () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/comfyui/manifest.json"), "utf8"));
     const w = manifest.workflows.find((x: { id: string }) => x.id === "soundtrack-remix-dbs");
-    expect(w).toMatchObject({ capability: "separate-audio", validated: true, outputs: [{ node: "9", kind: "audio" }] });
+    expect(w).toMatchObject({ capability: "separate-audio", validated: true, outputs: [
+        { node: "9", kind: "audio", stem: "voice" },
+        { node: "10", kind: "text", role: "report" },
+      ],
+    });
+    expect(w.defaults).toMatchObject({ voiceDb: 0, musicDb: -18, effectsDb: -18 });
     const reqs = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/comfyui/requirements.json"), "utf8"));
     const r = reqs.workflows?.["soundtrack-remix-dbs"] ?? reqs["soundtrack-remix-dbs"];
     expect(r.packs).toEqual({ "ComfyUI-DBS": ["DBSLoader", "DBSSeparate"] });
@@ -269,12 +279,16 @@ describe("split_soundtrack and remove_dialogue as tools", () => {
   it("runs a remix as one mixed file (graph C)", async () => {
     const out = await run("split_soundtrack", { media: wav("remix.wav"), levels_db: { music: -12 }, keep: ["dialogue", "music"] });
     const body = JSON.parse(out.content as string);
-    expect(body.returns).toBe("one mixed file: Dialogue + Music −12 dB");
+    expect(body.returns).toMatch(/^one mixed file: Dialogue \+ Music −12 dB /);
+    expect(body.returns).toMatch(/meta\.stem voice/);
     const g = await finished(body.result);
-    expect(g.request.params?.extra).toMatchObject({ remix: true, voiceDb: 0, musicDb: -12, effectsDb: -100 });
-    expect(g.outputs).toHaveLength(1);
-    expect(g.outputs[0]).toMatchObject({ kind: "audio" });
-    expect(g.outputs[0].meta?.stem).toBeUndefined();
+    expect(g.modelId).toBe("oss-dbs-remix");
+    expect(g.request.params?.extra).toMatchObject({ voiceDb: 0, musicDb: -12, effectsDb: -100 });
+    expect(g.request.params?.extra).not.toHaveProperty("remix");
+    // Graph C tags its one audio output as the voice stem, whatever the levels.
+    const audio = g.outputs.filter((o) => o.kind === "audio");
+    expect(audio).toHaveLength(1);
+    expect(audio[0].meta?.stem).toBe("voice");
   }, 30_000);
 
   it("runs Remove dialogue as the page does: the split, then the mux with the background stem", async () => {
