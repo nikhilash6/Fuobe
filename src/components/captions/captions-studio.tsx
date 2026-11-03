@@ -1,6 +1,7 @@
 "use client";
 
 import { Captions, Download, FileUp, Flame, Loader2, Sparkles, Wand2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { realDuration } from "@/components/av/frame-sampler";
 import { SourceLanguageSelect } from "@/components/av/language-picker";
 import { MediaDrop } from "@/components/av/media-drop";
 import { StepList } from "@/components/av/step-list";
+import { VoiceFirstSwitch } from "@/components/studio/voice-first-switch";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
 import { useCreateGeneration, useEngine, useGenerations } from "@/lib/api";
@@ -35,6 +37,7 @@ import {
   type CaptionSize,
 } from "@/lib/av/captions";
 import { parseCues, toSrt, toVtt, type Cue } from "@/lib/cues";
+import { speechEditLink } from "@/lib/speech-edit-handoff";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 
@@ -140,12 +143,15 @@ export function CaptionsStudio({ tabs }: { tabs?: React.ReactNode }) {
 }
 
 function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Saved | null; onReplace: (v: SlotValue | null) => void }) {
-  const [engine] = useEngine();
+  const [engine, , mode] = useEngine();
+  const router = useRouter();
   const create = useCreateGeneration();
   const editor = useCueEditor(restored?.cues ?? []);
   const [look, setLook] = useState<CaptionLook>(restored?.look ?? DEFAULT_LOOK);
   const [transcriptId, setTranscriptId] = useState<string | undefined>(restored?.transcriptId);
   const [source, setSource] = useState("auto");
+  // "Clean the voice first": on for a video (music and effects under the speech blur the words), free on your GPU.
+  const [voiceFirst, setVoiceFirst] = useState(true);
   const [quick, setQuick] = useState(false);
   const transcript = useGeneration(transcriptId);
   const player = useRef<HTMLVideoElement>(null);
@@ -179,7 +185,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
   }, [video, cues, look, transcriptId]);
 
   const transcribe = () =>
-    create.mutate(transcribeRequest({ engine, video: video.ref, sourceLanguage: source }), {
+    create.mutate(transcribeRequest({ engine, video: video.ref, sourceLanguage: source, voiceFirst, seconds: duration }), {
       onSuccess: (items) => {
         loaded.current = null;
         setTranscriptId(items[0].id);
@@ -256,6 +262,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
                 {transcribing ? <Loader2 className="size-4 animate-spin" /> : <Captions className="size-4" />}
                 {transcribing ? "Transcribing…" : "Transcribe the speech"}
               </Button>
+              <VoiceFirstSwitch className="mt-3" engine={engine} on={voiceFirst} onChange={setVoiceFirst} seconds={duration} />
               <p className="mt-2 text-[12px] text-muted-foreground">{engine === "open" ? "Detects 30 languages." : "ElevenLabs Scribe v2 (word timings, ≈ $0.008 per minute)."}</p>
               {t && <StepList className="mt-3" steps={[{ key: "t", label: "Transcript", g: t }]} />}
             </div>
@@ -268,6 +275,8 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
             }}
             className="max-h-[60vh]"
             emptyHint="Transcribe the clip, import an .srt / .vtt, or write the lines yourself."
+            /* Fix this line: change what was said in the clip itself (Edit speech, your GPU only). */
+            onFixLine={mode === "cloud" ? undefined : (i) => router.push(speechEditLink({ media: video.ref, kind: "video", name: video.name, cues, line: i }))}
           />
         </Panel>
 

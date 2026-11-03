@@ -172,7 +172,7 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
     const core = new Set();
     const byPack = {};
     for (const n of wf.customNodes) byPack[n.name] ??= new Set();
-    for (const cls of new Set(Object.values(graph).map((n) => n.class_type))) {
+    for (const cls of new Set([...Object.values(graph).map((n) => n.class_type), ...(wf.runtimeNodes ?? [])])) {
       const owner = ownerOf(cls, wf);
       if (!owner) continue;
       if (owner === 'core') core.add(cls);
@@ -189,6 +189,8 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       optional: uniq(wf.models.filter((m) => m.optional).map((m) => `${m.folder}/${m.file}`)),
       vramGb: Number(wf.vramGb) || 0,
       isolated: wf.worker === 'isolated',
+      // The card its nodes need (the NVIDIA RTX Video nodes): readiness checks it against the GPU's name.
+      ...(wf.gpu && { gpu: wf.gpu }),
       firstRun: wf.autoDownloads ?? [],
       ...(wf.validated && { validated: true }),
     };

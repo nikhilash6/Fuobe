@@ -102,7 +102,7 @@ export const GenerationRequestSchema = z.object({
       slowdown: z.number().min(1).max(8).optional(),
       colormap: z.string().max(40).optional(),
       sideBySide: z.boolean().optional(),
-      matteOutput: z.enum(["cutout", "matte"]).optional(),
+      matteOutput: z.enum(["cutout", "matte", "foreground"]).optional(),
       position: Focus.optional(),
       scale: z.number().positive().max(10).optional(),
       animation: z.union([z.string().max(200), z.number()]).optional(),
@@ -146,4 +146,6 @@ export const GenerationRequestSchema = z.object({
   // What a tool calls its result (Trim · 0:01.0–0:02.5, Captions · Karaoke), shown instead of the prompt.
   title: z.string().max(200).optional(),
   batchTitle: z.string().max(200).optional(),
+  // "Clean the voice first" (src/lib/av/voice-first.ts): a transcript or lip sync runs on the speech alone.
+  voiceFirst: z.boolean().optional(),
 });

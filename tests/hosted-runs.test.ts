@@ -32,6 +32,8 @@ const { resetRates } = await import("@/server/rate");
 const billing = await import("@/server/billing");
 const { visitorStatus } = await import("@/server/account-gpu");
 const { poolAllows } = await import("@/server/hosted");
+const { writeSnapshot } = await import("@/server/gpu/snapshots");
+const { RTX_MISSING } = await import("@/lib/catalog/rtx-video");
 
 let fake: FakeBilling;
 let a = "";
@@ -145,6 +147,37 @@ describe("hosted runs on", () => {
     expect(quoted?.quote).toBeTruthy();
   });
 
+  it("Clean the voice first: its clean-voice step plans and prices here, and a policy that keeps it off keeps the run off", async () => {
+    process.env.FUOBE_BILLING_URL = fake.url;
+    process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
+    fake.policy = { ...fake.policy, uploads: { image: true, video: false, audio: true } };
+    const up = await upload(wav(), "audio/wav", "voice.wav");
+    expect(up.status).toBe(201);
+    const { url } = (await up.json()) as { url: string };
+    const { decidePlace, poolQuote } = await import("@/server/hosted-run");
+    const req = { feature: "transcribe", modelId: "oss-qwen3-asr", op: "transcribe" as const, inputs: { audio: url }, params: { sourceLanguage: "en" }, voiceFirst: true };
+    const place = await decidePlace(auth.accountById(a)!, req, undefined);
+    expect(place.kind).toBe("pool");
+    if (place.kind !== "pool") return;
+    expect(place.planned.steps).toEqual([{ model: "oss-dbs-separate", op: "separate-audio" }]);
+    const before = fake.calls_of("/v1/quote").length;
+    const quoted = await poolQuote(auth.accountById(a)!, req, undefined);
+    expect(quoted?.planned.model.id).toBe("oss-qwen3-asr");
+    const sent = fake.calls_of("/v1/quote").slice(before).at(-1)?.body as { run: { model: string; steps?: unknown } };
+    expect(sent.run.model).toBe("oss-qwen3-asr");
+    expect(sent.run.steps).toEqual([{ model: "oss-dbs-separate", op: "separate-audio" }]);
+    // Without the switch there are no other steps to send.
+    const plain = await poolQuote(auth.accountById(a)!, { ...req, voiceFirst: false }, undefined);
+    expect(plain?.planned.steps).toBeUndefined();
+    // A policy that keeps the clean-voice model off this install's GPUs keeps the whole run off, priced or run.
+    fake.policy = { ...fake.policy, pool: { deny: ["oss-dbs-separate"] } };
+    billing.resetBillingCache();
+    expect(await poolQuote(auth.accountById(a)!, req, undefined)).toBeNull();
+    const refused = await decidePlace(auth.accountById(a)!, req, undefined);
+    expect(refused.kind).toBe("refuse");
+    expect((await decidePlace(auth.accountById(a)!, { ...req, voiceFirst: false }, undefined)).kind).toBe("pool");
+  });
+
   it("the pool's allow and deny lists, for models and apps", () => {
     expect(poolAllows({ pool: {} }, "m")).toBe(true);
     expect(poolAllows({ pool: { allow: ["m"] } }, "m")).toBe(true);
@@ -152,6 +185,67 @@ describe("hosted runs on", () => {
     expect(poolAllows({ pool: { deny: ["m"] } }, "m")).toBe(false);
     expect(poolAllows({ pool: { apps: { deny: ["app-x"] } } }, "m", "app-x")).toBe(false);
     expect(poolAllows({ pool: { apps: { allow: ["app-y"] } } }, "m", "app-x")).toBe(false);
+  });
+
+  it("an NVIDIA RTX model on an install whose card isn't RTX: refused in plain words before any quote or hold", async () => {
+    process.env.FUOBE_BILLING_URL = fake.url;
+    process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
+    fake.policy = { ...fake.policy, uploads: { image: true, video: true, audio: false } };
+    const clip = await upload(TINY_MP4, "video/mp4", "rtx.mp4");
+    expect(clip.status).toBe(201);
+    const { url } = (await clip.json()) as { url: string };
+    const INSTALL = { kind: "install", key: "install", via: "server" } as const;
+    const check = (device: { name: string; type: string } | null, missing: string[] = []) => {
+      const at = Date.now();
+      writeSnapshot(INSTALL, {
+        v: 1, via: "server", checkedAt: at, tookMs: 5, reachable: true,
+        devices: device ? [{ ...device, index: 0, vramTotal: 24 * 2 ** 30, vramFree: 24 * 2 ** 30 }] : [],
+        manager: { api: "none" }, nodes: { have: [], missing, total: 1, readAt: at, how: "object_info" },
+        combos: {}, packs: {}, models: {}, loras: {}, fingerprint: "x", errors: [],
+      } as never);
+    };
+    const rtx = { feature: "upscale", modelId: "oss-rtx-video-upscale", op: "upscale-video", inputs: { video: url }, params: { resolution: "1080p" } };
+    const runs = async (body: unknown) => {
+      const before = fake.calls.length;
+      const r = await post(body);
+      const reached = fake.calls.slice(before).map((c) => c.path.split("?")[0]);
+      return { r, body: (await r.json()) as { error: string; code?: string }, reached };
+    };
+    try {
+      for (const [device, missing] of [
+        [{ name: "cpu", type: "cpu" }, []],
+        [{ name: "cuda:0 AMD Radeon RX 7900 XTX : native", type: "cuda" }, []],
+        [{ name: "cuda:0 NVIDIA GeForce GTX 1080 Ti : cudaMallocAsync", type: "cuda" }, []],
+        [{ name: "cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync", type: "cuda" }, ["RTXVideoSuperResolution"]],
+      ] as const) {
+        check(device, [...missing]);
+        const { r, body, reached } = await runs(rtx);
+        expect(r.status).toBe(403);
+        expect(body.code).toBe("not-offered");
+        expect(body.error).toContain("NVIDIA RTX card");
+        // Visitor words: no script, switch or file names.
+        expect(body.error).not.toMatch(/install-comfyui|RTX_VIDEO|scripts\/|\.sh\b/);
+        expect(reached).not.toContain("/v1/quote");
+        expect(reached).not.toContain("/v1/reserve");
+        // The price check doesn't offer it here either: it is priced for the account's own GPU (no quote).
+        const preview = await generationsRoute.POST(new Request("http://localhost:3000/api/generations?preview=1", { method: "POST", headers: headers({ "content-type": "application/json" }), body: JSON.stringify(rtx) }));
+        expect(((await preview.json()) as { place?: string }).place).toBeUndefined();
+      }
+      // Frame generation needs an RTX 40 series card or newer: an RTX 3090 is refused, an RTX 4070 isn't.
+      check({ name: "cuda:0 NVIDIA GeForce RTX 3090 : cudaMallocAsync", type: "cuda" });
+      const fg = { feature: "fps-boost", modelId: "oss-rtx-frame-generation", op: "interpolate", inputs: { video: url }, params: { targetFps: 60 } };
+      expect((await runs(fg)).body.code).toBe("not-offered");
+      check({ name: "cuda:0 NVIDIA GeForce RTX 4070 : cudaMallocAsync", type: "cuda" });
+      expect((await runs(fg)).body.code).not.toBe("not-offered");
+      // A card the name doesn't tell (a data-centre card) is never refused for its name.
+      check({ name: "cuda:0 NVIDIA H100 80GB HBM3 : cudaMallocAsync", type: "cuda" });
+      expect((await runs(rtx)).body.code).not.toBe("not-offered");
+    } finally {
+      check({ name: "cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync", type: "cuda" });
+    }
+    // The owner's line names the setup script; an account never gets it.
+    expect(RTX_MISSING.owner).toContain("install-comfyui.sh");
+    expect(RTX_MISSING.visitor).not.toMatch(/install-comfyui|RTX_VIDEO|scripts\//);
   });
 
   it("an install whose ComfyUI is on the owner's computer doesn't offer hosted runs", async () => {
@@ -164,3 +258,23 @@ describe("hosted runs on", () => {
     }
   });
 });
+
+/** A 1 s mono 16 kHz WAV. */
+function wav(): Buffer {
+  const frames = 16000;
+  const b = Buffer.alloc(44 + frames * 2);
+  b.write("RIFF", 0);
+  b.writeUInt32LE(36 + frames * 2, 4);
+  b.write("WAVE", 8);
+  b.write("fmt ", 12);
+  b.writeUInt32LE(16, 16);
+  b.writeUInt16LE(1, 20);
+  b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(16000, 24);
+  b.writeUInt32LE(32000, 28);
+  b.writeUInt16LE(2, 32);
+  b.writeUInt16LE(16, 34);
+  b.write("data", 36);
+  b.writeUInt32LE(frames * 2, 40);
+  return b;
+}

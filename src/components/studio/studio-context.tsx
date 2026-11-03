@@ -81,6 +81,16 @@ export interface StudioConfig {
    * seconds and the request carries them (params.sourceDuration). Not while a video is attached (lip re-sync).
    */
   voiceFacts?: boolean;
+  /**
+   * "Clean the voice first" (src/lib/av/voice-first.ts): a switch under the files when the speech is attached, so the
+   * transcript or lip sync runs on the speech alone (Transcribe, Lipsync & avatars).
+   */
+  voiceFirst?: boolean;
+  /**
+   * Video tools → Green screen: the picker lists only keyers for green-screen footage (ModelOptions.greenScreen); every
+   * other Remove background studio leaves them out.
+   */
+  greenScreen?: boolean;
   /** Offer every output format of the studio's models on this engine; picking one another model writes moves the request there (SDR to HDR, Export). */
   formatPicker?: boolean;
   /** The models' enum settings chip ("Director" by default; "Options" for a tool's settings such as Topaz's model). */
@@ -108,6 +118,9 @@ export interface Draft {
   params: GenParams;
   slots: Partial<Record<SlotKey, SlotValue | null>>;
   refs: SlotValue[];
+  /** References mode (MiniMax H3 on your GPU, Pika H3 Flex): reference clips and voice or music clips, in order. */
+  refClips?: SlotValue[];
+  refAudios?: SlotValue[];
   presetId?: string;
   presetOptions: Record<string, string>;
   /** Motions/effects: strength of the preset, and an optional second one mixed in (Mix). */

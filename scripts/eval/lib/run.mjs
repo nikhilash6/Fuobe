@@ -641,13 +641,13 @@ async function download(client, gens, folder, runFolder) {
         const dest = path.join(folder, `${n}${role}.txt`);
         fs.mkdirSync(folder, { recursive: true });
         fs.writeFileSync(dest, o.text);
-        files.push({ file: path.relative(runFolder, dest), kind: "text", generationId: g.id, bytes: Buffer.byteLength(o.text) });
+        files.push({ file: path.relative(runFolder, dest), kind: "text", generationId: g.id, bytes: Buffer.byteLength(o.text), ...(o.meta?.role && { role: o.meta.role }) });
         continue;
       }
       const ext = /^\.[a-z\d]{1,10}$/i.exec(path.extname(new URL(o.url, "http://x").pathname))?.[0] ?? ".bin";
       const dest = path.join(folder, `${n}${role}${ext}`);
       const bytes = await client.download(o.url, dest);
-      files.push({ file: path.relative(runFolder, dest), url: o.url, kind: o.kind, contentType: o.contentType ?? null, generationId: g.id, bytes, ...(o.meta?.role && { role: o.meta.role }), ...(o.meta?.demo && { demo: true }) });
+      files.push({ file: path.relative(runFolder, dest), url: o.url, kind: o.kind, contentType: o.contentType ?? null, generationId: g.id, bytes, ...(o.meta?.role && { role: o.meta.role }), ...(o.meta?.stem && { stem: o.meta.stem }), ...(o.meta?.demo && { demo: true }) });
     }
   }
   return files;

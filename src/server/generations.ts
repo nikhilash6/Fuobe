@@ -26,7 +26,8 @@ import { finishSteps, mosaicPixels, unionMasks } from "@/lib/soul-post";
 import { ANGLES_ORIGINAL, MOSAIC_SCALE } from "@/lib/catalog/open-tools";
 import { computeDimensions } from "@/lib/comfy";
 import { captionFromWords, parseCaption } from "@/lib/ideogram-caption";
-import { h3Frames, h3Prompt } from "@/lib/h3-prompt";
+import { h3Frames, h3Prompt, inH3Layout } from "@/lib/h3-prompt";
+import { h3ReferenceTags, h3TalkPrompt } from "@/lib/h3-references";
 import {
   CHAIN_LIST_SLACK,
   LAST_FRAME_CHAIN,
@@ -60,6 +61,8 @@ import { pollTrainings } from "./training";
 import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
 import { chainedRefine } from "@/lib/av/hi3d";
 import { createRegenerateRun } from "./regenerate";
+import { createVoiceFirstRun, voiceFirstPlanFor } from "./voice-first";
+import { BED_NOTES, VOICE_FIRST_LABEL } from "@/lib/av/voice-first";
 import { REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
 import { carriesLayout } from "@/lib/layout-prompt";
@@ -78,6 +81,7 @@ import { missingFilesMessage, type MissingFiles } from "@/lib/missing-files";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { graphLoras as h3GraphLoras } from "@/lib/catalog/character-swap";
+import { PIKA_FLEX_REF_WORKFLOW, pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
 import { restoreGraphLoras } from "@/lib/restore-graph";
 import { ensureLorasOnComfy, prepareCloudLoras, withoutUnreachableCivitai } from "./loras";
 import { ACCESS_PLACE } from "@/lib/model-access";
@@ -765,6 +769,17 @@ function prepare(original: GenerationRequest) {
       tenantAccount() ? `${speed} isn't available here. Pick another speed` : `${speed} runs with the LoRA “${loraName({ file: tier.file })}”, which is switched off in ${ACCESS_PLACE}. Pick another speed, or turn it back on there`,
     );
   }
+  // Pika H3 Flex (MiniMax H3's Fast · Pika Flex, References and Talk from a voice clip) loads Pika's adapter in the graph:
+  // that adapter switched off holds the run.
+  const flexOff = route.provider === "comfyui" ? offeredLoras(pikaFlexGraphLoras(route.endpoint, plan.params.extra)).dropped[0] : undefined;
+  if (flexOff) {
+    const refs = route.endpoint === PIKA_FLEX_REF_WORKFLOW;
+    const what = refs ? (plan.op === "avatar" ? "Talk from a voice clip" : "References") : "Fast · Pika Flex";
+    const instead = refs ? "Use one start frame, or pick another model" : "Pick Standard or Sharper";
+    throw new Error(
+      tenantAccount() ? `${what} isn't available here. ${instead}` : `${what} runs with “${loraName(flexOff)}”, which is switched off in ${ACCESS_PLACE}. ${instead}, or turn it back on there`,
+    );
+  }
   // "Fast · writes the details" edits with at most 3 pictures (its LoRA's card).
   if (tier?.speed === "details" && (req.inputs?.images?.length ?? 0) > DETAILS_MAX_IMAGES) {
     throw new Error(`${QWEN21_SPEED.labels?.details ?? "Fast · writes the details"} edits with up to ${DETAILS_MAX_IMAGES} pictures. Remove one, or pick another speed`);
@@ -839,7 +854,12 @@ function prepare(original: GenerationRequest) {
 }
 
 /** The LoRA files a graph loads itself (not injected), so a run downloads the ones ComfyUI lacks before it starts. */
-const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined) => [...h3GraphLoras(endpoint, extra), ...restoreGraphLoras(endpoint, extra), ...regenerateGraphLoras(endpoint)];
+const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined) => [
+  ...h3GraphLoras(endpoint, extra),
+  ...restoreGraphLoras(endpoint, extra),
+  ...regenerateGraphLoras(endpoint),
+  ...pikaFlexGraphLoras(endpoint, extra),
+];
 
 /** Operations whose clip length is the duration picked (made, or added by extend), not an input video's. */
 const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "extend", "keyframes"]);
@@ -857,7 +877,15 @@ export function previewGeneration(asked: GenerationRequest) {
     dropped: [...switchedOff, ...unreachable.map((l) => ({ file: l.file, reason: "it downloads from civitai, which needs your civitai key (Settings → LoRAs)" })), ...fitted.dropped],
   };
   // PixeletedFace pixelates each picture's faces afterwards (createMosaicRun): fal's SAM 3.1 per picture in the cloud.
-  const post = demo || moved.request.postMade ? 0 : postStepCost(plan.model.id, moved.request.presetId, plan.model.engine, plan.jobs * plan.perJobOutputs, getModel);
+  let post = demo || moved.request.postMade ? 0 : postStepCost(plan.model.id, moved.request.presetId, plan.model.engine, plan.jobs * plan.perJobOutputs, getModel);
+  // "Clean the voice first" (voice-first.ts): its other steps are checked as the run checks them, and priced in.
+  const voiced = moved.request.voiceFirst ? voiceFirstExtra(moved.request, plan.model) : null;
+  if (voiced) {
+    if (voiced.costUsd !== null) post += voiced.costUsd;
+    notes.push(...voiced.notes);
+  }
+  // A clean-voice step whose price isn't known leaves the run's price unknown too, never the main step's alone.
+  const priceUnknown = cost === null || voiced?.costUsd === null;
   return {
     model: plan.model,
     op: plan.op,
@@ -865,7 +893,9 @@ export function previewGeneration(asked: GenerationRequest) {
     outputs: plan.jobs * plan.perJobOutputs,
     demo,
     providerId,
-    costUsd: cost === null ? null : post ? Math.round((cost * plan.jobs + post) * 1000) / 1000 : cost * plan.jobs,
+    costUsd: priceUnknown || cost === null ? null : post ? Math.round((cost * plan.jobs + post) * 1000) / 1000 : cost * plan.jobs,
+    // The other steps the run makes beside its own model (Clean the voice first's), so a policy and a price see them all.
+    ...(voiced?.steps.length && { steps: voiced.steps }),
     // The engine it runs on (a Fuobe Original picks one per request).
     engine: plan.model.engine,
     // What the route runs (the evaluation harness records it): the provider endpoint, the final prompt and the LoRAs it loads.
@@ -879,6 +909,28 @@ export function previewGeneration(asked: GenerationRequest) {
     ...(h3 && { h3 }),
     plan: { end: plan.end },
   };
+}
+
+/** The steps "Clean the voice first" adds to a run (all but the run itself), checked and priced as the run makes them. */
+function voiceFirstExtra(req: GenerationRequest, model: ModelDef): { costUsd: number | null; notes: string[]; steps: { model: string; op: string }[] } | null {
+  const vf = voiceFirstPlanFor(req, model);
+  if (!vf) return null;
+  let costUsd: number | null = 0;
+  const steps: { model: string; op: string }[] = [];
+  for (const s of vf.steps) {
+    if (s.key === "main") continue;
+    let p: ReturnType<typeof previewChained>;
+    try {
+      p = previewChained(s.chain ? { ...s.request, chain: s.chain } : s.request, s.after?.length ?? 0);
+    } catch (e) {
+      throw new Error(`${VOICE_FIRST_LABEL} can't run: ${(e as Error).message}. Turn it off to run without it`);
+    }
+    costUsd = costUsd === null || p.costUsd === null ? null : costUsd + p.costUsd;
+    steps.push({ model: p.model.id, op: p.op });
+  }
+  const op = inferOperation(model, req);
+  const notes = op === "lipsync" && req.inputs?.video ? [vf.bed ? BED_NOTES.open : model.engine === "cloud" ? BED_NOTES.cloud : null].filter((x): x is string => !!x) : [];
+  return { costUsd: costUsd === null ? null : Math.round(costUsd * 10000) / 10000, notes, steps };
 }
 
 /** Preview a step that will wait for `deps` earlier steps: validated with placeholders in its chain slots, as createGenerations does. */
@@ -969,6 +1021,11 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   if (!original.postMade && shotModel && soulPostStep(shotModel.id, original.presetId) === "face-mosaic") {
     const waitsFor = opts.dependsOn === undefined ? undefined : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
     return createMosaicRun(original, shotModel, { batchId: opts.batchId, dependsOn: waitsFor });
+  }
+  // "Clean the voice first": the clean voice, then the transcript or lip sync on it (and a lip re-sync's music back after).
+  if (!opts.dependsOn && original.voiceFirst && shotModel) {
+    const run = createVoiceFirstRun(original, shotModel, { batchId: opts.batchId });
+    if (run) return run;
   }
   // Open-H3 Regenerate: the draft preset from the clip's maker, and a clip over 15 s in 15 s parts joined (regenerate.ts).
   if (shotModel?.id === REGEN_MODEL) {
@@ -1762,6 +1819,20 @@ async function submitNow(
     const orbit = h3Op === "i2v" && plan.params.extra?.orbit === true;
     if (plan.model.options.promptFormat === "minimax-h3" && h3Op && prompt && !orbit) {
       const wrapped = h3Prompt(prompt, h3Op, h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape, plan.sound?.music);
+      if (wrapped !== prompt) {
+        prompt = wrapped;
+        update(id, { prompt });
+      }
+    }
+    // H3 with references (Pika H3 Flex Ref2VA): the studio's names (Image 1, Clip 1, Voice 1) become H3's tags (<Picture 1>,
+    // <Video 1>, <Audio 1>) in the same layout, with no alignment line (src/lib/h3-references.ts).
+    // Talk from a voice clip (avatar on H3): the portrait speaks the voice clip, with the words saying how.
+    if (plan.model.options.promptFormat === "minimax-h3" && plan.op === "avatar" && !inH3Layout(prompt ?? "")) {
+      const wrapped = h3Prompt(h3TalkPrompt(prompt ?? ""), "t2v", h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape ?? "Only the voice of <Audio 1>, clear and close.", plan.sound?.music);
+      prompt = wrapped;
+      update(id, { prompt });
+    } else if (plan.model.options.promptFormat === "minimax-h3" && plan.op === "ref2v" && prompt) {
+      const wrapped = h3Prompt(h3ReferenceTags(prompt), "t2v", h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape, plan.sound?.music);
       if (wrapped !== prompt) {
         prompt = wrapped;
         update(id, { prompt });
