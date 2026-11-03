@@ -1,0 +1,125 @@
+{
+  "key": "w2s-w5",
+  "impl": {
+    "branch": "o/w2s-w5 (worktree /home/user/wt/o-w2s-w5, head eb1d7128)",
+    "summary": "W5 Skills as canvases. Pure recipeToCanvas and canvasToRecipe are in src/lib/catalog/canvas.ts. Open as canvas is POST /api/canvases {skill}. Save as skill from a canvas uses POST /api/assist/skills/draft {canvas, page} and opens W2's review screen. A skill opened as a canvas can be saved back into the same skill (saveDraft replace). The Canvas list has a Skills tab, and the editor's run menu has Save as skill…. A saved canvas skill is an ordinary recipe skill, so it runs from the Run form, Assist and MCP (run_skill), the CLI and schedules with no extra code.",
+    "built": [
+      "Converter (src/lib/catalog/canvas.ts). recipeToCanvas(recipe, {elements, from}): inputs become prompt, image, video, audio or element nodes. Generate steps become model nodes with their model, op, words and settings. Chain slots become edges into prompt, images, endImage, video, videos, audio, or voice (for voiceAudio).",
+      "recipeToCanvas refuses with 'This skill can't be drawn yet' and a reason for: a studio (tool) step, which shows as a 'Studio step' note; number or choice inputs; audio2, audios, model3d or mask; chain slots with stem, index, position, of or optional; file inputs with no port; placeholders in settings; two text inputs apart in one prompt; linked (http) fixed files. Every drawing is read back with canvasToRecipe and compared by recipeShape, and a drawing that wouldn't come back the same is refused.",
+      "What a board has no field for is kept on its nodes, and the canvases NodeData schema now accepts both fields (size-capped). data.skill holds the step key, label, feature, extra request fields (LoRAs, preset, negativePrompt, settings outside the board's Params) and check; the extra fields are dropped if the model is swapped. data.input holds the input's id, limits and form order, or marks a fixed file.",
+      "canvasToRecipe(graph, {canvas}): input nodes that feed a step become inputs (fixed-file nodes stay fixed). Steps are built by describeNode. A Video concatenator compiles to its cut, frame, mute and join steps as runCanvas does, with helper steps on feature canvas-step. Element @handles become placeholders. Chain positions are kept only where they matter. A Table's columns become text inputs, read as '{Column}' in the words or as the row text, and its filled rows (at most 50 x 8, TABLE_LIMITS) become the Many tab's rows. It refuses a concatenator that joins a clip per table row, a second table, loops, more than 24 steps, and nodes that can't run (named by node). Leaf steps on a board made from scratch get a kind check.",
+      "src/lib/recipe-builder.ts: fixedDraft(recipe, varies) turns a recipe with inputs into W2's draft. Every input starts Fixed except inputs of the skill the board was drawn from and Table columns. A new DraftCandidate.part means text-node words inside longer words vary as those words (buildRecipe handles it). Also new: DraftCandidate.varies, SkillDraft.rows, SkillDraft.replaces, and rowsCsv.",
+      "src/server/canvas-skills.ts: canvasFromSkill(name) and draftFromCanvas(id, page). The draft is built from the page with current elements. Silence references are written as files, as Run all does. Each step's thumbnail is the node's last result. A Table's rows and the source skill's name, title and description carry over.",
+      "Routes: DraftSource accepts {canvas, page?} in the draft and draft/name routes. The draft/save route takes replace: true, which writes only recipe.json into an existing user skill (a built-in gets 403 'Duplicate it first'). POST /api/canvases takes {skill}: 201, 422 'This skill can't be drawn yet: …', or 404. RecipeView.canvas says whether a skill can be drawn, and names the studio for a studio step.",
+      "UI: the Canvas list has tabs Mine (shown as 'Your canvases' from sm up) | Templates | Skills. The Skills tab lists recipe skills: drawable ones have Open as canvas (hidden for visitors), a studio step shows a 'Studio step' note, other undrawable skills give the reason. The editor's 'More run options' menu has Save as skill… (owner only); it saves the board first, then opens the review. In the review: header and refusal copy for a canvas, inputs that start as Varies, a 'Save back into /name' checkbox (on by default, locks the name, button 'Save back'), and the Run form opens on the Many tab with the table's rows (new RunSkillDialog csv prop).",
+      "Public sign-up: no new routes. The draft routes are already owner-only (assist-owner), and POST /api/canvases is already a library change for guests and accounts. Comments in tests/public-signup.test.ts and tests/public-signup-visitors.test.ts note the new bodies."
+    ],
+    "tests": [
+      "New tests/canvas-recipe.test.ts (18, pass): recipe to canvas to recipe is equal (steps, params, checks, keys, labels, features, extra fields); a fixed file, an element and two texts in order; a model swapped on the board; each refusal (audio2, audios, model3d, mask, stem, index, position, an unported input, settings inputs, studio step, texts apart); canvas to recipe inputs and steps; Table rows to rows (named columns, read as text, more than 50 refused); fixedDraft plus buildRecipe round trip; a node that can't run, and an empty board.",
+      "New tests/canvas-skills.test.ts (6, pass, server, demo setup): Open as canvas through the route (201, nodes kept through the schema; 422 and 404); RecipeView.canvas; a skill opened as a canvas drafts with Varies kept, a model swapped on the board is saved back (replace; SKILL.md kept; plan verified; built-in refused 403); a board made on the Canvas drafts with inputs Fixed plus Table rows, saves, and runs 2 rows through runRecipe stamped with the skill; a refused node is named.",
+      "Also passing: tests/recipe-builder, recipes, recipe, canvas, public-signup, public-signup-visitors (8 files, 210 tests). Typecheck clean (tsc with NODE_OPTIONS=--max-old-space-size=8192 after next typegen; the default heap runs out of memory). eslint clean on changed files. Full suite not run (not in this stage).",
+      "Browser: tests/e2e/canvas-smoke.mjs gained check 5 and fully passes in demo mode on pnpm dev -p 3456: Skills tab at 1440 and 390 px, light and dark, with no sideways scroll; at 1440 light, Open as canvas, Save as skill…, the free check, Save back, the Run form opens, and the skill keeps its input and is verified; at 390 the review opens and fits. Console errors fail the check. I also looked at screenshots. Server stopped and .next deleted."
+    ],
+    "left": [
+      "An undrawable skill isn't opened as a read-only canvas: the Skills tab shows the reason (or the 'Studio step' note) instead.",
+      "Canvas drafts propose no settings candidates (takes, shape, length, quality), since W2's settings come from server-side result nodes. A board's checks are the stash's, or kind-only on leaves.",
+      "Pinned nodes run again in the skill; the review notes this.",
+      "Layout boxes that fill '{Column}' from a table aren't turned into inputs.",
+      "Number and choice inputs aren't drawable yet: the board has no settings-input node.",
+      "Not verified: live Claude or Ollama naming on canvas drafts, and a GPU or keyed real run.",
+      "No ComfyUI graphs, node packs, migrations or LoRAs were touched."
+    ],
+    "docsNotes": [
+      "STATUS: W5 Skills as canvases. A recipe skill opens as a new canvas from Canvas → Skills, and a canvas is saved as a skill from the run menu's Save as skill…. Saving can put the steps back into the skill it was opened from. A Table's rows become the Many tab's rows, and a saved canvas skill runs from Skills, Assist and MCP, the CLI and schedules.",
+      "ARCHITECTURE: recipeToCanvas and canvasToRecipe (src/lib/catalog/canvas.ts) with node fields data.skill and data.input; src/server/canvas-skills.ts; DraftSource {canvas, page}; POST /api/canvases {skill}; draft/save replace; RecipeView.canvas. No migration (canvases.graph_json).",
+      "docs/cli.md: no change (the CLI already runs recipe skills).",
+      "The brief's line numbers were out of date: the canvas list tabs are now near line 255 of canvas-list.tsx and were labelled 'Your canvases | Templates'; the editor menu is the 'More run options' dropdown in EditorHeader. All plan items were missing from the base: only RecipeSchema.source.canvas existed."
+    ],
+    "blocked": ""
+  },
+  "review": {
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Save back silently drops a skill's text input when the input has no example",
+        "where": "src/lib/recipe-builder.ts fixedDraft (locked 'Write its words on the canvas first') + src/server/recipes.ts saveDraft replace",
+        "detail": "A recipe text param with no example/default (allowed by RecipeSchema, e.g. a hand-written or uploaded recipe.json) is drawn as an empty text node (recipeView.canvas says ok). canvasToRecipe keeps it, but fixedDraft gives it example '' so it is 'locked' and never starts as Varies. buildRecipe then makes it Fixed with an empty value, and Save back writes it into the existing skill. The skill loses the input, and its prompt 'A photo of {{subject}}' becomes 'A photo of '. The plan check still passes. Schedules, MCP and CLI callers that pass `subject` no longer reach a prompt.",
+        "verified": "Scratch vitest probe (outside the repo): saveRecipe s2 {params:[subject text, no example], prompt 'A photo of {{subject}}'} -> canvasFromSkill -> draftFromCanvas -> buildRecipe(start choices) -> saveDraft({replace:true}) gave saved params [] and prompt 'A photo of '.",
+        "fix": "When an input comes from a skill (data.input.param exists), keep it as Varies even if it is empty, or refuse Save back until the words are filled in. Don't write a replace that removes an input the original skill had without saying so."
+      },
+      {
+        "severity": "medium",
+        "title": "A swapped model keeps the old step's check, so a skill changed from image to video fails its free check and real test forever",
+        "where": "src/lib/catalog/canvas.ts canvasToRecipe: `if (mark?.check) checks[key] = mark.check` (extra is dropped when modelId changes, but check is not)",
+        "detail": "The brief's user story is swapping a model visually and saving it back. data.skill.extra is applied only while mark.modelId === req.modelId, but data.skill.check is always kept. Swapping an image step's model for a video model (nano-banana-pro t2i -> kling-3 t2v) keeps checks.a = {kind:'image'}. saveDraft gates only on the plan, so Save back succeeds. After that, dryRun reports 'Step a made no image' and realRun reports 'it made no image (got video)' on every check, so the skill can never earn dryRun/real verification. An aspect or seconds check can also go stale after a swap that changes the output.",
+        "verified": "Scratch probe: lamp-style skill with checks {a:{kind:'image'}}, node swapped to kling-3/t2v -> draftFromCanvas -> saveDraft replace succeeded with checks {a:{kind:'image'}}; the generation ran as a video. In the dryRun code (recipes.ts ~line 614), kindOf(check) 'image' against video outputs adds a problem.",
+        "fix": "Drop the kept check when the node's model or op changes and its output kind differs (or when the model changes at all, like extra), and fall back to the kind-only leaf check used for boards made from scratch. Add a test that swaps an image model for a video model."
+      },
+      {
+        "severity": "low",
+        "title": "Brief items not built: undrawable skills don't open read-only, and number/choice inputs make a skill undrawable",
+        "where": "src/lib/catalog/canvas.ts recipeToCanvas, src/components/canvas/canvas-list.tsx SkillCard",
+        "detail": "The brief says undrawable recipes 'open read-only with This skill can't be drawn yet', and a tool step shows as one read-only 'Studio step' note on the canvas. The build only shows the reason (or the note) on the Skills tab card. recipeToCanvas also refuses every recipe with a number or choice param or a placeholder in settings. The brief's refusal list doesn't include these, and W2 makes them whenever a setting varies (numOutputs, aspectRatio, duration, resolution), so many Library-made skills can't be drawn. Both gaps are listed in 'left'.",
+        "verified": "Traced recipeToCanvas (settings refusal at the top, the placeholder-in-settings refusal) and SkillCard (no read-only open path).",
+        "fix": "Either build the read-only open and a settings-input node, or have the owner accept these as follow-ups."
+      },
+      {
+        "severity": "low",
+        "title": "Unticking 'Save back into /name' leaves the taken name, and in replace mode the title and description edits are thrown away",
+        "where": "src/components/skills/skill-builder.tsx Review",
+        "detail": "draft.name is replaces.name. After unticking, the name field is enabled but still holds the existing skill's name, and the own-checks pass (regex only), so Save is enabled and the server's createSkill then refuses with 'already exists'. With replace on, Title, Description and When to use stay editable, but saveDraft's replace path ignores them. The toast says so only after saving.",
+        "verified": "Probe: draftFromCanvas on a skill opened as a canvas returns name 's1' with replaces {name:'s1'}. Code reading of save() and saveDraft replace.",
+        "fix": "On untick, switch the name to freeName(title). Disable or hide the About fields while Save back is on."
+      },
+      {
+        "severity": "low",
+        "title": "Concatenator compile and the replace-mode SKILL.md drift have no tests; the e2e leaves its canvas and skill behind",
+        "where": "tests/canvas-recipe.test.ts, tests/canvas-skills.test.ts, tests/e2e/canvas-smoke.mjs",
+        "detail": "The brief asks that concat nodes compile as runCanvas does, but no test covers a concat board. A probe shows it works: 8 steps (fit/sound/quiet/mute helpers on canvas-step, join-clips), and the plan and dry run pass on cloud demo. The e2e check 5 never deletes the canvas made by Open as canvas at 1440 or the e2e-canvas-skill skill.",
+        "verified": "grep on the tests, plus a scratch probe of the concat board through draft and the demo-level check route (ok).",
+        "fix": "Add a concat round-trip test. Clean up in the e2e."
+      }
+    ],
+    "checks": [
+      "git diff claude/fuobe-parity-4...o/w2s-w5 read in full (23 files) with surrounding code (describeNode {text} slot, saveRecipe, checkEngines/dryRun/realRun, guest-access, proxy readAsGuest).",
+      "Public sign-up: POST /api/canvases {skill} is under the existing LIBRARY_CHANGES POST /api/canvases (403 for accounts, 401 for guests). The draft, draft/name and draft/save routes are assist-owner. GET /api/assist/skills is GUEST_FILTERED (built-ins only for visitors), and the recipe view's new `canvas` field leaks nothing. The Open as canvas and Save as skill buttons are hidden for visitors. No new route, no file read for an account run, no price check, no ComfyUI graph, model, LoRA or node pack, no Higgsfield use.",
+      "npx next typegen + tsc --noEmit (8 GB heap): clean. eslint on the changed files: clean.",
+      "Targeted vitest (canvas-recipe, canvas-skills, recipe-builder, recipes, recipe, canvas, public-signup, public-signup-visitors): 8 files, 210 tests pass.",
+      "Full vitest suite, run twice. Run 1 under load: 8 failures in 7 files. Run 2: 6 failures in 5 files, exactly the known pre-existing ones (comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack); nothing new.",
+      "Scratch vitest probes kept outside the repo (scratchpad config): a text input with no example lost on Save back (confirmed); an image input with no example drafts as Varies (ok); an image->video model swap keeps the image check, saves and runs as video (confirmed); a concat board drafts 8 steps and passes the plan and demo check (ok); unticked replace keeps the taken name (confirmed).",
+      "The browser e2e (tests/e2e/canvas-smoke.mjs check 5) was not re-run by the reviewer. I relied on the implementer's run, and the UI diff reads fine at 390 px (3-column tab grid with 'Mine' under sm, cards min-w-0).",
+      "No edits or commits. The .next made by typegen was deleted; the worktree is clean."
+    ],
+    "verdict": "changes requested: two medium bugs in the core round trip (a text input with no example is silently dropped on Save back; a swapped model keeps a stale check kind, so the skill fails its free check and real test). Both have small, local fixes. The rest is sound and follows the public sign-up rules."
+  },
+  "fix": {
+    "applied": [
+      "Medium, confirmed (Save back dropped a text input with no example): fixedDraft (src/lib/recipe-builder.ts) now marks an input of the source skill that a canvas holds no value for as a 'kept' candidate. Its {{id}} stays in the steps and the checks, it starts as Varies (not locked), and it carries the original param, so buildRecipe writes the input back exactly as the skill had it. Fixed puts in the value (empty words), and the review row says so. New helper putKept. Tests: canvas-recipe 'keeps words a skill asks for with no example', and canvas-skills 'saves back a skill's inputs a canvas holds no value for' (route-level Save back keeps prompt 'A photo of {{subject}}').",
+      "Medium, confirmed (a swapped model kept a stale check): canvasToRecipe keeps a step's own check only while the node keeps its model and the check's kind matches the op's output. Otherwise the step gets the kind-only leaf check a board made from scratch gets. A skill step with no check still gets none while its model stays, so the round trip is unchanged. Checks are now copied, not shared: an in-place edit used to leak back into the source recipe. Test: an image step (nano-banana-pro t2i, check image) swapped to kling-3 t2v reads back with {kind:'video'}.",
+      "Low, built (number/choice inputs made a skill undrawable): a settings input that fills a whole setting (params.<name>) and has a value now rides on its model node. The node shows the value, and data.skill.settings keeps {param, at}, with the canvases NodeData schema extended. On the way back it becomes {{id}} again while the node keeps its model and a value the input takes, and it follows a value changed on the board (default/example updated). A value outside the input's options or range, or a swapped model, leaves the board's value fixed, and any check part that followed it is dropped. In the review these inputs start as Varies as the skill had them (kept), and Fixed puts the value into the steps and the checks, typed. Settings used anywhere else, or with no value, are still refused, with a reason. Tests: draw, round trip, a changed value, an invalid value, a swapped model, the review start, and Fixed.",
+      "Low, confirmed (the Save back untick UX): the draft's name is now always a free name (freeName(title)). With Save back on, the Name field shows the target skill and Title, Description and When to use are disabled because the replace path keeps them. Unticking gives an editable free name, so Save no longer hits 'already exists'.",
+      "Low (test gaps): added a Video concatenator compile test (two clips become two video inputs, cut helper steps on canvas-step, the join is the node's own step and comes last, recipeProblems and RecipeSchema clean). e2e check 5 now seeds a choice setting input, asserts that both inputs survive Save back, and deletes the canvas it opened and the e2e skill at the end."
+    ],
+    "rejected": [
+      "Low, part (undrawable skills 'open read-only'): not built. A refused recipe has no drawing to open: a partial read-only board would need a second, lossy converter path. The Skills tab card already gives the exact reason, or the 'Studio step' note for a tool step. Settings inputs, the biggest cause of undrawable skills, are now drawable, so far fewer skills are affected. Listed in 'left'."
+    ],
+    "checks": [
+      "Branch check: git log claude/fuobe-parity-4..o/w2s-w5 lists only this package's commits, and the base is an ancestor (no merge needed). Worktree was clean at start.",
+      "npx next typegen + pnpm typecheck (NODE_OPTIONS=--max-old-space-size=8192): exit 0.",
+      "pnpm lint: exit 0 (5 pre-existing warnings in untouched files).",
+      "Targeted: tests/canvas-recipe.test.ts 24 pass, tests/canvas-skills.test.ts 7 pass.",
+      "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: exit 1, with 6 failures in 5 files (5477 passed, 4 skipped). These are exactly the known pre-existing failures from main: comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack. No new failures.",
+      "Browser: node tests/e2e/canvas-smoke.mjs against pnpm dev -p 3456 with FUOBE_DEMO_MODE=on, a temp data dir, and COMFYUI_URL/OLLAMA_URL pointing nowhere: all checks passed. That covers checks 1-3, then check 5 at 1440 and 390 px, light and dark. At 1440 light: Open as canvas, Save as skill, the free check, Save back, and the Run form opening, with the skill keeping both its words input and the new choice setting input. At 390: the review opens and fits. No sideways scroll, and console errors fail the check. The ComfyUI at :8188 was not touched. The server was stopped, and .next and the temp data deleted. git status is clean after commit 3baadb01."
+    ],
+    "finalSummary": "W5 Skills as canvases is finished on o/w2s-w5 (head 3baadb01, on top of the implementer's 4 commits). A recipe skill opens as a canvas from Canvas → Skills. A canvas saves as a skill from the run menu, including back into the skill it came from. Saving back now keeps inputs the board has no value for (words with no example, settings), and a step whose model is swapped gets a check that fits the new output. Skills W2 makes with varying takes, shape, length or resolution can now be drawn: those inputs ride on their model nodes. Engines: the converter, the draft and Save back are engine-neutral. A saved canvas skill runs through runRecipe like any recipe skill (form, Assist/MCP run_skill, CLI, schedules) on whichever engine its steps' models use. Verified in demo mode only: the free plan/demo check, the cloud demo and the open demo provider. No GPU run or keyed cloud run was made. No ComfyUI graphs, node packs, models, LoRAs or migrations changed. Public sign-up: no new routes. POST /api/canvases {skill} is under the existing LIBRARY_CHANGES rule (guests 401, accounts 403 library). The draft, draft/name and draft/save routes stay owner-only. Visitors see the Skills tab's built-in list (GUEST_FILTERED) without the Open as canvas or Save as skill buttons, and their runs are untouched.",
+    "left": [
+      "An undrawable skill isn't opened as a read-only canvas: the Skills tab card shows the reason, or the 'Studio step' note.",
+      "A settings input that appears anywhere but a whole params.<name> setting (in words, a nested setting) or has no default/example still isn't drawable.",
+      "Canvas drafts propose no new settings candidates of their own (takes, shape, length, quality) for boards made from scratch. A board's checks are the skill's, or kind-only on leaves.",
+      "Pinned nodes run again in the skill (the review notes this). Layout boxes that fill '{Column}' from a table aren't turned into inputs.",
+      "Not verified: live Claude or Ollama naming on canvas drafts, a GPU run, or a keyed cloud run.",
+      "Pre-existing failures (not this package): comfy-reuse, dop-originals, preset-featured, soul-runs (2), split-soundtrack."
+    ],
+    "blocked": ""
+  }
+}

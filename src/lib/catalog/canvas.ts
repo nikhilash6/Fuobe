@@ -24,6 +24,8 @@ import { fillLayout, layoutPlaceholders } from "@/lib/layout-surfaces";
 import { FLY_MODELS, flyKeys, planFlyAround } from "./fly-around";
 import type { CameraKey } from "@/lib/camera-path";
 import type { ExactOrbit } from "@/lib/exact-orbit";
+import { paramIdFrom } from "@/lib/recipe-builder";
+import type { GenerateStep, Recipe, RecipeCheck, RecipeParam, RecipeStep, RecipeValues } from "@/lib/recipe";
 import {
   OPERATION_LABELS,
   OPERATION_OUTPUT,
@@ -136,6 +138,10 @@ export interface CanvasNodeData {
   keys?: CameraKey[];
   /** Fly around: the clip's length in seconds (the cloud; your GPU always films about 5 s). */
   duration?: number;
+  /** A node drawn from a skill's step (recipeToCanvas): what the board has no field for, kept for the way back. */
+  skill?: SkillStepMark;
+  /** An input node drawn from a skill's input (or a fixed file of a step): the input as it was. */
+  input?: SkillInputMark;
 }
 
 export interface CanvasNode {
@@ -2563,4 +2569,581 @@ CANVAS_TEMPLATES.push(...EFFECT_CHAINS.map(effectChainTemplate));
 
 export function getTemplate(id: string): CanvasTemplate | undefined {
   return CANVAS_TEMPLATES.find((t) => t.id === id);
+}
+
+// ---------------------------------------------------------------------------
+// Skills as canvases (W5, docs/research/work2skill-7.md §10): a recipe skill drawn as a board, and a board saved as a
+// skill. Inputs are input nodes (text, image, video, audio, element), steps are model nodes, chain slots are edges.
+// What a board has no field for (a step's key and label, its feature, LoRAs, a preset, its check, an input's limits)
+// rides on the nodes (`data.skill`, `data.input`), so a skill opened as a canvas and saved back is the same skill.
+
+/** Why a skill isn't drawn (it still runs from its form). */
+export const CANT_DRAW = "This skill can't be drawn yet";
+/** How a skill that runs one studio tool shows on the Skills tab: one read-only note. */
+export const STUDIO_STEP = "Studio step";
+
+/** What a step drawn from a skill keeps that the board has no field for (dropped by the way back if the model changes). */
+export interface SkillStepMark {
+  key: string;
+  label?: string;
+  feature?: string;
+  /** The model the step was drawn with: `extra` applies only while the node keeps it. */
+  modelId: string;
+  /** Request fields the board doesn't hold (LoRAs, a preset, a negative prompt), and settings it has no field for. */
+  extra?: Record<string, unknown>;
+  check?: RecipeCheck;
+  /**
+   * Settings inputs (a number or a choice) by the setting they fill: the node shows the value, and the way back puts the
+   * input there again while the node keeps its model and a value the input takes. `at`: its place in the form.
+   */
+  settings?: Record<string, { param: RecipeParam; at: number }>;
+  /** The skill it was drawn from (Save as skill offers to save it back). */
+  from?: string;
+}
+
+/** An input node drawn from a skill: its input as it was (the node's label is the input's), its place in the form; or a fixed file. */
+export interface SkillInputMark {
+  param?: Omit<RecipeParam, "label">;
+  at?: number;
+  /** A file a step always uses (not an input): it stays fixed on the way back. */
+  fixed?: boolean;
+}
+
+export type RecipeDrawing = { ok: true; graph: CanvasGraph } | { ok: false; reason: string; detail: string; studio?: string };
+
+/** The settings a board's node keeps (the canvases route's Params); anything else rides on `data.skill.extra`. */
+const BOARD_PARAMS = new Set(["aspectRatio", "resolution", "duration", "numOutputs", "seed", "generateAudio", "voice", "targetLanguage", "sourceLanguage"]);
+/** Request fields a board's node makes itself (buildRequest). */
+const BOARD_FIELDS = new Set(["feature", "modelId", "op", "prompt", "inputs", "params", "chain", "engine"]);
+/** A request's file fields and the port each is drawn into. */
+const FILE_PORT: Record<string, InputPortId> = { images: "images", endImage: "endImage", video: "video", videos: "videos", audio: "audio", voiceAudio: "voice" };
+/** Chain slots a board draws, and the port each fills (voiceAudio ↔ Voice). */
+const CHAIN_PORT: Partial<Record<ChainSlot["slot"], InputPortId>> = { prompt: "prompt", ...(FILE_PORT as Partial<Record<ChainSlot["slot"], InputPortId>>) };
+const EXACT_PH = /^\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}$/;
+const ANY_PH = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
+const INPUT_NODE = { image: "image-input", video: "video-input", audio: "audio-input", text: "prompt", element: "element" } as const satisfies Record<string, CanvasNodeType>;
+const SENTINEL_EXT = { image: "png", video: "mp4", audio: "wav" } as const;
+const SENTINEL = /^\/api\/files\/recipe-input\/([A-Za-z][A-Za-z0-9_]*)\.(png|mp4|wav)$/;
+const asList = (a: string | string[] | undefined): string[] => (a === undefined ? [] : Array.isArray(a) ? a : [a]);
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** An @handle as a whole word (as recipe-builder matches it). */
+const handleRe = (handle: string) => new RegExp(`(?<![\\p{L}\\p{N}_@.-])${escapeRe(handle)}(?![\\p{L}\\p{N}_-])`, "giu");
+const words = (list: string[]) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : (list[0] ?? ""));
+
+/** Placeholders in a value, with whether each is the whole string. */
+function placeholdersIn(v: unknown, out: { id: string; exact: boolean }[] = []): { id: string; exact: boolean }[] {
+  if (typeof v === "string") {
+    const exact = EXACT_PH.exec(v);
+    if (exact) out.push({ id: exact[1], exact: true });
+    else for (const m of v.matchAll(ANY_PH)) out.push({ id: m[1], exact: false });
+  } else if (Array.isArray(v)) for (const x of v) placeholdersIn(x, out);
+  else if (v && typeof v === "object") for (const x of Object.values(v)) placeholdersIn(x, out);
+  return out;
+}
+
+/**
+ * The board's own words for a prompt whose text inputs are drawn as text nodes: the inputs must sit together, one
+ * after the other with a blank line between (the way a node joins its connected texts), so they become "{text}" in
+ * the node's words. Null when they can't (two texts apart in one prompt).
+ */
+function ownWords(prompt: string, texts: Set<string>): { own: string; order: string[] } | null {
+  const hits = [...prompt.matchAll(ANY_PH)].filter((m) => texts.has(m[1]));
+  if (!hits.length) return { own: prompt, order: [] };
+  const start = hits[0].index!;
+  const last = hits[hits.length - 1];
+  const end = last.index! + last[0].length;
+  const order = hits.map((m) => m[1]);
+  if (new Set(order).size !== order.length || prompt.slice(start, end) !== order.map((id) => `{{${id}}}`).join("\n\n")) return null;
+  const before = prompt.slice(0, start);
+  const after = prompt.slice(end);
+  if (prompt.includes("{text}")) return null;
+  return { own: before.trim() || after.trim() ? `${before}{text}${after}` : "", order };
+}
+
+/**
+ * A recipe skill drawn as a board: each input an input node, each generate step a model node (on its model, op,
+ * words and settings), each chain slot an edge into the port it fills. Only when every slot maps to a port (prompt,
+ * images, endImage, video, videos, audio, voice ↔ voiceAudio): a recipe with a studio step, `audio2`, `audios`,
+ * `model3d` or `mask`, a chain slot with a stem, an index or a position, or a settings input (a number or a choice)
+ * that isn't a whole setting with a value isn't drawn. A settings input rides on the nodes it fills (data.skill.settings). The drawing is read back (canvasToRecipe) before it's offered: what wouldn't come back the same isn't drawn.
+ */
+export function recipeToCanvas(recipe: Recipe, opts: { elements?: readonly ElementInfo[]; from?: string } = {}): RecipeDrawing {
+  const refuse = (detail: string, studio?: string): RecipeDrawing => ({ ok: false, reason: CANT_DRAW, detail, ...(studio && { studio }) });
+  const tool = recipe.steps.find((s): s is Extract<RecipeStep, { kind: "tool" }> => s.kind === "tool");
+  if (tool) return refuse("It runs one studio step, which shows as a note: open it from Skills", tool.tool);
+  const params = new Map(recipe.params.map((p) => [p.id, p]));
+  const steps = recipe.steps as GenerateStep[];
+  // A settings input (a number or a choice) rides on the nodes whose settings it fills: each node shows its value and
+  // keeps the input for the way back. It must be a whole setting (params.<name>) with a value to show.
+  const isSetting = (p: RecipeParam | undefined) => p?.type === "number" || p?.type === "choice";
+  const settingAt = (r: GenerationRequest): Map<string, RecipeParam> => {
+    const out = new Map<string, RecipeParam>();
+    for (const [k, v] of Object.entries((r.params ?? {}) as Record<string, unknown>)) {
+      const ph = typeof v === "string" ? EXACT_PH.exec(v) : null;
+      if (ph && isSetting(params.get(ph[1]))) out.set(k, params.get(ph[1])!);
+    }
+    return out;
+  };
+  const placedSettings = new Set(steps.flatMap((s) => [...settingAt(s.request).values()].map((p) => p.id)));
+  const loose = recipe.params.filter((p) => isSetting(p) && !placedSettings.has(p.id));
+  if (loose.length) return refuse(`A canvas has no node for ${words(loose.map((p) => p.label))} yet`);
+  const blank = recipe.params.filter((p) => isSetting(p) && (p.example ?? p.default) == null);
+  if (blank.length) return refuse(`Give ${words(blank.map((p) => p.label))} a default first: a canvas draws a setting with its value`);
+  const keys = new Set(steps.map((s) => s.key));
+  for (const s of steps) {
+    const r = s.request;
+    const name = s.label ?? s.key;
+    if (!getModel(r.modelId)) return refuse(`“${name}” uses a model that's no longer in the catalog`);
+    const after = asList(s.after);
+    if (after.some((a) => !keys.has(a))) return refuse(`“${name}” waits for a step that isn't there`);
+    for (const c of s.chain ?? []) {
+      if (!CHAIN_PORT[c.slot] || c.stem !== undefined || c.index !== undefined || c.position !== undefined || c.of !== undefined || c.optional) return refuse(`“${name}” takes an earlier step's result in a way a canvas can't wire yet`);
+    }
+    if ((s.chain?.length ?? after.length) !== after.length) return refuse(`“${name}” has a chain slot for each step it waits for only on a canvas`);
+    const inputs = (r.inputs ?? {}) as Record<string, unknown>;
+    if (Object.keys(inputs).some((k) => !FILE_PORT[k])) return refuse(`“${name}” uses an input a canvas has no port for yet`);
+    for (const [k, v] of Object.entries(r as Record<string, unknown>)) {
+      const found = placeholdersIn(v);
+      if (!found.length) continue;
+      if (k === "inputs") {
+        if (found.some((f) => !f.exact || !params.has(f.id) || !["image", "video", "audio"].includes(params.get(f.id)!.type))) return refuse(`“${name}” takes a file input a canvas can't wire yet`);
+      } else if (k === "prompt") {
+        if (found.some((f) => !params.has(f.id) || !["text", "element"].includes(params.get(f.id)!.type))) return refuse(`“${name}” puts an input into its words that a canvas can't draw yet`);
+      } else if (k === "params") {
+        const whole = settingAt(r);
+        const rest = Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([pk]) => !whole.has(pk)));
+        if (placeholdersIn(rest).length) return refuse(`An input changes “${name}”'s settings, which a canvas can't draw yet`);
+      } else return refuse(`An input changes “${name}”'s settings, which a canvas can't draw yet`);
+    }
+  }
+  for (const p of recipe.params) if (p.type === "element" && !String(p.example ?? p.default ?? "").replace(/^@/, "")) return refuse(`Pick an element for ${p.label} first: a canvas draws it with one`);
+
+  // Layout: inputs on the left, each step one column right of the last step it waits for.
+  const depth = new Map<string, number>();
+  for (const s of steps) depth.set(s.key, 1 + Math.max(0, ...asList(s.after).map((a) => depth.get(a) ?? 0)));
+  const rowsAt = new Map<number, number>();
+  const COL = 400;
+  const nodes: CanvasNode[] = [];
+  const edges: CanvasEdge[] = [];
+  const stepNode = new Map<string, string>();
+  for (const s of steps) {
+    const d = depth.get(s.key)!;
+    const row = rowsAt.get(d) ?? 0;
+    rowsAt.set(d, row + 1);
+    const r = s.request as GenerationRequest & Record<string, unknown>;
+    const model = getModel(r.modelId)!;
+    const texts = new Set([...((typeof r.prompt === "string" ? r.prompt : "").matchAll(ANY_PH))].map((m) => m[1]).filter((id) => params.get(id)?.type === "text"));
+    let prompt = typeof r.prompt === "string" ? r.prompt : "";
+    const own = ownWords(prompt, texts);
+    if (!own) return refuse(`“${s.label ?? s.key}” puts two inputs apart in its words, which a canvas can't draw yet`);
+    prompt = own.own;
+    // An element input is the element's @handle in the words, its node wired into Elements.
+    for (const id of new Set([...prompt.matchAll(ANY_PH)].map((m) => m[1]))) {
+      const p = params.get(id);
+      if (p?.type === "element") prompt = prompt.replace(new RegExp(`\\{\\{\\s*${id}\\s*\\}\\}`, "g"), `@${String(p.example ?? p.default).replace(/^@/, "")}`);
+    }
+    const boardParams: GenParams = {};
+    const extraParams: Record<string, unknown> = {};
+    const stepSettings = settingAt(r);
+    const settingMarks: NonNullable<SkillStepMark["settings"]> = {};
+    for (const [k, raw] of Object.entries((r.params ?? {}) as Record<string, unknown>)) {
+      const setting = stepSettings.get(k);
+      const v = setting ? (setting.example ?? setting.default) : raw;
+      if (setting) settingMarks[k] = { param: setting, at: recipe.params.indexOf(setting) };
+      const scalar = k === "extra" && v && typeof v === "object" && Object.values(v).every((x) => ["string", "number", "boolean"].includes(typeof x));
+      if (BOARD_PARAMS.has(k) || scalar) (boardParams as Record<string, unknown>)[k] = v;
+      else extraParams[k] = v;
+    }
+    const extra: Record<string, unknown> = Object.fromEntries(Object.entries(r).filter(([k]) => !BOARD_FIELDS.has(k)));
+    if (r.engine && !dualEngine(model)) extra.engine = r.engine;
+    if (Object.keys(extraParams).length) extra.params = extraParams;
+    const mark: SkillStepMark = {
+      key: s.key,
+      ...(s.label && { label: s.label }),
+      ...(r.feature !== "skill" && { feature: r.feature }),
+      modelId: model.id,
+      ...(Object.keys(extra).length && { extra }),
+      ...(recipe.checks?.[s.key] && { check: { ...recipe.checks[s.key] } }),
+      ...(Object.keys(settingMarks).length && { settings: settingMarks }),
+      ...(opts.from && { from: opts.from }),
+    };
+    const id = `step-${s.key}`.slice(0, 80);
+    stepNode.set(s.key, id);
+    const kind = model.kind === "image" || model.kind === "video" || model.kind === "audio" || model.kind === "text" ? model.kind : undefined;
+    nodes.push({
+      id,
+      type: "model",
+      position: { x: d * COL, y: row * 300 },
+      data: {
+        ...(s.label && { label: s.label }),
+        modelId: model.id,
+        ...(kind && { mediaKind: kind }),
+        ...(r.op && { op: r.op }),
+        ...(dualEngine(model) && r.engine && { engine: r.engine }),
+        ...(prompt && { prompt }),
+        ...(Object.keys(boardParams).length && { params: boardParams }),
+        skill: mark,
+      },
+    });
+  }
+  // Inputs, in the order the steps first use them (connected texts join a prompt top to bottom).
+  const inputNode = new Map<string, string>();
+  let inputRow = 0;
+  let fixedFiles = 0;
+  const addEdge = (source: string, target: string, port: InputPortId) => {
+    const e = { id: `e-${source}-${target}-${port}`.slice(0, 200), source, target, sourceHandle: OUT, targetHandle: port };
+    if (!edges.some((x) => x.id === e.id)) edges.push(e);
+  };
+  const paramNode = (p: RecipeParam): string => {
+    const known = inputNode.get(p.id);
+    if (known) return known;
+    const id = `input-${p.id}`;
+    inputNode.set(p.id, id);
+    const value = p.example ?? p.default;
+    const rest: Omit<RecipeParam, "label"> & { label?: string } = { ...p };
+    delete rest.label;
+    const mark: SkillInputMark = { param: rest, at: recipe.params.indexOf(p) };
+    const data: CanvasNodeData = { label: p.label, input: mark };
+    if (p.type === "text") data.text = typeof value === "string" ? value : value === undefined ? "" : String(value);
+    else if (p.type === "element") {
+      const handle = String(value).replace(/^@/, "");
+      const el = opts.elements?.find((e) => e.handle.toLowerCase() === handle.toLowerCase());
+      Object.assign(data, { handle: el?.handle ?? handle, ...(el && { elementId: el.id, name: el.name, ...(el.references[0] && { preview: el.references[0] }) }) });
+    } else if (typeof value === "string" && value.startsWith("/api/files/")) data.url = value;
+    nodes.push({ id, type: INPUT_NODE[p.type as keyof typeof INPUT_NODE], position: { x: 0, y: inputRow++ * 220 }, data });
+    return id;
+  };
+  for (const s of steps) {
+    const r = s.request;
+    const target = stepNode.get(s.key)!;
+    const prompt = typeof r.prompt === "string" ? r.prompt : "";
+    for (const m of prompt.matchAll(ANY_PH)) {
+      const p = params.get(m[1])!;
+      addEdge(paramNode(p), target, p.type === "element" ? "elements" : "prompt");
+    }
+    for (const [k, v] of Object.entries((r.inputs ?? {}) as Record<string, unknown>)) {
+      for (const item of Array.isArray(v) ? v : [v]) {
+        if (typeof item !== "string") return refuse(`“${s.label ?? s.key}” has a file a canvas can't hold`);
+        const ph = EXACT_PH.exec(item);
+        if (ph) {
+          addEdge(paramNode(params.get(ph[1])!), target, FILE_PORT[k]);
+          continue;
+        }
+        if (!item.startsWith("/api/files/")) return refuse(`“${s.label ?? s.key}” uses a linked file a canvas can't hold: add it to Fuobe first`);
+        const kind = k === "images" || k === "endImage" ? "image" : k === "video" || k === "videos" ? "video" : "audio";
+        const id = `file-${++fixedFiles}`;
+        nodes.push({ id, type: INPUT_NODE[kind], position: { x: 0, y: inputRow++ * 220 }, data: { url: item, input: { fixed: true } } });
+        addEdge(id, target, FILE_PORT[k]);
+      }
+    }
+    const after = asList(s.after);
+    after.forEach((a, i) => addEdge(stepNode.get(a)!, target, CHAIN_PORT[(s.chain?.[i] ?? { slot: "images" }).slot]!));
+  }
+  const graph: CanvasGraph = { nodes, edges };
+  // Read back: what wouldn't come back as the same skill isn't offered as a canvas.
+  const back = canvasToRecipe(graph);
+  if (!back.recipe) return refuse(back.problems[0]?.message ?? "It doesn't come back the same from a canvas");
+  if (recipeShape(back.recipe) !== recipeShape(recipe)) return refuse("It doesn't come back the same from a canvas");
+  return { ok: true, graph };
+}
+
+/** A recipe's params, steps and checks as one string, `after` as a list and each step's chain spelled out. */
+export function recipeShape(recipe: Pick<Recipe, "params" | "steps" | "checks">): string {
+  const stable = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(stable)
+      : v && typeof v === "object"
+        ? Object.fromEntries(
+            Object.entries(v)
+              .filter(([, x]) => x !== undefined)
+              .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+              .map(([k, x]) => [k, stable(x)]),
+          )
+        : v;
+  const steps = recipe.steps.map((s) => {
+    if (s.kind === "tool") return s;
+    const after = asList(s.after);
+    const request = { ...s.request, ...(typeof s.request.prompt === "string" && { prompt: s.request.prompt.trim() }) };
+    return { ...s, request, after, chain: s.chain ?? after.map(() => ({ slot: "images" })) };
+  });
+  return JSON.stringify(stable({ params: recipe.params, steps, checks: recipe.checks ?? {} }));
+}
+
+export interface CanvasRecipe {
+  /** Null when the board can't be a skill (`problems` say why). */
+  recipe: Recipe | null;
+  problems: { nodeId?: string; message: string }[];
+  /** A table's filled rows as the Many tab's rows (its columns are text inputs). */
+  rows?: RecipeValues[];
+  /** Inputs that varied in the skill the board was drawn from, and a table's columns: they start as Varies. */
+  varies: string[];
+  /** The skill the board was drawn from, when every step says the same. */
+  from?: string;
+  /** Each step's node (the review screen's thumbnails). */
+  nodes: Record<string, string>;
+}
+
+/** A value a settings input takes: one of a choice's options, a number in its range. */
+function settingFits(p: RecipeParam, v: unknown): boolean {
+  if (p.type === "choice") return typeof v === "string" && (!p.options || p.options.includes(v));
+  return typeof v === "number" && Number.isFinite(v) && (p.min === undefined || v >= p.min) && (p.max === undefined || v <= p.max);
+}
+
+const nodeValue = (n: CanvasNode): string =>
+  n.type === "prompt" ? (n.data.text ?? "") : n.type === "element" ? (n.data.handle ? `@${n.data.handle}` : "") : (n.data.url ?? "");
+const INPUT_TYPE: Partial<Record<CanvasNodeType, "text" | "image" | "video" | "audio" | "element">> = { prompt: "text", "image-input": "image", "video-input": "video", "audio-input": "audio", "clone-voice": "audio", element: "element" };
+const stepKeyOf = (label: string) =>
+  label
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32) || "step";
+
+/**
+ * A board as a recipe (the board is the "demo", W5): each input node that feeds a step becomes an input (a file a step
+ * drawn from a skill always uses stays fixed), each generator node a generate step with its request as describeNode
+ * builds it, and a Video concatenator its cuts and join, as runCanvas runs them. A Table's columns become text inputs and
+ * its filled rows the Many tab's rows (at most TABLE_LIMITS: 50 rows of 8). A node that can't run says why.
+ */
+export function canvasToRecipe(graph: CanvasGraph, page: { canvas?: string } = {}): CanvasRecipe {
+  const nodes = nodeMap(graph);
+  const problems: CanvasRecipe["problems"] = [];
+  const fail = (): CanvasRecipe => ({ recipe: null, problems, varies: [], nodes: {} });
+  const generators = graph.nodes.filter(isGenerator);
+  if (!generators.length) {
+    problems.push({ message: "Add a model to the board first: a skill runs its steps" });
+    return fail();
+  }
+  const feedsAStep = (n: CanvasNode) => [...descendants(graph, [n.id])].some((id) => isGenerator(nodes.get(id)!));
+  const tables = graph.nodes.filter((n) => n.type === "table" && feedsAStep(n));
+  if (tables.length > 1) problems.push({ nodeId: tables[1].id, message: "One table per skill: its rows become the runs" });
+  const feeds = tablesFeeding(graph);
+  for (const n of generators.filter((g) => g.type === "concat")) {
+    if (concatClips(graph, n).some((c) => {
+      const r = feeds(nodes.get(c.nodeId)!);
+      return !!r && !("error" in r);
+    }))
+      problems.push({ nodeId: n.id, message: `“${nodeLabel(n)}” joins a clip per row of a table: a skill makes one film per run, so join the clips without the table` });
+  }
+  if (problems.length) return fail();
+
+  // Inputs: their ids (as drawn from a skill, else from their labels) in the form's order.
+  const inputs = graph.nodes
+    .filter((n) => INPUT_TYPE[n.type] && feedsAStep(n) && !n.data.input?.fixed && !(n.type === "clone-voice" && graph.edges.some((e) => e.target === n.id && e.targetHandle === "audio")))
+    .sort((a, b) => (a.data.input?.at ?? Infinity) - (b.data.input?.at ?? Infinity) || byPosition(a, b));
+  const taken = new Set<string>();
+  const idOf = new Map<string, string>();
+  for (const n of inputs) {
+    const want = n.data.input?.param?.id;
+    const id = want && !taken.has(want) ? want : paramIdFrom(nodeLabel(n), taken);
+    taken.add(id);
+    idOf.set(n.id, id);
+  }
+  const handles = new Map<string, string>();
+  const subNodes = graph.nodes.map((n): CanvasNode => {
+    const id = idOf.get(n.id);
+    if (!id) return n;
+    const type = INPUT_TYPE[n.type]!;
+    if (type === "text") return { ...n, data: { ...n.data, text: `{{${id}}}` } };
+    if (type === "element") {
+      if (n.data.handle) handles.set(n.data.handle.toLowerCase(), id);
+      return n;
+    }
+    return { ...n, data: { ...n.data, url: `/api/files/recipe-input/${id}.${SENTINEL_EXT[type]}` } };
+  });
+  // A table: its columns are inputs, read the way rowRequest reads a row ("{Column}" in a node's words, else the row as text).
+  const table = tables[0];
+  const columns: { id: string; label: string; j: number }[] = [];
+  let rows: RecipeValues[] | undefined;
+  let edges = graph.edges;
+  if (table) {
+    const filled = tableRows(table);
+    if (filled.length > TABLE_LIMITS.rows) problems.push({ nodeId: table.id, message: `“${nodeLabel(table)}” has ${filled.length} rows: a skill runs up to ${TABLE_LIMITS.rows} at once` });
+    (table.data.columns ?? ["Prompt"]).slice(0, TABLE_LIMITS.columns).forEach((c, j) => {
+      const label = c.trim() || `Column ${j + 1}`;
+      const id = paramIdFrom(label, taken);
+      taken.add(id);
+      columns.push({ id, label: label.slice(0, 60), j });
+    });
+    rows = filled.map((cells) => Object.fromEntries(columns.map((c) => [c.id, cells[c.j] ?? ""])));
+    const named = new Set<string>();
+    for (const [i, n] of subNodes.entries()) {
+      if (!graph.edges.some((e) => e.source === table.id && e.target === n.id)) continue;
+      const own = n.data.prompt ?? "";
+      const raw = table.data.columns ?? [];
+      if (!raw.some((c) => c.trim() && own.includes(`{${c.trim()}}`))) continue;
+      named.add(n.id);
+      subNodes[i] = { ...n, data: { ...n.data, prompt: columns.reduce((p, c) => (raw[c.j]?.trim() ? p.replaceAll(`{${raw[c.j].trim()}}`, `{{${c.id}}}`) : p), own) } };
+    }
+    edges = graph.edges.filter((e) => !(e.source === table.id && named.has(e.target)));
+    const at = subNodes.findIndex((n) => n.id === table.id);
+    subNodes[at] = { ...table, type: "prompt", data: { text: columns.map((c) => `{{${c.id}}}`).join(", ") } };
+  }
+  if (problems.length) return fail();
+  const sub: CanvasGraph = { ...graph, nodes: subNodes, edges };
+  const subMap = nodeMap(sub);
+  const { order, cyclic } = topoOrder(sub);
+  for (const id of cyclic) if (isGenerator(subMap.get(id)!)) problems.push({ nodeId: id, message: `“${nodeLabel(subMap.get(id)!)}” is part of a loop: remove one of its connections` });
+
+  const usedKeys = new Set<string>();
+  const keyOf = new Map<string, string>();
+  const freeKey = (want: string) => {
+    let k = want.slice(0, 40);
+    for (let i = 2; usedKeys.has(k); i++) k = `${want.slice(0, 36)}-${i}`;
+    usedKeys.add(k);
+    return k;
+  };
+  const steps: GenerateStep[] = [];
+  const checks: Record<string, RecipeCheck> = {};
+  const settingParams = new Map<string, { p: RecipeParam; at: number }>();
+  const stepNodes: Record<string, string> = {};
+  const fromSkills = new Set<string>();
+  /** A chain slot's position only where it matters: before the step's own files in that list ("last" is the default). */
+  const chainOf = (req: GenerationRequest): ChainSlot[] | undefined =>
+    req.chain?.map((c) => {
+      const own = (req.inputs as Record<string, unknown> | undefined)?.[c.slot];
+      if (c.position === "first" && Array.isArray(own) && own.length) return c;
+      const rest = { ...c };
+      delete rest.position;
+      return rest;
+    });
+  const cleanRequest = (req: GenerationRequest, n: CanvasNode, main: boolean): GenerationRequest => {
+    const out: GenerationRequest & Record<string, unknown> = { ...req };
+    delete out.chain;
+    delete out.step;
+    const mark = n.data.skill;
+    if (main) out.feature = mark?.feature ?? "skill";
+    if (out.inputs) {
+      const inputs: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(out.inputs)) {
+        const swap = (x: unknown) => (typeof x === "string" && SENTINEL.test(x) ? `{{${SENTINEL.exec(x)![1]}}}` : x);
+        inputs[k] = Array.isArray(v) ? v.map(swap) : swap(v);
+      }
+      out.inputs = inputs as GenerationRequest["inputs"];
+    }
+    if (typeof out.prompt === "string") for (const [h, id] of handles) out.prompt = out.prompt.replace(handleRe(`@${h}`), `{{${id}}}`);
+    if (main && mark && mark.modelId === req.modelId && mark.extra) {
+      const { params, ...rest } = mark.extra as { params?: Record<string, unknown> };
+      Object.assign(out, rest);
+      if (params) out.params = { ...out.params, ...params } as GenParams;
+    }
+    // Settings inputs come back where the node still has the model and a value the input takes (else the value stays).
+    if (main && mark?.settings && mark.modelId === req.modelId) {
+      for (const [k, { param, at }] of Object.entries(mark.settings)) {
+        const v = (out.params as Record<string, unknown> | undefined)?.[k];
+        if (!settingFits(param, v) || taken.has(param.id)) continue;
+        const was = param.example ?? param.default;
+        const now = v as string | number;
+        const p: RecipeParam = now === was ? param : param.default !== undefined ? { ...param, default: now } : { ...param, example: now };
+        if (!settingParams.has(p.id)) settingParams.set(p.id, { p, at });
+        out.params = { ...out.params, [k]: `{{${p.id}}}` } as GenParams;
+      }
+    }
+    return out;
+  };
+  for (const id of order) {
+    const n = subMap.get(id)!;
+    if (!isGenerator(n)) continue;
+    const d = describeNode(sub, n);
+    if (d.error || !d.request || !d.deps) {
+      problems.push({ nodeId: n.id, message: `“${nodeLabel(n)}”: ${d.error ?? "it can't run"}` });
+      continue;
+    }
+    const mark = n.data.skill;
+    if (mark?.from) fromSkills.add(mark.from);
+    const key = freeKey(mark?.key && !usedKeys.has(mark.key) ? mark.key : stepKeyOf(nodeLabel(n)));
+    keyOf.set(n.id, key);
+    stepNodes[key] = n.id;
+    const label = n.data.label?.trim() || mark?.label;
+    if (!d.steps) {
+      const after = d.deps.map((dep) => keyOf.get(dep)!);
+      steps.push({
+        key,
+        kind: "generate",
+        ...(label && { label: label.slice(0, 80) }),
+        ...(after.length && { after }),
+        ...(d.request.chain?.length && { chain: chainOf(d.request) }),
+        request: cleanRequest(d.request, n, true) as GenerateStep["request"],
+      });
+    } else {
+      const sub2 = new Map(d.steps.map((st) => [st.key, st.request === d.request ? key : freeKey(`${key}-${st.key.replace(/[^A-Za-z0-9_-]+/g, "-")}`)]));
+      for (const st of d.steps) {
+        const after = st.from.map((f) => ("node" in f ? keyOf.get(f.node)! : sub2.get(f.step)!));
+        const main = st.request === d.request;
+        const own = main ? label : st.request.step?.label;
+        steps.push({
+          key: sub2.get(st.key)!,
+          kind: "generate",
+          ...(own && { label: own.slice(0, 80) }),
+          ...(after.length && { after }),
+          ...(st.request.chain?.length && { chain: chainOf(st.request) }),
+          request: cleanRequest(st.request, n, main) as GenerateStep["request"],
+        });
+      }
+    }
+    const kind = d.plan ? OPERATION_OUTPUT[d.plan.op] : undefined;
+    // A step's own check holds while its model does (like its extra fields): a model swapped on the board gets the
+    // kind-only check a board made from scratch gets, so an image check never stays on a step that now makes a video.
+    const same = !!mark && mark.modelId === d.request.modelId;
+    if (mark && same && mark.check && (!mark.check.kind || mark.check.kind === kind)) checks[key] = { ...mark.check };
+    else if (!same || mark?.check) {
+      if (kind && kind !== "text" && !graph.edges.some((e) => e.source === n.id && isGenerator(nodes.get(e.target) ?? n) && e.target !== n.id)) checks[key] = { kind: kind as RecipeCheck["kind"] };
+    }
+  }
+  if (problems.length) return fail();
+  if (steps.length > 24) {
+    problems.push({ message: `The board makes ${steps.length} steps: a skill has at most 24` });
+    return fail();
+  }
+  // Inputs no step uses (a text joined nowhere, an element whose node isn't wired) are left out.
+  const used = new Set(steps.flatMap((s) => placeholdersIn(s.request).map((p) => p.id)));
+  const placed: { p: RecipeParam; at: number }[] = [];
+  const varies: string[] = [];
+  for (const n of inputs) {
+    const id = idOf.get(n.id)!;
+    if (!used.has(id)) continue;
+    const mark = n.data.input?.param;
+    const value = nodeValue(n);
+    const type = INPUT_TYPE[n.type]!;
+    const label = nodeLabel(n).slice(0, 60);
+    const at = n.data.input?.at ?? Infinity;
+    if (mark) {
+      const was = mark.example ?? mark.default;
+      const p: RecipeParam = { ...mark, id, label, type };
+      if (value && value !== was) p.example = value.length > 2000 ? undefined : value;
+      placed.push({ p, at });
+      varies.push(id);
+    } else placed.push({ p: { id, label, type, required: true, ...(value && value.length <= 2000 && { example: value }) }, at });
+  }
+  for (const s of settingParams.values()) {
+    placed.push(s);
+    varies.push(s.p.id);
+  }
+  // The form's order as the skill had it (a stable sort: inputs made on the board stay after, as they were).
+  placed.sort((a, b) => (a.at === b.at ? 0 : a.at - b.at));
+  const params: RecipeParam[] = placed.map((x) => x.p);
+  // A check that follows a settings input that didn't come back (its value no longer fits) drops that part.
+  const known = new Set(params.map((p) => p.id));
+  for (const c of Object.values(checks)) {
+    for (const [k, v] of Object.entries(c)) {
+      const ph = typeof v === "string" ? EXACT_PH.exec(v) : null;
+      if (ph && !known.has(ph[1])) delete (c as Record<string, unknown>)[k];
+    }
+  }
+  for (const c of columns) {
+    if (!used.has(c.id)) continue;
+    const first = rows?.[0]?.[c.id];
+    params.push({ id: c.id, label: c.label, type: "text", required: true, ...(typeof first === "string" && first && { example: first }) });
+    varies.push(c.id);
+  }
+  if (rows) rows = rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => used.has(k))));
+  const recipe: Recipe = {
+    fuobeRecipe: 1,
+    params,
+    steps: steps as RecipeStep[],
+    ...(Object.keys(checks).length && { checks }),
+    source: { from: "canvas", ...(page.canvas && { canvas: page.canvas }) },
+  };
+  return { recipe, problems, ...(rows && rows.length && { rows }), varies, ...(fromSkills.size === 1 && { from: [...fromSkills][0] }), nodes: stepNodes };
 }

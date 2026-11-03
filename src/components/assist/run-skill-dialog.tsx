@@ -32,20 +32,21 @@ import { SkillIcon } from "./skill-icon";
  * Run a skill with new inputs (package W1): a form made from its recipe's inputs, priced live before it runs, one
  * run or many from a pasted CSV, on an engine where the recipe was checked. No LLM: the server compiles the recipe.
  */
-export function RunSkillDialog({ name, onClose, examples, intro }: { name: string | null; onClose: () => void; examples?: boolean; intro?: string }) {
+/** `csv`: the Many tab starts with these rows (a canvas's Table, saved as a skill). */
+export function RunSkillDialog({ name, onClose, examples, intro, csv }: { name: string | null; onClose: () => void; examples?: boolean; intro?: string; csv?: string }) {
   return (
     <Dialog open={!!name} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex max-h-[min(94svh,900px)] flex-col gap-0 overflow-hidden p-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:rounded-none max-sm:ring-0 sm:max-w-[680px]">
-        {name && <RunForm key={name} name={name} onClose={onClose} examples={examples} intro={intro} />}
+        {name && <RunForm key={name} name={name} onClose={onClose} examples={examples} intro={intro} csv={csv} />}
       </DialogContent>
     </Dialog>
   );
 }
 
 /** `examples`: the form starts filled with the values the skill was made from (a skill just made: "Try it with new inputs"). */
-function RunForm({ name, onClose, examples, intro }: { name: string; onClose: () => void; examples?: boolean; intro?: string }) {
+function RunForm({ name, onClose, examples, intro, csv }: { name: string; onClose: () => void; examples?: boolean; intro?: string; csv?: string }) {
   const view = useRecipe(name);
-  if (view.data) return <Loaded view={view.data} onClose={onClose} examples={examples} intro={intro} />;
+  if (view.data) return <Loaded view={view.data} onClose={onClose} examples={examples} intro={intro} startCsv={csv} />;
   return (
     <div className="space-y-3 p-6">
       <DialogTitle className="sr-only">Run a skill</DialogTitle>
@@ -82,20 +83,20 @@ function priceLine(e: RecipeEstimate | undefined, runs: number): string {
   return runs > 1 ? `${formatCost(e.total)} for ${runs} runs ${where}` : `${formatCost(e.total)} ${where}`;
 }
 
-function Loaded({ view, onClose, examples, intro }: { view: RecipeView; onClose: () => void; examples?: boolean; intro?: string }) {
+function Loaded({ view, onClose, examples, intro, startCsv }: { view: RecipeView; onClose: () => void; examples?: boolean; intro?: string; startCsv?: string }) {
   const { recipe, name } = view;
   const actions = useRecipeActions();
   const skillActions = useSkillActions();
   const qc = useQueryClient();
   const router = useRouter();
-  const [tab, setTab] = useState<"one" | "many">("one");
+  const [tab, setTab] = useState<"one" | "many">(startCsv ? "many" : "one");
   const [values, setValues] = useState<Record<string, string | number | undefined>>(() =>
     Object.fromEntries(recipe.params.map((p) => [p.id, examples && !isMediaType(p.type) && p.example !== undefined && p.example !== null ? p.example : p.default])),
   );
   const [slots, setSlots] = useState<Record<string, SlotValue | null>>(() =>
     examples ? Object.fromEntries(recipe.params.flatMap((p) => (isMediaType(p.type) && typeof p.example === "string" && p.example ? [[p.id, { ref: p.example, preview: p.example, kind: p.type }]] : []))) : {},
   );
-  const [csv, setCsv] = useState("");
+  const [csv, setCsv] = useState(startCsv ?? "");
   const [engine, setEngine] = useState<Engine>(view.ready[0] ?? view.engines[0] ?? "cloud");
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState<"run" | "check" | "on" | null>(null);

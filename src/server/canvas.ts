@@ -206,6 +206,24 @@ const NodeData = z.object({
   orbit: ExactOrbitSchema.optional(),
   keys: z.array(CameraKeySchema).min(1).max(MAX_KEYS).optional(),
   duration: z.number().min(1).max(15).optional(),
+  // Drawn from a skill (W5): what a step or an input keeps for the way back (read again through RecipeSchema when saved).
+  skill: z
+    .object({
+      key: z.string().max(40),
+      label: clamped(80).optional(),
+      feature: z.string().max(60).optional(),
+      modelId: z.string().max(120),
+      extra: z.record(z.string(), z.unknown()).optional(),
+      check: z.record(z.string(), z.unknown()).optional(),
+      settings: z.record(z.string().max(40), z.object({ param: z.record(z.string(), z.unknown()), at: z.number().int().min(0).max(100) })).optional(),
+      from: z.string().max(64).optional(),
+    })
+    .refine((m) => JSON.stringify(m).length <= 20_000, "too much kept from its skill")
+    .optional(),
+  input: z
+    .object({ param: z.record(z.string(), z.unknown()).optional(), at: z.number().int().min(0).max(100).optional(), fixed: z.boolean().optional() })
+    .refine((m) => JSON.stringify(m).length <= 8_000, "too much kept from its skill")
+    .optional(),
 });
 
 const Num = z.number().finite();
