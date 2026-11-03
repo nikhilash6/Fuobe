@@ -54,6 +54,8 @@ import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
 import { dbsChannelsFor, dbsModelFor, dbsSurroundBed, installedDbs, surroundSource, type DbsModel } from "@/lib/av/split";
 import { installedReuse, NO_REUSE_PACK, rateFor, reuseFileFor, STRENGTH_DB, type ReuseModel } from "@/lib/av/clean-voice";
 import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins";
+import { aukTtsWorkflow, expandSpeechEditWorkflow, readSpeechWindows, setAukDevice, speechFadeWav } from "@/lib/av/speech-edit-graph";
+import { SpeechEditError, ttsInstruction, ttsLength, type SpeechWindow } from "@/lib/speech-edit";
 import { expandInbetweenWorkflow, type InbetweenPass } from "@/lib/av/inbetween-graph";
 import { gapPrompt, requestTiming, type InbetweenTiming } from "@/lib/inbetween";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
@@ -1276,7 +1278,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // A voice track on the video's timeline: the clips are the spoken lines (the template binds the first).
   if (ctx.op === "timeline") values.audio = input.audios?.[0] ?? input.audio;
   // Speech workflows read the soundtrack with LoadAudio, which also takes a video upload.
-  if ((ctx.op === "transcribe" || ctx.op === "separate-audio" || ctx.op === "enhance-voice" || ctx.op === "translate") && b.audio && !b.video) values.audio = input.audio ?? input.video ?? clips[0];
+  if ((ctx.op === "transcribe" || ctx.op === "separate-audio" || ctx.op === "enhance-voice" || ctx.op === "translate" || ctx.op === "speech-edit") && b.audio && !b.video) values.audio = input.audio ?? input.video ?? clips[0];
   if (b.language && input.targetLanguage) values.language = input.targetLanguage;
   if (b.sourceLanguage && input.sourceLanguage) {
     const whisper = b.sourceLanguage.some((t) => workflow[t.node]?.class_type === "Apply Whisper");
@@ -1427,6 +1429,19 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (maxSeconds && b.duration && Number(values.duration ?? d.duration ?? 0) > maxSeconds + 0.001) {
     throw new ProviderError(OVER_LIMIT[manifest.capability]?.(maxSeconds) ?? `This workflow makes up to ${maxSeconds} s per job`);
   }
+  // Edit speech (speech-edit-auk): the edit windows the planner made, crossfaded back on a linear fade-in with a flat tail
+  // (src/lib/av/speech-edit-graph.ts says why; both sides of a seam are the same voice, so equal power would bump the level).
+  let speechWindows: SpeechWindow[] | null = null;
+  const aukQuality = extra.quality === "best" ? "best" : "fast";
+  if (manifest.expand === "speech") {
+    speechWindows = readSpeechWindows(extra.speechWindows);
+    if (!speechWindows) throw new ProviderError("Nothing to change: edit the words, or pick a range and an effect", 400);
+    if (b.fadeCurve && extra.fadeCurve === undefined) extra.fadeCurve = await ctx.upload(Buffer.from(speechFadeWav(Math.max(0.02, Number(input.crossfade ?? d.crossfade ?? 0.12)))), "audio/wav", "speech_fade.wav");
+  }
+  if (Object.values(workflow).some((n) => n.class_type === "AuKModelLoader")) {
+    delete extra.speechWindows;
+    delete extra.quality;
+  }
   // Loops and joins with a crossfade: core ComfyUI has no gain ramp, so the curve is a tiny WAV written here
   // (left = fade-in, right = fade-out, exactly the crossfade long). Clips too short for it are refused up front.
   if (b.fadeCurve) {
@@ -1517,6 +1532,20 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // place of SAM's, the anchor after the boundary, masked generation off. Branches it doesn't use go after binding.
   // Media inputs a studio job leaves out on purpose (their branches go after binding).
   const studioLeft: string[] = [];
+  // AuK's text to speech (speech-tts-auk, nm10-speech-edit): its instruction and length, written here since AuK's Prompt
+  // Enhancer is off. Without a voice sample the loader goes (a voice from its description).
+  let aukTts: { seconds: number; hasVoice: boolean } | null = null;
+  if (manifest.id === "speech-tts-auk") {
+    const hasVoice = !!values.audio;
+    if (!hasVoice) studioLeft.push("audio");
+    const sample = hasVoice ? (ctx.media?.(String(values.audio))?.duration ?? 0) : 0;
+    try {
+      aukTts = { seconds: ttsLength(String(input.prompt ?? ""), sample), hasVoice };
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
+    }
+    values.prompt = ttsInstruction(String(input.prompt ?? ""), { hasVoice, voiceDescription: input.voiceDescription });
+  }
   let studioSegment: Omit<SegmentGraphOptions, "outputs"> | null = null;
   if (manifest.id === STUDIO_WORKFLOWS.segment) {
     const history = typeof extra.historyVideo === "string" && !!extra.historyVideo;
@@ -1898,6 +1927,23 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       wf = expandTimelineWorkflow(wf, input.audios?.length ? input.audios : [String(values.audio)], timeline);
     } catch (e) {
       throw new ProviderError((e as Error).message);
+    }
+  }
+  if (speechWindows) {
+    const duration = ctx.media?.(String(values.audio ?? ""))?.duration ?? input.sourceDuration;
+    if (!duration) throw new ProviderError("Couldn't read how long the recording runs: add it again as WAV, MP3, M4A or MP4", 400);
+    try {
+      wf = expandSpeechEditWorkflow(wf, speechWindows, { duration, quality: aukQuality, seed: Number(values.seed) || 0, crossfade: Math.max(0.02, Number(input.crossfade ?? d.crossfade ?? 0.12)) });
+    } catch (e) {
+      throw new ProviderError((e as Error).message, e instanceof SpeechEditError ? 400 : 500);
+    }
+  }
+  if (aukTts) wf = aukTtsWorkflow(wf, aukTts);
+  if (Object.values(wf).some((n) => n.class_type === "AuKModelLoader")) {
+    try {
+      wf = setAukDevice(wf, typeof values.device === "string" ? values.device : undefined);
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
     }
   }
   // Keyframe animation: one pass per gap on the shared loaders, every keyframe loaded once.

@@ -282,6 +282,8 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /Corridor Key Licence 2\.0/, name: "Corridor Key Licence 2.0", class: "conditions", url: "https://github.com/nikopueringer/CorridorKey2.0/blob/485f5e9ab759ead6138cc990776184b59d6ea971/LICENSE" },
   { re: /CC[- ]BY[- ]NC[- ]SA[- ]4\.0/, name: "CC BY-NC-SA 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-SA-4.0") },
   { re: /CC[- ]BY[- ]NC(?![- ]SA)(?:[- ]4\.0)?\b/, name: "CC BY-NC 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-4.0") },
+  // Before the general entry: AuK's encoder (Edit speech) has its own copy of the licence.
+  { re: /Qwen2\.5-Omni-3B encoder Qwen Research License/, name: "Qwen Research License", class: "non-commercial", url: "https://huggingface.co/Qwen/Qwen2.5-Omni-3B/blob/main/LICENSE" },
   { re: /Qwen Research License/, name: "Qwen Research License", class: "non-commercial", url: "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE" },
   { re: /Tencent Hunyuan 3D 2\.1 Community License/, name: "Tencent Hunyuan 3D 2.1 Community License", class: "regions" },
   { re: /Tencent Hunyuan Community License/, name: "Tencent Hunyuan Community License", class: "regions" },
@@ -495,6 +497,13 @@ export const NODE_PACKS: NodePack[] = [
     name: "Corridor Key Licence 2.0",
     class: "conditions",
     note: "CorridorKey 2.0 nodes, with Corridor's CorridorKey 2.0 code inside unmodified; the code and the weights it downloads are under the Corridor Key Licence 2.0: free for any project, commercial ones included, but never resold or offered as a paid API or inference service. The frozen models it downloads keep their own licences (NVIDIA Open Model License, MIT, CC-BY 4.0)",
+  }),
+  // Edit speech (nm10-speech-edit), pinned in workflows/comfyui/packs.json: the LICENSE file read at the pinned commit.
+  pack("ComfyUI-AuK", "https://github.com/Tencent-Hunyuan/AuK/tree/0d40366b1039e37c6cad008ab4713f6ad6d954b7/comfyui/ComfyUI-AuK", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Tencent AuK's own nodes (speech editing and text to speech); MIT code and weights. The Qwen2.5-Omni-3B encoder AuK loads is under the Qwen Research License (non-commercial)",
   }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {

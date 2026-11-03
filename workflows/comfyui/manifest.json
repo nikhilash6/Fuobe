@@ -8689,6 +8689,137 @@
       "validationError": "HTTP 400: missing_node_type: Node 'VoxCPM2 voice clone' not found. The custom node may not be installed. (Node ID '#2')"
     },
     {
+      "id": "speech-edit-auk",
+      "title": "Edit what was said with Tencent AuK (words, pitch, pace, emotion, noise; windows crossfaded back)",
+      "capability": "speech-edit",
+      "file": "speech-edit-auk.json",
+      "source": "hand-built (scripts/comfy/hand-built/speech-edit-auk.json)",
+      "bindings": {
+        "audio": [
+          {
+            "node": "1",
+            "input": "audio"
+          }
+        ],
+        "fadeCurve": [
+          {
+            "node": "2",
+            "input": "audio"
+          }
+        ],
+        "seed": [
+          {
+            "node": "11",
+            "input": "seed"
+          }
+        ],
+        "device": [
+          {
+            "node": "4",
+            "input": "device"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "50",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "50",
+          "kind": "audio"
+        }
+      ],
+      "defaults": {
+        "crossfade": 0.12
+      },
+      "limits": {
+        "maxDurationSec": 1200
+      },
+      "models": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI-AuK",
+          "repo": "https://github.com/Tencent-Hunyuan/AuK/tree/0d40366b1039e37c6cad008ab4713f6ad6d954b7/comfyui/ComfyUI-AuK"
+        }
+      ],
+      "vramGb": 24,
+      "license": "AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (NON-COMMERCIAL)",
+      "validated": false,
+      "notes": "The recording (a video upload works: LoadAudio reads its soundtrack) and the edit windows Fuobe plans (params.extra.speechWindows: start, end, instruction, seconds). The graph is rebuilt for every window in one prompt: each window is cut with TrimAudioDuration, edited by AuKGenerateEdit (one shared AuKModelLoader) and crossfaded back over its first and last 0.12 s as a + (b − a) × fade-in, with the linear fade-in Fuobe writes (fadeCurve: the ramp, then a flat tail AudioMerge trims off). The recording and each edit are first brought to one rate (merged with silence at the other's: AuK speaks at 24 kHz), so no seam piece is resampled at its edges (a resampled piece tapers there: a click). Windows hold at least 1 s of untouched speech each side and are cut at silences. AuK takes a window plus its new audio up to 30 s per call (its node refuses more and does not split), so a window is at most about 14.7 s for a same-length effect. AuK-Flash by default (checkpoint ckpts/AuK-Flash/auk_flash.safetensors, 4 steps, CFG 0, sway -1); params.extra.quality \"best\" loads ckpts/AuK/auk_base.safetensors at 32 steps, CFG 2. The Prompt Enhancer is off: Fuobe writes the Cookbook instruction (Replace 'X' with 'Y'. / Add … after … / Remove …; pitch, speed, volume, emotion, whisper, enhancement and speaker extraction) and sets generation_seconds itself. device is bound to the server's first torch device (cuda:0, or cpu with fp32). AuK outputs mono, so edited windows are duplicated into a stereo recording. Peak VRAM ~25 GiB (AuK's README, A800, bf16), ~17 GiB with cpu_offload. Languages: English and Chinese (the technical report, arXiv 2609.08936: a bilingual corpus). Saves FLAC.",
+      "autoDownloads": [
+        "install-comfyui.sh with AUK=1 AUK_WEIGHTS=1 downloads into the AuK checkout's ckpts/ (relative paths resolve there, not in a ComfyUI models folder): tencent/AuK-Flash at 575b92f0895f75180bf2cbd35f2e176c5732b8ed (auk_flash.safetensors 6.12 GB, vae.safetensors 0.64 GB, config.yaml) and Qwen/Qwen2.5-Omni-3B at f75b40e3da2003cdd6e1829b1f420ca70797c34e (3 safetensors shards, 11.97 GB, plus config and tokenizer files); AUK_BASE=1 adds tencent/AuK at 790742b71a4430120daf2b2099192abae449eb9f (auk_base.safetensors 6.12 GB) for the Best setting"
+      ],
+      "expand": "speech",
+      "validationError": "HTTP 400: missing_node_type: Node 'AuK Model Loader (AuK-Flash; paths under the AuK checkout)' not found. The custom node may not be installed. (Node ID '#4')"
+    },
+    {
+      "id": "speech-tts-auk",
+      "title": "Tencent AuK text to speech (clone a voice sample, or a voice from its description)",
+      "capability": "tts",
+      "file": "speech-tts-auk.json",
+      "source": "hand-built (scripts/comfy/hand-built/speech-tts-auk.json)",
+      "bindings": {
+        "audio": [
+          {
+            "node": "1",
+            "input": "audio"
+          }
+        ],
+        "prompt": [
+          {
+            "node": "3",
+            "input": "instruction"
+          }
+        ],
+        "seed": [
+          {
+            "node": "3",
+            "input": "seed"
+          }
+        ],
+        "device": [
+          {
+            "node": "2",
+            "input": "device"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "4",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "4",
+          "kind": "audio"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxDurationSec": 30
+      },
+      "models": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI-AuK",
+          "repo": "https://github.com/Tencent-Hunyuan/AuK/tree/0d40366b1039e37c6cad008ab4713f6ad6d954b7/comfyui/ComfyUI-AuK"
+        }
+      ],
+      "vramGb": 24,
+      "license": "AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (NON-COMMERCIAL)",
+      "validated": false,
+      "notes": "Zero-shot TTS: the voice sample (audio) and the line as AuK's instruction (Say the following with the same voice: \"…\"), written by Fuobe; without a sample the loader is removed and AuK is asked for instruct TTS (Generate speech based on the following description: \"…\". The content to speak is: \"…\".) with params.voiceDescription. generation_seconds is the line's length at a speaking rate (the Prompt Enhancer that would estimate it is off). The sample plus the line fit in 30 s. AuK-Flash, 4 steps, CFG 0. Get consent for cloned voices. Saves FLAC.",
+      "autoDownloads": [
+        "install-comfyui.sh with AUK=1 AUK_WEIGHTS=1 downloads into the AuK checkout's ckpts/ (relative paths resolve there, not in a ComfyUI models folder): tencent/AuK-Flash at 575b92f0895f75180bf2cbd35f2e176c5732b8ed (auk_flash.safetensors 6.12 GB, vae.safetensors 0.64 GB, config.yaml) and Qwen/Qwen2.5-Omni-3B at f75b40e3da2003cdd6e1829b1f420ca70797c34e (3 safetensors shards, 11.97 GB, plus config and tokenizer files); AUK_BASE=1 adds tencent/AuK at 790742b71a4430120daf2b2099192abae449eb9f (auk_base.safetensors 6.12 GB) for the Best setting"
+      ],
+      "validationError": "HTTP 400: missing_node_type: Node 'AuK Model Loader (AuK-Flash)' not found. The custom node may not be installed. (Node ID '#2')"
+    },
+    {
       "id": "tts-dialogue-chatterbox",
       "title": "Chatterbox Dialogue (2 speakers, voice clone)",
       "capability": "dialogue",

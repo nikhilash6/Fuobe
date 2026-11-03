@@ -204,6 +204,37 @@ SHA
   fi
 fi
 
+# Tencent AuK (Audio → Edit speech and AuK speech, nm10-speech-edit; MIT code and weights): ComfyUI-AuK is the comfyui
+# folder of Tencent-Hunyuan/AuK, which imports the auk package from the same checkout. So the whole repository is cloned
+# beside custom_nodes at the pinned commit, installed editable with its [comfyui] extra, and the node folder linked into
+# custom_nodes; its relative model paths (ckpts/...) then resolve inside that checkout. Opt-in, since the weights are about
+# 19 GB and it wants a 24 GB+ NVIDIA GPU (17 GB with the loader's cpu_offload): AUK=1. AUK_WEIGHTS=1 also downloads
+# AuK-Flash and the Qwen2.5-Omni-3B encoder into AuK/ckpts (AUK_BASE=1 adds the 32-step base model). The Prompt Enhancer
+# stays off in Fuobe's graphs, so no LLM_* variables are needed.
+AUK_REF="${AUK_REF:-0d40366b1039e37c6cad008ab4713f6ad6d954b7}"   # 2026-10-27
+AUK_FLASH_REV="${AUK_FLASH_REV:-575b92f0895f75180bf2cbd35f2e176c5732b8ed}"
+AUK_BASE_REV="${AUK_BASE_REV:-790742b71a4430120daf2b2099192abae449eb9f}"
+AUK_QWEN_REV="${AUK_QWEN_REV:-f75b40e3da2003cdd6e1829b1f420ca70797c34e}"
+if [ "${AUK:-0}" = "1" ]; then
+  AUK_HOME_DIR="$COMFYUI_DIR/AuK"
+  if [ -d "$AUK_HOME_DIR/.git" ] || git clone -q https://github.com/Tencent-Hunyuan/AuK "$AUK_HOME_DIR"; then
+    git -C "$AUK_HOME_DIR" fetch -q --depth 1 origin "$AUK_REF" 2>/dev/null || true
+    git -C "$AUK_HOME_DIR" checkout -q "$AUK_REF" 2>/dev/null || echo "warn: could not pin AuK to $AUK_REF"
+    uv pip install --python "$PY" -e "$AUK_HOME_DIR[comfyui]" || echo "warn: AuK's Python package failed to install"
+    ln -sfn "$AUK_HOME_DIR/comfyui/ComfyUI-AuK" "$COMFYUI_DIR/custom_nodes/ComfyUI-AuK"
+    if [ "${AUK_WEIGHTS:-0}" = "1" ]; then
+      uv pip install --python "$PY" "huggingface_hub[cli]"
+      "$COMFYUI_DIR/.venv/bin/hf" download tencent/AuK-Flash --revision "$AUK_FLASH_REV" --local-dir "$AUK_HOME_DIR/ckpts/AuK-Flash" || echo "warn: could not download AuK-Flash"
+      "$COMFYUI_DIR/.venv/bin/hf" download Qwen/Qwen2.5-Omni-3B --revision "$AUK_QWEN_REV" --local-dir "$AUK_HOME_DIR/ckpts/Qwen2.5-Omni-3B" || echo "warn: could not download Qwen2.5-Omni-3B"
+      if [ "${AUK_BASE:-0}" = "1" ]; then
+        "$COMFYUI_DIR/.venv/bin/hf" download tencent/AuK --revision "$AUK_BASE_REV" --local-dir "$AUK_HOME_DIR/ckpts/AuK" || echo "warn: could not download AuK"
+      fi
+    fi
+  else
+    echo "warn: could not fetch Tencent-Hunyuan/AuK"
+  fi
+fi
+
 # Fuobe's live edit nodes (fuobe_live.py, one file Fuobe ships, MIT): Live edit's loader, cached reference encode,
 # crop, paste-back and socket save. Written from the copy in this checkout (src/lib/comfy-live-nodes.ts).
 if command -v node >/dev/null 2>&1; then

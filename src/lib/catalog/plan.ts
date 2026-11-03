@@ -242,7 +242,7 @@ const PROMPTLESS = new Set<Operation>([
   "concat", "frame", "color-match", "finalize", "reframe", "dialogue", "voice-change", "dub", "bg-remove-video", "depth-video", "upscale-image", "upscale-video", "bg-remove",
   "interpolate", "v2a", "face-swap", "motion-transfer", "lipsync", "avatar",
   // round 3: tools that work from their inputs (open caption burn-in takes timed lines as its prompt and says so when they're missing)
-  "trim", "transcribe", "mux", "separate-audio", "enhance-voice", "layers", "image-to-3d", "captions", "text-layers", "vectorize", "level",
+  "trim", "transcribe", "mux", "separate-audio", "enhance-voice", "speech-edit", "layers", "image-to-3d", "captions", "text-layers", "vectorize", "level",
   // av-tools: the dub voice track (clips placed on the video's timeline)
   "timeline",
   // round 4: tools that work from their inputs (removing an object needs a prompt only on models that read one)
@@ -554,6 +554,7 @@ export function planGeneration(
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");
   if (op === "voice-design" && !params.voiceDescription?.trim()) throw new Error("Describe the voice you want");
+  if (op === "speech-edit" && !(Array.isArray(params.extra?.speechWindows) && params.extra.speechWindows.length)) throw new Error("Edit the words, or pick a range and an effect");
   if (model.options.motionPaths && !(params.extra?.motionPaths as { paths?: unknown[] } | undefined)?.paths?.length) {
     throw new Error(`Draw on the start frame — ${model.name} moves things along the paths you draw`);
   }
@@ -850,6 +851,7 @@ const NEEDS: Partial<
   transcribe: { oneOf: ["audio", "video"], msg: "Add the audio or video to transcribe" },
   "separate-audio": { oneOf: ["audio", "video"], msg: "Add the audio or video to split" },
   "enhance-voice": { oneOf: ["audio", "video"], msg: "Add the audio or video to clean" },
+  "speech-edit": { oneOf: ["audio", "video"], msg: "Add the recording to edit" },
   level: { audio: true, msg: "Add the audio to level" },
   // round 4
   "remove-object": { video: true, msg: "Add the video to remove something from" },

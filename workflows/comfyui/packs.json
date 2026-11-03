@@ -1,4 +1,13 @@
 {
+  "ComfyUI-AuK": {
+    "repo": "https://github.com/Tencent-Hunyuan/AuK",
+    "commit": "0d40366b1039e37c6cad008ab4713f6ad6d954b7",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": "comfyui/ComfyUI-AuK",
+    "folders": []
+  },
   "ComfyUI-DBS": {
     "repo": "https://github.com/hiroki-abe-58/ComfyUI-DBS",
     "commit": "f656e53434b5485c148a2866fbd6ddc6b6152ed6",
