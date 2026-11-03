@@ -8,7 +8,7 @@
 //   pnpm eval:covers --templates <masters dir>
 //
 // Without --url it starts `next dev` on 3540 (KINETIC_COVERS_PORT moves it) and stops it at the end. Writes
-// <masters>/marketing/<id>/clip.mp4, poster.png (its last frame, for a look) and meta.json { "rest": "end" }: the tile
+// <masters>/marketing/<id>/clip.mp4, poster.png (its last frame, full size: the tile's still) and meta.json { "rest": "end" }: the tile
 // rests on the finished piece, with every word set ({ "rest": seconds } for a piece whose words give way to its logo:
 // the moment they are all set).
 import { spawn, execSync } from "node:child_process";

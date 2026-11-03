@@ -255,13 +255,17 @@ export function templateCoversFromMasters(dir, opts = {}) {
       const outDir = path.join(publicDir, "previews", "templates", group);
       const base = path.join(outDir, safeName(id));
       const frameFiles = m.frames.map((_, i) => `${base}-${i + 2}.jpg`);
-      const sources = [src, ...m.frames, ...(fs.existsSync(path.join(folder, "meta.json")) ? [path.join(folder, "meta.json")] : [])];
+      // A clip that rests on its end and comes with that last frame full size (poster.png, Kinetic's covers): the tile's
+      // still is made from it at the still size, sharper than a frame of the small clip.
+      const full = kind === "video" && rest === "end" && fs.existsSync(path.join(folder, "poster.png")) ? path.join(folder, "poster.png") : null;
+      const sources = [src, ...m.frames, ...(full ? [full] : []), ...(fs.existsSync(path.join(folder, "meta.json")) ? [path.join(folder, "meta.json")] : [])];
       const outputs = [`${base}.jpg`, ...(kind === "video" ? [`${base}.mp4`] : []), ...frameFiles];
       const kept = !opts.force && outputs.every((o) => sources.every((s) => newer(o, s))) && manifest[key] && (kind === "video") === (manifest[key].video !== undefined);
       let at = kept ? manifest[key].at : undefined;
       if (!opts.dryRun && !kept) {
         fs.mkdirSync(outDir, { recursive: true });
         at = encode(src, kind, base, { rest }).at;
+        if (full) encode(full, "image", base);
         m.frames.forEach((f, i) => encode(f, "image", `${base}-${i + 2}`));
       }
       const entry = {
