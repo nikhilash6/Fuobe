@@ -119,7 +119,7 @@ function useAction<B, R extends SwapProject | QueueAnswer = SwapProject>(id: str
 
 export const useAddClip = (id: string) => useAction<ClipInput>(id, "clips");
 export const usePrepareClip = (id: string) => useAction<{ clipId: string }>(id, "prepare");
-export const useTranscribe = (id: string) => useAction<{ clipId: string }>(id, "transcribe");
+export const useTranscribe = (id: string) => useAction<{ clipId: string; voiceFirst?: boolean }>(id, "transcribe");
 export const useMakeMask = (id: string) =>
   useAction<{ clipId: string; shotId: string; kind: "track" | "frame"; frame: number; points: PixelPoint[]; size?: { width: number; height: number }; base?: string }>(id, "masks");
 export const useMakeAnchor = (id: string) => useAction<{ clipId: string; shotId: string; segmentId?: string; modelId?: string; seed?: number }>(id, "anchors");

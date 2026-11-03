@@ -162,7 +162,7 @@ export function expandJobs(suite, opts) {
             modelId: modelId ?? candidates[0] ?? "",
             // The engine it runs on: a Fuobe Original runs on both and takes this one (single-engine models ignore it).
             ...(engine !== "demo" && { engine }),
-            ...((kase.op ?? target?.op) && { op: kase.op ?? target?.op }),
+            ...((variant.op ?? kase.op ?? target?.op) && { op: variant.op ?? kase.op ?? target?.op }),
             // A training case's "{character}" becomes the trained element's @handle in the runner.
             ...(prompt && { prompt }),
             ...(p.negative && { negativePrompt: p.negative }),

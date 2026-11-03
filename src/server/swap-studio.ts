@@ -729,7 +729,7 @@ function prepareClipQuietly(projectId: string, clipId: string): void {
 // ---------------------------------------------------------------------------
 // Transcript
 
-export function transcribe(projectId: string, clipId: string): SwapProject {
+export function transcribe(projectId: string, clipId: string, voiceFirst = false): SwapProject {
   const p = advanceProject(projectId);
   mustMatchMode(p.engine);
   const clip = mustClip(p, clipId);
@@ -738,7 +738,7 @@ export function transcribe(projectId: string, clipId: string): SwapProject {
   mustOffer(modelId, p.engine, "type each shot's words instead");
   const busy = look1(clip.transcript?.genId);
   if (busy && ACTIVE.has(busy.status)) throw new ShortsError("The clip is being transcribed", 409);
-  const pipe = run(planTranscribe(clip, p.engine));
+  const pipe = run(planTranscribe(clip, p.engine, voiceFirst));
   const genId = pipe.byKey.transcribe.id;
   return mutate(projectId, (cur) => mapClip(cur, clipId, (c) => ({ ...c, transcript: { genId, modelId, cues: null, voices: c.transcript?.voices ?? {} } })));
 }
@@ -1224,7 +1224,7 @@ export function estimateProject(projectId: string): StudioEstimate {
   const p = advanceProject(projectId);
   const look = lookup();
   const engine = p.engine;
-  const out: StudioEstimate = { engine, demo: false, free: engine === "open", segments: {}, problems: {}, shots: {}, project: { costUsd: 0, segments: 0 }, assembly: {}, transcribe: {}, mask: {}, sharpen: {}, anchors: [], notes: [] };
+  const out: StudioEstimate = { engine, demo: false, free: engine === "open", segments: {}, problems: {}, shots: {}, project: { costUsd: 0, segments: 0 }, assembly: {}, transcribe: {}, cleanVoice: {}, mask: {}, sharpen: {}, anchors: [], notes: [] };
   const track = (r: { demo: boolean }) => {
     if (r.demo) out.demo = true;
   };
@@ -1236,6 +1236,9 @@ export function estimateProject(projectId: string): StudioEstimate {
       const t = price(planTranscribe(working, engine));
       track(t);
       out.transcribe[clip.id] = t.costUsd;
+      // "Clean the voice first": what it adds (ElevenLabs Voice Isolation in the cloud; free on your GPU).
+      const c = price(planTranscribe(working, engine, true));
+      out.cleanVoice[clip.id] = c.costUsd === null || t.costUsd === null ? null : Math.round((c.costUsd - t.costUsd) * 10000) / 10000;
     }
     for (const [si, shot] of clip.shots.entries()) {
       if (shot.mode !== "generate") continue;

@@ -1139,6 +1139,8 @@ export interface StudioEstimate {
   project: { costUsd: number | null; segments: number };
   assembly: Record<string, number | null>;
   transcribe: Record<string, number | null>;
+  /** What "Clean the voice first" adds to a clip's transcript (null: unknown). */
+  cleanVoice: Record<string, number | null>;
   /** Tracking a whole shot's mask. */
   mask: Record<string, number | null>;
   /**
