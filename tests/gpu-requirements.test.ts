@@ -129,9 +129,11 @@ describe("requirements.json", () => {
   // weight files and two graphs) adds about 0.5 KB gzipped, and Live edit (its node file, LoRA and graph) about 1.6 KB.
   // Open-H3 Regenerate (its graph, two packs and three files) and Blockout to film's depth graph took it to 214 KB /
   // 27.1 KB gzipped, so the budget moves to 256 KB / 32 KB: room for about fifteen more graphs before it is looked at again.
-  it("stays within its size budget (256 KB, 32 KB gzipped)", () => {
-    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(256 * 1024);
-    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(32 * 1024);
+  // Green screen (VRMBG 3.0 and CorridorKey 2.0), RTX Video's three graphs and Edit speech's two, on top of Pika-H3-Flex's
+  // four, took it to 260.3 KB / 32.6 KB gzipped, so the budget moves to 288 KB / 36 KB.
+  it("stays within its size budget (288 KB, 36 KB gzipped)", () => {
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(288 * 1024);
+    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(36 * 1024);
   });
 });
 
