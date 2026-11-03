@@ -17,7 +17,7 @@ import { DESKTOP, PHONE, launch, openRoute } from "./_browser.mjs";
 const argv = process.argv.slice(2);
 const guestAt = argv.indexOf("--guest");
 const guestApp = guestAt >= 0 ? argv[guestAt + 1] : null;
-const args = argv.filter((a, i) => !a.startsWith("--") && i !== guestAt + 1);
+const args = argv.filter((a, i) => !a.startsWith("--") && (guestAt < 0 || i !== guestAt + 1));
 const app = args[0] ?? "http://localhost:3000";
 const out = args[1] ?? fs.mkdtempSync("/tmp/fuobe-watermark-");
 fs.mkdirSync(out, { recursive: true });
