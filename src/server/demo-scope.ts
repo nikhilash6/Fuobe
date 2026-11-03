@@ -18,3 +18,11 @@ export function runAsDemo<T>(fn: () => T): T {
 export function inDemoScope(): boolean {
   return scope.getStore()?.demo === true;
 }
+
+/**
+ * Run `fn` outside runAsDemo: for timers a dry run may be first to start (the generation runner, the skill-run sweep),
+ * which would otherwise carry the scope into every later tick and make every run on the install a demo.
+ */
+export function outsideDemo<T>(fn: () => T): T {
+  return scope.exit(fn);
+}

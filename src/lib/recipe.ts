@@ -247,6 +247,14 @@ export function stepRefs(v: unknown, path: (string | number)[] = [], out: StepRe
   return out;
 }
 
+/**
+ * Studio tools whose result names only a first stage, so no later step can take what they finally make: Faceless
+ * Studio's result is the episode's stills, and the episode is animated and mixed afterwards by Faceless's own steps.
+ */
+export const OUTPUT_NOT_HANDED_ON: Record<string, string> = {
+  faceless_episode: "Faceless Studio finishes an episode in steps of its own after its first pictures",
+};
+
 /** What each studio tool makes, for a later step that takes its output (its first output of the field's kind). */
 export const TOOL_MAKES: Record<string, MediaKind> = {
   dub_video: "video",
@@ -256,7 +264,6 @@ export const TOOL_MAKES: Record<string, MediaKind> = {
   remove_person: "video",
   blockout_film: "video",
   fly_around: "video",
-  faceless_episode: "video",
   katana: "video",
   split_layers: "image",
   create_ads: "image",
@@ -332,6 +339,10 @@ function refProblems(recipe: Recipe, makes?: (s: GenerateStep) => MediaKind | un
         continue;
       }
       const from = recipe.steps[j];
+      if (from.kind === "tool" && OUTPUT_NOT_HANDED_ON[from.tool]) {
+        out.push(`Step “${s.key}” takes the output of “${r.key}”, which no step can take yet: ${OUTPUT_NOT_HANDED_ON[from.tool]}`);
+        continue;
+      }
       const wants = fieldKind(r.path, s.kind === "tool" ? s.tool : undefined);
       const made = from.kind === "tool" ? TOOL_MAKES[from.tool] : (recipe.checks?.[from.key]?.kind ?? makes?.(from));
       if (wants && made && made !== wants) out.push(`Step “${s.key}” takes ${wants === "image" ? "an image" : `a${wants === "audio" ? "n" : ""} ${wants}`} from “${r.key}”, which makes ${made === "image" ? "an image" : made === "audio" ? "audio" : `a ${made}`}`);

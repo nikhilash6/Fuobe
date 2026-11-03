@@ -23,6 +23,7 @@ import {
   RECIPE_LIMITS,
   recipeProblems,
   RecipeSchema,
+  OUTPUT_NOT_HANDED_ON,
   SKILL_CHECK_FEATURE,
   today,
   verifiedLine,
@@ -739,11 +740,19 @@ async function finishRun(id: string, ms: number) {
  * inside runAsDemo, unchanged), then what it made goes to the Trash and the studio records it opened are deleted.
  */
 async function studioDryRun(skill: { name: string; title: string }, recipe: Recipe, c: Extract<Compiled, { kind: "tool" | "staged" }>, engine: Engine, values: RecipeValues): Promise<NonNullable<EngineCheck["dryRun"]>> {
-  const run = await startSkillRun(skill, recipe, partsOf(c), engine, values, { check: true });
+  // A studio that goes on in steps of its own after its result (Faceless) would outlive the check, so its plan is its
+  // check, as in W1; no step takes its output (recipeProblems), so the rest dry-runs without it.
+  const all = partsOf(c);
+  const parts = all.filter((p) => !(p.kind === "tool" && OUTPUT_NOT_HANDED_ON[p.tool]));
+  const left = all.filter((p) => !parts.includes(p)).map((p) => (p.kind === "tool" ? p.tool : ""));
+  const skipped = left.length ? `A studio step (${left.join(", ")}) is checked by its plan only` : undefined;
+  if (!parts.length) return { ok: true, problems: [], skipped };
+  const kept = new Set(parts.flatMap((p) => (p.kind === "tool" ? [p.key] : p.steps.map((s) => s.key))));
+  const run = await startSkillRun(skill, recipe, parts, engine, values, { check: true });
   try {
     const v = await finishRun(run.id, DRY_RUN_MS);
     const problems: string[] = [];
-    for (const s of v.steps) {
+    for (const s of v.steps.filter((x) => kept.has(x.key))) {
       if (s.status === "failed") {
         problems.push(`Step “${s.key}” ${s.error?.startsWith("Didn't start") ? `didn't start (${s.error.replace(/^Didn't start: /, "")})` : `failed${s.error ? `: ${s.error}` : ""}`}`);
         continue;
@@ -753,7 +762,7 @@ async function studioDryRun(skill: { name: string; title: string }, recipe: Reci
       const outputs = s.ids.flatMap((id) => getGeneration(id, { includeDeleted: true })?.outputs ?? []);
       if (!outputs.some((o) => o.kind === kind)) problems.push(`Step “${s.key}” made no ${kind}`);
     }
-    return { ok: !problems.length, problems };
+    return { ok: !problems.length, problems, ...(skipped && { skipped }) };
   } finally {
     await discardSkillRun(run.id);
   }

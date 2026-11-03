@@ -56,7 +56,8 @@ AI. The format is in `src/lib/recipe.ts` (and `docs/research/work2skill-7.md`):
   takes an earlier step's first result of the kind the field takes, so a studio step can feed later
   steps and the other way round ("dub, then captions, then a 9:16 cut"), with tool steps anywhere in
   the order. Each step starts by itself when the steps it takes from are done; the skill's dialog shows
-  the run's progress. A dub that feeds a later step dubs in one go (`"review": false`).
+  the run's progress. A dub that feeds a later step dubs in one go (`"review": false`). A Faceless
+  episode (`faceless_episode`) finishes in Faceless Studio's own steps, so no later step takes its output.
 - Optional `checks` per step (what it makes, how many, the shape, the length, sound, a sentence about
   the look) and `source` (where the recipe came from).
 

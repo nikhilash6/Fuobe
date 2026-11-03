@@ -98,7 +98,7 @@ import { accountSend } from "./account-send";
 import { stamped, stampOf, withRunStamp } from "./run-stamp";
 import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
 import { sweepBilling } from "./billing-outbox";
-import { inDemoScope } from "./demo-scope";
+import { inDemoScope, outsideDemo } from "./demo-scope";
 import { moderationConfigured } from "./moderation";
 import { holdForCheck, sweepOutputChecks } from "./output-checks";
 import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir } from "./storage";
@@ -1986,12 +1986,12 @@ declare global {
 }
 
 /**
- * Run `fn` as the owner's background work: outside any account's run (its tenant, its ComfyUI, the open-engine settings
+ * Run `fn` as the owner's background work: outside a skill check's demo scope and any account's run (its tenant, its ComfyUI, the open-engine settings
  * it runs with). Timers started inside inherit where they were started, so the runner, often first started by a run, is
  * started this way: every tick then polls each row in that row's own context.
  */
 export function outsideRuns<T>(fn: () => T): T {
-  return outsideTenant(() => outsideOwnGpu(() => withoutCandidates(fn)));
+  return outsideDemo(() => outsideTenant(() => outsideOwnGpu(() => withoutCandidates(fn))));
 }
 
 /**

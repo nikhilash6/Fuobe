@@ -7,7 +7,7 @@ import { dubLanguageFor } from "@/lib/assist-studios";
 import { isHelperFeature } from "@/lib/library";
 import { probeMedia } from "@/lib/media-probe";
 import { videoPoster } from "@/lib/output-actions";
-import { isMediaRef, leafKeys, RECIPE_LIMITS, stepRef, stepRefs, today, type ParamType, type Recipe, type RecipeCheck, type RecipeStep } from "@/lib/recipe";
+import { isMediaRef, leafKeys, OUTPUT_NOT_HANDED_ON, RECIPE_LIMITS, stepRef, stepRefs, today, type ParamType, type Recipe, type RecipeCheck, type RecipeStep } from "@/lib/recipe";
 import {
   DEMO_NOTE,
   isExpansionLabel,
@@ -396,6 +396,8 @@ function linkStudios(walk: Walk): boolean {
     if (typeof v === "string") {
       const src = made.get(v);
       if (!src || src === n || src.gen.createdAt > n.gen.createdAt || (!src.tool && !n.tool)) return v;
+      // A studio whose result is only its first stage (Faceless's stills) is kept as the file it handed on.
+      if (src.step.kind === "tool" && OUTPUT_NOT_HANDED_ON[src.step.tool]) return v;
       linked = true;
       return stepRef(src.key);
     }

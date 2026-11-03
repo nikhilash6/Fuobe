@@ -92,6 +92,7 @@ import type { JsonSpec } from "./llm";
 import { llmBackends, probeLocal } from "./providers/llm";
 import { fetchRemote } from "./remote-fetch";
 import { engineMode, getSetting } from "./settings";
+import { inDemoScope } from "./demo-scope";
 import { fileUrl, saveFile } from "./storage";
 import { firstOn, offeredModel } from "./model-access";
 
@@ -222,7 +223,7 @@ const TOPICS_TIMEOUT_MS = 25_000;
 
 /** One answer from the engine's text model, or null (no LLM, AI helper off, demo mode on, or it failed: `onError` hears why). */
 export async function askLlm(engine: Engine, system: string, user: string, o: AskOptions = {}): Promise<string | null> {
-  if (getSetting("demoMode") === "on") return null;
+  if (getSetting("demoMode") === "on" || inDemoScope()) return null;
   // A text model switched off in Settings → Models & licences gives way to the offline wording, like no LLM at all.
   const found = getModel(ENGINE_MODELS[engine].write);
   const model = found && offeredModel(found);

@@ -20,7 +20,8 @@ const gens = await import("@/server/generations");
 const { db } = await import("@/server/db");
 const { saveFile } = await import("@/server/storage");
 const { executeTool } = await import("@/server/assist/tools");
-const { inDemoScope, runAsDemo } = await import("@/server/demo-scope");
+const { inDemoScope, outsideDemo, runAsDemo } = await import("@/server/demo-scope");
+const { llmText } = await import("@/server/enhance");
 const lib = await import("@/lib/recipe");
 const runsRoute = await import("@/app/api/assist/skills/[name]/runs/route");
 
@@ -96,6 +97,19 @@ describe("the recipe format, version 2", () => {
     // Version 1 files still load, and keep their rule: a tool step alone.
     const v1 = lib.RecipeSchema.parse({ ...spanishShort(), fuobeRecipe: 1 });
     expect(lib.recipeProblems(v1).join("\n")).toMatch(/needs "fuobeRecipe": 2/);
+  });
+
+  it("refuses a step that takes a Faceless episode's output: its result is only the first stills", () => {
+    const scenes = Array.from({ length: 3 }, (_, i) => ({ narration: `Line ${i}`, visual: `Scene ${i}` }));
+    const r = lib.RecipeSchema.parse({
+      fuobeRecipe: 2,
+      params: [],
+      steps: [
+        { key: "ep", kind: "tool", tool: "faceless_episode", input: { scenes, style: "flat 2D" } },
+        { key: "captions", kind: "tool", tool: "add_captions", input: { video: "{{steps.ep.output}}" } },
+      ],
+    });
+    expect(lib.recipeProblems(r).join("\n")).toMatch(/“captions” takes the output of “ep”, which no step can take yet: Faceless Studio finishes an episode/);
   });
 
   it("compiles to parts, and fills a reference with the step's first output of the field's kind", () => {
@@ -193,6 +207,40 @@ describe("a skill that spans studios, in demo mode", () => {
   });
 });
 
+describe("following runs", () => {
+  it("the runs route lists a skill's newest 8, or exactly the runs asked for by id however many", async () => {
+    makeSkill("many-runs", spanishShort());
+    const state = JSON.stringify({ engine: "cloud", title: "Spanish short", labels: [], parts: [] });
+    const add = db().prepare("INSERT INTO skill_runs (id, skill, status, values_json, state_json, created_at, updated_at) VALUES (?, ?, 'done', '{}', ?, ?, ?)");
+    const ids = Array.from({ length: 12 }, (_, i) => `many${i}`);
+    ids.forEach((id, i) => add.run(id, "many-runs", state, 1000 + i, 1000 + i));
+    add.run("other0", "spanish-short", state, 5000, 5000);
+    const get = async (q = "") => {
+      const res = await runsRoute.GET(new Request(`http://x/api/assist/skills/many-runs/runs${q}`), { params: Promise.resolve({ name: "many-runs" }) });
+      return { status: res.status, items: ((await res.json()) as { items?: { id: string }[] }).items?.map((r) => r.id) };
+    };
+    expect((await get()).items).toEqual(ids.slice(4).reverse());
+    // The CLI following a 10-row table asks for its own runs: the oldest of them too, and never another skill's.
+    const asked = [...ids.slice(0, 10), "other0"];
+    expect((await get(`?ids=${asked.join(",")}`)).items?.sort()).toEqual(ids.slice(0, 10).sort());
+    expect((await get(`?ids=${Array.from({ length: 51 }, (_, i) => `x${i}`).join(",")}`)).status).toBe(400);
+  });
+});
+
+describe("the demo scope", () => {
+  it("is left by the timers a dry run may start first, and asks no LLM inside it", async () => {
+    await runAsDemo(async () => {
+      expect(inDemoScope()).toBe(true);
+      expect(outsideDemo(() => inDemoScope())).toBe(false);
+      expect(gens.outsideRuns(() => inDemoScope())).toBe(false);
+      // The skill-run sweep, first started here, ticks outside the scope.
+      const seen = await new Promise<boolean>((resolve) => outsideDemo(() => setTimeout(() => resolve(inDemoScope()), 1)));
+      expect(seen).toBe(false);
+      expect(await llmText("system", "user")).toBeNull();
+    });
+  });
+});
+
 describe("the studio dry run", () => {
   it("runs a studio module as a demo with no change to its code", async () => {
     expect(inDemoScope()).toBe(false);
@@ -229,5 +277,15 @@ describe("the studio dry run", () => {
     } finally {
       setSetting("demoMode", "auto");
     }
+  });
+
+  it("checks a Faceless episode by its plan only: it goes on in Faceless Studio's own steps after its result", async () => {
+    const scenes = Array.from({ length: 3 }, (_, i) => ({ narration: `Line ${i}`, visual: `Scene ${i}` }));
+    makeSkill("faceless-check", { fuobeRecipe: 2, params: [], steps: [{ key: "ep", kind: "tool", tool: "faceless_episode", input: { scenes, style: "flat 2D" } }] }, "Episode");
+    const episodes = count("faceless_episodes");
+    const check = await recipes.verifyRecipe("faceless-check", "demo", "cloud");
+    expect(check.engines[0].plan.ok).toBe(true);
+    expect(check.engines[0].dryRun).toEqual({ ok: true, problems: [], skipped: "A studio step (faceless_episode) is checked by its plan only" });
+    expect(count("faceless_episodes")).toBe(episodes);
   });
 });
