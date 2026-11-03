@@ -54,7 +54,7 @@ Real covers from the galleries. Every clip and still below was rendered locally 
 
 <p align="center">
   <a href="https://fuobe.com/apps"><img src="docs/media/gifs/showcase-apps.gif" alt="Twelve Fuobe apps showing their results: Outfit Swap, Head Swap, Restore Photo, Photo to 3D, Relight, Colorize, Tap to Recolor, Steam It, Upscale, Product Shot, Makeup Studio and Hairstyle Try-On" width="100%"></a><br>
-  <b>131 apps.</b> One-click tools for fashion, portraits, products and ads: swap, restore, relight, recolor, upscale and more.<br>
+  <b>132 apps.</b> One-click tools for fashion, portraits, products and ads: swap, restore, relight, recolor, upscale and more.<br>
   <a href="https://fuobe.com/apps">Browse all apps →</a> &nbsp;·&nbsp; <a href="docs/media/gifs/showcase-apps.mp4">MP4</a>
 </p>
 
@@ -80,8 +80,8 @@ Real covers from the galleries. Every clip and still below was rendered locally 
   <tr>
     <td width="50%" valign="top">
       <img src="docs/media/gifs/galleries.gif" alt="The grouped Create, Studios, Apps and Motions &amp; effects menus" width="100%">
-      <h3>29 studios, 131 apps, 363 effects and moves</h3>
-      108 camera motions (mix any two), 255 effects and 131 apps, grouped in the menus by what you want to make.
+      <h3>29 studios, 132 apps, 363 effects and moves</h3>
+      108 camera motions (mix any two), 255 effects and 132 apps, grouped in the menus by what you want to make.
     </td>
     <td width="50%" valign="top">
       <img src="docs/media/gifs/before-after.gif" alt="A photo before and after a Fuobe edit" width="100%">
