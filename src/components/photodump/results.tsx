@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MediaThumb, PendingTile } from "@/components/studio/feed";
 import { Viewer } from "@/components/studio/viewer";
-import { useGenerationActions } from "@/lib/api";
+import { askDeleteForGood } from "@/components/studio/delete-for-good";
+import { useGenerationActions, useIsAccount } from "@/lib/api";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -114,6 +115,8 @@ export function ResultsGrid({
   const done = tiles.filter((t) => t.o);
   const [open, setOpen] = useState<number | null>(null);
   const { trash } = useGenerationActions();
+  // An account has no Trash: its delete is for good, so it says so and asks first.
+  const account = useIsAccount();
   const retry = useRetryPhoto();
   const viewing = open !== null ? done[open] : undefined;
   return (
@@ -160,7 +163,7 @@ export function ResultsGrid({
                 {onPick && <IconLink label="View" icon={Maximize2} onClick={() => setOpen(idx)} />}
                 <IconLink href={`/video?image=${encodeURIComponent(url)}`} label="Animate" icon={Film} />
                 <IconLink href={`/edit?image=${encodeURIComponent(url)}`} label="Edit" icon={Pencil} />
-                <IconLink label="Move to Trash" icon={Trash2} onClick={() => void trash([t.g])} />
+                <IconLink label={account ? "Delete for good…" : "Move to Trash"} icon={Trash2} onClick={() => (account ? askDeleteForGood([t.g]) : void trash([t.g]))} />
               </div>
               {t.g.request.step && <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-background/85 px-2 py-0.5 text-[11px] font-medium">{t.g.request.step.label}</span>}
             </div>

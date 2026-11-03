@@ -67,6 +67,7 @@ export type OutputActionId =
   | "review"
   | "delete"
   | "delete-upload"
+  | "delete-own"
   | "restore"
   | "restore-video"
   | "delete-forever";
@@ -96,6 +97,8 @@ export interface ActionContext {
   engineMode?: "both" | "open" | "cloud";
   /** A guest or an account: hand-offs to the tools that run on a self-hosted Fuobe only are left out. */
   visitor?: boolean;
+  /** A signed-in account (public sign-up): it has no Trash, so a delete is for good ("Delete for good…", asked first). */
+  account?: boolean;
   /** Placeholder results are on (Settings): a new render is a free stand-in, so "paid" is left out. */
   placeholders?: boolean;
 }
@@ -245,8 +248,10 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   if (g.status === "succeeded" && g.outputs.some((x) => storedPath(x.url))) out.push({ id: "share", label: "Share link…", placement: "menu" });
   // Library: pinned results stay at the top of their view; the review status is a sub-menu of its own.
   out.push({ id: "pin", label: g.pinnedAt ? "Unpin" : "Pin to top", placement: "menu" }, { id: "review", label: "Review status", placement: "menu" });
-  // It goes to the Trash (restorable for 30 days), so it says so; a run still going is canceled first.
-  out.push({ id: "delete", label: "Move to Trash", placement: "menu", destructive: true });
+  // The owner's goes to the Trash (restorable for 30 days), so it says so; a run still going is canceled first. An
+  // account has no Trash: its delete is for good, so it says that and asks first.
+  if (ctx.account) out.push({ id: "delete-own", label: "Delete for good…", placement: "menu", destructive: true });
+  else out.push({ id: "delete", label: "Move to Trash", placement: "menu", destructive: true });
   return out;
 }
 

@@ -11,6 +11,7 @@ import { SkillSuggestions } from "@/components/skills/skill-suggestions";
 import { FolderDialog, FolderHeader, FolderStrip, MoveMenuItems } from "@/components/library/folders";
 import { ReviewMenuItems } from "@/components/library/review";
 import { UploadDeleteProvider } from "@/components/library/upload-delete";
+import { askDeleteForGood } from "@/components/studio/delete-for-good";
 import { useViewPrefs, ViewOptions, type ViewPrefs } from "@/components/library/view-options";
 import { openAddKey } from "@/components/keys/your-keys";
 import { PageShell } from "@/components/page-shell";
@@ -936,6 +937,16 @@ function Inner({ starters: given }: { starters: StarterCardData[] }) {
                       }}
                     />
                   </>
+                )}
+                {/* An account has no Trash: what it deletes goes for good, so it says so and asks first. */}
+                {account && !owner && !uploadsTab && (
+                  <BarButton
+                    icon={Trash2}
+                    label="Delete for good…"
+                    destructive
+                    disabled={!selectedGens.some((g) => g.feature !== "upload")}
+                    onClick={() => askDeleteForGood(selectedGens.filter((g) => g.feature !== "upload"), clear)}
+                  />
                 )}
               </>
             )}

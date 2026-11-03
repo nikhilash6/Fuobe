@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { GuestPrompt } from "@/components/guest-prompt";
+import { DeleteForGoodHost } from "@/components/studio/delete-for-good";
 import { AddKeyPrompt } from "@/components/keys/your-keys";
 import { toast } from "sonner";
 import { AUTH_CHANNEL, takeNotice, type ViewerInfo } from "@/lib/api";
@@ -57,6 +58,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           {/* Below the top bar on a desktop (56 px and a gap), near the top on a phone (its tabs are at the bottom). */}
           <Toaster position="top-center" gap={8} offset={{ top: 68 }} mobileOffset={{ top: 12 }} />
           <GuestPrompt />
+          <DeleteForGoodHost />
           <AddKeyPrompt />
           <BillingCard />
           <GuidedFixHost />

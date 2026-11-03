@@ -294,6 +294,25 @@ export function stepsToRedo(steps: KatanaStep[], failed: string[]): string[] {
   return steps.filter((st) => redo.has(st.key)).map((st) => st.key);
 }
 
+/**
+ * The steps a one-tap button makes again: every step for Run again (a new run of the same input), else the failed ones
+ * and every step after them, as retryKatana does (Retry failed steps). Null when the plan can't be read again.
+ */
+export function againKeys(j: KatanaJobView, all: boolean): string[] | null {
+  if (all) return Object.keys(j.steps);
+  const failed = Object.entries(j.steps)
+    .filter(([, id]) => {
+      const g = j.generations[id];
+      return !g || g.status === "failed" || g.status === "canceled";
+    })
+    .map(([k]) => k);
+  try {
+    return stepsToRedo(katanaSteps(j), failed);
+  } catch {
+    return null;
+  }
+}
+
 /** The key of the step that makes the finished video. */
 export function finalKey(steps: KatanaStep[]): string {
   return steps.some((s) => s.key === "final") ? "final" : steps.some((s) => s.key === "join") ? "join" : "move0";

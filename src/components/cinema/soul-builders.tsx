@@ -199,10 +199,11 @@ function useBuilderRun(projectId: string) {
   return { generate, results, setIds, current };
 }
 
-function CostLabel({ plan }: { plan: { costUsd: number | null } }) {
+/** A builder's price: "Free · your GPU" on the GPU, like every other price on it. */
+function CostLabel({ plan }: { plan: { costUsd: number | null; model: { engine: Engine } } }) {
   const status = useStatus().data;
   const demo = placeholdersOn(status?.demoMode);
-  return <span className="font-mono text-[12px] whitespace-nowrap text-muted-foreground">{demo ? "Placeholder · free" : plan.costUsd === 0 ? "Free" : plan.costUsd != null ? `≈ ${formatCost(plan.costUsd)}` : ""}</span>;
+  return <span className="font-mono text-[12px] whitespace-nowrap text-muted-foreground">{demo ? "Placeholder · free" : plan.costUsd === 0 ? (plan.model.engine === "open" ? "Free · your GPU" : "Free") : plan.costUsd != null ? `≈ ${formatCost(plan.costUsd)}` : ""}</span>;
 }
 
 function SaveElement({ kind, defaultName, picked, description, onSaved }: { kind: "character" | "location"; defaultName: string; picked: string[]; description: string; onSaved: () => void }) {

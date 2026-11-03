@@ -91,7 +91,8 @@ An account is signed in, but it sees the owner's studio as a guest does:
   (`GET /api/generations`), and it can open, cancel and delete them and download their files. They
   stay out of the owner's Library and live feed, and no other account can open them. The studio's
   owner can see them, open their files and delete them ([Managing accounts](#managing-accounts));
-  the sign-up form says so. An account's delete is for good (it has no Trash), so its space comes
+  the sign-up form says so. An account's delete is for good (it has no Trash): a result's ⋯ menu and the
+  Library's selection bar say **Delete for good…** and ask first, and its space comes
   back at once. The live-updates stream isn't sent to accounts: their studios poll instead.
 - **Its own uploads are its own.** Only the account that uploaded a file can use it in a run, and
   no other account can open it. See [Uploads](#uploads).

@@ -15,7 +15,8 @@ import { LookCard } from "@/components/shorts/preset-card";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { ClipBar, ClipDrop, costText, Field, Segmented, tabKeys } from "@/components/shorts/ui";
 import { clipDuration, clipSize, useSourceClip } from "@/components/shorts/use-source-clip";
-import { uploadFile, useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { uploadFile, useEngine, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { paidSuffix, placeholdersOn } from "@/lib/demo-mode";
 import { keepOffered, offered } from "@/lib/model-access";
 import {
   clampFps,
@@ -429,6 +430,10 @@ function Editor({
       : null;
   const estimate = useMixedEstimate(body);
   const est = estimate.data;
+  // The preview frame is a run of its own: on the cloud its button says its price (the estimate's, per frame), else "· paid";
+  // nothing on your GPU (free) or while placeholders are on.
+  const placeholders = placeholdersOn(useStatus().data?.demoMode);
+  const previewPaid = cloud && !visitor && !(est ? est.demo : placeholders) ? paidSuffix(est?.previewUsd) : "";
 
   // A new clip, preset or engine starts without a preview (and so does another frame editor: the preview is its own work).
   const key = `${preset?.id}|${clip?.preview}|${engine}|${mode === "fast" ? "" : modelId}`;
@@ -699,7 +704,10 @@ function Editor({
           )}
         >
           {previewBusy ? <Loader2 className="size-4 animate-spin" /> : <ImageIcon className="size-4" />}
-          {preview ? "Generate another preview frame" : "Generate preview frame"}
+          <span>
+            {preview ? "Generate another preview frame" : "Generate preview frame"}
+            {previewPaid}
+          </span>
         </button>
       </div>
 

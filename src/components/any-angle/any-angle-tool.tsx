@@ -39,7 +39,7 @@ import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { downloadHref } from "@/lib/library";
 import { presetCover } from "@/lib/preset-covers";
 import { toastError } from "@/lib/refusals";
-import { againWhere, placeholdersOn } from "@/lib/demo-mode";
+import { againPrice, againWhere, placeholdersOn } from "@/lib/demo-mode";
 import { cn } from "@/lib/utils";
 
 /**
@@ -348,7 +348,7 @@ function ShotCard({ g, original, onAgain }: { g: Generation; original: string; o
           {(out || g.status === "failed") && (
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => onAgain(g)}>
               <RefreshCw className="size-3.5" /> {out ? "Make another" : "Try again"}
-              {againWhere(g, { placeholders })}
+              {againWhere(g, { placeholders }, againPrice([g]))}
             </Button>
           )}
           {out && (

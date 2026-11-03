@@ -620,6 +620,28 @@ export function useGenerationActions() {
       trash,
       restore,
       deleteForever: (gs: Generation[]) => run(gs, null, "delete"),
+      /**
+       * An account's own runs, deleted for good (an account has no Trash): DELETE /api/generations/<id> one by one, which
+       * the proxy lets through for the account's own runs only. Optimistic, then the server; on a refusal the caches are
+       * refetched and its words shown. How many went.
+       */
+      deleteOwn: async (gs: Generation[]) => {
+        if (!gs.length) return 0;
+        local(gs, null);
+        let n = 0;
+        try {
+          for (const g of gs) {
+            const res = await fetch(`/api/generations/${encodeURIComponent(g.id)}?forever=1`, { method: "DELETE" });
+            if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "It couldn't be deleted. Try again.");
+            n++;
+          }
+        } catch (e) {
+          toast.error((e as Error).message);
+        } finally {
+          refresh();
+        }
+        return n;
+      },
       emptyTrash: async () => {
         await fetch("/api/generations/trash", { method: "DELETE" });
         refresh();

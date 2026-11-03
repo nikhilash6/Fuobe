@@ -74,7 +74,8 @@ import { useShare } from "@/components/share/share-provider";
 import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useCreateGeneration, useEngineMode, useGenerationActions, useLikelyVisitor, useSaveElement, useStatus } from "@/lib/api";
+import { useCreateGeneration, useEngineMode, useGenerationActions, useIsAccount, useLikelyVisitor, useSaveElement, useStatus } from "@/lib/api";
+import { askDeleteForGood } from "@/components/studio/delete-for-good";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { ELEMENT_KINDS, type ElementKind } from "@/lib/catalog/elements";
 import { OPERATION_LABELS, type Generation, type OutputFile } from "@/lib/catalog/types";
@@ -132,6 +133,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   review: CircleDot,
   delete: Trash2,
   "delete-upload": Trash2,
+  "delete-own": Trash2,
   restore: ArchiveRestore,
   "restore-video": Palette,
   "extend-song": ListMusic,
@@ -276,6 +278,8 @@ export function useActionRunner(opts: RunnerOptions = {}) {
       case "pin":
         void actions.pin([g], !g.pinnedAt);
         return void toast(g.pinnedAt ? "Unpinned" : "Pinned to the top of the Library", { id: "pin" });
+      case "delete-own":
+        return askDeleteForGood([g], opts.onDeleted);
       case "delete-upload":
         return deleteUpload?.(g, opts.onDeleted);
       case "delete":
@@ -419,7 +423,8 @@ export function TileActions({
   const engineMode = useEngineMode();
   const visitor = useLikelyVisitor();
   const placeholders = placeholdersOn(useStatus().data?.demoMode);
-  const list = useMemo(() => outputActions(g, index, { ...ctx, engineMode, visitor, placeholders }), [g, index, ctx, engineMode, visitor, placeholders]);
+  const account = useIsAccount();
+  const list = useMemo(() => outputActions(g, index, { ...ctx, engineMode, visitor, placeholders, account }), [g, index, ctx, engineMode, visitor, placeholders, account]);
   const [saving, setSaving] = useState(false);
   const strip = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);

@@ -13,7 +13,7 @@ import { formatCost, timeAgo } from "@/lib/format";
 import { PRESETS as GRADE_PRESETS } from "@/lib/grade";
 import { trashDaysLeft, userTitle } from "@/lib/library";
 import { editOnlyFormat, isLayered, layerInfo, outputActions, type OutputAction } from "@/lib/output-actions";
-import { useEngineMode, useLikelyVisitor, useStatus } from "@/lib/api";
+import { useEngineMode, useIsAccount, useLikelyVisitor, useStatus } from "@/lib/api";
 import { placeholdersOn } from "@/lib/demo-mode";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
@@ -171,7 +171,8 @@ export function Viewer({
   const engineMode = useEngineMode();
   const visitor = useLikelyVisitor();
   const placeholders = placeholdersOn(useStatus().data?.demoMode);
-  const list = useMemo(() => outputActions(g, index, { reuse: !!onReuse, compare: !!source, inViewer: true, engineMode, visitor, placeholders }), [g, index, onReuse, source, engineMode, visitor, placeholders]);
+  const account = useIsAccount();
+  const list = useMemo(() => outputActions(g, index, { reuse: !!onReuse, compare: !!source, inViewer: true, engineMode, visitor, placeholders, account }), [g, index, onReuse, source, engineMode, visitor, placeholders, account]);
 
   // Read the latest values from the key handler without re-subscribing on every render.
   const latest = useRef({ list, run, g, index, onPrev, onNext, source });

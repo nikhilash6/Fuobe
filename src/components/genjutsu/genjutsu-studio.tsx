@@ -1284,6 +1284,11 @@ function RunPanel({ run, onAgain, finish = [], onFinish }: { run: Run; onAgain: 
   const byId = useMemo(() => new Map((list ?? []).map((g) => [g.id, g])), [list]);
   const final = byId.get(run.final);
   const placeholders = placeholdersOn(useStatus().data?.demoMode);
+  // Run again sends the run's own request again (a new seed): on the cloud it says that request's price, from the same
+  // estimate the Generate button showed ("· paid" until it's known, or when it can't be priced).
+  const priced = !!final && final.engine !== "open" && final.place !== "pool" && !placeholders;
+  const againEst = useGenjutsuEstimate(priced ? run.body : null);
+  const againCost = againEst.data && !againEst.isError && !againEst.data.demo ? againEst.data.costUsd : null;
   const rows: StepRow[] = run.ids.map((id) => {
     const g = byId.get(id);
     return { key: id, label: g?.request.step?.label ?? "A step", g };
@@ -1315,7 +1320,7 @@ function RunPanel({ run, onAgain, finish = [], onFinish }: { run: Run; onAgain: 
             {(out || state.status === "failed") && (
               <Button size="sm" variant="outline" className="rounded-full" onClick={onAgain}>
                 <RotateCcw className="size-3.5" /> {state.status === "failed" ? "Try again" : "Run again"}
-                {againWhere(final, { placeholders })}
+                {againWhere(final, { placeholders }, againCost)}
               </Button>
             )}
           </div>

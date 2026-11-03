@@ -52,6 +52,7 @@ import { cancelGeneration, createGenerations, currentRequest, getGeneration, pre
 import { trashGenerations } from "./library";
 import { isOffered, modelLicence } from "./model-access";
 import { GenerationRequestSchema } from "./request-schema";
+import { db } from "./db";
 import { engineMode } from "./settings";
 import { createSkill, deleteSkill, getSkill, setSkillFile, skillFile, SkillError } from "./skills";
 import { beginSkillRun, stagedDryRun } from "./skill-runs";
@@ -478,8 +479,24 @@ export function recipeView(name: string): RecipeView {
     recheck: needsRecheck(recipe, ready),
     line: verifiedLine(recipe, engines),
     ...(!engines.length && { why: noEngine(recipe) }),
+    ...(recipe.source?.demo && madeRealResult(skill.name) && { madeReal: true as const }),
     models: [...new Map(models.map((x) => [`${x.engine}:${x.name}`, x])).values()],
   };
+}
+
+/**
+ * Whether a skill has made a real result: one of its runs (its steps share `request.skill.run`, else a batch) whose
+ * every step succeeded and none was a placeholder. A free test run's steps are placeholders, so they never count.
+ * Only the owner's runs count (an account's stay out of the owner's skills).
+ */
+export function madeRealResult(name: string): boolean {
+  return !!db()
+    .prepare(
+      `SELECT 1 FROM generations WHERE json_valid(request_json) AND json_extract(request_json, '$.skill.name') = ? AND json_extract(request_json, '$.account') IS NULL
+       GROUP BY COALESCE(json_extract(request_json, '$.skill.run'), batch_id, id)
+       HAVING SUM(status != 'succeeded') = 0 AND SUM(provider = 'mock') = 0 LIMIT 1`,
+    )
+    .get(name);
 }
 
 /**

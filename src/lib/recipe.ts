@@ -1033,6 +1033,11 @@ export interface RecipeView {
   line: string;
   /** Why it runs nowhere on this install. */
   why?: string;
+  /**
+   * Made from placeholder results (recipe.source.demo), and a run of it has since made a real result (every step
+   * succeeded, none a placeholder): "Made from placeholder results" isn't said any more.
+   */
+  madeReal?: true;
   /** Each step's model and its licence on each engine, as information. */
   models: { engine: RecipeEngine; name: string; licence: string }[];
 }

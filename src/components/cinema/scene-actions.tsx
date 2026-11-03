@@ -47,7 +47,9 @@ export function usePlanPrice(plan: CinemaPlan): { cost: number | null; label: st
   const status = useStatus().data;
   const demo = placeholdersOn(status?.demoMode);
   const cost = demo ? 0 : plan.costUsd;
-  return { cost, demo, label: demo ? "Placeholder · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown" };
+  // Free on the GPU says where it runs, like every other price on it.
+  const free = plan.model.engine === "open" ? "Free · your GPU" : "Free";
+  return { cost, demo, label: demo ? "Placeholder · free" : cost === 0 ? free : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown" };
 }
 
 const SKIP_KEY = "fuobe.cinema.sceneConfirm";

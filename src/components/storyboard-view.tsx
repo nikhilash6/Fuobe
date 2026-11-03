@@ -20,7 +20,8 @@ import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media
 import { Viewer } from "@/components/studio/viewer";
 import { StarterParam } from "@/components/starters/starter-param";
 import { StarterSection, useStarters } from "@/components/starters/starter-section";
-import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsVisitor, useStatus } from "@/lib/api";
+import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsAccount, useIsVisitor, useStatus } from "@/lib/api";
+import { askDeleteForGood } from "@/components/studio/delete-for-good";
 import { MAX_FRAMES, STORYBOARD_ASPECTS, STORYBOARD_PARTNER_IDS, type StoryboardNextScene, type StoryboardPartner } from "@/lib/catalog/storyboard";
 import { lookCard } from "@/lib/catalog/soul-cards";
 import type { Engine, Generation } from "@/lib/catalog/types";
@@ -232,6 +233,8 @@ function Board({
   names: Record<string, string>;
 }) {
   const { trash } = useGenerationActions();
+  // An account has no Trash: its board goes for good, so it says so and asks first.
+  const account = useIsAccount();
   const qc = useQueryClient();
   const first = frames[0];
   const done = frames.filter((f) => f.status === "succeeded").length;
@@ -305,11 +308,11 @@ function Board({
             variant="ghost"
             size="sm"
             className="text-muted-foreground hover:text-destructive"
-            aria-label="Move storyboard to Trash"
+            aria-label={account ? "Delete storyboard for good" : "Move storyboard to Trash"}
             // One bulk call, and the shared toast with Undo (the frames go to the Trash).
-            onClick={() => void trash([...frames, ...film], "Storyboard moved to Trash")}
+            onClick={() => (account ? askDeleteForGood([...frames, ...film]) : void trash([...frames, ...film], "Storyboard moved to Trash"))}
           >
-            <Trash2 /> <span className="hidden sm:inline">Move to Trash</span>
+            <Trash2 /> <span className="hidden sm:inline">{account ? "Delete for good…" : "Move to Trash"}</span>
           </Button>
         </div>
       </header>
