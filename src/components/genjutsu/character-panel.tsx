@@ -32,6 +32,7 @@ import {
 import type { GenjutsuTarget, Maker } from "@/lib/catalog/genjutsu";
 import { cloudSharpenUsd, OPEN_TIER_OFF, SHARPEN_COPY, type SharpenTier } from "@/lib/catalog/sharpen";
 import type { Engine } from "@/lib/catalog/types";
+import { VoiceFirstSwitch } from "@/components/studio/voice-first-switch";
 
 /** The Quality field's short hint: H3's own sizes in words, a finishing size's price (cloud) or "Free · your GPU". */
 export function qualityShort(engine: Engine, q: CharacterChoice): string {
@@ -92,8 +93,8 @@ export function CharacterControls({
   seedProblem?: string | null;
   /** "Describe my character" from the character picture (the engine's text model). */
   describe?: PanelHelper;
-  /** "Use the clip's words": the part's lines from a transcription of the clip. */
-  words?: PanelHelper;
+  /** "Use the clip's words": the part's lines from a transcription of the clip, its voice cleaned first when switched on. */
+  words?: PanelHelper & { voiceFirst?: { on: boolean; onChange: (on: boolean) => void; seconds?: number } };
 }) {
   const set = (patch: Partial<CharacterOptions>) => onChange({ ...value, ...patch });
   const h3 = !!maker?.h3;
@@ -255,6 +256,7 @@ export function CharacterControls({
                     {words.busy ? <Loader2 className="size-3.5 animate-spin" /> : <AudioLines className="size-3.5" />} {words.busy ? "Listening to the clip…" : "Use the clip's words"}
                   </Button>
                 )}
+                {words?.voiceFirst && <VoiceFirstSwitch className="mt-2" engine={engine} on={words.voiceFirst.on} onChange={words.voiceFirst.onChange} seconds={words.voiceFirst.seconds} />}
               </Field>
             )}
             <Field label="Swap style" hint="How the swap is drawn">
