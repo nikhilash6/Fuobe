@@ -7,7 +7,7 @@
  */
 
 import { contrast, luminance, readableOn, themeFrom, type AdTheme } from "@/components/ads/layout";
-import { about, group, mixHex, multiply, translate, withAlpha, type DisplayList, type DisplayNode, type TextRun } from "../../display";
+import { about, group, mixHex, multiply, translate, withAlpha, type DisplayList, type DisplayNode, type Paint, type TextRun } from "../../display";
 import { curve, type CurveName } from "../../ease";
 import { layoutText, type Measure, type TextLayout } from "../../layout";
 import type { Recipe } from "../../recipe";
@@ -549,7 +549,7 @@ export interface BrandMark {
 export const sampleMark = (c: Pick<MarketingContext, "recipe">): boolean => !!c.recipe.brand.logo?.startsWith("/previews/");
 
 /** The logo in a box: as it is, or (a sample mark) in `color`. */
-export function logoNode(c: Pick<MarketingContext, "recipe">, box: { x: number; y: number; w: number; h: number }, color: string): DisplayNode {
+export function logoNode(c: Pick<MarketingContext, "recipe">, box: { x: number; y: number; w: number; h: number; crop?: { x: number; y: number; w: number; h: number } }, color: Paint): DisplayNode {
   const img: DisplayNode = { type: "image", src: "logo", ...box };
   if (!sampleMark(c)) return img;
   const pad = 2;
@@ -658,8 +658,7 @@ export interface BadgeSpot {
 /**
  * Where a round badge sits by a product so it covers the least of it: of the spots round the picture's upper corners
  * and sides (and just past them, inside `bounds`), the one with the least of the badge over the product's outline
- * (point in polygon, so a spot inside the shape never counts as clear; a ring 15 % wider than the badge counts too, so
- * its points keep clear of the product), nearer the top when two tie. The badge is sized
+ * (point in polygon, so a spot inside the shape never counts as clear), nearer the top when two tie. The badge is sized
  * to the product (its radius at most `maxShare` of the product's width, never more than `r`), and shrinks (down to 70 %) while every spot
  * still covers the product. A photo without an outline: its upper right corner, overlapping by a third.
  */
@@ -667,6 +666,10 @@ export function badgeSpot(img: { x: number; y: number; w: number; h: number }, o
   const R0 = Math.min(r, Math.max(r * 0.7, img.w * maxShare));
   const clampIn = (x: number, y: number, rr: number): [number, number] => [Math.min(bounds.x + bounds.w - rr, Math.max(bounds.x + rr, x)), Math.min(bounds.y + bounds.h - rr, Math.max(bounds.y + rr, y))];
   if (!outline) {
+    // Beside the picture's upper right (clear of it with a tenth of the badge to spare) where the bounds allow, else
+    // over its upper right corner by a third.
+    const [bx, by] = clampIn(img.x + img.w + R0 * 1.1, img.y + Math.max(R0, img.h * 0.3), R0);
+    if (bx - R0 * 1.1 >= img.x + img.w - 0.5) return { cx: bx, cy: by, r: R0, cover: 0 };
     const [cx, cy] = clampIn(img.x + img.w - R0 * 0.35, img.y + R0 * 0.35, R0);
     return { cx, cy, r: R0, cover: 0.5 };
   }
@@ -677,18 +680,18 @@ export function badgeSpot(img: { x: number; y: number; w: number; h: number }, o
   const score = (s: BadgeSpot) => {
     // Less cover first; then nearer the product (it reads as its badge), nearer the top, and the larger badge.
     const gx = Math.max(0, img.x - s.cx, s.cx - (img.x + img.w)) / Math.max(1, s.r);
-    return s.cover * 10 + gx * 0.35 + ((s.cy - img.y) / Math.max(1, img.h)) * 0.6 - s.r / r;
+    return s.cover * 40 + gx * 0.35 + ((s.cy - img.y) / Math.max(1, img.h)) * 0.6 - s.r / r;
   };
   for (let rr = R0; rr >= r * 0.7 - 1e-6; rr -= r * 0.1) {
     for (let i = 0; i <= 8; i++) {
       for (const fy of [-0.04, 0.08, 0.2, 0.34, 0.48]) {
         const [cx, cy] = clampIn(img.x - rr * 1.1 + ((img.w + rr * 2.2) * i) / 8, img.y + img.h * fy + (fy < 0 ? -rr * 0.3 : 0), rr);
-        // Scored with a little clearance round the badge, so its points never touch the product; drawn at rr.
-        const spot = { cx, cy, r: rr, cover: discCover(pts, cx, cy, rr * 1.15) };
+        // Measured with a margin round the badge (a tenth of its radius), so it never kisses the product's edge.
+        const spot = { cx, cy, r: rr, cover: discCover(pts, cx, cy, rr * 1.1) };
         if (!best || score(spot) < score(best)) best = spot;
       }
     }
-    if (best && best.cover <= 0.04) break;
+    if (best && best.cover <= 0) break;
   }
   return best!;
 }
