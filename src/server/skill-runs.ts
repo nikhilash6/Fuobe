@@ -192,6 +192,7 @@ async function startPart(runId: string, skill: string, state: RunState, p: PartS
       return;
     }
     const tool = p.part.tool;
+    const step = p.part.key;
     const input = fillRefs(p.part.input, pick, tool);
     const out = state.check ? await runAsDemo(() => executeTool(tool, input, { engine: state.engine })) : await executeTool(tool, input, { engine: state.engine });
     const text = typeof out.content === "string" ? out.content : "";
@@ -201,8 +202,9 @@ async function startPart(runId: string, skill: string, state: RunState, p: PartS
     p.href = card?.href && card.href !== "/library" ? card.href : undefined;
     p.studio = card?.studio;
     if (state.check) p.records = recordsOf(text, card?.href);
-    // The studio's own rows carry the run's stamp and the skill's title, as a pipeline's do.
-    stampRequests(p.ids, () => ({ skill: { name: skill, run: runId }, batchTitle: state.title.slice(0, 200) }));
+    // The studio's own rows carry the run's stamp, with the step's key (a failure is laid at this step, not at a
+    // generate step on the same model), and the skill's title, as a pipeline's do.
+    stampRequests(p.ids, () => ({ skill: { name: skill, run: runId, step }, batchTitle: state.title.slice(0, 200) }));
     p.status = p.ids.length ? "running" : "done";
   } catch (e) {
     p.status = "failed";

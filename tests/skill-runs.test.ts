@@ -157,6 +157,8 @@ describe("a skill that spans studios, in demo mode", () => {
     expect(cut).toMatchObject({ op: "reframe", status: "succeeded", provider: "mock" });
     // Every row carries the run's stamp and the skill's title.
     for (const g of [dubbed, captioned, cut]) expect(g.request).toMatchObject({ skill: { name: "spanish-short", run: run.run }, batchTitle: "Spanish short" });
+    // ...and the key of the step that made it, a studio step's too (a failure is laid at the step that failed).
+    [dubbed, captioned, cut].forEach((g, i) => expect(g.request.skill?.step).toBe(done.steps[i].key));
     expect(done.steps[1]).toMatchObject({ studio: "Captions", href: expect.stringMatching(/^\/video-tools\/captions\?video=/) });
 
     // The skill's dialog reads its runs.
