@@ -901,6 +901,8 @@ export interface RecipeView {
   why?: string;
   /** Each step's model and its licence on each engine, as information. */
   models: { engine: RecipeEngine; name: string; licence: string }[];
+  /** Whether it opens as a canvas (W5), or why not; a skill that runs one studio step names the studio. */
+  canvas?: { ok: true } | { ok: false; detail: string; studio?: string };
 }
 
 export interface RecipeEstimate {

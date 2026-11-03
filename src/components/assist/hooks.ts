@@ -244,15 +244,15 @@ export interface DraftCheckResult {
 }
 
 /** What a skill is drafted from: results picked in the Library (W2), or an Assist chat whose plans ran (W3). */
-export type DraftSource = { generations: string[] } | { thread: string };
+export type DraftSource = { generations: string[] } | { thread: string } | { canvas: string; page?: string };
 
-const sourceKey = (s: DraftSource) => ("thread" in s ? `chat:${s.thread}` : s.generations.join(","));
+export const sourceKey = (s: DraftSource) => ("thread" in s ? `chat:${s.thread}` : "canvas" in s ? `canvas:${s.canvas}:${s.page ?? ""}` : s.generations.join(","));
 
 /** The draft of a skill from picked results or a chat: its steps rebuilt, every input Fixed, and what it couldn't use. */
 export function useSkillDraft(source: DraftSource) {
   return useQuery({
     queryKey: ["skill-draft", sourceKey(source)],
-    enabled: "thread" in source || source.generations.length > 0,
+    enabled: !("generations" in source) || source.generations.length > 0,
     retry: false,
     // Read once while the review is open, and dropped when it closes: opened again, it is drafted again (a name saved
     // since is taken, a result trashed since is gone).
@@ -269,7 +269,7 @@ export function useDraftActions() {
     check: (recipe: unknown, level: "plan" | "demo", title?: string) => recipeCall<DraftCheckResult>("/api/assist/skills/draft/check", { recipe, level, title }),
     /** The optional naming pass (null: no LLM, or its answer didn't fit). */
     name: async (source: DraftSource) => (await recipeCall<{ naming: Naming | null }>("/api/assist/skills/draft/name", source)).naming,
-    save: async (body: { name: string; title: string; description: string; whenToUse?: string; body: string; recipe: unknown }) => {
+    save: async (body: { name: string; title: string; description: string; whenToUse?: string; body: string; recipe: unknown; replace?: boolean }) => {
       const view = await recipeCall<RecipeView>("/api/assist/skills/draft/save", body);
       qc.setQueryData(["assist-recipe", view.name], view);
       qc.removeQueries({ queryKey: ["skill-draft"] });

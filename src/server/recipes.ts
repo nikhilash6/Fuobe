@@ -1,4 +1,6 @@
 import "server-only";
+import { recipeToCanvas } from "@/lib/catalog/canvas";
+import { studioForTool } from "@/lib/recipe-builder";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -351,6 +353,10 @@ export function recipeView(name: string): RecipeView {
     line: verifiedLine(recipe, engines),
     ...(!engines.length && { why: noEngine(recipe) }),
     models: [...new Map(models.map((x) => [`${x.engine}:${x.name}`, x])).values()],
+    canvas: (() => {
+      const d = recipeToCanvas(recipe);
+      return d.ok ? { ok: true as const } : { ok: false as const, detail: d.detail, ...(d.studio && { studio: studioForTool(d.studio) ?? d.studio }) };
+    })(),
   };
 }
 

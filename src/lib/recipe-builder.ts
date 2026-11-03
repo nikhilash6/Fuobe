@@ -480,6 +480,21 @@ export function fixedDraft(recipe: Recipe, varies: string[] = []): Pick<SkillDra
   return { recipe: fixed, candidates };
 }
 
+/**
+ * A canvas's Table rows (by candidate id) as the Run form's Many tab CSV: a header of the input ids the recipe asks for
+ * (a column switched back to Fixed is left out), one quoted line per row.
+ */
+export function rowsCsv(rows: Record<string, string>[], params: Pick<RecipeParam, "id">[], choices: Pick<BuilderChoices, "ids"> = {}): string {
+  const asked = new Set(params.map((p) => p.id));
+  const cols = Object.keys(rows[0] ?? {}).flatMap((cand) => {
+    const id = choices.ids?.[cand]?.trim() || cand;
+    return asked.has(id) ? [{ cand, id }] : [];
+  });
+  if (!cols.length) return "";
+  const cell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  return [cols.map((c) => c.id).join(","), ...rows.map((r) => cols.map((c) => cell(r[c.cand] ?? "")).join(","))].join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // SKILL.md
 

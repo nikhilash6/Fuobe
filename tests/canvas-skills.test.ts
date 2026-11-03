@@ -81,6 +81,9 @@ describe("Open as canvas", () => {
     expect(r.status).toBe(422);
     expect((await r.json()).error).toMatch(new RegExp(`^${CANT_DRAW}`));
     expect((await canvasesRoute.POST(post("/api/canvases", { skill: "nope" }))).status).toBe(404);
+    // The Skills tab reads the same answer from the skill's recipe view.
+    expect(recipes.recipeView("caption-it").canvas).toMatchObject({ ok: false, studio: "Captions" });
+    expect(recipes.recipeView("lamp-scene").canvas).toEqual({ ok: true });
   });
 });
 

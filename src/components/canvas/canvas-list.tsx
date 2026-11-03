@@ -1,6 +1,6 @@
 "use client";
 
-import { Cloud, Copy, Cpu, Loader2, MoreHorizontal, Pencil, Plus, Search, Trash2, Workflow } from "lucide-react";
+import { BookOpen, Cloud, Copy, Cpu, Loader2, MoreHorizontal, Pencil, Plus, Search, Trash2, Workflow } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { NodeIcon } from "./canvas-context";
 import { useCanvasActions, useCanvases } from "./use-canvas";
+import { useRecipe, useSkills } from "@/components/assist/hooks";
+import type { SkillSummary } from "@/lib/assist";
 
 const BOX = { w: 280, h: 150 };
 
@@ -211,7 +213,7 @@ export function TemplateCard({ t, engine, onUse, busy }: { t: TemplateCardData; 
 function ListInner({ templates }: { templates: TemplateCardData[] }) {
   const router = useRouter();
   const params = useSearchParams();
-  const tab = params.get("tab") === "templates" ? "templates" : "mine";
+  const tab = params.get("tab") === "templates" ? "templates" : params.get("tab") === "skills" ? "skills" : "mine";
   const canvases = useCanvases();
   const { create, rename, remove } = useCanvasActions();
   const [engine, setEngine] = useEngine();
@@ -224,7 +226,7 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
   const visitor = useIsVisitor();
 
   const items = (canvases.data ?? []).filter((c) => !q || c.name.toLowerCase().includes(q.toLowerCase()));
-  const setTab = (t: "mine" | "templates") => router.replace(t === "templates" ? "/canvas?tab=templates" : "/canvas", { scroll: false });
+  const setTab = (t: "mine" | "templates" | "skills") => router.replace(t === "mine" ? "/canvas" : `/canvas?tab=${t}`, { scroll: false });
 
   const start = async (key: string, body: Parameters<typeof create>[0]) => {
     setCreating(key);
@@ -254,11 +256,12 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
-        <div className="inline-grid h-9 grid-cols-2 rounded-full bg-muted p-0.5 text-[13px] font-medium" role="tablist" aria-label="Canvases or templates">
+        <div className="inline-grid h-9 grid-cols-3 rounded-full bg-muted p-0.5 text-[13px] font-medium" role="tablist" aria-label="Canvases, templates or skills">
           {(
             [
               ["mine", "Your canvases"],
               ["templates", "Templates"],
+              ["skills", "Skills"],
             ] as const
           ).map(([k, label]) => (
             <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={cn("rounded-full px-3.5 transition-colors", tab === k ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground")}>
@@ -271,7 +274,7 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search canvases" aria-label="Search canvases" className="h-9 rounded-full pl-9" />
           </div>
-        ) : (
+        ) : tab === "skills" ? null : (
           <div className="ml-auto flex items-center gap-2 text-[13px] text-muted-foreground">
             <span className="hidden sm:inline">Variant</span>
             <EngineSwitch value={engine} onChange={setEngine} size="sm" />
@@ -326,6 +329,8 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
             </EmptyContent>
           </Empty>
         )
+      ) : tab === "skills" ? (
+        <SkillsTab visitor={visitor} busy={creating} onOpen={(name) => void start(`skill:${name}`, { skill: name })} />
       ) : (
         <div className="mt-6 space-y-10">
           {[...new Set(templates.map((t) => t.group ?? ""))].map((group) => (
@@ -400,6 +405,79 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
         </AlertDialogContent>
       </AlertDialog>
     </PageShell>
+  );
+}
+
+/** Recipe skills (W5): each that can be drawn opens as a new canvas; one that runs a studio step shows as a note. */
+function SkillsTab({ visitor, busy, onOpen }: { visitor: boolean; busy: string | null; onOpen: (name: string) => void }) {
+  const skills = useSkills();
+  const list = (skills.data ?? []).filter((s) => s.recipe);
+  if (skills.isLoading)
+    return (
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <Skeleton key={i} className="h-40 rounded-xl" />
+        ))}
+      </div>
+    );
+  if (!list.length)
+    return (
+      <Empty className="mt-6 border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <BookOpen />
+          </EmptyMedia>
+          <EmptyTitle className="text-[22px]">No skills that run by themselves yet</EmptyTitle>
+          <EmptyDescription>Make one from results you like in the Library, or save a canvas as a skill from its run menu: it then opens here as a canvas.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  return (
+    <div className="mt-6 space-y-3">
+      <p className="text-[13px] text-muted-foreground">Open a skill as a new canvas to see its steps and swap a model, then use Save as skill to put it back.</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {list.map((s) => (
+          <SkillCard key={s.name} s={s} visitor={visitor} busy={busy === `skill:${s.name}`} onOpen={() => onOpen(s.name)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SkillCard({ s, visitor, busy, onOpen }: { s: SkillSummary; visitor: boolean; busy: boolean; onOpen: () => void }) {
+  const view = useRecipe(s.name);
+  const drawn = view.data?.canvas;
+  const steps = view.data?.recipe.steps.length;
+  return (
+    <article className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3.5">
+      <div className="min-w-0">
+        <h3 className="truncate text-[14px] font-medium">{s.title || s.name}</h3>
+        <p className="font-mono text-[12px] text-muted-foreground">/{s.name}</p>
+      </div>
+      {s.description && <p className="line-clamp-2 text-[13px] text-muted-foreground">{s.description}</p>}
+      {!view.data ? (
+        view.isError ? null : <Skeleton className="h-8 w-32 rounded-full" />
+      ) : drawn && !drawn.ok ? (
+        drawn.studio ? (
+          <p className="rounded-lg bg-muted/60 px-3 py-2 text-[12px] text-muted-foreground">
+            <span className="font-medium text-foreground">Studio step</span> · runs {drawn.studio} as one step, so it isn&apos;t drawn as nodes. Run it from Skills.
+          </p>
+        ) : (
+          <p className="rounded-lg bg-muted/60 px-3 py-2 text-[12px] text-muted-foreground">
+            <span className="font-medium text-foreground">This skill can&apos;t be drawn yet</span> · {drawn.detail}.
+          </p>
+        )
+      ) : (
+        <div className="mt-auto flex flex-wrap items-center gap-2">
+          {!visitor && (
+            <Button size="sm" className="w-fit rounded-full" onClick={onOpen} disabled={busy}>
+              {busy ? <Loader2 className="animate-spin" /> : <Workflow />} Open as canvas
+            </Button>
+          )}
+          {steps !== undefined && <span className="text-[12px] text-muted-foreground">{steps === 1 ? "1 step" : `${steps} steps`}</span>}
+        </div>
+      )}
+    </article>
   );
 }
 
