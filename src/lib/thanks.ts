@@ -7,8 +7,8 @@
  * Some licences ask the app to name them ("Built with DINOv3", MiniMax H3's "MiniMax H3"): those rows carry `credits`,
  * and the page names each one at the top, which is where Fuobe meets that condition.
  *
- * Above the list, "Built on" thanks the projects Fuobe stands on (ComfyUI first) and the labs and people whose open
- * models it runs, grouped by maker from the same rows: the files each tool downloads, its name and its vendor.
+ * Above the list, "Built on" thanks ComfyUI, Hugging Face (where the open model files come from) and the labs and people
+ * whose open models Fuobe runs, grouped by maker from the same rows: the files each tool downloads, its name and its vendor.
  */
 import {
   ATTRIBUTIONS,
@@ -81,7 +81,7 @@ export interface ThanksMaker {
 }
 
 export interface Thanks {
-  /** ComfyUI first, then the services and code the app is built with. */
+  /** ComfyUI first, then where the open model files come from. */
   builtOn: ThanksProject[];
   /** The model makers: premium image and video makers first, then by how many rows run their models. */
   makers: ThanksMaker[];
@@ -137,13 +137,6 @@ export const COMFYUI = {
   url: "https://github.com/Comfy-Org/ComfyUI",
   licence: { name: "GPL-3.0", url: SPDX("GPL-3.0-only") },
 } as const;
-
-/** Packages the app ships with that Built on thanks by name (only when package.json lists them), with what each does. */
-export const BUILT_ON_PACKAGES: { pkg: string; name: string; maker: string; use: string }[] = [
-  { pkg: "next", name: "Next.js", maker: "Vercel", use: "The framework the app is built with" },
-  { pkg: "react", name: "React", maker: "The React team", use: "Draws every screen" },
-  { pkg: "three", name: "three.js", maker: "mrdoob and contributors", use: "Shows 3D models in your browser" },
-];
 
 interface MakerDef {
   id: string;
@@ -520,6 +513,10 @@ export function buildThanks(input: ThanksInput): Thanks {
   const code = groups.get("code")!;
   code.push({ id: "code:fuobe", name: "Fuobe", url: FUOBE_REPO, use: "This app, open source", licences: [{ name: "MIT", url: `${FUOBE_REPO}/blob/main/LICENSE` }] });
   code.push({ id: "code:comfyui", name: COMFYUI.name, maker: COMFYUI.maker, url: COMFYUI.url, use: "Runs the open models on your GPU", licences: [{ ...COMFYUI.licence }] });
+  // FFmpeg: the cloud joins run on fal's FFmpeg API, and VideoHelperSuite reads and writes video with it in ComfyUI.
+  if (input.models.some((m) => m.routes.some((r) => /ffmpeg/i.test(r.endpoint))) || input.workflows.some((w) => w.packs?.includes("ComfyUI-VideoHelperSuite"))) {
+    code.push({ id: "code:ffmpeg", name: "FFmpeg", maker: "The FFmpeg developers", url: "https://ffmpeg.org", use: "Joins, encodes and reads video", licences: [{ name: "LGPL-2.1+", url: "https://ffmpeg.org/legal.html" }] });
+  }
   // The Character swap's workflow (its models, LoRAs and node packs are listed above).
   for (const l of CHARACTER_LICENCES.filter((x) => /workflow/i.test(x.item))) {
     code.push({ id: `code:${l.item}`, name: l.item, maker: ownerOf(l.url), url: l.url, use: "The Character swap's ComfyUI graph", licences: [{ name: l.name, url: l.url }] });
@@ -550,20 +547,10 @@ export function buildThanks(input: ThanksInput): Thanks {
     });
   }
 
-  // Built on: ComfyUI, where the open weights are hosted, the app's frameworks and FFmpeg, each only when Fuobe uses it.
+  // Built on: ComfyUI, then Hugging Face when the open weights come from there.
   const builtOn: ThanksProject[] = [{ id: "comfyui", name: COMFYUI.name, maker: COMFYUI.maker, url: COMFYUI.url, use: "Every open model in Fuobe runs through ComfyUI, on your own GPU.", licence: { ...COMFYUI.licence } }];
   if (input.workflows.some((w) => w.models?.some((x) => x.url?.startsWith("https://huggingface.co/")))) {
     builtOn.push({ id: "huggingface", name: "Hugging Face", maker: "Hugging Face", url: "https://huggingface.co", use: "Hosts the open model files Fuobe runs" });
-  }
-  for (const b of BUILT_ON_PACKAGES) {
-    const p = input.packages.find((x) => x.name === b.pkg);
-    if (!p) continue;
-    const url = spdxLink(p.license);
-    builtOn.push({ id: `package:${p.name}`, name: b.name, maker: b.maker, url: p.url ?? `https://www.npmjs.com/package/${p.name}`, use: b.use, licence: { name: p.license || "See its page", ...(url && { url }) } });
-  }
-  // FFmpeg: the cloud joins run on fal's FFmpeg API, and VideoHelperSuite reads and writes video with it in ComfyUI.
-  if (input.models.some((m) => m.routes.some((r) => /ffmpeg/i.test(r.endpoint))) || input.workflows.some((w) => w.packs?.includes("ComfyUI-VideoHelperSuite"))) {
-    builtOn.push({ id: "ffmpeg", name: "FFmpeg", maker: "The FFmpeg developers", url: "https://ffmpeg.org", use: "Joins, encodes and reads video", licence: { name: "LGPL-2.1+", url: "https://ffmpeg.org/legal.html" } });
   }
 
   const modelRows = GROUP_ORDER.filter((g) => g !== "loras" && g !== "packs" && g !== "code").flatMap((g) => groups.get(g)!);

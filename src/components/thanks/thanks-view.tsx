@@ -94,7 +94,7 @@ function Project({ p }: { p: ThanksProject }) {
 }
 
 /**
- * Thanks & licences: Built on (ComfyUI first, the code and services under the app, the model makers, and the names
+ * Thanks & licences: Built on (ComfyUI first, Hugging Face where the open model files come from, the model makers, and the names
  * some licences ask Fuobe to show), then every model, LoRA, node pack and library in groups (ThanksList, which
  * searches them and filters them by maker).
  */
@@ -122,7 +122,7 @@ export function ThanksView({ thanks }: { thanks: Thanks }) {
         )}
 
         {projects.length > 0 && (
-          <ul className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+          <ul className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((p) => (
               <Project key={p.id} p={p} />
             ))}

@@ -57,7 +57,9 @@ for (const [label, device] of [
     check(`${tag}: Built on thanks ComfyUI first`, firstName === "ComfyUI", firstName);
     check(`${tag}: ComfyUI links its code and its GPL-3.0 licence`, (await builtOn.locator('a[href="https://github.com/Comfy-Org/ComfyUI"]').count()) > 0 && (await builtOn.getByRole("link", { name: /GPL-3\.0/ }).count()) > 0);
     const builtText = await builtOn.innerText();
-    check(`${tag}: Built on names Hugging Face, Next.js, React, three.js and FFmpeg`, ["Hugging Face", "Next.js", "React", "three.js", "FFmpeg"].every((n) => builtText.includes(n)));
+    const cards = (await builtOn.locator("ul").first().locator(":scope > li").allInnerTexts()).map((t) => t.split("\n")[0].trim());
+    check(`${tag}: Built on has one card beside ComfyUI, Hugging Face`, cards.length === 1 && cards[0] === "Hugging Face", cards.join(", "));
+    check(`${tag}: Built on has no framework or library cards`, !["Next.js", "three.js", "FFmpeg"].some((n) => builtText.includes(n)));
     check(`${tag}: the model makers name Qwen, Ideogram, Black Forest Labs, Wan and MiniMax`, ["Qwen team", "Ideogram", "Black Forest Labs", "Wan team", "MiniMax"].every((n) => builtText.includes(n)));
 
     // The names licences ask for stay on show, each with a count and a Show all list.

@@ -8,7 +8,7 @@ import { CLOUD_NOTICES } from "@/lib/av/model3d";
 import { MODELS } from "@/lib/catalog";
 import { ATTRIBUTIONS, buildLicenceList, licenceInfo, NODE_PACKS, OPENMDW_NOTICE } from "@/lib/licences";
 import { loraLicenceRows } from "@/lib/lora-licences";
-import { BUILT_ON_PACKAGES, baseLabel, buildThanks, COMFYUI, groupOf, MAKERS, makersOf, ownerOf, packageFacts, searchText, shownName } from "@/lib/thanks";
+import { baseLabel, buildThanks, COMFYUI, groupOf, MAKERS, makersOf, ownerOf, packageFacts, searchText, shownName } from "@/lib/thanks";
 import { readThanks } from "@/server/thanks";
 
 const ROOT = path.join(__dirname, "..");
@@ -131,40 +131,35 @@ describe("Thanks & licences", () => {
     expect(thanks.groups.find((g) => g.id === "code")!.rows.find((r) => r.id === "code:comfyui")).toMatchObject({ name: "ComfyUI", url: COMFYUI.url });
   });
 
-  it("thanks in Built on only what Fuobe really uses, each with a link and, for code, its licence", () => {
+  it("thanks in Built on ComfyUI and Hugging Face only, and keeps FFmpeg's licence under Code and libraries", () => {
     const raw = JSON.parse(fs.readFileSync(path.join(ROOT, "workflows", "comfyui", "manifest.json"), "utf8")) as {
       workflows: { models?: { url?: string }[]; customNodes?: { name: string }[] }[];
     };
-    const ids = thanks.builtOn.map((b) => b.id);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(expect.arrayContaining(["comfyui", "huggingface", "package:next", "package:react", "package:three", "ffmpeg"]));
-    for (const b of thanks.builtOn) {
-      expect(b.url, b.id).toMatch(/^https:\/\//);
-      expect(b.use.trim(), b.id).not.toBe("");
-      expect(shown(b.name), b.name).toBe(true);
-      if (b.id === "huggingface") {
-        // A host, not code: the open weights come from there.
-        expect(raw.workflows.some((w) => w.models?.some((m) => m.url?.startsWith("https://huggingface.co/")))).toBe(true);
-        expect(b.licence).toBeUndefined();
-        continue;
-      }
-      expect(b.licence?.name, b.id).toBeTruthy();
-      expect(b.licence?.url, b.id).toMatch(/^https:\/\//);
-      if (b.id.startsWith("package:")) {
-        const name = b.id.slice("package:".length);
-        expect(Object.keys(pkg.dependencies), name).toContain(name);
-        const own = JSON.parse(fs.readFileSync(path.join(ROOT, "node_modules", name, "package.json"), "utf8")) as { license?: string };
-        expect(b.licence?.name).toBe(own.license);
-      }
-      if (b.id === "ffmpeg") {
-        const cloud = MODELS.some((m) => m.routes.some((r) => /ffmpeg/i.test(r.endpoint)));
-        const comfyPack = raw.workflows.some((w) => w.customNodes?.some((n) => n.name === "ComfyUI-VideoHelperSuite"));
-        expect(cloud || comfyPack).toBe(true);
-      }
+    // No framework or library cards: those stay in the list below with their licences.
+    expect(thanks.builtOn.map((b) => b.id)).toEqual(["comfyui", "huggingface"]);
+    for (const name of ["Next.js", "three.js", "FFmpeg"]) expect(text.slice(0, text.indexOf("The model makers")), name).not.toContain(name);
+    const hf = thanks.builtOn[1];
+    expect(hf.url).toBe("https://huggingface.co");
+    expect(hf.use.trim()).not.toBe("");
+    expect(shown(hf.name)).toBe(true);
+    // A host, not code: the open weights come from there.
+    expect(raw.workflows.some((w) => w.models?.some((m) => m.url?.startsWith("https://huggingface.co/")))).toBe(true);
+    expect(hf.licence).toBeUndefined();
+    // The packages the cards named keep their rows and licences under Code and libraries.
+    const code = thanks.groups.find((g) => g.id === "code")!.rows;
+    for (const name of ["next", "react", "three"].filter((n) => n in pkg.dependencies)) {
+      const own = JSON.parse(fs.readFileSync(path.join(ROOT, "node_modules", name, "package.json"), "utf8")) as { license?: string };
+      expect(code.find((r) => r.id === `package:${name}`)?.licences[0].name, name).toBe(own.license);
     }
-    expect(BUILT_ON_PACKAGES.every((p) => ids.includes(`package:${p.pkg}`) === p.pkg in pkg.dependencies)).toBe(true);
-    // With nothing to go on, only ComfyUI is thanked.
-    expect(buildThanks({ models: [], workflows: [], loras: [], packages: [] }).builtOn.map((b) => b.id)).toEqual(["comfyui"]);
+    // FFmpeg's licence moves to its own row there, only when Fuobe uses it.
+    const cloud = MODELS.some((m) => m.routes.some((r) => /ffmpeg/i.test(r.endpoint)));
+    const comfyPack = raw.workflows.some((w) => w.customNodes?.some((n) => n.name === "ComfyUI-VideoHelperSuite"));
+    expect(cloud || comfyPack).toBe(true);
+    expect(code.find((r) => r.id === "code:ffmpeg")).toMatchObject({ name: "FFmpeg", url: "https://ffmpeg.org", licences: [{ name: "LGPL-2.1+", url: "https://ffmpeg.org/legal.html" }] });
+    // With nothing to go on, only ComfyUI is thanked, and FFmpeg isn't listed.
+    const empty = buildThanks({ models: [], workflows: [], loras: [], packages: [] });
+    expect(empty.builtOn.map((b) => b.id)).toEqual(["comfyui"]);
+    expect(empty.groups.flatMap((g) => g.rows).some((r) => r.id === "code:ffmpeg")).toBe(false);
   });
 
   it("thanks the model makers whose models Fuobe runs, premium image and video makers first, each linking to its rows", () => {
