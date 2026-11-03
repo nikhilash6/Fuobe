@@ -3158,7 +3158,7 @@ export const SPEC = [
     modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
     notes:
       'Tap to Recolor: qwen-image-21-inpaint with the mask made in the graph from the taps by AusBoss Mask by Touch on core SAM 3.1. ' +
-      'touches = the node\'s JSON {"v":1,"items":[{"t":"name","w":word,"x":int,"y":int,"op":1|0}]} in the photo\'s pixels (src/lib/catalog/recolor.ts recolorTouches): ' +
+      'touches = the node\'s JSON {"v":1,"items":[{"t":"name","w":word,"x":int,"y":int,"op":1|0}]} in the photo\'s pixels: ' +
       'each tap asks for the smallest thing of the piece\'s name under it (Jacket: jacket + clothing; Auto: clothing, bag, shoe, hat, scarf), a Leave out tap takes away a hand, arm, hair, ' +
       'belt, bag strap or necklace under it. SAM 3.1\'s point prompt alone (SAM3_Detect) returned the whole person on every GPU test, so taps go through names. If nothing is found ' +
       'the mask is empty and the photo comes back unchanged (if_nothing "empty mask"); free_vram unloads SAM before the repaint. -> GrowMask maskGrow (1) -> Crop For Inpaint ' +

@@ -28,7 +28,6 @@ import {
   MicOff,
   UserX,
   MoreHorizontal,
-  Palette,
   Pin,
   Repeat,
   RotateCcw,

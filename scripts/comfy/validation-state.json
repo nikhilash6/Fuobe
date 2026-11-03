@@ -408,10 +408,10 @@
     "at": "2026-11-02T01:11:11.304Z"
   },
   "qwen-image-21-recolor": {
-    "sha256": "770927631d3423d8c72a087ec1bcaf9c3ae421415fc398809f47a1921670099f",
+    "sha256": "c774489d3215d047d47e065b375c506c98ef9593f1c57953b67b86a8e3afdccd",
     "validated": true,
     "error": null,
-    "at": "2026-11-02T09:12:49.843Z"
+    "at": "2026-11-03T08:03:14.171Z"
   },
   "qwen-image-2512-t2i": {
     "sha256": "c18da4a3488120bdcee722e4ae7d187385544ec4805753e7dae6946ddb6f6ba5",

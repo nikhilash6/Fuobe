@@ -45,6 +45,7 @@ export const PRESET_BEFORE_AFTER: Record<string, string> = {
   "app-sticker-pack": "338816db",
   "app-style-snap": "4c8fdb8e",
   "app-style-transfer": "3bedd5a5",
+  "app-tap-to-recolor": "c3264e2c",
   "app-text-edit": "84d7797d",
   "app-upscale": "69a94761",
   "app-vectorize": "03816a24",
