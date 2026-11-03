@@ -8,7 +8,7 @@ import { studioForTool } from "@/lib/recipe-builder";
 import { executeTool } from "./assist/tools";
 import { createPipeline } from "./chains";
 import { db } from "./db";
-import { runAsDemo } from "./demo-scope";
+import { outsideDemo, runAsDemo } from "./demo-scope";
 import { deleteDubSession } from "./dub";
 import { deleteEpisode } from "./faceless";
 import { getGeneration, stampRequests } from "./generations";
@@ -298,9 +298,20 @@ export function getSkillRun(id: string): SkillRunView | null {
   return found ? view(found.row, found.state) : null;
 }
 
-/** A skill's newest runs (dry runs left out). */
-export function listSkillRuns(skill: string, limit = 8): SkillRunView[] {
-  const rows = db().prepare("SELECT * FROM skill_runs WHERE skill = ? ORDER BY created_at DESC LIMIT ?").all(skill, limit * 2) as Row[];
+/**
+ * A skill's newest runs (dry runs left out), or with `ids` exactly those of its runs (a CSV's runs, up to
+ * RECIPE_LIMITS.rows, which the CLI follows however many newer runs started since).
+ */
+export function listSkillRuns(skill: string, limit = 8, ids?: string[]): SkillRunView[] {
+  const rows = (
+    ids
+      ? ids.length
+        ? db()
+            .prepare(`SELECT * FROM skill_runs WHERE skill = ? AND id IN (${ids.map(() => "?").join(",")}) ORDER BY created_at DESC`)
+            .all(skill, ...ids)
+        : []
+      : db().prepare("SELECT * FROM skill_runs WHERE skill = ? ORDER BY created_at DESC LIMIT ?").all(skill, limit * 2)
+  ) as Row[];
   return rows
     .map((row) => ({ row, state: JSON.parse(row.state_json) as RunState }))
     .filter((r) => !r.state.check)
@@ -371,7 +382,8 @@ export function ensureSkillRunSweep(): void {
     cur.tick = tick;
     return;
   }
-  const state = { tick, timer: setInterval(() => globalThis.__fuobeSkillRunSweep?.tick(), SWEEP_MS) };
+  // Outside a dry run's demo scope, which the timer would otherwise keep for every run it moves on.
+  const state = { tick, timer: outsideDemo(() => setInterval(() => globalThis.__fuobeSkillRunSweep?.tick(), SWEEP_MS)) };
   state.timer.unref?.();
   globalThis.__fuobeSkillRunSweep = state;
 }

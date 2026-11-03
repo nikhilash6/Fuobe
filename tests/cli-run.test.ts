@@ -121,7 +121,11 @@ beforeAll(async () => {
     if (route === "GET /api/assist/skills/weekly-promo/runs") {
       runPolls++;
       const done = runPolls >= 2;
-      return send(200, { items: [{ id: "r1", status: done ? "done" : "running", steps: [{ key: "dub", label: "Dub", status: "done", ids: ["gen1"] }, { key: "cut", label: "9:16 cut", status: done ? "done" : "waiting", ids: done ? ["gen9"] : [] }] }] });
+      // Like the server: the newest 8 runs, or with ?ids= exactly those runs.
+      const ids = url.searchParams.get("ids")?.split(",") ?? Array.from({ length: 8 }, (_, i) => `r${i + 1}`);
+      return send(200, {
+        items: ids.map((id) => ({ id, status: done ? "done" : "running", steps: [{ key: "dub", label: "Dub", status: "done", ids: ["gen1"] }, { key: "cut", label: "9:16 cut", status: done ? "done" : "waiting", ids: done ? ["gen9"] : [] }] })),
+      });
     }
     if (route === "GET /api/generations") return send(200, { items: [generation("succeeded")] });
     if (route === "GET /api/files/outputs/2026-10-22/out1.png") {
@@ -152,7 +156,7 @@ beforeAll(async () => {
         if (long.length) return send(422, { error: `Fix the recipe first: ${long.map((r) => `Row ${r.line}: The clip is longer than 10 s`).join("; ")}`, problems: [] });
         // A tool row that couldn't start while the others run.
         // A skill that spans studios: a run whose later step waits for the dub (W7).
-        if (rows[0].name === "Spanish") return send(201, { engine: "cloud", demo: false, runs: [{ run: "r1", batchId: "r1", ids: ["gen1"], href: "/audio/translate?dub=d1", waiting: ["9:16 cut"] }] });
+        if (rows[0].name === "Spanish") return send(201, { engine: "cloud", demo: false, runs: rows.map((_, i) => ({ run: `r${i + 1}`, batchId: `r${i + 1}`, ids: ["gen1"], href: "/audio/translate?dub=d1", waiting: ["9:16 cut"] })) });
         return send(201, { engine: b.engine ?? "cloud", demo: false, runs: rows.map((r, i) => (r.name === "nope" ? { ids: [], error: "The tool couldn't start" } : { batchId: `b${i}`, ids: i ? [`gen${i + 1}`] : ["gen1"], href: "/library" })) });
       }
       // A clip is priced by its length once it's uploaded: more than its stand-in.
@@ -496,6 +500,17 @@ describe("fuobe skills: a skill that runs by itself (W4)", () => {
       ["gen9", "succeeded"],
     ]);
     expect(runPolls).toBeGreaterThanOrEqual(2);
+  });
+
+  it("--wait follows every run of a table of more than 8 rows that span studios, not only the newest 8", async () => {
+    fs.writeFileSync(path.join(tmp, "lamp.png"), PNG);
+    fs.writeFileSync(path.join(tmp, "nine.csv"), `Product photo,Product name\n${Array.from({ length: 9 }, () => "lamp.png,Spanish").join("\n")}\n`);
+    polls = 0;
+    runPolls = 0;
+    const w = await run(["skills", "run", "weekly-promo", "--rows", "nine.csv", "--yes", "--wait", "--json", "--interval", "0.2", "--timeout", "20"]);
+    expect(w.code).toBe(0);
+    const asked = seen.filter((s) => s.path.startsWith("/api/assist/skills/weekly-promo/runs")).map((s) => s.path);
+    expect(asked.at(-1)).toBe(`/api/assist/skills/weekly-promo/runs?ids=${Array.from({ length: 9 }, (_, i) => `r${i + 1}`).join(",")}`);
   });
 
   it("--rows: one run per row, -p fills the empty cells, files beside the table go up once, and --json skips the question", async () => {

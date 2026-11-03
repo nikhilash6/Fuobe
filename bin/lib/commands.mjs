@@ -290,7 +290,7 @@ async function waitRuns(ctx, name, runIds) {
   const seen = new Map();
   try {
     for (;;) {
-      const { items = [] } = await ctx.client.request("GET", `/api/assist/skills/${enc(name)}/runs`);
+      const { items = [] } = await ctx.client.request("GET", `/api/assist/skills/${enc(name)}/runs?ids=${runIds.map(enc).join(",")}`);
       const mine = items.filter((r) => runIds.includes(r.id));
       if (!v.json) {
         for (const r of mine) {
