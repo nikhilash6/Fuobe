@@ -236,7 +236,7 @@ Fuobe's existing cloud TripoSplat in Splat mode (`triposplat`, fal `tripo3d/trip
   - **Splat:** cloud `triposplat` ("The subject as a .ply splat · ≈ $0.05"); open `oss-triposplat` ("The subject as a .spz splat + an orbit video · 8 GB GPU · MIT", L57).
   - `CLOUD_NOTICES` adds "Built with DINOv3" to cloud TripoSplat and TRELLIS.2 (L67). The studio's hint under the button names TripoSplat by hand (`model3d-studio.tsx` L314–320).
 - **The open model** `oss-triposplat` (`src/lib/catalog/models.ts` L1380): route `comfy('splat', 'image-to-splat-triposplat')`, a `numGaussians` slider 32,768–1,048,576. Its manifest entry (`workflows/comfyui/manifest.json` L15453) is pinned to ComfyUI 0.41.0 (`fc04da91`): defaults steps 20, cfg 3, 262,144 Gaussians, 75 orbit frames, `.spz`, cut-out on; `vramGb` 8, "VRAM unverified. Validated by /prompt only."
-- **Viewers.** GLBs show in `@google/model-viewer` 4.3.1 (`package.json` L35). three 0.183.2 (L56) drives Cinema's scene viewer. **Fuobe does not draw splats**: `result-media.tsx` L248 and `model-card.tsx` L177 say so and point to SuperSplat.
+- **Viewers.** GLBs show in `@google/model-viewer` 4.3.1 (`package.json` L35). three 0.183.2 (L56) drives Cinema's scene viewer. **Fuobe does not draw splats**: `result-media.tsx` L248 and `model-card.tsx` L177 say so and point to SuperSplat. *(Since idol-4, 2026-11-03: it does, with Spark; see §9 idol-4.)*
 - **Elsewhere.** Canvas: `model3d` nodes default to op `image-to-3d` (`canvas.ts` L404); `splat` takes images (L516); the tile is `canvas/nodes.tsx` L469–472. Feed: image next steps are animate, upscale, edit (`output-actions.ts` L169–170), no 3D action; 3D outputs get "View in 3D" (L146). Library: a 3D tab (`library-view.tsx` L58). Licences: `src/lib/licences.ts` builds rows from the manifest and `NODE_PACKS` (from L406).
 - **Name clash.** `src/lib/catalog/apps.ts` L1486 already ships a video app called **"Idol"** ("Become a K-pop idol on stage"), mirroring a Higgsfield effect (`higgsfield-inventory.md` L414). The 3D model needs another name in pickers, ⌘K, the Library and Settings: **"Idol 3D"**.
 - **The local ComfyUI** (`127.0.0.1:8188`): v0.41.0, CPU only, 14.3 GB RAM. It has every stock TripoSplat and splat node. The `diffusion_models`, `vae`, `clip_vision` and `background_removal` folders are empty, so nothing 3D can run there; only `/prompt` validation.
@@ -312,6 +312,32 @@ A `splat` suite in `scripts/eval/cases/splat.json`, kind `video` (the orbit vide
 
 A lazily loaded three.js Gaussian-splat viewer for `.spz` / `.ply` / `.ksplat` in `model-card.tsx`, `studio/result-media.tsx` and the Library's 3D tab, replacing "Fuobe doesn't draw splats yet". Orbit, zoom, reset, an opacity cut-off (default 0.05 for Idol), "Save a still" to the Library; the orbit video stays as the poster and the fallback. The library choice (Spark or GaussianSplats3D, say) is a guess and needs its own check of licence, version, `.spz` support and phone performance. Works for TripoSplat results on both engines.
 
+**Built (2026-11-03): Spark 2.3.1.** The two candidates, checked at npm and in the packages themselves:
+
+| | Spark (`@sparkjsdev/spark`) | GaussianSplats3D (`@mkkellogg/gaussian-splats-3d`) |
+|---|---|---|
+| Licence | MIT (© 2025 World Labs Technologies) | MIT |
+| Version | 2.3.1, published 2026-10-01 (2.4.0 of 2026-10-20 was 14 days old: too new) | 0.4.7, 2025-01-25, no release since |
+| three | peer `>=0.180.0` (Fuobe has 0.183.2) | peer `>=0.160.0` |
+| `.spz` | yes (its README; Fuobe's demo `.spz` v2 parses, see below) | no (`.ply`, `.splat`, `.ksplat` only, its README) |
+| `.ply`, degree-0 SH | yes (Idol's 17-float layout parses) | yes |
+| `.ksplat` | yes | yes (its own format) |
+| WebGL2 | yes ("targeting 98%+ WebGL2 support") | yes |
+| Bundle | `spark.module.min.js` 2.60 MB, **0.92 MB gzipped** (the Rust/WASM core is inlined as base64); one dependency, `fflate` | not measured (ruled out on `.spz`) |
+| Per-splat opacity cut-off | a `dyno` object modifier (the viewer's "Hide faint haze", live); `transcodeSpz` also takes `opacityThreshold` | `splatAlphaRemovalThreshold` at load only (0-255) |
+
+Spark loads only through a dynamic import (`src/components/model3d/splat-engine.ts`, from `splat-viewer.tsx`); `tests/splat-view.test.ts` checks that nothing else imports it, and `tests/e2e/splat-viewer.mjs` that a page without a splat never fetches it (matched by its WASM glue's module name, so it holds for hashed production chunks too).
+
+Numbers measured here (this container: 4 CPUs, no GPU; Chromium's WebGL2 runs on SwiftShader, a software renderer):
+
+- **Parsing.** Spark's own decoder (`transcodeSpz`, in Node) reads the demo `.ply` and `.spz` (4,096 Gaussians, 1,280 of them haze) to the same 4,096, positions identical to the bit and v2 rotations identical; with `opacityThreshold` 0.05 it keeps 2,816, the solid ones.
+- **Sizes at 262,144 Gaussians** (`node scripts/gen-demo-splat.mjs --gaussians=262144`): `.ply` 17,826,208 bytes (matches §2.1's 17.8 MB), `.spz` v2 2,770,631 bytes (6.4×; real splats compress less than this synthetic one, guess).
+- **Load.** The 17.8 MB `.ply` from the local server to the toolbar showing: 1.6 s at 390 px (fetch, parse, upload).
+- **Frame time: not measured on a phone.** SwiftShader takes about 8 s per frame at 262,144 Gaussians (median of 51 frames while dragging at 390 px), so software rendering says nothing about a phone's GPU. The 4,096-Gaussian demo draws within about 3 s of opening on SwiftShader. Measure on a real phone (an iPhone 12 / Pixel 6 class device, a 262,144-Gaussian `.spz`) before calling it fast; the viewer caps the pixel ratio at 1.5 on touch screens and draws only when something changes (a drag, the slider, Spark finishing a sort), never in a loop.
+- **Size limit.** The viewer opens files up to 48 MB on a touch screen (a 262,144-Gaussian `.ply` fits; a 1,048,576 one at 71 MB doesn't) and 160 MB elsewhere; past that the orbit video or picture stays, with the download.
+
+The cut-off starts at 0.05 for Idol 3D (both engines) and at 0 for TripoSplat, until the A/B (idol-3) says what TripoSplat's haze is. The orbit video stays as the fallback with no WebGL2, for a file over the limit, and with reduced motion in the full-screen viewer (until "Look around in 3D").
+
 ### idol-5 · "Make it 3D (quick)" on image results (P1)
 
 A menu action on image results (`output-actions.ts`, `case "image"`) that opens `/image-to-3d?mode=splat&model=oss-idol&quality=quick&image=…` with the picture in the slot and the photo crop off. Shown only when the open engine is available (a new `ActionContext.openEngine`); `NEXT_STEPS.image` stays as it is. The studio learns `?image=` and `?quality=`. Copy says "tens of seconds on a consumer GPU", not 2 s.
@@ -348,7 +374,7 @@ Place an Idol splat in the MoGe scene viewer (`src/components/cinema/scene-viewe
 - **The SDK route needs gated repos** (DINOv3 manual approval; FLUX.2-dev repo terms). Use the ComfyUI route and the ungated files.
 - **URL drift.** `flux2-vae`'s URL works only through HF's rename redirect.
 - **Scope.** One object, background removed. Not a scene model (MoGe stays for Cinema). The core photo crop is my analysis until checked.
-- **No splat viewer yet,** so "look around it" is an orbit video until idol-4 lands.
+- **No splat viewer yet,** so "look around it" is an orbit video until idol-4 lands. *(Landed 2026-11-03, Spark 2.3.1; phone frame time still unmeasured.)*
 - **VRAM.** A 7.2 GB vendor peak rules out 6 GB GPUs; 8 GB is borderline and unmeasured in ComfyUI.
 - **CPU and Apple.** Possible in principle through ComfyUI in fp32, but likely tens of minutes per object (guess). Don't call it quick on CPU-only installs.
 - **ComfyUI API drift.** The pack relies on `comfy_api.latest` types and the TripoSplat code. Both are unchanged from 0.41.0 to 0.43.1. The core-only graph is the safer base.
@@ -368,7 +394,7 @@ Place an Idol splat in the MoGe scene viewer (`src/components/cinema/scene-viewe
 - What format the project page's 0.4 / 3.2 / 12.2 MB file sizes are.
 - How good `SplatToMesh` meshes and `RenderSplat` side views of Idol splats are.
 - Whether Speridlabs, fal or Replicate will host Idol, and what comes after "v0.1".
-- Which three.js splat renderer and version Fuobe should adopt.
+- Which three.js splat renderer and version Fuobe should adopt. *(Answered: Spark 2.3.1, §9 idol-4. Still unknown: its frame time on phones.)*
 
 ## Sources (read 2026-10-30)
 

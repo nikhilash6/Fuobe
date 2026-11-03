@@ -2,7 +2,7 @@
 
 import { Box, Camera, Clapperboard, Download, ImageIcon, Loader2, Paintbrush, Pause, PersonStanding, Play, Printer, Rotate3d, Sparkles, Video, Wand2 } from "lucide-react";
 import Link from "next/link";
-import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
+import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { uploadFile, useEngine, useHydrated, useIsOwner } from "@/lib/api";
@@ -21,6 +21,8 @@ import { PoweredByHi3d, RefineDialog } from "./refine-option";
 import { HI3D_NOTICE, canRefine, isRefined } from "@/lib/av/hi3d";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { recordableType, recordTurntable } from "./turntable";
+import { hasWebgl2, SplatViewer, useReducedMotion } from "./splat-viewer";
+import { FALLBACK_TEXT, hazeCutoffFor } from "@/lib/av/splat-view";
 
 /** Downloads besides the main file, by the name the provider gave them. */
 const FORMAT_LABEL: Record<string, string> = { rigged: "Rigged .glb", walking: "Walk .glb", running: "Run .glb", fbx: ".fbx", splat: "Splat", points: "Points .glb" };
@@ -40,8 +42,9 @@ function rigClips(g: Generation, view: Model3dView): { key: string; label: strin
 /**
  * A finished 3D model. The card plays its turntable (or shows its poster or photo); the orbitable viewer, and with it
  * the GLB, loads only when "View in 3D" opens it: the web GLB when the server made one, else the original (a rig
- * plays its animation). A splat shows its orbit video or picture with the file to download. Then the turntable,
- * Animate the spin and Rig & animate; an Idol 3D draft on your GPU, "Build the final with TRELLIS.2".
+ * plays its animation). A splat shows its orbit video or picture, and "View in 3D" opens the splat viewer in its
+ * place (Spark, loaded only then; the orbit video stays where there's no WebGL2). Then the turntable, Animate the
+ * spin and Rig & animate; an Idol 3D draft on your GPU, "Build the final with TRELLIS.2".
  */
 export function ModelCard({
   g,
@@ -61,8 +64,9 @@ export function ModelCard({
   onFinal?: (photo: string) => void;
 }) {
   const view = model3dView(g);
-  // "preview": the turntable or the still (a splat with an orbit video: the video). "3d": the viewer (a splat: its picture).
-  const [show, setShow] = useState<"preview" | "3d">("preview");
+  // "preview": the turntable or the still (a splat with an orbit video: the video). "3d": the viewer (a splat: its
+  // picture). "look": a splat in the splat viewer.
+  const [show, setShow] = useState<"preview" | "3d" | "look">("preview");
   const [viewer, setViewer] = useState<HTMLElement | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -80,6 +84,12 @@ export function ModelCard({
   const hydrated = useHydrated();
   const owner = useIsOwner();
   const canRecord = hydrated && !!recordableType();
+  // A splat opens in the splat viewer where the browser draws WebGL2 and the file isn't too big for it (it says so).
+  const [splatNote, setSplatNote] = useState<string | null>(null);
+  const canLook = !!view.splat && hydrated && hasWebgl2() && !splatNote;
+  const looking = show === "look" && canLook;
+  // Opened with "View in 3D" (which unmounts itself): the viewer takes the focus once it's drawn.
+  const [focusLook, setFocusLook] = useState(false);
   const clips = rigClips(g, view);
   const [clipKey, setClipKey] = useState("main");
   const rigClip = clips.find((c) => c.key === clipKey);
@@ -189,7 +199,7 @@ export function ModelCard({
       viewer.removeEventListener("error", onError);
     };
   }, [viewer, startRecording, onOriginal]);
-  const switchTo = (v: "preview" | "3d") => {
+  const switchTo = (v: "preview" | "3d" | "look") => {
     // A recording asked for before the model loaded is off once the 3D view is closed.
     if (v === "preview") pendingRecord.current = pendingFilm.current = false;
     setShow(v);
@@ -226,12 +236,15 @@ export function ModelCard({
   // The radio buttons in the corner: the preview and the 3D view, a rig's clips, or a splat's video and picture.
   // A rig's clip is picked by its key ("main", "walking", "running"); "3d" is the model itself.
   const choices: { key: string; label: string; on: boolean }[] = view.splat
-    ? clip
-      ? [
-          { key: "preview", label: "Turntable", on: show === "preview" },
-          { key: "3d", label: "Preview", on: show === "3d" },
-        ]
-      : []
+    ? [
+        ...(clip
+          ? [
+              { key: "preview", label: "Turntable", on: show === "preview" },
+              { key: "3d", label: "Preview", on: show === "3d" },
+            ]
+          : [{ key: "preview", label: "Preview", on: show !== "look" }]),
+        ...(canLook ? [{ key: "look", label: "3D", on: looking }] : []),
+      ]
     : view.glb
       ? [
           { key: "preview", label: clip ? "Turntable" : "Preview", on: show === "preview" },
@@ -241,7 +254,8 @@ export function ModelCard({
         ]
       : [];
   const pick = (key: string) => {
-    if (key === "preview") return switchTo("preview");
+    setFocusLook(false);
+    if (key === "preview" || key === "look") return switchTo(key);
     if (key !== "3d") setClipKey(key);
     switchTo("3d");
   };
@@ -268,17 +282,32 @@ export function ModelCard({
   return (
     <article className="overflow-hidden rounded-2xl border bg-background shadow-soft">
       <div className="relative aspect-[4/3] bg-[radial-gradient(circle_at_50%_40%,var(--muted),var(--background))]" style={open3d && backdrop ? { background: backdrop } : undefined}>
-        {!open3d ? (
+        {looking && view.splat ? (
+          <SplatViewer
+            url={view.splat.url}
+            format={view.splat.format}
+            poster={view.poster}
+            name={name}
+            defaultCutoff={hazeCutoffFor(g.modelId)}
+            label={`the ${label} splat`}
+            autoFocus={focusLook}
+            onUnavailable={(note) => {
+              setSplatNote(note);
+              setShow("preview");
+            }}
+          />
+        ) : !open3d ? (
           <>
             {clip && show === "preview" ? <TurntableLoop src={clip} poster={still} label={`Turntable of the ${label} model`} /> : placeholder}
-            {view.glb && (
+            {(view.glb || canLook) && (
               <Button
                 size="sm"
                 variant="secondary"
                 className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-soft"
                 onClick={() => {
-                  focusViewer.current = true;
-                  switchTo("3d");
+                  if (view.splat) setFocusLook(true);
+                  else focusViewer.current = true;
+                  switchTo(view.splat ? "look" : "3d");
                 }}
               >
                 <Rotate3d className="size-3.5" /> View in 3D
@@ -340,11 +369,7 @@ export function ModelCard({
           {g.modelName}
           {g.prompt && !view.rigged ? ` · ${g.prompt}` : ""}
         </p>
-        {view.splat && (
-          <p className="text-[12px] text-muted-foreground">
-            Fuobe doesn&apos;t draw splats yet: {clip ? "the turntable shows it turning" : "the picture is what the model saw"}. Open the .{view.splat.format} in a Gaussian-splat viewer (SuperSplat, for one) to look around it.
-          </p>
-        )}
+        {view.splat && hydrated && !canLook && <p className="text-[12px] text-muted-foreground">{splatNote ?? FALLBACK_TEXT["no-webgl2"]}</p>}
         {/* Idol 3D on your GPU: how clean the file is. Only the owner reads how to make it cleaner (it's their ComfyUI). */}
         {view.clean?.cleaned && <p className="text-[12px] font-medium">{view.clean.text}</p>}
         {view.clean && !view.clean.cleaned && owner && (
@@ -472,21 +497,6 @@ export function ModelCard({
       {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} />}
       {view.glb && retexturing && <RetextureDialog glb={view.glb} open={retexturing} onOpenChange={setRetexturing} cloudAllowed={cloudAllowed} />}
     </article>
-  );
-}
-
-const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
-
-/** Whether the user prefers reduced motion (true until hydrated, so nothing moves before it's known). */
-function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    (cb) => {
-      const mq = window.matchMedia(REDUCED_MOTION);
-      mq.addEventListener("change", cb);
-      return () => mq.removeEventListener("change", cb);
-    },
-    () => window.matchMedia(REDUCED_MOTION).matches,
-    () => true,
   );
 }
 
