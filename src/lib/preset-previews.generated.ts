@@ -626,8 +626,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-outfit-swap": {
-    "poster": "/previews/presets/app-outfit-swap.jpg?v=03f0908c",
-    "video": "/previews/presets/app-outfit-swap.mp4?v=a400a645",
+    "poster": "/previews/presets/app-outfit-swap.jpg?v=bad5a090",
+    "video": "/previews/presets/app-outfit-swap.mp4?v=d41b93ea",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "ideogram4+qwen-image-2.1-edit",

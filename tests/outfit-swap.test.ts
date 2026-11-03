@@ -1,16 +1,16 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 import type { GenInput } from "@/lib/catalog/types";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 // Outfit Swap: AusBoss's Outfit Swap LoRA on Qwen-Image 2.1 changes only the clothes, from a photo of the outfit or from
 // words. The catalog, the plan on both engines, the two graphs as Fuobe sends them, the library rows, and a run end to
 // end on an account's own ComfyUI (the stand-in from tests/helpers).
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-outfit-swap-"));
+const dir = tempDir("fuobe-outfit-swap-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -80,9 +80,6 @@ afterAll(async () => {
   globalThis.__fuobeTestGpuPort = undefined;
   globalThis.__fuobeTestDiskFree = undefined;
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();
@@ -98,7 +95,7 @@ describe("Outfit Swap in the catalog", () => {
       ["image2", "Outfit", false],
     ]);
     expect(p.userPrompt).toBe("optional");
-    expect(p.options?.map((o) => [o.key, o.choices.map((c) => [c.label, c.extra?.request])])).toEqual([
+    expect(p.options?.map((o) => [o.key, o.choices.map((c) => [c.label, c.openExtra?.request])])).toEqual([
       ["shoes", [["New shoes too", REPLACE], ["Keep mine", KEEP]]],
     ]);
     expect(p.open).toMatchObject({ modelId: "oss-outfit-swap", op: "edit", promptTemplate: "{prompt}" });
@@ -234,7 +231,7 @@ describe("Outfit Swap in the library", () => {
       }
     }
     const m = manifest.workflows.find((w) => w.id === id)!;
-    expect(m).toMatchObject({ capability: "edit", customNodes: [], validated: false, vramGb: 20, defaults: { steps: 25, loraStrength: 1 } });
+    expect(m).toMatchObject({ capability: "edit", customNodes: [], validated: true, vramGb: 20, defaults: { steps: 25, loraStrength: 1 } });
     for (const targets of Object.values(m.bindings)) for (const t of targets!) expect(wf[t.node]?.inputs, `${id} ${t.node}.${t.input}`).toHaveProperty([t.input]);
     expect(licenceInfo(workflowLicence(m))).toMatchObject({ name: "Qwen Research License", class: "non-commercial" });
   });

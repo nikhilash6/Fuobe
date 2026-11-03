@@ -87,7 +87,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-nano-theft": "0fecbf8d",
   "app-object-remover": ["b0eb851e","09a4f7b3"],
   "app-outfit-shot": ["7cc52972","374c31a0"],
-  "app-outfit-swap": ["03f0908c","a400a645"],
+  "app-outfit-swap": ["bad5a090","d41b93ea"],
   "app-outfit-vending": ["f6115780","4bc2c804"],
   "app-packshot": ["d0be4290","2ef123f7"],
   "app-paint-app": ["90fb5dfc","247b5d0f"],

@@ -3371,7 +3371,7 @@ export const SPEC = [
       'leaving out shoes when the feet are not in the picture and everything below the waist when the legs are not; StringFormat writes "Dress the person in image 1 in <phrase>. Keep their face, hair, hands, pose and the background exactly the same. <request> <prompt>". ' +
       'request = "Replace everything they wear." (the card\'s default: clears the old outfit) or "Keep their own shoes and legwear."; prompt = the person\'s own words, added at the end. ' +
       'Changed from the card: the no-feet phrase ends "shown in image 2" (the card adds "without the shoes"; Fuobe\'s requests name only what is wanted). ' +
-      'Removed: the outfit picture\'s crop node (Fuobe sends the photo as it is), the typed/described switch (outfit-swap-qwen-image-21-text is the words route), the turbo LoRA row (off on the card), compare, timer, notes. Output follows the person picture at about 2 MP.',
+      'Removed: the outfit picture\'s crop node (Fuobe sends the photo as it is), the typed/described switch (outfit-swap-qwen-image-21-text is the words route), the turbo LoRA row (off on the card), compare, timer, notes. Output follows the person picture at about 2 MP. RTX 5090: about 80 s a photo at 25 steps, peak about 29.5 GB.',
   },
   {
     id: 'outfit-swap-qwen-image-21-text',
@@ -3388,7 +3388,7 @@ export const SPEC = [
     notes:
       'Outfit Swap with no outfit photo (Fuobe runs it when the request has one picture): outfit-swap-qwen-image-21 without image 2 and the describer. ' +
       'prompt = the outfit in words ("a black velvet tuxedo with satin lapels"), set into "Dress the person in image 1 in <prompt>. Keep their face, hair, hands, pose and the background exactly the same. <request>". ' +
-      'The LoRA was trained with an outfit picture as image 2: with one picture, compare loraStrength 1 with 0 (the plain 25-step edit) before relying on it.',
+      'The LoRA was trained with an outfit picture as image 2: with one picture, loraStrength 1 and 0 (the plain 25-step edit) both dress the person as asked and keep the picture in place. RTX 5090: about 65 s a photo.',
   },
   // ---- Owner's SOTA image families: Ideogram 4 -------------------------------------------
   {

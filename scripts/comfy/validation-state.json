@@ -383,6 +383,18 @@
     "error": null,
     "at": "2026-10-23T00:12:19.538Z"
   },
+  "outfit-swap-qwen-image-21": {
+    "sha256": "a26aa4ce786c3eadf9df1f43143fcfaeeda26dafd76f466b316bab1b4d43c8ee",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T09:52:23.581Z"
+  },
+  "outfit-swap-qwen-image-21-text": {
+    "sha256": "2bd851cceee37da404539dac44da7a0bc5f220777e8bafc12e97de01235bd9ad",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T09:52:24.551Z"
+  },
   "palette-transfer-image": {
     "sha256": "3287bd729386b870c9797679512d46526e17e66b09736029ca55867c6670e43f",
     "validated": true,

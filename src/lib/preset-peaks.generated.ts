@@ -35,7 +35,7 @@ export const PRESET_PEAKS: Record<string, { at: number; from: number; v: string 
   "app-match-colors": { "at": 2.8958, "from": 0.3542, "v": "314cf6c8" },
   "app-object-remover": { "at": 2.8958, "from": 0.4792, "v": "ff2579bd" },
   "app-outfit-shot": { "at": 2.8958, "from": 0.4375, "v": "80181bdf" },
-  "app-outfit-swap": { "at": 2.8958, "from": 0.4792, "v": "dc9ba318" },
+  "app-outfit-swap": { "at": 2.8958, "from": 0.4375, "v": "4a199b3d" },
   "app-packshot": { "at": 2.8958, "from": 0.4375, "v": "6400e1f9" },
   "app-product-360": { "at": 2.6042, "from": 0.0208, "v": "bcf239e2" },
   "app-product-shot": { "at": 2.8958, "from": 0.6458, "v": "46133020" },

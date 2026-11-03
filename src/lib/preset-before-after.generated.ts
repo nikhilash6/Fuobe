@@ -29,7 +29,7 @@ export const PRESET_BEFORE_AFTER: Record<string, string> = {
   "app-micro-beasts": "2e8811ee",
   "app-object-remover": "6105a00c",
   "app-outfit-shot": "764ff42a",
-  "app-outfit-swap": "2c839e13",
+  "app-outfit-swap": "6fd82821",
   "app-outfit-vending": "00704eb1",
   "app-packshot": "b2f3af70",
   "app-paint-app": "a628a3c6",
