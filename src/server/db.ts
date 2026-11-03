@@ -12,7 +12,8 @@ export const DATA_DIR = path.resolve(/*turbopackIgnore: true*/ process.env.FUOBE
  * - auth_install: one row: the cookie secret, the Settings password's hash, the public sign-up switch, auth.json's
  *   top-level fields this build doesn't know, and a number that grows with every change (authVersion).
  * - auth_migration: one row once the store is set up: where it came from (an imported auth.json, or new) and whether
- *   the imported file is still kept in step for a build that may still read it ("bridge") or was put aside ("done").
+ *   the imported file is still kept in step for a build that may still read it ("bridge"), was put aside ("done"), or
+ *   was written out again for an older build by scripts/auth-export.mjs ("exported", with the version it wrote).
  * - auth_tokens, auth_accounts (one per email, lower-cased), auth_account_gpu and auth_account_keys (rows of an
  *   account, removed with it), auth_signed_out (signed-out cookies by their SHA-256, until they would have expired).
  * Safe to run on every start.
@@ -36,7 +37,8 @@ export const AUTH_TABLES = `CREATE TABLE IF NOT EXISTS auth_install (
     json_sha256 TEXT,
     counts_json TEXT,
     backup_file TEXT,
-    retired_at INTEGER
+    retired_at INTEGER,
+    exported_version INTEGER
   );
   CREATE TABLE IF NOT EXISTS auth_tokens (
     id TEXT PRIMARY KEY,
@@ -694,8 +696,8 @@ export const MIGRATIONS: string[] = [
   AUTH_TABLES,
 ];
 
-/** The place of the sign-in tables' migration in MIGRATIONS. */
-const AUTH_MIGRATION = 27;
+/** The place of the sign-in tables' migration in MIGRATIONS (27). */
+const AUTH_MIGRATION = MIGRATIONS.indexOf(AUTH_TABLES);
 
 /**
  * "Use the ComfyUI on this computer" (src/server/computer/tasks.ts). relay_runners: each principal's computer (the one
@@ -901,7 +903,7 @@ export const SKILL_TABLES = `CREATE TABLE IF NOT EXISTS skill_runs (
 /** The columns each sign-in table must have: a table of the same name made by something else is never used. */
 const AUTH_COLUMNS: Record<string, string[]> = {
   auth_install: ["id", "secret", "password_hash", "public_signup", "extra_json", "version", "updated_at"],
-  auth_migration: ["id", "source", "state", "started_at", "synced_at", "json_stat", "json_sha256", "counts_json", "backup_file", "retired_at"],
+  auth_migration: ["id", "source", "state", "started_at", "synced_at", "json_stat", "json_sha256", "counts_json", "backup_file", "retired_at", "exported_version"],
   auth_tokens: ["id", "name", "hash", "prefix", "created_at", "last_used_at", "extra_json"],
   auth_accounts: ["id", "email", "password_hash", "created_at", "password_changed_at", "last_login_at", "disabled", "sessions_after", "extra_json"],
   auth_account_gpu: ["account_id", "mode", "url", "token"],
@@ -1004,8 +1006,8 @@ function open(): Database.Database {
   db.pragma("busy_timeout = 5000");
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
-  // A deleted row's bytes are overwritten where that costs no extra writes: a deleted account's email and password hash
-  // don't stay behind in the file.
+  // Most of a deleted row's bytes (a deleted account's email and password hash) are overwritten where that costs no
+  // extra writes. Traces can stay on free pages, and in the -wal file until its next checkpoint.
   db.pragma("secure_delete = FAST");
   db.exec(`CREATE TABLE IF NOT EXISTS _migrations (id INTEGER PRIMARY KEY)`);
   forgetDroppedBranchMigrations(db);

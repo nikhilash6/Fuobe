@@ -322,7 +322,9 @@ account with that provider. The studio's own keys are never used for an account'
   keys included. Removing or replacing a key that runs are going on answers 409 `runs-going` first;
   with `{ stopRuns: true }` those runs are stopped with the old key before it changes. A run still
   being handed to the provider is stopped there when its submit lands: the key (or the deleted
-  account's record) waits for that, up to a minute.
+  account's record) waits for that, up to a minute. On an install upgraded from `auth.json`, the
+  backup `auth.json.migrated-<time>` still holds the accounts as they were at the upgrade, sealed
+  keys included: delete it once the upgrade is confirmed ([Sign-in data](SELF-HOSTING.md#sign-in-data)).
 - **What it changes in the studios.** `GET /api/status` lists the account's keys
   (`viewer.keys`) and its engine mode: `both` while it has a key and the studio isn't open-source
   only, else `open`. The model pickers dim the paid models it has no key for ("Add your Replicate

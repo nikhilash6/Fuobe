@@ -17,9 +17,14 @@
  * server before it stops the old one). Taking auth.json away at once would leave that server with no password at all.
  * So for 10 minutes ("bridge") the database leads and auth.json is kept as an exact copy of it: each change here is
  * also written to the file, and a change the older server makes to the file is read back in. Once the file has been
- * quiet for 3 minutes after that, it is renamed to auth.json.migrated-<UTC time> (kept, never deleted) and a short
- * text file that isn't JSON takes its place, so an older build pointed at this folder later fails closed (sign-in on,
- * nobody signed in) instead of opening the studio. A new install gets that file with its first sign-in change.
+ * quiet for 3 minutes after that, it is put aside as auth.json.migrated-<UTC time> (kept, never deleted) and a note
+ * takes its place (TOMBSTONE): JSON that every older build reads as "sign-in on, nobody can sign in", so an older build
+ * pointed at this folder later never opens the studio. A new install gets the note with its first sign-in change.
+ *
+ * Going back to an older build: scripts/auth-export.mjs writes auth.json from the database again and marks the store
+ * "exported". The next start of this build moves that file back in (with what the older build changed in it) and
+ * bridges again. Any other auth.json found beside a store that was already moved (a backup copied back) is never read
+ * on its own: sign-in fails closed (503) until it is removed, or FUOBE_AUTH_REIMPORT=1 says to move it in.
  */
 import "server-only";
 import type Database from "better-sqlite3";
@@ -52,7 +57,7 @@ export type AuthStoreMode = "fresh" | "bridge" | "done" | "unreadable" | "failed
 
 interface Marker {
   source: "auth.json" | "new";
-  state: "bridge" | "done";
+  state: "bridge" | "done" | "exported";
   started_at: number;
   synced_at: number | null;
   json_stat: string | null;
@@ -60,6 +65,8 @@ interface Marker {
   counts_json: string | null;
   backup_file: string | null;
   retired_at: number | null;
+  /** exported: auth_install.version when scripts/auth-export.mjs wrote auth.json. */
+  exported_version: number | null;
 }
 
 interface Counts {
@@ -92,9 +99,15 @@ declare global {
 
 const now = () => globalThis.__fuobeAuthClock?.() ?? Date.now();
 
+/** How often a server whose store was moved looks at auth.json again (for a file put back, or an unfinished rename). */
+const FILE_CHECK_MS = 60_000;
+
 const s = {
+  /** The store was moved (done or exported) and auth.json was looked at, at fileCheckedAt. */
   done: false,
-  finished: false,
+  fileCheckedAt: 0,
+  /** What that look found that keeps sign-in closed (an auth.json put back, or one that can't go in). */
+  held: null as { mode: "unreadable" | "failed"; message: string } | null,
   /** The auth.json (by its stat) last found unreadable, or whose data couldn't go in, and when. */
   bad: null as { key: string; mode: "unreadable" | "failed"; at: number; data: boolean } | null,
   /** The database couldn't be used: try again after a moment. */
@@ -102,7 +115,7 @@ const s = {
   /** In the bridge: an auth.json (by its stat) that couldn't be read back in. */
   bridgeBad: null as string | null,
   retireCheckedAt: 0,
-  warned: { unreadable: 0, failed: 0, ignored: 0 },
+  warned: { unreadable: 0, failed: 0 },
   writes: 0,
 };
 
@@ -173,28 +186,60 @@ function readFile(): FileRead {
       data = JSON.parse(raw.toString("utf8")) as AuthJson | null;
     } catch {
       // Never the parser's message: it quotes the file.
-      return { error: raw.toString("utf8").startsWith(TOMBSTONE_HEAD) ? "tombstone" : "not valid JSON" };
+      return { error: raw.toString("utf8").startsWith(TEXT_TOMBSTONE_HEAD) ? "tombstone" : "not valid JSON" };
     }
     if (!data || typeof data !== "object" || Array.isArray(data)) return { error: "not an object" };
+    if (isTombstone(data)) return { error: "tombstone" };
     return { data, key, sha: crypto.createHash("sha256").update(raw).digest("hex") };
   } catch (e) {
     return { error: (e as NodeJS.ErrnoException).code ?? "can't be read" };
   }
 }
 
-const TOMBSTONE_HEAD = "This is not Fuobe's sign-in file any more.";
-const TOMBSTONE = `${TOMBSTONE_HEAD}
-Sign-in data (the password, accounts and API tokens) is kept in the database, fuobe.db, in this folder.
-This file is not JSON on purpose: an older Fuobe build that finds it keeps sign-in on with nobody signed in,
-instead of opening the studio without a password. To go back to an older build, see "Sign-in data" in docs/SELF-HOSTING.md.
-`;
+/**
+ * The note left in place of auth.json once it was moved: JSON that every older build reads as "sign-in on, nobody can
+ * sign in". Builds from 2026-10-31 on read `unreadable: true` as a file they can't read: they fail closed and never
+ * write over it. Older ones see a password whose hash (1 byte) no scrypt result (32 bytes) can match, no secret (no
+ * cookie is valid) and no tokens. Each of them, and the account sweep, finds no accounts, and a missing secret makes
+ * the sweep stop instead of removing anyone's files.
+ */
+const TOMBSTONE_KEY = "fuobeSignInMovedTo";
+const TOMBSTONE = `${JSON.stringify(
+  {
+    [TOMBSTONE_KEY]: "fuobe.db",
+    note: 'Sign-in data (the password, accounts and API tokens) is in the database, fuobe.db, in this folder. This file signs nobody in. To go back to an older Fuobe build, see "Sign-in data" in docs/SELF-HOSTING.md.',
+    password: "00:00",
+    secret: "",
+    tokens: [],
+    unreadable: true,
+  },
+  null,
+  2,
+)}\n`;
+/** The first form of the note (plain text), from test builds of this change. */
+const TEXT_TOMBSTONE_HEAD = "This is not Fuobe's sign-in file any more.";
 
-/** Write a file the way auth.json was always written: a temporary file, then a rename, readable by this user only. */
-function writeAtomic(file: string, text: string): void {
+/**
+ * The note, also after an older build that let its owner in (FUOBE_PASSWORD) wrote it again: it holds no accounts, no
+ * tokens and no public sign-up. One that does is sign-in data an older build added, which is never ignored.
+ */
+function isTombstone(data: AuthJson): boolean {
+  const some = (v: unknown) => Array.isArray(v) && v.length > 0;
+  return data[TOMBSTONE_KEY] !== undefined && !some(data.accounts) && !some(data.tokens) && !data.publicSignup;
+}
+
+/**
+ * Write a file the way auth.json was always written: a temporary file (a name no other server or container uses),
+ * then a rename, readable by this user only. Gives the file's stat key as written: the rename keeps it, and a stat
+ * after the rename could already see another server's file.
+ */
+function writeAtomic(file: string, text: string): string {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`;
   fs.writeFileSync(tmp, text, { mode: 0o600 });
+  const st = fs.statSync(tmp);
   fs.renameSync(tmp, file);
+  return `${st.mtimeMs}:${st.size}:${st.ino}`;
 }
 
 function writeTombstone(): void {
@@ -492,8 +537,8 @@ function importFile(file: { data: AuthJson; key: string | null; sha: string }): 
 /** Write the store to auth.json in its usual format (bridge only), and remember the file as this server left it. */
 function exportFile(): void {
   const text = JSON.stringify(exportJson(), null, 2);
-  writeAtomic(AUTH_FILE, text);
-  sql("UPDATE auth_migration SET json_stat = ?, json_sha256 = ? WHERE id = 1").run(statKey(), crypto.createHash("sha256").update(text).digest("hex"));
+  const key = writeAtomic(AUTH_FILE, text);
+  sql("UPDATE auth_migration SET json_stat = ?, json_sha256 = ? WHERE id = 1").run(key, crypto.createHash("sha256").update(text).digest("hex"));
 }
 
 /**
@@ -554,7 +599,7 @@ function bridgeTick(m: Marker): AuthStoreMode {
     const fresh = marker();
     if (fresh?.state === "bridge" && t - fresh.started_at >= bridgeMs() && t - (fresh.synced_at ?? fresh.started_at) >= quietMs()) retire();
   }
-  return s.done ? "done" : "bridge";
+  return s.done ? (s.held?.mode ?? "done") : "bridge";
 }
 
 /** "auth.json.migrated-20261104T101500Z", or with -2, -3… when that is taken. */
@@ -584,35 +629,128 @@ function retire(): void {
     return;
   }
   const m = marker();
-  if (m?.state === "done") {
-    s.done = true;
-    finishDone(m);
+  if (m?.state === "done") afterMove(m);
+}
+
+const reimportAsked = () => process.env.FUOBE_AUTH_REIMPORT?.trim() === "1";
+
+const PUT_BACK =
+  "auth.json is back in the data folder, but sign-in data was already moved into the database (fuobe.db), so it is not read. Remove it to keep the database's sign-in data, or start once with FUOBE_AUTH_REIMPORT=1 to replace the database's sign-in data with it. See \"Sign-in data\" in docs/SELF-HOSTING.md.";
+
+/** Keep sign-in closed for what afterMove found, until the next look. */
+function hold(mode: "unreadable" | "failed", message: string): AuthStoreMode {
+  s.held = { mode, message };
+  return failClosed(mode, message);
+}
+
+/**
+ * The store was moved (done), or written out for an older build (exported): look at auth.json, at most once a minute.
+ * - The note, or no file: as it should be (the note is written again when it is missing).
+ * - The file as the bridge last left it: put aside under its backup name (a crash between the database's change and
+ *   that, or a copy put back that holds nothing new), and the note put in its place.
+ * - exported: the file scripts/auth-export.mjs wrote, maybe changed by the older build since: moved back in.
+ * - Any other JSON auth.json (a backup copied back, a file from elsewhere) is never read on its own: an older build may
+ *   have run on it, and ignoring it would lose its accounts (and the sweep would remove their files), while reading it
+ *   could bring back a revoked token or an old password. Sign-in fails closed until it is removed, or until a start
+ *   with FUOBE_AUTH_REIMPORT=1 moves it in.
+ */
+function afterMove(m: Marker): AuthStoreMode {
+  s.done = true;
+  s.fileCheckedAt = now();
+  s.held = null;
+  const key = statKey();
+  const file = key === null ? null : readFile();
+  const note = file === null || ("error" in file && file.error === "tombstone");
+  if (m.state === "exported") {
+    if (note) {
+      immediate(() => {
+        if (marker()?.state === "exported") sql("UPDATE auth_migration SET state = 'done', exported_version = NULL WHERE id = 1").run();
+      });
+      writeTombstone();
+      return "done";
+    }
+    if ("error" in file!) return hold("unreadable", `${AUTH_FILE} can't be read (${file.error}).`);
+    return reimport(file!, "exported");
+  }
+  if (note) {
+    if (file === null) writeTombstone();
+    return "done";
+  }
+  // A broken file (an older build fails closed on it too): not read, and not written over.
+  if ("error" in file!) return "done";
+  if (m.source === "auth.json" && file.sha === m.json_sha256) {
+    putAside(m);
+    return "done";
+  }
+  if (reimportAsked()) return reimport(file, "asked");
+  return hold("failed", PUT_BACK);
+}
+
+/** auth.json as the bridge last left it: kept under the backup name (never written over), and the note in its place. */
+function putAside(m: Marker): void {
+  try {
+    if (m.backup_file) {
+      const backup = path.join(DATA_DIR, m.backup_file);
+      let made = true;
+      try {
+        // A link can't replace a file already there, so a second server finishing at the same moment can't put the
+        // note over the backup.
+        fs.linkSync(AUTH_FILE, backup);
+      } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code;
+        if (code === "EEXIST") made = false;
+        else fs.copyFileSync(AUTH_FILE, backup, fs.constants.COPYFILE_EXCL); // a file system without links
+      }
+      if (made) {
+        if (process.platform !== "win32") fs.chmodSync(backup, 0o600);
+        console.info(
+          `[fuobe] auth.json was kept as ${m.backup_file}: sign-in data is in the database now. That file still holds the accounts, password hashes and sealed keys as they were at the move, including accounts deleted since: delete it once you won't go back to an older version.`,
+        );
+      }
+    }
+    writeTombstone();
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't put auth.json aside: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
   }
 }
 
 /**
- * Done: auth.json is put aside under its backup name (after a crash between the database's change and the rename,
- * this finishes it) and the note that isn't JSON is in its place. A JSON auth.json put back later is not read.
+ * Move auth.json in again over the store's rows, in one transaction, checked as the first move is. From an export, only
+ * when nothing changed in the database since (else the database's changes would be lost): sign-in fails closed instead.
+ * Then the bridge starts again (an older build may still run on the file), and puts the file aside under a new name.
  */
-function finishDone(m: Marker): void {
-  s.finished = true;
-  const key = statKey();
-  if (key === null) return writeTombstone();
-  const file = readFile();
-  if ("error" in file) return; // the note, or a broken file: an older build fails closed on either
-  const backup = m.backup_file ? path.join(DATA_DIR, m.backup_file) : null;
-  if (m.source === "auth.json" && backup && !fs.existsSync(backup)) {
-    try {
-      fs.renameSync(AUTH_FILE, backup);
-      if (process.platform !== "win32") fs.chmodSync(backup, 0o600);
-      writeTombstone();
-      console.info(`[fuobe] auth.json was kept as ${m.backup_file}: sign-in data is in the database now.`);
-    } catch (e) {
-      console.warn(`[fuobe] Couldn't put auth.json aside: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
-    }
-    return;
+function reimport(file: { data: AuthJson; key: string | null; sha: string }, why: "exported" | "asked"): AuthStoreMode {
+  let counts: Counts | null = null;
+  try {
+    immediate(() => {
+      const m = marker();
+      if (m?.state !== "done" && m?.state !== "exported") return; // another server did it
+      const version = (sql("SELECT version FROM auth_install WHERE id = 1").get() as { version: number } | undefined)?.version ?? 0;
+      if (why === "exported" && m.exported_version !== version && !reimportAsked()) {
+        throw new DataError("sign-in data changed in the database after auth.json was exported");
+      }
+      const at = now();
+      clearAll();
+      counts = insertAll(file.data, at, version + 1);
+      verify(file.data, counts, at);
+      sql(
+        "UPDATE auth_migration SET source = 'auth.json', state = 'bridge', started_at = ?, synced_at = ?, json_stat = ?, json_sha256 = ?, counts_json = ?, backup_file = NULL, retired_at = NULL, exported_version = NULL WHERE id = 1",
+      ).run(at, at, file.key, file.sha, JSON.stringify(counts));
+    });
+  } catch (e) {
+    const how = e instanceof DataError ? e.message : `the database said: ${(e as Error).message}`;
+    return hold("failed", `auth.json couldn't be moved back into the database (${how}); nothing was changed. ${PUT_BACK}`);
   }
-  warnOnce("ignored", `${AUTH_FILE} is not read: sign-in data is in the database (fuobe.db). See "Sign-in data" in docs/SELF-HOSTING.md.`);
+  if (counts) {
+    const c = counts as Counts;
+    console.info(
+      `[fuobe] Sign-in data moved back in from auth.json (${why === "exported" ? "written for an older version" : "FUOBE_AUTH_REIMPORT=1"}): ${c.accounts} accounts, ${c.tokens} API tokens, ${c.keys} saved keys, ${c.gpus} GPU links. auth.json is kept in step for ${Math.round(bridgeMs() / 60_000)} minutes, then kept as auth.json.migrated-<time>.`,
+    );
+  }
+  s.done = false;
+  s.retireCheckedAt = 0;
+  const m = marker();
+  return m?.state === "bridge" ? bridgeTick(m) : m ? afterMove(m) : "fresh";
 }
 
 // ---------------------------------------------------------------------------
@@ -626,28 +764,19 @@ function failClosed(kind: "unreadable" | "failed", message: string): AuthStoreMo
 /** Where sign-in data stands now. Moves auth.json in when it is waiting, and keeps the bridge going. */
 export function authStoreMode(): AuthStoreMode {
   if (globalThis.__fuobeAuthTablesError) return failClosed("failed", `The sign-in tables in the database can't be used (${globalThis.__fuobeAuthTablesError}).`);
-  if (s.done) {
-    if (!s.finished) {
-      try {
-        const m = marker();
-        if (m) finishDone(m);
-      } catch {}
-    }
-    return "done";
-  }
+  if (s.done && now() - s.fileCheckedAt < FILE_CHECK_MS) return s.held ? failClosed(s.held.mode, s.held.message) : "done";
   if (s.dbFailedAt && Date.now() - s.dbFailedAt < 5_000) return "failed";
   try {
     db();
     if (globalThis.__fuobeAuthTablesError) return authStoreMode();
     const m = marker();
-    if (m?.state === "done") {
-      s.done = true;
-      finishDone(m);
-      return "done";
-    }
+    if (m?.state === "done" || m?.state === "exported") return afterMove(m);
+    s.done = false;
+    s.held = null;
     if (m?.state === "bridge") return bridgeTick(m);
     return beforeMove();
   } catch (e) {
+    s.done = false;
     s.dbFailedAt = Date.now();
     return failClosed("failed", `The sign-in data in the database can't be read (${(e as Error).message}).`);
   }
@@ -666,7 +795,7 @@ function beforeMove(): AuthStoreMode {
   if ("error" in file) {
     // Another server set the store up a moment ago (and left the note in place of auth.json).
     const set = marker();
-    if (set) return set.state === "done" ? ((s.done = true), "done") : bridgeTick(set);
+    if (set) return set.state === "bridge" ? bridgeTick(set) : afterMove(set);
     s.bad = { key, mode: "unreadable", at: Date.now(), data: false };
     return failClosed(
       "unreadable",
@@ -684,11 +813,8 @@ function beforeMove(): AuthStoreMode {
     return failClosed("failed", `auth.json couldn't be moved into the database (${(e as Error).message}); nothing was changed.`);
   }
   const m = marker();
-  if (m?.state === "done") {
-    s.done = true;
-    return "done";
-  }
-  return m ? bridgeTick(m) : "fresh";
+  if (!m) return "fresh";
+  return m.state === "bridge" ? bridgeTick(m) : afterMove(m);
 }
 
 /** Sign-in can't be used (the database, or auth.json waiting to move in, can't be read): fail closed. */
@@ -700,34 +826,54 @@ export const authStoreFailed = () => authStoreMode() === "failed";
 const UNREADABLE = "The sign-in file (auth.json) can't be read. Fix or restore it: Fuobe won't write over it.";
 const FAILED = "The sign-in data can't be read. Fix or restore it: Fuobe won't write over it.";
 
+/** An older server changed auth.json while a change here was being made: the change is made again on top of it. */
+class FileMoved extends Error {}
+
 /**
  * Change sign-in data: `fn` runs inside a transaction that holds the write lock. A new install is set up first; during
- * the bridge auth.json is caught up with first and written after, in the same transaction.
+ * the bridge auth.json is caught up with first and written after, in the same transaction. When an older server
+ * changes the file in between, the transaction is undone and run again on top of that change (up to 3 times).
  */
 export function authWrite<T>(fn: () => T): T {
   const mode = authStoreMode();
   if (mode === "unreadable") throw new Error(UNREADABLE);
   if (mode === "failed") throw new Error(FAILED);
   let fresh = false;
-  const out = immediate(() => {
-    const m = marker();
-    const at = now();
-    if (!m) {
-      if (statKey() !== null || hasRows()) throw new Error("The sign-in data changed while saving: try again.");
-      sql("INSERT INTO auth_migration (id, source, state, started_at) VALUES (1, 'new', 'done', ?)").run(at);
-      fresh = true;
-    } else if (m.state === "bridge") {
-      syncFromFile(m);
+  let out!: T;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      out = immediate(() => {
+        const m = marker();
+        const at = now();
+        if (!m) {
+          if (statKey() !== null || hasRows()) throw new Error("The sign-in data changed while saving: try again.");
+          sql("INSERT INTO auth_migration (id, source, state, started_at) VALUES (1, 'new', 'done', ?)").run(at);
+          fresh = true;
+        } else if (m.state === "bridge") {
+          syncFromFile(m);
+        } else if (m.state === "exported") {
+          throw new Error("The sign-in data changed while saving: try again.");
+        }
+        sql("INSERT OR IGNORE INTO auth_install (id, secret, updated_at) VALUES (1, '', ?)").run(at);
+        const r = fn();
+        sql("UPDATE auth_install SET version = version + 1, updated_at = ? WHERE id = 1").run(at);
+        const after = marker();
+        if (after?.state === "bridge") {
+          if (attempt < 3 && statKey() !== after.json_stat) throw new FileMoved();
+          exportFile();
+        }
+        return r;
+      });
+      break;
+    } catch (e) {
+      if (e instanceof FileMoved) continue;
+      throw e;
     }
-    sql("INSERT OR IGNORE INTO auth_install (id, secret, updated_at) VALUES (1, '', ?)").run(at);
-    const r = fn();
-    sql("UPDATE auth_install SET version = version + 1, updated_at = ? WHERE id = 1").run(at);
-    if (marker()?.state === "bridge") exportFile();
-    return r;
-  });
+  }
   if (fresh) {
     s.done = true;
-    s.finished = true;
+    s.fileCheckedAt = now();
+    s.held = null;
     writeTombstone();
   }
   s.writes++;

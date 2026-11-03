@@ -82,10 +82,22 @@ The password, the sign-in secret, API tokens and accounts are kept in the databa
 
 - On the first start of this version, `auth.json` moves into the database in one go, checked before it is saved. A crash part-way changes nothing, and the next start does it again.
 - For 10 minutes after that, `auth.json` is kept up to date, in case a server of the older version still runs on the same folder (for example during a deploy that starts the new server before it stops the old one).
-- Then it is renamed to `auth.json.migrated-<date and time>`, which is kept as a backup, and a short note takes its place. An older version that finds the note keeps sign-in on with nobody signed in, rather than opening the studio without a password.
-- If `auth.json` can't be read, nothing moves and sign-in stays on with nobody signed in until you fix or restore the file. If its data can't be moved (two accounts with the same email, for example), nothing changes, and the server answers every request with 503 and says why in its log.
+- Then it is renamed to `auth.json.migrated-<date and time>`, which is kept as a backup, and a note takes its place. Every older version reads the note as "sign-in is on and nobody can sign in", so it never opens the studio without a password.
+- If `auth.json` can't be read, nothing moves and sign-in stays on with nobody signed in until you fix or restore the file. If its data can't be moved (two accounts with the same email, for example), nothing changes, and the server answers every request with 503. Its log says why and which entry, by its place in the list (for example "account 7"), never by email.
 
-To back up, copy `fuobe.db` (stop the server first, or use `sqlite3 data/fuobe.db ".backup backup.db"`, which also takes the `-wal` file's changes) together with `secrets.key`. To go back to an older version: stop the server and copy `auth.json.migrated-<…>` over `auth.json`. Changes made since the move (new accounts, a new password) are not in that file.
+The backup `auth.json.migrated-<…>` holds the password hash, the sign-in secret, API tokens and every account (with its email, password hash, GPU link and sealed keys) as they were at the upgrade, including accounts deleted since. Keep it as private as `fuobe.db`, and delete it once you won't go back to an older version.
+
+**Backups.** `fuobe.db` (with its `-wal` and `-shm` files) can be read only by the server's own user, so a backup job must run as that user. Copy `fuobe.db` together with `secrets.key`: stop the server first, or make a consistent copy while it runs with `(umask 077; sqlite3 data/fuobe.db ".backup backup.db")`, which also takes the `-wal` file's changes. Keep the copy and `secrets.key` as private as the originals: they hold the sign-in secret, password hashes and GPU links, and `secrets.key` opens the saved keys.
+
+**Going back to an older version.**
+
+1. Stop the server.
+2. Run `node scripts/auth-export.mjs` from this version's folder (with `FUOBE_DATA_DIR` set if your data folder isn't `./data`). It writes `auth.json` from the database, with everything made since the upgrade, readable by the server's user only. It never writes over an `auth.json` that isn't the note.
+3. Start the older version.
+
+When you start this version again, it moves that `auth.json` back in, with what the older version changed (new accounts, a new password), and keeps it in step for 10 minutes again. This needs no step either.
+
+Don't copy `auth.json.migrated-<…>` back instead. It lacks the accounts made since the upgrade, and the older version removes the files of accounts it doesn't know. If an `auth.json` that the export didn't write is found after the move, this version doesn't read it on its own: it answers every request with 503 and says so in its log. Remove the file to keep the database's sign-in data, or start once with `FUOBE_AUTH_REIMPORT=1` to replace the database's sign-in data with what the file holds.
 
 ## Environment variables
 
@@ -96,6 +108,7 @@ To back up, copy `fuobe.db` (stop the server first, or use `sqlite3 data/fuobe.d
 | `FUOBE_TRUST_PROXY=1` | Behind a reverse proxy: trust the last `X-Forwarded-For` hop, so wrong passwords, and too many wrong share links, lock out only that visitor (60 s). Without it, everyone shares one limit: passwords are slowed to one attempt every 4 s and never locked, and wrong share links past 100 a minute get 429 while real links still open |
 | `FUOBE_ALLOW_PRIVATE_URLS=1` | Let inputs, product links and project sources be fetched from private / LAN addresses (they are refused by default), and let Assist connectors use plain http beyond localhost (without it a connector needs https unless it is on localhost; a private https address is accepted, with a warning that Claude can only reach it through a public tunnel) |
 | `FUOBE_DATA_DIR` | Where the database (with the sign-in data) and files live (default `./data`). Back up `secrets.key` there with `fuobe.db`: it opens the fal.ai and Replicate keys accounts saved ([Your keys](public-signup.md#your-keys)), which must be added again without it |
+| `FUOBE_AUTH_REIMPORT=1` | For one start only: an `auth.json` found after sign-in data moved into the database replaces the database's sign-in data ([Sign-in data](#sign-in-data)). Remove it after that start |
 | `FUOBE_DEMO_MODE` | `off` (default: a run with nothing connected asks you to connect one) or `on` (placeholder results, for a tour: every run makes a labelled placeholder). The old `auto` reads as `off`, and a saved `auto` is cleared on start |
 | `FUOBE_SKILLS_DIR` | Where Assist's built-in skills are read from (default `./skills`) |
 | `FUOBE_ENGINE_MODE`, `FUOBE_CLOUD_PROVIDER`, `FUOBE_ENHANCE_PROVIDER`, `FUOBE_LLM_PROVIDER` | The Settings choices above |

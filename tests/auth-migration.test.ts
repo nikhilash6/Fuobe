@@ -4,7 +4,7 @@
  * second server starting at the same moment, a file that can't be read or can't go in, and 100,000 accounts.
  * Synthetic data only. Each "server" is the auth modules loaded afresh on a data folder (a restart).
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -65,6 +65,45 @@ function legacyRead(dir: string): Record<string, unknown> & { unreadable?: true 
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return { secret: "", tokens: [] };
     return { unreadable: true };
   }
+}
+
+/**
+ * What a build from before 2026-10-31 (no fail-closed read yet) makes of auth.json: a file it can't parse means no
+ * password (an open studio). The note must keep it locked: a password nobody can match, no secret, no tokens, no accounts.
+ */
+function veryOldLocked(dir: string): boolean {
+  let d: { password?: string; secret?: string; tokens?: unknown[]; accounts?: unknown[] };
+  try {
+    d = JSON.parse(fs.readFileSync(authFile(dir), "utf8"));
+  } catch {
+    d = { secret: "", tokens: [] };
+  }
+  const verify = (pw: string) => {
+    if (!d.password) return false;
+    const [salt, hash] = d.password.split(":");
+    if (!salt || !hash) return false;
+    const a = crypto.scryptSync(pw, Buffer.from(salt, "hex"), 32);
+    const b = Buffer.from(hash, "hex");
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  };
+  return !!d.password && !verify("") && !verify("owner password") && !d.secret && !d.tokens?.length && !d.accounts?.length;
+}
+
+/** The note in place of auth.json: JSON, so every older build reads it, and locked for each of them. */
+function isNote(dir: string): boolean {
+  const d = JSON.parse(fs.readFileSync(authFile(dir), "utf8"));
+  return d.fuobeSignInMovedTo === "fuobe.db" && legacyRead(dir).unreadable === true && veryOldLocked(dir);
+}
+
+/** scripts/auth-export.mjs on a data folder (the server stopped first). */
+function exportScript(dir: string, env: Record<string, string> = {}) {
+  globalThis.__fuobeDb?.close();
+  globalThis.__fuobeDb = undefined;
+  const r = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "auth-export.mjs")], {
+    env: { ...process.env, FUOBE_DATA_DIR: dir, ...env },
+    encoding: "utf8",
+  });
+  return { code: r.status, out: `${r.stdout}${r.stderr}` };
 }
 
 /** A server of an older build writing auth.json (a temporary file, then a rename). */
@@ -165,8 +204,7 @@ describe("a new install", () => {
     expect(fs.existsSync(authFile(dir))).toBe(false);
     srv.auth.setPassword("owner password");
     expect(srv.marker()).toMatchObject({ source: "new", state: "done" });
-    expect(() => JSON.parse(fs.readFileSync(authFile(dir), "utf8"))).toThrow();
-    expect(fs.readFileSync(authFile(dir), "utf8")).toContain("fuobe.db");
+    expect(isNote(dir)).toBe(true);
     // An older build pointed at this folder fails closed instead of opening the studio.
     expect(legacyRead(dir).unreadable).toBe(true);
     srv = await server(dir);
@@ -175,7 +213,7 @@ describe("a new install", () => {
     expect(srv.store.authStoreMode()).toBe("done");
   });
 
-  it("moves in an auth.json put there before the first change, and ignores one put back after", async () => {
+  it("moves in an auth.json put there before the first change; one put back after is never read on its own", async () => {
     const dir = tempDir("fuobe-auth-drop-");
     let srv = await server(dir);
     expect(srv.auth.authEnabled()).toBe(false);
@@ -183,13 +221,25 @@ describe("a new install", () => {
     expect(srv.auth.authEnabled()).toBe(true);
     expect(srv.auth.checkPassword("dropped password")).toBe(true);
     expect(srv.marker()).toMatchObject({ source: "auth.json", state: "bridge" });
-    // Put aside, then an auth.json without a password put back: not read.
+    // Put aside, then an auth.json without a password put back: not read, and nobody gets in (503) until it goes.
     globalThis.__fuobeAuthClock = () => Date.now() + 11 * MIN;
     expect(srv.store.authStoreMode()).toBe("done");
     legacyWrite(dir, { secret: "", tokens: [] });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("failed");
+    expect(srv.store.authStoreFailed()).toBe(true);
     expect(srv.auth.authEnabled()).toBe(true);
+    expect(srv.auth.checkPassword("dropped password")).toBe(false);
+    expect(() => srv.auth.readAccountIds()).toThrow();
+    expect(errors.mock.calls.flat().join("\n")).toMatch(/FUOBE_AUTH_REIMPORT=1/);
+    errors.mockRestore();
+    // Removed: the database's sign-in data again, and the note in its place.
+    fs.rmSync(authFile(dir));
+    srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
     expect(srv.auth.checkPassword("dropped password")).toBe(true);
+    expect(isNote(dir)).toBe(true);
   });
 });
 
@@ -384,8 +434,7 @@ describe("the bridge: auth.json kept in step for a server of an older build", ()
       expect(fs.statSync(backup).mode & 0o777).toBe(0o600);
       expect(fs.statSync(authFile(dir)).mode & 0o777).toBe(0o600);
     }
-    expect(() => JSON.parse(fs.readFileSync(authFile(dir), "utf8"))).toThrow();
-    expect(legacyRead(dir).unreadable).toBe(true);
+    expect(isNote(dir)).toBe(true);
     // Changes no longer touch auth.json; a restart moves nothing in.
     srv.auth.createAccount("after-retire@example.com", "long enough");
     expect(legacyRead(dir).unreadable).toBe(true);
@@ -403,12 +452,147 @@ describe("the bridge: auth.json kept in step for a server of an older build", ()
     const again = await server(dir);
     expect(again.store.authStoreMode()).toBe("done");
     expect(fs.readFileSync(path.join(dir, "auth.json.migrated-20261104T000000Z"), "utf8")).toBe(original);
-    expect(legacyRead(dir).unreadable).toBe(true);
+    expect(isNote(dir)).toBe(true);
     // The note gone too: written again.
     fs.rmSync(authFile(dir));
     const third = await server(dir);
     expect(third.store.authStoreMode()).toBe("done");
     expect(legacyRead(dir).unreadable).toBe(true);
+  });
+});
+
+describe("going back to an older build, and forward again", () => {
+  /** An older install moved in and put aside, then an account made on this build. */
+  async function moved(prefix: string) {
+    const o = await olderInstall(prefix);
+    expect(o.srv.store.authStoreMode()).toBe("bridge");
+    globalThis.__fuobeAuthClock = () => Date.now() + 11 * MIN;
+    expect(o.srv.store.authStoreMode()).toBe("done");
+    globalThis.__fuobeAuthClock = undefined;
+    const after = o.srv.auth.createAccount("after-move@example.com", "long enough");
+    return { ...o, after };
+  }
+
+  it("scripts/auth-export.mjs writes auth.json for the older build; this build moves its changes back in", async () => {
+    const { dir, fx, after } = await moved("fuobe-auth-export-");
+    const backups = () => fs.readdirSync(dir).filter((f) => f.startsWith("auth.json.migrated-"));
+    expect(backups()).toHaveLength(1);
+    const r = exportScript(dir);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).not.toContain("@example.com");
+    if (process.platform !== "win32") expect(fs.statSync(authFile(dir)).mode & 0o777).toBe(0o600);
+    // The older build reads every account, the one made after the move too, and the password.
+    const older = legacyRead(dir) as typeof fx.data & { accounts: Record<string, unknown>[] };
+    expect(legacyRead(dir).unreadable).toBeUndefined();
+    expect(older.accounts.map((a) => a.email)).toContain("after-move@example.com");
+    expect(older.password).toBe(fx.data.password);
+    // A second export would write over what the older build changed: refused.
+    expect(exportScript(dir).code).not.toBe(0);
+    // The older build signs someone up and changes the owner's password.
+    older.accounts.push({ id: "acctrollback00001", email: "rollback@example.com", hash: hashPw("rollback password"), createdAt: Date.now() });
+    older.password = hashPw("owner password two");
+    legacyWrite(dir, older);
+    // Forward again: moved back in, with the older build's changes, and bridged again.
+    const srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("bridge");
+    expect(srv.auth.checkAccount("rollback@example.com", "rollback password")?.id).toBe("acctrollback00001");
+    expect(srv.auth.checkAccount("after-move@example.com", "long enough")?.id).toBe(after.id);
+    expect(srv.auth.checkPassword("owner password two")).toBe(true);
+    expect(srv.auth.checkPassword("owner password")).toBe(false);
+    expect(srv.auth.readAccountIds().has("acctrollback00001")).toBe(true);
+    expect(srv.marker()).toMatchObject({ state: "bridge", exported_version: null });
+    globalThis.__fuobeAuthClock = () => Date.now() + 11 * MIN;
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(backups()).toHaveLength(2);
+    expect(isNote(dir)).toBe(true);
+  });
+
+  it("an export the older build never used: back to the database as it was", async () => {
+    const { dir } = await moved("fuobe-auth-export-unused-");
+    expect(exportScript(dir).code).toBe(0);
+    fs.rmSync(authFile(dir));
+    const srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(srv.marker()).toMatchObject({ state: "done" });
+    expect(srv.auth.listAccounts()).toHaveLength(5);
+    expect(isNote(dir)).toBe(true);
+  });
+
+  it("an export after which the database changed: fails closed until FUOBE_AUTH_REIMPORT=1", async () => {
+    const { dir } = await moved("fuobe-auth-export-stale-");
+    expect(exportScript(dir).code).toBe(0);
+    let srv = await server(dir);
+    // A change in the database after the export (the auth store not started: it would move the file in first).
+    (await import("@/server/db")).db().prepare("UPDATE auth_install SET version = version + 1").run();
+    srv = await server(dir);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(srv.store.authStoreMode()).toBe("failed");
+    errors.mockRestore();
+    process.env.FUOBE_AUTH_REIMPORT = "1";
+    try {
+      srv = await server(dir);
+      expect(srv.store.authStoreMode()).toBe("bridge");
+      expect(srv.auth.listAccounts()).toHaveLength(5);
+    } finally {
+      delete process.env.FUOBE_AUTH_REIMPORT;
+    }
+  });
+
+  it("the export script refuses an auth.json that isn't the note, and a store still in its bridge", async () => {
+    const { dir, srv } = await olderInstall("fuobe-auth-export-refuse-");
+    expect(srv.store.authStoreMode()).toBe("bridge");
+    expect(exportScript(dir).out).toMatch(/kept up to date/);
+    const { dir: dir2 } = await moved("fuobe-auth-export-refuse2-");
+    legacyWrite(dir2, { secret: "", tokens: [] });
+    const r = exportScript(dir2);
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/move it away first/);
+    expect(legacyRead(dir2)).toEqual({ secret: "", tokens: [] });
+  });
+
+  it("a backup copied back over auth.json: unchanged it is put aside again; changed by an older build it fails closed, and nothing is swept", async () => {
+    const { dir, after } = await moved("fuobe-auth-putback-");
+    let srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    const backup = path.join(dir, srv.marker()!.backup_file as string);
+    // Copied back and not changed: holds nothing new, so the note goes back in its place.
+    fs.copyFileSync(backup, authFile(dir));
+    srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(isNote(dir)).toBe(true);
+    expect(srv.auth.accountById(after.id)).toBeDefined();
+    // Copied back, and an older build signed someone up there.
+    const old = JSON.parse(fs.readFileSync(backup, "utf8"));
+    old.accounts.push({ id: "acctputback000001", email: "putback@example.com", hash: hashPw("putback password"), createdAt: Date.now() });
+    legacyWrite(dir, old);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("failed");
+    expect(() => srv.auth.readAccountIds()).toThrow(); // the account sweep stops: nobody's files are removed
+    expect(srv.auth.accountById(after.id)).toBeUndefined(); // closed, not gone
+    errors.mockRestore();
+    // A running server notices a file put back within a minute.
+    fs.rmSync(authFile(dir));
+    srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    legacyWrite(dir, old);
+    expect(srv.store.authStoreMode()).toBe("done");
+    globalThis.__fuobeAuthClock = () => Date.now() + 61_000;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(srv.store.authStoreMode()).toBe("failed");
+    vi.restoreAllMocks();
+    globalThis.__fuobeAuthClock = undefined;
+    // Moved in when asked: the file as it is.
+    process.env.FUOBE_AUTH_REIMPORT = "1";
+    try {
+      srv = await server(dir);
+      expect(srv.store.authStoreMode()).toBe("bridge");
+      expect(srv.auth.checkAccount("putback@example.com", "putback password")?.id).toBe("acctputback000001");
+      // The backup was taken before that account existed: only what the file holds comes back.
+      expect(srv.auth.accountById(after.id)).toBeUndefined();
+    } finally {
+      delete process.env.FUOBE_AUTH_REIMPORT;
+    }
   });
 });
 
