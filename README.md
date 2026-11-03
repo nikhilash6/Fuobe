@@ -14,7 +14,8 @@
 
 <p align="center">
   <a href="https://fuobe.com"><b>Website</b></a> &nbsp;·&nbsp;
-  <a href="docs/media/fuobe-demo.mp4"><b>Launch film</b></a> &nbsp;·&nbsp;
+  <a href="docs/media/fuobe-short.mp4"><b>Launch film (46 s)</b></a> &nbsp;·&nbsp;
+  <a href="docs/media/fuobe-demo.mp4"><b>Full film (3 min)</b></a> &nbsp;·&nbsp;
   <a href="#documentation"><b>Docs</b></a> &nbsp;·&nbsp;
   <a href="#quick-start"><b>Quick start</b></a>
 </p>
@@ -31,10 +32,18 @@
   Every preview clip and still was rendered locally on ComfyUI, on one RTX 5090.
 </p>
 
-<p align="center">
-  <a href="docs/media/fuobe-demo.mp4"><img src="docs/media/demo-poster.jpg" alt="Watch the Fuobe launch film" width="70%"></a><br>
-  <a href="docs/media/fuobe-demo.mp4"><b>▶ Watch the launch film</b></a> (3 min)
-</p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="docs/media/fuobe-short.mp4"><img src="docs/media/short-poster.jpg" alt="Watch the 46-second Fuobe launch film" width="100%"></a><br>
+      <a href="docs/media/fuobe-short.mp4"><b>▶ Launch film</b></a> (46 s)
+    </td>
+    <td align="center" width="50%">
+      <a href="docs/media/fuobe-demo.mp4"><img src="docs/media/demo-poster.jpg" alt="Watch the full Fuobe film" width="100%"></a><br>
+      <a href="docs/media/fuobe-demo.mp4"><b>▶ Full film</b></a> (3 min)
+    </td>
+  </tr>
+</table>
 
 ## Showcase
 
