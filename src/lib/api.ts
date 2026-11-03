@@ -730,9 +730,12 @@ export function useShareActions() {
 // ---------------------------------------------------------------------------
 // Uploads & assets
 
-/** Upload a file as it is (streamed by the server: src/lib/upload.ts). */
-export async function uploadFile(file: File): Promise<Asset> {
-  return postFile(file);
+/**
+ * Upload a file as it is (streamed by the server: src/lib/upload.ts). `kinetic`: a Kinetic Motion clip or poster
+ * rendered in the page, which any account may save (KINETIC_UPLOAD_HEADER).
+ */
+export async function uploadFile(file: File, opts: { kinetic?: boolean } = {}): Promise<Asset> {
+  return postFile(file, undefined, opts);
 }
 
 /** A stored file's uses: where it's used, in one line ("2 results and the element “Maya”"), empty when nothing uses it. */

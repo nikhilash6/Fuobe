@@ -211,7 +211,8 @@ export function accountMayChange(method: string, pathname: string, search: strin
   // Like, pin or review many of its own runs at once (the route checks each is its own, and refuses the rest).
   if (method === "POST" && pathname === "/api/generations/bulk") return true;
   // A Kinetic Motion clip it rendered in its browser and uploaded, recorded as its own run (the route checks the files
-  // are its own, its run rate and the studio's checks; a grade or a Relight blend stays the owner's there).
+  // are its own, its run rate and the studio's checks; a grade or a Relight blend stays the owner's there). No model
+  // runs, so it needs no GPU or key of its own.
   if (method === "POST" && pathname === "/api/generations/local") return true;
   return isPriceCheck(method, pathname, search);
 }
@@ -283,6 +284,12 @@ export const CONNECT_GPU_MESSAGE = "Connect your GPU to run this. It's free.";
 export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU, or add a fal.ai or Replicate key, to add your own files.";
 /** The same, on a studio with paid models off (no keys). */
 export const CONNECT_GPU_UPLOAD_OPEN_MESSAGE = "Connect your GPU to add your own files.";
+/**
+ * Sent with the upload of a Kinetic Motion clip (or its poster) rendered in the browser, set to "1". Saving one needs no
+ * model, so an account with neither its own GPU nor its own key may upload it too: an MP4 or WebM clip, or a PNG
+ * poster, within the account's space and upload limits (src/app/api/uploads).
+ */
+export const KINETIC_UPLOAD_HEADER = "x-fuobe-kinetic";
 /** An account with neither its own GPU nor its own key (the proxy's answer to a run): the card it opens offers both. */
 export const CONNECT_GPU_OR_KEY_MESSAGE = CONNECT_GPU_MESSAGE;
 

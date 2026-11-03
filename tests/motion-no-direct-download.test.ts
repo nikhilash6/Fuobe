@@ -28,6 +28,8 @@ describe("no direct download of a motion render", () => {
   it("saves through an upload and a recorded result", () => {
     const save = fs.readFileSync(path.join(ROOT, "src/components/motion/save.ts"), "utf8");
     expect(save).toContain("uploadFile(");
+    // Marked as a Kinetic Motion result: any account may save one, with or without its own GPU or key.
+    expect(save).toContain("{ kinetic: true }");
     expect(save).toContain('"/api/generations/local"');
     expect(save).toContain('op: "motion"');
   });

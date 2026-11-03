@@ -4,17 +4,19 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
-import { uploadFile, useAskBeforeUpload, useIsAccount } from "@/lib/api";
+import { askToSignUp, uploadFile, useIsAccount, useIsGuest } from "@/lib/api";
 import type { Generation } from "@/lib/catalog/types";
 import { recipeKey, type Recipe } from "@/lib/motion/recipe";
 import { responseError, toastError } from "@/lib/refusals";
 
 /**
- * Everything made here goes through Fuobe: a finished render is uploaded (POST /api/uploads, the same rule as any
- * upload: the owner, or an account with its own GPU or key) and recorded as a Kinetic Motion result (POST
- * /api/generations/local), which shows in the Library (the owner's) or the account's own runs at once. The person
- * downloads it from there, never straight from the page.
+ * Everything made here goes through Fuobe: a finished render is uploaded (POST /api/uploads, marked as a Kinetic Motion
+ * result: the owner, or any account, with or without its own GPU or key, since no model makes it) and recorded as a
+ * Kinetic Motion result (POST /api/generations/local), which shows in the Library (the owner's) or the account's own
+ * runs at once. The person downloads it from there, never straight from the page.
  */
+
+const uploadKinetic = (file: File) => uploadFile(file, { kinetic: true });
 
 export const MOTION_MODEL = "local-motion";
 
@@ -39,8 +41,8 @@ export interface SaveMeta {
 export async function saveMotionResult(clip: MotionResult, meta: SaveMeta): Promise<Generation> {
   const ext = clip.type === "video/webm" ? "webm" : "mp4";
   const [asset, poster] = await Promise.all([
-    uploadFile(new File([clip.blob], `kinetic-motion.${ext}`, { type: clip.type })),
-    clip.poster ? uploadFile(new File([clip.poster], "kinetic-motion.png", { type: "image/png" })).catch(() => null) : null,
+    uploadKinetic(new File([clip.blob], `kinetic-motion.${ext}`, { type: clip.type })),
+    clip.poster ? uploadKinetic(new File([clip.poster], "kinetic-motion.png", { type: "image/png" })).catch(() => null) : null,
   ]);
   const images = (meta.images ?? []).filter((u) => u.startsWith("/api/files/")).slice(0, 4);
   const res = await fetch("/api/generations/local", {
@@ -65,13 +67,13 @@ export async function saveMotionResult(clip: MotionResult, meta: SaveMeta): Prom
 export type SavePhase = { kind: "idle" } | { kind: "rendering"; done: number; total: number } | { kind: "saving" } | { kind: "saved"; id: string };
 
 /**
- * Render-then-save for a page: asks first whoever couldn't save (a guest: "Create a free account"; an account with no
- * GPU or key: "Connect your GPU"), before anything renders. A look saves once per visit; a failed save keeps the
- * rendered clip, so Try again uploads without rendering again.
+ * Render-then-save for a page: a guest is asked to sign up ("Create a free account") before anything renders; the owner
+ * and every account save (an account needs no GPU or key of its own for this). A look saves once per visit; a failed
+ * save keeps the rendered clip, so Try again uploads without rendering again.
  */
 export function useMotionSave() {
   const qc = useQueryClient();
-  const ask = useAskBeforeUpload();
+  const guest = useIsGuest();
   const router = useRouter();
   const account = useIsAccount();
   const [phase, setPhase] = useState<SavePhase>({ kind: "idle" });
@@ -81,7 +83,10 @@ export function useMotionSave() {
 
   const save = useCallback(
     async (meta: SaveMeta, render: (signal: AbortSignal, progress: (done: number, total: number) => void) => Promise<MotionResult>): Promise<Generation | null> => {
-      if (ask()) return null;
+      if (guest) {
+        askToSignUp("upload");
+        return null;
+      }
       const key = recipeKey(meta.recipe);
       if (saved.current.has(key)) {
         toast(account ? "Already saved to your runs" : "Already saved to your Library", { action: { label: "Open", onClick: () => router.push("/library") } });
@@ -111,7 +116,7 @@ export function useMotionSave() {
         if (abort.current === ctl) abort.current = null;
       }
     },
-    [ask, account, qc, router],
+    [guest, account, qc, router],
   );
 
   const cancel = useCallback(() => abort.current?.abort(), []);

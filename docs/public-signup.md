@@ -97,8 +97,9 @@ An account is signed in, but it sees the owner's studio as a guest does:
   no other account can open it. See [Uploads](#uploads).
 - **Results made in the browser (Kinetic Motion) are its own runs too.** A motion clip rendered in
   the page (an animated end card, a text template) is saved with an upload and
-  `POST /api/generations/local` (`op: "motion"`, model `local-motion`). It needs the same own GPU or
-  own key as any upload, and counts as the account's own runs and files: the clip and every file it
+  `POST /api/generations/local` (`op: "motion"`, model `local-motion`). No model makes it, so any
+  account may save one, with or without its own GPU or key (the upload is sent with
+  `x-fuobe-kinetic: 1`; see [Uploads](#uploads)). It counts as the account's own runs and files: the clip and every file it
   names (its pictures, and the recipe's logo, product and pictures) must be the account's own (403
   otherwise), a clip is never made from a video (400), the stored file must be the MP4 or WebM it
   claims to be (400), and it shares the account's hourly run budget (60 an hour with its other runs,
@@ -356,7 +357,10 @@ The code is `src/server/hosted.ts` (the switch, the place, the line), `src/serve
 An account with its own ComfyUI connected, or its own key, can upload files (`POST /api/uploads`,
 the file as the request body with its type in `Content-Type` and its name in `X-File-Name`; an
 older page's multipart form works up to 26 MB). With neither it answers 403 with
-`code: "connect-gpu"`, and a guest gets 401 with the sign-up card.
+`code: "connect-gpu"`, and a guest gets 401 with the sign-up card. The one exception is a Kinetic
+Motion result rendered in the page (sent with `x-fuobe-kinetic: 1`): any account may upload its MP4
+or WebM clip and its PNG poster, within the same space, size and upload limits below. Any other type
+sent that way answers 403 `connect-gpu`, and a model run still needs the account's own GPU or key.
 
 | What | Types | Largest |
 |---|---|---|

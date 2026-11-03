@@ -11,7 +11,8 @@
 // it shows under "Made with this template", opens in the viewer and downloads as the stored MP4 (1080 × 1920, 150
 // frames). Account with a stand-in key: Logo Sting with its own logo from the Brand row, saved to its own runs, listed
 // in its strip and downloaded; the owner's Library doesn't list it, the owner's Accounts' runs does. Account with
-// neither: Save opens the Connect card and nothing is uploaded. Guest: the fields and preview work, Save opens the
+// neither: Save to your runs saves the clip at 1440 and 390 with no Connect card, and its own picture upload is still
+// refused. Guest: the fields and preview work, Save opens the
 // sign-up card before anything renders, a code template shows no "not available" note while an AI template still does.
 // Covers: the ten code templates' tiles show their versioned cover and clip. Phone 390 and desktop 1440 for each
 // viewer: no sideways scroll, controls at least 44 px. Evidence: screenshots, the saved clips, timings.
@@ -257,18 +258,32 @@ try {
     await ctx.close();
   }
 
-  // ---- An account with neither a GPU nor a key: Save asks it to connect one, before anything renders.
+  // ---- An account with neither a GPU nor a key: no model makes a Kinetic clip, so it saves to its own runs too (phone
+  // and desktop), and no Connect card opens.
   const bare = cookieOf(await api("/api/auth/signup", { method: "POST", body: { email: "bare-templates@example.com", password: "account password" } }));
-  const bctx = await withCookie(bare, DESKTOP);
-  const bp = await bctx.newPage();
-  let bareUploads = 0;
-  bp.on("request", (r) => r.url().endsWith("/api/uploads") && bareUploads++);
-  await openTemplate(bp, "ms-big-number");
-  await bp.getByRole("button", { name: "Save to your runs" }).click();
-  check(await bp.getByText(/Connect your GPU/).first().waitFor({ timeout: 10_000 }).then(() => true, () => false), "account without a GPU or key: Save opens the Connect card");
-  check(!(await bp.getByText(/^Rendering \d+ of/).isVisible().catch(() => false)) && bareUploads === 0, `account without a GPU or key: nothing renders or uploads (${bareUploads} uploads)`);
-  await bp.screenshot({ path: path.join(out, "account-bare-save.png") });
-  await bctx.close();
+  for (const [name, vp] of [["1440", DESKTOP], ["390", { ...PHONE, deviceScaleFactor: 3 }]]) {
+    const bctx = await withCookie(bare, vp);
+    const bp = await bctx.newPage();
+    await openTemplate(bp, "ms-big-number");
+    await layoutChecks(bp, "account without a GPU or key", name);
+    if (name === "390") await bp.getByRole("textbox", { name: "The number", exact: true }).fill("4,210");
+    const rec = bp.waitForResponse((r) => r.url().endsWith("/api/generations/local") && r.request().method() === "POST", { timeout: 180_000 });
+    await bp.getByRole("button", { name: "Save to your runs" }).click();
+    check((await rec).status() === 201, `account without a GPU or key ${name}: its clip is recorded`);
+    check(await bp.getByText("Saved to your runs").first().waitFor({ timeout: 30_000 }).then(() => true, () => false), `account without a GPU or key ${name}: the toast says it's in its runs`);
+    check(!(await bp.getByText(/Connect your GPU/).first().isVisible().catch(() => false)), `account without a GPU or key ${name}: no Connect card`);
+    await bp.screenshot({ path: path.join(out, `account-bare-save-${name}.png`) });
+    await bctx.close();
+  }
+  const bareRuns = (await api("/api/generations?features=marketing-kinetic&limit=20", { cookie: bare })).json?.items ?? [];
+  check(bareRuns.length === 2 && bareRuns.every((x) => x.modelId === "local-motion" && x.status === "succeeded"), `account without a GPU or key: both clips are in its own runs (${bareRuns.length})`);
+  const bareFile = bareRuns[0] ? await api(bareRuns[0].outputs[0].url, { cookie: bare }) : null;
+  check(bareFile?.status === 200 && mp4Frames(bareFile.buf) > 0, "account without a GPU or key: it downloads its clip from Fuobe");
+  const ownerSees = (await api("/api/generations?limit=200", { cookie: owner })).json?.items ?? [];
+  check(!ownerSees.some((x) => bareRuns.some((b) => b.id === x.id)), "the owner's Library doesn't list them");
+  // Its own files still ask it to connect one: an upload without the Kinetic mark.
+  const plain = await fetch(APP + "/api/uploads", { method: "POST", headers: { Origin: APP, cookie: bare, "Content-Type": "image/png", "X-File-Name": "logo.png" }, body: logo });
+  check(plain.status === 403 && (await plain.json()).code === "connect-gpu", `account without a GPU or key: its own picture still asks to connect a GPU (${plain.status})`);
 
   // ---- Guest: fields and preview work, Save asks to sign up first, AI templates keep their note.
   for (const [name, vp] of [["390", { ...PHONE, deviceScaleFactor: 3 }], ["1440", DESKTOP]]) {

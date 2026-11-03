@@ -10,8 +10,8 @@
 // Checks. Owner: the preview animates (pixels differ between 0.2 s and 1.0 s, equal at 2.0 s and 2.4 s); Iris renders
 // to an MP4 whose frame count is round(seconds × fps); Generate sends the clip and the run joins it after the ad; "Save
 // the end card" makes a Library result whose file is the uploaded clip. Account with a stand-in key: uploads its clip,
-// records it, sees it in its own runs and downloads it; the owner's Library doesn't list it. Account with neither: the
-// upload is refused (connect-gpu). Guest: the page's note, and the record route answers 401. Reduced motion: the rest
+// records it, sees it in its own runs and downloads it; the owner's Library doesn't list it. Account with neither: an
+// unmarked upload is refused (connect-gpu), a Kinetic clip uploads and records to its own runs. Guest: the page's note, and the record route answers 401. Reduced motion: the rest
 // frame and no autoplay. Phone 390 × 844: no sideways scroll, 44 px chips and scrub bar. Frame times on desktop and on
 // a 4× throttled phone. Evidence: MP4s of the five styles, contact sheets, screenshots, timings.
 import { spawn, execSync } from "node:child_process";
@@ -76,8 +76,8 @@ async function stopAll() {
   await fal.close();
 }
 
-const api = async (route, { method = "GET", body, cookie, raw, type } = {}) => {
-  const headers = { Origin: APP, ...(cookie && { cookie }) };
+const api = async (route, { method = "GET", body, cookie, raw, type, kinetic } = {}) => {
+  const headers = { Origin: APP, ...(cookie && { cookie }), ...(kinetic && { "x-fuobe-kinetic": "1" }) };
   if (raw) Object.assign(headers, { "Content-Type": type, "X-File-Name": encodeURIComponent(`file.${type.split("/")[1]}`) });
   else headers["Content-Type"] = "application/json";
   const res = await fetch(APP + route, { method, headers, ...(raw ? { body: raw } : body !== undefined && { body: JSON.stringify(body) }) });
@@ -313,10 +313,17 @@ try {
   const stolen = await api("/api/generations/local", { method: "POST", cookie: acct, body: { feature: "kinetic-end-card", modelId: "local-motion", op: "motion", prompt: "x", inputs: {}, params: { extra: { motion: recipe } }, output: { url: sent.endCard.clip, kind: "video", contentType: "video/mp4" } } });
   check(stolen.status === 403, `the account can't record the owner's clip (${stolen.status})`);
 
-  // ---- An account with neither a GPU nor a key: the upload asks it to connect one.
+  // ---- An account with neither a GPU nor a key: its own files ask it to connect one, but a Kinetic Motion clip (no
+  // model makes it) saves to its own runs.
   const bare = cookieOf(await api("/api/auth/signup", { method: "POST", body: { email: "bare@example.com", password: "account password" } }));
-  const refused = await api("/api/uploads", { method: "POST", cookie: bare, raw: mine, type: "video/mp4" });
-  check(refused.status === 403 && refused.json?.code === "connect-gpu", `an account with no GPU or key can't upload (${refused.status} ${refused.json?.code})`);
+  const bareUp = await api("/api/uploads", { method: "POST", cookie: bare, raw: mine, type: "video/mp4", kinetic: true });
+  check(bareUp.status === 201, `an account with no GPU or key uploads its Kinetic clip (${bareUp.status})`);
+  const bareRec = await api("/api/generations/local", { method: "POST", cookie: bare, body: { feature: "kinetic-end-card", modelId: "local-motion", op: "motion", prompt: "Sora Skin · Daily Veil SPF 50", title: "Sora Skin end card", inputs: {}, params: { extra: { motion: recipe } }, output: { url: bareUp.json?.url, kind: "video", contentType: "video/mp4" } } });
+  check(bareRec.status === 201 && bareRec.json?.status === "succeeded", `an account with no GPU or key records its clip (${bareRec.status})`);
+  check(((await api("/api/generations?limit=50", { cookie: bare })).json?.items ?? []).some((g) => g.id === bareRec.json?.id), "it shows in that account's own runs");
+  // (Refused before the body is read: a small one, so the connection stays usable.)
+  const refused = await api("/api/uploads", { method: "POST", cookie: bare, raw: mine.subarray(0, 4096), type: "video/mp4" });
+  check(refused.status === 403 && refused.json?.code === "connect-gpu", `an account with no GPU or key can't upload its own files (${refused.status} ${refused.json?.code})`);
 
   // ---- Guest (phone and desktop): the page's note, the end card previews live on a sample kit with their words, and
   // saving it opens the sign-up card. The record route asks to sign up.
