@@ -84,6 +84,9 @@ export const CLOUD_NOTICES: Record<string, string[]> = { triposplat: ["Built wit
 /** Idol 3D on each engine: the open graph (image-to-splat-idol) and fal's speridlabs/idol. */
 export const IDOL_MODELS = { open: "oss-idol", cloud: "idol-3d" } as const;
 export const isIdol = (id: string | null | undefined) => id === IDOL_MODELS.open || id === IDOL_MODELS.cloud;
+/** Idol 3D quick mesh (From an image, open engine only): Idol's splat graph, then core SplatToMesh into a vertex-coloured GLB. */
+export const IDOL_MESH_MODEL = "oss-idol-mesh";
+export const isIdolMesh = (id: string | null | undefined) => id === IDOL_MESH_MODEL;
 
 export type IdolQuality = "best" | "quick";
 
@@ -162,9 +165,9 @@ export interface Model3dInput {
   views?: Partial<Record<ViewSide, string>>;
   /** From text: the object; Pick an object: what to take out. */
   prompt?: string;
-  /** Splat with Idol 3D: Best (its reference settings, the default) or Quick look. */
+  /** Splat with Idol 3D, or From an image with Idol 3D quick mesh: Best (its reference settings, the default) or Quick look. */
   quality?: IdolQuality;
-  /** Splat with Idol 3D: the picture is a photo, so the object gets Idol's looser crop. */
+  /** Splat with Idol 3D, or From an image with Idol 3D quick mesh: the picture is a photo, so the object gets Idol's looser crop. */
   photoCrop?: boolean;
 }
 
@@ -221,7 +224,8 @@ export function model3dRequest(i: Model3dInput): GenerationRequest {
       // Idol 3D gets its Best / Quick look settings and the photo crop; TripoSplat's request is unchanged.
       return { ...base, op: "splat", inputs: { images }, ...(isIdol(modelId) && { params: { extra: idolExtra(i.engine, i.quality, !!i.photoCrop) } }) };
     default:
-      return { ...base, op: "image-to-3d", inputs: { images } };
+      // Idol 3D quick mesh runs Idol's graph first, so it takes the same Best / Quick look settings and photo crop.
+      return { ...base, op: "image-to-3d", inputs: { images }, ...(isIdolMesh(modelId) && i.engine === "open" && { params: { extra: idolExtra("open", i.quality, !!i.photoCrop) } }) };
   }
 }
 
@@ -298,8 +302,11 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   const meta = (mesh?.meta ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
   const videos = g.outputs.filter((o) => o.kind === "video");
-  const video = videos.find((o) => o.meta?.role === "turntable" || o.meta?.turntable) ?? videos[0];
   const finish = (meta.finish ?? {}) as { turntable?: unknown; turntableProgress?: unknown; material?: unknown };
+  // Idol 3D quick mesh's graph brings the splat's orbit, which looks smoother than the mesh: its card shows a turntable
+  // only once the server has rendered the mesh's own (which replaces the orbit), else the poster, and one can be recorded.
+  const orbitOnly = isIdolMesh(g.request.modelId) && finish.turntable !== "done";
+  const video = orbitOnly ? videos.find((o) => o.meta?.turntable === true) : (videos.find((o) => o.meta?.role === "turntable" || o.meta?.turntable) ?? videos[0]);
   const pending = finish.turntable === "queued" || finish.turntable === "rendering";
   const formats: Record<string, string> = {};
   const listed = meta.formats;

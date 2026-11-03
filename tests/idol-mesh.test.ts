@@ -137,12 +137,28 @@ describe("Idol 3D quick mesh: the model and From an image", () => {
     expect(m3d.MODELS_3D.splat.open.map((x) => x.id)).toEqual(["oss-triposplat", "oss-idol"]);
   });
 
-  it("asks for image-to-3d with the photo and plans on the graph; the Idol splat settings stay with Splat", () => {
+  it("asks for image-to-3d with the photo and Idol's Best / Quick look and photo crop, and plans on the graph", async () => {
     const req = m3d.model3dRequest({ engine: "open", mode: "image", modelId: "oss-idol-mesh", photo, quality: "quick", photoCrop: true });
-    expect(req).toEqual({ feature: "image-to-3d", modelId: "oss-idol-mesh", op: "image-to-3d", inputs: { images: [photo] } });
+    expect(req).toEqual({
+      feature: "image-to-3d",
+      modelId: "oss-idol-mesh",
+      op: "image-to-3d",
+      inputs: { images: [photo] },
+      params: { extra: { steps: 20, sampler: "dpmpp_2m", cfg: 4, numGaussians: 65536, photoCrop: true } },
+    });
+    expect(m3d.model3dRequest({ engine: "open", mode: "image", modelId: "oss-idol-mesh", photo }).params?.extra).toEqual({ ...m3d.IDOL_PRESETS.best, photoCrop: false });
     const p = planGeneration(req, getModel, getPreset);
     expect(p.model.id).toBe("oss-idol-mesh");
     expect(p.op).toBe("image-to-3d");
+    // The settings reach Idol's nodes in the mesh graph.
+    const ctx = { generationId: "gen-mesh", op: "image-to-3d" as const, upload: async () => "x" };
+    const { workflow } = await prepareWorkflow("image-to-mesh-idol", { prompt: "", images: ["p.png"], extra: req.params!.extra }, ctx);
+    expect(workflow["88:6"].inputs).toMatchObject({ steps: 20, sampler_name: "dpmpp_2m" });
+    expect(workflow["88:55"].inputs).toMatchObject({ num_gaussians: 65536 });
+    expect(workflow["88:104"].inputs.switch).toBe(true);
+    // Other From an image models get no Idol settings.
+    expect(m3d.model3dRequest({ engine: "open", mode: "image", modelId: "oss-trellis2", photo, quality: "quick", photoCrop: true }).params).toBeUndefined();
+    expect(m3d.isIdolMesh("oss-idol-mesh") && !m3d.isIdol("oss-idol-mesh")).toBe(true);
   });
 
   it("is offered by a Canvas 3D model node", () => {
@@ -154,7 +170,7 @@ describe("Idol 3D quick mesh: the model and From an image", () => {
 describe("Idol 3D quick mesh: what a finished job gives", () => {
   const history = { status: { status_str: "success", completed: true }, outputs: { "51": { "3d": [file("gen-mesh_00001_.glb")] }, "42": { images: [file("gen-mesh_00001_.mp4")], animated: [true] } } };
 
-  it("comes back as a GLB model (no role, no splat format) and the orbit as the turntable", () => {
+  it("comes back as a GLB model (no role, no splat format), with the orbit kept as a file but not shown as the mesh's turntable", () => {
     const outs = collectOutputs(history as never, getWorkflow("image-to-mesh-idol").manifest);
     expect(outs.map((o) => [o.kind, o.contentType, o.meta])).toEqual([
       ["model3d", "model/gltf-binary", undefined],
@@ -164,8 +180,16 @@ describe("Idol 3D quick mesh: what a finished job gives", () => {
     const view = m3d.model3dView(g as never);
     expect(view.splat).toBeUndefined();
     expect(view.glb).toBe(outs[0].url);
-    expect(view.turntable).toBe(outs[1].url);
+    // The graph's video is the splat's orbit, smoother than the mesh: not the card's turntable until the server renders the mesh's.
+    expect(view.turntable).toBeUndefined();
     expect(view.photo).toBe(photo);
+    const skipped = m3d.model3dView({ ...g, outputs: [{ ...outs[0], meta: { finish: { turntable: "skipped: no Chromium" } } }, outs[1]] } as never);
+    expect(skipped.turntable).toBeUndefined();
+    const mine = { url: "/api/files/turntable.mp4", kind: "video", contentType: "video/mp4", meta: { role: "turntable", fps: 24, frames: 96 } };
+    const done = m3d.model3dView({ ...g, outputs: [{ ...outs[0], meta: { finish: { turntable: "done" } } }, mine] } as never);
+    expect(done.turntable).toBe(mine.url);
+    // Another model's graph turntable still shows (Idol's own splat orbit, TRELLIS.2's).
+    expect(m3d.model3dView({ ...g, request: { ...g.request, modelId: "oss-trellis2" } } as never).turntable).toBe(outs[1].url);
     // Once saved, the server finishes the GLB like every image-to-3D route's (a web GLB, and its own turntable of the mesh).
     const saved = outs.map((o, i) => ({ ...o, assetId: `a${i}` }));
     expect(modelToFinish({ provider: "comfyui", op: "image-to-3d" }, saved as never)).toBe(0);
@@ -178,7 +202,7 @@ describe("Idol 3D quick mesh: what a finished job gives", () => {
     expect(hi3d.canRefine({ glb: view.glb, photo: view.photo, splat: view.splat, openAllowed: true })).toBe(true);
     expect(hi3d.refineRequest({ glb: view.glb!, photo: view.photo! })).toMatchObject({ modelId: "oss-hi3d-refine", inputs: { model3d: view.glb, images: [photo] } });
     const req = hi3d.withRefine(m3d.model3dRequest({ engine: "open", mode: "image", modelId: "oss-idol-mesh", photo }), "open", 512);
-    expect(req.params?.extra).toEqual({ hi3dRefine: 512 });
+    expect(req.params?.extra).toEqual({ ...m3d.IDOL_PRESETS.best, photoCrop: false, hi3dRefine: 512 });
   });
 });
 

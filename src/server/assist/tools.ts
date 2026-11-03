@@ -277,7 +277,7 @@ const Job = z.object({
   mesh_resolution: z
     .union([z.literal(512), z.literal(1024), z.literal(1536)])
     .optional()
-    .describe("refine-3d: Hi3D's detail, 512 (one pass), 1024 (two, the default) or 1536 (three). On an open image-to-3d model, setting it also refines the model after it is built. The result is geometry only."),
+    .describe("refine-3d: Hi3D's detail, 512 (one pass), 1024 (two, the default) or 1536 (three). On an open image-to-3d model, setting it also refines the model after it is built. The result is geometry only (colours and textures are lost). On oss-idol-mesh too it means that refine step, not a finer Idol mesh: leave it out to keep the vertex colours."),
   aspect_ratio: z.string().optional().describe("e.g. 16:9, 9:16, 1:1 — one the model lists."),
   resolution: z.string().optional().describe("e.g. 1080p, 2K — one the model lists."),
   duration: z.number().optional().describe("Seconds, for video and music — one the model lists."),

@@ -30,6 +30,7 @@ import {
   VIEW_SIDES,
   idolPhotoFor,
   isIdol,
+  isIdolMesh,
   model3dBlocker,
   model3dFor,
   model3dRequest,
@@ -62,7 +63,7 @@ export interface Model3dInfo {
 const PLACEHOLDER = "/api/files/placeholder.png";
 
 const HINTS: Record<Model3dMode, string> = {
-  image: "One clear photo → a textured 3D model (.glb) you can spin, download, rig and animate, record as a turntable and turn into a video.",
+  image: "One clear photo → a 3D model (.glb) you can spin, download, rig and animate, record as a turntable and turn into a video.",
   multi: "Photos of the same object from 2–4 sides → one 3D model that's right all the way round.",
   text: "Describe one object → a textured 3D model of it.",
   objects: "Name something in a photo → just that object, rebuilt in 3D as it stands.",
@@ -238,7 +239,9 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const wanted = picked[`${mode}:${engine}`];
   const modelId = model3dFor(mode, engine, wanted && choices.some((m) => m.id === wanted) ? wanted : choices[0]?.id);
   const sides = Object.fromEntries(VIEW_SIDES.flatMap((s) => (views[s] ? [[s, views[s]!.ref]] : []))) as Partial<Record<ViewSide, string>>;
-  const idol = mode === "splat" && isIdol(modelId);
+  // Idol 3D in Splat, and Idol 3D quick mesh in From an image (Idol's graph runs first): Best or Quick look and the crop.
+  const idolSplat = mode === "splat" && isIdol(modelId);
+  const idol = idolSplat || (mode === "image" && engine === "open" && isIdolMesh(modelId));
   const idolQuality = idolQualities[`${mode}:${engine}`] ?? "best";
   const setIdolQuality = (q: IdolQuality) => setIdolQualities((p) => ({ ...p, [`${mode}:${engine}`]: q }));
   const input: Model3dInput = {
@@ -412,7 +415,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {!licence && info[modelId]?.notices.length > 0 && <p className="text-[12px] font-medium">{info[modelId].notices.join(" · ")}</p>}
                 {licence && licence.notices.length > 0 && <p className="text-[12px] text-muted-foreground">{licence.notices.join(" · ")}</p>}
               </div>
-              {!idol && (mode === "image" || mode === "multi") && <RefineOption engine={engine} value={refine} onChange={setRefine} openAllowed={refineAllowed} onUseGpu={() => setEngine("open")} />}
+              {!idolSplat && (mode === "image" || mode === "multi") && <RefineOption engine={engine} value={refine} onChange={setRefine} openAllowed={refineAllowed} onUseGpu={() => setEngine("open")} />}
               {idol && <IdolSettings quality={idolQuality} onQuality={setIdolQuality} photo={idolPhoto} onPhoto={setIdolPhoto} />}
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
@@ -421,7 +424,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {visitor ? blocker : <>{blocker ? `${blocker} · ` : ""}{preview.isError ? (preview.error as Error).message : (price ?? "Working out the price…")}</>}
               </p>
               <p className="mt-1 text-[12px] text-muted-foreground">
-                {idol
+                {idolSplat
                   ? engine === "open"
                     ? "Idol cuts the object out, builds the splat and renders an orbit video on your GPU. One object per picture."
                     : "Idol cuts the object out and builds the splat, ready to download. One object per picture."
