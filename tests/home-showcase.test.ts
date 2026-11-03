@@ -200,7 +200,7 @@ describe("Home's showcase", () => {
     expect(facts.partners).toBe(modelCounts().cloud);
     expect(facts.partners).toBe(visible.filter((m) => m.engine === "cloud" && !m.engines?.includes("open")).length);
     expect(facts.cinemaMoves).toBe(CAMERA_MOVES.length);
-    expect(facts.adTemplates).toBe(TEMPLATES.length);
+    expect(facts.adTemplates).toBe(TEMPLATES.filter((t) => !t.ownerOnly).length);
     expect(facts.mixedLooks).toBe(EFFECTS.filter((e) => e.category === "Mixed Media").length);
     expect(facts.audioTools).toBe(HUB_MODES.audio.length);
     expect(facts.skills).toBe(fs.readdirSync(path.join(root, "skills")).filter((d) => fs.existsSync(path.join(root, "skills", d, "SKILL.md"))).length);
