@@ -1041,7 +1041,7 @@ export function sweepSuggestions(now = Date.now()): SkillSuggestion[] {
       continue;
     }
     const after = depList(r.depends_on).filter((d) => byId.has(d));
-    const slots = after.map((_, i) => req.chain?.[i]?.slot ?? "images");
+    const slots: string[] = after.map((_, i) => req.chain?.[i]?.slot ?? "images");
     const inputs = (req.inputs ?? {}) as Record<string, unknown>;
     const link = (url: unknown, slot: string) => {
       const src = typeof url === "string" ? madeBy.get(url) : undefined;
@@ -1276,7 +1276,8 @@ export function stepFixes(name: string): StepFix[] {
           try {
             const plan = planCheck(compileRun({ name, title: "Check" }, next, valuesForCheck(next), e, { run: "check" }), e);
             if (plan.errors.length) continue;
-            found = { modelId: c.id, name: c.name, engine: e, total: plan.total, free: e === "open" || plan.total === 0 };
+            const demo = plan.jobs.length > 0 && plan.jobs.every((j) => j.demo);
+            found = { modelId: c.id, name: c.name, engine: e, total: plan.total, free: e === "open" || plan.total === 0, demo };
             break;
           } catch {
             continue;

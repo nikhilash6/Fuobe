@@ -1086,6 +1086,8 @@ export interface FixCandidate {
   /** The whole run's price with this model in the step (null: varies). */
   total: number | null;
   free: boolean;
+  /** Every job would run on the demo provider here (no provider connected, or placeholders on): priced as a placeholder. */
+  demo: boolean;
 }
 
 /** A step of a saved skill that needs a fix, why, and what could replace its model. */

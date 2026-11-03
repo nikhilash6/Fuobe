@@ -80,7 +80,8 @@ export function SkillHistorySection({ name }: { name: string }) {
   );
 }
 
-const pricing = (c: StepFix["candidates"][number]) => (c.engine === "open" ? "Free on your GPU" : c.total === null ? "Price varies" : `${formatCost(c.total)} a run`);
+const pricing = (c: StepFix["candidates"][number]) =>
+  c.demo ? "Placeholder · free" : c.engine === "open" ? "Free on your GPU" : c.total === null ? "Price varies" : `${formatCost(c.total)} a run`;
 
 /** Suggest a fix: each step that needs one, the models that could take its place with their prices; checked, then saved. */
 export function SuggestFix({ name, fixes, onDone }: { name: string; fixes: StepFix[]; onDone?: () => void }) {
