@@ -274,6 +274,45 @@ export async function waitFor(ctx, ids) {
   }
 }
 
+/**
+ * Wait for runs of a skill that spans studios to end (each later step starts on the server when the steps before it
+ * finish): every step's generations, or why waiting stopped.
+ * @returns {Promise<{ ids: string[], stopped?: "timeout" | "interrupted" }>}
+ */
+async function waitRuns(ctx, name, runIds) {
+  const v = ctx.values;
+  const timeout = (v.timeout ?? 1800) * 1000;
+  const interval = Math.max(0.2, v.interval ?? 2) * 1000;
+  const started = ctx.io.now();
+  const pause = new AbortController();
+  const stopped = new Promise((resolve) => pause.signal.addEventListener("abort", resolve, { once: true }));
+  const off = ctx.io.onInterrupt(() => pause.abort());
+  const seen = new Map();
+  try {
+    for (;;) {
+      const { items = [] } = await ctx.client.request("GET", `/api/assist/skills/${enc(name)}/runs`);
+      const mine = items.filter((r) => runIds.includes(r.id));
+      if (!v.json) {
+        for (const r of mine) {
+          const line = r.steps.map((s) => `${s.label} · ${s.status}`).join(" → ");
+          if (seen.get(r.id) !== line) ctx.note(line);
+          seen.set(r.id, line);
+        }
+      }
+      const ids = mine.flatMap((r) => r.steps.flatMap((s) => s.ids));
+      if (mine.length === runIds.length && mine.every((r) => r.status !== "running")) {
+        for (const r of mine) if (r.error && !v.json) ctx.note(r.error);
+        return { ids };
+      }
+      if (timeout > 0 && ctx.io.now() - started >= timeout) return { ids, stopped: "timeout" };
+      await Promise.race([ctx.io.sleep(interval, pause.signal), stopped]);
+      if (pause.signal.aborted) return { ids, stopped: "interrupted" };
+    }
+  } finally {
+    off();
+  }
+}
+
 /** Save every output of the finished generations into `dir`. */
 async function saveOutputs(ctx, gens, dir) {
   const files = [];
@@ -835,10 +874,16 @@ async function skillsRun(ctx, name) {
   const runsOut = out.runs.map((r, i) => (req.rows ? { ...r, line: req.runLine(i) } : r));
   const demo = out.demo ? " (a demo: nothing connected, free)" : "";
   for (const [i, r] of out.runs.entries()) if (r.error && !v.json) ctx.note(`${req.rows ? `Row ${req.runLine(i)}` : `Run ${i + 1}`} didn't start: ${r.error}`);
-  const studio = out.runs.find((r) => r.href && !r.href.startsWith("/library"))?.href;
+  const studio = out.runs.find((r) => r.href && !r.href.startsWith("/library") && !r.href.startsWith("/assist/skills"))?.href;
+  // A skill that spans studios: its later steps start by themselves on the server as the steps before them finish.
+  const waiting = [...new Set(out.runs.flatMap((r) => r.waiting ?? []))];
+  const progress = absolute(ctx, `/assist/skills?skill=${enc(view.name)}`);
   if (v.wait || v.out) {
     if (!v.json) ctx.note(`Started ${started === 1 ? view.title : `${started} runs of ${view.title}`}${all ? "" : ` (${out.runs.length - started} didn't start)`}${demo}.${studio ? ` It opens in ${absolute(ctx, studio)}` : ""}`);
-    const code = await finish(ctx, ids, { download: !!v.out, also: { runs: runsOut } });
+    const staged = out.runs.filter((r) => r.run && !r.error);
+    const later = staged.length ? await waitRuns(ctx, view.name, staged.map((r) => r.run)) : null;
+    if (later?.stopped) return later.stopped === "interrupted" ? EXIT.interrupted : EXIT.timeout;
+    const code = await finish(ctx, later ? [...new Set([...ids, ...later.ids])] : ids, { download: !!v.out, also: { runs: runsOut } });
     return code === EXIT.ok && !all ? EXIT.failed : code;
   }
   if (v.json) {
@@ -847,7 +892,8 @@ async function skillsRun(ctx, name) {
   }
   ctx.print(`Started ${started === 1 ? view.title : `${started} runs of ${view.title}`} on ${engineWords(out.engine)}${demo}: ${ids.join(" ")}`);
   if (studio) ctx.print(`It opens in ${absolute(ctx, studio)}`);
-  if (ids.length) ctx.print(`Wait for ${ids.length === 1 ? "it" : "them"}: fuobe wait ${ids.join(" ")}   Save ${ids.length === 1 ? "it" : "them"}: fuobe download ${ids.join(" ")} --out .`);
+  if (waiting.length) ctx.print(`Then ${waiting.join(", ")} start${waiting.length === 1 ? "s" : ""} by ${waiting.length === 1 ? "itself" : "themselves"} as the steps before finish. Follow it: ${progress} (or run it with --wait)`);
+  else if (ids.length) ctx.print(`Wait for ${ids.length === 1 ? "it" : "them"}: fuobe wait ${ids.join(" ")}   Save ${ids.length === 1 ? "it" : "them"}: fuobe download ${ids.join(" ")} --out .`);
   return all ? EXIT.ok : EXIT.failed;
 }
 

@@ -229,6 +229,11 @@ fuobe skills export weekly-promo --out weekly-promo.zip   # SKILL.md and its fil
   `run` prints the ids to pass to `fuobe wait` or `fuobe download`. When a row didn't start (a studio
   tool's run can refuse one row and start the rest), it says which by its line in your file and exits 1;
   `--json` lists every run under `runs`, each with its `error` and, for `--rows`, its `line`.
+- A skill that spans studios (a dub, then captions, then a 9:16 cut) starts its first steps at once, and the
+  server starts each later step when the steps it takes from finish: `run` names the steps that wait and
+  where to follow the run (the skill's **Runs** in **Assist → Skills**). `--wait` and `--out` follow the
+  run until its last step is done, printing each change (`Dub · done → Captions · running → 9:16 cut ·
+  waiting`), then wait for and save every step's results; `--json` lists each run's `run` id and `waiting`.
 - `export` saves the skill as a zip (`SKILL.md`, `recipe.json` and its other files); `--examples` keeps
   the values it was made with, which are left out by default.
 
