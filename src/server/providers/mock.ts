@@ -321,11 +321,8 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
       if (kind === "image") return [depth];
       return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", scene: true, role: "scene" } }, depth];
     }
-    // An open splat graph also renders its orbit video (role turntable), as the real ones do; fal's splat is the file alone.
-    case "splat": {
-      const splat: DemoOutput = { url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", splat: true } };
-      return meta.orbit ? [splat, { url: "sample:demo-turntable.mp4", kind: "video", contentType: "video/mp4", meta: { demo: true, role: "turntable" } }] : [splat];
-    }
+    case "splat":
+      return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", splat: true } }];
     case "rig-3d":
       return [{ url: "sample:demo-model.glb", kind: "model3d", contentType: "model/gltf-binary", meta: { demo: true, format: "glb", rigged: true } }];
     // Hi3D's refine: the demo mesh, geometry only as the real one is.
@@ -460,8 +457,6 @@ export const mockProvider: ProviderAdapter = {
         threeStems: route.op === "separate-audio" && route.endpoint === "separate-soundtrack-dbs",
         // DBS graph C (soundtrack-remix-dbs): one remixed track.
         remix: route.op === "separate-audio" && route.endpoint === "soundtrack-remix-dbs",
-        // An open splat (image-to-splat-*): the splat and its orbit video.
-        orbit: route.op === "splat" && route.provider === "comfyui",
       },
       payload: { demo: true, ...input },
     };

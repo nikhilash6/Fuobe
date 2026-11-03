@@ -484,8 +484,8 @@ describe("the runner on the demo provider", () => {
     expect(done.map((x) => `${x.caseId} ${x.variant}`).sort()).toEqual(
       ["idol-best", "idol-quick", "idol-photo-crop", "triposplat-today"].map((v) => `splat/photo-mug ${v}`).concat(["idol-best", "idol-quick", "triposplat-today"].map((v) => `splat/bottle ${v}`)).sort(),
     );
-    // The splat file is kept and the orbit video comes with it: that is what the scorer and the blind review read.
-    for (const row of done) expect((row.outputs as { kind: string; role?: string }[]).map((o) => [o.kind, o.role ?? null])).toEqual([["model3d", null], ["video", "turntable"]]);
+    // The demo's splat is its mesh alone (a real open run adds the orbit video, which the scorer and the blind review read).
+    for (const row of done) expect((row.outputs as { kind: string }[]).map((o) => o.kind)).toEqual(["model3d"]);
     expect(rows.filter((x) => x.status === "skipped").map((x) => [x.caseId, x.variant, x.skip])).toEqual(
       expect.arrayContaining([
         ["splat/bottle", "idol-photo-crop", "the idol-photo-crop variant runs on cases tagged photo only"],
