@@ -9,7 +9,7 @@ import { cleanJob, emptyFolders, allowedNodes, vetGraph } from "./checks.mjs";
 import { folders, OwnComfy, PortBusy } from "./comfy.mjs";
 import { PROTOCOL, readControl, writeControl, writeStatus } from "./config.mjs";
 import { GpuWatch, othersOf, readGpu } from "./gpu.mjs";
-import { inventoryHash, modelFiles, nodePacks } from "./inventory.mjs";
+import { inventoryHash, modelFiles, packFolders } from "./inventory.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "../../..");
@@ -60,6 +60,7 @@ export async function runWorker(cfg, deps) {
   let troubleAt = 0;
   let answer = null;
   let inv = { files: [], nodePacks: [] };
+  let packs = [];
   let invHash = null;
   let gpuInfo = { otherApps: [], tempC: null };
   let lastGpuAt = 0;
@@ -70,7 +71,8 @@ export async function runWorker(cfg, deps) {
   const api = (p, init = {}) => fetchFn(`${site}${p}`, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${cfg.token}`, "User-Agent": `FuobeWorker/${VERSION}` } });
 
   async function scan() {
-    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json")), nodePacks: nodePacks(cfg.comfyDir, index) };
+    packs = packFolders(cfg.comfyDir, index);
+    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json")), nodePacks: packs.map(({ name, commit }) => ({ name, commit })) };
     invHash = inventoryHash(inv);
   }
   await scan();
@@ -176,7 +178,8 @@ export async function runWorker(cfg, deps) {
         } else {
           try {
             log("Starting its own ComfyUI.");
-            await comfy.start(inv.nodePacks.map((p) => p.name));
+            // The packs by their folder names on disk, which is what ComfyUI matches (whatever the catalog's case).
+            await comfy.start(packs.map((p) => p.folder));
           } catch (e) {
             if (e instanceof PortBusy) {
               comfyTrouble = "port-busy";

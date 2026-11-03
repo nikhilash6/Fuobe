@@ -71,6 +71,7 @@ The worker always starts and stops its own ComfyUI process. It never uses a Comf
 - gets the model folders through `extra_model_paths.yaml`;
 - starts with `--disable-metadata` and `--disable-auto-launch`;
 - loads only the custom node packs that the worker found (`--disable-all-custom-nodes --whitelist-custom-nodes …`).
+  The worker finds a pack whatever the case of its folder name, and gives ComfyUI the folder name as it is on disk.
 
 **The port guard.** Before each start, the worker binds the port itself and releases it at once. If the bind fails,
 another program is using the port. The worker then does not start ComfyUI, pauses itself (its state says "port-busy")

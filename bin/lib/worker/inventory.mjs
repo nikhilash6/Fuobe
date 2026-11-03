@@ -17,8 +17,11 @@ function sha256File(file) {
   });
 }
 
-/** The pack folders in ComfyUI's custom_nodes, named as the catalog names them, with their git commit. */
-export function nodePacks(comfyDir, index) {
+/**
+ * The pack folders in ComfyUI's custom_nodes that the catalog knows, matched whatever their case: { name (as the
+ * catalog names it), folder (as it is on disk, which is what ComfyUI's --whitelist-custom-nodes compares), commit }.
+ */
+export function packFolders(comfyDir, index) {
   const dir = path.join(comfyDir ?? "", "custom_nodes");
   if (!comfyDir || !fs.existsSync(dir)) return [];
   const known = new Map();
@@ -32,10 +35,13 @@ export function nodePacks(comfyDir, index) {
     if (!e.isDirectory() || e.name.startsWith(".") || e.name === "__pycache__") continue;
     const name = known.get(e.name.toLowerCase());
     if (!name) continue;
-    out.push({ name, commit: gitCommit(path.join(dir, e.name)) });
+    out.push({ name, folder: e.name, commit: gitCommit(path.join(dir, e.name)) });
   }
   return out;
 }
+
+/** The node packs as the studio sees them: the catalog's name and the commit. */
+export const nodePacks = (comfyDir, index) => packFolders(comfyDir, index).map(({ name, commit }) => ({ name, commit }));
 
 function gitCommit(dir) {
   try {
