@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-shell";
 import { HadItemsScript, useHadItems } from "@/components/use-had-items";
 import { SelfHostNote } from "@/components/self-host-note";
 import { ExampleRow } from "@/components/studio/example-row";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { useIsVisitor } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -17,6 +18,7 @@ import type { CinemaProject } from "@/lib/catalog/cinema";
 import { formatUsd } from "./money";
 import { timeAgo } from "@/lib/format";
 import type { ExampleRowData } from "@/lib/examples/types";
+import { starterShown, type StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { useCinemaProjects, useUpdateProject } from "./hooks";
@@ -165,8 +167,11 @@ function EmptyProjects({ loading, onCreate, className }: { loading?: boolean; on
   );
 }
 
-/** examples: "More to try" (exampleRow(), from the page), under a guest's or an account's empty list. */
-export function CinemaProjects({ examples }: { examples?: ExampleRowData | null }) {
+/**
+ * examples: "More to try" (exampleRow(), from the page), under a guest's or an account's empty list. starters: the ready
+ * films (catalog cards), first while there are no projects, then in one row under them.
+ */
+export function CinemaProjects({ examples, starters: given = [] }: { examples?: ExampleRowData | null; starters?: StarterCardData[] }) {
   const { data, isLoading } = useCinemaProjects();
   const router = useRouter();
   const [creating, setCreating] = useState(false);
@@ -174,6 +179,10 @@ export function CinemaProjects({ examples }: { examples?: ExampleRowData | null 
   // A project is saved to the studio's library, which is its owner's: a guest or an account can't start one.
   const visitor = useIsVisitor();
   const onCreate = visitor ? undefined : () => setCreating(true);
+  // The ready films this viewer sees: a visitor only those with their real cover (the page carries only those), the
+  // owner every one.
+  const { owner, starters } = useStarters("cinema", given);
+  const hasStarters = starters.some((s) => starterShown(s, !owner));
   useHadItems("cinema-projects", data?.length);
   const [blockout, setBlockout] = useState(false);
   const markBlockout = useCallback(() => setBlockout(true), []);
@@ -212,7 +221,14 @@ export function CinemaProjects({ examples }: { examples?: ExampleRowData | null 
         </div>
       ) : !data?.length ? (
         <div key="empty">
-          <EmptyProjects onCreate={onCreate} />
+          {hasStarters ? (
+            <>
+              {!owner && <SelfHostNote className="mb-5">Projects aren&apos;t available here.</SelfHostNote>}
+              <StarterSection surface="cinema" starters={given} />
+            </>
+          ) : (
+            <EmptyProjects onCreate={onCreate} />
+          )}
           {examples && <ExampleRow row={examples} className="mt-12" />}
         </div>
       ) : (
@@ -226,6 +242,7 @@ export function CinemaProjects({ examples }: { examples?: ExampleRowData | null 
           >
             <Plus className="size-5" /> New project
           </button>
+          <StarterSection surface="cinema" starters={given} row className="col-span-full mt-6" />
         </div>
       )}
       <ProjectDialog

@@ -29,7 +29,7 @@ import { ElementsPanel } from "./elements-panel";
 import { FolderSidebar, subtree, viewKey, type CinemaView } from "./folder-sidebar";
 import { mediaDuration } from "./media";
 import { formatUsd } from "./money";
-import { foreign, useAutosave, useCinemaGenerate, useCinemaItems, useCinemaProject, useItemActions, useStudioGenerations, useUpdateProject, type CinemaGeneration, type ProjectView } from "./hooks";
+import { foreign, useAutosave, useCinemaGenerate, useCinemaItems, useCinemaProject, useDirectorChat, useItemActions, useStudioGenerations, useUpdateProject, type CinemaGeneration, type ProjectView } from "./hooks";
 import { cutGrid } from "./media";
 import { ProjectDialog } from "./project-settings";
 import { useShare } from "@/components/share/share-provider";
@@ -178,6 +178,35 @@ export function CinemaWorkspace({ id }: { id: string }) {
   return <Workspace data={project.data} items={items.data ?? []} loading={items.isLoading} />;
 }
 
+/**
+ * /cinema/<id>?shot=<n> (a project made from a starter): the AI Director's proposed shot n goes into the prompt bar once
+ * the chat is in (`onLoad` gets it and how many shots there are), and the address drops that parameter (keeping any
+ * other), so a reload keeps what the person changed since.
+ */
+function LoadProposedShot({ projectId, n, onLoad }: { projectId: string; n: number; onLoad: (s: DirectorShot, of: number) => void }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { messages, loading } = useDirectorChat(projectId);
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current || loading) return;
+    done.current = true;
+    const shots = messages.findLast((m) => m.role === "assistant" && m.shots?.length)?.shots ?? [];
+    if (shots[n - 1]) onLoad(shots[n - 1], shots.length);
+    const rest = new URLSearchParams(params.toString());
+    rest.delete("shot");
+    const q = rest.toString();
+    router.replace(`/cinema/${projectId}${q ? `?${q}` : ""}`, { scroll: false });
+  }, [loading, messages, n, onLoad, params, projectId, router]);
+  return null;
+}
+
+/** The empty project's line once a starter's shot 1 is in the prompt bar: where the other shots are. */
+function proposedLine(of: number) {
+  const rest = of === 2 ? "Shot 2 is" : of === 3 ? "Shots 2 and 3 are" : `Shots 2 to ${of} are`;
+  return `Shot 1 of ${of} is ready below. ${rest} in the AI Director.`;
+}
+
 function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaGeneration[]; loading: boolean }) {
   const { project, folders, spentUsd, context } = data;
   const id = project.id;
@@ -221,6 +250,8 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
   // Blockout to film: the composer's panel (its draft kept while the project is open) and the builder.
   // /cinema/<id>?blockout=1 (a link to Blockout to film) opens it.
   const search = useSearchParams();
+  // A starter's film: how many shots the AI Director proposed, once shot 1 is in the prompt bar.
+  const [starterShots, setStarterShots] = useState(0);
   const [blockoutOpen, setBlockoutOpen] = useState(() => search.get("blockout") === "1");
   const [blockout, setBlockout] = useState<BlockoutDraft>(initialBlockout);
   const [builder, setBuilder] = useState<BlockoutScene | null>(null);
@@ -402,6 +433,8 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
       <Empty icon={Library} title="No generations yet" text="Everything you make in Cinema Studio, in any project, shows up here." />
     ) : currentView.kind === "folder" ? (
       <Empty icon={FolderOpen} title="An empty scene" text="Describe a scene below and hit Generate — new takes land in this folder." />
+    ) : starterShots > 1 ? (
+      <Empty icon={Clapperboard} title="Your first shot" text={proposedLine(starterShots)} />
     ) : (
       <Empty icon={Clapperboard} title="Your first shot" text="Start by describing a scene and pressing “Generate”. Set the genre, camera, palette and light in the Director's Panel." />
     );
@@ -424,9 +457,22 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
     <SidePanel project={project} tab={panel} setTab={setPanel} onClose={() => setPanel(null)} onLoadShot={onLoadShot} promptText={draft.prompt} />
   );
   const builderProps = { projectId: id, folderId, engine, settings, context, brief: project.brief.body };
+  const proposedShot = Number(search.get("shot")) || 0;
 
   return (
     <div className="flex h-content min-w-0 flex-col">
+      {proposedShot > 0 && (
+        <LoadProposedShot
+          projectId={id}
+          n={proposedShot}
+          onLoad={(s, of) => {
+            onLoadShot(s);
+            setStarterShots(of);
+            // On a wide screen the AI Director shows the other shots beside the work.
+            if (xl) setPanel("director");
+          }}
+        />
+      )}
       <header className="flex h-14 shrink-0 items-center gap-1.5 border-b px-2 sm:gap-2 sm:px-4">
         <Tooltip>
           <TooltipTrigger asChild>

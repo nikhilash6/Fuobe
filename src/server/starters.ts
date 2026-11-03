@@ -1,16 +1,20 @@
 import "server-only";
+import { nanoid } from "nanoid";
 import type { Engine } from "@/lib/catalog/types";
 import type { NarratorVoice } from "@/lib/catalog/faceless";
 import { getStarter, starterCards, starterFills, starterVoice, type Starter, type StarterProduct } from "@/lib/starters/catalog";
 import type { OwnerStarters, StarterFill, StarterSurface } from "@/lib/starters/types";
 import { createManualBrand, createProduct, listBrands, listProducts, updateProduct } from "./brand";
 import { adoptSample } from "./canvas-samples";
+import { appendChat, createProject, getChat, listItems, listProjects, updateProject } from "./cinema";
+import { createElement, listElements } from "./elements";
 import { createChannel, listChannels, updateChannel } from "./faceless";
 
 /**
- * The owner's "Use template" on a starter that is made here (POST /api/starters/<id>): a Faceless channel set up for
- * its first episode, or a brand kit with its product and photo (Ads Studio, Click to Ad, Marketing Studio). It answers
- * where to go next. A starter that fills a composer (Content Factory, Explainer) is opened, not made.
+ * The owner's "Use template" on a starter that is made here (POST /api/starters/<id>): a Cinema Studio project with its
+ * look, brief and shots, a saved element from its own files, a Faceless channel set up for its first episode, or a brand
+ * kit with its product and photo (Ads Studio, Click to Ad, Marketing Studio). It answers where to go next. A starter that
+ * fills a composer (Assist, Storyboard, Content Factory, Explainer) or links to one (the Library's) is opened, not made.
  *
  * Guests get 401 and accounts 403 "library" before this runs (LIBRARY_CHANGES in src/lib/guest-access.ts): a starter
  * is saved to the owner's library.
@@ -68,16 +72,54 @@ export function startersForOwner(surface: StarterSurface): OwnerStarters {
       const voice = narrator({ id, surface });
       fills[id] = voice ? { ...f, voiceSample: voice.url } : f;
     }
-  }
+  } else if (surface === "assist" || surface === "storyboard") Object.assign(fills, starterFills(surface, { all: true }));
   return { starters, fills };
 }
 
-/** Make the starter and say where it opens. */
-export async function createFromStarter(id: string, engine: Engine): Promise<{ href: string }> {
+/** The starter's own files as the owner's stored files, in order (made once each, kept out of the Library lists). */
+function adoptSamples(s: Starter): string[] {
+  return (s.samples ?? []).map((f) => {
+    const url = adoptSample(f.src);
+    if (!url) throw new StarterError("That starter's file is missing", 500);
+    return url;
+  });
+}
+
+/** Make the starter and say where it opens (and, for a project or an element, what it made, and `note`: what to do next). */
+export async function createFromStarter(id: string, engine: Engine): Promise<{ href: string; id?: string; note?: string }> {
   const s = getStarter(id);
   if (!s) throw new StarterError("That starter doesn't exist", 404);
   const seed = s.seed;
-  if (seed.kind === "fill") throw new StarterError("That starter opens in its studio: nothing to make here");
+  if (seed.kind === "fill" || seed.kind === "assist" || seed.kind === "storyboard" || seed.kind === "link") throw new StarterError("That starter opens in its studio: nothing to make here");
+  if (seed.kind === "cinema") {
+    // The project made before from this starter opens again while nothing has been made or asked in it yet.
+    const untouched = listProjects().find(
+      (p) => p.name === seed.project.name && p.description === seed.project.description && !listItems(p.id).length && getChat(p.id).length <= 1,
+    );
+    if (untouched) return { href: `/cinema/${untouched.id}?shot=1`, id: untouched.id };
+    const p = createProject(seed.project);
+    updateProject(p.id, { director: seed.director, brief: seed.brief });
+    // The AI Director's proposal, as if it had just planned the film: each shot loads into the prompt bar from the chat.
+    appendChat(p.id, {
+      id: nanoid(10),
+      role: "assistant",
+      text: `The look is set and the brief is in place. Here are the ${seed.shots.length} shots: load one into the prompt bar, then press Generate.`,
+      shots: seed.shots,
+      createdAt: Date.now(),
+    });
+    return { href: `/cinema/${p.id}?shot=1`, id: p.id };
+  }
+  if (seed.kind === "element") {
+    const references = adoptSamples(s);
+    // Saved before (same name, same first picture): that one, not a second copy with its own handle.
+    const known = listElements(seed.element.kind).find((e) => e.name === seed.element.name && e.references[0] === references[0]);
+    const el = known ?? createElement({ ...seed.element, references });
+    const note =
+      el.kind === "voice"
+        ? `${el.name} is saved. Pick it as the voice in Audio, a talking clip or a narration.`
+        : `${el.name} is saved. Type @${el.handle} in any image or video prompt.`;
+    return { href: "/elements", id: el.id, note };
+  }
   if (seed.kind === "faceless") {
     // On the open engine the narrator clones a voice: the starter's own sample, while it is published.
     const voice = engine === "open" ? narrator(s) : undefined;

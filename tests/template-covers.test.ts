@@ -56,7 +56,8 @@ const TILES: Record<TemplateGroup, string[]> = {
   // The example pictures of the empty pages: Character Sheet, Storyboard (six frames), Elements (four pictures).
   examples: ["character-sheet", "storyboard-heist", "element-maya", "element-rooftop-bar", "element-aurora", "element-together"],
   // The studios' ready-made starters, by starter id (src/lib/starters/catalog.ts).
-  starters: STARTERS.map((s) => s.id),
+  // A starter that shows another tile's cover, an example's or its own published photos (coverOf) gets none of its own.
+  starters: STARTERS.filter((s) => !s.coverOf).map((s) => s.id),
 };
 const VERSIONED = /^(\/previews\/[^?]+)\?v=([0-9a-f]{8})$/;
 const sha8 = (...files: string[]) => {
@@ -131,10 +132,11 @@ describe("the template covers manifest", () => {
       }
     }
     // The studios' tiles (242, with Keyframes → animation, Outfit lookbook and Music video), Fuobe Soul's looks (139),
-    // AI Influencer's types (9), the empty pages' examples (6) and the studios' ready-made starters (15).
-    expect(lines).toHaveLength(242 + 139 + 9 + 6 + 15);
+    // AI Influencer's types (9), the empty pages' examples (6) and the studios' ready-made starters with a cover of their
+    // own (24).
+    expect(lines).toHaveLength(242 + 139 + 9 + 6 + 24);
     const text = `{\n${lines.join(",\n")}\n}`;
-    expect(text.length).toBeLessThan(36_000);
+    expect(text.length).toBeLessThan(37_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);
   });
 });

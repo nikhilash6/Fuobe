@@ -5,14 +5,14 @@
 // opens the channel's first episode, the filled composer, the brand kit, the product's ad or the product shot, ready
 // to run. After that the owner's own work leads and the starters sit in one row below.
 //
-// node tests/e2e/starters-b.mjs <app address> <owner password> [screenshot folder]
+// node tests/e2e/starters-series-and-ads.mjs <app address> <owner password> [screenshot folder]
 // Against `next start` with a fresh data dir, FUOBE_PUBLIC_SIGNUP=1 and demo mode on (FUOBE_DEMO_MODE=on).
 import fs from "node:fs";
 import path from "node:path";
 import { launch, PHONE, DESKTOP } from "./_browser.mjs";
 
 const [app, password, shots] = process.argv.slice(2);
-if (!app || !password) throw new Error("usage: node tests/e2e/starters-b.mjs <app address> <owner password> [screenshot folder]");
+if (!app || !password) throw new Error("usage: node tests/e2e/starters-series-and-ads.mjs <app address> <owner password> [screenshot folder]");
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
 const ENGINE_WORDS = /Fuobe DoP|Effects 2\.0|\bGPU\b|Qwen|MiniMax|Nano Banana|Seedance|Ideogram|Kling|ElevenLabs|ACE-Step|placeholder/;
@@ -39,8 +39,8 @@ async function signIn(ctx, persona) {
     const r = await ctx.request.post(`${app}/api/auth/login`, { data: { password } });
     if (!r.ok()) throw new Error(`owner login ${r.status()}`);
   } else if (persona === "account") {
-    const email = `starters-b-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@example.com`;
-    const r = await ctx.request.post(`${app}/api/auth/signup`, { data: { email, password: "starters-b-pw-123" } });
+    const email = `starters-sa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@example.com`;
+    const r = await ctx.request.post(`${app}/api/auth/signup`, { data: { email, password: "starters-sa-pw-123" } });
     if (!r.ok()) throw new Error(`signup ${r.status()}`);
   }
 }

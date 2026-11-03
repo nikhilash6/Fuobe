@@ -48,7 +48,7 @@ describe("Assist's suggestion chips on the offline planner (R4-04)", () => {
     const p = agent.offlinePlan(ASSIST_SUGGESTIONS[1], "cloud")!;
     const jobs = jobsOf(p);
     expect(jobs).toHaveLength(1);
-    expect(jobs[0]).toMatchObject({ model_id: "nano-banana-pro", outputs: 4, prompt: "Moody portrait of a lighthouse keeper, 35mm film" });
+    expect(jobs[0]).toMatchObject({ model_id: "nano-banana-pro", outputs: 4, prompt: "Moody portrait of a model in a black velvet suit, 35mm film" });
     expect(jobs[0].after).toBeUndefined();
     expect((p.input as { summary: string }).summary).toMatch(/^Pick the best of 4 stills/);
     expect(p.say).toMatch(/4 stills first.*tell me which one to animate/);
@@ -211,7 +211,7 @@ describe("picking a take", () => {
     const clip = v.generations.find((g) => g.kind === "video")!;
     expect(clip).toBeTruthy();
     expect(clip.request).toMatchObject({ modelId: "minimax-h3", inputs: { images: ["/api/files/outputs/take-2.png"] } });
-    expect(clip.request.prompt).toMatch(/^Moody portrait of a lighthouse keeper, 35mm film\. The still comes to life/);
+    expect(clip.request.prompt).toMatch(/^Moody portrait of a model in a black velvet suit, 35mm film\. The still comes to life/);
     expect(v.thread.items.filter((i) => i.role === "assistant").map((i) => (i as { text: string }).text)).toContain("I'll animate take 2 with the default video model.");
   });
 

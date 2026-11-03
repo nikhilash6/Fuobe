@@ -30,14 +30,15 @@ import { VoiceRecorder } from "@/components/studio/voice-recorder";
 import { useMaybeClean } from "@/components/audio-tools/clean-voice-switch";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { useDeleteElement, useElements, useIsVisitor, useSaveElement } from "@/lib/api";
 import { ELEMENT_KINDS, elementKindInfo, handleFor, MAX_ELEMENT_PHOTOS, type ElementKind, type StudioElement } from "@/lib/catalog/elements";
 import { isLegacySoulId, SOUL_ID_PHOTOS } from "@/lib/catalog/training";
 import { copyText } from "@/lib/clipboard";
+import { starterShown, type StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { voiceOrigin } from "@/lib/voice-design";
-import { ElementsExample } from "@/components/empty-examples";
 
 const TIPS: Record<ElementKind, string> = {
   character: `3+ clear photos of one person (${SOUL_ID_PHOTOS.recommended}+ to train a Soul ID, up to ${SOUL_ID_PHOTOS.max}): different angles, at least one full-body, no sunglasses, filters or group shots.`,
@@ -381,7 +382,7 @@ function ElementCard({ el }: { el: StudioElement }) {
   );
 }
 
-function ElementsBody() {
+function ElementsBody({ starters: given }: { starters: StarterCardData[] }) {
   const sp = useSearchParams();
   const router = useRouter();
   const els = useElements();
@@ -391,6 +392,12 @@ function ElementsBody() {
   const visitor = useIsVisitor();
   const [kinds, kindsFade] = useEdgeFade<HTMLDivElement>();
   const list = useMemo(() => (els.data ?? []).filter((e) => tab === "all" || e.kind === tab), [els.data, tab]);
+  // The ready elements this viewer sees (the page carries the covered ones; the owner's view loads every one), less the
+  // ones already saved: an element keeps its starter's name.
+  const { owner, starters } = useStarters("elements", given);
+  const saved = useMemo(() => new Set((els.data ?? []).map((e) => e.name)), [els.data]);
+  const unsaved = (s: StarterCardData) => !saved.has(s.name);
+  const hasStarters = starters.some((s) => starterShown(s, !owner) && unsaved(s));
 
   return (
     <PageShell>
@@ -432,7 +439,10 @@ function ElementsBody() {
           {list.map((el) => (
             <ElementCard key={el.id} el={el} />
           ))}
+          {tab === "all" && <StarterSection surface="elements" starters={given} hide={(s) => !unsaved(s)} row className="col-span-full mt-8" />}
         </div>
+      ) : tab === "all" && hasStarters ? (
+        <StarterSection surface="elements" starters={given} hide={(s) => !unsaved(s)} />
       ) : (
         <div className="rounded-xl border border-primary/10 bg-brand-faint px-6 py-14 text-center">
           <AtSign className="mx-auto size-8 text-brand-text" />
@@ -440,7 +450,6 @@ function ElementsBody() {
           <p className="mx-auto mt-1 max-w-md text-[14px] text-muted-foreground">
             Save a person, a place or a product from a few photos. Then write “@Maya walking into @Rooftop_bar” in any prompt.
           </p>
-          {tab === "all" && <ElementsExample />}
           {!visitor && (
             <Button className="mt-5" variant="outline" onClick={() => setOpen(true)}>
               <Plus /> New element
@@ -460,10 +469,11 @@ function ElementsBody() {
   );
 }
 
-export function ElementsView() {
+/** starters: the ready elements (catalog cards, from the page), first while there are none, then in one row under them. */
+export function ElementsView({ starters = [] }: { starters?: StarterCardData[] }) {
   return (
     <Suspense fallback={<PageSkeleton title="Elements" rows={2} />}>
-      <ElementsBody />
+      <ElementsBody starters={starters} />
     </Suspense>
   );
 }

@@ -25,6 +25,10 @@ function Input({ input }: { input: StarterInput }) {
           {input.image && <p className="text-[13px] text-muted-foreground">{input.image.name}</p>}
         </div>
       </div>
+      {input.audio && (
+        // A voice sample: its words are what it shows.
+        <audio controls preload="none" src={input.audio.src} aria-label={input.audio.name} className="mt-2 h-9 w-full" />
+      )}
       {input.text && <p className="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-[13px] text-pretty whitespace-pre-line">{input.text}</p>}
     </li>
   );
@@ -69,10 +73,16 @@ export function StarterPage({ s }: { s: StarterCardData }) {
         <div className="min-w-0">
           <div ref={ref} {...handlers} className="relative aspect-[16/9] overflow-hidden rounded-2xl border bg-muted">
             {cover ? (
-              cover.frames.length > 1 ? (
+              cover.frames.length > 1 || (s.coverTop && !cover.video) ? (
                 <div className="absolute inset-0 grid auto-cols-fr grid-flow-col gap-0.5">
                   {cover.frames.map((f) => (
-                    <CoverImg key={f.src} frame={f} sizes="(max-width: 1024px) 34vw, 280px" />
+                    <CoverImg
+                      key={f.src}
+                      frame={f}
+                      sizes={cover.frames.length > 1 ? "(max-width: 1024px) 34vw, 280px" : "(max-width: 1024px) 100vw, 820px"}
+                      // A portrait: from its top, so the head stays whole in the wide frame.
+                      className={s.coverTop ? "object-top" : undefined}
+                    />
                   ))}
                 </div>
               ) : (
@@ -115,7 +125,7 @@ export function StarterPage({ s }: { s: StarterCardData }) {
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <Button asChild className="rounded-full">
                 <Link href={s.tryIn.href}>
-                  Try it in {s.tryIn.label} <ArrowRight />
+                  {s.tryIn.text ?? `Try it in ${s.tryIn.label}`} <ArrowRight />
                 </Link>
               </Button>
             </div>

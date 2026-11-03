@@ -62,7 +62,22 @@ describe("the starters catalog", () => {
       for (const name of names) expect(words, `${s.id}: ${name}`).not.toContain(name);
       // The words a starter puts in (its prompts and topics) name only what should be there.
       const seed = s.seed;
-      const prompts = seed.kind === "faceless" ? [seed.channel.idea, seed.episode.topic] : seed.kind === "fill" ? [seed.fill.prompt] : [seed.kit.brand.description, seed.kit.product.description];
+      const prompts =
+        seed.kind === "faceless"
+          ? [seed.channel.idea, seed.episode.topic]
+          : seed.kind === "fill"
+            ? [seed.fill.prompt]
+            : seed.kind === "product"
+              ? [seed.kit.brand.description, seed.kit.product.description]
+              : seed.kind === "assist"
+                ? [seed.prompt]
+                : seed.kind === "cinema"
+                  ? [seed.brief.body, ...seed.shots.map((x) => x.prompt)]
+                  : seed.kind === "storyboard"
+                    ? [seed.story]
+                    : seed.kind === "element"
+                      ? [seed.element.description]
+                      : [];
       for (const p of prompts) expect(p, s.id).not.toMatch(NEGATIONS);
     }
   });
@@ -111,7 +126,8 @@ describe("the starters catalog", () => {
       for (const c of cards) {
         expect(starterShown(c, false)).toBe(true);
         expect(starterShown(c, true)).toBe(!!c.cover);
-        expect(starterHref(c)).toBe(`${STARTER_SURFACES[surface].base}/start/${c.id}`);
+        // A link (the Library's row) opens its studio; every other starter has its own page.
+        expect(starterHref(c)).toBe(c.use.kind === "link" ? c.use.href : `${STARTER_SURFACES[surface].base}/start/${c.id}`);
       }
     }
     expect(starterOn("faceless", "cf.narcissus")).toBeUndefined();
@@ -143,7 +159,7 @@ describe("the starters catalog", () => {
 
 describe("who may use a starter", () => {
   it("opens a starter's page to everyone, as catalog data, not a stored record", () => {
-    for (const s of STARTERS) {
+    for (const s of STARTERS.filter((x) => x.seed.kind !== "link")) {
       const href = starterHref(s);
       expect(recordForPath(href), href).toBeNull();
       expect(guestRead(href), href).toEqual({ kind: "pass" });
@@ -155,6 +171,8 @@ describe("who may use a starter", () => {
   it("keeps a starter with no cover yet the owner's: the proxy's 404 for others matches the catalog's covers", () => {
     for (const s of STARTERS) {
       expect(starterCovered(s.id), s.id).toBe(!!starterCover(s));
+      // A Library link has no page of its own: its card opens another studio.
+      if (s.seed.kind === "link") continue;
       expect(hiddenStarterPage(starterHref(s)), s.id).toBe(!starterCover(s));
       expect(hiddenStarterPage(`${starterHref(s)}/`), s.id).toBe(!starterCover(s));
     }

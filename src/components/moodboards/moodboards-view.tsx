@@ -143,7 +143,13 @@ export function MoodboardsView() {
   const { data, isLoading } = useMoodboards();
   const { rename, remove } = useMoodboardActions();
   const [engine, setEngine] = useEngine();
-  const [tab, setTab] = useState<"mine" | "curated">("mine");
+  const looks = useCuratedSet("soul-v2");
+  // Curated first while the person has no boards of their own (a guest or an account always), once curated looks have
+  // their real covers (a wall of drawn tiles is no place to start): picking a tab keeps it. Known once the list is in,
+  // so the owner's own boards never wait behind a flash of Curated.
+  const [picked, setTab] = useState<"mine" | "curated" | null>(null);
+  const curatedFirst = !isLoading && !data?.items.length && looks.some((c) => c.preview);
+  const tab = picked ?? (curatedFirst ? "curated" : "mine");
   const [cat, setCat] = useState("All presets");
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
@@ -152,10 +158,13 @@ export function MoodboardsView() {
   const [deleting, setDeleting] = useState<Moodboard | null>(null);
   const needle = q.trim().toLowerCase();
   const mine = useMemo(() => (data?.items ?? []).filter((m) => !needle || m.name.toLowerCase().includes(needle)), [data, needle]);
-  const looks = useCuratedSet("soul-v2");
-  // Curated looks are Fuobe Soul's: they open on Fuobe Soul, which applies the whole look on either engine.
+  // Curated looks are Fuobe Soul's: they open on Fuobe Soul, which applies the whole look on either engine. Looks with
+  // their real cover come first.
   const curated = useMemo(
-    () => looks.filter((c) => (needle ? `${c.name} ${c.description}`.toLowerCase().includes(needle) : inCuratedTab(c, cat))),
+    () =>
+      looks
+        .filter((c) => (needle ? `${c.name} ${c.description}`.toLowerCase().includes(needle) : inCuratedTab(c, cat)))
+        .sort((a, b) => Number(!a.preview) - Number(!b.preview)),
     [looks, needle, cat],
   );
 
@@ -238,6 +247,9 @@ export function MoodboardsView() {
         )
       ) : (
         <>
+          {curatedFirst && !picked && !needle && (
+            <p className="mb-3 text-[14px] text-pretty text-muted-foreground">Start from a curated look: tap one to use it in the Image studio, or make your own from {MOODBOARD_LIMITS.min} or more pictures.</p>
+          )}
           {!needle && (
             <div className="scrollbar-none mb-4 flex gap-1.5 overflow-x-auto">
               {CURATED_TABS["soul-v2"].map((c) => (

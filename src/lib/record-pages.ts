@@ -41,8 +41,13 @@ const PAGES: [RegExp, (m: string[]) => RecordRef][] = [
 const FIXED = new Set(["/ads/multiplier"]);
 
 /** A ready-made starter's page (/faceless/start/<id>…): catalog data, not a stored record. */
-const STARTER_PAGE = /^\/(faceless|content-factory|explainer|ads|marketing|marketing\/click-to-ad)\/start\/([^/]+)$/;
-const STARTER_BASE: Record<string, StarterSurface> = { faceless: "faceless", "content-factory": "content-factory", explainer: "explainer", ads: "ads", marketing: "marketing", "marketing/click-to-ad": "click-to-ad" };
+const STARTER_PAGE = /^\/(assist|cinema|storyboard|elements|faceless|content-factory|explainer|ads|marketing|marketing\/click-to-ad)\/start\/([^/]+)$/;
+const STARTER_BASE: Record<string, StarterSurface> = {
+  assist: "assist",
+  cinema: "cinema",
+  storyboard: "storyboard",
+  elements: "elements",
+  faceless: "faceless", "content-factory": "content-factory", explainer: "explainer", ads: "ads", marketing: "marketing", "marketing/click-to-ad": "click-to-ad" };
 
 function decode(s: string): string {
   try {

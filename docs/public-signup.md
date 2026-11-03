@@ -70,10 +70,13 @@ An account is signed in, but it sees the owner's studio as a guest does:
   owner's Library, with or without a GPU. Accounts have their own uploads and runs (below), but no
   projects yet.
   Canvas shows its ready boards to guests and accounts as read-only pages (`/canvas/start/<id>`):
-  what goes in, the steps and what comes out. Only the owner makes boards. Faceless Studio, Content
-  Factory, Explainer, Ads Studio, Click to Ad and Marketing Studio show their ready-made starters the
-  same way (`<studio>/start/<id>`); making one (`POST /api/starters/<id>`) is the owner's, and an
-  account gets 403 `library`.
+  what goes in, the steps and what comes out. Only the owner makes boards. Assist, Cinema Studio,
+  Storyboard, Elements, Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and
+  Marketing Studio show their ready-made starters the same way (`<studio>/start/<id>`); making one
+  (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`. A starter without its
+  cover yet is the owner's only: its card, its words and its page (404 for anyone else). Storyboard's
+  ready stories with a cover also fill its composer for anyone (`/storyboard?starter=<id>`), and the
+  Library's "Make your first" row links to pages everyone can open.
 - **Settings, keys and tokens are the owner's.** Changing settings or model switches, the password,
   API tokens, Public sign-up, LoRA downloads, Assist connectors and the MCP endpoint answer 403 for
   an account.

@@ -123,10 +123,10 @@ export function threadTitle(text: string): string {
  * (tests/assist-suggestions.test.ts runs them through the offline planner).
  */
 export const ASSIST_SUGGESTIONS = [
-  "A 3-shot product ad for a matte black perfume bottle — hero still, then animate it",
-  "Four moody portraits of a lighthouse keeper, 35mm film, then pick the best and animate it",
-  "Storyboard a 6-frame heist in Paris at night",
-  "A 10-second vertical video of a fox running through snow, with sound",
+  "A 3-shot ad for a gold watch on a model's wrist on a Lake Como terrace — hero still, then animate it",
+  "Four moody portraits of a model in a black velvet suit, 35mm film, then pick the best and animate it",
+  "Storyboard a 6-frame escape from a Venice masquerade ball at midnight",
+  "A 10-second vertical video of a model in a red silk gown running through falling snow at night, with sound",
 ] as const;
 
 /** The longest prompt a link can type into a new chat (/assist?prompt=). */

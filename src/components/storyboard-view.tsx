@@ -4,7 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { ArrowUp, Clapperboard, Film, ImagePlus, Loader2, Minus, Plus, Sparkles, Trash2, Wand2, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { Suspense, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import { finishGaveUp, useSoulFinish } from "@/components/studio/soul-finish";
 import { FailedTile, MediaThumb, PendingTile, tileRatio } from "@/components/studio/feed";
 import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { Viewer } from "@/components/studio/viewer";
+import { StarterParam } from "@/components/starters/starter-param";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsVisitor, useStatus } from "@/lib/api";
 import { MAX_FRAMES, STORYBOARD_ASPECTS, STORYBOARD_PARTNER_IDS, type StoryboardNextScene, type StoryboardPartner } from "@/lib/catalog/storyboard";
 import { lookCard } from "@/lib/catalog/soul-cards";
@@ -25,6 +27,7 @@ import type { Engine, Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
 import { BOARD_TITLES_KEY, boardTitle, filmReady, rememberTitle } from "@/lib/storyboard-board";
 import { animateHref, MAX_KEYS } from "@/lib/inbetween";
+import { starterShown, type StarterCardData, type StarterFill } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
 import { BoardExample, hasBoardExample } from "@/components/empty-examples";
@@ -320,7 +323,18 @@ function Board({
   );
 }
 
-export function StoryboardView({ modelNames = {} }: { /** Display names of the storyboard models, from the server. */ modelNames?: Record<string, string> }) {
+export function StoryboardView({
+  modelNames = {},
+  starters: given = [],
+  fills: givenFills = {},
+}: {
+  /** Display names of the storyboard models, from the server. */
+  modelNames?: Record<string, string>;
+  /** The ready stories with their real cover (catalog cards), and what each one puts into the composer, by id. */
+  starters?: StarterCardData[];
+  fills?: Record<string, StarterFill>;
+}) {
+  const { owner, starters, fills } = useStarters("storyboard", given, givenFills);
   const qc = useQueryClient();
   const [engine, setEngine] = useEngine();
   // The engine is known once the install's engine mode is and the page has hydrated (until then useEngine answers the
@@ -344,6 +358,25 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
   // Your GPU only: the next frames' model (Qwen-Image 2.1 unless the classic recipe is picked).
   const [nextScene, setNextScene] = useState<StoryboardNextScene | undefined>();
   const [open, setOpen] = useState<Generation | null>(null);
+  // A ready story fills the composer (for everyone: the price shows at once, and Generate is the owner's), from its
+  // page's link (?starter=<id>) or its card here, then the composer comes into view.
+  const storyRef = useRef<HTMLTextAreaElement>(null);
+  const applyStarter = (id: string) => {
+    const s = Object.hasOwn(fills, id) ? fills[id] : undefined;
+    if (s?.kind !== "storyboard") return false;
+    setMode("auto");
+    setStory(s.story);
+    setCount(Math.min(MAX_FRAMES, Math.max(2, s.frames)));
+    setAspect(s.aspectRatio);
+    setLook(s.look);
+    setLookStrength(1);
+    requestAnimationFrame(() => {
+      storyRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      storyRef.current?.focus({ preventScroll: true });
+    });
+    return true;
+  };
+  const hasStarters = starters.some((s) => starterShown(s, !owner));
   const feed = useGenerations({ features: ["storyboard", "storyboard-film"], limit: 240 });
   const titles = useBoardTitles();
   // A board with a look: each frame gets the look's grade and overlay here, once it's made.
@@ -434,6 +467,9 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
 
   return (
     <div className="flex min-h-content min-w-0 flex-col">
+      <Suspense fallback={null}>
+        <StarterParam onStarter={applyStarter} />
+      </Suspense>
       <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">Storyboard</h1>
         <div className="ml-auto">
@@ -465,11 +501,12 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
             </div>
             {mode === "auto" ? (
               <textarea
+                ref={storyRef}
                 value={story}
                 onChange={(e) => setStory(e.target.value)}
                 rows={2}
                 aria-label="Your story"
-                placeholder="The whole story in a sentence or two — e.g. “a lighthouse keeper finds a glowing bottle and follows its map into the sea”"
+                placeholder="The whole story in a sentence or two — e.g. “a model in an emerald gown slips out of a palace ball at midnight and drives a vintage car to the sea”"
                 className="field-sizing-content max-h-52 min-h-16 w-full resize-none bg-transparent px-2 py-1.5 text-base leading-relaxed outline-none placeholder:text-subtle-foreground"
               />
             ) : (
@@ -591,7 +628,10 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
                 names={modelNames}
               />
             ))}
+            <StarterSection surface="storyboard" starters={given} onFill={applyStarter} row className="col-span-full pt-6" />
           </div>
+        ) : hasStarters ? (
+          <StarterSection surface="storyboard" starters={given} onFill={applyStarter} />
         ) : (
           <div className="grid place-items-center rounded-xl border border-dashed px-4 py-14 text-center text-muted-foreground">
             {/* An example board (six frames) in place of the icon, once it is published. */}

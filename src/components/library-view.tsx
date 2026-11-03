@@ -47,6 +47,8 @@ import { keyCombo, useModKey } from "@/lib/keys";
 import { buildEntries, folderAndDescendants, reviewInfo, splitByDate, toggleAll, TRASH_DAYS, type LibraryEntry } from "@/lib/library";
 import { isLayered, shownOutputs } from "@/lib/output-actions";
 import { isExpired } from "@/lib/share";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
+import { starterShown, type StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 
@@ -224,7 +226,7 @@ function Cards({ entries, prefs, expanded, render, panel }: { entries: LibraryEn
   );
 }
 
-function Inner() {
+function Inner({ starters: given }: { starters: StarterCardData[] }) {
   const routed = useSearchParams();
   // The params just set by go(): the History API hands them to useSearchParams in a transition, a frame later; shown at
   // once until the router has them.
@@ -281,6 +283,8 @@ function Inner() {
   // Trash or skills here (they're the studio owner's). Left out until /api/auth/me says it's the owner, so a visitor
   // never sees them flash in and out.
   const owner = useIsOwner();
+  // "Make your first": the covered starters the page carries, every one for the owner.
+  const { starters } = useStarters("library", given);
   const shareApi = useShare();
   const share = owner ? shareApi : null;
   const builder = useSkillBuilder();
@@ -545,6 +549,19 @@ function Inner() {
         </Empty>
       );
     if (uploadsTab) return <Empty title="No uploads yet">Files you add to a studio show up here.</Empty>;
+    // Nothing made yet: "Make your first" leads on All (a visitor's cards only those with their cover), then one quiet line.
+    if (tab.id === "all" && starters.some((s) => starterShown(s, !owner)))
+      return (
+        <>
+          <StarterSection surface="library" starters={given} />
+          <p className="mt-8 text-center text-[14px] text-muted-foreground">
+            Everything you make lands here.{" "}
+            <Link href="/image" className="text-brand-text underline underline-offset-2">
+              Create an image
+            </Link>
+          </p>
+        </>
+      );
     return (
       <Empty title="Your creations will appear here">
         Generate something and it lands here.{" "}
@@ -1005,12 +1022,13 @@ function BarButton({ icon: Icon, label, onClick, disabled, destructive, classNam
   );
 }
 
-export function LibraryView() {
+/** starters: "Make your first" under an empty Library (catalog cards, from the page). */
+export function LibraryView({ starters = [] }: { starters?: StarterCardData[] }) {
   return (
     <Suspense fallback={null}>
       <ForeverConfirmProvider>
         <UploadDeleteProvider>
-          <Inner />
+          <Inner starters={starters} />
         </UploadDeleteProvider>
       </ForeverConfirmProvider>
     </Suspense>

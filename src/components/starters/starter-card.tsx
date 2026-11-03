@@ -32,6 +32,8 @@ export interface StarterCardProps {
   wide?: boolean;
   /** On a phone, the cover as a thumbnail on the left and the words beside it (a row that must fit above a docked composer). */
   compact?: boolean;
+  /** A portrait still: shown from its top, so a head is never cut off in the wide frame. */
+  coverTop?: boolean;
   className?: string;
 }
 
@@ -40,7 +42,7 @@ export interface StarterCardProps {
  * line of description and one action. The cards of a row line up: the description takes two lines at most and the
  * action sits at the foot.
  */
-export function StarterCard({ coverKey, cover, hue, flow, overlay, icon, title, description, href, meta, badge, action, wide, compact, className }: StarterCardProps) {
+export function StarterCard({ coverKey, cover, hue, flow, overlay, icon, title, description, href, meta, badge, action, wide, compact, coverTop, className }: StarterCardProps) {
   const { ref, playing, asked, handlers } = useCoverPlayback<HTMLElement>(coverKey, cover);
   // A phone's compact card: a thumbnail as tall as the words beside it.
   const shape = cn(wide ? "aspect-[16/9] sm:aspect-[2/1]" : "aspect-[16/9]", compact && "max-sm:aspect-auto max-sm:min-h-28 max-sm:w-28 max-sm:shrink-0");
@@ -57,10 +59,15 @@ export function StarterCard({ coverKey, cover, hue, flow, overlay, icon, title, 
     >
       {cover ? (
         <div className={cn("relative overflow-hidden bg-muted", shape)}>
-          {cover.frames.length > 1 ? (
+          {cover.frames.length > 1 || (coverTop && !cover.video) ? (
             <div className="absolute inset-0 grid auto-cols-fr grid-flow-col gap-0.5">
               {cover.frames.map((f) => (
-                <CoverImg key={f.src} frame={f} sizes="(max-width: 640px) 34vw, (max-width: 1024px) 17vw, 150px" />
+                <CoverImg
+                  key={f.src}
+                  frame={f}
+                  sizes={cover.frames.length > 1 ? "(max-width: 640px) 34vw, (max-width: 1024px) 17vw, 150px" : "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 440px"}
+                  className={coverTop ? "object-top" : undefined}
+                />
               ))}
             </div>
           ) : (
