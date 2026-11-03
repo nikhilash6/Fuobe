@@ -51,7 +51,7 @@ node tests/e2e/mixed-shorts-original.mjs [url] # Mixed Media and Shorts on their
 node tests/e2e/marketing-originals.mjs [url]   # Marketing Studio, Ads Studio, the AI Influencer builder, Photodump and Fashion Factory start on the Originals, partners stay choices, the try-on LoRA's switch
 node tests/e2e/open-tools.mjs [url]            # the Angles and Fuobe Angles apps, Fuobe Speak in Lipsync priced on the voice, Depth map's large model, PixeletedFace's face mosaic, the new LoRA rows
 node tests/e2e/popcorn-evolution.mjs [url]     # Video tools → Evolution (direction, price, a demo run with before/after), Storyboard's looks and price, Canvas's Effects 2.0 chains
-node tests/e2e/skills-run.mjs [url]            # a skill with a recipe: the free check, a run from the form and three from CSV rows, re-check, a switched-off skill, ⌘K
+node tests/e2e/skills-run.mjs [url]            # a skill with a recipe: the free test run, a run from the form and three from CSV rows, Test again, a switched-off skill, ⌘K
 node tests/e2e/skills-builder.mjs [url]        # a 3-step chain made in the composer, turned into a skill from the Library, checked, saved and run with new words
 node tests/e2e/fixes-5.mjs [url]               # Settings → Training against a stand-in AI-Toolkit, the H3 packs' install commands, Edit video's clip price and window
 node tests/e2e/split-soundtrack.mjs [url] [outDir] [--live]  # Audio → Split soundtrack: the cloud engine's "runs on your GPU" note, the open engine's options and price, then a split of an audio file and a video: the stem tiles, the mixer, a preset, Export mix and Put back on the video; needs ffmpeg

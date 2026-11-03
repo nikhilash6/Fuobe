@@ -76,6 +76,7 @@ import {
   prestepCost,
   pushRecent,
   routeParams,
+  saysYourGpu,
   untouchedParams,
   settingsShape,
   showsPrompt,
@@ -874,7 +875,9 @@ export function Composer({ docked }: { docked: boolean }) {
   const alternativeHref = alternative && `${alternative.href}${video?.startsWith("/api/files/") ? `&video=${encodeURIComponent(video)}` : ""}`;
   const demo = !!(model && placeholdersOn(status?.demoMode));
   // On the open engine every run is free on the GPU: said even before the run can be planned (no voice sample, no clip yet).
-  const ownCostText = costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), unknown: loraPriceUnknown }, formatCost);
+  // Said with "your GPU" only off a hosted studio: there the run may use the studio's GPUs, and the chip or hint says where.
+  const gpuRun = saysYourGpu(engine, hostedHere);
+  const ownCostText = costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), unknown: loraPriceUnknown, gpu: gpuRun }, formatCost);
   // An account's paid run is billed to its own provider account (Your keys), or still needs that key.
   const payer = paidThrough(model, status);
   const missingKey = needsKey(model, status)?.[0];
@@ -1567,7 +1570,7 @@ export function Composer({ docked }: { docked: boolean }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums">
-                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
+                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), compact: true, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost)}</span>
                 <span className="hidden sm:inline">
                   {costText}
                   {payerText}

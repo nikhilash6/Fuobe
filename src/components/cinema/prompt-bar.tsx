@@ -549,8 +549,8 @@ export function PromptBar(props: PromptBarProps) {
     .filter(Boolean)
     .join(" · ");
   // The live cost sits next to Generate at every width (short on narrow bars).
-  const costShort = demo ? "Placeholder" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "≈ ?";
-  const costLong = demo ? "Placeholder · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
+  const costShort = demo ? "Placeholder" : cost === 0 ? (engine === "open" ? "Free · GPU" : "Free") : cost != null ? `≈ ${formatCost(cost)}` : "≈ ?";
+  const costLong = demo ? "Placeholder · free" : cost === 0 ? (engine === "open" ? "Free · your GPU" : "Free") : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
 
   // The Director's Panel chips: their own row from sm up; on phones one "Director" chip opens them in a sheet.
   const directorChips = (
@@ -918,7 +918,7 @@ export function PromptBar(props: PromptBarProps) {
         </p>
       )}
       <span className="sr-only" aria-live="polite">
-        {cost != null ? `Estimated cost ${demo ? "free in demo mode" : formatCost(cost)}` : ""}
+        {cost != null ? `Estimated cost ${demo ? "free: placeholder results" : cost === 0 && engine === "open" ? "free, on your GPU" : formatCost(cost)}` : ""}
       </span>
     </div>
   );

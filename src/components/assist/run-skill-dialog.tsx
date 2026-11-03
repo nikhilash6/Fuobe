@@ -20,7 +20,7 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { useElements } from "@/lib/api";
 import type { Engine } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
-import { checkValues, isMediaType, parseRows, RECIPE_LIMITS, type RecipeEstimate, type RecipeParam, type RecipeView } from "@/lib/recipe";
+import { checkValues, isMediaType, parseRows, RECIPE_LIMITS, TEST_RUN_DONE, TEST_RUN_NOTE, type RecipeEstimate, type RecipeParam, type RecipeView } from "@/lib/recipe";
 import { DEMO_NOTE } from "@/lib/recipe-builder";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
@@ -134,11 +134,11 @@ function Loaded({ view, onClose, examples, intro, csv: rowsCsv }: { view: Recipe
     try {
       const r = await actions.verify(name);
       const passed = r.engines.filter((e) => e.plan.ok && (e.dryRun?.ok ?? true)).map((e) => (e.engine === "cloud" ? "Cloud" : "your GPU"));
-      if (r.ok) toast.success(`Checked — it runs on ${passed.join(" and ")}`, { description: "Priced, and run once on the demo provider for free." });
+      if (r.ok) toast.success(`Test run passed — it runs on ${passed.join(" and ")}`, { description: TEST_RUN_DONE });
       else {
         const why = r.engines.flatMap((e) => [...e.plan.errors, ...(e.dryRun?.problems ?? [])]);
         setProblems(why);
-        toast.error(passed.length ? `It runs on ${passed.join(" and ")} only` : "The check didn't pass", { description: why[0] });
+        toast.error(passed.length ? `It runs on ${passed.join(" and ")} only` : "The test run didn't pass", { description: why[0] });
       }
       const next = r.view.ready;
       if (next.length && !next.includes(engine)) setEngine(next[0]);
@@ -184,7 +184,7 @@ function Loaded({ view, onClose, examples, intro, csv: rowsCsv }: { view: Recipe
           : staged?.waiting?.length
             ? `${staged.waiting.join(", ")} start${staged.waiting.length === 1 ? "s" : ""} when the step before is done`
             : r.demo
-              ? "A demo run — no provider connected"
+              ? "Placeholder results, free — placeholders are on in Settings"
               : `${view.title}: same steps, new take`,
         action: staged ? { label: "See its steps", onClick: () => router.push(`/assist/skills?skill=${encodeURIComponent(name)}`) } : { label: `Open in ${studio}`, onClick: () => router.push(href) },
       });
@@ -227,15 +227,15 @@ function Loaded({ view, onClose, examples, intro, csv: rowsCsv }: { view: Recipe
           <div className="flex flex-col gap-3 rounded-xl bg-muted/60 px-4 py-3 sm:flex-row sm:items-center">
             <ShieldCheck className="size-5 shrink-0 text-brand-text" />
             <p className="min-w-0 flex-1 text-[13px]">
-              <span className="font-medium">Check it once first — it&apos;s free.</span> <span className="text-muted-foreground">Fuobe prices every step and runs it on the demo provider, so you know it works before you spend anything.</span>
+              <span className="font-medium">Do a free test run first.</span> <span className="text-muted-foreground">{TEST_RUN_NOTE}</span>
             </p>
             <Button size="sm" onClick={() => void check()} disabled={busy !== null}>
-              {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Check it (free)
+              {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Test run (free)
             </Button>
           </div>
         ) : recheck?.length ? (
-          <Notice tone="warn" action={<Button size="sm" variant="outline" onClick={() => void check()} disabled={busy !== null}>{busy === "check" ? <Loader2 className="animate-spin" /> : null} Re-check</Button>}>
-            Needs a re-check: {recheck[0]}
+          <Notice tone="warn" action={<Button size="sm" variant="outline" onClick={() => void check()} disabled={busy !== null}>{busy === "check" ? <Loader2 className="animate-spin" /> : null} Test again (free)</Button>}>
+            Needs a new test run: {recheck[0]}
           </Notice>
         ) : null}
         {recipe.source?.demo && !Object.values(recipe.verified ?? {}).some((v) => v?.real) && <Notice tone="info">{DEMO_NOTE}.</Notice>}
@@ -321,7 +321,7 @@ function Loaded({ view, onClose, examples, intro, csv: rowsCsv }: { view: Recipe
       </div>
       <DialogFooter className="mx-0 mb-0 flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
         <p className={cn("min-w-0 text-[13px] break-words", estError ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
-          {!view.enabled ? "Switched off" : !ready ? "Check it first to see the price" : estError ?? (canPrice ? price : tab === "one" ? (tried ? Object.values(checked.errors)[0] : "Fill in the inputs to see the price") : rows ? (rows.errors[0] ?? "Fix the rows marked below") : "Paste rows to see the total")}
+          {!view.enabled ? "Switched off" : !ready ? "Do a test run first to see the price" : estError ?? (canPrice ? price : tab === "one" ? (tried ? Object.values(checked.errors)[0] : "Fill in the inputs to see the price") : rows ? (rows.errors[0] ?? "Fix the rows marked below") : "Paste rows to see the total")}
         </p>
         <div className="flex shrink-0 gap-1.5 max-sm:w-full">
           <Button variant="ghost" size="sm" onClick={onClose} className="max-sm:flex-1">
@@ -330,7 +330,14 @@ function Loaded({ view, onClose, examples, intro, csv: rowsCsv }: { view: Recipe
           <Button size="sm" onClick={() => void run()} disabled={busy !== null || !view.enabled || !ready || (canPrice && (!fresh || estimate.isFetching)) || (tried && !runnable)} className="max-sm:flex-[2]">
             {busy === "run" ? <Loader2 className="animate-spin" /> : <Play />}
             {runs > 1 ? `Run ${runs}` : "Run"}
-            {runnable && est && !est.demo && est.total ? ` · ${formatCost(est.total)}` : ""}
+            {runnable && est && !est.demo && est.total
+              ? ` · ${formatCost(est.total)}`
+              : runnable && est && !est.demo && est.engine === "open"
+                ? " on your GPU"
+                : // Some Cloud prices vary (the footer says so): still a paid run, said before the tap.
+                  runnable && est && !est.demo && est.total === null && est.engine === "cloud"
+                  ? " · paid"
+                  : ""}
           </Button>
         </div>
       </DialogFooter>

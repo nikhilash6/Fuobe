@@ -43,7 +43,7 @@ export function SkillSuggestions() {
           You&apos;ve made “{s.words}” {s.count} times. Save it as a skill?
         </p>
         <p className="text-[12px] text-muted-foreground">
-          {s.demo ? "From demo results: check it on your engine once it's saved. " : ""}A skill runs the same steps again with new inputs, priced first.
+          {s.demo ? "Made from placeholder results: it hasn't made a real result yet. " : ""}A skill runs the same steps again with new inputs, priced first.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">

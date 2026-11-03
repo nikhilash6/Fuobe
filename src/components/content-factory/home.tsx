@@ -313,7 +313,7 @@ export function ContentFactoryHome({ voices, starters: given = [], fills: givenF
                   <Sparkles className="size-3.5" /> Presets
                 </a>
                 <span className="text-[12px] text-muted-foreground">
-                  {engine === "open" ? (visitor ? "We study the clip's pacing and look" : "Reading a clip is free (Gemma 4 on your ComfyUI)") : perMinute > 0 ? `Reading a clip costs about ${usd(perMinute)} a minute` : "Reading a clip runs as a free demo"}
+                  {engine === "open" ? (visitor ? "We study the clip's pacing and look" : "Reading a clip is free (Gemma 4 on your ComfyUI)") : perMinute > 0 ? `Reading a clip costs about ${usd(perMinute)} a minute` : "Reading a clip makes a free placeholder"}
                 </span>
                 <input ref={file} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" hidden onChange={(e) => (void onFile(e.target.files?.[0]), (e.target.value = ""))} />
               </div>

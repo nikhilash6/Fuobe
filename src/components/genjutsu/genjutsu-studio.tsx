@@ -27,7 +27,7 @@ import { openInStudio } from "@/components/swap-studio/hooks";
 import { SelfHostNote } from "@/components/self-host-note";
 import { ExampleRow } from "@/components/studio/example-row";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { useEngine, useGenerations, useIsOwner, useLikelyVisitor, useModelAccess, useSoundLive } from "@/lib/api";
+import { useEngine, useGenerations, useIsOwner, useLikelyVisitor, useModelAccess, useSoundLive, useStatus } from "@/lib/api";
 import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterChoice, type CharacterOptions } from "@/lib/catalog/character-swap";
 import {
   chooseMaker,
@@ -65,6 +65,7 @@ import type { Generation, PixelPoint } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
 import type { ExampleRowData } from "@/lib/examples/types";
+import { againWhere, placeholdersOn } from "@/lib/demo-mode";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
 import { CharacterControls, CharacterFacts, qualityOff } from "./character-panel";
@@ -1282,6 +1283,7 @@ function RunPanel({ run, onAgain, finish = [], onFinish }: { run: Run; onAgain: 
   const list = useGenerationList(run.ids).data;
   const byId = useMemo(() => new Map((list ?? []).map((g) => [g.id, g])), [list]);
   const final = byId.get(run.final);
+  const placeholders = placeholdersOn(useStatus().data?.demoMode);
   const rows: StepRow[] = run.ids.map((id) => {
     const g = byId.get(id);
     return { key: id, label: g?.request.step?.label ?? "A step", g };
@@ -1313,6 +1315,7 @@ function RunPanel({ run, onAgain, finish = [], onFinish }: { run: Run; onAgain: 
             {(out || state.status === "failed") && (
               <Button size="sm" variant="outline" className="rounded-full" onClick={onAgain}>
                 <RotateCcw className="size-3.5" /> {state.status === "failed" ? "Try again" : "Run again"}
+                {againWhere(final, { placeholders })}
               </Button>
             )}
           </div>

@@ -16,11 +16,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
-import { useCreateGeneration, useGenerationActions } from "@/lib/api";
+import { useCreateGeneration, useGenerationActions, useStatus } from "@/lib/api";
+import { placeholdersOn } from "@/lib/demo-mode";
 import { useSoulFinish } from "./soul-finish";
 import { elapsed, formatCost, leftLabel, notePace, ratioValue, timeAgo, timeLeft } from "@/lib/format";
 import { downloadHref, downloadName, userTitle } from "@/lib/library";
-import { isLayered, shownOutputs } from "@/lib/output-actions";
+import { draftRenderPaid, isLayered, shownOutputs } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { toastError } from "@/lib/refusals";
@@ -186,6 +187,7 @@ function useFeed(): FeedApi {
 
 function DraftButton({ g, draftId }: { g: Generation; draftId: string }) {
   const finalize = useFinalizeDraft();
+  const placeholders = placeholdersOn(useStatus().data?.demoMode);
   return (
     <button
       onClick={(e) => {
@@ -194,7 +196,7 @@ function DraftButton({ g, draftId }: { g: Generation; draftId: string }) {
       }}
       className="absolute top-2 left-2 inline-flex h-7 items-center gap-1 rounded-full bg-black/55 pr-2.5 pl-2 text-[12px] font-medium text-white backdrop-blur transition-colors hover:bg-black/75"
     >
-      <Sparkles className="size-3.5" /> Draft · render 1080p
+      <Sparkles className="size-3.5" /> Draft · render 1080p{draftRenderPaid(placeholders)}
     </button>
   );
 }

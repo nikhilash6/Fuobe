@@ -30,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useIsOwner, useIsVisitor } from "@/lib/api";
 import { SKILL_LIMITS, SKILL_NAME_RE, skillSlug, type Skill, type SkillSummary } from "@/lib/assist";
+import { TEST_RUN_DONE } from "@/lib/recipe";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
 import { radioKeys } from "@/components/studio/radio-keys";
@@ -281,8 +282,8 @@ function SkillGrid({ list, loading, onOpen, onToggle, empty }: { list: SkillSumm
 }
 
 /**
- * Under a recipe skill's description: where it was checked ("Checked 29 Oct · Cloud ✓ · GPU not checked"), or in amber
- * why it needs a re-check, with Re-check (the plan and the free dry run).
+ * Under a recipe skill's description: where it was tested ("Tested 29 Oct · Cloud ✓ · Your GPU not tested yet"), or in
+ * amber why it needs a new test run, with Test again (the plan and the free placeholder run).
  */
 function RecipeStatus({ skill, owner }: { skill: Skill; owner: boolean }) {
   const recipe = useRecipe(skill.name, !!skill.recipe);
@@ -299,8 +300,8 @@ function RecipeStatus({ skill, owner }: { skill: Skill; owner: boolean }) {
     setBusy(true);
     try {
       const r = await actions.verify(skill.name);
-      if (r.ok) toast.success("Checked — it still runs", { description: "Priced, and run once on the demo provider for free." });
-      else toast.error("The check didn't pass", { description: r.engines.flatMap((e) => [...e.plan.errors, ...(e.dryRun?.problems ?? [])])[0] });
+      if (r.ok) toast.success("Test run passed — it still runs", { description: TEST_RUN_DONE });
+      else toast.error("The test run didn't pass", { description: r.engines.flatMap((e) => [...e.plan.errors, ...(e.dryRun?.problems ?? [])])[0] });
     } catch (e) {
       const f = e as RecipeFailure;
       if (!refusalShown(f)) toast.error(f.message, { description: f.problems?.slice(1).join("; ") || undefined });
@@ -314,10 +315,10 @@ function RecipeStatus({ skill, owner }: { skill: Skill; owner: boolean }) {
     <>
       <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", recheck.length || v.why ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
         {recheck.length || v.why ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
-        <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a re-check: ${recheck[0]}` : v.line)}</span>
+        <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a new test run: ${recheck[0]}` : v.line)}</span>
         {canCheck && !v.why && (recheck.length > 0 || !v.ready.length) && (
           <Button variant="outline" size="xs" className="h-6 rounded-full px-2 text-[12px]" onClick={() => void recheckNow()} disabled={busy}>
-            {busy && <Loader2 className="animate-spin" />} {v.ready.length ? "Re-check" : "Check it (free)"}
+            {busy && <Loader2 className="animate-spin" />} {v.ready.length ? "Test again (free)" : "Test run (free)"}
           </Button>
         )}
         {canFix && recheck.length > 0 && !fixing && (

@@ -733,11 +733,11 @@ async function skillRequest(ctx, view) {
 
 /** A skill not checked on this engine gets its free plan check first (it prices every step; nothing runs). */
 async function checkSkill(ctx, view, engine) {
-  if (!ctx.values.json) ctx.note(`Checking /${view.name} on ${engineWords(engine)} first (free: it prices each step, nothing runs)…`);
+  if (!ctx.values.json) ctx.note(`Pricing /${view.name} on ${engineWords(engine)} first (free: nothing runs)…`);
   const r = await ctx.client.request("POST", `/api/assist/skills/${enc(view.name)}/verify`, { json: { level: "plan", engine } });
   if (r.ok) return;
   const why = r.engines.flatMap((e) => e.plan.errors)[0];
-  throw new ApiError(`/${view.name} doesn't run on ${engineWords(engine)} as it is${why ? `: ${why}` : ""}. Check it in Assist → Skills.`);
+  throw new ApiError(`/${view.name} doesn't run on ${engineWords(engine)} as it is${why ? `: ${why}` : ""}. Give it a free test run in Assist → Skills (nothing runs for real).`);
 }
 
 const priceSkill = (ctx, view, engine, body) => ctx.client.request("POST", `/api/assist/skills/${enc(view.name)}/estimate`, { json: { ...body, engine } });
@@ -765,7 +765,7 @@ async function skillsEstimate(ctx, name) {
     return est.runnable ? EXIT.ok : EXIT.failed;
   }
   for (const line of estimateLines(est, view.title, { rows: req.rows, lineOf: req.lineOf })) ctx.print(line);
-  if (est.runnable && !view.ready.includes(engine)) ctx.note(`Not checked on ${engineWords(engine)} yet: fuobe skills run checks it first, for free.`);
+  if (est.runnable && !view.ready.includes(engine)) ctx.note(`Not priced on ${engineWords(engine)} yet: fuobe skills run prices every step first, for free (nothing runs).`);
   return est.runnable ? EXIT.ok : EXIT.failed;
 }
 

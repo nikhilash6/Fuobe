@@ -79,7 +79,7 @@ export interface SkillDraft {
   title: string;
   description: string;
   whenToUse: string;
-  /** Made from results the demo provider made: check it on a real engine before trusting it. */
+  /** Made from results the demo provider made: nothing shows it works on a real engine yet. */
   demo: boolean;
   /** What the review screen says once (a model that moved, a step left as a fixed input). */
   notes: string[];
@@ -94,7 +94,7 @@ export interface DraftRefusal {
   reason: string;
 }
 
-export const DEMO_NOTE = "Made from demo results: check it on your engine before trusting it";
+export const DEMO_NOTE = "Made from placeholder results: it hasn't made a real result yet";
 export const STEPS_REFUSAL = "This was made in steps from one request: open it, press Reuse settings, run it again, then make the skill";
 
 // ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ const STUDIOS: [RegExp, StudioInfo][] = [
   [/^audio-(loop|join)$/, { name: "Audio tools" }],
   [/^moodboard$/, { name: "Moodboards" }],
   [/^eval$/, { name: "the evaluation harness" }],
-  [/^skill-check$/, { name: "a skill's check" }],
+  [/^skill-check$/, { name: "a skill's test run" }],
 ];
 
 /**

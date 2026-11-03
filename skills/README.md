@@ -58,9 +58,10 @@ AI. The format is in `src/lib/recipe.ts` (and `docs/research/work2skill-7.md`):
 The easiest way to write one is not to: **Make a skill from this…** on a result, or **Make a skill**
 in the Library, builds the recipe from the steps behind your results, and you pick which inputs change.
 
-A recipe runs on an engine only after a free check has passed there: Fuobe plans and prices every
-step. The check also does a dry run on demo mode's mock provider (not for a studio tool step), but a
-run doesn't wait for it. A retired, switched-off or repriced model asks for a new check. Fuobe
+A recipe runs on an engine only after a free **Test run** has passed there: Fuobe plans and prices
+every step. The test run also runs it once with placeholder results (not for a studio tool step), so
+nothing runs for real and nothing is spent; a run doesn't wait for that part. A retired, switched-off
+or repriced model asks for a new test run (**Test again**). Fuobe
 writes the `verified` dates itself: an uploaded `recipe.json` loses them and starts unchecked, and a
 downloaded `.zip` leaves out this install's checks (and, unless you ask, the examples and where the
 recipe came from). The built-in skills here carry no recipe and can't be checked: duplicate one

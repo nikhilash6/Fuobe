@@ -149,8 +149,8 @@ describe("saving a recipe", () => {
 describe("running a recipe", () => {
   it("runs only on an engine where it was checked", async () => {
     makeSkill("lamp-unchecked", lamp());
-    await expect(recipes.runRecipe("lamp-unchecked", { values: { product: photo, name: "Lamp" } })).rejects.toThrow(/Check this skill on the cloud first/);
-    expect(recipes.recipeView("lamp-unchecked")).toMatchObject({ engines: ["cloud"], ready: [], line: expect.stringMatching(/Not checked yet/) });
+    await expect(recipes.runRecipe("lamp-unchecked", { values: { product: photo, name: "Lamp" } })).rejects.toThrow(/Give this skill a free test run on the cloud first/);
+    expect(recipes.recipeView("lamp-unchecked")).toMatchObject({ engines: ["cloud"], ready: [], line: expect.stringMatching(/Not tested yet/) });
   });
 
   it("a 3-step recipe makes one batch of 3 rows with the skill stamp", async () => {
@@ -218,7 +218,7 @@ describe("running a recipe", () => {
     const check = await recipes.verifyRecipe("caption-it", "demo");
     expect(check.ok).toBe(true);
     // A studio step gets the plan check only in W1 (its dry run would make a record the user sees).
-    expect(check.engines.map((e) => e.dryRun?.skipped)).toEqual([expect.stringContaining("checked by its plan only"), expect.stringContaining("checked by its plan only")]);
+    expect(check.engines.map((e) => e.dryRun?.skipped)).toEqual([expect.stringContaining("priced only, not test-run"), expect.stringContaining("priced only, not test-run")]);
     const out = await recipes.runRecipe("caption-it", { values: { video: clip, lang: "German" } }, "open");
     expect(out.runs).toHaveLength(1);
     expect(out.runs[0].href).toMatch(/^\/video-tools\/captions\?video=/);
@@ -250,7 +250,7 @@ describe("running a recipe", () => {
     expect(out.engine).toBe("open");
     expect(gens.getGeneration(out.runs[0].ids[0])).toMatchObject({ engine: "open" });
     // Asked for the cloud, it still says to check it there first.
-    await expect(recipes.runRecipe("gpu-only", { values: { subject: "a potter" } }, "cloud")).rejects.toThrow(/Check this skill on the cloud first/);
+    await expect(recipes.runRecipe("gpu-only", { values: { subject: "a potter" } }, "cloud")).rejects.toThrow(/Give this skill a free test run on the cloud first/);
   });
 
   it("a skill switched off doesn't run until it's switched on", async () => {
@@ -341,7 +341,7 @@ describe("checking a recipe", () => {
     const file = JSON.parse(skills.skillFile("lamp", "recipe.json")!);
     file.steps[1].request.modelId = "seedream-5-pro";
     skills.setSkillFile("lamp", "recipe.json", JSON.stringify(file));
-    expect(recipes.recipeView("lamp").recheck.cloud).toEqual(["The models, routes or prices it uses changed since it was checked"]);
+    expect(recipes.recipeView("lamp").recheck.cloud).toEqual(["The models, routes or prices it uses changed since its last test run"]);
   });
 
   it("never writes a check over a recipe saved while it ran, and keeps checks that finished meanwhile", async () => {
@@ -350,7 +350,7 @@ describe("checking a recipe", () => {
     const checking = recipes.verifyRecipe("race", "demo", "open");
     const edited = { ...soul(), params: [{ ...soul().params[0], example: "a baker at dawn" }] };
     recipes.saveRecipe("race", edited);
-    await expect(checking).rejects.toThrow(/changed while it was being checked/);
+    await expect(checking).rejects.toThrow(/changed during its test run/);
     const stored = JSON.parse(skills.skillFile("race", "recipe.json")!);
     expect(stored.params[0].example).toBe("a baker at dawn");
     expect(stored.verified).toBeUndefined();
@@ -417,7 +417,7 @@ describe("checking a recipe", () => {
     const r = await recipes.verifyRecipe("lamp-unchecked", "real", undefined, { confirm: true });
     const [cloud] = r.engines;
     // No key: it ran as a demo, so it isn't recorded as a real test, and says so.
-    expect(cloud.real).toMatchObject({ ok: true, demo: true, notes: [expect.stringContaining("ran as a demo")] });
+    expect(cloud.real).toMatchObject({ ok: true, demo: true, notes: [expect.stringContaining("ran with placeholder results")] });
     expect(r.view.recipe.verified?.cloud?.real).toBeNull();
   });
 });

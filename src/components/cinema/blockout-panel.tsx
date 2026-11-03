@@ -204,7 +204,7 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
   const seconds = s?.seconds ?? 0;
   const set = (patch: Partial<BlockoutDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const cost = plan.costUsd;
-  const price = demo ? "Placeholder · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
+  const price = demo ? "Placeholder · free" : cost === 0 ? (engine === "open" ? "Free · your GPU" : "Free") : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
   const model = getModel(engine === "cloud" ? draft.modelId : BLOCKOUT_MODELS.open);
   const resolutions = engine === "cloud" ? (getModel(draft.modelId)?.options.resolutions ?? []) : ["480p", "720p"];
   const resolution = draft.resolution && resolutions.some((r) => r.toLowerCase() === draft.resolution!.toLowerCase()) ? draft.resolution : (engine === "cloud" ? getModel(draft.modelId)?.defaults?.resolution : "480p");

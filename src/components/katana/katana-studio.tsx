@@ -20,7 +20,8 @@ import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { ExampleRow } from "@/components/studio/example-row";
-import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { againWhere, placeholdersOn } from "@/lib/demo-mode";
 import { formatCueTime } from "@/lib/av/cue-edit";
 import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
 import { keepOffered, offered } from "@/lib/model-access";
@@ -353,6 +354,9 @@ function stepRows(j: KatanaJobView): { segment: number; rows: StepRow[] }[] {
 
 function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
   const { remove, retry } = useKatanaActions();
+  // A run again is a new run: where it runs (or that it's paid) is said on the button before the tap.
+  const placeholders = placeholdersOn(useStatus().data?.demoMode);
+  const where = (j: KatanaJobView) => againWhere(j, { placeholders });
   const again = (id: string, all: boolean) =>
     retry.mutate(
       { id, all },
@@ -397,6 +401,7 @@ function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
                     {stage !== "running" && (
                       <Button variant="ghost" size="sm" className="rounded-full" disabled={retry.isPending} onClick={() => again(j.id, stage === "done")}>
                         <RotateCcw className="size-3.5" /> {stage === "failed" ? "Retry failed steps" : "Run again"}
+                        {where(j)}
                       </Button>
                     )}
                     <AlertDialog>

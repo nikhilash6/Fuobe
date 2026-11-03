@@ -95,7 +95,12 @@ export interface ActionContext {
   engineMode?: "both" | "open" | "cloud";
   /** A guest or an account: hand-offs to the tools that run on a self-hosted Fuobe only are left out. */
   visitor?: boolean;
+  /** Placeholder results are on (Settings): a new render is a free stand-in, so "paid" is left out. */
+  placeholders?: boolean;
 }
+
+/** A draft's one-tap 1080p render: a new paid run, said before the tap (left out while placeholders are on). */
+export const draftRenderPaid = (placeholders: boolean | undefined): string => (placeholders ? "" : " · paid");
 
 /** Hand-offs to tools a guest or an account can't open (they run on a self-hosted Fuobe only). */
 const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(["restore-video", "remove-dialogue", "remove-person", "clean-dialogue"]);
@@ -218,10 +223,10 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   if (g.feature === "upload") {
     // An upload's Regenerate (it has no words of its own) sits with its other hand-offs.
     if (REGEN_OFFERED && o.kind === "video" && ctx.engineMode !== "cloud") link("regenerate", "Regenerate in 2K", regenerateHref(o.url));
-    return [...out.filter((a) => a.id !== "favorite"), { id: "delete-upload", label: "Delete", placement: "menu", destructive: true }];
+    return [...out.filter((a) => a.id !== "favorite"), { id: "delete-upload", label: "Delete for good…", placement: "menu", destructive: true }];
   }
   if (g.outputs.length > 1) out.push({ id: "download-all", label: `Download all ${g.outputs.length} (.zip)`, placement: "menu", href: `/api/generations/zip?ids=${g.id}`, download: "" });
-  if (o.draftId) out.push({ id: "finalize", label: "Render this draft in 1080p", placement: "menu" });
+  if (o.draftId) out.push({ id: "finalize", label: `Render this draft in 1080p${ctx.placeholders ? "" : " · a new paid render"}`, placement: "menu" });
   // Finishing in 2K beside it: a fal H3 result renders again at 2K on the same hosted model (a new render, priced); a clip
   // made on your GPU (or uploaded) opens Upscale → Video on Open-H3 Regenerate, which runs on your GPU only. Other cloud
   // results keep their upscalers in Upscale.
@@ -238,7 +243,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   if (g.status === "succeeded" && g.outputs.some((x) => storedPath(x.url))) out.push({ id: "share", label: "Share link…", placement: "menu" });
   // Library: pinned results stay at the top of their view; the review status is a sub-menu of its own.
   out.push({ id: "pin", label: g.pinnedAt ? "Unpin" : "Pin to top", placement: "menu" }, { id: "review", label: "Review status", placement: "menu" });
-  out.push({ id: "delete", label: "Delete", placement: "menu", destructive: true });
+  // It goes to the Trash (restorable for 30 days), so it says so; a run still going is canceled first.
+  out.push({ id: "delete", label: "Move to Trash", placement: "menu", destructive: true });
   return out;
 }
 

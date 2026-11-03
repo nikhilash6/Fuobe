@@ -15,15 +15,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { SKILL_LIMITS, SKILL_NAME_RE } from "@/lib/assist";
 import { formatCost } from "@/lib/format";
-import { isMediaType, recipeProblems, RECIPE_LIMITS, type ParamType } from "@/lib/recipe";
+import { isMediaType, recipeProblems, RECIPE_LIMITS, TEST_RUN_NOTE, type ParamType } from "@/lib/recipe";
 import { buildRecipe, paramIdFrom, skillBody, slugify, type DraftCandidate, type DraftRefusal, type DraftStep, type Naming, type SkillDraft, type Slot } from "@/lib/recipe-builder";
 import { refusalShown } from "@/lib/refusals";
 import { cn } from "@/lib/utils";
 
 /**
  * Make a skill from results already made (package W2): the steps behind them, rebuilt by the server from their exact
- * requests; what changes next time (every input starts Fixed); a free check (the plan on each engine, then a dry run on
- * the demo provider); then Save, which opens the Run form with the inputs it was made from ("Try it with new inputs").
+ * requests; what changes next time (every input starts Fixed); a free test run (the plan on each engine, then one run
+ * with placeholder results); then Save, which opens the Run form with the inputs it was made from ("Try it with new inputs").
  * A tall dialog on a desktop, the whole screen on a phone.
  */
 export function SkillBuilder({ source, onClose }: { source: DraftSource; onClose: () => void }) {
@@ -364,7 +364,7 @@ function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: 
               Cancel
             </Button>
             <Button variant={planOk ? "outline" : "default"} size="sm" onClick={() => void runCheck()} disabled={busy !== null || own.length > 0} className="max-sm:flex-1">
-              {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {current?.plan ? "Check again" : "Check it"}
+              {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {current?.plan ? "Test again (free)" : "Test run (free)"}
             </Button>
             <Button size="sm" onClick={() => void save()} disabled={busy !== null || !planOk || own.length > 0} className="max-sm:flex-[1.4]">
               {busy === "save" ? <Loader2 className="animate-spin" /> : <Check />} Save skill
@@ -378,13 +378,13 @@ function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: 
 
 /** The line above the footer's buttons: what to do next, or what the check found. */
 function statusLine(c: CheckState | null, busy: "check" | "save" | null, own: string[]): string {
-  if (own.length) return "Fix what's marked to check it";
-  if (busy === "check") return "Checking: pricing every step on each engine…";
+  if (own.length) return "Fix what's marked to test it";
+  if (busy === "check") return "Test run: pricing every step on each engine…";
   if (busy === "save") return "Saving…";
-  if (!c?.plan) return "Check it first — it's free: Fuobe prices every step and runs it once on the demo provider.";
+  if (!c?.plan) return `Do a free test run first. ${TEST_RUN_NOTE}`;
   if (!c.plan.ready.length) return "It doesn't run as it is: see what's marked";
   const where = c.plan.ready.map((e) => ENGINE_WORD[e]).join(" and ");
-  return `It runs on ${where}. Save it now; the free dry run finishes on its own.`;
+  return `It runs on ${where}. Save it now; the placeholder run finishes on its own.`;
 }
 
 function priceOf(e: DraftCheckResult["engines"][number]): string {
@@ -410,21 +410,21 @@ function CheckBadges({ check }: { check: CheckState }) {
       ))}
       {demo === "running" && (
         <span className="inline-flex h-6 items-center gap-1 rounded-full bg-muted px-2 text-[12px] text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" /> Dry run…
+          <Loader2 className="size-3 animate-spin" /> Placeholder run…
         </span>
       )}
       {demo && demo !== "running" && skipped && (
         // A studio step's dry run would make a record you'd see (a demo dub): its plan is its check, and nothing ran.
         <span className="inline-flex h-6 items-center gap-1 rounded-full bg-muted px-2 text-[12px] text-muted-foreground" title={skipped}>
-          <Info className="size-3" /> No dry run: a studio step is checked by its plan
+          <Info className="size-3" /> Priced only: a studio step isn&apos;t test-run
         </span>
       )}
       {demo && demo !== "running" && !skipped && (
         <span className={cn("inline-flex h-6 items-center gap-1 rounded-full px-2 text-[12px] font-medium", demo.ok ? "bg-brand-faint text-brand-text" : "bg-destructive/10 text-destructive")} title={demo.ok ? undefined : demo.engines.flatMap((e) => e.dryRun?.problems ?? []).join("; ")}>
-          {demo.ok ? <Check className="size-3" /> : <X className="size-3" />} Dry run {demo.ok ? "passed" : "failed"}
+          {demo.ok ? <Check className="size-3" /> : <X className="size-3" />} Placeholder run {demo.ok ? "passed" : "failed"}
         </span>
       )}
-      {check.error && <span className="inline-flex h-6 items-center rounded-full bg-destructive/10 px-2 text-[12px] text-destructive">Dry run: {check.error}</span>}
+      {check.error && <span className="inline-flex h-6 items-center rounded-full bg-destructive/10 px-2 text-[12px] text-destructive">Placeholder run: {check.error}</span>}
     </div>
   );
 }

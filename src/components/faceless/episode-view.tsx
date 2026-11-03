@@ -359,7 +359,7 @@ function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: Sc
             {apply.isPending ? <Loader2 className="animate-spin" /> : <Wand2 />} Apply
           </Button>
         </div>
-        <p className="text-[11px] text-muted-foreground">Applying re-renders this change and publishes it when it&apos;s done; Undo brings the version before back. Spent credits aren&apos;t refunded.</p>
+        <p className="text-[11px] text-muted-foreground">Applying re-renders this change and publishes it when it&apos;s done; Undo brings the version before back. What it already spent isn&apos;t refunded.</p>
       </div>
     </section>
   );

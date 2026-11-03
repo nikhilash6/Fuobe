@@ -195,8 +195,9 @@ else `skills/`, `.agents/skills/`, `.claude/skills/` and the folders right under
 levels), else any `SKILL.md` a few levels down; skills marked `metadata.internal: true` are left out
 unless named with `--skill`. Each skill is uploaded as a zip with its text files (binaries and
 dot-files are left out, and listed). Git sources need `git`. A skill's `recipe.json` (a skill that runs
-by itself; see `skills/README.md`) goes up with it but starts unchecked: `skills run` checks it for free
-before its first run, or check it in **Assist → Skills**.
+by itself; see `skills/README.md`) goes up with it but starts untested: `skills run` prices every step
+for free before its first run (nothing runs), or give it a free **Test run** in **Assist → Skills**
+(every step priced and run once with placeholder results; nothing runs for real).
 
 #### Running a skill that runs by itself
 
@@ -224,7 +225,7 @@ fuobe skills export weekly-promo --out weekly-promo.zip   # SKILL.md and its fil
   your files are uploaded it prices them again (a clip is priced by its length): when that's more, it
   asks again with the new price, or stops without a terminal.
 - `--engine open|cloud` picks where it runs, among the engines its steps run on (by default: where it
-  was checked). A skill not yet checked on that engine gets its free plan check first.
+  was tested). A skill not yet priced on that engine has every step priced first, for free (nothing runs).
 - `--wait` and `--out <dir>` wait for the results and save them, as `fuobe generate` does; without them,
   `run` prints the ids to pass to `fuobe wait` or `fuobe download`. When a row didn't start (a studio
   tool's run can refuse one row and start the rest), it says which by its line in your file and exits 1;

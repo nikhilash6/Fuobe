@@ -203,7 +203,7 @@ export function AdvancedSettings({ preset, values, onChange }: { preset: MixedPr
     <div className="rounded-xl border">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left">
         <span className="text-[13px] font-medium">Advanced settings</span>
-        <span className="text-[11px] text-muted-foreground">{isSaved ? "Saved" : isDefault ? "Preset defaults" : "Not saved"}</span>
+        <span className="text-[11px] text-muted-foreground">{isSaved ? "Saved in this browser" : isDefault ? "Preset defaults" : "Not saved"}</span>
       </button>
       {open && (
         <div className="space-y-3 border-t px-3 pt-3 pb-3">
@@ -227,7 +227,7 @@ export function AdvancedSettings({ preset, values, onChange }: { preset: MixedPr
               disabled={isSaved}
               className="inline-flex h-8 items-center gap-1.5 rounded-full border bg-background px-3 text-[12px] font-medium hover:bg-accent disabled:opacity-50"
             >
-              <Save className="size-3.5" /> Save
+              <Save className="size-3.5" /> Save in this browser
             </button>
             <button
               type="button"

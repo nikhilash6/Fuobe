@@ -302,11 +302,11 @@ function Board({
             variant="ghost"
             size="sm"
             className="text-muted-foreground hover:text-destructive"
-            aria-label="Delete storyboard"
+            aria-label="Move storyboard to Trash"
             // One bulk call, and the shared toast with Undo (the frames go to the Trash).
             onClick={() => void trash([...frames, ...film], "Storyboard moved to Trash")}
           >
-            <Trash2 /> <span className="hidden sm:inline">Delete</span>
+            <Trash2 /> <span className="hidden sm:inline">Move to Trash</span>
           </Button>
         </div>
       </header>

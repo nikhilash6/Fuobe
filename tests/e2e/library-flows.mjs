@@ -255,14 +255,14 @@ try {
   await page.waitForTimeout(500);
   await uploadCard("used").hover();
   await uploadCard("used").getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByRole("menuitem", { name: "Delete for good…" }).click();
   await page.getByText(/still in use/).waitFor({ timeout: 20_000 }).catch(() => {});
   const said = (await page.getByRole("alertdialog").innerText()).replace(/\s+/g, " ");
   check("an upload in use says where", /still in use/.test(said) && /1 result/.test(said), said);
   await page.getByRole("button", { name: "OK" }).click();
   await uploadCard("free").hover();
   await uploadCard("free").getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByRole("menuitem", { name: "Delete for good…" }).click();
   await page.getByRole("button", { name: "Delete upload" }).click({ timeout: 20_000 });
   await page.waitForTimeout(1200);
   const left = (await call("/api/assets?source=upload&limit=200")).items.map((a) => a.id);

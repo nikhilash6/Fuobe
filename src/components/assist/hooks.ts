@@ -215,7 +215,7 @@ export function useRecipeActions() {
   return {
     estimate: (name: string, body: RecipeBody) => recipeCall<RecipeEstimate>(`/api/assist/skills/${name}/estimate`, body),
     run: (name: string, body: RecipeBody) => recipeCall<{ engine: Engine; runs: RecipeRun[]; demo: boolean }>(`/api/assist/skills/${name}/run`, body),
-    /** Check it (plan + the free dry run by default); the skill's status is refreshed with the result. */
+    /** Test run (the plan + the free placeholder run by default); the skill's status is refreshed with the result. */
     verify: async (name: string, body: { level?: "plan" | "demo" | "real"; engine?: Engine; confirm?: boolean } = {}) => {
       try {
         const r = await recipeCall<VerifyResult>(`/api/assist/skills/${name}/verify`, { level: "demo", ...body });
@@ -265,7 +265,7 @@ export function useSkillDraft(source: DraftSource) {
 export function useDraftActions() {
   const qc = useQueryClient();
   return {
-    /** Price it on each engine (`plan`), or add the free dry run (`demo`). */
+    /** Price it on each engine (`plan`), or add the free placeholder run (`demo`): the builder's Test run. */
     check: (recipe: unknown, level: "plan" | "demo", title?: string) => recipeCall<DraftCheckResult>("/api/assist/skills/draft/check", { recipe, level, title }),
     /** The optional naming pass (null: no LLM, or its answer didn't fit). */
     name: async (source: DraftSource) => (await recipeCall<{ naming: Naming | null }>("/api/assist/skills/draft/name", source)).naming,

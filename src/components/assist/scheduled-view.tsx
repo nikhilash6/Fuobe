@@ -227,7 +227,7 @@ function TaskRow({ s, showProject }: { s: ScheduleView; showProject: boolean }) 
           <dt className="text-muted-foreground">Next run</dt>
           <dd className="font-medium">{s.paused ? "Paused" : s.nextRunAt ? `${formatWhen(s.nextRunAt, s.tz)} (${untilText(s.nextRunAt, now)})` : "None — it ran"}</dd>
           <dd className="text-muted-foreground">
-            {s.approval === "ask" ? "Asks before generating" : s.capUsd ? `Runs on its own up to ${formatCost(s.capUsd)} a run` : "Runs free plans on its own"}
+            {s.approval === "ask" ? "Asks before generating" : s.capUsd ? `Runs on its own up to ${formatCost(s.capUsd)} a run` : "Runs on its own only when it's free; asks before anything paid"}
             {s.connectors ? " · uses your connectors" : ""}
           </dd>
         </div>

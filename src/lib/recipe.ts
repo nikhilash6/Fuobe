@@ -981,19 +981,27 @@ export const shortDay = (day: string): string => {
 /** The day a check passed, for `verified` (UTC, so every install agrees). */
 export const today = (now = Date.now()): string => new Date(now).toISOString().slice(0, 10);
 
-export const ENGINE_WORDS: Record<RecipeEngine, string> = { cloud: "Cloud", open: "GPU" };
+export const ENGINE_WORDS: Record<RecipeEngine, string> = { cloud: "Cloud", open: "Your GPU" };
+
+/** What the free test run does: every step priced on each engine, then one run with placeholder results. */
+export const TEST_RUN_NOTE = "Fuobe prices every step and runs it once with placeholder results. Nothing runs for real and nothing is spent.";
+
+/** The same, once a test run passed. */
+export const TEST_RUN_DONE = "Every step priced and run once with placeholder results. Nothing ran for real and nothing was spent.";
 
 /**
- * "Checked 29 Oct · Cloud ✓ · GPU not checked": the line under a recipe skill's description. `engines` are the ones
- * its steps allow on this install.
+ * "Tested 29 Oct · Cloud ✓ · Your GPU not tested yet": the line under a recipe skill's description. `engines` are the
+ * ones its steps allow on this install. "✓": its placeholder run passed there; "priced": only its plan was checked.
  */
 export function verifiedLine(recipe: Pick<Recipe, "verified">, engines: RecipeEngine[]): string {
   const v = recipe.verified ?? {};
   const days = engines.map((e) => v[e]?.dryRun ?? v[e]?.plan).filter((d): d is string => !!d);
-  if (!days.length) return "Not checked yet — check it once (free) before the first run";
+  if (!days.length) return "Not tested yet · a test run is free and runs nothing for real";
   const last = days.sort().at(-1)!;
-  const parts = engines.map((e) => (v[e]?.dryRun ? `${ENGINE_WORDS[e]} ✓` : v[e]?.plan ? `${ENGINE_WORDS[e]} priced` : `${ENGINE_WORDS[e]} not checked`));
-  return [`Checked ${shortDay(last)}`, ...parts].join(" · ");
+  const parts = engines.map((e) => (v[e]?.dryRun ? `${ENGINE_WORDS[e]} ✓` : v[e]?.plan ? `${ENGINE_WORDS[e]} priced` : `${ENGINE_WORDS[e]} not tested yet`));
+  // "Tested" only when a placeholder run passed somewhere; a skill only priced (by the CLI or Assist) says "Priced".
+  const verb = engines.some((e) => v[e]?.dryRun) ? "Tested" : "Priced";
+  return [`${verb} ${shortDay(last)}`, ...parts].join(" · ");
 }
 
 // ---------------------------------------------------------------------------
@@ -1019,9 +1027,9 @@ export interface RecipeView {
   engines: RecipeEngine[];
   /** Engines it may run on now: its plan check passed there. */
   ready: RecipeEngine[];
-  /** Why it needs a re-check, per engine checked before. */
+  /** Why it needs a new test run, per engine tested before. */
   recheck: Partial<Record<RecipeEngine, string[]>>;
-  /** "Checked 29 Oct · Cloud ✓ · GPU not checked". */
+  /** "Tested 29 Oct · Cloud ✓ · Your GPU not tested yet". */
   line: string;
   /** Why it runs nowhere on this install. */
   why?: string;

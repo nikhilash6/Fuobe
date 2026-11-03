@@ -380,7 +380,7 @@ export async function stagedDryRun(skill: { name: string; title: string }, steps
           const problems = (r?.state.steps ?? []).filter((s) => s.status === "failed").map((s) => `Step “${s.key}”: ${s.error ?? "it failed"}`);
           return { ok: status === "done", problems };
         }
-        if (Date.now() > until) return { ok: false, problems: ["The dry run took too long"] };
+        if (Date.now() > until) return { ok: false, problems: ["The test run took too long"] };
         await new Promise((res) => setTimeout(res, 300));
       }
     });

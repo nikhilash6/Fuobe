@@ -2,7 +2,7 @@
 // picture (Image), an edit of it (Edit, with a photo of the product too) and a clip of the edit (Video) — then selected
 // in the Library and turned into a skill with the bulk bar's "Make a skill": the review screen shows the 3 steps,
 // waiting for each other; one input is switched to Varies and words selected in a prompt become an input of their own;
-// Check it prices it and dry-runs it for free; Save opens the
+// Test run (free) prices it and runs it once with placeholder results; Save opens the
 // Run form ("Try it with new inputs"), which runs it with new words. That whole flow runs at 1440 px light (words picked
 // with the mouse) and at 390 px dark (on a phone, the words typed: the keyboard's way). The result ⋯ menu offers "Make a
 // skill from this…" too, and so does a creation opened from ⌘K (a viewer outside the page). At 1440 and 390 px, light
@@ -110,7 +110,7 @@ try {
         check(`${tagLine}: Make a skill opens the review screen`, await seen(dialog.getByRole("heading", { name: "Make a skill" })));
         check(`${tagLine}: it shows the 3 steps behind them`, await seen(dialog.getByText("What changes next time"), 30_000) && (await dialog.locator("ol > li").count()) === 3);
         check(`${tagLine}: each waits for the one before`, (await dialog.getByText(/^waits for /).count()) === 2);
-        check(`${tagLine}: it says they were demo results`, await seen(dialog.getByText(/Made from demo results/)));
+        check(`${tagLine}: it says they were placeholder results`, await seen(dialog.getByText(/Made from placeholder results/)));
         check(`${tagLine}: every input starts Fixed`, (await dialog.getByRole("radio", { name: "Varies", checked: true }).count()) === 0);
         // 3. One input varies: the picture's words. And two words of the edit's prompt become an input of their own
         //    (selected in the text), which every prompt that has them shares.
@@ -145,10 +145,11 @@ try {
         await editRow.getByRole("button", { name: "Make it an input" }).click();
         check(`${tagLine}: selected words become an input, marked in the text`, (await dialog.locator("mark", { hasText: "brass desk lamp" }).count()) >= 1 && (await dialog.getByText("2 inputs for the Run form").count()) === 1);
         await shot(page, `builder-${width}-${scheme}`);
-        // 4. Check it: priced on each engine, then a free dry run in the background.
-        await dialog.getByRole("button", { name: "Check it" }).click();
-        check(`${tagLine}: Check it passes the plan`, await seen(dialog.getByText(/^It runs on /), 60_000), (await dialog.locator("[aria-live=polite]").last().innerText().catch(() => "")).slice(0, 120));
-        check(`${tagLine}: the dry run passes (free, on the demo provider)`, await seen(dialog.getByText("Dry run passed"), 120_000));
+        // 4. Test run: priced on each engine, then a free placeholder run in the background.
+        check(`${tagLine}: it says the test run runs nothing for real`, await seen(dialog.getByText(/Nothing runs for real and nothing is spent/)));
+        await dialog.getByRole("button", { name: "Test run (free)" }).click();
+        check(`${tagLine}: Test run passes the plan`, await seen(dialog.getByText(/^It runs on /), 60_000), (await dialog.locator("[aria-live=polite]").last().innerText().catch(() => "")).slice(0, 120));
+        check(`${tagLine}: the placeholder run passes (free)`, await seen(dialog.getByText("Placeholder run passed"), 120_000));
         // 5. Save: the Run form opens with the inputs it was made from.
         const title = await dialog.getByLabel("Title").inputValue();
         const skillName = await page.locator("#sb-name").inputValue();

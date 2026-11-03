@@ -10,6 +10,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
  */
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-placeholders-"));
+
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here
 delete process.env.FUOBE_DEMO_MODE;

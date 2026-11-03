@@ -160,7 +160,7 @@ export function ResultsGrid({
                 {onPick && <IconLink label="View" icon={Maximize2} onClick={() => setOpen(idx)} />}
                 <IconLink href={`/video?image=${encodeURIComponent(url)}`} label="Animate" icon={Film} />
                 <IconLink href={`/edit?image=${encodeURIComponent(url)}`} label="Edit" icon={Pencil} />
-                <IconLink label="Delete" icon={Trash2} onClick={() => void trash([t.g])} />
+                <IconLink label="Move to Trash" icon={Trash2} onClick={() => void trash([t.g])} />
               </div>
               {t.g.request.step && <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-background/85 px-2 py-0.5 text-[11px] font-medium">{t.g.request.step.label}</span>}
             </div>

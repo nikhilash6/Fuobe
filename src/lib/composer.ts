@@ -1274,13 +1274,24 @@ export function toggleIn(list: string[], id: string): string[] {
 // ---------------------------------------------------------------------------
 // Cost hint
 
-export function costLabel(s: { demo: boolean; cost: number | null; compact?: boolean; unknown?: boolean }, format: (usd: number) => string): string {
+/**
+ * The price beside Generate. `gpu`: it runs on the person's own GPU, said with "Free" so a free run never reads as
+ * free of anything (the run still takes their GPU's time).
+ */
+export function costLabel(s: { demo: boolean; cost: number | null; compact?: boolean; unknown?: boolean; gpu?: boolean }, format: (usd: number) => string): string {
   if (s.demo) return s.compact ? "Placeholder" : "Placeholder · free";
-  if (s.cost === 0) return "Free";
+  if (s.cost === 0) return s.gpu ? (s.compact ? "Free · GPU" : "Free · your GPU") : "Free";
   if (s.cost != null) return `≈ ${format(s.cost)}`;
   // A price the provider hasn't published (fal's MOSS-Image with LoRAs): said, never shown as free.
   return s.unknown ? "Price unknown" : "";
 }
+
+/**
+ * Whether the price says "your GPU": an open-engine run on the person's own GPU. On a hosted studio an open run may go
+ * to the studio's GPUs instead, and the "Your GPU" / "This studio's GPUs" chip or the price's hint says where, so the
+ * price never claims the person's GPU there.
+ */
+export const saysYourGpu = (engine: string | undefined, hostedHere: boolean): boolean => engine === "open" && !hostedHere;
 
 /** Prompts with an @mention: spellcheck would underline every handle. */
 export const hasMention = (text: string) => /(^|\s)@[\p{L}\p{N}_-]+/u.test(text);

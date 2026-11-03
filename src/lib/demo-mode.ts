@@ -28,6 +28,18 @@ export const PLACEHOLDER_ACTION_LABELS: Record<PlaceholderAction, string> = {
 /** A result the demo provider made (a placeholder, not the real thing). */
 export const isPlaceholder = (g: { provider?: string | null } | null | undefined): boolean => g?.provider === "mock";
 
+/**
+ * What a one-tap "Run again" adds to its label, so a new run never starts unannounced: " on your GPU", " on the
+ * studio's GPUs" (a hosted run) or " · paid" (a cloud run is billed), nothing before the run is known. The new run
+ * follows the placeholder switch as it is now (`now.placeholders`, from the status), not the old result: nothing while
+ * placeholders are on, even after a real result, and a real run's words after an old placeholder once they're off.
+ */
+export function againWhere(g: { engine: string; place?: "pool" } | null | undefined, now: { placeholders: boolean }): string {
+  if (!g || now.placeholders) return "";
+  if (g.place === "pool") return " on the studio's GPUs";
+  return g.engine === "open" ? " on your GPU" : " · paid";
+}
+
 /** Whether the owner's runs make placeholders now: only with the switch on ("on"; anything else is off). */
 export const placeholdersOn = (demoMode: string | undefined): boolean => demoMode === "on";
 

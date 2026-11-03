@@ -590,7 +590,7 @@ function Mixer({ stems, source, engine, initial = ORIGINAL_MIX }: { stems: Stem[
     }
     return backgroundLowered(peak);
   }, [bed]);
-  const remuxCost = remuxPrice.data ? (remuxPrice.data.demo ? "Placeholder · free" : engine === "open" ? "Free" : remuxPrice.data.costUsd !== null && remuxPrice.data.costUsd < 0.01 ? "under $0.01" : `≈ $${remuxPrice.data.costUsd?.toFixed(2)}`) : null;
+  const remuxCost = remuxPrice.data ? (remuxPrice.data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : remuxPrice.data.costUsd !== null && remuxPrice.data.costUsd < 0.01 ? "under $0.01" : `≈ $${remuxPrice.data.costUsd?.toFixed(2)}`) : null;
 
   return (
     <section aria-labelledby="mixer" className="space-y-3">

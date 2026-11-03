@@ -145,7 +145,7 @@ async function runFound(input: RunSkill, ctx: ToolContext, found: { recipe: Reci
   const engine = asked ?? recipeEngines(recipe)[0];
   if (engine && !recipe.verified?.[engine]?.plan && skill.source === "user") {
     const check = await verifyRecipe(found.name, "plan", engine).catch((e: Error) => ({ ok: false, why: e.message }));
-    if (!check.ok) return { content: JSON.stringify({ error: `/${found.name} doesn't run on ${ENGINE_WORDS[engine]} as it is: check it on the Skills page` }), isError: true };
+    if (!check.ok) return { content: JSON.stringify({ error: `/${found.name} doesn't run on ${ENGINE_WORDS[engine]} as it is: give it a free test run in Assist → Skills (nothing runs for real)` }), isError: true };
   }
   const out = await runRecipe(found.name, body, asked);
   const ids = out.runs.flatMap((r) => r.ids);

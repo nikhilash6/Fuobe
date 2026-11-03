@@ -1,8 +1,8 @@
 // Skills W1 in a real browser (demo mode: no keys, ComfyUI unreachable). A skill with a recipe is seeded over the API;
-// its card says "Runs by itself"; /assist/skills?run=<name> opens the Run form, which asks for a free check first,
+// its card says "Runs by itself"; /assist/skills?run=<name> opens the Run form, which asks for a free test run first,
 // then runs it once from the form (a photo, a name, a shape) and three times from pasted CSV rows, each priced first
 // ("Placeholder · free" here); a switched-off skill's form says so and switches it back on; the skill's dialog says where it was
-// checked, and in amber that it needs a re-check after its route changed, and Re-check clears it. ⌘K lists
+// tested, and in amber that it needs a new test run after its route changed, and Test again clears it. ⌘K lists
 // "Run <skill>…". At 1440 and 390 px, light and dark: nothing scrolls sideways, and on a phone the form fills the screen.
 // Usage: node tests/e2e/skills-run.mjs [appUrl] [--shots <dir>]   (app running in demo mode). Exits 1 on a failed check.
 import fs from "node:fs";
@@ -92,16 +92,17 @@ try {
       const dialog = page.getByRole("dialog");
       check(`${tag}: ?run= opens the Run form`, await seen(dialog.getByRole("heading", { name: "Run E2E Poster" })));
       if (!flowsDone) {
-        // 1. Unchecked: the form asks for the free check first.
-        check(`${tag}: it asks for a free check first`, await seen(dialog.getByText("Check it once first")));
-        await dialog.getByRole("button", { name: "Check it (free)" }).click();
+        // 1. Untested: the form asks for the free test run first, and says nothing runs for real.
+        check(`${tag}: it asks for a free test run first`, await seen(dialog.getByText("Do a free test run first.")));
+        check(`${tag}: …and says nothing runs for real`, await seen(dialog.getByText(/Nothing runs for real and nothing is spent/)));
+        await dialog.getByRole("button", { name: "Test run (free)" }).click();
         const checked = await page
-          .getByText(/Checked — it runs on Cloud/)
+          .getByText(/Test run passed — it runs on Cloud/)
           .first()
           .waitFor({ timeout: 90_000 })
           .then(() => true)
           .catch(() => false);
-        check(`${tag}: the check passes (plan + a free dry run)`, checked);
+        check(`${tag}: the test run passes (plan + a free placeholder run)`, checked);
         // 2. One run: a photo, a name, a shape; the price before it starts.
         await dialog.locator('input[type="file"][accept^="image"]').first().setInputFiles(path.join(root, photoFile));
         await dialog.getByLabel("Product name").fill("Arc floor lamp");
@@ -162,26 +163,26 @@ try {
         check(`${tag}: …and its Run button is off`, await dialog.getByRole("button", { name: /^Run/ }).isDisabled());
         await dialog.getByRole("button", { name: "Switch it on" }).click();
         check(`${tag}: Switch it on brings the form back`, await seen(dialog.getByText("Runs in the cloud")));
-        // 4. Re-check: a different route than the one checked (Replicate preferred) needs a re-check, and Re-check clears it.
+        // 4. Test again: a different route than the one tested (Replicate preferred) needs a new test run, and Test again clears it.
         await send("PUT", "/api/settings", { cloudProvider: "replicate" });
         await openRoute(page, `${app}/assist/skills?skill=${NAME}`);
         const amber = await page
-          .getByText(/Needs a re-check:/)
+          .getByText(/Needs a new test run:/)
           .first()
           .waitFor({ timeout: 15_000 })
           .then(() => true)
           .catch(() => false);
-        check(`${tag}: the skill says it needs a re-check after its route changed`, amber);
+        check(`${tag}: the skill says it needs a new test run after its route changed`, amber);
         await shot(page, `recheck-${width}-${scheme}`);
         if (amber) {
-          await page.getByRole("button", { name: "Re-check" }).click();
+          await page.getByRole("button", { name: "Test again (free)" }).click();
           const ok = await page
-            .getByText(/Checked — it still runs/)
+            .getByText(/Test run passed — it still runs/)
             .first()
             .waitFor({ timeout: 90_000 })
             .then(() => true)
             .catch(() => false);
-          check(`${tag}: Re-check passes and clears it`, ok && (await seen(page.getByText(/Checked \d+ \w+ · Cloud ✓/).first())));
+          check(`${tag}: Test again passes and clears it`, ok && (await seen(page.getByText(/Tested \d+ \w+ · Cloud ✓/).first())));
         }
         await send("PUT", "/api/settings", { cloudProvider: "auto" });
         await send("POST", `/api/assist/skills/${NAME}/verify`, { level: "demo" });
@@ -204,7 +205,7 @@ try {
         await openRoute(page, `${app}/assist/skills?run=${NAME}`);
       }
       // Layout: ready to run, at this size and scheme.
-      check(`${tag}: the form is ready to run (checked on Cloud)`, await seen(dialog.getByText("Runs in the cloud")));
+      check(`${tag}: the form is ready to run (tested on Cloud)`, await seen(dialog.getByText("Runs in the cloud")));
       const box = await dialog.boundingBox();
       check(`${tag}: the dialog fits the screen`, !!box && box.width <= width + 1 && box.x >= -1, box ? `${Math.round(box.width)}×${Math.round(box.height)}` : "");
       if (width < 500) check(`${tag}: on a phone it fills the screen`, !!box && box.height >= height - 2);

@@ -910,7 +910,7 @@ function Inner() {
                     </DropdownMenu>
                     <BarButton
                       icon={Trash2}
-                      label="Delete"
+                      label="Move to Trash"
                       destructive
                       disabled={!selectedGens.length}
                       onClick={() => {

@@ -163,7 +163,7 @@ function DirectorChat({ projectId, onLoadShot, onBrief, promptText }: { projectI
             </Button>
           </div>
         </div>
-        <p className="px-1 pt-1.5 text-[10.5px] text-muted-foreground">LLMs can make mistakes. The Director only proposes; generating costs credits when you press Generate.</p>
+        <p className="px-1 pt-1.5 text-[10.5px] text-muted-foreground">LLMs can make mistakes. The Director only proposes: nothing runs and nothing is spent until you press Generate.</p>
       </div>
     </div>
   );

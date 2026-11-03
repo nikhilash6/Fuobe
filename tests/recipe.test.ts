@@ -391,7 +391,12 @@ describe("sharing and reading", () => {
   });
 
   it("says when and where it was checked", () => {
-    expect(verifiedLine(lamp(), ["cloud", "open"])).toBe("Checked 29 Oct · Cloud ✓ · GPU not checked");
-    expect(verifiedLine({}, ["cloud"])).toMatch(/Not checked yet/);
+    expect(verifiedLine(lamp(), ["cloud", "open"])).toBe("Tested 29 Oct · Cloud ✓ · Your GPU not tested yet");
+    expect(verifiedLine({}, ["cloud"])).toMatch(/Not tested yet · a test run is free and runs nothing for real/);
+  });
+
+  it("says Priced, not Tested, when only the plan was checked", () => {
+    const planOnly = { verified: { cloud: { plan: "2026-10-29", dryRun: null, real: null, catalog: "sha256:abc" }, open: null } } as Pick<Recipe, "verified">;
+    expect(verifiedLine(planOnly, ["cloud", "open"])).toBe("Priced 29 Oct · Cloud priced · Your GPU not tested yet");
   });
 });

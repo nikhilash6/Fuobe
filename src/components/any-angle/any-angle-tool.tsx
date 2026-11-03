@@ -11,7 +11,7 @@ import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration, useGenerationList } from "@/components/av/use-generation";
 import { ACCEPT, LibraryGrid } from "@/components/studio/media-slot";
 import { loadModelViewer } from "@/components/model3d/model-viewer";
-import { askToSignUp, uploadFile, useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useIsGuest, useIsOwner } from "@/lib/api";
+import { askToSignUp, uploadFile, useAskBeforeUpload, useCreateGeneration, useEngine, useGenerations, useIsGuest, useIsOwner, useStatus } from "@/lib/api";
 import { ACTIVE_RUNS_CODE } from "@/lib/guest-access";
 import {
   ANY_ANGLE,
@@ -39,6 +39,7 @@ import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { downloadHref } from "@/lib/library";
 import { presetCover } from "@/lib/preset-covers";
 import { toastError } from "@/lib/refusals";
+import { againWhere, placeholdersOn } from "@/lib/demo-mode";
 import { cn } from "@/lib/utils";
 
 /**
@@ -313,6 +314,7 @@ function DragView({ view, onUse }: { view: AnyAngleView; onUse: (a: CustomAngle)
 /** One angle: its picture when it is done, the original a tap away, and what to do next. */
 function ShotCard({ g, original, onAgain }: { g: Generation; original: string; onAgain: (g: Generation) => void }) {
   const [before, setBefore] = useState(false);
+  const placeholders = placeholdersOn(useStatus().data?.demoMode);
   const out = g.status === "succeeded" ? g.outputs.find((o) => o.kind === "image") : undefined;
   const label = g.prompt || "New angle";
   return (
@@ -346,6 +348,7 @@ function ShotCard({ g, original, onAgain }: { g: Generation; original: string; o
           {(out || g.status === "failed") && (
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => onAgain(g)}>
               <RefreshCw className="size-3.5" /> {out ? "Make another" : "Try again"}
+              {againWhere(g, { placeholders })}
             </Button>
           )}
           {out && (

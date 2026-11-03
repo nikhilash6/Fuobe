@@ -135,7 +135,7 @@ export function SkillHistorySection({ name }: { name: string }) {
                 <div className="min-w-0 flex-1 text-[12px]">
                   <p className="flex items-center gap-1.5 font-medium">
                     <StatusDot status={r.status} /> {STATUS_WORDS[r.status]}
-                    {r.demo && <span className="font-normal text-muted-foreground">· demo</span>}
+                    {r.demo && <span className="font-normal text-muted-foreground">· placeholder</span>}
                   </p>
                   <p className="text-muted-foreground">
                     {day(r.at)} · {r.costUsd === null ? "price unknown" : formatCost(r.costUsd)} · {r.steps} result{r.steps === 1 ? "" : "s"}
@@ -168,11 +168,11 @@ export function FixPanel({ name, onClose }: { name: string; onClose: () => void 
         await fetch(`/api/assist/skills/${encodeURIComponent(name)}/fixes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step, modelId }) }),
       );
       if (r.ok) {
-        toast.success("Fixed and checked", { description: "The step uses the new model; the skill was priced and run once for free." });
+        toast.success("Fixed and tested", { description: "The step uses the new model. A free test run priced it and ran it once with placeholder results." });
         void qc.invalidateQueries({ queryKey: ["assist-recipe", name] });
         void qc.invalidateQueries({ queryKey: ["assist-skill-fixes", name] });
         onClose();
-      } else toast.error("That model doesn't pass the check, so nothing changed", { description: r.problems[0] });
+      } else toast.error("That model didn't pass the test run, so nothing changed", { description: r.problems[0] });
     } catch (e) {
       const f = e as RecipeFailure;
       if (!refusalShown(f)) toast.error(f.message);
@@ -193,7 +193,7 @@ export function FixPanel({ name, onClose }: { name: string; onClose: () => void 
       ) : !q.data ? (
         <Skeleton className="mt-2 h-16" />
       ) : !q.data.steps.length ? (
-        <p className="mt-1 text-muted-foreground">Every step looks fine. Re-check it to price it again.</p>
+        <p className="mt-1 text-muted-foreground">Every step looks fine. Test it again (free) to see its price today.</p>
       ) : (
         <ul className="mt-2 space-y-3">
           {q.data.steps.map((s) => (

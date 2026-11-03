@@ -449,7 +449,7 @@ describe("fuobe skills: a skill that runs by itself", () => {
     expect(engine.stderr).toMatch(/^\/weekly-promo runs on the cloud only: leave out --engine/);
   });
 
-  it("run won't spend without a yes; with --yes it checks the skill, uploads the file, runs, waits and saves", async () => {
+  it("run won't spend without a yes; with --yes it prices the skill, uploads the file, runs, waits and saves", async () => {
     fs.writeFileSync(path.join(tmp, "lamp.png"), PNG);
     const asked = await run(["skills", "run", "weekly-promo", "-p", "product=lamp.png", "-p", "name=Lumen"]);
     expect(asked.code).toBe(2);
@@ -458,7 +458,7 @@ describe("fuobe skills: a skill that runs by itself", () => {
     seen = [];
     const r = await run(["skills", "run", "weekly-promo", "-p", "product=lamp.png", "-p", "name=Lumen", "--yes", "--out", "promo", "--interval", "0.2"]);
     expect(r.code).toBe(0);
-    expect(r.stderr).toContain("Checking /weekly-promo on the cloud first (free: it prices each step, nothing runs)…");
+    expect(r.stderr).toContain("Pricing /weekly-promo on the cloud first (free: nothing runs)…");
     expect(r.stdout).toMatch(/^Saved promo\/gen1\.png \(1 KB\)$/m);
     // Priced with a stand-in, checked, then the file went up once and the run used its URL.
     expect(seen.filter((s) => s.method === "POST").map((s) => s.path)).toEqual([

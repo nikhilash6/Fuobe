@@ -86,7 +86,7 @@ export function NewAds({ brand, products, engine, onCreated }: { brand: BrandKit
       onError: (e) => toastError(e),
     });
   };
-  const price = est.data ? (est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "price unknown" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const price = est.data ? (est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "price unknown" : est.data.costUsd === 0 ? (engine === "open" ? "Free · your GPU" : "Free") : `≈ ${formatCost(est.data.costUsd)}`) : "";
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border bg-background p-4 sm:p-5">

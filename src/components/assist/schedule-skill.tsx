@@ -104,9 +104,9 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-/** "About $0.62 a run on Cloud", "Free on your GPU", "Free: a demo run". */
+/** "About $0.62 a run on Cloud", "Free on your GPU", "Placeholder results, free". */
 function priceText(e: RecipeEstimate): string {
-  if (e.demo) return "Free: a demo run, since nothing is connected for these steps yet";
+  if (e.demo) return "Placeholder results, free: placeholders are on in Settings";
   if (e.total === null) return "Some prices vary";
   const where = e.engine === "open" ? "on your GPU" : "on Cloud";
   return e.total === 0 ? `Free ${where}` : `About ${formatCost(e.total)} a run ${where}`;

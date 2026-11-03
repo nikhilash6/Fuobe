@@ -9,6 +9,7 @@ import { dualEngine } from "@/lib/catalog/engines";
 import { currentModelId, replacedBy } from "@/lib/catalog/replaced";
 import type { ChainSlot, Engine, Generation, GenerationRequest, MediaKind } from "@/lib/catalog/types";
 import { probeMedia, type MediaInfo } from "@/lib/media-probe";
+import { studioForTool } from "@/lib/recipe-builder";
 import {
   checkOutputs,
   checkValues,
@@ -109,7 +110,7 @@ function serverProblems(recipe: Recipe): string[] {
   }
   if (out.length) return out;
   try {
-    compileRun({ name: "check", title: "Check" }, recipe, valuesForCheck(recipe), "cloud", { run: "check" });
+    compileRun({ name: "check", title: "Test run" }, recipe, valuesForCheck(recipe), "cloud", { run: "check" });
   } catch (e) {
     out.push((e as Error).message);
   }
@@ -505,10 +506,10 @@ export function needsRecheck(recipe: Recipe, engines: Engine[] = recipeEngines(r
     }
     if (!reasons.length) {
       try {
-        const c = compileRun({ name: "check", title: "Check" }, recipe, valuesForCheck(recipe), e, { run: "check" });
+        const c = compileRun({ name: "check", title: "Test run" }, recipe, valuesForCheck(recipe), e, { run: "check" });
         const plan = planCheck(c, e);
         if (plan.errors.length) reasons.push(plan.errors[0]);
-        else if (v.catalog && planHash(c, e) !== v.catalog) reasons.push("The models, routes or prices it uses changed since it was checked");
+        else if (v.catalog && planHash(c, e) !== v.catalog) reasons.push("The models, routes or prices it uses changed since its last test run");
       } catch (err) {
         reasons.push((err as Error).message);
       }
@@ -619,7 +620,7 @@ export async function runRecipe(name: string, input: RunInput, asked?: Engine): 
   const { skill, recipe } = getRecipe(name);
   mustBeOn(skill);
   const engine = engineFor(recipe, asked);
-  if (!recipe.verified?.[engine]?.plan) throw new SkillError(`Check this skill on ${ENGINE_NAME[engine]} first — the check is free`, 409);
+  if (!recipe.verified?.[engine]?.plan) throw new SkillError(`Give this skill a free test run on ${ENGINE_NAME[engine]} first — nothing runs for real`, 409);
   const { rows, errors } = rowsOf(recipe, input);
   if (errors.length) throw new RecipeError(errors);
   if (!rows.length) throw new RecipeError(["Add a row to run"]);
@@ -733,7 +734,7 @@ async function dryRun(skill: { name: string; title: string }, recipe: Recipe, en
   // studio made for it (a dub session, a Layers project…) is deleted and its rows go to the Trash.
   if (c.kind === "staged") return stagedDryRun(skill, c.steps, engine, valuesForCheck(recipe, true), DRY_RUN_MS);
   // A studio step would make a record the user sees (a demo dub, a Layers project): its plan is its check in W1.
-  if (c.kind === "tool") return { ok: true, problems: [], skipped: `A studio step (${c.tool}) is checked by its plan only` };
+  if (c.kind === "tool") return { ok: true, problems: [], skipped: `A ${studioForTool(c.tool) ?? "studio"} step is priced only, not test-run` };
   const p = createPipeline(c.steps, { batchId: nanoid(10) });
   const ids = p.items.map((g) => g.id);
   try {
@@ -809,7 +810,7 @@ async function realRun(skill: { name: string; title: string }, recipe: Recipe, e
   let made: Generation[];
   let byKey: Record<string, string> = {};
   // A run in stages is checked by its plan and its dry run; a real test of one isn't offered yet.
-  if (c.kind === "staged") return { ok: true, problems: [], notes: ["A real test of a skill whose steps wait across studios isn't offered yet: its plan and its dry run check it"], demo: false };
+  if (c.kind === "staged") return { ok: true, problems: [], notes: ["A real test of a skill whose steps wait across studios isn't offered yet: its price and its placeholder run test it"], demo: false };
   if (c.kind === "tool") {
     const out = await executeTool(c.tool, c.input, { engine });
     if (out.isError) return { ok: false, problems: [typeof out.content === "string" ? out.content : "The tool couldn't start"], notes, demo: false };
@@ -823,7 +824,7 @@ async function realRun(skill: { name: string; title: string }, recipe: Recipe, e
     byKey = Object.fromEntries(Object.entries(p.byKey).map(([k, g]) => [k, g.id]));
   }
   const demo = made.length > 0 && made.every((g) => g.provider === "mock");
-  if (demo) notes.push(`It ran as a demo (no provider connected for ${ENGINE_NAME[engine]}): connect one in Settings for a real test`);
+  if (demo) notes.push(`It ran with placeholder results on ${ENGINE_NAME[engine]} (placeholders are on in Settings): turn placeholders off in Settings for a real test`);
   const byId = new Map(made.map((g) => [g.id, g]));
   for (const [key, check] of Object.entries(c.checks)) {
     const g = byId.get(byKey[key]);
@@ -917,7 +918,7 @@ const allPassed = (checks: EngineCheck[]) => checks.every((c) => c.plan.ok && (c
 export async function verifyRecipe(name: string, level: VerifyLevel, asked?: Engine, o: { confirm?: boolean } = {}): Promise<VerifyResult> {
   const found = getRecipe(name);
   const { skill } = found;
-  if (skill.source === "builtin") throw new SkillError("Built-in skills can't be changed — Duplicate it first, then check your copy", 403);
+  if (skill.source === "builtin") throw new SkillError("Built-in skills can't be changed — Duplicate it first, then test your copy", 403);
   // A step that names a model Fuobe retired runs on what replaced it (as every run does): the re-check writes that down.
   const recipe = asRunsNow(found.recipe);
   const problems = allProblems(recipe);
@@ -931,7 +932,7 @@ export async function verifyRecipe(name: string, level: VerifyLevel, asked?: Eng
   // A check takes a while (a dry run, a real test): a recipe saved or uploaded meanwhile is never overwritten, and what
   // was checked is never written onto it. Checks of other engines that finished meanwhile are kept.
   const now = getRecipe(name).recipe;
-  if (!sameRecipe(now, found.recipe)) throw new SkillError("The recipe changed while it was being checked — check it again", 409);
+  if (!sameRecipe(now, found.recipe)) throw new SkillError("The recipe changed during its test run: test it again", 409);
   const merged: NonNullable<Recipe["verified"]> = { ...now.verified, ...Object.fromEntries(engines.map((e) => [e, verified[e] ?? null])) };
   saveRecipe(name, { ...recipe, verified: merged }, { keepVerified: true });
   return { ok: allPassed(checks), engines: checks, view: recipeView(name) };
@@ -1018,11 +1019,11 @@ function adoptChecks(name: string, recipe: Recipe, verified: NonNullable<Recipe[
 }
 
 /**
- * Check a draft's recipe before it is saved (the review screen's Check it): `plan` prices it on each engine its steps
+ * Check a draft's recipe before it is saved (the review screen's Test run): `plan` prices it on each engine its steps
  * allow (free, quick); `demo` adds the free dry run on the demo provider. What passed is kept for the save; a draft saved
  * while its dry run was going gets the result when it ends.
  */
-export async function checkDraft(input: unknown, level: "plan" | "demo", title = "Skill check"): Promise<DraftCheck> {
+export async function checkDraft(input: unknown, level: "plan" | "demo", title = "Skill test run"): Promise<DraftCheck> {
   const recipe = draftRecipe(input);
   const engines = recipeEngines(recipe);
   if (!engines.length) return { ok: false, engines: [], ready: [], why: noEngine(recipe) };
