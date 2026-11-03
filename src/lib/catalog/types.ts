@@ -1192,6 +1192,12 @@ export interface GenerationRequest {
    * steps, src/server/turnaround.ts; a character trained with it carries its training's time). Stripped from API input.
    */
   consentAt?: number;
+  /**
+   * "Clean the voice first" (src/lib/av/voice-first.ts): a transcript or a lip sync runs on the speech taken out from
+   * under the music and effects (DBS on your GPU, ElevenLabs Voice Isolation in the cloud), and a lip re-sync on your GPU
+   * gets the clip's music and effects back after it. The server expands it into steps (src/server/voice-first.ts).
+   */
+  voiceFirst?: boolean;
 }
 
 export interface ChainSlot {
