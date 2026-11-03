@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { exampleKey, type ExampleCard, type ExampleInput, type ExampleMedia, type ExampleRowData } from "@/lib/examples/types";
+import { hasHdStill } from "@/lib/preset-hd";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 
@@ -24,8 +25,8 @@ export type ExamplePick = (card: ExampleCard) => void;
 /** A card's shape: 4:3, or 3:4 on the vertical studios. */
 export type ExampleAspect = "4/3" | "3/4";
 
-/** A real cover's still has a 320 px copy beside it (thumbs/), used on small screens. */
-const hasThumbs = (src: string) => /^\/previews\/presets\/(peak\/)?[^/]+\.(jpg|webp)\?/.test(src);
+/** A real cover's still has a 320 px copy beside it (thumbs/), used on small screens, or larger copies (preset-hd.ts). */
+const hasCopies = (src: string) => /^\/previews\/presets\/(peak\/)?[^/]+\.(jpg|webp)\?/.test(src) || hasHdStill(src);
 
 function pillText(card: ExampleCard, active: boolean): string {
   if (active) return "In the composer";
@@ -58,12 +59,16 @@ function Output({ card, index, playing, asked, sizes }: { card: ExampleCard; ind
         playing={playing}
         asked={asked}
         place={staggered(index)}
-        sizes={hasThumbs(still) ? sizes : undefined}
+        sizes={hasCopies(still) ? sizes : undefined}
         loading={index < 2 ? "eager" : "lazy"}
       />
     );
   }
   const small = out.poster ?? out.src;
+  // A preset's still cover with larger copies: the card takes one as wide as it shows (PresetPreview's picture).
+  if (hasHdStill(small)) {
+    return <PresetPreview preview={{ poster: small, scene: "portrait" }} hue={0} playing={false} sizes={sizes} loading={index < 2 ? "eager" : "lazy"} />;
+  }
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
