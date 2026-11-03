@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://fuobe.com"><b>Website</b></a> &nbsp;·&nbsp;
-  <a href="docs/media/fuobe-demo.mp4"><b>Demo video</b></a> &nbsp;·&nbsp;
+  <a href="docs/media/fuobe-demo.mp4"><b>Launch film</b></a> &nbsp;·&nbsp;
   <a href="#documentation"><b>Docs</b></a> &nbsp;·&nbsp;
   <a href="#quick-start"><b>Quick start</b></a>
 </p>
@@ -22,7 +22,7 @@
 <br>
 
 <p align="center">
-  <img src="docs/media/gifs/hero-clips.gif" alt="Clips made in Fuobe and rendered locally on ComfyUI" width="100%">
+  <img src="docs/media/gifs/hero-clips.gif" alt="The Fuobe home page: every kind of media, each tile opening the studio that makes it" width="100%">
 </p>
 
 <p align="center">
@@ -31,6 +31,19 @@
   Every preview clip and still was rendered locally on ComfyUI, on one RTX 5090.
 </p>
 
+<p align="center">
+  <a href="docs/media/fuobe-demo.mp4"><img src="docs/media/demo-poster.jpg" alt="Watch the Fuobe launch film" width="70%"></a><br>
+  <a href="docs/media/fuobe-demo.mp4"><b>▶ Watch the launch film</b></a> (3 min)
+</p>
+
+### New this week
+
+- **A new Home.** One first screen shows every kind of media (film, stills, sound, 3D, live edit and whole pipelines), and each tile opens the studio that makes it.
+- **Grouped menus.** Create, Studios, Apps, Motions & effects and Canvas show everything inside them, grouped by what you want to make, with a cover on each.
+- **Kinetic Motion.** Motion graphics in your brand, set in your exact words and drawn live in the browser, with presets, timing and versions.
+- **Marketing templates.** Ten text templates drawn live in your brand, next to product shots, UGC, TikTok, ads and posters.
+- **New apps on your GPU:** Outfit Swap, Head Swap, Restore Photo, Steam It, Tap to Recolor, Photo to 3D and Any Angle, plus MiniMax H3 motion transfer.
+
 <br>
 
 ## Features
@@ -38,14 +51,26 @@
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/media/gifs/galleries.gif" alt="Browsing camera motions, effects and apps" width="100%">
-      <h3>Motions, effects and apps</h3>
-      108 camera motions (mix any two), 255 effects and 125 apps, ready for a photo or a prompt.
+      <img src="docs/media/gifs/galleries.gif" alt="The grouped Create, Studios, Apps and Motions &amp; effects menus" width="100%">
+      <h3>29 studios, 131 apps, 363 effects and moves</h3>
+      108 camera motions (mix any two), 255 effects and 131 apps, grouped in the menus by what you want to make.
     </td>
     <td width="50%" valign="top">
       <img src="docs/media/gifs/before-after.gif" alt="A photo before and after a Fuobe edit" width="100%">
       <h3>Before and after</h3>
       Turn one photo into a new scene, look or shot with an app, an effect or an edit in plain words.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/media/gifs/kinetic.gif" alt="Kinetic Motion templates playing in the browser" width="100%">
+      <h3>Kinetic Motion</h3>
+      Headlines, big numbers, logo end cards and five-star quotes, animated in your brand and your exact words.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/media/gifs/marketing.gif" alt="Browsing the Marketing templates" width="100%">
+      <h3>Marketing templates</h3>
+      Product shots, UGC, TikTok, ads, posters and marketplace listings, each ready for your product and brand kit.
     </td>
   </tr>
   <tr>

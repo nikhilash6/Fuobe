@@ -6,9 +6,9 @@ Fuobe is a complete creative studio you can run yourself: 108 camera motions, 25
 
 **Every preview on the site was rendered locally on ComfyUI** with open weights: stills with Ideogram 4, before/after end frames with Qwen Image 2.1 edits, and the motion clips with MiniMax H3 (including its Orbit LoRA for bullet time), all on one RTX 5090.
 
-[![Watch the product demo](media/demo-poster.jpg)](media/fuobe-demo.mp4)
+[![Watch the launch film](media/demo-poster.jpg)](media/fuobe-demo.mp4)
 
-▶ **[Watch the product demo](media/fuobe-demo.mp4)** (80 s, 60 fps): the studio itself, then how every preview was rendered on ComfyUI
+▶ **[Watch the launch film](media/fuobe-demo.mp4)** (about 3 min): the studios, apps and effects at work, all rendered on ComfyUI
 
 | Camera motions | Effects | Apps |
 |---|---|---|
