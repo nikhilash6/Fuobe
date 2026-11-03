@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Clapperboard, Copy, ExternalLink, MoreHorizontal, Pin, PinOff, Plus, Settings2 } from "lucide-react";
+import { Box, Clapperboard, Copy, ExternalLink, Globe, MoreHorizontal, Pin, PinOff, Plus, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -104,14 +104,16 @@ function ProjectCard({ project, onSettings, query = "" }: { project: CinemaProje
 }
 
 /**
- * /cinema?blockout=1 (the GPU board's Blockout to film row): the list says to pick the project, and a project opened
- * or started from it opens Blockout to film. Read in its own Suspense boundary, so the rest of the list prerenders.
+ * /cinema?blockout=1 (the GPU board's Blockout to film row) or /cinema?world=1 (its World mode row): the list says to
+ * pick the project, and a project opened or started from it opens Blockout to film or World. Read in its own Suspense
+ * boundary, so the rest of the list prerenders.
  */
-function BlockoutQuery({ onBlockout }: { onBlockout: () => void }) {
-  const on = useSearchParams().get("blockout") === "1";
+function OpenerQuery({ onOpener }: { onOpener: (o: "blockout" | "world") => void }) {
+  const params = useSearchParams();
+  const on = params.get("blockout") === "1" ? "blockout" : params.get("world") === "1" ? "world" : null;
   useEffect(() => {
-    if (on) onBlockout();
-  }, [on, onBlockout]);
+    if (on) onOpener(on);
+  }, [on, onOpener]);
   return null;
 }
 
@@ -172,9 +174,10 @@ export function CinemaProjects() {
   const visitor = useIsVisitor();
   const onCreate = visitor ? undefined : () => setCreating(true);
   useHadItems("cinema-projects", data?.length);
-  const [blockout, setBlockout] = useState(false);
-  const markBlockout = useCallback(() => setBlockout(true), []);
-  const query = blockout ? "?blockout=1" : "";
+  const [opener, setOpener] = useState<"blockout" | "world" | null>(null);
+  const markOpener = useCallback((o: "blockout" | "world") => setOpener(o), []);
+  const blockout = opener === "blockout";
+  const query = opener ? `?${opener}=1` : "";
   return (
     <PageShell wide>
       <PageHeader title="Cinema Studio" description="Direct films shot by shot: genre, camera, lens, palette and light, with characters and locations that stay the same.">
@@ -185,11 +188,16 @@ export function CinemaProjects() {
         )}
       </PageHeader>
       <Suspense fallback={null}>
-        <BlockoutQuery onBlockout={markBlockout} />
+        <OpenerQuery onOpener={markOpener} />
       </Suspense>
       {blockout && !!data?.length && (
         <p className="mb-5 flex items-center gap-2 rounded-xl bg-brand-faint px-3 py-2.5 text-[13px] text-brand-text">
           <Box className="size-4 shrink-0" /> Blockout to film: pick the project to film it in{onCreate ? ", or start a new one" : ""}.
+        </p>
+      )}
+      {opener === "world" && !!data?.length && (
+        <p className="mb-5 flex items-center gap-2 rounded-xl bg-brand-faint px-3 py-2.5 text-[13px] text-brand-text">
+          <Globe className="size-4 shrink-0" /> World: pick the project to film it in{onCreate ? ", or start a new one" : ""}.
         </p>
       )}
       {isLoading ? (

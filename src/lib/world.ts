@@ -113,7 +113,8 @@ export function newWorld(seed = Math.floor(Math.random() * 2 ** 31)): WorldScrip
   };
 }
 
-const clampSeconds = (s: number) => {
+/** A turn's length as World mode takes it: on the half second, 3–12 s. */
+export const clampSeconds = (s: number) => {
   const n = Number.isFinite(s) ? s : 5;
   return Math.min(WORLD_LIMITS.maxSeconds, Math.max(WORLD_LIMITS.minSeconds, Math.round(n / WORLD_LIMITS.step) * WORLD_LIMITS.step));
 };
@@ -210,6 +211,46 @@ export function exportClips(script: WorldScript, clips: readonly (WorldClip | un
     urls.push(c.url);
   }
   return urls;
+}
+
+/** What a World take carries (a Cinema take's generation and its take.world). */
+export interface WorldTakeLike {
+  id: string;
+  status: string;
+  createdAt: number;
+  outputs?: { url: string; kind?: string }[];
+  take?: { world?: { turn: number; made: string; joined?: boolean } };
+}
+
+/** A turn's status on the timeline. */
+export type TurnState = "done" | "running" | "failed" | "stale" | "none";
+
+/**
+ * The clips of the script's turns from the project's takes: per turn, the newest take made from the script as it is now
+ * (nothing up to that turn changed since), made after the turn's last Redo from here (`redoAt[k]`, ms). A take that
+ * failed or was cancelled is not a clip. Also each turn's state, for the timeline.
+ */
+export function clipsFromTakes(script: WorldScript, takes: readonly WorldTakeLike[], redoAt: Readonly<Record<number, number>> = {}): { clips: (WorldClip | undefined)[]; states: TurnState[] } {
+  const n = script.turns.length + 1;
+  const clips: (WorldClip | undefined)[] = [];
+  const states: TurnState[] = [];
+  const sorted = [...takes].filter((t) => t.take?.world && !t.take.world.joined).sort((a, b) => b.createdAt - a.createdAt);
+  for (let k = 0; k < n; k++) {
+    const key = scriptKey(script, k);
+    const since = Math.max(0, ...Object.entries(redoAt).filter(([i]) => Number(i) <= k).map(([, at]) => at));
+    const mine = sorted.filter((t) => t.take!.world!.turn === k && t.createdAt >= since);
+    const current = mine.find((t) => t.take!.world!.made === key && t.status !== "failed" && t.status !== "canceled");
+    if (current) {
+      const url = current.status === "succeeded" ? current.outputs?.find((o) => !o.kind || o.kind === "video")?.url : undefined;
+      clips.push({ generationId: current.id, made: key, ...(url ? { url } : {}) });
+      states.push(url ? "done" : current.status === "succeeded" ? "failed" : "running");
+      continue;
+    }
+    clips.push(undefined);
+    const last = mine[0];
+    states.push(!last ? "none" : last.take!.world!.made !== key ? "stale" : last.status === "failed" ? "failed" : "none");
+  }
+  return { clips, states };
 }
 
 /** A turn's label for the timeline ("Opening", "Turn 2 · Arc 90° left · 5 s"). */

@@ -548,6 +548,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "Idol's crop modes, predicted camera and splat pruning; Apache-2.0 code, no model code; ports idol-sdk's preprocess and camera code (Apache-2.0)",
   }),
+  // World mode (nm10-hy-nomas-world), pinned in workflows/comfyui/packs.json: the LICENSE and NOTICE files read at the pinned commit.
+  pack("ComfyUI-HyNomas", "https://github.com/Nynxz/ComfyUI-HyNomas/tree/a89e0515619924da71093aa3fe52dbb7104cb06e", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Hy-Nomas world generation on ComfyUI's own loaders; Apache-2.0 code reimplementing Tencent's Apache-2.0 model code. The Hy-Nomas DiT is Apache-2.0; the PixelUMM decoder it loads is under the NVIDIA One-Way Noncommercial License",
+  }),
   // Krea 2's edits (the owner's SOTA image families, 2026-10-31).
   pack("comfyui-krea2edit", "https://github.com/lbouaraba/comfyui-krea2edit", {
     name: "Apache-2.0",

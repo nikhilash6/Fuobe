@@ -300,14 +300,15 @@
   {
    "name": "Hy-Nomas (interactive world model)",
    "area": "world model / long steerable video",
-   "licence": "Apache-2.0 (HF tag)",
+   "licence": "Apache-2.0 (code and weights: LICENSE at tencent/Hy-Nomas bb6a8ca4, read 2026-11-03; third-party components keep their own licences). The PixelUMM decoder is Tencent's fine-tune of NVIDIA PixelUMM: the converted file (nynxz/Hy-Nomas) is under the NVIDIA One-Way Noncommercial License per its card. The prompt enhancer (PE, ~55 GB in 18 shards) is in the same Apache-2.0 repository and is only needed by the web demo",
    "vram": "8 GPUs reference; one 4090 with INT8 DiT + FP8 decoder + offload; port: 5090 ~21 s per 3 s turn at 1280x704",
    "hosted": [],
-   "comfy": "community port Nynxz/ComfyUI-HyNomas (stock loaders)",
+   "comfy": "community port Nynxz/ComfyUI-HyNomas at a89e0515 (Apache-2.0, stock loaders; weights nynxz/Hy-Nomas at e8ddc4bf: int8 ConvRot DiT 8.97 GB, bf16 DiT 17.11 GB, PixelUMM VAE bf16 15.78 GB; text encoder qwen_2.5_vl_7b from Comfy-Org/Qwen-Image, already pinned). History lives in ComfyUI's memory (NOMAS_WORLD + an int8 KV cache in temp/nomas_history): separate /prompt calls carry it only through ComfyUI's output cache (the same upstream nodes and inputs) or the Nomas Explore node's in-process sessions",
    "released": "2026-10-21",
    "url": "https://huggingface.co/tencent/Hy-Nomas",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "fuobe": "World mode in Cinema (nm10-hy-nomas-world): oss-hy-nomas-world, graph world-hy-nomas-turn, open engine only"
   },
   {
    "name": "MiniMax H3 Max Director (realtime steering)",
@@ -328,7 +329,9 @@
    "released": "2026-09-03 / 2026-10-15",
    "url": "https://fal.ai/models/minimax/h3-max/director",
    "inFuobe": false,
-   "confirmed": true
+   "confirmed": true,
+   "pricing": "fal (read 2026-11-03): $0.08/s, 1080p $0.16/s from 2026-11-16 (30% off 11-01 to 11-15: $0.056 / $0.112); every session billed at least 60 s. Reference Director: no price listed on fal's model list",
+   "notes": "Realtime WebRTC sessions with live prompts (fal's 'worlds' category). A different model from Hy-Nomas, not a stand-in for World mode; offering it under its own name is the owner's call"
   },
   {
    "name": "Prism (Tencent/Fudan/ZJU joint 2K audio-video, preview)",
@@ -1273,6 +1276,75 @@
    "notes": "\"<qma> {azimuth} {elevation} {distance}\": 8 azimuths relative to the original camera, 4 elevations, 3 distances; strength 1.0, 30 steps, CFG 3, euler / simple, ~1 MP. Not hostable: fal's Qwen-Image 2.1 takes no LoRAs.",
    "inFuobe": true,
    "confirmed": true
+  },
+  {
+   "name": "Abot World 0 (Alibaba)",
+   "area": "interactive world (realtime)",
+   "licence": "commercial (fal listing)",
+   "vram": "hosted (realtime session)",
+   "hosted": [
+    {
+     "provider": "fal",
+     "endpoint": "alibaba/abot-world-0"
+    }
+   ],
+   "comfy": "no",
+   "released": "2026-10-15",
+   "url": "https://fal.ai/models/alibaba/abot-world-0",
+   "inFuobe": false,
+   "confirmed": true,
+   "pricing": "not listed on fal's model list (read 2026-11-03)",
+   "notes": "fal 'worlds': explore interactive worlds in real time with movement and camera controls. A different model from Hy-Nomas, not a stand-in; offering it under its own name is the owner's call"
+  },
+  {
+   "name": "Lingbot World 2 (Robbyant)",
+   "area": "interactive world (realtime)",
+   "licence": "research (fal listing: licenseType 'research')",
+   "vram": "hosted (realtime session)",
+   "hosted": [
+    {
+     "provider": "fal",
+     "endpoint": "robbyant/lingbot-world-2"
+    }
+   ],
+   "comfy": "no",
+   "released": "2026-10-16",
+   "url": "https://fal.ai/models/robbyant/lingbot-world-2",
+   "inFuobe": false,
+   "confirmed": true,
+   "pricing": "not listed on fal's model list (read 2026-11-03)",
+   "notes": "fal 'worlds': realtime movement and camera controls. Research licence on fal. A different model from Hy-Nomas; the owner's call"
+  },
+  {
+   "name": "VAST Eden Live (5B / 14B, Game and Video)",
+   "area": "realtime game worlds and video-to-video",
+   "licence": "commercial (fal listing)",
+   "vram": "hosted (realtime session)",
+   "hosted": [
+    {
+     "provider": "fal",
+     "endpoint": "vast/eden-live-14b-game"
+    },
+    {
+     "provider": "fal",
+     "endpoint": "vast/eden-live-5b-game"
+    },
+    {
+     "provider": "fal",
+     "endpoint": "vast/eden-live-14b-video"
+    },
+    {
+     "provider": "fal",
+     "endpoint": "vast/eden-live-5b-video"
+    }
+   ],
+   "comfy": "no",
+   "released": "2026-10-22",
+   "url": "https://fal.ai/models/vast/eden-live-14b-game",
+   "inFuobe": false,
+   "confirmed": true,
+   "pricing": "fal (read 2026-11-03): 14B $0.01 per generated second, 5B $0.0035, each session billed at least 10 s",
+   "notes": "Game models in fal's 'worlds' category; the Video ones are video-to-video. Different models from Hy-Nomas; the owner's call"
   }
  ],
  "packages": [

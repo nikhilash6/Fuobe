@@ -1,35 +1,6 @@
 "use client";
 
-import {
-  ArrowLeftToLine,
-  ArrowRightToLine,
-  ArrowUp,
-  AtSign,
-  AudioLines,
-  Box,
-  Check,
-  ChevronDown,
-  Clapperboard,
-  Clock,
-  Copy as CopyIcon,
-  FileVideo,
-  Grid2x2,
-  ImageIcon,
-  ImagePlus,
-  Loader2,
-  MapPin,
-  Maximize,
-  Plus,
-  RectangleHorizontal,
-  SlidersHorizontal,
-  Sparkles,
-  UserRoundPlus,
-  Video,
-  Volume2,
-  VolumeX,
-  Wand2,
-  X,
-} from "lucide-react";
+import { ArrowLeftToLine, ArrowRightToLine, ArrowUp, AtSign, AudioLines, Box, Check, ChevronDown, Clapperboard, Clock, Copy as CopyIcon, FileVideo, Globe, Grid2x2, ImageIcon, ImagePlus, Loader2, MapPin, Maximize, Plus, RectangleHorizontal, SlidersHorizontal, Sparkles, UserRoundPlus, Video, Volume2, VolumeX, Wand2, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -343,6 +314,8 @@ export interface PromptBarProps {
   onLocation: () => void;
   /** Blockout to film: a grey-box blockout (uploaded or built) as the take's camera, blocking and timing. */
   onBlockout?: () => void;
+  /** World mode (nm10-hy-nomas-world): a world described once, steered turn by turn. Absent when the engine mode is "Paid APIs only". */
+  onWorld?: () => void;
 }
 
 const ACTIONS: { id: BarAction; label: string; icon: typeof Video; hint: string }[] = [
@@ -608,6 +581,19 @@ export function PromptBar(props: PromptBarProps) {
             </button>
           </TooltipTrigger>
           <TooltipContent>Blockout to film: a grey box from Blender or built here sets the camera and timing</TooltipContent>
+        </Tooltip>
+      )}
+      {draft.mode === "video" && props.onWorld && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button" onClick={() => {
+                setDirectorOpen(false);
+                props.onWorld!();
+              }} className={cn(chip, chipIdle)} aria-label="World: describe a world, then steer it turn by turn">
+              <Globe className="size-3.5" /> World
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>World: describe a world once, then steer it turn by turn with words and camera moves (your GPU)</TooltipContent>
         </Tooltip>
       )}
     </>
