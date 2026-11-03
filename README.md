@@ -36,11 +36,11 @@
   <tr>
     <td align="center" width="50%">
       <a href="docs/media/fuobe-short.mp4"><img src="docs/media/short-poster.jpg" alt="Watch the 46-second Fuobe launch film" width="100%"></a><br>
-      <a href="docs/media/fuobe-short.mp4"><img src="docs/media/buttons/watch-launch-film.svg" alt="Watch the launch film, 46 s" height="40"></a>
+      <a href="docs/media/fuobe-short.mp4"><img src="docs/media/buttons/watch-launch-film.svg" alt="Watch the launch film, 46 s" height="44"></a>
     </td>
     <td align="center" width="50%">
       <a href="docs/media/fuobe-demo.mp4"><img src="docs/media/demo-poster.jpg" alt="Watch the full Fuobe film" width="100%"></a><br>
-      <a href="docs/media/fuobe-demo.mp4"><img src="docs/media/buttons/watch-full-film.svg" alt="Watch the full film, 3 min" height="40"></a>
+      <a href="docs/media/fuobe-demo.mp4"><img src="docs/media/buttons/watch-full-film.svg" alt="Watch the full film, 3 min" height="44"></a>
     </td>
   </tr>
 </table>
