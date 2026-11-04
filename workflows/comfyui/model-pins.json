@@ -1176,7 +1176,8 @@
  },
  "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/latent_upscaler/config.json": {
   "revision": "3d6672923a4dfcd387961864654e123dd53b8ee4",
-  "sizeBytes": 2258
+  "sizeBytes": 2258,
+  "sha256": "a459869598068c6f075c19b9fbb8ebaf62b24b8db848d49640949eaa3726f636"
  },
  "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/latent_upscaler/diffusion_pytorch_model.safetensors": {
   "revision": "3d6672923a4dfcd387961864654e123dd53b8ee4",
@@ -1185,15 +1186,18 @@
  },
  "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/model_index.json": {
   "revision": "3d6672923a4dfcd387961864654e123dd53b8ee4",
-  "sizeBytes": 359
+  "sizeBytes": 359,
+  "sha256": "74ab5c1f007a9cb73d11745d1b0562b71ba44d02cb3c5f6f6724fd7168248d74"
  },
  "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/scheduler/scheduler_config.json": {
   "revision": "3d6672923a4dfcd387961864654e123dd53b8ee4",
-  "sizeBytes": 231
+  "sizeBytes": 231,
+  "sha256": "6254b357af4e1249006ce41032731f3748de56cc98d51935360468908235c488"
  },
  "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/transformer/config.json": {
   "revision": "3d6672923a4dfcd387961864654e123dd53b8ee4",
-  "sizeBytes": 1214
+  "sizeBytes": 1214,
+  "sha256": "47113af2751a8f7b4a941f0aec0369ee236fa12830f78a0cc85a63f66edee405"
  },
  "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/transformer/diffusion_pytorch_model.safetensors": {
   "revision": "3d6672923a4dfcd387961864654e123dd53b8ee4",
@@ -1202,7 +1206,8 @@
  },
  "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/vae/config.json": {
   "revision": "3d6672923a4dfcd387961864654e123dd53b8ee4",
-  "sizeBytes": 569
+  "sizeBytes": 569,
+  "sha256": "48e9f4a5f8e911d6abf37126d46de0527e9b32c97df150b0eed046bbeb5d6f9c"
  },
  "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/vae/diffusion_pytorch_model.safetensors": {
   "revision": "3d6672923a4dfcd387961864654e123dd53b8ee4",
@@ -1296,7 +1301,8 @@
  },
  "https://huggingface.co/nvidia/bigvgan_v2_44khz_128band_512x/resolve/95a9d1dcb12906c03edd938d77b9333d6ded7dfb/config.json": {
   "revision": "95a9d1dcb12906c03edd938d77b9333d6ded7dfb",
-  "sizeBytes": 1403
+  "sizeBytes": 1403,
+  "sha256": "65b7f487bfaf15256056a75f6667ef5f640214c981922a111927873705ea4ddb"
  },
  "https://huggingface.co/nynxz/Hy-Nomas/resolve/e8ddc4bfa664d69213930552493c220c3af56f41/nomas_dit_distilled_bf16.safetensors": {
   "revision": "e8ddc4bfa664d69213930552493c220c3af56f41",
