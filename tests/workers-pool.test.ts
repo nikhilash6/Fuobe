@@ -499,6 +499,83 @@ describe("a worker whose model folder isn't there yet (a drive still locked afte
   });
 });
 
+describe("a worker's list of model files", () => {
+  const inventoryRoute = () => import("@/app/api/gpu/computer/inventory/route");
+  const beatWith = (w: W, inventoryHash: string | null) =>
+    pool.workerBeat(row(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1.0.0", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash, running: [], stopped: [] }), clock);
+  const put = async (w: W, body: unknown) => {
+    const { PUT } = await inventoryRoute();
+    const res = await PUT(new Request("http://localhost:3000/api/gpu/computer/inventory", { method: "PUT", headers: { host: "localhost:3000", authorization: `Bearer ${w.token}`, "content-type": "application/json" }, body: JSON.stringify(body) }));
+    return { status: res.status, body: (await res.json()) as { lanes?: string[]; workflows?: string[] } };
+  };
+  const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
+  /** A workflow whose files sit in subfolders of their model folder ("audio_vae/bigvgan_vocoder/config.json"), and every workflow of its lane. */
+  const nested = () => {
+    const index = loadIndex();
+    const id = Object.keys(index.workflows).find((x) => !index.workflows[x].isolated && index.workflows[x].files.includes("audio_vae/bigvgan_vocoder/config.json"))!;
+    const lane = laneOf(index, id, sha)!;
+    const all = Object.keys(index.workflows).filter((x) => !index.workflows[x].isolated && laneOf(index, x, sha) === lane);
+    const needs = all.map((x) => needsOf(index, x)!);
+    const files = [...new Map(needs.flatMap((n) => n.files).map((f) => [`${f.folder}/${f.name}`, { ...f, sha256: f.sha256 ?? "0".repeat(64) }])).values()];
+    const nodePacks = [...new Set(needs.flatMap((n) => n.packs))].map((name) => ({ name, commit: null }));
+    return { id, lane, files, nodePacks, minVram: Math.max(...needs.map((n) => n.minVramBytes)) };
+  };
+  /** A pool worker the owner allowed `lanes`, with `vram`, that has sent no list of files yet. */
+  const bare = (name: string, lanes: string[], vram: number) => {
+    const w = pool.addWorker(name);
+    pool.patchWorker(w.id, { paused: false, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l, { delayMs: 0 }])), claimAfterMs: 0 });
+    db().prepare("UPDATE relay_workers SET facts_json = ? WHERE id = ?").run(JSON.stringify({ vramBytes: vram }), w.id);
+    return w;
+  };
+
+  it("keeps the index's files in subfolders, so its hash is the worker's: one list is enough, and their lane counts", async () => {
+    const { inventoryHash: workerInventoryHash } = await import("../bin/lib/worker/inventory.mjs");
+    const n = nested();
+    expect(n.files.some((f) => f.name.includes("/"))).toBe(true);
+    const w = bare("nested-files", [n.lane], n.minVram + GB);
+    // Allowed the lane, but no list of files yet: nothing it could run, so no run is let in for it.
+    expect(pool.workersCanRun(n.id)).toBe(false);
+    const inv = { files: n.files.map(({ folder, name, size, sha256 }) => ({ folder, name, size, sha256 })), nodePacks: n.nodePacks, media: ["image", "video", "audio"] };
+    expect(beatWith(w, workerInventoryHash(inv)).worker.sendInventory).toBe(true);
+    const r = await put(w, inv);
+    expect(r.status).toBe(200);
+    expect(r.body.workflows).toContain(n.id);
+    expect(r.body.lanes).toContain(n.lane);
+    expect(JSON.parse(row(w).lanes_json ?? "{}").lanes).toContain(n.lane);
+    // The studio's hash of what it was sent is the worker's own: the next beat asks for no list again.
+    expect(row(w).inventory_hash).toBe(workerInventoryHash(inv));
+    expect(beatWith(w, workerInventoryHash(inv)).worker.sendInventory).toBe(false);
+    expect(pool.workersCanRun(n.id)).toBe(true);
+    // Too little VRAM for it: no run is let in.
+    db().prepare("UPDATE relay_workers SET facts_json = ? WHERE id = ?").run(JSON.stringify({ vramBytes: n.minVram - GB }), w.id);
+    expect(pool.workersCanRun(n.id)).toBe(false);
+  });
+
+  it("drops a name that climbs out, starts at a root or a drive, uses backslashes, or isn't in the index; its hash is still of what was sent", async () => {
+    const { inventoryHash: workerInventoryHash } = await import("../bin/lib/worker/inventory.mjs");
+    const n = nested();
+    const w = bare("odd-names", [n.lane], n.minVram + GB);
+    const good = n.files.map(({ folder, name, size, sha256 }) => ({ folder, name, size, sha256 }));
+    const odd = [
+      { folder: "audio_vae", name: "../loras/x.safetensors", size: 1, sha256: null },
+      { folder: "audio_vae", name: "bigvgan_vocoder/../../x.json", size: 1, sha256: null },
+      { folder: "audio_vae", name: "/etc/passwd", size: 1, sha256: null },
+      { folder: "audio_vae", name: "C:/Windows/x.dll", size: 1, sha256: null },
+      { folder: "audio_vae", name: "bigvgan_vocoder\\config.json", size: 1, sha256: null },
+      { folder: "audio_vae", name: "bigvgan_vocoder//config.json", size: 1, sha256: null },
+      { folder: "audio_vae", name: "not-in-the-index/model.safetensors", size: 1, sha256: null },
+      { folder: "../audio_vae", name: "bigvgan_vocoder/config.json", size: 1, sha256: null },
+    ];
+    const inv = { files: [...good, ...odd], nodePacks: n.nodePacks, media: ["image", "video", "audio"] };
+    const r = await put(w, inv);
+    expect(r.status).toBe(200);
+    expect(r.body.workflows).toContain(n.id);
+    const kept = JSON.parse(row(w).inventory_json ?? "{}") as { files: { folder: string; name: string }[] };
+    expect(kept.files.map((f) => `${f.folder}/${f.name}`).sort()).toEqual(good.map((f) => `${f.folder}/${f.name}`).sort());
+    expect(beatWith(w, workerInventoryHash(inv)).worker.sendInventory).toBe(false);
+  });
+});
+
 describe("routes", () => {
   it("the beat's answer carries claimableNow", async () => {
     clock = Date.now();

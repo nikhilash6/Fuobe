@@ -136,7 +136,7 @@ import {
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
-import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, workersAllowed } from "../computer/pool";
+import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, workersCanRun } from "../computer/pool";
 import { ownerWaitMs } from "../queue-settings";
 import { worldcastBase, worldcastHealth } from "../worldcast";
 
@@ -309,7 +309,7 @@ export function installComfyLocal(worker: ComfyWorker = "main"): boolean {
 export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this machine, so runs of accounts don't go to it.";
 
 /** Said to the owner when no worker is allowed the lane of a job sent to the workers. */
-export const NO_WORKER_FOR_LANE = "No worker is allowed to run this model yet. Allow its lane for a worker in Settings → Open-source engine · ComfyUI → Workers.";
+export const NO_WORKER_FOR_LANE = "No worker can run this model yet. Allow its lane for a worker that has its model files, in Settings → Open-source engine · ComfyUI → Workers.";
 
 /**
  * Every VideoHelperSuite save node of a graph for the workers saves no metadata: the prompt and the machine's own clock never
@@ -2856,9 +2856,9 @@ export const comfyProvider: ProviderAdapter = {
     if (computer) {
       const metaBatch = !!meta.metaBatch;
       const forPool = onWorkers(computer);
-      // The owner's job that no worker is allowed to run would wait with no end (the owner's jobs have no wait limit
-      // unless the owner sets one): it is refused now, as an account's run is.
-      if (forPool && computer === "owner" && !workersAllowed(poolLane(manifest.id))) throw new ProviderError(NO_WORKER_FOR_LANE);
+      // The owner's job that no worker is allowed and able to run would wait with no end (the owner's jobs have no wait
+      // limit unless the owner sets one): it is refused now, as an account's run is.
+      if (forPool && computer === "owner" && !workersCanRun(manifest.id)) throw new ProviderError(NO_WORKER_FOR_LANE);
       const task = createTask({
         principal: computer,
         generationId,

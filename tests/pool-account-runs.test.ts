@@ -56,6 +56,7 @@ const { loadManifest, withoutSaveMetadata, planRelayOutputs, onComputer, OWN_OUT
 const { accountTotalBytes, accountUsage, diskFloorBytes } = await import("@/server/account-files");
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
+const { getModel } = await import("@/lib/catalog");
 const { ComputerRunner } = await import("@/lib/computer-runner");
 const { POOL_WORDS } = await import("@/lib/relay");
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
@@ -315,6 +316,23 @@ describe("an account's run on the workers", () => {
     const r = await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse" });
     expect(r.status).toBe(403);
     expect((db().prepare("SELECT COUNT(*) AS n FROM relay_tasks").get() as { n: number }).n).toBe(before);
+  });
+
+  it("refuses a run whose lane a worker is allowed but whose files no worker has, before anything is queued", async () => {
+    const w = standInWorker();
+    const endpoint = getModel("oss-z-image-turbo")!.routes.find((x) => x.provider === "comfyui")!.endpoint;
+    const workflows = loadManifest().workflows.map((x) => x.id);
+    const lanesNow = JSON.parse(workerRow(w).lanes_json ?? "{}") as { lanes: string[] };
+    // Allowed every lane, but its last list of files lacks this workflow's: nothing it could ever run.
+    db().prepare("UPDATE relay_workers SET lanes_json = ? WHERE id = ?").run(JSON.stringify({ lanes: [], workflows: workflows.filter((x) => x !== endpoint) }), w.id);
+    const before = (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks").get() as { n: number }).n;
+    const r = await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse" });
+    expect(r.status, JSON.stringify(r.body)).toBe(403);
+    expect(r.body.code).toBe("not-offered");
+    expect((db().prepare("SELECT COUNT(*) AS n FROM relay_tasks").get() as { n: number }).n).toBe(before);
+    // Its files are there again: the run goes in line.
+    db().prepare("UPDATE relay_workers SET lanes_json = ? WHERE id = ?").run(JSON.stringify({ ...lanesNow, workflows }), w.id);
+    expect((await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse" })).status).toBe(201);
   });
 
   it("a file input in params.extra is one the run sent, never a name in the workers' folders", async () => {

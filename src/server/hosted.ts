@@ -5,7 +5,7 @@ import { h3Canvas, isH3Graph } from "@/lib/h3-prompt";
 import { imageSize } from "@/lib/image-size";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
-import { lineFacts, poolLane, queueOfGeneration, workersAllowed } from "./computer/pool";
+import { lineFacts, poolLane, queueOfGeneration, workersCanRun } from "./computer/pool";
 import { db } from "./db";
 import { loadIndex } from "./gpu/index-file";
 import { hostedRunsOn } from "./hosted-switch";
@@ -47,15 +47,15 @@ export const poolOnWorkers = (): boolean => getSetting("comfyWhere") === "worker
 
 /**
  * Hosted runs are on, something answers for them (a billing service, or FUOBE_HOSTED_FREE=1), and this install has GPUs
- * for them: a worker the owner added and allowed a lane (paused or not: a paused worker means the run waits in line),
- * or its own ComfyUI server on this machine.
+ * for them: a worker the owner added and allowed a lane that it can run (paused or not: a paused worker means the run
+ * waits in line), or its own ComfyUI server on this machine.
  */
 export function poolReady(): boolean {
   if (!hostedRunsOn()) return false;
   if (!billingConfigured() && !hostedFree()) return false;
   const where = getSetting("comfyWhere");
   if (where === "computer") return false;
-  return where === "workers" ? workersAllowed(null) : installComfyLocal();
+  return where === "workers" ? workersCanRun(null) : installComfyLocal();
 }
 
 /**
@@ -70,18 +70,18 @@ export function workflowPicks(endpoint: string): string[] {
 }
 
 /**
- * May this install's GPUs run this workflow (planned.route.endpoint)? On the workers: one is allowed its lane (a
- * workflow that picks its graph at run time, `…-{n}`: the lane of every graph it may pick). On its own server: the
- * isolated ComfyUI's workflows too only when that one is on this machine.
+ * May this install's GPUs run this workflow (planned.route.endpoint)? On the workers: one is allowed its lane and has
+ * what it needs, as its last list of files said (a workflow that picks its graph at run time, `…-{n}`: every graph it
+ * may pick). On its own server: the isolated ComfyUI's workflows too only when that one is on this machine.
  */
 export function poolTakes(endpoint: string | undefined): boolean {
   if (!endpoint) return false;
   const isolated = workerFor(endpoint) === "isolated";
   if (!poolOnWorkers()) return installComfyLocal(isolated ? "isolated" : "main");
   if (isolated) return false;
-  if (!endpoint.includes("{")) return workersAllowed(poolLane(endpoint));
+  if (!endpoint.includes("{")) return workersCanRun(endpoint);
   const picks = workflowPicks(endpoint);
-  return picks.length > 0 && picks.every((id) => workersAllowed(poolLane(id)));
+  return picks.length > 0 && picks.every((id) => workersCanRun(id));
 }
 
 /**

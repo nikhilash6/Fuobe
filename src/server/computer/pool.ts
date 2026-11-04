@@ -251,6 +251,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
         // While a model folder isn't there, the studio keeps the list it has (its lanes don't go missing meanwhile).
         sendInventory: b.local.why !== MODELS_NOT_READY && (!fresh.inventory_hash || fresh.inventory_hash !== b.inventoryHash),
         ...(nextToken && { token: nextToken }),
+        ...(fresh.expires_at && { tokenExpiresAt: fresh.expires_at }),
       },
     };
   }).immediate();
@@ -273,17 +274,42 @@ export function claimableNow(w: WorkerRow, now = Date.now()): number {
 // ---------------------------------------------------------------------------
 // Inventory
 
-/** The worker's verified files and node packs: what it can run now, and what each other lane lacks. */
+/**
+ * A model file's name as a worker reports it: the requirements index's own name for it inside its folder, which may hold
+ * subfolders ("bigvgan_vocoder/config.json"), with forward slashes. Never a path that climbs out ("..") or starts at a
+ * root or a drive, never a backslash, an empty part or a control character.
+ */
+const fileNameOk = (name: string) => name.length <= 256 && !/[\\\0-\x1f]|^\/|^[a-z]:|(^|\/)\.{1,2}(\/|$)|\/\/|\/$/i.test(name);
+
+/** The index's files, as "folder/name" (loadIndex keeps one index until its file changes). */
+const indexFileKeys = new WeakMap<ReturnType<typeof loadIndex>, Set<string>>();
+function knownFiles(): Set<string> {
+  const index = loadIndex();
+  let keys = indexFileKeys.get(index);
+  if (!keys) {
+    keys = new Set(Object.values(index.files).map((f) => `${f.folder}/${f.file}`));
+    indexFileKeys.set(index, keys);
+  }
+  return keys;
+}
+
+/**
+ * The worker's verified files and node packs: what it can run now, and what each other lane lacks. Only the files the
+ * requirements index names are kept (by folder and name, subfolders and all), but the hash is of the list as the worker
+ * sent it, so it equals the hash the worker computes and the studio asks for the list again only when it changed.
+ */
 export function saveInventory(w: WorkerRow, raw: unknown): { lanes: string[]; workflows: string[]; missing: { lane: string; label: string; files: string[]; bytes: number }[] } {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const files = (Array.isArray(o.files) ? o.files : []).slice(0, 20_000).flatMap((f) => {
+  const sent = (Array.isArray(o.files) ? o.files : []).slice(0, 20_000).flatMap((f) => {
     const x = f as Record<string, unknown>;
     const folder = text(x?.folder, 64);
-    const name = text(x?.name, 256);
+    const name = typeof x?.name === "string" && x.name ? x.name : null;
     const size = num(x?.size);
     const sha256 = typeof x?.sha256 === "string" && /^[0-9a-f]{64}$/.test(x.sha256) ? x.sha256 : null;
-    return folder && name && size !== null && !/[\\/]|\.\./.test(name) ? [{ folder, name, size, sha256 }] : [];
+    return folder && name && size !== null ? [{ folder, name, size, sha256 }] : [];
   });
+  const known = knownFiles();
+  const files = sent.filter((f) => !/[\\/]|\.\./.test(f.folder) && fileNameOk(f.name) && known.has(`${f.folder}/${f.name}`));
   const nodePacks = (Array.isArray(o.nodePacks) ? o.nodePacks : []).slice(0, 500).flatMap((p) => {
     const x = p as Record<string, unknown>;
     const name = text(x?.name, 128);
@@ -294,7 +320,7 @@ export function saveInventory(w: WorkerRow, raw: unknown): { lanes: string[]; wo
   const media = Array.isArray(o.media) ? MEDIA_KINDS.filter((k) => (o.media as unknown[]).includes(k)) : undefined;
   const inv: Inventory = { files, nodePacks, ...(media && { media }) };
   const r = lanesFor(loadIndex(), inv, sha);
-  const invHash = inventoryHash(inv);
+  const invHash = inventoryHash({ ...inv, files: sent });
   db()
     .prepare("UPDATE relay_workers SET inventory_json = ?, inventory_hash = ?, lanes_json = ? WHERE id = ?")
     .run(JSON.stringify(inv), invHash, JSON.stringify({ lanes: r.lanes, workflows: r.workflows }), w.id);
@@ -704,13 +730,22 @@ export function poolLane(workflowId: string): string {
 }
 
 /**
- * Is there a worker for this lane: one the owner added and didn't revoke, allowed the lane (any lane: `lane` null),
- * whether it is paused, outside its hours or offline right now (a run then waits in line for it).
+ * Is there a worker for this workflow (any workflow: `workflowId` null): one the owner added and didn't revoke, allowed
+ * the workflow's lane, and able to run it as its last list of files said (its verified files and node packs, the kinds
+ * of input it takes) with the VRAM it needs, whether it is paused, outside its hours or offline right now (a run then
+ * waits in line for it). A run that no worker could ever take is refused before Run, never left to wait for nothing.
  */
-export function workersAllowed(lane: string | null): boolean {
+export function workersCanRun(workflowId: string | null): boolean {
+  const needs = workflowId ? needsOf(loadIndex(), workflowId) : null;
+  const lane = workflowId ? poolLane(workflowId) : null;
+  // (Runs made here go to the "pool" pool: poolFields.)
   return poolWorkers().some((w) => {
+    if (w.pool !== "pool") return false;
     const allow = allowOf(w);
-    return lane === null ? Object.keys(allow).length > 0 : lane in allow;
+    const cap = capableOf(w);
+    if (workflowId === null) return cap.workflows.some((id) => poolLane(id) in allow);
+    if (!needs || !(lane! in allow) || !cap.workflows.includes(workflowId)) return false;
+    return needs.minVramBytes <= (factsOf(w).vramBytes ?? 0);
   });
 }
 
