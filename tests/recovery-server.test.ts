@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runnerByHand, startAppProcess, tick, type AppProcess } from "./helpers/app-process";
 import { apiAs, loadRoutes, type ComputerRoutes } from "./helpers/computer-tab";
@@ -49,6 +51,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 const auth = await import("@/server/auth");
 const generationsRoute = await import("@/app/api/generations/route");
 const oneRoute = await import("@/app/api/generations/[id]/route");
+const previewRoute = await import("@/app/api/generations/[id]/preview/route");
 const { proxy } = await import("@/proxy");
 const { NextRequest } = await import("next/server");
 const { db } = await import("@/server/db");
@@ -192,6 +195,21 @@ async function browserGet(url: string, cookie: string, route: (req: Request) => 
 async function sessionGet(cookie: string, id: string): Promise<{ status: number; run: RunLike | null }> {
   const r = await browserGet(`/api/generations/${id}`, cookie, (req) => oneRoute.GET(req, { params: Promise.resolve({ id }) } as never));
   return { status: r.status, run: r.ok ? ((await r.json()) as RunLike) : null };
+}
+
+/** A small JPEG as a worker sends its preview picture (base64): its bytes start as a JPEG's, then `n` and filler. */
+const jpegBase64 = (n: number, size = 2000) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(`preview ${n} `), Buffer.alloc(size, n % 251)]).toString("base64");
+
+/** GET a run's preview picture as a session's browser asks it: the response. */
+const previewGet = (cookie: string, url: string) => {
+  const id = /^\/api\/generations\/([^/]+)\/preview/.exec(url)![1];
+  return browserGet(url, cookie, (req) => previewRoute.GET(req, { params: Promise.resolve({ id }) } as never));
+};
+
+/** The picture's first bytes (hex) as the session gets it, or its status when it gets none. */
+async function previewOf(cookie: string, url: string): Promise<string> {
+  const r = await previewGet(cookie, url);
+  return r.ok ? Buffer.from(await r.arrayBuffer()).subarray(0, 12).toString("hex") : String(r.status);
 }
 
 /** A run as a session reads it (an answer that isn't OK throws: a person would see an error). */
@@ -467,6 +485,136 @@ describe("a refresh, a second session and the list see the same run", () => {
     for (const at of together) expect(Math.max(...at.map((p) => p ?? 0)) - Math.min(...at.map((p) => p ?? 0))).toBeLessThanOrEqual(1 / 10 + 1e-9);
     expect(together.some((at) => at.every((p) => (p ?? 0) > 0))).toBe(true);
     await expectOnce(id, watch, { prompts: 1, place: 2 });
+  });
+});
+
+describe("a run's preview picture while it works", () => {
+  it("the Working tile gets the worker's latest picture, for the run's own account only and never kept by a cache; it goes when the run ends", async () => {
+    const w = standInWorker();
+    const { id, task } = await pressRun();
+    const watch = watchOf(id);
+    comfy.inner.opts.steps = 6;
+    comfy.inner.opts.stepMs = 100;
+    const d = driver(w);
+    let n = 0;
+    d.previews(() => jpegBase64(++n));
+    const seen: { session?: string; list?: string; picture: string; headers: Record<string, string | null>; other: number; guest: number }[] = [];
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step !== "running" || seen.length) return;
+      const g = (await sessionRead(a1)(id)) as RunLike & { preview?: string };
+      if (!g.preview) return;
+      const listed = (await listRead(a1)(id)) as (RunLike & { preview?: string }) | null;
+      const r = await previewGet(a2, g.preview);
+      seen.push({
+        session: g.preview,
+        list: listed?.preview,
+        picture: Buffer.from(await r.arrayBuffer()).subarray(0, 3).toString("hex"),
+        headers: { type: r.headers.get("content-type"), cache: r.headers.get("cache-control"), sniff: r.headers.get("x-content-type-options") },
+        other: (await previewGet(b1, g.preview)).status,
+        guest: (await previewGet("", g.preview)).status,
+      });
+    });
+    await workAll(d);
+    expect(seen).toHaveLength(1);
+    const [s] = seen;
+    expect(s.session).toMatch(new RegExp(`^/api/generations/${id}/preview\\?at=\\d+$`));
+    expect(s.list, "the list carries it too").toBe(s.session);
+    expect(s.picture).toBe("ffd8ff");
+    expect(s.headers).toEqual({ type: "image/jpeg", cache: "private, no-store", sniff: "nosniff" });
+    expect(s.other, "another account").toBe(403);
+    expect(s.guest, "a guest").toBe(401);
+    // Ended: no picture is left, and its address answers nothing.
+    const g = (await expectOnce(id, watch, { prompts: 1, place: 1 })) as RunLike & { preview?: string };
+    expect(g.preview).toBeUndefined();
+    expect((await previewGet(a1, s.session!)).status).toBe(404);
+    expect(taskOf(id)!.preview_at).toBeNull();
+    expect(tasks.runPreview(id)).toBeNull();
+    expect(fs.existsSync(path.join(tasks.relayDir(), "tasks", task.id, "preview.jpg"))).toBe(false);
+  });
+
+  it("back in line, the run shows no picture of the attempt before", async () => {
+    clock();
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    comfy.inner.opts.steps = 6;
+    comfy.inner.opts.stepMs = 100;
+    const d = driver(w);
+    d.previews(() => jpegBase64(1));
+    let had = "";
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step !== "running" || had) return;
+      had = ((await sessionRead(a1)(id)) as RunLike & { preview?: string }).preview ?? "";
+      if (!had) return;
+      d.pause("gpu-busy:game.exe");
+      await d.beat();
+    });
+    await workAll(d);
+    expect(had).toMatch(/\/preview\?at=/);
+    await tick();
+    const g = (await sessionRead(a1)(id)) as RunLike & { preview?: string };
+    expect(g).toMatchObject({ status: "queued", queue: { place: 1 } });
+    expect(g.preview).toBeUndefined();
+    expect((await previewGet(a1, had)).status).toBe(404);
+    d.pause(null);
+    d.previews(null);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { place: 1 });
+  });
+
+  it("a picture that isn't a JPEG, is over 64 KB or comes within 2 s of the last is dropped; a person's own computer keeps none", () => {
+    const now = 1_000_000;
+    const t = { id: "t".repeat(16), pools: "pool", preview_at: null };
+    expect(tasks.notePreview(t, Buffer.from("not a picture").toString("base64"), now)).toBe(false);
+    expect(tasks.notePreview(t, jpegBase64(1, 70 * 1024), now)).toBe(false);
+    expect(tasks.notePreview(t, "%%%", now)).toBe(false);
+    expect(tasks.notePreview({ ...t, pools: null }, jpegBase64(1), now)).toBe(false);
+    expect(tasks.notePreview({ ...t, preview_at: now - 1000 }, jpegBase64(1), now)).toBe(false);
+    expect(tasks.notePreview({ ...t, preview_at: now - 2000 }, jpegBase64(1), now)).toBe(true);
+    tasks.dropProgress(t.id);
+  });
+
+  it("a worker's report with a picture over 64 KB is taken without the picture, and the run goes on", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    d.previews(() => jpegBase64(1, 66 * 1024));
+    const previews: (string | undefined)[] = [];
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step === "running") previews.push(((await sessionRead(a1)(id)) as RunLike & { preview?: string }).preview);
+    });
+    await workAll(d);
+    expect(d.steps).toContain("running");
+    expect(previews.length).toBeGreaterThan(0);
+    expect(previews.every((p) => p === undefined)).toBe(true);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+});
+
+describe("the owner's own job on the workers", () => {
+  it("waiting, it carries its place in their line in the list as after a refresh", async () => {
+    const w = standInWorker();
+    const owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
+    const theirs = await pressRun(IMAGE, b1);
+    const { id } = await pressRun(IMAGE, owner);
+    expect(taskOf(id)!.principal).toBe("owner");
+    const one = (await sessionRead(owner)(id)) as RunLike & { queue?: { place: number } };
+    const listed = (await listRead(owner)(id)) as (RunLike & { queue?: { place: number } }) | null;
+    // People's runs go first: the owner's job is second.
+    expect(one.queue?.place).toBe(2);
+    expect(listed?.queue).toEqual(one.queue);
+    const d = driver(w);
+    lookAtEveryStep(d, watchOf(theirs.id));
+    await workAll(d);
+    expect((await ended(id))?.status).toBe("succeeded");
   });
 });
 
@@ -880,7 +1028,7 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     await expect(app2.generation(id, b1)).rejects.toThrow(/answered 403/);
   });
 
-  it("a step the worker reports to the other process isn't seen here today: live progress stays in the memory of the process that took the report, so every look shows no step", async () => {
+  it("a step and a preview picture the worker reports to the other process are seen here too: a refresh, both sessions, the list and the other process show the same step", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
     const watch = watchOf(id, { "other process": there(id) });
@@ -889,15 +1037,25 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     const d = driver(w);
     // The worker's calls reach the other process; this one's runner turns.
     d.via(app2.api);
+    let n = 0;
+    d.previews(() => jpegBase64(++n));
     const steps: (number | null)[][] = [];
+    const pictures: (string | null)[] = [];
     d.onStep(async (step, _path, report) => {
       if (step !== "running" || Number(report?.value ?? 0) < 2) return;
       await tick();
       steps.push((await watch.look()).map((s) => s.progress));
+      const g = (await sessionRead(a2)(id)) as RunLike & { preview?: string };
+      pictures.push(g.preview ? await previewOf(a2, g.preview) : null);
     });
     await workAll(d);
     expect(steps.length, "looks while the worker said it was past step 2").toBeGreaterThan(0);
-    for (const at of steps) for (const p of at) expect(p ?? 0, "the step a look shows").toBe(0);
+    for (const at of steps) {
+      for (const p of at) expect(p ?? 0, "the step a look shows").toBeGreaterThan(0);
+      expect(Math.max(...at.map((p) => p ?? 0)) - Math.min(...at.map((p) => p ?? 0)), "every look at one moment, the same step").toBeLessThanOrEqual(1 / 10 + 1e-9);
+    }
+    // The second device loads the picture from this process, though the other one took it.
+    expect(pictures.some((p) => p && p.startsWith("ffd8ff"))).toBe(true);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 

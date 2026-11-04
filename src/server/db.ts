@@ -1009,6 +1009,10 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_tasks", "class", "TEXT"],
   // Since when a worker's task has been sending its files again on the same claim (NULL: since its claim).
   ["relay_tasks", "sending_since", "INTEGER"],
+  // A task's live progress (its step, its node, its place in its ComfyUI's queue) as JSON, and when its latest preview
+  // picture came (the picture is a file in the task's folder): kept in the database, so every app process sees them.
+  ["relay_tasks", "progress_json", "TEXT"],
+  ["relay_tasks", "preview_at", "INTEGER"],
   // A pool worker's next token (workers.ts offerNextToken) and where its token was used from (hashed networks).
   ["relay_workers", "next_token_hash", "TEXT"],
   ["relay_workers", "next_expires_at", "INTEGER"],

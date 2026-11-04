@@ -2738,7 +2738,7 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
 
 /** Where a task is (on someone's computer, or with a worker), in the words its tile shows. */
 async function pollTask(principal: Principal, t: TaskRow, meta: Record<string, unknown>, manifest: ManifestWorkflow | undefined, made: string | undefined): Promise<PollResult> {
-  const p = taskProgress(t.id);
+  const p = taskProgress(t);
   const kind = extraOf(t).made ?? made ?? "image";
   const waitMs = tenantAccount() ? ACCOUNT_LIMITS.queueMs : 4 * 3_600_000;
   const sentAt = t.sent_at ?? undefined;

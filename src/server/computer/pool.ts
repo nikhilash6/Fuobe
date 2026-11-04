@@ -5,7 +5,7 @@ import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type Compu
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
-import { cleanFacts, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, type TaskRow } from "./tasks";
+import { cleanFacts, dropProgress, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, type TaskRow } from "./tasks";
 import { queueSettings, runCeilingMs } from "../queue-settings";
 import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 
@@ -532,6 +532,8 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?:
       ...(o.lostAt && t.worker_id && { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), lost: { worker: t.worker_id, at: o.lostAt } }) }),
     });
     d.prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
+    // In line again: nothing of the attempt before shows (no step, no preview).
+    dropProgress(t.id);
     return true;
   }).immediate();
 }

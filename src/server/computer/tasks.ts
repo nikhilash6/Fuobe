@@ -51,10 +51,8 @@ const inputFile = (name: string) => path.join(relayDir(), "in", name);
 const taskDir = (id: string) => path.join(relayDir(), "tasks", id);
 export const outputFile = (id: string, n: number) => path.join(taskDir(id), `out-${n}`);
 
-declare global {
-  /** Live progress by task id (written on every step, so kept in memory, not in SQLite). */
-  var __fuobeRelayProgress: Map<string, Progress> | undefined;
-}
+/** A task's latest preview picture (a worker's JPEG while the job renders), in the task's folder. */
+const previewFile = (id: string) => path.join(taskDir(id), "preview.jpg");
 
 export interface Progress {
   value?: number;
@@ -65,8 +63,14 @@ export interface Progress {
   at: number;
 }
 
-const progressMap = () => (globalThis.__fuobeRelayProgress ??= new Map());
-export const taskProgress = (id: string): Progress | undefined => progressMap().get(id);
+/**
+ * A task's live progress, as its last report or beat said it. Kept in the database (relay_tasks.progress_json), not in
+ * one process's memory: a refresh, a second device and the other app process during a deploy all see the same step.
+ */
+export const taskProgress = (t: Pick<TaskRow, "progress_json">): Progress | undefined => json<Progress | undefined>(t.progress_json, undefined);
+
+/** The most a preview picture may weigh, and how often one is kept (one at most every 2 s, a little early allowed). */
+export const PREVIEW_LIMITS = { bytes: 64 * 1024, everyMs: 2000, slackMs: 300 } as const;
 
 /** The relay's tables are made with the database (db.ts RELAY_TABLES). */
 const rdb = () => db();
@@ -110,6 +114,9 @@ export interface TaskRow {
   worker_id: string | null;
   /** Its class in the line: "paid", "free" (people's runs) or "owner" (the owner's own jobs, served last). NULL: from before classes, read as "owner" with no account and "free" with one. */
   class: string | null;
+  /** Its live progress as JSON (taskProgress), and when its latest preview picture came (null: none kept). */
+  progress_json: string | null;
+  preview_at: number | null;
   created_at: number;
   updated_at: number;
   claimed_at: number | null;
@@ -485,6 +492,7 @@ export function beat(principal: Principal, b: BeatInput, now = Date.now()): Beat
   return { runner: free, heldElsewhere: !free && elsewhere, waiting, stops };
 }
 
+/** Note a task's live progress (a report or a beat), over what it said before. */
 export function noteProgress(id: string, r: Record<string, unknown>, now: number) {
   const p: Progress = { at: now };
   for (const k of ["value", "max", "nodesDone", "position"] as const) {
@@ -493,8 +501,61 @@ export function noteProgress(id: string, r: Record<string, unknown>, now: number
   }
   const node = str(r.node, 64);
   if (node) p.node = node;
-  progressMap().set(id, { ...progressMap().get(id), ...p });
+  const d = rdb();
+  d.transaction(() => {
+    const cur = d.prepare("SELECT progress_json FROM relay_tasks WHERE id = ?").get(id) as Pick<TaskRow, "progress_json"> | undefined;
+    if (!cur) return;
+    d.prepare("UPDATE relay_tasks SET progress_json = ? WHERE id = ?").run(JSON.stringify({ ...taskProgress(cur), ...p }), id);
+  })();
 }
+
+/** Is this a JPEG picture (its first bytes)? */
+const isJpeg = (b: Buffer) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+
+/**
+ * Keep a worker's preview picture of its job (a JPEG of at most 64 KB, sent as base64 with a "running" report), in
+ * place of the one before. One every 2 s at most: one that comes sooner is dropped, as is anything that isn't a JPEG
+ * or is too big. Only a worker's task keeps one; a person's own computer shows its own previews in its tab.
+ */
+export function notePreview(t: Pick<TaskRow, "id" | "pools" | "preview_at">, base64: unknown, now = Date.now()): boolean {
+  if (!t.pools || typeof base64 !== "string" || !base64 || base64.length > Math.ceil(PREVIEW_LIMITS.bytes / 3) * 4 + 4) return false;
+  if (t.preview_at && now - t.preview_at < PREVIEW_LIMITS.everyMs - PREVIEW_LIMITS.slackMs) return false;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) return false;
+  const data = Buffer.from(base64, "base64");
+  if (data.length > PREVIEW_LIMITS.bytes || !isJpeg(data)) return false;
+  const file = previewFile(t.id);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const part = `${file}.${process.pid}.part`;
+  fs.writeFileSync(part, data, { mode: 0o600 });
+  fs.renameSync(part, file);
+  rdb().prepare("UPDATE relay_tasks SET preview_at = ? WHERE id = ?").run(now, t.id);
+  return true;
+}
+
+/** Forget a task's progress and its preview picture (it ended, or went back in line, or its ComfyUI starts it again). */
+export function dropProgress(id: string): void {
+  rdb().prepare("UPDATE relay_tasks SET progress_json = NULL, preview_at = NULL WHERE id = ?").run(id);
+  fs.rmSync(previewFile(id), { force: true });
+}
+
+/**
+ * The latest preview picture of a run's job on the workers while it works, and when it came; null when there is none.
+ * The caller has checked that the run is the viewer's own.
+ */
+export function runPreview(generationId: string): { path: string; at: number } | null {
+  const t = previewTask(generationId);
+  if (!t) return null;
+  const file = previewFile(t.id);
+  return fs.existsSync(file) ? { path: file, at: t.preview_at } : null;
+}
+
+const previewTask = (generationId: string) =>
+  rdb()
+    .prepare("SELECT id, preview_at FROM relay_tasks WHERE generation_id = ? AND pools IS NOT NULL AND state IN ('queued','running') AND preview_at IS NOT NULL ORDER BY created_at DESC LIMIT 1")
+    .get(generationId) as { id: string; preview_at: number } | undefined;
+
+/** When a run's latest preview picture came (null: it has none now), for the address its tile loads it from. */
+export const runPreviewAt = (generationId: string): number | null => previewTask(generationId)?.preview_at ?? null;
 
 /**
  * A computer asks for work: first a task it took before and lost track of (a reload: not in `running`), then, when it is
@@ -594,7 +655,7 @@ export function endTask(id: string, state: "done" | "failed" | "canceled", field
   setTask(id, { state, finished_at: Date.now(), down_at: null, down_why: null, ...(stop && { stop }), ...fields });
   // A task a worker held ends: the workers' log says how.
   if (t?.pools && t.worker_id && (ACTIVE_STATES as readonly string[]).includes(t.state)) logWorkerJob(state, t, t.worker_id);
-  progressMap().delete(id);
+  dropProgress(id);
   for (const i of rdb().prepare("SELECT name FROM relay_inputs WHERE task_id = ?").all(id) as { name: string }[]) fs.rmSync(inputFile(i.name), { force: true });
   rdb().prepare("DELETE FROM relay_inputs WHERE task_id = ?").run(id);
 }
@@ -673,6 +734,8 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
     case "running":
       setTask(t.id, { ...seen, state: "running", ...(!t.started_at && { started_at: now }), note: null });
       noteProgress(t.id, { ...e, position: undefined }, now);
+      // A worker's preview picture of the job: the tile shows the latest one while the run works.
+      if (e.preview) notePreview(taskById(t.id) ?? t, e.preview, now);
       return { ok: true };
     case "finished":
     case "passes": {
@@ -722,6 +785,7 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
         // A worker's task sends its files again: its sending clock (pool.ts SENDING_MS) starts again from now. The
         // attempt's own deadline stays where its claim put it (pool.ts attemptDeadline).
         setTask(t.id, { ...seen, state: "sending", note: "resent", started_at: null, ...(t.pools && { sending_since: now }) });
+        dropProgress(t.id);
         rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
         return { ok: true };
       }
@@ -851,7 +915,6 @@ function sweepPrincipal(principal?: Principal) {
 export function purgeComputer(principal: Principal): void {
   const d = rdb();
   for (const t of d.prepare("SELECT id FROM relay_tasks WHERE principal = ?").all(principal) as { id: string }[]) {
-    progressMap().delete(t.id);
     fs.rmSync(taskDir(t.id), { recursive: true, force: true });
   }
   for (const i of d.prepare("SELECT name FROM relay_inputs WHERE principal = ?").all(principal) as { name: string }[]) fs.rmSync(inputFile(i.name), { force: true });

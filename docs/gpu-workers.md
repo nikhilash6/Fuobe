@@ -574,6 +574,12 @@ its target), at most once an hour each.
     than once counts once: the attempt whose result was kept. The studio keeps at most the run ceiling of the job's lane,
     and at most the time since the job was sent to its ComfyUI (plus a minute, because ComfyUI starts a job a moment
     before the studio hears that it was sent).
+  - `running` can carry `preview`: the latest preview picture of the job, a JPEG of at most 64 KB as base64, at most
+    one every 2 seconds. The studio keeps only the latest one for the job, shows it in the run's tile while the run
+    works, and serves it only to the run's own account (`GET /api/generations/<id>/preview`, never cached). It drops
+    the picture when the job ends or goes back in line. A picture that is not a JPEG, is too big or comes too soon is
+    dropped, and the rest of the report still counts. Progress from reports and beats is kept in the database, so
+    every app process sees the same step.
   - `give-back` with `why` (`stalled`, `run-limit` or `media`) puts the job back in line. The job keeps its place and
     counts as an attempt. Only a worker's job can be given back.
   - `failed` can also give `unknown-node`, `unsafe-path` (a path, or an input outside its rule), `model-unverified`,

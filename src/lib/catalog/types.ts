@@ -1488,6 +1488,11 @@ export interface Generation {
   /** A run waiting for this install's GPUs: its place in line and the wait, about (GET /api/generations/<id>). */
   queue?: { place: number; etaSeconds: number | null };
   /**
+   * A run working on this install's GPUs: the address of its latest preview picture (a JPEG, for the run's own account
+   * only), while there is one.
+   */
+  preview?: string;
+  /**
    * What the run leaves out or changes, said when it is created (LoRAs a cloud run can't carry, a clip length
    * the API rounds). Only on the answer that creates it; not stored.
    */

@@ -106,7 +106,8 @@ import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
 import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { placeInLine, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
-import { poolLane } from "./computer/pool";
+import { poolLane, queueOfGeneration } from "./computer/pool";
+import { runPreviewAt } from "./computer/tasks";
 import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
 import { inDemoScope, outsideDemo } from "./demo-scope";
@@ -225,7 +226,23 @@ export function toGeneration(r: Row): Generation {
     ...(checking && !pool && { stage: "checking" as const }),
     // Waiting in line on this install's GPUs: its place and the wait, about.
     ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
+    // The owner's own job on the workers, waiting: its place in their line (in the list as after a refresh).
+    ...(stored.place !== "pool" && r.status === "queued" && r.provider === "comfyui" && workerQueue(r.id)),
+    // Working on this install's GPUs: the address of its latest preview picture, while there is one.
+    ...(r.status === "running" && r.provider === "comfyui" && !checking && livePreview(r.id)),
   };
+}
+
+/** The owner's job waiting for the workers: its place in their line, as the Generation field. */
+function workerQueue(id: string): { queue: { place: number; etaSeconds: number | null } } | Record<string, never> {
+  const q = queueOfGeneration(id);
+  return q ? { queue: q } : {};
+}
+
+/** A run's latest preview picture from the workers, as the address its tile loads (it changes with each picture). */
+function livePreview(id: string): { preview: string } | Record<string, never> {
+  const at = runPreviewAt(id);
+  return at ? { preview: `/api/generations/${encodeURIComponent(id)}/preview?at=${at}` } : {};
 }
 
 /** A pool row's words while it goes: in line, or working on it. */

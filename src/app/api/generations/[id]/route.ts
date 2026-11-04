@@ -3,15 +3,14 @@ import { getGeneration, setFavorite } from "@/server/generations";
 import { deleteForever, setPinned, setReview, trashGenerations } from "@/server/library";
 import { isReviewStatus } from "@/lib/library";
 import { requestAccount } from "@/server/auth";
-import { queueOfGeneration } from "@/server/computer/pool";
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/generations/[id]">) {
   await connection();
   const { id } = await ctx.params;
   const g = getGeneration(id);
   if (!g) return Response.json({ error: "Not found" }, { status: 404 });
-  const queue = queueOfGeneration(id);
-  return Response.json(queue ? { ...g, queue } : g);
+  // (A run waiting for the workers carries its place in line, as in the list: generations.ts toGeneration.)
+  return Response.json(g);
 }
 
 /** Favorite, pin (`pinned`) or set the review status (`review`, null clears it). */

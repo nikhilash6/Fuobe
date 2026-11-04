@@ -60,6 +60,11 @@ export interface WorkerDriver {
    * restart the app, …). A report's event comes with it.
    */
   onStep: (fn: StepHook | null) => void;
+  /**
+   * Its "running" reports carry a preview picture (base64, as the worker program sends one), from `fn` at each report
+   * (undefined: none with that report). Null: none.
+   */
+  previews: (fn: (() => string | undefined) | null) => void;
   stop: () => void;
 }
 
@@ -97,6 +102,7 @@ export function workerDriver(o: {
   const answers: { step: WorkerStep; status: number; left: number }[] = [];
   let paused: string | null = null;
   let hook: StepHook | null = null;
+  let preview: (() => string | undefined) | null = null;
   let died: () => void = () => {};
   const diedP = new Promise<"stopped">((r) => (died = () => r("stopped")));
   const calls: string[] = [];
@@ -112,6 +118,13 @@ export function workerDriver(o: {
   const api: StudioApi = async (path, init = {}) => {
     if (dead) return never();
     const step = stepOf(path, init);
+    if (step === "running" && preview && typeof init.body === "string") {
+      const picture = preview();
+      if (picture) {
+        const body = JSON.stringify({ ...(JSON.parse(init.body) as Record<string, unknown>), preview: picture });
+        init = { ...init, body, headers: { ...Object.fromEntries(new Headers(init.headers)), "content-length": String(Buffer.byteLength(body)) } };
+      }
+    }
     calls.push(`${step} ${path.split("?")[0]}`);
     const fake = answers.find((a) => a.step === step && a.left > 0);
     if (fake) {
@@ -203,6 +216,9 @@ export function workerDriver(o: {
     },
     onStep: (fn) => {
       hook = fn;
+    },
+    previews: (fn) => {
+      preview = fn;
     },
     stop: die,
   };

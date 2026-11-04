@@ -49,8 +49,11 @@ export type ReportEvent =
   | { event: "refused"; status: number; body: unknown }
   /** Waiting in ComfyUI's queue: how many prompts are before it. */
   | { event: "queued"; position: number }
-  /** Running: the sampler's steps, and the node. */
-  | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number }
+  /**
+   * Running: the sampler's steps, and the node. A worker may add `preview`: its latest preview picture of the job, a
+   * JPEG of at most 64 KB as base64, at most one every 2 s (the run's tile shows it while it works).
+   */
+  | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number; preview?: string }
   /**
    * Finished: its /history entry. A worker adds the most VRAM it took (for the benchmarks), how long its ComfyUI spent
    * executing the job (`execMs`: execution only, no waits, no uploads), its GPU's name (`device`), and `kept` when the
