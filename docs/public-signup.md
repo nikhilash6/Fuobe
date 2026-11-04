@@ -360,6 +360,17 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   deletes a take for good (it has no Trash). "Create 3D scene" and an exact orbit run there too: on its GPU their first
   step is a 3D model, finished on this server under its limits as Image to 3D's are. Saving a still as an element, the
   elements list and sharing a project are left out: those are the owner's library. A guest gets the sign-up card.
+- **Photodump, Fashion Factory, Character Sheet and AI Influencer.** An account runs them the same way
+  (`POST /api/photodump`, `/api/photodump/fashion`, `/api/photodump/character`, `/api/influencer`, and a photo's retry
+  `/api/photodump/retry`): every photo on its own ComfyUI or its own fal.ai or Replicate key, with only its own files,
+  after the same checks, and a set counts once against its limits. Its packs (`/api/photodump/packs`) and its
+  characters (`/api/photodump/characters`: a name and photos of one person, saved from New character or from a
+  Character Sheet's "Save as character") are its own projects: up to 50 of each, from its own photos, deleted with the
+  account; another account's or the owner's read as not found (404). An account's character goes into a run as its
+  first photo (an @mention names the owner's elements only). Its runs are its own (each tool's History and recent
+  sheets), and a retried photo replaces the failed one for good (it has no Trash). The price is its run's: free on its
+  GPU, its own key's price on the cloud engine. A guest gets the sign-up card on Generate, on Create pack, on New
+  character and before choosing a photo.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

@@ -247,12 +247,12 @@ describe("the Studios sheet", () => {
   it("lists what a group's studios hold inside as pills under the tiles, by their tabs' names, as a visitor may run them", () => {
     const sell = at("/", () => sheet({ group: "sell" }));
     // Ads Studio is a tile of the group already: not a pill again.
-    expect(pills(sell)).toEqual(["Click to Ad", "Ad Multiplier"]);
+    expect(pills(sell)).toEqual(["Click to Ad", "Ad Multiplier", "From a selfie"]);
     expect(words(sell)).toContain("Marketing Studio");
     const people = at("/", () => sheet({ group: "people" }));
-    expect(pills(people)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
+    expect(pills(people)).toEqual(["From Reference", "Build from scratch", "From a description", "Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
     // Pages that say "isn't available here" to a visitor, and the owner's own modes, aren't linked for them.
-    for (const w of ["From a selfie", "From Reference", "Split soundtrack", "Remove dialogue"]) {
+    for (const w of ["Split soundtrack", "Remove dialogue"]) {
       for (const g of LAUNCHER_GROUPS) expect(pills(at("/", () => sheet({ group: g.id }))), `${g.id}: ${w}`).not.toContain(w);
     }
     // Cinema Studio's Blockout is linked for everyone (a guest is offered a free account on a run).

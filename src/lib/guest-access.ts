@@ -67,6 +67,7 @@ const EMPTY: Record<string, unknown> = {
   "/api/shares": { items: [], signIn: true },
   "/api/photodump": { packs: [] },
   "/api/photodump/packs": { packs: [] },
+  "/api/photodump/characters": { items: [] },
   "/api/generations/facets": NO_FACETS,
   // GPU pre-flight: a guest has no GPU (Connect your GPU), so no board and no chips.
   "/api/gpu/readiness": { connected: false, reason: "guest" },
@@ -296,6 +297,8 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/swap-studio\/projects\/[^/]+\/(anchors|assemble|clips|masks|prepare|queue|sharpen|transcribe)$/,
   // Cinema Studio: a take in the account's own project, a retry and a 2K finish of one of its takes.
   /^\/api\/cinema\/projects\/[^/]+\/(generate|items\/[^/]+\/(retry|finish))$/,
+  // The photo apps: Photodump, Fashion Factory, Character Sheet, AI Influencer, and a retry of its own photo.
+  /^\/api\/(photodump(\/(fashion|character|retry))?|influencer)$/,
 ];
 
 /**
@@ -315,6 +318,8 @@ export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   // no AI helper, GPU or key), and a ready film made as its own project (src/server/cinema.ts).
   /^\/api\/cinema\/projects(\/[^/]+(\/(director|folders|items|folders\/[^/]+|items\/[^/]+\/tiles))?)?$/,
   /^\/api\/starters\/cinema\.[^/]+$/,
+  // Photodump and Fashion Factory: its own packs and its own characters (src/server/photodump.ts).
+  /^\/api\/photodump\/(packs|characters)(\/[^/]+)?$/,
 ];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));

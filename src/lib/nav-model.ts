@@ -734,8 +734,6 @@ export const STUDIO_SUBS: Readonly<Record<string, StudioSubs>> = {
 export const OWNER_RUNS: ReadonlySet<string> = new Set([
   "audio-split",
   "video-tools-remove-dialogue",
-  ...STUDIO_SUBS["character-sheet"].ids,
-  ...STUDIO_SUBS.photodump.ids,
 ]);
 
 /** The studio a feature lives under in the menus (Ads Studio under Marketing Studio). */

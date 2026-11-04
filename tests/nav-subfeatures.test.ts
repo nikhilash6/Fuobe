@@ -180,8 +180,11 @@ describe("who sees a studio's features", () => {
     expect(studioSubs("audio", "owner", "sheet").map((e) => e.id)).toContain("audio-split");
     // Image to 3D runs for accounts too (on their own GPU or key): its modes are linked for everyone.
     for (const kind of [...VISITORS, "owner" as const]) expect(studioSubs("image-to-3d", kind, "menu").length, String(kind)).toBe(3);
-    expect(studioSubs("character-sheet", "owner", "sheet").length).toBe(3);
-    expect(studioSubs("character-sheet", "guest", "sheet")).toEqual([]);
+    // Character Sheet and Photodump run for accounts too (on their own GPU or key): their modes are linked for everyone.
+    for (const kind of [...VISITORS, "owner" as const]) {
+      expect(studioSubs("character-sheet", kind, "sheet").length, String(kind)).toBe(3);
+      expect(studioSubs("photodump", kind, "sheet").map((e) => e.id), String(kind)).toEqual(["photodump-instadump"]);
+    }
     // Search still finds them, as before.
     expect(entriesFor("guest").some((e) => e.id === "audio-split")).toBe(true);
   });
