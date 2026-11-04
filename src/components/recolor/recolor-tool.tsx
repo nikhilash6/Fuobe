@@ -260,6 +260,8 @@ export function RecolorTool({ app }: { app: { name: string; description: string 
 
   const go = async () => {
     if (blocker || !ready || !frame) return void toast(blocker ?? "Add a photo");
+    // Refused by this studio's GPUs before Run (busy, a limit): its words, and nothing is sent.
+    if (place?.refused) return void toast(place.refused);
     // The example photo goes up as the visitor's own picture the first time it runs. A guest is asked to sign up for
     // the run itself (they added no file of their own); an account that can't add pictures gets the usual card.
     if (example && guest) return askToSignUp("run");
@@ -375,16 +377,16 @@ export function RecolorTool({ app }: { app: { name: string; description: string 
                 size="lg"
                 className="h-11 w-full rounded-full text-[15px]"
                 onClick={go}
-                disabled={sending || !ready || !frame}
+                disabled={sending || !ready || !frame || !!place?.refused}
                 aria-describedby="recolor-blocker"
                 title={place?.send ? `${runLabel} · ${place.send}` : undefined}
               >
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <Palette className="size-4" />}
                 {runLabel}
               </Button>
-              {blocker && ready && (
+              {(blocker || place?.refused) && ready && (
                 <p id="recolor-blocker" className="text-center text-[12px] text-muted-foreground" aria-live="polite">
-                  {blocker}
+                  {blocker ?? place?.refused}
                 </p>
               )}
             </div>

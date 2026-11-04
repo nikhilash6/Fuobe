@@ -1,3 +1,4 @@
+import { lineWords } from "./pool-line";
 import { billedTo, CLOUD_KEY, type CloudProvider } from "./your-keys";
 
 /**
@@ -32,8 +33,12 @@ export interface RunPlaceInput {
   hosted?: boolean;
   /** Runs go to this studio's GPUs first, even when the viewer has a GPU of its own (the studio's policy). */
   preferPool?: boolean;
-  /** The price of a run on this studio's GPUs (the billing service's words; empty text: free), undefined while pricing. */
-  pool?: { text: string; sub?: string } | null;
+  /**
+   * The price of a run on this studio's GPUs (the billing service's words; empty text: free), undefined while pricing.
+   * `refused`: the price check refused the run (its words are `text`), so it can't start now. `wait`: where it would
+   * stand in line, and the wait.
+   */
+  pool?: { text: string; sub?: string; refused?: boolean; wait?: string } | null;
   /** The provider an account's paid run is billed to (its own key), or null when it has no key for this model. */
   payer?: CloudProvider | null;
   /** How a price reads: "$0.04". */
@@ -55,6 +60,8 @@ export interface RunPlace {
   send: string;
   /** What this viewer does before the run can start: create an account, connect a GPU, or add a key. */
   needs?: "signup" | "gpu" | "key";
+  /** The run can't start now (this studio's GPUs refused it before Run): the send button is off, and these words say why. */
+  refused?: string;
   /** The cloud model the chip names, when known (the label is "Cloud" without one). */
   model?: string;
 }
@@ -104,18 +111,22 @@ export function runPlace(input: RunPlaceInput): RunPlace {
   // at the billing service's price (the studio composer's "This studio's GPUs" chip).
   if (open && input.hosted && audience !== "owner" && (!input.gpu || input.preferPool)) {
     const signup = audience === "guest";
+    const refused = !input.demo && input.pool?.refused ? input.pool.text : undefined;
     const poolPrice = input.demo ? price : input.pool ? input.pool.text || "Free" : "";
     const tip = input.demo
       ? "Placeholder results are on (Settings), so outputs are free stand-ins."
-      : `${input.pool?.sub ?? `Runs on this studio's GPUs${withModels}.`}${signup ? " Create a free account to run it." : ""}`;
+      : refused
+        ? (input.pool?.sub ?? refused)
+        : `${input.pool?.sub ?? `Runs on this studio's GPUs${withModels}.`}${input.pool?.wait ? ` ${input.pool.wait}.` : ""}${signup ? " Create a free account to run it." : ""}`;
     return {
       where: "pool",
       label: "This studio's GPUs",
       price: poolPrice,
       title: "Runs on this studio's GPUs",
       tip,
-      send: input.demo ? price : [poolPrice, signup ? "this studio's GPUs, after sign-up" : "this studio's GPUs"].filter(Boolean).join(" · "),
-      ...(signup && { needs: "signup" as const }),
+      send: input.demo ? price : refused ?? [poolPrice, signup ? "this studio's GPUs, after sign-up" : "this studio's GPUs"].filter(Boolean).join(" · "),
+      ...(signup && !refused && { needs: "signup" as const }),
+      ...(refused && { refused }),
     };
   }
   if (open) {
@@ -180,8 +191,13 @@ export const IN_BROWSER: RunPlace = runPlace({ audience: "guest", engine: "brows
  * model the studio doesn't offer there, its own GPU or key): the chip then says your GPU, never this studio's.
  * `count`: runs one press starts (the quote is for one, said "each").
  */
-export function checkedPool(check: { place?: "pool"; quote?: { text: string; sub?: string } } | null | undefined, count = 1): { text: string; sub?: string } | undefined {
+export function checkedPool(
+  check: { place?: "pool"; quote?: { text: string; sub?: string; allowed?: boolean }; line?: { place: number; etaSeconds: number | null } } | null | undefined,
+  count = 1,
+): { text: string; sub?: string; refused?: boolean; wait?: string } | undefined {
   if (check?.place !== "pool" || !check.quote) return undefined;
   const { text, sub } = check.quote;
-  return { text: count > 1 && text ? `${text} each` : text, ...(sub && { sub }) };
+  // Refused before Run (busy, a limit, not offered here): its words, never priced "each".
+  if (check.quote.allowed === false) return { text, ...(sub && { sub }), refused: true };
+  return { text: count > 1 && text ? `${text} each` : text, ...(sub && { sub }), ...(check.line && { wait: lineWords(check.line) }) };
 }

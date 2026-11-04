@@ -19,7 +19,8 @@ import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
-import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
+import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
+import { PoolNote } from "./pool-note";
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
@@ -598,8 +599,12 @@ export function Composer({ docked }: { docked: boolean }) {
   const hostedHere = !!viewerInfo?.hosted && model?.engine === "open";
   const poolPrice = hostedHere && runOn === "pool";
   const priceBody = useSettled(poolPrice ? quoteBody(signed.request, runOn) : null);
-  const hostedQuote = useHostedQuote(priceBody).data?.quote;
-  const priceUnavailable = poolPrice && hostedQuote?.code === "paused";
+  const hostedCheck = useHostedQuote(priceBody).data;
+  const hostedQuote = hostedCheck?.quote;
+  // The price check's answer: refused (busy, a limit, not offered here, paused…), Run is off and says why; otherwise
+  // the price, and where the run would stand in line with the wait.
+  const poolState = poolPrice ? poolRunState(hostedCheck) : null;
+  const poolRefused = !!poolState?.refused;
   const resolvesOnServer = mentions.mentioned.length > 0 || !!draft.slots.mask?.ref || !!draft.slots.sketch?.ref;
 
   // Plan with stand-ins for attachments that are missing or still uploading, so the cost and the
@@ -705,7 +710,8 @@ export function Composer({ docked }: { docked: boolean }) {
       : undefined;
   const presetGpu = presetKey && gpuBadges?.connected ? gpuBadges.presets[presetKey] : undefined;
   const gpuBadge = model?.engine === "open" && gpuBadges?.connected ? (presetGpu ?? badgeFor(gpuBadges, { modelId: model.id, op: gpuOp })) : null;
-  const gpuSetup = gpuBadge && gpuBadge[0] !== "r" ? gpuBadge : null;
+  // (A run on this studio's GPUs never meets the pre-flight of the account's own GPU.)
+  const gpuSetup = gpuBadge && gpuBadge[0] !== "r" && !poolPrice ? gpuBadge : null;
   const gpuRef = presetGpu && presetKey ? `preset:${presetKey}` : model ? `model:${model.id}#${gpuOp ?? Object.keys(gpuBadges?.models ?? {}).find((k) => k.startsWith(`${model.id}#`))?.split("#")[1] ?? ""}` : "";
   const openGpuFix = () => {
     setGpuRetry(
@@ -733,6 +739,8 @@ export function Composer({ docked }: { docked: boolean }) {
     }
     if (keyToAdd && model && !create.isPending) return openAddKey(keyToAdd, model.id);
     if (!blocker && gpuSetup && !skipGpu && !create.isPending) return openGpuFix();
+    // Refused by the price check (Run is off; Enter in the prompt lands here too): its words, and nothing is sent.
+    if (!blocker && poolRefused && poolState) return void toast(poolState.text, { id: "composer-blocker" });
     if (blocker || create.isPending || signature.lock.isPending) {
       if (blocker) {
         // One blocker toast at a time (pressing Generate again replaces it), gone once a run starts.
@@ -885,7 +893,7 @@ export function Composer({ docked }: { docked: boolean }) {
   // On this studio's GPUs: the quote's words (none from the server: free, as the open engine always is).
   // An exact orbit runs as a fly-around: its own price.
   const exactPrice = exact ? fly.price : "";
-  const costText = exactPrice || (poolPrice ? (priceUnavailable ? "Price unavailable" : hostedQuote?.text || ownCostText) : ownCostText);
+  const costText = exactPrice || (poolPrice ? (poolState?.refused ? poolState.text : hostedQuote?.text || ownCostText) : ownCostText);
   const payerText = poolPrice ? "" : ownPayerText;
 
   // Attachments: only when something is attached, a required slot is still empty, or none of a "one of these" group is filled (U8).
@@ -1569,7 +1577,7 @@ export function Composer({ docked }: { docked: boolean }) {
         {costText && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums">
+              <span className={cn("shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums", poolRefused && "min-w-0 shrink truncate max-sm:hidden")} data-pool-refused={poolRefused || undefined}>
                 <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), compact: true, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost)}</span>
                 <span className="hidden sm:inline">
                   {costText}
@@ -1579,9 +1587,9 @@ export function Composer({ docked }: { docked: boolean }) {
             </TooltipTrigger>
             <TooltipContent className="max-w-72">
               {poolPrice
-                ? priceUnavailable
-                  ? "Runs on this studio's GPUs are paused for a moment. Try again soon, or run on your own GPU."
-                  : (hostedQuote?.sub ?? "Runs on this studio's GPUs")
+                ? poolState?.refused
+                  ? (poolState.sub ?? poolState.text)
+                  : [hostedQuote?.sub ?? "Runs on this studio's GPUs", poolState?.wait].filter(Boolean).join(" · ")
                 : demo
                 ? "Placeholder results are on (Settings), so outputs are free stand-ins"
                 : cost === 0
@@ -1601,8 +1609,8 @@ export function Composer({ docked }: { docked: boolean }) {
             <Button
               size="icon"
               onClick={submit}
-              disabled={create.isPending || signature.lock.isPending || priceUnavailable}
-              aria-label={blocker ? `Generate — ${blocker.message}` : "Generate"}
+              disabled={create.isPending || signature.lock.isPending || poolRefused}
+              aria-label={blocker ? `Generate — ${blocker.message}` : poolRefused && poolState ? `Generate — ${poolState.text}` : "Generate"}
               aria-busy={create.isPending || signature.lock.isPending || undefined}
               // Blocked, it stays the brand colour (paler, the arrow still 3:1 or more): pressing it still says what's missing and points at it.
               className={cn("size-10 shrink-0 rounded-full", blocker && "bg-primary/70 hover:bg-primary/80")}
@@ -1647,6 +1655,8 @@ export function Composer({ docked }: { docked: boolean }) {
             )}
           </p>
         )}
+        {/* Folded (docked, not focused), the composer stays one line: the wait shows again once it opens. */}
+        {!blocker && !gpuSetup && poolState && (poolState.refused || !collapsed) && <PoolNote state={poolState} />}
         {!blocker && gpuSetup && (
           <p className="px-2 text-[12px] text-muted-foreground">
             <button

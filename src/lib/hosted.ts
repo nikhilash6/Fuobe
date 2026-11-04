@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { GenerationRequest } from "./catalog/types";
+import { lineWords } from "./pool-line";
 
 /**
  * The browser's side of hosted runs and the optional billing service (src/server/hosted.ts, src/server/billing.ts).
@@ -85,6 +86,19 @@ export function useSettled<T>(value: T, ms = 300): T {
   return v;
 }
 
+/** Where a new run would stand in line on this studio's GPUs right now (1: next), and the wait, about (null: unknown). */
+export interface HostedLine {
+  place: number;
+  etaSeconds: number | null;
+}
+
+/** The price check's answer for a run on this studio's GPUs: the quote, and where the run would stand in line. */
+export interface HostedCheck {
+  place?: "pool";
+  quote?: HostedQuote;
+  line?: HostedLine;
+}
+
 /**
  * The price of a run on this studio's GPUs: `?preview=1` with `place: "pool"`. `body` is the request as JSON (null:
  * nothing to price). The answer's `quote` is absent when the run would go to the person's own GPU or key.
@@ -95,13 +109,28 @@ export function useHostedQuote(body: string | null) {
     enabled: !!body,
     staleTime: 10_000,
     retry: false,
-    queryFn: async (): Promise<{ place?: "pool"; quote?: HostedQuote } | null> => {
+    queryFn: async (): Promise<HostedCheck | null> => {
       const res = await fetch("/api/generations?preview=1", { method: "POST", headers: { "Content-Type": "application/json" }, body: body! });
       if (!res.ok) return null;
-      const b = (await res.json()) as { place?: "pool"; quote?: HostedQuote };
-      return { place: b.place, quote: b.quote };
+      const b = (await res.json()) as HostedCheck;
+      return { place: b.place, quote: b.quote, ...(b.line && { line: b.line }) };
     },
   });
+}
+
+/**
+ * What Run says and does for a run on this studio's GPUs, from its price check:
+ * - `refused`: the run wouldn't be taken now (busy, a limit, not offered here, closed, paused, a top-up): Run is off,
+ *   and the price slot says the service's words (`text`), with its line under them (`sub`) and its link or offer;
+ * - otherwise the price (`text`: the service's words, empty when there is none) and, under it, where the run would stand
+ *   in line and the wait (`wait`).
+ * Null while there is no answer yet.
+ */
+export function poolRunState(check: HostedCheck | null | undefined): { refused: boolean; text: string; sub?: string; wait?: string; action?: BillingAction; offer?: BillingOffer } | null {
+  const q = check?.quote;
+  if (!q) return null;
+  if (!q.allowed) return { refused: true, text: q.text, ...(q.sub && { sub: q.sub }), ...(q.action && { action: q.action }), ...(q.offer && { offer: q.offer }) };
+  return { refused: false, text: q.text, ...(q.sub && { sub: q.sub }), ...(check?.line && { wait: lineWords(check.line) }) };
 }
 
 /** The request as the price check sends it: the run, plus where it should go. */
@@ -123,10 +152,4 @@ export function useInterest() {
   });
 }
 
-/** "In line · 3rd · about 40 s": a waiting run's place on this studio's GPUs. */
-export function lineWords(q: { place: number; etaSeconds: number | null }): string {
-  const n = q.place;
-  const ord = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
-  const eta = q.etaSeconds === null ? "" : q.etaSeconds < 60 ? ` · about ${Math.max(5, Math.round(q.etaSeconds / 5) * 5)} s` : ` · about ${Math.round(q.etaSeconds / 60)} min`;
-  return n === 1 ? `Next in line${eta}` : `In line · ${n}${ord}${eta}`;
-}
+export { lineWords };
