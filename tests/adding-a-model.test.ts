@@ -46,6 +46,7 @@ const FIRST_RUN_GAPS = [
   "dub-prepare-dbs-transcribe",
   "dub-prepare-separate-transcribe",
   "face-swap-reactor",
+  "image-matte-feynobg",
   "infinitetalk-wanwrapper",
   "interpolate-rife-vfi",
   "lipsync-latentsync16",
@@ -54,6 +55,8 @@ const FIRST_RUN_GAPS = [
   "qwen-image-21-t2i-small",
   "sfx-hunyuan-foley",
   "sfx-thinksound",
+  "speech-edit-auk",
+  "speech-tts-auk",
   "tryon-flux2-klein-4b",
   "tts-chatterbox-multilingual",
   "tts-dialogue-chatterbox",
@@ -68,6 +71,7 @@ const FIRST_RUN_GAPS = [
   "video-fix-faces-h3",
   "video-from-picture-h3",
   "video-from-picture-solar",
+  "video-key-corridorkey",
   "video-motion-transfer-h3",
   "voice-change-chatterbox",
 ];
@@ -88,8 +92,11 @@ const KEEPS_METADATA = [
   "mixed-media-zimage-frames",
   "selftest-meta-batch",
   "upscale-video-esrgan-chunked",
+  "upscale-video-rtx",
   "upscale-video-seedvr2-chunked",
   "v2a-mmaudio",
+  "video-key-corridorkey",
+  "video-matte-vrmbg3",
 ];
 
 const SHA = "0123456789abcdef".repeat(4);
@@ -219,7 +226,7 @@ describe("the worker build", () => {
     const less = structuredClone(rules);
     delete less.inputs.AILab_Qwen3ASRSubtitle.output_path;
     delete less.inputs.UNETLoader.unet_name;
-    expect(unruledPathInputs(catalog, less)).toEqual(["AILab_Qwen3ASRSubtitle.output_path (required, named for a path, a path or a download)", "UNETLoader.unet_name (a model file)"]);
+    expect(unruledPathInputs(catalog, less)).toEqual(["AILab_Qwen3ASRSubtitle.output_path (required, named for a path, a path or a download)", "UNETLoader.unet_name (a model file, a path or a download)"]);
   });
 
   it("stops when the catalog links another node into any input that has a rule (a model file, a sent file, a save name)", () => {
