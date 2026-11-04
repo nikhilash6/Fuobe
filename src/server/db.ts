@@ -970,6 +970,13 @@ declare global {
   var __fuobeAuthTablesError: string | null | undefined;
 }
 
+/** Whether skill_runs is the earlier build's table (no engine column), and no table holds the earlier runs yet. */
+function skillRunsFromEarlierBuild(db: Database.Database): boolean {
+  const columns = (db.prepare("PRAGMA table_info(skill_runs)").all() as { name: string }[]).map((c) => c.name);
+  if (!columns.length || columns.includes("engine")) return false;
+  return !db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'skill_runs_earlier'").get();
+}
+
 /**
  * A data folder that ran PR #15's branch before the owner dropped the old accounts packages on 10-30
  * (`claude/fuobe-parity-4` up to f7c6d8e, `claude/fuobe-r5-batch-7` up to c9cd489) has places 23 and 24 marked done for
@@ -978,13 +985,6 @@ declare global {
  * forgotten when this list's work is missing and the dropped package's is there, so the loop below runs it. The dropped
  * tables stay: nothing reads them, and nothing anyone made is deleted.
  */
-/** Whether skill_runs is the earlier build's table (no engine column), and no table holds the earlier runs yet. */
-function skillRunsFromEarlierBuild(db: Database.Database): boolean {
-  const columns = (db.prepare("PRAGMA table_info(skill_runs)").all() as { name: string }[]).map((c) => c.name);
-  if (!columns.length || columns.includes("engine")) return false;
-  return !db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'skill_runs_earlier'").get();
-}
-
 function forgetDroppedBranchMigrations(db: Database.Database): void {
   const done = (id: number) => !!db.prepare("SELECT 1 FROM _migrations WHERE id = ?").get(id);
   const has = (type: "table" | "trigger", name: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?").get(type, name);
