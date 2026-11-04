@@ -64,6 +64,7 @@ const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { getModel } = await import("@/lib/catalog");
 const { POOL_WORDS } = await import("@/lib/relay");
+const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 
 type TaskRow = import("@/server/computer/tasks").TaskRow;
 
@@ -789,6 +790,29 @@ describe("the run ceiling per lane", () => {
     await expectOnce(id, watch, { place: 1 });
     // Its ComfyUI got the job twice (once per attempt), under the task's one prompt id.
     expect(comfy.postsOf(task.prompt_id)).toBe(2);
+  });
+});
+
+describe("the server's disk is low when the result comes", () => {
+  it("the run ends in the one plain sentence, never words about uploads or a pause", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const d = driver(w);
+    d.onStep(async (step) => {
+      await tick();
+      // While it renders, the server's disk drops below the free space it keeps.
+      if (step === "running") globalThis.__fuobeTestDiskFree = 1;
+    });
+    try {
+      await workAll(d);
+      const g = await ended(id);
+      expect(g?.status).toBe("failed");
+    } finally {
+      globalThis.__fuobeTestDiskFree = 1e13;
+    }
+    const g = await expectFreeFailure(id);
+    expect(g.error).not.toBe(ACCOUNT_MESSAGES.diskLow);
+    expect(db().prepare("SELECT error FROM generations WHERE id = ?").get(id)).toEqual({ error: ACCOUNT_MESSAGES.diskLow });
   });
 });
 

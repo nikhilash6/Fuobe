@@ -83,7 +83,8 @@ The policy's limits count runs on this install's GPUs only, never runs on the ac
 install's own limits). A run is one press of Run: its jobs and chain steps count once. `activeRuns` counts runs going
 now (waiting or running), `waiting` those not started yet, `runsPerHour` those started in the last hour, and
 `addressRunsPerHour` those started from one client address in the last hour, across accounts (only when the install
-trusts its proxy, `FUOBE_TRUST_PROXY=1`; the address is kept as a salted hash for two hours). 0 or absent means no such
+trusts its proxy, `FUOBE_TRUST_PROXY=1`; the address is kept as a salted hash, and every run's entry is removed two
+hours on, whether or not more runs come). 0 or absent means no such
 limit. Fuobe counts them in its database together with making the run's rows, so requests that arrive together (or
 reach two servers during a deploy) never pass a limit together. They apply with or without a billing service.
 

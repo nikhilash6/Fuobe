@@ -297,6 +297,21 @@ describe("runs waiting, runs an hour, runs from one address", () => {
     expect(kept.length).toBeGreaterThan(0);
     expect(kept.every((r) => /^[0-9a-f]{32}$/.test(r.addr) && !r.addr.includes("203"))).toBe(true);
   });
+
+  it("a run's address hash goes two hours on, even when no other run comes", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0, addressRunsPerHour: 5 } });
+    process.env.FUOBE_TRUST_PROXY = "1";
+    const a = account();
+    expect((await post({ ...IMAGE, ...SHOWN }, a.cookie, { "x-forwarded-for": "203.0.113.77" })).status).toBe(201);
+    const kept = () => (db().prepare("SELECT COUNT(*) AS n FROM pool_admissions WHERE account = ?").get(a.id) as { n: number }).n;
+    expect(kept()).toBe(1);
+    // Two hours and a minute pass with no other run here; the runner turns as it always does.
+    db().prepare("UPDATE pool_admissions SET at = ? WHERE account = ?").run(Date.now() - 121 * 60_000, a.id);
+    globalThis.__fuobePoolAdmissionsPruned = 0;
+    await tick();
+    expect(kept()).toBe(0);
+    expect((db().prepare("SELECT COUNT(*) AS n FROM pool_admissions WHERE at < ?").get(Date.now() - 120 * 60_000) as { n: number }).n).toBe(0);
+  });
 });
 
 describe("where a run goes", () => {

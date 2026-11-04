@@ -77,6 +77,7 @@ import { CONNECT_GPU_MESSAGE, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/
 import { outsideTenant, runAsTenant, tenant, tenantAccount } from "./tenant";
 import { generationAccount } from "./account-library";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "./account-files";
+import { prunePoolAdmissions } from "./pool-limits";
 import { checkAccountLoras } from "./account-loras";
 import { missingFilesMessage, type MissingFiles } from "@/lib/missing-files";
 import { Readable } from "node:stream";
@@ -230,7 +231,7 @@ function poolMessage(r: Pick<Row, "status" | "message">): string | null {
 /**
  * A pool row's failure as the account reads it: Fuobe's own plain words about the account's side (its files are full, a
  * picture it can't use, it stopped the run) and the output check's words (a result it removed) as they are; anything
- * else (whatever the GPUs, ComfyUI or a worker said) one plain sentence.
+ * else (whatever the GPUs, ComfyUI, a worker or the server's own state said) one plain sentence.
  */
 function poolError(id: string, error: string | null): string | null {
   if (!error) return error;
@@ -239,11 +240,24 @@ function poolError(id: string, error: string | null): string | null {
   return checked ? error : POOL_WORDS.failed;
 }
 
+/**
+ * The words a pool row's failure keeps as they are: about the account's own side only (a file it sent, its files full,
+ * it stopped the run) and the safety and output checks. Words about the server's own state (its disk, its upload or
+ * finish limits) become the one plain sentence.
+ */
 const PLAIN_POOL_ERRORS = (() => {
   let set: Set<string> | undefined;
+  const m = ACCOUNT_MESSAGES;
   return () =>
     (set ??= new Set<string>([
-      ...Object.values(ACCOUNT_MESSAGES),
+      m.imageTooBig,
+      m.imageTooManyPixels,
+      m.audioTooBig,
+      m.videoTooBig,
+      m.fileTooBig,
+      m.wrongType,
+      m.uploadsFull,
+      m.filesFull,
       RELAY_WORDS.stopped,
       POOL_WORDS.failed,
       BLOCKED_CARD_MESSAGE,
@@ -2202,6 +2216,12 @@ async function tick(): Promise<void> {
     // service. Neither does anything while no service is set.
     if (moderationConfigured()) await sweepOutputChecks();
     void sweepBilling();
+    // The hourly run counts forget a run (and the client address it came from) two hours on, whether more runs come.
+    try {
+      prunePoolAdmissions();
+    } catch (e) {
+      console.warn(`[generations] run counts: ${(e as Error).message}`);
+    }
   } finally {
     state.busy = false;
   }

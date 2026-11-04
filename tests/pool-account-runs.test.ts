@@ -52,7 +52,8 @@ const pool = await import("@/server/computer/pool");
 const hosted = await import("@/server/hosted");
 const billing = await import("@/server/billing");
 const { listAccountRuns } = await import("@/server/account-admin");
-const { loadManifest, withoutSaveMetadata, planRelayOutputs, onComputer } = await import("@/server/providers/comfyui");
+const { loadManifest, withoutSaveMetadata, planRelayOutputs, onComputer, OWN_OUTPUT_LIMITS } = await import("@/server/providers/comfyui");
+const { accountTotalBytes, accountUsage, diskFloorBytes } = await import("@/server/account-files");
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { ComputerRunner } = await import("@/lib/computer-runner");
@@ -508,6 +509,30 @@ describe("graphs and results for the workers", () => {
     try {
       const full = onComputer("owner", () => planRelayOutputs(t, [entry], false));
       expect("error" in full && full.error).toMatch(/no room/);
+      // The owner's own computer keeps its results whatever the disk has free, as before.
+      const ownLow = onComputer("owner", () => planRelayOutputs({ ...t, pools: null }, [entry], false));
+      expect("wanted" in ownLow && ownLow.wanted.length).toBe(40);
+    } finally {
+      globalThis.__fuobeTestDiskFree = 1e13;
+    }
+  });
+
+  it("an account's result from its own GPU has the room its files have, as before; on the workers, never past the disk's free floor", () => {
+    const entry = { status: { status_str: "success", completed: true }, outputs: { "9": { images: [{ filename: "x_0.png", subfolder: "", type: "output" }] } } };
+    const t = { id: "acct-task-00001x", workflow_id: loadManifest().workflows.find((x) => x.outputs.length === 1)!.id, meta_batch: 0, prefix: null, extra_json: JSON.stringify({ outputs: 1 }), pools: null };
+    // The disk has a megabyte more than the free space it keeps.
+    globalThis.__fuobeTestDiskFree = diskFloorBytes() + 2 ** 20;
+    try {
+      const own = onComputer(`acct:${accountId}`, () => planRelayOutputs(t, [entry], false));
+      const room = Math.min(OWN_OUTPUT_LIMITS.maxBytes, accountTotalBytes(accountId) - accountUsage(accountId).total);
+      expect(room).toBeGreaterThan(2 ** 20);
+      expect("wanted" in own && own.wanted.map((w) => w.maxBytes)).toEqual([room]);
+      const pooled = onComputer(`acct:${accountId}`, () => planRelayOutputs({ ...t, pools: "pool" }, [entry], false));
+      expect("wanted" in pooled && pooled.wanted.map((w) => w.maxBytes)).toEqual([2 ** 20]);
+      // Right at the floor: its own GPU's result still has its room (never told its files are full).
+      globalThis.__fuobeTestDiskFree = diskFloorBytes();
+      const atFloor = onComputer(`acct:${accountId}`, () => planRelayOutputs(t, [entry], false));
+      expect("wanted" in atFloor && atFloor.wanted.length).toBe(1);
     } finally {
       globalThis.__fuobeTestDiskFree = 1e13;
     }
