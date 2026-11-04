@@ -226,7 +226,13 @@ describe("what this install's GPUs keep off, in the status", () => {
     expect((await visitorStatus(auth.accountById(a)!)).viewer.pool).toBeUndefined();
     process.env.FUOBE_HOSTED_RUNS = "1";
     const s = await visitorStatus(auth.accountById(a)!);
-    expect(s.viewer.pool).toEqual({ deny: ["oss-z-image-turbo"], apps: { deny: ["app-x"] }, kinds: { model3d: false } });
+    expect(s.viewer.pool).toMatchObject({ deny: ["oss-z-image-turbo"], kinds: { model3d: false } });
+    // The policy's own app list, and every preset whose open model (or the kind it makes) is kept off with it.
+    const { PRESETS, getModel } = await import("@/lib/catalog");
+    const offWithModel = PRESETS.filter((p) => p.open && (p.open.modelId === "oss-z-image-turbo" || getModel(p.open.modelId)?.kind === "model3d")).map((p) => p.id);
+    expect(offWithModel.length).toBeGreaterThan(0);
+    expect(s.viewer.pool?.apps?.deny).toEqual(expect.arrayContaining(["app-x", ...offWithModel]));
+    expect(s.viewer.pool?.apps?.deny).not.toContain(PRESETS.find((p) => p.open && !offWithModel.includes(p.id))!.id);
     expect((await visitorStatus(null)).viewer.pool).toEqual(s.viewer.pool);
     // Its own GPU runs what this install's GPUs don't: nothing is left out of its pickers.
     auth.setAccountGpu(a, { mode: "computer" });

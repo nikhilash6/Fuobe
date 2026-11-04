@@ -34,7 +34,7 @@ import { h3Frames, h3Prompt } from "@/lib/h3-prompt";
 import {
   CHAIN_LIST_SLACK,
   LAST_FRAME_CHAIN,
-  OPERATION_OUTPUT,
+  operationOutput,
   type ChainSlot,
   type Engine,
   type Generation,
@@ -157,6 +157,8 @@ export function toGeneration(r: Row): Generation {
   // The run's stamp is the server's (its place, the billing hold, its class in the line): never sent to a browser or a
   // script, so a retry that sends the request back never says where the last attempt ran.
   const hold = stored.hold;
+  // Its hold set an amount aside: only then does a run that can't finish say it wasn't charged.
+  const charged = !!hold && Number(stored.heldAmount) > 0;
   const request = withoutStamp(stored);
   // A run on this install's GPUs shows the account only where it is (in line, working) and its result, or one plain
   // sentence when it can't finish: never the technical reason, which the owner reads in the accounts' runs.
@@ -190,7 +192,7 @@ export function toGeneration(r: Row): Generation {
     request,
     // Held for the moderation service's check: nothing of it is shown until it passes.
     outputs: checking ? [] : (JSON.parse(r.outputs_json) as OutputFile[]),
-    error: pool ? poolError(r.id, r.error) : r.error,
+    error: pool ? poolError(r.id, r.error, charged) : r.error,
     costUsd: r.cost_usd,
     favorite: !!r.favorite,
     createdAt: r.created_at,
@@ -211,7 +213,7 @@ export function toGeneration(r: Row): Generation {
     // On this install's GPUs (hosted runs): what it cost, or that it cost nothing.
     ...(stored.place === "pool" && { place: "pool" as const }),
     ...(stored.charge && r.status === "succeeded" && { charge: stored.charge }),
-    ...(hold && (r.status === "failed" || r.status === "canceled") && { notCharged: true as const }),
+    ...(charged && (r.status === "failed" || r.status === "canceled") && { notCharged: true as const }),
     ...(checking && { stage: "checking" as const }),
     // Waiting in line on this install's GPUs: its place and the wait, about.
     ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
@@ -228,13 +230,15 @@ function poolMessage(r: Pick<Row, "status" | "message">): string | null {
 /**
  * A pool row's failure as the account reads it: Fuobe's own plain words about the account's side (its files are full, a
  * picture it can't use, it stopped the run) and the output check's words (a result it removed) as they are; anything
- * else (whatever the GPUs, ComfyUI or a worker said) one plain sentence.
+ * else (whatever the GPUs, ComfyUI or a worker said) one plain sentence. "Not charged" stays only on a run that had
+ * something set aside (`charged`).
  */
-function poolError(id: string, error: string | null): string | null {
+function poolError(id: string, error: string | null, charged: boolean): string | null {
   if (!error) return error;
   if (PLAIN_POOL_ERRORS().has(error) || /^Your files have reached \d+ GB\b/.test(error)) return error;
   const checked = db().prepare("SELECT 1 FROM output_checks WHERE generation_id = ? AND state IN ('hidden', 'unchecked') LIMIT 1").get(id);
-  return checked ? error : POOL_WORDS.failed;
+  if (!checked) return POOL_WORDS.failed;
+  return charged ? error : error.replace(/\s*Not charged\.$/, "");
 }
 
 const PLAIN_POOL_ERRORS = (() => {
@@ -647,10 +651,9 @@ export class ConnectComfyError extends Error {
 /** Text steps depend on which LLM the route may use (the open model never calls Claude). */
 const routeReady = (r: ModelRoute) => (r.provider === "llm" ? llmBackends(r).length > 0 : provider(r.provider).isConfigured());
 
-/** What a run produces: colour matching works on images and videos, and fal renders a timeline as a video, so those follow the model. */
+/** What a run produces (operationOutput: some operations follow the model's kind). */
 export function outputKind(op: Generation["op"], model: { kind: MediaKind }): MediaKind {
-  // A 3D scene is a mesh on the open engine and a depth map (an image) on the cloud.
-  return op === "color-match" || op === "timeline" || op === "scene-3d" ? model.kind : OPERATION_OUTPUT[op];
+  return operationOutput(op, model.kind);
 }
 
 // Live updates: every write to the table becomes an event (src/server/live.ts). A trashed row

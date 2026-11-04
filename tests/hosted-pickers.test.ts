@@ -46,6 +46,54 @@ describe("what pickers leave out for a visitor with no GPU of its own", () => {
   });
 });
 
+describe("presets kept off with their model or the kind they make", () => {
+  const presets = [
+    { id: "app-face", model: { id: "oss-face", kind: "image" as const } },
+    { id: "app-portrait", model: { id: "oss-portrait", kind: "image" as const } },
+    { id: "motion-orbit", model: { id: "oss-clip", kind: "video" as const } },
+    { id: "effect-melt", model: { id: "oss-clip", kind: "video" as const } },
+    { id: "app-cloud-only" },
+  ];
+  const tryFree = (pool: Parameters<typeof poolRulesOf>[0]) => tryFreeFor({ hosted: true, gpu: { connected: false }, pool: poolRulesOf(pool, presets) }, "both")!;
+
+  it("a preset on a model the policy denies, or of a kind it keeps off, says no Try free and leaves the pickers", () => {
+    const denied = tryFree({ pool: { deny: ["oss-face"] } });
+    expect(denied({ id: "app-face", open: true })).toBe(false);
+    expect(denied({ id: "app-portrait", open: true })).toBe(true);
+    expect(denied({ id: "motion-orbit", open: true })).toBe(true);
+    const noVideo = tryFree({ pool: {}, kinds: { video: false } });
+    expect(noVideo({ id: "motion-orbit", open: true })).toBe(false);
+    expect(noVideo({ id: "effect-melt", open: true })).toBe(false);
+    expect(noVideo({ id: "app-face", open: true })).toBe(true);
+    // The rules the gallery and the motion and effect pickers filter by say the same.
+    const rules = poolRulesOf({ pool: { deny: ["oss-face"] }, kinds: { video: false } }, presets);
+    expect(presets.filter((p) => poolRunsPreset(rules, p.id)).map((p) => p.id)).toEqual(["app-portrait", "app-cloud-only"]);
+  });
+
+  it("keeps the shorter list, and the policy's own app lists", () => {
+    // Most presets kept off: the ones still on are listed instead.
+    expect(poolRulesOf({ pool: { allow: ["oss-portrait"] } }, presets)?.apps).toEqual({ allow: ["app-portrait", "app-cloud-only"] });
+    // An app allow list of the policy's own only loses what its models keep off.
+    expect(poolRulesOf({ pool: { deny: ["oss-face"], apps: { allow: ["app-face", "motion-orbit"] } } }, presets)?.apps).toEqual({ allow: ["motion-orbit"] });
+    expect(poolRulesOf({ pool: { deny: ["oss-face"], apps: { deny: ["effect-melt"] } } }, presets)?.apps).toEqual({ deny: ["effect-melt", "app-face"] });
+    // Nothing kept off: nothing to send.
+    expect(poolRulesOf({ pool: { deny: [] } }, presets)).toBeUndefined();
+  });
+
+  it("agree with the server: a preset says Try free only when the run it makes would be taken", async () => {
+    const { poolAllows } = await import("@/server/hosted");
+    const { kindAllowed } = await import("@/server/hosted-run");
+    const policies = [{ pool: {} }, { pool: { deny: ["oss-face"] } }, { pool: { allow: ["oss-clip"] } }, { pool: {}, kinds: { video: false } }, { pool: { apps: { deny: ["app-portrait"] } } }];
+    for (const p of policies) {
+      const free = tryFreeFor({ hosted: true, gpu: { connected: false }, pool: poolRulesOf(p, presets) }, "both")!;
+      for (const preset of presets.filter((x) => x.model)) {
+        const server = poolAllows(p, preset.model!.id, preset.id) && kindAllowed(p, preset.model!.kind);
+        expect(free({ id: preset.id, open: true }), JSON.stringify({ p, preset: preset.id })).toBe(server);
+      }
+    }
+  });
+});
+
 describe("Try free on preset cards", () => {
   const card = { id: "app-x", open: true };
   it("only with hosted runs on, for a viewer whose runs go to this studio's GPUs, on presets they run", () => {

@@ -7,14 +7,15 @@ import { accountGpu, type Account, type AccountGpu } from "./auth";
 import type { OwnerGpuView } from "@/lib/connections";
 import { runnerFacts, type Principal } from "./computer/tasks";
 import { offeredSummary } from "./model-access";
-import { MODELS } from "@/lib/catalog";
+import { getModel, MODELS, PRESETS } from "@/lib/catalog";
+import { operationOutput } from "@/lib/catalog/types";
 import { hostedUntestedSummary } from "@/lib/catalog/hosted-untested";
 import { PROVIDERS } from "./providers";
 import { blockedForAccounts, fetchPublic, isLoopbackGpu } from "./remote-fetch";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
 import { balance as billingBalance, policy as billingPolicy, type Action, type Balance } from "./billing";
 import { poolReady } from "./hosted";
-import { poolRulesOf, type PoolRules } from "@/lib/pool-rules";
+import { poolRulesOf, type PoolRules, type PresetModel } from "@/lib/pool-rules";
 
 /**
  * "Your GPU" (public sign-up): the ComfyUI an account connects, where its runs go. The server calls
@@ -200,6 +201,17 @@ export interface VisitorView {
   notice?: { id: string; text: string; url?: string };
 }
 
+declare global {
+  var __fuobePresetModels: PresetModel[] | undefined;
+}
+
+/** Every preset with the open model it runs on and the kind it makes (for the pickers' rules): made once. */
+const presetModels = (): PresetModel[] =>
+  (globalThis.__fuobePresetModels ??= PRESETS.map((p) => {
+    const m = p.open ? getModel(p.open.modelId) : undefined;
+    return m && p.open ? { id: p.id, model: { id: m.id, kind: operationOutput(p.open.op, m.kind) } } : { id: p.id };
+  }));
+
 /**
  * GET /api/status for a guest or an account: ComfyUI is its own GPU (taken as there until it has one,
  * so the studios offer Generate and the run asks it to connect one), fal.ai and Replicate are its own
@@ -224,7 +236,7 @@ export async function visitorStatus(account: Account | null) {
     const p = await billingPolicy(account?.id ?? null);
     if (p?.hosted) viewer.hosted = true;
     if (p?.hosted && p.prefer === "pool") viewer.prefer = "pool";
-    const rules = p?.hosted && !gpu ? poolRulesOf(p) : undefined;
+    const rules = p?.hosted && !gpu ? poolRulesOf(p, presetModels()) : undefined;
     if (rules) viewer.pool = rules;
     if (account && p?.links?.length) viewer.links = p.links;
     if (account && p?.notice) viewer.notice = p.notice;

@@ -9,6 +9,7 @@ import type { GenerationRequest } from "@/lib/catalog/types";
  *
  * - `place: "pool"`: the run goes to this install's GPUs (hosted runs, hosted.ts), not the account's own.
  * - `hold`: the billing service's hold for the run (billing.ts reserve); every row reports to it once (billing-outbox.ts).
+ *   `heldAmount`: what the hold set aside (absent: nothing was).
  * - `charge`: the words the billing service gave for the charge ("7 units"), shown on the result.
  * - `checkOutputs`: the moderation service asked to see this run's outputs before they show (moderation.ts).
  * - `class` and `boostMs`: its class in the line ("paid" before "free") and its head start inside that class.
@@ -16,6 +17,8 @@ import type { GenerationRequest } from "@/lib/catalog/types";
 export interface RunStamp {
   place?: "pool";
   hold?: string;
+  /** What the hold set aside, when it set anything aside (a run that can't finish then says it wasn't charged). */
+  heldAmount?: number;
   charge?: string;
   checkOutputs?: boolean;
   /** How long it may wait in line on this install's GPUs (ms), from the billing service. */
@@ -39,7 +42,7 @@ export const withRunStamp = <T,>(stamp: RunStamp, fn: () => T): T => store().run
 export const runStamp = (): RunStamp | undefined => store().getStore();
 
 /** The server-only fields of a request. */
-export const STAMP_FIELDS = ["place", "hold", "charge", "checkOutputs", "waitMs", "class", "boostMs"] as const;
+export const STAMP_FIELDS = ["place", "hold", "heldAmount", "charge", "checkOutputs", "waitMs", "class", "boostMs"] as const;
 
 /** A request with the current stamp's fields, and none of a stored request's own. */
 export function stamped(req: GenerationRequest): GenerationRequest {
@@ -51,6 +54,7 @@ export function stamped(req: GenerationRequest): GenerationRequest {
     ...out,
     ...(s.place && { place: s.place }),
     ...(s.hold && { hold: s.hold }),
+    ...(s.heldAmount && s.heldAmount > 0 && { heldAmount: s.heldAmount }),
     ...(s.charge && { charge: s.charge }),
     ...(s.checkOutputs && { checkOutputs: true }),
     ...(s.waitMs && s.waitMs > 0 && { waitMs: s.waitMs }),
@@ -64,6 +68,7 @@ export function stampOf(req: Pick<GenerationRequest, (typeof STAMP_FIELDS)[numbe
   return {
     ...(req.place === "pool" && { place: "pool" as const }),
     ...(req.hold && { hold: req.hold }),
+    ...(req.heldAmount && req.heldAmount > 0 && { heldAmount: req.heldAmount }),
     ...(req.charge && { charge: req.charge }),
     ...(req.checkOutputs && { checkOutputs: true }),
     ...(req.waitMs && { waitMs: req.waitMs }),

@@ -154,7 +154,8 @@ export async function POST(request: Request) {
     if (preview) {
       // Hosted runs: a visitor's run that would go to this install's GPUs is priced there, with the billing service's
       // quote (its words for Run) and where it would stand in line. Off, or a run on its own GPU or key: priced as before.
-      const pool = viewer.kind !== "owner" ? await poolQuote(account, req, wish, { addr: account ? clientAddress(request) : null }) : null;
+      // (The client's address is read only for a policy that counts runs per address.)
+      const pool = viewer.kind !== "owner" ? await poolQuote(account, req, wish, { addr: () => clientAddress(request) }) : null;
       if (pool) {
         const { model, ...p } = pool.planned;
         return Response.json({ ...p, modelId: model.id, modelName: model.name, engine: model.engine, kind: outputKind(p.op, model), opLabel: OPERATION_LABELS[p.op] ?? p.op, place: "pool", quote: pool.quote, line: pool.line });

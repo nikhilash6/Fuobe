@@ -72,6 +72,11 @@ describe("a run's tile on this studio's GPUs", () => {
     expect(html).toContain(POOL_WORDS.failed.replace("'", "&#x27;"));
     expect(html).not.toContain("Couldn&#x27;t generate this one");
     expect(html).toContain("Retry");
+    // Nothing set aside for it (every run free): only the sentence and Retry, with nothing about a charge.
+    const free = render(createElement(FailedTile, { g: gen({ place: "pool", status: "failed", error: POOL_WORDS.failed }), ratio: 1, onRetry: () => {} }));
+    expect(free).toContain(POOL_WORDS.failed.replace("'", "&#x27;"));
+    expect(free).toContain("Retry");
+    expect(free).not.toMatch(/charged/i);
   });
   it("every other run's tiles are as before", () => {
     const own = render(createElement(PendingTile, { g: gen({ status: "running", message: "Generating", progress: 0.4 }), ratio: 1 }));
