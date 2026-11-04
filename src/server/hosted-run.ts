@@ -33,6 +33,7 @@ import { checkRun, moderationConfigured } from "./moderation";
 import type { RunStamp } from "./run-stamp";
 import { readRef } from "./storage";
 import { ACCOUNT_LIMITS } from "./account-files";
+import { poolLimitRefusal } from "./pool-limits";
 import { runAsTenant } from "./tenant";
 
 /**
@@ -305,14 +306,34 @@ export async function reservePool(
   };
 }
 
+/** Where a new run would stand in line on this install's GPUs right now (1: next), and the wait, about (null: unknown). */
+export interface PoolLine {
+  place: number;
+  etaSeconds: number | null;
+}
+
+/** A price check's answer for a run this install's GPUs won't take, in the words the run itself would get. */
+const notOfferedQuote = (text: string): Quote => ({ allowed: false, amount: 0, priceVersion: "", text, code: "not-offered" });
+
 /**
- * A price check on this install's GPUs (hosted runs on): the plan there and the billing service's quote (no service:
- * free, and Run keeps its own words). Null when the run wouldn't go there (its own GPU, its own key, today's answer).
+ * A price check on this install's GPUs (hosted runs on): the plan there, the billing service's quote (no service: free,
+ * and Run keeps its own words) and where the run would stand in line. Null when the run wouldn't go there (its own GPU,
+ * its own key, today's answer).
+ *
+ * The quote is refused before Run for what the run itself would be refused for (decidePlace and the route's limits), so
+ * Run is off and says why instead of failing once pressed: a model, a kind, LoRAs or files this install's GPUs don't
+ * take (for a viewer with no GPU of its own to send them to instead), and the policy's limits on runs at once, runs in
+ * line and runs an hour. `addr`: the client's address as the hourly count keeps it (pool-limits.ts clientAddress).
  */
-export async function poolQuote(account: Account | null, asked: GenerationRequest, wish: PlaceWish): Promise<{ planned: Planned; quote: Quote } | null> {
+export async function poolQuote(
+  account: Account | null,
+  asked: GenerationRequest,
+  wish: PlaceWish,
+  o: { addr?: string | null } = {},
+): Promise<{ planned: Planned; quote: Quote; line: PoolLine } | null> {
   if (!hostedRunsOn() || wish === "own" || !poolReady()) return null;
   // A guest is priced under the billing service's policy for guests (none set: as an account would be, once signed up).
-  const p = account ? await billingPolicy(account.id) : billingConfigured() ? await billingPolicy(null) : null;
+  const p = await billingPolicy(account?.id ?? null);
   // Priced for the outputs it would make: the studio's cap per run, and the billing service's when lower.
   const cap = Math.min(ACCOUNT_LIMITS.outputsPerRun, ...(billingConfigured() && p && p.limits.outputsPerRun > 0 ? [p.limits.outputsPerRun] : []));
   const req = (asked.params?.numOutputs ?? 1) > cap ? { ...asked, params: { ...asked.params, numOutputs: cap } } : asked;
@@ -323,14 +344,34 @@ export async function poolQuote(account: Account | null, asked: GenerationReques
     return null;
   }
   if (planned.route.provider !== "comfyui") return null;
-  if (account && wish !== "pool" && !prefersPool(p) && accountGpu(account.id) && (await ownGpuOnline(account.id))) return null;
+  const hasGpu = !!account && !!accountGpu(account.id);
+  if (account && hasGpu && wish !== "pool" && !prefersPool(p) && (await ownGpuOnline(account.id))) return null;
+  if (p && !p.hosted) return null;
+  const line = (facts: { ahead: number; etaS: number | null }, q?: Quote): PoolLine => ({ place: Math.max(0, facts.ahead) + 1, etaSeconds: q?.etaS ?? facts.etaS ?? null });
+  // What this install's GPUs won't take goes to the viewer's own GPU when it has one (as the run would); otherwise the
+  // price check says so, and Run stays off.
+  const notHere = (text: string) => (hasGpu && wish !== "pool" ? null : { planned, quote: notOfferedQuote(text), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) });
   const kind = outputKind(planned.op, planned.model);
-  if (p && (!p.hosted || !poolAllows(p, planned.model.id, req.presetId) || !kindAllowed(p, kind))) return null;
-  if (!poolTakes(planned.route.endpoint)) return null;
+  if (kind === "model3d") return notHere(OWN_GPU_TOOL_MESSAGE);
+  if (p && (!poolAllows(p, planned.model.id, req.presetId) || !kindAllowed(p, kind))) return notHere(HOSTED_WORDS.notOffered);
+  if (!poolTakes(planned.route.endpoint)) return notHere(HOSTED_WORDS.notOffered);
+  if (req.loras?.length) return notHere(HOSTED_WORDS.loras);
+  if (p) {
+    const inputs = inputCounts(req);
+    const takes = (k: "image" | "video" | "audio") => p.uploads[k] && poolTakesFiles(k);
+    if ((inputs.image && !takes("image")) || (inputs.video && !takes("video")) || (inputs.audio && !takes("audio"))) return notHere(HOSTED_WORDS.inputs);
+  }
   // Priced once for every step of a chain that uses this install's GPUs (a step it can't take there: not offered here).
   const steps = account ? poolSteps(account.id, req) : null;
-  if (steps && p && stepsProblem(p, steps)) return null;
+  const problem = steps && p ? stepsProblem(p, steps) : null;
+  if (problem) return notHere(problem);
   const facts = { ...runFacts(req, planned, kind), ...(steps && { steps: pricedSteps(steps) }) };
-  const q = await billingQuote(account ? accountFacts(account) : null, facts, queueFacts(account?.id ?? null, planned.route.endpoint));
-  return { planned, quote: q };
+  const queue = queueFacts(account?.id ?? null, planned.route.endpoint);
+  let q = await billingQuote(account ? accountFacts(account) : null, facts, queue);
+  // The policy's limits on this account's runs here, as the run would meet them (pool-limits.ts): said before Run.
+  if (q.allowed && account && p) {
+    const over = poolLimitRefusal(account.id, p, o.addr ?? null);
+    if (over) q = { ...q, allowed: false, code: "limit", text: over.error };
+  }
+  return { planned, quote: q, line: line(queue, q) };
 }
