@@ -117,7 +117,7 @@ describe("FLUX 3 Image Klein's ComfyUI graphs", () => {
     expect(e["11"].inputs.image).toEqual(["31", 0]);
   });
 
-  it("pins BFL's gated repack at feef60b0 with its sizes; the shared encoder and VAE download without a token", () => {
+  it("pins BFL's gated repack at feef60b0 with its sizes and SHA-256; the shared encoder and VAE download without a token", () => {
     for (const id of ["flux3-klein-t2i", "flux3-klein-edit", "flux3-klein-base-t2i-lora"]) {
       const files = Object.fromEntries(entry(id).models.map((m) => [m.file, m]));
       expect(files["qwen3vl_4b_int8_convrot.safetensors"]).toMatchObject({ folder: "text_encoders", sizeGb: 4.86 });
@@ -132,7 +132,7 @@ describe("FLUX 3 Image Klein's ComfyUI graphs", () => {
     const base = Object.fromEntries(entry("flux3-klein-base-t2i-lora").models.map((m) => [m.file, m]));
     expect(base["flux3-image-klein-base-int8-convrot.safetensors"]).toMatchObject({ sizeGb: 5.81, gated: true });
     for (const [file, bytes] of Object.entries(SIZES)) {
-      expect(pins[`${REPO}/${file}`], file).toEqual({ revision: "feef60b0aaf63a4773ace96636ebbcf43b881312", sizeBytes: bytes });
+      expect(pins[`${REPO}/${file}`], file).toEqual({ revision: "feef60b0aaf63a4773ace96636ebbcf43b881312", sizeBytes: bytes, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
     }
     // Every Klein file in the manifest points at the pinned revision.
     for (const id of ["flux3-klein-t2i", "flux3-klein-edit", "flux3-klein-base-t2i-lora"]) {
