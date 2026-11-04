@@ -2489,7 +2489,11 @@ async function pollOne(r: Row): Promise<void> {
   }
   const ctx = pollContext(r, model);
   // Its outputs are saved and the 3D finish runs (or ran until a restart): nothing more to ask the provider.
-  if (ctx.meta.finishing) return resumeFinish(r);
+  // (Only the app process whose turn it is: two processes on one database never run its finish twice.)
+  if (ctx.meta.finishing) {
+    if (claimFinish(r.id)) resumeFinish(r);
+    return;
+  }
   // Poll first: a job that finished while the server was asleep or down is collected, not timed out.
   let res: PollResult | undefined;
   let pollError: unknown;
@@ -2583,6 +2587,9 @@ async function pollOne(r: Row): Promise<void> {
     }
     res = { ...res, outputs: (res.outputs as RichOutput[]).map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, watermark: { mode, ...(marks && { marks }) } } } : o)) };
   }
+  // One app process saves a finished run's results: the one that takes the turn (two processes on one database during a
+  // deploy's overlap never both save them, and the second never ends a saved run as failed).
+  if (!claimFinish(r.id)) return;
   // Mark first so a slow download isn't polled twice.
   update(r.id, { status: "running", progress: 0.99, message: "Saving results" });
   const outputs: OutputFile[] = [];
@@ -2604,6 +2611,8 @@ async function pollOne(r: Row): Promise<void> {
     for (const o of keepMatte(res.outputs as RichOutput[], matte)) {
       try {
         outputs.push(await persistOutput(o, r.id));
+        // Still saving: the turn is still this process's.
+        claimFinish(r.id);
       } catch (e) {
         if (account) {
           for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
@@ -2677,6 +2686,38 @@ async function pollOne(r: Row): Promise<void> {
     message: dropped ? `Kept ${ACCOUNT_LIMITS.outputsPerJob} of ${ACCOUNT_LIMITS.outputsPerJob + dropped} results` : null,
     completed_at: Date.now(),
   });
+}
+
+/** How long an app process holds the turn to save a finished run's results (it renews it as it goes). */
+const FINISH_TURN_MS = 5 * 60_000;
+
+declare global {
+  /** This app process, as the runs whose results it saves name it. */
+  var __fuobeRunnerToken: string | undefined;
+}
+
+const runnerToken = () => (globalThis.__fuobeRunnerToken ??= `${process.pid}:${nanoid(12)}`);
+
+/**
+ * Take (or renew) this app process's turn to save a run's results: only while the run still goes, and only when no other
+ * process holds the turn (or its turn ran out: that process stopped part way, so this one takes over). Two processes on
+ * one database (a deploy's overlap) never both save a run, so a run is finished once.
+ */
+export function claimFinish(id: string, now = Date.now()): boolean {
+  const d = db();
+  return d
+    .transaction((): boolean => {
+      const g = d.prepare("SELECT status FROM generations WHERE id = ?").get(id) as Pick<Row, "status"> | undefined;
+      if (!g || (g.status !== "queued" && g.status !== "running")) return false;
+      const me = runnerToken();
+      d.prepare("INSERT OR IGNORE INTO generation_runs (id, submitted_at, started_at) VALUES (?, ?, NULL)").run(id, now);
+      return (
+        d
+          .prepare("UPDATE generation_runs SET finish_by = ?, finish_until = ? WHERE id = ? AND (finish_by IS NULL OR finish_by = ? OR finish_until IS NULL OR finish_until < ?)")
+          .run(me, now + FINISH_TURN_MS, id, me, now).changes > 0
+      );
+    })
+    .immediate();
 }
 
 /** Start (or keep running) the 3D finish of a job whose outputs are stored; it marks the job done when it ends. */

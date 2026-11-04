@@ -987,6 +987,18 @@ const HOOK_COLUMNS: [string, string, string][] = [
   ["assets", "held", "INTEGER NOT NULL DEFAULT 0"],
   // NULL, or "checking" (the tile says "Checking").
   ["generations", "stage", "TEXT"],
+  // A report one app process is sending now, until when: no other process sends it meanwhile (billing-outbox.ts).
+  ["billing_outbox", "sending_until", "INTEGER"],
+  ["billing_outbox", "sending_by", "TEXT"],
+];
+
+/**
+ * Columns the runner added to generation_runs: the app process that saves a finished run's results, and until when it
+ * holds that turn (generations.ts claimFinish). Two processes on one database (a deploy's overlap) never both save it.
+ */
+const RUNNER_COLUMNS: [string, string, string][] = [
+  ["generation_runs", "finish_by", "TEXT"],
+  ["generation_runs", "finish_until", "INTEGER"],
 ];
 
 /** Columns of the relay tables that came later: [table, column, type]. */
@@ -1112,7 +1124,7 @@ function open(): Database.Database {
   }
   // The optional billing and moderation services (billing.ts, moderation.ts): their tables and columns.
   db.exec(HOOK_TABLES);
-  for (const [table, column, type] of HOOK_COLUMNS) {
+  for (const [table, column, type] of [...HOOK_COLUMNS, ...RUNNER_COLUMNS]) {
     const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
     if (!has) addColumn(db, `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }

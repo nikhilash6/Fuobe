@@ -1,4 +1,5 @@
 import "server-only";
+import crypto from "node:crypto";
 import { db } from "./db";
 import { billingConfigured, forgetBalance, sendReport, type RefundReport, type SettleReport } from "./billing";
 
@@ -6,7 +7,8 @@ import { billingConfigured, forgetBalance, sendReport, type RefundReport, type S
  * The billing outbox: every report the billing service must get (settle, refund, release) is written here first, then
  * sent, and sent again with backoff until the service takes it (for 7 days). A report is known by its key (the run
  * row's id, or "release:<hold>"), so a row is reported once however often the sweep runs, and a restart in between
- * loses nothing: the sweep finds every finished row with a hold and no report from what is stored.
+ * loses nothing: the sweep finds every finished row with a hold and no report from what is stored. An app process
+ * takes a report before it sends it, so two processes on one database (a deploy's overlap) never send the same one.
  *
  * A hold's rows are reported once none of them is still queued or running, each with `rows` (how many rows share the
  * hold), so the service closes the hold when the last report arrives.
@@ -140,15 +142,42 @@ interface OutboxRow {
   created_at: number;
 }
 
+/** How long an app process holds a report it is sending (a send takes 5 s at most: billing.ts BILLING_TIMEOUTS.report). */
+const SEND_TURN_MS = 60_000;
+
+declare global {
+  /** This app process, as the reports it is sending name it. */
+  var __fuobeOutboxToken: string | undefined;
+}
+
+const outboxToken = () => (globalThis.__fuobeOutboxToken ??= `${process.pid}:${crypto.randomUUID()}`);
+
+/**
+ * Take a report to send it: only one not sent yet, that no other app process is sending now (two processes on one
+ * database during a deploy's overlap never send the same report, so the service gets each one once).
+ */
+function claimReport(key: string): boolean {
+  const now = Date.now();
+  const me = outboxToken();
+  return (
+    db()
+      .prepare("UPDATE billing_outbox SET sending_by = ?, sending_until = ? WHERE key = ? AND done_at IS NULL AND (sending_until IS NULL OR sending_until < ? OR sending_by = ?)")
+      .run(me, now + SEND_TURN_MS, key, now, me).changes > 0
+  );
+}
+
 /** Send the reports that are due. Returns how many the service took. */
 export async function drainOutbox(now = Date.now(), limit = 50): Promise<number> {
   const d = db();
-  const due = d.prepare("SELECT key, kind, hold_id, payload_json, tries, created_at FROM billing_outbox WHERE done_at IS NULL AND next_at <= ? ORDER BY next_at LIMIT ?").all(now, limit) as OutboxRow[];
+  const due = d
+    .prepare("SELECT key, kind, hold_id, payload_json, tries, created_at FROM billing_outbox WHERE done_at IS NULL AND next_at <= ? AND (sending_until IS NULL OR sending_until < ?) ORDER BY next_at LIMIT ?")
+    .all(now, Date.now(), limit) as OutboxRow[];
   let sent = 0;
   for (const r of due) {
+    if (!claimReport(r.key)) continue;
     try {
       await sendReport(r.kind, JSON.parse(r.payload_json));
-      d.prepare("UPDATE billing_outbox SET done_at = ?, tries = tries + 1, last_error = NULL WHERE key = ?").run(Date.now(), r.key);
+      d.prepare("UPDATE billing_outbox SET done_at = ?, tries = tries + 1, last_error = NULL, sending_until = NULL, sending_by = NULL WHERE key = ?").run(Date.now(), r.key);
       sent++;
       const account = accountOfHold(r.hold_id);
       if (account) forgetBalance(account);
@@ -158,11 +187,11 @@ export async function drainOutbox(now = Date.now(), limit = 50): Promise<number>
       const age = now - r.created_at;
       if (age >= GIVE_UP_MS) {
         // Kept, marked as given up: the service's own hold sweep releases what it held.
-        d.prepare("UPDATE billing_outbox SET done_at = ?, tries = ?, last_error = ?, gave_up = 1 WHERE key = ?").run(now, tries, (e as Error).message.slice(0, 500), r.key);
+        d.prepare("UPDATE billing_outbox SET done_at = ?, tries = ?, last_error = ?, gave_up = 1, sending_until = NULL, sending_by = NULL WHERE key = ?").run(now, tries, (e as Error).message.slice(0, 500), r.key);
         console.warn(`[fuobe] billing: gave up sending ${r.kind} ${r.key} after 7 days`);
         continue;
       }
-      d.prepare("UPDATE billing_outbox SET tries = ?, next_at = ?, last_error = ? WHERE key = ?").run(tries, now + wait, (e as Error).message.slice(0, 500), r.key);
+      d.prepare("UPDATE billing_outbox SET tries = ?, next_at = ?, last_error = ?, sending_until = NULL, sending_by = NULL WHERE key = ?").run(tries, now + wait, (e as Error).message.slice(0, 500), r.key);
       if (age >= ALERT_AFTER_MS) console.warn(`[fuobe] billing: ${r.kind} ${r.key} still not sent after ${Math.round(age / 60_000)} min: ${(e as Error).message}`);
     }
   }

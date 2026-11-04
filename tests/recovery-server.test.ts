@@ -1059,13 +1059,16 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 
-  it("while one process saves a finished run's result, the other saves it too today, and the run ends failed: no runner lease or one-time finalize", async () => {
+  it("while one process saves a finished run's result, the other leaves it to that process: the result is saved once, and the run settles once", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
+    const watch = watchOf(id, { "other process": there(id) });
     const d = driver(w);
     // This process's runner turns at every step but the result's parts: the result is saved below.
     d.onStep(async (step) => {
-      if (step !== "part") await tick();
+      if (step === "part") return;
+      await tick();
+      await watch.look();
     });
     await d.beat();
     expect(await d.runOne()).toBe(true);
@@ -1076,12 +1079,37 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     const theirs = app2.tick();
     await pause.paused;
     await tick();
+    // (Only this process is looked at now: the other one waits in the middle of its move until it is released.)
+    expect(getGeneration(id)?.status, "this process leaves the run to the one saving it").toBe("running");
+    expect(getGeneration(id)?.message).toBe(POOL_WORDS.working);
     pause.release();
     await theirs;
-    await expectFreeFailure(id);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 
-  it("both processes send a finished run's report today when their sweeps meet, so the service gets it twice", async () => {
+  it("a process that stopped while it saved a result leaves it to the other once its turn runs out", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    d.onStep(async (step) => {
+      if (step === "part") return;
+      await tick();
+      await watch.look();
+    });
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    expect(getGeneration(id)?.status).toBe("running");
+    // Another process took the turn and stopped (a deploy ended it) before it saved anything.
+    db().prepare("UPDATE generation_runs SET finish_by = 'another-process', finish_until = ? WHERE id = ?").run(Date.now() + 60_000, id);
+    await tick();
+    expect(getGeneration(id)?.status).toBe("running");
+    // Its turn runs out: this process saves the result.
+    db().prepare("UPDATE generation_runs SET finish_until = ? WHERE id = ?").run(Date.now() - 1, id);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("both processes' sweeps meet over a finished run's report: one sends it, so the service gets it once", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
     const watch = watchOf(id);
@@ -1105,6 +1133,7 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     expect(watch.problems({ place: 1 })).toEqual([]);
     expect(g?.status).toBe("succeeded");
     const settle = { holdId: holdOf(id), kind: "settle", status: "succeeded" };
-    expect(svc.reportsFor(id)).toEqual([settle, settle]);
+    expect(svc.reportsFor(id)).toEqual([settle]);
+    expect(svc.callsOf("/v1/settle").filter((c) => (c.body as { generationId?: string }).generationId === id)).toHaveLength(1);
   });
 });
