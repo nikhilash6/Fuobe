@@ -1,5 +1,5 @@
 // One retry policy for the worker's calls to the studio (docs/gpu-workers.md). A studio that is restarting (a deploy), a
-// proxy in front of it with nothing to say (502, 503, Cloudflare's 52x), a busy studio that says when to come back
+// proxy in front of it with nothing to say (502, 503, a CDN's 52x), a busy studio that says when to come back
 // (429 with Retry-After) or a network that drops for a moment are waited out with a growing pause (1 s, 2 s, 4 s … at
 // most 30 s at a time): up to 2 minutes for a call, and up to an hour for a part of a result. A beat is never waited
 // out: the next one comes soon anyway. A call that may have reached the studio is sent again only when sending it twice
