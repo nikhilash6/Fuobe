@@ -4,8 +4,9 @@ import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Idol 3D under public sign-up: 3D models are closed to accounts, so an account's Idol run answers 403
- * own-gpu-tool on both engines — on its own linked ComfyUI (oss-idol) and with its own fal.ai key (idol-3d) — and
- * nothing reaches its GPU or fal.
+ * own-gpu-tool on both engines — on its own linked ComfyUI (oss-idol, and the quick mesh oss-idol-mesh) and with its
+ * own fal.ai key (idol-3d) — and nothing reaches its GPU or fal. So does its "Make the other sides" run (Idol 3D's
+ * four views).
  */
 
 const dir = tempDir("fuobe-account-idol-");
@@ -29,6 +30,7 @@ const generationsRoute = await import("@/app/api/generations/route");
 const { saveFile } = await import("@/server/storage");
 const { getModel } = await import("@/lib/catalog");
 const { model3dRequest } = await import("@/lib/av/model3d");
+const { idolViewsRequest } = await import("@/lib/av/idol-views");
 
 let fake: FakeComfy;
 let cookie = "";
@@ -62,12 +64,14 @@ const post = (body: unknown) => {
 
 describe("Idol 3D stays closed to accounts", () => {
   it.each([
-    ["open", "oss-idol"],
-    ["cloud", "idol-3d"],
-  ] as const)("on the %s engine (%s): 403 own-gpu-tool, nothing sent", async (engine, modelId) => {
+    ["open", "oss-idol", "splat"],
+    ["cloud", "idol-3d", "splat"],
+    // idol-7: Idol 3D quick mesh, in From an image.
+    ["open", "oss-idol-mesh", "image"],
+  ] as const)("on the %s engine (%s): 403 own-gpu-tool, nothing sent", async (engine, modelId, mode) => {
     expect(getModel(modelId)?.engine).toBe(engine);
     const photo = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload", accountId: account }).url;
-    const req = model3dRequest({ engine, mode: "splat", modelId, photo, quality: "quick", photoCrop: true });
+    const req = model3dRequest({ engine, mode, modelId, photo, quality: "quick", photoCrop: true });
     expect(req.modelId).toBe(modelId);
     fake.log.length = 0;
     fetched.length = 0;
@@ -76,5 +80,14 @@ describe("Idol 3D stays closed to accounts", () => {
     expect((await r.json()).code).toBe("own-gpu-tool");
     expect(fake.log.filter((e) => e.path === "/prompt" || e.path === "/upload/image")).toHaveLength(0);
     expect(fetched.filter((u) => /fal\.(run|ai|media)/.test(u))).toHaveLength(0);
+  });
+
+  it("the other sides from one picture (Idol 3D's views): 403 own-gpu-tool, nothing sent", async () => {
+    const photo = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload", accountId: account }).url;
+    fake.log.length = 0;
+    const r = await post(idolViewsRequest(photo));
+    expect(r.status, await r.clone().text()).toBe(403);
+    expect((await r.json()).code).toBe("own-gpu-tool");
+    expect(fake.log.filter((e) => e.path === "/prompt" || e.path === "/upload/image")).toHaveLength(0);
   });
 });

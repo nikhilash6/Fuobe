@@ -1,6 +1,7 @@
 import { body, handle, once } from "@/server/shorts-schemas";
 import { createFlyAround, FlyAroundSchema, previewFlyAround } from "@/server/fly-around";
 import { priceAs } from "@/server/visitor";
+import { worldcastContextNow } from "@/server/worldcast-on";
 
 /**
  * Fly around: a still filmed along an exact camera path (an orbit's numbers, a preset or keys), on either
@@ -9,6 +10,8 @@ import { priceAs } from "@/server/visitor";
 async function post(request: Request) {
   return handle(async () => {
     const { requestId, ...input } = await body(request, FlyAroundSchema, "Pick the engine, the still and the path");
+    // The WorldCast worker's answer, fresh, before the plan reads it (N7-9).
+    await worldcastContextNow();
     if (new URL(request.url).searchParams.get("preview")) return Response.json(previewFlyAround(input));
     // A plan that can't run (FlyAroundError) is a 422 with its reason, as any planner's error is.
     const result = await once("fly-around", requestId, () => createFlyAround(input));

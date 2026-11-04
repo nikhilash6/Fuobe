@@ -20,6 +20,7 @@ import {
   RotateCcw,
   Rows3,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   UserRoundPlus,
   UserX,
@@ -28,8 +29,7 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useLikelyVisitor } from "@/lib/api";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -57,6 +57,9 @@ import { getModel } from "@/lib/catalog";
 import type { CinemaFolder } from "@/lib/catalog/cinema";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { formatCost, timeAgo } from "@/lib/format";
+import { useEngineMode, useLikelyVisitor } from "@/lib/api";
+import { finishedTakes, finishIn2k, REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { useSubmitGuard } from "@/components/shorts/hooks";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { toastError } from "@/lib/refusals";
@@ -188,12 +191,26 @@ export function deleteLabel(g: CinemaGeneration): string {
   return tiles ? `Move grid to Trash (sheet + ${tiles} tiles)` : "Move take to Trash";
 }
 
+/** The takes the feed's list already finishes in 2K (finishedTakes). */
+const FinishedIn2k = createContext<Set<string>>(new Set());
+
 function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; folders: CinemaFolder[]; projectId: string; handlers: FeedHandlers; onDelete: (ids: string[]) => void }) {
   const actions = useItemActions(projectId);
+  const engineMode = useEngineMode();
+  const finished = useContext(FinishedIn2k);
+  // One paid submit at a time, with a nonce the server answers a repeat with (a double click is one 2K render).
+  const guard = useSubmitGuard();
   // Remove a person runs on a self-hosted Fuobe only: a guest or an account isn't sent there.
   const visitor = useLikelyVisitor();
   const o = u.output;
   const elsewhere = foreign(u.g, projectId);
+  // Finish in 2K: a MiniMax H3 take below 2K (fal renders it again at 2K; your GPU redraws it with Open-H3 Regenerate),
+  // once: not on a take whose 2K finish is under way or made (a 2K run's own 768p draft included).
+  // A take from your GPU is finished by Open-H3 Regenerate (perSecond null): offered only while Regenerate is.
+  const offered = o?.kind === "video" && !u.tile && !finished.has(u.g.id) ? finishIn2k(u.g, engineMode) : null;
+  const finish = offered && (offered.perSecond !== null || REGEN_OFFERED) ? offered : null;
+  const seconds = Number(u.g.request.params?.duration ?? 0);
+  const finishPrice = !finish ? "" : finish.perSecond === null ? "Free" : seconds > 0 ? `≈ ${formatCost(finish.perSecond * seconds)}` : `$${finish.perSecond.toFixed(2)}/s`;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -249,6 +266,17 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
                 <Link href={`/video-tools/remove-person?video=${encodeURIComponent(o.url)}`}>
                   <UserX /> Remove a person
                 </Link>
+              </DropdownMenuItem>
+            )}
+            {finish && (
+              <DropdownMenuItem
+                onClick={() =>
+                  void guard(`finish-2k:${u.g.id}`, (requestId) => actions.finish2k(u.g, requestId))
+                    .then((done) => done !== undefined && toast(finish.perSecond === null ? "Finishing in 2K on your GPU" : "Rendering it again at 2K"))
+                    .catch((e) => toastError(e))
+                }
+              >
+                <Sparkles /> {finish.label} <span className="ml-auto text-[11.5px] text-muted-foreground">{finishPrice}</span>
               </DropdownMenuItem>
             )}
           </>
@@ -572,6 +600,8 @@ export function CinemaFeed({
   const [prefs, setPrefs] = usePrefs();
   const actions = useItemActions(projectId);
   const qc = useQueryClient();
+  // Takes with a 2K finish under way or made: their menus don't offer Finish in 2K again.
+  const finished = useMemo(() => finishedTakes(items), [items]);
   // Stills on Fuobe Soul Cinema and Soul Location's Movie look finish in the browser (the 21:9 crop, the grade).
   useSoulFinish(items, CINEMA_KEY);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -659,6 +689,7 @@ export function CinemaFeed({
   ] as const;
 
   return (
+    <FinishedIn2k.Provider value={finished}>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">{title}</div>
@@ -828,5 +859,6 @@ export function CinemaFeed({
       )}
 
     </div>
+    </FinishedIn2k.Provider>
   );
 }

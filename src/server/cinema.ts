@@ -2,10 +2,12 @@ import "server-only";
 import { nanoid } from "nanoid";
 import { getModel } from "@/lib/catalog";
 import type { CinemaFolder, CinemaItem, CinemaProject, CinemaTakeInfo, CinemaTile, DirectorMessage, DirectorSettings } from "@/lib/catalog/cinema";
+import { finishIn2k, REGEN_COPY, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { db } from "./db";
 import { ConnectComfyError, createGenerations, getGeneration, listGenerations, previewChained, previewGeneration, toGeneration } from "./generations";
 import { trashGenerations } from "./library";
+import { engineMode } from "./settings";
 
 /**
  * Cinema Studio projects: Director settings, brief and AI Director chat per project, nested folders
@@ -701,6 +703,56 @@ export function retryItem(projectId: string, generationId: string): Generation[]
     db().transaction(() => replaced.forEach((id) => zero.run(projectId, id)))();
   }
   return created;
+}
+
+/**
+ * "Finish in 2K" on a MiniMax H3 take, in the same folder: a fal take renders again at 2K on the same hosted model (priced
+ * per second, within the project's limit); a take from your GPU is redrawn at 2K by Open-H3 Regenerate, from its saved
+ * 768p latent when its draft kept one (finishIn2k). The 2K take lands beside the first one.
+ */
+export function finishTake(projectId: string, generationId: string): Generation[] {
+  const row = itemRow(projectId, generationId);
+  const g = row ? liveGeneration(generationId) : null;
+  if (!row || !g) throw new CinemaError("That take isn't in this project", 404);
+  // A take from your GPU is finished by Open-H3 Regenerate (perSecond null): only while it is offered (REGEN_OFFERED).
+  const finish = finishIn2k(g, engineMode());
+  if (!finish) throw new CinemaError("Finish in 2K is for finished MiniMax H3 takes made below 2K", 422);
+  if (finish.perSecond === null && !REGEN_OFFERED) throw new CinemaError(REGEN_COPY.heldFinish, 422);
+  // Once per take: a 2K finish under way or made (this action's, or the 2K run's own finish of its draft) isn't repeated.
+  if (finishedIn2k(generationId)) throw new CinemaError("This take already has a 2K finish", 409);
+  const project = getProject(projectId);
+  let cost = 0;
+  try {
+    cost = previewGeneration(finish.request).costUsd ?? 0;
+  } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
+    throw new CinemaError((e as Error).message, 422);
+  }
+  if (project?.costCapUsd != null && cost > 0) {
+    const spent = spentUsd(projectId);
+    if (spent + cost > project.costCapUsd + 1e-9) {
+      throw new CinemaError(`Finishing in 2K (≈ $${cost.toFixed(2)}) would take the project past its $${project.costCapUsd.toFixed(2)} limit — $${spent.toFixed(2)} is already spent. Raise the limit in project settings.`, 422);
+    }
+  }
+  let made: Generation[];
+  try {
+    made = createGenerations(finish.request, g.batchId ? { batchId: g.batchId } : {});
+  } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
+    throw new CinemaError((e as Error).message, 422);
+  }
+  recordTakes(projectId, made, row.folder_id, parse<ItemMeta>(row.meta_json, {}).take);
+  return made;
+}
+
+/** Whether a take has a 2K finish that hasn't failed (request.finishOf; one in the Trash doesn't count). */
+function finishedIn2k(generationId: string): boolean {
+  return !!db()
+    .prepare(
+      `SELECT 1 FROM generations g LEFT JOIN generation_trash t ON t.generation_id = g.id
+       WHERE json_extract(g.request_json, '$.finishOf') = ? AND g.status NOT IN ('failed', 'canceled') AND t.deleted_at IS NULL LIMIT 1`,
+    )
+    .get(generationId);
 }
 
 export function setTiles(projectId: string, generationId: string, tiles: CinemaTile[]): CinemaItem {

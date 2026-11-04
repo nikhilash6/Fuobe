@@ -161,6 +161,12 @@
     "error": null,
     "at": "2026-11-01T13:51:34.372Z"
   },
+  "fps-rtx-framegen": {
+    "sha256": "cabe1f235a447892a526dec506c0018fc9c094bb8de43ee164032cadc46ac18c",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'RTX Video Frame Generation: (N - 1) x m + 1 frames, cuts detected' not found. The custom node may not be installed. (Node ID '#7')",
+    "at": "2026-11-02T10:52:33.580Z"
+  },
   "frame-extract": {
     "sha256": "0f695a5ddf779a1d7b57f1c817e14c36e53534c81148449055f39c55cf9952ab",
     "validated": true,
@@ -203,6 +209,18 @@
     "error": null,
     "at": "2026-10-29T10:46:02.938Z"
   },
+  "image-matte-feynobg": {
+    "sha256": "1b466b50169056e40c59c629f9c74f041d57fc1da9f45d8bf7b2dacee8e6b296",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'FeyNoBg fine-hair matte (foreground refine on)' not found. The custom node may not be installed. (Node ID '#2')",
+    "at": "2026-11-02T11:07:46.548Z"
+  },
+  "image-person-mask-sam3": {
+    "sha256": "81f9b96a74bb2dfe09589e87c53ecb843f08d57b08a4e8b2418ae138f539a659",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T21:03:03.876Z"
+  },
   "image-to-3d-hunyuan3d-21": {
     "sha256": "275a30c4184a8728e919166e72d88913abcf61a85b051a897ecb7249db849a08",
     "validated": true,
@@ -232,6 +250,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-26T00:46:07.467Z"
+  },
+  "image-to-mesh-idol": {
+    "sha256": "5bf97b5d462812261fbd47230e1ec291582787914bc77f8622843e07dde14350",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T01:59:09.652Z"
   },
   "image-to-splat-idol": {
     "sha256": "f5230e116764047049fd2b7f7dde07372c3c64b2967219e719ea5114599ba228",
@@ -305,6 +329,18 @@
     "error": null,
     "at": "2026-10-16T20:57:26.862Z"
   },
+  "kandinsky6-i2av": {
+    "sha256": "2ba5f947197fdb84a241373b7a8bb4985d022aaac54bd1d6e704d8703f88fc44",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Audio VAE (MMAudio 44 kHz) + BigVGAN vocoder' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T11:05:12.479Z"
+  },
+  "kandinsky6-t2av": {
+    "sha256": "db4b91fec291482b63dd051c95410cf0d213695ca8c68bb577e99a0137a43230",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Audio VAE (MMAudio 44 kHz) + BigVGAN vocoder' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T11:05:12.444Z"
+  },
   "kenburns-still": {
     "sha256": "34c5bdc4b0a425d82b5971ca31eae697da6b7363ea48b30dfe055d7a8573976d",
     "validated": true,
@@ -376,6 +412,36 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T20:57:26.738Z"
+  },
+  "mesh-refine-hi3d": {
+    "sha256": "e0c498e66fc81e427e624fa4ca1e7101819cf0a69a87b1680d225470e2ce75b9",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Hi3D Model Loader' not found. The custom node may not be installed. (Node ID '#1')",
+    "at": "2026-11-02T15:11:18.633Z"
+  },
+  "minimax-h3-flex-flf2v": {
+    "sha256": "a76ec6135a539210a9589118f1859746864ba13dded68f5f5fb1ab585a3995c3",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T10:49:21.229Z"
+  },
+  "minimax-h3-flex-i2v": {
+    "sha256": "17a0af634b6e376bd7962b31425328d513fe5994cafd2fffd2bc7791a9cb2ab9",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T10:49:20.882Z"
+  },
+  "minimax-h3-flex-ref2va": {
+    "sha256": "5e23b463861266c45b5d47c74d07a24498ef91e305488b94797eb761c1154766",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T10:49:22.296Z"
+  },
+  "minimax-h3-flex-t2v": {
+    "sha256": "ac3aba6022c2642eb895cb2e8572a4507d242f3b1962be4603a90656a95cfe28",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T10:49:20.705Z"
   },
   "mixed-media-zimage-frames": {
     "sha256": "0e78a2602566f88e12a48711caa67d604a6d4455031e71b08f9b3cd030778387",
@@ -545,6 +611,12 @@
     "error": null,
     "at": "2026-10-23T00:12:21.301Z"
   },
+  "sdr-to-hdr-rtx": {
+    "sha256": "f7ba6d2b932efd5f4479fafb4e7e17a02657dcb994f680ebf8bf88a7fb64d4c5",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'RTX Video HDR (peak nits; HDR = BT.2020 HLG, HDR PQ = BT.2020 PQ)' not found. The custom node may not be installed. (Node ID '#3')",
+    "at": "2026-11-02T10:52:33.596Z"
+  },
   "sdxl-t2i": {
     "sha256": "ae16cc9b74193179da08136571719871c3e31e2abacf5297985657c2fe5e9fbf",
     "validated": true,
@@ -605,11 +677,23 @@
     "error": null,
     "at": "2026-11-02T01:03:50.001Z"
   },
+  "speech-edit-auk": {
+    "sha256": "e38704387a1473e0e72ca81b4b2e586849e69425ec57a53820574323d595baf1",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'AuK Model Loader (AuK-Flash; paths under the AuK checkout)' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T15:31:23.430Z"
+  },
   "speech-translate-gemma4": {
     "sha256": "baf609432b57514c43d2f91630b9ae3cb916e9fe8dab47ac02c6c9b64ded643a",
     "validated": true,
     "error": null,
     "at": "2026-10-22T23:27:26.367Z"
+  },
+  "speech-tts-auk": {
+    "sha256": "7dc1ef8affcbcfaf5670ebc9cf2a16755dd7ae5c7acf696e8b1c84a7ea226ab4",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'AuK Model Loader (AuK-Flash)' not found. The custom node may not be installed. (Node ID '#2')",
+    "at": "2026-11-02T15:31:23.452Z"
   },
   "steam-it-qwen-image-21": {
     "sha256": "e2b94b6cf0105022ee0b93d25e9072eaef8892cf0581d6b296ff14d2aa8ec3e2",
@@ -730,6 +814,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-23T22:48:22.275Z"
+  },
+  "upscale-video-rtx": {
+    "sha256": "c850e3910096031d865de8d4b8206e39b8a7f7fa960e17ecb7d6d282755a66ac",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'RTX Video Super Resolution (quality: rtxQuality)' not found. The custom node may not be installed. (Node ID '#6')",
+    "at": "2026-11-02T10:52:33.559Z"
   },
   "upscale-video-seedvr2": {
     "sha256": "42f7ef1d6ab68d53f96a704037fc443fd207b790562da473c747f9f6e14c34fc",
@@ -941,6 +1031,12 @@
     "error": null,
     "at": "2026-11-03T19:15:30.473Z"
   },
+  "video-h3-t2v-2k": {
+    "sha256": "2193606d5114870328d785cd55f4138da105c563ca8e2dc9db37a21457d1253d",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Save the 768p latent (Finish in 2K decodes from it)' not found. The custom node may not be installed. (Node ID '#20')",
+    "at": "2026-11-02T15:34:50.056Z"
+  },
   "video-inpaint-wan-vace": {
     "sha256": "71aaa43c8ac4bb0a764a9a835d96d1c47b33244f741611c7036ebea8ffcef3a7",
     "validated": true,
@@ -959,11 +1055,23 @@
     "error": null,
     "at": "2026-10-23T00:12:21.209Z"
   },
+  "video-key-corridorkey": {
+    "sha256": "05971ce7115c793259dc1e6d88bee9a5815c50f7f6d2ba98132433a9dad5a20d",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'CorridorKey 2.0 (weights downloaded on first run): matte, despilled foreground over black, straight RGBA' not found. The custom node may not be installed. (Node ID '#6')",
+    "at": "2026-11-02T21:14:06.467Z"
+  },
   "video-mask-h3-relay": {
     "sha256": "d5a3fc7046010b54ea070f45acc325602ed5ab5dbe403040e4d6591949084c84",
     "validated": false,
     "error": "HTTP 400: missing_node_type: Node 'H3RelayPrepareSource' not found. The custom node may not be installed. (Node ID '#prepare')",
     "at": "2026-10-27T11:01:36.148Z"
+  },
+  "video-matte-vrmbg3": {
+    "sha256": "bc8e7b99a0f2e29af5355f6fc2823966f18a0012acf2dac1f6c65fdf90b6591a",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'VRMBG 3.0: each frame conditioned on the one before' not found. The custom node may not be installed. (Node ID '#3')",
+    "at": "2026-11-02T11:08:13.090Z"
   },
   "video-mux-audio": {
     "sha256": "68af795bae0c0e89749819173916044e4024a6ce3035f830b48c80e0b6899181",
@@ -1000,6 +1108,12 @@
     "validated": false,
     "error": "HTTP 400: missing_node_type: Node 'Open-H3 Regenerate LoRA (curve branches off)' not found. The custom node may not be installed. (Node ID '#3')",
     "at": "2026-11-01T16:34:43.069Z"
+  },
+  "video-regenerate-h3-latent": {
+    "sha256": "c5b3c29ab22871a33819819585c2a28505606526fe7e424d6c77d7f549dcc470",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'The draft's saved 768p latent' not found. The custom node may not be installed. (Node ID '#1')",
+    "at": "2026-11-02T15:34:50.077Z"
   },
   "video-relight-bernini-r": {
     "sha256": "218ca68fa4c552a6e5f986973f33f122ad43f27b6808ef493a2d9f9733b8a72d",
@@ -1054,6 +1168,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-23T00:12:16.143Z"
+  },
+  "video-upscale-kandinsky6-vsr": {
+    "sha256": "2ed6d22b03034fb762043da81e7ed6489973d9e56e45fa921a268c4b780dafe3",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Kandinsky VSR VAE' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T11:05:12.503Z"
   },
   "voice-change-chatterbox": {
     "sha256": "ad8b9d59f8cb4632f2859db6a0ee2e8b6114263a9507f144554cd827ceea3f0c",

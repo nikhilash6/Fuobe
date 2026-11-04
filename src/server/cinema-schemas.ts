@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { BLOCKOUT } from "@/lib/blockout";
+import { PERSPECTIVES, STYLES, WORLD_LIMITS, type Perspective, type WorldStyle } from "@/lib/world";
 import { DISTANCE, MAX_KEYS } from "@/lib/camera-path";
 import { APERTURE, LENS } from "@/lib/scene3d";
 import { CinemaError } from "./cinema";
@@ -103,12 +104,34 @@ export const BlockoutSchema = z.object({
   avoid: z.array(z.string().trim().max(120)).max(16).optional(),
 });
 
+/** A World take (src/lib/catalog/cinema.ts WorldRun): the opening and the turns, the turn to run, or the clips to join. */
+const WorldTurnSchema = z.object({
+  words: z.string().max(WORLD_LIMITS.maxScene).default(""),
+  action: z.string().max(WORLD_LIMITS.maxWords).optional(),
+  move: z.string().max(40),
+  seconds: z.number().min(WORLD_LIMITS.minSeconds).max(WORLD_LIMITS.maxSeconds),
+});
+export const WorldSchema = z.object({
+  script: z.object({
+    opening: WorldTurnSchema.extend({
+      subject: z.string().max(120).optional(),
+      details: z.string().max(WORLD_LIMITS.maxWords).optional(),
+      perspective: z.enum(PERSPECTIVES.map((p) => p.id) as [Perspective, ...Perspective[]]).optional(),
+      style: z.enum(STYLES.map((p) => p.id) as [WorldStyle, ...WorldStyle[]]).optional(),
+    }),
+    turns: z.array(WorldTurnSchema).max(WORLD_LIMITS.maxTurns - 1),
+    seed: z.number().int().min(0).max(2 ** 31),
+  }),
+  turn: z.number().int().min(0).max(WORLD_LIMITS.maxTurns - 1),
+  join: z.array(FileRef).min(2).max(WORLD_LIMITS.maxTurns).optional(),
+});
+
 export const GenerateBody = z.object({
   folderId: z.string().max(40).nullable().optional(),
   input: z.object({
     engine: z.enum(["cloud", "open"]),
     mode: z.enum(["video", "image"]),
-    action: z.enum(["generate", "extend-forward", "extend-backward", "edit", "grid", "cast", "location", "location-view", "scene", "recompose", "path", "turnaround", "blockout"]).default("generate"),
+    action: z.enum(["generate", "extend-forward", "extend-backward", "edit", "grid", "cast", "location", "location-view", "scene", "recompose", "path", "turnaround", "blockout", "world"]).default("generate"),
     modelId: z.string().max(80).optional(),
     prompt: z.string().max(60_000).default(""),
     moves: z.array(z.string().max(40)).max(12).optional(),
@@ -174,6 +197,8 @@ export const GenerateBody = z.object({
     turnaround: TurnaroundSchema.omit({ engine: true, realPerson: true, consent: true }).optional(),
     // Blockout to film: the grey box (its depth and first frame when the builder made them), beats, references, words.
     blockout: BlockoutSchema.optional(),
+    // World mode (nm10-hy-nomas-world): the script, the turn to run, or the turns' clips to join (src/lib/world.ts).
+    world: WorldSchema.optional(),
   }),
 });
 

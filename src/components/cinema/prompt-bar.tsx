@@ -1,35 +1,6 @@
 "use client";
 
-import {
-  ArrowLeftToLine,
-  ArrowRightToLine,
-  ArrowUp,
-  AtSign,
-  AudioLines,
-  Box,
-  Check,
-  ChevronDown,
-  Clapperboard,
-  Clock,
-  Copy as CopyIcon,
-  FileVideo,
-  Grid2x2,
-  ImageIcon,
-  ImagePlus,
-  Loader2,
-  MapPin,
-  Maximize,
-  Plus,
-  RectangleHorizontal,
-  SlidersHorizontal,
-  Sparkles,
-  UserRoundPlus,
-  Video,
-  Volume2,
-  VolumeX,
-  Wand2,
-  X,
-} from "lucide-react";
+import { ArrowLeftToLine, ArrowRightToLine, ArrowUp, AtSign, AudioLines, Box, Check, ChevronDown, Clapperboard, Clock, Copy as CopyIcon, FileVideo, Globe, Grid2x2, ImageIcon, ImagePlus, Loader2, MapPin, Maximize, Plus, RectangleHorizontal, SlidersHorizontal, Sparkles, UserRoundPlus, Video, Volume2, VolumeX, Wand2, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -57,8 +28,8 @@ import {
   IMAGE_RESOLUTIONS,
   ORIGINAL_LINES,
   VIDEO_ASPECTS,
-  VIDEO_RESOLUTIONS,
   checkReferences,
+  videoResolutionsFor,
   modelLine,
   planCinema,
   type DirectorSettings,
@@ -333,7 +304,7 @@ export interface PromptBarProps {
   onSettings: (patch: Partial<DirectorSettings>) => void;
   palettes: { name: string; hex: string[] }[];
   onPalettes: (p: { name: string; hex: string[] }[]) => void;
-  context: { cloudAllowed: boolean; civitai?: boolean };
+  context: { cloudAllowed: boolean; civitai?: boolean; worldcast?: boolean };
   brief: string;
   spentUsd: number;
   costCapUsd: number | null;
@@ -343,6 +314,8 @@ export interface PromptBarProps {
   onLocation: () => void;
   /** Blockout to film: a grey-box blockout (uploaded or built) as the take's camera, blocking and timing. */
   onBlockout?: () => void;
+  /** World mode (nm10-hy-nomas-world): a world described once, steered turn by turn. Absent when the engine mode is "Paid APIs only". */
+  onWorld?: () => void;
 }
 
 const ACTIONS: { id: BarAction; label: string; icon: typeof Video; hint: string }[] = [
@@ -475,6 +448,8 @@ export function PromptBar(props: PromptBarProps) {
       ? "Describe the scene – the whole grid shares it"
       : "Describe your still – use @ to add characters & locations";
 
+  // MiniMax H3 adds a 2K tier (fal's 2K, or a 768p draft finished by Open-H3 Regenerate on your GPU).
+  const videoTiers = videoResolutionsFor(model);
   // Secondary settings: inline on wide bars, in one Settings popover on narrow ones.
   const settingsItems: { label: string; node: React.ReactNode }[] = [
     {
@@ -489,8 +464,9 @@ export function PromptBar(props: PromptBarProps) {
           key="resolution"
           icon={Maximize}
           label="Resolution"
-          value={draft.resolution[draft.mode]}
-          options={video ? VIDEO_RESOLUTIONS : IMAGE_RESOLUTIONS}
+          value={video && !videoTiers.includes(draft.resolution.video) ? "1080p" : draft.resolution[draft.mode]}
+          options={video ? videoTiers : IMAGE_RESOLUTIONS}
+          describe={video && videoTiers.includes("2K") ? (v) => (v !== "2K" ? "" : model.engine === "open" ? "768p draft, then redrawn at 2K on your GPU" : "Rendered from a 768P base") : undefined}
           onChange={(v) => setDraft((d) => ({ resolution: { ...d.resolution, [d.mode]: v } }))}
         />
       ),
@@ -605,6 +581,19 @@ export function PromptBar(props: PromptBarProps) {
             </button>
           </TooltipTrigger>
           <TooltipContent>Blockout to film: a grey box from Blender or built here sets the camera and timing</TooltipContent>
+        </Tooltip>
+      )}
+      {draft.mode === "video" && props.onWorld && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button" onClick={() => {
+                setDirectorOpen(false);
+                props.onWorld!();
+              }} className={cn(chip, chipIdle)} aria-label="World: describe a world, then steer it turn by turn">
+              <Globe className="size-3.5" /> World
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>World: describe a world once, then steer it turn by turn with words and camera moves (your GPU)</TooltipContent>
         </Tooltip>
       )}
     </>

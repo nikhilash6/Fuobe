@@ -5,6 +5,7 @@ import { getModel } from "@/lib/catalog";
 import {
   SWATCH_PLACEHOLDER,
   blockoutTake,
+  worldTake,
   pathTake,
   planCinema,
   withPlaceholders,
@@ -23,13 +24,14 @@ import { encodePng } from "./png";
 import { engineMode, getSetting } from "./settings";
 import { saveFile, storedMedia } from "./storage";
 import { isOffered } from "./model-access";
+import { worldcastContext } from "./worldcast-on";
 
 /**
  * What this install can run right now (cloud fallbacks such as reading a take's first frame, the workflows it has, a
  * camera LoRA that downloads from civitai, which fal gets only with the user's civitai key).
  */
 export function cinemaContext(): CinemaContext {
-  return { cloudAllowed: engineMode() !== "open", has: (id) => !!getModel(id) && isOffered(id), civitai: !!getSetting("civitaiKey") };
+  return { cloudAllowed: engineMode() !== "open", has: (id) => !!getModel(id) && isOffered(id), civitai: !!getSetting("civitaiKey"), worldcast: worldcastContext() };
 }
 
 declare global {
@@ -167,6 +169,7 @@ export function generateInProject(projectId: string, asked: CinemaRequest, folde
     ...(input.action === "recompose" && input.capture ? { camera: { lens: input.capture.lens, aperture: input.capture.aperture, pose: input.capture.pose } } : {}),
     ...(input.action === "path" && input.path ? { path: pathTake(input, plan) } : {}),
     ...(input.action === "blockout" && input.blockout ? { blockout: blockoutTake(input, plan) } : {}),
+    ...(input.action === "world" && input.world ? { world: worldTake(input) } : {}),
   };
   const batchId = nanoid(10);
   const made: Record<string, Generation[]> = {};

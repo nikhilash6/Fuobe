@@ -3,6 +3,7 @@ import { recordExists } from "@/server/records";
 import { body, handle } from "@/server/shorts-schemas";
 import { previewTurnaround, TurnaroundBodySchema, turnaroundRun } from "@/server/turnaround";
 import { priceAs } from "@/server/visitor";
+import { worldcastContextNow } from "@/server/worldcast-on";
 
 /**
  * A turnaround's price and plan, as the studio routes' estimates answer it (the evaluation harness prices a job here
@@ -16,6 +17,7 @@ async function post(request: Request) {
     if (input.elementId && (requestViewer(request).kind !== "owner" || !recordExists({ kind: "element", ids: [input.elementId] }))) {
       return Response.json({ error: "Character not found" }, { status: 404 });
     }
+    await worldcastContextNow();
     const p = previewTurnaround(turnaroundRun(input));
     return Response.json({ ...p, modelId: p.model.id, modelName: p.model.name });
   });

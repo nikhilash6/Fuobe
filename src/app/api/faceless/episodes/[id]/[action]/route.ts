@@ -1,4 +1,4 @@
-import { episodeView, handle, renderEpisode, retryEpisode, rewriteEpisode, undoChange, upscaleEpisode } from "@/server/faceless";
+import { episodeView, handle, regenerateEpisode, renderEpisode, retryEpisode, rewriteEpisode, undoChange, upscaleEpisode } from "@/server/faceless";
 
 const ACTIONS = {
   /** Render the reviewed script. */
@@ -11,6 +11,8 @@ const ACTIONS = {
   undo: undoChange,
   /** Upscale the finished film to 1080p (cloud). */
   upscale: upscaleEpisode,
+  /** Redraw every scene at 1080p with Open-H3 Regenerate, then join and mix again (open engine). */
+  regenerate: regenerateEpisode,
 } as const;
 
 export async function POST(request: Request, ctx: RouteContext<"/api/faceless/episodes/[id]/[action]">) {

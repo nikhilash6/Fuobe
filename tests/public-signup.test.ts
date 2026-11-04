@@ -239,6 +239,10 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/swap-studio/projects/p1/sharpen",
       // Plan layout plans with the studio's own AI helper.
       "/api/layout/plan",
+      // Regenerate in Faceless, Shorts segments and Cinema takes (n7-10): studio jobs, like their renders.
+      "/api/faceless/episodes/e1/regenerate",
+      "/api/shorts/sessions/s1/segments/0/enhance",
+      "/api/cinema/projects/p1/items/g1/finish",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);

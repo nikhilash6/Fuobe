@@ -34,6 +34,7 @@ export const HUB_MODES: Record<HubKind, HubMode[]> = {
     { id: "dialogue", label: "Dialogue" },
     { id: "voice-change", label: "Voice change" },
     { id: "design", label: "Design a voice" },
+    { id: "edit-speech", label: "Edit speech", selfHostedOnly: true },
     { id: "translate", label: "Translate", selfHostedOnly: true },
     { id: "transcribe", label: "Transcribe" },
     { id: "split", label: "Split soundtrack", selfHostedOnly: true },
@@ -46,6 +47,7 @@ export const HUB_MODES: Record<HubKind, HubMode[]> = {
   ],
   "video-tools": [
     { id: "matte", label: "Remove background" },
+    { id: "green-screen", label: "Green screen" },
     { id: "remove-object", label: "Remove object", selfHostedOnly: true },
     { id: "remove-dialogue", label: "Remove dialogue", selfHostedOnly: true },
     { id: "remove-person", label: "Remove a person", ownerOnly: true, selfHostedOnly: true },
