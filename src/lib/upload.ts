@@ -19,3 +19,28 @@ export async function postFile(file: File, signal?: AbortSignal, opts: { kinetic
   if (!res.ok) throw responseError(res, body.error ?? "That upload didn't go through. Please try again.");
   return body;
 }
+
+/**
+ * postFile with its progress (fetch can't report an upload's): the file as the body, its type and name in headers, so a
+ * clip up to the viewer's limit is streamed to disk (a form is only taken from an account while small). Aborts with
+ * `signal` (an AbortError).
+ */
+export function postFileWithProgress(file: File, onProgress: (p: number) => void, signal?: AbortSignal): Promise<{ url: string; name?: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/uploads");
+    xhr.responseType = "json";
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.setRequestHeader("X-File-Name", encodeURIComponent(file.name));
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => {
+      const body = xhr.response as { url?: string; name?: string; error?: string } | null;
+      if (xhr.status >= 200 && xhr.status < 300 && body?.url) resolve({ url: body.url, name: body.name });
+      else reject(new Error(body?.error ?? "That upload didn't go through. Please try again."));
+    };
+    xhr.onerror = () => reject(new Error("Upload failed — check your connection"));
+    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+    signal?.addEventListener("abort", () => xhr.abort());
+    xhr.send(file);
+  });
+}

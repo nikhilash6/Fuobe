@@ -7,11 +7,13 @@
  *
  * Options for tests: `loras` (GET /models/loras), `delayMs` (until the history says done), `drip` (the history
  * answers one byte every 2 s, never finishing), `huge` (/view streams without end), `promptId` (the job id /prompt
- * answers), `missing` (a file /prompt answers "not in list" for), `output` ("video" or "image"), `layers` (the
+ * answers), `missing` (a file /prompt answers "not in list" for), `output` ("video", "image" or "model3d": a one-triangle
+ * GLB), `layers` (the
  * history lists that many Qwen-Image-Layered layers, node 60), `frames` (an EXR export: a preview clip, node 5, and
  * that many frames, node 3), `historyError` (/history answers HTTP 500 and then sends nothing), `uploadStatus` (the HTTP
  * status /upload/image answers, e.g. 500 to fail every upload), `refuseClass` (/prompt answers "not in list" for a graph with
- * a node of that class), `echo` (an image output is the last picture uploaded, so a result lines up with its photo).
+ * a node of that class), `echo` (an image output is the last picture uploaded, so a result lines up with its photo),
+ * `text` (a SaveText output, node 5: the history carries the words and /view serves them as the .txt file).
  * This file runs under plain Node too: only erasable TypeScript.
  */
 import http from "node:http";
@@ -25,7 +27,7 @@ export interface FakeComfyOptions {
   huge?: boolean;
   promptId?: string;
   missing?: string;
-  output?: "video" | "image";
+  output?: "video" | "image" | "model3d";
   layers?: number;
   frames?: number;
   historyError?: boolean;
@@ -33,6 +35,8 @@ export interface FakeComfyOptions {
   /** /prompt answers "not in list" for a graph with a node of this class (a file that node loads isn't there). */
   refuseClass?: string;
   echo?: boolean;
+  /** A text result (SaveText, node 5): these words in the history and in the .txt file /view serves. */
+  text?: string;
 }
 
 export interface FakeLogEntry {
@@ -58,6 +62,35 @@ export const TINY_PNG = Buffer.from(
   "89504e470d0a1a0a0000000d494844520000000200000002080600000072b60d240000001149444154789c63381150f11f8419600c005a940a3db632c1b20000000049454e44ae426082",
   "hex",
 );
+
+/** A one-triangle binary glTF 2 (a GLB the server's 3D finish can read). */
+export const TINY_GLB: Buffer = (() => {
+  const bin = Buffer.alloc(36);
+  [0, 0, 0, 1, 0, 0, 0, 1, 0].forEach((v, i) => bin.writeFloatLE(v, i * 4));
+  const doc = {
+    asset: { version: "2.0" },
+    buffers: [{ byteLength: 36 }],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36 }],
+    accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: "VEC3", min: [0, 0, 0], max: [1, 1, 0] }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+    nodes: [{ mesh: 0 }],
+    scenes: [{ nodes: [0] }],
+    scene: 0,
+  };
+  let j = Buffer.from(JSON.stringify(doc));
+  j = Buffer.concat([j, Buffer.alloc((4 - (j.length % 4)) % 4, 0x20)]);
+  const header = Buffer.alloc(12);
+  header.writeUInt32LE(0x46546c67, 0);
+  header.writeUInt32LE(2, 4);
+  header.writeUInt32LE(12 + 8 + j.length + 8 + bin.length, 8);
+  const jh = Buffer.alloc(8);
+  jh.writeUInt32LE(j.length, 0);
+  jh.writeUInt32LE(0x4e4f534a, 4);
+  const bh = Buffer.alloc(8);
+  bh.writeUInt32LE(bin.length, 0);
+  bh.writeUInt32LE(0x004e4942, 4);
+  return Buffer.concat([header, jh, j, bh, bin]);
+})();
 
 /** The start of an MP4 (an ftyp box), enough for the studio to store it as one. */
 export const TINY_MP4 = Buffer.concat([Buffer.from("000000186674797069736f6d0000020069736f6d69736f32", "hex"), Buffer.alloc(64)]);
@@ -146,7 +179,9 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         const done = { status: { completed: true, status_str: "success" } };
         const list = (n: number, ext: string) => Array.from({ length: n }, (_, i) => ({ filename: `fake_${String(i + 1).padStart(5, "0")}_.${ext}`, subfolder: "", type: "output" }));
         if (opts.layers) return json(200, { [id]: { ...done, outputs: { "60": { images: list(opts.layers, "png") } } } });
+        if (opts.text !== undefined) return json(200, { [id]: { ...done, outputs: { "5": { text: [opts.text], files: [{ filename: "fake_00001_.txt", subfolder: "fuobe", type: "output" }] } } } });
         if (opts.frames) return json(200, { [id]: { ...done, outputs: { "5": { gifs: list(1, "mp4") }, "3": { images: list(opts.frames, "exr") } } } });
+        if (opts.output === "model3d") return json(200, { [id]: { ...done, outputs: { "900": { "3d": [{ filename: "fake_00001_.glb", subfolder: "3D", type: "output" }] } } } });
         const file = opts.output === "image" ? { filename: "fake_00001_.png", subfolder: "", type: "output" } : { filename: "fake_00001.mp4", subfolder: "", type: "output" };
         const key = opts.output === "image" ? "images" : "gifs";
         return json(200, { [id]: { status: { completed: true, status_str: "success" }, outputs: { "900": { [key]: [file] } } } });
@@ -172,9 +207,17 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
           return;
         }
         const name = url.searchParams.get("filename") ?? "";
+        if (name.endsWith(".txt")) {
+          res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+          return res.end(opts.text ?? "");
+        }
         if (name.endsWith(".exr")) {
           res.writeHead(200, { "content-type": "image/x-exr" });
           return res.end(Buffer.from("762f3101", "hex"));
+        }
+        if (name.endsWith(".glb")) {
+          res.writeHead(200, { "content-type": "application/octet-stream" });
+          return res.end(TINY_GLB);
         }
         const png = name.endsWith(".png");
         if (png && opts.echo && lastUpload) {

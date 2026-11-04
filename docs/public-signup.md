@@ -264,8 +264,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the account's ComfyUI can't be reached, the run fails and says so. A cloud model, an AI helper or
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
   (Canvas, Cinema, Shorts, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
-  plan with the studio's own AI helpers or keep projects of their own. Image to 3D and text to 3D
-  answer the same for now: a 3D model is finished on the server. So do the Audio hub's Split
+  plan with the studio's own AI helpers or keep projects of their own. A 3D model sent here answers the
+  same: Image to 3D has its own route (below). So do the Audio hub's Split
   soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
   turnaround video (`POST /api/turnaround`), though their price checks work, priced for the account's
   own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
@@ -283,6 +283,33 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
   A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
   have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.
+- **Genjutsu.** An account runs Genjutsu's modes that are open to everyone the same way (`POST /api/genjutsu`, and the
+  clip's words for Character swap, `POST /api/genjutsu/transcribe`). Each step of the run (the cut, the swap, the joins,
+  the sound) is a run of its own on the account's ComfyUI, or on its own fal.ai or Replicate key on the cloud engine,
+  with only its own files, and the whole run counts once against its limits. Its results show under "Your Genjutsu" and
+  in its own runs, to open and download. "Describe my character" (`POST /api/genjutsu/describe`) runs the GPU describer
+  on the account's own ComfyUI: a core graph (Qwen3-VL 8B through TextGenerate, `character-describe-qwen3vl`) reads
+  only the account's own picture, takes no text from the request and saves under a name the server makes; the page
+  fills the description from that run's text. A guest gets the sign-up card. The checks are
+  `src/server/account-tool-run.ts`.
+- **Storyboard.** An account makes boards the same way (`POST /api/storyboards`), and the film of a board
+  (`POST /api/storyboards/<id>/film`). Every frame, shot and join is a run of its own on the account's ComfyUI, or on
+  its own fal.ai or Replicate key on the cloud engine, with only its own pictures as look references, and a board (or
+  a film) counts once against its limits. Its boards are its own runs: the page lists them, to reopen, open and
+  download, and a film takes only its own board (another account's board, or the owner's, answers 404 "We can't
+  find that storyboard."). "From one idea" splits the story into a shot list without the studio's AI helper. One
+  sheet takes as many panels for an account as its recorded GPU test showed (`ONE_SHEET_GPU_TEST`; with none recorded
+  a one-sheet board answers 422 for an account). A guest gets the sign-up card.
+- **Image to 3D.** An account makes its 3D models on its own ComfyUI, or on its own fal.ai or Replicate key on the
+  cloud engine (`POST /api/image-to-3d`, which takes the same request as `POST /api/generations`): From an image, From
+  several images, From text, Pick an object and Splat, and a finished model's Rig & animate. It gets the checks every
+  tool run gets, and its models show under "Your 3D models", to view in 3D and download. A GLB from its ComfyUI is
+  finished on this server (the web GLB the viewer loads) under its limits (`src/server/model3d-finish.ts`): one account's
+  finish at a time across the server, at low priority; a model over 300 MB, a server or account short of room, or more
+  than 60 finishes in an hour keep the model as it came (still viewable and downloadable). Its turntable is recorded in
+  the browser ("Record turntable"), not on the server. Refine detail, the TRELLIS.2 final, Idol 3D's other sides and
+  Film it photoreal stay the owner's, and Retexture opens once its cloud models pass a live call. On this install's
+  GPUs (hosted runs) 3D isn't offered yet. A guest gets the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.
@@ -360,7 +387,7 @@ account with that provider. The studio's own keys are never used for an account'
 - **Limits.** Every account limit applies to paid runs too (4 at once, 60 an hour, 4 outputs a run,
   its space), checked before anything reaches the provider. Runs with a key send the prompt and the
   attached files to that provider. civitai LoRAs are left out of runs on an account's key (copying
-  them would use the studio's civitai key). Assist, text steps, 3D and the other tools stay closed.
+  them would use the studio's civitai key). Image to 3D runs on its key too; Assist, text steps and the other tools stay closed.
 - An account on a studio set to **Open source only** keeps its keys, but they aren't used.
 
 ## Hosted runs

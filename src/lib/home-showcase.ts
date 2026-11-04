@@ -164,7 +164,8 @@ export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => 
   { href: "/photodump", id: "app-headshot-generator", line: modelLine("/photodump") },
   { href: "/ads", id: "app-billboard-ad", line: modelLine("/ads") },
   { href: "/reframe", id: "app-expand-image", line: modelLine("/reframe") },
-  { href: "/kinetic", id: "app-click-to-ad", line: () => "Motion graphics in your brand: titles, offers and end cards." },
+  // Kinetic draws its own cover (studio-covers.ts): Runway Titles at the card's shape, its title cutting in over the gold gown.
+  { href: "/kinetic", id: "kinetic-runway-titles", line: () => "Motion graphics in your brand: titles, offers and end cards." },
   { href: "/image", id: "app-poster", line: modelLine("/image") },
 ];
 

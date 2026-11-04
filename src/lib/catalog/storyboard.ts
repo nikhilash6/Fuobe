@@ -210,7 +210,7 @@ export interface SheetTest {
   /** The most panels that still came out usable. */
   maxPanels: number;
 }
-export const ONE_SHEET_GPU_TEST: SheetTest | null = null;
+export const ONE_SHEET_GPU_TEST: SheetTest | null = { date: "2026-11-05", gpu: "RTX 5090 32 GB", maxPanels: 8 };
 
 /** How many panels a one-sheet board may have for this viewer: 0 hides the option. */
 export function sheetPanelLimit(owner: boolean, test: SheetTest | null = ONE_SHEET_GPU_TEST): number {

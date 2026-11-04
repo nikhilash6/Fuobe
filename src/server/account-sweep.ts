@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { RETENTION_MS, runAccountDeletedHooks } from "./account-files";
 import { deleteAccountCanvases } from "./account-canvas";
+import { deleteAccountProjects } from "./account-projects";
 import { clearAccountLoras } from "./account-loras";
 import { accountById, deleteAccount, readAccountIds, setAccountDisabled } from "./auth";
 import { strayAccountIds } from "./auth-store";
@@ -45,6 +46,7 @@ export async function purgeAccount(id: string): Promise<{ runs: number; files: n
   for (const f of files) deleteAsset(f);
   clearAccountLoras(id);
   deleteAccountCanvases(id);
+  deleteAccountProjects(id);
   await runAccountDeletedHooks(id);
   return { runs, files: files.length };
 }

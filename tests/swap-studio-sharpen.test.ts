@@ -268,13 +268,18 @@ describe("the route under public sign-up", () => {
       const cookie = auth.createSession(account.id).value;
       auth.setAccountGpu(account.id, { url: "https://gpu.example" });
       const at = (url: string, c?: string) => new NextRequest(`http://localhost:3000${url}`, { method: "POST", headers: c ? { cookie: `${auth.SESSION_COOKIE}=${c}` } : {}, body: "{}" });
-      for (const p of ["/api/swap-studio/projects/swap-1/sharpen", "/api/swap-studio/projects/swap-1/assemble", "/api/genjutsu"]) {
+      for (const p of ["/api/swap-studio/projects/swap-1/sharpen", "/api/swap-studio/projects/swap-1/assemble"]) {
         for (const c of [undefined, cookie]) {
           const r = proxy(at(p, c));
           expect(r.status, `${p} ${c ? "account" : "guest"}`).toBe(403);
           expect(await r.json()).toEqual({ error: access.OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" });
         }
       }
+      // Genjutsu runs on an account's own GPU (its route makes the account's checks); a guest signs up first.
+      expect(proxy(at("/api/genjutsu", cookie)).headers.get("x-middleware-next")).toBe("1");
+      const guest = proxy(at("/api/genjutsu"));
+      expect(guest.status).toBe(401);
+      expect((await guest.json()).error).toBe(access.GUEST_RUN_MESSAGE);
       // Genjutsu's price check (2K included) stays open to visitors.
       expect(access.isPriceCheck("POST", "/api/genjutsu/estimate", "")).toBe(true);
       expect(proxy(at("/api/genjutsu/estimate")).headers.get("x-middleware-next")).toBe("1");

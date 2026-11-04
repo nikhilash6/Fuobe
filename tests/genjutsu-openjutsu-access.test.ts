@@ -175,20 +175,34 @@ describe("Genjutsu's Openjutsu features before and after they open", () => {
     expect(say("/api/files/never-made.png")).toBe("Make and pick the first frame first");
   });
 
-  it("From picture's describer is the owner's, like every Genjutsu run", async () => {
+  it("From picture's describer runs for an account (on its own GPU) only once From picture opens; a guest signs up first", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
-    const cookie = auth.createSession(auth.createAccount(`oj${++n}@example.com`, "long enough").id).value;
-    for (const who of [undefined, cookie]) {
-      for (const p of ["/api/genjutsu", "/api/genjutsu/scene"]) {
-        const r = proxy(req(p, { method: "POST", cookie: who }));
-        expect(r.status, `${p} ${who ? "account" : "guest"}`).toBe(403);
-        expect((await r.json()).code).toBe("own-gpu-tool");
-      }
+    const id = auth.createAccount(`oj${++n}@example.com`, "long enough").id;
+    const cookie = auth.createSession(id).value;
+    for (const p of ["/api/genjutsu", "/api/genjutsu/scene"]) {
+      // A guest: the sign-up card. An account with neither a GPU nor a key: Connect your GPU.
+      const g = proxy(req(p, { method: "POST" }));
+      expect(g.status, `${p} guest`).toBe(401);
+      expect((await g.json()).error).toBe(access.GUEST_RUN_MESSAGE);
+      const r = proxy(req(p, { method: "POST", cookie }));
+      expect(r.status, `${p} account`).toBe(403);
+      expect((await r.json()).code).toBe("connect-gpu");
     }
     expect(access.isPriceCheck("POST", "/api/genjutsu/scene", "")).toBe(false);
-    // Behind the proxy the route refuses a visitor too.
-    const r = await sceneRoute.POST(call("/api/genjutsu/scene", { engine: "open", source: { url: clip }, range: { start: 0, end: 6 }, ownPerson: true }));
-    expect(r.status).toBe(422);
-    expect((await r.json()).error).toBe(NOT_HERE);
+    // Behind the proxy the route refuses a guest, and an account's describer while From picture hasn't opened.
+    const body = { engine: "open", source: { url: clip }, range: { start: 0, end: 6 }, ownPerson: true };
+    expect((await sceneRoute.POST(call("/api/genjutsu/scene", body))).status).toBe(401);
+    const { runAsTenant } = await import("@/server/tenant");
+    const own = runAsTenant({ kind: "account", id }, () => saveFile({ data: fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4")), contentType: "video/mp4", source: "upload", name: "mine.mp4" }).url);
+    globalThis.__fuobeTestDiskFree = 1e13;
+    try {
+      const r = await sceneRoute.POST(call("/api/genjutsu/scene", { ...body, source: { url: own } }, cookie));
+      if (!genjutsuLive().picture) {
+        expect(r.status).toBe(422);
+        expect((await r.json()).error).toBe(NOT_HERE);
+      }
+    } finally {
+      globalThis.__fuobeTestDiskFree = undefined;
+    }
   });
 });

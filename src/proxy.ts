@@ -11,6 +11,7 @@ import {
   liveRoute,
   accountMayChange,
   accountOwnRead,
+  accountProjectRoute,
   anyoneMayReport,
   ASSIST_OWNER_MESSAGE,
   CONNECT_GPU_HEADER,
@@ -214,7 +215,7 @@ function guest(request: NextRequest): NextResponse {
   if (isAssistChange(method, pathname)) return assistOwner();
   if (anyoneMayReport(method, pathname)) return pass(request);
   // What an account may send, the library, the owner's settings and the studios' runs: signing up is the next step.
-  if (!accountMayChange(method, pathname, search) && !isLibraryChange(method, pathname) && !ownerOnly(method, pathname) && !ownGpuRun(method, pathname)) return ownGpuTool();
+  if (!accountMayChange(method, pathname, search) && !isLibraryChange(method, pathname) && !ownerOnly(method, pathname) && !ownGpuRun(method, pathname) && !accountProjectRoute(pathname)) return ownGpuTool();
   return NextResponse.json({ error: GUEST_RUN_MESSAGE }, { status: 401, headers: guestHeaders });
 }
 
@@ -272,6 +273,8 @@ function account(request: NextRequest, who: Account): NextResponse {
   if (gen !== undefined) return generationAccount(gen) === who.id ? pass(request) : notYours();
   const file = request.method === "GET" || request.method === "HEAD" ? /^\/api\/files\/(.+)$/.exec(pathname)?.[1] : undefined;
   if (file !== undefined) return fileAccount(safeDecode(file)) === who.id ? pass(request) : notYours();
+  // A tool's projects, kept per account: the route answers with its own only.
+  if (accountProjectRoute(pathname)) return pass(request);
   if (request.method === "GET" || request.method === "HEAD") return accountOwnRead(pathname) ? pass(request) : readAsGuest(request, true);
   if (isPriceCheck(request.method, pathname, search)) return priceCheck(request, `account:${who.id}`);
   if (accountMayChange(request.method, pathname, search)) return pass(request);

@@ -21,7 +21,7 @@ import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media
 import { Viewer } from "@/components/studio/viewer";
 import { StarterParam } from "@/components/starters/starter-param";
 import { StarterSection, useStarters } from "@/components/starters/starter-section";
-import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsAccount, useIsVisitor, useStatus, uploadFile } from "@/lib/api";
+import { COMPUTER_KICK_EVENT, useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsAccount, useStatus, uploadFile } from "@/lib/api";
 import { askDeleteForGood } from "@/components/studio/delete-for-good";
 import {
   MAX_FRAMES,
@@ -92,6 +92,22 @@ function useBoardTitles() {
 }
 
 const modelName = (g: Generation, names: Record<string, string>) => (g as Generation & { modelName?: string }).modelName ?? names[g.modelId] ?? g.modelId;
+
+/**
+ * Start a board or its film. Stopped by the GPU pre-flight, the guided fix opens (src/lib/api.ts watchGuestRefusals), so
+ * no error toast goes on top of it. A run started on the ComfyUI on this computer (an account's "Your GPU") is asked for by
+ * the tab that runs it at once.
+ */
+async function startRun<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const b = (await res.json().catch(() => ({}))) as T & { error?: string; gpuWarning?: string };
+  if (res.status === 409 && res.headers.get("x-fuobe-gpu-setup") === "1") throw Object.assign(new Error(b.error ?? "This needs setting up on your GPU"), { refusalShown: true });
+  if (!res.ok) throw responseError(res, b.error ?? "Something went wrong. Please try again.");
+  window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));
+  // Its own ComfyUI seems to miss something: said, never a stop.
+  if (b.gpuWarning) toast.warning(b.gpuWarning);
+  return b;
+}
 
 function RatioPill({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
@@ -360,14 +376,12 @@ function Board({
   const ready = filmReady(frames, finishGaveUp);
   const ratio = tileRatio(first);
   const sheet = first.request.frame?.sheet;
+  // A click's film, once: a repeat of the request (a second click that got through) gets the film the first one started.
+  const filmRequest = useRef(nanoid());
   const makeFilm = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/storyboards/${first.batchId}/film`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      const body = await res.json();
-      if (!res.ok) throw responseError(res, body.error);
-      return body as { items: Generation[] };
-    },
+    mutationFn: () => startRun<{ items: Generation[] }>(`/api/storyboards/${first.batchId}/film`, { requestId: filmRequest.current }),
     onSuccess: (b) => {
+      filmRequest.current = nanoid();
       toast.success(`Animating ${b.items.length - 1} shots, then joining them into one film`);
       void qc.invalidateQueries({ queryKey: ["generations"] });
     },
@@ -471,8 +485,6 @@ export function StoryboardView({
   const hydrated = useHydrated();
   const status = useStatus().data;
   const statusReady = hydrated && !!status;
-  // A storyboard doesn't run on an account's own GPU yet (only the studios' generations do), nor for a guest who signs up.
-  const visitor = useIsVisitor();
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [story, setStory] = useState("");
   const [count, setCount] = useState(4);
@@ -492,7 +504,7 @@ export function StoryboardView({
   const [sheetPicked, setSheet] = useState(false);
   const sheet = sheetPicked && sheetLimit > 0;
   const [open, setOpen] = useState<Generation | null>(null);
-  // A ready story fills the composer (for everyone: the price shows at once, and Generate is the owner's), from its
+  // A ready story fills the composer (for everyone: the price shows at once), from its
   // page's link (?starter=<id>) or its card here, then the composer comes into view.
   const storyRef = useRef<HTMLTextAreaElement>(null);
   const applyStarter = (id: string) => {
@@ -569,18 +581,17 @@ export function StoryboardView({
     enabled: statusReady && (JSON.parse(priceKey) as { engine?: string }).engine === engine,
   });
   const est = estimate.data && !estimate.isError ? estimate.data : undefined;
+  // A click's board, once: a repeat of the request (a second click that got through) gets the board the first one started.
+  const boardRequest = useRef(nanoid());
   const submit = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/storyboards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sheet ? boardBody : { ...boardBody, references: refs.filter((r) => r.ref).map((r) => r.ref) }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw responseError(res, body.error);
-      return body as { scenes: string[]; batchId?: string };
-    },
+    // A board for anyone: the owner's, or an account's on its own GPU or key. A guest's click opens the sign-up card.
+    mutationFn: () =>
+      startRun<{ scenes: string[]; batchId?: string }>("/api/storyboards", {
+        ...(sheet ? boardBody : { ...boardBody, references: refs.filter((r) => r.ref).map((r) => r.ref) }),
+        requestId: boardRequest.current,
+      }),
     onSuccess: (b) => {
+      boardRequest.current = nanoid();
       const idea = mode === "auto" ? story : scenes.find((s) => s.trim());
       if (b.batchId && idea?.trim()) saveTitle(b.batchId, idea);
       toast.success(sheet ? `${b.scenes.length} panels on the way, drawn together on one sheet` : `${b.scenes.length} frames on the way — each one builds on the last`);
@@ -722,9 +733,7 @@ export function StoryboardView({
               {!sheet && engine === "open" && <NextScenePill value={nextScene} onChange={setNextScene} />}
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 <span className="text-right text-[12px] leading-tight tabular-nums text-muted-foreground" aria-live="polite">
-                  {visitor ? (
-                    <span className="block font-semibold text-foreground">Not available here</span>
-                  ) : estimate.isError ? (
+                  {estimate.isError ? (
                     <span className="text-destructive">{(estimate.error as Error).message}</span>
                   ) : (
                     <>
@@ -733,18 +742,14 @@ export function StoryboardView({
                     </>
                   )}
                 </span>
-                <Button size="icon" className="size-10 shrink-0 rounded-full" disabled={!ready || submit.isPending || estimate.isError || visitor} onClick={() => submit.mutate()} aria-label="Generate storyboard">
+                <Button size="icon" className="size-10 shrink-0 rounded-full" disabled={!ready || submit.isPending || estimate.isError} onClick={() => submit.mutate()} aria-label="Generate storyboard">
                   {submit.isPending ? <Loader2 className="animate-spin" /> : <ArrowUp />}
                 </Button>
               </div>
             </div>
             <p className="mt-2 flex items-start gap-1.5 text-[11px] text-muted-foreground">
               <Sparkles className="mt-px size-3 shrink-0" />
-              {mode === "auto"
-                ? visitor
-                  ? "Fuobe splits your story into frames."
-                  : "Fuobe splits your story into frames."
-                : "One prompt per frame. References keep the cast consistent."}
+              {mode === "auto" ? "Fuobe splits your story into frames." : "One prompt per frame. References keep the cast consistent."}
               {sheet && ` One sheet draws every panel at once on MOSS-Image, then cuts it into frames.${ONE_SHEET_GPU_TEST ? "" : " Not yet tested on a GPU (shown to you as the owner)."}`}
               {!sheet && lookName && ` Every frame gets the ${lookName} look's grade${aspect === "21:9" ? ", made at 16:9 and cropped to 21:9" : ""}.`}
             </p>

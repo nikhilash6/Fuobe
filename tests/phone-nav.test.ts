@@ -252,11 +252,12 @@ describe("the Studios sheet", () => {
     const people = at("/", () => sheet({ group: "people" }));
     expect(pills(people)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "Finish"]);
     // Pages that say "isn't available here" to a visitor, and the owner's own modes, aren't linked for them.
-    for (const w of ["From a selfie", "From Reference", "From picture", "Split soundtrack", "Remove dialogue", "From an image", "Blockout"]) {
+    for (const w of ["From a selfie", "From Reference", "From picture", "Split soundtrack", "Remove dialogue", "Blockout"]) {
       for (const g of LAUNCHER_GROUPS) expect(pills(at("/", () => sheet({ group: g.id }))), `${g.id}: ${w}`).not.toContain(w);
     }
+    // Image to 3D runs for visitors with an account (on their own GPU or key): its modes are linked too.
     const finish = at("/", () => sheet({ group: "finish" }));
-    expect(pills(finish)).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export"]);
+    expect(pills(finish)).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export", "From an image", "From several images", "From text", "Pick an object", "Splat"]);
     // Each pill links its feature (a route, or its studio with ?mode= / ?tab=).
     expect(hrefs(sell)).toEqual(expect.arrayContaining(["/marketing/click-to-ad", "/ads", "/ads/multiplier"]));
     expect(hrefs(people)).toEqual(expect.arrayContaining(["/genjutsu?mode=motion", "/genjutsu?mode=insert"]));
