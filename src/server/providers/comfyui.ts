@@ -2431,9 +2431,10 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   if (!t.pools) return pollTask(principal, t, meta, manifest, made);
   // A run on the workers: while it waits, its place in line; once a worker has it, that worker's reports (a worker that
   // goes quiet gives it back to the line, pool.ts, so no "open Fuobe on your computer"). It keeps its task's clocks
-  // (pool.ts): its wait limit until a worker first takes it, then each attempt's own running time; back in line after
-  // an attempt (a worker paused, went quiet, restarted), it keeps its place.
-  const res: PollResult = t.state === "waiting" ? { state: "queued", message: t.note === "resent" ? "Back in line for another GPU" : poolWaitWords(t) } : await pollTask(principal, t, meta, manifest, made);
+  // (pool.ts): its wait limit until a worker first takes it, then each attempt's own running time. Back in line after an
+  // attempt (a worker paused, went quiet, gave it back), it shows its kept place as any waiting run does, and once a
+  // worker has it again, the usual words: never a restart.
+  const res: PollResult = t.state === "waiting" ? { state: "queued", message: poolWaitWords(t) } : await pollTask(principal, t, meta, manifest, made);
   if (res.state !== "queued" && res.state !== "running") return res;
   // An account's run says only where it is: in line, or working on it (the owner's own runs keep the workers' words).
   if (!tenantAccount()) return { state: res.state, progress: res.progress, message: res.message, ownClocks: true };
@@ -2458,7 +2459,7 @@ async function pollTask(principal: Principal, t: TaskRow, meta: Record<string, u
       return { state: "queued", message, timeoutError: RELAY_WORDS.waitedTooLong(waitMs) };
     }
     case "sending":
-      return { state: "queued", message: down ?? (t.note === "resent" ? RELAY_WORDS.resent : sendingWords(inputKinds(t))), timeoutError: RELAY_WORDS.waitedTooLong(waitMs), ...(sentAt && { sentAt }) };
+      return { state: "queued", message: down ?? (t.note === "resent" && !t.pools ? RELAY_WORDS.resent : sendingWords(inputKinds(t))), timeoutError: RELAY_WORDS.waitedTooLong(waitMs), ...(sentAt && { sentAt }) };
     case "queued":
       return { state: "queued", message: down ?? queueWords(p?.position), ...(sentAt && { sentAt }) };
     case "running": {

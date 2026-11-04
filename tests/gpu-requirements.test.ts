@@ -1,9 +1,11 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { buildIndex, hfParts, indexHash, loadInputs, packOfClass, PT_EXTENSIONS } from "../scripts/comfy/build-requirements.mjs";
+import { buildIndex, hfParts, indexHash, loadInputs, packOfClass, PT_EXTENSIONS, refreshPins, SMALL_FILE_BYTES } from "../scripts/comfy/build-requirements.mjs";
 import { CUSTOM_NODE_REPOS } from "../scripts/comfy/library.spec.mjs";
+import { tempDir } from "./helpers/temp-dir";
 import type { Manifest } from "@/lib/comfy";
 import type { RequirementIndex } from "@/lib/gpu/types";
 
@@ -133,6 +135,41 @@ describe("requirements.json", () => {
   it("stays within its size budget (320 KB, 40 KB gzipped)", () => {
     expect(Buffer.byteLength(text)).toBeLessThanOrEqual(320 * 1024);
     expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(40 * 1024);
+  });
+});
+
+describe("refreshing the model pins (no network: a stand-in for Hugging Face)", () => {
+  it("pins a large file by its LFS sha256 and a small file kept in git by the sha256 of its bytes at that revision", async () => {
+    const dir = tempDir("fuobe-pins-");
+    const rev = "a".repeat(40);
+    const config = Buffer.from('{"sr": 44100}\n');
+    const big = Buffer.alloc(SMALL_FILE_BYTES + 1, 1);
+    const oid = "b".repeat(64);
+    const url = (p: string) => `https://huggingface.co/someone/sep/resolve/${rev}/${p}`;
+    fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ workflows: [{ models: ["config.json", "model.safetensors", "big.json", "short.json"].map((p) => ({ url: url(p) })) }] }));
+    const asked: string[] = [];
+    const fetchImpl = async (u: string, init?: RequestInit) => {
+      asked.push(`${init?.method ?? "GET"} ${u}`);
+      if (u.endsWith(`/paths-info/${rev}`)) {
+        return Response.json([
+          { type: "file", path: "config.json", size: config.length },
+          { type: "file", path: "model.safetensors", size: 135, lfs: { oid, size: 5_000_000 } },
+          { type: "file", path: "big.json", size: big.length },
+          { type: "file", path: "short.json", size: 99 },
+        ]);
+      }
+      if (u === url("config.json")) return new Response(config);
+      if (u === url("short.json")) return new Response("too short");
+      return new Response("no", { status: 404 });
+    };
+    await refreshPins(dir, { token: undefined, fetchImpl: fetchImpl as typeof fetch, log: () => {} });
+    const out = JSON.parse(fs.readFileSync(path.join(dir, "model-pins.json"), "utf8"));
+    expect(out[url("config.json")]).toEqual({ revision: rev, sizeBytes: config.length, sha256: crypto.createHash("sha256").update(config).digest("hex") });
+    expect(out[url("model.safetensors")]).toEqual({ revision: rev, sizeBytes: 5_000_000, sha256: oid });
+    // Too big to read here, or not the size the listing says: no hash.
+    expect(out[url("big.json")]).toEqual({ revision: rev, sizeBytes: big.length });
+    expect(out[url("short.json")]).toEqual({ revision: rev, sizeBytes: 99 });
+    expect(asked.some((a) => a.includes("big.json"))).toBe(false);
   });
 });
 

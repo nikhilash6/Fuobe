@@ -6,6 +6,7 @@ import { GpuWatch, othersOf, parseApps, parseGpu } from "../bin/lib/worker/gpu.m
 import { cleanJob, vetGraph } from "../bin/lib/worker/checks.mjs";
 import { comfyArgs, OwnComfy, PortBusy, portFree } from "../bin/lib/worker/comfy.mjs";
 import { parseFor, syncedFolder } from "../bin/lib/worker/config.mjs";
+import { worker } from "../bin/lib/worker/index.mjs";
 import { localPause } from "../bin/lib/worker/run.mjs";
 import { inventoryHash as workerHash } from "../bin/lib/worker/inventory.mjs";
 import { tempDir } from "./helpers/temp-dir";
@@ -119,26 +120,46 @@ describe("its own ComfyUI (check 12)", () => {
 });
 
 describe("cleanup (check 13) and setup", () => {
-  it("after a job, its files leave the worker folder and its history entry goes", async () => {
+  it("after a job, its files leave the worker folder, and its ComfyUI keeps nothing of it: no queue, no prompt, no history", async () => {
     const dir = tempDir("fuobe-worker-clean-");
     const f = { input: path.join(dir, "input"), output: path.join(dir, "output"), temp: path.join(dir, "temp") };
     for (const d of Object.values(f)) fs.mkdirSync(d, { recursive: true });
     fs.writeFileSync(path.join(f.input, "fuobe_abcdefgh12.png"), "x");
+    fs.writeFileSync(path.join(f.input, "fuobe_leftover1234.mp4"), "x");
     fs.mkdirSync(path.join(f.output, "fuobe"));
     fs.writeFileSync(path.join(f.output, "fuobe", "out_00001_.png"), "x");
     fs.writeFileSync(path.join(f.temp, "preview.png"), "x");
     const calls: string[] = [];
-    await cleanJob({ inputs: [{ name: "fuobe_abcdefgh12.png" }], promptId: "p-1" }, f, "http://127.0.0.1:1", (async (url: string, init: RequestInit) => {
+    await cleanJob(f, "http://127.0.0.1:1", (async (url: string, init: RequestInit) => {
       calls.push(`${init.method} ${url} ${init.body}`);
       return new Response("{}");
     }) as typeof fetch);
     expect(Object.values(f).flatMap((d) => fs.readdirSync(d))).toEqual([]);
-    expect(calls).toEqual(['POST http://127.0.0.1:1/history {"delete":["p-1"]}']);
+    // The whole history goes (a meta-batch's passes included), not only the job's own entry.
+    expect(calls).toEqual(['POST http://127.0.0.1:1/queue {"clear":true}', "POST http://127.0.0.1:1/interrupt {}", 'POST http://127.0.0.1:1/history {"clear":true}']);
   });
 
   it("refuses a synced folder", () => {
     expect(syncedFolder("C:\\Users\\me\\OneDrive\\Worker")).toBe(true);
     expect(syncedFolder("D:\\FuobeWorker")).toBe(false);
+  });
+
+  it("setup again keeps a port pinned by hand and the rest of worker.json, drops the older setups' 8190, and adds no defaults", async () => {
+    const setupWith = async (saved: Record<string, unknown>) => {
+      const home = tempDir("fuobe-worker-setup-home-");
+      const comfyDir = tempDir("fuobe-worker-setup-comfy-");
+      fs.writeFileSync(path.join(comfyDir, "main.py"), "");
+      fs.writeFileSync(path.join(home, "worker.json"), JSON.stringify(saved));
+      const answers = ["https://studio.example", `fuobe_wkr_${"a".repeat(43)}`, comfyDir, path.join(comfyDir, "models"), path.join(tempDir("fuobe-worker-setup-work-"), "w"), "-", "n"];
+      const io = { env: { FUOBE_WORKER_HOME: home }, home, stdout: { write: () => {} }, stderr: { write: () => {} }, ask: async () => answers.shift() ?? "" };
+      expect(await worker(["setup"], io)).toBe(0);
+      return JSON.parse(fs.readFileSync(path.join(home, "worker.json"), "utf8")) as Record<string, unknown>;
+    };
+    const kept = await setupWith({ port: 41_000, stallMin: 7, yieldFolder: "C:/turns" });
+    expect(kept).toMatchObject({ port: 41_000, stallMin: 7, yieldFolder: "C:/turns", site: "https://studio.example", ffmpeg: null, autoResume: false });
+    for (const key of ["hungMin", "busyVramMb", "localComfyPorts", "allowHttpSite"]) expect(kept).not.toHaveProperty(key);
+    expect((await setupWith({ port: 8190 })).port).toBeNull();
+    expect((await setupWith({})).port).toBeNull();
   });
 
   it("hashes its inventory the way the studio does", async () => {

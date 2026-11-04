@@ -4,6 +4,7 @@
 import os from "node:os";
 import readline from "node:readline";
 import { main } from "./lib/cli.mjs";
+import { onSignals, STOP_SIGNALS } from "./lib/signals.mjs";
 
 /** Ask on the terminal; `hidden` keeps a pasted token off the screen. */
 function ask(question, { hidden = false } = {}) {
@@ -62,10 +63,9 @@ process.exitCode = await main(process.argv.slice(2), {
       signal?.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
     }),
   /** Ctrl+C while waiting stops the wait (the job keeps running on the server). */
-  onInterrupt: (fn) => {
-    process.on("SIGINT", fn);
-    return () => process.off("SIGINT", fn);
-  },
+  onInterrupt: (fn) => onSignals(fn),
+  /** Ctrl+C, and a stop from the system (SIGTERM): a long-running command ends its own way, cleaning up as it goes. */
+  onStop: (fn) => onSignals(fn, STOP_SIGNALS),
   ask,
   readStdin,
 });

@@ -47,13 +47,18 @@ or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected
 
 1. In **Settings → Workers**, press **Add a worker** and give it a name. The page shows the worker's token only once.
    The worker starts paused, with no hours and no lanes.
-2. On the GPU's PC, you need Node 22 or later and a Fuobe checkout (or a copy of `bin/`, `package.json` and
-   `workflows/comfyui/requirements.json`). Run `node scripts/build-worker.mjs`, then run `node bin/fuobe.mjs worker setup`.
+2. On the GPU's PC, you need Node 22 or later, git and pnpm (`corepack enable` installs pnpm). Install the worker from
+   a git checkout of Fuobe that you have verified (see "Install and update"). Run `node scripts/build-worker.mjs`, then
+   run `node bin/fuobe.mjs worker setup`.
    Setup asks for the studio's address, the token (as hidden input), ComfyUI's folder, the model folders, a worker
-   folder and a port for the worker's own ComfyUI (default 8190). It refuses these:
+   folder and the path of ffmpeg (see "Clips and sound"). It refuses these:
+   - a studio address that does not start with `https://` (only `http://127.0.0.1` and `http://localhost` are allowed,
+     for tests). A studio on your own network (`http://10.x`, `http://172.16.x` to `172.31.x`, `http://192.168.x` or
+     an IPv6 address from `fc00::/7`) may use `http://` only when you set `"allowHttpSite": true` in `worker.json`
+     yourself. The studio can never set it. The worker's token and people's files then cross your network
+     unencrypted, and the worker says so in its log at each start;
    - a folder that a cloud drive syncs;
-   - a port that another program is using;
-   - port 8188.
+   - an ffmpeg path where no ffmpeg runs.
 
    On Windows it marks the worker folder as "not content indexed". The settings go to `worker.json`, and only you can
    read that file. Setup also pauses the worker on the PC.
@@ -65,23 +70,101 @@ or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected
 
 On a machine with no keyboard, set `FUOBE_WORKER_TOKEN` and `FUOBE_WORKER_SITE` so that the token stays out of files.
 
+### Install and update
+
+The worker runs other people's jobs on your PC, so install it only from code that you can check. The studio does not
+offer the worker as a download. Use a git checkout at a signed release tag:
+
+1. Clone the repository once: `git clone https://github.com/workingprototype/Fuobe.git`.
+2. Fetch the tags: `git fetch --tags`.
+3. Verify the tag that you want: `git verify-tag <tag>`. Go on only when git says that the signature is good and the
+   key is one that you trust.
+4. Check it out: `git checkout <tag>`.
+5. Install the build's tools: `pnpm install --frozen-lockfile`. The build needs TypeScript, which is a development
+   dependency.
+6. Build the worker's parts: `node scripts/build-worker.mjs`.
+
+**Release tags.** A maintainer makes each release tag with `git tag -s <version>` (a signed, annotated tag) and pushes
+it. Get the maintainer's public key from a source that you trust, and import it before step 3. Until the repository
+has a release tag, check out a commit instead, and verify it with `git verify-commit <commit>` in step 3.
+
+To update, stop the worker, do steps 2 to 6 with the new tag, and start the worker again. If the worker was set up by
+an older version, run `fuobe worker setup` again after the update. That clears the fixed port that older setups saved
+(8190), so its ComfyUI takes a free port at each start, and it asks for ffmpeg (without ffmpeg the worker takes no
+clips or sound). Until then, the worker treats a saved 8190 as no fixed port, and says when no ffmpeg is set. Do not
+install the worker from a zip file, from a copy that someone sends you, or from a branch.
+
 ### The worker's own ComfyUI
 
 The worker always starts and stops its own ComfyUI process. It never uses a ComfyUI that it did not start. Its ComfyUI:
 
-- listens on `127.0.0.1` only, on the worker's own port;
+- listens on `127.0.0.1` only, on a free port that the worker picks at random (20000 to 59999) at each start. Port
+  8188 is never used. To fix one port instead, set `port` in `worker.json` (8190, which older setups saved for every
+  worker, counts as no fixed port);
+- starts through the worker's guard (see below), with the worker folder as its working folder. A node that writes to
+  a relative path writes into the worker folder, not into ComfyUI's folder;
 - uses its own `user`, `input`, `output` and `temp` folders in the worker folder;
 - gets the model folders through `extra_model_paths.yaml`;
-- starts with `--disable-metadata` and `--disable-auto-launch`;
+- starts with `--disable-metadata` and `--disable-auto-launch`, and with `--disable-partner-nodes` when that ComfyUI
+  has the flag (the worker reads ComfyUI's `comfy/cli_args.py` to find out);
 - loads only the custom node packs that the worker found (`--disable-all-custom-nodes --whitelist-custom-nodes …`).
+  The worker finds a pack whatever the case of its folder name, and gives ComfyUI the folder name as it is on disk;
+- gets only the environment variables that it needs: the system's own, `PATH`, the temp folder, the user folders
+  (for model caches) and the graphics card's settings. Your keys, tokens and other settings do not reach it. To add a
+  variable, put it in `comfyEnv` in `worker.json` (for example `{ "comfyEnv": { "MY_SETTING": "1" } }`);
+- loads models only from this PC: `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_DATASETS_OFFLINE=1` and
+  `PIP_NO_INDEX=1` are always set. A node that downloads its model on its first run needs that model on the PC first.
 
 **The port guard.** Before each start, the worker binds the port itself and releases it at once. If the bind fails,
 another program is using the port. The worker then does not start ComfyUI, pauses itself (its state says "port-busy")
 and never connects to that port. The worker also talks to its ComfyUI only while the process that it started is
-running.
+running. When that process stops, the worker forgets its port, so nothing (not even the cleanup after a job) goes to
+whatever listens there later.
 
-If its ComfyUI stops by itself, the worker starts it again, at most 3 times in one hour. After that, it pauses itself
-("ComfyUI keeps stopping").
+A request to its ComfyUI waits at most 15 seconds for the answer to begin (2 minutes for a request that sends a file,
+and 5 seconds for the look at its memory that the worker takes every 5 seconds). A long download of a result is not
+cut short. So a ComfyUI that takes the connection but never answers holds nothing up: the worker goes on beating, and
+after `hungMin` minutes it starts that ComfyUI again.
+
+**The guard.** The worker makes a new random key at each start. It starts ComfyUI through
+`bin/lib/worker/comfy_guard.py`. At each start, it empties the worker folder's `guard/` folder and copies the guard
+into it, and it runs the guard in Python's isolated mode (`-I`). So no other file in that folder, and no `PYTHON*`
+variable, can change what the guard imports. (The guard applies `PYTHONIOENCODING` to its own output, and the worker
+passes `PYTHONUTF8` on as `-X utf8`. ComfyUI's own child processes still get every variable of its environment.) The
+guard reads the key from the environment, removes it from there, and puts a check in front of every request to
+ComfyUI:
+
+- The `Host` header must be exactly `127.0.0.1:<port>`. A web page that points its own name at 127.0.0.1 (DNS
+  rebinding) sends its own name, so it is refused.
+- The request must carry the key in `X-Fuobe-Worker-Key`. The worker sends it with every request and with the live
+  socket. Without it, the answer is 403.
+
+Before the worker sends the key, the process on the port must prove two things. It signs a random challenge with the
+key (`GET /fuobe-worker/hello`, HMAC-SHA-256), and it names its process id and its parent's. One of them must be the
+process that the worker started. (On Windows, a venv's `python.exe` starts the real Python as a process of its own, so
+there the parent is the one that the worker started.) A program that took the port first learns nothing. When ComfyUI
+is ready, the worker also checks that a request without the key is refused. If it is not refused, the guard is
+missing. The worker then stops that ComfyUI, does not use it, and pauses itself for an hour ("comfy-crashes").
+
+**A ComfyUI left running.** The worker writes its ComfyUI's process id to `comfyui.pid` in the worker folder, with
+its own process id. If the worker stops without stopping ComfyUI (a crash), the next start finds that file. It stops
+that process, but only when the worker that started it no longer runs, and only when the process's command line still
+names the guard in this worker folder, so a reused process id is never stopped.
+
+**One worker on a worker folder.** At each start, the worker makes `worker.lock` in the worker folder, with its process
+id. A second worker with the same worker folder (for example `fuobe worker run` by hand while the sign-in task's worker
+runs) does not start: it says that another worker runs, and it touches nothing (exit code 4). A lock whose worker has
+stopped is taken over. The worker counts a lock as stopped when its process is gone, or when that process id now
+belongs to a program that is not a Fuobe worker. If the command line of that process can't be read, the lock counts
+as held.
+
+**Its log.** ComfyUI's output goes to `comfyui.log` in the worker folder. Each start begins a new file, and so does a
+file that passes 20 MB. The worker keeps the two files before it (`comfyui.1.log`, `comfyui.2.log`).
+
+**When its ComfyUI stops by itself.** The worker starts it again after a short wait: 5 seconds, then twice as long each
+time in a row, at most 2 minutes. If ComfyUI stops twice while it runs the same job, that job fails with plain words
+("This run couldn't finish with these files or settings"), and the worker goes on with the next job. If ComfyUI
+stops more than 3 times in one hour with no job running, the worker pauses itself ("ComfyUI keeps stopping").
 
 ### Pauses
 
@@ -104,6 +187,83 @@ The worker obeys any one of these pauses. One pause never ends another pause.
   `worker.json`. With it on, a PC can serve whenever its owner isn't using the GPU.
 - **Hours:** outside its hours, the worker takes nothing new. Near the end of a window, it takes only a job that its
   estimate says will finish in time.
+
+On Windows, the pause shortcut (Ctrl+Alt+P, from `fuobe worker install`) runs `fuobe worker pause --choose`. It asks
+for 1, 2 or 4 hours, or until you resume, and then pauses at once: the job goes back to the queue at no cost, and its
+ComfyUI stops.
+
+### Studio jobs first
+
+A PC can also run ComfyUI work of its own: a ComfyUI that you use by hand, or a queue of your own renders. With
+**studio jobs first**, the studio's jobs go before that local ComfyUI work, in the order they were sent. Your local
+ComfyUI work runs whenever no studio job waits. Any other program (a game, Blender, a video editor) still pauses the
+worker, as above.
+
+The worker never connects to your other ComfyUIs. It reads three things only:
+
+1. **Windows' table of listening ports** (`Get-NetTCPConnection -State Listen`). Reading the table connects to
+   nothing. A python process that listens on a port in `localComfyPorts` (8188 to 8199) is local ComfyUI work. The
+   worker's own ComfyUI (by its process id and its port) never counts. Neither do the ports and process ids in
+   `localComfyExcludePorts` and `localComfyExcludePids`. The worker reads the table every 30 seconds, and sooner when
+   a process that it doesn't know holds GPU memory.
+2. **Windows' GPU counters** (`\GPU Process Memory(pid_<n>_*)\Dedicated Usage`, read with `typeperf`). These are the
+   numbers that Task Manager shows for each process. `nvidia-smi` gives the total only, because its per-process memory
+   reads `[N/A]` on Windows. The worker reads the graphics card whose processes hold the most memory. On a PC with
+   more than one card, set `gpuLuid` to the card's part of the counter name (for example
+   `0x00000000_0x0000d1b5_0`, the luid and the phys number).
+3. **A GPU lock file** (`gpuLockFile`), only when the counters or the port table can't be read. If the first word of
+   the lock names an owner in `gpuLockComfyOwners`, the GPU's memory counts as local ComfyUI work. Any other owner
+   counts as another program, and so does no lock at all.
+
+Every 5 seconds, the worker splits the GPU's used memory three ways. **Others** are the total, minus its own ComfyUI,
+minus local ComfyUI work, minus the desktop's usual share (`desktopBaselineMb`). Run `fuobe worker baseline` once,
+with no game open, to measure that share. Local ComfyUI work may stay open while you measure, and the worker may keep
+running: its own ComfyUI is not counted (the process in `comfyui.pid` in the worker folder, and the process that
+listens on its port). The command shows what it counted, with the biggest programs by name. It saves at most 4096 MB.
+More than that means that another GPU program was open: it says so, and you can close that program and measure again.
+
+- If others are above `busyVramMb` in two readings in a row, the worker pauses as before ("Your GPU is busy"). After
+  one such reading, it starts no new job, and a turn stays as it is: it doesn't begin, and it doesn't end.
+- If only local ComfyUI work holds more than `busyVramMb`, the worker asks for a turn and waits. While it waits, its
+  jobs keep their place in the line. This is not a pause: there is no cool-down, and the studio does not send its jobs
+  back.
+
+**The turn files.** Set `yieldFolder` in `worker.json` to a folder for two small files. The PC's setup makes the
+folder. The worker never makes it, so the folder keeps the rights that the setup gave it. If the folder isn't there,
+local ComfyUI work counts as another program.
+
+- `site.json` is written by the worker on every beat, and at least every 5 seconds:
+  `{ siteWaiting, oldestWaitS, interrupt, interruptAt, at }`. `siteWaiting` is the number of studio jobs that this
+  worker may take now (from the beat's `claimableNow`), plus the job that it runs. During a turn it is at least 1. It
+  goes to 0 when no studio job has come for a minute, when the worker is paused, or when a local cap is reached. When
+  the worker stops, it writes 0. `oldestWaitS` is how long the worker has seen people's jobs waiting for it, by its
+  own clock.
+- `yielded.json` is written by a helper on the PC's side: `{ state, at, startsAt }`. The state `"yielding"` can carry
+  the helper's estimate of the start time (`startsAt`, in ms). The worker passes it on in its beat. The state
+  `"yielded"` means that local ComfyUI work has made room. A "yielded" counts when it was written after the turn began,
+  or in the last 15 seconds. The worker then starts at once.
+
+When no studio job has come for a minute, the worker frees its own ComfyUI's memory (`/free`) and writes
+`siteWaiting: 0`, so your local work can go on. If no "yielded" comes within 3 minutes, the worker says so in its log
+and in its beat (`waiting-for-yield:no-answer`). It goes on waiting, with the jobs kept in line.
+
+**Limits that only the PC sets.** The studio can never change these:
+
+- `yieldMaxHoursPerDay` (20): the most hours of turns in one day, on the PC's clock. After that, local ComfyUI work
+  counts as another program until the next day. A restart doesn't reset the count.
+- `interruptGapMin` (30): a request to stop your current local job instead of letting it finish passes on at most
+  once in this many minutes, as one interrupt: `interrupt: true` with `interruptAt`, the time the worker allowed it.
+  The helper stops at most one local job for each `interruptAt` value. Both go back to `false` and `null` as soon as
+  the helper writes `yielded.json` after that time. The beat's answer has no such request yet, so today `interrupt`
+  is always false and the helper lets your local job finish.
+- `neverInterrupt` (false): when it is true, `interrupt` is always false.
+
+**You first.** A pause by hand always wins. While the worker is paused, `siteWaiting` is 0. With a plain
+`fuobe worker pause`, a job that is still finishing keeps `siteWaiting` at 1 until it ends. The shortcut's choice
+(`--choose`) and `--now` give the GPU back at once.
+
+Turns need the studio to send `claimableNow` in the beat's answer. A studio that doesn't send it gets today's
+behaviour: local ComfyUI work pauses the worker like any other program. With no `yieldFolder`, nothing changes.
 
 ### The queue
 
@@ -131,8 +291,10 @@ A worker gets a job only when all of these are true, all in one SQLite transacti
 
 - it is paused in neither place, it is not draining, it is inside its hours, and the studio heard from it in the last
   30 seconds;
+- its worker program speaks protocol 2 or later (an older one takes nothing until it is updated);
 - the job is in its pool, in a lane that the owner allows for it, after the lane's delay and `claim_after_ms`;
-- it has the workflow's files and packs (from its inventory) and enough VRAM;
+- it has the workflow's files and packs (from its inventory) and enough VRAM. A workflow's need is its whole GB less
+  3%, because a card reports a little less than its size (a 32 GB card shows about 31.8 GiB);
 - the retry rule allows it: a worker that lost or failed the job gets it again only when no other worker that can run
   the job was heard from in the last 10 minutes;
 - near the end of its hours, the job's estimate fits before the window closes;
@@ -184,19 +346,126 @@ Before its ComfyUI gets a graph, the worker checks all of these. The studio cann
 1. Every node type is on the allowlist that is built into the worker (`bin/lib/worker/dist/allowed-nodes.json`, made
    by `scripts/build-worker.mjs` from the catalog's workflows and the graph builders). For your own workflows, pass
    a file with `allowNodesFile` in `worker.json`. The studio can never send a file like that.
-2. Every file that the graph reads was sent with the job.
-3. No string input names a path (an absolute path, a drive letter, a network share or a `..` step).
-4. Every model file that the graph names is one that the worker verified.
+2. Every file that the graph reads was sent with the job, under the name the studio gave it.
+3. Every input keeps to its rule (`bin/lib/worker/dist/input-rules.json`). The build gives a rule to each input that
+   could name a file, a folder, a download or code, from the values in the catalog's own workflows:
+   - a fixed value, or one of a list (a subtitle node writes no file; a timeline node reads no clip by path; a format
+     string, a download name and a save folder stay the catalog's);
+   - a number range;
+   - a file that this job sent;
+   - a save name that the studio makes (plain name parts, no path);
+   - a model file that the worker verified, in the model folder that its loader reads.
 
-After each job, the worker deletes the job's inputs and results from its folders and deletes the prompt from its
-ComfyUI's history. At start, it empties its folders.
+   No link from another node may reach an input that has a rule, so a value cannot be built from pieces. A node that
+   has such an input takes only the inputs that the catalog gives it.
+4. Inputs with no rule that do not take free text hold no path. A name is refused if it has a `:`, `%`, `~` or `..`.
+   Any value is refused if it starts with `/`, `\`, `~` or a drive (`C:`), or if it holds an address (`://`), an
+   encoded or variable part (`%2e`, `%TEMP%`), a `..` step or a Windows device name (`CON`, `NUL`, `COM1`…).
+   Prompts, lyrics and captions keep any text.
+5. Every model file that the graph names is one that the worker verified, by its exact name. A file with the same
+   name in another folder does not count.
+
+The worker reports a model file only when its SHA-256 matches the hash that the catalog pins for it
+(`bin/lib/worker/dist/file-pins.json`, from `requirements.json` and `model-pins.json`). A file that has no pinned hash
+is not reported, so no job that needs it comes to the worker. The worker keeps the hashes it computed, so a restart
+does not read the files again. The catalog's files that still have no pin are listed in `UNPINNED_FILES`
+(`scripts/lib/worker-catalog.mjs`). A test fails when a workflow for workers needs a file that has no pin and is not on
+that list, and when a file on the list gets a pin, so the list only gets shorter.
+
+The worker checks the copy that its ComfyUI loads:
+
+- Its ComfyUI looks in the worker's model folders first, in the order that `worker.json` gives (`is_default` in the
+  worker's `extra_model_paths.yaml`), and takes the first folder that has the file. So the worker checks only that
+  first copy. If that copy has the wrong size or hash, the file is not reported, even when a later folder has a good
+  copy.
+- Some node packs read ComfyUI's own `models` folder directly. And an older ComfyUI that does not know `is_default`
+  looks in its own folders first. So a copy with the same name in ComfyUI's own `models` folder (`unet` and `clip`
+  count for `diffusion_models` and `text_encoders`), or in a folder that ComfyUI's own `extra_model_paths.yaml` adds,
+  must be the same file too. If it is not, the file is not reported.
+
+After each job, however it ended, nothing of it stays in its ComfyUI: the worker empties the queue, stops a prompt that
+still runs, and clears the whole history (a meta-batch's passes too). It also deletes the job's inputs and results from
+its folders, and its copies of the inputs. At start, and whenever it stops, it empties these folders too. Before it
+starts a job that its ComfyUI did not have last, it clears its ComfyUI the same way.
 
 Pictures for workers are made again from their pixels on the studio (no EXIF, no GPS), the owner's and accounts'
 alike. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default;
-`image,video,audio` for all); an account's run with a kind it doesn't allow is refused before it is queued. Every
-VideoHelperSuite save node of a graph for the workers is sent with `save_metadata` off, so no prompt rides inside a
-result. An account's run is shaped by the workers' own facts (the least VRAM and RAM of the workers allowed its lane),
-never by the account's own computer.
+`image,video,audio` for all); an account's run with a kind it doesn't allow is refused before it is queued. The worker
+then makes each one again before its ComfyUI reads it (see "Clips and sound"). Every VideoHelperSuite save node of a
+graph for the workers is sent with `save_metadata` off, so no prompt rides inside a result. An account's run is shaped
+by the workers' own facts (the least VRAM and RAM of the workers allowed its lane), never by the account's own computer.
+
+### Clips and sound
+
+Set `ffmpeg` in `worker.json` to the path of ffmpeg (setup asks for it). The worker then makes every clip and every
+sound that a job sends again, into a fresh file, before its ComfyUI sees it:
+
+- a clip keeps its first picture stream and its first sound stream, encoded again in the format that its name says
+  (H.264 and AAC in MP4 for most names, VP9 and Opus for WebM);
+- a sound keeps its first sound stream, in the format that its name says (WAV for any other name);
+- nothing else of the file is kept: no metadata, chapters, subtitles, attachments or data streams.
+
+The worker knows a clip or a sound by its type, by its name, or by the loader that reads it in the graph. ffmpeg runs
+in its own process, at low priority, for at most 20 minutes. It reads the file only as a local file
+(`-protocol_whitelist file`), and only as one of these container formats (`-format_whitelist`): MP4 and MOV (with M4A
+and 3GP), Matroska and WebM, AVI, GIF, MPEG-TS, MPEG-PS, FLV, ASF, WAV, MP3, FLAC, Ogg, AAC and AIFF. A playlist, a
+list or any other format that would make ffmpeg open other files or addresses is refused.
+
+What ffmpeg writes has limits too: at most one hour, at most 4096 pixels on the long side (a bigger picture is made
+smaller, in the same shape), and at most 8 times the input's size (at least 256 MB, at most 2 GB). A result that
+reaches the size cap is refused before the worker reads it. If ffmpeg cannot read a file, or its result is too big,
+the job fails with plain words ("A clip or a sound in this run couldn't be read").
+
+Without `ffmpeg`, the worker takes pictures only. Its inventory says so (`media: ["image"]`), and the studio sends it no
+workflow that reads a clip or a sound. If such a job comes anyway, the worker gives it back to the line.
+
+### When something goes wrong
+
+The worker keeps its jobs going by itself:
+
+- **Results are kept until the studio has them.** When its ComfyUI finishes a job, the worker copies every result into
+  `hold/<job>/` in the worker folder before it tells the studio. The copy stays until the studio has every file. If
+  the worker or its ComfyUI stops in between, the next claim gives the job back to this worker, and it uploads the
+  kept files from where the studio's copy got to. The job never runs twice. Kept results go up even while the worker
+  is paused, because they need no GPU. Each beat names the jobs whose results the worker keeps (`held`), so a pause,
+  even a pause now, leaves those jobs with this worker instead of sending them back in line. Kept results are deleted
+  when the studio has them all, when the worker takes another job, when the studio no longer has the job, or after a
+  day. A claim that finds nothing for the worker keeps them: their job may still come back to it.
+- **One retry policy for the studio.** A studio that restarts, a proxy that answers 502, 503 or 52x, a network that
+  drops, or a busy studio that says when to come back is waited out. The pause grows from 1 second to at most 30
+  seconds. The worker waits up to 2 minutes for a call, and up to an hour for a part of a result. It sends a call
+  again only when that is safe. A proxy's page in place of the studio's answer (a 403 that is not JSON) never stops
+  the worker.
+- **A job that stalls goes back to the line.** If a job makes no progress for the stall limit that the claim gives (10
+  minutes, never more than its lane's run ceiling; `stallMin` in `worker.json` wins), or runs past the run limit that
+  the claim gives, the worker takes its prompt off its ComfyUI and gives the job back. The job keeps
+  its place in the line. If its ComfyUI does not let go of the prompt within 15 seconds, the worker stops ComfyUI and
+  starts it again. A job that is given back counts as an attempt; the third time, it fails.
+- **The run limit** counts from when its ComfyUI starts running the job (the model load included), not while the job
+  waits. The studio gives 3 times the lane's 90th-percentile time on that worker plus the lane's model load, at least
+  10 minutes and at most the lane's run ceiling (the queue's `runCeilingS`, 45 minutes unless the owner sets another).
+  For a lane with no times on that worker yet, it gives the run ceiling, so a first long job can finish. A job given
+  back once for running past its limit gets the whole run ceiling on its next try; past that, it fails. The worker
+  ignores a run limit under 10 minutes.
+- **A ComfyUI that stops answering** for `hungMin` minutes (3) is stopped and started again.
+- **A job that the studio took back** (its token for the job no longer works, for example after the worker was out of
+  touch) is stopped in its ComfyUI at once, so it never keeps the GPU busy for nothing.
+- **Out of memory.** The worker frees its ComfyUI's memory (`/free`) and sends the job once more. Only a second time
+  fails the job. The execution time that it reports is the retry's only.
+- **Inputs are read once.** The worker keeps a copy of each input (by its SHA-256) while its job runs, so a job that
+  is sent again reads nothing from the studio twice. If the studio will not send an input again (429 with no
+  `Retry-After`), the job fails at once instead of looping. The copies go when the job ends, and also when a claim
+  brings another job or none, however the last job ended.
+- **The PC stays awake** while the worker holds a job, has results to send, or waits for work. A small helper asks the
+  system to stay awake (`SetThreadExecutionState` on Windows, `caffeinate` on macOS, `systemd-inhibit` on Linux). The
+  screen may still turn off. While the worker is paused or outside its hours, the PC sleeps as usual.
+- **Its model folders are read again** every 10 minutes, and whenever a job needs a model file that the worker has not
+  found yet. A drive that comes back after a restart is noticed, and the studio gets the new list.
+- **When the studio stops the worker.** If the studio no longer knows the worker's token, `fuobe worker run` ends with
+  exit code 3; any other stop that you did not ask for ends with exit code 1. The sign-in task that
+  `fuobe worker install` adds then starts the worker again after a minute. Ctrl+C ends with 0. On Ctrl+C, and on a
+  stop from the system (SIGTERM), the worker stops its ComfyUI and empties its folders before it ends. Kept results
+  stay for its next start.
 
 ### The protocol
 
@@ -220,20 +489,44 @@ within 10 minutes of each other, each write an alert to the admin log (`worker.a
 its target), at most once an hour each.
 
 - `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, canRotateToken?, local: { paused, why,
-  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane }`. The answer adds `worker: { paused, pauseNow, drain, autoResume,
-  insideHours, nextChangeAt, lanes, minProtocol, sendInventory, token? }` (`token`: the next token, above) and
-  `claimableNow`: how many people's jobs (an
-  account's, never the owner's) this worker may claim right now by its lanes, files, VRAM and hours, its own pause aside.
-- `PUT /api/gpu/computer/inventory`: `{ files: [{ folder, name, size, sha256 }], nodePacks: [{ name, commit }] }` →
-  `{ lanes, workflows, missing }`.
-- `POST /api/gpu/computer/claim`: the browser's claimed task plus `{ lane, estMs, runLimitMs, notAfter, attempt,
-  models }`.
+  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held }`. The answer adds `worker: { paused, pauseNow,
+  drain, autoResume, insideHours, nextChangeAt, lanes, minProtocol, sendInventory, token? }` (`token`: the next token,
+  above).
+  - `protocol` is 2 for a worker that says which inputs it takes, makes clips and sound again, and keeps its ComfyUI
+    behind the guard.
+  - `held` (optional) names the jobs whose finished results the worker keeps on its disk. A pause now sends those
+    jobs back in line only when the worker doesn't name them.
+  - While the worker waits for its turn (see "Studio jobs first"), `local` is `{ paused: false, why:
+    "waiting-for-yield", until }`, where `until` is the helper's estimate of the start time, or null. After 3 minutes
+    with no answer, `why` is `"waiting-for-yield:no-answer"`. The worker may still take jobs, and its jobs keep their
+    place.
+  - The answer also carries `claimableNow`, for studio jobs first: the number of people's jobs (never the owner's own)
+    that this worker may take now. It counts the jobs in the worker's pool that it can run (its lanes, files and VRAM)
+    and that end before its hours do. It is 0 while the worker is paused on the website, drains, is outside its hours
+    or runs an older worker program. The worker's own pause on the PC does not change it. The answer has no wait time
+    and no request to interrupt local work: the worker measures `oldestWaitS` itself.
+- `PUT /api/gpu/computer/inventory`: `{ files: [{ folder, name, size, sha256 }], nodePacks: [{ name, commit }], media }`
+  → `{ lanes, workflows, missing }`. `media` lists the kinds of input that the worker takes (`image`, `video`,
+  `audio`). With no `media` (a worker from before it was added, which doesn't make clips and sound again), the studio
+  counts pictures only.
+- `POST /api/gpu/computer/claim`: the browser's claimed task plus `{ lane, estMs, runLimitMs, stallMs, notAfter,
+  attempt, models }`. See "The run limit" above for `runLimitMs`, and "A job that stalls" for `stallMs`.
 - `POST /api/gpu/computer/bench`: bench jobs for this worker only (none are defined yet). The times of every finished
   job also count: the last 20 jobs in each lane give the median and the 90th percentile.
-- Reports, inputs and results work as they do for the browser. `failed` can also give `unknown-node`, `unsafe-path`
-  or `model-unverified` as the reason. `finished` (and the last `passes`) can add `execMs`, the time its ComfyUI
-  spent running the job (not waits, files or the upload), and `device`, its GPU's name. The billing service gets
-  them as `gpuMs` and `device`. A job that ran more than once counts once: the attempt whose result was kept.
+- Reports, inputs and results work as they do for the browser, with these additions:
+  - `finished`, and the last `passes` report, carry `execMs` (the time that its ComfyUI spent executing the job, from
+    ComfyUI's own timestamps: no waits, no uploads) and `device` (the GPU's name). The workers' log keeps both
+    (`GET /api/admin/workers/jobs`), and the billing service gets them as `gpuMs` and `device`. A job that ran more
+    than once counts once: the attempt whose result was kept. The studio keeps at most the run ceiling of the job's lane,
+    and at most the time since the job was sent to its ComfyUI (plus a minute, because ComfyUI starts a job a moment
+    before the studio hears that it was sent).
+  - `give-back` with `why` (`stalled`, `run-limit` or `media`) puts the job back in line. The job keeps its place and
+    counts as an attempt. Only a worker's job can be given back.
+  - `failed` can also give `unknown-node`, `unsafe-path` (a path, or an input outside its rule), `model-unverified`,
+    `input-crashed` (its ComfyUI stopped twice on the job) or `input-unreadable` (ffmpeg could not read a clip or a
+    sound) as the reason. The worker's own log names the node and the input, never the value. For
+    `input-crashed` and `input-unreadable`, and for a job that a worker gave back for the last time, the person who
+    started the run sees one plain sentence with no technical detail.
 
 Each worker counts against its own rate limits, so three workers that beat every 5 seconds never hold each other up.
 
@@ -256,7 +549,20 @@ routes.
 ## Tests
 
 - `pnpm test` (`tests/workers-pool.test.ts`, `tests/workers-pairing.test.ts`, `tests/worker-program.test.ts`,
-  `tests/worker-queue.test.ts`, `tests/pool-account-runs.test.ts`)
+  `tests/worker-queue.test.ts`, `tests/worker-tokens.test.ts`, `tests/pool-account-runs.test.ts`,
+  `tests/pool-line-order.test.ts`, `tests/pool-limits.test.ts`,
+  `tests/worker-input-rules.test.ts`, `tests/worker-environment.test.ts`, `tests/worker-guard.test.ts`,
+  `tests/worker-runner.test.ts`, `tests/worker-recovery.test.ts`, `tests/worker-parts.test.ts`,
+  `tests/worker-turns.test.ts`, `tests/worker-turns-run.test.ts`). The turn tests use a fake port table, fake GPU
+  counters and a fake lock file. With only local ComfyUI work on the GPU, the worker writes `siteWaiting` and claims
+  within 5 seconds of the answer; with a game, it pauses and asks for no turn. The input-rule tests
+  send graphs that try to write or read files outside the worker's folders, and check that the worker refuses them.
+  They also prepare every catalog workflow the way the studio does, and check that the worker accepts each one. The
+  recovery tests run the worker against the studio's routes and a stand-in ComfyUI that the worker starts: they kill
+  its ComfyUI halfway, stop the worker before an upload, make its ComfyUI hang, and check that the output arrives
+  each time, once. The guard tests run the real guard in front of a stand-in ComfyUI when a Python with aiohttp is
+  there (`FUOBE_TEST_PYTHON`, else `python3` or `python`), also through a venv's Python (that Python itself when it is
+  a venv's, else a venv made from it); the clip tests need `ffmpeg` on the `PATH`.
 - `node tests/e2e/worker.mjs` and `node tests/e2e/fuobe-connect.mjs` (after `pnpm build`, or with `E2E_DEV=1`). These
   use a stand-in ComfyUI and a stand-in `nvidia-smi` on ports 3361 and 3362. They never touch a real GPU or ComfyUI.
 - `python -m unittest discover -s tests` in `integrations/fuobe-connect`

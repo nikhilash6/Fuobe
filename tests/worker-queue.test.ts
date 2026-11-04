@@ -80,7 +80,7 @@ type WorkerRow = import("@/server/computer/workers").WorkerRow;
 const workerRow = (w: { id: string }) => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
 const rowOf = (id: string) => db().prepare("SELECT * FROM relay_tasks WHERE id = ?").get(id) as import("@/server/computer/tasks").TaskRow;
 const beatAs = (w: { id: string }, now = Date.now(), local: { paused: boolean; why: string | null } = { paused: false, why: null }, running: { task: string }[] = []) =>
-  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 1, version: "1", local: { ...local, until: null }, gpu: {}, inventoryHash: null, running, stopped: [] }), now);
+  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { ...local, until: null }, gpu: {}, inventoryHash: null, running, stopped: [] }), now);
 const claimAs = (w: { id: string }, running: string[] = [], now = Date.now()) => pool.workerClaim(workerRow(w), running, now);
 
 describe("one job at a time", () => {

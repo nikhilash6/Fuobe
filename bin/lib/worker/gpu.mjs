@@ -72,9 +72,9 @@ export function othersOf(reading, own, busyVramMb) {
 
 /**
  * The automatic pause and resume. `update` takes each reading's verdict; `paused` says whether the GPU keeps the worker
- * paused now. Busy pauses at once; with `autoResume`, it resumes once the GPU stayed free for `resumeAfterMs` in a row
- * and is cooler than `resumeBelowC`. Any busy reading starts the cool-down again. Without autoResume, only `clear()` (a
- * resume by hand) ends it.
+ * paused now. Busy pauses after `busyReadings` busy readings in a row (1, the default: at once); with `autoResume`, it
+ * resumes once the GPU stayed free for `resumeAfterMs` in a row and is cooler than `resumeBelowC`. Any busy reading
+ * starts the cool-down again. Without autoResume, only `clear()` (a resume by hand) ends it.
  */
 export class GpuWatch {
   constructor(o) {
@@ -82,15 +82,23 @@ export class GpuWatch {
     this.paused = false;
     this.who = null;
     this.freeSince = null;
+    this.busyInARow = 0;
+    /** What the last busy reading saw: "work" for local ComfyUI work only (studio jobs first), else null. */
+    this.cause = null;
   }
 
   update(verdict, tempC, now) {
     if (verdict.busy) {
-      this.paused = true;
-      this.who = verdict.who;
+      this.busyInARow++;
       this.freeSince = null;
+      if (this.paused || this.busyInARow >= (this.o.busyReadings ?? 1)) {
+        this.paused = true;
+        this.who = verdict.who;
+        this.cause = verdict.cause ?? null;
+      }
       return;
     }
+    this.busyInARow = 0;
     this.freeSince ??= now;
     if (this.paused && this.o.autoResume && now - this.freeSince >= this.o.resumeAfterMs && (tempC === null || tempC === undefined || tempC < this.o.resumeBelowC)) {
       this.paused = false;
@@ -102,5 +110,7 @@ export class GpuWatch {
   clear() {
     this.paused = false;
     this.who = null;
+    this.busyInARow = 0;
+    this.cause = null;
   }
 }

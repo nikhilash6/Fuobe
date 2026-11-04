@@ -20,11 +20,12 @@ const { principalOf } = await import("@/server/computer/http");
 const beatRoute = await import("@/app/api/gpu/computer/beat/route");
 const claimRoute = await import("@/app/api/gpu/computer/claim/route");
 const reportRoute = await import("@/app/api/gpu/computer/tasks/[id]/report/route");
-const { forWorkers } = await import("@/server/providers/comfyui");
+const { comfyProvider, forWorkers } = await import("@/server/providers/comfyui");
 const { hoursAt, parseHours } = await import("@/lib/worker-hours");
-const { lanesFor, needsOf, laneOf } = await import("@/lib/lanes");
+const lanesModule = await import("@/lib/lanes");
+const { lanesFor, needsOf, laneOf } = lanesModule;
 const { loadIndex } = await import("@/server/gpu/index-file");
-const { QUEUE_DEFAULTS, queueSettings, saveQueueSettings } = await import("@/server/queue-settings");
+const { QUEUE_DEFAULTS, queueSettings, runCeilingMs, saveQueueSettings } = await import("@/server/queue-settings");
 
 const LANE_A = "aaaaaaaaaaaa";
 const LANE_B = "bbbbbbbbbbbb";
@@ -51,7 +52,7 @@ const row = (w: W) => workers.getWorker(w.id)!;
 function beat(w: W, local: { paused?: boolean; why?: string | null } = {}, running: string[] = []) {
   return pool.workerBeat(
     row(w),
-    pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 1, version: "1.0.0", local: { paused: local.paused ?? false, why: local.why ?? null, until: null }, gpu: {}, inventoryHash: null, running: running.map((task) => ({ task })), stopped: [] }),
+    pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1.0.0", local: { paused: local.paused ?? false, why: local.why ?? null, until: null }, gpu: {}, inventoryHash: null, running: running.map((task) => ({ task })), stopped: [] }),
     clock,
   );
 }
@@ -59,7 +60,7 @@ function beat(w: W, local: { paused?: boolean; why?: string | null } = {}, runni
 const claim = (w: W, running: string[] = []) => pool.workerClaim(row(w), running, clock);
 
 let gens = 0;
-function task(o: { lane?: string; workflow?: string; minVram?: number; rankAgoMs?: number; estMs?: number; notAfter?: number } = {}) {
+function task(o: { lane?: string; workflow?: string; minVram?: number; rankAgoMs?: number; estMs?: number; notAfter?: number; account?: string } = {}) {
   const gid = `gen-${++gens}`;
   db()
     .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', 'queued', '{}', '[]', ?, ?)")
@@ -69,7 +70,7 @@ function task(o: { lane?: string; workflow?: string; minVram?: number; rankAgoMs
     principal: "owner",
     generationId: gid,
     graph: { "1": { class_type: "SaveImage", inputs: { filename_prefix: "x" } } },
-    pool: { pools: ["pool"], rankAt: created, lane: o.lane ?? LANE_A, needs: { workflowId: o.workflow ?? "wf-a", files: [], packs: [], minVramBytes: o.minVram ?? 0 }, estMs: o.estMs, notAfter: o.notAfter },
+    pool: { pools: ["pool"], account: o.account, rankAt: created, lane: o.lane ?? LANE_A, needs: { workflowId: o.workflow ?? "wf-a", files: [], packs: [], minVramBytes: o.minVram ?? 0 }, estMs: o.estMs, notAfter: o.notAfter },
   });
   db().prepare("UPDATE relay_tasks SET created_at = ? WHERE id = ?").run(created, t.id);
   return t.id;
@@ -92,7 +93,7 @@ describe("who may claim (check 1)", () => {
   it("a new worker is paused in both places and claims nothing", () => {
     const w = pool.addWorker("fresh");
     task();
-    const a = pool.workerBeat(row({ id: w.id, token: w.token }), pool.cleanBeat({ device: "x", protocol: 1, version: "1", local: { paused: true, why: "here" } }), clock);
+    const a = pool.workerBeat(row({ id: w.id, token: w.token }), pool.cleanBeat({ device: "x", protocol: 2, version: "1", local: { paused: true, why: "here" } }), clock);
     expect(a.runner).toBe(false);
     expect(a.worker.paused).toBe(true);
     expect(pool.workerClaim(row({ id: w.id, token: w.token }), [], clock)).toBeNull();
@@ -109,6 +110,24 @@ describe("who may claim (check 1)", () => {
     expect(claim(night)).toBeNull();
     expect(pool.workerState(row(night), clock).words).toBe(`Outside its hours (back at ${at(180)})`);
     expect(state(id2).state).toBe("waiting");
+  });
+
+  it("an older worker program takes no task, and the owner sees why", () => {
+    const id = task();
+    const w = worker("older-program");
+    const a = pool.workerBeat(
+      row(w),
+      pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 1, version: "0.9.0", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }),
+      clock,
+    );
+    expect(a.runner).toBe(false);
+    expect(a.worker.minProtocol).toBe(2);
+    expect(a.claimableNow).toBe(0);
+    expect(claim(w)).toBeNull();
+    expect(pool.workerState(row(w), clock)).toEqual({ state: "paused", words: "Takes no jobs until its worker program is updated" });
+    expect(state(id).state).toBe("waiting");
+    beat(w);
+    expect(claim(w)?.id).toBe(id);
   });
 
   it("paused on the website, or here, or draining: no new task", () => {
@@ -222,6 +241,30 @@ describe("losing a worker (checks 3, 4, 5)", () => {
     expect(state(id).tried_json).toBeNull();
   });
 
+  it("a pause now leaves a job whose finished results the worker keeps its own, so it sends them instead of running it again", () => {
+    const id = task();
+    const w = worker("keeps");
+    claim(w);
+    tasks.setTask(id, { state: "running", sent_at: clock });
+    const a = pool.workerBeat(
+      row(w),
+      pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1.0.0", local: { paused: true, why: "here-now", until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], held: [id] }),
+      clock,
+    );
+    expect(a.worker.pauseNow).toBe(true);
+    expect(a.stops).toEqual([]);
+    expect(state(id)).toMatchObject({ state: "running", worker_id: w.id });
+    // Paused, it may take no new job, but its own job comes back to it, for the kept results.
+    expect(pool.workerClaim(row(w), [], clock)?.id).toBe(id);
+    // The same pause with nothing kept: the job goes back in line.
+    const id2 = task();
+    const w2 = worker("keeps-nothing");
+    claim(w2);
+    tasks.setTask(id2, { state: "running", sent_at: clock });
+    beat(w2, { paused: true, why: "here-now" }, [id2]);
+    expect(state(id2).state).toBe("waiting");
+  });
+
   it("a busy GPU on the worker sends its job back the same way", () => {
     const id = task();
     const w = worker("busy");
@@ -293,14 +336,55 @@ describe("order (checks 8, 9)", () => {
   });
 });
 
+describe("people's runs this worker may take now (the beat's claimableNow)", () => {
+  it("counts people's waiting runs it can run here, never the owner's own, and not runs for other lanes, files or VRAM", () => {
+    const w = worker("counts", { lanes: [LANE_A], workflows: ["wf-a"], vram: 12 * GB });
+    expect(beat(w).claimableNow).toBe(0);
+    task(); // the owner's own
+    expect(beat(w).claimableNow).toBe(0);
+    task({ account: "acct-1" });
+    task({ account: "acct-2" });
+    task({ account: "acct-3", lane: LANE_B }); // a lane it isn't allowed
+    task({ account: "acct-4", workflow: "wf-z" }); // a workflow it can't run
+    task({ account: "acct-5", minVram: 20 * GB }); // more VRAM than it has
+    expect(beat(w).claimableNow).toBe(2);
+    // Its own pause doesn't change the count (its PC reads it to know whether people's runs wait for it).
+    expect(beat(w, { paused: true, why: "gpu-busy:ComfyUI on port 8188" }).claimableNow).toBe(2);
+    // Paused on the website, draining or outside its hours: none.
+    pool.patchWorker(w.id, { paused: true });
+    expect(beat(w).claimableNow).toBe(0);
+    pool.patchWorker(w.id, { paused: false, drain: true });
+    expect(beat(w).claimableNow).toBe(0);
+    pool.patchWorker(w.id, { drain: false, hours: everyDay(at(180), at(240)) });
+    expect(beat(w).claimableNow).toBe(0);
+  });
+
+  it("goes down as it claims them", () => {
+    const w = worker("claims");
+    task({ account: "acct-1" });
+    task({ account: "acct-2" });
+    expect(beat(w).claimableNow).toBe(2);
+    expect(claim(w)).not.toBeNull();
+    expect(beat(w, {}, []).claimableNow).toBe(1);
+  });
+});
+
 describe("routes", () => {
+  it("the beat's answer carries claimableNow", async () => {
+    clock = Date.now();
+    const w = worker("beat-route");
+    task({ account: "acct-route" });
+    const res = await beatRoute.POST(new Request("http://localhost:3000/api/gpu/computer/beat", { method: "POST", headers: { host: "localhost:3000", authorization: `Bearer ${w.token}`, "content-type": "application/json" }, body: JSON.stringify({ device: "x", protocol: 2, version: "1", local: { paused: false } }) }));
+    expect(((await res.json()) as { claimableNow?: number }).claimableNow).toBe(1);
+  });
+
   it("three workers that beat every 5 seconds are not rate-limited (check 14)", async () => {
     clock = Date.now();
     const ws = [worker("r1"), worker("r2"), worker("r3")];
     let ok = 0;
     for (let i = 0; i < 12; i++) {
       for (const w of ws) {
-        const res = await beatRoute.POST(new Request("http://localhost:3000/api/gpu/computer/beat", { method: "POST", headers: { host: "localhost:3000", authorization: `Bearer ${w.token}`, "content-type": "application/json" }, body: JSON.stringify({ device: "x", protocol: 1, version: "1", local: { paused: false } }) }));
+        const res = await beatRoute.POST(new Request("http://localhost:3000/api/gpu/computer/beat", { method: "POST", headers: { host: "localhost:3000", authorization: `Bearer ${w.token}`, "content-type": "application/json" }, body: JSON.stringify({ device: "x", protocol: 2, version: "1", local: { paused: false } }) }));
         if (res.status === 200) ok++;
       }
     }
@@ -317,7 +401,8 @@ describe("routes", () => {
     const { task: t } = await c.json();
     expect(t.id).toBe(id);
     expect(t.lane).toBe(LANE_A);
-    // No measured run in its lane yet: the lane's run ceiling (45 minutes unless the owner sets another).
+    // No times for the lane on this worker yet: the lane's run ceiling (45 minutes unless the owner sets another), so a
+    // first long job (a cold model load) can finish.
     expect(t.runLimitMs).toBe(45 * MIN);
     const sent = await reportRoute.POST(new Request(`http://localhost:3000/api/gpu/computer/tasks/${id}/report`, { method: "POST", headers: { ...headers, "x-fuobe-lease": t.lease }, body: JSON.stringify({ event: "sent", promptId: t.promptId }) }), {
       params: Promise.resolve({ id }),
@@ -367,5 +452,229 @@ describe("hours and lanes", () => {
     const bad = { ...good, files: good.files.map((f, i) => (i === 0 ? { ...f, size: f.size + 1 } : f)) };
     expect(lanesFor(index, bad, sha).workflows).not.toContain(id);
     expect(laneOf(index, id, sha)).toMatch(/^([0-9a-f]{12}|small)$/);
+  });
+});
+
+describe("a worker's own reports: giving a job back, its execution time, the inputs it takes", () => {
+  const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
+
+  async function routed(w: W, id: string) {
+    const headers = { host: "localhost:3000", authorization: `Bearer ${w.token}`, "content-type": "application/json" };
+    const c = await claimRoute.POST(new Request("http://localhost:3000/api/gpu/computer/claim", { method: "POST", headers, body: JSON.stringify({ running: [] }) }));
+    const { task: t } = await c.json();
+    expect(t.id).toBe(id);
+    const say = async (body: Record<string, unknown>) => {
+      const r = await reportRoute.POST(new Request(`http://localhost:3000/api/gpu/computer/tasks/${id}/report`, { method: "POST", headers: { ...headers, "x-fuobe-lease": t.lease }, body: JSON.stringify(body) }), { params: Promise.resolve({ id }) });
+      return { status: r.status, body: await r.json() };
+    };
+    return { t, say };
+  }
+
+  it("a job given back goes back in line with its place, counts as an attempt, and the third time fails in plain words", async () => {
+    clock = Date.now();
+    const id = task();
+    const rank = state(id).rank_at;
+    const w = worker("gives-back");
+    for (let i = 1; i <= 3; i++) {
+      const { t, say } = await routed(w, id);
+      expect(t.attempt).toBe(i);
+      expect((await say({ event: "sent", promptId: t.promptId })).status).toBe(200);
+      const back = await say({ event: "give-back", why: i === 1 ? "stalled" : i === 2 ? "run-limit" : "media" });
+      expect(back.status).toBe(200);
+      if (i < 3) {
+        expect(back.body.state).toBe("waiting");
+        expect(state(id)).toMatchObject({ state: "waiting", requeues: i, rank_at: rank, worker_id: null });
+        expect(JSON.parse(state(id).tried_json ?? "[]")).toEqual([w.id]);
+      } else {
+        expect(back.body.state).toBe("failed");
+        expect(state(id).error).toBe(pool.GAVE_BACK_WORDS);
+      }
+    }
+  });
+
+  it("a job given back shows its kept place in line, then the usual words once a worker has it again: never a restart", async () => {
+    clock = Date.now();
+    const id = task();
+    const w = worker("words");
+    const poll = async () => (await comfyProvider.poll({ externalId: "11111111-1111-4111-8111-111111111111", meta: { relay: id, workflowId: "none", generationId: state(id).generation_id } } as never)) as { state: string; message?: string };
+    const first = await routed(w, id);
+    await first.say({ event: "sent", promptId: first.t.promptId });
+    await first.say({ event: "give-back", why: "stalled" });
+    expect(state(id)).toMatchObject({ state: "waiting", note: "resent" });
+    const waiting = await poll();
+    expect(waiting).toMatchObject({ state: "queued", message: pool.poolWaitWords(state(id)) });
+    expect(waiting.message).not.toMatch(/another GPU|restart/i);
+    await routed(w, id);
+    const again = await poll();
+    expect(state(id).state).toBe("sending");
+    expect(again.state).toBe("queued");
+    expect(again.message).not.toMatch(/restart|sent it again/i);
+  });
+
+  it("a give-back with an unknown reason is refused, and a person's own computer can't give its job back", async () => {
+    clock = Date.now();
+    const id = task();
+    const w = worker("bad-reason");
+    const { t, say } = await routed(w, id);
+    await say({ event: "sent", promptId: t.promptId });
+    expect((await say({ event: "give-back", why: "bored" })).status).toBe(400);
+    expect(state(id).state).toBe("queued");
+    const own = tasks.createTask({ principal: "owner", generationId: "own-gen", graph: { "1": { class_type: "SaveImage", inputs: { filename_prefix: "x" } } } });
+    db().prepare("UPDATE relay_tasks SET state = 'running' WHERE id = ?").run(own.id);
+    expect(() => tasks.report(state(own.id), { event: "give-back", why: "stalled" }, () => ({ error: "x" }))).toThrow(/doesn't fit/);
+  });
+
+  it("keeps the execution time and the GPU name a worker reports with a finished job", async () => {
+    clock = Date.now();
+    const id = task();
+    const w = worker("exec");
+    const { t } = await routed(w, id);
+    tasks.report(state(id), { event: "sent", promptId: t.promptId }, () => ({ error: "x" }));
+    const entry = { status: { status_str: "success", completed: true }, outputs: {} };
+    tasks.report(state(id), { event: "finished", entry, execMs: 12_345.6, device: "  Test GPU  " }, () => ({ wanted: [], outputs: [], budget: 0 }));
+    expect(state(id).state).toBe("done");
+    expect(tasks.execOf(state(id))).toEqual({ ms: 12_346, device: "Test GPU" });
+    // Nothing reported: nothing kept; a nonsense time is not kept either.
+    const id2 = task();
+    const { t: t2 } = await routed(w, id2);
+    tasks.report(state(id2), { event: "sent", promptId: t2.promptId }, () => ({ error: "x" }));
+    tasks.report(state(id2), { event: "finished", entry, execMs: -5 }, () => ({ wanted: [], outputs: [], budget: 0 }));
+    expect(tasks.execOf(state(id2))).toBeNull();
+  });
+
+  it("holds a reported execution time to the time since the job was sent, and to its run ceiling", async () => {
+    clock = Date.now();
+    const w = worker("exec-caps");
+    const entry = { status: { status_str: "success", completed: true }, outputs: {} };
+    const finish = async (sentAgoMs: number, execMs: number) => {
+      const id = task();
+      const { t } = await routed(w, id);
+      tasks.report(state(id), { event: "sent", promptId: t.promptId }, () => ({ error: "x" }));
+      tasks.setTask(id, { sent_at: Date.now() - sentAgoMs });
+      tasks.report(state(id), { event: "finished", entry, execMs }, () => ({ wanted: [], outputs: [], budget: 0 }));
+      return tasks.execOf(state(id))!.ms;
+    };
+    // Sent 2 minutes ago, said to have run 10 hours: about 3 minutes (2, and the minute allowed before "sent").
+    const capped = await finish(2 * MIN, 10 * 60 * MIN);
+    expect(capped).toBeGreaterThanOrEqual(3 * MIN - 1_000);
+    expect(capped).toBeLessThanOrEqual(3 * MIN + 1_000);
+    // Sent 3 hours ago, said to have run 2 hours: the run ceiling.
+    expect(await finish(180 * MIN, 120 * MIN)).toBe(runCeilingMs(LANE_A));
+    // A sound time stays as it was.
+    expect(await finish(30 * MIN, 25 * MIN)).toBe(25 * MIN);
+  });
+
+  it("past its run limit: back in line once, with the whole run ceiling for its next try; past it again, it fails at once", async () => {
+    clock = Date.now();
+    const id = task();
+    const w = worker("run-limit");
+    db().prepare("UPDATE relay_workers SET bench_json = ? WHERE id = ?").run(JSON.stringify({ [LANE_A]: { medianMs: 2 * MIN, p90Ms: 3 * MIN } }), w.id);
+    const first = await routed(w, id);
+    expect(first.t.runLimitMs).toBe(10 * MIN);
+    expect(first.t.stallMs).toBe(pool.STALL_MS);
+    await first.say({ event: "sent", promptId: first.t.promptId });
+    expect((await first.say({ event: "give-back", why: "run-limit" })).body.state).toBe("waiting");
+    expect(state(id)).toMatchObject({ state: "waiting", requeues: 1 });
+    // The lane's times may come from shorter jobs: this one gets the whole ceiling now.
+    const second = await routed(w, id);
+    expect(second.t.runLimitMs).toBe(runCeilingMs(LANE_A));
+    await second.say({ event: "sent", promptId: second.t.promptId });
+    const back = await second.say({ event: "give-back", why: "run-limit" });
+    expect(back.body.state).toBe("failed");
+    expect(state(id)).toMatchObject({ state: "failed", error: pool.GAVE_BACK_WORDS, requeues: 2 });
+    // Other reasons still have three tries: a stall after one run-limit goes back in line.
+    const id2 = task();
+    const third = await routed(w, id2);
+    await third.say({ event: "sent", promptId: third.t.promptId });
+    await third.say({ event: "give-back", why: "run-limit" });
+    const fourth = await routed(w, id2);
+    await fourth.say({ event: "sent", promptId: fourth.t.promptId });
+    expect((await fourth.say({ event: "give-back", why: "stalled" })).body.state).toBe("waiting");
+  });
+
+  it("results kept from an earlier try go up as no new attempt, keep their own time, and add no time to the lane", async () => {
+    clock = Date.now();
+    const entry = { status: { status_str: "success", completed: true }, outputs: {} };
+    // Made 10 minutes ago; it ran, its worker stopped before the studio heard, and it went back in line.
+    const id = task({ rankAgoMs: 10 * MIN });
+    const w = worker("kept");
+    const first = await routed(w, id);
+    await first.say({ event: "sent", promptId: first.t.promptId });
+    expect(state(id).attempts).toBe(1);
+    pool.backInLine(state(id), { blame: true });
+    const again = await routed(w, id);
+    expect((await again.say({ event: "sent", promptId: again.t.promptId, kept: true })).status).toBe(200);
+    expect(state(id).attempts).toBe(1);
+    const done = await again.say({ event: "finished", entry, execMs: 4 * MIN, device: "Test GPU <b>", kept: true });
+    expect(done.status).toBe(200);
+    expect(state(id).state).not.toBe("queued");
+    // Its time ran before this "sent": kept as reported (it is under the time since the task was made). The GPU's name
+    // keeps only plain characters.
+    expect(tasks.execOf(state(id))).toEqual({ ms: 4 * MIN, device: "Test GPU b" });
+    expect(JSON.parse(row(w).bench_json ?? "{}")[LANE_A]).toBeUndefined();
+    // A job that runs here counts toward the lane's times, and its "sent" is an attempt.
+    const id2 = task();
+    const run = await routed(w, id2);
+    await run.say({ event: "sent", promptId: run.t.promptId });
+    expect(state(id2).attempts).toBe(1);
+    tasks.setTask(id2, { sent_at: Date.now() - 5_000 });
+    await run.say({ event: "finished", entry, execMs: 1_000 });
+    expect(JSON.parse(row(w).bench_json ?? "{}")[LANE_A]?.runs).toHaveLength(1);
+  });
+
+  it("a worker that can't make clips and sound again gets no workflow that reads them", () => {
+    const index = loadIndex();
+    const { mediaOf } = lanesModule;
+    const reads = Object.keys(index.workflows).filter((k) => !index.workflows[k].isolated && mediaOf(index.workflows[k]).length);
+    const pictures = Object.keys(index.workflows).filter((k) => !index.workflows[k].isolated && !mediaOf(index.workflows[k]).length);
+    expect(reads.length).toBeGreaterThan(10);
+    // A worker that has every file and pack.
+    const files = Object.values(index.files).map((f) => ({ folder: f.folder, name: f.file, size: f.sizeBytes, sha256: f.sha256 ?? null }));
+    const nodePacks = Object.keys(index.packs).map((name) => ({ name, commit: null }));
+    const all = lanesFor(index, { files, nodePacks, media: ["image", "video", "audio"] }, sha).workflows;
+    expect(all).toEqual(expect.arrayContaining([...reads, ...pictures]));
+    const onlyPictures = lanesFor(index, { files, nodePacks, media: ["image"] }, sha);
+    expect(onlyPictures.workflows).toEqual(expect.arrayContaining(pictures));
+    for (const id of reads) expect(onlyPictures.workflows).not.toContain(id);
+    expect(onlyPictures.missing.some((m) => m.files.includes("input:video"))).toBe(true);
+    // A worker from before workers said which inputs they take (no `media`) never re-encodes clips: pictures only.
+    expect(lanesFor(index, { files, nodePacks }, sha).workflows).toEqual(onlyPictures.workflows);
+  });
+
+  it("a job's run limit: the run ceiling with no times yet, else 3 × the lane's p90 plus its load, 10 minutes to the ceiling", () => {
+    expect(pool.runLimitMs(undefined)).toBe(runCeilingMs(LANE_A));
+    expect(pool.runLimitMs(null, "small", 200_000)).toBe(45 * MIN);
+    expect(pool.runLimitMs(0)).toBe(45 * MIN);
+    expect(pool.runLimitMs(30_000)).toBe(10 * MIN);
+    expect(pool.runLimitMs(4 * MIN, "small", 3 * MIN)).toBe(15 * MIN);
+    expect(pool.runLimitMs(20 * MIN, "small", 5 * MIN)).toBe(45 * MIN);
+    // The claim gives the worker's own times for the lane.
+    clock = Date.now();
+    const id = task();
+    const w = worker("timed");
+    db().prepare("UPDATE relay_workers SET bench_json = ? WHERE id = ?").run(JSON.stringify({ [LANE_A]: { medianMs: 3 * MIN, p90Ms: 4 * MIN, loadMs: 3 * MIN } }), w.id);
+    const t = pool.workerClaim(row(w), [], clock)!;
+    expect(t.id).toBe(id);
+    expect(t.runLimitMs).toBe(15 * MIN);
+  });
+
+  it("an older worker's inventory (no `media`) keeps its hash, so the studio doesn't ask for it at every beat", () => {
+    const inv = { files: [{ folder: "loras", name: "a.safetensors", size: 7, sha256: null }], nodePacks: [{ name: "P", commit: null }] };
+    const w = worker("older");
+    pool.saveInventory(row(w), inv);
+    expect(row(w).inventory_hash).toBe(pool.inventoryHash(inv));
+    expect(JSON.parse(row(w).inventory_json ?? "{}").media).toBeUndefined();
+  });
+
+  it("the inventory's hash covers the kinds of input, and the worker hashes it the same way", async () => {
+    const { inventoryHash: workerHash } = await import("../bin/lib/worker/inventory.mjs");
+    const inv = { files: [{ folder: "loras", name: "a.safetensors", size: 7, sha256: null }], nodePacks: [{ name: "P", commit: null }] };
+    expect(pool.inventoryHash({ ...inv, media: ["image"] })).not.toBe(pool.inventoryHash(inv));
+    expect(pool.inventoryHash({ ...inv, media: ["video", "image"] })).toBe(pool.inventoryHash({ ...inv, media: ["image", "video"] }));
+    expect(workerHash({ ...inv, media: ["image", "audio"] })).toBe(pool.inventoryHash({ ...inv, media: ["image", "audio"] }));
+    const w = worker("media");
+    const saved = pool.saveInventory(row(w), { ...inv, media: ["image", "teleport"] });
+    expect(saved.lanes).toBeDefined();
+    expect(JSON.parse(row(w).inventory_json ?? "{}").media).toEqual(["image"]);
   });
 });

@@ -131,7 +131,7 @@ function workerRunner(token: string) {
       sha256,
       origin: "http://localhost:3000",
       sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 50))),
-      beatExtra: () => ({ protocol: 1, version: "test", local: { paused: false, why: null, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null }),
+      beatExtra: () => ({ protocol: 2, version: "test", local: { paused: false, why: null, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null }),
     },
     { device: "worker", port: comfy.port, clientId: "worker-test" },
   );
@@ -182,7 +182,7 @@ function accountTask(o: { lane?: string; account?: string; rankAt?: number; notA
 type WorkerRow = import("@/server/computer/workers").WorkerRow;
 const workerRow = (w: { id: string }) => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
 const beatAs = (w: { id: string }, now = Date.now()) =>
-  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 1, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }), now);
+  pool.workerBeat(workerRow(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }), now);
 const claimAs = (w: { id: string }, running: string[] = [], now = Date.now()) => pool.workerClaim(workerRow(w), running, now);
 
 describe("with hosted runs off, nothing changes", () => {
@@ -359,7 +359,7 @@ describe("the line", () => {
     // The worker pauses at once (another program on the GPU): the job goes back in line at no cost.
     pool.workerBeat(
       db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as never,
-      pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 1, version: "1", local: { paused: true, why: "gpu-busy:game.exe", until: null }, gpu: {}, running: [{ task: first.id }], stopped: [] }),
+      pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: true, why: "gpu-busy:game.exe", until: null }, gpu: {}, running: [{ task: first.id }], stopped: [] }),
     );
     const back = rowOf(first.id);
     expect(back.state).toBe("waiting");

@@ -150,7 +150,7 @@ const taskOf = (generationId: string) => db().prepare("SELECT * FROM relay_tasks
 const workerRow = () => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(worker.id) as import("@/server/computer/workers").WorkerRow;
 /** The stand-in worker takes the next task in line, as the worker program does. */
 function workerTakes() {
-  pool.workerBeat(workerRow(), pool.cleanBeat({ device: `wkr-${worker.id}`, protocol: 1, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }));
+  pool.workerBeat(workerRow(), pool.cleanBeat({ device: `wkr-${worker.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }));
   return pool.workerClaim(workerRow(), [], Date.now());
 }
 const started = (generationId: string) => !!(db().prepare("SELECT started_at FROM generation_runs WHERE id = ?").get(generationId) as { started_at: number | null } | undefined)?.started_at;

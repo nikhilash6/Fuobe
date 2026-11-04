@@ -286,12 +286,15 @@ Runs this PC's GPU as a worker for a studio: it takes the studio's ComfyUI jobs 
 ComfyUI, and it opens no port. See [gpu-workers.md](gpu-workers.md).
 
 ```bash
-node scripts/build-worker.mjs     # once, in the checkout: the worker's shared parts
-fuobe worker setup                # the studio's address, the token from Settings → Workers, ComfyUI's folder, a port
-fuobe worker run                  # until Ctrl+C
+pnpm install --frozen-lockfile    # once, in the checkout: the build's tools
+node scripts/build-worker.mjs     # then the worker's shared parts
+fuobe worker setup                # the studio's address, the token, ComfyUI's folder, the model and worker folders, ffmpeg's path
+fuobe worker run                  # until Ctrl+C; exit code 4: another worker runs on the same worker folder
 fuobe worker pause                # finish the job, then stop its ComfyUI;  --now: stop now;  --for 2h: back by itself
+fuobe worker pause --choose       # asks for 1, 2 or 4 hours, then stops now (the Ctrl+Alt+P shortcut)
 fuobe worker resume
 fuobe worker status
+fuobe worker baseline             # the desktop's usual share of the GPU, for studio jobs first
 fuobe worker install              # Windows: shows a sign-in task and pause/resume shortcuts; --yes adds them
 ```
 

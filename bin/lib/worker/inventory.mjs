@@ -1,11 +1,24 @@
 // What this worker has (docs/gpu-workers.md): the model files in its model folders that the studio's catalog names,
-// each checked by folder, name and exact size, and by SHA-256 where the catalog pins one; and its ComfyUI's node packs
-// with their commits. Hashes are cached by path, size and modified time, so a restart doesn't read hundreds of GB again.
+// each checked by folder, name, exact size and SHA-256 (every file the catalog names has its hash pinned in the
+// worker's build: dist/file-pins.json); and its ComfyUI's node packs with their commits. Hashes are cached by path,
+// size and modified time, so a restart doesn't read hundreds of GB again.
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const KINDS = /\.(safetensors|gguf)$/i;
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+/** The SHA-256 of every model file the catalog names ("folder/file" → hex), built into this worker. */
+export function filePins(file = path.join(here, "dist", "file-pins.json")) {
+  try {
+    const p = JSON.parse(fs.readFileSync(file, "utf8")).files;
+    return p && typeof p === "object" ? p : {};
+  } catch {
+    return {};
+  }
+}
 
 function sha256File(file) {
   return new Promise((resolve, reject) => {
@@ -17,8 +30,11 @@ function sha256File(file) {
   });
 }
 
-/** The pack folders in ComfyUI's custom_nodes, named as the catalog names them, with their git commit. */
-export function nodePacks(comfyDir, index) {
+/**
+ * The pack folders in ComfyUI's custom_nodes that the catalog knows, matched whatever their case: { name (as the
+ * catalog names it), folder (as it is on disk, which is what ComfyUI's --whitelist-custom-nodes compares), commit }.
+ */
+export function packFolders(comfyDir, index) {
   const dir = path.join(comfyDir ?? "", "custom_nodes");
   if (!comfyDir || !fs.existsSync(dir)) return [];
   const known = new Map();
@@ -32,10 +48,13 @@ export function nodePacks(comfyDir, index) {
     if (!e.isDirectory() || e.name.startsWith(".") || e.name === "__pycache__") continue;
     const name = known.get(e.name.toLowerCase());
     if (!name) continue;
-    out.push({ name, commit: gitCommit(path.join(dir, e.name)) });
+    out.push({ name, folder: e.name, commit: gitCommit(path.join(dir, e.name)) });
   }
   return out;
 }
+
+/** The node packs as the studio sees them: the catalog's name and the commit. */
+export const nodePacks = (comfyDir, index) => packFolders(comfyDir, index).map(({ name, commit }) => ({ name, commit }));
 
 function gitCommit(dir) {
   try {
@@ -52,11 +71,109 @@ function gitCommit(dir) {
   }
 }
 
+/** ComfyUI's older folder names and the ones they stand for (its folder_paths.map_legacy). */
+const LEGACY = { unet: "diffusion_models", clip: "text_encoders" };
+/** ComfyUI's own models folder: the subfolders it reads for a folder name, where they aren't just that name. */
+const OWN_SUBFOLDERS = { diffusion_models: ["unet", "diffusion_models"], text_encoders: ["text_encoders", "clip"] };
+const canonical = (folder) => LEGACY[folder] ?? folder;
+
+/** A path from an extra_model_paths.yaml with ~ and environment variables ($X, ${X}, and %X% on Windows) filled in. */
+function expand(p, env, home) {
+  const vars = (name, whole) => env[name] ?? env[Object.keys(env).find((k) => k.toUpperCase() === name.toUpperCase()) ?? ""] ?? whole;
+  let out = String(p).replace(/\$\{([^}]+)\}|\$(\w+)/g, (whole, a, b) => vars(a ?? b, whole));
+  if (process.platform === "win32") out = out.replace(/%([^%]+)%/g, (whole, a) => vars(a, whole));
+  return /^~(?=$|[\\/])/.test(out) ? path.join(home, out.slice(1)) : out;
+}
+
+const unquote = (v) => {
+  const s = v.trim();
+  if (s.length >= 2 && s[0] === '"' && s.at(-1) === '"') {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return s.slice(1, -1);
+    }
+  }
+  return s.length >= 2 && s[0] === "'" && s.at(-1) === "'" ? s.slice(1, -1).replaceAll("''", "'") : s;
+};
+
 /**
- * The verified files: for every file the catalog names, found in one of the model folders under its folder with the
- * exact size (and the pinned SHA-256, when there is one). A file of the wrong size isn't reported at all.
+ * The folders an extra_model_paths.yaml adds, as ComfyUI reads it (utils/extra_config.py): { folder name → [folders] }.
+ * It reads the shape ComfyUI's example uses: entries of `base_path`, `is_default` and `name: subfolder` (or a `|` block
+ * with one subfolder a line), a subfolder joined to base_path, or to the file's own folder when it isn't a full path.
+ * @param {string} text
+ * @param {string} yamlDir
+ * @param {Record<string, string | undefined>} [env]
+ * @param {string} [home]
+ * @returns {Record<string, string[]>}
  */
-export async function modelFiles(modelDirs, index, cacheFile) {
+export function yamlModelDirs(text, yamlDir, env = process.env, home = os.homedir()) {
+  const entries = [];
+  let entry = null;
+  const lines = String(text).split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/(^|\s)#.*$/, "");
+    if (!line.trim()) continue;
+    const indent = line.length - line.trimStart().length;
+    if (indent === 0) {
+      entry = /^[^:]+:\s*$/.test(line) ? {} : null;
+      if (entry) entries.push(entry);
+      continue;
+    }
+    const m = /^\s+([^:\s][^:]*?)\s*:\s*(.*)$/.exec(line);
+    if (!entry || !m) continue;
+    let value = m[2];
+    if (/^[|>][+-]?$/.test(value.trim())) {
+      // A block: the lines indented more than this one, each one subfolder.
+      const block = [];
+      while (i + 1 < lines.length && (!lines[i + 1].trim() || lines[i + 1].length - lines[i + 1].trimStart().length > indent)) block.push(lines[++i].trim());
+      value = block.filter(Boolean).join("\n");
+    } else value = unquote(value);
+    entry[m[1]] = value;
+  }
+  const out = {};
+  for (const e of entries) {
+    let base = typeof e.base_path === "string" && e.base_path ? expand(e.base_path, env, home) : null;
+    if (base && !path.isAbsolute(base)) base = path.resolve(yamlDir, base);
+    for (const [name, value] of Object.entries(e)) {
+      if (name === "base_path" || name === "is_default" || typeof value !== "string") continue;
+      for (const sub of value.split("\n").map((s) => s.trim()).filter(Boolean)) {
+        const full = base ? path.join(base, sub) : path.isAbsolute(sub) ? sub : path.resolve(yamlDir, sub);
+        (out[canonical(name)] ??= []).push(path.normalize(full));
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Where ComfyUI itself also looks for a folder's files, outside the worker's model folders: its own models folder (which
+ * some node packs read directly), and the folders its own extra_model_paths.yaml adds.
+ */
+export function comfyModelDirs(comfyDir, env = process.env, home = os.homedir()) {
+  if (!comfyDir) return () => [];
+  let fromYaml = {};
+  try {
+    fromYaml = yamlModelDirs(fs.readFileSync(path.join(comfyDir, "extra_model_paths.yaml"), "utf8"), comfyDir, env, home);
+  } catch {}
+  return (folder) => {
+    const name = canonical(folder);
+    return [...(OWN_SUBFOLDERS[name] ?? [name]).map((sub) => path.join(comfyDir, "models", sub)), ...(fromYaml[name] ?? [])];
+  };
+}
+
+/** The same file, by its full path (whatever its case on Windows). */
+const samePath = (a, b) => (process.platform === "win32" ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
+
+/**
+ * The verified files: for every file the catalog names with a pinned SHA-256 (`pins`, else the index's own), the copy
+ * that ComfyUI finds first, with the exact size and that hash. ComfyUI looks in the model folders in order and takes the
+ * first one that has the file, so only that copy counts: one of the wrong size or with another hash isn't reported,
+ * even when a later folder has a good copy. Every copy where ComfyUI itself also looks (`o.comfyDir`: its own models
+ * folder and its extra_model_paths.yaml) must be the same file too, or it isn't reported. A file with no pin isn't
+ * reported at all, so no job that needs it comes here.
+ */
+export async function modelFiles(modelDirs, index, cacheFile, pins = filePins(), o = {}) {
   const cache = (() => {
     try {
       return JSON.parse(fs.readFileSync(cacheFile, "utf8"));
@@ -64,27 +181,48 @@ export async function modelFiles(modelDirs, index, cacheFile) {
       return {};
     }
   })();
+  const elsewhere = comfyModelDirs(o.comfyDir, o.env, o.home);
+  /** The file at `p` (or null when there's none), and whether it is the pinned one. */
+  const look = async (p, f, want) => {
+    let st;
+    try {
+      st = fs.statSync(p);
+    } catch {
+      return null;
+    }
+    if (!st.isFile()) return null;
+    if (st.size !== f.sizeBytes) return { ok: false };
+    const key = `${p}|${st.size}|${st.mtimeMs}`;
+    const sha = cache[key] ?? (cache[key] = await sha256File(p));
+    return { ok: sha === want, size: st.size, sha };
+  };
   const out = [];
   for (const f of Object.values(index.files ?? {})) {
-    if (!KINDS.test(f.file) && !(f.sha256 && /\.pth$/i.test(f.file))) continue;
+    const want = pins[`${f.folder}/${f.file}`] ?? f.sha256;
+    if (typeof want !== "string" || !/^[0-9a-f]{64}$/.test(want)) continue;
+    let first = null;
+    let firstPath = null;
     for (const root of modelDirs ?? []) {
       const p = path.join(root, f.folder, f.file);
-      let st;
-      try {
-        st = fs.statSync(p);
-      } catch {
-        continue;
+      first = await look(p, f, want);
+      if (first) {
+        firstPath = p;
+        break;
       }
-      if (!st.isFile() || st.size !== f.sizeBytes) continue;
-      let sha = null;
-      if (f.sha256) {
-        const key = `${p}|${st.size}|${st.mtimeMs}`;
-        sha = cache[key] ?? (cache[key] = await sha256File(p));
-        if (sha !== f.sha256) continue;
-      }
-      out.push({ folder: f.folder, name: f.file, size: st.size, sha256: sha });
-      break;
     }
+    if (!first?.ok) continue;
+    let shadowed = false;
+    for (const dir of elsewhere(f.folder)) {
+      const p = path.join(dir, f.file);
+      if (samePath(p, firstPath)) continue;
+      const other = await look(p, f, want);
+      if (other && !other.ok) {
+        shadowed = true;
+        break;
+      }
+    }
+    if (shadowed) continue;
+    out.push({ folder: f.folder, name: f.file, size: first.size, sha256: first.sha });
   }
   try {
     fs.writeFileSync(cacheFile, JSON.stringify(cache));
@@ -92,9 +230,9 @@ export async function modelFiles(modelDirs, index, cacheFile) {
   return out;
 }
 
-/** The same hash the studio computes (src/server/computer/pool.ts inventoryHash). */
+/** The same hash the studio computes (src/server/computer/pool.ts inventoryHash), with the kinds of input it takes. */
 export function inventoryHash(inv) {
   const files = inv.files.map((f) => `${f.folder}/${f.name}:${f.size}:${f.sha256 ?? ""}`).sort();
   const packs = inv.nodePacks.map((p) => `${p.name}@${p.commit ?? ""}`).sort();
-  return crypto.createHash("sha256").update(JSON.stringify({ files, packs })).digest("hex");
+  return crypto.createHash("sha256").update(JSON.stringify({ files, packs, ...(inv.media && { media: [...inv.media].sort() }) })).digest("hex");
 }

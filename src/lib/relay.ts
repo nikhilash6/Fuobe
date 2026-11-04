@@ -23,14 +23,28 @@ export interface HistoryEntryLike {
   outputs?: Record<string, Record<string, unknown>>;
 }
 
-/** Why the tab gave up on a task by itself (the server says it in plain words). */
-export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed", "unknown-node", "unsafe-path", "model-unverified"] as const;
+/**
+ * Why the tab gave up on a task by itself (the server says it in plain words). A worker adds two: its ComfyUI stopped
+ * twice while running the task ("input-crashed"), and a clip or a sound that couldn't be made again ("input-unreadable").
+ */
+export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed", "unknown-node", "unsafe-path", "model-unverified", "input-crashed", "input-unreadable"] as const;
 export type TabFailure = (typeof TAB_FAILURES)[number];
+
+/**
+ * Why a worker gives a task back to the line (another worker, or this one later, runs it): it made no progress for too
+ * long ("stalled"), it ran past its run limit ("run-limit"), or it takes clips or sound and this worker can't make them
+ * again ("media").
+ */
+export const GIVE_BACK = ["stalled", "run-limit", "media"] as const;
+export type GiveBackWhy = (typeof GIVE_BACK)[number];
 
 /** What the tab reports about one task. */
 export type ReportEvent =
-  /** ComfyUI took the prompt (`promptId`: the id it answered, the server's own unless an older ComfyUI minted one). */
-  | { event: "sent"; promptId: string; number?: number }
+  /**
+   * ComfyUI took the prompt (`promptId`: the id it answered, the server's own unless an older ComfyUI minted one).
+   * `kept`: a worker sends results it kept from an earlier try instead (nothing new runs, so it isn't another attempt).
+   */
+  | { event: "sent"; promptId: string; number?: number; kept?: boolean }
   /** ComfyUI's /prompt refused it (its answer, as it was). */
   | { event: "refused"; status: number; body: unknown }
   /** Waiting in ComfyUI's queue: how many prompts are before it. */
@@ -38,12 +52,18 @@ export type ReportEvent =
   /** Running: the sampler's steps, and the node. */
   | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number }
   /**
-   * Finished: its /history entry. A worker adds the most VRAM it took (for the benchmarks), the time its ComfyUI spent
-   * running the job (`execMs`: not the wait, the files or the upload) and its GPU's name (`device`).
+   * Finished: its /history entry. A worker adds the most VRAM it took (for the benchmarks), how long its ComfyUI spent
+   * executing the job (`execMs`: execution only, no waits, no uploads), its GPU's name (`device`), and `kept` when the
+   * results are ones it kept from an earlier try (their time doesn't count toward the lane's times).
    */
-  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string }
-  /** A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. */
-  | { event: "passes"; running: boolean; entries: HistoryEntryLike[]; execMs?: number; device?: string }
+  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string; kept?: boolean }
+  /**
+   * A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. The
+   * last one (not running) is the job's end: a worker adds `execMs`, `device` and `kept` as for "finished".
+   */
+  | { event: "passes"; running: boolean; entries: HistoryEntryLike[]; execMs?: number; device?: string; kept?: boolean }
+  /** A worker gives the task back to the line (it counts as an attempt). */
+  | { event: "give-back"; why: GiveBackWhy }
   /** ComfyUI has no trace of it (restarted): the server sends it again once. */
   | { event: "gone" }
   /** The tab can't use ComfyUI: it doesn't answer, or (`why: "setting"`) it answers without Fuobe's setting. */
@@ -64,6 +84,7 @@ const ALLOWED: Record<ReportEventName, readonly RelayState[]> = {
   finished: ["queued", "running"],
   passes: ["queued", "running"],
   gone: ["sending", "queued", "running"],
+  "give-back": ["sending", "queued", "running"],
   "comfy-down": ["sending", "queued", "running", "collecting"],
   stopped: ["sending", "queued", "running", "collecting", "done", "failed", "canceled"],
   failed: ["sending", "queued", "running", "collecting"],
@@ -112,10 +133,14 @@ export interface ClaimedTask {
   /** Collecting: the files still to upload, and how far each got. */
   wanted?: WantedFile[];
   received?: { n: number; bytes: number; done: boolean }[];
-  /** A worker's task (docs/gpu-workers.md): its lane, how long it should take there, when to stop it, and its files. */
+  /**
+   * A worker's task (docs/gpu-workers.md): its lane, how long it should take there, when to stop it (`runLimitMs`: running
+   * past it; `stallMs`: no progress for that long), and its files.
+   */
   lane?: string;
   estMs?: number | null;
   runLimitMs?: number;
+  stallMs?: number;
   notAfter?: number | null;
   attempt?: number;
   models?: { folder: string; name: string; size: number; sha256: string | null }[];
@@ -175,7 +200,7 @@ export interface WorkerAnswer {
   /** Its inventory is unknown or changed: send it (PUT /api/gpu/computer/inventory). */
   sendInventory: boolean;
   /**
-   * Its next token (protocol 2), when its token has a lifetime and half of it is gone: save it and use it from the next
+   * Its next token (to a worker that says `canRotateToken`), when its token has a lifetime and half of it is gone: save it and use it from the next
    * call on. The old token stops at the new one's first use. Given again after 10 minutes if it was never used.
    */
   token?: { value: string; expiresAt: number };
@@ -190,7 +215,11 @@ export interface WorkerBeat {
   canRotateToken?: boolean;
   ready: boolean;
   why: string | null;
-  /** Its own pause switch: by hand ("here", "here-until:<ms>"), by itself ("gpu-busy:<process>", "comfy-crashes", "port-busy"). */
+  /**
+   * Its own pause switch: by hand ("here", "here-until:<ms>", "here-now"), by itself ("gpu-busy:<process>",
+   * "comfy-crashes", "port-busy"). Not paused, `why` may say that it
+   * waits for local ComfyUI work to make room ("waiting-for-yield", "waiting-for-yield:no-answer").
+   */
   local: { paused: boolean; why: string | null; until: number | null };
   gpu: { otherApps: { pid: number; name: string; vramBytes: number }[]; tempC: number | null };
   facts?: ComputerFacts;
@@ -198,6 +227,8 @@ export interface WorkerBeat {
   warmLane: string | null;
   running: { task: string; position?: number; value?: number; max?: number; node?: string; nodesDone?: number }[];
   stopped: string[];
+  /** The tasks whose finished results the worker keeps on its disk (a stop-now leaves them its own, to send them up). */
+  held?: string[];
 }
 
 /** Task timings (DESIGN 5.5): the runner lease, how often the tab beats, when a computer counts as gone. */
@@ -379,6 +410,10 @@ export function tabFailureWords(reason: TabFailure, status?: number): string {
       return "The GPU that took this run refused it: it names a file path.";
     case "model-unverified":
       return "The GPU that took this run refused it: it needs a model file that GPU couldn't verify.";
+    case "input-crashed":
+      return "This run couldn't finish with these files or settings.";
+    case "input-unreadable":
+      return "A clip or sound in this run couldn't be read.";
     default:
       return `Your ComfyUI answered HTTP ${Number.isInteger(status) ? status : "?"}. Check that it's running, then press Retry.`;
   }

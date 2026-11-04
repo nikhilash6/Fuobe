@@ -16,6 +16,7 @@ import {
   type BeatAnswer,
   type ClaimedTask,
   type ComputerFacts,
+  type GiveBackWhy,
   type HistoryEntryLike,
   type RelayState,
   type ReportEvent,
@@ -23,6 +24,7 @@ import {
   type WantedFile,
 } from "@/lib/relay";
 import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
+import { runCeilingMs } from "../queue-settings";
 
 /**
  * "Use the ComfyUI on this computer" (DESIGN.md): the server keeps each ComfyUI job of a run on someone's computer as a
@@ -650,7 +652,8 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
     case "sent": {
       const promptId = typeof e.promptId === "string" && UUID.test(e.promptId) ? e.promptId : typeof e.promptId === "string" && /^[\w-]{1,64}$/.test(e.promptId) ? e.promptId : null;
       if (!promptId) throw new RelayError(400, "Bad prompt id");
-      setTask(t.id, { ...seen, state: "queued", prompt_id: promptId, sent_at: now, attempts: t.attempts + 1 });
+      // Results a worker kept from an earlier try go up instead: no new attempt.
+      setTask(t.id, { ...seen, state: "queued", prompt_id: promptId, sent_at: now, attempts: t.attempts + (t.pools && e.kept ? 0 : 1) });
       return { ok: true };
     }
     case "refused":
@@ -674,6 +677,8 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       const entries = e.event === "finished" ? [e.entry] : e.entries;
       if (!Array.isArray(entries) || entries.some((x) => !x || typeof x !== "object")) throw new RelayError(400, "Bad history entry");
       const p = plan(entries, e.event === "passes");
+      // A worker's job ended on its ComfyUI: the workers' log keeps its measured run (the billing service settles with it).
+      if (t.pools && t.worker_id && (!("follow" in p) || !t.meta_batch)) logWorkerJob("finished", t, t.worker_id, now, execFields(e, t, now) ?? {});
       if ("follow" in p) {
         if (!t.meta_batch) {
           endTask(t.id, "failed", { error: "This run finished without a result. Press Retry." });
@@ -701,6 +706,11 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       });
       return { ok: true, wanted: p.wanted };
     }
+    case "give-back":
+      // Only a worker's task goes back to the line (a person's own computer keeps its jobs).
+      if (!t.pools || !poolGiveBack) throw new RelayError(409, "That doesn't fit this run now");
+      poolGiveBack(t, e.why);
+      return { ok: true };
     case "gone":
       if (t.attempts < 2 && t.state !== "sending") {
         // A worker's task sends its files again: its sending clock (pool.ts SENDING_MS) starts again too.
@@ -798,7 +808,7 @@ export function failTask(t: TaskRow, error: string): void {
 /** The tab let go of a task it hadn't sent yet (the tab closes): another tab or computer may take it at once. */
 export function release(t: TaskRow): void {
   if (t.state === "sending" && !t.sent_at) {
-    setTask(t.id, { state: "waiting", device: null, lease_hash: null });
+    setTask(t.id, { state: "waiting", device: null, lease_hash: null, ...(t.pools && { worker_id: null }) });
     rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
   } else setTask(t.id, { lease_hash: null });
 }
@@ -904,6 +914,40 @@ export function checkClocks(t: TaskRow, now = Date.now()): TaskRow {
 /** A task for workers keeps the workers' clocks (pool.ts sets this, so this file needn't import it). */
 let poolClocks: ((t: TaskRow, now: number) => TaskRow) | null = null;
 export const setPoolClocks = (fn: (t: TaskRow, now: number) => TaskRow) => (poolClocks = fn);
+
+/** A worker gives its task back to the line (pool.ts sets this too). */
+let poolGiveBack: ((t: TaskRow, why: GiveBackWhy) => void) | null = null;
+export const setPoolGiveBack = (fn: (t: TaskRow, why: GiveBackWhy) => void) => (poolGiveBack = fn);
+
+/** The execution time (ms) and GPU name a worker reported with a finished job, as the workers' log keeps them. */
+export interface ExecFacts {
+  ms: number;
+  device?: string;
+}
+
+/** ComfyUI starts a job as soon as it takes it, a little before the studio hears "sent": the time allowed for that. */
+const SENT_SLACK_MS = 60_000;
+
+/**
+ * The execution time a worker reports, held to what is possible: at most a day, at most the run ceiling of the task's
+ * lane (queue-settings.ts), and at most the time since it sent the job to its ComfyUI (or, with no send noted, since the
+ * task was made). Results kept from an earlier try ran before their "sent" (it notes only the upload): for them, the
+ * time since the task was made. With its GPU's name, as the workers' log keeps them (none reported: empty).
+ */
+function execFields(e: ReportEvent, t: TaskRow, now = Date.now()): { execMs?: number; device?: string } | null {
+  if (e.event !== "finished" && e.event !== "passes") return null;
+  const since = e.kept ? t.created_at : (t.sent_at ?? t.created_at);
+  const most = Math.max(0, Math.min(24 * 3_600_000, runCeilingMs(t.lane), now - since + SENT_SLACK_MS));
+  const ms = typeof e.execMs === "number" && Number.isFinite(e.execMs) && e.execMs >= 0 ? Math.min(Math.round(e.execMs), most) : null;
+  const device = typeof e.device === "string" && e.device.trim() ? e.device.trim().slice(0, FACT_LIMITS.text) : undefined;
+  return { ...(ms !== null && { execMs: ms }), ...(ms !== null && device && { device }) };
+}
+
+/** What a worker measured for a task's last finished run (the workers' log): its execution time and its GPU, or null. */
+export function execOf(t: Pick<TaskRow, "id">): ExecFacts | null {
+  const r = rdb().prepare("SELECT exec_ms, device FROM worker_jobs WHERE task_id = ? AND event = 'finished' ORDER BY id DESC LIMIT 1").get(t.id) as { exec_ms: number | null; device: string | null } | undefined;
+  return r && r.exec_ms !== null ? { ms: r.exec_ms, ...(r.device && { device: r.device }) } : null;
+}
 
 /** The file of a received output, for the principal whose task it is (anyone else: null). */
 export function receivedFile(principal: Principal, taskId: string, n: number): { path: string; contentType?: string } | null {

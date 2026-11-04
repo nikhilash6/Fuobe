@@ -1,12 +1,12 @@
-import { RELAY_LIMITS, TAB_FAILURES, type ReportEvent } from "@/lib/relay";
+import { GIVE_BACK, RELAY_LIMITS, TAB_FAILURES, type ReportEvent } from "@/lib/relay";
 import { gateAsProxy, readBodyWithin } from "@/server/direct-gate";
 import { callerKey, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
 import { noteFinished } from "@/server/computer/bench";
-import { leased, logWorkerJob, report, type TaskRow } from "@/server/computer/tasks";
+import { leased, report, type TaskRow } from "@/server/computer/tasks";
 import { onComputer, planRelayOutputs } from "@/server/providers/comfyui";
 import { enter } from "@/server/rate";
 
-const EVENTS = new Set(["sent", "refused", "queued", "running", "finished", "passes", "gone", "comfy-down", "stopped", "failed"]);
+const EVENTS = new Set(["sent", "refused", "queued", "running", "finished", "passes", "gone", "give-back", "comfy-down", "stopped", "failed"]);
 
 /** Reports read at once: one person's, and across the server (each holds its body in memory while it is read). */
 const AT_ONCE = { person: 2, all: 16 };
@@ -18,9 +18,13 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
   const e = b.event;
   if (typeof e !== "string" || !EVENTS.has(e)) return null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+  // A worker's results kept from an earlier try (nothing new runs).
+  const kept = b.kept === true ? { kept: true } : {};
+  // A worker's measured execution time and GPU name, with a finished job.
+  const exec = { ...measured(b), ...kept };
   switch (e) {
     case "sent":
-      return typeof b.promptId === "string" ? { event: e, promptId: b.promptId, number: num(b.number) } : null;
+      return typeof b.promptId === "string" ? { event: e, promptId: b.promptId, number: num(b.number), ...kept } : null;
     case "refused":
       return { event: e, status: num(b.status) ?? 400, body: b.body };
     case "queued":
@@ -28,9 +32,11 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
     case "running":
       return { event: e, value: num(b.value), max: num(b.max), nodesDone: num(b.nodesDone), ...(typeof b.node === "string" && { node: b.node }) };
     case "finished":
-      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }), ...measured(b) } : null;
+      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }), ...exec } : null;
     case "passes":
-      return Array.isArray(b.entries) && b.entries.length <= 64 ? { event: e, running: b.running === true, entries: b.entries as never, ...measured(b) } : null;
+      return Array.isArray(b.entries) && b.entries.length <= 64 ? { event: e, running: b.running === true, entries: b.entries as never, ...(b.running !== true && exec) } : null;
+    case "give-back":
+      return typeof b.why === "string" && (GIVE_BACK as readonly string[]).includes(b.why) ? { event: e, why: b.why as never } : null;
     case "failed":
       return typeof b.reason === "string" && (TAB_FAILURES as readonly string[]).includes(b.reason) ? { event: e, reason: b.reason as never, status: num(b.status) } : null;
     case "comfy-down":
@@ -102,11 +108,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
     // Where the job is now (it may have moved while the body arrived).
     const t = leased(principal, id, lease);
     const answer = report(t, event, (entries, passes) => onComputer(t.principal, () => planRelayOutputs(t, entries, passes)));
-    // A worker's finished job counts toward its lane's times there, and the workers' log keeps its measured run.
-    if (t.pools && (event.event === "finished" || event.event === "passes") && answer.state !== "running") {
-      noteFinished(t, Date.now(), event.event === "finished" ? event.peakVramBytes : undefined);
-      if (t.worker_id) logWorkerJob("finished", t, t.worker_id, Date.now(), { execMs: event.execMs, device: event.device });
-    }
+    // A worker's finished job counts toward its lane's times there (not results kept from an earlier try: their time
+    // there would be only the upload's). The workers' log keeps its measured run (tasks.ts report).
+    if (t.pools && (event.event === "finished" || event.event === "passes") && answer.state !== "running" && !event.kept) noteFinished(t, Date.now(), event.event === "finished" ? event.peakVramBytes : undefined);
     return Response.json(answer, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return relayAnswer(e);
