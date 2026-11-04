@@ -857,19 +857,92 @@ describe("the billing service down or restarting", () => {
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 
-  it("Run pressed while the service is down is refused at once today, and nothing is made: the reserve isn't tried again while the service comes back", async () => {
-    standInWorker();
+  it("Run pressed while the service restarts waits for it: the run is made once, with one hold, and finishes", async () => {
+    const w = standInWorker();
     // The account's policy is known from its price check.
     expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
     const rows = made();
     const holds = svc.holds.size;
+    const reserves = svc.callsOf("/v1/reserve").length;
     await svc.downFor(10_000);
+    const t = Date.now();
     const r = await run(IMAGE);
-    expect(r.status, JSON.stringify(r.body)).toBe(503);
-    expect(r.body.code).toBe("paused");
-    expect(made()).toBe(rows);
-    await svc.start();
-    expect(svc.holds.size).toBe(holds);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(Date.now() - t, "it waited for the service").toBeGreaterThanOrEqual(9_000);
+    expect(made() - rows).toBe(1);
+    expect(svc.holds.size - holds).toBe(1);
+    // Every try was the same press: one request id.
+    const ids = new Set(svc.callsOf("/v1/reserve").slice(reserves).map((c) => (c.body as { requestId?: string }).requestId));
+    expect(ids.size).toBe(1);
+    const id = r.body.items![0].id;
+    const watch = watchOf(id);
+    const d = driver(w);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a service that stays down past the wait: Run says to try again in a moment, in plain words, and nothing is made", async () => {
+    standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const was = { ...billing.RESERVE_RETRY };
+    Object.assign(billing.RESERVE_RETRY, { forMs: 1500, firstMs: 200 });
+    try {
+      await svc.stop();
+      const r = await run(IMAGE);
+      expect(r.status, JSON.stringify(r.body)).toBe(503);
+      expect(r.body.error).toBe(billing.BILLING_WAIT.run);
+      expect(r.body.error).not.toMatch(/paus|error|service|GPU|worker/i);
+      expect(made()).toBe(rows);
+    } finally {
+      Object.assign(billing.RESERVE_RETRY, was);
+      await svc.start();
+    }
+  });
+
+  it("down for 30 s while one account presses Run and another's run settles: both finish, each settles once, and no error shows", async () => {
+    const w = standInWorker();
+    expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const theirs = await pressRun(IMAGE, b1);
+    await svc.downFor(30_000);
+    // Account A presses Run during the outage; meanwhile the worker renders B's run, which finishes and can't settle yet.
+    const press = run(IMAGE);
+    const d = driver(w);
+    d.onStep(() => tick());
+    await d.beat();
+    expect(await d.runOne()).toBe(true);
+    await until(() => done(getGeneration(theirs.id)));
+    expect(getGeneration(theirs.id)?.status).toBe("succeeded");
+    await outbox.sweepBilling();
+    expect(svc.reportsFor(theirs.id)).toEqual([]);
+    const r = await press;
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const id = r.body.items![0].id;
+    const watch = watchOf(id);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    // The outbox's next try reaches the service again.
+    await outbox.drainOutbox(Date.now() + 10 * MIN);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+    expect(await reportsOf(theirs.id)).toEqual([{ holdId: holdOf(theirs.id), kind: "settle", status: "succeeded" }]);
+    expect(svc.late).toEqual([]);
+  });
+
+  it("the last policy it gave stands for 10 minutes while it doesn't answer, then runs wait for it", async () => {
+    clock();
+    expect(await billing.policy(A)).toBeTruthy();
+    await svc.stop();
+    try {
+      vi.setSystemTime(Date.now() + 9 * MIN);
+      expect(await billing.policy(A), "9 minutes on").toBeTruthy();
+      vi.setSystemTime(Date.now() + 2 * MIN);
+      expect(await billing.policy(A), "11 minutes on").toBeNull();
+    } finally {
+      await svc.start();
+    }
+    vi.setSystemTime(Date.now() + MIN);
+    expect(await billing.policy(A), "answered again").toBeTruthy();
   });
 });
 

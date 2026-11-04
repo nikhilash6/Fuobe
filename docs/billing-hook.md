@@ -29,7 +29,7 @@ twice: the service must treat a repeated call (the same `requestId`, or the same
 | `GET /v1/policy?account=<id>` | 1 s | before a run on this install's GPUs, and for the status (cached for the answer's `ttlS`) |
 | `GET /v1/policy` | 1 s | a guest's status and price check: the policy for someone not signed in (cached the same way) |
 | `POST /v1/quote` | 1 s | the price check before Run (`POST /api/generations?preview=1`), asked again 300 ms after each change |
-| `POST /v1/reserve` | 2 s, one retry with the same `requestId` | just before the run's rows are made |
+| `POST /v1/reserve` | 2 s a try; with no answer, tried again with the same `requestId` for up to 60 s (backoff from 0.5 s, doubling, up to 8 s) | just before the run's rows are made |
 | `POST /v1/release` | 5 s, through the outbox | the rows couldn't be made after a reserve |
 | `POST /v1/settle` | 5 s, through the outbox | each row that succeeded |
 | `POST /v1/refund` | 5 s, through the outbox | each row that failed, was stopped, or was removed by an output check |
@@ -109,7 +109,9 @@ request names always wins, so the account can still pick its own GPU. When the a
 run named no place, Fuobe asks (409, `code: "own-gpu-offline"`, header `x-fuobe-place-ask`) instead of moving the run
 to this install's GPUs, but only for a run this install's GPUs would take. Any other run goes to the account's own GPU,
 as before. While the policy is cached, a run on an account's own GPU never waits for the service; when a policy call
-gets no answer, the last answer (or none) stands for 5 seconds (60 for a guest) before the service is asked again.
+gets no answer, the last answer (or none) stands for 5 seconds (60 for a guest) before the service is asked again. The
+last answer the service gave stands for up to 10 minutes while it doesn't answer; after that, runs on this install's
+GPUs wait until it answers again.
 
 | Call | Request | Answer |
 |---|---|---|
@@ -186,7 +188,9 @@ client can never set it. Once none of a hold's rows is still queued or running, 
 a row that succeeded, `refund` for any other, each with `rows` (how many rows share the hold), so the service knows when
 the hold is closed. Reports are written to an outbox table first and sent from there, retried with backoff (10 s,
 doubling, up to 10 minutes) for 7 days. A restart loses nothing: the outbox finds every finished row with a hold and no
-report from what is stored. A run whose rows couldn't be made after its reserve sends one `release`.
+report from what is stored. A run whose rows couldn't be made after its reserve sends one `release`. Two app processes
+on one database (during a deploy) never send the same report: a process takes a report before it sends it, and only one
+process saves a finished run's results.
 
 ## When the service is down
 
@@ -194,6 +198,6 @@ report from what is stored. A run whose rows couldn't be made after its reserve 
 |---|---|
 | No `FUOBE_BILLING_URL` | No call. Runs on this install's GPUs are closed, or free and allowed with `FUOBE_HOSTED_FREE=1`. |
 | Set, and it answers | As above. |
-| Set, and no answer in time | Runs on this install's GPUs are refused (503, "Try again in a moment."). Before Run, the price slot says "Ready in a moment" and Run is off; the price check asks again by itself, and Run comes back on with its answer. Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
+| Set, and no answer in time | A press of Run waits while the reserve is tried again for up to 60 seconds (a restart of the service), then the run is made with its place in line. Past that, the run is refused (503, "Try again in a moment.") and nothing is made. The last policy stands for 10 minutes (above). Before Run, the price slot says "Ready in a moment" and Run is off; the price check asks again by itself, and Run comes back on with its answer. Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
 
 The service's address and its errors are written to the server's log only. A browser never sees them.

@@ -197,7 +197,7 @@ function target(): HookTarget | null {
 
 declare global {
   var __fuobeBillingBadUrl: boolean | undefined;
-  var __fuobeBillingPolicies: Map<string, { at: number; ttlMs: number; policy: Policy | null }> | undefined;
+  var __fuobeBillingPolicies: Map<string, PolicyEntry> | undefined;
   var __fuobeBillingBalances: Map<string, { at: number; balance: Balance }> | undefined;
 }
 
@@ -240,9 +240,24 @@ export const OPEN_POLICY: Policy = {
 export const POLICY_RETRY_MS = { account: 5_000, guest: 60_000 };
 
 /**
+ * How long the last policy the service gave stands while it doesn't answer (a restart, a short outage): runs go on
+ * under it, and only after this long without an answer are runs on this install's GPUs held until it answers again.
+ */
+export const POLICY_KEEP_MS = 10 * 60_000;
+
+/** A policy as kept: when it was read, how long it stands, and when the service last answered (`goodAt`). */
+interface PolicyEntry {
+  at: number;
+  ttlMs: number;
+  policy: Policy | null;
+  goodAt?: number;
+}
+
+/**
  * The account's policy (cached for its `ttlS`), or a guest's (`accountId` null: GET /v1/policy with no account). No
- * service: OPEN_POLICY. The service down: the last answer, else null (the caller treats runs on this install's GPUs as
- * paused). That stands for POLICY_RETRY_MS, so a service that doesn't answer isn't waited for on every call.
+ * service: OPEN_POLICY. The service down: the last answer it gave, for up to POLICY_KEEP_MS after it gave it, else null
+ * (the caller holds runs on this install's GPUs until it answers). That stands for POLICY_RETRY_MS, so a service that
+ * doesn't answer isn't waited for on every call.
  */
 export async function policy(accountId: string | null): Promise<Policy | null> {
   if (!billingConfigured()) return OPEN_POLICY;
@@ -250,19 +265,23 @@ export async function policy(accountId: string | null): Promise<Policy | null> {
   const key = accountId ?? "";
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < hit.ttlMs) return hit.policy;
-  const keep = (entry: { at: number; ttlMs: number; policy: Policy | null }) => {
+  const keep = (entry: PolicyEntry) => {
     cache.set(key, entry);
     if (cache.size > 5000) cache.delete(cache.keys().next().value!);
   };
   try {
     const p = await call<Policy>("GET", accountId ? `/v1/policy?account=${encodeURIComponent(accountId)}` : "/v1/policy", undefined, BILLING_TIMEOUTS.policy);
     const ttlMs = Math.max(0, Math.min(3600, Number(p.ttlS) || 0)) * 1000;
-    keep({ at: Date.now(), ttlMs, policy: p });
+    keep({ at: Date.now(), ttlMs, policy: p, goodAt: Date.now() });
     return p;
   } catch (e) {
     logDown("policy", e);
-    const last = hit?.policy ?? null;
-    keep({ at: Date.now(), ttlMs: accountId ? POLICY_RETRY_MS.account : POLICY_RETRY_MS.guest, policy: last });
+    const now = Date.now();
+    const goodAt = hit?.goodAt;
+    const last = goodAt !== undefined && now - goodAt < POLICY_KEEP_MS ? (hit?.policy ?? null) : null;
+    // Never past the time the last answer may stand.
+    const retryMs = accountId ? POLICY_RETRY_MS.account : POLICY_RETRY_MS.guest;
+    keep({ at: now, ttlMs: last && goodAt !== undefined ? Math.min(retryMs, goodAt + POLICY_KEEP_MS - now) : retryMs, policy: last, ...(goodAt !== undefined && { goodAt }) });
     return last;
   }
 }
@@ -292,12 +311,21 @@ export async function quote(account: AccountFacts | null, run: RunFacts, queue: 
 }
 
 /**
- * Set the run's price aside before it is created. No service: null (no hold; the run is free). The service down (one
- * retry with the same request id): a `paused` refusal. Never throws.
+ * How a reserve the service doesn't answer is tried again (ms): after `firstMs`, then twice as long each time up to
+ * `mostMs`, for up to `forMs` in all. A press of Run waits through a short outage or a restart of the service, and the
+ * run starts with its place once it answers.
+ */
+export const RESERVE_RETRY = { forMs: 60_000, firstMs: 500, mostMs: 8_000 };
+
+/**
+ * Set the run's price aside before it is created. No service: null (no hold; the run is free). The service down: tried
+ * again with the same request id (RESERVE_RETRY: the service makes one hold for it however often it hears it), then a
+ * `paused` refusal in plain words. Never throws.
  */
 export async function reserve(input: { requestId: string; account: AccountFacts; run: RunFacts; queue: QueueFacts | null; shown: { amount: number; priceVersion: string } }): Promise<ReserveAnswer | null> {
   if (!billingConfigured()) return null;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const start = Date.now();
+  for (let attempt = 0; ; attempt++) {
     try {
       const a = await call<ReserveAnswer>("POST", "/v1/reserve", input, BILLING_TIMEOUTS.reserve);
       if (a.ok && (typeof a.holdId !== "string" || !a.holdId)) throw new HookDown(HOOK, "a reserve answer without a hold id");
@@ -305,6 +333,9 @@ export async function reserve(input: { requestId: string; account: AccountFacts;
     } catch (e) {
       logDown(`reserve (try ${attempt + 1})`, e);
     }
+    const wait = Math.min(RESERVE_RETRY.mostMs, RESERVE_RETRY.firstMs * 2 ** Math.min(attempt, 16));
+    if (Date.now() - start + wait > RESERVE_RETRY.forMs) break;
+    await new Promise((r) => setTimeout(r, wait));
   }
   return { ok: false, code: "paused", text: BILLING_WAIT.run };
 }
