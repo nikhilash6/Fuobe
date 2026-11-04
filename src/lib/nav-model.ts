@@ -264,10 +264,16 @@ const HUB_ORDER: HubKind[] = ["upscale", "audio", "video-tools"];
 const HUB_ICON: Record<HubKind, NavIconName> = { upscale: "ZoomIn", audio: "AudioLines", "video-tools": "Layers" };
 
 /**
- * The Sound column: the Audio studio, then its main modes in this order (voice is the studio's first mode, so the lead
- * card stands for it). These modes are in the launcher, the Studios sheet and "Every studio" as well as in search.
+ * The Sound column: the Audio studio, then its main modes in this order, Clean up voice (the studio's first mode) first.
+ * These modes are in the launcher, the Studios sheet and "Every studio" as well as in search.
  */
-const SOUND_COLUMN = ["audio", "audio-music", "audio-sfx", "audio-clean", "audio-translate"];
+const SOUND_COLUMN = ["audio", "audio-clean", "audio-music", "audio-sfx", "audio-translate"];
+
+/**
+ * A hub's first mode with a row of its own in the menus (Audio's Clean up voice): its own page (/audio/clean, the same
+ * tool as /audio), so its row and the studio's card don't share a link.
+ */
+const OWN_PAGE = new Set(["audio-clean"]);
 
 /** Every hub mode as a tool of its studio (found by search, linked from the goal bands). */
 const HUB_TOOLS: NavEntry[] = HUB_ORDER.flatMap((hub) =>
@@ -276,7 +282,7 @@ const HUB_TOOLS: NavEntry[] = HUB_ORDER.flatMap((hub) =>
     const copy = TOOL_COPY[id];
     return {
       id,
-      href: modeHref(hub, m.id),
+      href: OWN_PAGE.has(id) ? `/${hub}/${m.id}` : modeHref(hub, m.id),
       label: copy?.label ?? m.label,
       ...(copy?.label && copy.label !== m.label && { tab: m.label }),
       what: copy?.what ?? m.label,

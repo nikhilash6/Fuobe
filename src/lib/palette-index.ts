@@ -50,7 +50,7 @@ const MODEL_STUDIOS: [string, StudioConfig][] = [
   ["/reframe", REFRAME_STUDIO],
   ["/upscale", UPSCALE_STUDIO],
   ["/upscale/video", VIDEO_UPSCALE_STUDIO],
-  ["/audio", AUDIO_STUDIO],
+  ["/audio/speech", AUDIO_STUDIO],
   ["/audio/dialogue", DIALOGUE_STUDIO],
   ["/audio/voice-change", VOICE_CHANGE_STUDIO],
   ["/audio/transcribe", TRANSCRIBE_STUDIO],
@@ -70,7 +70,7 @@ const IN_3D = new Set([...ALL_MODELS_3D.map((m) => m.id), RIG_MODEL, ...RETEXTUR
 /** The Layers editor's tools (cut-out, layers, text detection…): its project list is where they start. */
 const IN_LAYERS = new Set(Object.values(TOOL_MODELS).flatMap((t) => [...t.cloud, ...t.open]));
 /** Where a model no studio, app or tool offers opens: the studio of what it makes. */
-const KIND_HOME: Record<ModelDef["kind"], string> = { image: "/image", video: "/video", audio: "/audio", text: "/assist", model3d: "/image-to-3d" };
+const KIND_HOME: Record<ModelDef["kind"], string> = { image: "/image", video: "/video", audio: "/audio/speech", text: "/assist", model3d: "/image-to-3d" };
 /** Tools with their own flow (and their own model choice), by operation. */
 const TOOL_PAGES: [string, Operation][] = [
   ["/video-tools/captions", "captions"],

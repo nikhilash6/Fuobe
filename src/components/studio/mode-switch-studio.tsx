@@ -94,8 +94,10 @@ export function ModeSwitchStudio({ kind, mode }: { kind: HubKind; mode?: string 
   if (Tool) return <Tool />;
   const config = CONFIGS[kind][current];
   if (!config) notFound();
-  // A composer mode's own examples ("hub:upscale", "hub:upscale/video"…), else the hub's covers that fit it.
-  const examples = exampleRow(current === HUB_MODES[kind][0].id ? `hub:${kind}` : `hub:${kind}/${current}`);
+  // A composer mode's own examples ("hub:upscale", "hub:upscale/video"…), else the hub's covers that fit it. The hub's
+  // first composer mode has the hub's own row (Audio's Speech: its first mode, Clean up voice, is a tool of its own).
+  const home = HUB_MODES[kind].find((m) => !TOOLS[kind]?.[m.id])?.id;
+  const examples = exampleRow(current === home ? `hub:${kind}` : `hub:${kind}/${current}`);
   return <StudioPage config={config} catalog={studioCatalog(config)} examples={examples} />;
 }
 

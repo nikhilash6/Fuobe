@@ -27,14 +27,15 @@ export const HUB_MODES: Record<HubKind, HubMode[]> = {
     { id: "hdr", label: "SDR to HDR" },
     { id: "export", label: "Export" },
   ],
+  // Clean up voice leads: /audio opens on it, and every list of Audio's modes starts with it.
   audio: [
+    { id: "clean", label: "Clean up voice" },
     { id: "speech", label: "Speech" },
     { id: "dialogue", label: "Dialogue" },
     { id: "voice-change", label: "Voice change" },
     { id: "design", label: "Design a voice" },
     { id: "translate", label: "Translate", selfHostedOnly: true },
     { id: "transcribe", label: "Transcribe" },
-    { id: "clean", label: "Clean up voice" },
     { id: "split", label: "Split soundtrack", selfHostedOnly: true },
     { id: "sfx", label: "Sound effects" },
     { id: "music", label: "Music" },

@@ -467,7 +467,7 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
                 </Link>
               </Button>
               <Button variant="outline" size="sm" className="rounded-full" asChild>
-                <Link href={`/audio?voice=${encodeURIComponent(out.url)}`}>
+                <Link href={`/audio/speech?voice=${encodeURIComponent(out.url)}`}>
                   <UserRound className="size-3.5" /> Use as a voice sample
                 </Link>
               </Button>
