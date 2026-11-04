@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { GenerationRequest } from "./catalog/types";
 import { lineWords } from "./pool-line";
@@ -99,23 +99,49 @@ export interface HostedCheck {
   line?: HostedLine;
 }
 
+/** The price checks' cache key: every check starts with it, so one call asks them all again. */
+export const HOSTED_QUOTE_KEY = "hosted-quote";
+
 /**
- * The price of a run on this studio's GPUs: `?preview=1` with `place: "pool"`. `body` is the request as JSON (null:
- * nothing to price). The answer's `quote` is absent when the run would go to the person's own GPU or key.
+ * How often the price check is asked again with no change to the draft: soon while it refuses the run (a limit, busy,
+ * paused: Run comes back on its own once that passes), less often while it shows a place in line (the place and the
+ * wait stay current), never otherwise.
  */
-export function useHostedQuote(body: string | null) {
-  return useQuery({
-    queryKey: ["hosted-quote", body],
+export function quoteRefetchMs(check: HostedCheck | null | undefined): number | false {
+  if (check?.quote?.allowed === false) return 15_000;
+  if (check?.place === "pool" && check.line) return 30_000;
+  return false;
+}
+
+/** The query behind useHostedQuote, for a body (the request as JSON; null: nothing to price). */
+export function hostedQuoteQuery(body: string | null) {
+  return {
+    queryKey: [HOSTED_QUOTE_KEY, body] as const,
     enabled: !!body,
     staleTime: 10_000,
     retry: false,
+    refetchInterval: (q: { state: { data: HostedCheck | null | undefined } }) => quoteRefetchMs(q.state.data),
     queryFn: async (): Promise<HostedCheck | null> => {
       const res = await fetch("/api/generations?preview=1", { method: "POST", headers: { "Content-Type": "application/json" }, body: body! });
       if (!res.ok) return null;
       const b = (await res.json()) as HostedCheck;
       return { place: b.place, quote: b.quote, ...(b.line && { line: b.line }) };
     },
-  });
+  };
+}
+
+/**
+ * The price of a run on this studio's GPUs: `?preview=1` with `place: "pool"`. `body` is the request as JSON (null:
+ * nothing to price). The answer's `quote` is absent when the run would go to the person's own GPU or key. It is asked
+ * again by itself (quoteRefetchMs), and at once when a run starts or one on this studio's GPUs ends (refreshPriceChecks).
+ */
+export function useHostedQuote(body: string | null) {
+  return useQuery(hostedQuoteQuery(body));
+}
+
+/** Ask every price check again now: a run started or ended, so the runs going, the line and its wait have changed. */
+export function refreshPriceChecks(qc: QueryClient): void {
+  void qc.invalidateQueries({ queryKey: [HOSTED_QUOTE_KEY] });
 }
 
 /**

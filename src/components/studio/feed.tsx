@@ -1,7 +1,9 @@
 "use client";
 
 import { Cloud, Copy, Cpu, Download, FolderDown, Heart, MoreHorizontal, RotateCcw, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { lineWords } from "@/lib/pool-line";
+import { refreshPriceChecks } from "@/lib/hosted";
 import { openGpuSetup } from "@/hooks/use-gpu";
 import { useLocalJob } from "@/components/gpu/computer-runner";
 import { jobFraction, jobWords, POOL_WORDS } from "@/lib/relay";
@@ -57,6 +59,10 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   // recovery, its place kept, with no progress from an earlier attempt), then "Working" with its progress.
   const pool = g.place === "pool";
   const inLine = pool && g.status === "queued";
+  // Its tile leaves once it is done (its result, or one plain sentence): the price check before the next Run asks again,
+  // so a refusal for runs going (or the line's wait) doesn't outlast it.
+  const qc = useQueryClient();
+  useEffect(() => (pool ? () => refreshPriceChecks(qc) : undefined), [pool, qc]);
   const label = pool
     ? inLine
       ? g.queue

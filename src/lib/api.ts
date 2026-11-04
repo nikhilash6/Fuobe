@@ -35,7 +35,7 @@ import { postFile } from "./upload";
 import type { ShareCreated, ShareInfo, ShareListItem, SharePatch, ShareRequest } from "./share";
 import type { AccessSummary } from "./model-access";
 import { ADD_KEY_HEADER, isCloudProvider, type CloudProvider } from "./your-keys";
-import { BILLING_EVENT, BILLING_HEADER, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
+import { BILLING_EVENT, BILLING_HEADER, refreshPriceChecks, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
 
 export interface Asset {
   id: string;
@@ -543,6 +543,8 @@ export function useCreateGeneration() {
       for (const g of items) applyEvent(qc, { type: "generation", generation: { ...g, deletedAt: null } });
       void qc.invalidateQueries({ queryKey: ["generations"] });
       void qc.invalidateQueries({ queryKey: ["library-facets"] });
+      // The runs going and the line changed: the price check before the next Run asks again.
+      refreshPriceChecks(qc);
     },
   });
 }

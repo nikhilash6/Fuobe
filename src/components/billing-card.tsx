@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { BILLING_EVENT, safeLink, useInterest, type BillingRefusalDetail } from "@/lib/hosted";
+import { BILLING_EVENT, refreshPriceChecks, safeLink, useInterest, type BillingRefusalDetail } from "@/lib/hosted";
 
 /**
  * One card for a run the billing service refused (x-fuobe-billing; src/server/billing.ts): the service's own words,
@@ -25,7 +25,7 @@ export function BillingCard() {
       setRefusal(d);
       setOpen(true);
       // A new price (or the balance it was refused for): the composer and the chip ask again.
-      void qc.invalidateQueries({ queryKey: ["hosted-quote"] });
+      refreshPriceChecks(qc);
       void qc.invalidateQueries({ queryKey: ["status"] });
     };
     window.addEventListener(BILLING_EVENT, onRefusal);
