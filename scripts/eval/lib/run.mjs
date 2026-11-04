@@ -460,7 +460,10 @@ async function price(client, job, inputs, ctx) {
     const route = job.submit.estimate === false ? null : (job.submit.estimate ?? `${job.submit.route}/estimate`);
     if (!route) return { studio: true, costUsd: null, demo: ctx.engine === "demo", modelId: job.model.id };
     const e = await client.request("POST", route, { json: body });
-    return { studio: true, costUsd: e.costUsd ?? e.totalUsd ?? null, demo: e.demo ?? ctx.engine === "demo", modelId: e.modelId ?? job.model.id, ...(e.modelName && { modelName: e.modelName }), ...(Array.isArray(e.providers) && { providers: e.providers }), notes: e.notes };
+    // A saved skill's estimate (RecipeEstimate, from pnpm eval:from-skill's cases): its total, or why it can't run.
+    if (Array.isArray(e.runs) && e.runnable === false) throw new Error([...(e.errors ?? []), ...e.runs.flatMap((r) => r.errors ?? [])][0] ?? "it can't run");
+    const skillTotal = Array.isArray(e.runs) ? e.total : undefined;
+    return { studio: true, costUsd: e.costUsd ?? e.totalUsd ?? skillTotal ?? null, demo: e.demo ?? ctx.engine === "demo", modelId: e.modelId ?? job.model.id, ...(e.modelName && { modelName: e.modelName }), ...(Array.isArray(e.providers) && { providers: e.providers }), notes: e.notes };
   }
   const p = await client.request("POST", "/api/generations", { json: { ...job.request, inputs }, query: { preview: 1 } });
   return { ...p, ...(p.model?.id && { modelId: p.model.id, modelName: p.model.name }) };

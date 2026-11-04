@@ -1375,4 +1375,26 @@ describe("what a job measures", () => {
     const older = { costUsd: 1, demo: false, modelId: "kling-motion-control" };
     expect((await plan(studioStub(older, { fal: { configured: true } }))).jobs[0].skip).toBeUndefined();
   });
+
+  it("prices a saved skill's case (pnpm eval:from-skill) by its estimate's total, and skips one that can't run", async () => {
+    const fromSkill = (await import("../scripts/eval/from-skill.mjs")) as { caseFromSkill: (view: object, server: string) => { suite: string } };
+    const view = { name: "promo", title: "Promo", recipe: { params: [{ id: "topic", type: "text", label: "Topic", example: "a desk lamp" }], steps: [{ kind: "generate", request: { modelId: "z-image-turbo-cloud" } }], checks: {} } };
+    const file = path.join(dir, "skill-promo.json");
+    fs.writeFileSync(file, JSON.stringify(fromSkill.caseFromSkill(view, "http://stub.local")));
+    const skillStub = (estimate: Record<string, unknown>) => ({
+      url: "http://stub.local",
+      async request(method: string, p: string) {
+        if (p === "/api/status") return { engineMode: "both", demoMode: "auto", cloudProvider: "auto", providers: { fal: { configured: true } } };
+        if (p === "/api/models") return { items: [{ id: "z-image-turbo-cloud" }] };
+        if (p === "/api/assist/skills/promo/estimate") return estimate;
+        throw new Error(`stub: no ${method} ${p}`);
+      },
+    });
+    const dry = (client: object) => runner.runEval({ suite: cases.loadSuite(file), engine: "cloud", dryRun: true, root: path.join(dir, "skill") }, { client }) as Promise<{ estimateUsd: number; jobs: { skip?: string }[] }>;
+    const priced = await dry(skillStub({ engine: "cloud", total: 0.12, demo: false, runnable: true, errors: [], jobs: [], runs: [{ line: 1, jobs: [], total: 0.12, errors: [] }] }));
+    expect(priced.jobs[0].skip).toBeUndefined();
+    expect(priced.estimateUsd).toBeCloseTo(0.12, 6);
+    const stopped = await dry(skillStub({ engine: "cloud", total: null, demo: false, runnable: false, errors: [], jobs: [], runs: [{ line: 1, jobs: [], total: null, errors: ["Step 1's model is switched off"] }] }));
+    expect(stopped.jobs[0].skip).toBe("the server refused it: Step 1's model is switched off");
+  });
 });
