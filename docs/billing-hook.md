@@ -100,6 +100,13 @@ to this install's GPUs.
 | `POST /v1/account-event` | `{ event: "created" \| "verified" \| "signed-in" \| "deleted", account: AccountFacts }` | `{ ok: true }` |
 | `POST /v1/interest` | `{ account, key }` | `{ ok: true, text }` |
 
+The price check before Run shows the quote's `text` (and `sub`) as they are. Next to the price it shows where a new
+run would stand in line and the wait, about: the quote's `etaS`, else the line's own estimate. A quote with
+`allowed: false` turns Run off and puts its `text` in the price slot, with its `action` link or `offer`. Fuobe also
+refuses the check itself, with the words the run would get, for the policy's limits (`code: "limit"`) and for what
+this install's GPUs don't take (`code: "not-offered"`: a model, a kind, LoRAs or files), so Run never fails on them
+once pressed.
+
 `shown` is the price the person saw before pressing Run. A service must never charge more than it: when the price would
 be higher, it refuses with `price-changed` and the new quote, and the person sees the new price before running again.
 

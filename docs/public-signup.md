@@ -372,6 +372,19 @@ With it on:
   only those the studio's GPUs take (`FUOBE_POOL_MEDIA_INPUTS` on the workers). Others still need its own GPU or key.
 - A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in
   Settings → Your GPU and at `/connect`; the account menu says "Your GPU · Optional".
+- Before Run is pressed, the composer shows the price check's words ("Free", or the billing service's price) and where
+  the run would stand in line, with the wait (`line: { place, etaSeconds }` in the `?preview=1` answer). A check
+  that refuses the run (busy, a limit, not offered here, closed, paused, a top-up) turns Run off and says why in the
+  price slot. The run's own limits and what the studio's GPUs don't take are refused there too, never only after Run.
+- For a visitor with no GPU of its own, `GET /api/status` says what the studio's GPUs keep off (`viewer.pool`: the
+  policy's model and app lists, and its kinds). The model, camera motion and effect pickers and the preset galleries
+  leave those out. Preset cards that run on the studio's GPUs for the viewer say "Try free".
+- A guest can attach pictures in a studio before signing up: they stay in the browser (for a day) and are not
+  uploaded. The whole draft (words, model, settings, preset and files) is kept for the tab. When a guest presses Run,
+  the run waits with the price it showed, and the sign-up card opens. Back on the same page as an account, the draft
+  returns, its files are uploaded as the account's own, and the run starts by itself when the price is unchanged;
+  otherwise the new price shows and Run waits for a click.
+- Results show an "AI-generated" tag.
 - A run on the studio's GPUs shows only where it is: "In line" with its place ("In line · 3rd · about 40 s"),
   "Working" with its progress, then its result. The place counts every run ahead of it that the same GPUs serve
   first, whatever its model. When a worker pauses, goes quiet or restarts, the run is "In line" again in the same
@@ -401,7 +414,9 @@ Two optional services can go with it:
 The code is `src/server/hosted.ts` (the switch, the place, the line), `src/server/hosted-run.ts` (the run route's side),
 `src/server/run-stamp.ts` (what every row of a run carries) and `src/lib/hosted.ts` (the browser's side). The tests are
 `tests/hosted-runs.test.ts`, `tests/pool-account-runs.test.ts` (runs on the workers), `tests/billing-hook.test.ts`,
-`tests/billing-release.test.ts` and `tests/moderation-hook.test.ts`.
+`tests/billing-release.test.ts` and `tests/moderation-hook.test.ts`. The browser's side before and during a run is in
+`tests/hosted-price-check.test.ts`, `tests/hosted-run-button.test.ts`, `tests/hosted-run-tiles.test.ts`,
+`tests/hosted-pickers.test.ts` and `tests/hosted-guest-draft.test.ts`.
 
 ## Uploads
 
