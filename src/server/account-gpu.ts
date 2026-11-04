@@ -12,7 +12,7 @@ import { hostedUntestedSummary } from "@/lib/catalog/hosted-untested";
 import { PROVIDERS } from "./providers";
 import { blockedForAccounts, fetchPublic, isLoopbackGpu } from "./remote-fetch";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
-import { balance as billingBalance, OPEN_POLICY, policy as billingPolicy, type Action, type Balance } from "./billing";
+import { balance as billingBalance, policy as billingPolicy, type Action, type Balance } from "./billing";
 import { poolReady } from "./hosted";
 
 /**
@@ -181,6 +181,11 @@ export interface VisitorView {
    * connecting a GPU of its own is optional.
    */
   hosted?: boolean;
+  /**
+   * "pool": runs go to this install's GPUs first, even when the account's own GPU is online (the billing service's
+   * policy says so). Absent: its own GPU first, as before. Either can always be picked.
+   */
+  prefer?: "pool";
   /** The billing service's words for the account's balance (billing.ts): the top bar's chip and the account menu. */
   balance?: Balance;
   /** Extra links the billing service sends for the menu. */
@@ -209,8 +214,10 @@ export async function visitorStatus(account: Account | null) {
   };
   // Hosted runs and the billing hook: nothing of either with them off.
   if (poolReady()) {
-    const p = account ? await billingPolicy(account.id) : OPEN_POLICY;
+    // A guest is told what the billing service's policy for guests says (no service: what any account gets).
+    const p = await billingPolicy(account?.id ?? null);
     if (p?.hosted) viewer.hosted = true;
+    if (p?.hosted && p.prefer === "pool") viewer.prefer = "pool";
     if (account && p?.links?.length) viewer.links = p.links;
     if (account && p?.notice) viewer.notice = p.notice;
     const b = account ? await billingBalance(account.id) : null;

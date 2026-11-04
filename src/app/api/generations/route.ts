@@ -16,19 +16,19 @@ import { wantsVoiceFirst } from "@/lib/av/voice-first";
 import { relightRunTitle } from "@/lib/relight/engine";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
-import { db } from "@/server/db";
 import { findView, requestViewKey } from "@/server/any-angle";
-import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, createGenerations, getGeneration, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
+import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, captureRun, createGenerations, getGeneration, listGenerations, outputKind, previewGeneration, stepsOf, type AccountRunRefusal } from "@/server/generations";
+import { accountActiveRuns, AdmitRefused, admitRun, clientAddress, poolLimitRefusal } from "@/server/pool-limits";
 import { ensureTrashPurge, listOptionsFrom } from "@/server/library";
 import { hit, unhit } from "@/server/rate";
 import { GenerationRequestSchema } from "@/server/request-schema";
 import { gateGeneration, GPU_SETUP_HEADER } from "@/server/gpu/gate";
 import { gpuTargetFor } from "@/server/gpu/target";
 import { connectNeeds } from "@/server/connect-refusal";
-import { billingConfigured } from "@/server/billing";
+import { BILLING_HEADER } from "@/server/billing";
 import { queueRelease } from "@/server/billing-outbox";
 import { runOnPool } from "@/server/hosted";
-import { decidePlace, moderateRun, poolQuote, readWishes, reservePool, type PlaceDecision, type Refusal } from "@/server/hosted-run";
+import { decidePlace, moderateRun, poolQuote, readWishes, reservePool, stepsProblem, type PlaceDecision, type Refusal } from "@/server/hosted-run";
 import { withRunStamp, type RunStamp } from "@/server/run-stamp";
 
 /**
@@ -44,16 +44,6 @@ export async function GET(request: Request) {
   const viewer = requestViewer(request);
   if (viewer.kind === "guest") return Response.json({ items: [] });
   return Response.json({ items: listGenerations({ ...listOptionsFrom(new URL(request.url).searchParams), account: viewer.kind === "account" ? viewer.account.id : undefined }) });
-}
-
-/** An account's runs going now (queued or running), counted as runs: a run's jobs and chain steps share a batch. */
-function activeRuns(accountId: string): number {
-  const r = db()
-    .prepare(
-      "SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE status IN ('queued', 'running') AND json_extract(request_json, '$.account') = ?",
-    )
-    .get(accountId) as { n: number };
-  return r.n;
 }
 
 /** What the sign-in proxy passes on of a request body (next.config.ts proxyClientMaxBodySize). */
@@ -130,7 +120,7 @@ export async function POST(request: Request) {
     // Room on the server, room in the account's files, and a fair share of runs.
     if (!diskHasRoom()) return refuse(503, ACCOUNT_MESSAGES.diskLow);
     if (accountUsage(account.id).total >= accountTotalBytes(account.id)) return refuse(413, filesFullMessage(account.id));
-    if (activeRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
+    if (accountActiveRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
     const rate = hit(`run:${account.id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
     if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
     if ((req.params?.numOutputs ?? 1) > ACCOUNT_LIMITS.outputsPerRun) {
@@ -179,13 +169,17 @@ export async function POST(request: Request) {
       if (decision.kind === "refuse") return refusedBy(decision.refusal);
     }
     let onPool = decision.kind === "pool" ? decision : null;
-    if (account && onPool && billingConfigured()) {
-      // The billing service's limits for runs on this install's GPUs (never above the studio's own).
-      const lim = onPool.policy.limits;
-      if (lim.activeRuns > 0 && activeRuns(account.id) >= lim.activeRuns) {
+    // The client's address, kept only as a salted hash for the policy's hourly count per address (null: no trusted proxy).
+    const addr = account && onPool ? clientAddress(request) : null;
+    if (account && onPool) {
+      // The policy's limits for runs on this install's GPUs, counted on runs there only (never on runs on the account's own
+      // GPU or key): said now, before anything is checked or set aside, and counted again as the run is made (admitRun).
+      const over = poolLimitRefusal(account.id, onPool.policy, addr);
+      if (over) {
         unhit(`run:${account.id}`);
-        return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
+        return refuse(over.status, over.error, { code: over.code }, { "Retry-After": String(over.retryAfterS) });
       }
+      const lim = onPool.policy.limits;
       if (lim.outputsPerRun > 0 && (req.params?.numOutputs ?? 1) > lim.outputsPerRun) {
         req = { ...req, params: { ...req.params, numOutputs: lim.outputsPerRun } };
         notes.push(ACCOUNT_MESSAGES.outputsCapped);
@@ -251,22 +245,39 @@ export async function POST(request: Request) {
       const mod = await moderateRun(account, req, onPool?.planned ?? null, onPool ? "pool" : "own");
       if (!mod.ok) return refusedBy(mod.refusal);
       if (onPool) {
-        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs);
+        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs, onPool.steps);
         if (!held.ok) return refusedBy(held.refusal);
         stamp = held.stamp;
       } else if (mod.checkOutputs) stamp = { checkOutputs: true };
     }
-    // Counted again just before the run is stored, with nothing awaited in between: requests that arrived together all
-    // passed the first count while the checks above waited.
-    if (account && activeRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) {
-      unhit(`run:${account.id}`);
-      if (stamp?.hold) queueRelease(stamp.hold);
-      return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
-    }
     const make = () => createGenerations(req);
+    const inScope = <T,>(fn: () => T): T => (account && onPool ? runOnPool(account.id, () => withRunStamp(stamp ?? { place: "pool" }, fn)) : stamp ? onOwn(() => withRunStamp(stamp, fn)) : onOwn(fn));
     let items: ReturnType<typeof createGenerations>;
     try {
-      items = account && onPool ? runOnPool(account.id, () => withRunStamp(stamp ?? { place: "pool" }, make)) : stamp ? onOwn(() => withRunStamp(stamp, make)) : onOwn(make);
+      if (account) {
+        // Counted again as the run is made, in one transaction (admitRun): requests that arrived together all passed the
+        // first counts while the checks above waited, and a second server may be making runs too. The run's rows are made
+        // and checked step by step (every step of a chain on this install's GPUs is one the policy allows); nothing is
+        // sent until they are kept.
+        const pool = onPool;
+        const admitted = inScope(() => {
+          const r = admitRun({ accountId: account.id, pool: pool ? { policy: pool.policy, addr } : null }, () => {
+            const run = captureRun(make);
+            const problem = pool && stepsProblem(pool.policy, stepsOf(run.ids));
+            if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
+            return run;
+          });
+          if (r.ok) r.value.start();
+          return r;
+        });
+        if (!admitted.ok) {
+          unhit(`run:${account.id}`);
+          if (stamp?.hold) queueRelease(stamp.hold);
+          const r = admitted.refusal;
+          return refuse(r.status, r.error, { code: r.code }, r.code === "not-offered" ? { [BILLING_HEADER]: "not-offered" } : { "Retry-After": String(r.retryAfterS ?? 30) });
+        }
+        items = admitted.value.value;
+      } else items = make();
     } catch (e) {
       // Nothing was made: what was set aside goes back.
       if (stamp?.hold) queueRelease(stamp.hold);

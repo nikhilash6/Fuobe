@@ -30,6 +30,8 @@ export interface RunPlaceInput {
   gpu?: boolean;
   /** Hosted runs are on: an open model may run on this studio's GPUs when the viewer has no GPU of its own. */
   hosted?: boolean;
+  /** Runs go to this studio's GPUs first, even when the viewer has a GPU of its own (the studio's policy). */
+  preferPool?: boolean;
   /** The price of a run on this studio's GPUs (the billing service's words; empty text: free), undefined while pricing. */
   pool?: { text: string; sub?: string } | null;
   /** The provider an account's paid run is billed to (its own key), or null when it has no key for this model. */
@@ -100,7 +102,7 @@ export function runPlace(input: RunPlaceInput): RunPlace {
   const withModels = models.length ? ` with ${list(models)}` : "";
   // Hosted runs: an account (or a guest, once signed up) with no GPU of its own runs open models on this studio's GPUs,
   // at the billing service's price (the studio composer's "This studio's GPUs" chip).
-  if (open && input.hosted && audience !== "owner" && !input.gpu) {
+  if (open && input.hosted && audience !== "owner" && (!input.gpu || input.preferPool)) {
     const signup = audience === "guest";
     const poolPrice = input.demo ? price : input.pool ? input.pool.text || "Free" : "";
     const tip = input.demo

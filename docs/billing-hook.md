@@ -27,6 +27,7 @@ twice: the service must treat a repeated call (the same `requestId`, or the same
 | Call | Timeout | When |
 |---|---|---|
 | `GET /v1/policy?account=<id>` | 1 s | before a run on this install's GPUs, and for the status (cached for the answer's `ttlS`) |
+| `GET /v1/policy` | 1 s | a guest's status and price check: the policy for someone not signed in (cached the same way) |
 | `POST /v1/quote` | 1 s | the price check before Run (`POST /api/generations?preview=1`), asked again 300 ms after each change |
 | `POST /v1/reserve` | 2 s, one retry with the same `requestId` | just before the run's rows are made |
 | `POST /v1/release` | 5 s, through the outbox | the rows couldn't be made after a reserve |
@@ -48,6 +49,7 @@ type RunFacts = {
   kind: "image" | "video" | "audio" | "text" | "model3d"; engine: "open" | "cloud"; provider: string;
   jobs: number; outputsPerJob: number; megapixels: number | null; seconds: number | null; fps: number | null;
   loras: number; inputs: { image: number; video: number; audio: number }; lane: string | null; providerUsd: number | null;
+  steps?: { model: string; op: string | null; kind: RunFacts["kind"]; jobs: number; lane: string | null }[];
 };
 type QueueFacts = { lane: string; ahead: number; etaS: number | null; workersOnline: number; nextOpenAt: number | null; mine: { waiting: number; running: number } };
 type Action = { label: string; url: string };              // Fuobe opens url as given (https, or a path on this site)
@@ -59,10 +61,33 @@ type Policy = {
   hosted: boolean;                                                // may this account use this install's GPUs at all
   pool: { allow?: string[]; deny?: string[]; apps?: { allow?: string[]; deny?: string[] } };  // models and apps there
   uploads: { image: boolean; video: boolean; audio: boolean };    // which of its own files those runs may use
-  limits: { activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number; keepDays: number; spaceBytes: number };
+  limits: { activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number; keepDays: number; spaceBytes: number; addressRunsPerHour?: number };
+  prefer?: "pool" | "own";                                         // the default place (absent: "own")
+  kinds?: { image?: boolean; video?: boolean; audio?: boolean; text?: boolean; model3d?: boolean };  // absent: all
   links?: Action[]; notice?: { id: string; text: string; url?: string }; ttlS: number;
 };
 ```
+
+`megapixels` is the size of each picture or frame the run makes, about: the canvas the request names, else its aspect
+ratio and resolution (the model's defaults where it names none). It is null for sound, text and 3D.
+
+`steps` lists every step of the run that uses this install's GPUs, the run's own step first: a chain (a film of
+several shots, a picture and then a step on it) is priced once, with one quote and one hold, for one press of Run.
+Steps that need no model (joins, trims) and text steps are left out: they cost nothing. Every step must be one the
+policy allows (`pool`, `kinds`), or the run isn't offered here.
+
+The policy's limits count runs on this install's GPUs only, never runs on the account's own GPU or key (those keep the
+install's own limits). A run is one press of Run: its jobs and chain steps count once. `activeRuns` counts runs going
+now (waiting or running), `waiting` those not started yet, `runsPerHour` those started in the last hour, and
+`addressRunsPerHour` those started from one client address in the last hour, across accounts (only when the install
+trusts its proxy, `FUOBE_TRUST_PROXY=1`; the address is kept as a salted hash for two hours). 0 or absent means no such
+limit. Fuobe counts them in its database together with making the run's rows, so requests that arrive together (or
+reach two servers during a deploy) never pass a limit together. They apply with or without a billing service.
+
+`prefer: "pool"` sends a run to this install's GPUs first even when the account's own GPU is online. A place the
+request names always wins, so the account can still pick its own GPU. When the account's own GPU doesn't answer and the
+run named no place, Fuobe asks (409, `code: "own-gpu-offline"`, header `x-fuobe-place-ask`) instead of moving the run
+to this install's GPUs.
 
 | Call | Request | Answer |
 |---|---|---|

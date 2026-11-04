@@ -590,11 +590,11 @@ export function Composer({ docked }: { docked: boolean }) {
   const { mentions, sketched, signed } = prepare(draft);
   // Hosted runs: an open model may run on this studio's GPUs. Its price there is the server's (the words of the
   // studio's billing service, or free), asked again 300 ms after a change. With the account's own GPU online, that
-  // GPU is the default; the person can pick either.
+  // GPU is the default, unless the studio puts its own GPUs first; the person can pick either.
   const viewerInfo = status?.viewer;
   const ownOnline = !!viewerInfo?.gpu.connected && !!viewerInfo.gpu.online;
   const [runOnPick, setRunOn] = useState<RunOn | null>(null);
-  const runOn: RunOn = runOnPick ?? (ownOnline ? "own" : "pool");
+  const runOn: RunOn = runOnPick ?? (ownOnline && viewerInfo?.prefer !== "pool" ? "own" : "pool");
   const hostedHere = !!viewerInfo?.hosted && model?.engine === "open";
   const poolPrice = hostedHere && runOn === "pool";
   const priceBody = useSettled(poolPrice ? quoteBody(signed.request, runOn) : null);

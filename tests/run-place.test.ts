@@ -106,6 +106,10 @@ describe("hosted runs (this studio's GPUs)", () => {
     expect(at({ audience: "account", engine: "open", hosted: true, gpu: true }).where).toBe("gpu");
     expect(at({ audience: "owner", engine: "open", hosted: true }).where).toBe("gpu");
   });
+  it("with the studio's GPUs first, an account with its own GPU runs on the studio's; the owner still on its own", () => {
+    expect(at({ audience: "account", engine: "open", hosted: true, gpu: true, preferPool: true }).where).toBe("pool");
+    expect(at({ audience: "owner", engine: "open", hosted: true, preferPool: true }).where).toBe("gpu");
+  });
   it("a guest signs up first", () => {
     const p = at({ audience: "guest", engine: "open", hosted: true });
     expect(p).toMatchObject({ where: "pool", needs: "signup", send: "this studio's GPUs, after sign-up" });

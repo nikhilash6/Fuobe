@@ -865,6 +865,14 @@ export const HOOK_TABLES = `CREATE TABLE IF NOT EXISTS billing_outbox (
   );
   CREATE INDEX IF NOT EXISTS output_checks_generation ON output_checks(generation_id);
   CREATE INDEX IF NOT EXISTS output_checks_due ON output_checks(state, next_at);
+  CREATE TABLE IF NOT EXISTS pool_admissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account TEXT NOT NULL,
+    addr TEXT,
+    at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS pool_admissions_account ON pool_admissions(account, at);
+  CREATE INDEX IF NOT EXISTS pool_admissions_addr ON pool_admissions(addr, at);
   CREATE TABLE IF NOT EXISTS reports_inbox (
     id TEXT PRIMARY KEY,
     target_json TEXT NOT NULL,

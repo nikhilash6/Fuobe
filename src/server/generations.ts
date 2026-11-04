@@ -1,4 +1,5 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
@@ -1101,10 +1102,78 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
     // What the run leaves out or changes (LoRAs a cloud run can't carry, a length the API rounds) goes back
     // with it, so the composer and API clients can say so; it isn't stored.
     created.push(notes.length ? { ...toGeneration(row), notes } : toGeneration(row));
-    if (!waits) void submit(id, route, providerId, plan, req, i);
+    const capture = captureStore().getStore();
+    capture?.ids.push(id);
+    if (!waits) {
+      const start = () => void submit(id, route, providerId, plan, req, i);
+      if (capture) capture.submits.push(start);
+      else start();
+    }
   }
   ensureRunner();
   return created;
+}
+
+interface RunCapture {
+  ids: string[];
+  submits: (() => void)[];
+}
+
+declare global {
+  var __fuobeRunCapture: AsyncLocalStorage<RunCapture> | undefined;
+}
+
+const captureStore = () => (globalThis.__fuobeRunCapture ??= new AsyncLocalStorage<RunCapture>());
+
+/**
+ * Run `fn` (createGenerations, and every step its chains queue) with the rows it makes noted and their submits held:
+ * `ids` are the rows, in the order they were made, and `start()` sends the held submits. Lets a caller make a run's rows
+ * inside a transaction and send nothing until it commits.
+ */
+export function captureRun<T>(fn: () => T): { value: T; ids: string[]; start: () => void } {
+  const cap: RunCapture = { ids: [], submits: [] };
+  const value = captureStore().run(cap, fn);
+  return { value, ids: cap.ids, start: () => cap.submits.splice(0).forEach((s) => s()) };
+}
+
+/** One row a run would make: its model, operation, provider, kind and app, and the earlier steps it waits for. */
+export interface PlannedStep {
+  id: string;
+  modelId: string;
+  op: string;
+  provider: string;
+  kind: string;
+  presetId: string | null;
+  waits: boolean;
+}
+
+const ROLLED_BACK = Symbol("rolled back");
+
+/**
+ * Every row `fn` (createGenerations) would make, made and thrown away inside one transaction: nothing is kept and
+ * nothing is sent. A chain's later steps are planned exactly as the real run plans them.
+ */
+export function plannedSteps(fn: () => unknown): PlannedStep[] {
+  const d = db();
+  let steps: PlannedStep[] = [];
+  try {
+    d.transaction(() => {
+      steps = stepsOf(captureRun(fn).ids);
+      throw ROLLED_BACK;
+    })();
+  } catch (e) {
+    if (e !== ROLLED_BACK) throw e;
+  }
+  return steps;
+}
+
+/** The rows of a run (by id) as steps. */
+export function stepsOf(ids: string[]): PlannedStep[] {
+  const q = db().prepare("SELECT id, model_id, op, provider, kind, preset_id, depends_on FROM generations WHERE id = ?");
+  return ids.flatMap((id) => {
+    const r = q.get(id) as { id: string; model_id: string; op: string; provider: string; kind: string; preset_id: string | null; depends_on: string | null } | undefined;
+    return r ? [{ id: r.id, modelId: r.model_id, op: r.op, provider: r.provider, kind: r.kind, presetId: r.preset_id, waits: !!r.depends_on }] : [];
+  });
 }
 
 /** Where each dependency's output goes: `chain`, or the single-image `chainFrom`. */

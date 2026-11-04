@@ -24,18 +24,24 @@ const ICONS: Record<RunPlace["where"], typeof Cloud> = { cloud: Cloud, gpu: Cpu,
  * before, so a chip never says "Not available here" to the owner and then takes it back. With it, the account's own GPU
  * and its first key (who its paid runs are billed to).
  */
-export function useRunViewer(): { audience: RunAudience; gpu: boolean; hosted: boolean; payer: RunPlaceInput["payer"] } | null {
+export function useRunViewer(): { audience: RunAudience; gpu: boolean; hosted: boolean; preferPool: boolean; payer: RunPlaceInput["payer"] } | null {
   const hydrated = useHydrated();
   const viewer = useViewer().data;
   const status = useStatus().data;
   if (!hydrated || !viewer) return null;
   const audience: RunAudience = viewer.owner ? "owner" : viewer.account ? "account" : "guest";
   const keys = status?.viewer?.keys ?? [];
-  return { audience, gpu: !!status?.viewer?.gpu.connected, hosted: !!status?.viewer?.hosted, payer: keys.includes("fal") ? "fal" : (keys[0] ?? null) };
+  return {
+    audience,
+    gpu: !!status?.viewer?.gpu.connected,
+    hosted: !!status?.viewer?.hosted,
+    preferPool: !!status?.viewer?.hosted && status.viewer.prefer === "pool",
+    payer: keys.includes("fal") ? "fal" : (keys[0] ?? null),
+  };
 }
 
 /** The place and price for this viewer (null until the viewer is known). */
-export function useRunPlace(input: Omit<RunPlaceInput, "audience" | "format" | "gpu" | "hosted" | "payer">): RunPlace | null {
+export function useRunPlace(input: Omit<RunPlaceInput, "audience" | "format" | "gpu" | "hosted" | "preferPool" | "payer">): RunPlace | null {
   const who = useRunViewer();
   return who ? runPlace({ ...input, ...who, format: formatCost }) : null;
 }
@@ -49,7 +55,7 @@ export function useRunPlace(input: Omit<RunPlaceInput, "audience" | "format" | "
  */
 export function useOpenRunPlace(models: readonly string[], request: GenerationRequest | null, o: { count?: number; ownGpuOnly?: boolean } = {}): RunPlace | null {
   const viewer = useRunViewer();
-  const mayPool = !!viewer && !o.ownGpuOnly && viewer.audience !== "owner" && viewer.hosted && !viewer.gpu;
+  const mayPool = !!viewer && !o.ownGpuOnly && viewer.audience !== "owner" && viewer.hosted && (!viewer.gpu || viewer.preferPool);
   const checked = useHostedQuote(useSettled(mayPool ? quoteBody(request, "pool") : null)).data;
   if (!viewer) return null;
   // This studio's GPUs only on the server's word (as the studio composer asks it): a model it doesn't offer there, or

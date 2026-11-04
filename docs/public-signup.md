@@ -360,8 +360,11 @@ Where the runs go:
 With it on:
 
 - An account with no GPU of its own can run in the studios (generations, camera motions, effects, apps).
-- An account whose own GPU is online runs there by default. The composer shows where a run goes ("Your GPU" or "This
-  studio's GPUs"), and the person can pick either.
+- An account whose own GPU is online runs there by default, unless the billing service's policy puts the studio's
+  GPUs first (`prefer: "pool"`). The composer shows where a run goes ("Your GPU" or "This studio's GPUs"), and the
+  person can pick either. When the account's own GPU doesn't answer and the run named no place, the run is not moved
+  to the studio's GPUs: the page asks first, and runs it there if the person says so.
+- A guest is told what the billing service's policy for guests says (without one, what any account gets).
 - Every other tool still needs the account's own GPU ("This tool doesn't run on your own GPU yet" stays as it is).
   Image to 3D and extra LoRAs added to a request stay on the account's own GPU. So do clips and sound as inputs,
   unless the policy and the studio's GPUs both take them.
@@ -381,7 +384,11 @@ With it on:
   default; [gpu-workers.md](gpu-workers.md#the-queue)).
 - In a run's `params.extra`, a file input is used only when the run sent that file itself. A name of a file in the
   GPUs' folders is dropped. The graph is checked before it is queued or sent: it reads only the files this run sent.
-- The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.
+- The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space. The policy's limits
+  for runs on the studio's GPUs (runs at once, runs waiting, runs an hour, runs from one address an hour) count those
+  runs only, never runs on the account's own GPU or key. They are counted in the database as the run is made, so
+  requests sent together never pass them together. A chain counts once, and each of its steps must be one the policy
+  allows.
 
 Two optional services can go with it:
 

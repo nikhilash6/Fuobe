@@ -1,5 +1,6 @@
 import "server-only";
 import { getModel } from "@/lib/catalog";
+import { computeDimensions } from "@/lib/comfy";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
 import { lineFacts, poolLane, queueOfGeneration, workersAllowed } from "./computer/pool";
@@ -177,6 +178,23 @@ export function placeInLine(generationId: string): { place: number; etaSeconds: 
   return { place: before + 1, etaSeconds: typical === null ? null : Math.round(((before + 1) * typical) / 1000) };
 }
 
+/**
+ * The megapixels of each picture or frame a request makes, about: the canvas it names (params.extra.width and height),
+ * else its aspect ratio and resolution (the model's defaults where it names none). Null for sound, text and 3D.
+ */
+export function requestMegapixels(req: GenerationRequest, kind: RunFacts["kind"], modelId: string): number | null {
+  if (kind !== "image" && kind !== "video") return null;
+  const extra = (req.params?.extra ?? {}) as Record<string, unknown>;
+  const w = Number(extra.width);
+  const h = Number(extra.height);
+  const model = getModel(modelId);
+  const size =
+    Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0
+      ? { width: w, height: h }
+      : computeDimensions(req.params?.aspectRatio ?? model?.defaults?.aspectRatio, req.params?.resolution ?? model?.defaults?.resolution, {});
+  return Math.round((size.width * size.height) / 10_000) / 100;
+}
+
 /** The facts the billing service prices a run by (from a planned request: previewGeneration's answer). */
 export function runFacts(
   req: GenerationRequest,
@@ -197,7 +215,7 @@ export function runFacts(
     provider: p.providerId,
     jobs: p.jobs,
     outputsPerJob: p.jobs > 0 ? Math.max(1, Math.round(p.outputs / p.jobs)) : 1,
-    megapixels: null,
+    megapixels: requestMegapixels(req, kind, p.model.id),
     seconds: req.params?.duration ?? (kind === "video" ? (model?.defaults?.duration ?? null) : null),
     fps: req.params?.fps ?? null,
     loras: p.loras.applied.length,
