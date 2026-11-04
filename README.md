@@ -48,7 +48,7 @@
 Real covers from the galleries. Every clip and still below was rendered locally on ComfyUI.
 
 <p align="center">
-  <a href="https://fuobe.com/motions"><img src="docs/media/gifs/showcase-motions.gif" alt="Twelve Fuobe camera motions playing side by side: Dolly In, Catwalk, Glam, Crane Up, Slow Motion, Super Dolly In, Arc Left, Lazy Susan, Crane Over the Head, Snorricam, Aerial Pullback and Crash Zoom In" width="100%"></a>
+  <a href="https://fuobe.com/motions"><img src="docs/media/gifs/showcase-motions.gif" alt="Twelve Fuobe camera motions playing side by side: Dolly In, Dreamy Flow, Glam, Crane Up, Slow Motion, Super Dolly In, Arc Left, Lazy Susan, Crane Down, Snorricam, Aerial Pullback and Crash Zoom In" width="100%"></a>
 </p>
 
 <p align="center">
