@@ -9,11 +9,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { loaderInput, MODEL_EXT, pathNamed, TEXT_NAME, valueProblem } from "../../bin/lib/worker/rules.mjs";
 
-const SKIP = new Set(["requirements.json", "manifest.json", "model-pins.json"]);
+const SKIP = new Set(["requirements.json", "manifest.json", "model-pins.json", "first-run-files.json"]);
 
-/** The catalog: its workflow graphs by file name, its manifest, its requirement index and its model pins. */
-export function readCatalog(root) {
-  const dir = path.join(root, "workflows/comfyui");
+/**
+ * The catalog: its workflow graphs by file name, its manifest, its requirement index and its model pins. `dir` is the
+ * library folder (workflows/comfyui under the root unless given).
+ */
+export function readCatalog(root, dir = path.join(root, "workflows/comfyui")) {
   const read = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
   const graphs = {};
   for (const f of fs.readdirSync(dir).sort()) {
