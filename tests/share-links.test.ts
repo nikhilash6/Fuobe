@@ -295,6 +295,19 @@ describe("what a token serves", () => {
     expect((await serve(S3.token, r3.rel)).status).toBe(200);
   });
 
+  it("never puts an account's run on a link: not as a result, not in a selection, not in a folder", async () => {
+    const theirs = made("an account's harbour");
+    db().prepare("UPDATE generations SET request_json = json_set(request_json, '$.account', 'acct-someone') WHERE id = ?").run(theirs.g.id);
+    expect(() => shares.createShare({ kind: "result", targetId: theirs.g.id })).toThrow();
+    expect(() => shares.createShare({ kind: "publish", items: [theirs.g.id] })).toThrow();
+    const folder = lib.createFolder({ name: "Mixed" });
+    const mine = made("the owner's harbour");
+    lib.moveToFolder([theirs.g.id, mine.g.id], folder.id);
+    const S = shares.createShare({ kind: "folder", targetId: folder.id });
+    expect((await serve(S.token, mine.rel)).status).toBe(200);
+    expect((await serve(S.token, theirs.rel)).status).toBe(404);
+  });
+
   it("shares a folder with its subfolders, without the Trash or helper steps", async () => {
     const top = lib.createFolder({ name: "Shared top" });
     const sub = lib.createFolder({ name: "Shared sub", parentId: top.id });

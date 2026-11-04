@@ -60,6 +60,15 @@ export interface WorkerRow {
   switch_after_ms: number;
   state: string;
   seen_at: number | null;
+  /** A pool worker's next token (its SHA-256), offered in a beat answer and not used yet; its expiry; when it was made. */
+  next_token_hash?: string | null;
+  next_expires_at?: number | null;
+  next_token_at?: number | null;
+  /** The countries and networks (as short hashes) a pool worker's token was used from. */
+  seen_json?: string | null;
+  /** The network (a short hash) of its last call, and when. */
+  last_network?: string | null;
+  last_net_at?: number | null;
 }
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
@@ -73,20 +82,132 @@ export const isWorkerAuth = (header: string | null | undefined): boolean => !!he
 const touched = new Map<string, number>();
 
 /**
- * The worker behind an Authorization header, read now: null when the token is unknown, revoked or expired. Records
- * when it was last used (at most every 30 s) and Cloudflare's country header.
+ * How long a pool worker's token lasts (FUOBE_WORKER_TOKEN_DAYS; unset or 0: it never expires, as before). With a
+ * lifetime, the beat answer gives a worker that says it saves tokens (`canRotateToken`) its next token once half of it
+ * is gone, and the old token stops the moment the new one is first used.
  */
-export function workerFromAuth(header: string | null | undefined, country?: string | null, now = Date.now()): WorkerRow | null {
+export function poolTokenMs(): number {
+  const days = Number(process.env.FUOBE_WORKER_TOKEN_DAYS);
+  return Number.isFinite(days) && days > 0 ? Math.min(days, 3650) * 24 * 60 * 60_000 : 0;
+}
+
+/** A next token not used this long after it was offered is offered again (a beat answer that never arrived). */
+const NEXT_TOKEN_RETRY_MS = 10 * 60_000;
+/** Calls from two networks this close together are "two sources". */
+const TWO_SOURCES_MS = 10 * 60_000;
+/** Countries and networks remembered per worker. */
+const SEEN_MAX = 16;
+
+/** Where a call came from: Cloudflare's country header and the client's network (when the proxy is trusted). */
+export interface CallSource {
+  country?: string | null;
+  network?: string | null;
+}
+
+/**
+ * The worker behind an Authorization header, read now: null when the token is unknown, revoked or expired. A pool
+ * worker's next token (offered in a beat answer) works too, and its first use makes it the token: the old one stops. A
+ * pool worker's token with no expiry gets the lifetime (FUOBE_WORKER_TOKEN_DAYS, when set) from this call on.
+ * Records when it was last used (at most every 30 s) and Cloudflare's country header. For a pool worker, a call from a
+ * country or a network its token never came from before, or from a second network within minutes of another, writes an
+ * alert to the admin log.
+ */
+export function workerFromAuth(header: string | null | undefined, from: CallSource | string | null = null, now = Date.now()): WorkerRow | null {
   const m = BEARER_WORKER.exec((header ?? "").trim());
   if (!m || !WORKER_TOKEN.test(m[1])) return null;
-  const row = db().prepare("SELECT * FROM relay_workers WHERE token_hash = ?").get(sha(m[1])) as WorkerRow | undefined;
+  const source: CallSource = typeof from === "string" ? { country: from } : (from ?? {});
+  const hash = sha(m[1]);
+  let row = db().prepare("SELECT * FROM relay_workers WHERE token_hash = ?").get(hash) as WorkerRow | undefined;
+  if (!row) row = promoteNextToken(hash, now);
   if (!row || row.revoked_at || (row.expires_at && row.expires_at <= now)) return null;
+  // A pool worker added before tokens had a lifetime gets one now, from its first call after: no token is left that
+  // never expires and never changes.
+  const life = row.kind === "pool" && !row.expires_at ? poolTokenMs() : 0;
+  if (life) {
+    db().prepare("UPDATE relay_workers SET expires_at = ? WHERE id = ? AND kind = 'pool' AND expires_at IS NULL").run(now + life, row.id);
+    row = db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(row.id) as WorkerRow;
+  }
+  const country = source.country && /^[A-Z]{2}$/.test(source.country) ? source.country : null;
+  if (row.kind === "pool") noteSource(row, country, source.network ?? null, now);
   if (now - (touched.get(row.id) ?? 0) > 30_000) {
     touched.set(row.id, now);
-    const c = country && /^[A-Z]{2}$/.test(country) ? country : null;
-    db().prepare("UPDATE relay_workers SET last_used_at = ?, last_country = COALESCE(?, last_country) WHERE id = ?").run(now, c, row.id);
+    db().prepare("UPDATE relay_workers SET last_used_at = ?, last_country = COALESCE(?, last_country) WHERE id = ?").run(now, country, row.id);
   }
   return row;
+}
+
+/** A pool worker's next token, used for the first time: it becomes the token, with its own expiry. */
+function promoteNextToken(hash: string, now: number): WorkerRow | undefined {
+  const d = db();
+  return d.transaction(() => {
+    const w = d.prepare("SELECT * FROM relay_workers WHERE next_token_hash = ? AND kind = 'pool' AND revoked_at IS NULL").get(hash) as WorkerRow | undefined;
+    if (!w || (w.next_expires_at && w.next_expires_at <= now)) return undefined;
+    d.prepare("UPDATE relay_workers SET token_hash = next_token_hash, expires_at = next_expires_at, next_token_hash = NULL, next_expires_at = NULL, next_token_at = NULL WHERE id = ?").run(w.id);
+    return d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
+  })();
+}
+
+/**
+ * A pool worker's next token for its beat answer, when its token has a lifetime and half of it is gone (made now; only its
+ * hash is kept). Null otherwise, and while one offered in the last 10 minutes waits for its first use.
+ */
+export function offerNextToken(w: WorkerRow, now = Date.now()): { value: string; expiresAt: number } | null {
+  const life = poolTokenMs();
+  if (w.kind !== "pool" || w.revoked_at || !life || !w.expires_at) return null;
+  if (w.expires_at - now > life / 2) return null;
+  if (w.next_token_hash && w.next_token_at && now - w.next_token_at < NEXT_TOKEN_RETRY_MS) return null;
+  const value = newWorkerToken();
+  const expiresAt = now + life;
+  db().prepare("UPDATE relay_workers SET next_token_hash = ?, next_expires_at = ?, next_token_at = ? WHERE id = ? AND revoked_at IS NULL").run(sha(value), expiresAt, now, w.id);
+  return { value, expiresAt };
+}
+
+/** A short hash of a network, so the admin log and the worker's row never hold an address. */
+const netHash = (network: string) => sha(`network:${network}`).slice(0, 16);
+
+/** One alert per worker and kind an hour (a worker that moved keeps calling from its new place). */
+const alerted = new Map<string, number>();
+
+/** An alert about a worker's token in the admin log (actor "system"). */
+function workerAlert(w: WorkerRow, kind: "new-country" | "new-network" | "two-sources", detail: Record<string, unknown>, now: number): void {
+  const key = `${w.id}:${kind}:${JSON.stringify(detail)}`;
+  if (now - (alerted.get(key) ?? 0) < 60 * 60_000) return;
+  alerted.set(key, now);
+  if (alerted.size > 2000) alerted.delete(alerted.keys().next().value!);
+  try {
+    db()
+      .prepare("INSERT INTO admin_audit (at, actor, token_id, token_name, action, target, detail_json, status) VALUES (?, 'system', NULL, NULL, 'worker.alert', ?, ?, 200)")
+      .run(now, w.id, JSON.stringify({ kind, worker: w.name, ...detail }));
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't write the admin log: ${(e as Error).message}`);
+  }
+  console.warn(`[fuobe] Worker ${w.name}: ${kind}`);
+}
+
+/** Remember where a pool worker's token was used from, and alert on a new country, a new network or two at once. */
+function noteSource(w: WorkerRow, country: string | null, network: string | null, now: number): void {
+  const net = network ? netHash(network) : null;
+  if (!country && !net) return;
+  const seen = json<{ countries: string[]; networks: string[] }>(w.seen_json ?? null, { countries: [], networks: [] });
+  let changed = false;
+  if (country && !seen.countries.includes(country)) {
+    if (seen.countries.length) workerAlert(w, "new-country", { country, known: seen.countries.slice(-4) }, now);
+    seen.countries = [...seen.countries, country].slice(-SEEN_MAX);
+    changed = true;
+  }
+  if (net && !seen.networks.includes(net)) {
+    if (seen.networks.length) workerAlert(w, "new-network", { network: net }, now);
+    seen.networks = [...seen.networks, net].slice(-SEEN_MAX);
+    changed = true;
+  }
+  if (net && w.last_network && w.last_network !== net && w.last_net_at && now - w.last_net_at < TWO_SOURCES_MS) {
+    workerAlert(w, "two-sources", { networks: [w.last_network, net].sort() }, now);
+  }
+  if (changed || (net && (net !== w.last_network || now - (w.last_net_at ?? 0) > 30_000))) {
+    db()
+      .prepare("UPDATE relay_workers SET seen_json = ?, last_network = COALESCE(?, last_network), last_net_at = CASE WHEN ? IS NULL THEN last_net_at ELSE ? END WHERE id = ?")
+      .run(JSON.stringify(seen), net, net, now, w.id);
+  }
 }
 
 export function getWorker(id: string): WorkerRow | null {
@@ -100,8 +221,9 @@ const cleanName = (name: unknown) =>
     .trim()
     .slice(0, 48) || "ComfyUI";
 
-/** A new worker and its token (the only time the token exists in the clear). */
+/** A new worker and its token (the only time the token exists in the clear). A pool worker's token lasts poolTokenMs(). */
 export function createWorker(w: { name: string; kind: WorkerKind; principal?: Principal; pool?: string; facts?: ComputerFacts; expiresAt?: number }, now = Date.now()): { id: string; token: string } {
+  const life = w.kind === "pool" ? poolTokenMs() : 0;
   const id = nanoid(12).replace(/[^A-Za-z0-9_-]/g, "_");
   const token = newWorkerToken();
   db()
@@ -117,7 +239,7 @@ export function createWorker(w: { name: string; kind: WorkerKind; principal?: Pr
       w.pool ?? "pool",
       sha(token),
       now,
-      w.expiresAt ?? null,
+      w.expiresAt ?? (life ? now + life : null),
       w.facts ? JSON.stringify(w.facts) : null,
       // A personal worker is that person's computer: it follows their own runs, as their tab does. A pool worker starts
       // paused in both places.
@@ -133,10 +255,14 @@ export function revokeWorker(id: string, now = Date.now()): boolean {
   return db().prepare("UPDATE relay_workers SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").run(now, id).changes > 0;
 }
 
-/** A new token for a worker; the old one stops at once. */
-export function rotateWorker(id: string): string | null {
+/** A new token for a worker; the old one (and a next one offered and not used yet) stops at once. */
+export function rotateWorker(id: string, now = Date.now()): string | null {
   const token = newWorkerToken();
-  const ok = db().prepare("UPDATE relay_workers SET token_hash = ? WHERE id = ? AND revoked_at IS NULL").run(sha(token), id).changes > 0;
+  const life = poolTokenMs();
+  const ok =
+    db()
+      .prepare("UPDATE relay_workers SET token_hash = ?, next_token_hash = NULL, next_expires_at = NULL, next_token_at = NULL, expires_at = CASE WHEN kind = 'pool' AND ? > 0 THEN ? ELSE expires_at END WHERE id = ? AND revoked_at IS NULL")
+      .run(sha(token), life, now + life, id).changes > 0;
   return ok ? token : null;
 }
 

@@ -1116,9 +1116,15 @@ export interface GenerationRequest {
   place?: "pool";
   hold?: string;
   charge?: string;
+  /** Server-only: the hold set an amount aside (a run that ends early then says it wasn't charged). */
+  charged?: boolean;
   checkOutputs?: boolean;
   /** How long a run on this install's GPUs may wait in line (ms), when the billing service set it. */
   waitMs?: number;
+  /** Server-only: the run's class in the line on this install's GPUs ("paid" goes before "free"), from the billing service. */
+  class?: "paid" | "free";
+  /** Server-only: a head start in line within its class (ms), from the billing service. */
+  boostMs?: number;
   feature: string;
   presetId?: string;
   modelId: string;
@@ -1386,9 +1392,9 @@ export interface Generation {
   place?: "pool";
   /** The billing service's words for what a run on this install's GPUs costs ("7 units"); shown when it succeeded. */
   charge?: string;
-  /** A run with a billing hold that failed or was stopped: nothing was charged. */
+  /** A run whose billing hold set an amount aside, and that failed or was stopped: nothing was charged. */
   notCharged?: true;
-  /** "checking": its outputs wait for the moderation service before they show. */
+  /** "checking": its outputs wait for the moderation service before they show (on this install's GPUs: "Working"). */
   stage?: "checking";
   /** A run waiting for this install's GPUs: its place in line and the wait, about (GET /api/generations/<id>). */
   queue?: { place: number; etaSeconds: number | null };

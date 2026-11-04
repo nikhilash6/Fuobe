@@ -46,6 +46,12 @@ export interface RunFacts {
   inputs: { image: number; video: number; audio: number };
   lane: string | null;
   providerUsd: number | null;
+  /**
+   * Every step of the run that uses this install's GPUs, its own step first, so one quote and one hold cover a whole
+   * chain (one press of Run). Steps that need no model (joins, trims) and text steps are left out: they cost nothing.
+   * Absent: the run is its own one step.
+   */
+  steps?: { model: string; op: string | null; kind: RunFacts["kind"]; jobs: number; lane: string | null }[];
 }
 
 export interface QueueFacts {
@@ -92,14 +98,37 @@ export interface Policy {
   pool: { allow?: string[]; deny?: string[]; apps?: { allow?: string[]; deny?: string[] } };
   /** Which of its own files a run on this install's GPUs may use. */
   uploads: { image: boolean; video: boolean; audio: boolean };
-  limits: { activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number; keepDays: number; spaceBytes: number };
+  /**
+   * Limits on runs on this install's GPUs, counted on those runs only (never on runs on the account's own GPU or key).
+   * 0 or absent: no such limit. `addressRunsPerHour`: runs there from one client address an hour.
+   */
+  limits: { activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number; keepDays: number; spaceBytes: number; addressRunsPerHour?: number };
+  /**
+   * Where a run goes when the account could run it on its own GPU and on this install's: "pool" for this install's, "own"
+   * (or absent) for its own GPU, as before. A place the request names always wins.
+   */
+  prefer?: "pool" | "own";
+  /** Which kinds of run may use this install's GPUs (absent: all; a kind set to false: not that kind). */
+  kinds?: { image?: boolean; video?: boolean; audio?: boolean; text?: boolean; model3d?: boolean };
   links?: Action[];
   notice?: { id: string; text: string; url?: string };
   ttlS: number;
 }
 
 export type ReserveAnswer =
-  | { ok: true; holdId: string; amount: number; boostMs: number; maxWaitMs: number; pools?: string[]; text: string }
+  | {
+      ok: true;
+      holdId: string;
+      amount: number;
+      /** A head start in line within the run's class (ms). */
+      boostMs: number;
+      /** The longest the run may wait before a worker first takes it (ms; 0: the install's own limit). */
+      maxWaitMs: number;
+      pools?: string[];
+      /** The run's class in the line: "paid" goes before "free" (absent: "free"). */
+      class?: "paid" | "free";
+      text: string;
+    }
   | { ok: false; code: RefuseCode | "price-changed"; text: string; quote?: Quote; action?: Action; offer?: Offer };
 
 export interface Balance {
@@ -158,7 +187,7 @@ function target(): HookTarget | null {
 
 declare global {
   var __fuobeBillingBadUrl: boolean | undefined;
-  var __fuobeBillingPolicies: Map<string, { at: number; ttlMs: number; policy: Policy }> | undefined;
+  var __fuobeBillingPolicies: Map<string, { at: number; ttlMs: number; policy: Policy | null }> | undefined;
   var __fuobeBillingBalances: Map<string, { at: number; balance: Balance }> | undefined;
 }
 
@@ -191,24 +220,47 @@ export const OPEN_POLICY: Policy = {
 };
 
 /**
- * The account's policy (cached for its `ttlS`). No service: OPEN_POLICY. The service down: null (the caller treats
- * runs on this install's GPUs as paused).
+ * After a policy call that got no answer, how long the last answer (or none) stands before the service is asked again
+ * (ms). A guest's status is read on every page, so a guest's policy waits longer.
  */
-export async function policy(accountId: string): Promise<Policy | null> {
+export const POLICY_RETRY_MS = { account: 5_000, guest: 60_000 };
+
+/**
+ * The account's policy (cached for its `ttlS`), or a guest's (`accountId` null: GET /v1/policy with no account). No
+ * service: OPEN_POLICY. The service down: the last answer, else null (the caller treats runs on this install's GPUs as
+ * paused). That stands for POLICY_RETRY_MS, so a service that doesn't answer isn't waited for on every call.
+ */
+export async function policy(accountId: string | null): Promise<Policy | null> {
   if (!billingConfigured()) return OPEN_POLICY;
   const cache = (globalThis.__fuobeBillingPolicies ??= new Map());
-  const hit = cache.get(accountId);
+  const key = accountId ?? "";
+  const hit = cache.get(key);
   if (hit && Date.now() - hit.at < hit.ttlMs) return hit.policy;
-  try {
-    const p = await call<Policy>("GET", `/v1/policy?account=${encodeURIComponent(accountId)}`, undefined, BILLING_TIMEOUTS.policy);
-    const ttlMs = Math.max(0, Math.min(3600, Number(p.ttlS) || 0)) * 1000;
-    cache.set(accountId, { at: Date.now(), ttlMs, policy: p });
+  const keep = (entry: { at: number; ttlMs: number; policy: Policy | null }) => {
+    cache.set(key, entry);
     if (cache.size > 5000) cache.delete(cache.keys().next().value!);
+  };
+  try {
+    const p = await call<Policy>("GET", accountId ? `/v1/policy?account=${encodeURIComponent(accountId)}` : "/v1/policy", undefined, BILLING_TIMEOUTS.policy);
+    const ttlMs = Math.max(0, Math.min(3600, Number(p.ttlS) || 0)) * 1000;
+    keep({ at: Date.now(), ttlMs, policy: p });
     return p;
   } catch (e) {
     logDown("policy", e);
-    return hit?.policy ?? null;
+    const last = hit?.policy ?? null;
+    keep({ at: Date.now(), ttlMs: accountId ? POLICY_RETRY_MS.account : POLICY_RETRY_MS.guest, policy: last });
+    return last;
   }
+}
+
+/**
+ * The policy as last read, with no call to the service: undefined when none is kept (or it is too old). No service:
+ * OPEN_POLICY.
+ */
+export function cachedPolicy(accountId: string | null): Policy | null | undefined {
+  if (!billingConfigured()) return OPEN_POLICY;
+  const hit = globalThis.__fuobeBillingPolicies?.get(accountId ?? "");
+  return hit && Date.now() - hit.at < hit.ttlMs ? hit.policy : undefined;
 }
 
 /** A free run's quote (no service set): Run keeps its own words. */

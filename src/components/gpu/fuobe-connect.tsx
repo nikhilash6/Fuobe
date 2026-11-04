@@ -92,7 +92,7 @@ export function PairWithCode({ initial, className }: { initial?: string; classNa
   const [typed, setTyped] = useState(initial ?? "");
   const code = pairCode(typed);
   const [found, setFound] = useState<{ code: string; name: string; facts: PairedComfy["facts"] } | null>(null);
-  const [approved, setApproved] = useState<{ id: string; name: string } | null>(null);
+  const [approved, setApproved] = useState<{ id: string; name: string; settingsNeeded?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const paired = usePaired(!!approved, !!approved);
@@ -129,8 +129,8 @@ export function PairWithCode({ initial, className }: { initial?: string; classNa
         setTyped("");
         toast("That code won't work now.");
       } else {
-        const r = await pairCall<{ worker: { id: string; name: string } }>("POST", "/api/gpu/pair", { code: found.code });
-        setApproved(r.worker);
+        const r = await pairCall<{ worker: { id: string; name: string }; settingsNeeded?: boolean }>("POST", "/api/gpu/pair", { code: found.code });
+        setApproved({ ...r.worker, ...(r.settingsNeeded && { settingsNeeded: true }) });
       }
     } catch (e) {
       setError((e as Error).message);
@@ -139,6 +139,15 @@ export function PairWithCode({ initial, className }: { initial?: string; classNa
     }
   };
 
+  if (approved?.settingsNeeded)
+    return (
+      <div className={cn("space-y-1 rounded-xl bg-brand-faint p-3 text-[13px]", className)}>
+        <p className="flex items-center gap-2 font-medium">
+          <Check className="size-4 text-brand-text" /> {approved.name} is paired.
+        </p>
+        <p className="text-muted-foreground">To run the studio&apos;s ComfyUI jobs there, choose your computer in Settings → ComfyUI.</p>
+      </div>
+    );
   if (approved)
     return (
       <div className={cn("space-y-1 rounded-xl bg-brand-faint p-3 text-[13px]", className)}>

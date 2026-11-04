@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, GUEST_HEADER, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
 import type { WantedFile } from "@/lib/relay";
 import { sniffMedia } from "@/lib/sniff";
-import { accountById, accountGpu, authEnabled, crossSite, hostAllowed, publicSignup, requestViewer, validToken } from "../auth";
+import { accountById, accountGpu, authEnabled, crossSite, hostAllowed, LoginGuard, publicSignup, requestViewer, validToken } from "../auth";
 import { hit } from "../rate";
 import { getSetting } from "../settings";
 import { RelayError, type Principal } from "./tasks";
@@ -44,7 +44,7 @@ export function principalOf(request: Request): Principal | Response {
  * request can't change that.
  */
 function workerPrincipal(request: Request, auth: string, no: (status: number, error: string, extra?: Record<string, unknown>) => Response): Principal | Response {
-  const w = workerFromAuth(auth, request.headers.get("cf-ipcountry"));
+  const w = workerFromAuth(auth, { country: request.headers.get("cf-ipcountry"), network: callNetwork(request) });
   if (!w) return no(401, "This ComfyUI isn't paired with this studio any more. Pair it again from Fuobe Connect.", { code: "worker-token" });
   const host = request.headers.get("host") ?? new URL(request.url).host;
   if (!authEnabled() && !hostAllowed(host)) return no(403, "Blocked a request for an address this studio isn't reached at.");
@@ -62,6 +62,17 @@ function workerPrincipal(request: Request, auth: string, no: (status: number, er
   if (!gpu) return no(403, CONNECT_GPU_MESSAGE, { code: "connect-gpu" });
   if (gpu.mode !== "computer") return no(409, "Your GPU is connected with a link, so the server runs it.", { code: "link-mode" });
   return w.principal as Principal;
+}
+
+/**
+ * The network a call came from (an IPv4 address's /24, an IPv6 address's /64), or null when the proxy isn't trusted and
+ * every client looks the same.
+ */
+export function callNetwork(request: Request): string | null {
+  const key = LoginGuard.clientKey(request.headers);
+  if (key === LoginGuard.DIRECT) return null;
+  const v4 = key.split(".");
+  return v4.length === 4 ? `${v4.slice(0, 3).join(".")}.0/24` : key;
 }
 
 /** The worker that made a request, once principalOf has read it (null: a browser). */

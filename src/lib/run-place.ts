@@ -30,6 +30,8 @@ export interface RunPlaceInput {
   gpu?: boolean;
   /** Hosted runs are on: an open model may run on this studio's GPUs when the viewer has no GPU of its own. */
   hosted?: boolean;
+  /** Runs go to this studio's GPUs first, even when the viewer has a GPU of its own (the studio's policy). */
+  preferPool?: boolean;
   /** The price of a run on this studio's GPUs (the billing service's words; empty text: free), undefined while pricing. */
   pool?: { text: string; sub?: string } | null;
   /** The provider an account's paid run is billed to (its own key), or null when it has no key for this model. */
@@ -100,7 +102,7 @@ export function runPlace(input: RunPlaceInput): RunPlace {
   const withModels = models.length ? ` with ${list(models)}` : "";
   // Hosted runs: an account (or a guest, once signed up) with no GPU of its own runs open models on this studio's GPUs,
   // at the billing service's price (the studio composer's "This studio's GPUs" chip).
-  if (open && input.hosted && audience !== "owner" && !input.gpu) {
+  if (open && input.hosted && audience !== "owner" && (!input.gpu || input.preferPool)) {
     const signup = audience === "guest";
     const poolPrice = input.demo ? price : input.pool ? input.pool.text || "Free" : "";
     const tip = input.demo
@@ -167,6 +169,18 @@ export function mainModel(steps: readonly { modelName: string; costUsd: number |
   let best: { modelName: string; costUsd: number | null } | undefined;
   for (const s of steps ?? []) if (!best || (s.costUsd ?? -1) > (best.costUsd ?? -1)) best = s;
   return best?.modelName;
+}
+
+/**
+ * Where a studio composer's run goes, with hosted runs on: the person's pick, else its own GPU while that is online
+ * (unless the studio puts its own GPUs first), else this studio's GPUs. `place` is what the run names beside the request:
+ * none when the default is this studio's GPUs only because the studio puts them first, so the server decides, and a
+ * model this studio's GPUs don't take still runs on the account's own GPU.
+ */
+export function composerPlace(pick: "own" | "pool" | null, ownOnline: boolean, preferPool: boolean): { runOn: "own" | "pool"; place: "own" | "pool" | undefined } {
+  if (pick) return { runOn: pick, place: pick };
+  if (!ownOnline) return { runOn: "pool", place: "pool" };
+  return preferPool ? { runOn: "pool", place: undefined } : { runOn: "own", place: "own" };
 }
 
 /** Drawn in this browser (a Kinetic template, Click to Ad's end card): the same place and price whoever looks. */

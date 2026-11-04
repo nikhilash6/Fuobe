@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { adminAccess, auditRead } from "@/server/admin-tokens";
+import { actorHas, adminAccess, auditRead } from "@/server/admin-tokens";
 import { listReports } from "@/server/moderation";
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -16,5 +16,8 @@ export async function GET(request: Request) {
   const limit = asked === null ? 100 : Math.trunc(Number(asked));
   if (!Number.isFinite(limit) || limit < 1 || limit > 500) return Response.json({ error: "limit is 1 to 500" }, { status: 400, headers: NO_STORE });
   auditRead(access.actor, "reports.list");
-  return Response.json({ items: listReports(limit) }, { headers: NO_STORE });
+  // Reporters' emails only with accounts:read (the owner always).
+  const emails = actorHas(access.actor, "accounts:read");
+  const items = listReports(limit).map((r) => (emails ? r : { ...r, reporter: { ...r.reporter, email: null } }));
+  return Response.json({ items }, { headers: NO_STORE });
 }

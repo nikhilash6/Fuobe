@@ -29,6 +29,12 @@ interface DoneRow {
   started_at: number | null;
   completed_at: number | null;
   check_state: string | null;
+  /**
+   * A run on the workers: their measured time on its jobs (each job's last finished attempt, the one whose result was
+   * kept), and the GPU of the last one (the workers' log).
+   */
+  exec_ms: number | null;
+  exec_device: string | null;
 }
 
 /** Where a row stands in the output check, for its report: hidden, never checked in time, or nothing to say. */
@@ -50,7 +56,10 @@ export function queueReports(now = Date.now(), limit = 200): number {
     .prepare(
       `SELECT g.id, g.status, g.error, g.outputs_json, g.external_id, g.cost_usd, g.completed_at,
               json_extract(g.request_json, '$.hold') AS hold, r.started_at AS started_at,
-              (SELECT state FROM output_checks c WHERE c.generation_id = g.id AND c.state IN ('hidden', 'unchecked') LIMIT 1) AS check_state
+              (SELECT state FROM output_checks c WHERE c.generation_id = g.id AND c.state IN ('hidden', 'unchecked') LIMIT 1) AS check_state,
+              (SELECT SUM(j.exec_ms) FROM worker_jobs j WHERE j.generation_id = g.id AND j.event = 'finished' AND j.exec_ms IS NOT NULL
+                 AND j.id = (SELECT MAX(k.id) FROM worker_jobs k WHERE k.task_id = j.task_id AND k.event = 'finished' AND k.exec_ms IS NOT NULL)) AS exec_ms,
+              (SELECT j.device FROM worker_jobs j WHERE j.generation_id = g.id AND j.event = 'finished' AND j.device IS NOT NULL ORDER BY j.id DESC LIMIT 1) AS exec_device
        FROM generations g LEFT JOIN generation_runs r ON r.id = g.id
        WHERE json_extract(g.request_json, '$.hold') IS NOT NULL
          AND g.status IN ('succeeded', 'failed', 'canceled')
@@ -66,7 +75,10 @@ export function queueReports(now = Date.now(), limit = 200): number {
   d.transaction(() => {
     for (const r of rows) {
       const n = (count.get(r.hold) as { n: number }).n;
-      const gpuMs = r.started_at && r.completed_at && r.completed_at > r.started_at ? r.completed_at - r.started_at : null;
+      // A run on the workers: the time their ComfyUI spent on its jobs, as they measured it (no waits, no files, no
+      // upload). Anything else: from its start to its end, as before.
+      const gpuMs = r.exec_ms !== null ? r.exec_ms : r.started_at && r.completed_at && r.completed_at > r.started_at ? r.completed_at - r.started_at : null;
+      const device = r.exec_device ?? null;
       const outputs = (() => {
         try {
           return JSON.parse(r.outputs_json) as { width?: number; height?: number }[];
@@ -84,7 +96,7 @@ export function queueReports(now = Date.now(), limit = 200): number {
           final: { outputs: outputs.length, megapixels: megapixels(outputs), seconds: null },
           providerUsd: r.cost_usd,
           gpuMs,
-          device: null,
+          device,
           reachedProvider: !!r.external_id,
         };
         written += insert.run(r.id, "settle", r.hold, JSON.stringify(report), now, now).changes;
@@ -97,7 +109,7 @@ export function queueReports(now = Date.now(), limit = 200): number {
           reason: (r.error ?? "").slice(0, 500),
           reachedProvider: !!r.external_id,
           gpuMs,
-          device: null,
+          device,
         };
         written += insert.run(r.id, "refund", r.hold, JSON.stringify(report), now, now).changes;
       }

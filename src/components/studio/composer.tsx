@@ -20,6 +20,7 @@ import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
+import { composerPlace } from "@/lib/run-place";
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
@@ -590,11 +591,12 @@ export function Composer({ docked }: { docked: boolean }) {
   const { mentions, sketched, signed } = prepare(draft);
   // Hosted runs: an open model may run on this studio's GPUs. Its price there is the server's (the words of the
   // studio's billing service, or free), asked again 300 ms after a change. With the account's own GPU online, that
-  // GPU is the default; the person can pick either.
+  // GPU is the default, unless the studio puts its own GPUs first; the person can pick either.
   const viewerInfo = status?.viewer;
   const ownOnline = !!viewerInfo?.gpu.connected && !!viewerInfo.gpu.online;
   const [runOnPick, setRunOn] = useState<RunOn | null>(null);
-  const runOn: RunOn = runOnPick ?? (ownOnline ? "own" : "pool");
+  // (The place the run names: none when the default is the studio's GPUs only because the studio puts them first.)
+  const { runOn, place: runPlace } = composerPlace(runOnPick, ownOnline, viewerInfo?.prefer === "pool");
   const hostedHere = !!viewerInfo?.hosted && model?.engine === "open";
   const poolPrice = hostedHere && runOn === "pool";
   const priceBody = useSettled(poolPrice ? quoteBody(signed.request, runOn) : null);
@@ -761,7 +763,7 @@ export function Composer({ docked }: { docked: boolean }) {
       model?.kind,
     );
     // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
-    const hosted = viewerInfo?.hosted ? { place: runOn, ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
+    const hosted = viewerInfo?.hosted ? { ...(runPlace && { place: runPlace }), ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
     const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
     const body = { ...withVoiceFirst, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
     create.mutate(body, {

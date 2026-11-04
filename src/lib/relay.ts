@@ -37,10 +37,13 @@ export type ReportEvent =
   | { event: "queued"; position: number }
   /** Running: the sampler's steps, and the node. */
   | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number }
-  /** Finished: its /history entry (a worker adds the most VRAM it took, for the benchmarks). */
-  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number }
+  /**
+   * Finished: its /history entry. A worker adds the most VRAM it took (for the benchmarks), the time its ComfyUI spent
+   * running the job (`execMs`: not the wait, the files or the upload) and its GPU's name (`device`).
+   */
+  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string }
   /** A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. */
-  | { event: "passes"; running: boolean; entries: HistoryEntryLike[] }
+  | { event: "passes"; running: boolean; entries: HistoryEntryLike[]; execMs?: number; device?: string }
   /** ComfyUI has no trace of it (restarted): the server sends it again once. */
   | { event: "gone" }
   /** The tab can't use ComfyUI: it doesn't answer, or (`why: "setting"`) it answers without Fuobe's setting. */
@@ -145,6 +148,8 @@ export interface BeatAnswer {
   heldElsewhere: boolean;
   /** Tasks waiting for a computer. */
   waiting: number;
+  /** A worker's own: people's tasks it may claim right now (its lanes, files, VRAM and hours), its own pause aside. */
+  claimableNow?: number;
   /** Prompts to take off this computer's ComfyUI. */
   stops: { task: string; promptId: string; prefix?: string }[];
   /** A worker's own (docs/gpu-workers.md): what the studio says about it now. */
@@ -169,6 +174,11 @@ export interface WorkerAnswer {
   minProtocol: number;
   /** Its inventory is unknown or changed: send it (PUT /api/gpu/computer/inventory). */
   sendInventory: boolean;
+  /**
+   * Its next token (protocol 2), when its token has a lifetime and half of it is gone: save it and use it from the next
+   * call on. The old token stops at the new one's first use. Given again after 10 minutes if it was never used.
+   */
+  token?: { value: string; expiresAt: number };
 }
 
 /** What a worker says in its beat, on top of a browser's. */
@@ -176,6 +186,8 @@ export interface WorkerBeat {
   device: string;
   protocol: number;
   version: string;
+  /** It saves the next token a beat answer gives it (`worker.token`) and uses it from its next call on. */
+  canRotateToken?: boolean;
   ready: boolean;
   why: string | null;
   /** Its own pause switch: by hand ("here", "here-until:<ms>"), by itself ("gpu-busy:<process>", "comfy-crashes", "port-busy"). */
@@ -331,6 +343,18 @@ export const RELAY_WORDS = {
   disconnected: "You disconnected your computer, so this run stopped. Press Retry.",
   /** A run sent to the computer whose Fuobe tab stopped answering (closed, asleep): it goes on once that tab is back. */
   computerAway: "Waiting for your computer. Open Fuobe there to finish this run.",
+} as const;
+
+/**
+ * What a run on this install's GPUs (hosted runs) shows an account: in line (with its place and wait, the row's queue
+ * block), working on it, then its result. Every recovery (a worker that paused, went quiet or restarted, a retry) is
+ * "in line" again in the same place. A run that can't finish says one plain sentence; the technical reason is kept for
+ * the owner only.
+ */
+export const POOL_WORDS = {
+  inLine: "In line",
+  working: "Working",
+  failed: "This one couldn't be made. Press Retry to try again.",
 } as const;
 
 /** A script's open-source run (an API token) while the owner's ComfyUI is on the owner's computer. */

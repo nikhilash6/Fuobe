@@ -109,16 +109,29 @@ describe("the billing hook with no service set", () => {
     expect(await billing.reserve({ requestId: "r", account: billing.accountFacts({ id: a, email: "x@example.com", createdAt: 1 }), run: {} as never, queue: null, shown: { amount: 0, priceVersion: "" } })).toBeNull();
   });
 
-  it("with hosted runs on and no billing service, a run on this install's GPUs is free, with no hold", async () => {
+  it("with hosted runs on and no billing service, they stay closed unless they are free for everyone", async () => {
     delete process.env.FUOBE_BILLING_URL;
-    const r = await post(run());
-    expect(r.status).toBe(201);
-    const { items } = (await r.json()) as { items: { id: string; place?: string }[] };
-    expect(items[0].place).toBe("pool");
-    expect(holdOf(items[0].id)).toBeNull();
-    await until(() => statusOf(items[0].id).status !== "queued" && statusOf(items[0].id).status !== "running");
-    expect(statusOf(items[0].id).status).toBe("succeeded");
+    const closed = await post(run());
+    expect(closed.status).toBe(403);
+    expect(((await closed.json()) as { code: string }).code).toBe("connect-gpu");
     expect(fake.calls).toEqual([]);
+  });
+
+  it("with hosted runs on, no billing service and FUOBE_HOSTED_FREE=1, a run on this install's GPUs is free, with no hold", async () => {
+    delete process.env.FUOBE_BILLING_URL;
+    process.env.FUOBE_HOSTED_FREE = "1";
+    try {
+      const r = await post(run());
+      expect(r.status).toBe(201);
+      const { items } = (await r.json()) as { items: { id: string; place?: string }[] };
+      expect(items[0].place).toBe("pool");
+      expect(holdOf(items[0].id)).toBeNull();
+      await until(() => statusOf(items[0].id).status !== "queued" && statusOf(items[0].id).status !== "running");
+      expect(statusOf(items[0].id).status).toBe("succeeded");
+      expect(fake.calls).toEqual([]);
+    } finally {
+      delete process.env.FUOBE_HOSTED_FREE;
+    }
   });
 });
 

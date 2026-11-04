@@ -1,4 +1,5 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
@@ -97,8 +98,11 @@ import { convertMask, decodePng, encodePng } from "./png";
 import { engineMode, getSetting, withCandidates, withoutCandidates } from "./settings";
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
-import { stamped, stampOf, withRunStamp } from "./run-stamp";
+import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
+import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
+import { poolLane } from "./computer/pool";
+import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
 import { inDemoScope } from "./demo-scope";
 import { moderationConfigured } from "./moderation";
@@ -150,8 +154,13 @@ const LIBRARY_JOIN = `generations g ${LIBRARY_JOINS}`;
 
 export function toGeneration(r: Row): Generation {
   const stored = JSON.parse(r.request_json) as GenerationRequest;
-  // The billing hold is the server's: never sent to a browser or a script.
-  const { hold, ...request } = stored;
+  // The run's stamp is the server's (its place, the billing hold, its class in the line): never sent to a browser or a
+  // script, so a retry that sends the request back never says where the last attempt ran.
+  const hold = stored.hold;
+  const request = withoutStamp(stored);
+  // A run on this install's GPUs shows the account only where it is (in line, working) and its result, or one plain
+  // sentence when it can't finish: never the technical reason, which the owner reads in the accounts' runs.
+  const pool = stored.place === "pool";
   const checking = r.stage === "checking";
   const model = getModel(r.model_id);
   const ar = request.params?.aspectRatio ?? model?.defaults?.aspectRatio;
@@ -176,12 +185,12 @@ export function toGeneration(r: Row): Generation {
     kind: r.kind,
     status: r.status,
     progress: r.progress,
-    message: r.message,
+    message: pool ? poolMessage(r) : r.message,
     prompt: r.prompt,
     request,
     // Held for the moderation service's check: nothing of it is shown until it passes.
     outputs: checking ? [] : (JSON.parse(r.outputs_json) as OutputFile[]),
-    error: r.error,
+    error: pool ? poolError(r.id, r.error) : r.error,
     costUsd: r.cost_usd,
     favorite: !!r.favorite,
     createdAt: r.created_at,
@@ -196,18 +205,53 @@ export function toGeneration(r: Row): Generation {
     folderId: lib.folder_id ?? null,
     pinnedAt: r.pinned_at ?? null,
     review: isReviewStatus(r.review) ? r.review : null,
-    ...(r.status === "failed" && r.fix_json && { fix: parseFix(r.fix_json) }),
+    ...(r.status === "failed" && r.fix_json && !pool && { fix: parseFix(r.fix_json) }),
     // Failed or stopped before a paid provider took the job (a refused key, an empty balance): nothing was billed.
     ...((r.status === "failed" || r.status === "canceled") && !r.external_id && (r.provider === "fal" || r.provider === "replicate") && { notBilled: true as const }),
     // On this install's GPUs (hosted runs): what it cost, or that it cost nothing.
     ...(stored.place === "pool" && { place: "pool" as const }),
     ...(stored.charge && r.status === "succeeded" && { charge: stored.charge }),
-    ...(hold && (r.status === "failed" || r.status === "canceled") && { notCharged: true as const }),
-    ...(checking && { stage: "checking" as const }),
+    // (Only when its hold set an amount aside: a free run's hold has nothing to give back, so nothing is said.)
+    ...(hold && stored.charged && (r.status === "failed" || r.status === "canceled") && { notCharged: true as const }),
+    // On this install's GPUs the output check is part of "Working": no word of its own.
+    ...(checking && !pool && { stage: "checking" as const }),
     // Waiting in line on this install's GPUs: its place and the wait, about.
     ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
   };
 }
+
+/** A pool row's words while it goes: in line, or working on it. */
+function poolMessage(r: Pick<Row, "status" | "message">): string | null {
+  if (r.status === "queued") return POOL_WORDS.inLine;
+  if (r.status === "running") return POOL_WORDS.working;
+  return null;
+}
+
+/**
+ * A pool row's failure as the account reads it: Fuobe's own plain words about the account's side (its files are full, a
+ * picture it can't use, it stopped the run) and the output check's words (a result it removed) as they are; anything
+ * else (whatever the GPUs, ComfyUI or a worker said) one plain sentence.
+ */
+function poolError(id: string, error: string | null): string | null {
+  if (!error) return error;
+  if (PLAIN_POOL_ERRORS().has(error) || /^Your files have reached \d+ GB\b/.test(error)) return error;
+  const checked = db().prepare("SELECT 1 FROM output_checks WHERE generation_id = ? AND state IN ('hidden', 'unchecked') LIMIT 1").get(id);
+  return checked ? error : POOL_WORDS.failed;
+}
+
+const PLAIN_POOL_ERRORS = (() => {
+  let set: Set<string> | undefined;
+  return () =>
+    (set ??= new Set<string>([
+      ...Object.values(ACCOUNT_MESSAGES),
+      RELAY_WORDS.stopped,
+      POOL_WORDS.failed,
+      BLOCKED_CARD_MESSAGE,
+      NO_SUBJECT_MESSAGE,
+      WATERMARK_COPY.rejected,
+      WATERMARK_COPY.scanFailed,
+    ]));
+})();
 
 /** A pool row's place in line, as the Generation field (none once it has started). */
 function poolQueue(id: string): { queue: { place: number; etaSeconds: number | null } } | Record<string, never> {
@@ -487,6 +531,7 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_workers.bench_json": "a worker's job times in each lane",
   "relay_workers.hours_json": "a worker's hours: a time zone and windows",
   "relay_workers.allow_json": "the lanes the owner lets a worker run, with their delays",
+  "relay_workers.seen_json": "the countries and network hashes a worker's token was used from",
   "relay_pairings.facts_json": "what a paired ComfyUI said about itself: its name, GPU and version",
 };
 
@@ -1062,10 +1107,78 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
     // What the run leaves out or changes (LoRAs a cloud run can't carry, a length the API rounds) goes back
     // with it, so the composer and API clients can say so; it isn't stored.
     created.push(notes.length ? { ...toGeneration(row), notes } : toGeneration(row));
-    if (!waits) void submit(id, route, providerId, plan, req, i);
+    const capture = captureStore().getStore();
+    capture?.ids.push(id);
+    if (!waits) {
+      const start = () => void submit(id, route, providerId, plan, req, i);
+      if (capture) capture.submits.push(start);
+      else start();
+    }
   }
   ensureRunner();
   return created;
+}
+
+interface RunCapture {
+  ids: string[];
+  submits: (() => void)[];
+}
+
+declare global {
+  var __fuobeRunCapture: AsyncLocalStorage<RunCapture> | undefined;
+}
+
+const captureStore = () => (globalThis.__fuobeRunCapture ??= new AsyncLocalStorage<RunCapture>());
+
+/**
+ * Run `fn` (createGenerations, and every step its chains queue) with the rows it makes noted and their submits held:
+ * `ids` are the rows, in the order they were made, and `start()` sends the held submits. Lets a caller make a run's rows
+ * inside a transaction and send nothing until it commits.
+ */
+export function captureRun<T>(fn: () => T): { value: T; ids: string[]; start: () => void } {
+  const cap: RunCapture = { ids: [], submits: [] };
+  const value = captureStore().run(cap, fn);
+  return { value, ids: cap.ids, start: () => cap.submits.splice(0).forEach((s) => s()) };
+}
+
+/** One row a run would make: its model, operation, provider, kind and app, and the earlier steps it waits for. */
+export interface PlannedStep {
+  id: string;
+  modelId: string;
+  op: string;
+  provider: string;
+  kind: string;
+  presetId: string | null;
+  waits: boolean;
+}
+
+const ROLLED_BACK = Symbol("rolled back");
+
+/**
+ * Every row `fn` (createGenerations) would make, made and thrown away inside one transaction: nothing is kept and
+ * nothing is sent. A chain's later steps are planned exactly as the real run plans them.
+ */
+export function plannedSteps(fn: () => unknown): PlannedStep[] {
+  const d = db();
+  let steps: PlannedStep[] = [];
+  try {
+    d.transaction(() => {
+      steps = stepsOf(captureRun(fn).ids);
+      throw ROLLED_BACK;
+    })();
+  } catch (e) {
+    if (e !== ROLLED_BACK) throw e;
+  }
+  return steps;
+}
+
+/** The rows of a run (by id) as steps. */
+export function stepsOf(ids: string[]): PlannedStep[] {
+  const q = db().prepare("SELECT id, model_id, op, provider, kind, preset_id, depends_on FROM generations WHERE id = ?");
+  return ids.flatMap((id) => {
+    const r = q.get(id) as { id: string; model_id: string; op: string; provider: string; kind: string; preset_id: string | null; depends_on: string | null } | undefined;
+    return r ? [{ id: r.id, modelId: r.model_id, op: r.op, provider: r.provider, kind: r.kind, presetId: r.preset_id, waits: !!r.depends_on }] : [];
+  });
 }
 
 /** Where each dependency's output goes: `chain`, or the single-image `chainFrom`. */
@@ -1952,7 +2065,10 @@ async function submitNow(
 const POLL_MS = 1500;
 /** Jobs about to finish (progress ≥ 0.9) are polled this often, so results land sooner. */
 const FAST_POLL_MS = 500;
-/** How long a job may run once its provider has started it… */
+/**
+ * How long a job may run once its provider has started it… (A job on this install's own GPUs: its lane's run ceiling,
+ * which the owner sets, 45 minutes by default: runningLimitMs.)
+ */
 const TIMEOUT_MS = 45 * 60 * 1000;
 /** …and how long it may wait in the provider's queue first (a busy local GPU works through jobs one by one). */
 const QUEUE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
@@ -2119,6 +2235,17 @@ async function fastTick(): Promise<void> {
   }
 }
 
+/**
+ * How long a started job may run: on this install's own GPUs (an account's run there, or the owner's ComfyUI job), its
+ * lane's run ceiling (queue-settings.ts); anywhere else (an account's own GPU or key, a cloud provider) 45 minutes, as
+ * always.
+ */
+function runningLimitMs(r: Pick<Row, "provider">, meta: Record<string, unknown>, account: string | undefined, onPool: boolean): number {
+  if (r.provider !== "comfyui" || (account && !onPool)) return TIMEOUT_MS;
+  const wf = typeof meta.workflowId === "string" && !meta.workflowId.includes("{") ? meta.workflowId : null;
+  return runCeilingMs(wf ? poolLane(wf) : null);
+}
+
 /** Order by: the owner's rows (no account in the request) before accounts'. */
 const ACCOUNT_LAST = "(json_extract(request_json, '$.account') IS NOT NULL)";
 
@@ -2171,9 +2298,17 @@ async function pollOne(r: Row): Promise<void> {
       recordSubmission(r.id, res.sentAt);
       run = { submitted_at: res.sentAt, started_at: null };
     }
+    // A job for the workers keeps its task's own clocks (its wait limit until a worker first takes it): back in line
+    // after an attempt, its next attempt gets its own running time, and no wait limit of the runner's ends it.
+    const ownClocks = !!res && (res.state === "queued" || res.state === "running") && !!res.ownClocks;
+    if (ownClocks && res?.state === "queued" && run.started_at) {
+      db().prepare("UPDATE generation_runs SET started_at = NULL WHERE id = ?").run(r.id);
+      run = { ...run, started_at: null };
+    }
     // A job that has just left the queue gets its full running time from now.
     const startsNow = res?.state === "running" && !run.started_at;
-    const overdue = run.started_at ? now - run.started_at > TIMEOUT_MS : !startsNow && now - run.submitted_at > queueMs;
+    const limitMs = runningLimitMs(r, ctx.meta, account, onPool);
+    const overdue = run.started_at ? now - run.started_at > limitMs : !ownClocks && !startsNow && now - run.submitted_at > queueMs;
     if (overdue) {
       // Stop the provider's job too, so it doesn't keep rendering (or billing) for nothing.
       await adapterFor(r.provider, account)
@@ -2182,7 +2317,7 @@ async function pollOne(r: Row): Promise<void> {
       update(r.id, {
         status: "failed",
         error: run.started_at
-          ? `Timed out after ${TIMEOUT_MS / 60_000} minutes`
+          ? `Timed out after ${Math.round(limitMs / 60_000)} minutes`
           : res?.state === "queued" && res.timeoutError
             ? res.timeoutError
             : onPool
@@ -2203,7 +2338,8 @@ async function pollOne(r: Row): Promise<void> {
   if (res.state === "failed") {
     // What the GPU was missing (a model, a node class): the tile offers "Fix it", and the GPU's check counts as stale.
     update(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(res.fix && { fix_json: JSON.stringify(res.fix) }) });
-    if (res.fix) markStale(account ? `acct:${account}` : "install");
+    // (A run on this install's GPUs says nothing about the account's own GPU.)
+    if (res.fix && !onPool) markStale(account ? `acct:${account}` : "install");
     return;
   }
   // The Watermark Remover gave the original back (no clean repair was possible): no new result, the run says what to try.

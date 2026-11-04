@@ -129,8 +129,15 @@ export function accountRunOptions(sp: URLSearchParams): ListOptions | { error: s
  */
 export type OutputState = "shown" | "held" | "removed";
 
-/** An account's run as the owner sees it: whose it is (null email: the account was deleted), and each result's state. */
-export type AccountRun = Omit<Generation, "outputs"> & { outputs: (OutputFile & { state: OutputState })[]; account: { id: string; email: string | null } };
+/**
+ * An account's run as the owner sees it: whose it is (null email: the account was deleted; no `email` and
+ * `emailHidden: true`: a reader that may not see emails), and each result's state. A run on this install's GPUs also
+ * carries `detail`: the technical reason it failed, which the account never sees (its own page shows one plain sentence).
+ */
+export type AccountRun = Omit<Generation, "outputs"> & { outputs: (OutputFile & { state: OutputState })[]; account: AccountOfRun; detail?: string };
+
+/** Whose a run is: its email (null: the account was deleted), or no email and `emailHidden` for a reader that may not see emails. */
+export type AccountOfRun = { id: string; email?: string | null; emailHidden?: true };
 
 /** Each result's state, read from its stored file (its asset row; none: removed). An output that isn't a stored file is shown. */
 function withStates(outputs: OutputFile[]): (OutputFile & { state: OutputState })[] {
@@ -144,16 +151,66 @@ function withStates(outputs: OutputFile[]): (OutputFile & { state: OutputState }
   });
 }
 
-/** One page of accounts' runs, newest first, and the cursor of the next (null on the last page). Never the owner's. */
-export function listAccountRuns(o: ListOptions): { items: AccountRun[]; next: string | null } {
+/**
+ * A run with its content left out (what a reader without outputs:view gets): when, which model and app, how it ended and
+ * how many results, never its prompt, its inputs, its results' files or words, or its technical reason.
+ */
+export type AccountRunFacts = Pick<
+  AccountRun,
+  "id" | "batchId" | "feature" | "presetId" | "presetName" | "modelId" | "modelName" | "engine" | "provider" | "op" | "kind" | "status" | "progress" | "costUsd" | "createdAt" | "updatedAt" | "completedAt" | "place" | "account"
+> & { outputs: { kind: OutputFile["kind"]; state: OutputState }[] };
+
+function factsOnly(r: AccountRun): AccountRunFacts {
+  return {
+    id: r.id,
+    batchId: r.batchId,
+    feature: r.feature,
+    presetId: r.presetId,
+    presetName: r.presetName,
+    modelId: r.modelId,
+    modelName: r.modelName,
+    engine: r.engine,
+    provider: r.provider,
+    op: r.op,
+    kind: r.kind,
+    status: r.status,
+    progress: r.progress,
+    costUsd: r.costUsd,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    completedAt: r.completedAt,
+    ...(r.place && { place: r.place }),
+    account: r.account,
+    outputs: r.outputs.map((x) => ({ kind: x.kind, state: x.state })),
+  };
+}
+
+/**
+ * One page of accounts' runs, newest first, and the cursor of the next (null on the last page). Never the owner's.
+ * `show.content` false: each run's facts only (factsOnly); `show.emails` false: no account's email.
+ */
+export function listAccountRuns(o: ListOptions): { items: AccountRun[]; next: string | null };
+export function listAccountRuns(o: ListOptions, show: { content: boolean; emails: boolean }): { items: (AccountRun | AccountRunFacts)[]; next: string | null };
+export function listAccountRuns(o: ListOptions, show: { content: boolean; emails: boolean } = { content: true, emails: true }): { items: (AccountRun | AccountRunFacts)[]; next: string | null } {
   const limit = o.limit ?? RUNS_PAGE;
   const opts: ListOptions = o.account ? { ...o, accounts: undefined, limit } : { ...o, account: undefined, accounts: true, limit };
   const emails = new Map(listAccounts().map((a) => [a.id, a.email]));
   // The WHERE already leaves the owner's runs out; this keeps them out whatever a caller passes.
   const found = listGenerations(opts).filter((g) => g.request.account);
   const last = found.at(-1);
+  const raw = db().prepare("SELECT error FROM generations WHERE id = ?");
+  const detail = (g: Generation) => {
+    if (g.place !== "pool" || !g.error) return {};
+    const e = (raw.get(g.id) as { error: string | null } | undefined)?.error;
+    return e && e !== g.error ? { detail: e } : {};
+  };
   return {
-    items: found.map((g) => ({ ...g, outputs: withStates(g.outputs), account: { id: g.request.account!, email: emails.get(g.request.account!) ?? null } })),
+    items: found.map((g) => {
+      const id = g.request.account!;
+      const account: AccountOfRun = show.emails ? { id, email: emails.get(id) ?? null } : { id, emailHidden: true };
+      const run: AccountRun = { ...g, outputs: withStates(g.outputs), account, ...detail(g) };
+      return show.content ? run : factsOnly(run);
+    }),
     next: last && found.length === limit ? `${last.createdAt}:${last.id}` : null,
   };
 }

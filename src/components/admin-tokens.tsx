@@ -40,7 +40,7 @@ interface AdminTokensAnswer {
 interface AuditRow {
   id: number;
   at: number;
-  actor: "owner" | "token";
+  actor: "owner" | "token" | "system";
   token: { id: string; name: string } | null;
   action: string;
   target: string | null;
@@ -71,6 +71,10 @@ const ACTION_WORDS: Record<string, string> = {
   "worker.change": "Changed a worker",
   "worker.rotate": "Gave a worker a new token",
   "worker.revoke": "Revoked a worker",
+  "worker.alert": "A worker's token was used from somewhere new",
+  "queue.settings": "Changed the queue's settings",
+  "settings.comfy_where": "Changed where ComfyUI runs",
+  "runs.content": "Read an account's prompts and results",
   "token.create": "Made an admin token",
   "token.revoke": "Revoked an admin token",
   "token.revoke_all": "Revoked every admin token",
@@ -274,7 +278,7 @@ function AdminLog() {
                   {r.status >= 400 && <span className="ml-1.5 text-[11px] text-destructive">{r.status}</span>}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
-                  {r.actor === "token" ? (r.token?.name ?? "A token") : "You"} · {timeAgo(r.at)}
+                  {r.actor === "token" ? (r.token?.name ?? "A token") : r.actor === "system" ? "The studio" : "You"} · {timeAgo(r.at)}
                 </span>
               </li>
             ))}

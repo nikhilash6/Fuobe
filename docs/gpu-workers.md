@@ -35,7 +35,10 @@ You do not need a start flag or a guard file. In the studio, **Connect your GPU*
    gets a worker token (`fuobe_wkr_…`). The studio makes the token at that moment and keeps only its SHA-256 hash.
 
 The token acts only as that person's own computer. The ComfyUI gets that person's jobs, and nobody else's. The jobs
-run with no Fuobe tab open. The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
+run with no Fuobe tab open. When the owner pairs a ComfyUI, the studio's ComfyUI jobs move to the owner's computer, as
+before, unless they run on workers or hosted runs are on (`FUOBE_HOSTED_RUNS=1`). Then the pairing changes nothing of
+where they run: the paired ComfyUI takes the owner's jobs once the owner chooses the computer in Settings → ComfyUI.
+Every change of that setting is in the admin log (`settings.comfy_where`, with the value before and after). The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
 or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected token gets 401 at its next call.
 
 ## Workers (the owner's shared GPUs)
@@ -104,14 +107,25 @@ The worker obeys any one of these pauses. One pause never ends another pause.
 
 ### The queue
 
-A job for the workers belongs to the owner. It names the pools that may take it (`pool` by default). It also keeps:
+A job for the workers belongs to the owner or, with hosted runs on ([public-signup.md](public-signup.md#hosted-runs)),
+to an account. An account's job is the account's task (`acct:<id>`): only a worker of its pool takes it, and the
+account's own session never reaches it through the computer routes. It names the pools that may take it (`pool` by
+default). It also keeps:
 
 - its lane: the first 12 hex digits of the SHA-256 of the sorted names of the workflow's files over 2 GB. A workflow
   with no big file is in the lane `small`.
 - what it needs: the workflow, its files (folder, name, exact size, and SHA-256 where it is pinned), its node packs
   and its VRAM;
-- `rank_at`: `created_at` minus a boost. The owner's jobs get a one-day boost.
-- a wait limit (`FUOBE_POOL_WAIT_MIN`, 30 minutes). Past it, the job fails with "The GPUs were busy".
+- its class: `paid` or `free` for an account's run (the billing service says which; `free` without one), `owner` for
+  the owner's own jobs. People's runs always go first: the owner's jobs wait until no person's run waits that the
+  same worker could take.
+- `rank_at`: `created_at`, minus the head start the billing service gave the run inside its class (at most a day). A
+  job that goes back in line keeps its `rank_at`, so it keeps its place.
+- a wait limit: for an account's run, `FUOBE_POOL_WAIT_MIN` (30 minutes) or what the billing service set; for the
+  owner's own jobs, the owner's wait limit (none by default; see the queue's settings below). It applies only until a
+  worker first takes the job: past it, a job that no worker took fails with "The GPUs were busy".
+- how many results its workflow makes. An owner's job keeps no more than that (and at least 16), as an account's job
+  keeps at most 16. Results are never saved past the disk's free floor.
 
 A worker gets a job only when all of these are true, all in one SQLite transaction:
 
@@ -121,15 +135,47 @@ A worker gets a job only when all of these are true, all in one SQLite transacti
 - it has the workflow's files and packs (from its inventory) and enough VRAM;
 - the retry rule allows it: a worker that lost or failed the job gets it again only when no other worker that can run
   the job was heard from in the last 10 minutes;
-- near the end of its hours, the job's estimate fits before the window closes.
+- near the end of its hours, the job's estimate fits before the window closes;
+- it holds no other job. A worker runs one job at a time: while it holds one, a claim gives it that job again when
+  it lost track of it, and nothing new.
 
-The lowest `rank_at` goes first. A worker keeps to its warm lane (the models that it has loaded) until another lane's
-best job has waited longer than `switch_after_ms` (30 minutes) and is older.
+Jobs go by class (`paid`, then `free`, then `owner`), then by the lowest `rank_at` (then the oldest). With the
+pick allowance at 0 (the default), that is the whole rule. Above 0, a worker may take a job in its warm lane (the
+models it has loaded) ahead of the best job, in the same class, while the best job has waited less than the pick
+allowance (or the worker's own `switch_after_ms`, if that is lower). With fair share on, each class goes round its
+accounts: an account's next run goes after every other account's run that is an earlier turn of its own. An account's
+turns count the runs a worker holds for it now and those a worker finished for it since the oldest run still waiting
+in that class came.
 
-If a worker stops answering for 2 minutes, or its ComfyUI is down for 2 minutes, its job goes back to the queue. The
-worker is added to the job's `tried_json` list, and the input reads start again. The old worker's late calls get 409,
-and it deletes that prompt. After the third lost attempt, the job fails. A job that is put back because of a pause
-does not count as an attempt.
+**The queue's settings.** The owner sets these with `GET` and `PATCH /api/admin/queue/settings`
+([admin-api.md](admin-api.md)). They apply at once, with no restart:
+
+| Setting | What it does | Default |
+|---|---|---|
+| `runCeilingS` | `{ default, lanes }`: the longest one attempt at a job may run, in seconds, with a value per lane that overrides the default. It ends the run's own clock, and a worker's run limit is never longer | `{ "default": 2700, "lanes": {} }` (45 minutes) |
+| `ownerWaitLimitS` | How long the owner's own jobs may wait before a worker first takes them, in seconds. `null`: no limit | `null` |
+| `fairShare` | Each class goes round its accounts (above). Off: strict order | `false` |
+| `pickAllowanceMs` | How long a job in a worker's warm lane may go ahead of an older one (above). 0: strict order | `0` |
+
+A worker's run limit for one attempt is 3 times the lane's 90th percentile on that worker plus its model load, at
+least 10 minutes and never past the lane's run ceiling. With no measured run in the lane yet, it is the ceiling.
+
+If a worker stops answering for 2 minutes, its ComfyUI is down for 2 minutes, or the job is still sending its files
+15 minutes after the worker claimed it (or after its ComfyUI lost the job and the worker sent it again), its job goes
+back to the queue. The worker is added to the job's
+`tried_json` list, and the input reads start again. The old worker's late calls get 409, and it deletes that prompt.
+After the third lost attempt, the job fails. A job that is put back because of a pause does not count as an attempt.
+The run's own clocks follow the queue's: each attempt gets its own running time.
+
+**The place in line.** A waiting job's place counts every job that a worker able to run it would serve first, whatever
+its lane: one GPU serves every lane it has in this order. The wait adds the rest of the jobs those workers run now,
+the lane's load time when none has it warm, and the job's own run (the lane's median on the quickest worker, else the
+median of the workers' measured runs). The billing service's line facts (`QueueFacts`) read the same line.
+
+**The workers' log.** `worker_jobs` keeps which worker took which job, when, and how it ended (`claimed`,
+`finished` with the measured run, `requeued`, `done`, `failed`, `canceled`). It holds ids, times and those facts
+only. Rows are only added, and each is kept a year, like the admin API's log. The owner reads it at
+`GET /api/admin/workers/jobs` ([admin-api.md](admin-api.md)).
 
 ### What the worker checks itself
 
@@ -145,8 +191,12 @@ Before its ComfyUI gets a graph, the worker checks all of these. The studio cann
 After each job, the worker deletes the job's inputs and results from its folders and deletes the prompt from its
 ComfyUI's history. At start, it empties its folders.
 
-Pictures for workers are made again from their pixels on the studio (no EXIF, no GPS). Clips and sound go to workers
-only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default; `image,video,audio` for all).
+Pictures for workers are made again from their pixels on the studio (no EXIF, no GPS), the owner's and accounts'
+alike. Clips and sound go to workers only when `FUOBE_POOL_MEDIA_INPUTS` allows them (`image` by default;
+`image,video,audio` for all); an account's run with a kind it doesn't allow is refused before it is queued. Every
+VideoHelperSuite save node of a graph for the workers is sent with `save_metadata` off, so no prompt rides inside a
+result. An account's run is shaped by the workers' own facts (the least VRAM and RAM of the workers allowed its lane),
+never by the account's own computer.
 
 ### The protocol
 
@@ -154,9 +204,26 @@ Every worker call carries `Authorization: Bearer fuobe_wkr_…`. A worker token 
 gets 403 everywhere else. It is never the owner, and an owner API token can never act as a worker. The studio reads the
 token on every call, so a revoked token stops at once.
 
-- `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, local: { paused, why, until }, gpu: {
-  otherApps, tempC }, inventoryHash, warmLane }`. The answer adds `worker: { paused, pauseNow, drain, autoResume,
-  insideHours, nextChangeAt, lanes, minProtocol, sendInventory }`.
+**A token's lifetime.** With `FUOBE_WORKER_TOKEN_DAYS` set (unset or 0: a token never expires, as before), a pool
+worker's token lasts that many days. A worker added before the lifetime was set gets it from its first call after. Once
+half of it is gone, the beat answer of a worker that says it saves tokens (`canRotateToken: true` in its beat) gives it
+the next token (`worker.token: { value, expiresAt }`). The worker saves it and uses it from its next call on. The old
+token stops at the new one's first use. A next token that is never used is given again, as a new one, after 10
+minutes. A paired ComfyUI's token keeps no lifetime. Set the lifetime only once every pool worker sends
+`canRotateToken: true`: the token of a worker that doesn't expires at the end of its lifetime, and the worker stops
+until you rotate its token in Settings → Workers.
+
+**Where a token is used from.** For a pool worker, the studio remembers the countries (Cloudflare's `cf-ipcountry`)
+and the networks (an IPv4 address's /24 or an IPv6 address's /64, read only with `FUOBE_TRUST_PROXY=1`) its token was
+used from, as short hashes, never as addresses. A call from a new country or a new network, and calls from two networks
+within 10 minutes of each other, each write an alert to the admin log (`worker.alert`, actor `system`, the worker as
+its target), at most once an hour each.
+
+- `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, canRotateToken?, local: { paused, why,
+  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane }`. The answer adds `worker: { paused, pauseNow, drain, autoResume,
+  insideHours, nextChangeAt, lanes, minProtocol, sendInventory, token? }` (`token`: the next token, above) and
+  `claimableNow`: how many people's jobs (an
+  account's, never the owner's) this worker may claim right now by its lanes, files, VRAM and hours, its own pause aside.
 - `PUT /api/gpu/computer/inventory`: `{ files: [{ folder, name, size, sha256 }], nodePacks: [{ name, commit }] }` →
   `{ lanes, workflows, missing }`.
 - `POST /api/gpu/computer/claim`: the browser's claimed task plus `{ lane, estMs, runLimitMs, notAfter, attempt,
@@ -164,7 +231,9 @@ token on every call, so a revoked token stops at once.
 - `POST /api/gpu/computer/bench`: bench jobs for this worker only (none are defined yet). The times of every finished
   job also count: the last 20 jobs in each lane give the median and the 90th percentile.
 - Reports, inputs and results work as they do for the browser. `failed` can also give `unknown-node`, `unsafe-path`
-  or `model-unverified` as the reason.
+  or `model-unverified` as the reason. `finished` (and the last `passes`) can add `execMs`, the time its ComfyUI
+  spent running the job (not waits, files or the upload), and `device`, its GPU's name. The billing service gets
+  them as `gpuMs` and `device`. A job that ran more than once counts once: the attempt whose result was kept.
 
 Each worker counts against its own rate limits, so three workers that beat every 5 seconds never hold each other up.
 
@@ -176,6 +245,7 @@ Each worker counts against its own rate limits, so three workers that beat every
   A window can go past midnight.
 - `GET /api/admin/queue`: the jobs that wait in each lane, the oldest job, the estimate, and which workers have the
   lane warm.
+- `GET` and `PATCH /api/admin/queue/settings`: the queue's settings (above).
 
 ### Behind Cloudflare
 
@@ -185,7 +255,8 @@ routes.
 
 ## Tests
 
-- `pnpm test` (`tests/workers-pool.test.ts`, `tests/workers-pairing.test.ts`, `tests/worker-program.test.ts`)
+- `pnpm test` (`tests/workers-pool.test.ts`, `tests/workers-pairing.test.ts`, `tests/worker-program.test.ts`,
+  `tests/worker-queue.test.ts`, `tests/pool-account-runs.test.ts`)
 - `node tests/e2e/worker.mjs` and `node tests/e2e/fuobe-connect.mjs` (after `pnpm build`, or with `E2E_DEV=1`). These
   use a stand-in ComfyUI and a stand-in `nvidia-smi` on ports 3361 and 3362. They never touch a real GPU or ComfyUI.
 - `python -m unittest discover -s tests` in `integrations/fuobe-connect`

@@ -277,6 +277,15 @@ export const ACTIVE_RUNS_CODE = "active-runs";
 
 export const OWN_GPU_TOOL_MESSAGE = "This tool isn't available here. Try the Image, Video or Audio studio, or an app, effect or camera motion.";
 
+/**
+ * The header of an account's run the server asks about instead of moving (409): its own GPU didn't answer, and the run
+ * named no place. The page offers to run it on this studio's GPUs (watchGuestRefusals).
+ */
+export const PLACE_ASK_HEADER = "x-fuobe-place-ask";
+
+/** Fired when a run started from a toast or a card (not from a page's own button), so the lists show it. */
+export const RUNS_CHANGED_EVENT = "fuobe:runs-changed";
+
 /** Set on an account's refused run: the client shows "Connect your GPU to run this". */
 export const CONNECT_GPU_HEADER = "x-fuobe-connect-gpu";
 /** Beside it on the owner's refused run (Demo mode off, nothing connected): what would run it, "gpu", "key" or "any". */

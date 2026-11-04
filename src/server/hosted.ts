@@ -1,12 +1,16 @@
 import "server-only";
 import { getModel } from "@/lib/catalog";
+import { computeDimensions } from "@/lib/comfy";
 import type { GenerationRequest } from "@/lib/catalog/types";
+import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
+import { lineFacts, poolLane, queueOfGeneration, workersAllowed } from "./computer/pool";
 import { db } from "./db";
+import { loadIndex } from "./gpu/index-file";
 import { hostedRunsOn } from "./hosted-switch";
-import { onInstallComfy } from "./providers/comfyui";
+import { poolRunCounts } from "./pool-limits";
+import { installComfyLocal, onInstallComfy, workerFor, workersTake } from "./providers/comfyui";
 import { getSetting, withCandidates } from "./settings";
 import { runAsTenant } from "./tenant";
-import type { Policy, QueueFacts, RunFacts } from "./billing";
 
 /**
  * Hosted runs (FUOBE_HOSTED_RUNS=1; docs/public-signup.md "Hosted runs"): an account with no GPU of its own may run on
@@ -20,18 +24,65 @@ import type { Policy, QueueFacts, RunFacts } from "./billing";
  *    when a billing service is set (billing.ts), free otherwise;
  * 4. otherwise today's answer ("Connect your GPU", "Add your key").
  *
- * This install's GPUs are its own ComfyUI server (Settings → ComfyUI address). An install whose ComfyUI is on the
+ * This install's GPUs are its workers (Settings: ComfyUI runs on "workers", docs/gpu-workers.md): each job of the run is
+ * a task for them, in one line with every other, and nothing reaches a ComfyUI address from here. Otherwise its own
+ * ComfyUI server (Settings → ComfyUI address), only when that is on this machine. An install whose ComfyUI is on the
  * owner's computer (a browser tab) doesn't offer hosted runs: that computer is the owner's alone.
+ *
+ * Runs here need someone to answer for them: a billing service (billing.ts), whose policy then says who may run what;
+ * or FUOBE_HOSTED_FREE=1, which says this install's runs are free for every account (within its own limits). With
+ * neither, hosted runs stay closed even when switched on.
  */
 
 export const hostedRuns = hostedRunsOn;
 
-/** Hosted runs are on and this install has a ComfyUI server they can use. */
+/** FUOBE_HOSTED_FREE=1: with no billing service, runs on this install's GPUs are free for accounts (within its limits). */
+export const hostedFree = (): boolean => process.env.FUOBE_HOSTED_FREE === "1";
+
+/** This install's GPUs are its workers (Settings: ComfyUI runs on "workers"). */
+export const poolOnWorkers = (): boolean => getSetting("comfyWhere") === "workers";
+
+/**
+ * Hosted runs are on, something answers for them (a billing service, or FUOBE_HOSTED_FREE=1), and this install has GPUs
+ * for them: a worker the owner added and allowed a lane (paused or not: a paused worker means the run waits in line),
+ * or its own ComfyUI server on this machine.
+ */
 export function poolReady(): boolean {
   if (!hostedRunsOn()) return false;
-  if (getSetting("comfyWhere") === "computer") return false;
-  return !!getSetting("comfyUrl").trim();
+  if (!billingConfigured() && !hostedFree()) return false;
+  const where = getSetting("comfyWhere");
+  if (where === "computer") return false;
+  return where === "workers" ? workersAllowed(null) : installComfyLocal();
 }
+
+/**
+ * The workflows a route's endpoint may run: itself, or for one that picks its graph at run time (`video-concat-{n}`)
+ * every graph it may pick (one per count).
+ */
+export function workflowPicks(endpoint: string): string[] {
+  const ids = Object.keys(loadIndex().workflows);
+  if (!endpoint.includes("{")) return ids.includes(endpoint) ? [endpoint] : [];
+  const re = new RegExp(`^${endpoint.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "\\d+")}$`);
+  return ids.filter((id) => re.test(id));
+}
+
+/**
+ * May this install's GPUs run this workflow (planned.route.endpoint)? On the workers: one is allowed its lane (a
+ * workflow that picks its graph at run time, `…-{n}`: the lane of every graph it may pick). On its own server: the
+ * isolated ComfyUI's workflows too only when that one is on this machine.
+ */
+export function poolTakes(endpoint: string | undefined): boolean {
+  if (!endpoint) return false;
+  const isolated = workerFor(endpoint) === "isolated";
+  if (!poolOnWorkers()) return installComfyLocal(isolated ? "isolated" : "main");
+  if (isolated) return false;
+  if (!endpoint.includes("{")) return workersAllowed(poolLane(endpoint));
+  const picks = workflowPicks(endpoint);
+  return picks.length > 0 && picks.every((id) => workersAllowed(poolLane(id)));
+}
+
+/** May a run on this install's GPUs send them this kind of file (the workers take only the kinds the install allows)? */
+export const poolTakesFiles = (kind: "image" | "video" | "audio"): boolean => !poolOnWorkers() || workersTake(kind);
 
 /**
  * Run `fn` as an account's run on this install's GPUs: as the account (its own files and runs only), on this install's
@@ -102,31 +153,40 @@ function typicalRunMs(): number | null {
 /** Rows not started yet (no provider start): they wait in line. */
 const WAITING = "NOT EXISTS (SELECT 1 FROM generation_runs r WHERE r.id = g.id AND r.started_at IS NOT NULL)";
 
-/** The line on this install's GPUs right now, for a quote or a reserve (QueueFacts). */
-export function queueFacts(accountId: string | null): QueueFacts {
+/**
+ * The account's runs on this install's GPUs (QueueFacts.mine), counted as the policy's limits count them: a run is one
+ * press of Run, however many jobs or chain steps it has.
+ */
+function myRuns(accountId: string | null): QueueFacts["mine"] {
+  if (!accountId) return { waiting: 0, running: 0 };
+  const c = poolRunCounts(accountId);
+  return { waiting: c.waiting, running: c.active - c.waiting };
+}
+
+/**
+ * The line on this install's GPUs right now, for a quote or a reserve (QueueFacts). On the workers: their own line, as a
+ * new run of this workflow would stand in it (every task ahead of it, whatever its lane). On its own server: its rows.
+ */
+export function queueFacts(accountId: string | null, workflowId?: string | null): QueueFacts {
+  if (poolOnWorkers()) return { ...lineFacts(accountId, workflowId ?? null), mine: myRuns(accountId) };
   const d = db();
   const ahead = (d.prepare(`SELECT COUNT(*) AS n FROM generations g WHERE ${POOL_ROWS} AND ${WAITING}`).get() as { n: number }).n;
   const typical = typicalRunMs();
-  const mine = accountId
-    ? (d
-        .prepare(
-          `SELECT SUM(CASE WHEN ${WAITING} THEN 1 ELSE 0 END) AS waiting, SUM(CASE WHEN ${WAITING} THEN 0 ELSE 1 END) AS running
-           FROM generations g WHERE ${POOL_ROWS} AND json_extract(g.request_json, '$.account') = ?`,
-        )
-        .get(accountId) as { waiting: number | null; running: number | null })
-    : { waiting: 0, running: 0 };
   return {
     lane: POOL_LANE,
     ahead,
     etaS: typical === null ? null : Math.round(((ahead + 1) * typical) / 1000),
     workersOnline: poolReady() ? 1 : 0,
     nextOpenAt: null,
-    mine: { waiting: mine.waiting ?? 0, running: mine.running ?? 0 },
+    mine: myRuns(accountId),
   };
 }
 
 /** A waiting row's place in line on this install's GPUs (1: next), and the wait, about. Null when it isn't waiting there. */
 export function placeInLine(generationId: string): { place: number; etaSeconds: number | null } | null {
+  // On the workers: its task's place in their line (back in line after an attempt, the same place).
+  const task = queueOfGeneration(generationId);
+  if (task || poolOnWorkers()) return task;
   const d = db();
   const row = d.prepare(`SELECT g.created_at FROM generations g WHERE g.id = ? AND ${POOL_ROWS} AND ${WAITING}`).get(generationId) as { created_at: number } | undefined;
   if (!row) return null;
@@ -135,13 +195,31 @@ export function placeInLine(generationId: string): { place: number; etaSeconds: 
   return { place: before + 1, etaSeconds: typical === null ? null : Math.round(((before + 1) * typical) / 1000) };
 }
 
+/**
+ * The megapixels of each picture or frame a request makes, about: the canvas it names (params.extra.width and height),
+ * else its aspect ratio and resolution (the model's defaults where it names none). Null for sound, text and 3D.
+ */
+export function requestMegapixels(req: GenerationRequest, kind: RunFacts["kind"], modelId: string): number | null {
+  if (kind !== "image" && kind !== "video") return null;
+  const extra = (req.params?.extra ?? {}) as Record<string, unknown>;
+  const w = Number(extra.width);
+  const h = Number(extra.height);
+  const model = getModel(modelId);
+  const size =
+    Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0
+      ? { width: w, height: h }
+      : computeDimensions(req.params?.aspectRatio ?? model?.defaults?.aspectRatio, req.params?.resolution ?? model?.defaults?.resolution, {});
+  return Math.round((size.width * size.height) / 10_000) / 100;
+}
+
 /** The facts the billing service prices a run by (from a planned request: previewGeneration's answer). */
 export function runFacts(
   req: GenerationRequest,
-  p: { model: { id: string; kind: string; engine: "open" | "cloud" }; op: string; jobs: number; outputs: number; providerId: string; costUsd: number | null; loras: { applied: unknown[] } },
+  p: { model: { id: string; kind: string; engine: "open" | "cloud" }; op: string; jobs: number; outputs: number; providerId: string; costUsd: number | null; loras: { applied: unknown[] }; route?: { endpoint?: string } },
   kind: RunFacts["kind"],
 ): RunFacts {
   const model = getModel(p.model.id);
+  const endpoint = p.route?.endpoint;
   return {
     place: "pool",
     model: p.model.id,
@@ -154,12 +232,12 @@ export function runFacts(
     provider: p.providerId,
     jobs: p.jobs,
     outputsPerJob: p.jobs > 0 ? Math.max(1, Math.round(p.outputs / p.jobs)) : 1,
-    megapixels: null,
+    megapixels: requestMegapixels(req, kind, p.model.id),
     seconds: req.params?.duration ?? (kind === "video" ? (model?.defaults?.duration ?? null) : null),
     fps: req.params?.fps ?? null,
     loras: p.loras.applied.length,
     inputs: inputCounts(req),
-    lane: POOL_LANE,
+    lane: poolOnWorkers() && endpoint && !endpoint.includes("{") ? poolLane(endpoint) : POOL_LANE,
     providerUsd: p.costUsd,
   };
 }

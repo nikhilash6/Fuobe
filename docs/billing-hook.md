@@ -2,8 +2,8 @@
 
 An install can connect an external billing service at `FUOBE_BILLING_URL`. Fuobe sends facts about each run that goes
 to this install's GPUs (hosted runs, see [public-signup.md](public-signup.md#hosted-runs)); the service answers with what
-the person sees and whether the run may start. With no service set, every run is free and allowed, and Fuobe makes no
-call at all.
+the person sees and whether the run may start. With no service set, Fuobe makes no call at all, and runs on this
+install's GPUs stay closed unless `FUOBE_HOSTED_FREE=1` makes them free for every account.
 
 Fuobe has no words of its own for prices or balances. Every word on screen about them (the price on Run, the balance in
 the top bar and the account menu, a refusal's text, a link, an offer) comes from the service's answers at runtime.
@@ -15,6 +15,7 @@ the top bar and the account menu, a refusal's text, a link, an offer) comes from
 | `FUOBE_BILLING_URL` | The service: `https://billing.example.com/base`, `http://…`, or a Unix socket on this machine, `unix:/path/to/billing.sock` | none: no billing |
 | `FUOBE_BILLING_TOKEN` | Sent as `Authorization: Bearer <token>` with every call | none |
 | `FUOBE_HOSTED_RUNS` | `1` lets accounts run on this install's GPUs (the only runs the service prices) | off |
+| `FUOBE_HOSTED_FREE` | `1` opens those runs with no service set: free for every account, within the install's own limits | off |
 | `FUOBE_POOL_WAIT_MIN` | How long a run may wait in line on this install's GPUs when the service doesn't say | 30 |
 
 ## When Fuobe calls the service
@@ -26,6 +27,7 @@ twice: the service must treat a repeated call (the same `requestId`, or the same
 | Call | Timeout | When |
 |---|---|---|
 | `GET /v1/policy?account=<id>` | 1 s | before a run on this install's GPUs, and for the status (cached for the answer's `ttlS`) |
+| `GET /v1/policy` | 1 s | a guest's status and price check: the policy for someone not signed in (cached the same way) |
 | `POST /v1/quote` | 1 s | the price check before Run (`POST /api/generations?preview=1`), asked again 300 ms after each change |
 | `POST /v1/reserve` | 2 s, one retry with the same `requestId` | just before the run's rows are made |
 | `POST /v1/release` | 5 s, through the outbox | the rows couldn't be made after a reserve |
@@ -47,6 +49,7 @@ type RunFacts = {
   kind: "image" | "video" | "audio" | "text" | "model3d"; engine: "open" | "cloud"; provider: string;
   jobs: number; outputsPerJob: number; megapixels: number | null; seconds: number | null; fps: number | null;
   loras: number; inputs: { image: number; video: number; audio: number }; lane: string | null; providerUsd: number | null;
+  steps?: { model: string; op: string | null; kind: RunFacts["kind"]; jobs: number; lane: string | null }[];
 };
 type QueueFacts = { lane: string; ahead: number; etaS: number | null; workersOnline: number; nextOpenAt: number | null; mine: { waiting: number; running: number } };
 type Action = { label: string; url: string };              // Fuobe opens url as given (https, or a path on this site)
@@ -58,15 +61,40 @@ type Policy = {
   hosted: boolean;                                                // may this account use this install's GPUs at all
   pool: { allow?: string[]; deny?: string[]; apps?: { allow?: string[]; deny?: string[] } };  // models and apps there
   uploads: { image: boolean; video: boolean; audio: boolean };    // which of its own files those runs may use
-  limits: { activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number; keepDays: number; spaceBytes: number };
+  limits: { activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number; keepDays: number; spaceBytes: number; addressRunsPerHour?: number };
+  prefer?: "pool" | "own";                                         // the default place (absent: "own")
+  kinds?: { image?: boolean; video?: boolean; audio?: boolean; text?: boolean; model3d?: boolean };  // absent: all
   links?: Action[]; notice?: { id: string; text: string; url?: string }; ttlS: number;
 };
 ```
 
+`megapixels` is the size of each picture or frame the run makes, about: the canvas the request names, else its aspect
+ratio and resolution (the model's defaults where it names none). It is null for sound, text and 3D.
+
+`steps` lists every step of the run that uses this install's GPUs, the run's own step first: a chain (a film of
+several shots, a picture and then a step on it) is priced once, with one quote and one hold, for one press of Run.
+Steps that need no model (joins, trims) and text steps are left out: they cost nothing. Every step must be one the
+policy allows (`pool`, `kinds`), or the run isn't offered here.
+
+The policy's limits count runs on this install's GPUs only, never runs on the account's own GPU or key (those keep the
+install's own limits). A run is one press of Run: its jobs and chain steps count once. `activeRuns` counts runs going
+now (waiting or running), `waiting` those not started yet, `runsPerHour` those started in the last hour, and
+`addressRunsPerHour` those started from one client address in the last hour, across accounts (only when the install
+trusts its proxy, `FUOBE_TRUST_PROXY=1`; the address is kept as a salted hash for two hours). 0 or absent means no such
+limit. Fuobe counts them in its database together with making the run's rows, so requests that arrive together (or
+reach two servers during a deploy) never pass a limit together. They apply with or without a billing service.
+
+`prefer: "pool"` sends a run to this install's GPUs first even when the account's own GPU is online. A place the
+request names always wins, so the account can still pick its own GPU. When the account's own GPU doesn't answer and the
+run named no place, Fuobe asks (409, `code: "own-gpu-offline"`, header `x-fuobe-place-ask`) instead of moving the run
+to this install's GPUs, but only for a run this install's GPUs would take. Any other run goes to the account's own GPU,
+as before. While the policy is cached, a run on an account's own GPU never waits for the service; when a policy call
+gets no answer, the last answer (or none) stands for 5 seconds (60 for a guest) before the service is asked again.
+
 | Call | Request | Answer |
 |---|---|---|
 | `POST /v1/quote` | `{ account: AccountFacts \| null, run: RunFacts, queue: QueueFacts \| null }` | `Quote` |
-| `POST /v1/reserve` | `{ requestId, account: AccountFacts, run: RunFacts, queue: QueueFacts \| null, shown: { amount, priceVersion } }` | `{ ok: true, holdId, amount, boostMs, maxWaitMs, pools?, text }` or `{ ok: false, code: RefuseCode \| "price-changed", text, quote?, action?, offer? }` |
+| `POST /v1/reserve` | `{ requestId, account: AccountFacts, run: RunFacts, queue: QueueFacts \| null, shown: { amount, priceVersion } }` | `{ ok: true, holdId, amount, boostMs, maxWaitMs, pools?, class?, text }` or `{ ok: false, code: RefuseCode \| "price-changed", text, quote?, action?, offer? }` |
 | `POST /v1/release` | `{ holdId, reason: "not-created" }` | `{ ok: true }` |
 | `POST /v1/settle` | `{ holdId, generationId, rows, status: "succeeded", final: { outputs, megapixels, seconds }, providerUsd, gpuMs, device, reachedProvider }` | `{ ok: true, charged }` |
 | `POST /v1/refund` | `{ holdId, generationId, rows, status: "failed" \| "canceled" \| "hidden" \| "unchecked", reason, reachedProvider, gpuMs, device }` | `{ ok: true, text }` |
@@ -77,8 +105,23 @@ type Policy = {
 `shown` is the price the person saw before pressing Run. A service must never charge more than it: when the price would
 be higher, it refuses with `price-changed` and the new quote, and the person sees the new price before running again.
 
-A reserve's `text` is shown on the result once it succeeded ("7 units"). `maxWaitMs` is how long the run may wait in
-line; past it the row fails and is refunded.
+A reserve's `text` is shown on the result once it succeeded ("7 units"). A run that set an `amount` above 0 aside and
+then failed or was stopped says "Not charged"; a run whose hold set nothing aside says nothing about a charge. `maxWaitMs` is how long the run may wait in
+line before a GPU first takes it; past it the row fails and is refunded. Once a GPU has taken it, the limit is over: a
+run that goes back in line (a GPU paused or restarted) keeps its place and waits there.
+
+`class` puts the run in a class of the line: `"paid"` runs go before `"free"` ones (no `class`: `"free"`). The
+install's own jobs come after both. `boostMs` is a head start inside the class, at most a day: the run stands in line as
+if it had come that much earlier. Both are kept for every row of the run, and a browser never sees them.
+
+On the workers ([gpu-workers.md](gpu-workers.md)), `queue` counts the line the way the workers serve it: `ahead` is
+every task the workers that may run this one would serve first, whatever its model, and `lane` is the workflow's lane.
+`mine` counts the account's runs on this install's GPUs the way the limits do: one press of Run is one run, however
+many jobs or chain steps it has (`waiting`: none of its rows has started).
+A report's `gpuMs` is the time the workers' ComfyUI spent running the row's jobs, as they measured it (no waits, no
+files, no upload). A job that ran more than once counts once, for the attempt whose result was kept. `device` is the
+GPU's name. Elsewhere `gpuMs` is the row's time from its start to its end, and
+`device` is null.
 
 Example (arbitrary numbers):
 
@@ -121,7 +164,7 @@ report from what is stored. A run whose rows couldn't be made after its reserve 
 
 | Situation | What happens |
 |---|---|
-| No `FUOBE_BILLING_URL` | No call. Every run is free and allowed. |
+| No `FUOBE_BILLING_URL` | No call. Runs on this install's GPUs are closed, or free and allowed with `FUOBE_HOSTED_FREE=1`. |
 | Set, and it answers | As above. |
 | Set, and no answer in time | Runs on this install's GPUs are refused (503, "Runs are paused for a moment. Try again soon."). Run shows "Price unavailable". Runs on the account's own GPU or key go on. Reports wait in the outbox and are sent when it is back. Runs that already have a hold keep running. |
 

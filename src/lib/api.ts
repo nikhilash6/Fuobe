@@ -27,7 +27,8 @@ import {
 } from "./generation-stream";
 import { fetchWithin, READ_LIMIT_MS } from "./fetch-within";
 import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folder } from "./library";
-import { markRefusalShown, responseError } from "./refusals";
+import { markRefusalShown, refusalShown, responseError } from "./refusals";
+import { PLACE_ASK_HEADER, RUNS_CHANGED_EVENT } from "./guest-access";
 import { postFile } from "./upload";
 import type { ShareCreated, ShareInfo, ShareListItem, SharePatch, ShareRequest } from "./share";
 import type { AccessSummary } from "./model-access";
@@ -886,6 +887,8 @@ export interface StatusInfo {
     paidAllowed?: boolean;
     /** Hosted runs (FUOBE_HOSTED_RUNS=1): runs may go to this studio's GPUs, so a GPU of one's own is optional. */
     hosted?: boolean;
+    /** "pool": runs go to this studio's GPUs first, even with its own GPU online (either can still be picked). */
+    prefer?: "pool";
     /** The billing service's words for the account's balance (src/server/billing.ts). */
     balance?: HostedBalance;
     links?: BillingAction[];
@@ -1391,6 +1394,23 @@ export function refusalCard(kind: RefusalCard["kind"], at: { pathname: string; s
  * card. Never on the sign-in page (refusalCard). Installed once. A refused upload's card says so ("add your own
  * files"), not "run this".
  */
+/** Send a run again on this studio's GPUs (the toast a run that named no place gets when its own GPU didn't answer). */
+async function runOnPool(sent: string): Promise<void> {
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(sent) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+  try {
+    const res = await window.fetch("/api/generations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, place: "pool" }) });
+    if (res.ok) window.dispatchEvent(new Event(RUNS_CHANGED_EVENT));
+    else await json(res).catch((e: unknown) => void (refusalShown(e) || toast.error((e as Error).message)));
+  } catch {
+    toast.error("That didn't start. Try again.");
+  }
+}
+
 export function watchGuestRefusals(): void {
   const w = window as typeof window & { __fuobeGuestFetch?: boolean };
   if (w.__fuobeGuestFetch) return;
@@ -1429,6 +1449,17 @@ export function watchGuestRefusals(): void {
         .clone()
         .json()
         .then((b: Omit<BillingRefusalDetail, "code">) => window.dispatchEvent(new CustomEvent<BillingRefusalDetail>(BILLING_EVENT, { detail: { ...b, code: billing } })))
+        .catch(() => {});
+    }
+    // A run that named no place, whose account's own GPU didn't answer: offered on this studio's GPUs, never moved there
+    // by itself.
+    if (res.status === 409 && res.headers.get(PLACE_ASK_HEADER) === "1" && method === "POST" && requestPath(input) === "/api/generations" && typeof init?.body === "string") {
+      markRefusalShown(res);
+      const sent = init.body;
+      res
+        .clone()
+        .json()
+        .then((b: { error?: string }) => toast(b.error ?? "Your GPU isn't answering right now.", { action: { label: "Run on this studio's GPUs", onClick: () => void runOnPool(sent) } }))
         .catch(() => {});
     }
     // A run the GPU pre-flight stopped (something missing on the viewer's ComfyUI): the guided fix opens with its plan.
