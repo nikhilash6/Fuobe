@@ -987,18 +987,22 @@ export function Composer({ docked }: { docked: boolean }) {
   const step = startRequest ? startStep({ settling, blocker }) : "wait";
 
   // Back from sign-up with the run its guest pressed: once the draft, its files and the price check have settled, it
-  // starts by itself when the price is the one the guest saw; otherwise the new price shows and Run waits for a click.
-  // Something missing (a file that didn't come back) leaves it to the blocker's line.
+  // starts by itself when the price is the one the guest saw on the draft Run was pressed on. Otherwise Run waits for a
+  // click, with a line saying why: a kept file didn't come back, the draft changed after Run, or a new price. Something
+  // else missing leaves it to the blocker's line.
   const pendingRun = guestDraft.pending;
   const clearPending = guestDraft.clearPending;
+  const keptLost = guestDraft.lost;
   useEffect(() => {
     if (!pendingRun) return;
-    const next = pendingStep({ settled: !settling && priceSettled, blocked: !!blocker, pool: poolPrice, shown: pendingRun.shown, quote: hostedQuote });
+    const next = pendingStep({ settled: !settling && priceSettled, blocked: !!blocker, pool: poolPrice, shown: pendingRun.shown, quote: hostedQuote, lost: keptLost, same: pendingRun.same });
     if (next === "wait") return;
     clearPending();
     if (next === "start") submitRef.current();
+    else if (next === "lost") setPriceNote("Add your file again, then press Generate.");
+    else if (next === "ask") setPriceNote("Your draft is back. Press Generate to start.");
     else if (next === "note" && hostedQuote) setPriceNote(`The price is now ${hostedQuote.text}. Press Generate to start.`);
-  }, [pendingRun, clearPending, settling, priceSettled, blocker, poolPrice, hostedQuote]);
+  }, [pendingRun, clearPending, settling, priceSettled, blocker, poolPrice, hostedQuote, keptLost]);
   const blockedSlot = blocker?.slot;
   useEffect(() => {
     if (step === "wait" || startRequest <= startedFor.current) return;
@@ -1347,7 +1351,7 @@ export function Composer({ docked }: { docked: boolean }) {
           )}
           {hasCleanVoice && <CleanVoiceSwitch status className="hidden max-w-[16rem] shrink-0 sm:flex" hint="first, free on your GPU" />}
           {config.sketch && draft.slots.image?.ref && !draft.slots.image.uploading && (
-            <SketchTools modes={config.sketch} image={draft.slots.image.ref} autoOpen={config.sketchAutoOpen} />
+            <SketchTools modes={config.sketch} image={draft.slots.image.ref} autoOpen={config.sketchAutoOpen} held={!!draft.slots.image.held} />
           )}
           {config.multiRef &&
             draft.refs.map((r, i) => (

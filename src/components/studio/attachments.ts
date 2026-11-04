@@ -18,20 +18,25 @@ import { useStudio, type Draft, type SlotKey } from "./studio-context";
  */
 const inflight = new Map<string, { ac: AbortController; seen: boolean }>();
 
-/** A guest's kept files the draft has held (src/lib/held-files.ts): one taken out of the draft is forgotten too. */
-const heldSeen = new Set<string>();
+/**
+ * The kept files (src/lib/held-files.ts) one draft held and no longer holds, to forget: `seen` is that draft's own
+ * list (updated here), so a file another studio's draft holds is never dropped by this one.
+ */
+export function heldToDrop(seen: Set<string>, held: ReadonlySet<string>): string[] {
+  for (const id of held) seen.add(id);
+  const gone = [...seen].filter((id) => !held.has(id));
+  for (const id of gone) seen.delete(id);
+  return gone;
+}
 
 /** Abort uploads whose attachment is gone from the draft. Mount once, where the draft is read. */
 export function useUploadReaper(draft: Pick<Draft, "slots" | "refs" | "frames">) {
+  // A guest's kept files this draft has held: one it takes out is forgotten too (each studio page has its own draft).
+  const heldSeen = useRef(new Set<string>());
   useEffect(() => {
     const values = [...Object.values(draft.slots), ...draft.refs, ...(draft.frames ?? []).map((f) => f.value)];
     const held = new Set(values.map((v) => v?.held).filter((x): x is string => !!x));
-    for (const id of held) heldSeen.add(id);
-    for (const id of heldSeen) {
-      if (held.has(id)) continue;
-      heldSeen.delete(id);
-      void dropHeld(id);
-    }
+    for (const id of heldToDrop(heldSeen.current, held)) void dropHeld(id);
     if (!inflight.size) return;
     const ids = new Set(values.map((v) => v?.id).filter(Boolean));
     for (const [id, e] of inflight) {

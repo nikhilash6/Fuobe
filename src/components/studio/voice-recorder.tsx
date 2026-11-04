@@ -67,7 +67,8 @@ export function VoiceRecorder({ onRecorded, max = 60, className, clean }: { onRe
 
   const stop = () => rec.current?.state === "recording" && rec.current.stop();
   // A guest, or an account with neither its own GPU nor its own key, gets its card before the microphone: the sample would be refused.
-  const askFirst = useAskBeforeUpload();
+  // (A recording is uploaded as soon as it stops: a guest signs up first, even in a studio that keeps its pictures.)
+  const askFirst = useAskBeforeUpload({ hold: false });
 
   const start = async () => {
     if (askFirst()) return;

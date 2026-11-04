@@ -4,8 +4,8 @@ import type { MediaKind } from "./catalog/types";
  * A guest's whole studio draft through sign-up (hosted runs on): the words, the model and its settings, the preset and
  * the files attached (kept in this browser: held-files.ts), saved in this tab's sessionStorage per page. Run pressed by a
  * guest also saves the run itself with the price it showed: back on the same page as an account, the studio restores
- * the draft, uploads the kept files as the account's own, and starts the run by itself when the price is unchanged;
- * otherwise it shows the new price and waits for a click.
+ * the draft, uploads the kept files as the account's own, and starts the run by itself when the price is unchanged, the
+ * draft is the one Run was pressed on and every kept file came back; otherwise it says why and waits for a click.
  */
 
 /** An attachment as the studio draft keeps it (src/components/studio/media-slot.tsx SlotValue). */
@@ -93,6 +93,36 @@ export function clearDraft(path: string): void {
   } catch {}
 }
 
+/** The kept files every draft saved in this tab holds (any page's): the files this tab may still need. */
+export function savedHeldIds(): Set<string> {
+  const out = new Set<string>();
+  try {
+    const s = store();
+    if (!s) return out;
+    for (let i = 0; i < s.length; i++) {
+      const key = s.key(i);
+      if (!key?.startsWith(draftKey(""))) continue;
+      const d = readDraft(key.slice(draftKey("").length));
+      if (d) for (const v of heldValues(d)) out.add(v.held!);
+    }
+  } catch {}
+  return out;
+}
+
+/**
+ * A short fingerprint of a draft as it is saved (keepDraft): the run a guest pressed starts by itself only on the same
+ * draft, never on one edited after Run was pressed.
+ */
+export function draftPrint(d: DraftLike): string {
+  const s = JSON.stringify(keepDraft(d));
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${s.length.toString(36)}.${h.toString(36)}`;
+}
+
 /** The price a guest's run showed when Run was pressed (null: none to compare, so it never starts by itself). */
 export type ShownPrice = { amount: number; priceVersion: string; text: string } | null;
 
@@ -100,13 +130,20 @@ export interface PendingRun {
   path: string;
   shown: ShownPrice;
   at: number;
+  /** The draft Run was pressed on (draftPrint). */
+  draft?: string;
 }
 
-/** A guest pressed Run here: kept for this tab, to start once signed up. */
-export function savePendingRun(path: string, shown: ShownPrice): void {
+/** A guest pressed Run here on this draft: kept for this tab, to start once signed up. */
+export function savePendingRun(path: string, shown: ShownPrice, draft?: DraftLike): void {
   try {
-    store()?.setItem(PENDING_KEY, JSON.stringify({ path, shown, at: Date.now() } satisfies PendingRun));
+    store()?.setItem(PENDING_KEY, JSON.stringify({ path, shown, at: Date.now(), ...(draft && { draft: draftPrint(draft) }) } satisfies PendingRun));
   } catch {}
+}
+
+/** Is this the draft the guest pressed Run on (not one edited since)? */
+export function sameDraft(run: Pick<PendingRun, "draft">, kept: DraftLike | null): boolean {
+  return !!run.draft && !!kept && draftPrint(kept) === run.draft;
 }
 
 /** The run pressed on this page within the hour, taken (it starts at most once), or null. */
@@ -140,13 +177,38 @@ export function restoredDraft<D extends DraftLike>(kept: D, account: boolean): {
 }
 
 /**
- * What the run a guest pressed does once back as an account: wait (the draft, its files or the price check haven't
- * settled), start (the price is the one the guest saw), note (a new price: shown, and Run waits for a click), or none
- * (something is missing, which the blocker says; or no price was shown to compare).
+ * The words a restored draft starts with: a prompt the link brought (?prompt=, still in the address the sign-up returns
+ * to) wins over the saved words, as it does for the words kept per page; but the run its guest pressed comes back with
+ * the words it was pressed on (`pressed`: that run is back, on the same draft).
  */
-export function pendingStep(o: { settled: boolean; blocked: boolean; pool: boolean; shown: ShownPrice; quote?: { allowed: boolean; amount: number; text: string } }): "wait" | "start" | "note" | "none" {
+export function restoredPrompt(link: string, saved: string, pressed: boolean): string {
+  return pressed ? saved : link || saved;
+}
+
+/**
+ * What the run a guest pressed does once back as an account:
+ * - lost: one of its kept files didn't come back (gone from the browser, or its upload refused): it never starts without
+ *   it, and the person is asked to add it again;
+ * - wait: the draft, its files or the price check haven't settled;
+ * - ask: the draft was edited after Run was pressed (`same` false): it waits for a click on what is there now;
+ * - start: the price is the one the guest saw;
+ * - note: a new price, shown, and Run waits for a click;
+ * - none: something is missing (the blocker says what), it would run elsewhere, it is refused now, or no price was shown
+ *   to compare.
+ */
+export function pendingStep(o: {
+  settled: boolean;
+  blocked: boolean;
+  pool: boolean;
+  shown: ShownPrice;
+  quote?: { allowed: boolean; amount: number; text: string };
+  lost: boolean;
+  same: boolean;
+}): "wait" | "start" | "note" | "ask" | "lost" | "none" {
+  if (o.lost) return "lost";
   if (!o.settled) return "wait";
   if (o.blocked || !o.pool) return "none";
+  if (!o.same) return o.quote?.allowed ? "ask" : "none";
   if (priceUnchanged(o.shown, o.quote)) return "start";
   return o.shown && o.quote?.allowed && o.quote.text ? "note" : "none";
 }
