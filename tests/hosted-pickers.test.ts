@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { poolRulesOf, poolRunsModel, poolRunsPreset, tryFreeFor } from "@/lib/pool-rules";
+import { poolRulesOf, poolRunsModel, poolRunsPreset, presetOffered, tryFreeFor } from "@/lib/pool-rules";
 
 /*
  * For a visitor with no GPU of its own (hosted runs), pickers leave out what this studio's GPUs keep off (the policy's
@@ -32,6 +32,25 @@ describe("what pickers leave out for a visitor with no GPU of its own", () => {
     expect(poolRunsPreset({ apps: { allow: ["app-y"] } }, "app-x")).toBe(false);
     expect(poolRunsPreset({ apps: { allow: ["app-y"] } }, "app-y")).toBe(true);
     expect(poolRunsPreset({ deny: ["m"] }, "app-x")).toBe(true);
+  });
+  it("a camera motion or effect with a cloud route stays in the pickers of the cloud engine, whatever this studio's GPUs run", () => {
+    // Videos kept off this studio's GPUs: every motion and effect on an open model is in the rules' deny list.
+    const rules = { apps: { deny: ["motion-both", "motion-open"] }, kinds: { video: false } };
+    const both = { id: "motion-both", open: { modelId: "oss-clip" }, cloud: { modelId: "cloud-clip" } };
+    const openOnly = { id: "motion-open", open: { modelId: "oss-clip" }, cloud: null };
+    const cloudOnly = { id: "motion-cloud", open: null, cloud: { modelId: "cloud-clip" } };
+    // On the cloud engine (an account with its own key): the ones with a cloud route.
+    expect(presetOffered(rules, both, "cloud")).toBe(true);
+    expect(presetOffered(rules, cloudOnly, "cloud")).toBe(true);
+    // On the open engine: only what this studio's GPUs run.
+    expect(presetOffered(rules, both, "open")).toBe(false);
+    expect(presetOffered(rules, openOnly, "open")).toBe(false);
+    expect(presetOffered(rules, cloudOnly, "open")).toBe(true);
+    // A gallery (either engine) keeps every card that has a cloud route, as before.
+    expect(presetOffered(rules, both)).toBe(true);
+    expect(presetOffered(rules, openOnly)).toBe(false);
+    // No rules: every preset.
+    expect(presetOffered(undefined, openOnly, "open")).toBe(true);
   });
   it("agree with the server's own check of every run", async () => {
     const { poolAllows } = await import("@/server/hosted");

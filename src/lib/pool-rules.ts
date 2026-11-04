@@ -71,6 +71,17 @@ export function poolRunsPreset(rules: PoolRules | undefined, presetId: string): 
 }
 
 /**
+ * Does a picker or gallery offer this preset to a viewer under the rules (no rules: every preset)? A preset with no open
+ * route, or with a cloud route while the picker's engine isn't the open one (`engine` undefined: either engine), never
+ * needs this studio's GPUs, so the rules don't leave it out; one only they could run is offered when they run it.
+ */
+export function presetOffered(rules: PoolRules | undefined, p: { id: string; open: unknown; cloud: unknown }, engine?: "open" | "cloud"): boolean {
+  if (!rules || !p.open) return true;
+  if (p.cloud && engine !== "open") return true;
+  return poolRunsPreset(rules, p.id);
+}
+
+/**
  * "Try free" on preset cards: with hosted runs on, a card whose preset runs on this studio's GPUs for this viewer (a
  * guest, an account with no GPU of its own, or one whose runs go to this studio's GPUs first) says it can be tried there.
  * The rules hold presets whose model or kind is kept off too (poolRulesOf). Null (no card says it) with hosted runs off,

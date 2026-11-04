@@ -12,7 +12,7 @@ import { useProgressive } from "@/components/use-progressive";
 import { CardChip, badgeKey, parseBadgeKey } from "@/components/gpu/readiness-chip";
 import { useGpuBadges } from "@/hooks/use-gpu";
 import { usePoolRules, useTryFree } from "@/hooks/use-pool-rules";
-import { poolRunsPreset } from "@/lib/pool-rules";
+import { presetOffered } from "@/lib/pool-rules";
 import { useEngineMode, useViewer } from "@/lib/api";
 import { categoryFrom, skippedInAll } from "@/lib/gallery-category";
 import { matchesSearch, previewFlip, readMoreTap, searchText, TAP_TO_READ, type PresetCardData } from "@/lib/preset-cards";
@@ -264,7 +264,7 @@ export function PresetGallery({
   // For a viewer with no GPU of its own (hosted runs), a preset only this studio's GPUs could run, and which they keep
   // off, is left out (src/lib/pool-rules.ts): nothing here fails at Run for it.
   const rules = usePoolRules();
-  const offered = useMemo(() => (rules ? presets.filter((p) => !p.open || p.cloud || poolRunsPreset(rules, p.id)) : presets), [presets, rules]);
+  const offered = useMemo(() => (rules ? presets.filter((p) => presetOffered(rules, p)) : presets), [presets, rules]);
   // "both" until hydrated, so the server HTML and the first client render agree.
   const mode = useEngineMode();
   const locked = mode === "both" ? undefined : mode;

@@ -12,7 +12,7 @@ import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { CoverScrollBox, CoverTile, usePickerPlayback } from "@/components/cover-tile";
 import { PRESET_ICONS } from "@/components/preset-icons";
 import { usePoolRules } from "@/hooks/use-pool-rules";
-import { poolRunsPreset } from "@/lib/pool-rules";
+import { presetOffered } from "@/lib/pool-rules";
 import { loadFullCatalog, useCatalog } from "./catalog";
 import { Chip, ClearableChip } from "./chip";
 
@@ -118,14 +118,15 @@ function usePickerSide() {
   return { chip, side, measure };
 }
 
-export function PresetChip({ type, value, onChange }: { type: "motion" | "effect"; value?: string; onChange: (id?: string) => void }) {
+export function PresetChip({ type, value, onChange, engine }: { type: "motion" | "effect"; value?: string; onChange: (id?: string) => void; engine?: "open" | "cloud" }) {
   const [open, setOpen] = useState(false);
   const { chip, side, measure } = usePickerSide();
   const catalog = useCatalog();
-  // For a viewer with no GPU of its own, what this studio's GPUs keep off is left out (src/lib/pool-rules.ts).
+  // For a viewer with no GPU of its own, what this studio's GPUs keep off is left out (src/lib/pool-rules.ts), unless
+  // the preset has a cloud route and the composer isn't on the open engine (the gallery keeps those too).
   const rules = usePoolRules();
   const all = catalog.presets?.[type] ?? null;
-  const list = useMemo(() => (all && rules ? all.filter((p) => poolRunsPreset(rules, p.id)) : all), [all, rules]);
+  const list = useMemo(() => (all && rules ? all.filter((p) => presetOffered(rules, p, engine)) : all), [all, rules, engine]);
   const selected = value ? catalog.getPreset(value) : undefined;
   // The picked preset's poster in place of its icon, as the Look chip shows its look.
   const cover = selected && presetCover(selected.id);
@@ -177,6 +178,7 @@ export function MixChip({
   strengthOn,
   mix,
   onChange,
+  engine,
 }: {
   primary: Preset;
   strength: number;
@@ -184,6 +186,8 @@ export function MixChip({
   strengthOn?: string;
   mix?: { presetId: string; strength: number };
   onChange: (patch: { presetStrength?: number; mix?: { presetId: string; strength: number } | undefined }) => void;
+  /** The composer's engine: a preset with a cloud route stays on the cloud engine whatever this studio's GPUs run. */
+  engine?: "open" | "cloud";
 }) {
   const [open, setOpen] = useState(false);
   const { chip, side, measure } = usePickerSide();
@@ -194,8 +198,8 @@ export function MixChip({
   const presets = catalog.presets;
   const rules = usePoolRules();
   const mixable = useMemo(
-    () => (presets ? [...presets.motion, ...presets.effect].filter((p) => p.id !== primary.id && !p.inputs.some((i) => i.key === "endImage") && poolRunsPreset(rules, p.id)) : null),
-    [presets, primary.id, rules],
+    () => (presets ? [...presets.motion, ...presets.effect].filter((p) => p.id !== primary.id && !p.inputs.some((i) => i.key === "endImage") && presetOffered(rules, p, engine)) : null),
+    [presets, primary.id, rules, engine],
   );
   return (
     <ClearableChip active={!!mix} onClear={() => onChange({ mix: undefined })} clearLabel="Remove the mix">
@@ -263,6 +267,7 @@ export default function PresetChips({
   mix,
   onPreset,
   onMix,
+  engine,
 }: {
   picker?: "motion" | "effect";
   preset?: Preset;
@@ -274,11 +279,13 @@ export default function PresetChips({
   mix?: { presetId: string; strength: number };
   onPreset: (id?: string) => void;
   onMix: (patch: { presetStrength?: number; mix?: { presetId: string; strength: number } | undefined }) => void;
+  /** The composer's engine (the pickers keep a preset with a cloud route off the open engine only). */
+  engine?: "open" | "cloud";
 }) {
   return (
     <>
-      {picker && <PresetChip type={picker} value={presetId} onChange={onPreset} />}
-      {preset && (preset.type === "motion" || preset.type === "effect") && <MixChip primary={preset} strength={strength} takesStrength={takesStrength} strengthOn={strengthOn} mix={mix} onChange={onMix} />}
+      {picker && <PresetChip type={picker} value={presetId} onChange={onPreset} engine={engine} />}
+      {preset && (preset.type === "motion" || preset.type === "effect") && <MixChip primary={preset} strength={strength} takesStrength={takesStrength} strengthOn={strengthOn} mix={mix} onChange={onMix} engine={engine} />}
     </>
   );
 }

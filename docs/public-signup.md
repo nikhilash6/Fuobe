@@ -421,8 +421,9 @@ With it on:
   or one on the studio's GPUs ends.
 - For a visitor with no GPU of its own, `GET /api/status` says what the studio's GPUs keep off (`viewer.pool`: the
   policy's model and app lists, and its kinds). The app lists also hold every preset whose open model, or the kind it
-  makes, is kept off. The model, camera motion and effect pickers and the preset galleries leave those out. Preset cards
-  that run on the studio's GPUs for the viewer say "Try free".
+  makes, is kept off. The model, camera motion and effect pickers and the preset galleries leave those out. A preset
+  with a cloud route stays in the galleries, and in the pickers while the composer is on the cloud engine (an account's
+  own key runs it there). Preset cards that run on the studio's GPUs for the viewer say "Try free".
 - A guest can attach files (pictures, clips and sound) in a studio before signing up: they stay in the browser and
   are not uploaded. A voice recording, and a drawing or painted area on a kept picture, are uploaded as they are made,
   so those ask the guest to sign up first. The whole draft (words, model, settings, preset and files) is kept for the

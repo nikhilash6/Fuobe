@@ -1245,6 +1245,7 @@ export function Composer({ docked }: { docked: boolean }) {
           mix={draft.mix}
           onPreset={pickPreset}
           onMix={(patch) => setDraft(patch)}
+          engine={engine}
         />
       )}
       {config.signature && (
