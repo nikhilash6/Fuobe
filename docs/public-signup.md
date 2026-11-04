@@ -267,13 +267,15 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   with the open-source engine: the Image, Video and Audio studios (their input modes too: edit,
   inpaint, extend, lipsync, reframe, upscale, image to video…), every camera motion and effect,
   and the apps that take a picture, a clip or a sound. Their chained steps (multi-shot films,
-  Frames mode, Extend, relit effects) run there too, as the account's own. Polls,
+  Frames mode, Extend, relit effects) run there too, as the account's own. So does a 3D model (the
+  Image to 3D and Photo to 3D apps, and an image result's "Make it 3D", which opens Photo to 3D), on
+  the account's own GPU or key; it is finished as Image to 3D's models are (below), and on this
+  install's GPUs (hosted runs) 3D isn't offered yet. Polls,
   uploads, outputs and cancels go there, and nothing falls back to the studio's own providers. If
   the account's ComfyUI can't be reached, the run fails and says so. A cloud model, an AI helper or
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
   (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
-  plan with the studio's own AI helpers or keep projects of their own. A 3D model sent here answers the
-  same: Image to 3D has its own route (below). So do the Audio hub's Split
+  plan with the studio's own AI helpers or keep projects of their own. So do the Audio hub's Split
   soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
   turnaround video (`POST /api/turnaround`), though their price checks work, priced for the account's
   own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split

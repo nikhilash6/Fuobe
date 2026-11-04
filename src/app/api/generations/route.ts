@@ -219,13 +219,9 @@ export async function POST(request: Request) {
           if (account) unhit(`run:${account.id}`);
           return refuse(422, ISOLATED_ON_COMPUTER, { code: "isolated-on-computer" });
         }
-        // A 3D model from someone else's ComfyUI is finished on this server (decimate, web GLB, turntable): accounts
-        // don't get Image to 3D until that finish runs under an account's own limits.
-        // (Any Angle's 3D view is a splat and its turntable: nothing to finish, so an account builds it on its own GPU.)
-        if (account && outputKind(planned.op, planned.model) === "model3d" && planned.model.id !== ANY_ANGLE.buildModel) {
-          unhit(`run:${account.id}`);
-          return Response.json({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, { status: 403 });
-        }
+        // An account's 3D model (Image to 3D, Photo to 3D, Make it 3D) runs on its own GPU or key, and is finished on
+        // this server under the account's limits (model3d-finish.ts). This install's GPUs don't take 3D: decidePlace
+        // refuses it there, and createGenerations refuses a run stamped for them.
         const skip = (body as { gpuCheck?: unknown } | null)?.gpuCheck === "skip";
         const gate = await gateGeneration(gpuTargetFor(request, "read"), { request: req, route: planned.route, op: planned.op, modelId: planned.model.id, gpu: planned.gpu, h3: planned.h3, skip, actor: account?.id ?? "owner" });
         if (!gate.ok) {
