@@ -19,11 +19,11 @@
 //    first paint until both tiles play, and nothing shifts as a clip takes over from its still.
 // 1c. The swap: each tile's still is its clip's first frame (the clip at frame 0 over it differs by under 3 levels in
 //    255 on average), at 390@3x and 1440@2x.
-// 1d. The video tile's reel, at 390@3x and 1440@2x, light and dark: its still is One Take's first frame; it plays One
-//    Take, Sand Storm and Crane Over the Head in that order and back to One Take, each crossfading into the next; each
+// 1d. The video tile's reel, at 390@3x and 1440@2x, light and dark: its still is Sand Storm's first frame; it plays Sand
+//    Storm, then One Take, and back to Sand Storm, each crossfading into the next; each
 //    clip framed as listed (its object-position); never more than the clip playing and the next one loaded, the next
 //    asked for only once the current one plays; off screen it pauses, back on screen it goes on. A picture of each
-//    clip in the tile (--shots). Under reduced motion a hover plays One Take alone, on a loop.
+//    clip in the tile (--shots). Under reduced motion a hover plays Sand Storm alone, on a loop.
 // 2. Layout shift under 0.01 at 390 and 1440, through a load and a scroll to the bottom and back.
 // 2b. The headline holds still when its parts come late, at 390@3x, 768 and 1440@2x (Chromium): with every font file
 //    2.5 s late, and with the HTML in two parts (cut after the second line's first words, 1.5 s apart, by a proxy) and
@@ -73,8 +73,10 @@ const TILES = ["video", "image", "audio", "threeD", "restore", "numbers", "live"
 /** The widest copy of a clip (scripts/gen-home-bento.mjs), where its element doesn't say (a reel clip's data-max). */
 const CLIP_MAX = 2048;
 /** The video tile's reel, in order, and how each clip is framed (HOME_BENTO_REEL). */
-const REEL = ["motion-one-take", "effect-sand-storm", "motion-crane-over-the-head"];
-const REEL_POSITION = { "motion-one-take": "50% 15%", "effect-sand-storm": "50% 0%", "motion-crane-over-the-head": "50% 0%" };
+const REEL = ["effect-sand-storm", "motion-one-take"];
+const REEL_POSITION = { "effect-sand-storm": "50% 0%", "motion-one-take": "50% 15%" };
+/** Each reel clip's copies' name (HOME_BENTO_REEL's name). */
+const REEL_NAME = { "effect-sand-storm": "reel-sand-storm", "motion-one-take": "reel-one-take" };
 const HEADLINE = "Make anything: From an idea to a finished film, in one place.";
 
 /** A context as `who`; null when that viewer can't be had here (a guest needs a studio with a password). */
@@ -381,13 +383,13 @@ if (run("1d")) {
       });
       await page.addInitScript(watchReel);
       await open(page);
-      // The still: One Take's first frame, framed as its clip is.
+      // The still: the first clip's first frame, framed as its clip is.
       const still = await page.evaluate(() => {
         const img = document.querySelector("#home-bento [data-tile=video] picture img");
         return { src: new URL(img.currentSrc || img.src).pathname.split("/").pop(), pos: getComputedStyle(img).objectPosition };
       });
-      check(`reel ${tag}: the still is One Take's first frame, framed as its clip`, /^reel-one-take-\d+\.(avif|jpg)$/.test(still.src) && still.pos === REEL_POSITION[REEL[0]], JSON.stringify(still));
-      // Round the reel once and into One Take again (about 11 s), a picture of each clip as it plays.
+      check(`reel ${tag}: the still is ${REEL[0]}'s first frame, framed as its clip`, still.src.startsWith(`${REEL_NAME[REEL[0]]}-`) && /^reel-[a-z-]+-\d+\.(avif|jpg)$/.test(still.src) && still.pos === REEL_POSITION[REEL[0]], JSON.stringify(still));
+      // Round the reel once and into the first clip again, a picture of each clip as it plays.
       const seen = [];
       const deadline = Date.now() + 25_000;
       while (Date.now() < deadline) {
@@ -410,13 +412,13 @@ if (run("1d")) {
         await page.waitForTimeout(150);
       }
       const r = await page.evaluate(() => window.__reel);
-      check(`reel ${tag}: plays the clips in order and back to the first`, seen.join() === "0,1,2,0", seen.join());
-      check(`reel ${tag}: each clip crossfades into the next`, r.fades >= 3, `${r.fades} frames mid-fade`);
+      check(`reel ${tag}: plays the clips in order and back to the first`, seen.join() === [...REEL.keys(), 0].join(), seen.join());
+      check(`reel ${tag}: each clip crossfades into the next`, r.fades >= REEL.length, `${r.fades} frames mid-fade`);
       check(`reel ${tag}: never more than the clip playing and the next one`, r.most <= 2, String(r.most));
       // Each clip asked for only once the one before it plays; at most one ahead of the clip on screen.
       const order = asked.map((a) => a.name);
       const firstAsk = (name) => asked.find((a) => a.name === name)?.t;
-      const names = REEL.map((id) => `reel-${{ "motion-one-take": "one-take", "effect-sand-storm": "sand-storm", "motion-crane-over-the-head": "crane-over" }[id]}`);
+      const names = REEL.map((id) => REEL_NAME[id]);
       const aheadOk = names.slice(1).every((name, i) => {
         const t = firstAsk(name);
         const prevPlays = r.playing[`${REEL[i]}@${i}`];
@@ -436,7 +438,7 @@ if (run("1d")) {
       await ctx.close();
     }
 
-  // Reduced motion: nothing plays by itself; a hover plays One Take alone, on a loop.
+  // Reduced motion: nothing plays by itself; a hover plays the first clip alone, on a loop.
   const ctx = await browser.newContext({ ...DESKTOP, reducedMotion: "reduce" });
   const page = await ctx.newPage();
   const asked = [];
@@ -448,8 +450,8 @@ if (run("1d")) {
   await page.waitForTimeout(6500);
   const st = await page.evaluate(() => [...document.querySelectorAll("#home-bento [data-tile=video] video")].map((x) => ({ clip: x.dataset.clip, loop: x.loop, paused: x.paused })));
   check(
-    "reduced motion: no reel clip until asked; a hover plays One Take alone, on a loop",
-    before === 0 && st.length === 1 && st[0].clip === REEL[0] && st[0].loop && !st[0].paused && asked.every((a) => a.startsWith("reel-one-take-")),
+    `reduced motion: no reel clip until asked; a hover plays ${REEL[0]} alone, on a loop`,
+    before === 0 && st.length === 1 && st[0].clip === REEL[0] && st[0].loop && !st[0].paused && asked.every((a) => a.startsWith(`${REEL_NAME[REEL[0]]}-`)),
     JSON.stringify({ before, st, asked }),
   );
   await ctx.close();
@@ -501,8 +503,10 @@ if (run("2"))
 async function splittingProxy(pauseMs) {
   const http = await import("node:http");
   const target = new URL(app);
+  // The app over HTTPS (a live check) is asked over HTTPS; the proxy itself stays plain HTTP on localhost.
+  const upstream = target.protocol === "https:" ? await import("node:https") : http;
   const server = http.createServer((req, res) => {
-    const up = http.request(
+    const up = upstream.request(
       // No kept-alive sockets (agent: false), so nothing holds the script open once the proxy closes.
       { host: target.hostname, port: target.port, path: req.url, method: req.method, agent: false, headers: { ...req.headers, host: target.host, connection: "close", "accept-encoding": "identity" } },
       (upRes) => {
