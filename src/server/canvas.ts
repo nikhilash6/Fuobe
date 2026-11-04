@@ -112,6 +112,7 @@ const NODE_TYPES = [
   "clone-voice",
   "translate",
   "concat",
+  "restore",
   "table",
   "layout",
   "camera-path",
