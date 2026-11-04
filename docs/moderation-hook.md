@@ -27,8 +27,9 @@ The owner's own runs are never sent to the service.
 ## The run check
 
 The check comes first, before a billing hold. `{ allowed: false }` stops the run: nothing is made, nothing is charged,
-and the person sees the service's `text` (403). No answer in time: the run is refused with "Checks are paused for a
-moment" (503).
+and the person sees the service's `text` (403). No answer in time: the run is refused (503). On this install's GPUs it
+says "Try again in a moment.", as when the billing service doesn't answer. On the account's own GPU or key it says
+"Checks are paused for a moment. Try again soon."
 
 ## The output check, and when a service may skip it
 

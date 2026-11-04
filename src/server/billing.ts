@@ -165,8 +165,12 @@ export interface RefundReport {
   device: string | null;
 }
 
-/** What a person sees when the billing service doesn't answer: never its address or its error. */
-export const BILLING_PAUSED = "Runs are paused for a moment. Try again soon.";
+/**
+ * What a person sees when the billing service doesn't answer: never its address, its error or a word about the service.
+ * `quote`: the price slot before Run (the price check asks again by itself, and Run comes back on with its answer);
+ * `run`: a run pressed then, which didn't start.
+ */
+export const BILLING_WAIT = { quote: "Ready in a moment", run: "Try again in a moment." } as const;
 
 /** Timeouts per call (ms). */
 export const BILLING_TIMEOUTS = { policy: 1000, quote: 1000, reserve: 2000, balance: 1000, report: 5000, event: 5000 };
@@ -273,7 +277,7 @@ export async function quote(account: AccountFacts | null, run: RunFacts, queue: 
     return await call<Quote>("POST", "/v1/quote", { account, run, queue }, BILLING_TIMEOUTS.quote);
   } catch (e) {
     logDown("quote", e);
-    return { allowed: false, amount: 0, priceVersion: "", text: BILLING_PAUSED, code: "paused" };
+    return { allowed: false, amount: 0, priceVersion: "", text: BILLING_WAIT.quote, code: "paused" };
   }
 }
 
@@ -292,7 +296,7 @@ export async function reserve(input: { requestId: string; account: AccountFacts;
       logDown(`reserve (try ${attempt + 1})`, e);
     }
   }
-  return { ok: false, code: "paused", text: BILLING_PAUSED };
+  return { ok: false, code: "paused", text: BILLING_WAIT.run };
 }
 
 /** The HTTP status and header for a billing refusal (the generations route; docs/billing-hook.md). */

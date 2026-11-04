@@ -122,10 +122,24 @@ describe("the run check", () => {
     expect(sent.body).toMatchObject({ prompt: "a quiet harbour", account: { id: a }, consent: null });
   });
 
-  it("no answer: the run is refused as paused", async () => {
+  it("no answer: a run on this install's GPUs is refused in plain words, with no word of a pause", async () => {
     mod.down = true;
+    const before = (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;
     const r = await post(run);
     expect(r.status).toBe(503);
+    const body = (await r.json()) as { error: string };
+    expect(body.error).toBe(billing.BILLING_WAIT.run);
+    expect(body.error).not.toMatch(/paus|check/i);
+    expect((db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n).toBe(before);
+  });
+
+  it("no answer: a run on the account's own GPU keeps today's words", async () => {
+    mod.down = true;
+    const { moderateRun } = await import("@/server/hosted-run");
+    const { CHECKS_PAUSED } = await import("@/server/moderation");
+    const account = auth.checkAccount("checks@example.com", "long enough")!;
+    const own = await moderateRun(account, { ...run, feature: "video" }, null, "own", { kind: "video", place: "own-gpu" });
+    expect(own).toMatchObject({ ok: false, refusal: { status: 503, body: { error: CHECKS_PAUSED, code: "paused" } } });
   });
 });
 

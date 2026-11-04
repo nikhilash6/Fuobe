@@ -136,11 +136,13 @@ describe("the price check with hosted runs on", () => {
     expect(r.body.quote).toMatchObject({ allowed: false, code: "busy", text: "Busy right now. Try again in about 10 min." });
   });
 
-  it("the service not answering: refused as paused, in plain words", async () => {
+  it("the service not answering: refused before Run in plain words, with no word of a pause", async () => {
     useService();
     fake.down = "error";
     const r = await check(fox);
-    expect(r.body.quote).toMatchObject({ allowed: false, code: "paused", text: billing.BILLING_PAUSED });
+    expect(r.body.quote).toMatchObject({ allowed: false, code: "paused", text: billing.BILLING_WAIT.quote });
+    const { text, sub } = r.body.quote as { text: string; sub?: string };
+    expect(`${text} ${sub ?? ""}`).not.toMatch(/paus/i);
   });
 
   it("the policy's limits on runs at once and in line are said before Run, with the run's own words", async () => {

@@ -8,7 +8,7 @@ import { accountGpu, type Account } from "./auth";
 import {
   accountFacts,
   BILLING_HEADER,
-  BILLING_PAUSED,
+  BILLING_WAIT,
   billingConfigured,
   cachedPolicy,
   forgetBalance,
@@ -271,7 +271,7 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
     }
   }
   if (p === undefined) p = await billingPolicy(account.id);
-  if (!p) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_PAUSED) };
+  if (!p) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
   // Closed to this account: its own GPU (or today's "Connect your GPU"); asked for by name, said so.
   if (!p.hosted) return wish === "pool" ? notOffered(HOSTED_WORDS.notHosted) : OWN;
   // Planned, checked and priced for the outputs it would make there (the policy's cap per run).
@@ -353,7 +353,9 @@ export async function moderateRun(
   });
   if (a.allowed) return { ok: true, checkOutputs: a.checkOutputs !== false };
   const status = a.code === "paused" ? 503 : 403;
-  return { ok: false, refusal: { status, body: { error: a.text, code: a.code }, headers: {} } };
+  // No answer from the service, on this install's GPUs: the same plain words as when the billing service doesn't answer.
+  const error = a.code === "paused" && place === "pool" ? BILLING_WAIT.run : a.text;
+  return { ok: false, refusal: { status, body: { error, code: a.code }, headers: {} } };
 }
 
 /**

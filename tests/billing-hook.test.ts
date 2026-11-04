@@ -223,15 +223,16 @@ describe("the billing hook with a service", () => {
     }
   });
 
-  it("service down: runs on this install's GPUs are paused with plain words, and a run on the account's own GPU still goes", async () => {
+  it("service down: runs on this install's GPUs are refused in plain words with no word of a pause, and a run on the account's own GPU still goes", async () => {
     fake.down = "error";
     const r = await post({ ...run(), shown: { amount: 7, priceVersion: "v7" } });
     expect(r.status).toBe(503);
     const body = (await r.json()) as { error: string };
-    expect(body.error).toBe(billing.BILLING_PAUSED);
+    expect(body.error).toBe(billing.BILLING_WAIT.run);
+    expect(body.error).not.toMatch(/paus/i);
     expect(JSON.stringify(body)).not.toContain(String(fake.port));
     const p = await post(run(), cookie, "?preview=1");
-    expect(((await p.json()) as { quote: { code: string } }).quote.code).toBe("paused");
+    expect(((await p.json()) as { quote: unknown }).quote).toMatchObject({ allowed: false, code: "paused", text: billing.BILLING_WAIT.quote });
     // Its own GPU online: its own GPU is the place, and the billing service is never asked.
     fake.calls.length = 0;
     const own = await post(run(), gpuCookie);
