@@ -97,10 +97,8 @@ describe("round-4 ComfyUI workflows", () => {
     // The owner's SOTA image families (2026-10-31) wait for a /prompt check on a ComfyUI that isn't rendering, and the
     // MiniMax H3 graphs and Restore & colourise on node packs this server doesn't have (h3_character_swap, H3 Relay,
     // ComfyUI-LTXVideo): never installed here, so their /prompt check names a missing node (tests/comfy-character-swap.test.ts,
-    // tests/restore-comfy.test.ts). MOSS-Image's graph too, since its
-    // encoder became the int8 file (the w4a8 one faulted the driver). MiniMax H3's video graphs wait for their first run.
+    // tests/restore-comfy.test.ts). MiniMax H3's video graphs wait for their first run.
     expect(manifest.workflows.filter((w) => !w.validated).map((w) => w.id)).toEqual([
-      "moss-image-t2i",
       // Green screen and fine hair (nm10-keying): ComfyUI-RMBG 3.3.0 and the CorridorKey wrapper aren't on the validation
       // server (tests/keying.test.ts checks their classes against the packs' source).
       "image-matte-feynobg",
@@ -126,38 +124,20 @@ describe("round-4 ComfyUI workflows", () => {
       "speech-tts-auk",
       "video-matte-vrmbg3",
       "video-key-corridorkey",
-      "qwen-image-21-t2i",
-      "qwen-image-21-edit",
-      "qwen-image-21-turbo-edit",
       "qwen-image-21-live-edit",
-      "qwen-image-21-inpaint",
-      "qwen-image-21-outpaint",
       // Qwen-Image 2.1's speeds, its next scene and its 16 GB route: unvalidated like their base graphs until
       // they run on a GPU (tests/qwen21-fast.test.ts).
-      "qwen-image-21-t2i-draft",
       "qwen-image-21-t2i-fast",
       "qwen-image-21-t2i-details",
-      "qwen-image-21-edit-draft",
       "qwen-image-21-edit-fast",
       "qwen-image-21-edit-details",
-      "qwen-image-21-inpaint-draft",
       "qwen-image-21-inpaint-fast",
-      "qwen-image-21-outpaint-draft",
       "qwen-image-21-outpaint-fast",
       "qwen-image-21-next-scene",
       "qwen-image-21-t2i-small",
       "qwen-image-21-edit-small",
-      "ideogram4-t2i",
-      "krea2-realism-t2i",
-      "krea2-turbo-t2i",
-      "krea2-edit-general",
-      "krea2-edit-identity",
-      "krea2-turbo-i2i",
       "krea2-inpaint",
       "krea2-outpaint",
-      "fibo2-dev-t2i",
-      "fibo2-dev-edit",
-      "fibo2-edit-turbo-edit",
       "video-restore-ltx25-tiled",
       // Clean up voice: ComfyUI-RE-USE isn't on the validation server; the pack's own tests run it (comfy-nodes/ComfyUI-RE-USE/tests).
       "voice-clean-reuse",

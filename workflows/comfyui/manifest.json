@@ -1329,7 +1329,7 @@
       "customNodes": [],
       "vramGb": 16,
       "license": "Apache-2.0 (MOSS-Image SFT and Base, Qwen3.5-9B, FLUX.2 small decoder, byte-identical to BFL's Apache-2.0 FLUX.2-small-decoder; Fast: Spectrallic's MOSS-Image SFT 8-step DMD int8 file, Apache-2.0)",
-      "validated": false,
+      "validated": true,
       "notes": "Core nodes only (MOSS-Image is native in the pinned ComfyUI): Comfy-Org's template image_moss_image_t2i_bboxes without its subgraph, TextGenerate upsampler and box nodes. The prompt is plain words or a compiled layout (a summary + items with pixel boxes from the canvas centre, y before x), which reaches the model verbatim; width / height are the layout's canvas (multiples of 16, up to 2048). Standard = the template: 25 steps, CFG 2.5, er_sde / simple, skip-layer guidance on layer 22 for the first half; Quality = the MOSS-Image user guide: 50 steps, CFG 3, euler; Fast = Spectrallic's SFT with the 8-step DMD LoRA merged (unet), 8 steps, CFG 1; Base = MOSS-Image Base (unet) at 50 steps, CFG 3, euler. The text encoder is qwen3.5_9b_int8_convrot (the int8 file FIBO 2's prompt writer also loads), not the template's qwen3.5_9b_w4a8_gptq. The 16 GB VRAM figure is an estimate, as MOSS-Image publishes none: about 15 GB of files (DiT 5.4 + encoder 9.7 + VAE 0.25), and ComfyUI offloads. The int8 files run through comfy-kitchen's kernels, which need a PyTorch built for CUDA 13 (cu130): comfy/quant_ops.py turns its CUDA backend off otherwise and logs a warning, and the model may run slower."
     },
     {
@@ -13170,7 +13170,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
-      "validated": false,
+      "validated": true,
       "notes": "The Qwen-Image 2.1 text-to-image workflow, its subgraph flattened: int8 model, Qwen3-VL 8B int8 text encoder (type qwen_image), TextEncodeQwenImage21 (no negative, resolution 1024, no images), EmptyLatentImage, KSampler 25 steps, cfg 1, euler, simple, denoise 1. Removed: the ResolutionSelector (width/height bind the latent, multiples of 32, native up to 2048x2048) and the SaveImageAdvanced (SaveImage after SplitImageWithAlpha, as the Qwen 2.1 VAE decodes four channels). cfg 1: no negative prompt. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
@@ -13278,7 +13278,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
-      "validated": false,
+      "validated": true,
       "notes": "The 25-step Qwen-Image 2.1 edit behind the site's preview pictures, with the references wired as in the Qwen-Image 2.1 image-edit workflow: each image scaled to 2048 on its long side (lanczos), all of them on one TextEncodeQwenImage21 (images.image_1..4, resolution 0 = each at its own size on the 32 grid, vae linked, no negative), its latent (image 1's size: no custom-size latent, which shifts the edit), QwenImage21Cache auto, KSampler 25 steps, cfg 1, euler, simple. Output follows image 1 (2048 on the long side). Images 2-4 are optional: Fuobe leaves out the branch of a reference not given. Prompt: one plain instruction, then one keep clause pointing at the picture (\"Keep ... exactly as in image 1\"); refer to references as image 1/2/3/4. Removed: the ComfySwitchNode custom size, compare and note nodes. It and qwen-image-21-turbo-edit made 133 of the site's preview edits. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
@@ -13378,7 +13378,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
-      "validated": false,
+      "validated": true,
       "notes": "The Qwen-Image 2.1 turbo image-edit workflow, as the site's fast preview edits run it: turbo int8 model, the fixed 8-step ManualSigmas schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder's latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
@@ -13734,7 +13734,7 @@
       ],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
-      "validated": false,
+      "validated": true,
       "notes": "The AusBoss pack's example \"Qwen Image 2.1 Inpaint (AusBoss)\", its two subgraphs flattened: Crop For Inpaint (context 1.6, blend 8 px, multiple 32, 1.5 MP, bicubic) -> GrowMask 8 on the crop's mask -> StringFormat \"{a} Keep everything else exactly the same.\" -> TextEncodeQwenImage21 with the crop as image 1 (resolution 0) -> VAEEncode of the crop + SetLatentNoiseMask -> QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> SplitImageWithAlpha -> Stitch Inpaint (classic, no colour match) back into the full picture. mask = separate uploaded PNG, same size as image, read from the RED channel: white = change (as flux1-fill-inpaint). Removed: Mask by Touch and its SAM 3.1 model (the mask is uploaded), the speed LoRA (off in the example), the crop/pad loader (LoadImage), compare, timer and notes. Prompt: say what goes in the painted area like asking a person (\"Replace the cup with a glass of orange juice\"). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
@@ -13980,7 +13980,7 @@
       ],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; outpaint LoRA by AusBoss under the same licence; AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
-      "validated": false,
+      "validated": true,
       "notes": "The Qwen-Image 2.1 outpaint workflow (v12) as the site's Expand previews run it: Crop + Rotate + Pad puts the photo on a gray (#808080) canvas grown by the pads (feather 12, scaled to 1 MP on the 32 grid) -> outpaint-v2 LoRA at 1 -> Qwen3-VL 8B (the same text encoder, TextGenerate, the workflow's instruction, seed fixed) describes the picture, \"Outpaint the image: ... Scene:\" leads -> TextEncodeQwenImage21 with the canvas as image 1 -> KSampler 25 steps, cfg 1, euler, simple, no noise mask (it drew a box at the seam) -> SplitImageWithAlpha -> Stitch Inpaint (blend in, tone match 1) -> scaled to the full-size padded canvas, and the original photo composited back on top (second pad node, feather 48). Pads are the input photo's pixels (multiples of 8); defaults 384/288/384/288 = a 1.5x zoom-out of a 1536x1152 photo. Grow at most about the photo's own size per side per run. prompt = the optional \"what goes there\" hint (the lead-in \"Also include in the prompt:\" is added); it must not name the subject, which then appears again in the margin. Removed: AusBoss Seed/Text/Compare/RunTimer/ShowText/WorkflowNote and its SaveImage (SaveImage). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
@@ -14078,7 +14078,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; linoyts' DMD2 2-step LoRA v1.5, a derivative of Qwen-Image 2.1 under the same Qwen Research License (card and NOTICE); Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
-      "validated": false,
+      "validated": true,
       "notes": "Options → Speed \"draft\" on qwen-image-21-t2i: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. linoyts/Qwen-Image-2.1-DMD2-2steps @ 5bae2836, pytorch_lora_weights_v1_5 (2026-10-30: better prompt adherence and edit fidelity than v1, same settings): rank 32, attention only, trained on fixed sigmas [1.0, 0.5] with no shift, CFG 1. ManualSigmas \"1.0, 0.5, 0.0\" as the card says (resolution independent). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
@@ -14386,7 +14386,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; linoyts' DMD2 2-step LoRA v1.5, a derivative of Qwen-Image 2.1 under the same Qwen Research License (card and NOTICE); Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
-      "validated": false,
+      "validated": true,
       "notes": "Options → Speed \"draft\" on qwen-image-21-edit: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. linoyts/Qwen-Image-2.1-DMD2-2steps @ 5bae2836, pytorch_lora_weights_v1_5 (2026-10-30: better prompt adherence and edit fidelity than v1, same settings): rank 32, attention only, trained on fixed sigmas [1.0, 0.5] with no shift, CFG 1. ManualSigmas \"1.0, 0.5, 0.0\" as the card says (resolution independent). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
@@ -14700,7 +14700,7 @@
       ],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; linoyts' DMD2 2-step LoRA v1.5, a derivative of Qwen-Image 2.1 under the same Qwen Research License (card and NOTICE); AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
-      "validated": false,
+      "validated": true,
       "notes": "Options → Speed \"draft\" on qwen-image-21-inpaint: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. linoyts/Qwen-Image-2.1-DMD2-2steps @ 5bae2836, pytorch_lora_weights_v1_5 (2026-10-30: better prompt adherence and edit fidelity than v1, same settings): rank 32, attention only, trained on fixed sigmas [1.0, 0.5] with no shift, CFG 1. ManualSigmas \"1.0, 0.5, 0.0\" as the card says (resolution independent). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
@@ -14949,7 +14949,7 @@
       ],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; linoyts' DMD2 2-step LoRA v1.5, a derivative of Qwen-Image 2.1 under the same Qwen Research License (card and NOTICE); outpaint LoRA by AusBoss under the same licence; AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
-      "validated": false,
+      "validated": true,
       "notes": "Options → Speed \"draft\" on qwen-image-21-outpaint: the same graph with a LoraLoaderModelOnly after the UNETLoader and the outpaint-v2 LoRA (the speed LoRA stacks on it) and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. linoyts/Qwen-Image-2.1-DMD2-2steps @ 5bae2836, pytorch_lora_weights_v1_5 (2026-10-30: better prompt adherence and edit fidelity than v1, same settings): rank 32, attention only, trained on fixed sigmas [1.0, 0.5] with no shift, CFG 1. ManualSigmas \"1.0, 0.5, 0.0\" as the card says (resolution independent). Expand keeps its Qwen3-VL scene description (TextGenerate) as it is. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
@@ -15907,7 +15907,7 @@
       "customNodes": [],
       "vramGb": 24,
       "license": "Ideogram Non-Commercial Model Agreement: NON-COMMERCIAL (research and personal use; commercial use needs a paid Ideogram licence)",
-      "validated": false,
+      "validated": true,
       "notes": "The Ideogram 4 int8 text-to-image workflow, exported through the ComfyUI frontend (subgraph 98 flattened, its LLM caption-template subgraph and preview pruned); it made the site's Ideogram 4 preview stills. Kept as saved: the conditional UNET with CFGOverride (cfg 3 for the last 30% of steps) into DualModelGuider cfg 7, whose negative pass is the unconditional UNET on the zeroed prompt; qwen3vl_8b_fp8_scaled loaded as type ideogram4; flux2-vae; EmptyFlux2LatentImage; euler; SamplerCustomAdvanced; width and height rounded up to 16 (at least 256) by its math nodes. The preset table feeds Ideogram4Scheduler (Quality 48 steps / mu 0 / std 1.5, Default 20 / 0 / 1.75, Turbo 12 / 0.5 / 1.75); the graph runs Quality, the recipe of the preview stills with people (those without ran Default, as the original workflow does). No negative prompt: the guidance is asymmetric with a text-free unconditional pass. The prompt is an Ideogram 4 JSON caption (the app writes one from plain words); plain sentences often come back as the grey \"blocked by safety filter\" card. The Realism Engine LoRA graph is not used."
     },
     {
@@ -16006,7 +16006,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it); Krea2-realism-V2 LoRA MIT",
-      "validated": false,
+      "validated": true,
       "notes": "The official Krea 2 Turbo text-to-image graph with LoraLoaderModelOnly Krea2-realism-V2 at 1.0 after the UNET, run as the LoRA's author recommends: euler / simple, 6 steps (4-8), cfg 1 with ConditioningZeroOut, about 2 MP (1 MP gets noisy), detailed natural-language prose. Removed: the style-LoRA and Refine-prompt switches, the ResolutionSelector (explicit width/height, multiple of 16)."
     },
     {
@@ -16092,7 +16092,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it)",
-      "validated": false,
+      "validated": true,
       "notes": "The official Krea 2 Turbo text-to-image graph: euler / simple, 8 steps, cfg 1 with ConditioningZeroOut, 1024x1024 by default. Removed: the style-LoRA and Refine-prompt switches (your own LoRAs attach after the UNET as on every graph), the ResolutionSelector (explicit width/height, multiple of 16)."
     },
     {
@@ -16201,7 +16201,7 @@
       ],
       "vramGb": 20,
       "license": "Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it); the Krea 2 General Edit V2 LoRA is NON-COMMERCIAL (commercial use needs a licence from its author)",
-      "validated": false,
+      "validated": true,
       "notes": "The comfyui-krea2edit pack's \"Krea2 Image Edit\" graph with the pack's V2 LoRA krea2_general_edit_v2 at 1.0 → Krea2EditModelPatch (the photo VAE-encoded as source_latent, the pixel path vae + source_image, target_latent = the KSampler's latent, fit_mode fit, ref_boost 4, ref_boost_a 1, both references aligned) → Krea2EditGroundedEncode with the instruction (grounding_px 768) as the positive and an empty one on the same photo as the negative; EmptySD3LatentImage; KSampler 8 steps (the V2 card; the v1.2 graph used 10), cfg 1, euler, simple. image2 is the person for \"put this person in the scene\" (a group the pack's graph ships bypassed): its loader goes when no second photo is given. The output follows image 1 (\"auto\") or the shape asked for; 1 MP is the sweet spot. Removals need the Raw model at cfg 3 (pack README): Turbo at cfg 1 tends to re-render the subject."
     },
     {
@@ -16310,7 +16310,7 @@
       ],
       "vramGb": 20,
       "license": "Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it); the Krea 2 Identity Edit V2 LoRA is NON-COMMERCIAL (commercial use needs a licence from its author)",
-      "validated": false,
+      "validated": true,
       "notes": "krea2-edit-general's graph (the pack's \"Krea2 Image Edit\") with krea2_identity_edit_v2 at 1.0, ref_boost 2 and the person aligned (trained): a new place, pose or outfit, the same face. For a distinctive face, end the instruction with \"Preserve the exact facial identity - distinguishing features: ...\" (pack notes). image2 = a second person or the person to put in the scene, dropped when not given. 8 steps, cfg 1, euler, simple."
     },
     {
@@ -16402,7 +16402,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it)",
-      "validated": false,
+      "validated": true,
       "notes": "Image to image on Krea 2 Turbo, built like z-image-turbo-i2i: the picture scaled to about 2 MP on the 16-pixel grid, VAE-encoded, then Krea 2 Turbo's sampler (8 steps, cfg 1, euler, simple) at denoise = strength (0.6). The result keeps the picture's shape."
     },
     {
@@ -16718,7 +16718,7 @@
       "customNodes": [],
       "vramGb": 24,
       "license": "CC-BY-NC-4.0 (Bria FIBO 2.0 weights: NON-COMMERCIAL; commercial use needs a Bria agreement)",
-      "validated": false,
+      "validated": true,
       "notes": "The FIBO 2 Dev text-to-image VGL workflow: core TextGenerate on Qwen3.5 9B int8 (CLIPLoader type stable_diffusion, 2048 tokens, sampling off) turns the words into Bria's VGL JSON with an art-director system prompt, and CLIP Text Encode (fibo2, Qwen3-VL 4B int8) encodes it; empty negative, 30 steps, cfg 5, euler / simple. The ResolutionSelector is replaced by an explicit width x height (FIBO 2 is trained at about 1 MP, multiple of 16); the prompt preview and the notes are removed."
     },
     {
@@ -16823,7 +16823,7 @@
       "customNodes": [],
       "vramGb": 16,
       "license": "CC-BY-NC-4.0 (Bria FIBO 2.0 weights: NON-COMMERCIAL; commercial use needs a Bria agreement)",
-      "validated": false,
+      "validated": true,
       "notes": "The FIBO 2 Dev multi-image edit workflow: image 1 scaled to 1 MP and to a multiple of 16 (bicubic), the other references straight into TextEncodeFibo2 (images.image_2..4: the original graph wires two, 3 and 4 are wired the same way). The encoder gives the conditioning and the latent at the trained size of image 1's shape (width = height = 0); empty negative (the null caption FIBO 2 was trained with), 30 steps, cfg 5, euler / simple. One picture is scaled and centre-cropped to the result (the edit lines up with it pixel for pixel); several are each scaled to their own trained size. References not given are left out of the encoder. The instruction names the pictures <image_1>, <image_2>... The VGL edit graphs (a 9.75 GB prompt writer on every edit) are not used."
     },
     {
@@ -16915,7 +16915,7 @@
       "customNodes": [],
       "vramGb": 16,
       "license": "CC-BY-NC-4.0 (Bria FIBO 2.0 weights: NON-COMMERCIAL; commercial use needs a Bria agreement)",
-      "validated": false,
+      "validated": true,
       "notes": "The FIBO 2 Edit Turbo multi-image edit workflow: fibo2-dev-edit on the Edit Turbo weights, 4 steps, cfg 1 (no negative pass), euler / simple; references 3 and 4 wired like reference 2, and left out when not given. Edits only: the turbo weights aren't used for text to image."
     },
     {

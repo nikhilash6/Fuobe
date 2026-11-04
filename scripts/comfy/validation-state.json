@@ -83,6 +83,24 @@
     "error": null,
     "at": "2026-10-16T20:57:21.016Z"
   },
+  "fibo2-dev-edit": {
+    "sha256": "992017c59febfc88b98f5b3e2e038402ad0e6dfc27e48cf7dbc8196a0fc9bd5d",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.096Z"
+  },
+  "fibo2-dev-t2i": {
+    "sha256": "527b61a8081295df35331aa3481708cc1c424bcb8afbc1029b9b5cebfdc431fb",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.095Z"
+  },
+  "fibo2-edit-turbo-edit": {
+    "sha256": "6f81f2f97a4d5c63730486478b47f1c9c07ff168bc65b016987ffa3ac595f920",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.097Z"
+  },
   "flux1-dev-t2i": {
     "sha256": "62de41ccfa9c0fcce1599c8f5f712b983e767800af5b73a4e06cb71a1aa649ea",
     "validated": true,
@@ -202,6 +220,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T20:57:25.685Z"
+  },
+  "ideogram4-t2i": {
+    "sha256": "b0847a7c624c75668f301dfc7a9a01673f95c50a6397d9381b722622e8972cd5",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.094Z"
   },
   "image-face-mosaic-sam3": {
     "sha256": "4493ff975bbb3d81188837a2f7de3e20d8c485fcc92a96b4b9fc3401cb6fa03b",
@@ -347,6 +371,36 @@
     "error": null,
     "at": "2026-10-23T00:12:21.225Z"
   },
+  "krea2-edit-general": {
+    "sha256": "76bc87a9ad55717a2c94f63418e7c094fbf8988a8b5e248d0d594d14a4d39dcf",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.096Z"
+  },
+  "krea2-edit-identity": {
+    "sha256": "3a5ed1a9b2010f3114a2f4750118d3a24213b977c0c03f37c18ecd7f98f18d26",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.097Z"
+  },
+  "krea2-realism-t2i": {
+    "sha256": "93b01aeb5d584a78d26271c8a42ad9e7c82c3d38e26f02437dfe2c03d90afded",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.094Z"
+  },
+  "krea2-turbo-i2i": {
+    "sha256": "fab03e77b8a82f83404e6c9e069a157221e08acc1e5aa8abe04c075ad53046eb",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.096Z"
+  },
+  "krea2-turbo-t2i": {
+    "sha256": "3a39cd2708654be5a4ddeb85445d73fdca23ef8c5c96d7a1ab06a3eaaac40734",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.094Z"
+  },
   "layers-qwen-image-layered": {
     "sha256": "7e8aae04b028f3e0000ca59ab953c4af5be0a1a65f734481d8162179d6cc9e77",
     "validated": true,
@@ -450,10 +504,10 @@
     "at": "2026-10-17T21:02:01.881Z"
   },
   "moss-image-t2i": {
-    "sha256": "e306a63bdc30998b0f1083662f906faae772de46d8f6a71c90e17ec299b2fae5",
+    "sha256": "b31217edfbc0d7f88fe89867afc5c7f34d32290bdfc8f5f202263cfd6af37fe6",
     "validated": true,
     "error": null,
-    "at": "2026-10-30T09:40:38.592Z"
+    "at": "2026-11-04T19:55:00.095Z"
   },
   "music-ace-step-15": {
     "sha256": "ddfe9b5459aab53ddd05a8a767fcd75d48c572574e4898198200067a3e53a5d8",
@@ -521,6 +575,42 @@
     "error": null,
     "at": "2026-10-21T16:25:18.796Z"
   },
+  "qwen-image-21-edit": {
+    "sha256": "552cb279fe235af2d9db1445e206b4fe4acfb399d0a51b16af18af811060776b",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.090Z"
+  },
+  "qwen-image-21-edit-draft": {
+    "sha256": "3e58c31b3464559f727b22ee46ea54b5594c86c3a7563d3c3c29ed1cd368d205",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.091Z"
+  },
+  "qwen-image-21-inpaint": {
+    "sha256": "b2b2464bf5fd9ec2d7652f7d2119031c89ba675eb34b03cd4a26ceb87cede2c2",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.092Z"
+  },
+  "qwen-image-21-inpaint-draft": {
+    "sha256": "c47152b10dbab94d33f98de81309eb8400f5466bc817b54896893b961e76ddd4",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.092Z"
+  },
+  "qwen-image-21-outpaint": {
+    "sha256": "f2a6229690848015d00dc81c718d2ea79ed14e271363d7eb3aed25bde6357331",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.093Z"
+  },
+  "qwen-image-21-outpaint-draft": {
+    "sha256": "e97298f69484412ce1e7c15d21b285ad47b6e1eba01592972cb7c4c93103ec6e",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.093Z"
+  },
   "qwen-image-21-qma": {
     "sha256": "dfafe7192f5f94796a4d9c3b6cfd9b2e42b4971dca91c0811fd5412fd6481e53",
     "validated": true,
@@ -538,6 +628,24 @@
     "validated": true,
     "error": null,
     "at": "2026-11-04T03:21:58.891Z"
+  },
+  "qwen-image-21-t2i": {
+    "sha256": "4cb5c638906665a1d1d50ae1b271eb6b4f8a13330c65ad05abc07609926633ce",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.089Z"
+  },
+  "qwen-image-21-t2i-draft": {
+    "sha256": "70237732a98d072e569dd7fb9588a91a0e285b7088e9664276d01ec1fbb25079",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.090Z"
+  },
+  "qwen-image-21-turbo-edit": {
+    "sha256": "2e5032ac5a831fa251a10bed9a9ed3c377ce211aa9dbb3809616555f925c1a44",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T19:55:00.091Z"
   },
   "qwen-image-2512-t2i": {
     "sha256": "c18da4a3488120bdcee722e4ae7d187385544ec4805753e7dae6946ddb6f6ba5",
