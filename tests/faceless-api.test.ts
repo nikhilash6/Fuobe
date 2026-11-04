@@ -1,6 +1,10 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { EpisodeSettings, EpisodeView, FacelessChannel, FacelessEpisode } from "@/lib/catalog/faceless";
 import { tempDir } from "./helpers/temp-dir";
+
+// Regenerate is switched off for now (REGEN_OFFERED); Faceless's Regenerate to 1080p is checked as it runs once switched on.
+// tests/regenerate-held.test.ts checks that every way in refuses it while it is off.
+vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 
 const dir = tempDir("fuobe-faceless-");
 process.env.FUOBE_DATA_DIR = dir;
@@ -257,8 +261,9 @@ describe("Episodes", () => {
       // Regenerate to 1080p (open engine only): every scene redrawn by Open-H3 Regenerate, joined and mixed again with the
       // episode's own narration and subtitles timing; the cloud shows no Regenerate.
       expect(doneCloud.regenerate).toBeNull();
-      // Offered on the open engine while Regenerate is (REGEN_OFFERED, held for now); the action itself runs either way.
-      expect(doneOpen.regenerate).toEqual(REGEN_OFFERED ? { scenes: 6, demo: true } : null);
+      // Offered on the open engine while Regenerate is (REGEN_OFFERED, switched on for this file).
+      expect(REGEN_OFFERED).toBe(true);
+      expect(doneOpen.regenerate).toEqual({ scenes: 6, demo: true });
       expect((await actionRoute.POST(json("POST"), params({ id: cloudId, action: "regenerate" }))).status).toBe(422);
       const regenOpen: EpisodeView = await (await actionRoute.POST(json("POST"), params({ id: openId, action: "regenerate" }))).json();
       const rIds = regenOpen.episode.plan!.regenerated!.ids;

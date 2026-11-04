@@ -5,6 +5,9 @@ import type { Generation } from "@/lib/catalog/types";
 import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
+// Regenerate is switched off for now (REGEN_OFFERED); Shorts' Enhance is checked as it runs once switched on.
+// tests/regenerate-held.test.ts checks that every way in refuses it while it is off.
+vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 
 const dir = tempDir("fuobe-shorts-");
 process.env.FUOBE_DATA_DIR = dir;

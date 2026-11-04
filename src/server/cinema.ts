@@ -2,7 +2,7 @@ import "server-only";
 import { nanoid } from "nanoid";
 import { getModel } from "@/lib/catalog";
 import type { CinemaFolder, CinemaItem, CinemaProject, CinemaTakeInfo, CinemaTile, DirectorMessage, DirectorSettings } from "@/lib/catalog/cinema";
-import { finishIn2k, REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { finishIn2k, REGEN_COPY, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { db } from "./db";
 import { ConnectComfyError, createGenerations, getGeneration, listGenerations, previewChained, previewGeneration, toGeneration } from "./generations";
@@ -715,9 +715,9 @@ export function finishTake(projectId: string, generationId: string): Generation[
   const g = row ? liveGeneration(generationId) : null;
   if (!row || !g) throw new CinemaError("That take isn't in this project", 404);
   // A take from your GPU is finished by Open-H3 Regenerate (perSecond null): only while it is offered (REGEN_OFFERED).
-  const offered = finishIn2k(g, engineMode());
-  const finish = offered && (offered.perSecond !== null || REGEN_OFFERED) ? offered : null;
+  const finish = finishIn2k(g, engineMode());
   if (!finish) throw new CinemaError("Finish in 2K is for finished MiniMax H3 takes made below 2K", 422);
+  if (finish.perSecond === null && !REGEN_OFFERED) throw new CinemaError(REGEN_COPY.heldFinish, 422);
   // Once per take: a 2K finish under way or made (this action's, or the 2K run's own finish of its draft) isn't repeated.
   if (finishedIn2k(generationId)) throw new CinemaError("This take already has a 2K finish", 409);
   const project = getProject(projectId);

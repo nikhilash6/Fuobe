@@ -64,7 +64,7 @@ import { pollTrainings } from "./training";
 import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, createVoiceFirst, joinClips } from "./chains";
 import { chainedRefine } from "@/lib/av/hi3d";
 import { wantsVoiceFirst } from "@/lib/av/voice-first";
-import { createH3TwoKRun, createRegenerateRun, keepsH3Latent, regenSwitchedOff } from "./regenerate";
+import { createH3TwoKRun, createRegenerateRun, keepsH3Latent, regenHeld, regenSwitchedOff } from "./regenerate";
 import { H3_2K_STEPS_NOTE, h3TwoKRequests, REGEN_COPY, REGEN_MODEL, regenerateGraphLoras, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
 import { kandinskyPrompt } from "@/lib/kandinsky-prompt";
@@ -900,6 +900,9 @@ const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "ext
 /** What a request would run as — model, operation, job count and cost — without starting it. */
 export function previewGeneration(asked: GenerationRequest) {
   const moved = currentRequest(asked);
+  // Open-H3 Regenerate while it is held (REGEN_OFFERED), and MiniMax H3's 2K on your GPU that finishes with it: priced as refused.
+  const held = regenHeld(moved.request);
+  if (held) throw new Error(held);
   const prepared = prepare(moved.request);
   const { plan, route, demo, providerId, cost, asked: askedLoras, unreachable, switchedOff, gpu, h3 } = prepared;
   const notes = moved.note ? [moved.note, ...prepared.notes] : prepared.notes;
@@ -1013,6 +1016,10 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   // A retired model or operation (a retry, an old script, a saved project) runs on what replaced it, and says so.
   const moved = currentRequest(asked);
   const original = withFinishOf(moved.request, opts.dependsOn);
+  // Open-H3 Regenerate is held until it has run on a card that fits it (REGEN_OFFERED): a run of it, or of MiniMax H3's 2K on
+  // your GPU that finishes with it, is refused here before any step is made, whichever way it was asked for.
+  const held = regenHeld(original);
+  if (held) throw new Error(held);
   // Open models make multi-shot films shot by shot, then join the clips. A Fuobe Original is taken on the engine it runs
   // on (Fuobe DoP's Frames mode is a GPU chain).
   // A model (or an Original's engine asked for) switched off in Settings → Models & licences is refused here, before a

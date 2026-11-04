@@ -9,6 +9,9 @@ import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
 // it ran on and says where; the finish loads it only from there, names the draft it waits for when it starts (so a retried
 // draft is the one loaded), redraws the draft's clip when the latent is gone, and never loads one across places.
 vi.setConfig({ testTimeout: 120_000 });
+// Regenerate is switched off for now (REGEN_OFFERED); these tests check it as it runs once switched on.
+// tests/regenerate-held.test.ts checks that every way in refuses it while it is off.
+vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-regen-latent-"));
 process.env.FUOBE_DATA_DIR = dir;

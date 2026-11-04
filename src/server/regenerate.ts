@@ -2,6 +2,7 @@ import "server-only";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import {
+  ENHANCE_FEATURES,
   H3_TURBO_4STEP_LORA,
   h3TwoKRequests,
   isH3Source,
@@ -12,12 +13,15 @@ import {
   REGEN_FILES,
   REGEN_LORA,
   REGEN_MAX_PARTS,
+  REGEN_MODEL,
+  REGEN_OFFERED,
   REGEN_ONE_PASS_NOTE,
   REGEN_SEAM_NOTE,
   regenCropNote,
   regenCrops,
   regenTooLong,
   regenWindows,
+  wantsH3TwoK,
 } from "@/lib/catalog/regenerate";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import type { Generation, GenerationRequest, ModelDef } from "@/lib/catalog/types";
@@ -64,6 +68,19 @@ const positive = (n: number | undefined) => (typeof n === "number" && n > 0 ? n 
 export function regenSwitchedOff(): string | undefined {
   if (!offeredLoras([REGEN_LORA]).dropped.length) return undefined;
   return tenant() ? REGEN_COPY.off : `Open-H3 Regenerate runs with the ${REGEN_FILES[0].item}, which is switched off in ${ACCESS_PLACE}. Turn it back on there, or pick Restore · faithful`;
+}
+
+/**
+ * Why a run can't start while Open-H3 Regenerate is held (REGEN_OFFERED: it hasn't run on a card that fits it yet), for
+ * the owner and visitors alike: a Regenerate run however it is asked for (Upscale → Video, Edit video's Enhance, a Canvas
+ * node, a skill, a studio's steps, the API), and MiniMax H3 at 2K on your GPU, whose takes it finishes. In plain words for
+ * what was asked; undefined while it is offered, and for any other run.
+ */
+export function regenHeld(req: Pick<GenerationRequest, "feature" | "modelId" | "params">): string | undefined {
+  if (REGEN_OFFERED) return undefined;
+  if (wantsH3TwoK(req.modelId, req.params?.resolution)) return REGEN_COPY.heldTwoK;
+  if (req.modelId !== REGEN_MODEL) return undefined;
+  return ENHANCE_FEATURES.has(req.feature) ? REGEN_COPY.heldEnhance : REGEN_COPY.held;
 }
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;

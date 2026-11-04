@@ -10,6 +10,9 @@ import { startFakeComfy, TINY_MP4, type FakeComfy } from "./helpers/fake-comfy-r
 // server loads one only from a run of the same account that kept it on the same ComfyUI: never the owner's or another
 // account's, even when both sit on one ComfyUI. An account's own 2K run hands its latent over on its own GPU.
 vi.setConfig({ testTimeout: 120_000 });
+// Regenerate is switched off for now (REGEN_OFFERED); these tests check it as it runs once switched on.
+// tests/regenerate-held.test.ts checks that every way in refuses it while it is off.
+vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-latent-"));
 process.env.FUOBE_DATA_DIR = dir;

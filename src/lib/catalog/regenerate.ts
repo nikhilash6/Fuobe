@@ -398,6 +398,16 @@ export const REGEN_COPY = {
   missingVisitor: "Your ComfyUI doesn't have Open-H3 Regenerate yet. Add it with Fuobe's ComfyUI setup, then run this again.",
   /** The refusal when Settings → Models & licences has the refiner switched off. */
   off: "Regenerate isn't available right now. Pick Restore · faithful to sharpen the clip instead.",
+  /** The refusals while Regenerate is held (REGEN_OFFERED off), for the owner and visitors alike: a run of it asked for directly. */
+  held: "Regenerate isn't available yet. Pick Restore · faithful to sharpen the clip instead.",
+  /** MiniMax H3 at 2K on your GPU, whose takes it finishes. */
+  heldTwoK: "MiniMax H3 in 2K isn't available on your GPU yet. Pick 768p, or make it in the cloud.",
+  /** Enhance (H3 regenerate) on an Edit video result or a Shorts segment. */
+  heldEnhance: "Enhance (H3 regenerate) isn't available yet.",
+  /** Finish in 2K on a take from your GPU (a cloud take still re-renders at 2K). */
+  heldFinish: "Finish in 2K isn't available for a take from your GPU yet.",
+  /** Faceless's Regenerate to 1080p. */
+  heldEpisode: "Regenerate to 1080p isn't available yet. Pick Upscale to 1080p instead.",
   gpuOnly: "Runs on your GPU (open source)",
   prompt: "Describe the clip: what is in it, how it moves, the light. Regenerate redraws it from these words",
   /** A 2K finish whose draft's saved copy is gone from the GPU (a retry redraws the draft's clip instead). */

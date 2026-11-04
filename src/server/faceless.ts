@@ -85,7 +85,7 @@ import {
 } from "@/lib/catalog/faceless";
 import { routesFor } from "@/lib/catalog/plan";
 import { pricingAt } from "@/lib/catalog/promo";
-import { REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { REGEN_COPY, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { DocxError, docxText } from "./assist/docx";
 import { PdfError, pdfText } from "./assist/pdf";
@@ -1163,6 +1163,8 @@ function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["rege
  */
 export function regenerateEpisode(id: string): FacelessEpisode {
   const ep = mustEpisode(id);
+  // Open-H3 Regenerate is held until it has run on a card that fits it (REGEN_OFFERED): nothing is made.
+  if (!REGEN_OFFERED) throw new FacelessError(REGEN_COPY.heldEpisode, 422);
   if (!ENGINE_MODELS[ep.settings.engine].regenerate) throw new FacelessError("Regenerate runs on your GPU (open source): switch the episode to open source to use it", 422);
   const final = finalOf(ep);
   if (!ep.plan || !final) throw new FacelessError("Wait for the episode to finish first", 409);
