@@ -382,6 +382,12 @@ export interface AssetRef {
   /** SQL that names the row, and the key that tells rows apart (default `id`; a Cinema take and its project are one project). */
   name?: string;
   key?: string;
+  /**
+   * The column naming the account a row belongs to (an account's own board or project). Such a row keeps only that
+   * account's own files: what a board names is checked when the file is read, not when the board is saved, and a
+   * project's free text is never checked, so a row naming the owner's or another account's file must never keep it.
+   */
+  account?: string;
 }
 
 /**
@@ -434,9 +440,9 @@ export const ASSET_REFS: AssetRef[] = [
   // An account's own boards and projects (public sign-up): a board's pages (its nodes' pictures and clips), and a
   // project's data (a Shorts session or preset, a Cinema project, a Character Swap project…) and its list line (a
   // short's final video, a swap's character picture). `key` is set so an owner's dry run never deletes these rows
-  // (skill-runs.ts STUDIO_TABLES).
-  { table: "account_canvases", cols: ["pages_json"], what: "account canvas", key: "id", name: "name" },
-  { table: "account_projects", cols: ["data_json", "summary_json"], what: "account project", key: "id", name: "name" },
+  // (skill-runs.ts STUDIO_TABLES). `account` lets a row keep only its own account's files.
+  { table: "account_canvases", cols: ["pages_json"], what: "account canvas", key: "id", name: "name", account: "account_id" },
+  { table: "account_projects", cols: ["data_json", "summary_json"], what: "account project", key: "id", name: "name", account: "account_id" },
 ];
 
 /**
@@ -505,8 +511,10 @@ export const ASSET_FREE: Record<string, string> = {
 export function assetRefSql(r: AssetRef): string {
   const where = r.cols.map((c) => `instr(COALESCE(${c}, ''), @id) > 0`).join(" OR ");
   const except = r.except ? ` AND ${r.except} != @g` : "";
+  // A row of the file's own account only (the owner's files have no account, so no account's row keeps them).
+  const own = r.account ? ` AND ${r.account} = (SELECT account_id FROM assets WHERE id = @id)` : "";
   const trashed = r.table === "generations" ? ", EXISTS (SELECT 1 FROM generation_trash t WHERE t.generation_id = generations.id) AS trashed" : "";
-  return `SELECT ${r.key ?? "id"} AS k, ${r.name ?? "NULL"} AS n${trashed} FROM ${r.table} WHERE (${where})${except} LIMIT @max`;
+  return `SELECT ${r.key ?? "id"} AS k, ${r.name ?? "NULL"} AS n${trashed} FROM ${r.table} WHERE (${where})${except}${own} LIMIT @max`;
 }
 
 /**
