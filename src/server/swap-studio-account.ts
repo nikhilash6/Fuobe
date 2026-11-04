@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { GUEST_HEADER, GUEST_LIBRARY_MESSAGE } from "@/lib/guest-access";
 import { projectRefsProblem, projectSavesLimited } from "./account-projects";
 import { bodyTooBig, guestRun, refusalResponse, runAccountTool, toolViewer, toolWishes } from "./account-tool-run";
-import { requestViewer, type Account } from "./auth";
+import type { Account } from "./auth";
 import { AccountRunError, asAccount } from "./generations";
 import { body, handle } from "./shorts-schemas";
 import { planSwapJob, startSwapJob, StudioError } from "./swap-studio";
