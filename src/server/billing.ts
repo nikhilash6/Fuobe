@@ -187,7 +187,7 @@ function target(): HookTarget | null {
 
 declare global {
   var __fuobeBillingBadUrl: boolean | undefined;
-  var __fuobeBillingPolicies: Map<string, { at: number; ttlMs: number; policy: Policy }> | undefined;
+  var __fuobeBillingPolicies: Map<string, { at: number; ttlMs: number; policy: Policy | null }> | undefined;
   var __fuobeBillingBalances: Map<string, { at: number; balance: Balance }> | undefined;
 }
 
@@ -220,8 +220,15 @@ export const OPEN_POLICY: Policy = {
 };
 
 /**
+ * After a policy call that got no answer, how long the last answer (or none) stands before the service is asked again
+ * (ms). A guest's status is read on every page, so a guest's policy waits longer.
+ */
+export const POLICY_RETRY_MS = { account: 5_000, guest: 60_000 };
+
+/**
  * The account's policy (cached for its `ttlS`), or a guest's (`accountId` null: GET /v1/policy with no account). No
- * service: OPEN_POLICY. The service down: null (the caller treats runs on this install's GPUs as paused).
+ * service: OPEN_POLICY. The service down: the last answer, else null (the caller treats runs on this install's GPUs as
+ * paused). That stands for POLICY_RETRY_MS, so a service that doesn't answer isn't waited for on every call.
  */
 export async function policy(accountId: string | null): Promise<Policy | null> {
   if (!billingConfigured()) return OPEN_POLICY;
@@ -229,16 +236,31 @@ export async function policy(accountId: string | null): Promise<Policy | null> {
   const key = accountId ?? "";
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < hit.ttlMs) return hit.policy;
+  const keep = (entry: { at: number; ttlMs: number; policy: Policy | null }) => {
+    cache.set(key, entry);
+    if (cache.size > 5000) cache.delete(cache.keys().next().value!);
+  };
   try {
     const p = await call<Policy>("GET", accountId ? `/v1/policy?account=${encodeURIComponent(accountId)}` : "/v1/policy", undefined, BILLING_TIMEOUTS.policy);
     const ttlMs = Math.max(0, Math.min(3600, Number(p.ttlS) || 0)) * 1000;
-    cache.set(key, { at: Date.now(), ttlMs, policy: p });
-    if (cache.size > 5000) cache.delete(cache.keys().next().value!);
+    keep({ at: Date.now(), ttlMs, policy: p });
     return p;
   } catch (e) {
     logDown("policy", e);
-    return hit?.policy ?? null;
+    const last = hit?.policy ?? null;
+    keep({ at: Date.now(), ttlMs: accountId ? POLICY_RETRY_MS.account : POLICY_RETRY_MS.guest, policy: last });
+    return last;
   }
+}
+
+/**
+ * The policy as last read, with no call to the service: undefined when none is kept (or it is too old). No service:
+ * OPEN_POLICY.
+ */
+export function cachedPolicy(accountId: string | null): Policy | null | undefined {
+  if (!billingConfigured()) return OPEN_POLICY;
+  const hit = globalThis.__fuobeBillingPolicies?.get(accountId ?? "");
+  return hit && Date.now() - hit.at < hit.ttlMs ? hit.policy : undefined;
 }
 
 /** A free run's quote (no service set): Run keeps its own words. */

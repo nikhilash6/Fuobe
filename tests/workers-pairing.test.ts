@@ -133,6 +133,33 @@ describe("pairing a ComfyUI", () => {
     ]);
   });
 
+  it("on an install with no workers and no hosted runs, the owner's pairing runs ComfyUI on the owner's computer, as before", async () => {
+    delete process.env.FUOBE_HOSTED_RUNS;
+    setSetting("comfyWhere", "server");
+    const logged = () => db().prepare("SELECT detail_json FROM admin_audit WHERE action = 'settings.comfy_where' ORDER BY id").all() as { detail_json: string }[];
+    const before = logged().length;
+    const approve = async () => {
+      const s = await (await startRoute.POST(program("/api/gpu/pair/start", undefined, { body: JSON.stringify({ name: "pc" }) }))).json();
+      const r = await pairRoute.POST(browser("owner", "/api/gpu/pair", { method: "POST", body: JSON.stringify({ code: s.code }) }));
+      expect(r.status).toBe(200);
+      return (await r.json()) as { settingsNeeded?: boolean };
+    };
+    expect((await approve()).settingsNeeded).toBeUndefined();
+    expect(getSetting("comfyWhere")).toBe("computer");
+    // The change is in the admin log.
+    expect(logged().slice(before).map((r) => JSON.parse(r.detail_json))).toEqual([{ before: "server", after: "computer" }]);
+    // With hosted runs on, a pairing never moves the studio's jobs: the owner is told where to choose.
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    try {
+      setSetting("comfyWhere", "server");
+      expect((await approve()).settingsNeeded).toBe(true);
+      expect(getSetting("comfyWhere")).toBe("server");
+    } finally {
+      delete process.env.FUOBE_HOSTED_RUNS;
+      setSetting("comfyWhere", "server");
+    }
+  });
+
   it("codes are case- and dash-blind", () => {
     expect(pairCode("abcd efgh")).toBe("ABCD-EFGH");
     expect(pairCode("abcd-efg")).toBeNull();

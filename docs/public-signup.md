@@ -363,7 +363,9 @@ With it on:
 - An account whose own GPU is online runs there by default, unless the billing service's policy puts the studio's
   GPUs first (`prefer: "pool"`). The composer shows where a run goes ("Your GPU" or "This studio's GPUs"), and the
   person can pick either. When the account's own GPU doesn't answer and the run named no place, the run is not moved
-  to the studio's GPUs: the page asks first, and runs it there if the person says so.
+  to the studio's GPUs: the page asks first, and runs it there if the person says so. A run the studio's GPUs wouldn't
+  take (a model or a kind not offered there, extra LoRAs, a file kind they don't take, Image to 3D, the billing service
+  not answering) goes to the account's own GPU as before, and waits for it there.
 - A guest is told what the billing service's policy for guests says (without one, what any account gets).
 - Every other tool still needs the account's own GPU ("This tool doesn't run on your own GPU yet" stays as it is).
   Image to 3D and extra LoRAs added to a request stay on the account's own GPU. So do clips and sound as inputs,

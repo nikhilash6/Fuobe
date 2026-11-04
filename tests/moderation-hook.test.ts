@@ -36,6 +36,7 @@ const checks = await import("@/server/output-checks");
 const { getGeneration } = await import("@/server/generations");
 const { fileAccount, fileHeld } = await import("@/server/account-library");
 const { listReports } = await import("@/server/moderation");
+const { POOL_WORDS } = await import("@/lib/relay");
 
 let mod: FakeModeration;
 let bill: FakeBilling;
@@ -141,7 +142,10 @@ describe("the output check", () => {
     const id = await started();
     await until(() => row(id).stage === "checking");
     const g = getGeneration(id)!;
-    expect(g.stage).toBe("checking");
+    // A run on this install's GPUs: the check is part of "Working", with no word of its own.
+    expect(g.place).toBe("pool");
+    expect(g.stage).toBeUndefined();
+    expect(g.message).toBe(POOL_WORDS.working);
     expect(g.outputs).toEqual([]);
     const held = (JSON.parse(row(id).outputs_json) as { url: string }[])[0].url.replace(/^\/api\/files\//, "");
     expect(fileHeld(held)).toBe(true);

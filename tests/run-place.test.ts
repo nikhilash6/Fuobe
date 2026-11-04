@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkedPool, IN_BROWSER, mainModel, placePrice, runPlace, type RunPlaceInput } from "@/lib/run-place";
+import { checkedPool, composerPlace, IN_BROWSER, mainModel, placePrice, runPlace, type RunPlaceInput } from "@/lib/run-place";
 
 /** Where a run happens and what it costs, for each audience and engine (the composers' place chip and send button). */
 const fmt = (usd: number) => `$${usd.toFixed(2)}`;
@@ -186,6 +186,21 @@ describe("the main model of a pipeline", () => {
     expect(mainModel([{ modelName: "Join", costUsd: null }, { modelName: "Seedance", costUsd: 0.2 }])).toBe("Seedance");
     expect(mainModel([])).toBeUndefined();
     expect(mainModel(undefined)).toBeUndefined();
+  });
+});
+
+describe("where a composer's run goes, and the place it names", () => {
+  it("the person's pick, named", () => {
+    expect(composerPlace("own", false, true)).toEqual({ runOn: "own", place: "own" });
+    expect(composerPlace("pool", true, false)).toEqual({ runOn: "pool", place: "pool" });
+  });
+  it("its own GPU while online, named; this studio's GPUs when it isn't, named", () => {
+    expect(composerPlace(null, true, false)).toEqual({ runOn: "own", place: "own" });
+    expect(composerPlace(null, false, false)).toEqual({ runOn: "pool", place: "pool" });
+    expect(composerPlace(null, false, true)).toEqual({ runOn: "pool", place: "pool" });
+  });
+  it("this studio's GPUs first while its own GPU is online: shown, but not named, so the server can still use its own GPU", () => {
+    expect(composerPlace(null, true, true)).toEqual({ runOn: "pool", place: undefined });
   });
 });
 

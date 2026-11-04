@@ -87,7 +87,9 @@ reach two servers during a deploy) never pass a limit together. They apply with 
 `prefer: "pool"` sends a run to this install's GPUs first even when the account's own GPU is online. A place the
 request names always wins, so the account can still pick its own GPU. When the account's own GPU doesn't answer and the
 run named no place, Fuobe asks (409, `code: "own-gpu-offline"`, header `x-fuobe-place-ask`) instead of moving the run
-to this install's GPUs.
+to this install's GPUs, but only for a run this install's GPUs would take. Any other run goes to the account's own GPU,
+as before. While the policy is cached, a run on an account's own GPU never waits for the service; when a policy call
+gets no answer, the last answer (or none) stands for 5 seconds (60 for a guest) before the service is asked again.
 
 | Call | Request | Answer |
 |---|---|---|
@@ -103,7 +105,8 @@ to this install's GPUs.
 `shown` is the price the person saw before pressing Run. A service must never charge more than it: when the price would
 be higher, it refuses with `price-changed` and the new quote, and the person sees the new price before running again.
 
-A reserve's `text` is shown on the result once it succeeded ("7 units"). `maxWaitMs` is how long the run may wait in
+A reserve's `text` is shown on the result once it succeeded ("7 units"). A run that set an `amount` above 0 aside and
+then failed or was stopped says "Not charged"; a run whose hold set nothing aside says nothing about a charge. `maxWaitMs` is how long the run may wait in
 line before a GPU first takes it; past it the row fails and is refunded. Once a GPU has taken it, the limit is over: a
 run that goes back in line (a GPU paused or restarted) keeps its place and waits there.
 
@@ -113,6 +116,8 @@ if it had come that much earlier. Both are kept for every row of the run, and a 
 
 On the workers ([gpu-workers.md](gpu-workers.md)), `queue` counts the line the way the workers serve it: `ahead` is
 every task the workers that may run this one would serve first, whatever its model, and `lane` is the workflow's lane.
+`mine` counts the account's runs on this install's GPUs the way the limits do: one press of Run is one run, however
+many jobs or chain steps it has (`waiting`: none of its rows has started).
 A report's `gpuMs` is the time the workers' ComfyUI spent running the row's jobs, as they measured it (no waits, no
 files, no upload). A job that ran more than once counts once, for the attempt whose result was kept. `device` is the
 GPU's name. Elsewhere `gpuMs` is the row's time from its start to its end, and

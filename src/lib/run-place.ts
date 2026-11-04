@@ -171,6 +171,18 @@ export function mainModel(steps: readonly { modelName: string; costUsd: number |
   return best?.modelName;
 }
 
+/**
+ * Where a studio composer's run goes, with hosted runs on: the person's pick, else its own GPU while that is online
+ * (unless the studio puts its own GPUs first), else this studio's GPUs. `place` is what the run names beside the request:
+ * none when the default is this studio's GPUs only because the studio puts them first, so the server decides, and a
+ * model this studio's GPUs don't take still runs on the account's own GPU.
+ */
+export function composerPlace(pick: "own" | "pool" | null, ownOnline: boolean, preferPool: boolean): { runOn: "own" | "pool"; place: "own" | "pool" | undefined } {
+  if (pick) return { runOn: pick, place: pick };
+  if (!ownOnline) return { runOn: "pool", place: "pool" };
+  return preferPool ? { runOn: "pool", place: undefined } : { runOn: "own", place: "own" };
+}
+
 /** Drawn in this browser (a Kinetic template, Click to Ad's end card): the same place and price whoever looks. */
 export const IN_BROWSER: RunPlace = runPlace({ audience: "guest", engine: "browser", format: String });
 

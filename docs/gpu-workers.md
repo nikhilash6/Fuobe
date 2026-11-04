@@ -35,9 +35,10 @@ You do not need a start flag or a guard file. In the studio, **Connect your GPU*
    gets a worker token (`fuobe_wkr_…`). The studio makes the token at that moment and keeps only its SHA-256 hash.
 
 The token acts only as that person's own computer. The ComfyUI gets that person's jobs, and nobody else's. The jobs
-run with no Fuobe tab open. The owner's pairing never changes where the studio's ComfyUI jobs run: the paired
-ComfyUI takes the owner's jobs once the owner chooses the computer in Settings → ComfyUI. Every change of that setting
-is in the admin log (`settings.comfy_where`, with the value before and after). The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
+run with no Fuobe tab open. When the owner pairs a ComfyUI, the studio's ComfyUI jobs move to the owner's computer, as
+before, unless they run on workers or hosted runs are on (`FUOBE_HOSTED_RUNS=1`). Then the pairing changes nothing of
+where they run: the paired ComfyUI takes the owner's jobs once the owner chooses the computer in Settings → ComfyUI.
+Every change of that setting is in the admin log (`settings.comfy_where`, with the value before and after). The person can disconnect the ComfyUI in Settings → Your GPU (`DELETE /api/gpu/paired/<id>`)
 or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected token gets 401 at its next call.
 
 ## Workers (the owner's shared GPUs)
@@ -204,11 +205,13 @@ gets 403 everywhere else. It is never the owner, and an owner API token can neve
 token on every call, so a revoked token stops at once.
 
 **A token's lifetime.** With `FUOBE_WORKER_TOKEN_DAYS` set (unset or 0: a token never expires, as before), a pool
-worker's token lasts that many days. Once half of it is gone, the beat answer of a worker that speaks protocol 2 gives
-it the next token (`worker.token: { value, expiresAt }`). The worker saves it and uses it from its next call on. The old
+worker's token lasts that many days. A worker added before the lifetime was set gets it from its first call after. Once
+half of it is gone, the beat answer of a worker that says it saves tokens (`canRotateToken: true` in its beat) gives it
+the next token (`worker.token: { value, expiresAt }`). The worker saves it and uses it from its next call on. The old
 token stops at the new one's first use. A next token that is never used is given again, as a new one, after 10
-minutes. A paired ComfyUI's token keeps no lifetime. Set the lifetime only once every worker speaks protocol 2: an
-older worker's token would simply expire.
+minutes. A paired ComfyUI's token keeps no lifetime. Set the lifetime only once every pool worker sends
+`canRotateToken: true`: the token of a worker that doesn't expires at the end of its lifetime, and the worker stops
+until you rotate its token in Settings → Workers.
 
 **Where a token is used from.** For a pool worker, the studio remembers the countries (Cloudflare's `cf-ipcountry`)
 and the networks (an IPv4 address's /24 or an IPv6 address's /64, read only with `FUOBE_TRUST_PROXY=1`) its token was
@@ -216,8 +219,8 @@ used from, as short hashes, never as addresses. A call from a new country or a n
 within 10 minutes of each other, each write an alert to the admin log (`worker.alert`, actor `system`, the worker as
 its target), at most once an hour each.
 
-- `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, local: { paused, why, until }, gpu: {
-  otherApps, tempC }, inventoryHash, warmLane }`. The answer adds `worker: { paused, pauseNow, drain, autoResume,
+- `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, canRotateToken?, local: { paused, why,
+  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane }`. The answer adds `worker: { paused, pauseNow, drain, autoResume,
   insideHours, nextChangeAt, lanes, minProtocol, sendInventory, token? }` (`token`: the next token, above) and
   `claimableNow`: how many people's jobs (an
   account's, never the owner's) this worker may claim right now by its lanes, files, VRAM and hours, its own pause aside.

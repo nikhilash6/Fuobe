@@ -49,6 +49,9 @@ const { loadManifest } = await import("@/server/providers/comfyui");
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { PLACE_ASK_HEADER } = await import("@/lib/guest-access");
+const hosted = await import("@/server/hosted");
+const { getGeneration } = await import("@/server/generations");
+const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 
 const HOST = "localhost:3000";
 const SITE_HEADERS = { host: HOST, "sec-fetch-site": "same-origin", origin: `http://${HOST}` };
@@ -57,6 +60,8 @@ const IMAGE = { feature: "image", modelId: "oss-z-image-turbo", prompt: "a light
 
 let fake: FakeBilling;
 let n = 0;
+/** The stand-in worker of the test that runs. */
+let worker: { id: string };
 
 /** A new account and its cookie (each test gets its own, so counts never carry over). */
 function account(o: { gpu?: "online" | "offline" } = {}) {
@@ -126,8 +131,34 @@ beforeEach(() => {
   setSetting("engineMode", "open");
   setSetting("demoMode", "off");
   db().prepare("DELETE FROM relay_workers").run();
-  standInWorker();
+  // Nothing of an earlier test waits in line.
+  db().prepare("UPDATE relay_tasks SET state = 'canceled' WHERE state IN ('waiting','sending','queued','running','collecting')").run();
+  worker = standInWorker();
 });
+
+const tick = () => globalThis.__fuobeRunner?.tick();
+async function until<T>(fn: () => T | Promise<T>, tries = 200, everyMs = 25): Promise<T> {
+  let v = await fn();
+  for (let i = 0; i < tries && !v; i++) {
+    await tick();
+    await new Promise((r) => setTimeout(r, everyMs));
+    v = await fn();
+  }
+  return v;
+}
+const taskOf = (generationId: string) => db().prepare("SELECT * FROM relay_tasks WHERE generation_id = ? ORDER BY created_at DESC").get(generationId) as { id: string; state: string } | undefined;
+const workerRow = () => db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(worker.id) as import("@/server/computer/workers").WorkerRow;
+/** The stand-in worker takes the next task in line, as the worker program does. */
+function workerTakes() {
+  pool.workerBeat(workerRow(), pool.cleanBeat({ device: `wkr-${worker.id}`, protocol: 1, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }));
+  return pool.workerClaim(workerRow(), [], Date.now());
+}
+const started = (generationId: string) => !!(db().prepare("SELECT started_at FROM generation_runs WHERE id = ?").get(generationId) as { started_at: number | null } | undefined)?.started_at;
+const preview = async (body: Record<string, unknown>, cookie: string) => {
+  const text = JSON.stringify(body);
+  const r = await generationsRoute.POST(new Request(`http://${HOST}/api/generations?preview=1`, { method: "POST", headers: { ...SITE_HEADERS, cookie, "content-type": "application/json", "content-length": String(Buffer.byteLength(text)) }, body: text }));
+  return { status: r.status, body: (await r.json()) as { place?: string; quote?: { amount: number } } };
+};
 
 const SHOWN = { shown: { amount: 7, priceVersion: "v7" } };
 
@@ -194,10 +225,26 @@ describe("runs at once on this install's GPUs", () => {
     const a = account();
     const p = await billing.policy(a.id);
     expect(p).toBe(billing.OPEN_POLICY);
-    for (let i = 0; i < 4; i++) expect((await post(IMAGE, a.cookie)).status).toBe(201);
-    const over = await post(IMAGE, a.cookie);
-    expect(over.status).toBe(429);
-    expect(poolRuns(a.id)).toBe(4);
+    // Lower than the studio's own limits, so only the policy's own count can stop these runs.
+    const was = { ...billing.OPEN_POLICY.limits };
+    try {
+      billing.OPEN_POLICY.limits.activeRuns = 1;
+      expect((await post(IMAGE, a.cookie)).status).toBe(201);
+      const second = await post(IMAGE, a.cookie);
+      expect(second.status).toBe(429);
+      expect(second.body.error).toBe(limits.POOL_LIMIT_WORDS.active(1));
+      expect(second.body.error).not.toBe(ACCOUNT_MESSAGES.activeRuns);
+      billing.OPEN_POLICY.limits.activeRuns = 0;
+      billing.OPEN_POLICY.limits.runsPerHour = 2;
+      expect((await post(IMAGE, a.cookie)).status).toBe(201);
+      const third = await post(IMAGE, a.cookie);
+      expect(third.status).toBe(429);
+      expect(third.body.code).toBe("limit");
+      expect(third.body.error).toBe(limits.POOL_LIMIT_WORDS.hourly);
+    } finally {
+      Object.assign(billing.OPEN_POLICY.limits, was);
+    }
+    expect(poolRuns(a.id)).toBe(2);
   });
 });
 
@@ -209,9 +256,11 @@ describe("runs waiting, runs an hour, runs from one address", () => {
     const second = await post({ ...IMAGE, ...SHOWN }, a.cookie);
     expect(second.status).toBe(429);
     expect(second.body.error).toBe(limits.POOL_LIMIT_WORDS.waiting(1));
-    // Once it has started, the next one may wait.
+    // Once a worker has taken it (its run has started), the next one may wait.
     const id = (db().prepare("SELECT id FROM generations WHERE json_extract(request_json, '$.account') = ?").get(a.id) as { id: string }).id;
-    db().prepare("INSERT OR REPLACE INTO generation_runs (id, submitted_at, started_at) VALUES (?, ?, ?)").run(id, Date.now(), Date.now());
+    const t = await until(() => taskOf(id));
+    expect(workerTakes()?.id).toBe(t!.id);
+    expect(await until(() => started(id))).toBe(true);
     expect((await post({ ...IMAGE, ...SHOWN }, a.cookie)).status).toBe(201);
   });
 
@@ -273,6 +322,18 @@ describe("where a run goes", () => {
     expect((await visitorStatus(auth.accountById(a.id)!)).viewer.prefer).toBe("pool");
   });
 
+  it("with this install's GPUs first, a run that names no place and that they don't take runs on the account's own GPU", async () => {
+    withBilling({ prefer: "pool", pool: { deny: ["oss-z-image-turbo"] }, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account({ gpu: "online" });
+    const r = await post(IMAGE, a.cookie);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.items![0].place).toBeUndefined();
+    // Named, it is a refusal (the person asked for that place).
+    const named = await post({ ...IMAGE, place: "pool", ...SHOWN }, a.cookie);
+    expect(named.status).toBe(403);
+    expect(named.body.code).toBe("not-offered");
+  });
+
   it("an own GPU that doesn't answer: a run that named no place is asked about, never moved and charged", async () => {
     withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
     const a = account({ gpu: "offline" });
@@ -289,6 +350,81 @@ describe("where a run goes", () => {
     expect(poolRuns(a.id)).toBe(1);
   });
 
+  it("an own GPU that doesn't answer: a run this install's GPUs wouldn't take goes to that GPU, as before, never asked about", async () => {
+    const a = account({ gpu: "offline" });
+    const own = (r: Awaited<ReturnType<typeof post>>, why: string) => {
+      expect(r.body.code, why).not.toBe("own-gpu-offline");
+      expect(r.headers.get(PLACE_ASK_HEADER), why).toBeNull();
+      expect(r.status, `${why}: ${JSON.stringify(r.body)}`).toBe(201);
+      expect(r.body.items![0].place, why).toBeUndefined();
+      // Stopped, so the studio's own limit of runs at once leaves room for the next.
+      db().prepare("UPDATE generations SET status = 'canceled' WHERE json_extract(request_json, '$.account') = ? AND status IN ('queued', 'running')").run(a.id);
+    };
+    const holds = fake.holds.size;
+    // Closed to the account.
+    withBilling({ hosted: false, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    own(await post(IMAGE, a.cookie), "hosted runs closed");
+    // A model the policy doesn't offer there.
+    withBilling({ pool: { allow: ["oss-qwen-image-21-turbo"] }, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    own(await post(IMAGE, a.cookie), "a model not offered");
+    // A kind the policy leaves out.
+    withBilling({ kinds: { image: false }, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    own(await post(IMAGE, a.cookie), "a kind left out");
+    // Extra LoRAs.
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const lora = await post({ ...IMAGE, loras: [{ file: "a-look.safetensors", strength: 0.8 }] }, a.cookie);
+    expect(lora.body.code).not.toBe("own-gpu-offline");
+    expect(lora.status, JSON.stringify(lora.body)).not.toBe(403);
+    // The billing service not answering (and no earlier answer kept).
+    billing.resetBillingCache();
+    fake.down = "error";
+    try {
+      own(await post(IMAGE, a.cookie), "the service down");
+    } finally {
+      fake.down = false;
+    }
+    expect(poolRuns(a.id)).toBe(0);
+    expect(fake.holds.size).toBe(holds);
+    expect(ownRuns(a.id)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("asked for this install's GPUs by name while they are closed to the account: said so, never run on its own GPU", async () => {
+    withBilling({ hosted: false, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account({ gpu: "online" });
+    const r = await post({ ...IMAGE, place: "pool", ...SHOWN }, a.cookie);
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe("not-offered");
+    expect(ownRuns(a.id) + poolRuns(a.id)).toBe(0);
+  });
+
+  it("an own GPU that answers: its run never waits for the billing service once its policy is known", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    fake.policy = { ...fake.policy, ttlS: 60 };
+    const a = account({ gpu: "online" });
+    await billing.policy(a.id);
+    const asked = () => fake.calls_of("/v1/policy").length;
+    const before = asked();
+    const r = await post(IMAGE, a.cookie);
+    expect(r.status).toBe(201);
+    expect(r.body.items![0].place).toBeUndefined();
+    expect(asked()).toBe(before);
+    // A service that doesn't answer is waited for once, then not again for a while.
+    billing.resetBillingCache();
+    fake.down = "hang";
+    try {
+      const t0 = Date.now();
+      expect((await post(IMAGE, a.cookie)).status).toBe(201);
+      expect(Date.now() - t0).toBeLessThan(billing.BILLING_TIMEOUTS.policy + 1500);
+      const after = asked();
+      const t1 = Date.now();
+      expect((await post(IMAGE, a.cookie)).status).toBe(201);
+      expect(Date.now() - t1).toBeLessThan(billing.BILLING_TIMEOUTS.policy);
+      expect(asked()).toBe(after);
+    } finally {
+      fake.down = false;
+    }
+  });
+
   it("a kind the policy leaves out is not offered here", async () => {
     withBilling({ kinds: { image: false }, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
     const a = account();
@@ -297,6 +433,22 @@ describe("where a run goes", () => {
     expect(r.body.code).toBe("not-offered");
     expect(hostedRun.kindAllowed({ kinds: { image: false } }, "video")).toBe(true);
     expect(hostedRun.kindAllowed({}, "model3d")).toBe(true);
+  });
+
+  it("a guest's policy that gets no answer isn't asked for again on every page for a while", async () => {
+    withBilling();
+    fake.down = "error";
+    try {
+      const before = fake.calls_of("/v1/policy").length;
+      expect((await visitorStatus(null)).viewer.hosted).toBeUndefined();
+      expect((await visitorStatus(null)).viewer.hosted).toBeUndefined();
+      expect(fake.calls_of("/v1/policy").length).toBe(before + 1);
+      expect(billing.cachedPolicy(null)).toBeNull();
+    } finally {
+      fake.down = false;
+    }
+    billing.resetBillingCache();
+    expect((await visitorStatus(null)).viewer.hosted).toBe(true);
   });
 
   it("a guest is told what the billing service's policy for guests says", async () => {
@@ -331,6 +483,74 @@ describe("a run's price facts", () => {
     expect(filmRun.steps?.find((s) => s.model === "oss-wan22-14b-fast")?.jobs).toBe(2);
     expect(filmRun.steps?.every((s) => s.model === "oss-wan22-14b-fast"), JSON.stringify(filmRun.steps)).toBe(true);
     expect(poolRuns(a.id)).toBe(2);
+  });
+
+  it("under the policy's cap on outputs, the price check and the run plan, price and make the same run", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0, outputsPerRun: 1 } });
+    const a = account();
+    const asked = { ...IMAGE, params: { numOutputs: 4 } };
+    const q = await preview(asked, a.cookie);
+    expect(q.body.place).toBe("pool");
+    const quoted = (fake.calls_of("/v1/quote").at(-1)!.body as { run: { jobs: number; steps?: { jobs: number }[] } }).run;
+    const r = await post({ ...asked, ...SHOWN }, a.cookie);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const reserved = (fake.calls_of("/v1/reserve").at(-1)!.body as { run: { jobs: number; steps?: { jobs: number }[] } }).run;
+    expect(quoted.jobs).toBe(1);
+    expect(reserved.jobs).toBe(1);
+    expect(reserved.steps).toEqual(quoted.steps);
+    expect(reserved.steps?.[0].jobs).toBe(1);
+    expect(r.body.items).toHaveLength(1);
+    expect((r.body as { notes?: string[] }).notes).toContain(ACCOUNT_MESSAGES.outputsCapped);
+  });
+
+  it("the account's runs in the line facts count one per press of Run, however many jobs", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account();
+    const r = await post({ ...IMAGE, params: { numOutputs: 3 }, ...SHOWN }, a.cookie);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.items!.length).toBeGreaterThan(1);
+    await until(() => r.body.items!.every((g) => taskOf(g.id)));
+    expect(hosted.queueFacts(a.id, "z-image-turbo-t2i").mine).toEqual({ waiting: 1, running: 0 });
+    expect((await post({ ...IMAGE, ...SHOWN }, a.cookie)).status).toBe(201);
+    const sent = (fake.calls_of("/v1/reserve").at(-1)!.body as { queue: { mine: { waiting: number } } }).queue;
+    expect(sent.mine.waiting).toBe(1);
+  });
+
+  it("a run whose hold set nothing aside never says it wasn't charged", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account();
+    const stopped = async () => {
+      const r = await post({ ...IMAGE, ...SHOWN }, a.cookie);
+      expect(r.status, JSON.stringify(r.body)).toBe(201);
+      const id = r.body.items![0].id;
+      db().prepare("UPDATE generations SET status = 'canceled', completed_at = ? WHERE id = ?").run(Date.now(), id);
+      return getGeneration(id)!;
+    };
+    expect((await stopped()).notCharged).toBe(true);
+    fake.price = { amount: 0, version: "v0" };
+    const free = await stopped();
+    expect(free.place).toBe("pool");
+    expect(free.notCharged).toBeUndefined();
+  });
+
+  it("a chain whose join no worker takes is refused before anything is made", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account();
+    const film = { feature: "video", modelId: "oss-wan22-14b-fast", prompt: "x", params: { aspectRatio: "16:9", shots: [{ prompt: "wide shot", duration: 3 }, { prompt: "close-up", duration: 3 }] }, ...SHOWN };
+    // Every lane but the joins'.
+    const joins = new Set(hosted.workflowPicks("video-concat-{n}").map((id) => pool.poolLane(id)));
+    expect(joins.size).toBeGreaterThan(0);
+    const lanes = allLanes(loadIndex(), sha).map((l) => l.lane);
+    expect(lanes.some((l) => !joins.has(l))).toBe(true);
+    pool.patchWorker(worker.id, { allow: Object.fromEntries(lanes.filter((l) => !joins.has(l)).map((l) => [l, { delayMs: 0 }])) });
+    const holds = fake.holds.size;
+    const r = await post(film, a.cookie);
+    expect(r.status, JSON.stringify(r.body)).toBe(403);
+    expect(r.body.code).toBe("not-offered");
+    expect(poolRuns(a.id)).toBe(0);
+    expect(fake.holds.size).toBe(holds);
+    // Its price check says the same: not here.
+    expect((await preview(film, a.cookie)).body.place).toBeUndefined();
   });
 
   it("every step must be one the policy allows: a later step's model it leaves out stops the run before anything is made", () => {

@@ -2,8 +2,9 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { tempDir } from "./helpers/temp-dir";
 
 /**
- * Pool worker tokens: a lifetime (FUOBE_WORKER_TOKEN_DAYS, off by default) with the next token in the beat answer, the
- * old token stopping at the new one's first use; and alerts in the admin log when a token is used from a new country, a
+ * Pool worker tokens: a lifetime (FUOBE_WORKER_TOKEN_DAYS, off by default) with the next token in the beat answer of a
+ * worker that says it saves tokens, the old token stopping at the new one's first use, and the lifetime given to a worker
+ * added before it was set; and alerts in the admin log when a token is used from a new country, a
  * new network, or two networks at once. The admin log and the worker's row never hold an address.
  */
 
@@ -32,8 +33,9 @@ afterEach(() => {
 
 const row = (id: string) => workers.getWorker(id)!;
 const bearer = (token: string) => `Bearer ${token}`;
-const beat = (id: string, protocol: number, now: number) =>
-  pool.workerBeat(row(id), pool.cleanBeat({ device: `wkr-${id}`, protocol, version: "2.0.0", local: { paused: true, why: "here", until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }), now);
+/** A beat; `rotate`: the worker says it saves the next token (`canRotateToken`). */
+const beat = (id: string, protocol: number, now: number, rotate = true) =>
+  pool.workerBeat(row(id), pool.cleanBeat({ device: `wkr-${id}`, protocol, version: "2.0.0", ...(rotate && { canRotateToken: true }), local: { paused: true, why: "here", until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }), now);
 const alerts = (id: string) =>
   (db().prepare("SELECT actor, target, detail_json FROM admin_audit WHERE action = 'worker.alert' AND target = ? ORDER BY id").all(id) as { actor: string; target: string; detail_json: string }[]).map(
     (r) => ({ actor: r.actor, ...(JSON.parse(r.detail_json) as { kind: string } & Record<string, unknown>) }),
@@ -46,14 +48,16 @@ describe("a pool worker's token lifetime", () => {
     expect(beat(w.id, 2, Date.now() + 400 * DAY).worker.token).toBeUndefined();
   });
 
-  it("with a lifetime: the next token once half is gone, to a worker that speaks protocol 2; the old one stops at its first use", () => {
+  it("with a lifetime: the next token once half is gone, to a worker that says it saves tokens; the old one stops at its first use", () => {
     process.env.FUOBE_WORKER_TOKEN_DAYS = "10";
     const t0 = Date.now();
     const w = workers.createWorker({ name: `expiring-${++n}`, kind: "pool" }, t0);
     expect(row(w.id).expires_at).toBe(t0 + 10 * DAY);
-    // More than half left: nothing yet. A worker on protocol 1 never gets one.
+    // More than half left: nothing yet. A worker that doesn't say it saves tokens never gets one, whatever its protocol.
     expect(beat(w.id, 2, t0 + 4 * DAY).worker.token).toBeUndefined();
-    expect(beat(w.id, 1, t0 + 6 * DAY).worker.token).toBeUndefined();
+    expect(beat(w.id, 2, t0 + 6 * DAY, false).worker.token).toBeUndefined();
+    expect(beat(w.id, 3, t0 + 6 * DAY, false).worker.token).toBeUndefined();
+    expect(pool.cleanBeat({ protocol: 2, canRotateToken: "yes" }).canRotateToken).toBeUndefined();
     const offered = beat(w.id, 2, t0 + 6 * DAY).worker.token!;
     expect(offered.value).toMatch(/^fuobe_wkr_[A-Za-z0-9_-]{43}$/);
     expect(offered.expiresAt).toBe(t0 + 16 * DAY);
@@ -92,11 +96,32 @@ describe("a pool worker's token lifetime", () => {
     expect(row(w.id).expires_at).toBe(t0 + 1.5 * DAY + MIN + 2 * DAY);
   });
 
+  it("a pool worker added before the lifetime was set gets it from its first call after, then the next token as any other", () => {
+    const t0 = Date.now();
+    const w = workers.createWorker({ name: `older-${++n}`, kind: "pool" }, t0);
+    expect(row(w.id).expires_at).toBeNull();
+    process.env.FUOBE_WORKER_TOKEN_DAYS = "4";
+    const t1 = t0 + 30 * DAY;
+    expect(workers.workerFromAuth(bearer(w.token), null, t1)?.id).toBe(w.id);
+    expect(row(w.id).expires_at).toBe(t1 + 4 * DAY);
+    // A later call keeps that expiry.
+    workers.workerFromAuth(bearer(w.token), null, t1 + DAY);
+    expect(row(w.id).expires_at).toBe(t1 + 4 * DAY);
+    const next = beat(w.id, 2, t1 + 3 * DAY).worker.token!;
+    expect(next.expiresAt).toBe(t1 + 7 * DAY);
+    // A worker that never takes it stops at the end of its lifetime.
+    expect(workers.workerFromAuth(bearer(w.token), null, t1 + 4 * DAY + 1)).toBeNull();
+    expect(workers.workerFromAuth(bearer(next.value), null, t1 + 4 * DAY + 2)?.id).toBe(w.id);
+  });
+
   it("a person's paired ComfyUI keeps its token as before", () => {
     process.env.FUOBE_WORKER_TOKEN_DAYS = "1";
     const p = workers.createWorker({ name: `paired-${++n}`, kind: "personal", principal: "owner" });
     expect(row(p.id).expires_at).toBeNull();
     expect(workers.offerNextToken(row(p.id), Date.now() + 400 * DAY)).toBeNull();
+    // Its calls give it no lifetime either.
+    expect(workers.workerFromAuth(bearer(p.token), null)?.id).toBe(p.id);
+    expect(row(p.id).expires_at).toBeNull();
   });
 });
 

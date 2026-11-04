@@ -211,8 +211,10 @@ export function toGeneration(r: Row): Generation {
     // On this install's GPUs (hosted runs): what it cost, or that it cost nothing.
     ...(stored.place === "pool" && { place: "pool" as const }),
     ...(stored.charge && r.status === "succeeded" && { charge: stored.charge }),
-    ...(hold && (r.status === "failed" || r.status === "canceled") && { notCharged: true as const }),
-    ...(checking && { stage: "checking" as const }),
+    // (Only when its hold set an amount aside: a free run's hold has nothing to give back, so nothing is said.)
+    ...(hold && stored.charged && (r.status === "failed" || r.status === "canceled") && { notCharged: true as const }),
+    // On this install's GPUs the output check is part of "Working": no word of its own.
+    ...(checking && !pool && { stage: "checking" as const }),
     // Waiting in line on this install's GPUs: its place and the wait, about.
     ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
   };

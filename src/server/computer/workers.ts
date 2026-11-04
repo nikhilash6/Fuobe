@@ -83,8 +83,8 @@ const touched = new Map<string, number>();
 
 /**
  * How long a pool worker's token lasts (FUOBE_WORKER_TOKEN_DAYS; unset or 0: it never expires, as before). With a
- * lifetime, the beat answer gives a worker that speaks protocol 2 its next token once half of it is gone, and the old
- * token stops the moment the new one is first used.
+ * lifetime, the beat answer gives a worker that says it saves tokens (`canRotateToken`) its next token once half of it
+ * is gone, and the old token stops the moment the new one is first used.
  */
 export function poolTokenMs(): number {
   const days = Number(process.env.FUOBE_WORKER_TOKEN_DAYS);
@@ -106,7 +106,8 @@ export interface CallSource {
 
 /**
  * The worker behind an Authorization header, read now: null when the token is unknown, revoked or expired. A pool
- * worker's next token (offered in a beat answer) works too, and its first use makes it the token: the old one stops.
+ * worker's next token (offered in a beat answer) works too, and its first use makes it the token: the old one stops. A
+ * pool worker's token with no expiry gets the lifetime (FUOBE_WORKER_TOKEN_DAYS, when set) from this call on.
  * Records when it was last used (at most every 30 s) and Cloudflare's country header. For a pool worker, a call from a
  * country or a network its token never came from before, or from a second network within minutes of another, writes an
  * alert to the admin log.
@@ -119,6 +120,13 @@ export function workerFromAuth(header: string | null | undefined, from: CallSour
   let row = db().prepare("SELECT * FROM relay_workers WHERE token_hash = ?").get(hash) as WorkerRow | undefined;
   if (!row) row = promoteNextToken(hash, now);
   if (!row || row.revoked_at || (row.expires_at && row.expires_at <= now)) return null;
+  // A pool worker added before tokens had a lifetime gets one now, from its first call after: no token is left that
+  // never expires and never changes.
+  const life = row.kind === "pool" && !row.expires_at ? poolTokenMs() : 0;
+  if (life) {
+    db().prepare("UPDATE relay_workers SET expires_at = ? WHERE id = ? AND kind = 'pool' AND expires_at IS NULL").run(now + life, row.id);
+    row = db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(row.id) as WorkerRow;
+  }
   const country = source.country && /^[A-Z]{2}$/.test(source.country) ? source.country : null;
   if (row.kind === "pool") noteSource(row, country, source.network ?? null, now);
   if (now - (touched.get(row.id) ?? 0) > 30_000) {

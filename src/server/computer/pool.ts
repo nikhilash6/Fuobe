@@ -123,6 +123,7 @@ export function cleanBeat(b: unknown): WorkerBeat {
     device: String(o.device ?? ""),
     protocol: num(o.protocol) ?? 0,
     version: text(o.version, 40) ?? "",
+    ...(o.canRotateToken === true && { canRotateToken: true }),
     ready: o.ready !== false,
     why: text(o.why, 64),
     local: { paused: local.paused !== false, why: text(local.why, 96), until: num(local.until) },
@@ -179,8 +180,9 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     }
     const state = workerState(fresh, now);
     d.prepare("UPDATE relay_workers SET state = ? WHERE id = ?").run(state.state, w.id);
-    // A worker that can save a new token (protocol 2) gets its next one when half its token's life is gone.
-    const nextToken = b.protocol >= 2 ? offerNextToken(fresh, now) : null;
+    // A worker that says it saves a new token (`canRotateToken` in its beat) gets its next one when half its token's life
+    // is gone. (Not by its protocol number: a worker may speak a newer protocol without saving tokens.)
+    const nextToken = b.canRotateToken ? offerNextToken(fresh, now) : null;
     const h = hoursAt(hoursOf(fresh), now);
     // Pool names are validated at creation (/^[a-z0-9-]{1,32}$/), so they never contain commas. INSTR on the
     // CSV avoids the LIKE-wildcard class of risk (%, _) entirely.
@@ -596,8 +598,8 @@ export function poolFacts(lane: string | null): ComputerFacts {
 
 /**
  * The line for a new run of this workflow, for a quote or a reserve (the billing service's QueueFacts): how many tasks the
- * workers that may run it would serve before it, about how long until it would be done, how many such workers can take
- * work now, and the account's own tasks waiting and running.
+ * workers that may run it would serve before it, about how long until it would be done, and how many such workers can
+ * take work now. (The account's own runs, QueueFacts.mine, are counted by run in hosted.ts.)
  */
 export function lineFacts(accountId: string | null, asked: string | null, now = Date.now()) {
   // A workflow that picks its graph at run time (`…-{n}`) has no lane yet: the whole line counts.
@@ -608,12 +610,7 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
   const probe = { id: "", principal: accountId ? `acct:${accountId}` : "guest", account: accountId ?? "guest", class: "free", pools: "pool", lane, needs_json: needs ? JSON.stringify(needs) : null, rank_at: now, created_at: now, stop: 0, only_worker: null, est_ms: null } as unknown as TaskRow;
   const p = lane ? placeInLine(probe, now) : { place: (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting'").get() as { n: number }).n + 1, etaSeconds: null };
   const online = poolWorkers().filter((w) => eligible(w, now) && (!lane || fits({ ...probe, created_at: 0 }, w, now))).length;
-  const mine = accountId
-    ? (db()
-        .prepare("SELECT SUM(CASE WHEN state = 'waiting' THEN 1 ELSE 0 END) AS waiting, SUM(CASE WHEN state = 'waiting' THEN 0 ELSE 1 END) AS running FROM relay_tasks WHERE pools IS NOT NULL AND account = ? AND state IN ('waiting','sending','queued','running','collecting')")
-        .get(accountId) as { waiting: number | null; running: number | null })
-    : { waiting: 0, running: 0 };
-  return { lane: lane ?? "small", ahead: p.place - 1, etaS: p.etaSeconds, workersOnline: online, nextOpenAt: null, mine: { waiting: mine.waiting ?? 0, running: mine.running ?? 0 } };
+  return { lane: lane ?? "small", ahead: p.place - 1, etaS: p.etaSeconds, workersOnline: online, nextOpenAt: null };
 }
 
 /**

@@ -186,6 +186,8 @@ export interface WorkerBeat {
   device: string;
   protocol: number;
   version: string;
+  /** It saves the next token a beat answer gives it (`worker.token`) and uses it from its next call on. */
+  canRotateToken?: boolean;
   ready: boolean;
   why: string | null;
   /** Its own pause switch: by hand ("here", "here-until:<ms>"), by itself ("gpu-busy:<process>", "comfy-crashes", "port-busy"). */

@@ -317,10 +317,34 @@ describe("an account's run on the workers", () => {
 
   it("a file input in params.extra is one the run sent, never a name in the workers' folders", async () => {
     standInWorker();
-    const r = await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse", params: { extra: { image: "fuobe_someone_elses.png" } } });
+    const uploadsRoute = await import("@/app/api/uploads/route");
+    const { TINY_PNG } = await import("./helpers/fake-comfy-runner");
+    const up = await uploadsRoute.POST(
+      new Request(`http://${HOST}/api/uploads`, { method: "POST", headers: { ...SITE_HEADERS, cookie, "content-type": "image/png", "x-file-name": "me.png", "content-length": String(TINY_PNG.length) }, body: new Uint8Array(TINY_PNG) }),
+    );
+    expect(up.status).toBe(201);
+    const { url } = (await up.json()) as { url: string };
+    // A workflow that loads a picture: the name in params.extra would replace the picture the run sent.
+    const r = await run({ feature: "image", modelId: "oss-rmbg", op: "bg-remove", inputs: { images: [url] }, params: { extra: { image: "fuobe_someone_elses.png" } } });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     const t = await until(() => taskOf(r.body.items![0].id));
-    expect(t?.graph_json ?? "").not.toContain("fuobe_someone_elses.png");
+    expect(t).toBeDefined();
+    expect(t!.graph_json ?? "").not.toContain("fuobe_someone_elses.png");
+    // The picture its graph loads is the one this run sent, kept for its task.
+    const graph = JSON.parse(t!.graph_json ?? "{}") as Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+    const loaded = Object.values(graph)
+      .filter((x) => x.class_type === "LoadImage")
+      .map((x) => String(x.inputs.image));
+    expect(loaded).toHaveLength(1);
+    const staged = db().prepare("SELECT principal, task_id FROM relay_inputs WHERE name = ?").get(loaded[0]) as { principal: string; task_id: string | null } | undefined;
+    expect(staged).toEqual({ principal: `acct:${accountId}`, task_id: t!.id });
+  });
+
+  it("a graph that names a file the run didn't send is refused before it is queued", async () => {
+    const { graphProblem } = await import("@/lib/local-comfy");
+    const graph = { "1": { class_type: "LoadImage", inputs: { image: "fuobe_someone_elses.png" } }, "2": { class_type: "SaveImage", inputs: { images: ["1", 0], filename_prefix: "x" } } };
+    expect(graphProblem(graph as never, ["fuobe_mine.png"])).toBeTruthy();
+    expect(graphProblem({ ...graph, "1": { class_type: "LoadImage", inputs: { image: "fuobe_mine.png" } } } as never, ["fuobe_mine.png"])).toBeNull();
   });
 });
 
@@ -393,6 +417,27 @@ describe("what an account reads about its run", () => {
     // Fuobe's own words about the account's side stay as they are.
     db().prepare("UPDATE generations SET error = ? WHERE id = ?").run("Your files have reached 3 GB. Delete some runs to make room.", id);
     expect(getGeneration(id)!.error).toBe("Your files have reached 3 GB. Delete some runs to make room.");
+  });
+
+  it("its output check is part of Working, and a stopped run says Not charged only when its hold set something aside", () => {
+    const now = Date.now();
+    const insert = (id: string, status: string, request: Record<string, unknown>, stage: string | null = null) =>
+      db()
+        .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, stage, request_json, outputs_json, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', ?, ?, ?, '[]', ?, ?)")
+        .run(id, status, stage, JSON.stringify({ account: accountId, ...request }), now, now);
+    insert(`check-pool-${now}`, "running", { place: "pool" }, "checking");
+    insert(`check-own-${now}`, "running", {}, "checking");
+    const pooled = getGeneration(`check-pool-${now}`)!;
+    expect(pooled.stage).toBeUndefined();
+    expect(pooled.message).toBe(POOL_WORDS.working);
+    // On the account's own GPU, as before.
+    expect(getGeneration(`check-own-${now}`)!.stage).toBe("checking");
+    insert(`charged-${now}`, "canceled", { place: "pool", hold: "h_1", charged: true });
+    insert(`free-${now}`, "failed", { place: "pool", hold: "h_2" });
+    expect(getGeneration(`charged-${now}`)!.notCharged).toBe(true);
+    expect(getGeneration(`free-${now}`)!.notCharged).toBeUndefined();
+    // Neither field ever reaches the page's copy of the request.
+    expect("charged" in getGeneration(`charged-${now}`)!.request).toBe(false);
   });
 
   it("while it goes, only In line or Working, whatever the technical words were", () => {

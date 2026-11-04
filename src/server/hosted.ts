@@ -5,7 +5,9 @@ import type { GenerationRequest } from "@/lib/catalog/types";
 import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
 import { lineFacts, poolLane, queueOfGeneration, workersAllowed } from "./computer/pool";
 import { db } from "./db";
+import { loadIndex } from "./gpu/index-file";
 import { hostedRunsOn } from "./hosted-switch";
+import { poolRunCounts } from "./pool-limits";
 import { installComfyLocal, onInstallComfy, workerFor, workersTake } from "./providers/comfyui";
 import { getSetting, withCandidates } from "./settings";
 import { runAsTenant } from "./tenant";
@@ -54,16 +56,29 @@ export function poolReady(): boolean {
 }
 
 /**
+ * The workflows a route's endpoint may run: itself, or for one that picks its graph at run time (`video-concat-{n}`)
+ * every graph it may pick (one per count).
+ */
+export function workflowPicks(endpoint: string): string[] {
+  const ids = Object.keys(loadIndex().workflows);
+  if (!endpoint.includes("{")) return ids.includes(endpoint) ? [endpoint] : [];
+  const re = new RegExp(`^${endpoint.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "\\d+")}$`);
+  return ids.filter((id) => re.test(id));
+}
+
+/**
  * May this install's GPUs run this workflow (planned.route.endpoint)? On the workers: one is allowed its lane (a
- * workflow that picks its graph at run time, `…-{n}`, goes to any). On its own server: the isolated ComfyUI's
- * workflows too only when that one is on this machine.
+ * workflow that picks its graph at run time, `…-{n}`: the lane of every graph it may pick). On its own server: the
+ * isolated ComfyUI's workflows too only when that one is on this machine.
  */
 export function poolTakes(endpoint: string | undefined): boolean {
   if (!endpoint) return false;
   const isolated = workerFor(endpoint) === "isolated";
   if (!poolOnWorkers()) return installComfyLocal(isolated ? "isolated" : "main");
   if (isolated) return false;
-  return workersAllowed(endpoint.includes("{") ? null : poolLane(endpoint));
+  if (!endpoint.includes("{")) return workersAllowed(poolLane(endpoint));
+  const picks = workflowPicks(endpoint);
+  return picks.length > 0 && picks.every((id) => workersAllowed(poolLane(id)));
 }
 
 /** May a run on this install's GPUs send them this kind of file (the workers take only the kinds the install allows)? */
@@ -139,29 +154,31 @@ function typicalRunMs(): number | null {
 const WAITING = "NOT EXISTS (SELECT 1 FROM generation_runs r WHERE r.id = g.id AND r.started_at IS NOT NULL)";
 
 /**
+ * The account's runs on this install's GPUs (QueueFacts.mine), counted as the policy's limits count them: a run is one
+ * press of Run, however many jobs or chain steps it has.
+ */
+function myRuns(accountId: string | null): QueueFacts["mine"] {
+  if (!accountId) return { waiting: 0, running: 0 };
+  const c = poolRunCounts(accountId);
+  return { waiting: c.waiting, running: c.active - c.waiting };
+}
+
+/**
  * The line on this install's GPUs right now, for a quote or a reserve (QueueFacts). On the workers: their own line, as a
  * new run of this workflow would stand in it (every task ahead of it, whatever its lane). On its own server: its rows.
  */
 export function queueFacts(accountId: string | null, workflowId?: string | null): QueueFacts {
-  if (poolOnWorkers()) return lineFacts(accountId, workflowId ?? null);
+  if (poolOnWorkers()) return { ...lineFacts(accountId, workflowId ?? null), mine: myRuns(accountId) };
   const d = db();
   const ahead = (d.prepare(`SELECT COUNT(*) AS n FROM generations g WHERE ${POOL_ROWS} AND ${WAITING}`).get() as { n: number }).n;
   const typical = typicalRunMs();
-  const mine = accountId
-    ? (d
-        .prepare(
-          `SELECT SUM(CASE WHEN ${WAITING} THEN 1 ELSE 0 END) AS waiting, SUM(CASE WHEN ${WAITING} THEN 0 ELSE 1 END) AS running
-           FROM generations g WHERE ${POOL_ROWS} AND json_extract(g.request_json, '$.account') = ?`,
-        )
-        .get(accountId) as { waiting: number | null; running: number | null })
-    : { waiting: 0, running: 0 };
   return {
     lane: POOL_LANE,
     ahead,
     etaS: typical === null ? null : Math.round(((ahead + 1) * typical) / 1000),
     workersOnline: poolReady() ? 1 : 0,
     nextOpenAt: null,
-    mine: { waiting: mine.waiting ?? 0, running: mine.running ?? 0 },
+    mine: myRuns(accountId),
   };
 }
 
