@@ -67,9 +67,9 @@ describe("the GPU check (check 11)", () => {
     expect(localPause({ paused: true, now: true }, free, null, 0)?.why).toBe("here-now");
     expect(localPause({ paused: false }, free, "port-busy", 0)).toEqual({ paused: true, why: "port-busy", until: null });
     // A model folder that isn't there yet: after a pause by hand and a busy GPU, before its ComfyUI's trouble.
-    expect(localPause({ paused: false }, free, "port-busy", 0, ["X:/models"])).toEqual({ paused: true, why: "models-not-ready", until: null });
-    expect(localPause({ paused: false }, { paused: true, who: "game.exe" }, null, 0, ["X:/models"])?.why).toBe("gpu-busy:game.exe");
-    expect(localPause({ paused: true }, free, null, 0, ["X:/models"])?.why).toBe("here");
+    expect(localPause({ paused: false }, free, "port-busy", 0, ["/mnt/models"])).toEqual({ paused: true, why: "models-not-ready", until: null });
+    expect(localPause({ paused: false }, { paused: true, who: "game.exe" }, null, 0, ["/mnt/models"])?.why).toBe("gpu-busy:game.exe");
+    expect(localPause({ paused: true }, free, null, 0, ["/mnt/models"])?.why).toBe("here");
     expect(localPause({ paused: false }, free, null, 0, [])).toEqual({ paused: false, why: null, until: null });
   });
 
