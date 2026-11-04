@@ -7,6 +7,13 @@ import type { FinishOptions, GenjutsuLook, GenjutsuMode, GenjutsuTarget, Genjuts
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
 import { useDebounced } from "@/components/faceless/hooks";
 import { send } from "@/components/shorts/hooks";
+import { COMPUTER_KICK_EVENT } from "@/lib/api";
+
+/**
+ * A run started: the tab that runs this person's jobs on the ComfyUI on this computer (an account's "Your GPU") asks for
+ * them at once, as after a studio run.
+ */
+const kick = () => window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));
 
 /** React Query hooks for /api/genjutsu/**. */
 
@@ -78,6 +85,7 @@ export function useGenjutsuRun() {
   return useMutation({
     mutationFn: (b: GenjutsuBody) => send<{ final: Generation; items: Generation[] }>("/api/genjutsu", "POST", b),
     onSuccess: (r) => {
+      kick();
       r.items.forEach((g) => qc.setQueryData(["generation", g.id], g));
       void qc.invalidateQueries({ queryKey: ["generations"] });
     },
@@ -94,12 +102,13 @@ export function useDescribeScene() {
   return useMutation({
     mutationFn: (b: { engine: "open"; source: { url: string; duration?: number }; range: { start: number; end: number }; frame?: string; ownPerson?: boolean }) =>
       send<{ id: string; modelId: string }>("/api/genjutsu/scene", "POST", b),
+    onSuccess: kick,
   });
 }
 
 /** The clip's words (one transcription; the page takes the part's lines from its cues). */
 export function useTranscribeClip() {
-  return useMutation({ mutationFn: (b: { engine: Engine; source: { url: string; duration?: number }; cleanVoiceFirst?: boolean }) => send<{ id: string; modelId: string }>("/api/genjutsu/transcribe", "POST", b) });
+  return useMutation({ mutationFn: (b: { engine: Engine; source: { url: string; duration?: number }; cleanVoiceFirst?: boolean }) => send<{ id: string; modelId: string }>("/api/genjutsu/transcribe", "POST", b), onSuccess: kick });
 }
 
 /** Waits for one generation to finish (polling; the page's helpers that fill a field from it). */

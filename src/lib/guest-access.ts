@@ -266,17 +266,34 @@ export function isLibraryChange(method: string, pathname: string): boolean {
 export const ACCOUNT_LIBRARY_MESSAGE = "We can't find that.";
 export const LIBRARY_MESSAGE = "Saving here isn't available. Download what you make from your runs.";
 
-/**
- * Runs an account may start once it has connected its own ComfyUI ("Your GPU") or added its own fal.ai or Replicate key
- * ("Your keys"): the studios' generations, camera motions, effects and apps, which the route sends to that ComfyUI or
- * that key only, with only its own uploaded files (src/app/api/generations/route.ts, generations.ts accountRun). Other
- * tools plan with the install's AI helpers or its own ComfyUI, so they stay refused.
- */
 /** A report anyone may send, signed in or not ("Report this result" on a shared link). */
 export const anyoneMayReport = (method: string, pathname: string): boolean => method === "POST" && pathname === "/api/reports";
 
+/**
+ * The tools an account runs on its own GPU or key, beside the studios' generations. Each route makes an account's checks
+ * itself (src/server/account-tool-run.ts: its own files, its limits, its GPU or key for every step) and refuses a guest
+ * with the sign-up card. Genjutsu's "Describe my character" isn't here: it uses the studio's own AI helper.
+ */
+export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [/^\/api\/genjutsu(\/(scene|transcribe))?$/];
+
+/**
+ * A tool's project routes that keep each account's projects apart (src/server/account-projects.ts): the proxy lets an
+ * account's reads and changes through, and the route answers with its own projects only (another's reads as not found).
+ * A guest's change gets the sign-up card; its reads go by guestRead. A tool adds its routes here when it opens to
+ * accounts.
+ */
+export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [];
+
+export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));
+
+/**
+ * Runs an account may start once it has connected its own ComfyUI ("Your GPU") or added its own fal.ai or Replicate key
+ * ("Your keys"): the studios' generations, camera motions, effects and apps, which the route sends to that ComfyUI or
+ * that key only, with only its own uploaded files (src/app/api/generations/route.ts, generations.ts accountRun), and
+ * the tools in ACCOUNT_TOOL_RUNS. Other tools plan with the install's AI helpers or its own ComfyUI, so they stay refused.
+ */
 export function ownGpuRun(method: string, pathname: string): boolean {
-  return method === "POST" && pathname === "/api/generations";
+  return method === "POST" && (pathname === "/api/generations" || ACCOUNT_TOOL_RUNS.some((r) => r.test(pathname)));
 }
 
 /** The code on an account's run refused because its runs going are at the limit: the next one may wait for a place and send again. */

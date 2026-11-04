@@ -283,6 +283,13 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
   A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
   have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.
+- **Genjutsu.** An account runs Genjutsu's modes that are open to everyone the same way (`POST /api/genjutsu`, and the
+  clip's words for Character swap, `POST /api/genjutsu/transcribe`). Each step of the run (the cut, the swap, the joins,
+  the sound) is a run of its own on the account's ComfyUI, or on its own fal.ai or Replicate key on the cloud engine,
+  with only its own files, and the whole run counts once against its limits. Its results show under "Your Genjutsu" and
+  in its own runs, to open and download. "Describe my character" uses the studio's AI helper, so it isn't offered: the
+  account describes the character in its own words. A guest gets the sign-up card. The checks are
+  `src/server/account-tool-run.ts`.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

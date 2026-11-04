@@ -25,10 +25,9 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SketchEditor, type Stroke } from "@/components/studio/sketch-editor";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
 import { openInStudio } from "@/components/swap-studio/hooks";
-import { SelfHostNote } from "@/components/self-host-note";
 import { ExampleRow } from "@/components/studio/example-row";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
-import { useEngine, useGenerations, useIsOwner, useLikelyVisitor, useModelAccess, useSoundLive, useStatus } from "@/lib/api";
+import { useEngine, useGenerations, useIsOwner, useModelAccess, useSoundLive, useStatus } from "@/lib/api";
 import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterChoice, type CharacterOptions } from "@/lib/catalog/character-swap";
 import {
   chooseMaker,
@@ -63,7 +62,6 @@ import {
   type Maker,
 } from "@/lib/catalog/genjutsu";
 import { chainState } from "@/lib/catalog/shorts";
-import { withoutOwnGpu } from "@/lib/catalog/engines";
 import type { Generation, PixelPoint } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
@@ -140,8 +138,6 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
     staleTime: Infinity,
   });
   const shownExamples = owner && ownerExamples.data ? ownerExamples.data : modeExamples;
-  // Genjutsu doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
-  const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const [mode, setModeState] = useState<GenjutsuMode>("motion");
   const source = useSourceClip(GENJUTSU.maxBytes);
@@ -804,9 +800,9 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
   const tabs = <ModeTabsRow modes={GENJUTSU_MODES.filter((m) => modeOpen(m.id, open))} mode={mode} onMode={setMode} onlyYou={(m) => owner && !modeOpen(m, (f) => !!live?.[f])} />;
 
   return (
-    <ToolShell title="Genjutsu" tabs={tabs} fadeKey={mode} header={<SetupCode setup={fullSetup} onPaste={(s) => apply(s)} />} wide selfHostedOnly>
+    <ToolShell title="Genjutsu" tabs={tabs} fadeKey={mode} header={<SetupCode setup={fullSetup} onPaste={(s) => apply(s)} />} wide>
       {!clip && (
-        <ToolHero title={modeInfo.label} subtitle={`${hint}${visitor ? "" : " Free on your own ComfyUI."}`}>
+        <ToolHero title={modeInfo.label} subtitle={`${hint} Free on your own ComfyUI.`}>
           {isCharacter && (
             <Link href="/character-swap" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
               Whole clips, shot by shot? Open in Character Swap Studio
@@ -815,16 +811,13 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
         </ToolHero>
       )}
       {!clip && example && (
-        <ModeExample key={example.id} card={example} owner={!visitor} canUse={!visitor} inUse={exampleInUse} onlyYou={exampleOnlyYou} onUse={() => pickExample(example)} className="mt-6" />
+        <ModeExample key={example.id} card={example} owner={owner} canUse inUse={exampleInUse} onlyYou={exampleOnlyYou} onUse={() => pickExample(example)} className="mt-6" />
       )}
       <div id="gj-clip-drop" className={cn("mx-auto scroll-mt-24 rounded-2xl transition-shadow", clip ? "pt-4" : "mt-8 max-w-[640px]", dropRing && "ring-2 ring-primary ring-offset-4 ring-offset-background")}>
-        {/* Said by the upload box it turns off (after the mode's example, which every viewer can watch). */}
-        {!clip && visitor && <SelfHostNote className="mb-3">Genjutsu isn&apos;t available here.</SelfHostNote>}
         {!clip ? (
           <ClipDrop
             accept={GENJUTSU.accept}
             limits={limits(mode)}
-            disabled={visitor}
             onFile={(f) => {
               const err = source.pick(f);
               if (err) toast.error(err);
@@ -999,7 +992,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
 
             <Panel id="gj-side" className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               {mode === "picture" && <PictureSteps stage={pictureStage} />}
-              {example && !visitor && <ModeExampleRow key={example.id} card={example} owner canUse inUse={exampleInUse} onlyYou={exampleOnlyYou} onUse={() => pickExample(example)} />}
+              {example && <ModeExampleRow key={example.id} card={example} owner={owner} canUse inUse={exampleInUse} onlyYou={exampleOnlyYou} onUse={() => pickExample(example)} />}
               <p className="text-[13px] text-pretty text-muted-foreground">{hint}</p>
 
               {mode === "finish" && <FinishFields value={finish} onChange={setFinish} open={open} ownerOnly={ownerOnly} seed={seed} onSeed={setSeed} />}
@@ -1135,7 +1128,8 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                   seed={seed}
                   onSeed={setSeed}
                   seedProblem={seedProblem(seedNumber)}
-                  describe={{ run: describeCharacter, busy: describeMutation.isPending, blocked: refs.some((r) => !r.uploading) ? null : "Add your character's picture to describe it" }}
+                  // Describing uses the studio's own AI helper: the owner's. Everyone else describes the character in words.
+                  describe={owner ? { run: describeCharacter, busy: describeMutation.isPending, blocked: refs.some((r) => !r.uploading) ? null : "Add your character's picture to describe it" } : undefined}
                   words={{ run: () => void fillClipWords(), busy: listening, blocked: clip?.url && !clip.uploading && range ? null : "Add the clip first" }}
                   voiceFirst={voiceFirstShown ? { on: cleanFirst, onChange: setVoiceFirst, seconds: duration } : undefined}
                 />
@@ -1175,7 +1169,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
               )}
               {maker && options.length <= 1 && (
                 <p className="text-[12px] text-muted-foreground">
-                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {visitor ? withoutOwnGpu(maker.note) : maker.note}
+                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {maker.note}
                 </p>
               )}
 
@@ -1221,7 +1215,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                     ) : (
                       <>
                         <p className="flex items-center gap-1.5 text-[15px] font-semibold tabular-nums">
-                          {costText(est, engine, visitor)}
+                          {costText(est, engine)}
                           {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" aria-label="Updating the price" />}
                         </p>
                         {est && (
@@ -1232,11 +1226,10 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                       </>
                     )}
                   </div>
-                  <Button id="gj-generate" className="rounded-full" onClick={() => start()} disabled={!!blocker || runMutation.isPending || visitor || describing}>
+                  <Button id="gj-generate" className="rounded-full" onClick={() => start()} disabled={!!blocker || runMutation.isPending || describing}>
                     {runMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />} {mode === "picture" ? (pictureStage === "frame" ? "Make the first frame" : "Make the video") : "Generate"}
                   </Button>
                 </div>
-                {visitor && <SelfHostNote>Genjutsu isn&apos;t available here.</SelfHostNote>}
                 {est && est.notes.length > 0 && !blocker && (
                   <ul className="space-y-1 text-[12px] leading-snug text-muted-foreground">
                     {est.notes.map((n) => (
@@ -1251,7 +1244,8 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                     engine={engine}
                     maker={maker}
                     cut={cut}
-                    onOpenStudio={() => void openStudio()}
+                    // Character Swap Studio's projects are the owner's for now: anyone else gets the link to the studio.
+                    onOpenStudio={owner ? () => void openStudio() : undefined}
                     opening={opening}
                     waiting={clip?.uploading || refs.some((x) => x.uploading) ? "waiting for the upload" : null}
                   />}
@@ -1261,7 +1255,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
         )}
       </div>
 
-      {examples && !clip && !run && (visitor || (history.isSuccess && !history.data.length)) && <ExampleRow row={examples} layout="column" maxColumns={2} maxWidth={640} className="mt-12" />}
+      {examples && !clip && !run && history.isSuccess && !history.data.length && <ExampleRow row={examples} layout="column" maxColumns={2} maxWidth={640} className="mt-12" />}
 
       {run && (
         <RunPanel
@@ -1439,8 +1433,6 @@ function SourceBadge({ source }: { source: Maker["source"] }) {
 
 /** The models for this mode and engine, one line each (where it comes from, what it's good at, its limits). */
 function MakerList({ options, value, onChange, onlyYou }: { options: Maker[]; value: string; onChange: (id: string) => void; onlyYou?: (m: Maker) => boolean }) {
-  // A guest or an account: open weights run on a self-hosted Fuobe only, not on their own GPU yet.
-  const visitor = useLikelyVisitor();
   return (
     <div role="radiogroup" aria-label="Model" onKeyDown={radioKeys} className="space-y-1.5">
       {options.map((m) => (
@@ -1462,7 +1454,7 @@ function MakerList({ options, value, onChange, onlyYou }: { options: Maker[]; va
               {m.label} <SourceBadge source={m.source} />
               {onlyYou?.(m) && <OnlyYou />}
             </span>
-            <span className="block text-[12px] leading-snug text-muted-foreground">{visitor ? withoutOwnGpu(m.note) : m.note}</span>
+            <span className="block text-[12px] leading-snug text-muted-foreground">{m.note}</span>
           </span>
         </button>
       ))}

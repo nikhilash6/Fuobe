@@ -56,11 +56,11 @@ import {
 } from "@/lib/catalog/genjutsu";
 import { MASK_TRACKER, REMOVE_TOOLS, scalePoints, wholeClip, type RemoveRange, type RemoveSource } from "@/lib/catalog/remove-object";
 import { planSegments, type PlanStep } from "@/lib/catalog/shorts";
-import type { Engine, Generation, PixelPoint, ProviderId } from "@/lib/catalog/types";
+import type { Engine, Generation, GenerationRequest, PixelPoint, ProviderId } from "@/lib/catalog/types";
 import { silenceWriter } from "./canvas";
 import { createPipeline } from "./chains";
 import { llmText, llmTextBackend } from "./enhance";
-import { ConnectComfyError, createGenerations, previewChained } from "./generations";
+import { AccountRunError, ConnectComfyError, createGenerations, previewChained } from "./generations";
 import { db } from "./db";
 import { genjutsuLive } from "./genjutsu-live";
 import { decodePng } from "./png";
@@ -73,6 +73,7 @@ import { pointsFromPaint } from "./remove-object";
 import { engineMode, getSetting } from "./settings";
 import { probeSource, ShortsError } from "./shorts";
 import { readRef } from "./storage";
+import { tenantAccount } from "./tenant";
 
 /**
  * Fuobe Genjutsu (/genjutsu): plans, prices and starts a Motion transfer, Character swap, Object swap, Restyle or Insert
@@ -357,20 +358,23 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean; viewer?: Ge
   };
 }
 
-/** Whether a first frame is one this install's From picture made (and finished). */
+/**
+ * Whether a first frame is one this install's From picture made (and finished) for the asker: the owner's own frames, or
+ * inside an account's work (tenant.ts) that account's own. Never another's.
+ */
 function madeFrame(url: string | undefined): boolean {
   if (!url) return false;
-  // Looked up by its address, however old (not in the Trash, not an account's run).
+  // Looked up by its address, however old (not in the Trash).
   const row = db()
     .prepare(
       `SELECT 1 FROM generations g
         WHERE g.model_id = 'oss-from-picture-frame' AND g.status = 'succeeded'
-          AND json_extract(g.request_json, '$.account') IS NULL
+          AND json_extract(g.request_json, '$.account') IS ?
           AND NOT EXISTS (SELECT 1 FROM generation_trash t WHERE t.generation_id = g.id)
           AND EXISTS (SELECT 1 FROM json_each(g.outputs_json) o WHERE json_extract(o.value, '$.url') = ?)
         LIMIT 1`,
     )
-    .get(url);
+    .get(tenantAccount() ?? null, url);
   return !!row;
 }
 
@@ -687,22 +691,52 @@ export async function estimateGenjutsu(body: GenjutsuBody, viewer: GenjutsuViewe
   };
 }
 
-/** Start it; returns the finished video's generation (the other steps wait for each other). */
-export async function createGenjutsu(body: GenjutsuBody, viewer: GenjutsuViewer = OWNER): Promise<{ final: Generation; items: Generation[] }> {
+/** A Genjutsu run planned and checked, not started yet: its steps, and the one that makes the finished video. */
+export interface GenjutsuRun {
+  steps: PlanStep[];
+  final: string;
+}
+
+/**
+ * Plan a run as it will start (the clip's header read, every step checked and priced): nothing is made yet. An account's
+ * run is planned inside its own work (src/server/account-tool-run.ts), so its steps are checked before any starts.
+ */
+export async function planGenjutsuRun(body: GenjutsuBody, viewer: GenjutsuViewer = OWNER): Promise<GenjutsuRun> {
   const { input } = await planInput(body, { probe: true, viewer });
   try {
     const plan = planGenjutsu(input);
     // The same check as the estimate: nothing starts when only some of the steps have a provider.
     price(plan.steps, input);
-    // A silent clip's cloud swap ends on silence: its WAV is written now (silenceRef, as Canvas mutes a clip).
-    const withSilence = silenceWriter();
-    const p = createPipeline(plan.steps.map((s) => ({ ...s, request: withSilence(s.request) })));
-    return { final: p.byKey[plan.final], items: p.items };
+    return { steps: plan.steps, final: plan.final };
   } catch (e) {
     if (e instanceof ShortsError) throw e;
     if (e instanceof ConnectComfyError) throw e;
+    if (e instanceof AccountRunError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
+}
+
+/** A planned run's steps as the requests they make, with how many earlier steps each waits for. */
+export const genjutsuSteps = (run: GenjutsuRun): { request: GenerationRequest; deps: number }[] => run.steps.map((s) => ({ request: withChain(s), deps: s.after?.length ?? 0 }));
+
+/** Start a planned run; returns the finished video's generation (the other steps wait for each other). */
+export function startGenjutsu(run: GenjutsuRun): { final: Generation; items: Generation[] } {
+  try {
+    // A silent clip's cloud swap ends on silence: its WAV is written now (silenceRef, as Canvas mutes a clip).
+    const withSilence = silenceWriter();
+    const p = createPipeline(run.steps.map((s) => ({ ...s, request: withSilence(s.request) })));
+    return { final: p.byKey[run.final], items: p.items };
+  } catch (e) {
+    if (e instanceof ShortsError) throw e;
+    if (e instanceof ConnectComfyError) throw e;
+    if (e instanceof AccountRunError) throw e;
+    throw new ShortsError((e as Error).message, 422);
+  }
+}
+
+/** Plan and start it (the owner's runs; an account's go through src/server/account-tool-run.ts). */
+export async function createGenjutsu(body: GenjutsuBody, viewer: GenjutsuViewer = OWNER): Promise<{ final: Generation; items: Generation[] }> {
+  return startGenjutsu(await planGenjutsuRun(body, viewer));
 }
 
 // ---------------------------------------------------------------------------
@@ -762,6 +796,11 @@ export const SceneSchema = z.object({
  * frame (a step of its own; the page waits for its text and puts it in an editable box). Owner-only, like the runs.
  */
 export function describeScene(body: z.infer<typeof SceneSchema>, viewer: GenjutsuViewer = OWNER): { id: string; modelId: string } {
+  return startStep(sceneRequest(body, viewer));
+}
+
+/** The describer's request for "What happens", checked (an account's is checked again by its run's gate first). */
+export function sceneRequest(body: z.infer<typeof SceneSchema>, viewer: GenjutsuViewer = OWNER): GenerationRequest {
   mustMatchMode("open");
   if (!openFor(viewer)("picture")) throw new ShortsError(NOT_HERE, 422);
   const len = body.range.end - body.range.start;
@@ -770,19 +809,25 @@ export function describeScene(body: z.infer<typeof SceneSchema>, viewer: Genjuts
   if (!body.ownPerson && !madeFrame(body.frame)) throw new ShortsError("Make and pick the first frame first", 422);
   const modelId = "oss-scene-describe";
   if (!isOffered(modelId, "open")) throw new ShortsError(`Describing is switched off in ${ACCESS_PLACE} — write what happens in your own words`, 422);
+  return {
+    feature: GENJUTSU.stepFeature,
+    batchTitle: "Genjutsu · what happens",
+    modelId,
+    op: "describe-video",
+    inputs: { video: body.source.url, ...(body.ownPerson ? {} : { images: [body.frame!] }) },
+    params: { startTime: body.range.start, extra: { openjutsu: { seconds: len, ownPerson: !!body.ownPerson } } },
+    step: { label: "What happens in the part", index: 0, of: 1 },
+  };
+}
+
+/** Start a helper step (the clip's words, what happens): one generation the page waits for. */
+export function startStep(req: GenerationRequest): { id: string; modelId: string } {
   try {
-    const [g] = createGenerations({
-      feature: GENJUTSU.stepFeature,
-      batchTitle: "Genjutsu · what happens",
-      modelId,
-      op: "describe-video",
-      inputs: { video: body.source.url, ...(body.ownPerson ? {} : { images: [body.frame!] }) },
-      params: { startTime: body.range.start, extra: { openjutsu: { seconds: len, ownPerson: !!body.ownPerson } } },
-      step: { label: "What happens in the part", index: 0, of: 1 },
-    });
-    return { id: g.id, modelId };
+    const [g] = createGenerations(req);
+    return { id: g.id, modelId: req.modelId };
   } catch (e) {
     if (e instanceof ConnectComfyError) throw e;
+    if (e instanceof AccountRunError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
 }
@@ -802,23 +847,22 @@ export const TranscribeSchema = z.object({
  * afterwards takes its own lines from it in the browser (partWords). A Genjutsu step: it stays out of the page's feed.
  */
 export function transcribeClip(body: z.infer<typeof TranscribeSchema>): { id: string; modelId: string } {
+  return startStep(transcribeRequest(body));
+}
+
+/** The transcriber's request for the clip's words, checked (an account's is checked again by its run's gate first). */
+export function transcribeRequest(body: z.infer<typeof TranscribeSchema>): GenerationRequest {
   mustMatchMode(body.engine);
   const modelId = TRANSCRIBERS[body.engine];
   if (!isOffered(modelId, body.engine)) throw new ShortsError(`${getModel(modelId)?.name ?? modelId} is switched off in ${ACCESS_PLACE} — type the words instead`, 422);
   const seconds = body.source.duration;
-  try {
-    const [g] = createGenerations({
-      feature: GENJUTSU.stepFeature,
-      batchTitle: "Genjutsu · the clip's words",
-      modelId,
-      op: "transcribe",
-      inputs: { video: body.source.url },
-      ...((seconds || body.cleanVoiceFirst) && { params: { ...(seconds && { duration: seconds, sourceDuration: seconds }), ...(body.cleanVoiceFirst && { extra: { cleanVoiceFirst: true } }) } }),
-      step: { label: "The clip's words", index: 0, of: 1 },
-    });
-    return { id: g.id, modelId };
-  } catch (e) {
-    if (e instanceof ConnectComfyError) throw e;
-    throw new ShortsError((e as Error).message, 422);
-  }
+  return {
+    feature: GENJUTSU.stepFeature,
+    batchTitle: "Genjutsu · the clip's words",
+    modelId,
+    op: "transcribe",
+    inputs: { video: body.source.url },
+    ...((seconds || body.cleanVoiceFirst) && { params: { ...(seconds && { duration: seconds, sourceDuration: seconds }), ...(body.cleanVoiceFirst && { extra: { cleanVoiceFirst: true } }) } }),
+    step: { label: "The clip's words", index: 0, of: 1 },
+  };
 }
