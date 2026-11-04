@@ -452,6 +452,107 @@ describe("what an account reads about its run", () => {
   });
 });
 
+describe("an account's run that a worker can't finish", () => {
+  /** Words that must never reach an account's run on this install's GPUs. */
+  const JARGON = /ComfyUI|GPU|worker|lane|Press Retry|refused|stopped answering|busy|restart/i;
+  const MIN_ = 60_000;
+
+  /** An account's run through the run route, waiting for the workers. */
+  async function accountRun() {
+    const r = await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse at dusk" });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const id = r.body.items![0].id;
+    const t = await until(() => taskOf(id));
+    expect(t).toBeDefined();
+    return { id, taskId: t!.id };
+  }
+  /** The worker program's own calls (its token), as `fuobe worker run` makes them. */
+  function workerApi(token: string) {
+    const api = apiAs(routes, null, { authorization: `Bearer ${token}` });
+    const json = { "content-type": "application/json" };
+    return {
+      claim: async () => ((await (await api("/api/gpu/computer/claim", { method: "POST", headers: json, body: JSON.stringify({ device: "worker", running: [] }) })).json()) as { task: { id: string; lease: string; promptId: string } | null }).task,
+      report: (t: { id: string; lease: string }, body: Record<string, unknown>) => api(`/api/gpu/computer/tasks/${t.id}/report`, { method: "POST", headers: { ...json, "x-fuobe-lease": t.lease }, body: JSON.stringify(body) }),
+    };
+  }
+  /** The run once it ended, as the account reads it. */
+  const ended = async (id: string) =>
+    (await until(() => {
+      const g = getGeneration(id);
+      return g && g.status !== "queued" && g.status !== "running" ? g : null;
+    }, 400))!;
+
+  const cases: [string, (w: ReturnType<typeof workerApi>, taskId: string) => Promise<void>][] = [
+    [
+      "given back three times (it stalled)",
+      async (w) => {
+        for (let i = 0; i < 3; i++) {
+          const t = (await w.claim())!;
+          await w.report(t, { event: "sent", promptId: t.promptId });
+          await w.report(t, { event: "give-back", why: "stalled" });
+        }
+      },
+    ],
+    [
+      "past its run limit twice",
+      async (w) => {
+        for (let i = 0; i < 2; i++) {
+          const t = (await w.claim())!;
+          await w.report(t, { event: "sent", promptId: t.promptId });
+          await w.report(t, { event: "give-back", why: "run-limit" });
+        }
+      },
+    ],
+    [
+      "its ComfyUI stopped twice on it",
+      async (w) => {
+        const t = (await w.claim())!;
+        await w.report(t, { event: "sent", promptId: t.promptId });
+        await w.report(t, { event: "failed", reason: "input-crashed" });
+      },
+    ],
+    [
+      "a file the worker refused",
+      async (w) => {
+        const t = (await w.claim())!;
+        await w.report(t, { event: "failed", reason: "model-unverified" });
+      },
+    ],
+    [
+      "lost three times by workers that went quiet",
+      async (w, taskId) => {
+        for (let i = 0; i < 3; i++) {
+          expect(await w.claim()).not.toBeNull();
+          db().prepare("UPDATE relay_workers SET seen_at = ? WHERE kind = 'pool'").run(Date.now() - 3 * MIN_);
+          pool.sweepPool(Date.now());
+          expect(rowOf(taskId).requeues).toBe(i + 1);
+          for (const x of db().prepare("SELECT id FROM relay_workers WHERE kind = 'pool'").all() as { id: string }[]) beatAs(x);
+          // The retry rule: the same worker may take it again (no other worker is about).
+        }
+      },
+    ],
+  ];
+
+  for (const [name, end] of cases) {
+    it(`${name}: one plain sentence for the account, the reason for the owner`, async () => {
+      const w = standInWorker();
+      beatAs(w);
+      const { id, taskId } = await accountRun();
+      await end(workerApi(w.token), taskId);
+      expect(rowOf(taskId).state).toBe("failed");
+      const g = await ended(id);
+      expect(g.status).toBe("failed");
+      expect(g.error).toBe(POOL_WORDS.failed);
+      expect(g.message ?? "").not.toMatch(JARGON);
+      expect(g.fix).toBeUndefined();
+      // The owner reads what happened.
+      const owner = listAccountRuns({ account: accountId }).items.find((x) => x.id === id);
+      expect(owner?.detail).toBeTruthy();
+      expect(owner?.detail).not.toBe(POOL_WORDS.failed);
+    });
+  }
+});
+
 describe("graphs and results for the workers", () => {
   it("every VideoHelperSuite save node saves no metadata", () => {
     const wf = withoutSaveMetadata({
