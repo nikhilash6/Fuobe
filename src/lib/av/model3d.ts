@@ -644,9 +644,10 @@ export const TURN_VIEWS: { id: TurnView; label: string; theta: number; phi: numb
 
 /**
  * The yaw (degrees) that turns a model's own front to model-viewer's front, by model: a GLB made from a splat faces
- * the way the model put the subject, which the GPU test measures. Models not listed face +Z already.
+ * the way the model put the subject, which the GPU test measures. Models not listed face +Z already. Idol 3D quick
+ * mesh (oss-idol-mesh) meshes the same Idol splat with the same SplatToMesh node as Photo to 3D's, so it faces the same way.
  */
-export const FRONT_YAW: Record<string, number> = { "oss-idol-3d": 90 };
+export const FRONT_YAW: Record<string, number> = { "oss-idol-3d": 90, "oss-idol-mesh": 90 };
 
 /** model-viewer's camera-orbit for a chip: its angle plus the model's front, at the distance the viewer frames it. */
 export function turnOrbit(view: TurnView, frontYaw = 0): string {

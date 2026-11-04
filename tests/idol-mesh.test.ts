@@ -185,6 +185,8 @@ describe("Idol 3D quick mesh: what a finished job gives", () => {
     // The graph's video is the splat's orbit, smoother than the mesh: not the card's turntable until the server renders the mesh's.
     expect(view.turntable).toBeUndefined();
     expect(view.photo).toBe(photo);
+    // Its GLB is Idol's splat through SplatToMesh, as Photo to 3D's: the card and the viewer open on, and turn from, the same front.
+    expect(m3d.FRONT_YAW["oss-idol-mesh"]).toBe(m3d.FRONT_YAW["oss-idol-3d"]);
     const skipped = m3d.model3dView({ ...g, outputs: [{ ...outs[0], meta: { finish: { turntable: "skipped: no Chromium" } } }, outs[1]] } as never);
     expect(skipped.turntable).toBeUndefined();
     const mine = { url: "/api/files/turntable.mp4", kind: "video", contentType: "video/mp4", meta: { role: "turntable", fps: 24, frames: 96 } };
