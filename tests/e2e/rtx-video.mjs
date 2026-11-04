@@ -1,7 +1,7 @@
 // Browser check of NVIDIA RTX Video (nm10-rtx-video).
 // Usage: node tests/e2e/rtx-video.mjs [appUrl] [outDir]   (the app in demo mode: no keys, no ComfyUI)
-// At 1440 px and 390 px, light and dark, on the open engine: Upscale → Video's "Quick · RTX" beside Restore · faithful and
-// Regenerate · creative — last and not picked when the card isn't known, first (still not picked) on an RTX 4070, switched
+// At 1440 px and 390 px, light and dark, on the open engine: Upscale → Video's "Quick · RTX" beside Restore · faithful (and
+// Regenerate · creative while it is offered) — last and not picked when the card isn't known, first (still not picked) on an RTX 4070, switched
 // off with "Needs an NVIDIA RTX card" on an AMD card; picking it on the RTX card shows its line. FPS boost and SDR to HDR
 // open on their RTX choice from a link. The GPU check's answer is stubbed in the browser (/api/gpu/badges). Fails on any
 // console error or page error, and on sideways scroll. Screenshots go to outDir.
@@ -59,12 +59,13 @@ try {
         const names = await radios.allInnerTexts();
         const quick = group.getByRole("radio", { name: /Quick · RTX/ });
         const restore = group.getByRole("radio", { name: /Restore · faithful/ });
-        check(names.length === 3, `${label}: three choices (${names.length})`);
+        // Restore · faithful and Quick · RTX (Regenerate · creative joins them while it is offered).
+        check(names.length === 2, `${label}: two choices (${names.length})`);
         check((await restore.getAttribute("aria-checked")) === "true", `${label}: Restore · faithful stays the default`);
         check((await quick.getAttribute("aria-checked")) === "false", `${label}: Quick · RTX is not picked for anyone`);
         const first = /Quick · RTX/.test(names[0] ?? "");
         if (card === "rtx") check(first, `${label}: Quick · RTX comes first on an RTX card`);
-        else check(!first && /Quick · RTX/.test(names[2] ?? ""), `${label}: Quick · RTX comes last`);
+        else check(!first && /Quick · RTX/.test(names.at(-1) ?? ""), `${label}: Quick · RTX comes last`);
         if (card === "amd") {
           check(/Needs an NVIDIA RTX card/.test(await quick.innerText()), `${label}: says it needs an NVIDIA RTX card`);
           check((await quick.getAttribute("aria-disabled")) === "true", `${label}: switched off`);

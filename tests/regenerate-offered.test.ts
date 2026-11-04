@@ -52,7 +52,8 @@ describe("Regenerate while it is switched off", () => {
   it("is not a step before upscaling, a finishing choice, a model to pick or a Canvas node", () => {
     expect(UPSCALE_FIRST_STEPS.map((s) => s.id)).not.toContain("regenerate");
     expect(UPSCALE_FIRST_STEPS.map((s) => s.id)).toContain("restore");
-    expect(VIDEO_UPSCALE_STUDIO.finishChoices).toBeUndefined();
+    // The finishing row stays, with Restore · faithful (and Quick · RTX, which the row adds), and no Regenerate.
+    expect(VIDEO_UPSCALE_STUDIO.finishChoices?.map((c) => c.modelId)).toEqual(["oss-seedvr2"]);
     expect(getModel("oss-h3-regenerate")?.hidden).toBe(true);
     expect(paletteItems("both").map((p) => p.id)).not.toContain("upscale-regenerate");
   });
