@@ -237,28 +237,14 @@ export const FREE_TEXT_INPUTS = [
  * Model files the catalog names that have no SHA-256 pin yet: the one list of them. A file of the requirement index is
  * "folder/file". A file that only a graph names is its bare name: a node fetches it on its first run, and
  * first-run-files.json doesn't pin it yet. A worker never reports such a file, so no worker runs a workflow that needs
- * one. The index files' repositories need a signed-in account to read the hashes
- * (`node scripts/comfy/build-requirements.mjs --refresh-pins` with HF_TOKEN); the LTX-2.5 entries also need their exact
- * sizes and a pinned revision. The list may only shrink: tests/adding-a-model.test.ts fails when a file has no pin and
+ * one. The index files here sit in a repository that asks a signed-in account to accept its licence before their hashes
+ * can be read (`node scripts/comfy/build-requirements.mjs --refresh-pins` with HF_TOKEN). The list may only shrink: tests/adding-a-model.test.ts fails when a file has no pin and
  * isn't here, and when a file here gets one; tests/worker-input-rules.test.ts fails when a file that a workflow for
  * workers needs has no pin and isn't here.
  */
 export const UNPINNED_FILES = [
-  "diffusion_models/flux3-image-klein-base-bf16.safetensors",
-  "diffusion_models/flux3-image-klein-base-int8-convrot.safetensors",
-  "diffusion_models/flux3-image-klein-base-nvfp4.safetensors",
-  "diffusion_models/flux3-image-klein-bf16.safetensors",
-  "diffusion_models/flux3-image-klein-int8-convrot.safetensors",
-  "diffusion_models/flux3-image-klein-nvfp4.safetensors",
-  "diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
-  "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
   "loras/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors",
   "loras/ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
-  "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-  "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors",
-  "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
-  "vae/ltx-2.5-audio-vae-bf16.safetensors",
-  "vae/ltx-2.5-video-vae-bf16.safetensors",
   "rife49.pth",
   "video_depth_anything_vitl.pth",
   "video_depth_anything_vits.pth",
