@@ -31,11 +31,19 @@ const ROW_HIDE = (i: number, families = false) =>
   );
 
 function NewBadge() {
-  return <span className="shrink-0 rounded-full bg-highlight px-1.5 py-px text-[10px] leading-4 font-semibold text-highlight-foreground">New</span>;
+  return (
+    <span data-new className="shrink-0 rounded-full bg-highlight px-1.5 py-px text-[10px] leading-4 font-semibold text-highlight-foreground">
+      New
+    </span>
+  );
 }
 
-/** A column's first card: its cover, name and one line. `row` 1 under the owner's New board (Canvas), its cover shorter by that button. */
-export function LeadCard({ e, col, row = 0, current, inside, now }: { e: MegaItem; col: number; row?: number; current: boolean; inside?: boolean; now: number }) {
+/**
+ * A column's first card: its cover, name and one line. `row` 1 under the owner's New board (Canvas), its cover shorter by
+ * that button. The cover's height is rounded down to the 4 px grid (a 4:3 box of a fractional column width would put
+ * every row under the card on a half pixel), and its words start 12 px in, the column its features hang from.
+ */
+export function LeadCard({ e, col, row = 0, current, inside, now, className }: { e: MegaItem; col: number; row?: number; current: boolean; inside?: boolean; now: number; className?: string }) {
   return (
     <IntentLink
       href={e.href}
@@ -43,7 +51,7 @@ export function LeadCard({ e, col, row = 0, current, inside, now }: { e: MegaIte
       data-row={row}
       aria-current={current ? "page" : undefined}
       data-active={inside ? "" : undefined}
-      className="nav-row group/lead flex flex-col overflow-hidden rounded-[14px] border bg-card text-card-foreground"
+      className={cn("nav-row group/lead flex flex-col overflow-hidden rounded-[14px] border bg-card text-card-foreground [container-type:inline-size]", className)}
     >
       <CoverThumb
         id={e.navCover}
@@ -52,11 +60,11 @@ export function LeadCard({ e, col, row = 0, current, inside, now }: { e: MegaIte
         icon={e.icon}
         eager
         className={cn(
-          "rounded-none md:max-lg:max-h-[max(56px,calc(100dvh-460px))]",
-          row ? "max-h-[max(64px,calc(100dvh-640px))]" : "max-h-[max(64px,calc(100dvh-592px))]",
+          "h-[round(down,75cqw,4px)] rounded-none md:max-lg:max-h-[round(down,max(56px,calc(100dvh_-_460px)),4px)]",
+          row ? "max-h-[round(down,max(64px,calc(100dvh_-_640px)),4px)]" : "max-h-[round(down,max(64px,calc(100dvh_-_592px)),4px)]",
         )}
       />
-      <span className="nav-mark-start flex min-w-0 flex-col gap-0.5 px-3 pt-2.5 pb-3 md:max-lg:px-2.5 md:max-lg:py-2">
+      <span className="nav-mark-start flex min-w-0 flex-col gap-0.5 px-[11px] pt-2.5 pb-3 md:max-lg:py-2">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-[14px] leading-[18px] font-semibold md:max-lg:text-[13px]">{e.label}</span>
           {isNew(e, now) && <NewBadge />}
@@ -69,7 +77,14 @@ export function LeadCard({ e, col, row = 0, current, inside, now }: { e: MegaIte
   );
 }
 
+/**
+ * A studio's row: 44 px (40 below lg), 4 px from the next, so rows fall every 48 px. From 1280 px its name and its line
+ * share a 36 px box that wraps: a name too long to share its line with its New badge keeps its words and the badge starts
+ * the second line, before the line; a name too long for the column takes the second line instead and the line gives way
+ * (it stays in the title). Below 1280 px the name alone, on up to two lines, with its badge beside it.
+ */
 function Row({ e, col, row, current, inside, now, className }: { e: MegaItem; col: number; row: number; current: boolean; inside?: boolean; now: number; className?: string }) {
+  const fresh = isNew(e, now);
   return (
     <IntentLink
       href={e.href}
@@ -78,18 +93,23 @@ function Row({ e, col, row, current, inside, now, className }: { e: MegaItem; co
       aria-current={current ? "page" : undefined}
       data-active={inside ? "" : undefined}
       title={e.line ? `${e.label}: ${e.line}` : e.label}
-      className={cn("nav-row nav-mark-start -mx-2 flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-1.5 md:max-lg:min-h-10", className)}
+      className={cn("nav-row nav-mark-start -mx-2 flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-1 md:max-lg:min-h-10 md:max-lg:py-0.5 [@media(pointer:coarse)]:min-h-11", className)}
     >
       {/* Six columns leave a row its name and line below 1440 px, and its name alone below 1280 px. Its picture loads
           when the row shows (lazy): a row hidden by the window's height never fetches it. */}
       <CoverThumb id={e.navCover} cover={e.cover} size="row" icon={e.icon} className="max-[1439.98px]:hidden" />
-      <span className="flex min-w-0 flex-col">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className={cn("truncate text-[13px] leading-[18px] font-medium max-xl:line-clamp-2 max-xl:whitespace-normal", (current || inside) && "font-semibold")}>{e.label}</span>
-          {isNew(e, now) && <NewBadge />}
+      {/* Centred while it fits; a name on two lines starts at the top and pushes the line out of the 36 px box. */}
+      <span data-row-text className="flex max-h-9 min-w-0 flex-1 flex-wrap items-center gap-x-1 overflow-hidden [align-content:safe_center] max-xl:flex-nowrap">
+        <span data-row-name className={cn("line-clamp-2 min-w-0 text-[13px] leading-[18px] font-medium", (current || inside) && "font-semibold")}>
+          {e.label}
         </span>
-        {/* A studio whose links become one line on a short window gives that line its own line's room. */}
-        <span className={cn("truncate text-[12px] leading-4 text-muted-foreground max-xl:hidden", e.subsLine && "[@media(max-height:799.98px)]:hidden")}>{e.line}</span>
+        {fresh && <NewBadge />}
+        {/* After a badge that wrapped, the line fills the rest of the second line; after one beside the name it can't fit
+            there and starts its own. Its basis leaves 48 px: the badge (about 34 px) and the 4 px gap, with room to spare.
+            A wider badge needs a smaller basis, or the line falls to a third line and is hidden. */}
+        <span className={cn("min-w-0 flex-1 truncate text-[12px] leading-4 text-muted-foreground max-xl:hidden", fresh ? "basis-[calc(100%-48px)]" : "basis-full")}>
+          {e.line}
+        </span>
       </span>
     </IntentLink>
   );
@@ -114,23 +134,20 @@ const hideBelow = (h: 800 | 880 | 960, line = false) => cn(!line && HIDE_SHORT[h
 
 /**
  * What a studio holds inside (its tabs and modes), as links under its card or row: names only, smaller and quieter
- * than the rows, hung from a hairline under the studio (nav-subs.css: with a mouse, two 24 px names to a
- * row's 48 px, so the columns' rows stay in line; pills on a touch screen; one wrapped line of names below the height a
- * studio with `subsLine` needs). `row`: the first link's place for the arrow keys (they go down from the studio through
- * its links to the next row). `current`: the open page's feature. `under`: links under a row, whose names start where
- * the row's name does.
+ * than the rows, hung from a hairline under the studio (nav-subs.css: with a mouse, 24 px names on the studio's text
+ * column; pills on a touch screen; wrapped lines of names below the height a studio with `subsLine` needs). `row`: the
+ * first link's place for the arrow keys (they go down from the studio through its links to the next row). `current`:
+ * the open page's feature. `under`: links under a row, whose names start where the row's name does.
  */
 function SubLinks({ e, col, row, current, under }: { e: MegaItem; col: number; row: number; current?: string; under?: boolean }) {
   if (!e.subs?.length) return null;
-  // An odd number of links ends half a row short: a 24 px pad fills it (the owner's taller-window links come in twos).
-  const odd = e.subs.filter((s) => !s.from).length % 2 === 1;
   return (
     <ul
       aria-label={`In ${e.label}`}
       data-subs={e.id}
-      data-odd={odd ? "" : undefined}
+      data-under={under ? "" : undefined}
       data-subs-line={e.subsLine ? "" : undefined}
-      className={cn("nav-subs ml-[17px] border-l border-border pl-1 max-[1439.98px]:ml-1.5", under && "min-[1440px]:pl-[21px]", e.subsFrom && hideBelow(e.subsFrom, e.subsLine))}
+      className={cn("nav-subs min-w-0", e.subsFrom && hideBelow(e.subsFrom, e.subsLine))}
     >
       {e.subs.map((s, i) => (
         <li key={s.id} data-from={s.from ? "" : undefined} className={cn(s.from && hideBelow(s.from))}>
@@ -168,10 +185,11 @@ function Tile({ e, col, row, current, eager }: { e: MegaItem; col: number; row: 
       data-row={row}
       aria-current={current ? "page" : undefined}
       title={e.line ? `${e.label}: ${e.line}` : e.label}
-      className="nav-row nav-mark-under flex min-w-0 flex-col gap-1.5 rounded-[12px] p-1.5"
+      className="nav-row nav-mark-under -m-1.5 flex min-w-0 flex-col gap-1.5 rounded-[12px] p-1.5 [container-type:inline-size]"
     >
-      <CoverThumb cover={e.cover} size="tile16" icon={e.icon} eager={eager} />
-      <span className="flex min-w-0 flex-col px-0.5">
+      {/* 16:9, its height rounded down to the 4 px grid, so a second row of tiles sits on a whole pixel. */}
+      <CoverThumb cover={e.cover} size="tile16" icon={e.icon} eager={eager} className="aspect-auto h-[round(down,56.25cqw,4px)]" />
+      <span className="flex min-w-0 flex-col">
         <span className={cn("truncate text-[13px] leading-[18px] font-medium", current && "font-semibold")}>{e.label}</span>
         <span className="truncate text-[12px] leading-4 text-muted-foreground">{e.line}</span>
       </span>
@@ -266,7 +284,7 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
               </IntentLink>
             )}
           </div>
-          <ul aria-labelledby={labelId} className="grid gap-x-3 gap-y-2" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
+          <ul aria-labelledby={labelId} className="grid gap-3" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
             {c.rows.map((e, i) => {
               const row = Math.floor(i / n);
               // Two sections: one row of tiles each below 900 px of height, two from 900 px.
@@ -292,10 +310,10 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
     return (
       <div key={c.id} data-group={c.id} className={cn("flex min-w-0 flex-col gap-2", place)}>
         {label}
-        <ul aria-labelledby={labelId} className="flex flex-col gap-0.5">
+        <ul aria-labelledby={labelId} className="flex flex-col gap-1">
           {c.lead && (
-            <li className="pb-1.5">
-              <LeadCard e={c.lead} col={col} current={current === c.lead.id} inside={holder === c.lead.id} now={now} />
+            <li>
+              <LeadCard e={c.lead} col={col} current={current === c.lead.id} inside={holder === c.lead.id} now={now} className="mb-1" />
               <SubLinks e={c.lead} col={col} row={1} current={current} />
             </li>
           )}
@@ -311,11 +329,11 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
   };
 
   return (
-    <div className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 2xl:gap-x-6">
+    <div className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 lg:gap-x-3">
       {families
         ? model.families!.map((f) => (
             <Fragment key={f.id}>
-              <div className={cn("flex items-center gap-2 border-b pb-1.5 lg:row-start-1", f.span >= 3 ? "col-span-3" : SPAN[f.span])} data-family={f.id}>
+              <div className={cn("flex h-10 items-center gap-2 border-b pb-px lg:row-start-1", f.span >= 3 ? "col-span-3" : SPAN[f.span])} data-family={f.id}>
                 <p className="text-[12px] leading-4 font-semibold text-foreground">
                   {f.label} <span className="font-normal text-muted-foreground tabular-nums">· {f.count}</span>
                 </p>
@@ -355,8 +373,8 @@ export function MegaPanel({ id, onClose, onSearch }: { id: MegaId; onClose: () =
   // The query too: moving from one preset to another (/video?preset=…) keeps the path.
   const search = useSearchParams()?.toString() ?? "";
   return (
-    <div className="max-w-[1440px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
-      <div className="flex min-h-10 items-center gap-3.5 pb-4">
+    <div className="max-w-[1680px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
+      <div className="flex min-h-10 items-center gap-3 pb-4">
         <p className="text-[13px] text-muted-foreground" data-count-line>
           {model ? model.countLine : failed ? "Couldn't load this menu" : " "}
         </p>
@@ -366,7 +384,7 @@ export function MegaPanel({ id, onClose, onSearch }: { id: MegaId; onClose: () =
           aria-current={pathname === area.href ? "page" : undefined}
           aria-label={model?.seeAll.name ?? `See all ${area.label.toLowerCase()}`}
           data-see-all
-          className="nav-row group/all -ml-1 inline-flex h-9 items-center gap-1 rounded-[10px] px-2 text-[13px] font-medium text-brand-text"
+          className="nav-row group/all -ml-1 inline-flex h-8 items-center gap-1 rounded-[8px] px-2 text-[13px] font-medium text-brand-text [@media(pointer:coarse)]:h-11"
         >
           See all
           <ArrowRight aria-hidden className="size-3.5 motion-safe:transition-transform group-hover/all:translate-x-0.5" />

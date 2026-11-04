@@ -251,6 +251,9 @@ export interface FinishOptions {
   soften?: number;
 }
 
+/** Fix colours' settings when a request leaves them out (one source for the plan and an example's card). */
+export const FINISH_COLOURS_DEFAULT: Required<Pick<FinishOptions, "finish" | "strength" | "soften">> = { finish: "soft", strength: 0.4, soften: 0.33 };
+
 /** The part a new maker takes (seconds): Group swap, Scene edit and From picture 2–15 s; Finish the whole clip. */
 export const OPENJUTSU_LIMITS = { minSeconds: 2, maxSeconds: 15, facesMaxSeconds: 10, coloursMaxSeconds: 60, maxCharacters: 4, roleChars: 80, lightChars: 300, sceneChars: 2000 } as const;
 
@@ -1906,7 +1909,7 @@ function planOpenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
   const settings =
     m.tool === "faces"
       ? { faceStyle: f.faceStyle ?? "mouth", chunkSeconds: f.chunkSeconds ?? 6.5 }
-      : { finish: f.finish ?? "soft", strength: f.strength ?? 0.4, soften: f.soften ?? 0.33 };
+      : { finish: f.finish ?? FINISH_COLOURS_DEFAULT.finish, strength: f.strength ?? FINISH_COLOURS_DEFAULT.strength, soften: f.soften ?? FINISH_COLOURS_DEFAULT.soften };
   const step = job("fix", m.tool === "faces" ? "face-fix-video" : "tone-video", m.tool === "faces" ? "Fix the faces" : "Fix the colours", m.tool === "faces" ? input.references.slice(0, 1) : [], settings);
   if (!steps.length) {
     delete step.after;
@@ -2041,7 +2044,17 @@ export interface GenjutsuSetup {
   /** From picture's settings (not the frame or the words: they belong to a run). */
   picture?: Omit<PictureOptions, "frame" | "scene" | "stage">;
   finish?: FinishOptions;
+  /** The run's seed (blank in the form: a new one each time). */
+  seed?: number;
+  /** How long the part is, in seconds (it starts where the part of the clip starts). */
+  length?: number;
+  /** What of the clip's sound goes back. */
+  originalSound?: OriginalSound;
 }
+
+/** The longest part a setup names: Finish's whole clip. */
+export const SETUP_MAX_LENGTH = 60;
+const SOUNDS: readonly OriginalSound[] = ["everything", "music-effects", "dialogue", "lower-music"];
 
 const MODES = new Set<string>(GENJUTSU_MODES.map((m) => m.id));
 const QUALITIES = new Set<string>(["480p", "720p", "768p", "1080p", "2K", "4K"]);
@@ -2170,7 +2183,10 @@ export function cleanFinish(v: unknown): FinishOptions | undefined {
 
 const ANCHOR_IDS = new Set(["gpt-image-2-5-sunburst", "nano-banana-pro", "oss-qwen-image-21", "oss-krea2-identity-edit", "oss-qwen-edit"]);
 
-/** A setup as a short code ("gj1." + base64url JSON with short keys; empty fields left out). */
+/**
+ * A setup as a short code ("gj2." + base64url JSON with short keys; empty fields left out). gj2 adds the seed, the
+ * part's length and the original sound to gj1's fields, so a pasted code makes the same run; gj1 codes still read.
+ */
 export function encodeSetup(s: GenjutsuSetup): string {
   const look = s.look && (s.look.kind === "custom" ? { k: "c", i: s.look.images, w: s.look.words || undefined } : { k: s.look.kind === "preset" ? "p" : "s", id: s.look.id });
   const o = {
@@ -2188,9 +2204,17 @@ export function encodeSetup(s: GenjutsuSetup): string {
     o: s.object && cleanObject(s.object),
     i: s.picture && cleanPicture(s.picture),
     f: s.finish && cleanFinish(s.finish),
+    sd: s.seed !== undefined && !seedProblem(s.seed) ? s.seed : undefined,
+    pl: lengthOf(s.length),
+    os: s.originalSound,
   };
-  return `gj1.${toBase64Url(JSON.stringify(o))}`;
+  // gj1 while none of gj2's own fields is set: an install that reads only gj1 still pastes it.
+  const v = o.sd === undefined && o.pl === undefined && o.os === undefined ? "gj1" : "gj2";
+  return `${v}.${toBase64Url(JSON.stringify(o))}`;
 }
+
+/** A part's length as a code keeps it: 3 decimals, 1 to 60 s. */
+const lengthOf = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) && v >= 1 && v <= SETUP_MAX_LENGTH ? Math.round(v * 1000) / 1000 : undefined);
 
 /**
  * A setup read back from a code (or a link with ?setup=…), checked field by field; null when it isn't one. A code naming
@@ -2203,7 +2227,7 @@ export function decodeSetup(input: string, open: FeatureCheck = ALL_FEATURES): G
     // A link: its ?setup= (a malformed %-escape is not a code either).
     const fromLink = /[?&]setup=([^&#\s]+)/.exec(code);
     if (fromLink) code = decodeURIComponent(fromLink[1]);
-    if (!code.startsWith("gj1.")) return null;
+    if (!/^gj[12]\./.test(code)) return null;
     o = JSON.parse(fromBase64Url(code.slice(4).replace(/\s+/g, ""))) as Record<string, unknown>;
   } catch {
     return null;
@@ -2252,6 +2276,11 @@ export function decodeSetup(input: string, open: FeatureCheck = ALL_FEATURES): G
   }
   const finish = mode === "finish" ? cleanFinish(o.f) : undefined;
   if (finish && open(finish.tool === "faces" ? "finish-faces" : "finish-colours")) out.finish = finish;
+  if (typeof o.sd === "number" && !seedProblem(o.sd)) out.seed = o.sd;
+  const length = lengthOf(o.pl);
+  if (length !== undefined) out.length = length;
+  const sound = oneOf(o.os, SOUNDS);
+  if (sound) out.originalSound = sound;
   return out;
 }
 

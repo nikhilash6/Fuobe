@@ -4705,5 +4705,84 @@
    "image": "/examples/app-upscale/1/in-image.jpg"
   },
   "output": "ba:app-upscale"
+ },
+ {
+  "id": "genjutsu-character.1",
+  "surface": "tool:genjutsu/character",
+  "rank": 1,
+  "caption": "Two people swapped in one take",
+  "words": "A couple on sunny stone steps becomes two new people. The kiss on the cheek, the laugh and the light stay as filmed.",
+  "load": "genjutsu",
+  "genjutsu": {
+   "layout": "inset",
+   "went": "A 5 s clip and two photos",
+   "recipe": {
+    "mode": "character",
+    "engine": "open",
+    "model": "oss-h3-group-swap",
+    "quality": "720p",
+    "target": "type",
+    "seed": 7,
+    "length": 5.166,
+    "originalSound": "everything"
+   },
+   "own": {
+    "character": {
+     "people": [
+      {
+       "role": "the woman on the left"
+      },
+      {
+       "role": "the man on the right"
+      }
+     ]
+    }
+   }
+  },
+  "inputs": {
+   "clip": "/examples/genjutsu-character/1/in-clip.jpg",
+   "photo1": "/examples/genjutsu-character/1/in-photo1.jpg",
+   "photo2": "/examples/genjutsu-character/1/in-photo2.jpg"
+  },
+  "output": "/examples/genjutsu-character/1/show.mp4",
+  "rest": {
+   "src": "/examples/genjutsu-character/1/show.peak.webp",
+   "at": 4.717,
+   "from": 0
+  }
+ },
+ {
+  "id": "genjutsu-finish.1",
+  "surface": "tool:genjutsu/finish",
+  "rank": 1,
+  "caption": "A soft film finish at golden hour",
+  "words": "The same take with a soft film finish: gentler contrast and smoother detail. Every frame and move stays as filmed.",
+  "load": "genjutsu",
+  "genjutsu": {
+   "layout": "wipe",
+   "went": "A 5 s clip",
+   "recipe": {
+    "mode": "finish",
+    "engine": "open",
+    "model": "oss-fix-colours",
+    "finish": {
+     "tool": "colours",
+     "finish": "soft",
+     "strength": 0.4,
+     "soften": 0.33
+    },
+    "length": 5.166,
+    "originalSound": "everything"
+   }
+  },
+  "inputs": {
+   "clip": "/examples/genjutsu-finish/1/in-clip.jpg"
+  },
+  "output": "/examples/genjutsu-finish/1/show.mp4",
+  "rest": {
+   "src": "/examples/genjutsu-finish/1/show.peak.webp",
+   "at": 4.717,
+   "from": 0
+  }
  }
 ]

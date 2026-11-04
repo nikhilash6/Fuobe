@@ -29,6 +29,7 @@ import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { onPeak, thumbOf } from "@/lib/preset-cards";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
+import { STUDIO_COVERS, isStudioCover } from "@/lib/studio-covers";
 import { mp4Seconds } from "./helpers/mp4-length";
 
 // homeShowcase() is kept with "use cache" and cacheLife, which only a Next render reads.
@@ -71,9 +72,10 @@ const LOOP_FADE_SECONDS = 6 / 24;
 const clipSeconds = (url: string) => mp4Seconds(path.join(root, "public", url.split("?")[0]));
 
 describe("Home's showcase", () => {
-  it("names real presets, each with its cover and, where the slot plays one, its clip", () => {
+  it("names real presets (or a studio's own cover), each with its cover and, where the slot plays one, its clip", () => {
     for (const id of [...homeIds, ...BENTO_REEL]) {
-      expect(getPreset(id), id).toBeDefined();
+      // A studio card may show one of its studio's own examples instead (studio-covers.ts): Genjutsu's group swap.
+      expect(getPreset(id) ?? (studioIds.includes(id) && isStudioCover(id) ? STUDIO_COVERS[id] : undefined), id).toBeDefined();
       const cover = PRESET_PREVIEWS[id];
       expect(cover, `${id} has a real cover`).toBeDefined();
       expect(exists(cover.poster), cover.poster).toBe(true);

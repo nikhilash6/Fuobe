@@ -18,7 +18,7 @@ import { studioCount } from "@/lib/nav-model";
 import { HUB_MODES } from "@/lib/hubs";
 import { modelHref } from "@/lib/palette-index";
 import { cacheLife } from "next/cache";
-import { toPresetCard } from "@/lib/preset-card-data";
+import { studioCoverCard, toPresetCard } from "@/lib/preset-card-data";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { onPeak, thumbOf, type PresetCardData } from "@/lib/preset-cards";
 
@@ -100,7 +100,7 @@ export const HOME_REVEALS = [
  */
 export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => string }[] = [
   { href: "/cinema", id: "motion-arc-left", line: (f) => `Direct a film shot by shot: camera, lens, light and ${f.cinemaMoves} moves.` },
-  { href: "/genjutsu", id: "effect-turning-metal", line: () => "Keep a clip’s motion. Change what’s in it." },
+  { href: "/genjutsu", id: "genjutsu-group-swap", line: () => "Keep a clip’s motion. Change what’s in it." },
   { href: "/character-swap", id: "app-character-swap", line: () => "Put your character into whole clips, shot by shot." },
   { href: "/marketing", id: "app-macroshot-product", line: (f) => `From a product link to a finished ad. ${f.adTemplates} ad templates.` },
   { href: "/mixed-media", id: "effect-paper", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },
@@ -197,8 +197,10 @@ const isOpen = (m: ModelDef) => m.engine === "open" || !!m.engines?.includes("op
 /** A preset's card, resting on its peak frame when it has one (onPeak). */
 export function homeCard(id: string): PresetCardData {
   const p = getPreset(id);
-  if (!p) throw new Error(`Home names ${id}, which isn't in the catalog`);
-  return onPeak(toPresetCard(p));
+  // A studio's own cover (studio-covers.ts) where no preset has the id: Genjutsu's group swap.
+  const card = p ? toPresetCard(p) : studioCoverCard(id);
+  if (!card) throw new Error(`Home names ${id}, which isn't in the catalog or a studio's cover`);
+  return onPeak(card);
 }
 
 /** Where a preset's card opens: an app's own page, else the Video studio with it picked. */

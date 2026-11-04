@@ -136,7 +136,8 @@ describe("the template covers manifest", () => {
     // ready-made starters with a cover of their own (24).
     expect(lines).toHaveLength(254 + 139 + 9 + 6 + 24);
     const text = `{\n${lines.join(",\n")}\n}`;
-    expect(text.length).toBeLessThan(37_000);
+    // More preset covers are clips now (a poster and a video each), so the shared preset entries are longer.
+    expect(text.length).toBeLessThan(38_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);
   });
 });

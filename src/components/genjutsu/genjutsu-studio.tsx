@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { Brush, Download, Info, Loader2, RotateCcw, Sparkles, Undo2, Wand2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -80,6 +81,9 @@ import { FinishFields, FrameCompare, LightPicker, More, OnlyYou, PERSON_COLOURS,
 import { LookPicker, type LookSource } from "./look-picker";
 import { SetupCode } from "./setup-code";
 import { useClipCuts } from "./use-cuts";
+import { ModeExample, ModeExampleRow } from "./mode-example";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { exampleFor, MARKED_NOTE, OWN_CHARACTER_FIELDS, partLimits, sameRecipe, toRecipe, type GenjutsuExampleCard, type ModeExamples } from "@/lib/examples/genjutsu";
 
 /** The upload box's line: the mode's own window (Character swap: 5–15 s of one shot). */
 const limits = (mode: GenjutsuMode) =>
@@ -115,14 +119,27 @@ const seedOf = (s: string): number | undefined => (s.trim() === "" ? undefined :
  * and your references, say what changes, see the price (or "Free" on your ComfyUI), get the result with a before /
  * after wipe. Fuobe's Originals run by default on both engines; open weights and partners are labelled alternatives.
  * Setups copy and paste as a short code. The plan: src/lib/catalog/genjutsu.ts; the server: src/server/genjutsu.ts.
- * examples: "More to try" (exampleRow(), from the page), under the clip drop until there is a run of one's own.
+ * examples: "More to try" (exampleRow(), from the page), under the clip drop until there is a run of one's own; and each
+ * mode's own example under its title (modeExamples: a before → after loop, and Use this example, which loads its recipe).
  */
-export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData | null; live?: Partial<Record<GenjutsuFeature, boolean>> }) {
+export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: ExampleRowData | null; modeExamples?: ModeExamples; live?: Partial<Record<GenjutsuFeature, boolean>> }) {
   const [engine, setEngine, engineMode] = useEngine();
   // The Openjutsu modes open one by one, each after its GPU test (src/server/genjutsu-live.ts); the owner sees them all.
   const owner = useIsOwner();
   const open: FeatureCheck = useCallback((f) => owner || !!live?.[f], [owner, live]);
   const ownerOnly: FeatureCheck = (f) => owner && !live?.[f];
+  // The page sends only the mode examples open to everyone; the owner's are fetched (never in a visitor's page).
+  const ownerExamples = useQuery({
+    queryKey: ["genjutsu-examples"],
+    queryFn: async () => {
+      const res = await fetch("/api/genjutsu/examples");
+      if (!res.ok) throw new Error(String(res.status));
+      return ((await res.json()) as { examples: ModeExamples }).examples;
+    },
+    enabled: owner,
+    staleTime: Infinity,
+  });
+  const shownExamples = owner && ownerExamples.data ? ownerExamples.data : modeExamples;
   // Genjutsu doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
   const visitor = useLikelyVisitor();
   const access = useModelAccess();
@@ -164,6 +181,18 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   const [describing, setDescribing] = useState(false);
   const [finish, setFinish] = useState<FinishOptions>({ tool: "colours" });
   const [tapFor, setTapFor] = useState<number | null>(null);
+  // A mode's example in the form: which one, the part's length it asks for until a clip is in, and its words that came
+  // from its own clip (a note under those fields).
+  const [exampleIn, setExampleIn] = useState<string | null>(null);
+  // The length asks for the mode (and model) it came with: another mode's part limits don't take it.
+  const [pendingLength, setPendingLength] = useState<{ length: number; mode: GenjutsuMode; model?: string } | null>(null);
+  // The mode whose seed field a pasted setup or an example filled (only that mode shows and sends it).
+  const [seedFor, setSeedFor] = useState<GenjutsuMode | null>(null);
+  // The form's words right after an example went in: words that still match it aren't the viewer's own.
+  const [exampleWords, setExampleWords] = useState("");
+  const [marked, setMarked] = useState<{ subject?: boolean; target?: boolean }>({});
+  const [askReplace, setAskReplace] = useState<GenjutsuExampleCard | null>(null);
+  const [dropRing, setDropRing] = useState(false);
   const runMutation = useGenjutsuRun();
   const sceneMutation = useDescribeScene();
   const guard = useSubmitGuard();
@@ -185,6 +214,12 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
 
   const setMode = (m: GenjutsuMode) => {
     setModeState(m);
+    // A seed or a length that came with another mode's setup stays with that mode.
+    if (seedFor && seedFor !== m) {
+      setSeed("");
+      setSeedFor(null);
+    }
+    if (pendingLength && pendingLength.mode !== m) setPendingLength(null);
     // Character swap takes a 5–15 s part: a longer selection is cut back to its first 15 s (From picture: 15 s too).
     const most = m === "character" || m === "picture" ? CHARACTER_SWAP.maxSeconds : null;
     if (most && range && range.endTime - range.startTime > most + 0.05) {
@@ -246,6 +281,8 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   const partCuts = isCharacter && range ? cutsInPart(cuts ?? undefined, { start: range.startTime, end: range.endTime }) : [];
   const cut = cutWarning(partCuts);
   const seedNumber = seedOf(seed);
+  // Modes with no seed field of their own show one once a seed is set (an example's or a pasted setup's).
+  const seedShown = !isCharacter && !fresh && seed.trim() !== "" && seedFor === mode;
   // Character swap's H3 makers take H3's two qualities; the other makers (Recast, P-Video…) Genjutsu's own.
   // A size this engine can't make worth it (your GPU's 4K) is asked as 2K, as the picker shows it.
   const askedQuality = isCharacter && maker?.h3 ? (qualityOff(engine, charQuality) ? "2K" : charQuality) : quality;
@@ -364,7 +401,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   }
   const pictureStage: "frame" | "video" = frameUrl ? "video" : "frame";
 
-  const apply = (s: GenjutsuSetup) => {
+  const apply = (s: GenjutsuSetup, example?: GenjutsuExampleCard) => {
     // Through setMode: the URL's ?mode= follows (a reload keeps the pasted mode).
     setMode(s.mode);
     const e = s.engine && engineMode === "both" ? s.engine : engine;
@@ -396,8 +433,31 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
     if (s.picture) setPicture({ ...s.picture, stage: "frame" });
     if (s.finish) setFinish(s.finish);
     if (s.references?.length) setRefs(s.references.map(asSlot));
-    toast("Setup pasted", { description: clip ? "Check the references and press Generate." : "Add a clip to run it on." });
+    // gj2 and examples: the seed, the part's length and the sound too (an example with no seed: a new one each time).
+    if (s.seed !== undefined || example) {
+      setSeed(s.seed !== undefined ? String(s.seed) : "");
+      setSeedFor(s.seed !== undefined ? s.mode : null);
+    }
+    if (s.originalSound) setOriginalSound(s.originalSound);
+    if (s.length !== undefined) partLength(s.length, s.mode, s.model);
+    if (!example) toast("Setup pasted", { description: clip ? "Check the references and press Generate." : "Add a clip to run it on." });
   };
+
+  /** The part becomes this long from where it starts (the clip's end at most, and the mode's longest part). */
+  const partLength = (length: number, m: GenjutsuMode, model?: string) => {
+    const most = partLimits(m, model).max;
+    if (!range || !duration) return setPendingLength({ length: Math.min(length, most), mode: m, model });
+    setPendingLength(null);
+    const end = Math.min(duration, range.startTime + Math.min(length, most));
+    setRange({ ...range, endTime: Math.round(end * 1000) / 1000 });
+    if (duration - range.startTime < length - 0.05) toast(`Your clip is ${Math.round((duration - range.startTime) * 10) / 10} s from there. The example used ${Math.round(length * 10) / 10} s.`, { id: "gj-example-length" });
+  };
+  // A clip added after an example: its part takes the example's length once the clip is read.
+  if (pendingLength && range && duration) {
+    setPendingLength(null);
+    const end = Math.min(duration, range.startTime + Math.min(pendingLength.length, partLimits(pendingLength.mode, pendingLength.model).max));
+    if (Math.abs(range.endTime - end) > 0.001) setRange({ ...range, endTime: Math.round(end * 1000) / 1000 });
+  }
 
   // Hand-offs: ?mode=swap, ?video=/api/files/…, ?image=/api/files/… (a reference), ?setup=gj1.…. Read as they change, so
   // "Use in Genjutsu" on a result in this page's own feed (a link to /genjutsu?video=…) loads that clip too. Each value
@@ -430,6 +490,13 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
       const s = decodeSetup(code, open);
       if (s) apply(s);
       else toast.error("That setup code didn't read — ask for it again");
+    }
+    // ?example=<id>: its mode, with the example in view (nothing is loaded until Use this example).
+    const ex = fresh("example");
+    const exMode = ex ? GENJUTSU_MODES.find((g) => shownExamples?.[g.id]?.some((c) => c.id === ex))?.id : undefined;
+    if (exMode && modeOpen(exMode, open)) {
+      setModeState(exMode);
+      requestAnimationFrame(() => document.querySelector("[data-mode-example]")?.scrollIntoView({ block: "center" }));
     }
     const video = fresh("video");
     if (video?.startsWith("/api/files/")) {
@@ -492,6 +559,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   const reset = () => {
     source.clear();
     setRange(null);
+    setPendingLength(null);
     clearMarks();
     // The clip is gone: a later hand-off of the same video loads it again.
     if (new URLSearchParams(window.location.search).has("video")) {
@@ -528,6 +596,13 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   const soundEngine = maker?.engine ?? engine;
   const soundLiveNow = useSoundLive(ORIGINAL_SOUND_FEATURE);
   const originalSound = originalSoundOn(soundAsked ?? originalSoundDefault({ replacesPerson: isCharacter, engine: soundEngine, live: soundLiveNow }), soundEngine);
+  // The whole setup, as the header copies it (gj2: with the seed, the part's length and the sound) and as an example compares.
+  const partNow = range ? Math.round((range.endTime - range.startTime) * 1000) / 1000 : (pendingLength?.length ?? undefined);
+  const fullSetup: GenjutsuSetup = { ...setup, ...(seedNumber !== undefined && !seedProblem(seedNumber) ? { seed: seedNumber } : {}), ...(partNow ? { length: partNow } : {}), originalSound };
+  // This mode's example for this viewer (none: no card), and whether the form still holds it.
+  const example = exampleFor(shownExamples, mode, open);
+  const exampleInUse = !!example && exampleIn === example.id && sameRecipe(toRecipe(fullSetup), example.load.recipe);
+  const exampleOnlyYou = !!example && owner && !example.load.needs.every((f) => !!live?.[f]);
   const body: GenjutsuBody | null =
     uploaded && maker && !problem && !refs.some((r) => r.uploading) && !custom.some((r) => r.uploading)
       ? {
@@ -547,7 +622,8 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
           source: { url: clip.url!, name: clip.name, duration, fps: clip.info?.fps, width: size.width, height: size.height, hasAudio: clip.info?.hasAudio },
           range: { start: range.startTime, end: range.endTime },
           ...(isCharacter ? { character, ...(seedNumber !== undefined ? { seed: seedNumber } : {}), ...(cuts?.length ? { cuts } : {}) } : {}),
-          ...(fresh && !isCharacter && seedNumber !== undefined ? { seed: seedNumber } : {}),
+          // A seed field shows for every mode once a seed is set (an example's, a pasted setup's): what shows, runs.
+          ...(!isCharacter && seedNumber !== undefined && (fresh || seedShown) ? { seed: seedNumber } : {}),
           ...(sceneEdit ? { object: { ...objectEdit, action } } : {}),
           ...(mode === "picture" ? { picture: { ...picture, stage: pictureStage, ...(frameUrl ? { frame: frameUrl } : {}), ...(scene.trim() ? { scene: scene.trim() } : {}) } } : {}),
           ...(mode === "finish" ? { finish } : {}),
@@ -640,12 +716,95 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
     setTapFor(null);
   };
 
+  /**
+   * Use this example: the form's own words and seed are replaced only after a yes. Words that came with the last
+   * example loaded (and are unchanged) aren't the viewer's: switching to another example asks nothing. The character's
+   * description and who is who stay the viewer's either way, so they never count.
+   */
+  const wordsList = [prompt, subject, objectEdit.target ?? "", objectEdit.becomes ?? "", picture.adjust ?? "", words, isCharacter || fresh || seedShown ? seed : ""].map((w) => w.trim());
+  const wordsNow = wordsList.some(Boolean) ? JSON.stringify(wordsList) : "";
+  if (exampleInUse && wordsNow !== exampleWords) setExampleWords(wordsNow);
+  const ownWords = wordsNow !== "" && wordsNow !== exampleWords;
+  const pickExample = (card: GenjutsuExampleCard) => (ownWords && !exampleInUse ? setAskReplace(card) : loadExample(card));
+  const loadExample = (card: GenjutsuExampleCard) => {
+    const snap = { mode, engine, tier, quality, charQuality, targets, subject, prompts, lookChoice, look, custom, words, picked, character, action, objectEdit, picture, finish, seed, seedFor, range, soundAsked, pendingLength, marked, exampleIn, points, paint };
+    const r = card.load.recipe;
+    apply(r, card);
+    // Who is who, the character's description and the clicks and paint describe the viewer's own clip and photos: kept.
+    if (r.mode === "character") {
+      const own = Object.fromEntries(OWN_CHARACTER_FIELDS.flatMap((k) => (character[k] !== undefined ? [[k, character[k]]] : [])));
+      setCharacter({ ...own, ...(r.character ?? {}) });
+    }
+    setMarked({ subject: !!r.subject, target: !!r.object?.target });
+    setExampleIn(card.id);
+    // What the form still needs, said as the next steps: the clip, then the photos the example used.
+    const photos = card.inputs.filter((i) => i.slot.startsWith("photo")).length;
+    const missingPhotos = Math.max(0, photos - ready(refs).length);
+    const photoWords = missingPhotos ? (r.mode === "character" ? (missingPhotos === 1 ? "a character photo" : `${missingPhotos} character photos`) : missingPhotos === 1 ? "a photo" : `${missingPhotos} photos`) : "";
+    const steps = [!clip && "your clip", photoWords].filter(Boolean).join(" and ");
+    toast("Example loaded", {
+      id: "gj-example",
+      description: steps ? `Add ${steps}, then Generate.` : "Check the settings, then Generate.",
+      duration: 10_000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          setMode(snap.mode);
+          if (engineMode === "both") setEngine(snap.engine);
+          setTier(snap.tier);
+          setQuality(snap.quality);
+          setCharQuality(snap.charQuality);
+          setTargets(snap.targets);
+          setSubject(snap.subject);
+          setPrompts(snap.prompts);
+          setLookSource(snap.lookChoice);
+          setLook(snap.look);
+          setCustom(snap.custom);
+          setWords(snap.words);
+          setPicked(snap.picked);
+          setCharacter(snap.character);
+          setAction(snap.action);
+          setObjectEdit(snap.objectEdit);
+          setPicture(snap.picture);
+          setFinish(snap.finish);
+          setSeed(snap.seed);
+          setSeedFor(snap.seedFor);
+          if (snap.range) setRange(snap.range);
+          setOriginalSound(snap.soundAsked);
+          setPendingLength(snap.pendingLength);
+          setMarked(snap.marked);
+          setExampleIn(snap.exampleIn);
+          setPoints(snap.points);
+          setPaint(snap.paint);
+        },
+      },
+    });
+    // Next, with the focus there (the example's button no longer acts): the clip (no clip yet), else the photos still
+    // missing, else the first empty field, else Generate.
+    requestAnimationFrame(() => {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const shown = (el: Element | null): el is HTMLElement => el instanceof HTMLElement && el.getClientRects().length > 0 && !(el as HTMLButtonElement).disabled;
+      const first = (sel: string) => [...document.querySelectorAll(sel)].find(shown);
+      const emptyField = [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("#gj-side input:not([type]), #gj-side input[type=text], #gj-side textarea")].find((el) => shown(el) && !el.value.trim());
+      const target = !clip
+        ? first("#gj-clip-drop button, #gj-clip-drop [role=button], #gj-clip-drop input:not([type=file])")
+        : (missingPhotos ? first("#gj-refs button") : undefined) ?? emptyField ?? first("#gj-generate");
+      const area = document.getElementById(clip ? (missingPhotos ? "gj-refs" : "gj-generate") : "gj-clip-drop");
+      (target ?? area)?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+      target?.focus({ preventScroll: true });
+      if (!clip) {
+        setDropRing(true);
+        setTimeout(() => setDropRing(false), 2000);
+      }
+    });
+  };
+
   const modeInfo = getMode(mode);
   const hint = modeHint(mode, open);
   const tabs = <ModeTabsRow modes={GENJUTSU_MODES.filter((m) => modeOpen(m.id, open))} mode={mode} onMode={setMode} onlyYou={(m) => owner && !modeOpen(m, (f) => !!live?.[f])} />;
 
   return (
-    <ToolShell title="Genjutsu" tabs={tabs} fadeKey={mode} header={<SetupCode setup={setup} onPaste={apply} />} wide selfHostedOnly>
+    <ToolShell title="Genjutsu" tabs={tabs} fadeKey={mode} header={<SetupCode setup={fullSetup} onPaste={(s) => apply(s)} />} wide selfHostedOnly>
       {!clip && (
         <ToolHero title={modeInfo.label} subtitle={`${hint}${visitor ? "" : " Free on your own ComfyUI."}`}>
           {isCharacter && (
@@ -653,10 +812,14 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
               Whole clips, shot by shot? Open in Character Swap Studio
             </Link>
           )}
-          {visitor && <SelfHostNote className="mt-3 max-w-xl">Genjutsu isn&apos;t available here.</SelfHostNote>}
         </ToolHero>
       )}
-      <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>
+      {!clip && example && (
+        <ModeExample key={example.id} card={example} owner={!visitor} canUse={!visitor} inUse={exampleInUse} onlyYou={exampleOnlyYou} onUse={() => pickExample(example)} className="mt-6" />
+      )}
+      <div id="gj-clip-drop" className={cn("mx-auto scroll-mt-24 rounded-2xl transition-shadow", clip ? "pt-4" : "mt-8 max-w-[640px]", dropRing && "ring-2 ring-primary ring-offset-4 ring-offset-background")}>
+        {/* Said by the upload box it turns off (after the mode's example, which every viewer can watch). */}
+        {!clip && visitor && <SelfHostNote className="mb-3">Genjutsu isn&apos;t available here.</SelfHostNote>}
         {!clip ? (
           <ClipDrop
             accept={GENJUTSU.accept}
@@ -805,6 +968,8 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
 
               {showRefs && (
                 <Panel
+                  id="gj-refs"
+                  className="scroll-mt-24"
                   title={sceneEdit ? (action === "background" ? "The new place (optional)" : "What goes in (optional)") : modeInfo.refs}
                   aside={<span className="text-[12px] text-muted-foreground tabular-nums">{refs.length}/{maxRefs}</span>}
                 >
@@ -832,8 +997,9 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
               )}
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
+            <Panel id="gj-side" className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               {mode === "picture" && <PictureSteps stage={pictureStage} />}
+              {example && !visitor && <ModeExampleRow key={example.id} card={example} owner canUse inUse={exampleInUse} onlyYou={exampleOnlyYou} onUse={() => pickExample(example)} />}
               <p className="text-[13px] text-pretty text-muted-foreground">{hint}</p>
 
               {mode === "finish" && <FinishFields value={finish} onChange={setFinish} open={open} ownerOnly={ownerOnly} seed={seed} onSeed={setSeed} />}
@@ -929,6 +1095,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
                   onSeed={setSeed}
                 />
               )}
+              {sceneEdit && marked.target && objectEdit.target && <p className="-mt-2 text-[12px] text-muted-foreground">{MARKED_NOTE}</p>}
 
               {group && (
                 <WhoBecomesWho
@@ -952,6 +1119,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
                     placeholder={maker?.people ? "e.g. “the presenter”" : "e.g. “the red car”, “her jacket”"}
                     className="text-[13px]"
                   />
+                  {marked.subject && subject.trim() && <p className="text-[12px] text-muted-foreground">{MARKED_NOTE}</p>}
                 </Field>
               )}
 
@@ -1037,6 +1205,12 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
                 </Field>
               )}
 
+              {seedShown && (
+                <Field label="Seed" htmlFor="gj-any-seed" hint="Blank: a new one each time">
+                  <Input id="gj-any-seed" inputMode="numeric" value={seed} onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, "").slice(0, 15))} className="h-11 text-[13px]" />
+                </Field>
+              )}
+
               {clip?.info?.hasAudio !== false && mode !== "picture" && <OriginalSoundPicker engine={soundEngine} value={originalSound} onChange={setOriginalSound} />}
 
               <div className="space-y-3 border-t pt-3">
@@ -1058,7 +1232,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
                       </>
                     )}
                   </div>
-                  <Button className="rounded-full" onClick={() => start()} disabled={!!blocker || runMutation.isPending || visitor || describing}>
+                  <Button id="gj-generate" className="rounded-full" onClick={() => start()} disabled={!!blocker || runMutation.isPending || visitor || describing}>
                     {runMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />} {mode === "picture" ? (pictureStage === "frame" ? "Make the first frame" : "Make the video") : "Generate"}
                   </Button>
                 </div>
@@ -1126,6 +1300,25 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
       <Suspense fallback={null}>
         <UrlParams onChange={setParams} />
       </Suspense>
+      <AlertDialog open={!!askReplace} onOpenChange={(o) => !o && setAskReplace(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace your settings with the example&apos;s?</AlertDialogTitle>
+            <AlertDialogDescription>Your words and settings change to the example&apos;s. Your clip and photos stay.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep mine</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (askReplace) loadExample(askReplace);
+                setAskReplace(null);
+              }}
+            >
+              Replace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ToolShell>
   );
 }

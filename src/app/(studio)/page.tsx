@@ -47,10 +47,11 @@ export default async function Page() {
       prices={starterPriceLine()}
       quotes={startQuotes()}
     >
+      {/* Live edit is the highlight: its own section comes first, right under the first screen and the composer. */}
+      <LiveEditSection />
       <EffectsSection facts={home.facts} effects={home.effects} />
       <MotionsSection facts={home.facts} motions={home.motions} />
       <AppsSection facts={home.facts} beforeAfter={home.beforeAfter} reveals={home.reveals} />
-      <LiveEditSection />
       <StudiosSection facts={home.facts} studios={home.studios} audioTools={home.audioTools} pills={home.pills} />
       <AssistSection facts={home.facts} skills={home.skills} />
       <OpenSourceSection facts={home.facts} newModels={home.newModels} />

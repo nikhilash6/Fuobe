@@ -42,7 +42,7 @@ export interface NavEntry {
   goals: GoalId[];
   /** Search words: what people type for it that its label doesn't say. */
   keywords: string;
-  /** A preset id with a real cover (in PRESET_COVERS). */
+  /** A preset id with a real cover, or a studio's own cover (studio-covers.ts): either way in PRESET_COVERS. */
   cover?: string;
   icon: NavIconName;
   /** Who sees it anywhere (bar, menus, sheets, search, next steps). Omitted: everyone. */
@@ -202,7 +202,7 @@ const STUDIOS: NavEntry[] = [
     icon: "Drama",
     newUntil: newFor30Days("2026-10-27"),
   },
-  { id: "genjutsu", href: "/genjutsu", label: "Genjutsu", short: "Genjutsu", what: "Insert or swap anyone", kind: "studio", group: "people", goals: ["people", "edit"], keywords: "swap insert character motion transfer", cover: "effect-turning-metal", icon: "WandSparkles", newUntil: newFor30Days("2026-10-23") },
+  { id: "genjutsu", href: "/genjutsu", label: "Genjutsu", short: "Genjutsu", what: "Insert or swap anyone", kind: "studio", group: "people", goals: ["people", "edit"], keywords: "swap insert character motion transfer", cover: "genjutsu-group-swap", icon: "WandSparkles", newUntil: newFor30Days("2026-10-23") },
   { id: "elements", href: "/elements", label: "Elements", short: "Elements", what: "Your people, places, props", kind: "studio", group: "people", goals: ["people", "film"], keywords: "characters places props", cover: "app-figurine", icon: "AtSign" },
   // Sound (the Audio studio leads; its main modes follow it, from HUB_TOOLS)
   {
@@ -612,7 +612,7 @@ export const STEP_COVERS = {
   sound: "effect-live-concert",
   split: "app-asmr-host",
   reframe: "app-expand-image",
-  swap: "effect-turning-metal",
+  swap: "genjutsu-group-swap",
   voice: "app-asmr-promo",
   clean: "app-clean-up-voice",
   spin: "app-product-360",

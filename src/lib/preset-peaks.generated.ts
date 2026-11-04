@@ -61,7 +61,7 @@ export const PRESET_PEAKS: Record<string, { at: number; from: number; v: string 
   "app-what-s-next": { "at": 3.5625, "from": 0.1875, "v": "ad80d920" },
   "app-zoom-out": { "at": 3.5625, "from": 0.0208, "v": "e2bcb936" },
   "effect-acid": { "at": 3.5625, "from": 0.3542, "v": "5dd1cc1f" },
-  "effect-agamemnon": { "at": 3.5625, "from": 0.3125, "v": "665eb99f" },
+  "effect-agamemnon": { "at": 3.5625, "from": 0.7708, "v": "dba14a42" },
   "effect-akrill": { "at": 3.5625, "from": 0.2708, "v": "a5148de3" },
   "effect-angel-wings": { "at": 3.5625, "from": 0.6042, "v": "0527eb83" },
   "effect-aquarium": { "at": 3.5625, "from": 0.1042, "v": "8b679f01" },
@@ -163,6 +163,7 @@ export const PRESET_PEAKS: Record<string, { at: number; from: number; v: string 
   "effect-windows": { "at": 3.0208, "from": 0.0208, "v": "6566b7b2" },
   "effect-wireframe": { "at": 3.6042, "from": 0.7708, "v": "69a56666" },
   "effect-wonderland": { "at": 2.3542, "from": 0.2292, "v": "526fe306" },
+  "genjutsu-group-swap": { "at": 3.2708, "from": 0.1875, "v": "d288f440" },
   "motion-eating-zoom": { "at": 3.5208, "from": 0.2708, "v": "8bd91cef" },
   "motion-tilt-up": { "at": 3.6875, "from": 0.0208, "v": "cb07a5e7" },
   "motion-timelapse-glam": { "at": 3.6875, "from": 0.0208, "v": "a6315876" }

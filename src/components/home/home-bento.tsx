@@ -1,4 +1,5 @@
-import { ArrowRight, ArrowUpRight, ChevronsLeftRight, Play, Sparkles, Video } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Play, Sparkles, Video } from "lucide-react";
+import { preload } from "react-dom";
 import { BentoClip, BentoMotion, BentoReel, LiveTyping, NumbersLink } from "@/components/home/bento-islands";
 import { PausePreviews } from "@/components/home/home-islands";
 import { IntentLink } from "@/components/intent-link";
@@ -13,20 +14,24 @@ import "./home-bento.css";
  * tile's width or, where the tile is the squarer shape, its height times 4/3, so the browser picks a copy that sharp.
  */
 const SIZES = {
-  video: "(min-width: 1024px) 572px, (min-width: 768px) 576px, calc(100vw - 32px)",
+  video: "(min-width: 1024px) 572px, (min-width: 768px) 630px, calc(100vw - 32px)",
+  /**
+   * The live tile: from lg a third of the grid wide and two rows tall (up to 570 px under cover on a 1920 x 1080
+   * screen), two rows tall on a tablet, the full row on a phone.
+   */
+  live: "(min-width: 1024px) 570px, (min-width: 768px) 630px, calc(100vw - 32px)",
   /** A 4:3 picture in a square tile on a phone (half the row): cropped at its sides, so 4/3 of the tile's width. */
-  square: "(min-width: 1024px) 290px, (min-width: 768px) 280px, calc((100vw - 44px) * 0.667)",
-  /** The before/after tile: wide (its 4:3 pair) below lg; from lg it is tall and takes the pair's 3:5 crop (`tall`). */
-  wide: "(min-width: 768px) 476px, calc(100vw - 32px)",
-  tall: "290px",
+  square: "(min-width: 1024px) 274px, (min-width: 768px) 320px, calc((100vw - 44px) * 0.667)",
+  /** The Genjutsu tile: a third of the grid wide from lg, one column on a tablet (its 4:3 clip under cover: 280 px), the full row on a phone. */
+  genjutsu: "(min-width: 1024px) 376px, (min-width: 768px) 280px, calc(100vw - 32px)",
+  /** The original's window in the Genjutsu tile (home-bento.css: at most 132 px wide). */
+  original: "132px",
 };
-/** From lg the before/after tile is tall (home-bento.css). */
-const TALL_MEDIA = "(min-width: 1024px)";
 
 /**
- * A picture in AVIF where the browser takes it, its published JPEG or WebP where not; a picture with a `tall` crop
- * takes it from lg. `position`: its object-position, where it differs from its tile's. Decorative: the tile's link
- * names it.
+ * A picture in AVIF where the browser takes it, its published JPEG or WebP where not. `position`: its object-position,
+ * where it differs from its tile's. Its tint (a clip's poster) is its box's colour until it is in. `decoding`: "sync"
+ * for the picture that must land with the first screen. Decorative: the tile's link names it.
  */
 function Pic({
   pic,
@@ -35,6 +40,7 @@ function Pic({
   loading = "eager",
   fetchPriority,
   position,
+  decoding = "async",
 }: {
   pic: BentoPicture;
   sizes: string;
@@ -42,10 +48,10 @@ function Pic({
   loading?: "eager" | "lazy";
   fetchPriority?: "high" | "low";
   position?: string;
+  decoding?: "async" | "sync";
 }) {
   return (
     <picture className={s.pic}>
-      {pic.tall && <source media={TALL_MEDIA} type="image/avif" srcSet={pic.tall.map((a) => `${a.src} ${a.w}w`).join(", ")} sizes={SIZES.tall} />}
       <source type="image/avif" srcSet={pic.avif.map((a) => `${a.src} ${a.w}w`).join(", ")} sizes={sizes} />
       <img
         src={pic.fallback}
@@ -54,10 +60,10 @@ function Pic({
         height={Math.round((pic.avif.at(-1)!.w * 3) / 4)}
         loading={loading}
         fetchPriority={fetchPriority}
-        decoding="async"
+        decoding={decoding}
         draggable={false}
         className={cn(s.fill, className)}
-        style={position ? { objectPosition: position } : undefined}
+        style={position || pic.tint ? { objectPosition: position, backgroundColor: pic.tint } : undefined}
       />
     </picture>
   );
@@ -156,6 +162,15 @@ function CanvasBoard({ board }: { board: Bento["canvas"] }) {
  */
 export function HomeBento({ bento }: { bento: Bento }) {
   const { tiles } = bento;
+  // The video tile's still is the first screen's biggest picture: asked for from the head, before the body's HTML.
+  const still = bento.video.poster;
+  preload(still.avif.at(-1)!.src, {
+    as: "image",
+    type: "image/avif",
+    fetchPriority: "high",
+    imageSrcSet: still.avif.map((a) => `${a.src} ${a.w}w`).join(", "),
+    imageSizes: SIZES.video,
+  });
   return (
     <section id="home-bento" aria-labelledby="home-bento-title" className={s.bento}>
       <div className={s.head}>
@@ -176,20 +191,39 @@ export function HomeBento({ bento }: { bento: Bento }) {
             <span aria-hidden className={s.end} />
           </span>
         </h1>
-        <p className={s.aside}>Film, stills, sound, 3D, live edits and whole pipelines. Each tile opens the studio that makes it.</p>
+        <p className={s.aside}>Film, live edits, swaps, stills, sound, 3D and whole pipelines. Each tile opens the studio that makes it.</p>
       </div>
 
       <div className={s.grid}>
         <Tile tile={tiles.video} area={s.video} bigMeta>
-          <Pic pic={bento.video.poster} sizes={SIZES.video} fetchPriority="high" position={bento.video.reel[0].position} />
+          <Pic pic={still} sizes={SIZES.video} fetchPriority="high" decoding="sync" position={bento.video.reel[0].position} />
           <BentoReel id={bento.video.id} reel={bento.video.reel} progress />
           <span aria-hidden className={s.badge}>
             <Video className="size-3.5" /> Video
           </span>
         </Tile>
 
+        <Tile tile={tiles.live} area={s.live}>
+          <LiveTyping frames={bento.live.frames} phrases={bento.live.phrases} sizes={SIZES.live} />
+        </Tile>
+
         <Tile tile={tiles.image} area={s.image}>
           <Pic pic={bento.image} sizes={SIZES.square} className={s.kenburns} fetchPriority="low" />
+        </Tile>
+
+        <Tile tile={tiles.threeD} area={s.three}>
+          <Pic pic={bento.threeD.poster} sizes={SIZES.square} fetchPriority="low" />
+          <BentoClip id={bento.threeD.id} clips={bento.threeD.clips} />
+        </Tile>
+
+        <Tile tile={tiles.genjutsu} area={s.genjutsu}>
+          <Pic pic={bento.genjutsu.poster} sizes={SIZES.genjutsu} fetchPriority="low" />
+          <BentoClip id={bento.genjutsu.id} clips={bento.genjutsu.clips} />
+          {/* The clip as it was: both people in it are swapped in the one take behind it. */}
+          <span aria-hidden className={s.original}>
+            <Pic pic={bento.genjutsu.original} sizes={SIZES.original} fetchPriority="low" />
+            <span className={s.originalLabel}>Original</span>
+          </span>
         </Tile>
 
         <Tile tile={tiles.audio} area={s.audio}>
@@ -198,27 +232,6 @@ export function HomeBento({ bento }: { bento: Bento }) {
               <i key={i} style={{ "--h": h, "--d": `${((i / bento.wave.bars.length) * bento.wave.seconds).toFixed(3)}s` } as React.CSSProperties} />
             ))}
             <span className={s.playhead} />
-          </span>
-        </Tile>
-
-        <Tile tile={tiles.threeD} area={s.three}>
-          <Pic pic={bento.threeD.poster} sizes={SIZES.square} fetchPriority="low" />
-          <BentoClip id={bento.threeD.id} clips={bento.threeD.clips} />
-        </Tile>
-
-        <Tile tile={tiles.restore} area={s.restore}>
-          <Pic pic={bento.restore.after} sizes={SIZES.wide} fetchPriority="low" />
-          <Pic pic={bento.restore.before} sizes={SIZES.wide} className={s.before} fetchPriority="low" />
-          <span aria-hidden className={s.split}>
-            <span>
-              <ChevronsLeftRight className="size-4" />
-            </span>
-          </span>
-          <span aria-hidden className={cn(s.side, s.left)}>
-            Before
-          </span>
-          <span aria-hidden className={cn(s.side, s.right)}>
-            After
           </span>
         </Tile>
 
@@ -240,10 +253,6 @@ export function HomeBento({ bento }: { bento: Bento }) {
             </span>
           </span>
         </NumbersLink>
-
-        <Tile tile={tiles.live} area={s.live}>
-          <LiveTyping frames={bento.live.frames} phrases={bento.live.phrases} sizes={SIZES.square} />
-        </Tile>
 
         <Tile tile={tiles.canvas} area={s.canvas}>
           <CanvasBoard board={bento.canvas} />

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useNavUi } from "@/components/nav/nav-ui";
 import { usePreviewPlayback, usePreviewsPaused } from "@/components/preset-preview";
 import type { BentoPicture } from "@/lib/home-bento";
-import { REEL_FADE_MS, fadeDue, nextInReel, reelProgress, reelSources, type ReelClip } from "@/lib/home-reel";
+import { REEL_STALL_MS, fadeDue, fadeOf, holdOf, nextInReel, reelProgress, reelSources, type ReelClip } from "@/lib/home-reel";
 import { coverWidth, pickWidth, type Sized } from "@/lib/media-pick";
 import { releaseVideo } from "@/lib/media-release";
 import { browserPlaybackEnv } from "@/lib/preview-playback";
@@ -232,7 +232,9 @@ export function BentoClip({ id, clips, progress }: { id: string; clips: Sized[];
 
   return (
     <span ref={ref} aria-hidden className={s.clip} onPointerEnter={handlers.onPointerEnter} onPointerLeave={handlers.onPointerLeave}>
-      {clip && <video ref={video} src={clip} muted loop playsInline preload="auto" data-ready={ready || undefined} onLoadedData={() => setReady(true)} />}
+      {clip && (
+        <video ref={video} src={clip} muted loop playsInline preload="auto" data-max={Math.max(...clips.map((c) => c.w))} data-ready={ready || undefined} onLoadedData={() => setReady(true)} />
+      )}
       {progress && (
         <span className={s.progress}>
           <i ref={bar} />
@@ -247,50 +249,67 @@ const holdsStill = () => window.matchMedia("(prefers-reduced-motion: reduce)").m
 
 /**
  * One clip of the reel, in its own element (keyed by `k`, its place in the order the reel has played): it lets go of
- * its source when it leaves, so a clip that has played stops costing memory. `shown`: on screen; `incoming`: it fades
- * in over the clip ending, at the reel's pace.
+ * its source when it leaves, so a clip that has played stops costing memory. Its source is set here rather than as a
+ * prop: in development React mounts it twice, and the source let go of on the first unmount must come back. `run`:
+ * whether it plays (it plays and pauses itself, so a second mount plays it too; played once it has ended, it starts
+ * from its first frame). `shown`: on screen; `incoming`: it fades in over the clip ending, for `fadeMs`.
  */
 function ReelVideo({
   k,
   clip,
   src,
   loop,
+  run,
   shown,
   incoming,
+  fadeMs,
   register,
   onLoaded,
   onPlaying,
   onEnded,
+  onFailed,
+  onFaded,
 }: {
   k: number;
   clip: ReelClip;
   src: string;
   loop: boolean;
+  run: boolean;
   shown: boolean;
   incoming: boolean;
+  fadeMs: number;
   register: (k: number, v: HTMLVideoElement | null) => void;
   onLoaded: (k: number) => void;
   onPlaying: (k: number) => void;
   onEnded: (k: number) => void;
+  onFailed: (k: number) => void;
+  onFaded: (k: number) => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const v = ref.current;
+    if (!v) return;
+    v.src = src;
     register(k, v);
     return () => {
       register(k, null);
       releaseVideo(v);
     };
-  }, [k, register]);
+  }, [k, src, register]);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (run) void v.play().catch(() => {});
+    else v.pause();
+  }, [run]);
   return (
     <video
       ref={ref}
-      src={src}
       muted
       loop={loop}
       playsInline
       preload="auto"
-      style={{ objectPosition: clip.position }}
+      style={{ objectPosition: clip.position, transitionDuration: incoming ? `${fadeMs}ms` : undefined }}
       data-clip={clip.id}
       data-max={Math.max(...clip.clips.map((c) => c.w))}
       data-ready={shown || undefined}
@@ -298,22 +317,28 @@ function ReelVideo({
       onLoadedData={() => onLoaded(k)}
       onPlaying={() => onPlaying(k)}
       onEnded={() => onEnded(k)}
+      onError={() => onFailed(k)}
+      onTransitionEnd={(e) => e.propertyName === "opacity" && onFaded(k)}
     />
   );
 }
 
-/** The latest of two places in the reel's order (each "this one has loaded / played / ended" only moves forward). */
+/** The latest of two places in the reel's order (each "this one has loaded / played" only moves forward). */
 const later = (k: number) => (prev: number) => Math.max(prev, k);
 
 /**
  * The video tile's reel (src/lib/home-reel.ts): its clips one after another, each played once, each crossfading into
- * the next for REEL_FADE_MS as it ends, and after the last the first again. It plays by the same rules as a tile's clip
- * (BentoClip): it joins the site's playback rules once its still is painted, plays only on screen and in a visible tab,
- * pauses where it is, and each clip is the narrowest copy at least as wide as the tile needs on this screen (and as the
- * copy of the still the browser chose). The still is the first clip's first frame, and that clip shows only once it has
- * that frame: no sign, no flash, nothing moves. Only the clip playing and the one after it are loaded, the next one
- * only once the current one plays. Under reduced motion or Save-Data nothing plays by itself; a hover or keyboard focus
- * plays the first clip alone, on a loop. `progress`: a line along the bottom follows the whole reel.
+ * the next as it ends (or once it has held its last frame), and after the last the first again. It plays by the same
+ * rules as a tile's clip (BentoClip): it joins the site's playback rules once its still is painted, plays only on
+ * screen and in a visible tab, pauses where it is, and each clip is the narrowest copy at least as wide as the tile
+ * needs on this screen (and as the copy of the still the browser chose). The still is the first clip's first frame,
+ * and that clip shows only once it has that frame: no sign, no flash, nothing moves. Only the clip playing and the one
+ * after it are loaded, the next one only once the current one plays. The next clip is started when its fade is due (a
+ * phone may not fetch a paused clip's frames) and shows once it plays. A next clip that fails stops the reel turning:
+ * the clip on screen loops instead. One that is slow lets the clip on screen play again rather than stop on its last
+ * frame. Under reduced motion or Save-Data nothing plays by itself; a hover or keyboard focus plays the first clip
+ * alone, on a loop (under Save-Data, the copy as wide as the still). `progress`: a line along the bottom follows the
+ * whole reel.
  */
 export function BentoReel({ id, reel, progress }: { id: string; reel: ReelClip[]; progress?: boolean }) {
   const [armed, setArmed] = useState(false);
@@ -337,8 +362,25 @@ export function BentoReel({ id, reel, progress }: { id: string; reel: ReelClip[]
   }, [ref]);
   // Chosen when it first plays, and kept: each clip's copy, and whether the reel turns or its first clip loops alone.
   const [plan, setPlan] = useState<{ srcs: string[]; turns: boolean } | null>(null);
-  if (playing && !plan) setPlan({ srcs: reelSources(reel, Math.max(need, stillW)), turns: reel.length > 1 && !holdsStill() });
+  // The clip resting on its last frame: it has ended, and stays there until the reel plays it again.
+  const [rest, setRest] = useState(-1);
+  if (playing && !plan) {
+    const width = browserPlaybackEnv.saveData() ? Math.max(stillW, 1) : Math.max(need, stillW);
+    setPlan({ srcs: reelSources(reel, width), turns: reel.length > 1 && !holdsStill() });
+  }
   const turns = !!plan?.turns;
+  // Asked for less motion once it has started: it stops turning, and the clip on screen loops alone when played.
+  useEffect(() => {
+    if (!turns) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const stop = () => {
+      if (!reduced.matches) return;
+      setPlan((p) => p && { ...p, turns: false });
+      setRest(-1);
+    };
+    reduced.addEventListener("change", stop);
+    return () => reduced.removeEventListener("change", stop);
+  }, [turns]);
 
   // `seq`: how many clips have played before the one on screen (it is clip seq % n). Each element is keyed by its seq,
   // so a clip that comes round again is a new element.
@@ -346,13 +388,22 @@ export function BentoReel({ id, reel, progress }: { id: string; reel: ReelClip[]
   const [seq, setSeq] = useState(0);
   const [loaded, setLoaded] = useState(-1);
   const [started, setStarted] = useState(-1);
+  // `due`: the latest clip whose fade into the next has come (set back when the next one is late, so it comes again).
   const [due, setDue] = useState(-1);
-  // The next clip loads once this one plays; it fades in once this one is near its end (or has ended) and it has its
-  // first frame.
+  // Each time a clip ends: which one, and a count, so the same clip ending again is seen.
+  const [ends, setEnds] = useState({ k: -1, n: 0 });
+  const cur = reel[seq % n];
+  // The next clip loads once this one plays; it starts once this one is near its end (or has ended and held its last
+  // frame), and fades in once it plays.
   const nextOn = turns && started >= seq;
-  const fading = nextOn && due >= seq && loaded > seq;
+  const fading = nextOn && due >= seq;
+  const incomingShown = fading && started > seq;
   const els = useRef(new Map<number, HTMLVideoElement>());
   const [register] = useState(() => (k: number, v: HTMLVideoElement | null) => void (v ? els.current.set(k, v) : els.current.delete(k)));
+  const startedNow = useRef(started);
+  useEffect(() => {
+    startedNow.current = started;
+  });
   const bar = useRef<HTMLElement>(null);
   const on = useRef(handlers);
   useEffect(() => {
@@ -373,37 +424,51 @@ export function BentoReel({ id, reel, progress }: { id: string; reel: ReelClip[]
     };
   }, [ref]);
 
-  // Play or pause the clip on screen, and the one fading in over it; the next one waits on its first frame.
-  useEffect(() => {
-    const cur = els.current.get(seq);
-    const next = els.current.get(seq + 1);
-    if (cur) {
-      if (playing) void cur.play().catch(() => {});
-      else cur.pause();
-    }
-    if (next) {
-      if (playing && fading) void next.play().catch(() => {});
-      else next.pause();
-    }
-  }, [playing, seq, fading, plan, nextOn]);
+  // Whether each clip plays: the clip on screen while the reel plays, unless it has ended and rests on its last frame
+  // (played again, it starts from its first: it loops alone, or the next one is late); the next one only once its fade
+  // is due (until then it loads).
+  const runs = (k: number) => playing && (k === seq ? rest !== seq : fading);
 
-  // Once the next clip has faded in, it takes this one's place (and this one's element goes).
+  // Once the next clip has faded in (its opacity's transition has ended), it takes this one's place and this one's
+  // element goes; a little after the fade's length at the latest.
+  const advance = (k: number) => {
+    if (k === seq + 1 && incomingShown) setSeq((x) => Math.max(x, k));
+  };
   useEffect(() => {
-    if (!fading) return;
-    const t = window.setTimeout(() => setSeq((x) => Math.max(x, seq + 1)), REEL_FADE_MS);
+    if (!incomingShown) return;
+    const t = window.setTimeout(() => setSeq((x) => Math.max(x, seq + 1)), fadeOf(cur) + 150);
     return () => clearTimeout(t);
-  }, [fading, seq]);
+  }, [incomingShown, seq, cur]);
 
-  // A frame at a time while it plays: the line follows the reel, and the fade is due REEL_FADE_MS before a clip's end.
+  // When the clip on screen ends: its fade is due now, or once its last frame has held. If the next clip hasn't
+  // started REEL_STALL_MS after that, the fade is set back: the clip on screen plays again from its start, and the
+  // fade comes round again at its end.
+  useEffect(() => {
+    if (!turns || ends.k !== seq) return;
+    const hold = holdOf(cur);
+    const a = window.setTimeout(() => setDue(later(seq)), hold);
+    const b = window.setTimeout(() => {
+      if (startedNow.current > seq) return;
+      setDue((d) => Math.min(d, seq - 1));
+      setRest(-1);
+    }, hold + REEL_STALL_MS);
+    return () => {
+      clearTimeout(a);
+      clearTimeout(b);
+    };
+  }, [ends, seq, turns, cur]);
+
+  // A frame at a time while it plays: the line follows the reel, and the fade is due its length before a clip's end
+  // (fadeDue; for a clip that holds its last frame, only once it has ended).
   useEffect(() => {
     const v = els.current.get(seq);
     const b = bar.current;
-    if (!v || !playing || loaded < seq) return;
+    if (!v || !playing || Math.max(loaded, started) < seq) return;
     let raf = 0;
-    let marked = false;
+    let marked = due >= seq;
     const tick = () => {
       if (b) b.style.transform = `scaleX(${turns ? reelProgress(seq % n, n, v.currentTime, v.duration) : v.duration > 0 ? v.currentTime / v.duration : 0})`;
-      if (turns && !marked && fadeDue(v.currentTime, v.duration)) {
+      if (turns && !marked && !v.ended && fadeDue(v.currentTime, v.duration, cur)) {
         marked = true;
         setDue(later(seq));
       }
@@ -411,7 +476,14 @@ export function BentoReel({ id, reel, progress }: { id: string; reel: ReelClip[]
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, loaded, seq, turns, n]);
+  }, [playing, loaded, started, seq, turns, n, due, cur]);
+
+  // A next clip that can't play (missing, cut off, not decodable): the reel stops turning and the clip on screen loops.
+  const failed = (k: number) => {
+    if (k <= seq) return;
+    setPlan((p) => p && { ...p, turns: false });
+    setRest(-1);
+  };
 
   const playingNow = plan ? [{ k: seq, i: seq % n }, ...(nextOn ? [{ k: seq + 1, i: nextInReel(seq % n, n) }] : [])] : [];
   return (
@@ -424,12 +496,19 @@ export function BentoReel({ id, reel, progress }: { id: string; reel: ReelClip[]
             clip={reel[i]}
             src={plan.srcs[i]}
             loop={!turns}
-            shown={loaded >= k && (k === seq || fading)}
+            run={runs(k)}
+            shown={k === seq ? Math.max(loaded, started) >= k : incomingShown}
             incoming={k > seq}
+            fadeMs={fadeOf(cur)}
             register={register}
             onLoaded={(x) => setLoaded(later(x))}
             onPlaying={(x) => setStarted(later(x))}
-            onEnded={(x) => setDue(later(x))}
+            onEnded={(x) => {
+              setRest(x);
+              setEnds((e) => ({ k: x, n: e.n + 1 }));
+            }}
+            onFailed={failed}
+            onFaded={advance}
           />
         ))}
       {progress && (

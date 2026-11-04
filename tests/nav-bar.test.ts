@@ -227,7 +227,7 @@ describe("the launcher's columns", () => {
     expect(render(createElement(LauncherColumns, { kind: undefined, current: "genjutsu", now: 0 }))).not.toContain("data-active");
   });
 
-  it("gives Genjutsu's modes one wrapped line on a short window, and pads an odd list to whole rows", () => {
+  it("gives Genjutsu's modes wrapped lines on a short window, and hangs a row's features on its name's column", () => {
     const ul = (id: string) => html.match(new RegExp(`<ul[^>]*data-subs="${id}"[^>]*>`))?.[0] ?? "";
     expect(ul("genjutsu")).toContain("data-subs-line");
     // With a mouse it never hides (the line takes over); on a touch screen it needs 1024 px.
@@ -235,8 +235,11 @@ describe("the launcher's columns", () => {
     expect(ul("genjutsu")).toContain("[@media(pointer:coarse)_and_(max-height:1023.98px)]:hidden");
     expect(ul("video-tools")).toContain("[@media(max-height:879.98px)]:hidden");
     expect(ul("video-tools")).not.toContain("data-subs-line");
-    expect(ul("marketing")).toContain("data-odd");
-    expect(ul("audio")).not.toContain("data-odd");
+    // No pad after an odd list (the next row follows 4 px below, as rows do); features under a row are marked to
+    // start on its name (nav-subs.css), under a lead card on the card's words.
+    expect(html).not.toContain("data-odd");
+    expect(ul("genjutsu")).toContain("data-under");
+    expect(ul("marketing")).not.toContain("data-under");
   });
 
   it("shows New badges only until their date", () => {
@@ -283,7 +286,7 @@ describe("the bar's shell", () => {
     expect(html).not.toContain('aria-label="Search Fuobe"');
     expect(html).toContain('aria-keyshortcuts="/ Meta+K Control+K"');
     // The viewer's room is kept: Sign up's by default, the avatar's where an account or the owner was last.
-    expect(html).toMatch(/data-slot="viewer" class="[^"]*w-\[130px\]/);
+    expect(html).toMatch(/data-slot="viewer" class="[^"]*w-\[132px\]/);
     for (const w of OWNER_WORDS) expect(words(html), w).not.toContain(w.replace("&amp;", "&"));
     expect(html).not.toContain("Sign up");
   });

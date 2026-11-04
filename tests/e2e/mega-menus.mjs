@@ -38,6 +38,7 @@ const SIZES = [
   { width: 1280, height: 720 },
   { width: 1366, height: 768 },
   { width: 1440, height: 900 },
+  { width: 1680, height: 1050 },
   { width: 1920, height: 1080 },
 ];
 const SHOT_WIDTHS = [1280, 1440, 1920];
@@ -189,6 +190,141 @@ try {
         await ctx.close();
       }
     }
+  }
+
+  // 1c. One spacing system (nav-subs.css, mega-panel.tsx): in every list column, a feature's name starts on its
+  // studio's text column and the hairline ends at the last feature shown; rows 44 px (40 below lg), 4 px apart, on
+  // whole pixels; a card 8 px above the next row (4 above its features), a feature list 4 px above it; See all 32 px;
+  // Canvas' tiles on their column's edge and top, on whole pixels; no name cut beside a New badge (and from 1440 px
+  // Fuobe Kinetic Motion's badge beside its name); every row's line shown from 1280 px unless a two-line name takes it.
+  {
+    const widths = {};
+    for (const who of ["guest", "owner"]) {
+      for (const size of [{ width: 1024, height: 768 }, ...SIZES]) {
+        const ctx = await as(who, { viewport: size });
+        const p = await page(ctx);
+        await openRoute(p, `${app}/image`, { settleMs: 300 });
+        const label = `${who} ${size.width}x${size.height}`;
+        for (const [id, m] of Object.entries(MENUS)) {
+          if (size.width < m.from) continue;
+          const panel = await openMenu(p, id);
+          const r = await panel.evaluate((el) => {
+            const vis = (n) => !!n && n.checkVisibility();
+            const box = (n) => n.getBoundingClientRect();
+            // Where an element's first words start (a Range on its first text node).
+            const textX = (n) => {
+              const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (t.textContent.trim() && vis(t.parentElement) ? 1 : 3) });
+              const t = w.nextNode();
+              if (!t) return NaN;
+              const rg = document.createRange();
+              rg.selectNodeContents(t);
+              return rg.getClientRects()[0]?.left ?? NaN;
+            };
+            const near = (a, b, tol = 0.75) => Math.abs(a - b) <= tol;
+            const out = { text: [], line: [], gaps: [], heights: [], halves: [], cut: [], badge: [], clipped: [], seeAll: [], seeAllHalves: [], canvas: [], tileHalves: [], widths: [], beside: {}, noLine: [] };
+            for (const group of el.querySelectorAll("[data-group]")) {
+              const list = group.querySelector(":scope > ul");
+              const colX = box(group).left;
+              out.widths.push(box(group).width);
+              // Tiles (Canvas) are checked below; the owner's Canvas column (New board, recent boards) has its own rows.
+              if (!list || list.classList.contains("grid") || list.querySelector(":scope > li > button")) continue;
+              let prev = null; // { kind: "card" | "row" | "subs", bottom }
+              for (const li of [...list.children].filter(vis)) {
+                const a = li.querySelector(":scope > a");
+                if (!a) continue;
+                const subs = li.querySelector(":scope > ul.nav-subs");
+                const lead = a.matches('[class*="group/lead"]');
+                const ab = box(a);
+                if (prev) out.gaps.push({ at: a.textContent.trim().slice(0, 24), from: prev.kind, gap: +(ab.top - prev.bottom).toFixed(2), want: prev.kind === "card" ? 8 : 4 });
+                if (!lead) {
+                  out.heights.push({ at: a.textContent.trim().slice(0, 24), h: +ab.height.toFixed(2) });
+                  if (Math.abs(ab.top - Math.round(ab.top)) > 0.05) out.halves.push(`${a.textContent.trim().slice(0, 24)} ${ab.top.toFixed(2)}`);
+                }
+                prev = { kind: lead ? "card" : "row", bottom: ab.bottom };
+                const name = lead ? a.querySelector(".nav-mark-start > span > span") : a.querySelector("[data-row-name]");
+                const nameX = textX(name);
+                // Every row's name shows whole inside its words' box (a two-line name pushes its line out, never itself).
+                const holderBox = !lead && a.querySelector("[data-row-text]");
+                if (holderBox && (box(name).top < box(holderBox).top - 0.5 || box(name).bottom > box(holderBox).bottom + 0.5 || name.scrollHeight > name.clientHeight + 0.5))
+                  out.clipped.push(a.textContent.trim().slice(0, 30));
+                if (lead) out.text.push({ at: "lead", x: +(nameX - colX).toFixed(2), want: 12 });
+                // A name beside (or above) its New badge keeps all its words, and the badge shows whole.
+                const badge = a.querySelector("[data-new]");
+                if (badge) {
+                  if (name.scrollWidth > name.clientWidth + 0.5 || name.scrollHeight > name.clientHeight + 0.5) out.cut.push(a.textContent.trim().slice(0, 30));
+                  const holder = badge.parentElement;
+                  if (box(badge).bottom > box(holder).bottom + 0.5 || box(badge).right > box(holder).right + 0.5) out.badge.push(a.textContent.trim().slice(0, 30));
+                  // Beside: the badge's middle on the name's first line.
+                  out.beside[name.textContent.trim()] = Math.abs((box(badge).top + box(badge).bottom) / 2 - (box(name).top + 9)) <= 3;
+                }
+                // A row's line shows inside its words' box, unless its name takes two lines.
+                const rowLine = holderBox && [...holderBox.children].find((c) => c !== name && !c.matches("[data-new]"));
+                if (rowLine && rowLine.textContent.trim() && box(name).height < 20 && (!vis(rowLine) || box(rowLine).bottom > box(holderBox).bottom + 0.5))
+                  out.noLine.push(name.textContent.trim().slice(0, 24));
+                if (vis(subs)) {
+                  const first = [...subs.querySelectorAll(":scope > li > a")].find(vis);
+                  const links = [...subs.querySelectorAll(":scope > li")].filter(vis);
+                  const sb = box(subs);
+                  out.gaps.push({ at: `${a.textContent.trim().slice(0, 16)}'s features`, from: lead ? "card" : "row", gap: +(sb.top - ab.bottom).toFixed(2), want: lead ? 4 : 0 });
+                  // Under a card, or under a row without its thumbnail: the card's 12 px column; else the row's name.
+                  const words = a.querySelector(":scope > [data-row-text]");
+                  const thumb = !lead && [...a.children].some((c) => c !== words && vis(c));
+                  const want = lead || !thumb ? 12 : nameX - colX;
+                  out.text.push({ at: `${a.textContent.trim().slice(0, 16)}'s features`, x: +(textX(first) - colX).toFixed(2), want: +want.toFixed(2) });
+                  const before = getComputedStyle(subs, "::before");
+                  const lineBottom = sb.bottom - (parseFloat(before.bottom) || 0);
+                  const last = links.at(-1);
+                  if (!matchMedia("(pointer: coarse)").matches && !near(lineBottom, box(last).bottom)) out.line.push(`${a.textContent.trim().slice(0, 16)}: ${(lineBottom - box(last).bottom).toFixed(1)} past`);
+                  prev = { kind: "subs", bottom: box(last).bottom };
+                }
+              }
+            }
+            for (const s of el.querySelectorAll("a:not([data-sub])"))
+              if (vis(s) && /^See all/.test(s.textContent.trim())) {
+                out.seeAll.push(+box(s).height.toFixed(2));
+                if (Math.abs(box(s).top - Math.round(box(s).top)) > 0.05) out.seeAllHalves.push(`${s.getAttribute("aria-label") ?? "See all"} ${box(s).top.toFixed(2)}`);
+              }
+            // Canvas: a tile's picture on its column's edge, the first row's tops on the lead column's first item.
+            const tiles = [...el.querySelectorAll("[data-group] > ul.grid")].filter(vis);
+            if (tiles.length) {
+              const firstItem = [...el.querySelectorAll("[data-group]")].filter((g) => !g.querySelector(":scope > ul.grid")).map((g) => [...g.querySelectorAll("a, button")].find(vis))[0];
+              for (const ul of tiles) {
+                const g = ul.closest("[data-group]");
+                const ib = box(ul.querySelector(":scope > li > a > *"));
+                out.canvas.push({ dx: +(ib.left - box(g).left).toFixed(2), top: +ib.top.toFixed(2), lead: firstItem ? +box(firstItem).top.toFixed(2) : null });
+                for (const t of ul.querySelectorAll(":scope > li > a")) if (vis(t) && Math.abs(box(t).top - Math.round(box(t).top)) > 0.05) out.tileHalves.push(`${t.textContent.trim().slice(0, 20)} ${box(t).top.toFixed(2)}`);
+              }
+            }
+            return out;
+          });
+          const rowH = size.width >= 1024 ? 44 : 40;
+          const offText = r.text.filter((t) => Math.abs(t.x - t.want) > 0.75);
+          check(offText.length === 0, `${label} ${id}: features start on their studio's text column, card words 12 px in`, offText.map((t) => `${t.at} ${t.x}/${t.want}`).join(", "));
+          check(r.line.length === 0, `${label} ${id}: each hairline ends at its last feature`, r.line.join(", "));
+          const offGap = r.gaps.filter((g) => Math.abs(g.gap - g.want) > 0.75);
+          check(offGap.length === 0, `${label} ${id}: rows 4 px apart, a card 8 (4 to its features), a feature list 4`, offGap.slice(0, 5).map((g) => `${g.at} after ${g.from} ${g.gap}/${g.want}`).join(", "));
+          const offH = r.heights.filter((h) => Math.abs(h.h - rowH) > 0.5);
+          check(offH.length === 0, `${label} ${id}: rows ${rowH} px tall`, offH.slice(0, 5).map((h) => `${h.at} ${h.h}`).join(", "));
+          check(r.halves.length === 0, `${label} ${id}: every row on a whole pixel`, r.halves.slice(0, 4).join(", "));
+          if (size.width >= 1280) check(r.cut.length === 0 && r.badge.length === 0, `${label} ${id}: no name cut beside a New badge, the badge whole`, [...r.cut, ...r.badge].join(", "));
+          check(r.clipped.length === 0, `${label} ${id}: every row's name whole, none pushed out of its row`, r.clipped.join(", "));
+          check(r.seeAll.every((h) => Math.abs(h - 32) <= 0.5), `${label} ${id}: every See all 32 px`, r.seeAll.join(", "));
+          check(r.seeAllHalves.length === 0, `${label} ${id}: every See all on a whole pixel`, r.seeAllHalves.join(", "));
+          if (size.width >= 1440 && "Fuobe Kinetic Motion" in r.beside) check(r.beside["Fuobe Kinetic Motion"], `${label} ${id}: Fuobe Kinetic Motion's New badge beside its name`, JSON.stringify(r.beside));
+          if (size.width >= 1280) check(r.noLine.length === 0, `${label} ${id}: every one-line row shows its line`, r.noLine.join(", "));
+          if (id === "canvas") check(r.tileHalves.length === 0, `${label} canvas: every tile on a whole pixel`, r.tileHalves.join(", "));
+          if (id === "canvas")
+            check(r.canvas.every((c) => Math.abs(c.dx) <= 0.75 && c.lead !== null && Math.abs(c.top - c.lead) <= 0.75) || r.canvas.length === 0, `${label} canvas: tiles on their column's edge, level with the first column`, JSON.stringify(r.canvas));
+          if (id === "studios") (widths[size.width] ??= []).push(...r.widths);
+          await p.keyboard.press("Escape");
+          await panel.waitFor({ state: "hidden" });
+        }
+        await ctx.close();
+      }
+    }
+    // Wider windows never get narrower columns (the panel stops at 1680 px with one gutter).
+    const w = (x) => Math.min(...(widths[x] ?? [0]));
+    check(w(1920) >= w(1440) - 0.5, "Studios: columns at 1920 at least as wide as at 1440", `${w(1440).toFixed(1)} → ${w(1920).toFixed(1)}`);
   }
 
   // 2. Keys, one panel at a time, links and See all (guest, 1440x900).
@@ -488,6 +624,20 @@ try {
             const said = OWNER_WORDS.filter((w) => r.text.includes(w));
             check(said.length === 0, `${label} ${fam}: no owner-only words`, said.join(", "));
           }
+          if (fam === "studios") {
+            // The family tabs on the chips' 16 px gutter; tile rows of one height (two lines kept for every name).
+            const g = await sheet.evaluate((el) => {
+              const left = (sel) => el.querySelector(sel)?.getBoundingClientRect().left ?? NaN;
+              const tiles = [...el.querySelectorAll('[data-sheet-family="studios"] > ul > li')].filter((li) => li.checkVisibility());
+              return {
+                fam: left('[role="group"][aria-label="What to show"] button'),
+                chip: left('[role="group"][aria-label^="Show the studios"] button'),
+                heights: [...new Set(tiles.map((li) => Math.round(li.getBoundingClientRect().height * 10) / 10))],
+              };
+            });
+            check(Math.abs(g.fam - g.chip) <= 0.5, `${label} studios: family tabs and chips on one gutter`, `${g.fam} / ${g.chip}`);
+            check(g.heights.length === 1 && g.heights[0] % 4 === 0, `${label} studios: tile rows of one height on the 4 px grid`, g.heights.join(", "));
+          }
           if (fam !== "studios" && fam !== "canvas") {
             const chips = sheet.locator('[role="group"][aria-label^="Show one group"] button[aria-pressed]');
             await chips.nth(1).tap();
@@ -504,6 +654,45 @@ try {
         await ctx.close();
       }
     }
+  }
+
+  // 5b. Phone: the You sheet's rows (status rows too) start their words on one column; a best match keeps its whole
+  // name, its crumb moving to the second line.
+  {
+    const ctx = await as("owner", PHONE);
+    const p = await page(ctx);
+    await openRoute(p, `${app}/image`, { settleMs: 300 });
+    await p.locator('[data-phone-tabs] [data-tab="you"]').first().tap();
+    const sheet = p.locator("#phone-sheet");
+    await sheet.waitFor({ state: "visible" });
+    await p.waitForTimeout(800);
+    const xs = await sheet.evaluate((el) =>
+      [...el.querySelectorAll('a[class*="-mx-2"], button[class*="-mx-2"]')]
+        .filter((n) => n.checkVisibility())
+        .map((n) => {
+          const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (t.textContent.trim() && t.parentElement.checkVisibility() ? 1 : 3) });
+          const t = w.nextNode();
+          const rg = document.createRange();
+          if (t) rg.selectNodeContents(t);
+          return { at: t?.textContent.trim().slice(0, 20), x: t ? Math.round(rg.getClientRects()[0].left * 10) / 10 : NaN };
+        }),
+    );
+    const xsOk = xs.length > 2 && Math.max(...xs.map((r) => r.x)) - Math.min(...xs.map((r) => r.x)) <= 0.75;
+    check(xsOk, "phone You sheet: every row's words on one column", xs.map((r) => `${r.at} ${r.x}`).join(", "));
+    await p.keyboard.press("Escape");
+    await p.waitForTimeout(400);
+    await p.keyboard.press("/");
+    const dlg = p.getByRole("dialog");
+    await dlg.waitFor({ state: "visible" });
+    await p.keyboard.type("ad", { delay: 40 });
+    await p.waitForTimeout(1200);
+    const cut = await dlg.evaluate((el) =>
+      [...el.querySelectorAll('[data-hit-name="stack"]')].filter((n) => n.checkVisibility() && n.scrollWidth > n.clientWidth + 0.5).map((n) => n.textContent.trim()),
+    );
+    const stacked = await dlg.locator('[data-hit-name="stack"]').count();
+    check(stacked > 0 && cut.length === 0, "phone search: best matches keep their whole names", cut.join(" | ") || `${stacked} names`);
+    check(ctx.errors.length === 0, "phone You sheet and search: no console errors", ctx.errors.join(" | "));
+    await ctx.close();
   }
 
   // 6. /canvas: the finished look only, nothing over the subject, no cover-less card for visitors.

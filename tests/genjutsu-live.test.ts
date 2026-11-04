@@ -49,7 +49,9 @@ describe("Genjutsu's live gate", () => {
     expect(Object.keys(record.features).sort()).toEqual(["finish-colours", "group-swap"]);
     expect(Object.entries(genjutsuLive()).filter(([, on]) => on).map(([k]) => k).sort()).toEqual(["finish-colours", "group-swap"]);
     const page = fs.readFileSync(path.join(ROOT, "src/app/(studio)/genjutsu/page.tsx"), "utf8");
-    expect(page).toMatch(/<GenjutsuStudio examples=\{exampleRow\("tool:genjutsu"\)\} live=\{genjutsuLive\(\)\} \/>/);
+    expect(page).toContain("const live = genjutsuLive();");
+    // The page's mode examples are only the ones open to everyone (the owner's come from an owner-only route).
+    expect(page).toMatch(/<GenjutsuStudio examples=\{exampleRow\("tool:genjutsu"\)\} modeExamples=\{genjutsuExamples\(\(f\) => live\[f\]\)\} live=\{live\} \/>/);
     // The studio shows a feature when it is live or the viewer is the owner.
     const studio = fs.readFileSync(path.join(ROOT, "src/components/genjutsu/genjutsu-studio.tsx"), "utf8");
     expect(studio).toContain("const open: FeatureCheck = useCallback((f) => owner || !!live?.[f], [owner, live]);");

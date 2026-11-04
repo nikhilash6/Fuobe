@@ -13,11 +13,12 @@
  *   rotation-{640,1024,1536,2048}.{mp4,avif}  the turning gown (the 3D tile) at four widths, and each one's first frame
  *   reel-sand-storm-1024.jpg, rotation-1024.jpg the 1024 px clips' first frames, for a browser without AVIF
  *   image-4-{480,768}.avif                the Image studio's example 4
- *   ba-{before,after}-{640,960,1280}.avif       Colorize's before and after (4:3)
- *   ba-{before,after}-tall-{432,691}.avif       the same pair, a 3:5 crop for the tall tile
+ *   genjutsu-{640,768,1024}.{mp4,avif}    Genjutsu's group swap (the Genjutsu tile) at three widths, and each one's first frame
+ *   genjutsu-1024.jpg                     the 1024 px clip's first frame, for a browser without AVIF
+ *   genjutsu-original-{240,480}.avif      the original clip's first frame, for the Genjutsu tile's window
  *   board-{photo,film}.webp               the Canvas board's photo and a frame of its film, 168 px squares
  * and src/lib/home-bento.generated.ts: each file's content version, the reel (its clips in order, each one's length and
- * framing), and the waveform.
+ * framing, and where set how long it holds its last frame and fades out), each poster's mean colour, and the waveform.
  *
  * The reel: the video tile plays these clips one after another, each once, and crossfades into the next (after the
  * last, back to the first). Each is a stretch of its preset's full-size render: `from` (its first frame in the render)
@@ -37,7 +38,7 @@
  *   <dir>/<preset>-2048.mkv        the same render upscaled to 2048 x 1536, every frame (SeedVR2 7B, lossless FFV1,
  *                                  BT.709), for the 1536 and 2048 px copies: the 3D clip needs it; a reel clip without
  *                                  one comes at 640 and 1024 only
- *   <dir>/app-colorize-before.png, <dir>/app-colorize-after.png  Colorize's pair at full size (1536 x 1152)
+ *   <dir>/genjutsu-group-swap.mp4  Genjutsu's group swap at full size (1024 x 768, 24 fps): the Genjutsu tile's clip
  * Without it those files are kept as they are (and versioned; a reel clip in the widths it has), the posters are made
  * again from the clips kept, and so is the rest.
  *
@@ -69,14 +70,6 @@ export const WAVE_BARS = 48;
 export const WAVE_FLOOR = 0.12;
 const WAVE_SOURCE = "/samples/clean-voice/clean.m4a";
 
-/** The app the before/after tile shows (BENTO_BEFORE_AFTER in src/lib/home-bento.ts). */
-const BA_APP = "app-colorize";
-/**
- * The before/after tile is wide on a phone and a tablet (the 4:3 pair) and tall from lg: there it takes a 3:5 crop of
- * the full-size pair (1536 x 1152) around the subject, so it is never stretched past its own pixels and her face stays
- * in the frame.
- */
-const BA_TALL = { left: 422, top: 0, width: 691, height: 1152 };
 /**
  * The video tile's reel, in the order it plays: each clip's preset, the name of its copies here, the stretch of its
  * render it plays (`from`, its first frame; `frames`, at CLIP_FPS), where the tile anchors it (its object-position:
@@ -84,17 +77,29 @@ const BA_TALL = { left: 422, top: 0, width: 691, height: 1152 };
  * (chosen on close crops of faces and fine detail against the render; a busy picture, such as One Take's leaves, costs
  * more bits). The stretches are the ones that hold up frame by frame at the tile's size: One Take from the arch to its
  * look back (the render's last frame) and Sand Storm from the first gust until the sand has wrapped round her (the render's last second relights the shot). The first clip's first frame is the
- * tile's poster.
+ * tile's poster. `hold` and `fade` (ms, src/lib/home-reel.ts ReelClip): One Take ends on her face, so it holds that
+ * last frame a moment before the next clip comes in, and crossfades out quicker, so the two faces barely overlap.
  */
 export const REEL = [
   { id: "effect-sand-storm", name: "reel-sand-storm", from: 0, frames: 96, position: "50% 0%", crf: { 640: 22, 1024: 22, 1536: 26, 2048: 27 } },
-  { id: "motion-one-take", name: "reel-one-take", from: 28, frames: 96, position: "50% 15%", crf: { 640: 22, 1024: 23, 1536: 27, 2048: 28 } },
+  { id: "motion-one-take", name: "reel-one-take", from: 28, frames: 96, position: "50% 15%", hold: 450, fade: 350, crf: { 640: 22, 1024: 23, 1536: 27, 2048: 28 } },
 ];
 /**
  * The 3D tile's clip: its published preset, the name of its copies here, and the CRF each width is encoded at (the
  * wider copies, made from the 2048 px master, at a higher CRF: their pixels are smaller on the screen).
  */
 const LOOPS = [{ key: "app-3d-rotation", name: "rotation", crf: { 640: 23, 1024: 23, 1536: 27, 2048: 28 } }];
+/**
+ * The Genjutsu tile's clip (BENTO_GENJUTSU in src/lib/home-bento.ts): `frames` frames of its render from frame `from`,
+ * at the widths its 1024 px render covers, and the CRF each is encoded at. It plays on a loop, and its last frame is
+ * nothing like its first, so it holds that last frame `hold` frames and fades it to the tiles' dark colour over the
+ * last `fadeOut` (a crossfade at the seam would lay one face over another); its first frame, the poster, stays as it is.
+ */
+export const CUTS = [
+  { key: "genjutsu-group-swap", name: "genjutsu", from: 0, frames: 120, hold: 8, fadeOut: 8, widths: [640, 768, 1024], crf: { 640: 24, 768: 24, 1024: 23 } },
+];
+/** The colour a clip fades out to before it loops: the tiles' dark media colour (globals.css --media). */
+const FADE_COLOR = "0x0d0d0f";
 /** The widths each clip and its poster are made at: a tile takes the first at least as wide as its box needs. */
 const CLIP_WIDTHS = [640, 1024, 1536, 2048];
 /** The widths a reel clip is made at from its render alone (wider ones need its 2048 px master). */
@@ -112,12 +117,10 @@ const BOARD_THUMBS = [
 const STILLS = [
   { name: "image-4-480.avif", from: "/examples/image/4/out.jpg", width: 480 },
   { name: "image-4-768.avif", from: "/examples/image/4/out.jpg", width: 768 },
+  // The original clip's first frame (GENJUTSU_ORIGINAL in src/lib/home-bento.ts), for the Genjutsu tile's window.
+  { name: "genjutsu-original-240.avif", from: "/examples/genjutsu-character/1/in-clip.jpg", width: 240 },
+  { name: "genjutsu-original-480.avif", from: "/examples/genjutsu-character/1/in-clip.jpg", width: 480 },
 ];
-/** Copies made from a master (`master`: its file name in the masters folder). */
-const MASTER_STILLS = ["before", "after"].flatMap((side) => [
-  ...[640, 960, 1280].map((width) => ({ name: `ba-${side}-${width}.avif`, master: `${BA_APP}-${side}.png`, width })),
-  ...[432, 691].map((width) => ({ name: `ba-${side}-tall-${width}.avif`, master: `${BA_APP}-${side}.png`, width, crop: BA_TALL })),
-]);
 /** AVIF quality: the copies sit under a dark shade, and each tile takes one at least as wide as it shows. */
 const QUALITY = 55;
 /** The clips' posters: close enough to the clip's own first frame that the swap from one to the other can't be seen. */
@@ -150,13 +153,16 @@ function loopAt(src, width) {
 }
 
 /**
- * A reel clip at `width`: `frames` frames from frame `from` of the render (at CLIP_FPS), played once, no loop. Returns
- * its y4m stream.
+ * A clip at `width`: `frames` frames from frame `from` of the render (at CLIP_FPS). A reel clip plays once, no loop;
+ * the Genjutsu clip (CUTS) then holds its last frame `hold` frames and fades out over its last `fadeOut`, ending on
+ * the fade colour. Returns its y4m stream.
  */
-function cutAt(src, width, from, frames) {
-  const y4m = ffmpeg(["-v", "error", "-i", src, "-an", "-sn", "-dn", "-vf", `fps=${CLIP_FPS},trim=start_frame=${from}:end_frame=${from + frames},setpts=PTS-STARTPTS,scale=${width}:-2:flags=lanczos,format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
+function cutAt(src, width, from, frames, { hold = 0, fadeOut = 0 } = {}) {
+  const total = frames + hold;
+  const tail = (hold ? `,tpad=stop_mode=clone:stop=${hold}` : "") + (fadeOut ? `,fade=t=out:start_frame=${total - fadeOut}:nb_frames=${fadeOut - 1}:color=${FADE_COLOR}` : "");
+  const y4m = ffmpeg(["-v", "error", "-i", src, "-an", "-sn", "-dn", "-vf", `fps=${CLIP_FPS},trim=start_frame=${from}:end_frame=${from + frames},setpts=PTS-STARTPTS,scale=${width}:-2:flags=lanczos${tail},format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
   const got = readY4m(y4m).frames.length;
-  if (got !== frames) throw new Error(`${path.basename(src)} has ${got} frames from frame ${from}, not ${frames}`);
+  if (got !== total) throw new Error(`${path.basename(src)} has ${got} frames from frame ${from}, not ${total}`);
   return y4m;
 }
 
@@ -198,6 +204,12 @@ function readWave() {
   return { wave: waveform(Array.from(samples, (s) => s / 32768)), seconds: samples.length / 8000 };
 }
 
+/**
+ * A reel clip as the generated list holds it (and src/lib/home-reel.ts ReelClip reads it): `hold` and `fade` only where set.
+ * @param {{ id: string; name: string; frames: number; position: string; hold?: number; fade?: number }} c
+ */
+export const reelEntry = ({ id, name, frames, position, hold, fade }) => ({ id, name, frames, fps: CLIP_FPS, position, ...(hold ? { hold } : {}), ...(fade ? { fade } : {}) });
+
 async function main() {
   if (!DRY) fs.mkdirSync(OUT_DIR, { recursive: true });
   if (MASTERS && !fs.existsSync(MASTERS)) throw new Error(`no masters folder at ${MASTERS}`);
@@ -228,13 +240,13 @@ async function main() {
         make: () => encodeClipBuffer(loopAt(master(w >= HD_FROM ? `${c.key}-2048.mkv` : `${c.key}.mp4`), w).all, c.crf[w]),
       })),
     ),
-    ...MASTER_STILLS.map((s) => ({
-      ...s,
-      make: () => {
-        const img = sharp(master(s.master));
-        return (s.crop ? img.extract(s.crop) : img).resize(s.width).avif({ quality: QUALITY, effort: 6 }).toBuffer();
-      },
-    })),
+    ...CUTS.flatMap((c) =>
+      c.widths.map((w) => ({
+        name: `${c.name}-${w}.mp4`,
+        clip: true,
+        make: () => encodeClipBuffer(cutAt(master(`${c.key}.mp4`), w, c.from, c.frames, c), c.crf[w]),
+      })),
+    ),
   ];
   for (const s of fromMasters) {
     const out = path.join(OUT_DIR, s.name);
@@ -250,8 +262,8 @@ async function main() {
     }
     if (!DRY) versions[`/previews/home/${s.name}`] = contentVersion([out]);
   }
-  // Each poster, from its clip as it is now (just made, or kept): the reel's first clip's, and the 3D clip's.
-  const posterSets = [{ name: reel[0].name, widths: reel[0].widths }, ...LOOPS.map((c) => ({ name: c.name, widths: CLIP_WIDTHS }))];
+  // Each poster, from its clip as it is now (just made, or kept): the reel's first clip's, the 3D clip's and Genjutsu's.
+  const posterSets = [{ name: reel[0].name, widths: reel[0].widths }, ...LOOPS.map((c) => ({ name: c.name, widths: CLIP_WIDTHS })), ...CUTS.map((c) => ({ name: c.name, widths: c.widths }))];
   const posters = posterSets.flatMap((c) => c.widths.map((w) => ({ name: `${c.name}-${w}.avif`, clip: `${c.name}-${w}.mp4` })));
   const jobs = [
     ...posters.map((p) => ({
@@ -285,6 +297,12 @@ async function main() {
     if (!fs.existsSync(out) || !fs.readFileSync(out).equals(buf)) fs.writeFileSync(out, buf);
     versions[`/previews/home/${s.name}`] = contentVersion([out]);
   }
+  // Each poster's mean colour: its tile's background until the picture is in, so the first paint is never an empty box.
+  const tints = {};
+  for (const c of posterSets) {
+    const { channels } = await sharp(path.join(OUT_DIR, `${c.name}-${FALLBACK_WIDTH}.jpg`)).stats();
+    tints[c.name] = `#${channels.slice(0, 3).map((ch) => Math.round(ch.mean).toString(16).padStart(2, "0")).join("")}`;
+  }
   const { wave, seconds } = readWave();
   console.log(`stills ${(total / 1024).toFixed(1)} KB (clips aside) Â· waveform ${wave.length} bars over ${seconds.toFixed(2)} s`);
   if (DRY) return;
@@ -298,10 +316,13 @@ export const HOME_BENTO_MEDIA: Record<string, string> = ${JSON.stringify(version
 
 /** The video tile's reel, in the order it plays: each clip's preset, its copies' name, its length and its framing. */
 export const HOME_BENTO_REEL = ${JSON.stringify(
-    REEL.map(({ id, name, frames, position }) => ({ id, name, frames, fps: CLIP_FPS, position })),
+    REEL.map(reelEntry),
     null,
     2,
   )};
+
+/** Each poster's mean colour (by its clip's name): the tile shows it until the poster is in. */
+export const HOME_BENTO_TINT: Record<string, string> = ${JSON.stringify(tints, null, 2)};
 
 export const HOME_BENTO_WAVE = {
   src: ${JSON.stringify(WAVE_SOURCE)},

@@ -6,16 +6,15 @@
 import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { MODELS, getPreset, isListed } from "@/lib/catalog";
+import { MODELS, isListed } from "@/lib/catalog";
 import { getTemplate } from "@/lib/catalog/canvas";
 import { runsOn } from "@/lib/catalog/engines";
 import type { ModelDef } from "@/lib/catalog/types";
 import { EXAMPLE_MEDIA } from "@/lib/examples/media.generated";
-import { HOME_BENTO_MEDIA, HOME_BENTO_REEL, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
+import { HOME_BENTO_MEDIA, HOME_BENTO_REEL, HOME_BENTO_TINT, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
 import type { ReelClip } from "@/lib/home-reel";
 import type { Demo } from "@/lib/live/demo";
 import { presetCover } from "@/lib/preset-covers";
-import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { templateCover } from "@/lib/template-covers";
 
 /** The preset whose clip the 3D tile plays (no other card on Home plays it: tests/home-showcase.test.ts). */
@@ -34,8 +33,18 @@ export const BENTO_REEL_ID = "home-reel";
 export const BENTO_CLIP_FALLBACK = 1024;
 /** The Image studio's example the image tile shows and opens with (src/lib/examples/plan.json). */
 export const BENTO_IMAGE_EXAMPLE = { id: "image.4", out: "/examples/image/4/out.jpg" };
-/** The app the before/after tile shows and opens: black and white to colour reads at a glance. */
-export const BENTO_BEFORE_AFTER = "app-colorize";
+/**
+ * The Genjutsu tile: Genjutsu's own Group swap example (a couple, both people swapped in one take; the studio's cover
+ * "genjutsu-group-swap"), cut by scripts/gen-home-bento.mjs into `name`'s copies, with the original clip's first frame in
+ * a small window. Its id in the playback store is its own, so a card lower down can play the same clip.
+ */
+export const BENTO_GENJUTSU = { id: "home-genjutsu", cover: "genjutsu-group-swap", name: "genjutsu", original: "genjutsu-original" } as const;
+/** The widths the Genjutsu clip comes in: its render is 1024 px wide, and nothing is made up past that (768 for a 2x laptop). */
+export const BENTO_GENJUTSU_WIDTHS = [640, 768, 1024] as const;
+/** The widths of the original's window (it shows at up to about 130 px wide: 480 covers a 3x screen). */
+export const BENTO_ORIGINAL_WIDTHS = [240, 480] as const;
+/** The example whose original clip's first frame the window shows (Genjutsu's Character swap example, src/lib/examples). */
+export const GENJUTSU_ORIGINAL = "/examples/genjutsu-character/1/in-clip.jpg";
 /** The Canvas board the canvas tile draws: the same film as /canvas's "What's a canvas?". */
 export const BENTO_BOARD = "effect-chain-pearl-earring";
 /** The Live edit steps the live tile plays: the session's first three changes (Home's Live edit section plays them all). */
@@ -47,7 +56,7 @@ export const BENTO_HREFS = {
   image: `/image?example=${BENTO_IMAGE_EXAMPLE.id}`,
   audio: "/audio",
   threeD: "/image-to-3d",
-  restore: `/apps/${BENTO_BEFORE_AFTER}`,
+  genjutsu: "/genjutsu",
   numbers: "#home-studios",
   live: "/live-edit?from=home",
   canvas: "/canvas",
@@ -56,13 +65,13 @@ export const BENTO_HREFS = {
 export type BentoKey = keyof typeof BENTO_HREFS;
 
 /**
- * A picture in two or three widths: AVIF for the browsers that take it, the published JPEG for the rest. `tall`: a portrait
- * crop of it for a tile that is tall from lg (home-bento.tsx), so the picture is never stretched past its own pixels.
+ * A picture in two or more widths: AVIF for the browsers that take it, the published JPEG for the rest. `tint`: its
+ * mean colour, shown until it is in (a clip's poster).
  */
 export interface BentoPicture {
   avif: { src: string; w: number }[];
   fallback: string;
-  tall?: { src: string; w: number }[];
+  tint?: string;
 }
 
 /** A tile's clip: its id in the playback store, its poster, and the clip in each width (the tile picks one). */
@@ -172,20 +181,13 @@ function board() {
 /** Everything the first screen shows, computed once per build with the rest of Home (homeShowcase). */
 export async function homeBento(f: BentoFacts) {
   const threeD = presetCover(BENTO_CLIPS.threeD);
-  const restore = getPreset(BENTO_BEFORE_AFTER);
-  const baV = PRESET_BEFORE_AFTER[BENTO_BEFORE_AFTER];
-  if (!threeD?.video || !restore || !baV || BENTO_REEL.some((id) => !presetCover(id)?.video)) throw new Error("Home's first screen names a clip or an app without its published media");
+  if (!threeD?.video || BENTO_REEL.some((id) => !presetCover(id)?.video)) throw new Error("Home's first screen names a clip without its published media");
   const demo = await readDemo();
   const frame = (id: string) => {
     const fr = demo.frames[id];
-    if (!fr?.small || !fr.mid || !fr.webp) throw new Error(`Home's live tile names frame ${id}, which the Live edit session doesn't have`);
-    return { avif: [{ src: fr.small, w: 512 }, { src: fr.mid, w: 768 }], fallback: fr.webp } satisfies BentoPicture;
+    if (!fr?.small || !fr.mid || !fr.src || !fr.webp) throw new Error(`Home's live tile names frame ${id}, which the Live edit session doesn't have`);
+    return { avif: [{ src: fr.small, w: 512 }, { src: fr.mid, w: 768 }, { src: fr.src, w: 1280 }], fallback: fr.webp } satisfies BentoPicture;
   };
-  const restoreSide = (side: "before" | "after"): BentoPicture => ({
-    avif: [640, 960, 1280].map((w) => ({ src: made(`/previews/home/ba-${side}-${w}.avif`), w })),
-    tall: [432, 691].map((w) => ({ src: made(`/previews/home/ba-${side}-tall-${w}.avif`), w })),
-    fallback: `/previews/presets/ba/960/${BENTO_BEFORE_AFTER}-${side}.jpg?v=${baV}`,
-  });
   // The video tile's reel: each clip in the widths it comes in, and the first one's first frame as the poster, in its
   // widths (and a JPEG at 1024 px for a browser without AVIF).
   const reel = (): BentoReelTile => {
@@ -195,27 +197,26 @@ export async function homeBento(f: BentoFacts) {
       poster: {
         avif: widthsOf(first.name, "avif").map((w) => ({ src: made(`/previews/home/${first.name}-${w}.avif`), w })),
         fallback: made(`/previews/home/${first.name}-${BENTO_CLIP_FALLBACK}.jpg`),
+        tint: HOME_BENTO_TINT[first.name],
       },
       reel: HOME_BENTO_REEL.map((c) => {
         const widths = widthsOf(c.name, "mp4");
         if (!widths.length) throw new Error(`Home's video tile names ${c.name}, which scripts/gen-home-bento.mjs didn't make`);
-        return { id: c.id, position: c.position, clips: widths.map((w) => ({ src: made(`/previews/home/${c.name}-${w}.mp4`), w })) };
+        return { id: c.id, position: c.position, hold: c.hold, fade: c.fade, clips: widths.map((w) => ({ src: made(`/previews/home/${c.name}-${w}.mp4`), w })) };
       }),
     };
   };
-  // A moving tile: its poster (the clip's first frame) and its clip, each in every width; for a browser without AVIF, the
-  // 1024 px clip's first frame as a JPEG.
-  const moving = (key: keyof typeof BENTO_CLIPS): BentoMovingTile => {
-    const name = BENTO_CLIP_FILES[key];
-    return {
-      id: BENTO_CLIPS[key],
-      poster: {
-        avif: BENTO_CLIP_WIDTHS.map((w) => ({ src: made(`/previews/home/${name}-${w}.avif`), w })),
-        fallback: made(`/previews/home/${name}-${BENTO_CLIP_FALLBACK}.jpg`),
-      },
-      clips: BENTO_CLIP_WIDTHS.map((w) => ({ src: made(`/previews/home/${name}-${w}.mp4`), w })),
-    };
-  };
+  // A moving tile: its poster (the clip's first frame) and its clip, each in every width it comes in; for a browser
+  // without AVIF, the 1024 px clip's first frame as a JPEG.
+  const moving = (id: string, name: string, widths: readonly number[] = BENTO_CLIP_WIDTHS): BentoMovingTile => ({
+    id,
+    poster: {
+      avif: widths.map((w) => ({ src: made(`/previews/home/${name}-${w}.avif`), w })),
+      fallback: made(`/previews/home/${name}-${BENTO_CLIP_FALLBACK}.jpg`),
+      tint: HOME_BENTO_TINT[name],
+    },
+    clips: widths.map((w) => ({ src: made(`/previews/home/${name}-${w}.mp4`), w })),
+  });
   const tile = (key: BentoKey, kind: string, meta: string, title: string, cta: string): BentoTile => ({
     key,
     meta,
@@ -231,7 +232,7 @@ export async function homeBento(f: BentoFacts) {
       image: tile("image", "Image", `Image · ${f.imageModels} models`, "Portraits and campaigns", "Open Image"),
       audio: tile("audio", "Audio", `Audio · ${f.soundTools} sound tools`, "Voice, music, sound effects", "Open Audio"),
       threeD: tile("threeD", "3D", `3D · ${f.models3d} models`, "Spin it in 3D", "Open Image to 3D"),
-      restore: tile("restore", "Before and after", `One of ${f.apps} apps`, "Bring an old photo to color", `Open ${restore.name}`),
+      genjutsu: tile("genjutsu", "Genjutsu", "Genjutsu", "Swap anyone in a clip", "Open Genjutsu"),
       numbers: {
         ...tile("numbers", "Studios", "", "Every studio, app and effect", "All studios"),
         // Read as the numbers it shows, and say that it opens the list of studios in place.
@@ -245,8 +246,14 @@ export async function homeBento(f: BentoFacts) {
       avif: [480, 768].map((w) => ({ src: made(`/previews/home/image-4-${w}.avif`), w })),
       fallback: example(BENTO_IMAGE_EXAMPLE.out),
     } satisfies BentoPicture,
-    threeD: moving("threeD"),
-    restore: { before: restoreSide("before"), after: restoreSide("after") },
+    threeD: moving(BENTO_CLIPS.threeD, BENTO_CLIP_FILES.threeD),
+    genjutsu: {
+      ...moving(BENTO_GENJUTSU.id, BENTO_GENJUTSU.name, BENTO_GENJUTSU_WIDTHS),
+      original: {
+        avif: BENTO_ORIGINAL_WIDTHS.map((w) => ({ src: made(`/previews/home/${BENTO_GENJUTSU.original}-${w}.avif`), w })),
+        fallback: example(GENJUTSU_ORIGINAL),
+      } satisfies BentoPicture,
+    },
     wave: { bars: HOME_BENTO_WAVE.bars, seconds: HOME_BENTO_WAVE.seconds },
     live: { frames: BENTO_LIVE_STEPS.map(frame), phrases: livePhrases(demo) },
     canvas: board(),

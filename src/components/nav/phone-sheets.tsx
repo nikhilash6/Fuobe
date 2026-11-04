@@ -62,7 +62,7 @@ export function sheetReturnTarget(opener: HTMLElement | null, shown: NavSheet, t
 
 function YouSheet() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-4 pb-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-4 pb-1 [--nav-icon:18px]">
       <ComputerNoteBlock />
       <AccountSections variant="sheet" />
     </div>
@@ -183,7 +183,8 @@ export function PhoneSheets() {
               onPointerCancel={() => (drag.current = null)}
             >
               <span aria-hidden className="mx-auto h-1 w-10 rounded-full bg-border-strong" />
-              <div className={cn("flex items-center pr-2", shown === "studios" ? "gap-1 pl-3" : "gap-3 pl-4")}>
+              {/* On the sheet's 16 px gutter, as the chips and tiles under it are. */}
+              <div className={cn("flex items-center pr-2 pl-4", shown === "studios" ? "gap-1" : "gap-3")}>
                 <SheetPrimitive.Title className={cn("font-heading text-[28px] leading-none font-normal text-foreground", shown === "studios" && "sr-only")}>
                   {shown === "studios" ? MEGA_AREAS[family].label : TITLES[shown]}
                 </SheetPrimitive.Title>

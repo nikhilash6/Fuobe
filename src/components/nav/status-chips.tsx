@@ -52,10 +52,10 @@ export function StatusDot({ ok }: { ok: boolean | undefined }) {
   return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", ok ? "bg-success" : "bg-subtle-foreground")} />;
 }
 
-/** A status dot centred in a 16 px slot: the icon column of the menu's rows. */
+/** A status dot centred in a slot as wide as the rows' icons (16 px in the menu, 18 px in the You sheet: --nav-icon). */
 function DotSlot({ ok }: { ok: boolean | undefined }) {
   return (
-    <span aria-hidden className="grid w-4 shrink-0 place-items-center">
+    <span aria-hidden className="grid w-[var(--nav-icon,16px)] shrink-0 place-items-center">
       <StatusDot ok={ok} />
     </span>
   );

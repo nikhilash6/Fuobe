@@ -3,6 +3,7 @@
  * picture, a clip, a recording, words) and what came out; one tap puts its own files, words and settings into the
  * page's composer. Client-safe types: the catalog that builds them is server only (catalog.ts).
  */
+import type { GenjutsuFeature, GenjutsuSetup } from "@/lib/catalog/genjutsu";
 import type { GenerationRequest } from "@/lib/catalog/types";
 
 /** Where an example shows: an app, a camera motion or effect, a studio, a hub mode, a tool of its own, or a studio of the suite. */
@@ -43,7 +44,28 @@ export type ExampleLoad =
   /** Every studio composer: the request goes into the draft. */
   | { via: "draft"; request: ExampleRequest }
   /** Look only: the card opens a sheet with what went in and what came out, or (a tile from another page) its page. */
-  | { via: "look"; href?: string };
+  | { via: "look"; href?: string }
+  /** A Genjutsu mode's example: its recipe goes into the Genjutsu form; the viewer's own clip and photos stay. */
+  | GenjutsuExampleLoad;
+
+/**
+ * A Genjutsu mode's example (src/lib/examples/genjutsu.ts): one before → after loop, what went in, and the recipe that
+ * made it. The recipe is a setup with the seed, the part's length and the sound, and none of the fields that point at
+ * the example's own clip or photos (who is who, clicked points, the character's description).
+ */
+export interface GenjutsuExampleLoad {
+  via: "genjutsu";
+  /** "inset": the result fills the frame, the source plays in a corner window. "wipe": the source, then a line wipes to the result. */
+  layout: "inset" | "wipe";
+  /** What went in, in words ("A 5 s clip and two photos"). */
+  went: string;
+  recipe: GenjutsuRecipe;
+  /** The features a viewer needs open to see it (src/server/genjutsu-live.ts); the owner sees every one. */
+  needs: GenjutsuFeature[];
+}
+
+/** A Genjutsu setup as an example's recipe: the part's length is always in it, the example's own files never. */
+export type GenjutsuRecipe = Omit<GenjutsuSetup, "references"> & { length: number };
 
 export interface ExampleInput {
   /** The composer slot it fills: image, image2, endImage, mask, video, audio… */
