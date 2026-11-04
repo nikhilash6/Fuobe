@@ -56,6 +56,12 @@ export const RESCAN_MS = 10 * 60_000;
  */
 export const MODELS_CHECK_MS = 60_000;
 
+/**
+ * A one-second wait in the worker's loop that took longer than this means the PC slept (the process was stopped). The
+ * next beat says how long (`slept`), so a job the studio took back meanwhile counts against no one.
+ */
+export const SLEPT_MS = 60_000;
+
 /** Kept results that the studio hasn't taken for this long are deleted (the studio drops its jobs after a day). */
 export const HOLD_MAX_AGE_MS = 24 * HOUR;
 
@@ -226,6 +232,9 @@ async function work(saved, deps, owner) {
   let lastTask = null;
   let heldRetryAt = 0;
   let holdCheckedAt = -Infinity;
+  // How long the PC slept since the studio last answered a beat (ms), and how much of it the beat in flight carries.
+  let slept = 0;
+  let sleptSent = 0;
   // Its ComfyUI's start, while it goes on (beats go on meanwhile), and the signal that ends a start when the worker stops.
   let starting = null;
   const stopStarts = new AbortController();
@@ -373,17 +382,25 @@ async function work(saved, deps, owner) {
         await cleanJob(f, comfy.base, own);
         emptyCache();
       },
-      beatExtra: () => ({
-        protocol: PROTOCOL,
-        version: VERSION,
-        local: pause,
-        gpu: gpuInfo,
-        inventoryHash: invHash,
-        warmLane: null,
-        // The jobs whose results it keeps: a pause doesn't send them back in line, so they go up instead of running again.
-        held: hold.ids().slice(0, 16),
-      }),
+      beatExtra: () => {
+        sleptSent = slept;
+        return {
+          protocol: PROTOCOL,
+          version: VERSION,
+          local: pause,
+          gpu: gpuInfo,
+          inventoryHash: invHash,
+          warmLane: null,
+          // The jobs whose results it keeps: a pause doesn't send them back in line, so they go up instead of running again.
+          held: hold.ids().slice(0, 16),
+          // The PC slept: a job taken back from it meanwhile goes on with no blame.
+          ...(slept > 0 && { slept }),
+        };
+      },
       onBeat: (a) => {
+        // The studio heard about the sleep.
+        slept = Math.max(0, slept - sleptSent);
+        sleptSent = 0;
         // A studio that takes jobs only from a newer worker program: say so once (it sends this worker none).
         const min = Number(a?.worker?.minProtocol);
         if (min > PROTOCOL && answer?.worker?.minProtocol !== a.worker.minProtocol) log("The studio needs a newer worker program: it sends this one no jobs. Update the worker (docs/gpu-workers.md, \"Install and update\").");
@@ -673,7 +690,14 @@ async function work(saved, deps, owner) {
         log(s);
       }
       writeStatus(deps.home, { state: s, pause, at: t, comfy: comfy.alive() ? comfy.pid : null, answer: answer?.worker ?? null });
+      const before = now();
       await sleep(1000);
+      // A second that took over a minute: the PC slept (the whole process stopped). The next beat says so.
+      const gap = now() - before;
+      if (gap >= SLEPT_MS) {
+        slept += gap;
+        log(`The PC slept for about ${Math.max(1, Math.round(gap / 60_000))} min: the studio hears it, so a job taken back meanwhile counts against no one.`);
+      }
     }
   } finally {
     // Every way out: the job in hand stops (its kept results stay for the next start), its ComfyUI stops, the PC may

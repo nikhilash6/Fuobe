@@ -205,6 +205,68 @@ describe("losing a worker (checks 3, 4, 5)", () => {
     expect(claim(b)?.id).toBe(id2);
   });
 
+  it("a worker whose PC slept: the job taken back from it meanwhile counts no attempt, and it may take the job again", () => {
+    const id = task();
+    const a = worker("sleeper");
+    const b = worker("awake");
+    expect(claim(a)?.id).toBe(id);
+    // The PC sleeps for 10 minutes: the studio takes the job back after 2 (blamed: the worker went quiet).
+    const asleep = clock;
+    clock += 3 * MIN;
+    beat(b);
+    pool.sweepPool(clock);
+    expect(state(id)).toMatchObject({ state: "waiting", requeues: 1 });
+    expect(JSON.parse(state(id).tried_json!)).toEqual([a.id]);
+    clock = asleep + 10 * MIN;
+    // It wakes and says how long it slept: the attempt is taken back, and it is off the tried list.
+    const woke = pool.workerBeat(row(a), pool.cleanBeat({ device: `wkr-${a.id}`, protocol: 2, version: "1.0.0", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [], slept: 10 * MIN }), clock);
+    expect(woke.runner).toBe(true);
+    expect(state(id)).toMatchObject({ state: "waiting", requeues: 0, tried_json: null });
+    // So it takes the job again at once, though another worker is about (no retry rule against it).
+    beat(b);
+    expect(claim(a)?.id).toBe(id);
+    expect(claim(a)!.attempt).toBe(1);
+  });
+
+  it("a sleep is forgiven once a job, only for a job lost while it slept, and never for another worker's or another loss", () => {
+    const a = worker("sleeps-twice");
+    const lose = (id: string) => {
+      expect(claim(a)?.id).toBe(id);
+      clock += 3 * MIN;
+      pool.sweepPool(clock);
+    };
+    const id = task();
+    lose(id);
+    expect(pool.forgiveSleep(row(a), 5 * MIN, clock)).toEqual([id]);
+    beat(a);
+    lose(id);
+    // A second sleep on the same job: the attempt stands.
+    expect(pool.forgiveSleep(row(a), 5 * MIN, clock)).toEqual([]);
+    expect(state(id).requeues).toBe(1);
+    // A loss well before the reported sleep began is not the sleep's.
+    db().prepare("UPDATE relay_tasks SET state = 'canceled' WHERE id = ?").run(id);
+    const old = task();
+    beat(a);
+    lose(old);
+    clock += 60 * MIN;
+    expect(pool.forgiveSleep(row(a), 5 * MIN, clock)).toEqual([]);
+    expect(state(old).requeues).toBe(1);
+    // Another worker's sleep, or a job given back (not lost to silence): nothing changes.
+    db().prepare("UPDATE relay_tasks SET state = 'canceled' WHERE id = ?").run(old);
+    const other = worker("other");
+    const mine = task();
+    beat(a);
+    lose(mine);
+    expect(pool.forgiveSleep(row(other), 5 * MIN, clock)).toEqual([]);
+    db().prepare("UPDATE relay_tasks SET state = 'canceled' WHERE id = ?").run(mine);
+    const given = task();
+    beat(a);
+    expect(claim(a)?.id).toBe(given);
+    pool.backInLine(state(given), { blame: true });
+    expect(pool.forgiveSleep(row(a), 5 * MIN, clock)).toEqual([]);
+    expect(state(given).requeues).toBe(1);
+  });
+
   it("the third lost attempt fails the row", () => {
     const id = task();
     for (let i = 0; i < 3; i++) {

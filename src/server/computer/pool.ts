@@ -159,6 +159,7 @@ export function cleanBeat(b: unknown): WorkerBeat {
     running: Array.isArray(o.running) ? (o.running.slice(0, MAX_RUNNING) as WorkerBeat["running"]) : [],
     stopped: Array.isArray(o.stopped) ? o.stopped.filter((x): x is string => typeof x === "string").slice(0, 64) : [],
     held: Array.isArray(o.held) ? o.held.filter((x): x is string => typeof x === "string").slice(0, 16) : [],
+    ...((num(o.slept) ?? 0) > 0 && { slept: Math.min(num(o.slept)!, MAX_SLEPT_MS) }),
   };
 }
 
@@ -177,6 +178,8 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       `UPDATE relay_workers SET seen_at = ?, device = ?, protocol = ?, version = ?, paused_local = ?, local_why = ?, local_until = ?,
          warm_lane = ?, facts_json = COALESCE(?, facts_json) WHERE id = ?`,
     ).run(now, device, b.protocol, b.version, b.local.paused ? 1 : 0, b.local.why, b.local.until, b.warmLane, facts ? JSON.stringify(facts) : null, w.id);
+    // Its PC slept: a job taken back from it for going quiet meanwhile counts against no one.
+    if (b.slept) forgiveSleep(w, b.slept, now);
     for (const r of b.running) {
       const t = typeof r?.task === "string" ? (d.prepare("SELECT * FROM relay_tasks WHERE id = ? AND worker_id = ?").get(r.task, w.id) as TaskRow | undefined) : undefined;
       if (!t || !(SENT_STATES as readonly string[]).includes(t.state)) continue;
@@ -449,7 +452,7 @@ export function lineOrder(rows: TaskRow[], fairShare: boolean): TaskRow[] {
  * its ComfyUI down: the worker is noted in tried_json and it counts as an attempt). The third lost attempt fails it.
  * The old worker's lease stops working, so its late calls get 409.
  */
-export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?: boolean }): void {
+export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?: boolean; lostAt?: number }): void {
   const tried = json<string[]>(t.tried_json, []);
   const requeues = t.requeues + (o.blame ? 1 : 0);
   if (o.blame && (requeues >= MAX_ATTEMPTS || o.last)) {
@@ -471,6 +474,8 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?:
     down_why: null,
     note: "resent",
     ...(o.blame && t.worker_id && { tried_json: JSON.stringify([...new Set([...tried, t.worker_id])]) }),
+    // Lost because its worker went quiet: noted, so a sleep the worker reports later takes the blame back (forgiveSleep).
+    ...(o.lostAt && t.worker_id && { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), lost: { worker: t.worker_id, at: o.lostAt } }) }),
   });
   db().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
 }
@@ -494,11 +499,39 @@ export function sweepPool(now = Date.now()): void {
     const down = !!t.down_at && now - t.down_at > RELAY_TIMES.poolComfyDownMs;
     const stuck = t.state === "sending" && !!t.claimed_at && now - t.claimed_at > SENDING_MS;
     if (silent || down || stuck) {
-      backInLine(t, { blame: true, why: silent ? "The GPU running this stopped answering, three times. Press Retry." : down ? "ComfyUI kept stopping on the GPUs. Press Retry." : "The GPUs couldn't start this run. Press Retry." });
+      backInLine(t, { blame: true, why: silent ? "The GPU running this stopped answering, three times. Press Retry." : down ? "ComfyUI kept stopping on the GPUs. Press Retry." : "The GPUs couldn't start this run. Press Retry.", ...(silent && !t.w_revoked && { lostAt: now }) });
     }
   }
   const late = d.prepare("SELECT id FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND claimed_at IS NULL AND not_after IS NOT NULL AND not_after < ?").all(now) as { id: string }[];
   for (const t of late) endTask(t.id, "failed", { error: "The GPUs were busy. Not charged." });
+}
+
+/** The longest sleep a worker's beat may report (a week). */
+const MAX_SLEPT_MS = 7 * 24 * 60 * 60_000;
+/** A job lost this long before the reported sleep began still counts as lost to it (beats come every few seconds). */
+const SLEEP_SLACK_MS = 2 * 60_000;
+
+/**
+ * A worker's PC slept for `sleptMs` until about now: each job the studio took back from it for going quiet during that
+ * sleep goes on with no blame. The attempt it counted is taken back, and the worker is off the job's tried list, so it
+ * may take the job again at once. Once a job at most: a worker can't keep a job going forever by saying it slept.
+ */
+export function forgiveSleep(w: Pick<WorkerRow, "id">, sleptMs: number, now = Date.now()): string[] {
+  const since = now - Math.min(sleptMs, MAX_SLEPT_MS) - SLEEP_SLACK_MS;
+  const rows = db().prepare("SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state IN ('waiting','sending','queued','running','collecting') AND INSTR(extra_json, '\"lost\"') > 0").all() as TaskRow[];
+  const forgiven: string[] = [];
+  for (const t of rows) {
+    const { lost, ...extra } = json<{ lost?: { worker?: string; at?: number }; sleptOnce?: boolean } & Record<string, unknown>>(t.extra_json, {});
+    if (lost?.worker !== w.id || typeof lost.at !== "number" || lost.at < since || lost.at > now) continue;
+    if (extra.sleptOnce || t.requeues <= 0) {
+      setTask(t.id, { extra_json: JSON.stringify(extra) });
+      continue;
+    }
+    const tried = json<string[]>(t.tried_json, []).filter((x) => x !== w.id);
+    setTask(t.id, { requeues: t.requeues - 1, tried_json: tried.length ? JSON.stringify(tried) : null, extra_json: JSON.stringify({ ...extra, sleptOnce: true }) });
+    forgiven.push(t.id);
+  }
+  return forgiven;
 }
 
 setPoolClocks((t, now) => {

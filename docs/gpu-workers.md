@@ -328,7 +328,8 @@ If a worker stops answering for 2 minutes, its ComfyUI is down for 2 minutes, or
 15 minutes after the worker claimed it (or after its ComfyUI lost the job and the worker sent it again), its job goes
 back to the queue. The worker is added to the job's
 `tried_json` list, and the input reads start again. The old worker's late calls get 409, and it deletes that prompt.
-After the third lost attempt, the job fails. A job that is put back because of a pause does not count as an attempt.
+After the third lost attempt, the job fails. A job that is put back because of a pause does not count as an attempt,
+and neither does one lost while the worker's PC slept, once the worker says so (`slept` in its next beat).
 The run's own clocks follow the queue's: each attempt gets its own running time.
 
 **The place in line.** A waiting job's place counts every job that a worker able to run it would serve first, whatever
@@ -461,6 +462,10 @@ The worker keeps its jobs going by itself:
 - **The PC stays awake** while the worker holds a job, has results to send, or waits for work. A small helper asks the
   system to stay awake (`SetThreadExecutionState` on Windows, `caffeinate` on macOS, `systemd-inhibit` on Linux). The
   screen may still turn off. While the worker is paused or outside its hours, the PC sleeps as usual.
+- **A PC that slept anyway** (a lid closed, the power button) is noticed when it wakes: a one-second wait in the
+  worker's loop took over a minute. The next beat says how long the PC slept (`slept`, in ms). A job that the studio
+  took back from the worker for going quiet during that sleep then counts no attempt, and the worker may take it again
+  at once. This happens once per job at most.
 - **Its model folders are read again** every 10 minutes, and whenever a job needs a model file that the worker has not
   found yet. A drive that comes back after a restart is noticed, and the studio gets the new list.
 - **A model folder that isn't there yet** (a drive that is still locked or not connected after a restart) pauses the
@@ -496,7 +501,7 @@ within 10 minutes of each other, each write an alert to the admin log (`worker.a
 its target), at most once an hour each.
 
 - `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, canRotateToken?, local: { paused, why,
-  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held }`. The answer adds `worker: { paused, pauseNow,
+  until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held, slept? }`. The answer adds `worker: { paused, pauseNow,
   drain, autoResume, insideHours, nextChangeAt, lanes, minProtocol, sendInventory, token? }` (`token`: the next token,
   above).
   - `protocol` is 2 for a worker that says which inputs it takes, makes clips and sound again, and keeps its ComfyUI

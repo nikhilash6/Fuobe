@@ -12,6 +12,8 @@
  * - A request to its ComfyUI with another Host or without the key is refused.
  * - A clip is made again by ffmpeg before its ComfyUI sees it; without ffmpeg, the job goes back to the line.
  * - A model file that turns up later is reported within one look at its folders.
+ * - Its PC sleeps mid-run and the studio takes the job back: the next beat says how long it slept, the attempt is taken
+ *   back, and the output arrives once.
  * - A model folder that isn't there yet (a drive still locked after a restart): the worker waits for it, says so, and
  *   sends no list of files meanwhile; once the folder is there, the waiting job is taken within one look.
  */
@@ -156,7 +158,7 @@ function start(
   w: W,
   s: Studio,
   p: Pc,
-  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelsCheckMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number } = {},
+  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelsCheckMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number; now?: () => number; sleep?: (ms: number) => Promise<void> } = {},
 ) {
   const ctrl = new AbortController();
   const cfg = {
@@ -189,7 +191,8 @@ function start(
     ...(o.gpuEveryMs && { gpuEveryMs: o.gpuEveryMs }),
     ...(o.ffmpeg === undefined || o.ffmpeg === null ? { ffmpegVersion: async () => null } : {}),
     awake: { set: (on: boolean) => void (p.awake.at(-1) !== on && p.awake.push(on)) },
-    sleep: (ms: number) => sleep(Math.min(ms, 50)),
+    sleep: o.sleep ?? ((ms: number) => sleep(Math.min(ms, 50))),
+    ...(o.now && { now: o.now }),
     log: (line: string) => {
       p.logs.push(line);
       p.logAt.push(Date.now());
@@ -624,5 +627,56 @@ describe("its model folders", () => {
     expect(done.state).toBe("done");
     expect(s.inventories.length).toBeGreaterThan(0);
     expect(p.logs.some((l) => /model folders are all there/.test(l))).toBe(true);
+  });
+
+  it("its PC sleeps mid-run and the studio takes the job back: no attempt counted, and the output arrives once", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const beats: Record<string, unknown>[] = [];
+    s.intercept = (q, init) => {
+      if (q === "/api/gpu/computer/beat") beats.push(JSON.parse(String(init.body)));
+      return undefined;
+    };
+    // The worker's clock: the PC's. A sleep moves it on by 5 minutes at the end of one of the worker's one-second waits.
+    let offset = 0;
+    let sleepNext = 0;
+    const { id } = addTask();
+    start(w, s, p, {
+      steps: 40,
+      stepMs: 100,
+      now: () => Date.now() + offset,
+      sleep: async (ms) => {
+        await sleep(Math.min(ms, 50));
+        if (ms === 1000 && sleepNext) {
+          offset += sleepNext;
+          sleepNext = 0;
+        }
+      },
+    });
+    await until(async () => {
+      const c = comfyOf(p);
+      return c && ((await fakeStats(c.port).catch(() => null))?.step ?? 0) >= 2;
+    });
+    // The PC sleeps: the studio hears nothing for 3 minutes and takes the job back, blamed on the worker.
+    db().prepare("UPDATE relay_workers SET seen_at = ? WHERE id = ?").run(Date.now() - 3 * 60_000, w.id);
+    pool.sweepPool(Date.now());
+    expect(state(id)).toMatchObject({ state: "waiting", requeues: 1 });
+    // It wakes: its loop sees the time jump, and its next beat says how long it slept.
+    await until(async () => {
+      if (p.logs.some((l) => /The PC slept for about 5 min/.test(l))) return true;
+      if (!sleepNext) sleepNext = 5 * 60_000;
+      await sleep(300);
+      return false;
+    }, 30_000);
+    await until(() => beats.some((b) => typeof b.slept === "number" && (b.slept as number) >= 5 * 60_000));
+    const done = await ended(id);
+    expect(done.state).toBe("done");
+    // The attempt lost to the sleep was taken back: no blame on the worker.
+    expect(done.requeues).toBe(0);
+    expect(done.tried_json).toBeNull();
+    // Once heard, the sleep isn't said again.
+    const last = beats.at(-1)!;
+    expect(last.slept).toBeUndefined();
   });
 });

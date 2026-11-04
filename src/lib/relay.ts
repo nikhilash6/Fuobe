@@ -229,6 +229,11 @@ export interface WorkerBeat {
   stopped: string[];
   /** The tasks whose finished results the worker keeps on its disk (a stop-now leaves them its own, to send them up). */
   held?: string[];
+  /**
+   * How long its PC slept (ms) since its last beat that the studio answered. A job the studio took back from it for
+   * going quiet during that sleep goes on with no blame: no attempt counted, and this worker may take it again.
+   */
+  slept?: number;
 }
 
 /** Task timings (DESIGN 5.5): the runner lease, how often the tab beats, when a computer counts as gone. */
