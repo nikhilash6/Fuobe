@@ -64,8 +64,14 @@ export function clampCanvas([w, h]: [number, number], max = 2048): [number, numb
   return k === 1 ? [w, h] : [Math.max(32, Math.floor((w * k) / 32) * 32), Math.max(32, Math.floor((h * k) / 32) * 32)];
 }
 
-/** The Context Loop run name of one Fuobe job: its folder under output/h3_chains is this job's alone. */
-export const runName = (generationId: string) => `fuobe_${generationId.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 48) || "job"}`;
+/**
+ * The Context Loop run name of one Fuobe job: its folder under output/h3_chains is this job's alone. Context Loop takes a
+ * name that ends with a letter or number, so an id ending in "_" or "-" gets an "x" after it (still this job's alone).
+ */
+export const runName = (generationId: string) => {
+  const name = `fuobe_${generationId.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 48) || "job"}`;
+  return /[A-Za-z0-9]$/.test(name) ? name : `${name}x`;
+};
 
 function setRunName(graph: ComfyWorkflow, name: string) {
   const plans = Object.values(graph).filter((n) => n.class_type === "MiniMaxH3ChainPlanModern");

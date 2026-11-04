@@ -110,8 +110,8 @@
       "start_index": 0,
       "duration": 2048,
       "audio": [
-        "8",
-        2
+        "pad_audio",
+        0
       ]
     },
     "class_type": "TrimAudioDuration",
@@ -1760,6 +1760,34 @@
     "class_type": "AudioAdjustVolume",
     "_meta": {
       "title": "Mute the reference audio H3 hears"
+    }
+  },
+  "pad_silence": {
+    "inputs": {
+      "duration": 1,
+      "sample_rate": 8000,
+      "channels": 2
+    },
+    "class_type": "EmptyAudio",
+    "_meta": {
+      "title": "A second of silence (pads short sound)"
+    }
+  },
+  "pad_audio": {
+    "inputs": {
+      "audio1": [
+        "8",
+        2
+      ],
+      "audio2": [
+        "pad_silence",
+        0
+      ],
+      "direction": "after"
+    },
+    "class_type": "AudioConcat",
+    "_meta": {
+      "title": "Soundtrack padded to the last frame"
     }
   }
 }

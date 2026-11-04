@@ -843,7 +843,7 @@ export const MAKERS: Maker[] = [
     engine: "open",
     modes: ["finish"],
     label: "Colour finish",
-    note: "A soft film finish in seconds · up to 60 s",
+    note: "A soft film finish · up to 60 s",
     source: "open",
     refs: { min: 0, max: 0 },
     keepsSound: true,

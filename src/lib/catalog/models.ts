@@ -1254,7 +1254,7 @@ const open: ModelDef[] = [
     vendor: "Openjutsu",
     family: "utility",
     kind: "video",
-    tagline: "A soft film finish for a finished video: gentler contrast, smoother detail, rich blacks · no model, seconds",
+    tagline: "A soft film finish for a finished video: gentler contrast, smoother detail, rich blacks · no model",
     hidden: true,
     routes: [comfy("tone-video", "video-fix-colours", "Image Detail Contrast + Orion4D's DCTL tone mapper")],
     options: {},

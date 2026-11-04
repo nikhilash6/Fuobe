@@ -25401,7 +25401,7 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta's SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT",
-      "validated": false,
+      "validated": true,
       "notes": "video = the part (Genjutsu fits it first), image..image4 = the characters (unused pictures, their shrink and describer are deleted). params.extra.openjutsu: pictures, roles (one line each, ordinal fill), quality 480p | 720p (pack 736p) | 1080p, motion 512 | 768, hats, mouthsFollowSound, edge tight | normal | loose (20 / 40 / 60 px), seed. Every job runs under its own Context Loop run name (fuobe_<generation id>); the provider deletes output/h3_chains/<run> through the pack's run-folder routes once the result is in. Weights touched one stage after another: H3 21 GB, NVFP4 text encoder 15.7 GB, describer 9.4 GB, SAM 3.1 1.7 GB, VAEs 3.8 GB. Upstream timing: 6 s at 480p in 6-13 min on a 16 GB card."
     },
     {
@@ -25609,7 +25609,7 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta's SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT",
-      "validated": false,
+      "validated": true,
       "notes": "params.extra.openjutsu: action change | remove | background, target (SAM words, comma list; background: what stays), becomes, picture (image sent), biggestOnly, keepShape, edge (10 / 20 / 40 px), motion, quality, seed, paint (one run-length keyframe at <= 256 px). Remove drops the picture and the grey shape; background flips the grown mask. Own run name and run-folder clean-up as video-group-swap-h3."
     },
     {
@@ -26166,7 +26166,7 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta's SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT · YOLO face/person weights AGPL-3.0 · SAM ViT-B Apache-2.0 · InsightFace buffalo_l (identity tracking): NON-COMMERCIAL research only",
-      "validated": false,
+      "validated": true,
       "notes": "video = the finished video, image = the character photo. params.extra.openjutsu: faceStyle photo | mouth, chunkSeconds 4 | 6.5 | 10, seed. H3FaceTrackCrop.select is largest_face (H3-FaceRefine 1.1.1). The whole clip is decoded and pasted back at full size (two frame-sized copies of every frame: 1080p 10 s is about 12 GB), so a part is fitted to 1080 px on its short side and kept to 10 s.",
       "autoDownloads": [
         "YOLO face and person detectors (ultralytics/bbox/face_yolov8m.pt, ultralytics/segm/person_yolov8m-seg.pt), SAM ViT-B (sams/sam_vit_b_01ec64.pth) and InsightFace buffalo_l (insightface/models/buffalo_l), as H3-FaceRefine documents"
@@ -26227,7 +26227,7 @@
       ],
       "vramGb": 2,
       "license": "n/a (no model; Image Detail Contrast MIT, Orion4D_FXMax MIT, VideoHelperSuite GPL-3.0 code)",
-      "validated": false,
+      "validated": true,
       "notes": "params.extra.openjutsu: finish soft | filmic | rich | off (the tone mapper's settings travel in raw_settings, no preset files), strength 0-1 (Orion 0-0.5), soften 0-1 (detail contrast 0 to -0.6; 0 drops the step). Both steps work frame by frame, so the clip goes through in passes (VHS_BatchManager re-queues the prompt until the clip is done, as upscale-video-esrgan-chunked does) into one H.264 encode that stays open; the last pass writes the file with the source's sound. framesPerBatch: the provider sizes it from the clip's header so a pass holds about 1.5 GB of frames (three frame-sized copies: decoded, softened, toned), so memory stays flat whatever the length."
     }
   ]

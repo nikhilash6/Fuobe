@@ -500,16 +500,18 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
 function openjutsuNotes(body: GenjutsuBody, m: Maker, range: RemoveRange): string[] {
   const len = range.end - range.start;
   const notes: string[] = [];
-  const minutes = (perSecond: number) => Math.max(1, Math.round((len * perSecond) / 60));
+  // Measured on a 32 GB GPU at 720p (1080p about 2.3 times as long, 480p about half).
+  const size = m.qualities ? (body.quality === "1080p" ? 2.3 : body.quality === "480p" ? 0.6 : 1) : 1;
+  const minutes = (perSecond: number) => Math.max(1, Math.round((len * perSecond * size) / 60));
   if (m.group) {
     const n = body.references?.length ?? 1;
     const twice = body.character?.onePerPerson && n === 2;
-    notes.push(`About ${minutes(twice ? 120 : 60)} min on your GPU · keeps the clip's sound`);
+    notes.push(`About ${minutes(twice ? 150 : 75)} min on your GPU · keeps the clip's sound`);
     if (n > 1) notes.push("Say who each character replaces, or leave it blank and the people with the most screen time are picked in order");
     const warn = cutWarning(cutsInPart(body.cuts, range));
     if (warn) notes.push(warn);
   } else if (m.actions) {
-    notes.push(`About ${minutes(50)} min on your GPU · keeps the clip's sound`);
+    notes.push(`About ${minutes(60)} min on your GPU · keeps the clip's sound`);
     if (body.object?.action === "background") notes.push("The people stay exactly as filmed");
   } else if (m.id === MOTION_H3) {
     notes.push(`About ${minutes(60)} min on your GPU · keeps the clip's sound`);
@@ -518,9 +520,9 @@ function openjutsuNotes(body: GenjutsuBody, m: Maker, range: RemoveRange): strin
     notes.push(body.picture?.stage === "video" ? `About ${minutes(60)} min on your GPU · keeps the clip's sound` : "The first frame takes about a minute: check it before the video is made");
   } else if (m.tool === "faces") {
     const chunks = faceChunkCount(len, body.finish?.chunkSeconds ?? 6.5);
-    notes.push(`${chunks} section${chunks > 1 ? "s" : ""} · about ${minutes(60)} min on your GPU · keeps the sound`);
+    notes.push(`${chunks} section${chunks > 1 ? "s" : ""} · about ${minutes(45)} min on your GPU · keeps the sound`);
     notes.push("Faces that already fill the frame are left as they are");
-  } else if (m.tool === "colours") notes.push("Takes seconds · keeps the sound");
+  } else if (m.tool === "colours") notes.push(`About ${minutes(16)} min on your GPU · keeps the sound`);
   return notes;
 }
 

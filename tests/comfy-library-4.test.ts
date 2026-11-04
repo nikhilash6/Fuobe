@@ -166,18 +166,14 @@ describe("round-4 ComfyUI workflows", () => {
       "any-angle-3d",
       "any-angle-shot",
       "video-regenerate-h3",
-      // Genjutsu's Openjutsu modes: their packs aren't on the validation server yet; each opens only after its /prompt
+      // Genjutsu's Openjutsu modes not checked against ComfyUI yet; each opens only after its /prompt
       // check and a real render (workflows/comfyui/gpu-tested.json, src/server/genjutsu-live.ts).
-      "video-group-swap-h3",
       "video-group-swap-h3-one-by-one",
-      "video-scene-edit-h3",
       "image-from-picture-prepare",
       "video-scene-describe",
       "video-from-picture-solar",
       "video-from-picture-h3",
       "video-motion-transfer-h3",
-      "video-fix-faces-h3",
-      "video-fix-colours",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);
   });

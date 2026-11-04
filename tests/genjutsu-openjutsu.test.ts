@@ -19,6 +19,8 @@ import {
   type Maker,
 } from "@/lib/catalog/genjutsu";
 import { roleFromPin } from "@/lib/catalog/character-swap";
+import { getModel } from "@/lib/catalog";
+import { promptOptional } from "@/lib/catalog/plan";
 
 // Genjutsu's Openjutsu modes in the catalog: Group swap (2–4 characters), Scene edit (change / remove / new background),
 // From picture (first frame, then the video) and Finish (Fix faces, Fix colours), each behind its own gate.
@@ -195,5 +197,13 @@ describe("Genjutsu: the Openjutsu modes", () => {
     expect(roleFromPin({ x: 0.1, y: 0.5 })).toBe("the person on the left");
     expect(roleFromPin({ x: 0.5, y: 0.8 })).toBe("the person in the centre in front");
     expect(roleFromPin({ x: 0.9, y: 0.1 })).toBe("the person on the right at the back");
+  });
+
+  it("every step of the new modes plans without a prompt: their words travel in the settings", () => {
+    const ids = ["oss-h3-group-swap", "oss-h3-scene-edit", "oss-from-picture-frame", "oss-scene-describe", "oss-from-picture", "oss-h3-fix-faces", "oss-fix-colours"];
+    for (const id of ids) {
+      const model = getModel(id)!;
+      for (const r of model.routes) expect(promptOptional(model, r.op), `${id} ${r.op}`).toBe(true);
+    }
   });
 });

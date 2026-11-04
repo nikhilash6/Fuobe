@@ -19,6 +19,8 @@ const pins = JSON.parse(fs.readFileSync(path.join(dir, "model-pins.json"), "utf8
 const entry = (id: string) => manifest.workflows.find((w) => w.id === id)!;
 const graph = (id: string) => JSON.parse(fs.readFileSync(path.join(dir, `${id}.json`), "utf8")) as ComfyWorkflow;
 const IDS = Object.values(OPENJUTSU_WORKFLOWS);
+// Checked against a ComfyUI with the packs installed (validate-workflows.mjs).
+const CHECKED = new Set<string>(["video-group-swap-h3","video-scene-edit-h3","video-fix-faces-h3","video-fix-colours"]);
 
 const PINS: Record<string, [string, string]> = {
   "ComfyUI-MiniMaxH3-Context-Loop": ["OJ_CONTEXT_LOOP_REF", "43afeffcc570beb5f7382593e79e4b211c7e02f6"],
@@ -30,11 +32,11 @@ const PINS: Record<string, [string, string]> = {
 };
 
 describe("the Openjutsu graphs in the library", () => {
-  it("are all in the manifest, not validated yet, with every weight pinned to a revision and sized", () => {
+  it("are all in the manifest, validated only once checked against ComfyUI, with every weight pinned to a revision and sized", () => {
     for (const id of IDS) {
       const w = entry(id);
       expect(w, id).toBeDefined();
-      expect(w.validated, id).toBe(false);
+      expect(w.validated, id).toBe(CHECKED.has(id));
       for (const m of w.models) {
         // At a revision in its address, or pinned to one in model-pins.json.
         const pinned = /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\//.test(m.url ?? "") || /^[0-9a-f]{40}$/.test(pins[m.url ?? ""]?.revision ?? "");

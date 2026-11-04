@@ -70,6 +70,10 @@ describe("Group swap's graphs", () => {
     expect(plan.inputs.run_name).toBe("fuobe_g1");
     expect(runName("abc-12_x/..")).toBe("fuobe_abc-12_x");
     expect(runName("a")).not.toBe(runName("b"));
+    // Context Loop refuses a name that ends with "_" or "-" (generation ids can).
+    expect(runName("fr2LxUpzHwD_")).toBe("fuobe_fr2LxUpzHwD_x");
+    expect(runName("abc-")).toBe("fuobe_abc-x");
+    expect(runName("abc-")).not.toBe(runName("abc_"));
   });
 
   it("edge and motion detail", () => {
