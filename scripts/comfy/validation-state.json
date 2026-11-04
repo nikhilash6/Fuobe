@@ -1,4 +1,16 @@
 {
+  "any-angle-3d": {
+    "sha256": "ded5abee5cefe7b9ed8924eb72499f25d0940c548ed06faf73da17e446850452",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T03:22:00.489Z"
+  },
+  "any-angle-shot": {
+    "sha256": "9cb1e588631eca3ec945a8c6da6a97301ea0b21531e5aaab19f5dbce9ecdefc9",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T03:33:21.938Z"
+  },
   "audio-join-crossfade": {
     "sha256": "f18c08cd22f37ccadb81cf557c4624e894c71dd718685e7b3030c92c9893be6a",
     "validated": true,
@@ -455,6 +467,12 @@
     "error": null,
     "at": "2026-11-03T08:03:14.171Z"
   },
+  "qwen-image-21-relight": {
+    "sha256": "06d2a199f03cd83e50b525d4bb8fc689ee3ab1268e3ef5da76865f614e9cdbe2",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T03:21:58.891Z"
+  },
   "qwen-image-2512-t2i": {
     "sha256": "c18da4a3488120bdcee722e4ae7d187385544ec4805753e7dae6946ddb6f6ba5",
     "validated": true,
@@ -508,6 +526,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T23:33:15.071Z"
+  },
+  "relight-scene-read": {
+    "sha256": "62ca8f04bbb6f9cbbe8a19e44c90da39f92c3485ecb26520dc922cfc0badfe20",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T03:21:59.684Z"
   },
   "restore-qwen-image-21": {
     "sha256": "70a711896b815722bee4e62dfda71b7eec7cbb7203dd411f4e169ff407a13705",

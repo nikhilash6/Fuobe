@@ -121,9 +121,6 @@ describe("round-4 ComfyUI workflows", () => {
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",
-      // Relight's graphs wait for their first GPU run (Viggle's node file isn't on this server).
-      "qwen-image-21-relight",
-      "relight-scene-read",
       "qwen-image-21-live-edit",
       "qwen-image-21-inpaint",
       "qwen-image-21-outpaint",
@@ -161,10 +158,6 @@ describe("round-4 ComfyUI workflows", () => {
       "video-character-swap-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
-      // Any Angle's two graphs: run end to end on the GPU, they wait for their /prompt check while that ComfyUI is busy
-      // rendering (the app stays the owner's until then: src/server/any-angle-live.ts).
-      "any-angle-3d",
-      "any-angle-shot",
       "video-regenerate-h3",
       // Genjutsu's Openjutsu modes not checked against ComfyUI yet; each opens only after its /prompt
       // check and a real render (workflows/comfyui/gpu-tested.json, src/server/genjutsu-live.ts).

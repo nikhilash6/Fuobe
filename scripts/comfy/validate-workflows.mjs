@@ -11,7 +11,7 @@
 // For each manifest entry:
 //   1. create zero-byte placeholder files for missing models (models/<folder>/<file>) so loader
 //      combos accept the names (deleted again at the end unless --keep-dummies; real files are never touched),
-//   2. upload tiny fixtures (png / mask png / wav / mp4) via POST /upload/image,
+//   2. upload tiny fixtures (png / mask png / wav / mp4 / spz) via POST /upload/image,
 //   3. apply sample values to every binding (exactly what the app will do),
 //   4. POST /prompt and require HTTP 200 + prompt_id + empty node_errors,
 //   5. immediately delete it from the queue (POST /queue {"delete":[id]}, POST /interrupt {prompt_id} if it
@@ -93,6 +93,7 @@ function sampleValue(key, entry, uploads) {
     case 'device': return 'cpu';
     case 'video': case 'video2': case 'video3': case 'video4': return uploads.mp4;
     case 'audio': case 'audio2': return uploads.wav;
+    case 'splatFile': return uploads.spz; // Load3D: a saved 3D view (Any Angle's .spz)
     case 'tracks': {
       // Wan-Move: one {x,y} per output frame per track (a moving stroke + a static anchor)
       const n = Number(entry.defaults?.frames ?? 81);
@@ -179,7 +180,7 @@ async function startBlocker(objectInfo) {
 }
 
 // The names the fixtures are uploaded under (upload() overwrites, so they keep them).
-const FIXTURE_NAMES = ['fuobe_validate.png', 'fuobe_validate_mask.png', 'fuobe_validate.wav', 'fuobe_validate.mp4'];
+const FIXTURE_NAMES = ['fuobe_validate.png', 'fuobe_validate_mask.png', 'fuobe_validate.wav', 'fuobe_validate.mp4', 'fuobe_validate.spz'];
 
 /**
  * object_info.subset.json for every class the library uses. Classes this server lacks keep their recorded definition
@@ -234,6 +235,7 @@ async function main() {
     mask: await upload(path.join(FIXTURES, 'test_mask.png'), 'fuobe_validate_mask.png'),
     wav: await upload(path.join(FIXTURES, 'test.wav'), 'fuobe_validate.wav'),
     mp4: await upload(path.join(FIXTURES, 'test.mp4'), 'fuobe_validate.mp4'),
+    spz: await upload(path.join(FIXTURES, 'test.spz'), 'fuobe_validate.spz'),
   };
 
   const created = [];
