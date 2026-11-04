@@ -39,8 +39,12 @@ export const TEXT_NAME = /^(text|texts|prompt|prompts|positive|negative|caption|
 /** File names that hold weights (or pickled code). */
 export const MODEL_EXT = /\.(safetensors|gguf|ckpt|pt|pt2|pth|bin|sft|onnx|pkl|pickle)$/i;
 
-/** A save name the studio makes: name parts of letters, digits, "_", "-" and ".", joined by "/"; no "..". */
-const OUTPUT_NAME = /^(?!.*\.\.)[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(\/[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}){0,7}$/;
+/**
+ * A save name the studio makes: name parts of letters, digits, "_", "-" and ".", joined by "/"; no "..". The first part
+ * starts with a letter, a digit or "_"; a later one may also start with "-" (the studio names a run's files after its id,
+ * "fuobe/<id>", and an id may start with "-").
+ */
+const OUTPUT_NAME = /^(?!.*\.\.)[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(\/[A-Za-z0-9_-][A-Za-z0-9_.-]{0,127}){0,7}$/;
 
 const DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$)(\..*)?$/i;
 

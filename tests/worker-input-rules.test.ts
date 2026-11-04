@@ -120,8 +120,19 @@ describe("the worker's input rules", () => {
     // The multi-talk node's output path, and a save name.
     const talk = { class_type: "WanVideoImageToVideoMultiTalk", inputs: { width: 832, height: 480, frame_window_size: 81, motion_frame: 9, force_offload: false, colormatch: "disabled", tiled_vae: false, mode: "infinitetalk", output_path: "C:x" } };
     expect(check({ "1": talk })).toBe("unsafe-path");
-    for (const p of ["../x", "/x", "C:/x", "x/../../y", "fuobe/%date%"]) expect(check({ "1": { class_type: "SaveImage", inputs: { images: ["2", 0], filename_prefix: p } } }), p).toBe("unsafe-path");
+    for (const p of ["../x", "/x", "C:/x", "x/../../y", "fuobe/%date%", "-x/y", "fuobe/.x", "fuobe/-/../x"]) expect(check({ "1": { class_type: "SaveImage", inputs: { images: ["2", 0], filename_prefix: p } } }), p).toBe("unsafe-path");
     expect(check({ "1": { class_type: "SaveImage", inputs: { images: ["2", 0], filename_prefix: "fuobe/gen-1_a" } } })).toBeNull();
+  });
+
+  it("takes the save name of every run id, one that starts with \"-\" too", async () => {
+    const { nanoid } = await import("nanoid");
+    const save = (id: string) => check({ "1": { class_type: "SaveImage", inputs: { images: ["2", 0], filename_prefix: `fuobe/${id}` } } });
+    expect(save("-r90nWOv8wC4")).toBeNull();
+    expect(save("_r90nWOv8wC4")).toBeNull();
+    for (let i = 0; i < 500; i++) {
+      const id = nanoid(12);
+      expect(save(id), id).toBeNull();
+    }
   });
 
   it("a format string stays the catalog's (no walk into the environment)", () => {
