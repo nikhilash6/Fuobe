@@ -1,4 +1,4 @@
-// `fuobe worker <setup | run | pause | resume | status | bench | install>` (docs/gpu-workers.md).
+// `fuobe worker <setup | run | pause | resume | status | bench | baseline | install>` (docs/gpu-workers.md).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,13 +7,33 @@ import { installScript } from "./install.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-export const WORKER_USAGE = "fuobe worker <setup | run | pause [--now] [--for 2h] | resume | status | bench | install [--yes]>";
+export const WORKER_USAGE = "fuobe worker <setup | run | pause [--now] [--for 2h] [--choose] | resume | status | bench | baseline | install [--yes]>";
 
 const flag = (args, name) => args.includes(`--${name}`);
 const value = (args, name) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : undefined;
 };
+
+/** The pause shortcut's question. Returns "1h", "2h", "4h", "" (until you resume) or null (not paused). */
+export async function choosePause(io) {
+  if (!io.ask) return "";
+  const answer = String((await io.ask("Pause the worker and have the GPU to yourself. For 1, 2 or 4 hours, or 0 until you resume? [1]: ")) ?? "").trim().toLowerCase();
+  if (answer === "" || answer === "1") return "1h";
+  if (answer === "2" || answer === "4") return `${answer}h`;
+  if (answer === "0") return "";
+  return null;
+}
+
+/** worker.json as saved (no defaults, no token from the environment). */
+function savedConfig(home) {
+  try {
+    const c = JSON.parse(fs.readFileSync(path.join(home, "worker.json"), "utf8"));
+    return c && typeof c === "object" ? c : {};
+  } catch {
+    return {};
+  }
+}
 
 /** The worker command. Returns the exit code. */
 export async function worker(args, io) {
@@ -54,14 +74,27 @@ export async function worker(args, io) {
       return why === "aborted" ? 0 : why === "signed-out" ? 3 : 1;
     }
     case "pause": {
-      const forMs = value(rest, "for") ? parseFor(value(rest, "for")) : null;
-      if (value(rest, "for") && !forMs) {
+      let forText = value(rest, "for");
+      let now = flag(rest, "now");
+      // The shortcut asks how long. The GPU is yours at once: its job goes back in line, keeping its place.
+      if (flag(rest, "choose")) {
+        const pick = await choosePause(io);
+        if (pick === null) {
+          say("Not paused.");
+          return 0;
+        }
+        forText = pick || undefined;
+        now = true;
+      }
+      const forMs = forText ? parseFor(forText) : null;
+      if (forText && !forMs) {
         io.stderr.write("Say how long, like --for 2h or --for 30m.\n");
         return 2;
       }
-      writeControl(home, { paused: true, now: flag(rest, "now"), until: forMs ? Date.now() + forMs : null });
-      say(flag(rest, "now") ? "Paused now: its job goes back in line, and its ComfyUI stops." : "Paused: it finishes its job, then stops its ComfyUI.");
-      if (forMs) say(`It resumes by itself at ${new Date(Date.now() + forMs).toLocaleTimeString()}.`);
+      const at = (io.now ?? Date.now)();
+      writeControl(home, { paused: true, now, until: forMs ? at + forMs : null });
+      say(now ? "Paused now: its job goes back in line, and its ComfyUI stops." : "Paused: it finishes its job, then stops its ComfyUI.");
+      if (forMs) say(`It resumes by itself at ${new Date(at + forMs).toLocaleTimeString()}.`);
       return 0;
     }
     case "resume":
@@ -86,11 +119,24 @@ export async function worker(args, io) {
       say(body.tasks ? `${body.tasks} bench jobs are waiting for this worker. Keep it running.` : "No bench jobs for its lanes yet. Its times come from the jobs it runs.");
       return 0;
     }
+    case "baseline": {
+      // The desktop's usual share of the GPU, for studio jobs first. Local ComfyUI work may stay open; it isn't counted.
+      const { measureBaseline } = await import("./local-work.mjs");
+      const mb = await measureBaseline(loadConfig(home, io.env), io.gpu ?? {});
+      if (mb === null) {
+        io.stderr.write("Couldn't read the GPU counters or the port table on this PC, so nothing changed.\n");
+        return 1;
+      }
+      saveConfig(home, { ...savedConfig(home), desktopBaselineMb: mb });
+      say(`The desktop uses about ${mb} MB of the GPU's memory. Saved as desktopBaselineMb in worker.json.`);
+      say("Measure again with no game or other GPU program open if that number looks too high.");
+      return 0;
+    }
     case "install": {
       const script = installScript({ node: process.execPath, bin: path.resolve(here, "../../fuobe.mjs"), home });
       if (!flag(rest, "yes")) {
         say("This adds a task that starts the worker when you sign in (and again if it stops), and two desktop shortcuts:");
-        say('"Pause Fuobe worker" (Ctrl+Alt+P) and "Resume Fuobe worker". To do it, run: fuobe worker install --yes');
+        say('"Pause Fuobe worker" (Ctrl+Alt+P: it asks for 1, 2 or 4 hours) and "Resume Fuobe worker". To do it, run: fuobe worker install --yes');
         say("");
         say(script.text);
         return 0;

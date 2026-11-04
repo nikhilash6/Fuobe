@@ -153,6 +153,73 @@ The worker obeys any one of these pauses. One pause never ends another pause.
 - **Hours:** outside its hours, the worker takes nothing new. Near the end of a window, it takes only a job that its
   estimate says will finish in time.
 
+On Windows, the pause shortcut (Ctrl+Alt+P, from `fuobe worker install`) runs `fuobe worker pause --choose`. It asks
+for 1, 2 or 4 hours, or until you resume, and then pauses at once: the job goes back to the queue at no cost, and its
+ComfyUI stops.
+
+### Studio jobs first
+
+A PC can also run ComfyUI work of its own: a ComfyUI that you use by hand, or a queue of your own renders. With
+**studio jobs first**, the studio's jobs go before that local ComfyUI work, in the order they were sent. Your local
+ComfyUI work runs whenever no studio job waits. Any other program (a game, Blender, a video editor) still pauses the
+worker, as above.
+
+The worker never connects to your other ComfyUIs. It reads three things only:
+
+1. **Windows' table of listening ports** (`Get-NetTCPConnection -State Listen`). Reading the table connects to
+   nothing. A python process that listens on a port in `localComfyPorts` (8188 to 8199) is local ComfyUI work. The
+   worker's own ComfyUI (by its process id and its port) never counts. Neither do the ports and process ids in
+   `localComfyExcludePorts` and `localComfyExcludePids`. The worker reads the table every 30 seconds, and sooner when
+   a process that it doesn't know holds GPU memory.
+2. **Windows' GPU counters** (`\GPU Process Memory(pid_<n>_*)\Dedicated Usage`, read with `typeperf`). These are the
+   numbers that Task Manager shows for each process. `nvidia-smi` gives the total only, because its per-process memory
+   reads `[N/A]` on Windows.
+3. **A GPU lock file** (`gpuLockFile`), only when the counters or the port table can't be read. If the first word of
+   the lock names an owner in `gpuLockComfyOwners`, the GPU's memory counts as local ComfyUI work. Any other owner
+   counts as another program, and so does no lock at all.
+
+Every 5 seconds, the worker splits the GPU's used memory three ways. **Others** are the total, minus its own ComfyUI,
+minus local ComfyUI work, minus the desktop's usual share (`desktopBaselineMb`). Run `fuobe worker baseline` once,
+with no game open, to measure that share. Local ComfyUI work may stay open while you measure.
+
+- If others are above `busyVramMb` in two readings in a row, the worker pauses as before ("Your GPU is busy").
+- If only local ComfyUI work holds more than `busyVramMb`, the worker asks for a turn and waits. While it waits, its
+  jobs keep their place in the line. This is not a pause: there is no cool-down, and the studio does not send its jobs
+  back.
+
+**The turn files.** Set `yieldFolder` in `worker.json` to a folder for two small files. The PC's setup makes the
+folder. The worker never makes it, so the folder keeps the rights that the setup gave it. If the folder isn't there,
+local ComfyUI work counts as another program.
+
+- `site.json` is written by the worker on every beat, and at least every 5 seconds:
+  `{ siteWaiting, oldestWaitS, interrupt, at }`. `siteWaiting` is the number of studio jobs that this worker may take
+  now (from the beat's `claimableNow`), plus the job that it runs. During a turn it is at least 1. It goes to 0 when no
+  studio job has come for a minute, when the worker is paused, or when a local cap is reached. When the worker stops,
+  it writes 0.
+- `yielded.json` is written by a helper on the PC's side: `{ state, at, startsAt }`. The state `"yielding"` can carry
+  the helper's estimate of the start time (`startsAt`, in ms). The worker passes it on in its beat. The state
+  `"yielded"` means that local ComfyUI work has made room. A "yielded" counts when it was written after the turn began,
+  or in the last 15 seconds. The worker then starts at once.
+
+When no studio job has come for a minute, the worker frees its own ComfyUI's memory (`/free`) and writes
+`siteWaiting: 0`, so your local work can go on. If no "yielded" comes within 3 minutes, the worker says so in its log
+and in its beat (`waiting-for-yield:no-answer`). It goes on waiting, with the jobs kept in line.
+
+**Limits that only the PC sets.** The studio can never change these:
+
+- `yieldMaxHoursPerDay` (20): the most hours of turns in one day, on the PC's clock. After that, local ComfyUI work
+  counts as another program until the next day. A restart doesn't reset the count.
+- `interruptGapMin` (30): the studio can ask the helper to stop your current local job instead of letting it finish
+  (`interrupt: true`). The worker passes that request on at most once in this many minutes.
+- `neverInterrupt` (false): when it is true, `interrupt` is always false.
+
+**You first.** A pause by hand always wins. While the worker is paused, `siteWaiting` is 0. With a plain
+`fuobe worker pause`, a job that is still finishing keeps `siteWaiting` at 1 until it ends. The shortcut's choice
+(`--choose`) and `--now` give the GPU back at once.
+
+Turns need the studio to send `claimableNow` in the beat's answer. A studio that doesn't send it gets today's
+behaviour: local ComfyUI work pauses the worker like any other program. With no `yieldFolder`, nothing changes.
+
 ### The queue
 
 A job for the workers belongs to the owner. It names the pools that may take it (`pool` by default). It also keeps:
@@ -286,6 +353,13 @@ token on every call, so a revoked token stops at once.
 - `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, local: { paused, why, until }, gpu: {
   otherApps, tempC }, inventoryHash, warmLane }`. The answer adds `worker: { paused, pauseNow, drain, autoResume,
   insideHours, nextChangeAt, lanes, minProtocol, sendInventory }`.
+  - While the worker waits for its turn (see "Studio jobs first"), `local` is `{ paused: false, why:
+    "waiting-for-yield", until }`, where `until` is the helper's estimate of the start time, or null. After 3 minutes
+    with no answer, `why` is `"waiting-for-yield:no-answer"`. The worker may still take jobs, and its jobs keep their
+    place.
+  - For studio jobs first, the answer may also carry `claimableNow` (the jobs that this worker may take now: its
+    lanes, files, VRAM and hours), `oldestWaitS`, and `worker.yieldInterrupt` (true: the studio asks for local
+    ComfyUI work to be stopped instead of finished, within the PC's own limits). Each one is optional.
 - `PUT /api/gpu/computer/inventory`: `{ files: [{ folder, name, size, sha256 }], nodePacks: [{ name, commit }], media }`
   → `{ lanes, workflows, missing }`. `media` lists the kinds of input that the worker takes (`image`, `video`,
   `audio`). With no `media`, the studio counts every kind.
@@ -323,7 +397,10 @@ routes.
 
 - `pnpm test` (`tests/workers-pool.test.ts`, `tests/workers-pairing.test.ts`, `tests/worker-program.test.ts`,
   `tests/worker-input-rules.test.ts`, `tests/worker-environment.test.ts`, `tests/worker-guard.test.ts`,
-  `tests/worker-runner.test.ts`, `tests/worker-recovery.test.ts`, `tests/worker-parts.test.ts`). The input-rule tests
+  `tests/worker-runner.test.ts`, `tests/worker-recovery.test.ts`, `tests/worker-parts.test.ts`,
+  `tests/worker-turns.test.ts`, `tests/worker-turns-run.test.ts`). The turn tests use a fake port table, fake GPU
+  counters and a fake lock file. With only local ComfyUI work on the GPU, the worker writes `siteWaiting` and claims
+  within 5 seconds of the answer; with a game, it pauses and asks for no turn. The input-rule tests
   send graphs that try to write or read files outside the worker's folders, and check that the worker refuses them.
   They also prepare every catalog workflow the way the studio does, and check that the worker accepts each one. The
   recovery tests run the worker against the studio's routes and a stand-in ComfyUI that the worker starts: they kill

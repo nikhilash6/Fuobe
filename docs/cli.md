@@ -290,8 +290,10 @@ node scripts/build-worker.mjs     # once, in the checkout: the worker's shared p
 fuobe worker setup                # the studio's address, the token from Settings → Workers, ComfyUI's folder, a port
 fuobe worker run                  # until Ctrl+C
 fuobe worker pause                # finish the job, then stop its ComfyUI;  --now: stop now;  --for 2h: back by itself
+fuobe worker pause --choose       # asks for 1, 2 or 4 hours, then stops now (the Ctrl+Alt+P shortcut)
 fuobe worker resume
 fuobe worker status
+fuobe worker baseline             # the desktop's usual share of the GPU, for studio jobs first
 fuobe worker install              # Windows: shows a sign-in task and pause/resume shortcuts; --yes adds them
 ```
 
