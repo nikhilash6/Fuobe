@@ -539,9 +539,9 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?:
 /**
  * The workers' clocks: a task whose worker went silent for 2 minutes (or was revoked), whose ComfyUI was down for 2
  * minutes, or that is still sending its files 15 minutes after the claim (or after it began sending them again) goes
- * back in line; a task no worker has taken
- * yet that is still waiting past its wait limit fails, not charged. (Once a worker took it, the wait limit is over: a
- * task back in line waits in its place until a worker runs it, or its attempts run out.)
+ * back in line; a task no worker has taken yet that is still waiting past its wait limit fails, not charged. (Once a
+ * worker took it, the wait limit is over: a task back in line waits in its place until a worker runs it, or its attempts
+ * run out.)
  */
 export function sweepPool(now = Date.now()): void {
   const d = db();
