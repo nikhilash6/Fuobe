@@ -709,7 +709,14 @@ describe("the price check before Run and the run itself", async () => {
     setSetting("comfyWhere", "");
     expect(hostedRun.poolCardRefuses("oss-rtx-video-upscale")).toBe(true);
     expect(hostedRun.poolCardRefuses("oss-z-image-turbo")).toBe(false);
+    // A chain's later step too, before Run, in the same words (an upscale on the card after a clip, say).
+    const chain = [
+      { id: "s0", modelId: "oss-z-image-turbo", op: "t2i", provider: "comfyui", kind: "image", presetId: null, waits: false },
+      { id: "s1", modelId: "oss-rtx-video-upscale", op: "upscale-video", provider: "comfyui", kind: "video", presetId: null, waits: true },
+    ];
+    expect(hostedRun.stepsProblem(billing.OPEN_POLICY, chain)).toBe(HOSTED_WORDS.rtxCard);
     setSetting("comfyWhere", "workers");
+    expect(hostedRun.stepsProblem(billing.OPEN_POLICY, chain)).not.toBe(HOSTED_WORDS.rtxCard);
     // A guest is told it isn't offered, with nowhere to connect a GPU named.
     expect(hostedRun.gateWords("rtxCard", true)).toBe(HOSTED_GUEST_WORDS.rtxCard);
     expect(hostedRun.gateWords("rtxCard", true)).not.toMatch(/Settings|your own GPU|NVIDIA/);

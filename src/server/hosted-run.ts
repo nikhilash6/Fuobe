@@ -135,13 +135,14 @@ export function poolSteps(accountId: string, req: GenerationRequest): PlannedSte
 /**
  * The first step of a run that this install's GPUs may not take under the policy (its model or app not offered, a kind
  * the policy leaves out, a model no worker is allowed, a cloud model, a text step or one made in the browser: steps that
- * can't run there), in words; null when every step may run there. A light ComfyUI step (a join) costs nothing and every
- * policy allows it, but it still runs there: something there must take it, or the run's other steps would finish and
- * their join would wait for nothing.
+ * can't run there, a model their card can't run), in words; null when every step may run there. A light ComfyUI step (a
+ * join) costs nothing and every policy allows it, but it still runs there: something there must take it, or the run's
+ * other steps would finish and their join would wait for nothing.
  */
 export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
   for (const s of steps) {
     if (!poolRunsProvider(s.provider)) return HOSTED_WORDS.notOffered;
+    if (s.provider === "comfyui" && poolCardRefuses(s.modelId)) return HOSTED_WORDS.rtxCard;
     if (freeStep(s)) {
       if (s.provider === "comfyui" && !poolTakes(stepEndpoint(s))) return HOSTED_WORDS.notOffered;
       continue;
@@ -210,7 +211,8 @@ export function poolGate(
   }
   // Every step of a chain, not only its first: each one the policy must allow, and the run is priced for all of them.
   const steps = planSteps();
-  if (steps && p && stepsProblem(p, steps)) return { ok: false, reason: "notOffered" };
+  const problem = steps && p ? stepsProblem(p, steps) : null;
+  if (problem) return { ok: false, reason: problem === HOSTED_WORDS.rtxCard ? "rtxCard" : "notOffered" };
   return { ok: true, steps };
 }
 
