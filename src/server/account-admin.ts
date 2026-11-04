@@ -130,11 +130,14 @@ export function accountRunOptions(sp: URLSearchParams): ListOptions | { error: s
 export type OutputState = "shown" | "held" | "removed";
 
 /**
- * An account's run as the owner sees it: whose it is (null email: the account was deleted), and each result's state. A
- * run on this install's GPUs also carries `detail`: the technical reason it failed, which the account never sees (its
- * own page shows one plain sentence).
+ * An account's run as the owner sees it: whose it is (null email: the account was deleted; no `email` and
+ * `emailHidden: true`: a reader that may not see emails), and each result's state. A run on this install's GPUs also
+ * carries `detail`: the technical reason it failed, which the account never sees (its own page shows one plain sentence).
  */
-export type AccountRun = Omit<Generation, "outputs"> & { outputs: (OutputFile & { state: OutputState })[]; account: { id: string; email: string | null }; detail?: string };
+export type AccountRun = Omit<Generation, "outputs"> & { outputs: (OutputFile & { state: OutputState })[]; account: AccountOfRun; detail?: string };
+
+/** Whose a run is: its email (null: the account was deleted), or no email and `emailHidden` for a reader that may not see emails. */
+export type AccountOfRun = { id: string; email?: string | null; emailHidden?: true };
 
 /** Each result's state, read from its stored file (its asset row; none: removed). An output that isn't a stored file is shown. */
 function withStates(outputs: OutputFile[]): (OutputFile & { state: OutputState })[] {
@@ -203,7 +206,9 @@ export function listAccountRuns(o: ListOptions, show: { content: boolean; emails
   };
   return {
     items: found.map((g) => {
-      const run: AccountRun = { ...g, outputs: withStates(g.outputs), account: { id: g.request.account!, email: show.emails ? (emails.get(g.request.account!) ?? null) : null }, ...detail(g) };
+      const id = g.request.account!;
+      const account: AccountOfRun = show.emails ? { id, email: emails.get(id) ?? null } : { id, emailHidden: true };
+      const run: AccountRun = { ...g, outputs: withStates(g.outputs), account, ...detail(g) };
       return show.content ? run : factsOnly(run);
     }),
     next: last && found.length === limit ? `${last.createdAt}:${last.id}` : null,

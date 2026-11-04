@@ -553,7 +553,7 @@ describe("admin tokens: accounts' content needs its own scopes", () => {
       .run(id, "a private prompt", JSON.stringify({ account: a.id, feature: "image", modelId: "oss-z-image-turbo", prompt: "a private prompt" }), JSON.stringify([{ url: file.url, kind: "image", contentType: "image/png" }]), now, now, now);
     return { account: a, id };
   }
-  type Page = { items: { id: string; prompt?: string; request?: unknown; outputs: { url?: string; state: string }[]; account: { id: string; email: string | null } }[] };
+  type Page = { items: { id: string; prompt?: string; request?: unknown; outputs: { url?: string; state: string }[]; account: { id: string; email?: string | null; emailHidden?: true } }[] };
   const runsOf = async (token?: string, cookie?: string) => (await (await routes.runs.GET(req("/api/admin/generations?limit=100", { token, cookie }))).json()) as Page;
 
   it("runs:read alone gets each run's facts: no prompt, no request, no result file, no email", async () => {
@@ -564,7 +564,8 @@ describe("admin tokens: accounts' content needs its own scopes", () => {
     expect(run.prompt).toBeUndefined();
     expect(run.request).toBeUndefined();
     expect(run.outputs).toEqual([{ kind: "image", state: "shown" }]);
-    expect(run.account).toEqual({ id: r.account.id, email: null });
+    // Hidden, never null (null says the account was deleted).
+    expect(run.account).toEqual({ id: r.account.id, emailHidden: true });
     expect(JSON.stringify(page)).not.toContain("a private prompt");
   });
 
@@ -573,9 +574,9 @@ describe("admin tokens: accounts' content needs its own scopes", () => {
     const withContent = (await runsOf(make(["runs:read", "outputs:view"]).token)).items.find((x) => x.id === r.id)!;
     expect(withContent.prompt).toBe("a private prompt");
     expect(withContent.outputs[0].url).toMatch(/^\/api\/files\//);
-    expect(withContent.account.email).toBeNull();
+    expect(withContent.account).toEqual({ id: r.account.id, emailHidden: true });
     const withEmail = (await runsOf(make(["runs:read", "accounts:read"]).token)).items.find((x) => x.id === r.id)!;
-    expect(withEmail.account.email).toBe(r.account.email);
+    expect(withEmail.account).toEqual({ id: r.account.id, email: r.account.email });
     expect(withEmail.prompt).toBeUndefined();
     const owner = (await runsOf(undefined, ownerCookie)).items.find((x) => x.id === r.id)!;
     expect(owner.prompt).toBe("a private prompt");

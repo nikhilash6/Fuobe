@@ -51,7 +51,8 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `audit:read` | `GET /api/admin/audit` |
 
 The read-only preset in Settings ticks `runs:read`, `reports:read`, `workers:read`, `queue:read` and `audit:read`:
-no emails, no prompts and no results. With `runs:read`, an account's email in a run needs `accounts:read`.
+no emails, no prompts and no results. With `runs:read`, an account's email in a run needs `accounts:read`. Without it a
+run's `account` is `{ id, emailHidden: true }`; `email: null` always means the account was deleted.
 
 Any valid admin token may call `GET /api/admin/tokens/self`, which says the token's name and scopes, so a tool can
 offer only what it may do. `/api/admin/tokens` itself (make, list, revoke) is the owner's signed-in browser's only.
@@ -102,7 +103,7 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `GET /api/admin/accounts/{id}` | | one account with its numbers; 404 `No such account` |
 | `PATCH /api/admin/accounts/{id}` | exactly one of `{ disabled: boolean }` or `{ signOut: true }` | the account (no numbers) |
 | `DELETE /api/admin/accounts/{id}` | | 204 |
-| `GET /api/admin/generations` | `account`, `status` (`finished`, `running`, `failed`), `kind` (`image`, `video`, `audio`, `model3d`, `text`), `before` (the last page's `next`), `limit` (1 to 100, default 30) | `{ items, next }`; `next` is null on the last page. Each output has a `state`: `shown`, `held` (hidden, or waiting for its check) or `removed` (its file is gone). A failed run on this install's GPUs also has `detail`: the technical reason, which the account never sees |
+| `GET /api/admin/generations` | `account`, `status` (`finished`, `running`, `failed`), `kind` (`image`, `video`, `audio`, `model3d`, `text`), `before` (the last page's `next`), `limit` (1 to 100, default 30) | `{ items, next }`; `next` is null on the last page. Each output has a `state`: `shown`, `held` (hidden, or waiting for its check) or `removed` (its file is gone). A failed run on this install's GPUs also has `detail`: the technical reason, which the account never sees. `account` is `{ id, email }` (`email` null: a deleted account), or `{ id, emailHidden: true }` without `accounts:read` |
 | `DELETE /api/admin/generations/{id}` | | 204; 404 for an unknown run or the owner's own |
 | `POST /api/admin/outputs/hide` | `{ assetIds?, generationIds? }` (up to 500 each) | `{ hidden }` |
 | `POST /api/admin/outputs/unhide` | the same | `{ shown }` |
@@ -117,7 +118,7 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `PATCH /api/admin/workers/{id}` | any of `paused`, `pauseNow`, `drain`, `autoResume`, `hours`, `allow`, `claimAfterMs`, `switchAfterMs`, `rotate` (needs `workers:tokens`), `revoke` | `{ worker, token? }`: a new worker token after `rotate`, once |
 | `GET /api/admin/workers/jobs` | `before`, `limit` (1 to 200, 50), `worker`, `generation` | `{ items, next }`: the workers' log, newest first. Each item: `{ id, at, event, workerId, workerName, taskId, generationId, principal, lane, execMs, device }` ([gpu-workers.md](gpu-workers.md)) |
 | `GET /api/admin/workers/download` | | the worker program, `fuobe-worker.zip` |
-| `GET /api/admin/audit` | `before` (the last page's `next`), `limit` (1 to 200, default 50), `actor` (`owner` or `token`), `token` (a token id), `action`, `changes=1` (changes only: no reads, file views or refusals) | `{ items, next }` |
+| `GET /api/admin/audit` | `before` (the last page's `next`), `limit` (1 to 200, default 50), `actor` (`owner`, `token` or `system`), `token` (a token id), `action`, `changes=1` (changes only: no reads, file views or refusals) | `{ items, next }` |
 | `GET /api/admin/tokens/self` | | `{ id, name, prefix, scopes, expiresAt, createdAt }` |
 
 A log row is `{ id, at, actor: "owner" | "token" | "system", token: { id, name } | null, action, target, detail, status }`.
