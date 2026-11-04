@@ -557,6 +557,35 @@ describe("a run's price facts", () => {
     expect(hosted.requestMegapixels({ ...IMAGE, params: { extra: { width: 1280, height: 720 } } } as never, "image", IMAGE.modelId, endpoint)).toBe(0.92);
   });
 
+  it("a price check reads the size of the viewer's own files only: another account's file, or a guest's look at one, says nothing of it", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account();
+    const b = account();
+    const sharp = (await import("sharp")).default;
+    const big = await sharp({ create: { width: 2000, height: 1500, channels: 3, background: "#864" } })
+      .png()
+      .toBuffer();
+    const uploadsRoute = await import("@/app/api/uploads/route");
+    const up = await uploadsRoute.POST(
+      new Request(`http://${HOST}/api/uploads`, { method: "POST", headers: { ...SITE_HEADERS, cookie: a.cookie, "content-type": "image/png", "x-file-name": "mine.png", "content-length": String(big.length) }, body: new Uint8Array(big) }),
+    );
+    expect(up.status).toBe(201);
+    const { url } = (await up.json()) as { url: string };
+    const upscale = { feature: "image", modelId: "oss-seedvr2-image", op: "upscale-image", inputs: { images: [url] } };
+    const quoted = () => (fake.calls_of("/v1/quote").at(-1)!.body as { run: { megapixels: number | null } }).run.megapixels;
+    // Its owner's price check: the size its run makes.
+    await preview(upscale, a.cookie);
+    expect(quoted()).toBe(12.48);
+    // Another account's, and a guest's: as if there were no such file.
+    const before = fake.calls_of("/v1/quote").length;
+    await preview(upscale, b.cookie);
+    expect(fake.calls_of("/v1/quote").length).toBe(before + 1);
+    expect(quoted()).toBeNull();
+    await preview(upscale, "");
+    expect(fake.calls_of("/v1/quote").length).toBe(before + 2);
+    expect(quoted()).toBeNull();
+  });
+
   it("under the policy's cap on outputs, the price check and the run plan, price and make the same run", async () => {
     withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0, outputsPerRun: 1 } });
     const a = account();

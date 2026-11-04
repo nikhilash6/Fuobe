@@ -365,8 +365,9 @@ export async function moderateRun(
 ): Promise<{ ok: true; checkOutputs: boolean } | { ok: false; refusal: Refusal }> {
   if (!moderationConfigured()) return { ok: true, checkOutputs: false };
   const kind = planned ? outputKind(planned.op, planned.model) : (browser?.kind ?? "image");
+  // Read as the account (an input's size from its own files only).
   const run = planned
-    ? { ...runFacts(req, planned, kind), place: place === "pool" ? ("pool" as const) : planned.route.provider === "comfyui" ? ("own-gpu" as const) : ("own-key" as const) }
+    ? { ...runAsTenant({ kind: "account", id: account.id }, () => runFacts(req, planned, kind)), place: place === "pool" ? ("pool" as const) : planned.route.provider === "comfyui" ? ("own-gpu" as const) : ("own-key" as const) }
     : null;
   const a = await checkRun({
     requestId: nanoid(16),
@@ -402,7 +403,7 @@ export async function reservePool(
   const a = await reserve({
     requestId: nanoid(16),
     account: accountFacts(account),
-    run: { ...runFacts(req, planned, kind), ...(steps?.length && { steps }) },
+    run: { ...runOnPool(account.id, () => runFacts(req, planned, kind)), ...(steps?.length && { steps }) },
     queue: queueFacts(account.id, planned.route.endpoint),
     shown: shown ?? { amount: 0, priceVersion: "" },
   });
@@ -478,8 +479,9 @@ export async function poolQuote(
     if (hasGpu && wish !== "pool") return null;
     return { planned, quote: notOfferedQuote(gateWords(gate.reason, !account)), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
   }
-  // Priced once for every step of a chain that uses this install's GPUs.
-  const facts = { ...runFacts(req, planned, outputKind(planned.op, planned.model)), ...(gate.steps && { steps: pricedSteps(gate.steps) }) };
+  // Priced once for every step of a chain that uses this install's GPUs. Its facts are read as the viewer (an input's
+  // size from its own files only: another's file reads as none, and says nothing of whether it exists).
+  const facts = { ...runOnPool(account?.id ?? null, () => runFacts(req, planned, outputKind(planned.op, planned.model))), ...(gate.steps && { steps: pricedSteps(gate.steps) }) };
   const queue = queueFacts(account?.id ?? null, planned.route.endpoint);
   let q = await billingQuote(account ? accountFacts(account) : null, facts, queue);
   // The policy's limits on this account's runs here, as the run would meet them (pool-limits.ts): said before Run.
