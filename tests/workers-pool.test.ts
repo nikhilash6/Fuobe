@@ -694,6 +694,33 @@ describe("a worker's own reports: giving a job back, its execution time, the inp
     expect(await finish(30 * MIN, 25 * MIN)).toBe(25 * MIN);
   });
 
+  it("each claim carries its lane's run ceiling and stall limit from the queue's settings, and a reported time keeps to that ceiling", async () => {
+    clock = Date.now();
+    const w = worker("ceilings", { lanes: [LANE_A, LANE_B] });
+    const entry = { status: { status_str: "success", completed: true }, outputs: {} };
+    try {
+      // The default 30 minutes, an hour for lane A.
+      saveQueueSettings({ ...queueSettings(), runCeilingS: { default: 1800, lanes: { [LANE_A]: 3600 } } });
+      const a = task({ lane: LANE_A });
+      const first = await routed(w, a);
+      expect(first.t).toMatchObject({ runLimitMs: 60 * MIN, stallMs: pool.STALL_MS });
+      await first.say({ event: "sent", promptId: first.t.promptId });
+      tasks.setTask(a, { sent_at: Date.now() - 3 * 60 * MIN });
+      await first.say({ event: "finished", entry, execMs: 2 * 60 * MIN, device: "Test GPU" });
+      // Said to have run 2 hours: the workers' log keeps the lane's hour, and that is what billing settles with.
+      expect(tasks.execOf(state(a))).toEqual({ ms: 60 * MIN, device: "Test GPU" });
+      const b = task({ lane: LANE_B });
+      expect((await routed(w, b)).t).toMatchObject({ runLimitMs: 30 * MIN, stallMs: pool.STALL_MS });
+      db().prepare("UPDATE relay_tasks SET state = 'canceled' WHERE id = ?").run(b);
+      // A lane ceiling under the stall limit: the stall limit is never longer than the ceiling.
+      saveQueueSettings({ ...queueSettings(), runCeilingS: { default: 1800, lanes: { [LANE_A]: 300 } } });
+      const short = task({ lane: LANE_A });
+      expect((await routed(w, short)).t).toMatchObject({ runLimitMs: 5 * MIN, stallMs: 5 * MIN });
+    } finally {
+      saveQueueSettings(QUEUE_DEFAULTS);
+    }
+  });
+
   it("past its run limit: back in line once, with the whole run ceiling for its next try; past it again, it fails at once", async () => {
     clock = Date.now();
     const id = task();
