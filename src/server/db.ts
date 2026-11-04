@@ -986,6 +986,8 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_tasks", "not_after", "INTEGER"],
   ["relay_tasks", "only_worker", "TEXT"],
   ["relay_tasks", "worker_id", "TEXT"],
+  // The class a task waits in: "paid", "free" or "owner" (pool.ts LINE_ORDER).
+  ["relay_tasks", "class", "TEXT"],
 ];
 
 declare global {

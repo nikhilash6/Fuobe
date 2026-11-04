@@ -6,6 +6,7 @@ import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
 import { cleanFacts, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setTask, takeTask, taskById, type TaskRow } from "./tasks";
+import { queueSettings, runCeilingMs } from "../queue-settings";
 import { createWorker, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 
 /**
@@ -24,17 +25,30 @@ export const RETRY_WINDOW_MS = 10 * 60_000;
 export const MAX_ATTEMPTS = 3;
 /** A worker that beat this recently may claim. */
 const FRESH_BEAT_MS = 30_000;
-/** The run limit: 3 × the lane's p90 on that worker, at least 5 minutes, at most 45. */
-export const runLimitMs = (p90?: number | null) => Math.min(45 * 60_000, Math.max(5 * 60_000, 3 * (p90 ?? 0)));
-/** The owner's own tasks go ahead of everyone else's by this much (rank_at = created_at - boost). */
-export const OWNER_BOOST_MS = 24 * 60 * 60_000;
 /**
- * The order workers serve waiting tasks in: by rank (a requeued task keeps its own, so it keeps its place), then by
- * when it was made. The claim and the place in line read the same order.
+ * The run limit of one attempt: 3 × the lane's p90 on that worker plus its model load, at least 10 minutes, and never
+ * past the lane's run ceiling (queue-settings.ts; 45 minutes unless the owner sets another). With no p90 yet, the
+ * ceiling.
  */
-const LINE_ORDER = "rank_at, created_at, id";
+export const runLimitMs = (p90?: number | null, lane?: string | null, loadMs?: number | null) => {
+  const ceiling = runCeilingMs(lane);
+  if (!p90 || p90 <= 0) return ceiling;
+  return Math.min(ceiling, Math.max(10 * 60_000, 3 * p90 + Math.max(0, loadMs ?? 0)));
+};
+/**
+ * A task's class as a number, in the order workers serve them: people's paid runs (0), then their free runs (1), then
+ * the owner's own jobs (2). A task from before classes had none: the owner's (no account) is the owner's class.
+ */
+const CLASS_RANK = "(CASE WHEN class = 'paid' THEN 0 WHEN class = 'owner' OR (class IS NULL AND account IS NULL) THEN 2 ELSE 1 END)";
+export const classRank = (t: Pick<TaskRow, "class" | "account">): number => (t.class === "paid" ? 0 : t.class === "owner" || (!t.class && !t.account) ? 2 : 1);
+/**
+ * The order workers serve waiting tasks in: by class, then by rank (a requeued task keeps its own, so it keeps its
+ * place), then by when it was made. The claim and the place in line read the same order. With fair share on
+ * (queue-settings.ts), each class goes round its accounts in turn (lineOrder).
+ */
+const LINE_ORDER = `${CLASS_RANK}, rank_at, created_at, id`;
 /** The columns the line's counts read (never a task's graph or files). */
-const LINE_COLS = "id, pools, only_worker, stop, lane, needs_json, created_at, rank_at, est_ms, tried_json, worker_id, claimed_at, account";
+const LINE_COLS = "id, principal, pools, only_worker, stop, lane, needs_json, created_at, rank_at, est_ms, tried_json, worker_id, claimed_at, account, class";
 /** A task a worker took that is still sending its files to its ComfyUI this long after the claim goes back in line. */
 export const SENDING_MS = 15 * 60_000;
 
@@ -269,7 +283,7 @@ export function workerClaim(w: WorkerRow, running: string[], now = Date.now()): 
 
 function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): ClaimedTask {
   const needs = json<Needs | null>(t.needs_json, null);
-  const p90 = t.lane ? benchOf(w)[t.lane]?.p90Ms : undefined;
+  const bench = t.lane ? benchOf(w)[t.lane] : undefined;
   if (t.state === "waiting") logWorkerJob("claimed", t, w.id, now);
   // A worker that lost track of its own task gets it again with its first claim's time, so the sending clock (SENDING_MS)
   // is never wound back by asking again.
@@ -278,7 +292,7 @@ function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): Claimed
     ...c,
     lane: t.lane ?? undefined,
     estMs: estOn(t, w),
-    runLimitMs: runLimitMs(p90),
+    runLimitMs: runLimitMs(bench?.p90Ms, t.lane, bench?.loadMs),
     notAfter: t.not_after,
     attempt: t.requeues + 1,
     models: needs?.files ?? [],
@@ -322,17 +336,71 @@ function beforeWindowEnds(t: TaskRow, w: WorkerRow, now: number): boolean {
   return now + (estOn(t, w) ?? 0) <= h.endsAt;
 }
 
+/**
+ * The best task this worker may run, in the line's order (lineOrder). A task in the lane it has loaded may go ahead of
+ * the best one, in the same class, while the best one has waited less than the pick allowance (the install's setting,
+ * capped by this worker's switch_after_ms; 0: strict order).
+ */
 function pick(w: WorkerRow, now: number): TaskRow | null {
+  const settings = queueSettings(now);
   const rows = db()
     .prepare(`SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND INSTR(',' || pools || ',', ?) > 0 ORDER BY ${LINE_ORDER} LIMIT ?`)
     .all(`,${w.pool},`, LOOK_AT) as TaskRow[];
-  const ok = rows.filter((t) => fits(t, w, now) && retryOk(t, w, now) && beforeWindowEnds(t, w, now));
+  const ok = lineOrder(rows, settings.fairShare).filter((t) => fits(t, w, now) && retryOk(t, w, now) && beforeWindowEnds(t, w, now));
   if (!ok.length) return null;
-  const warm = w.warm_lane ? ok.find((t) => t.lane === w.warm_lane) : undefined;
-  const other = ok.find((t) => t.lane !== w.warm_lane);
-  if (!warm) return other ?? null;
-  if (other && (other.rank_at ?? 0) < now - w.switch_after_ms && (other.rank_at ?? 0) < (warm.rank_at ?? 0)) return other;
-  return warm;
+  const best = ok[0];
+  const allowance = Math.min(w.switch_after_ms, settings.pickAllowanceMs);
+  if (allowance <= 0 || !w.warm_lane || best.lane === w.warm_lane) return best;
+  const warm = ok.find((t) => t.lane === w.warm_lane && classRank(t) === classRank(best));
+  return warm && (best.rank_at ?? best.created_at) >= now - allowance ? warm : best;
+}
+
+/**
+ * Turns already taken in each class, by whose turn: runs a worker holds now, and runs a worker took and finished since
+ * the oldest of `waiting` in that class came.
+ */
+function servedTurns(waiting: TaskRow[]): Map<string, number> {
+  const since = new Map<number, number>();
+  for (const r of waiting) since.set(classRank(r), Math.min(since.get(classRank(r)) ?? Infinity, r.created_at));
+  const out = new Map<string, number>();
+  for (const [cls, at] of since) {
+    const rows = db()
+      .prepare(
+        `SELECT COALESCE(account, principal) AS k, COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND ${CLASS_RANK} = ?
+           AND (state IN ('sending','queued','running','collecting') OR (state IN ('done','failed') AND claimed_at IS NOT NULL AND finished_at >= ?))
+         GROUP BY k`,
+      )
+      .all(cls, at) as { k: string; n: number }[];
+    for (const r of rows) out.set(`${cls}:${r.k}`, r.n);
+  }
+  return out;
+}
+
+/** Whose turn a task takes with fair share: its account's, or the owner's. */
+const turnKey = (t: Pick<TaskRow, "account" | "principal" | "class">) => `${classRank(t as Pick<TaskRow, "class" | "account">)}:${t.account ?? t.principal}`;
+
+/** The strict order (LINE_ORDER) of two tasks, in code. */
+const strictOrder = (a: TaskRow, b: TaskRow) =>
+  classRank(a) - classRank(b) || (a.rank_at ?? a.created_at) - (b.rank_at ?? b.created_at) || a.created_at - b.created_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+/**
+ * Waiting tasks (given in strict order) in the order workers serve them. Fair share off: as given. On: within a class,
+ * each account's (or the owner's) next run goes after every other account's run that is an earlier turn of its own. An
+ * account's turns count the runs a worker holds for it now and those a worker finished for it since the oldest run
+ * still waiting in its class came, so one account with many runs never holds the line.
+ */
+export function lineOrder(rows: TaskRow[], fairShare: boolean): TaskRow[] {
+  if (!fairShare || rows.length < 2) return rows;
+  const held = servedTurns(rows);
+  const seen = new Map<string, number>();
+  const turns = new Map<string, number>();
+  for (const r of [...rows].sort(strictOrder)) {
+    const k = turnKey(r);
+    const n = seen.get(k) ?? 0;
+    seen.set(k, n + 1);
+    turns.set(r.id, (held.get(k) ?? 0) + n);
+  }
+  return [...rows].sort((a, b) => classRank(a) - classRank(b) || turns.get(a.id)! - turns.get(b.id)! || strictOrder(a, b));
 }
 
 // ---------------------------------------------------------------------------
@@ -440,14 +508,7 @@ export function placeInLine(t: TaskRow, now = Date.now()): { place: number; etaS
   const d = db();
   const all = poolWorkers().filter((w) => sharePool({ pools: w.pool }, t));
   const workers = all.filter((w) => eligible(w, now) && fits({ ...t, created_at: 0 }, w, now));
-  const rank = t.rank_at ?? t.created_at;
-  const before = d
-    .prepare(
-      `SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND id != ?
-         AND (rank_at < ? OR (rank_at = ? AND (created_at < ? OR (created_at = ? AND id < ?))))
-       ORDER BY ${LINE_ORDER} LIMIT ?`,
-    )
-    .all(t.id, rank, rank, t.created_at, t.created_at, t.id, LOOK_AHEAD) as TaskRow[];
+  const before = lineBefore(t, now);
   // Ahead of it: a task the same workers would serve first (with none able to run it now, any that could run it at all).
   const able = workers.length ? workers : all.filter((w) => fits({ ...t, created_at: 0 }, w, now));
   const ahead = before.filter((x) => sharePool(x, t) && (!able.length || able.some((w) => fits({ ...x, created_at: 0 }, w, now))));
@@ -462,6 +523,25 @@ export function placeInLine(t: TaskRow, now = Date.now()): { place: number; etaS
   const running = (d.prepare(`SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state IN ('sending','queued','running','collecting') AND worker_id IS NOT NULL`).all() as TaskRow[]).filter((x) => ids.has(x.worker_id!));
   const left = running.reduce((s, x) => s + Math.max(0, estFor(x, workers, typical) - (now - (x.claimed_at ?? now))), 0);
   return { place: ahead.length + 1, etaSeconds: Math.round(((sum + left) / workers.length + load + own) / 1000) };
+}
+
+/** The waiting tasks served before this one (at most LOOK_AHEAD), in the line's order. */
+function lineBefore(t: TaskRow, now: number): TaskRow[] {
+  const d = db();
+  const rank = t.rank_at ?? t.created_at;
+  const cls = classRank(t);
+  if (!queueSettings(now).fairShare) {
+    return d
+      .prepare(
+        `SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND id != ?
+           AND (${CLASS_RANK} < ? OR (${CLASS_RANK} = ? AND (rank_at < ? OR (rank_at = ? AND (created_at < ? OR (created_at = ? AND id < ?))))))
+         ORDER BY ${LINE_ORDER} LIMIT ?`,
+      )
+      .all(t.id, cls, cls, rank, rank, t.created_at, t.created_at, t.id, LOOK_AHEAD) as TaskRow[];
+  }
+  const rows = d.prepare(`SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND id != ? ORDER BY ${LINE_ORDER} LIMIT ?`).all(t.id, LOOK_AHEAD) as TaskRow[];
+  const line = lineOrder([...rows, t], true);
+  return line.slice(0, line.findIndex((x) => x.id === t.id));
 }
 
 /** A one-argument function whose answers are kept for this call's life. */
@@ -521,7 +601,8 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
   const workflowId = asked && !asked.includes("{") ? asked : null;
   const lane = workflowId ? poolLane(workflowId) : null;
   const needs = workflowId ? needsOf(loadIndex(), workflowId) : null;
-  const probe = { id: "", pools: "pool", lane, needs_json: needs ? JSON.stringify(needs) : null, rank_at: now, created_at: now, stop: 0, only_worker: null, est_ms: null } as unknown as TaskRow;
+  // A new run of a person's, in the free class (a paid run's head start is the billing service's to price, not to quote).
+  const probe = { id: "", principal: accountId ? `acct:${accountId}` : "guest", account: accountId ?? "guest", class: "free", pools: "pool", lane, needs_json: needs ? JSON.stringify(needs) : null, rank_at: now, created_at: now, stop: 0, only_worker: null, est_ms: null } as unknown as TaskRow;
   const p = lane ? placeInLine(probe, now) : { place: (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting'").get() as { n: number }).n + 1, etaSeconds: null };
   const online = poolWorkers().filter((w) => eligible(w, now) && (!lane || fits({ ...probe, created_at: 0 }, w, now))).length;
   const mine = accountId
@@ -532,15 +613,20 @@ export function lineFacts(accountId: string | null, asked: string | null, now = 
   return { lane: lane ?? "small", ahead: p.place - 1, etaS: p.etaSeconds, workersOnline: online, nextOpenAt: null, mine: { waiting: mine.waiting ?? 0, running: mine.running ?? 0 } };
 }
 
-/** What a task for workers stores: its lane, its needs, and its place in line. */
-export function poolFields(workflowId: string, o: { account?: string; boostMs?: number; waitMs?: number; onlyWorker?: string } = {}, now = Date.now()) {
+/**
+ * What a task for workers stores: its lane, its needs, its class and its place in line. A person's run is "free" unless
+ * the billing service said "paid"; the owner's own jobs are the "owner" class, served after every person's.
+ */
+export function poolFields(workflowId: string, o: { account?: string; class?: "paid" | "free" | "owner"; boostMs?: number; waitMs?: number; onlyWorker?: string } = {}, now = Date.now()) {
   const index = loadIndex();
   const needs = needsOf(index, workflowId);
   const lane = poolLane(workflowId);
   return {
     pools: ["pool"],
     account: o.account,
-    rankAt: now - (o.boostMs ?? 0),
+    class: o.class ?? (o.account ? ("free" as const) : ("owner" as const)),
+    // A head start is only inside a class, and never more than a day.
+    rankAt: now - Math.max(0, Math.min(o.boostMs ?? 0, 24 * 60 * 60_000)),
     lane,
     needs: needs ?? { workflowId, files: [], packs: [], minVramBytes: 0 },
     notAfter: o.waitMs ? now + o.waitMs : undefined,

@@ -31,6 +31,7 @@ export const SCOPES = [
   "workers:write",
   "workers:tokens",
   "queue:read",
+  "queue:write",
   "audit:read",
 ] as const;
 
@@ -50,7 +51,8 @@ export const SCOPE_LABELS: Record<Scope, string> = {
   "workers:read": "See workers",
   "workers:write": "Pause, resume, change and revoke workers",
   "workers:tokens": "Add workers and give them new tokens (a worker runs accounts' queued jobs, with their files)",
-  "queue:read": "See the queue",
+  "queue:read": "See the queue and its settings",
+  "queue:write": "Change the queue's settings: the run ceiling, the owner's wait limit, fair share and the pick allowance",
   "audit:read": "See the admin log",
 };
 

@@ -11,6 +11,7 @@ import type { GenerationRequest } from "@/lib/catalog/types";
  * - `hold`: the billing service's hold for the run (billing.ts reserve); every row reports to it once (billing-outbox.ts).
  * - `charge`: the words the billing service gave for the charge ("7 units"), shown on the result.
  * - `checkOutputs`: the moderation service asked to see this run's outputs before they show (moderation.ts).
+ * - `class` and `boostMs`: its class in the line ("paid" before "free") and its head start inside that class.
  */
 export interface RunStamp {
   place?: "pool";
@@ -19,6 +20,10 @@ export interface RunStamp {
   checkOutputs?: boolean;
   /** How long it may wait in line on this install's GPUs (ms), from the billing service. */
   waitMs?: number;
+  /** Its class in the line on this install's GPUs, from the billing service (none: "free"). */
+  class?: "paid" | "free";
+  /** A head start in line within its class (ms), from the billing service. */
+  boostMs?: number;
 }
 
 declare global {
@@ -34,7 +39,7 @@ export const withRunStamp = <T,>(stamp: RunStamp, fn: () => T): T => store().run
 export const runStamp = (): RunStamp | undefined => store().getStore();
 
 /** The server-only fields of a request. */
-export const STAMP_FIELDS = ["place", "hold", "charge", "checkOutputs", "waitMs"] as const;
+export const STAMP_FIELDS = ["place", "hold", "charge", "checkOutputs", "waitMs", "class", "boostMs"] as const;
 
 /** A request with the current stamp's fields, and none of a stored request's own. */
 export function stamped(req: GenerationRequest): GenerationRequest {
@@ -49,10 +54,27 @@ export function stamped(req: GenerationRequest): GenerationRequest {
     ...(s.charge && { charge: s.charge }),
     ...(s.checkOutputs && { checkOutputs: true }),
     ...(s.waitMs && s.waitMs > 0 && { waitMs: s.waitMs }),
+    ...(s.class === "paid" && { class: "paid" as const }),
+    ...(s.boostMs && s.boostMs > 0 && { boostMs: s.boostMs }),
   };
 }
 
 /** A stored request's stamp, to run a later step of it (advanceDependents, polls) as it was decided. */
 export function stampOf(req: Pick<GenerationRequest, (typeof STAMP_FIELDS)[number]>): RunStamp {
-  return { ...(req.place === "pool" && { place: "pool" as const }), ...(req.hold && { hold: req.hold }), ...(req.charge && { charge: req.charge }), ...(req.checkOutputs && { checkOutputs: true }), ...(req.waitMs && { waitMs: req.waitMs }) };
+  return {
+    ...(req.place === "pool" && { place: "pool" as const }),
+    ...(req.hold && { hold: req.hold }),
+    ...(req.charge && { charge: req.charge }),
+    ...(req.checkOutputs && { checkOutputs: true }),
+    ...(req.waitMs && { waitMs: req.waitMs }),
+    ...(req.class === "paid" && { class: "paid" as const }),
+    ...(req.boostMs && req.boostMs > 0 && { boostMs: req.boostMs }),
+  };
+}
+
+/** A request without its server-only fields: what a browser or a script is sent (and so what a retry sends back). */
+export function withoutStamp<T extends Partial<Record<(typeof STAMP_FIELDS)[number], unknown>>>(req: T): Omit<T, (typeof STAMP_FIELDS)[number]> {
+  const out = { ...req };
+  for (const k of STAMP_FIELDS) delete out[k];
+  return out;
 }

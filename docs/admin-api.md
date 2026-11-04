@@ -46,7 +46,8 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `workers:read` | `GET /api/admin/workers`, `GET /api/admin/workers/jobs`, `GET /api/admin/workers/download` |
 | `workers:write` | `PATCH /api/admin/workers/{id}`: pause, resume, drain, hours, lanes, revoke |
 | `workers:tokens` | `POST /api/admin/workers`, and `PATCH /api/admin/workers/{id}` with `rotate`: both answer with a worker token. A worker receives accounts' queued jobs with their input files and sends back the results, so give this scope only to a tool you'd trust with those |
-| `queue:read` | `GET /api/admin/queue` |
+| `queue:read` | `GET /api/admin/queue`, `GET /api/admin/queue/settings` |
+| `queue:write` | `PATCH /api/admin/queue/settings`: the run ceiling, the owner's wait limit, fair share and the pick allowance |
 | `audit:read` | `GET /api/admin/audit` |
 
 Any valid admin token may call `GET /api/admin/tokens/self`, which says the token's name and scopes, so a tool can
@@ -106,6 +107,8 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `GET /api/admin/files/{path}` | `Range` works | the file; 404 for the owner's own files (held or not) and unknown paths |
 | `GET /api/admin/reports` | `limit` (1 to 500, default 100) | `{ items }`, newest first |
 | `GET /api/admin/queue` | | `{ lanes }` |
+| `GET /api/admin/queue/settings` | | `{ settings: { runCeilingS: { default, lanes }, ownerWaitLimitS, fairShare, pickAllowanceMs } }` ([gpu-workers.md](gpu-workers.md#the-queue)) |
+| `PATCH /api/admin/queue/settings` | any of `runCeilingS: { default, lanes? }` (seconds, 60 to 86400; a given `runCeilingS` replaces the default and every lane's value), `ownerWaitLimitS` (seconds, 60 to 604800, or `null` for no limit), `fairShare` (boolean), `pickAllowanceMs` (0 to 3600000) | `{ settings }`; 400 with the reason for a value out of bounds, an unknown setting or an unknown lane |
 | `GET /api/admin/workers` | | `{ workers, lanes }` |
 | `POST /api/admin/workers` | `{ name, pool? }` | 201 `{ id, token }`: the worker's token, once |
 | `PATCH /api/admin/workers/{id}` | any of `paused`, `pauseNow`, `drain`, `autoResume`, `hours`, `allow`, `claimAfterMs`, `switchAfterMs`, `rotate` (needs `workers:tokens`), `revoke` | `{ worker, token? }`: a new worker token after `rotate`, once |
@@ -117,7 +120,8 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 A log row is `{ id, at, actor: "owner" | "token", token: { id, name } | null, action, target, detail, status }`.
 `token.name` is the name the token had at the time. Actions: `account.disable`, `account.enable`, `account.signout`,
 `account.delete`, `run.delete`, `outputs.hide`, `outputs.unhide`, `outputs.remove`, `worker.add`, `worker.change`,
-`worker.rotate`, `worker.revoke`, `token.create`, `token.revoke`, `token.revoke_all`; a token's reads `accounts.list`, `accounts.csv`,
+`worker.rotate`, `worker.revoke`, `queue.settings` (with the values before and after), `token.create`, `token.revoke`,
+`token.revoke_all`; a token's reads `accounts.list`, `accounts.csv`,
 `account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action every 10 minutes) and
 `file.view` (one row per token and file every hour); and refusals `scope.denied` and `rate.limited`. The owner's own
 reads in the browser aren't logged. Rows go after a year.

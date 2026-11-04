@@ -99,7 +99,19 @@ export interface Policy {
 }
 
 export type ReserveAnswer =
-  | { ok: true; holdId: string; amount: number; boostMs: number; maxWaitMs: number; pools?: string[]; text: string }
+  | {
+      ok: true;
+      holdId: string;
+      amount: number;
+      /** A head start in line within the run's class (ms). */
+      boostMs: number;
+      /** The longest the run may wait before a worker first takes it (ms; 0: the install's own limit). */
+      maxWaitMs: number;
+      pools?: string[];
+      /** The run's class in the line: "paid" goes before "free" (absent: "free"). */
+      class?: "paid" | "free";
+      text: string;
+    }
   | { ok: false; code: RefuseCode | "price-changed"; text: string; quote?: Quote; action?: Action; offer?: Offer };
 
 export interface Balance {

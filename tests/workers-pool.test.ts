@@ -24,6 +24,7 @@ const { forWorkers } = await import("@/server/providers/comfyui");
 const { hoursAt, parseHours } = await import("@/lib/worker-hours");
 const { lanesFor, needsOf, laneOf } = await import("@/lib/lanes");
 const { loadIndex } = await import("@/server/gpu/index-file");
+const { QUEUE_DEFAULTS, queueSettings, saveQueueSettings } = await import("@/server/queue-settings");
 
 const LANE_A = "aaaaaaaaaaaa";
 const LANE_B = "bbbbbbbbbbbb";
@@ -253,9 +254,15 @@ describe("losing a worker (checks 3, 4, 5)", () => {
 });
 
 describe("order (checks 8, 9)", () => {
-  it("sticky lanes: the warm lane goes first until another lane's best task passes switch_after_ms", () => {
+  it("sticky lanes: the warm lane goes first until another lane's best task passes the pick allowance", () => {
     const w = worker("sticky", { lanes: [LANE_A, LANE_B] });
     db().prepare("UPDATE relay_workers SET warm_lane = ?, switch_after_ms = ? WHERE id = ?").run(LANE_A, 30 * MIN, w.id);
+    // The install's pick allowance is 0 by default: strict order, whatever the worker's own setting.
+    const first = task({ lane: LANE_B, rankAgoMs: 2 * MIN });
+    const warm = task({ lane: LANE_A, rankAgoMs: 1 * MIN });
+    expect(claim(w)?.id).toBe(first);
+    db().prepare("UPDATE relay_tasks SET state = 'canceled' WHERE id IN (?, ?)").run(first, warm);
+    saveQueueSettings({ ...queueSettings(), pickAllowanceMs: 60 * MIN });
     const b = task({ lane: LANE_B, rankAgoMs: 10 * MIN });
     const a = task({ lane: LANE_A, rankAgoMs: 1 * MIN });
     expect(claim(w)?.id).toBe(a);
@@ -264,6 +271,7 @@ describe("order (checks 8, 9)", () => {
     db().prepare("UPDATE relay_tasks SET rank_at = ? WHERE id = ?").run(clock - 31 * MIN, b);
     expect(claim(w)?.id).toBe(b);
     expect(state(a2).state).toBe("waiting");
+    saveQueueSettings(QUEUE_DEFAULTS);
   });
 
   it("near the end of its hours, a task that would overrun is not claimed", () => {
@@ -276,10 +284,10 @@ describe("order (checks 8, 9)", () => {
     expect(state(long).state).toBe("waiting");
   });
 
-  it("the owner's tasks go by rank_at, not by arrival", () => {
+  it("tasks in one class go by rank_at, not by arrival", () => {
     const w = worker("rank");
     const later = task({ rankAgoMs: 0 });
-    const boosted = task({ rankAgoMs: pool.OWNER_BOOST_MS });
+    const boosted = task({ rankAgoMs: 24 * 60 * MIN });
     expect(claim(w)?.id).toBe(boosted);
     expect(state(later).state).toBe("waiting");
   });
@@ -309,7 +317,8 @@ describe("routes", () => {
     const { task: t } = await c.json();
     expect(t.id).toBe(id);
     expect(t.lane).toBe(LANE_A);
-    expect(t.runLimitMs).toBe(5 * MIN);
+    // No measured run in its lane yet: the lane's run ceiling (45 minutes unless the owner sets another).
+    expect(t.runLimitMs).toBe(45 * MIN);
     const sent = await reportRoute.POST(new Request(`http://localhost:3000/api/gpu/computer/tasks/${id}/report`, { method: "POST", headers: { ...headers, "x-fuobe-lease": t.lease }, body: JSON.stringify({ event: "sent", promptId: t.promptId }) }), {
       params: Promise.resolve({ id }),
     });

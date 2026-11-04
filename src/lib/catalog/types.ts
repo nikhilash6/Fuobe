@@ -1119,6 +1119,10 @@ export interface GenerationRequest {
   checkOutputs?: boolean;
   /** How long a run on this install's GPUs may wait in line (ms), when the billing service set it. */
   waitMs?: number;
+  /** Server-only: the run's class in the line on this install's GPUs ("paid" goes before "free"), from the billing service. */
+  class?: "paid" | "free";
+  /** Server-only: a head start in line within its class (ms), from the billing service. */
+  boostMs?: number;
   feature: string;
   presetId?: string;
   modelId: string;

@@ -376,6 +376,9 @@ With it on:
   (`detail` in `GET /api/admin/generations`). A failed run on the studio's GPUs never offers "Fix it".
 - A run may wait `FUOBE_POOL_WAIT_MIN` minutes (30 by default, or what the billing service says) before a worker
   first takes it; past that it fails, not charged. Once a worker took it, that limit is over.
+- People's runs go before the owner's own jobs on the same GPUs, in the order they came (a billing service can put
+  paid runs first). One attempt may run as long as its lane's run ceiling, which the owner sets (45 minutes by
+  default; [gpu-workers.md](gpu-workers.md#the-queue)).
 - In a run's `params.extra`, a file input is used only when the run sent that file itself. A name of a file in the
   GPUs' folders is dropped. The graph is checked before it is queued or sent: it reads only the files this run sent.
 - The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.

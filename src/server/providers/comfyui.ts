@@ -113,7 +113,8 @@ import {
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
-import { OWNER_BOOST_MS, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords } from "../computer/pool";
+import { poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords } from "../computer/pool";
+import { ownerWaitMs } from "../queue-settings";
 
 export const WORKFLOW_DIR = path.join(process.cwd(), "workflows", "comfyui");
 
@@ -2568,10 +2569,12 @@ export const comfyProvider: ProviderAdapter = {
         ...(forPool && {
           pool:
             computer === "owner"
-              ? // The owner's jobs on the workers: the lane and files they need, ahead of everyone else's, with a wait limit.
-                poolFields(manifest.id, { boostMs: OWNER_BOOST_MS, waitMs: poolWaitMs() })
-              : // An account's: the lane and files they need, in the order they came, with the wait set for the run.
-                poolFields(manifest.id, { account: computer.slice(5), waitMs: runStamp()?.waitMs || poolWaitMs() }),
+              ? // The owner's jobs on the workers: the lane and files they need, after every person's run (the owner's
+                // class), with the owner's own wait limit (none unless the owner sets one: queue-settings.ts).
+                poolFields(manifest.id, { class: "owner", waitMs: ownerWaitMs() })
+              : // An account's: the lane and files they need, in its class (paid before free), in the order they came
+                // (with the billing service's head start inside the class), with the wait set for the run.
+                poolFields(manifest.id, { account: computer.slice(5), class: runStamp()?.class ?? "free", boostMs: runStamp()?.boostMs, waitMs: runStamp()?.waitMs || poolWaitMs() }),
         }),
       });
       return { externalId: task.promptId, meta: { ...meta, generationId, relay: task.id }, payload: wf };

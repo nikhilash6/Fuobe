@@ -56,6 +56,10 @@ export interface FakeBilling {
   refuse: null | { code: string; text: string };
   /** The policy every account gets. */
   policy: Record<string, unknown>;
+  /** The policy a guest gets (GET /v1/policy with no account); null: the same as an account. */
+  guestPolicy: Record<string, unknown> | null;
+  /** Extra fields of every reserve answer that sets a price aside (a class, say). */
+  reserveExtra: Record<string, unknown>;
   /** How many times each (hold, generation) pair was reported. */
   reportCount: (holdId: string, generationId: string) => number;
   calls_of: (path: string) => Recorded[];
@@ -80,6 +84,8 @@ export async function startFakeBilling(): Promise<FakeBilling> {
     down: false,
     refuse: null,
     policy: { ...FAKE_POLICY },
+    guestPolicy: null,
+    reserveExtra: {},
     reportCount: (h, g) => reportCounts.get(`${h} ${g}`) ?? 0,
     calls_of: (p) => f.calls.filter((c) => c.path.split("?")[0] === p),
   };
@@ -102,18 +108,18 @@ export async function startFakeBilling(): Promise<FakeBilling> {
     const p = path.split("?")[0];
     const b = (body ?? {}) as Record<string, unknown>;
     if (p === "/v1/health") return json(200, { ok: true, version: "test" });
-    if (p === "/v1/policy") return json(200, f.policy);
+    if (p === "/v1/policy") return json(200, !new URLSearchParams(path.split("?")[1] ?? "").get("account") && f.guestPolicy ? f.guestPolicy : f.policy);
     if (p === "/v1/quote") return json(200, quote());
     if (p === "/v1/reserve") {
       const requestId = String(b.requestId);
       const again = [...f.holds.entries()].find(([, h]) => h.requestId === requestId);
-      if (again) return json(200, { ok: true, holdId: again[0], amount: again[1].amount, boostMs: 7000, maxWaitMs: 700_000, text: `${again[1].amount} units` });
+      if (again) return json(200, { ok: true, holdId: again[0], amount: again[1].amount, boostMs: 7000, maxWaitMs: 700_000, text: `${again[1].amount} units`, ...f.reserveExtra });
       if (f.refuse) return json(200, { ok: false, code: f.refuse.code, text: f.refuse.text });
       const shown = b.shown as { amount: number; priceVersion: string };
       if (f.price.amount > shown.amount) return json(200, { ok: false, code: "price-changed", text: `The price is now ${f.price.amount} units.`, quote: quote() });
       const id = `h_${++holdN}`;
       f.holds.set(id, { amount: f.price.amount, requestId, reports: new Map(), released: false });
-      return json(200, { ok: true, holdId: id, amount: f.price.amount, boostMs: 7000, maxWaitMs: 700_000, text: `${f.price.amount} units` });
+      return json(200, { ok: true, holdId: id, amount: f.price.amount, boostMs: 7000, maxWaitMs: 700_000, text: `${f.price.amount} units`, ...f.reserveExtra });
     }
     if (p === "/v1/settle" || p === "/v1/refund") {
       const h = f.holds.get(String(b.holdId));

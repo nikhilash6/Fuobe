@@ -113,10 +113,14 @@ default). It also keeps:
   with no big file is in the lane `small`.
 - what it needs: the workflow, its files (folder, name, exact size, and SHA-256 where it is pinned), its node packs
   and its VRAM;
-- `rank_at`: `created_at` minus a boost. The owner's jobs get a one-day boost. A job that goes back in line keeps
-  its `rank_at`, so it keeps its place.
-- a wait limit (`FUOBE_POOL_WAIT_MIN`, 30 minutes, or what the billing service set for an account's run). It applies
-  only until a worker first takes the job: past it, a job that no worker took fails with "The GPUs were busy".
+- its class: `paid` or `free` for an account's run (the billing service says which; `free` without one), `owner` for
+  the owner's own jobs. People's runs always go first: the owner's jobs wait until no person's run waits that the
+  same worker could take.
+- `rank_at`: `created_at`, minus the head start the billing service gave the run inside its class (at most a day). A
+  job that goes back in line keeps its `rank_at`, so it keeps its place.
+- a wait limit: for an account's run, `FUOBE_POOL_WAIT_MIN` (30 minutes) or what the billing service set; for the
+  owner's own jobs, the owner's wait limit (none by default; see the queue's settings below). It applies only until a
+  worker first takes the job: past it, a job that no worker took fails with "The GPUs were busy".
 - how many results its workflow makes. An owner's job keeps no more than that (and at least 16), as an account's job
   keeps at most 16. Results are never saved past the disk's free floor.
 
@@ -132,8 +136,26 @@ A worker gets a job only when all of these are true, all in one SQLite transacti
 - it holds no other job. A worker runs one job at a time: while it holds one, a claim gives it that job again when
   it lost track of it, and nothing new.
 
-The lowest `rank_at` goes first (then the oldest). A worker keeps to its warm lane (the models that it has loaded)
-until another lane's best job has waited longer than `switch_after_ms` (30 minutes) and is older.
+Jobs go by class (`paid`, then `free`, then `owner`), then by the lowest `rank_at` (then the oldest). With the
+pick allowance at 0 (the default), that is the whole rule. Above 0, a worker may take a job in its warm lane (the
+models it has loaded) ahead of the best job, in the same class, while the best job has waited less than the pick
+allowance (or the worker's own `switch_after_ms`, if that is lower). With fair share on, each class goes round its
+accounts: an account's next run goes after every other account's run that is an earlier turn of its own. An account's
+turns count the runs a worker holds for it now and those a worker finished for it since the oldest run still waiting
+in that class came.
+
+**The queue's settings.** The owner sets these with `GET` and `PATCH /api/admin/queue/settings`
+([admin-api.md](admin-api.md)). They apply at once, with no restart:
+
+| Setting | What it does | Default |
+|---|---|---|
+| `runCeilingS` | `{ default, lanes }`: the longest one attempt at a job may run, in seconds, with a value per lane that overrides the default. It ends the run's own clock, and a worker's run limit is never longer | `{ "default": 2700, "lanes": {} }` (45 minutes) |
+| `ownerWaitLimitS` | How long the owner's own jobs may wait before a worker first takes them, in seconds. `null`: no limit | `null` |
+| `fairShare` | Each class goes round its accounts (above). Off: strict order | `false` |
+| `pickAllowanceMs` | How long a job in a worker's warm lane may go ahead of an older one (above). 0: strict order | `0` |
+
+A worker's run limit for one attempt is 3 times the lane's 90th percentile on that worker plus its model load, at
+least 10 minutes and never past the lane's run ceiling. With no measured run in the lane yet, it is the ceiling.
 
 If a worker stops answering for 2 minutes, its ComfyUI is down for 2 minutes, or the job is still sending its files
 15 minutes after the worker claimed it (or after its ComfyUI lost the job and the worker sent it again), its job goes
@@ -204,6 +226,7 @@ Each worker counts against its own rate limits, so three workers that beat every
   A window can go past midnight.
 - `GET /api/admin/queue`: the jobs that wait in each lane, the oldest job, the estimate, and which workers have the
   lane warm.
+- `GET` and `PATCH /api/admin/queue/settings`: the queue's settings (above).
 
 ### Behind Cloudflare
 

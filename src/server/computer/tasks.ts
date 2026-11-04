@@ -106,6 +106,8 @@ export interface TaskRow {
   not_after: number | null;
   only_worker: string | null;
   worker_id: string | null;
+  /** Its class in the line: "paid", "free" (people's runs) or "owner" (the owner's own jobs, served last). NULL: from before classes, read as "owner" with no account and "free" with one. */
+  class: string | null;
   created_at: number;
   updated_at: number;
   claimed_at: number | null;
@@ -306,7 +308,7 @@ export interface NewTask {
   /** How many results its workflow says one job makes (an owner's job keeps no more than that, and at least 16). */
   outputs?: number;
   /** For workers (pool.ts): the pools that may take it, and what they need to. */
-  pool?: { pools: string[]; account?: string; rankAt: number; lane: string; needs: unknown; estMs?: number; notAfter?: number; onlyWorker?: string };
+  pool?: { pools: string[]; account?: string; class?: "paid" | "free" | "owner"; rankAt: number; lane: string; needs: unknown; estMs?: number; notAfter?: number; onlyWorker?: string };
 }
 
 /** A ComfyUI job for a computer: the graph, the inputs it names, and a prompt id minted here. */
@@ -320,8 +322,8 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
     const pool = t.pool;
     d.prepare(
       `INSERT INTO relay_tasks (id, principal, generation_id, state, graph_json, prompt_id, prefix, meta_batch, preview, workflow_id, extra_json, created_at, updated_at,
-         account, pools, rank_at, lane, needs_json, est_ms, not_after, only_worker)
-       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         account, pools, rank_at, lane, needs_json, est_ms, not_after, only_worker, class)
+       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       t.principal,
@@ -343,6 +345,7 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
       pool?.estMs ?? null,
       pool?.notAfter ?? null,
       pool?.onlyWorker ?? null,
+      pool ? (pool.class ?? (pool.account ? "free" : "owner")) : null,
     );
     const free = d.prepare("SELECT name FROM relay_inputs WHERE principal = ? AND task_id IS NULL ORDER BY created_at").all(t.principal) as { name: string }[];
     let n = 0;

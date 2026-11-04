@@ -189,7 +189,19 @@ export async function reservePool(account: Account, req: GenerationRequest, plan
     return { ok: false, refusal: billingRefusal(a.code, a.text, { ...(a.quote && { quote: a.quote }), ...(a.action && { action: a.action }), ...(a.offer && { offer: a.offer }) }) };
   }
   forgetBalance(account.id);
-  return { ok: true, stamp: { ...base, hold: a.holdId, ...(a.text && { charge: a.text }), ...(a.maxWaitMs > 0 && { waitMs: a.maxWaitMs }) } };
+  // Its class and head start in the line come from the answer too (a paid run goes before every free one).
+  const boost = Number(a.boostMs);
+  return {
+    ok: true,
+    stamp: {
+      ...base,
+      hold: a.holdId,
+      ...(a.text && { charge: a.text }),
+      ...(a.maxWaitMs > 0 && { waitMs: a.maxWaitMs }),
+      ...(a.class === "paid" && { class: "paid" as const }),
+      ...(Number.isFinite(boost) && boost > 0 && { boostMs: Math.min(boost, 24 * 60 * 60_000) }),
+    },
+  };
 }
 
 /**

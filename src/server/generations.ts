@@ -97,9 +97,11 @@ import { convertMask, decodePng, encodePng } from "./png";
 import { engineMode, getSetting, withCandidates, withoutCandidates } from "./settings";
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
-import { stamped, stampOf, withRunStamp } from "./run-stamp";
+import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
 import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
 import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
+import { poolLane } from "./computer/pool";
+import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
 import { inDemoScope } from "./demo-scope";
 import { moderationConfigured } from "./moderation";
@@ -151,8 +153,10 @@ const LIBRARY_JOIN = `generations g ${LIBRARY_JOINS}`;
 
 export function toGeneration(r: Row): Generation {
   const stored = JSON.parse(r.request_json) as GenerationRequest;
-  // The billing hold is the server's: never sent to a browser or a script.
-  const { hold, ...request } = stored;
+  // The run's stamp is the server's (its place, the billing hold, its class in the line): never sent to a browser or a
+  // script, so a retry that sends the request back never says where the last attempt ran.
+  const hold = stored.hold;
+  const request = withoutStamp(stored);
   // A run on this install's GPUs shows the account only where it is (in line, working) and its result, or one plain
   // sentence when it can't finish: never the technical reason, which the owner reads in the accounts' runs.
   const pool = stored.place === "pool";
@@ -1987,7 +1991,10 @@ async function submitNow(
 const POLL_MS = 1500;
 /** Jobs about to finish (progress ≥ 0.9) are polled this often, so results land sooner. */
 const FAST_POLL_MS = 500;
-/** How long a job may run once its provider has started it… */
+/**
+ * How long a job may run once its provider has started it… (A job on this install's own GPUs: its lane's run ceiling,
+ * which the owner sets, 45 minutes by default: runningLimitMs.)
+ */
 const TIMEOUT_MS = 45 * 60 * 1000;
 /** …and how long it may wait in the provider's queue first (a busy local GPU works through jobs one by one). */
 const QUEUE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
@@ -2154,6 +2161,17 @@ async function fastTick(): Promise<void> {
   }
 }
 
+/**
+ * How long a started job may run: on this install's own GPUs (an account's run there, or the owner's ComfyUI job), its
+ * lane's run ceiling (queue-settings.ts); anywhere else (an account's own GPU or key, a cloud provider) 45 minutes, as
+ * always.
+ */
+function runningLimitMs(r: Pick<Row, "provider">, meta: Record<string, unknown>, account: string | undefined, onPool: boolean): number {
+  if (r.provider !== "comfyui" || (account && !onPool)) return TIMEOUT_MS;
+  const wf = typeof meta.workflowId === "string" && !meta.workflowId.includes("{") ? meta.workflowId : null;
+  return runCeilingMs(wf ? poolLane(wf) : null);
+}
+
 /** Order by: the owner's rows (no account in the request) before accounts'. */
 const ACCOUNT_LAST = "(json_extract(request_json, '$.account') IS NOT NULL)";
 
@@ -2215,7 +2233,8 @@ async function pollOne(r: Row): Promise<void> {
     }
     // A job that has just left the queue gets its full running time from now.
     const startsNow = res?.state === "running" && !run.started_at;
-    const overdue = run.started_at ? now - run.started_at > TIMEOUT_MS : !ownClocks && !startsNow && now - run.submitted_at > queueMs;
+    const limitMs = runningLimitMs(r, ctx.meta, account, onPool);
+    const overdue = run.started_at ? now - run.started_at > limitMs : !ownClocks && !startsNow && now - run.submitted_at > queueMs;
     if (overdue) {
       // Stop the provider's job too, so it doesn't keep rendering (or billing) for nothing.
       await adapterFor(r.provider, account)
@@ -2224,7 +2243,7 @@ async function pollOne(r: Row): Promise<void> {
       update(r.id, {
         status: "failed",
         error: run.started_at
-          ? `Timed out after ${TIMEOUT_MS / 60_000} minutes`
+          ? `Timed out after ${Math.round(limitMs / 60_000)} minutes`
           : res?.state === "queued" && res.timeoutError
             ? res.timeoutError
             : onPool

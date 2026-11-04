@@ -67,7 +67,7 @@ type Policy = {
 | Call | Request | Answer |
 |---|---|---|
 | `POST /v1/quote` | `{ account: AccountFacts \| null, run: RunFacts, queue: QueueFacts \| null }` | `Quote` |
-| `POST /v1/reserve` | `{ requestId, account: AccountFacts, run: RunFacts, queue: QueueFacts \| null, shown: { amount, priceVersion } }` | `{ ok: true, holdId, amount, boostMs, maxWaitMs, pools?, text }` or `{ ok: false, code: RefuseCode \| "price-changed", text, quote?, action?, offer? }` |
+| `POST /v1/reserve` | `{ requestId, account: AccountFacts, run: RunFacts, queue: QueueFacts \| null, shown: { amount, priceVersion } }` | `{ ok: true, holdId, amount, boostMs, maxWaitMs, pools?, class?, text }` or `{ ok: false, code: RefuseCode \| "price-changed", text, quote?, action?, offer? }` |
 | `POST /v1/release` | `{ holdId, reason: "not-created" }` | `{ ok: true }` |
 | `POST /v1/settle` | `{ holdId, generationId, rows, status: "succeeded", final: { outputs, megapixels, seconds }, providerUsd, gpuMs, device, reachedProvider }` | `{ ok: true, charged }` |
 | `POST /v1/refund` | `{ holdId, generationId, rows, status: "failed" \| "canceled" \| "hidden" \| "unchecked", reason, reachedProvider, gpuMs, device }` | `{ ok: true, text }` |
@@ -81,6 +81,10 @@ be higher, it refuses with `price-changed` and the new quote, and the person see
 A reserve's `text` is shown on the result once it succeeded ("7 units"). `maxWaitMs` is how long the run may wait in
 line before a GPU first takes it; past it the row fails and is refunded. Once a GPU has taken it, the limit is over: a
 run that goes back in line (a GPU paused or restarted) keeps its place and waits there.
+
+`class` puts the run in a class of the line: `"paid"` runs go before `"free"` ones (no `class`: `"free"`). The
+install's own jobs come after both. `boostMs` is a head start inside the class, at most a day: the run stands in line as
+if it had come that much earlier. Both are kept for every row of the run, and a browser never sees them.
 
 On the workers ([gpu-workers.md](gpu-workers.md)), `queue` counts the line the way the workers serve it: `ahead` is
 every task the workers that may run this one would serve first, whatever its model, and `lane` is the workflow's lane.
