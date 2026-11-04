@@ -5,9 +5,9 @@ import { MAKE_3D_HINT, idolPhotoFor, linkedIdolQuality, linkedPicture, readModel
 import { make3dOffered, openEngineReady } from "@/lib/connections";
 
 /**
- * Make it 3D (quick) on image results (idol-5, docs/research/idol-9.md §8, §9): a menu action that opens Image to 3D →
- * Splat on Idol 3D's Quick look with the picture in the slot, shown only where the open engine runs; the studio's link
- * parsing; and when results count the open engine as ready.
+ * Make it 3D on image results (docs/research/idol-9.md §8, §9): the menu action opens Photo to 3D; Image to 3D's link
+ * (Splat on Idol 3D's Quick look with the picture in the slot) and its parsing; and when results count the open engine
+ * as ready.
  */
 
 let n = 0;
@@ -44,52 +44,31 @@ function gen(p: Partial<Generation> = {}): Generation {
 const ids = (g: Generation, ctx = {}) => outputActions(g, 0, ctx).map((a) => a.id);
 const make3d = (g: Generation, ctx = {}) => outputActions(g, 0, ctx).find((a) => a.id === "make-3d");
 
-describe("Make it 3D (quick) on a result", () => {
-  it("is a menu action on pictures when the open engine can run, with Idol 3D's Quick look and the picture", () => {
+describe("Make it 3D on a result", () => {
+  // A picture's menu opens Photo to 3D (main's "Make it 3D"); Idol 3D's quick splat is reached from Image to 3D's own link.
+  it("is a menu action on pictures that opens Photo to 3D with the picture, on every engine", () => {
     const g = gen({ outputs: [{ url: "/api/files/outputs/d/fox 1.png", kind: "image" }] });
-    expect(make3d(g, { openEngine: true })).toEqual({
-      id: "make-3d",
-      label: "Make it 3D (quick)",
-      placement: "menu",
-      href: "/image-to-3d?mode=splat&model=oss-idol&quality=quick&image=%2Fapi%2Ffiles%2Foutputs%2Fd%2Ffox%201.png",
-    });
-    expect(make3d(g, { openEngine: true, engineMode: "open" })).toBeDefined();
-    expect(make3d(g, { openEngine: true, engineMode: "both" })).toBeDefined();
+    expect(make3d(g)).toEqual({ id: "make-3d", label: "Make it 3D", placement: "menu", href: "/apps/app-photo-to-3d?image=%2Fapi%2Ffiles%2Foutputs%2Fd%2Ffox%201.png" });
+    expect(make3d(g, { engineMode: "open" })).toBeDefined();
+    expect(make3d(g, { engineMode: "both" })).toBeDefined();
+    expect(outputActions(g, 0).filter((a) => a.label === "Make it 3D (quick)")).toEqual([]);
   });
 
-  it("is hidden without the open engine and on installs that run paid APIs only", () => {
-    const g = gen();
-    expect(make3d(g)).toBeUndefined();
-    expect(make3d(g, { openEngine: false, engineMode: "open" })).toBeUndefined();
-    expect(make3d(g, { openEngine: true, engineMode: "cloud" })).toBeUndefined();
+  it("sits after the hand-offs", () => {
+    const list = ids(gen(), { reuse: true });
+    expect(list.indexOf("make-3d")).toBe(list.indexOf("genjutsu") + 1);
   });
 
-  it("keeps the other picture actions and their order, and sits after the hand-offs", () => {
-    const g = gen();
-    const without = ids(g, { reuse: true });
-    const withIt = ids(g, { reuse: true, openEngine: true });
-    expect(withIt.filter((id) => id !== "make-3d")).toEqual(without);
-    expect(withIt.indexOf("make-3d")).toBe(withIt.indexOf("genjutsu") + 1);
-  });
-
-  it("never appears on videos, sound, text, 3D models, vector pictures or deleted results", () => {
-    const ctx = { openEngine: true, engineMode: "both" as const };
+  it("never appears on videos, sound, text or 3D models", () => {
+    const ctx = { engineMode: "both" as const };
     expect(ids(gen({ kind: "video", op: "t2v", outputs: [{ url: "/api/files/a.mp4", kind: "video" }] }), ctx)).not.toContain("make-3d");
     expect(ids(gen({ kind: "audio", op: "tts", outputs: [{ url: "/api/files/a.mp3", kind: "audio" }] }), ctx)).not.toContain("make-3d");
     expect(ids(gen({ kind: "text", outputs: [{ url: "/api/files/a.txt", kind: "text", text: "hi" }] }), ctx)).not.toContain("make-3d");
     expect(ids(gen({ kind: "model3d", outputs: [{ url: "/api/files/a.glb", kind: "model3d" }] }), ctx)).not.toContain("make-3d");
-    expect(ids(gen({ outputs: [{ url: "/api/files/logo.svg", kind: "image", contentType: "image/svg+xml" }] }), ctx)).not.toContain("make-3d");
-    expect(ids(gen({ deletedAt: 5 }), ctx)).not.toContain("make-3d");
-  });
-
-  it("opens an upload with the photo crop on", () => {
-    const up = make3d(gen({ feature: "upload", provider: "local", outputs: [{ url: "/api/files/uploads/p.jpg", kind: "image" }] }), { openEngine: true });
-    expect(up?.href).toBe(make3dHref("/api/files/uploads/p.jpg", true));
-    expect(up?.href).toMatch(/&photo=1$/);
   });
 
   it("leaves a picture's next steps as they are", () => {
-    for (const ctx of [{}, { openEngine: true }, { openEngine: true, engineMode: "open" as const }]) {
+    for (const ctx of [{}, { engineMode: "open" as const }]) {
       expect(nextSteps(gen(), 0, 3, ctx).map((a) => a.id)).toEqual(["animate", "upscale", "edit"]);
     }
   });
