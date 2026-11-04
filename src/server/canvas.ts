@@ -50,6 +50,7 @@ import {
 } from "@/lib/catalog/canvas";
 import type { Engine, Generation, GenerationRequest, MediaKind } from "@/lib/catalog/types";
 import { readLayout } from "@/lib/layout-prompt";
+import { LATENT_EXTRA } from "@/lib/catalog/regenerate";
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { listElements } from "./elements";
@@ -111,6 +112,7 @@ const NODE_TYPES = [
   "clone-voice",
   "translate",
   "concat",
+  "restore",
   "table",
   "layout",
   "camera-path",
@@ -132,7 +134,11 @@ const Params = z.object({
   voice: z.string().max(200).optional(),
   targetLanguage: z.string().max(80).optional(),
   sourceLanguage: z.string().max(80).optional(),
-  extra: z.record(z.string(), z.union([z.string().max(2000), z.number(), z.boolean()])).optional(),
+  // Less the server's own (MiniMax H3's 2K hand-off), as POST /api/generations drops them.
+  extra: z
+    .record(z.string(), z.union([z.string().max(2000), z.number(), z.boolean()]))
+    .transform((extra) => Object.fromEntries(Object.entries(extra).filter(([k]) => !(LATENT_EXTRA as readonly string[]).includes(k))))
+    .optional(),
 });
 
 /** Free text is clamped, not refused: one over-long paste must never stop the whole board from saving. */

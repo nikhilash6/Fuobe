@@ -5,6 +5,7 @@ import {
   heuristicScenes,
   MAX_FRAMES,
   parseScenes,
+  planOneSheet,
   planStoryboard,
   SPLIT_SYSTEM,
   STORYBOARD_NEXT_SCENE_IDS,
@@ -39,6 +40,8 @@ export const StoryboardBodySchema = z.object({
   lookStrength: z.number().min(0).max(1).optional(),
   aspectRatio: z.string().max(10).optional(),
   resolution: z.string().max(10).optional(),
+  /** One sheet: every panel drawn on one MOSS-Image page (a layout box per panel), cropped into frames in the browser. */
+  sheet: z.boolean().optional(),
 });
 
 export interface StoryboardRequest {
@@ -59,6 +62,8 @@ export interface StoryboardRequest {
   lookStrength?: number;
   aspectRatio?: string;
   resolution?: string;
+  /** One sheet: the whole board as one MOSS-Image page, one panel per scene, cropped into frames in the browser. */
+  sheet?: boolean;
 }
 
 /** Split a story into scenes with the configured LLM, or a deterministic shot list offline. */
@@ -77,11 +82,23 @@ function boardLook(r: Pick<StoryboardRequest, "look" | "lookStrength">): Storybo
   return { id: look.id, words: look.look, ...(r.lookStrength !== undefined && { strength: r.lookStrength }) };
 }
 
+/**
+ * The board's requests: one sheet (one MOSS-Image page with every panel; no look, references or partner model), or a frame
+ * each, every later one made from the one before.
+ */
+function boardFrames(r: StoryboardRequest, scenes: string[], batchTitle?: string) {
+  if (r.sheet) {
+    if (r.look) throw new Error("A one-sheet board has no look: make it frame by frame to use one");
+    return [planOneSheet({ engine: r.engine, scenes, references: r.references, style: r.style, aspectRatio: r.aspectRatio, resolution: r.resolution, batchTitle })];
+  }
+  return planStoryboard({ engine: r.engine, partner: r.partner, nextScene: r.nextScene, scenes, references: r.references, style: r.style, look: boardLook(r), aspectRatio: r.aspectRatio, resolution: r.resolution, batchTitle });
+}
+
 /** What a board costs before it runs: each frame's price (frame 1 alone, the rest as chained steps), and whether it would be a demo. */
 export function estimateStoryboard(r: StoryboardRequest): { costUsd: number | null; demo: boolean; frames: number; models: string[] } {
   const n = Math.max(1, Math.min(MAX_FRAMES, r.scenes?.filter((s) => s.trim()).length || r.frames || 4));
   const scenes = Array.from({ length: n }, (_, i) => r.scenes?.[i]?.trim() || `scene ${i + 1}`);
-  const frames = planStoryboard({ engine: r.engine, partner: r.partner, nextScene: r.nextScene, scenes, references: r.references, style: r.style, look: boardLook(r), aspectRatio: r.aspectRatio, resolution: r.resolution });
+  const frames = boardFrames(r, scenes);
   let cost: number | null = 0;
   let demo = false;
   const models: string[] = [];
@@ -96,13 +113,12 @@ export function estimateStoryboard(r: StoryboardRequest): { costUsd: number | nu
 
 export async function createStoryboard(r: StoryboardRequest): Promise<{ batchId: string; scenes: string[]; items: Generation[] }> {
   const n = Math.max(1, Math.min(MAX_FRAMES, r.scenes?.length || r.frames || 4));
-  const look = boardLook(r);
   const scenes = r.scenes?.length ? r.scenes.slice(0, MAX_FRAMES).map((s) => s.trim()).filter(Boolean) : await splitStory(r.story ?? "", n);
   if (!scenes.length) throw new Error("Describe the story or write at least one scene");
   const batchId = nanoid(10);
   // The board is named after the user's idea on every device (the Library's stack title too).
   const batchTitle = storyboardName(r.scenes?.length ? undefined : r.story, scenes);
-  const frames = planStoryboard({ engine: r.engine, partner: r.partner, nextScene: r.nextScene, scenes, references: r.references, style: r.style, look, aspectRatio: r.aspectRatio, resolution: r.resolution, batchTitle });
+  const frames = boardFrames(r, scenes, batchTitle);
   const items: Generation[] = [];
   let previous: string | undefined;
   for (const request of frames) {

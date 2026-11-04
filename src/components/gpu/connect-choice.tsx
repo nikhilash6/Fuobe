@@ -4,7 +4,7 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 import { ChevronDown, Cpu, Globe, Info, Loader2, TriangleAlert, Unplug } from "lucide-react";
 import { createContext, useContext, useState } from "react";
 import { toast } from "sonner";
-import { ConnectField, useAllowPrivate, useSettings } from "@/components/connect-field";
+import { ConnectField, useAllowPrivate, useSettings, type PublicSetting } from "@/components/connect-field";
 import { gib } from "@/components/gpu/comfy-finder";
 import { YourGpu } from "@/components/gpu/your-gpu";
 import { Button } from "@/components/ui/button";
@@ -379,8 +379,29 @@ export function OwnerServerComfy({
           refusal={refusal}
         />
       )}
+      {!onlyAddress && !computer && (!hosted || advanced) && <WorldcastField get={get} hosted={hosted} />}
       {computer && <p className="text-[12px] text-muted-foreground">Connecting a server address stops the runs still going on your computer.</p>}
     </div>
+  );
+}
+
+/**
+ * The WorldCast worker's address (build plan N7-9; docs/workers/worldcast.md), beside the isolated worker: Fly path,
+ * Turnaround and the exact orbits film with WorldCast while it answers.
+ */
+export function WorldcastField({ get, hosted = false }: { get: (n: string) => PublicSetting | undefined; hosted?: boolean }) {
+  const place = hosted ? ("hosted" as const) : undefined;
+  return (
+    <ConnectField
+      name="worldcastUrl"
+      setting={get("worldcastUrl")}
+      provider="comfyui"
+      label="WorldCast worker URL (optional)"
+      placeholder={hosted ? "https://…" : "http://127.0.0.1:8190"}
+      hint="WorldCast films Fly path, Turnaround and exact orbits so the back and sides match your photos. It runs beside ComfyUI on a GPU with 48 GB or more: workers/worldcast/README.md shows how to start it."
+      place={place}
+      refusal={hosted ? (line: string) => <HostedRefusal line={line} /> : undefined}
+    />
   );
 }
 

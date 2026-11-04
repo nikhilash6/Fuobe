@@ -109,6 +109,7 @@ export const HOSTED_WORDS = {
   notOffered: "This one runs on your own GPU. Connect one in Settings, or pick another model.",
   loras: "Extra LoRAs run on your own GPU. Connect one in Settings, or run without them.",
   inputs: "This kind of file runs on your own GPU. Connect one in Settings, or use a picture.",
+  rtxCard: "This one needs an NVIDIA RTX card, and this studio's GPUs can't run it right now. Connect your own GPU in Settings, or pick another choice.",
   notHosted: "Runs on this studio's GPUs aren't open to this account. Connect your own GPU in Settings.",
   waitedTooLong: "This studio's GPUs were busy, so it didn't run. Not charged.",
 };
@@ -116,6 +117,7 @@ export const HOSTED_WORDS = {
 /** The same refusals for a guest, who has no Settings to connect a GPU in yet. */
 export const HOSTED_GUEST_WORDS = {
   notOffered: "This one isn't offered here. Pick another model.",
+  rtxCard: "This one isn't offered here right now. Pick another choice.",
   loras: "Extra LoRAs aren't offered here. Run without them.",
   inputs: "This kind of file can't be used here. Use a picture instead.",
 };
@@ -130,6 +132,14 @@ export function poolAllows(p: Pick<Policy, "pool">, modelId: string, presetId?: 
     if (m.apps?.allow && !m.apps.allow.includes(presetId)) return false;
   }
   return true;
+}
+
+/**
+ * May this whole run go on this install's GPUs: its model and every other step it makes (a 2K take's Open-H3 Regenerate
+ * finish), so a policy that keeps a model off the pool keeps it off as a step too.
+ */
+export function poolAllowsRun(p: Pick<Policy, "pool">, planned: { model: { id: string }; steps?: { model: string }[] }, presetId?: string | null): boolean {
+  return [planned.model.id, ...(planned.steps ?? []).map((s) => s.model)].every((id) => poolAllows(p, id, presetId));
 }
 
 /** The file kinds a request uses (for the policy's uploads rule and the billing facts). */
@@ -326,14 +336,30 @@ export function requestMegapixels(req: GenerationRequest, kind: RunFacts["kind"]
   return megapixelsOf(w && h ? { width: w, height: h } : byAsk());
 }
 
+/**
+ * A run's own step, then the other steps it makes beside it (a 2K take's finish), each model and operation once with its
+ * count: the shape of RunFacts.steps.
+ */
+function stepsBeside(own: NonNullable<RunFacts["steps"]>[number], others: { model: string; op: string }[]): NonNullable<RunFacts["steps"]> {
+  const out = new Map<string, NonNullable<RunFacts["steps"]>[number]>([[`${own.model} ${own.op ?? ""}`, own]]);
+  for (const o of others) {
+    const key = `${o.model} ${o.op || ""}`;
+    const had = out.get(key);
+    if (had) had.jobs++;
+    else out.set(key, { model: o.model, op: o.op || null, kind: own.kind, jobs: 1, lane: own.lane });
+  }
+  return [...out.values()];
+}
+
 /** The facts the billing service prices a run by (from a planned request: previewGeneration's answer). */
 export function runFacts(
   req: GenerationRequest,
-  p: { model: { id: string; kind: string; engine: "open" | "cloud" }; op: string; jobs: number; outputs: number; providerId: string; costUsd: number | null; loras: { applied: unknown[] }; route?: { endpoint?: string } },
+  p: { model: { id: string; kind: string; engine: "open" | "cloud" }; op: string; jobs: number; outputs: number; providerId: string; costUsd: number | null; loras: { applied: unknown[] }; route?: { endpoint?: string }; steps?: { model: string; op: string }[] },
   kind: RunFacts["kind"],
 ): RunFacts {
   const model = getModel(p.model.id);
   const endpoint = p.route?.endpoint;
+  const lane = poolOnWorkers() && endpoint && !endpoint.includes("{") ? poolLane(endpoint) : POOL_LANE;
   return {
     place: "pool",
     model: p.model.id,
@@ -351,7 +377,10 @@ export function runFacts(
     fps: req.params?.fps ?? null,
     loras: p.loras.applied.length,
     inputs: inputCounts(req),
-    lane: poolOnWorkers() && endpoint && !endpoint.includes("{") ? poolLane(endpoint) : POOL_LANE,
+    lane,
     providerUsd: p.costUsd,
+    // The run's other steps (a 2K take's finish), priced beside its own step as one run. A plan of every row the run
+    // makes (hosted-run.ts pricedSteps) takes the place of this where there is one.
+    ...(p.steps?.length && { steps: stepsBeside({ model: p.model.id, op: p.op || null, kind, jobs: p.jobs, lane }, p.steps) }),
   };
 }

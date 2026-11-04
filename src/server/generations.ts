@@ -14,10 +14,10 @@ import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
 import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
 import { checkWatermarkBoxes, COPY as WATERMARK_COPY, parseScanReport, rejectedRepair, type WatermarkQuality } from "@/lib/watermark";
-import { upscaleTier } from "@/lib/av/upscale";
+import { sideMultipleProblem, upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
 import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, insertRangeProblem, portraitShapeProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
-import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, withoutTriggers } from "@/lib/catalog/plan";
+import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, sourceLengthProblem, withoutTriggers } from "@/lib/catalog/plan";
 import { framedLength, keepMatte, sizeValue } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
 import { dualEngine, onEngine, pickEngine } from "@/lib/catalog/engines";
@@ -30,7 +30,8 @@ import { finishSteps, mosaicPixels, unionMasks } from "@/lib/soul-post";
 import { ANGLES_ORIGINAL, MOSAIC_SCALE } from "@/lib/catalog/open-tools";
 import { computeDimensions } from "@/lib/comfy";
 import { captionFromWords, parseCaption } from "@/lib/ideogram-caption";
-import { h3Frames, h3Prompt } from "@/lib/h3-prompt";
+import { h3Frames, h3Prompt, inH3Layout } from "@/lib/h3-prompt";
+import { h3ReferenceTags, h3TalkPrompt } from "@/lib/h3-references";
 import {
   CHAIN_LIST_SLACK,
   LAST_FRAME_CHAIN,
@@ -61,15 +62,17 @@ import { H3_TIER_PARAM, H3_UNET_PARAM } from "@/lib/gpu/h3-tier";
 import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qwen21-speed";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
-import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d, createVoiceFirst, joinClips } from "./chains";
+import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, createVoiceFirst, joinClips } from "./chains";
+import { chainedRefine } from "@/lib/av/hi3d";
 import { wantsVoiceFirst } from "@/lib/av/voice-first";
-import { createRegenerateRun } from "./regenerate";
-import { REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { createH3TwoKRun, createRegenerateRun, keepsH3Latent, regenHeld, regenSwitchedOff } from "./regenerate";
+import { H3_2K_STEPS_NOTE, h3TwoKRequests, REGEN_COPY, REGEN_MODEL, regenerateGraphLoras, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
+import { kandinskyPrompt } from "@/lib/kandinsky-prompt";
 import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
-import { comfyLoraFiles, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, probeComfy, relayFile, type OwnGpu } from "./providers/comfyui";
+import { comfyLoraFiles, comfyPlace, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, probeComfy, relayFile, type OwnGpu } from "./providers/comfyui";
 import { accountById, accountGpu, gpuLink, type AccountGpu } from "./auth";
 import { accountEngineMode, accountKey, paidAllowed } from "./account-keys";
 import { addKeyMessage, isCloudProvider, keyRemovedMessage, type CloudProvider } from "@/lib/your-keys";
@@ -83,6 +86,7 @@ import { missingFilesMessage, type MissingFiles } from "@/lib/missing-files";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { graphLoras as h3GraphLoras } from "@/lib/catalog/character-swap";
+import { PIKA_FLEX_REF_WORKFLOW, pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
 import { restoreGraphLoras } from "@/lib/restore-graph";
 import { ensureLorasOnComfy, prepareCloudLoras, withoutUnreachableCivitai } from "./loras";
 import { ACCESS_PLACE } from "@/lib/model-access";
@@ -105,7 +109,7 @@ import { placeInLine, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { poolLane } from "./computer/pool";
 import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
-import { inDemoScope } from "./demo-scope";
+import { inDemoScope, outsideDemo } from "./demo-scope";
 import { moderationConfigured } from "./moderation";
 import { holdForCheck, sweepOutputChecks } from "./output-checks";
 import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir, scratchOutputFile } from "./storage";
@@ -851,13 +855,24 @@ function prepare(original: GenerationRequest) {
   if (access.dropped.length) plan = { ...plan, loras: access.loras, prompt: withoutTriggers(plan.prompt, plan.loras.filter((l) => !access.loras.some((k) => k.file === l.file)), access.loras) };
   else if (access.loras.some((l, i) => l !== plan.loras[i])) plan = { ...plan, loras: access.loras };
   // A preset can route to another model than the one asked for: its routes that are on (or the switch that's off).
-  const { route, demo } = chooseRoute(triedRoutes(plan.model, offeredRoutes(plan.model, routesFor(plan.model, plan.op))), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
+  const { route, demo } = chooseRoute(triedRoutes(plan.model, offeredRoutes(plan.model, routesFor(plan.model, plan.op, plan.params))), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
   // Qwen-Image 2.1's Options → Speed loads its speed's LoRA in the graph: that LoRA switched off holds the speed.
   const tier = route.provider === "comfyui" ? speedLora(route.endpoint, plan.params.extra) : undefined;
   if (tier && offeredLoras([{ file: tier.file }]).dropped.length) {
     const speed = QWEN21_SPEED.labels?.[tier.speed] ?? tier.speed;
     throw new Error(
       tenantAccount() ? `${speed} isn't available here. Pick another speed` : `${speed} runs with the LoRA “${loraName({ file: tier.file })}”, which is switched off in ${ACCESS_PLACE}. Pick another speed, or turn it back on there`,
+    );
+  }
+  // Pika H3 Flex (MiniMax H3's Fast · Pika Flex, References and Talk from a voice clip) loads Pika's adapter in the graph:
+  // that adapter switched off holds the run.
+  const flexOff = route.provider === "comfyui" ? offeredLoras(pikaFlexGraphLoras(route.endpoint, plan.params.extra)).dropped[0] : undefined;
+  if (flexOff) {
+    const refs = route.endpoint === PIKA_FLEX_REF_WORKFLOW;
+    const what = refs ? (plan.op === "avatar" ? "Talk from a voice clip" : "References") : "Fast · Pika Flex";
+    const instead = refs ? "Use one start frame, or pick another model" : "Pick Standard or Sharper";
+    throw new Error(
+      tenantAccount() ? `${what} isn't available here. ${instead}` : `${what} runs with “${loraName(flexOff)}”, which is switched off in ${ACCESS_PLACE}. ${instead}, or turn it back on there`,
     );
   }
   // "Fast · writes the details" edits with at most 3 pictures (its LoRA's card).
@@ -934,7 +949,12 @@ function prepare(original: GenerationRequest) {
 }
 
 /** The LoRA files a graph loads itself (not injected), so a run downloads the ones ComfyUI lacks before it starts. */
-const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined) => [...h3GraphLoras(endpoint, extra), ...restoreGraphLoras(endpoint, extra), ...regenerateGraphLoras(endpoint)];
+const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined) => [
+  ...h3GraphLoras(endpoint, extra),
+  ...restoreGraphLoras(endpoint, extra),
+  ...regenerateGraphLoras(endpoint, extra),
+  ...pikaFlexGraphLoras(endpoint, extra),
+];
 
 /** Operations whose clip length is the duration picked (made, or added by extend), not an input video's. */
 const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "extend", "keyframes"]);
@@ -943,6 +963,9 @@ const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "ext
 /** What a request would run as — model, operation, job count and cost — without starting it. */
 export function previewGeneration(asked: GenerationRequest) {
   const moved = currentRequest(asked);
+  // Open-H3 Regenerate while it is held (REGEN_OFFERED), and MiniMax H3's 2K on your GPU that finishes with it: priced as refused.
+  const held = regenHeld(moved.request);
+  if (held) throw new Error(held);
   const prepared = prepare(moved.request);
   const { plan, route, demo, providerId, cost, asked: askedLoras, unreachable, switchedOff, gpu, h3 } = prepared;
   const notes = moved.note ? [moved.note, ...prepared.notes] : prepared.notes;
@@ -952,7 +975,15 @@ export function previewGeneration(asked: GenerationRequest) {
     dropped: [...switchedOff, ...unreachable.map((l) => ({ file: l.file, reason: "it downloads from civitai, which needs your civitai key (Settings → LoRAs)" })), ...fitted.dropped],
   };
   // PixeletedFace pixelates each picture's faces afterwards (createMosaicRun): fal's SAM 3.1 per picture in the cloud.
-  const post = demo || moved.request.postMade ? 0 : postStepCost(plan.model.id, moved.request.presetId, plan.model.engine, plan.jobs * plan.perJobOutputs, getModel);
+  let post = demo || moved.request.postMade ? 0 : postStepCost(plan.model.id, moved.request.presetId, plan.model.engine, plan.jobs * plan.perJobOutputs, getModel);
+  // MiniMax H3 at 2K on your GPU: each take's Open-H3 Regenerate finish is planned and priced beside its draft.
+  const twoK = h3TwoKExtra(moved.request, plan.model, plan.op);
+  if (twoK) {
+    if (twoK.costUsd !== null) post += twoK.costUsd;
+    notes.push(...twoK.notes);
+  }
+  // A finish whose price isn't known leaves the run's price unknown too, never the main step's alone.
+  const priceUnknown = cost === null || twoK?.costUsd === null;
   return {
     model: plan.model,
     op: plan.op,
@@ -960,7 +991,9 @@ export function previewGeneration(asked: GenerationRequest) {
     outputs: plan.jobs * plan.perJobOutputs,
     demo,
     providerId,
-    costUsd: cost === null ? null : post ? Math.round((cost * plan.jobs + post) * 1000) / 1000 : cost * plan.jobs,
+    costUsd: priceUnknown || cost === null ? null : post ? Math.round((cost * plan.jobs + post) * 1000) / 1000 : cost * plan.jobs,
+    // The other steps the run makes beside its own model (a 2K take's finish), so a policy and a price see them all.
+    ...(twoK?.steps.length && { steps: twoK.steps }),
     // The engine it runs on (a Fuobe Original picks one per request).
     engine: plan.model.engine,
     // What the route runs (the evaluation harness records it): the provider endpoint, the final prompt and the LoRAs it loads.
@@ -973,6 +1006,24 @@ export function previewGeneration(asked: GenerationRequest) {
     // MiniMax H3's GPU tier and the card's file as decided for this run: the GPU pre-flight checks the graph and file it picks.
     ...(h3 && { h3 }),
     plan: { end: plan.end },
+  };
+}
+
+/**
+ * The finishes MiniMax H3's 2K tier adds on your GPU (createH3TwoKRun): one Open-H3 Regenerate pass per take, checked
+ * (the refiner LoRA's switch, the finish's own plan) and priced as the run makes them.
+ */
+function h3TwoKExtra(req: GenerationRequest, model: ModelDef, op: Operation): { costUsd: number | null; notes: string[]; steps: { model: string; op: string }[] } | null {
+  if (!wantsH3TwoK(model.id, req.params?.resolution)) return null;
+  const off = regenSwitchedOff();
+  if (off) throw new Error(off);
+  const takes = Math.max(1, Math.min(4, Math.round(req.params?.numOutputs ?? 1)));
+  const { finish } = h3TwoKRequests(req, op, { keepLatent: keepsH3Latent() });
+  const p = previewChained(finish, 1);
+  return {
+    costUsd: p.costUsd === null ? null : Math.round(p.costUsd * takes * 10000) / 10000,
+    notes: [H3_2K_STEPS_NOTE],
+    steps: Array.from({ length: takes }, () => ({ model: p.model.id, op: p.op })),
   };
 }
 
@@ -1027,7 +1078,11 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   const asked = stampTenant(given, opts);
   // A retired model or operation (a retry, an old script, a saved project) runs on what replaced it, and says so.
   const moved = currentRequest(asked);
-  const original = moved.request;
+  const original = withFinishOf(moved.request, opts.dependsOn);
+  // Open-H3 Regenerate is held until it has run on a card that fits it (REGEN_OFFERED): a run of it, or of MiniMax H3's 2K on
+  // your GPU that finishes with it, is refused here before any step is made, whichever way it was asked for.
+  const held = regenHeld(original);
+  if (held) throw new Error(held);
   // Open models make multi-shot films shot by shot, then join the clips. A Fuobe Original is taken on the engine it runs
   // on (Fuobe DoP's Frames mode is a GPU chain).
   // A model (or an Original's engine asked for) switched off in Settings → Models & licences is refused here, before a
@@ -1050,6 +1105,11 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   if (filmRoute && inferOperation(shotModel, original) === "keyframes" && (!opts.dependsOn || framesWait(original))) {
     return createKeyframeFilm(original, shotModel, filmRoute, { batchId: opts.batchId, dependsOn: opts.dependsOn });
   }
+  // Image to 3D's "Refine detail" (open engine): the model, then Hi3D's refine of its mesh with the same photo.
+  // Its photo may come from an earlier step (a Canvas image node, an Assist plan's still): the refine then waits for it too.
+  if (shotModel && shotModel.kind === "model3d" && original.op !== "refine-3d" && chainedRefine(original) !== null) {
+    return createRefinedModel(original, shotModel, { batchId: opts.batchId, dependsOn: opts.dependsOn });
+  }
   // Text to 3D on the open engine: a still first, then the 3D model of it. The operation is read as the planner
   // reads it (Assist, MCP and API clients usually leave op out).
   const stillTo3d = !opts.dependsOn && shotModel && inferOperation(shotModel, original) === "text-to-3d" ? routesFor(shotModel, "text-to-3d").find((r) => r.chained) : undefined;
@@ -1069,6 +1129,10 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   if (shotModel?.id === REGEN_MODEL) {
     const run = createRegenerateRun(original, shotModel, opts, createGenerations, joinClips, (id) => void cancelGeneration(id));
     if (run) return run;
+  }
+  // MiniMax H3 at 2K on your GPU (n7-10): a 768p draft, then Open-H3 Regenerate at 2K from it (from its latent for text to video).
+  if (shotModel && wantsH3TwoK(shotModel.id, original.params?.resolution)) {
+    return createH3TwoKRun(original, inferOperation(shotModel, original), opts, createGenerations, (id) => void cancelGeneration(id));
   }
   const deps = opts.dependsOn === undefined ? [] : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
   const waits = deps.length > 0;
@@ -1564,7 +1628,8 @@ async function advanceDependents(): Promise<void> {
       if (model?.routes.some((x) => x.provider === "llm")) await probeLocal();
       // Filled with the slots that have an input; stored with its whole chain (and what was skipped) for a retry.
       const filled = withChainInputs({ ...request, chain: slots }, values as string[]);
-      const original: GenerationRequest = { ...filled, chain: request.chain, chainFilled: true };
+      // A 2K finish names the draft it waits for as the latent to load (never an id stored before: a retried draft is new).
+      const original: GenerationRequest = latentFromDependency({ ...filled, chain: request.chain, chainFilled: true }, allIds.filter(keep), slots, deps);
       const prepared = asRun(() => prepare(original));
       const mode = chainMode(prepared, deps as Pick<Row, "provider">[], original);
       if (mode.error) throw new Error(mode.error);
@@ -1588,6 +1653,65 @@ async function advanceDependents(): Promise<void> {
       if (!handedOff) submitting().delete(r.id);
     }
   }
+}
+
+/** A chained 2K finish finishes the run its clip comes from (a retried draft is a new run: read again when it is created). */
+function withFinishOf(req: GenerationRequest, dependsOn: string | string[] | undefined): GenerationRequest {
+  if (!req.finishOf || dependsOn === undefined) return req;
+  const deps = Array.isArray(dependsOn) ? dependsOn : [dependsOn];
+  const at = slotsFor(req, deps.length).findIndex((s) => s.slot === "video");
+  return at >= 0 && deps[at] !== req.finishOf ? { ...req, finishOf: deps[at] } : req;
+}
+
+/**
+ * MiniMax H3's 2K finish (Open-H3 Regenerate chained after its 768p draft): the draft it waits for, when that draft kept
+ * its latent, is the latent it may load (latentHandOff checks it again when it starts). Any other latentFrom is dropped.
+ */
+function latentFromDependency(req: GenerationRequest, ids: string[], slots: ChainSlot[], deps: (Pick<Row, "request_json"> | undefined)[]): GenerationRequest {
+  if (req.modelId !== REGEN_MODEL) return req;
+  const at = slots.findIndex((s) => s.slot === "video");
+  let draft: GenerationRequest | undefined;
+  try {
+    draft = at >= 0 && deps[at] ? (JSON.parse(deps[at]!.request_json) as GenerationRequest) : undefined;
+  } catch {}
+  const { latentFrom: _stored, ...extra } = req.params?.extra ?? {};
+  void _stored;
+  const latentFrom = draft?.params?.extra?.latentDraft === true ? ids[at] : undefined;
+  if (!latentFrom && _stored === undefined) return req;
+  return { ...req, params: { ...req.params, extra: { ...extra, ...(latentFrom && { latentFrom }) } } };
+}
+
+/**
+ * The 2K hand-off as the run starts, on the ComfyUI it runs on (never trusted from the request; package n7-10). A draft
+ * keeps its latent only where one stays between jobs (not the owner's workers) and while its Turbo 4-step LoRA is on. A
+ * finish loads a latent only from a run of the same account (or the owner's own) that kept one on this same ComfyUI,
+ * and that no earlier finish found gone; otherwise it redraws its clip.
+ */
+export function latentHandOff(extra: Record<string, unknown> | undefined, account: string | undefined): Record<string, unknown> | undefined {
+  if (!extra || (extra.latentDraft === undefined && extra.latentFrom === undefined)) return extra;
+  const out = { ...extra };
+  const place = comfyPlace();
+  if (out.latentDraft !== undefined && !(out.latentDraft === true && place && keepsH3Latent())) delete out.latentDraft;
+  if (out.latentFrom !== undefined && !(typeof out.latentFrom === "string" && place && keptLatent(out.latentFrom, account, place))) delete out.latentFrom;
+  return out;
+}
+
+/** Whether run `id` kept its 768p latent on `place` for this account (the owner: undefined), and it is still there. */
+function keptLatent(id: string, account: string | undefined, place: string): boolean {
+  const row = db().prepare("SELECT status, request_json, external_meta_json FROM generations WHERE id = ?").get(id) as Pick<Row, "status" | "request_json" | "external_meta_json"> | undefined;
+  if (!row || row.status !== "succeeded" || accountOf(row) !== account) return false;
+  try {
+    const req = JSON.parse(row.request_json) as GenerationRequest;
+    const meta = JSON.parse(row.external_meta_json ?? "{}") as { latentAt?: unknown };
+    if (req.params?.extra?.latentDraft !== true || meta.latentAt !== place) return false;
+  } catch {
+    return false;
+  }
+  // A finish that found it gone (someone's computer reports that after the fact): the next one redraws the clip.
+  const gone = db()
+    .prepare("SELECT 1 FROM generations WHERE status = 'failed' AND error = ? AND json_extract(request_json, '$.params.extra.latentFrom') = ? LIMIT 1")
+    .get(REGEN_COPY.latentGone, id);
+  return !gone;
 }
 
 const statusOf = (id: string) => (db().prepare("SELECT status FROM generations WHERE id = ?").get(id) as Pick<Row, "status"> | undefined)?.status;
@@ -1793,6 +1917,11 @@ async function submitNow(
   submitting().add(id);
   /** Why the run failed, once it has: its files still waiting to be sent are not sent. */
   let failed: { error: unknown } | undefined;
+  // MiniMax H3's 2K hand-off, decided here, on the ComfyUI this run goes to.
+  if (providerId === "comfyui") {
+    const extra = latentHandOff(plan.params.extra, req.account);
+    if (extra !== plan.params.extra) plan = { ...plan, params: { ...plan.params, extra } };
+  }
   try {
     // An account's run on its own ComfyUI and keys only (asAccount): outside it, nothing is sent.
     const adapter = adapterFor(providerId, req.account);
@@ -1931,8 +2060,28 @@ async function submitNow(
         update(id, { prompt });
       }
     }
+    // H3 with references (Pika H3 Flex Ref2VA): the studio's names (Image 1, Clip 1, Voice 1) become H3's tags (<Picture 1>,
+    // <Video 1>, <Audio 1>) in the same layout, with no alignment line (src/lib/h3-references.ts).
+    // Talk from a voice clip (avatar on H3): the portrait speaks the voice clip, with the words saying how.
+    if (plan.model.options.promptFormat === "minimax-h3" && plan.op === "avatar" && !inH3Layout(prompt ?? "")) {
+      const wrapped = h3Prompt(h3TalkPrompt(prompt ?? ""), "t2v", h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape ?? "Only the voice of <Audio 1>, clear and close.", plan.sound?.music);
+      prompt = wrapped;
+      update(id, { prompt });
+    } else if (plan.model.options.promptFormat === "minimax-h3" && plan.op === "ref2v" && prompt) {
+      const wrapped = h3Prompt(h3ReferenceTags(prompt), "t2v", h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape, plan.sound?.music);
+      if (wrapped !== prompt) {
+        prompt = wrapped;
+        update(id, { prompt });
+      }
+    }
+    // Kandinsky 6.0 (both engines) reads spoken lines and the sound in tags of its own (src/lib/kandinsky-prompt.ts): quoted
+    // words and a "Sound:" line become them for this run; the run keeps the words as typed, so Reuse shows them.
+    if (plan.model.options.promptFormat === "kandinsky6" && prompt) prompt = kandinskyPrompt(prompt);
     const input: GenInput = {
       ...plan.params,
+      // The clip's size is only ever its header's (below): a size the request states (params.sourceSize) prices the run
+      // before it starts, never what an upscaler's factor is made from.
+      sourceSize: undefined,
       prompt,
       negativePrompt: req.negativePrompt,
       images: (await Promise.all((req.inputs?.images ?? []).map((ref, i) => (i === 0 ? prepCropped(ref) : prep(ref))))).filter(Boolean) as string[],
@@ -2028,6 +2177,15 @@ async function submitNow(
     }
     // An upscale that wouldn't enlarge the clip (a 1080p clip at a default 1080p; a 4K clip would even shrink):
     // a tier the model only defaulted to moves up to the next one it offers, one the caller picked is refused.
+    // A clip longer than the model takes (Kandinsky VSR: about 5 s) is refused, never cut short; one billed per output frame is
+    // priced again on its size and length.
+    if (plan.op === "upscale-video") {
+      const long = sourceLengthProblem(plan.model, input.sourceDuration);
+      if (long) throw new Error(long);
+      if (plan.model.pricing?.outputFrames && input.sourceSize && providerId !== "mock" && plan.model.engine !== "open") {
+        update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceSize: input.sourceSize, sourceDuration: input.sourceDuration }, 1, plan.op) });
+      }
+    }
     if (plan.op === "upscale-video" && input.sourceSize) {
       const tier = upscaleTier(input.resolution, plan.model.options.resolutions, input.sourceSize, req.params?.resolution !== undefined);
       if ("error" in tier) throw new Error(tier.error);
@@ -2035,6 +2193,8 @@ async function submitNow(
         input.resolution = tier.resolution;
         if (providerId !== "mock" && plan.model.engine !== "open") update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, resolution: tier.resolution }, 1, plan.op) });
       }
+      const sides = sideMultipleProblem(plan.model.name, plan.model.options.sideMultiple, plan.model.options.resolutions, input.resolution, input.sourceSize);
+      if (sides) throw new Error(sides);
     }
     // LoRA files: ComfyUI gets the ones it lacks downloaded into its loras folder; a cloud run gets a civitai
     // file mirrored once to the provider's storage (the civitai key never leaves this server).
@@ -2089,6 +2249,8 @@ const FAST_POLL_MS = 500;
  * which the owner sets, 45 minutes by default: runningLimitMs.)
  */
 const TIMEOUT_MS = 45 * 60 * 1000;
+/** …except on the WorldCast worker (N7-9): 50 steps at CFG 5 on a 14B model, tens of minutes a clip (its time is unpublished). */
+const WORLDCAST_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 /** …and how long it may wait in the provider's queue first (a busy local GPU works through jobs one by one). */
 const QUEUE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 /** A row this old with no external id, that no submit in this process is working on, was cut off by a restart. */
@@ -2110,12 +2272,12 @@ declare global {
 }
 
 /**
- * Run `fn` as the owner's background work: outside any account's run (its tenant, its ComfyUI, the open-engine settings
+ * Run `fn` as the owner's background work: outside a skill check's demo scope and any account's run (its tenant, its ComfyUI, the open-engine settings
  * it runs with). Timers started inside inherit where they were started, so the runner, often first started by a run, is
  * started this way: every tick then polls each row in that row's own context.
  */
 export function outsideRuns<T>(fn: () => T): T {
-  return outsideTenant(() => outsideOwnGpu(() => withoutCandidates(fn)));
+  return outsideDemo(() => outsideTenant(() => outsideOwnGpu(() => withoutCandidates(fn))));
 }
 
 /**
@@ -2262,10 +2424,11 @@ async function fastTick(): Promise<void> {
 
 /**
  * How long a started job may run: on this install's own GPUs (an account's run there, or the owner's ComfyUI job), its
- * lane's run ceiling (queue-settings.ts); anywhere else (an account's own GPU or key, a cloud provider) 45 minutes, as
- * always.
+ * lane's run ceiling (queue-settings.ts); on the WorldCast worker 3 hours; anywhere else (an account's own GPU or key, a
+ * cloud provider) 45 minutes, as always.
  */
 function runningLimitMs(r: Pick<Row, "provider">, meta: Record<string, unknown>, account: string | undefined, onPool: boolean): number {
+  if (r.provider === "worldcast") return WORLDCAST_TIMEOUT_MS;
   if (r.provider !== "comfyui" || (account && !onPool)) return TIMEOUT_MS;
   const wf = typeof meta.workflowId === "string" && !meta.workflowId.includes("{") ? meta.workflowId : null;
   return runCeilingMs(wf ? poolLane(wf) : null);

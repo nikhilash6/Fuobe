@@ -47,6 +47,7 @@
     "@gltf-transform/extensions": "4.5.1",
     "@gltf-transform/functions": "4.5.1",
     "@google/model-viewer": "4.3.1",
+    "@sparkjsdev/spark": "2.3.1",
     "@tanstack/react-query": "^5.104.3",
     "@xyflow/react": "^12.12.0",
     "better-sqlite3": "^13.0.3",

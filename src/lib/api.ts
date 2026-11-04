@@ -4,7 +4,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { AssistThread, AssistThreadSummary, AssistThreadView } from "./assist";
-import type { OwnerGpuView, TestProvider } from "./connections";
+import { make3dOffered, type OwnerGpuView, type TestProvider } from "./connections";
 import type { ElementKind, StudioElement } from "./catalog/elements";
 import type { Engine, Generation, GenerationRequest, MediaKind, ReviewStatus } from "./catalog/types";
 import {
@@ -1085,6 +1085,17 @@ export function useEngine(): [Engine, (e: Engine) => void, EngineMode] {
     [mode],
   );
   return [mode === "both" ? engine : mode, set, mode];
+}
+
+/**
+ * Whether Idol 3D runs on the owner's open engine here (make3dOffered): the install runs open models, ComfyUI is
+ * connected (or placeholder results are on), the viewer is the owner, and Idol 3D is switched on in Settings → Models &
+ * licences. False until hydrated and while the status is unknown.
+ */
+export function useOpenEngine(): boolean {
+  const hydrated = useHydrated();
+  const status = useStatus().data;
+  return hydrated && make3dOffered(status);
 }
 
 /** Remember the engine the studios start on, before the mode allows it (an account that just added its own key: Cloud). */

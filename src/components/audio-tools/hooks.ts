@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { AudioToolPreview } from "@/lib/av/audio-tools";
 import type { Engine, Generation } from "@/lib/catalog/types";
+import type { SpeechEffect } from "@/lib/speech-edit";
 import { responseError } from "@/lib/refusals";
 
 export type AudioToolBody =
@@ -35,6 +36,19 @@ export type AudioToolBody =
       strength?: number;
       remux?: boolean;
       channels?: number;
+      sourceDuration?: number;
+    }
+  | {
+      tool: "speech-edit";
+      engine: Engine;
+      media: string;
+      kind: "audio" | "video";
+      name?: string;
+      cues: { start: number; end: number; text: string }[];
+      edited?: string[];
+      range?: { start: number; end: number };
+      effect?: SpeechEffect;
+      quality?: "fast" | "best";
       sourceDuration?: number;
     }
   | {

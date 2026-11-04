@@ -259,17 +259,19 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   (Canvas, Cinema, Shorts, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
   plan with the studio's own AI helpers or keep projects of their own. Image to 3D and text to 3D
   answer the same for now: a 3D model is finished on the server. So do the Audio hub's Split
-  soundtrack and Video tools → Remove dialogue (both `POST /api/audio-tools`) and the turnaround
-  video (`POST /api/turnaround`), though their price checks work, priced for the account's own
-  GPU. Split soundtrack's and Remove dialogue's pages say so up front ("Split soundtrack isn't
-  available here", "Remove dialogue isn't available here"), with their upload and run off. Result
-  menus don't offer Remove dialogue or Clean up dialogue to a guest or an account. Restore & colourise
+  soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
+  turnaround video (`POST /api/turnaround`), though their price checks work, priced for the account's
+  own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
+  soundtrack isn't available here", "Edit speech isn't available here", "Remove dialogue isn't
+  available here"), with their upload and run off. Result menus don't offer Remove dialogue, Clean up
+  dialogue or Edit speech to a guest or an account, and Captions doesn't offer them "Fix this line"
+  (it opens Edit speech). Restore & colourise
   and Remove a person (its mask preview and "Redo from here", `POST /api/remove-object/preview` and
   `/reroll`, answer `own-gpu-tool` too) are left out of the Video tools tabs and the result menus for them.
   A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
   MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
-  song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2 and
-  Fuobe Animation's cloud half) answers `own-gpu-tool` for a guest or an account, even on its own key, and is left out
+  song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2,
+  Fuobe Animation's cloud half, Kandinsky 6.0, Kandinsky VSR, Bria green screen and Bria guided cut-out) answers `own-gpu-tool` for a guest or an account, even on its own key, and is left out
   of its pickers; Audio → Extend & remix is left out of the Audio tabs. Each opens once a live call passes.
   "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
   A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
@@ -388,6 +390,13 @@ With it on:
 - Every other tool still needs the account's own GPU ("This tool doesn't run on your own GPU yet" stays as it is).
   Image to 3D and extra LoRAs added to a request stay on the account's own GPU. So do clips and sound as inputs,
   unless the policy and the studio's GPUs both take them.
+- A choice that needs an NVIDIA RTX card (RTX Video's upscale, frame generation and HDR) doesn't go to the studio's
+  GPUs when their last GPU check says the card can't run it, or that their ComfyUI lacks the RTX Video nodes (on the
+  workers, a worker takes a job only with its node packs). The run goes to the account's own GPU when it has one, or
+  answers 403 `not-offered` ("This one needs an NVIDIA RTX card, and this studio's GPUs can't run it right now…"),
+  and the price check says so before Run.
+- When a billing service names the models that may run on the studio's GPUs, that applies to every model a run uses,
+  not only its main one.
 - An account can upload the kinds of file its policy allows for these runs (pictures without a billing service), and
   only those the studio's GPUs take (`FUOBE_POOL_MEDIA_INPUTS` on the workers). Others still need its own GPU or key.
 - A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in

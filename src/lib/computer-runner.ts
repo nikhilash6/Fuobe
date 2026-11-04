@@ -13,6 +13,7 @@ import { parseComfyBinary, parseComfyText } from "./comfy-ws";
 import { graphProblem, localBase, mayDownload, readPath, statsFacts, viewPath, writePath, type SystemStats } from "./local-comfy";
 import {
   DONE_SHOWN_MS,
+  META_BATCH_HISTORY,
   RELAY_LIMITS,
   RELAY_TIMES,
   type BeatAnswer,
@@ -755,7 +756,7 @@ export class ComputerRunner {
   /** The job's own entries on ComfyUI here, to check a resumed upload against. */
   private async ownEntries(t: ClaimedTask): Promise<HistoryEntryLike[]> {
     const own = (await this.read<Record<string, HistoryEntryLike>>(`/history/${t.promptId}`).catch(() => ({}) as Record<string, HistoryEntryLike>))[t.promptId];
-    const passes = t.prefix ? Object.values(await this.read<Record<string, HistoryEntryLike>>("/history?max_items=64").catch(() => ({}))).filter((e) => hasPrefix(e.prompt?.[2], t.prefix!)) : [];
+    const passes = t.prefix ? Object.values(await this.read<Record<string, HistoryEntryLike>>(`/history?max_items=${META_BATCH_HISTORY}`).catch(() => ({}))).filter((e) => hasPrefix(e.prompt?.[2], t.prefix!)) : [];
     return [...(own ? [own] : []), ...passes];
   }
 
@@ -902,7 +903,8 @@ export class ComputerRunner {
         const queued = [...(q.queue_running ?? []), ...(q.queue_pending ?? [])].filter((r) => hasPrefix(r[2], following!));
         const running = queued.length > 0;
         if (running) runningSince ??= this.now();
-        const passes = Object.values(await this.read<Record<string, HistoryEntryLike>>("/history?max_items=64").catch(() => ({}))).filter((e) => hasPrefix(e.prompt?.[2], following!));
+        // Every pass once the last is done (an EXR export saves frames in each one).
+        const passes = running ? [] : Object.values(await this.read<Record<string, HistoryEntryLike>>(`/history?max_items=${META_BATCH_HISTORY}`).catch(() => ({}))).filter((e) => hasPrefix(e.prompt?.[2], following!));
         const ev = this.events.get(String(queued[0]?.[1] ?? ""));
         moved(JSON.stringify([queued.map((r) => r[1]), passes.length, ev?.value, ev?.node, ev?.nodesDone]));
         if (!running && worker) await this.keep(t, { kind: "passes", entries: passes, execMs: execOf(passes) });

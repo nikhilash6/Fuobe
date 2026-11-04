@@ -5,6 +5,7 @@ import { getModel } from "@/lib/catalog";
 import { maxRefsFor, reframes, resolutionFor, sourceSeconds } from "@/lib/catalog/shorts-models";
 import {
   clipLengthProblem,
+  ENHANCE_COPY,
   clipShapeProblem,
   customPresetName,
   getShortsPreset,
@@ -13,8 +14,9 @@ import {
   needsFit,
   originalSegmentProblem,
   planSegments,
+  planEnhance,
+  planFinishedStitch,
   planShorts,
-  planStitch,
   planTake,
   rangeProblem,
   sessionPlanInput,
@@ -35,6 +37,7 @@ import {
   type ShortsTake,
   type TakeKeys,
 } from "@/lib/catalog/shorts";
+import { REGEN_COPY, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { createPipeline } from "./chains";
 import { db } from "./db";
@@ -449,7 +452,7 @@ function takeOf(t: TakeKeys, id: (key: string) => string, createdAt: number): Sh
 /** Every generation a session made. */
 export function sessionIds(s: ShortsSession): string[] {
   const ids = [
-    ...s.segments.flatMap((g) => g.takes.flatMap((t) => [t.cut, ...(t.fit ? [t.fit] : []), ...(t.still ? [t.still] : []), ...(t.frame ? [t.frame] : []), t.look])),
+    ...s.segments.flatMap((g) => g.takes.flatMap((t) => [t.cut, ...(t.fit ? [t.fit] : []), ...(t.still ? [t.still] : []), ...(t.frame ? [t.frame] : []), ...(t.enhance?.smooth ? [t.enhance.smooth] : []), t.look])),
     ...s.stitches.flatMap((x) => [...x.ids, x.final]),
   ];
   return [...new Set(ids)];
@@ -550,6 +553,42 @@ export function regenerateSegment(id: string, index: number): ShortsSessionView 
   return getSession(id);
 }
 
+/**
+ * Enhance (H3 regenerate) one segment's chosen take: RIFE to 24 fps, then Open-H3 Regenerate at 1080p from the segment's
+ * restyle words (planEnhance). On your GPU only, so an open-source short; Engine mode "Paid APIs only" refuses it. The
+ * result is a new take beside the others, to compare and pick.
+ */
+export function enhanceSegment(id: string, index: number): ShortsSessionView {
+  const s = readSession(id);
+  const seg = segmentAt(s, index);
+  // Open-H3 Regenerate is held until it has run on a card that fits it (REGEN_OFFERED): nothing is made.
+  if (!REGEN_OFFERED) throw new ShortsError(REGEN_COPY.heldEnhance, 422);
+  if (s.engine !== "open") throw new ShortsError(ENHANCE_COPY.cloudSession, 422);
+  checkEngine("open");
+  const take = seg.takes.find((t) => t.look === seg.primary);
+  if (!take) throw new ShortsError(ENHANCE_COPY.notReady, 409);
+  if (take.enhance) throw new ShortsError(ENHANCE_COPY.done, 409);
+  const g = getGeneration(take.look);
+  const url = g?.status === "succeeded" ? g.outputs.find((o) => o.kind === "video")?.url : undefined;
+  if (!url) throw new ShortsError(ENHANCE_COPY.notReady, 409);
+  let plan: ReturnType<typeof planEnhance>;
+  let pipeline;
+  try {
+    plan = planEnhance(sessionPlanInput(s), seg, { url }, `e${seg.takes.length}`);
+    pipeline = createPipeline(plan.steps, { batchId: s.batchId });
+  } catch (e) {
+    throw new ShortsError((e as Error).message, 422);
+  }
+  const next: ShortsTake = {
+    cut: take.cut,
+    look: pipeline.byKey[plan.keys.look].id,
+    enhance: { from: take.look, ...(plan.keys.smooth ? { smooth: pipeline.byKey[plan.keys.smooth].id } : {}) },
+    createdAt: Date.now(),
+  };
+  saveSession({ ...s, segments: s.segments.map((x, i) => (i === index ? { ...x, takes: [...x.takes, next] } : x)) });
+  return getSession(id);
+}
+
 /** Use another take of a segment in the stitch. */
 export function makePrimary(id: string, index: number, lookId: string): ShortsSessionView {
   const s = readSession(id);
@@ -569,14 +608,15 @@ export function stitchSession(id: string): ShortsSessionView {
     if (g.status === "queued" || g.status === "running") throw new ShortsError(`Segment ${i + 1} is still rendering`, 409);
     const url = g.outputs.find((o) => o.kind === "video")?.url;
     if (g.status !== "succeeded" || !url) throw new ShortsError(`Segment ${i + 1} didn't render — regenerate it first`, 409);
-    return { url };
+    return { url, enhanced: !!seg.takes.find((t) => t.look === seg.primary)?.enhance };
   });
   // A second "Stitch again" while the same takes are still being stitched would pay for the same video twice.
   const last = s.stitches[s.stitches.length - 1];
   if (last && stitchCurrent(s) && [...last.ids, last.final].some((gid) => ["queued", "running"].includes(getGeneration(gid)?.status ?? ""))) {
     throw new ShortsError("These takes are already being stitched", 409);
   }
-  const plan = planStitch(sessionPlanInput(s), clips, `-s${s.stitches.length}`);
+  // Enhanced takes are 1080p at 24 fps: the others are brought to 24 fps and the join runs at 1080p (planFinishedStitch).
+  const plan = planFinishedStitch(sessionPlanInput(s), clips, `-s${s.stitches.length}`);
   const now = Date.now();
   let stitch: ShortsStitch;
   if (!plan.steps.length || !plan.final) {

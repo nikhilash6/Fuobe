@@ -70,8 +70,10 @@ export const DBS_OPEN_ONLY_NOTE = "Keeping the music and sound effects of the or
 /**
  * The open engine's voice split (the dub's first step), the "Voice split" setting. DBS was trained for film-style
  * dialogue, music and effects, so the background keeps the score, the sound effects and any singing; MelBand RoFormer
- * is a vocals model (singing goes with the voice and is replaced). MelBand stays the default until the separation
- * evaluation (DBS D4) says otherwise. Both return the same stems and cues, so nothing after the split changes.
+ * is a vocals model (singing goes with the voice and is replaced). MelBand stays the default: on the separation suite's
+ * synthetic mixes (no singing, synthesized effects; DBS D4, docs/research/dbs-separation-7.md §9 D4) it scored higher than
+ * DBS and its transcripts were as good, so DBS becomes the default only when real clips rated blind say so. Both return
+ * the same stems and cues, so nothing after the split changes.
  */
 export const VOICE_SPLITS = {
   melband: { modelId: "oss-voice-separate", name: "MelBand RoFormer", note: MUSIC_MODEL_NOTE },

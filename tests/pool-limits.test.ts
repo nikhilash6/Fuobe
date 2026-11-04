@@ -696,6 +696,26 @@ describe("the price check before Run and the run itself", async () => {
     expect((db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.account') = 'guest:plan'").get() as { n: number }).n).toBe(0);
   });
 
+  it("a model that needs an NVIDIA RTX card: the install's own card check applies to its own ComfyUI, never to the workers", async () => {
+    const { writeSnapshot } = await import("@/server/gpu/snapshots");
+    const at = Date.now();
+    writeSnapshot({ kind: "install", key: "install", via: "server" }, {
+      v: 1, via: "server", checkedAt: at, tookMs: 5, reachable: true,
+      devices: [{ name: "cpu", type: "cpu", index: 0, vramTotal: 0, vramFree: 0 }],
+      manager: { api: "none" }, nodes: { have: [], missing: [], total: 1, readAt: at, how: "object_info" },
+      combos: {}, packs: {}, models: {}, loras: {}, fingerprint: "x", errors: [],
+    } as never);
+    expect(hostedRun.poolCardRefuses("oss-rtx-video-upscale")).toBe(false);
+    setSetting("comfyWhere", "");
+    expect(hostedRun.poolCardRefuses("oss-rtx-video-upscale")).toBe(true);
+    expect(hostedRun.poolCardRefuses("oss-z-image-turbo")).toBe(false);
+    setSetting("comfyWhere", "workers");
+    // A guest is told it isn't offered, with nowhere to connect a GPU named.
+    expect(hostedRun.gateWords("rtxCard", true)).toBe(HOSTED_GUEST_WORDS.rtxCard);
+    expect(hostedRun.gateWords("rtxCard", true)).not.toMatch(/Settings|your own GPU|NVIDIA/);
+    expect(hostedRun.gateWords("rtxCard", false)).toBe(HOSTED_WORDS.rtxCard);
+  });
+
   it("asks for the client's address only when the policy counts runs per address, and keeps its salt without writing again", async () => {
     const salted = () => !!db().prepare("SELECT 1 FROM settings WHERE key = 'pool.addressSalt'").get();
     const from = "203.0.113.20";

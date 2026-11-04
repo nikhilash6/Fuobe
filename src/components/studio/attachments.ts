@@ -30,11 +30,11 @@ export function heldToDrop(seen: Set<string>, held: ReadonlySet<string>): string
 }
 
 /** Abort uploads whose attachment is gone from the draft. Mount once, where the draft is read. */
-export function useUploadReaper(draft: Pick<Draft, "slots" | "refs" | "frames">) {
+export function useUploadReaper(draft: Pick<Draft, "slots" | "refs" | "frames" | "refClips" | "refAudios">) {
   // A guest's kept files this draft has held: one it takes out is forgotten too (each studio page has its own draft).
   const heldSeen = useRef(new Set<string>());
   useEffect(() => {
-    const values = [...Object.values(draft.slots), ...draft.refs, ...(draft.frames ?? []).map((f) => f.value)];
+    const values = [...Object.values(draft.slots), ...draft.refs, ...(draft.refClips ?? []), ...(draft.refAudios ?? []), ...(draft.frames ?? []).map((f) => f.value)];
     const held = new Set(values.map((v) => v?.held).filter((x): x is string => !!x));
     for (const id of heldToDrop(heldSeen.current, held)) void dropHeld(id);
     if (!inflight.size) return;
@@ -46,7 +46,7 @@ export function useUploadReaper(draft: Pick<Draft, "slots" | "refs" | "frames">)
         inflight.delete(id);
       }
     }
-  }, [draft.slots, draft.refs, draft.frames]);
+  }, [draft.slots, draft.refs, draft.refClips, draft.refAudios, draft.frames]);
 }
 
 /** Frames mode is full. */
@@ -178,6 +178,29 @@ export function useAttach(slots: InputSlot[], refMax: number, { hold = false }: 
     [start, setDraft, config.multiRef, refMax, noRoom],
   );
 
+  /** References mode's clips and voice or music clips (Pika H3 Flex): appended in order, up to `max`. */
+  const addListFile = useCallback(
+    (list: "refClips" | "refAudios", file: File, max: number) => {
+      if ((latest.current[list]?.length ?? 0) >= max) return void toast(list === "refClips" ? `Up to ${max} reference clips` : `Up to ${max} voice or music clips`);
+      start(file, (v) => setDraft((d) => ({ [list]: [...(d[list] ?? []), v] })), list === "refClips" ? "video" : "audio");
+    },
+    [start, setDraft],
+  );
+
+  /** A clip or voice picked from the library: appended the same way, up to `max`. */
+  const addToList = useCallback(
+    (list: "refClips" | "refAudios", v: SlotValue, max: number) => {
+      if ((latest.current[list]?.length ?? 0) >= max) return void toast(list === "refClips" ? `Up to ${max} reference clips` : `Up to ${max} voice or music clips`);
+      setDraft((d) => ({ [list]: [...(d[list] ?? []), v] }));
+    },
+    [setDraft],
+  );
+
+  const removeFromList = useCallback(
+    (list: "refClips" | "refAudios", r: SlotValue) => setDraft((d) => ({ [list]: (d[list] ?? []).filter((x) => (r.id ? x.id !== r.id : x !== r)) })),
+    [setDraft],
+  );
+
   /** A frame's tile: a new still in its place (its time stays), or null to take the frame out. */
   const setFrameValue = useCallback(
     (i: number, v: SlotValue | null) =>
@@ -191,8 +214,8 @@ export function useAttach(slots: InputSlot[], refMax: number, { hold = false }: 
   const uploadToFrame = useCallback((i: number, file: File) => start(file, (v) => setFrameValue(i, v), "image"), [start, setFrameValue]);
 
   return useMemo(
-    () => ({ kinds, attach, attachFiles, setSlotValue, uploadToSlot, removeRef, addRefFile, setFrameValue, uploadToFrame }),
-    [kinds, attach, attachFiles, setSlotValue, uploadToSlot, removeRef, addRefFile, setFrameValue, uploadToFrame],
+    () => ({ kinds, attach, attachFiles, setSlotValue, uploadToSlot, removeRef, addRefFile, addListFile, addToList, removeFromList, setFrameValue, uploadToFrame }),
+    [kinds, attach, attachFiles, setSlotValue, uploadToSlot, removeRef, addRefFile, addListFile, addToList, removeFromList, setFrameValue, uploadToFrame],
   );
 }
 

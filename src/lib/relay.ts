@@ -263,6 +263,12 @@ export const RELAY_TIMES = {
  */
 export const RELAY_LIMITS = { partBytes: 16 * 2 ** 20, reportBytes: 8 * 2 ** 20, refusalBytes: 256 * 1024, smallReportBytes: 8 * 1024, keptRefusalBytes: 16 * 1024, inputReads: 6 };
 
+/**
+ * How many recent ComfyUI /history entries are read for a meta-batch job's passes: an EXR export saves frames in every
+ * pass, so all of them are needed (1,800 frames is 57 passes of 32).
+ */
+export const META_BATCH_HISTORY = 512;
+
 /** A ComfyUI prompt id the server mints, and what the tab may name in a URL. */
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

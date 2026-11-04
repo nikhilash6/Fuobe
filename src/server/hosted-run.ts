@@ -3,6 +3,8 @@ import crypto from "node:crypto";
 import { nanoid } from "nanoid";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
+import { RTX_CLASSES, rtxCardOf } from "@/lib/catalog/rtx-video";
+import { gpuFits } from "@/lib/gpu/readiness";
 import { gpuState } from "./account-gpu";
 import { accountGpu, type Account } from "./auth";
 import {
@@ -27,12 +29,13 @@ import { PLACE_ASK_HEADER } from "@/lib/guest-access";
 import { createGenerations, outputKind, plannedSteps, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { poolLane } from "./computer/pool";
-import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
+import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
 import type { RunStamp } from "./run-stamp";
 import { readRef } from "./storage";
+import { readSnapshot } from "./gpu/snapshots";
 import { ACCOUNT_LIMITS } from "./account-files";
 import { poolLimitRefusal } from "./pool-limits";
 import { runAsTenant } from "./tenant";
@@ -167,8 +170,11 @@ export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]
   return [...out.values()];
 }
 
-/** Why this install's GPUs won't take a run: a 3D model, a model or kind not offered there, LoRAs, or a kind of file. */
-export type GateReason = "model3d" | "notOffered" | "loras" | "inputs";
+/**
+ * Why this install's GPUs won't take a run: a 3D model, a model or kind not offered there, a model their card can't run,
+ * LoRAs, or a kind of file.
+ */
+export type GateReason = "model3d" | "notOffered" | "rtxCard" | "loras" | "inputs";
 
 /** The words for a gate's reason: an account may connect its own GPU in Settings, a guest has nowhere to do that yet. */
 export function gateWords(reason: GateReason, guest: boolean): string {
@@ -179,9 +185,10 @@ export function gateWords(reason: GateReason, guest: boolean): string {
 /**
  * The one check of whether this install's GPUs take a run, shared by the run itself (decidePlace) and the price check
  * before Run (poolQuote), so the two always agree: its output kind (no 3D there), the policy's model, app and kind
- * lists, a worker allowed its lane, LoRAs, the kinds of file it sends, and every later step of a chain (planned only
- * once the cheaper checks pass). `p` null: the billing service didn't answer, so only what needs no policy is checked.
- * Passed, it gives the planned steps for the run's one price.
+ * lists (for the run's own model and every other model it makes a step with, such as a 2K take's finish), a worker
+ * allowed its lane, a card that can run it, LoRAs, the kinds of file it sends, and every later step of a chain (planned
+ * only once the cheaper checks pass). `p` null: the billing service didn't answer, so only what needs no policy is
+ * checked. Passed, it gives the planned steps for the run's one price.
  */
 export function poolGate(
   p: Policy | null,
@@ -191,9 +198,10 @@ export function poolGate(
 ): { ok: true; steps: PlannedStep[] | null } | { ok: false; reason: GateReason } {
   const kind = outputKind(planned.op, planned.model);
   if (kind === "model3d") return { ok: false, reason: "model3d" };
-  if (p && (!poolAllows(p, planned.model.id, req.presetId) || !kindAllowed(p, kind))) return { ok: false, reason: "notOffered" };
+  if (p && (!poolAllowsRun(p, planned, req.presetId) || !kindAllowed(p, kind))) return { ok: false, reason: "notOffered" };
   // Nothing of this install's would ever run it (no worker is allowed its lane): never a run that waits for nothing.
   if (!poolTakes(planned.route.endpoint)) return { ok: false, reason: "notOffered" };
+  if (poolCardRefuses(planned.model.id)) return { ok: false, reason: "rtxCard" };
   if (req.loras?.length) return { ok: false, reason: "loras" };
   if (p) {
     const inputs = inputCounts(req);
@@ -235,6 +243,22 @@ export function poolRequest(req: GenerationRequest, p: Pick<Policy, "limits"> | 
   const cap = Math.min(ACCOUNT_LIMITS.outputsPerRun, ...policyCap);
   if ((req.params?.numOutputs ?? 1) <= cap) return { req, capped: false };
   return { req: { ...req, params: { ...req.params, numOutputs: cap } }, capped: true };
+}
+
+/**
+ * A model that needs an NVIDIA RTX card (src/lib/catalog/rtx-video.ts) on this install's GPUs: refused when the install's
+ * last GPU check says its card can't run it (a CPU, an Apple, AMD or Intel device, an older NVIDIA card) or its ComfyUI
+ * lacks the RTX Video nodes. A card the name doesn't tell, or no check yet, never refuses (the run says what it finds).
+ * On the workers that check is of another machine, so it isn't made: a worker takes a job only when it has the job's
+ * node packs and files.
+ */
+export function poolCardRefuses(modelId: string): boolean {
+  if (poolOnWorkers()) return false;
+  const need = rtxCardOf(modelId);
+  if (!need) return false;
+  const inv = readSnapshot({ kind: "install", key: "install", via: "server" })?.inventory;
+  if (!inv?.reachable) return false;
+  return gpuFits(need, inv) === false || RTX_CLASSES.some((c) => inv.nodes.missing.includes(c));
 }
 
 /**

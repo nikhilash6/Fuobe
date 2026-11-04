@@ -339,6 +339,8 @@ describe("Split soundtrack's and Remove dialogue's pages tell a visitor up front
     for (const [file, tool] of [
       ["src/components/audio-tools/split-tool.tsx", "Split soundtrack"],
       ["src/components/audio-tools/remove-dialogue-tool.tsx", "Remove dialogue"],
+      // Edit speech's run is POST /api/audio-tools too (own-gpu-tool); its price line shows the blocker first.
+      ["src/components/audio-tools/speech-edit-tool.tsx", "Edit speech"],
     ] as const) {
       const page = src(file).replace(/\s+/g, " ");
       expect(page).toContain("const visitor = useLikelyVisitor();");
@@ -352,7 +354,7 @@ describe("Split soundtrack's and Remove dialogue's pages tell a visitor up front
       expect(page).toMatch(/if \(!f \|\| disabled \|\| askFirst\(\)\) return;/);
       expect(page).toMatch(/open=\{picking && !disabled\}/);
       expect(page).toMatch(/disabled=\{(busy \|\| visitor|visitor \|\| run\.isPending)/);
-      expect(page).toContain("openToolPrice(p, true)");
+      if (tool !== "Edit speech") expect(page).toContain("openToolPrice(p, true)");
     }
   });
 });

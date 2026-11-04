@@ -48,8 +48,9 @@ export interface RunFacts {
   providerUsd: number | null;
   /**
    * Every step of the run that uses this install's GPUs, its own step first, so one quote and one hold cover a whole
-   * chain (one press of Run). Steps that need no model (joins, trims) and text steps are left out: they cost nothing.
-   * Absent: the run is its own one step.
+   * chain (one press of Run) and the steps a run makes beside its own model (a 2K take's Open-H3 Regenerate finish).
+   * Steps that need no model (joins, trims) and text steps are left out: they cost nothing. Absent: the run is its own
+   * one step.
    */
   steps?: { model: string; op: string | null; kind: RunFacts["kind"]; jobs: number; lane: string | null }[];
 }

@@ -49,6 +49,15 @@ export const HOSTED_UNTESTED_ENDPOINTS: ReadonlySet<string> = new Set([
   "meshy/v7/retexture",
   "meshy/v6/retexture",
   "tripo3d/p2/image-to-3d",
+  // Kandinsky 6.0 (Pro and Lite, from words or a first frame) and Kandinsky VSR.
+  "fal-ai/kandinsky6-pro/text-to-video",
+  "fal-ai/kandinsky6-lite/text-to-video",
+  "fal-ai/kandinsky6-pro/image-to-video",
+  "fal-ai/kandinsky6-lite/image-to-video",
+  "fal-ai/kandinsky6-vsr",
+  // Bria: green-screen despill and the guided cut-out.
+  "bria/video/background-removal/green-screen-despill",
+  "bria/guided-remove-background",
 ]);
 
 /** Models whose hosted routes are new even where the endpoint isn't (Fuobe Animation's LoRA run on Wan 2.2 A14B). */
