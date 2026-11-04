@@ -18,15 +18,19 @@ import { tempDir } from "./helpers/temp-dir";
  *
  * They need the worker program's recovery parts (results kept on its disk until the studio has them, its ComfyUI
  * restarted when it stops or hangs, retries with backoff, staying awake, model folders looked at again, and studio jobs
- * before local ComfyUI work), and skip until those are in this tree.
+ * before local ComfyUI work), and skip until those are in this tree. The skip is never silent: the first check below
+ * says so in the test output, and it fails when only some of those parts are here (one renamed or left out), so these
+ * checks can't stay skipped by accident.
  *
  * Each job's graph is the stand-in's own (a sampler and the run's save node, with the run's file prefix), so the
  * worker's node and model checks pass without model files; everything else about the job is the studio's.
  */
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const WORKER = path.join(ROOT, "bin/lib/worker");
-const PROGRAM = ["hold.mjs", "turns.mjs", "local-work.mjs", "retry.mjs", "awake.mjs"].every((f) => fs.existsSync(path.join(WORKER, f)));
+/** The worker program's recovery parts these checks load. */
+const PARTS = ["bin/lib/worker/hold.mjs", "bin/lib/worker/turns.mjs", "bin/lib/worker/local-work.mjs", "bin/lib/worker/retry.mjs", "bin/lib/worker/awake.mjs", "scripts/lib/worker-catalog.mjs"];
+const HERE = PARTS.filter((f) => fs.existsSync(path.join(ROOT, f)));
+const PROGRAM = HERE.length === PARTS.length;
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 });
@@ -73,6 +77,14 @@ let routes: ComputerRoutes;
 let svc: StandInBilling;
 let a1 = "";
 let b1 = "";
+
+describe("the worker program's recovery parts", () => {
+  it("are all in this tree, or none is yet: the checks below run, or are skipped and said so", () => {
+    const missing = PARTS.filter((f) => !HERE.includes(f));
+    expect(HERE.length === 0 || missing.length === 0, `some of the worker program's recovery parts are missing: ${missing.join(", ")}`).toBe(true);
+    if (!PROGRAM) console.warn(`[tests] recovery-worker: the worker program's recovery checks are skipped: none of ${PARTS.join(", ")} is in this tree yet`);
+  });
+});
 
 describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to end)", () => {
   beforeAll(async () => {
