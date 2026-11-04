@@ -22,7 +22,7 @@ import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
 import { ffmpegOf, PROTOCOL, readControl, writeControl, writeStatus } from "./config.mjs";
 import { GpuWatch, othersOf, readGpu } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
-import { inventoryHash, modelFiles, packFolders } from "./inventory.mjs";
+import { inventoryHash, missingModelDirs, modelFiles, packFolders } from "./inventory.mjs";
 import { readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
 import { takeLock, workerLives } from "./lock.mjs";
 import { ffmpegVersion, fileSize, mediaKind, outputCap, reencode } from "./media.mjs";
@@ -49,6 +49,12 @@ const HOUR = 3_600_000;
 
 /** The worker looks at its model folders again this often (a folder that comes back after a restart counts). */
 export const RESCAN_MS = 10 * 60_000;
+
+/**
+ * It checks that every model folder is there this often. While one isn't (a drive still locked, or not connected yet
+ * after a restart), it takes no new job and keeps the studio's list of its files as it was.
+ */
+export const MODELS_CHECK_MS = 60_000;
 
 /** Kept results that the studio hasn't taken for this long are deleted (the studio drops its jobs after a day). */
 export const HOLD_MAX_AGE_MS = 24 * HOUR;
@@ -106,13 +112,15 @@ export function siteProblem(site, o = {}) {
 }
 
 /**
- * The worker's local pause, from its switch (`worker pause`), the GPU, and its ComfyUI: { paused, why, until }.
- * A pause by hand ("here", "here-until:<ms>", "here-now") always wins over the GPU's.
+ * The worker's local pause, from its switch (`worker pause`), the GPU, its model folders (`modelsMissing`: the ones that
+ * aren't there) and its ComfyUI: { paused, why, until }. A pause by hand ("here", "here-until:<ms>", "here-now") always
+ * wins over the GPU's.
  */
-export function localPause(control, gpu, comfyTrouble, now) {
+export function localPause(control, gpu, comfyTrouble, now, modelsMissing = []) {
   if (control.paused && control.until && now >= control.until) return null; // its --for ran out: the caller clears it
   if (control.paused) return { paused: true, why: control.now ? "here-now" : control.until ? `here-until:${control.until}` : "here", until: control.until ?? null };
   if (gpu.paused) return { paused: true, why: `gpu-busy:${gpu.who ?? "another program"}`, until: null };
+  if (modelsMissing.length) return { paused: true, why: "models-not-ready", until: null };
   if (comfyTrouble) return { paused: true, why: comfyTrouble, until: null };
   return { paused: false, why: null, until: null };
 }
@@ -285,6 +293,13 @@ async function work(saved, deps, owner) {
         scannedAt = now();
       }));
   await scan();
+  // A model folder that isn't there yet: no new job, and no list of files that lacks its files, until it is.
+  let modelsMissing = missingModelDirs(cfg.modelDirs);
+  let modelsCheckedAt = now();
+  let modelsBack = null;
+  const sayMissing = (missing) =>
+    log(`${missing.length === 1 ? "A model folder isn't" : `${missing.length} model folders aren't`} there yet (${missing.join(", ")}): it takes no new job until ${missing.length === 1 ? "it is" : "they are"}, and looks again every minute.`);
+  if (modelsMissing.length) sayMissing(modelsMissing);
 
   /** An input for its ComfyUI: read from the studio once, kept by its SHA-256, and a clip or sound made again. */
   async function takeInput(t, input, read) {
@@ -416,21 +431,23 @@ async function work(saved, deps, owner) {
 
   const mayWork = () => !pause.paused && answer?.worker && !answer.worker.paused && answer.worker.insideHours && !answer.worker.drain;
   const state = () =>
-    pause.paused
-      ? `Paused here (${pause.why})`
-      : !answer
-        ? "Connecting"
-        : answer.worker?.paused
-          ? "Paused on the website"
-          : !answer.worker?.insideHours
-            ? "Outside its hours"
-            : answer.worker?.drain
-              ? "Finishing, then pausing"
-              : turn.waitForYield
-                ? "Waiting for local ComfyUI work to make room (its jobs keep their place)"
-                : comfy.ready
-                  ? "Ready"
-                  : "Starting ComfyUI";
+    pause.why === "models-not-ready"
+      ? "Waiting for its model folders"
+      : pause.paused
+        ? `Paused here (${pause.why})`
+        : !answer
+          ? "Connecting"
+          : answer.worker?.paused
+            ? "Paused on the website"
+            : !answer.worker?.insideHours
+              ? "Outside its hours"
+              : answer.worker?.drain
+                ? "Finishing, then pausing"
+                : turn.waitForYield
+                  ? "Waiting for local ComfyUI work to make room (its jobs keep their place)"
+                  : comfy.ready
+                    ? "Ready"
+                    : "Starting ComfyUI";
   // A job that runs on its ComfyUI (not only sending kept results, which needs no GPU).
   let jobUsesGpu = false;
   const take = (o) => {
@@ -523,7 +540,22 @@ async function work(saved, deps, owner) {
         log("Its ComfyUI stopped answering: starting it again.");
         await comfy.stop();
       }
-      let next = localPause(control, gpu, comfyTrouble, t) ?? { paused: false, why: null, until: null };
+      if (!modelsBack && t - modelsCheckedAt >= (deps.modelsCheckMs ?? MODELS_CHECK_MS)) {
+        modelsCheckedAt = t;
+        const missing = missingModelDirs(cfg.modelDirs);
+        if (missing.length && !modelsMissing.length) {
+          sayMissing(missing);
+          modelsMissing = missing;
+        } else if (!missing.length && modelsMissing.length) {
+          // Its files are read again first, so the studio gets the whole list before it takes a job.
+          log("Its model folders are all there: looking at them again.");
+          modelsBack = rescan().finally(() => {
+            modelsMissing = missingModelDirs(cfg.modelDirs);
+            modelsBack = null;
+          });
+        } else modelsMissing = missing;
+      }
+      let next = localPause(control, gpu, comfyTrouble, t, modelsMissing) ?? { paused: false, why: null, until: null };
       // Waiting for its turn is not a pause: its jobs keep their place in the line. The helper's estimate of the start
       // goes with it.
       if (!next.paused && turn.waitForYield) next = { paused: false, why: turn.late ? "waiting-for-yield:no-answer" : "waiting-for-yield", until: turn.startsAt };
@@ -540,7 +572,7 @@ async function work(saved, deps, owner) {
             log(runner.view.stopped === "signed-out" ? "The studio doesn't know this worker's token. Run fuobe worker setup again." : "The studio stopped this worker.");
             break;
           }
-          if (a?.worker?.sendInventory) {
+          if (a?.worker?.sendInventory && !modelsMissing.length) {
             const r = await call("/api/gpu/computer/inventory", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(inv) });
             if (r.ok) {
               const body = await r.json();
@@ -552,7 +584,7 @@ async function work(saved, deps, owner) {
         }
       }
       // Its model folders, again every 10 minutes (in the background: beats go on while it hashes a new file).
-      if (t - scannedAt >= (deps.rescanMs ?? RESCAN_MS) && !scanning) void rescan();
+      if (t - scannedAt >= (deps.rescanMs ?? RESCAN_MS) && !scanning && !modelsMissing.length) void rescan();
       // Its own ComfyUI runs only while it may work; a pause (and a stop-now) frees the GPU.
       const stopNow = (pause.paused && (pause.why === "here-now" || pause.why?.startsWith("gpu-busy"))) || answer?.worker?.pauseNow;
       // Studio jobs first: the turn, from what the beat said and what holds the GPU; site.json on every beat, on a change,

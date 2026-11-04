@@ -407,6 +407,36 @@ describe("a worker waiting for local ComfyUI work to make room", () => {
   });
 });
 
+describe("a worker whose model folder isn't there yet (a drive still locked after a restart)", () => {
+  const inventoryRoute = () => import("@/app/api/gpu/computer/inventory/route");
+  const beatWith = (w: W, local: { paused: boolean; why: string | null }, inventoryHash: string | null) =>
+    pool.workerBeat(row(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1.0.0", local: { ...local, until: null }, gpu: {}, inventoryHash, running: [], stopped: [] }), clock);
+
+  it("shows its own state, takes nothing, and keeps its lanes: no list of files is asked for or taken meanwhile", async () => {
+    const w = worker("models-later", { lanes: [LANE_A] });
+    db().prepare("UPDATE relay_workers SET inventory_hash = 'before' WHERE id = ?").run(w.id);
+    const id = task({ account: "acct-1" });
+    const a = beatWith(w, { paused: true, why: "models-not-ready" }, "a-shorter-list");
+    expect(pool.workerState(row(w), clock)).toEqual({ state: "models-not-ready", words: "Waiting for its model folders" });
+    expect(pool.listWorkers(clock).find((x) => x.id === w.id)).toMatchObject({ state: "models-not-ready", words: "Waiting for its model folders", lanes: [LANE_A] });
+    expect(a.runner).toBe(false);
+    expect(a.worker.sendInventory).toBe(false);
+    expect(a.worker.pauseNow).toBe(false);
+    expect(claim(w)).toBeNull();
+    expect(state(id).state).toBe("waiting");
+    // A list sent anyway is refused, and the lanes stay as they were.
+    const { PUT } = await inventoryRoute();
+    const res = await PUT(new Request("http://localhost:3000/api/gpu/computer/inventory", { method: "PUT", headers: { host: "localhost:3000", authorization: `Bearer ${w.token}`, "content-type": "application/json" }, body: JSON.stringify({ files: [], nodePacks: [] }) }));
+    expect(res.status).toBe(409);
+    expect(JSON.parse(row(w).lanes_json ?? "{}").lanes).toEqual([LANE_A]);
+    // The folder is back: the studio asks for the list again, and the run is taken.
+    const back = beatWith(w, { paused: false, why: null }, "the-whole-list");
+    expect(back.worker.sendInventory).toBe(true);
+    expect(pool.workerState(row(w), clock).state).toBe("idle");
+    expect(claim(w)?.id).toBe(id);
+  });
+});
+
 describe("routes", () => {
   it("the beat's answer carries claimableNow", async () => {
     clock = Date.now();

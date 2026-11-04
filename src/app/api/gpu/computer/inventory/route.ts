@@ -1,5 +1,5 @@
 import { callerKey, principalOf, rateOf, requestWorker } from "@/server/computer/http";
-import { saveInventory } from "@/server/computer/pool";
+import { MODELS_NOT_READY, saveInventory } from "@/server/computer/pool";
 
 /** What an inventory may weigh: 20,000 files with their names and hashes. */
 const MAX_BYTES = 8 * 2 ** 20;
@@ -13,6 +13,8 @@ export async function PUT(request: Request) {
   if (principal instanceof Response) return principal;
   const worker = requestWorker(request);
   if (worker?.kind !== "pool") return Response.json({ error: "Only a worker sends its files" }, { status: 403 });
+  // A model folder of its isn't there yet: the list it has now lacks those files, so the last one stands.
+  if (worker.paused_local && worker.local_why === MODELS_NOT_READY) return Response.json({ error: "Its model folders aren't all there yet. Its last list of files stays." }, { status: 409, headers: { "Cache-Control": "no-store" } });
   const limited = rateOf(callerKey(request, principal), "inventory", 6);
   if (limited) return limited;
   const text = await request.text().catch(() => "");

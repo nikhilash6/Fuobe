@@ -463,6 +463,11 @@ The worker keeps its jobs going by itself:
   screen may still turn off. While the worker is paused or outside its hours, the PC sleeps as usual.
 - **Its model folders are read again** every 10 minutes, and whenever a job needs a model file that the worker has not
   found yet. A drive that comes back after a restart is noticed, and the studio gets the new list.
+- **A model folder that isn't there yet** (a drive that is still locked or not connected after a restart) pauses the
+  worker by itself (`local.why: "models-not-ready"`). Settings → Workers shows "Waiting for its model folders", and
+  the worker's lanes stay as they were: the studio asks for no list of files meanwhile, and refuses one with 409. The
+  worker checks its folders every minute. Once they are all there, it reads them again, sends the new list, and takes
+  jobs again. A job already running goes on.
 - **When the studio stops the worker.** If the studio no longer knows the worker's token, `fuobe worker run` ends with
   exit code 3; any other stop that you did not ask for ends with exit code 1. The sign-in task that
   `fuobe worker install` adds then starts the worker again after a minute. Ctrl+C ends with 0. On Ctrl+C, and on a

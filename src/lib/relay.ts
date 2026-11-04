@@ -217,7 +217,7 @@ export interface WorkerBeat {
   why: string | null;
   /**
    * Its own pause switch: by hand ("here", "here-until:<ms>", "here-now"), by itself ("gpu-busy:<process>",
-   * "comfy-crashes", "port-busy"). Not paused, `why` may say that it
+   * "comfy-crashes", "port-busy", "models-not-ready": a model folder isn't there yet). Not paused, `why` may say that it
    * waits for local ComfyUI work to make room ("waiting-for-yield", "waiting-for-yield:no-answer").
    */
   local: { paused: boolean; why: string | null; until: number | null };

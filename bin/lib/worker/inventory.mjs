@@ -162,8 +162,26 @@ export function comfyModelDirs(comfyDir, env = process.env, home = os.homedir())
   };
 }
 
+/**
+ * The model folders that aren't there now: each one must be a folder the worker can read. A drive that is still locked
+ * or not yet connected after a restart makes its folder missing, and the worker then waits for it (run.mjs) instead of
+ * telling the studio it lacks those files.
+ */
+export function missingModelDirs(modelDirs) {
+  const readable = (dir) => {
+    try {
+      if (!fs.statSync(dir).isDirectory()) return false;
+      fs.readdirSync(dir);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  return (modelDirs ?? []).filter((dir) => !readable(dir));
+}
+
 /** The same file, by its full path (whatever its case on Windows). */
-const samePath = (a, b) => (process.platform === "win32" ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
+const samePath =(a, b) => (process.platform === "win32" ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
 
 /**
  * The verified files: for every file the catalog names with a pinned SHA-256 (`pins`, else the index's own), the copy

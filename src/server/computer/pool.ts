@@ -22,6 +22,8 @@ import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRo
  * every input against its rules, and keeps its ComfyUI behind the guard. An older one is told to update.
  */
 export const MIN_PROTOCOL = 2;
+/** A worker's own pause while a model folder of its isn't there yet: it keeps its last list of files. */
+export const MODELS_NOT_READY = "models-not-ready";
 /** A task avoids workers that lost or failed it, unless no other worker that can run it beat this recently. */
 export const RETRY_WINDOW_MS = 10 * 60_000;
 /** Attempts in all before a task fails. */
@@ -79,7 +81,7 @@ const factsOf = (w: WorkerRow) => json<ComputerFacts>(w.facts_json, {});
 const hoursOf = (w: WorkerRow): Hours | null => parseHours(json<unknown>(w.hours_json, null));
 const benchOf = (w: WorkerRow) => json<Record<string, { medianMs?: number; p90Ms?: number; loadMs?: number; peakVramBytes?: number }>>(w.bench_json, {});
 
-export type WorkerState = "new" | "idle" | "busy" | "draining" | "paused" | "outside-hours" | "gpu-busy" | "comfy-down" | "waiting-for-yield" | "offline";
+export type WorkerState = "new" | "idle" | "busy" | "draining" | "paused" | "outside-hours" | "gpu-busy" | "comfy-down" | "models-not-ready" | "waiting-for-yield" | "offline";
 
 /** The state in one word, and in words for the owner ("Paused here until 16:30", "Your GPU is busy (blender.exe)"). */
 export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerState; words: string } {
@@ -92,6 +94,8 @@ export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerStat
     if (why.startsWith("gpu-busy")) return { state: "gpu-busy", words: `Your GPU is busy${why.includes(":") ? ` (${why.split(":").slice(1).join(":")})` : ""}` };
     if (why === "comfy-crashes") return { state: "comfy-down", words: "ComfyUI keeps stopping" };
     if (why === "port-busy") return { state: "comfy-down", words: "Its ComfyUI port is taken by another program" };
+    // A model folder isn't there yet (a drive still locked after a restart): it waits for it, with its lanes as they were.
+    if (why === MODELS_NOT_READY) return { state: "models-not-ready", words: "Waiting for its model folders" };
     return { state: "paused", words: w.local_until ? `Paused here until ${clock(w.local_until, tz)}` : "Paused here" };
   }
   if (w.paused_server) return { state: "paused", words: "Paused on the website" };
@@ -224,7 +228,8 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
         nextChangeAt: h.nextChangeAt,
         lanes: Object.keys(allowOf(fresh)),
         minProtocol: MIN_PROTOCOL,
-        sendInventory: !fresh.inventory_hash || fresh.inventory_hash !== b.inventoryHash,
+        // While a model folder isn't there, the studio keeps the list it has (its lanes don't go missing meanwhile).
+        sendInventory: b.local.why !== MODELS_NOT_READY && (!fresh.inventory_hash || fresh.inventory_hash !== b.inventoryHash),
         ...(nextToken && { token: nextToken }),
       },
     };

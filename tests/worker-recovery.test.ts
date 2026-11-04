@@ -12,6 +12,8 @@
  * - A request to its ComfyUI with another Host or without the key is refused.
  * - A clip is made again by ffmpeg before its ComfyUI sees it; without ffmpeg, the job goes back to the line.
  * - A model file that turns up later is reported within one look at its folders.
+ * - A model folder that isn't there yet (a drive still locked after a restart): the worker waits for it, says so, and
+ *   sends no list of files meanwhile; once the folder is there, the waiting job is taken within one look.
  */
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -154,7 +156,7 @@ function start(
   w: W,
   s: Studio,
   p: Pc,
-  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number } = {},
+  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelsCheckMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number } = {},
 ) {
   const ctrl = new AbortController();
   const cfg = {
@@ -193,6 +195,7 @@ function start(
       p.logAt.push(Date.now());
     },
     ...(o.rescanMs && { rescanMs: o.rescanMs }),
+    ...(o.modelsCheckMs && { modelsCheckMs: o.modelsCheckMs }),
   });
   const r = { ctrl, done };
   running.push(r);
@@ -597,5 +600,29 @@ describe("its model folders", () => {
     fs.writeFileSync(path.join(models, "loras", "late.safetensors"), "hello");
     const seen = await until(() => s.inventories.find((i) => (i.files as unknown[]).length > 0), 60_000);
     expect(seen.files).toEqual([{ folder: "loras", name: "late.safetensors", size: 5, sha256: sha }]);
+  });
+
+  it("a model folder that isn't there yet: it waits for it with its lanes kept, then takes the waiting job within one look", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const drive = path.join(tempDir("fuobe-worker-drive-"), "models");
+    const { id } = addTask();
+    start(w, s, p, { modelDirs: [drive], modelsCheckMs: 300 });
+    const workerRow = () => db().prepare("SELECT paused_local, local_why, state FROM relay_workers WHERE id = ?").get(w.id) as { paused_local: number; local_why: string | null; state: string };
+    await until(() => workerRow().local_why === "models-not-ready");
+    expect(workerRow()).toMatchObject({ paused_local: 1, state: "models-not-ready" });
+    expect(p.logs.some((l) => /A model folder isn't there yet/.test(l))).toBe(true);
+    // A few beats later: still waiting, its job still in line, and no list of files that lacks the folder's.
+    await sleep(1_500);
+    expect(state(id).state).toBe("waiting");
+    expect(s.inventories).toEqual([]);
+    expect(prompts(p)).toBe(0);
+    // The drive is unlocked: within one look its files are read again, and the job runs.
+    fs.mkdirSync(drive, { recursive: true });
+    const done = await ended(id);
+    expect(done.state).toBe("done");
+    expect(s.inventories.length).toBeGreaterThan(0);
+    expect(p.logs.some((l) => /model folders are all there/.test(l))).toBe(true);
   });
 });

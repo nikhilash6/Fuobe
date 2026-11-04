@@ -8,7 +8,7 @@ import { comfyArgs, OwnComfy, PortBusy, portFree } from "../bin/lib/worker/comfy
 import { parseFor, syncedFolder } from "../bin/lib/worker/config.mjs";
 import { worker } from "../bin/lib/worker/index.mjs";
 import { localPause } from "../bin/lib/worker/run.mjs";
-import { inventoryHash as workerHash } from "../bin/lib/worker/inventory.mjs";
+import { inventoryHash as workerHash, missingModelDirs } from "../bin/lib/worker/inventory.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 const MIN = 60_000;
@@ -66,6 +66,19 @@ describe("the GPU check (check 11)", () => {
     expect(localPause({ paused: false }, { paused: true, who: "blender.exe" }, null, 0)?.why).toBe("gpu-busy:blender.exe");
     expect(localPause({ paused: true, now: true }, free, null, 0)?.why).toBe("here-now");
     expect(localPause({ paused: false }, free, "port-busy", 0)).toEqual({ paused: true, why: "port-busy", until: null });
+    // A model folder that isn't there yet: after a pause by hand and a busy GPU, before its ComfyUI's trouble.
+    expect(localPause({ paused: false }, free, "port-busy", 0, ["X:/models"])).toEqual({ paused: true, why: "models-not-ready", until: null });
+    expect(localPause({ paused: false }, { paused: true, who: "game.exe" }, null, 0, ["X:/models"])?.why).toBe("gpu-busy:game.exe");
+    expect(localPause({ paused: true }, free, null, 0, ["X:/models"])?.why).toBe("here");
+    expect(localPause({ paused: false }, free, null, 0, [])).toEqual({ paused: false, why: null, until: null });
+  });
+
+  it("a model folder that can't be read counts as missing; a folder that is there doesn't", () => {
+    const base = tempDir("fuobe-model-dirs-");
+    const file = path.join(base, "a-file");
+    fs.writeFileSync(file, "x");
+    expect(missingModelDirs([base, path.join(base, "not-yet"), file])).toEqual([path.join(base, "not-yet"), file]);
+    expect(missingModelDirs(undefined)).toEqual([]);
   });
 
   it("--for 2h ends by itself after 2 hours (check 10)", () => {
