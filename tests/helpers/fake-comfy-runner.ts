@@ -37,6 +37,8 @@ export interface FakeComfyOptions {
   echo?: boolean;
   /** A text result (SaveText, node 5): these words in the history and in the .txt file /view serves. */
   text?: string;
+  /** The history lists one video under each of these node ids instead of node 900 (a graph's declared outputs, e.g. a take and its master). */
+  nodes?: string[];
 }
 
 export interface FakeLogEntry {
@@ -182,6 +184,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         if (opts.text !== undefined) return json(200, { [id]: { ...done, outputs: { "5": { text: [opts.text], files: [{ filename: "fake_00001_.txt", subfolder: "fuobe", type: "output" }] } } } });
         if (opts.frames) return json(200, { [id]: { ...done, outputs: { "5": { gifs: list(1, "mp4") }, "3": { images: list(opts.frames, "exr") } } } });
         if (opts.output === "model3d") return json(200, { [id]: { ...done, outputs: { "900": { "3d": [{ filename: "fake_00001_.glb", subfolder: "3D", type: "output" }] } } } });
+        if (opts.nodes?.length) return json(200, { [id]: { ...done, outputs: Object.fromEntries(opts.nodes.map((n, i) => [n, { gifs: [{ filename: `fake_${n}_${i + 1}.mp4`, subfolder: "", type: "output" }] }])) } });
         const file = opts.output === "image" ? { filename: "fake_00001_.png", subfolder: "", type: "output" } : { filename: "fake_00001.mp4", subfolder: "", type: "output" };
         const key = opts.output === "image" ? "images" : "gifs";
         return json(200, { [id]: { status: { completed: true, status_str: "success" }, outputs: { "900": { [key]: [file] } } } });

@@ -310,6 +310,15 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the browser ("Record turntable"), not on the server. Refine detail, the TRELLIS.2 final, Idol 3D's other sides and
   Film it photoreal stay the owner's, and Retexture opens once its cloud models pass a live call. On this install's
   GPUs (hosted runs) 3D isn't offered yet. A guest gets the sign-up card.
+- **Character Swap Studio.** An account keeps Character Swap projects of its own (`/character-swap`; `GET`/`POST
+  /api/swap-studio/projects`, `GET`/`PATCH`/`DELETE /api/swap-studio/projects/<id>`): its own only (another account's,
+  or the owner's, reads as 404; a guest gets the sign-up card), up to 50 of 1 MB each and 120 saves a minute, deleted
+  with the account. Every job in a project (a clip's 24 fps copy or browser copy, its words, a mask, a scene anchor,
+  queued takes, Sharpen, the assembly) is a run of its own on the account's ComfyUI, or on its own fal.ai key on the
+  cloud engine, with only its own uploads and results, after the same checks as Genjutsu's. A queue counts once against
+  its limits: a take that waits for the one before it starts later in the same run. The pictures a project names (the
+  character, an imported anchor) and its clips are the account's own. Its assembled clips are its own runs, to open and
+  download. The checks are `src/server/swap-studio-account.ts`.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.
