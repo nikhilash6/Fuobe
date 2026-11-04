@@ -38,9 +38,9 @@ describe("Home's video reel", () => {
         expect(mp4Seconds(file(url))).toBeCloseTo(c.frames / 24, 2);
       }
     }
-    // The stretches chosen: Sand Storm whole (124 frames), One Take from frame 28 to its end.
+    // The stretches chosen: Sand Storm's first 96 (to the sand round her), One Take from frame 28 to its end.
     expect(REEL.map((c) => [c.from, c.frames])).toEqual([
-      [0, 124],
+      [0, 96],
       [28, 96],
     ]);
   });

@@ -83,11 +83,11 @@ const BA_TALL = { left: 422, top: 0, width: 691, height: 1152 };
  * the tile is wider than the 4:3 clip, so only its top and bottom are cropped), and the CRF each width is encoded at
  * (chosen on close crops of faces and fine detail against the render; a busy picture, such as One Take's leaves, costs
  * more bits). The stretches are the ones that hold up frame by frame at the tile's size: One Take from the arch to its
- * look back (the render's last frame) and Sand Storm whole, from the first gust until the haze settles. The first clip's first frame is the
+ * look back (the render's last frame) and Sand Storm from the first gust until the sand has wrapped round her (the render's last second relights the shot). The first clip's first frame is the
  * tile's poster.
  */
 export const REEL = [
-  { id: "effect-sand-storm", name: "reel-sand-storm", from: 0, frames: 124, position: "50% 0%", crf: { 640: 22, 1024: 22, 1536: 26, 2048: 27 } },
+  { id: "effect-sand-storm", name: "reel-sand-storm", from: 0, frames: 96, position: "50% 0%", crf: { 640: 22, 1024: 22, 1536: 26, 2048: 27 } },
   { id: "motion-one-take", name: "reel-one-take", from: 28, frames: 96, position: "50% 15%", crf: { 640: 22, 1024: 23, 1536: 27, 2048: 28 } },
 ];
 /**
