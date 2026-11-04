@@ -4,12 +4,10 @@
  * scripts/gen-home-bento.mjs: run it again rather than editing.
  */
 export const HOME_BENTO_MEDIA: Record<string, string> = {
-  "/previews/home/reel-one-take-640.mp4": "175b3cd6",
-  "/previews/home/reel-one-take-1024.mp4": "dd9a7c62",
   "/previews/home/reel-sand-storm-640.mp4": "79c89fa8",
   "/previews/home/reel-sand-storm-1024.mp4": "a3911fc1",
-  "/previews/home/reel-crane-over-640.mp4": "34ae25b3",
-  "/previews/home/reel-crane-over-1024.mp4": "a7cc281e",
+  "/previews/home/reel-one-take-640.mp4": "175b3cd6",
+  "/previews/home/reel-one-take-1024.mp4": "dd9a7c62",
   "/previews/home/rotation-640.mp4": "3efbab2a",
   "/previews/home/rotation-1024.mp4": "3f5507ab",
   "/previews/home/rotation-1536.mp4": "87d3d4f1",
@@ -24,13 +22,13 @@ export const HOME_BENTO_MEDIA: Record<string, string> = {
   "/previews/home/ba-after-1280.avif": "61952772",
   "/previews/home/ba-after-tall-432.avif": "71f125b7",
   "/previews/home/ba-after-tall-691.avif": "46271396",
-  "/previews/home/reel-one-take-640.avif": "e3820eec",
-  "/previews/home/reel-one-take-1024.avif": "96abf153",
+  "/previews/home/reel-sand-storm-640.avif": "6e339255",
+  "/previews/home/reel-sand-storm-1024.avif": "13b5d74a",
   "/previews/home/rotation-640.avif": "c69b0d7b",
   "/previews/home/rotation-1024.avif": "23d2a89b",
   "/previews/home/rotation-1536.avif": "b3df3778",
   "/previews/home/rotation-2048.avif": "bcc9ccc5",
-  "/previews/home/reel-one-take-1024.jpg": "991af346",
+  "/previews/home/reel-sand-storm-1024.jpg": "cab53f24",
   "/previews/home/rotation-1024.jpg": "61a2cbc9",
   "/previews/home/image-4-480.avif": "5a6d07a1",
   "/previews/home/image-4-768.avif": "ef9d1b4d",
@@ -41,13 +39,6 @@ export const HOME_BENTO_MEDIA: Record<string, string> = {
 /** The video tile's reel, in the order it plays: each clip's preset, its copies' name, its length and its framing. */
 export const HOME_BENTO_REEL = [
   {
-    "id": "motion-one-take",
-    "name": "reel-one-take",
-    "frames": 96,
-    "fps": 24,
-    "position": "50% 15%"
-  },
-  {
     "id": "effect-sand-storm",
     "name": "reel-sand-storm",
     "frames": 84,
@@ -55,11 +46,11 @@ export const HOME_BENTO_REEL = [
     "position": "50% 0%"
   },
   {
-    "id": "motion-crane-over-the-head",
-    "name": "reel-crane-over",
-    "frames": 88,
+    "id": "motion-one-take",
+    "name": "reel-one-take",
+    "frames": 96,
     "fps": 24,
-    "position": "50% 0%"
+    "position": "50% 15%"
   }
 ];
 

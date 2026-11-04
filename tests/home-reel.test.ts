@@ -14,12 +14,12 @@ const root = process.cwd();
 const file = (url: string) => path.join(root, "public", url.split("?")[0]);
 
 describe("Home's video reel", () => {
-  it("plays One Take, then Sand Storm, then Crane Over the Head, then One Take again", () => {
-    expect(HOME_BENTO_REEL.map((c) => c.id)).toEqual(["motion-one-take", "effect-sand-storm", "motion-crane-over-the-head"]);
+  it("plays Sand Storm, then One Take, then Sand Storm again", () => {
+    expect(HOME_BENTO_REEL.map((c) => c.id)).toEqual(["effect-sand-storm", "motion-one-take"]);
     const n = HOME_BENTO_REEL.length;
     const order = [0];
     for (let i = 0; i < 6; i++) order.push(nextInReel(order.at(-1)!, n));
-    expect(order).toEqual([0, 1, 2, 0, 1, 2, 0]);
+    expect(order).toEqual([0, 1, 0, 1, 0, 1, 0]);
     // The generated list is the script's, in the same order (run node scripts/gen-home-bento.mjs after changing REEL).
     expect(HOME_BENTO_REEL).toEqual(REEL.map(({ id, name, frames, position }) => ({ id, name, frames, fps: 24, position })));
   });
@@ -38,11 +38,10 @@ describe("Home's video reel", () => {
         expect(mp4Seconds(file(url))).toBeCloseTo(c.frames / 24, 2);
       }
     }
-    // The stretches chosen: One Take from frame 28 to its end, Sand Storm's first 84, Crane Over the Head from 36.
+    // The stretches chosen: Sand Storm's first 84, One Take from frame 28 to its end.
     expect(REEL.map((c) => [c.from, c.frames])).toEqual([
-      [28, 96],
       [0, 84],
-      [36, 88],
+      [28, 96],
     ]);
   });
 

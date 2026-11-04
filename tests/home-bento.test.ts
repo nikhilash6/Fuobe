@@ -84,10 +84,10 @@ describe("Home's first screen", () => {
     }
   });
 
-  it("plays One Take, Sand Storm and Crane Over the Head in turn, on the first one's first frame", () => {
+  it("plays Sand Storm and One Take in turn, on the first one's first frame", () => {
     const v = bento.video;
     expect(v.id).toBe(BENTO_REEL_ID);
-    expect(v.reel.map((c) => c.id)).toEqual(["motion-one-take", "effect-sand-storm", "motion-crane-over-the-head"]);
+    expect(v.reel.map((c) => c.id)).toEqual(["effect-sand-storm", "motion-one-take"]);
     expect(v.reel.map((c) => c.id)).toEqual(BENTO_REEL);
     for (const c of v.reel) {
       // At least the 640 and 1024 px copies, each a width a still or clip comes in, narrowest first.
@@ -98,8 +98,8 @@ describe("Home's first screen", () => {
     // The poster: the first clip's first frame, in the widths that clip comes in, and a JPEG at 1024 px.
     const first = v.reel[0];
     expect(v.poster.avif.map((a) => a.w)).toEqual(first.clips.map((x) => x.w));
-    for (const a of v.poster.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/reel-one-take-${a.w}\\.avif\\?v=`));
-    expect(v.poster.fallback).toMatch(/^\/previews\/home\/reel-one-take-1024\.jpg\?v=/);
+    for (const a of v.poster.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/reel-sand-storm-${a.w}\\.avif\\?v=`));
+    expect(v.poster.fallback).toMatch(/^\/previews\/home\/reel-sand-storm-1024\.jpg\?v=/);
     // It is framed as its clip is: the poster's position is the first clip's, on the page.
     expect(html).toContain(`object-position:${first.position}`);
   });
