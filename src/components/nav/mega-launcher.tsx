@@ -71,7 +71,7 @@ export function preloadMegaPanel(): void {
 export function MegaSkeleton({ id }: { id?: MegaId }) {
   if (id === "canvas") {
     return (
-      <div aria-hidden data-mega-skeleton className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 2xl:gap-x-6">
+      <div aria-hidden data-mega-skeleton className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 lg:gap-x-3">
         <div className="col-span-3 flex flex-col gap-2 lg:col-span-2">
           <span className="h-4 w-24 rounded bg-muted" />
           <span className="aspect-[4/3] max-h-[max(64px,calc(100dvh-592px))] w-full rounded-t-[14px] bg-muted" />
@@ -92,7 +92,7 @@ export function MegaSkeleton({ id }: { id?: MegaId }) {
     );
   }
   return (
-    <div aria-hidden data-mega-skeleton className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 2xl:gap-x-6">
+    <div aria-hidden data-mega-skeleton className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 lg:gap-x-3">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="flex flex-col gap-2">
           <span className="h-4 w-24 rounded bg-muted" />
@@ -180,7 +180,7 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
           /* The body's place while its chunk loads: the count line's height, then the columns' skeleton. */
           <Suspense
             fallback={
-              <div className="max-w-[1440px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
+              <div className="max-w-[1680px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
                 <div className="min-h-10 pb-4" />
                 <MegaSkeleton id={id} />
               </div>

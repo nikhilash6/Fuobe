@@ -87,7 +87,7 @@ export function CreateList({ variant, onNavigate }: { variant: "menu" | "sheet";
           ))}
         </div>
         <div role="separator" className="mx-2.5 my-1.5 h-px bg-border" />
-        <IntentLink href={NEW_CREATION_HREF} eager data-col={0} data-row={columns[0]?.entries.length ?? 0} className={cn(CARD_ROW, MENU_ROW_1, "w-1/2 font-medium")}>
+        <IntentLink href={NEW_CREATION_HREF} eager data-col={0} data-row={columns[0]?.entries.length ?? 0} className={cn(CARD_ROW, MENU_ROW_1, "font-medium")}>
           <Plus aria-hidden className="size-4 text-brand-text" />
           New creation
           <Kbd aria-hidden className="ml-auto [@media(hover:none)]:hidden">

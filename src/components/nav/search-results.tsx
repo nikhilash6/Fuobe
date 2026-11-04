@@ -180,8 +180,8 @@ export function AlsoTile({ hit, onPick }: { hit: NavHit; onPick: (h: NavHit) => 
   );
 }
 
-/** Any other match, in its kind's group. */
-export function HitRow({ hit, onPick }: { hit: NavHit; onPick: (h: NavHit) => void }) {
+/** Any other match, in its kind's group. `bare`: under its own studio's heading ("In Marketing Studio"), so no crumb. */
+export function HitRow({ hit, onPick, bare }: { hit: NavHit; onPick: (h: NavHit) => void; bare?: boolean }) {
   return (
     <CommandPrimitive.Item
       value={hit.key}
@@ -190,7 +190,7 @@ export function HitRow({ hit, onPick }: { hit: NavHit; onPick: (h: NavHit) => vo
       className={cn("group/hit flex h-11 cursor-pointer items-center gap-3 rounded-[10px] pr-3 pl-2 text-[14px]", selected)}
     >
       <HitCover hit={hit} size="row" />
-      <Name hit={hit} crumb={hit.kind === "tool" ? hit.hint : undefined} className="min-w-0 flex-1 font-medium" />
+      <Name hit={hit} crumb={!bare && hit.kind === "tool" ? hit.hint : undefined} className="min-w-0 flex-1 font-medium" />
       {hit.kind !== "tool" && (hit.what ?? hit.hint) && (
         <span className="max-w-[45%] shrink-0 truncate pl-2 text-[12px] text-muted-foreground max-sm:hidden">{hit.what ?? hit.hint}</span>
       )}

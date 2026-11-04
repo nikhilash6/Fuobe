@@ -76,7 +76,8 @@
       --subs-pad: 4px;
       flex-direction: row;
       flex-wrap: wrap;
-      column-gap: 4px;
+      /* 4 + 8 + 4 px: 16 px between two names, so a pair never reads as one name. */
+      column-gap: 8px;
     }
     .nav-subs[data-subs-line] > li > a {
       font-size: 12px;

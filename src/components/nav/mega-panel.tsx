@@ -93,26 +93,21 @@ function Row({ e, col, row, current, inside, now, className }: { e: MegaItem; co
       aria-current={current ? "page" : undefined}
       data-active={inside ? "" : undefined}
       title={e.line ? `${e.label}: ${e.line}` : e.label}
-      className={cn("nav-row nav-mark-start -mx-2 flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-1 md:max-lg:min-h-10 md:max-lg:py-0.5", className)}
+      className={cn("nav-row nav-mark-start -mx-2 flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-1 md:max-lg:min-h-10 md:max-lg:py-0.5 [@media(pointer:coarse)]:min-h-11", className)}
     >
       {/* Six columns leave a row its name and line below 1440 px, and its name alone below 1280 px. Its picture loads
           when the row shows (lazy): a row hidden by the window's height never fetches it. */}
       <CoverThumb id={e.navCover} cover={e.cover} size="row" icon={e.icon} className="max-[1439.98px]:hidden" />
       {/* Centred while it fits; a name on two lines starts at the top and pushes the line out of the 36 px box. */}
-      <span data-row-text className="flex max-h-9 min-w-0 flex-1 flex-wrap items-center gap-x-1.5 overflow-hidden [align-content:safe_center] max-xl:flex-nowrap">
+      <span data-row-text className="flex max-h-9 min-w-0 flex-1 flex-wrap items-center gap-x-1 overflow-hidden [align-content:safe_center] max-xl:flex-nowrap">
         <span data-row-name className={cn("line-clamp-2 min-w-0 text-[13px] leading-[18px] font-medium", (current || inside) && "font-semibold")}>
           {e.label}
         </span>
         {fresh && <NewBadge />}
         {/* After a badge that wrapped, the line fills the rest of the second line; after one beside the name it can't fit
-            there and starts its own. A studio whose links become one line on a short window gives that line its room. */}
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate text-[12px] leading-4 text-muted-foreground max-xl:hidden",
-            fresh ? "basis-[calc(100%-48px)]" : "basis-full",
-            e.subsLine && "[@media(max-height:799.98px)]:hidden",
-          )}
-        >
+            there and starts its own. Its basis leaves 48 px: the badge (about 34 px) and the 4 px gap, with room to spare.
+            A wider badge needs a smaller basis, or the line falls to a third line and is hidden. */}
+        <span className={cn("min-w-0 flex-1 truncate text-[12px] leading-4 text-muted-foreground max-xl:hidden", fresh ? "basis-[calc(100%-48px)]" : "basis-full")}>
           {e.line}
         </span>
       </span>
@@ -190,9 +185,10 @@ function Tile({ e, col, row, current, eager }: { e: MegaItem; col: number; row: 
       data-row={row}
       aria-current={current ? "page" : undefined}
       title={e.line ? `${e.label}: ${e.line}` : e.label}
-      className="nav-row nav-mark-under -m-1.5 flex min-w-0 flex-col gap-1.5 rounded-[12px] p-1.5"
+      className="nav-row nav-mark-under -m-1.5 flex min-w-0 flex-col gap-1.5 rounded-[12px] p-1.5 [container-type:inline-size]"
     >
-      <CoverThumb cover={e.cover} size="tile16" icon={e.icon} eager={eager} />
+      {/* 16:9, its height rounded down to the 4 px grid, so a second row of tiles sits on a whole pixel. */}
+      <CoverThumb cover={e.cover} size="tile16" icon={e.icon} eager={eager} className="aspect-auto h-[round(down,56.25cqw,4px)]" />
       <span className="flex min-w-0 flex-col">
         <span className={cn("truncate text-[13px] leading-[18px] font-medium", current && "font-semibold")}>{e.label}</span>
         <span className="truncate text-[12px] leading-4 text-muted-foreground">{e.line}</span>
@@ -333,11 +329,11 @@ export function MegaColumns({ model, current, now, kind }: { model: MegaModel; c
   };
 
   return (
-    <div className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6">
+    <div className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 lg:gap-x-3">
       {families
         ? model.families!.map((f) => (
             <Fragment key={f.id}>
-              <div className={cn("flex h-10 items-center gap-2 border-b lg:row-start-1", f.span >= 3 ? "col-span-3" : SPAN[f.span])} data-family={f.id}>
+              <div className={cn("flex h-10 items-center gap-2 border-b pb-px lg:row-start-1", f.span >= 3 ? "col-span-3" : SPAN[f.span])} data-family={f.id}>
                 <p className="text-[12px] leading-4 font-semibold text-foreground">
                   {f.label} <span className="font-normal text-muted-foreground tabular-nums">· {f.count}</span>
                 </p>
@@ -377,7 +373,7 @@ export function MegaPanel({ id, onClose, onSearch }: { id: MegaId; onClose: () =
   // The query too: moving from one preset to another (/video?preset=…) keeps the path.
   const search = useSearchParams()?.toString() ?? "";
   return (
-    <div className="max-w-[1440px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
+    <div className="max-w-[1680px] px-6 pt-5 pb-6 lg:pt-6 lg:pb-7">
       <div className="flex min-h-10 items-center gap-3 pb-4">
         <p className="text-[13px] text-muted-foreground" data-count-line>
           {model ? model.countLine : failed ? "Couldn't load this menu" : " "}
@@ -388,7 +384,7 @@ export function MegaPanel({ id, onClose, onSearch }: { id: MegaId; onClose: () =
           aria-current={pathname === area.href ? "page" : undefined}
           aria-label={model?.seeAll.name ?? `See all ${area.label.toLowerCase()}`}
           data-see-all
-          className="nav-row group/all -ml-1 inline-flex h-8 items-center gap-1 rounded-[8px] px-2 text-[13px] font-medium text-brand-text"
+          className="nav-row group/all -ml-1 inline-flex h-8 items-center gap-1 rounded-[8px] px-2 text-[13px] font-medium text-brand-text [@media(pointer:coarse)]:h-11"
         >
           See all
           <ArrowRight aria-hidden className="size-3.5 motion-safe:transition-transform group-hover/all:translate-x-0.5" />

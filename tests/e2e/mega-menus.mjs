@@ -38,6 +38,7 @@ const SIZES = [
   { width: 1280, height: 720 },
   { width: 1366, height: 768 },
   { width: 1440, height: 900 },
+  { width: 1680, height: 1050 },
   { width: 1920, height: 1080 },
 ];
 const SHOT_WIDTHS = [1280, 1440, 1920];
@@ -194,7 +195,8 @@ try {
   // 1c. One spacing system (nav-subs.css, mega-panel.tsx): in every list column, a feature's name starts on its
   // studio's text column and the hairline ends at the last feature shown; rows 44 px (40 below lg), 4 px apart, on
   // whole pixels; a card 8 px above the next row (4 above its features), a feature list 4 px above it; See all 32 px;
-  // Canvas' tiles on their column's edge and top; and no name cut beside a New badge.
+  // Canvas' tiles on their column's edge and top, on whole pixels; no name cut beside a New badge (and from 1440 px
+  // Fuobe Kinetic Motion's badge beside its name); every row's line shown from 1280 px unless a two-line name takes it.
   {
     const widths = {};
     for (const who of ["guest", "owner"]) {
@@ -219,7 +221,7 @@ try {
               return rg.getClientRects()[0]?.left ?? NaN;
             };
             const near = (a, b, tol = 0.75) => Math.abs(a - b) <= tol;
-            const out = { text: [], line: [], gaps: [], heights: [], halves: [], cut: [], badge: [], clipped: [], seeAll: [], canvas: [], widths: [] };
+            const out = { text: [], line: [], gaps: [], heights: [], halves: [], cut: [], badge: [], clipped: [], seeAll: [], seeAllHalves: [], canvas: [], tileHalves: [], widths: [], beside: {}, noLine: [] };
             for (const group of el.querySelectorAll("[data-group]")) {
               const list = group.querySelector(":scope > ul");
               const colX = box(group).left;
@@ -252,7 +254,13 @@ try {
                   if (name.scrollWidth > name.clientWidth + 0.5 || name.scrollHeight > name.clientHeight + 0.5) out.cut.push(a.textContent.trim().slice(0, 30));
                   const holder = badge.parentElement;
                   if (box(badge).bottom > box(holder).bottom + 0.5 || box(badge).right > box(holder).right + 0.5) out.badge.push(a.textContent.trim().slice(0, 30));
+                  // Beside: the badge's middle on the name's first line.
+                  out.beside[name.textContent.trim()] = Math.abs((box(badge).top + box(badge).bottom) / 2 - (box(name).top + 9)) <= 3;
                 }
+                // A row's line shows inside its words' box, unless its name takes two lines.
+                const rowLine = holderBox && [...holderBox.children].find((c) => c !== name && !c.matches("[data-new]"));
+                if (rowLine && rowLine.textContent.trim() && box(name).height < 20 && (!vis(rowLine) || box(rowLine).bottom > box(holderBox).bottom + 0.5))
+                  out.noLine.push(name.textContent.trim().slice(0, 24));
                 if (vis(subs)) {
                   const first = [...subs.querySelectorAll(":scope > li > a")].find(vis);
                   const links = [...subs.querySelectorAll(":scope > li")].filter(vis);
@@ -271,7 +279,11 @@ try {
                 }
               }
             }
-            for (const s of el.querySelectorAll("a:not([data-sub])")) if (vis(s) && /^See all/.test(s.textContent.trim())) out.seeAll.push(+box(s).height.toFixed(2));
+            for (const s of el.querySelectorAll("a:not([data-sub])"))
+              if (vis(s) && /^See all/.test(s.textContent.trim())) {
+                out.seeAll.push(+box(s).height.toFixed(2));
+                if (Math.abs(box(s).top - Math.round(box(s).top)) > 0.05) out.seeAllHalves.push(`${s.getAttribute("aria-label") ?? "See all"} ${box(s).top.toFixed(2)}`);
+              }
             // Canvas: a tile's picture on its column's edge, the first row's tops on the lead column's first item.
             const tiles = [...el.querySelectorAll("[data-group] > ul.grid")].filter(vis);
             if (tiles.length) {
@@ -280,6 +292,7 @@ try {
                 const g = ul.closest("[data-group]");
                 const ib = box(ul.querySelector(":scope > li > a > *"));
                 out.canvas.push({ dx: +(ib.left - box(g).left).toFixed(2), top: +ib.top.toFixed(2), lead: firstItem ? +box(firstItem).top.toFixed(2) : null });
+                for (const t of ul.querySelectorAll(":scope > li > a")) if (vis(t) && Math.abs(box(t).top - Math.round(box(t).top)) > 0.05) out.tileHalves.push(`${t.textContent.trim().slice(0, 20)} ${box(t).top.toFixed(2)}`);
               }
             }
             return out;
@@ -296,6 +309,10 @@ try {
           if (size.width >= 1280) check(r.cut.length === 0 && r.badge.length === 0, `${label} ${id}: no name cut beside a New badge, the badge whole`, [...r.cut, ...r.badge].join(", "));
           check(r.clipped.length === 0, `${label} ${id}: every row's name whole, none pushed out of its row`, r.clipped.join(", "));
           check(r.seeAll.every((h) => Math.abs(h - 32) <= 0.5), `${label} ${id}: every See all 32 px`, r.seeAll.join(", "));
+          check(r.seeAllHalves.length === 0, `${label} ${id}: every See all on a whole pixel`, r.seeAllHalves.join(", "));
+          if (size.width >= 1440 && "Fuobe Kinetic Motion" in r.beside) check(r.beside["Fuobe Kinetic Motion"], `${label} ${id}: Fuobe Kinetic Motion's New badge beside its name`, JSON.stringify(r.beside));
+          if (size.width >= 1280) check(r.noLine.length === 0, `${label} ${id}: every one-line row shows its line`, r.noLine.join(", "));
+          if (id === "canvas") check(r.tileHalves.length === 0, `${label} canvas: every tile on a whole pixel`, r.tileHalves.join(", "));
           if (id === "canvas")
             check(r.canvas.every((c) => Math.abs(c.dx) <= 0.75 && c.lead !== null && Math.abs(c.top - c.lead) <= 0.75) || r.canvas.length === 0, `${label} canvas: tiles on their column's edge, level with the first column`, JSON.stringify(r.canvas));
           if (id === "studios") (widths[size.width] ??= []).push(...r.widths);
@@ -305,7 +322,7 @@ try {
         await ctx.close();
       }
     }
-    // Wider windows never get narrower columns (the panel stops at 1440 px with one gutter).
+    // Wider windows never get narrower columns (the panel stops at 1680 px with one gutter).
     const w = (x) => Math.min(...(widths[x] ?? [0]));
     check(w(1920) >= w(1440) - 0.5, "Studios: columns at 1920 at least as wide as at 1440", `${w(1440).toFixed(1)} → ${w(1920).toFixed(1)}`);
   }

@@ -367,7 +367,7 @@ export function PaletteBody({
               <CommandPrimitive.Group key={g.kind} heading={g.label} className={cn("mb-4", sectionHeading)}>
                 <div className="flex flex-col gap-1">
                   {g.hits.map((h) => (
-                    <HitRow key={h.key} hit={h} onPick={pickHit} />
+                    <HitRow key={h.key} hit={h} onPick={pickHit} bare={g.kind.startsWith("in-")} />
                   ))}
                 </div>
               </CommandPrimitive.Group>

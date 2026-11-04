@@ -59,14 +59,14 @@ function SheetSubs({ items, kind, current }: { items: MegaItem[]; kind: ViewerKi
   const groups = items.map((e) => ({ e, subs: studioSubs(e.id, kind, "sheet").filter((s) => !tiles.has(s.id)) })).filter((g) => g.subs.length > 0);
   if (!groups.length) return null;
   return (
-    <div data-sheet-subs className="flex flex-col gap-3 border-t pt-3 pb-3">
+    <div data-sheet-subs className="flex flex-col gap-4 border-t pt-3 pb-3">
       {groups.map(({ e, subs }) => (
         <section key={e.id} aria-labelledby={`sheet-subs-${e.id}`}>
           <p id={`sheet-subs-${e.id}`} className="text-[11px] leading-4 font-semibold tracking-[.08em] text-brand-text uppercase">
             {e.label}
           </p>
           {/* 32 px pills whose touch area reaches 6 px past each edge (44 px): rows 12 px apart, so no two overlap. */}
-          <ul aria-labelledby={`sheet-subs-${e.id}`} className="mt-2 flex flex-wrap gap-x-1.5 gap-y-3">
+          <ul aria-labelledby={`sheet-subs-${e.id}`} className="mt-2 flex flex-wrap gap-x-2 gap-y-3">
             {subs.map((s) => (
               <li key={s.id}>
                 <IntentLink data-sub="" href={s.href} aria-current={current === s.id ? "page" : undefined} title={s.what} className={SUB_PILL}>
