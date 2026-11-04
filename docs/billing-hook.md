@@ -120,8 +120,8 @@ every task the workers that may run this one would serve first, whatever its mod
 many jobs or chain steps it has (`waiting`: none of its rows has started).
 A report's `gpuMs` is the time the workers' ComfyUI spent running the row's jobs, as they measured it (no waits, no
 files, no upload). A job that ran more than once counts once, for the attempt whose result was kept. `device` is the
-GPU's name. Elsewhere `gpuMs` is the row's time from its start to its end, and
-`device` is null.
+GPU's name. A row on the workers none of whose jobs finished there has `gpuMs` and `device` null: its time in line
+never counts. Elsewhere `gpuMs` is the row's time from its start to its end, and `device` is null.
 
 Example (arbitrary numbers):
 

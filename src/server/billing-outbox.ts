@@ -35,6 +35,8 @@ interface DoneRow {
    */
   exec_ms: number | null;
   exec_device: string | null;
+  /** 1 when the run's jobs went to the workers, whether or not one of them finished there. */
+  on_workers: number;
 }
 
 /** Where a row stands in the output check, for its report: hidden, never checked in time, or nothing to say. */
@@ -59,7 +61,8 @@ export function queueReports(now = Date.now(), limit = 200): number {
               (SELECT state FROM output_checks c WHERE c.generation_id = g.id AND c.state IN ('hidden', 'unchecked') LIMIT 1) AS check_state,
               (SELECT SUM(j.exec_ms) FROM worker_jobs j WHERE j.generation_id = g.id AND j.event = 'finished' AND j.exec_ms IS NOT NULL
                  AND j.id = (SELECT MAX(k.id) FROM worker_jobs k WHERE k.task_id = j.task_id AND k.event = 'finished' AND k.exec_ms IS NOT NULL)) AS exec_ms,
-              (SELECT j.device FROM worker_jobs j WHERE j.generation_id = g.id AND j.event = 'finished' AND j.device IS NOT NULL ORDER BY j.id DESC LIMIT 1) AS exec_device
+              (SELECT j.device FROM worker_jobs j WHERE j.generation_id = g.id AND j.event = 'finished' AND j.device IS NOT NULL ORDER BY j.id DESC LIMIT 1) AS exec_device,
+              EXISTS (SELECT 1 FROM relay_tasks t WHERE t.generation_id = g.id AND t.pools IS NOT NULL) AS on_workers
        FROM generations g LEFT JOIN generation_runs r ON r.id = g.id
        WHERE json_extract(g.request_json, '$.hold') IS NOT NULL
          AND g.status IN ('succeeded', 'failed', 'canceled')
@@ -76,8 +79,9 @@ export function queueReports(now = Date.now(), limit = 200): number {
     for (const r of rows) {
       const n = (count.get(r.hold) as { n: number }).n;
       // A run on the workers: the time their ComfyUI spent on its jobs, as they measured it (no waits, no files, no
-      // upload). Anything else: from its start to its end, as before.
-      const gpuMs = r.exec_ms !== null ? r.exec_ms : r.started_at && r.completed_at && r.completed_at > r.started_at ? r.completed_at - r.started_at : null;
+      // upload), never its time in line; null when none of its jobs finished there. Anything else: from its start to its
+      // end, as before.
+      const gpuMs = r.on_workers || r.exec_ms !== null ? r.exec_ms : r.started_at && r.completed_at && r.completed_at > r.started_at ? r.completed_at - r.started_at : null;
       const device = r.exec_device ?? null;
       const outputs = (() => {
         try {

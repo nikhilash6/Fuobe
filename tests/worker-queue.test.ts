@@ -206,6 +206,19 @@ describe("the workers' measured run reaches the billing service", () => {
     expect(report.gpuMs).toBe(42_000);
     expect(report.device).toBe("Test GPU B");
   });
+
+  it("a run whose jobs never finished on a worker reports no time, never its time in line", () => {
+    const now = Date.now();
+    const t = accountTask();
+    db().prepare("UPDATE generations SET status = 'failed', error = 'x', completed_at = ?, request_json = ? WHERE id = ?").run(now, JSON.stringify({ account: accountId, place: "pool", hold: `hold-${t.id}` }), t.generationId);
+    // It waited in line for 40 minutes: its start and end are far apart, and no worker measured anything.
+    db().prepare("INSERT OR REPLACE INTO generation_runs (id, submitted_at, started_at) VALUES (?, ?, ?)").run(t.generationId, now - 40 * MIN, now - 40 * MIN);
+    tasks.logWorkerJob("claimed", { id: t.id, generation_id: t.generationId, principal: `acct:${accountId}`, lane: "small" }, "w-1", now - 5 * MIN);
+    queueReports(now);
+    const report = JSON.parse((db().prepare("SELECT payload_json FROM billing_outbox WHERE key = ?").get(t.generationId) as { payload_json: string }).payload_json) as { gpuMs: number | null; device: string | null };
+    expect(report.gpuMs).toBeNull();
+    expect(report.device).toBeNull();
+  });
 });
 
 describe("the workers' log", () => {
