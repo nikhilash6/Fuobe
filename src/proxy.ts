@@ -283,8 +283,9 @@ function account(request: NextRequest, who: Account): NextResponse {
   // A tool its own GPU or key wouldn't run says so first: "Connect your GPU" only for what a GPU or a key unlocks.
   if (!ownGpuRun(request.method, pathname)) return ownGpuTool();
   // Neither its own GPU nor its own key: nothing it could run on. (Which one a run needs, the route says.)
-  // With hosted runs on (FUOBE_HOSTED_RUNS=1), a run in the studios may go to this install's GPUs: the route decides.
-  const hosted = hostedRunsOn() && request.method === "POST" && pathname === "/api/generations";
+  // With hosted runs on (FUOBE_HOSTED_RUNS=1), a run in the studios or a tool's run may go to this install's GPUs: the route
+  // decides (hosted-run.ts decidePlace, account-tool-run.ts placeOf).
+  const hosted = hostedRunsOn();
   if (!who.gpu && !hasCloudKey(who) && !hosted) return NextResponse.json({ error: CONNECT_GPU_OR_KEY_MESSAGE, code: "connect-gpu" }, { status: 403, headers: { [CONNECT_GPU_HEADER]: "1" } });
   return pass(request);
 }

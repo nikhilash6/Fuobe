@@ -4,7 +4,7 @@ import type { GenerationRequest } from "@/lib/catalog/types";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
 import { accountEngineMode } from "@/server/account-keys";
-import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer, toolWishes } from "@/server/account-tool-run";
 import { createGenerations } from "@/server/generations";
 import { GenerationRequestSchema } from "@/server/request-schema";
 
@@ -24,6 +24,7 @@ export async function POST(request: Request) {
   const account = viewer.account;
   const big = bodyTooBig(request);
   if (big) return big;
+  const wishes = await toolWishes(request);
   const text = await request.text().catch(() => "");
   if (Buffer.byteLength(text) > ACCOUNT_LIMITS.runBodyBytes) return refuse(413, ACCOUNT_MESSAGES.bodyTooBig);
   let raw: unknown = null;
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
     () =>
       runAccountTool(request, account, {
         tool: "image-to-3d",
+        ...wishes,
         files,
         plan: () => [{ request: run }],
         start: () => createGenerations(run),

@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import { CONNECT_GPU_HEADER, CONNECT_GPU_UPLOAD_MESSAGE, CONNECT_GPU_UPLOAD_OPEN_MESSAGE, KINETIC_UPLOAD_HEADER } from "@/lib/guest-access";
 import { accountProviders, paidAllowed } from "@/server/account-keys";
 import { policy as billingPolicy } from "@/server/billing";
-import { poolReady, poolTakesFiles } from "@/server/hosted";
+import { poolReady, poolUploads } from "@/server/hosted";
 import { imageSize } from "@/lib/image-size";
 import { sniffMedia, type SniffKind } from "@/lib/sniff";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
@@ -182,13 +182,13 @@ type Without = { hosted: Kinds | null; kinetic: boolean };
 
 /**
  * The kinds of file an account with no GPU or key of its own may add for runs on this install's GPUs (hosted runs): the
- * policy's, and only those this install's GPUs take.
+ * policy's, and only those this install's GPUs take (hosted.ts poolUploads, which the run reads too).
  */
 async function hostedUploads(accountId: string): Promise<Kinds | null> {
   if (!poolReady()) return null;
   const p = await billingPolicy(accountId);
   if (!p?.hosted) return null;
-  const kinds: Kinds = { image: p.uploads.image && poolTakesFiles("image"), video: p.uploads.video && poolTakesFiles("video"), audio: p.uploads.audio && poolTakesFiles("audio") };
+  const kinds: Kinds = poolUploads(p);
   return kinds.image || kinds.video || kinds.audio ? kinds : null;
 }
 

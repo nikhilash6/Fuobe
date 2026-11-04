@@ -26,10 +26,10 @@ import {
 } from "./billing";
 import { getModel } from "@/lib/catalog";
 import { PLACE_ASK_HEADER } from "@/lib/guest-access";
-import { createGenerations, outputKind, plannedSteps, previewGeneration, type PlannedStep } from "./generations";
+import { createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { poolLane } from "./computer/pool";
-import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
+import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolUploads, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
@@ -86,13 +86,13 @@ export type PlaceDecision =
   | { kind: "pool"; planned: Planned; policy: Policy; steps: RunFacts["steps"]; req: GenerationRequest; capped: boolean; light: boolean }
   | { kind: "refuse"; refusal: Refusal };
 
-const OWN: PlaceDecision = { kind: "own" };
+const OWN = { kind: "own" } as const;
 
 /** What an account whose own GPU didn't answer is asked, when its run named no place (never moved and charged unasked). */
 export const OWN_GPU_QUIET = "Your GPU isn't answering right now. Run this on this studio's GPUs instead, or try again when your GPU is back.";
 
 /** A run this install's GPUs won't take, refused in the words the price check before Run gives too. */
-const notOffered = (error: string): PlaceDecision => ({ kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
+const notOffered = (error: string): { kind: "refuse"; refusal: Refusal } => ({ kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
 
 const askPlace = (): Refusal => ({ status: 409, body: { error: OWN_GPU_QUIET, code: "own-gpu-offline" }, headers: { [PLACE_ASK_HEADER]: "1" } });
 
@@ -108,12 +108,19 @@ const stepEndpoint = (s: PlannedStep): string | undefined => {
 };
 
 /**
+ * A text step (the install's AI helper writing a script, lyrics or a translation) inside a run on this install's GPUs:
+ * it runs on the helper, costs nothing and is never counted against the policy's limits.
+ */
+export const helperStep = (provider: string): boolean => provider === "llm";
+
+/**
  * A ComfyUI step of CPU work (the requirements index marks it `cpu`: no model file, no first-run download, no graphics
  * memory and no card its nodes need, such as a filter, a trim, a join, adding sound or a Ken Burns move): light work that
  * costs nothing, that every policy allows, and that is never counted. A step whose nodes run on the card (RTX Video) is
- * GPU work, model file or not.
+ * GPU work, model file or not. A chain's text step (helperStep) is free too.
  */
 function freeStep(s: PlannedStep): boolean {
+  if (helperStep(s.provider)) return true;
   if (s.provider !== "comfyui") return false;
   const endpoint = stepEndpoint(s);
   if (!endpoint) return false;
@@ -216,8 +223,8 @@ export function poolGate(
   if (req.loras?.length) return { ok: false, reason: "loras" };
   if (p) {
     const inputs = inputCounts(req);
-    const takes = (k: "image" | "video" | "audio") => p.uploads[k] && poolTakesFiles(k);
-    if ((inputs.image && !takes("image")) || (inputs.video && !takes("video")) || (inputs.audio && !takes("audio"))) return { ok: false, reason: "inputs" };
+    const takes = poolUploads(p);
+    if ((inputs.image && !takes.image) || (inputs.video && !takes.video) || (inputs.audio && !takes.audio)) return { ok: false, reason: "inputs" };
   }
   // Every step of a chain, not only its first: each one the policy must allow, and the run is priced for all of them.
   const steps = planSteps();
@@ -230,7 +237,7 @@ export function poolGate(
  * The account a guest's price check plans a chain's later steps under: no real account has it (account ids hold no
  * colon), and nothing planned under it is kept (plannedSteps throws every row away).
  */
-const GUEST_PLAN = "guest:plan";
+export const GUEST_PLAN = "guest:plan";
 
 /** Every row a run would make on this install's GPUs, for an account or (planned as nobody's) for a guest's price check. */
 const stepsFor = (account: Account | null, req: GenerationRequest) => poolSteps(account?.id ?? GUEST_PLAN, req);
@@ -505,4 +512,155 @@ export async function poolQuote(
     if (over) q = { ...q, allowed: false, code: "limit", text: over.error };
   }
   return { planned, quote: q, line: line(queue, q) };
+}
+
+/**
+ * Tool runs (account-tool-run.ts: Genjutsu, Storyboard, Character Swap Studio, the apps and the other tools that plan a
+ * run as a pipeline of generations): the same decision as a studio run's, made once for the whole run. Every step goes
+ * through poolGate as a studio run would (a chain's later steps too); the run is priced once from every step, held once,
+ * and counted once against the policy's limits. A text step (a script, lyrics, a translation) runs on the install's AI
+ * helper for free; a join, a trim or adding sound is free CPU work. A run with no ComfyUI step at all stays where it
+ * runs today.
+ */
+
+/** One step of a tool's run, as the tool planned it: its request, and how many earlier steps it waits for. */
+export interface ToolRunStep {
+  request: GenerationRequest;
+  deps?: number;
+}
+
+/** A tool run on this install's GPUs: its policy, the step it is priced and held as, its steps priced once, and whether it is light work only. */
+export interface ToolPoolRun {
+  policy: Policy;
+  main: { req: GenerationRequest; planned: Planned };
+  steps: RunFacts["steps"];
+  light: boolean;
+}
+
+export type ToolPlaceDecision = { kind: "own" } | ({ kind: "pool" } & ToolPoolRun) | { kind: "refuse"; refusal: Refusal };
+
+/** A planned step as a row it would make (for a step that waits, whose own chain can't be planned before its inputs exist). */
+const asPlannedStep = (req: GenerationRequest, p: Planned, waits: boolean): PlannedStep => ({
+  id: "",
+  modelId: p.model.id,
+  op: p.op,
+  provider: p.route.provider,
+  kind: outputKind(p.op, p.model),
+  presetId: req.presetId ?? null,
+  waits,
+});
+
+/**
+ * Every step of a tool's run through poolGate, as `viewer` (an account's id, or null for a guest's price check):
+ * "unplanned" when a step can't be planned on this install's GPUs (a cloud model, a request with something wrong: the
+ * run goes where it goes today, which says what), or the first step's refusal; passed, the step the run is priced as
+ * (its first ComfyUI step) and every row the run would make.
+ */
+export function toolGate(
+  p: Policy | null,
+  viewer: string | null,
+  steps: ToolRunStep[],
+): "unplanned" | { ok: false; reason: GateReason } | { ok: true; main: ToolPoolRun["main"]; rows: PlannedStep[] } {
+  let main: ToolPoolRun["main"] | null = null;
+  const rows: PlannedStep[] = [];
+  for (const step of steps) {
+    const deps = step.deps ?? 0;
+    const { req } = poolRequest(step.request, p);
+    let planned: Planned;
+    try {
+      planned = runOnPool(viewer, () => previewChained(req, deps));
+    } catch {
+      return "unplanned";
+    }
+    if (helperStep(planned.route.provider)) {
+      rows.push(asPlannedStep(req, planned, deps > 0));
+      continue;
+    }
+    if (planned.route.provider !== "comfyui") return "unplanned";
+    const gate = poolGate(p, planned, req, () => (deps ? [asPlannedStep(req, planned, true)] : poolSteps(viewer ?? GUEST_PLAN, req)));
+    if (!gate.ok) return gate;
+    rows.push(...(gate.steps ?? [asPlannedStep(req, planned, deps > 0)]));
+    main ??= { req, planned };
+  }
+  return main ? { ok: true, main, rows } : "unplanned";
+}
+
+/**
+ * Where an account's tool run goes: decidePlace's order for a whole run. With hosted runs off, or asked for its own GPU,
+ * always "own" (today). An account with a GPU of its own keeps it first (unless the policy puts this install's first),
+ * and a run this install's GPUs won't take goes there; with none, it runs here or is refused in the price check's words.
+ */
+export async function decideToolPlace(account: Account, steps: ToolRunStep[], wish: PlaceWish): Promise<ToolPlaceDecision> {
+  if (!hostedRunsOn() || wish === "own" || !poolReady() || !steps.length) return OWN;
+  const ownFallback = !!accountGpu(account.id) && wish !== "pool";
+  let p = cachedPolicy(account.id);
+  let ownOffline = false;
+  if (ownFallback && !prefersPool(p)) {
+    const [online, read] = await Promise.all([ownGpuOnline(account.id), p === undefined ? billingPolicy(account.id) : Promise.resolve(p)]);
+    p = read;
+    if (!prefersPool(p)) {
+      if (online) return OWN;
+      ownOffline = true;
+    }
+  }
+  if (p === undefined) p = await billingPolicy(account.id);
+  if (!p) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_WAIT.run) };
+  if (!p.hosted) return wish === "pool" ? notOffered(HOSTED_WORDS.notHosted) : OWN;
+  const gate = toolGate(p, account.id, steps);
+  if (gate === "unplanned") return OWN;
+  if (!gate.ok) {
+    if (ownFallback) return OWN;
+    const error = gateWords(gate.reason, false);
+    return gate.reason === "model3d" ? { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } } : notOffered(error);
+  }
+  if (ownOffline) return { kind: "refuse", refusal: askPlace() };
+  return { kind: "pool", policy: p, main: gate.main, steps: pricedSteps(gate.rows), light: lightRun(gate.rows) };
+}
+
+/**
+ * A tool's price check on this install's GPUs (hosted runs on): the billing service's quote for the whole run, priced
+ * once from every step, and where it would stand in line; refused before Run for what the run would be refused for (the
+ * same toolGate, and the policy's limits). Null when the run wouldn't go there (its own GPU, its own key, today's answer).
+ */
+export async function toolPoolQuote(
+  account: Account | null,
+  steps: ToolRunStep[],
+  wish: PlaceWish,
+  o: { addr?: () => string | null } = {},
+): Promise<{ quote: Quote; line: PoolLine } | null> {
+  if (!hostedRunsOn() || wish === "own" || !poolReady() || !steps.length) return null;
+  const p = await billingPolicy(account?.id ?? null);
+  const hasGpu = !!account && !!accountGpu(account.id);
+  if (account && hasGpu && wish !== "pool" && !prefersPool(p) && (await ownGpuOnline(account.id))) return null;
+  if (p && !p.hosted) return null;
+  const gate = toolGate(p, account?.id ?? null, steps);
+  if (gate === "unplanned") return null;
+  const lineOf = (endpoint: string | undefined, q?: Quote): PoolLine => {
+    const facts = queueFacts(account?.id ?? null, endpoint);
+    return { place: Math.max(0, facts.ahead) + 1, etaSeconds: q?.etaS ?? facts.etaS ?? null };
+  };
+  if (!gate.ok) {
+    if (hasGpu && wish !== "pool") return null;
+    return { quote: notOfferedQuote(gateWords(gate.reason, !account)), line: lineOf(undefined) };
+  }
+  const endpoint = gate.main.planned.route.endpoint;
+  if (lightRun(gate.rows)) return { quote: FREE_QUOTE, line: lineOf(endpoint) };
+  const { req, planned } = gate.main;
+  const facts = { ...runOnPool(account?.id ?? null, () => runFacts(req, planned, outputKind(planned.op, planned.model))), steps: pricedSteps(gate.rows) };
+  let q = await billingQuote(account ? accountFacts(account) : null, facts, queueFacts(account?.id ?? null, endpoint));
+  if (q.allowed && account && p) {
+    const over = poolLimitRefusal(account.id, p, o.addr ?? null);
+    if (over) q = { ...q, allowed: false, code: "limit", text: over.error };
+  }
+  return { quote: q, line: lineOf(endpoint, q) };
+}
+
+/**
+ * Could a viewer's tool run go to this install's GPUs, before its plan is made: hosted runs ready, not asked for its own
+ * GPU, and no GPU of its own that goes first (or this install's asked for, or put first by the policy as last read). A
+ * tool whose plan can't be made as the viewer's own run (no GPU or key of its own to plan it on) is planned here then.
+ */
+export function poolMayTake(account: Account | null, wish: PlaceWish): boolean {
+  if (!hostedRunsOn() || wish === "own" || !poolReady()) return false;
+  return !account || !accountGpu(account.id) || wish === "pool" || prefersPool(cachedPolicy(account.id));
 }

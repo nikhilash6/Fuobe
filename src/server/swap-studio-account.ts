@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import type { z } from "zod";
 import { GUEST_HEADER, GUEST_LIBRARY_MESSAGE } from "@/lib/guest-access";
 import { projectRefsProblem, projectSavesLimited } from "./account-projects";
-import { bodyTooBig, guestRun, refusalResponse, runAccountTool, toolViewer } from "./account-tool-run";
+import { bodyTooBig, guestRun, refusalResponse, runAccountTool, toolViewer, toolWishes } from "./account-tool-run";
 import { requestViewer, type Account } from "./auth";
 import { AccountRunError, asAccount } from "./generations";
 import { recordExists } from "./records";
@@ -45,7 +45,11 @@ function refused(e: unknown): Response {
  * One of an account's jobs (see the header): `files` the request names itself (a clip's upload), checked first; then the
  * job planned, checked and started as one run. A job that makes nothing (a clip the cloud reads as filmed) is a save.
  */
-export async function runSwapJob(request: Request, account: Account, job: { run: () => unknown; files?: (string | null | undefined)[]; status?: number }): Promise<Response> {
+export async function runSwapJob(
+  request: Request,
+  account: Account,
+  job: { run: () => unknown; files?: (string | null | undefined)[]; status?: number; wishes?: Awaited<ReturnType<typeof toolWishes>> },
+): Promise<Response> {
   const bad = refsRefused(account.id, job.files ?? []);
   if (bad) return bad;
   let planned: Awaited<ReturnType<typeof planSwapJob>>;
@@ -65,7 +69,7 @@ export async function runSwapJob(request: Request, account: Account, job: { run:
     }
   }
   const files = [...(job.files ?? []), ...planned.files].filter((f): f is string => !!f);
-  const r = await runAccountTool(request, account, { tool: "character-swap", files, plan: () => planned.steps, start: () => startSwapJob(job.run) });
+  const r = await runAccountTool(request, account, { tool: "character-swap", files, plan: () => planned.steps, start: () => startSwapJob(job.run), ...job.wishes });
   return r.ok ? Response.json(r.value, { status }) : r.response;
 }
 
@@ -91,11 +95,12 @@ export function jobRoute<S extends z.ZodType>(
     }
     return handle(async () => {
       const { id } = await ctx.params;
+      const wishes = viewer.kind === "account" ? await toolWishes(request) : {};
       const b = await body(request, schema, message);
       if (viewer.kind === "owner") return Response.json(await start(id, b), { status: opts.status ?? 201 });
       const no = opts.refuse?.(b);
       if (no) return no;
-      return runSwapJob(request, viewer.account, { run: () => start(id, b), files: opts.files?.(b), status: opts.status });
+      return runSwapJob(request, viewer.account, { run: () => start(id, b), files: opts.files?.(b), status: opts.status, wishes });
     }, request);
   };
 }

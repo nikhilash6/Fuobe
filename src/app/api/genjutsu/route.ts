@@ -1,4 +1,4 @@
-import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer } from "@/server/account-tool-run";
+import { bodyTooBig, guestRun, onceForAccount, runAccountTool, toolViewer, toolWishes } from "@/server/account-tool-run";
 import { createGenjutsu, GenjutsuBodySchema, genjutsuSteps, planGenjutsuRun, startGenjutsu, type GenjutsuRun } from "@/server/genjutsu";
 import { body, handle, once } from "@/server/shorts-schemas";
 
@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     if (big) return big;
   }
   return handle(async () => {
+    const wishes = viewer.kind === "account" ? await toolWishes(request) : {};
     const input = await body(request, GenjutsuBodySchema, "Add a clip, pick a mode and add your references");
     // A repeated requestId (a second click on Generate) gets the run the first one started.
     if (viewer.kind === "owner") {
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
     return onceForAccount(viewer.account, "genjutsu", input.requestId, () =>
       runAccountTool(request, viewer.account, {
         tool: "genjutsu",
+        ...wishes,
         files: [input.source.url, input.mask, input.picture?.frame, ...(input.references ?? []), ...look],
         plan: async () => genjutsuSteps((run = await planGenjutsuRun(input, { owner: false }))),
         start: () => startGenjutsu(run!),

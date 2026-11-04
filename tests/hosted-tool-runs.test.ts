@@ -1,0 +1,240 @@
+import http from "node:http";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
+import { listenOnFreePort, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
+import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
+
+/**
+ * A tool's run (Storyboard here, and every tool that runs through account-tool-run.ts) for an account with no GPU of its
+ * own: with hosted runs on it runs on this install's GPUs through the same gate as a studio run, held and counted once
+ * however many steps it has; with them off, or for an account whose own GPU answers, nothing changes.
+ */
+const dir = tempDir("fuobe-hosted-tool-runs-");
+process.env.FUOBE_DATA_DIR = dir;
+process.env.FUOBE_PUBLIC_SIGNUP = "1";
+delete process.env.FUOBE_PASSWORD;
+delete process.env.FUOBE_HOSTED_RUNS;
+delete process.env.FUOBE_BILLING_URL;
+delete process.env.FUOBE_MODERATION_URL;
+delete process.env.ANTHROPIC_API_KEY;
+globalThis.__fuobeTestDiskFree = 1e13;
+
+const probe = http.createServer();
+const comfyPort = await listenOnFreePort(probe);
+await new Promise<void>((r) => probe.close(() => r()));
+const comfy: FakeComfy = await startFakeComfy({ output: "image", delayMs: 0, loras: [] }, comfyPort);
+process.env.COMFYUI_URL = comfy.url;
+
+const auth = await import("@/server/auth");
+const boardsRoute = await import("@/app/api/storyboards/route");
+const gpuRoute = await import("@/app/api/account/gpu/route");
+const { proxy } = await import("@/proxy");
+const { db } = await import("@/server/db");
+const { resetRates } = await import("@/server/rate");
+const billing = await import("@/server/billing");
+const hostedRun = await import("@/server/hosted-run");
+const toolRun = await import("@/server/account-tool-run");
+const { createGenerations } = await import("@/server/generations");
+const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
+const { drainOutbox } = await import("@/server/billing-outbox");
+
+let fake: FakeBilling;
+const ids: Record<string, string> = {};
+const cookies: Record<string, string> = {};
+beforeAll(async () => {
+  fake = await startFakeBilling();
+  auth.setPassword("install password");
+  for (const who of ["none", "gpu"]) {
+    ids[who] = auth.createAccount(`tools-${who}@example.com`, "long enough").id;
+    cookies[who] = `${auth.SESSION_COOKIE}=${auth.createSession(ids[who]).value}`;
+  }
+  globalThis.__fuobeTestGpuPort = comfy.port;
+  expect((await gpuRoute.PUT(json("/api/account/gpu", "PUT", { url: comfy.url }, "gpu"))).status).toBe(200);
+});
+afterAll(async () => {
+  globalThis.__fuobeTestDiskFree = undefined;
+  globalThis.__fuobeTestGpuPort = undefined;
+  for (const k of ["FUOBE_HOSTED_RUNS", "FUOBE_HOSTED_FREE", "FUOBE_BILLING_URL", "FUOBE_BILLING_TOKEN"]) delete process.env[k];
+  await fake.close();
+  await comfy.close();
+});
+beforeEach(() => {
+  resetRates();
+  billing.resetBillingCache();
+  delete process.env.FUOBE_HOSTED_RUNS;
+  delete process.env.FUOBE_HOSTED_FREE;
+  delete process.env.FUOBE_BILLING_URL;
+  delete process.env.FUOBE_BILLING_TOKEN;
+  fake.policy = { hosted: true, pool: {}, uploads: { image: true, video: false, audio: false }, limits: { activeRuns: 7, waiting: 7, runsPerHour: 70, outputsPerRun: 2, maxMegapixels: 7, maxSeconds: 7, keepDays: 7, spaceBytes: 7 }, ttlS: 0 };
+  db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
+});
+
+function json(url: string, method: string, body: unknown, who?: string): Request {
+  const text = JSON.stringify(body);
+  return new Request(`http://localhost:3000${url}`, {
+    method,
+    headers: { host: "localhost:3000", "content-type": "application/json", "content-length": String(Buffer.byteLength(text)), ...(who && { cookie: cookies[who] }) },
+    body: text,
+  });
+}
+const viaProxy = (url: string, who: string) =>
+  proxy(new NextRequest(`http://localhost:3000${url}`, { method: "POST", headers: { host: "localhost:3000", cookie: cookies[who], "content-type": "application/json" }, body: "{}" }));
+const passed = (r: Response) => r.headers.get("x-middleware-next") === "1";
+
+const SCENES = ["A model in an emerald gown on a palace stair at midnight", "She runs to a vintage car under the lamps", "The car on a coast road at dawn"];
+const board = async (who: string, extra: Record<string, unknown> = {}) => {
+  const r = await boardsRoute.POST(json("/api/storyboards", "POST", { engine: "open", scenes: SCENES, ...extra }, who));
+  return { status: r.status, body: (await r.json()) as { items?: { id: string }[]; error?: string; code?: string } };
+};
+/** The stored requests of an account's runs (as the runner reads them). */
+const stored = (who: string) =>
+  (db().prepare("SELECT request_json FROM generations WHERE json_extract(request_json, '$.account') = ? AND status IN ('queued', 'running', 'succeeded') ORDER BY created_at").all(ids[who]) as { request_json: string }[]).map(
+    (r) => JSON.parse(r.request_json) as { place?: string; hold?: string; light?: boolean },
+  );
+const reserves = () => fake.calls_of("/v1/reserve").length;
+const useBilling = () => {
+  process.env.FUOBE_BILLING_URL = fake.url;
+  process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
+};
+
+describe("hosted runs off (the default): tool runs are as before", () => {
+  it("an account with no GPU or key is asked to connect one, at the proxy and at the route", async () => {
+    const at = await viaProxy("/api/storyboards", "none");
+    expect(at.status).toBe(403);
+    expect(((await at.json()) as { code: string }).code).toBe("connect-gpu");
+    const r = await board("none");
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe("connect-gpu");
+    expect(stored("none")).toEqual([]);
+  });
+
+  it("the seam answers its own GPU or key, whatever the steps", async () => {
+    const place = await toolRun.placeOf(auth.accountById(ids.none)!, [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }]);
+    expect(place).toEqual({ kind: "own" });
+  });
+});
+
+describe("hosted runs on", () => {
+  beforeEach(() => {
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    process.env.FUOBE_HOSTED_FREE = "1";
+  });
+
+  it("a tool's run reaches its route for an account with no GPU of its own; other tools still say so", async () => {
+    expect(passed(await viaProxy("/api/storyboards", "none"))).toBe(true);
+    const other = await viaProxy("/api/enhance", "none");
+    expect(other.status).toBe(403);
+    expect(((await other.json()) as { code: string }).code).toBe("own-gpu-tool");
+  });
+
+  it("a board runs on this install's GPUs: every step stamped for there", async () => {
+    const r = await board("none");
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const rows = stored("none");
+    expect(rows.length).toBe(SCENES.length);
+    expect(rows.every((q) => q.place === "pool")).toBe(true);
+  });
+
+  it("with a billing service: one hold for the whole run, priced from every step, on every row", async () => {
+    useBilling();
+    const before = reserves();
+    // The price the client showed before Run comes back with the run (a run priced higher is asked about again).
+    const r = await board("none", { shown: { amount: fake.price.amount, priceVersion: fake.price.version } });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(reserves() - before).toBe(1);
+    const reserve = fake.calls_of("/v1/reserve").at(-1)!.body as { run: { steps?: { model: string; jobs: number }[] } };
+    expect(reserve.run.steps?.reduce((n, s) => n + s.jobs, 0)).toBe(SCENES.length);
+    const holds = new Set(stored("none").map((q) => q.hold));
+    expect(holds.size).toBe(1);
+    expect([...holds][0]).toBeTruthy();
+  });
+
+  it("a model the policy keeps off this install's GPUs refuses the run before anything is held or made", async () => {
+    useBilling();
+    fake.policy = { ...fake.policy, pool: { deny: ["oss-z-image-turbo"] } };
+    const steps = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    const place = await toolRun.placeOf(auth.accountById(ids.none)!, steps);
+    expect(place.kind).toBe("refuse");
+    if (place.kind === "refuse") expect(place.refusal.body.code).toBe("not-offered");
+    const before = reserves();
+    const rows = stored("none").length;
+    const r = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), auth.accountById(ids.none)!, { tool: "test", files: [], plan: () => steps, start: () => createGenerations(steps[0].request) });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(((await r.response.json()) as { code: string }).code).toBe("not-offered");
+    expect(reserves()).toBe(before);
+    expect(stored("none").length).toBe(rows);
+  });
+
+  it("a row the start makes that the policy doesn't allow stops the whole run, and its hold goes back", async () => {
+    useBilling();
+    fake.policy = { ...fake.policy, pool: { deny: ["oss-flux1-schnell"] } };
+    const plan = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    const rows = stored("none").length;
+    const r = await toolRun.runAccountTool(json("/api/x", "POST", {}, "none"), auth.accountById(ids.none)!, {
+      tool: "test",
+      files: [],
+      shown: { amount: fake.price.amount, priceVersion: fake.price.version },
+      plan: () => plan,
+      // A start that makes more than it planned: a step the policy leaves out.
+      start: () => [...createGenerations(plan[0].request), ...createGenerations({ feature: "image", modelId: "oss-flux1-schnell", prompt: "a fox in red" })],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.response.status).toBe(403);
+    expect(stored("none").length).toBe(rows);
+    await drainOutbox();
+    const hold = [...fake.holds.values()].at(-1);
+    expect(hold?.released).toBe(true);
+  });
+
+  it("a 3D model stays on an account's own GPU: refused here in the tools' words", async () => {
+    const steps = [{ request: { feature: "3d", modelId: "oss-pixal3d", op: "image-to-3d" as const, prompt: "", inputs: { images: ["/api/files/x.png"] } } }];
+    const place = await toolRun.placeOf(auth.accountById(ids.none)!, steps);
+    expect(place.kind).toBe("refuse");
+    if (place.kind === "refuse") {
+      expect(place.refusal.body.code).toBe("own-gpu-tool");
+      expect(place.refusal.body.error).toBe(OWN_GPU_TOOL_MESSAGE);
+    }
+  });
+
+  it("an account whose own GPU answers keeps it, and asking for its own GPU always keeps it", async () => {
+    const steps = [{ request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } }];
+    expect(await toolRun.placeOf(auth.accountById(ids.gpu)!, steps)).toEqual({ kind: "own" });
+    expect(await toolRun.placeOf(auth.accountById(ids.none)!, steps, "own")).toEqual({ kind: "own" });
+    expect((await toolRun.placeOf(auth.accountById(ids.gpu)!, steps, "pool")).kind).toBe("pool");
+  });
+
+  it("the price check before Run answers for the whole run: place, quote and line", async () => {
+    useBilling();
+    const plan = () => [
+      { request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" } },
+      { request: { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox at night" }, deps: 1 },
+    ];
+    const asNone = new Request("http://localhost:3000/api/x?preview=1", { method: "POST", headers: { host: "localhost:3000", cookie: cookies.none } });
+    const check = await toolRun.toolPriceCheck(asNone, plan);
+    expect(check?.place).toBe("pool");
+    expect(check?.quote.allowed).toBe(true);
+    expect(check?.line.place).toBeGreaterThanOrEqual(1);
+    const quote = fake.calls_of("/v1/quote").at(-1)!.body as { run: { steps?: { jobs: number }[] } };
+    expect(quote.run.steps?.reduce((n, s) => n + s.jobs, 0)).toBe(2);
+    // A guest's is priced too (as nobody's run); the owner's never comes here.
+    const guest = await toolRun.toolPriceCheck(new Request("http://localhost:3000/api/x?preview=1", { method: "POST", headers: { host: "localhost:3000" } }), plan);
+    expect(guest?.place).toBe("pool");
+    // A run asked for on its own GPU isn't priced here.
+    expect(await toolRun.toolPriceCheck(asNone, plan, "own")).toBeNull();
+  });
+});
+
+describe("text steps inside a run on this install's GPUs", () => {
+  const step = (modelId: string, provider: string, i: number) => ({ id: `s${i}`, modelId, op: "t2i", provider, kind: "image", presetId: null, waits: i > 0 });
+  it("run on the install's AI helper: allowed, never priced, never counted", () => {
+    const steps = [step("oss-text-llm", "llm", 0), step("oss-z-image-turbo", "comfyui", 1)];
+    expect(hostedRun.stepsProblem(billing.OPEN_POLICY, steps)).toBeNull();
+    expect(hostedRun.pricedSteps(steps).map((s) => s.model)).toEqual(["oss-z-image-turbo"]);
+    expect(hostedRun.lightRun(steps)).toBe(false);
+    // A cloud step still can't run there.
+    expect(hostedRun.stepsProblem(billing.OPEN_POLICY, [...steps, step("fal-flux", "fal", 2)])).not.toBeNull();
+  });
+});
+
+void TINY_PNG;

@@ -14,9 +14,14 @@ import { checkAccountLoras } from "./account-loras";
 import { requestViewer, type Account } from "./auth";
 import { db } from "./db";
 import { accountRun, AccountRunError, asAccount, asVisitor, outputKind, previewChained, type AccountRunRefusal } from "./generations";
+import { BILLING_HEADER, type Quote } from "./billing";
+import { queueRelease } from "./billing-outbox";
 import { gateGeneration, GPU_SETUP_HEADER } from "./gpu/gate";
 import { gpuTargetFor } from "./gpu/target";
-import { moderateRun } from "./hosted-run";
+import { runOnPool } from "./hosted";
+import { decideToolPlace, GUEST_PLAN, moderateRun, poolMayTake, readWishes, reservePool, stepsProblem, toolPoolQuote, type PlaceWish, type PoolLine, type Refusal, type ToolPoolRun } from "./hosted-run";
+import { cancelGeneration, captureRun, stepsOf } from "./generations";
+import { AdmitRefused, admitRun, clientAddress, poolLimitRefusal } from "./pool-limits";
 import { hit, unhit } from "./rate";
 import { withRunStamp, type RunStamp } from "./run-stamp";
 import { once } from "./shorts-schemas";
@@ -38,8 +43,11 @@ import { ShortsError } from "./shorts";
  * - a 3D model only on the account's own GPU or key (model3dAllowed): its finish runs on this server under its limits.
  *
  * Then the tool's own start runs inside asAccount (tenant.ts): every generation it creates is stamped as the account's,
- * reads only its files and goes to its GPU or key. Where a run goes is decided in one place (`placeOf`): today always the
- * account's own GPU or key. Hosted runs (the install's GPUs) hook in there.
+ * reads only its files and goes to its GPU or key. Where a run goes is decided in one place (`placeOf`): with hosted
+ * runs off, always the account's own GPU or key. With them on (FUOBE_HOSTED_RUNS=1), placeOf may put the whole run on
+ * this install's GPUs instead, through the same gate as a studio run (hosted-run.ts decideToolPlace): the policy's
+ * limits, one hold for the whole run priced from every step, and every row stamped for there (runOnPool). The checks of
+ * the account's own GPU above (its provider, the pre-flight, its LoRAs) then don't apply.
  *
  * The owner's runs never come here: a route runs them as before.
  */
@@ -139,25 +147,81 @@ export interface ToolStep {
   deps?: number;
 }
 
-/** Where an account's tool run goes. Today always its own GPU or key ("own"); hosted runs add the install's GPUs ("pool"). */
-export type ToolPlace = { kind: "own" } | { kind: "pool" };
+/**
+ * Where an account's tool run goes: its own GPU or key ("own", as always), this install's GPUs ("pool", hosted runs: the
+ * whole run's decision, policy and price, hosted-run.ts decideToolPlace), or a refusal in the price check's words.
+ */
+export type ToolPlace = { kind: "own" } | ({ kind: "pool" } & ToolPoolRun) | { kind: "refuse"; refusal: Refusal };
 
 /**
  * Whether a run placed here may make a 3D model. A 3D model is finished on this server under the account's own limits
  * (model3d-finish.ts): allowed on the account's own GPU or key, never on this install's GPUs (hosted runs don't offer 3D yet).
  */
-export const model3dAllowed = (place: ToolPlace): boolean => place.kind === "own";
+export const model3dAllowed = (place: Pick<ToolPlace, "kind">): boolean => place.kind === "own";
 
 /**
- * Where this run goes. The one place a tool run's placement is decided: hosted runs (hosted-run.ts decidePlace, the
- * billing hold and runOnPool) hook in here for tools, as POST /api/generations does for the studios. Until then a tool
- * runs on the account's own GPU or key, whatever FUOBE_HOSTED_RUNS says (docs/public-signup.md: "Every other tool still
- * needs the account's own GPU").
+ * Where this run goes. The one place a tool run's placement is decided, as decidePlace decides a studio run's: with
+ * hosted runs off (FUOBE_HOSTED_RUNS unset), or asked for its own GPU, always the account's own GPU or key. On, every
+ * step goes through the same gate as a studio run (hosted-run.ts toolGate); runAccountTool then holds the run's price
+ * once and starts it inside runOnPool and its stamp.
  */
-export async function placeOf(account: Account, steps: ToolStep[]): Promise<ToolPlace> {
-  void account;
-  void steps;
-  return { kind: "own" };
+export async function placeOf(account: Account, steps: ToolStep[], wish?: PlaceWish): Promise<ToolPlace> {
+  return decideToolPlace(account, steps, wish);
+}
+
+/**
+ * A tool's price check (`?preview=1` or its estimate route) on this install's GPUs: `{ place: "pool", quote, line }` to
+ * add to the tool's own answer, or null when the run wouldn't go there (the tool prices it as today). `plan` gives the
+ * run's steps as the viewer's run plans them; a plan that can't be made prices nothing here (the tool says why).
+ */
+export async function toolPriceCheck(
+  request: Request,
+  plan: () => ToolStep[] | Promise<ToolStep[]>,
+  wish?: PlaceWish,
+): Promise<{ place: "pool"; quote: Quote; line: PoolLine } | null> {
+  const v = toolViewer(request);
+  if (v.kind === "owner") return null;
+  const account = v.kind === "account" ? v.account : null;
+  if (!poolMayTake(account, wish)) return null;
+  let steps: ToolStep[];
+  try {
+    steps = account ? await planAs(account, plan, wish) : await runOnPool(GUEST_PLAN, plan);
+  } catch {
+    return null;
+  }
+  const q = await toolPoolQuote(account, steps, wish, { addr: () => clientAddress(request) });
+  return q && { place: "pool", quote: q.quote, line: q.line };
+}
+
+/**
+ * What a tool's run body carries beside the tool's own fields (hosted-run.ts readWishes): the place the client prefers
+ * and the price it showed before Run. Read from a copy, before the route reads the body itself.
+ */
+export async function toolWishes(request: Request): Promise<{ place?: PlaceWish; shown?: { amount: number; priceVersion: string } | null }> {
+  const raw = await request
+    .clone()
+    .json()
+    .catch(() => null);
+  const { wish, shown } = readWishes(raw);
+  return { ...(wish && { place: wish }), shown };
+}
+
+/**
+ * A tool's plan as the account's own run plans it (its GPU, its keys), as always. When that can't be made (no GPU or
+ * key of its own to plan it on) and the run could go to this install's GPUs, it is planned as a run there instead; the
+ * first plan's refusal stands when neither can be made.
+ */
+async function planAs(account: Account, plan: () => ToolStep[] | Promise<ToolStep[]>, wish: PlaceWish | undefined): Promise<ToolStep[]> {
+  try {
+    return await asAccount(account.id, plan);
+  } catch (e) {
+    if (!poolMayTake(account, wish)) throw e;
+    try {
+      return await runOnPool(account.id, plan);
+    } catch {
+      throw e;
+    }
+  }
 }
 
 export interface AccountToolRun<T> {
@@ -174,6 +238,10 @@ export interface AccountToolRun<T> {
   start: () => T | Promise<T>;
   /** `gpuCheck: "skip"` from the request (the pre-flight's "Run anyway"). */
   skipGpuCheck?: boolean;
+  /** The place the client prefers (hosted-run.ts readWishes): "own", "pool", or none. */
+  place?: PlaceWish;
+  /** The price the client showed before Run (hosted-run.ts readWishes). */
+  shown?: { amount: number; priceVersion: string } | null;
 }
 
 export type AccountToolResult<T> = { ok: true; value: T; gpuWarning?: string } | { ok: false; response: Response };
@@ -241,23 +309,23 @@ export async function runAccountTool<T>(request: Request, account: Account, run:
   if (problem) return back(refuse(problem.status, problem.error, { code: problem.code }));
   let steps: ToolStep[];
   try {
-    steps = await asAccount(id, run.plan);
+    steps = await planAs(account, run.plan, run.place);
   } catch (e) {
     return back(errorResponse(e));
   }
   if (!steps.length) return back(refuse(422, "Nothing to run yet."));
-  const place = await placeOf(account, steps);
+  const place = await placeOf(account, steps, run.place);
+  if (place.kind === "refuse") return back(refuse(place.refusal.status, place.refusal.body.error, place.refusal.body, place.refusal.headers));
+  if (place.kind === "pool") return startOnPool(request, account, run, steps, files, place, back);
   let gpuWarning: string | undefined;
   let kind: MediaKind = "video";
   let onKey = false;
   try {
     // Each step's provider must be one the account has; a 3D model only where model3dAllowed says.
     const planned: Planned[] = steps.map((s) => ({ step: s, p: asAccount(id, () => previewChained(s.request, s.deps ?? 0)) }));
-    if (place.kind === "own") {
-      for (const provider of new Set(planned.map((x) => x.p.route.provider))) {
-        const own = accountRun(id, provider, "submit");
-        if ("error" in own) return back(refusalResponse(own));
-      }
+    for (const provider of new Set(planned.map((x) => x.p.route.provider))) {
+      const own = accountRun(id, provider, "submit");
+      if ("error" in own) return back(refusalResponse(own));
     }
     if (!model3dAllowed(place) && planned.some(({ p }) => outputKind(p.op, p.model) === "model3d" && p.model.id !== ANY_ANGLE.buildModel)) return back(ownGpuTool());
     // GPU pre-flight on its own ComfyUI: a step sure to fail for something missing stops the run with the plan that
@@ -282,10 +350,7 @@ export async function runAccountTool<T>(request: Request, account: Account, run:
     return back(errorResponse(e));
   }
   // The moderation service's check (none set: nothing is checked), on the run's words and its files.
-  const first = steps.find((s) => !s.deps) ?? steps[0];
-  const words = steps.map((s) => s.request.prompt?.trim()).filter(Boolean);
-  const checked: GenerationRequest = { ...first.request, prompt: [...new Set(words)].join("\n").slice(0, 8000), inputs: filesAsInputs(files) };
-  const mod = await moderateRun(account, checked, null, "own", { kind, place: onKey ? "own-key" : "own-gpu" });
+  const mod = await moderateRun(account, checkedRequest(steps, files), null, "own", { kind, place: onKey ? "own-key" : "own-gpu" });
   if (!mod.ok) return back(refuse(mod.refusal.status, mod.refusal.body.error, mod.refusal.body, mod.refusal.headers));
   const stamp: RunStamp | null = mod.checkOutputs ? { checkOutputs: true } : null;
   // Counted again just before the run is stored, with nothing awaited in between.
@@ -296,4 +361,97 @@ export async function runAccountTool<T>(request: Request, account: Account, run:
   } catch (e) {
     return back(errorResponse(e));
   }
+}
+
+/** What the moderation service checks of a tool's run: its words (every step's, once each) and its files. */
+function checkedRequest(steps: ToolStep[], files: string[]): GenerationRequest {
+  const first = steps.find((s) => !s.deps) ?? steps[0];
+  const words = steps.map((s) => s.request.prompt?.trim()).filter(Boolean);
+  return { ...first.request, prompt: [...new Set(words)].join("\n").slice(0, 8000), inputs: filesAsInputs(files) };
+}
+
+const isThenable = (v: unknown): v is PromiseLike<unknown> => !!v && typeof (v as { then?: unknown }).then === "function";
+
+/**
+ * A tool run on this install's GPUs (placeOf said "pool"): the policy's limits on runs there (never for light work
+ * only), the moderation service's check, one hold for the whole run priced from every step (none for light work: free),
+ * then the run made as the account's run there (runOnPool, every row stamped with its place and hold) and counted in
+ * the same transaction (admitRun). Every row it makes is checked against the policy again before anything is sent
+ * (stepsProblem): a step the policy doesn't allow stops the whole run, its rows are stopped, and its hold goes back.
+ * Its own GPU's checks (the pre-flight, its LoRAs) don't apply here.
+ */
+async function startOnPool<T>(
+  request: Request,
+  account: Account,
+  run: AccountToolRun<T>,
+  steps: ToolStep[],
+  files: string[],
+  pool: Extract<ToolPlace, { kind: "pool" }>,
+  back: (response: Response) => AccountToolResult<T>,
+): Promise<AccountToolResult<T>> {
+  const id = account.id;
+  const addr = clientAddress(request);
+  const over = pool.light ? null : poolLimitRefusal(id, pool.policy, addr);
+  if (over) return back(refuse(over.status, over.error, { code: over.code }, { "Retry-After": String(over.retryAfterS) }));
+  const kind = outputKind(pool.main.planned.op, pool.main.planned.model);
+  const mod = await moderateRun(account, checkedRequest(steps, files), null, "pool", { kind, place: "pool" });
+  if (!mod.ok) return back(refuse(mod.refusal.status, mod.refusal.body.error, mod.refusal.body, mod.refusal.headers));
+  let stamp: RunStamp;
+  if (pool.light) stamp = { place: "pool", light: true, ...(mod.checkOutputs && { checkOutputs: true }) };
+  else {
+    const held = await reservePool(account, pool.main.req, pool.main.planned, run.shown ?? null, mod.checkOutputs, pool.steps);
+    if (!held.ok) return back(refuse(held.refusal.status, held.refusal.body.error, held.refusal.body, held.refusal.headers));
+    stamp = held.stamp;
+  }
+  const release = () => {
+    if (stamp.hold) queueRelease(stamp.hold);
+  };
+  const notOffered = (error: string) => refuse(403, error, { code: "not-offered" }, { [BILLING_HEADER]: "not-offered" });
+  type Made = { value: T | Promise<T>; ids: string[]; start: () => void };
+  let admitted: { ok: true; value: Made } | { ok: false; refusal: { status: number; error: string; code: string; retryAfterS?: number } };
+  try {
+    admitted = runOnPool(id, () =>
+      withRunStamp(stamp, () =>
+        admitRun({ accountId: id, pool: pool.light ? null : { policy: pool.policy, addr } }, (): Made => {
+          const made = captureRun(run.start);
+          // A tool that makes its rows as it goes (after an await) is checked once they are all made, below.
+          if (!isThenable(made.value)) {
+            const problem = stepsProblem(pool.policy, stepsOf(made.ids));
+            if (problem) throw new AdmitRefused({ status: 403, error: problem, code: "not-offered" });
+          }
+          return made;
+        }),
+      ),
+    );
+  } catch (e) {
+    release();
+    return back(errorResponse(e));
+  }
+  if (!admitted.ok) {
+    release();
+    const r = admitted.refusal;
+    return back(r.code === "not-offered" ? notOffered(r.error) : refuse(r.status, r.error, { code: r.code }, { "Retry-After": String(r.retryAfterS ?? 30) }));
+  }
+  const made = admitted.value;
+  /** Stop what was made (nothing of it was sent) and give the hold back. */
+  const undo = () => {
+    for (const g of made.ids) void cancelGeneration(g);
+    release();
+  };
+  let value: T;
+  try {
+    value = await made.value;
+  } catch (e) {
+    undo();
+    return back(errorResponse(e));
+  }
+  if (isThenable(made.value)) {
+    const problem = stepsProblem(pool.policy, stepsOf(made.ids));
+    if (problem) {
+      undo();
+      return back(notOffered(problem));
+    }
+  }
+  made.start();
+  return { ok: true, value };
 }

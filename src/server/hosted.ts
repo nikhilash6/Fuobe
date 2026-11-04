@@ -85,15 +85,28 @@ export function poolTakes(endpoint: string | undefined): boolean {
 }
 
 /**
- * The steps a run on this install's GPUs can carry out there: ComfyUI's. The price check, the run's admission and its
- * submit read this one table, so a run is refused before Run when a step of it couldn't run there (a text step, a step
- * made in the browser, a cloud model), never part way through.
+ * The steps a run on this install's GPUs can carry out there: ComfyUI's, and a chain's text steps (a script, lyrics, a
+ * translation), which the install's AI helper writes for free. The price check, the run's admission and its submit read
+ * this one table, so a run is refused before Run when a step of it couldn't run there (a step made in the browser, a
+ * cloud model), never part way through.
  */
-const POOL_PROVIDERS: ReadonlySet<string> = new Set(["comfyui"]);
+const POOL_PROVIDERS: ReadonlySet<string> = new Set(["comfyui", "llm"]);
 export const poolRunsProvider = (provider: string): boolean => POOL_PROVIDERS.has(provider);
 
 /** May a run on this install's GPUs send them this kind of file (the workers take only the kinds the install allows)? */
 export const poolTakesFiles = (kind: "image" | "video" | "audio"): boolean => !poolOnWorkers() || workersTake(kind);
+
+/**
+ * The kinds of input file a run on this install's GPUs may use, read in one place by the upload route, the price check
+ * and the run: a kind the policy's `uploads` allows and the install's GPUs take (poolTakesFiles). With no billing
+ * service the policy is the open one (pictures only), and clips and sound follow what the workers take
+ * (FUOBE_POOL_MEDIA_INPUTS): each worker makes every clip and sound again before its ComfyUI reads it.
+ */
+export function poolUploads(p: Pick<Policy, "uploads">): { image: boolean; video: boolean; audio: boolean } {
+  const open = !billingConfigured() && poolOnWorkers();
+  const takes = (kind: "image" | "video" | "audio") => (!!p.uploads?.[kind] || (open && kind !== "image")) && poolTakesFiles(kind);
+  return { image: takes("image"), video: takes("video"), audio: takes("audio") };
+}
 
 /**
  * Run `fn` as an account's run on this install's GPUs: as the account (its own files and runs only), on this install's
