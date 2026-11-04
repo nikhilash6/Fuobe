@@ -344,8 +344,10 @@ describe("accounts never see or change the owner's library", () => {
     const cookie = auth.createSession(auth.createAccount("influencer@example.com", "long enough").id).value;
     expect(passed(proxy(req("/api/influencer?preview=1", { method: "POST" })))).toBe(true);
     expect(passed(proxy(req("/api/influencer?preview=1", { method: "POST", cookie })))).toBe(true);
-    // Its run isn't one an account's GPU runs either: the account's own-gpu-tool, not the sign-up card.
-    expect(proxy(req("/api/influencer", { method: "POST" })).status).toBe(403);
+    // Its run is an account's (src/server/tool-runs.ts): a guest gets the sign-up card, an account with no GPU or key
+    // "Connect your GPU".
+    expect(proxy(req("/api/influencer", { method: "POST" })).status).toBe(401);
+    expect(proxy(req("/api/influencer", { method: "POST", cookie })).headers.get(access.CONNECT_GPU_HEADER)).toBe("1");
   });
 });
 

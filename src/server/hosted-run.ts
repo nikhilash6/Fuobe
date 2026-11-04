@@ -578,7 +578,8 @@ export function toolGate(
     }
     if (planned.route.provider !== "comfyui") return "unplanned";
     const gate = poolGate(p, planned, req, () => (deps ? [asPlannedStep(req, planned, true)] : poolSteps(viewer ?? GUEST_PLAN, req)));
-    if (!gate.ok) return gate;
+    // A tool adds its LoRAs itself (a person adds none to it): said as a step that runs on an own GPU, not as extra LoRAs.
+    if (!gate.ok) return gate.reason === "loras" ? { ok: false, reason: "notOffered" } : gate;
     rows.push(...(gate.steps ?? [asPlannedStep(req, planned, deps > 0)]));
     main ??= { req, planned };
   }

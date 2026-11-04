@@ -284,6 +284,9 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/genjutsu\/describe$/,
   // Character Swap Studio's jobs on an account's own project (src/server/swap-studio-account.ts).
   /^\/api\/swap-studio\/projects\/[^/]+\/(anchors|assemble|clips|masks|prepare|queue|sharpen|transcribe)$/,
+  // Apps made in one go from the account's own pictures (src/server/tool-runs.ts): AI Influencer, Photodump, Fashion
+  // Factory, Character Sheet, Turnaround and Fly around.
+  /^\/api\/(influencer|photodump|photodump\/fashion|photodump\/character|turnaround|fly-around)$/,
 ];
 
 /**

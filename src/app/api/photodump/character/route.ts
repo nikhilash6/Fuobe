@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { createSheet, previewSheet, type SheetRun } from "@/server/photodump";
 import { refusedRun } from "@/server/connect-refusal";
+import { bodyTooBig, guestRun, toolViewer, toolWishes } from "@/server/account-tool-run";
+import { runToolForAccount, withPoolPrice } from "@/server/tool-runs";
 
 const Engine = z.enum(["cloud", "open"]);
 
@@ -32,13 +34,35 @@ function bodyError(mode: unknown, issues: z.core.$ZodIssue[]): string {
 /**
  * Character Sheet: a turnaround sheet from 1–5 reference photos, from a Soul Cast build, or from a
  * description (the AI Influencer app). `?preview=1` prices it instead.
+ *
+ * The owner's run as always; an account's with only its own pictures, after the checks every tool run gets
+ * (src/server/tool-runs.ts); a guest signs up first.
  */
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { mode?: unknown } | null;
+  const viewer = toolViewer(request);
+  const preview = !!new URL(request.url).searchParams.get("preview");
+  if (viewer.kind === "guest" && !preview) return guestRun();
+  if (viewer.kind === "account" && !preview) {
+    const big = bodyTooBig(request);
+    if (big) return big;
+  }
+  const wishes = viewer.kind === "owner" ? {} : await toolWishes(request);
+  const body = (await request.json().catch(() => null)) as { mode?: unknown; requestId?: unknown } | null;
   const parsed = Body.safeParse(body);
   if (!parsed.success) return Response.json({ error: bodyError(body?.mode, parsed.error.issues) }, { status: 400 });
   const input = parsed.data as SheetRun;
-  if (new URL(request.url).searchParams.get("preview")) return Response.json(previewSheet(input));
+  const start = () => createSheet(input);
+  if (preview) return Response.json(await withPoolPrice(request, previewSheet(input), start, wishes.place));
+  if (viewer.kind === "account") {
+    return runToolForAccount(request, viewer.account, {
+      tool: "character-sheet",
+      files: input.mode === "reference" ? input.images : [],
+      requestId: typeof body?.requestId === "string" && body.requestId.length <= 64 ? body.requestId : undefined,
+      wishes,
+      start,
+      ok: (value, gpuWarning) => Response.json({ ...value, ...(gpuWarning && { gpuWarning }) }, { status: 201 }),
+    });
+  }
   try {
     return Response.json(createSheet(input), { status: 201 });
   } catch (e) {
