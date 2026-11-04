@@ -128,7 +128,7 @@ export const EXAMPLE_LINES: Record<string, string> = {
   "app-billboard-ad": "A perfume ad over the skyline",
   "app-giant-product": "A lipstick towers over the city",
   "app-packshot": "A handbag, cut out on clean white",
-  "app-clean-up-voice": "A noisy brasserie, a clear voice",
+  "app-clean-up-voice": "A noisy restaurant, a clear voice",
   "effect-paper": "Whale and sea, redrawn in cut paper",
   "genjutsu-group-swap": "Two people swapped in one take",
 };

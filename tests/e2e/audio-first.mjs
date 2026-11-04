@@ -2,9 +2,9 @@
 // Usage: node tests/e2e/audio-first.mjs [appUrl] [shotsDir]   Exits 1 if any check fails.
 //
 // At 390 and 1440, as a guest:
-// 1. /audio: the Modes row starts with Clean up voice and it is the selected tab; the page is its demo ("Hear her, not
-//    the room."); nothing shifts while it loads; the only pictures and sounds it loads are the demo's (no other mode's
-//    covers or clips).
+// 1. /audio: the Modes row starts with Clean up voice and it is the selected tab; the page is its demo ("Studio-clean
+//    voice from any recording."); nothing shifts while it loads; the only pictures and sounds it loads are the demo's
+//    (no other mode's covers or clips).
 // 2. The other tabs still open their own pages (Speech at /audio/speech, Music), and Clean up voice brings /audio back.
 // 3. Old links: /audio/clean is the same tool with its tab selected; /audio?mode=speech and ?mode=music land on their
 //    pages; links made for Speech when it was /audio (/audio?voice=…, ?prompt=…, ?model=…) open Speech, query kept.
@@ -59,7 +59,7 @@ for (const [label, device] of [
   check(row[0]?.id === "clean" && row[0]?.name === "Clean up voice", `${label}: Clean up voice is the first tab`, row.slice(0, 4).map((t) => t.name).join(" › "));
   check(row.filter((t) => t.on).map((t) => t.id).join() === "clean", `${label}: on /audio, Clean up voice is the selected tab`);
   check(row[1]?.id === "speech", `${label}: Speech comes next (the old default, still a tab)`);
-  check(await p.getByRole("heading", { name: "Hear her, not the room." }).first().isVisible(), `${label}: /audio shows the Clean up voice demo`);
+  check(await p.getByRole("heading", { name: "Studio-clean voice from any recording." }).first().isVisible(), `${label}: /audio shows the Clean up voice demo`);
   check((await p.title()).startsWith("Audio"), `${label}: the page title is Audio`, await p.title());
   if (ENGINE === "chromium") {
     const cls = await p.evaluate(() => window.__cls);
@@ -77,7 +77,7 @@ for (const [label, device] of [
   for (const [name, to, heading] of [
     ["Speech", "/audio/speech", "Give it a voice"],
     ["Music", "/audio/music", null],
-    ["Clean up voice", "/audio", "Hear her, not the room."],
+    ["Clean up voice", "/audio", "Studio-clean voice from any recording."],
   ]) {
     const tab = p.locator('nav[aria-label="Modes"] a[data-mode]').filter({ hasText: new RegExp(`^${name}$`) }).first();
     await tab.scrollIntoViewIfNeeded();
@@ -90,7 +90,7 @@ for (const [label, device] of [
 
   // 3. Old links.
   await openRoute(p, `${app}/audio/clean`);
-  check((await tabs(p)).find((t) => t.on)?.id === "clean" && (await p.getByRole("heading", { name: "Hear her, not the room." }).first().isVisible()), `${label}: /audio/clean is the same tool, its tab selected`);
+  check((await tabs(p)).find((t) => t.on)?.id === "clean" && (await p.getByRole("heading", { name: "Studio-clean voice from any recording." }).first().isVisible()), `${label}: /audio/clean is the same tool, its tab selected`);
   for (const [from, to] of [
     ["/audio?mode=speech", "/audio/speech"],
     ["/audio?mode=music", "/audio/music"],

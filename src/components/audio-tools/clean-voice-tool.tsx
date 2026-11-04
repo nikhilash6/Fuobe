@@ -321,7 +321,7 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
             <Button
               variant="outline"
               className="h-11 rounded-full px-5"
-              onClick={() => take({ ref: DEMO_MEDIA.noisy, preview: DEMO_MEDIA.noisy, kind: "audio", id: nanoid(6), name: "Brasserie recording.m4a" })}
+              onClick={() => take({ ref: DEMO_MEDIA.noisy, preview: DEMO_MEDIA.noisy, kind: "audio", id: nanoid(6), name: "Restaurant recording.m4a" })}
             >
               <Sparkles className="size-4" />
               Try it on this recording
