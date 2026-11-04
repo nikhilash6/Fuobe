@@ -292,6 +292,15 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
 };
 
 /**
+ * What an operation makes on a model of this kind: colour matching works on images and videos, fal renders a timeline
+ * as a video, and a 3D scene is a mesh on the open engine and a depth map (an image) on the cloud, so those follow the
+ * model.
+ */
+export function operationOutput(op: Operation, modelKind: MediaKind): MediaKind {
+  return op === "color-match" || op === "timeline" || op === "scene-3d" ? modelKind : OPERATION_OUTPUT[op];
+}
+
+/**
  * Video codecs and containers an export or HDR job can write (params.format): H.264 MP4, 10-bit H.265
  * MP4, ProRes 422 HQ or 4444 in a .mov, lossless FFV1 in a .mkv, or a 16-bit EXR frame sequence.
  * The open engine's HDR is also written as 10-bit H.264 in BT.2020 with the HLG or PQ (HDR10) curve

@@ -192,7 +192,9 @@ describe("the output check", () => {
     await checks.sweepOutputChecks(Date.now() + 25 * 3_600_000);
     expect(row(id).status).toBe("failed");
     expect(row(id).error).toBe(checks.UNCHECKED_WORDS);
-    expect(getGeneration(id)!.error).toBe(checks.UNCHECKED_WORDS);
+    // Nothing was set aside for it (no billing service): the account reads the sentence without the charge.
+    expect(getGeneration(id)!.error).toBe(checks.UNCHECKED_WORDS.replace(/ Not charged\.$/, ""));
+    expect(getGeneration(id)!.error).not.toContain("charged");
     expect(db().prepare("SELECT 1 FROM assets WHERE id = ?").get(file)).toBeUndefined();
   });
 });

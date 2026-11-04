@@ -4,10 +4,11 @@ import { nanoid } from "nanoid";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useAskBeforeUpload } from "@/lib/api";
+import { dropHeld } from "@/lib/held-files";
 import { MAX_KEYFRAMES } from "@/lib/catalog/keyframes";
 import { acceptedKinds, addFrame, fitAttachments, noRoomMessage, onImageChange, placeAttachment, removeFrame, replaceAttachment } from "@/lib/composer";
 import type { InputSlot, MediaKind } from "@/lib/catalog/types";
-import { fileToSlot, kindOfFile, type SlotValue } from "./media-slot";
+import { fileToSlot, heldSlot, kindOfFile, type SlotValue } from "./media-slot";
 import { useStudio, type Draft, type SlotKey } from "./studio-context";
 
 /**
@@ -17,11 +18,27 @@ import { useStudio, type Draft, type SlotKey } from "./studio-context";
  */
 const inflight = new Map<string, { ac: AbortController; seen: boolean }>();
 
+/**
+ * The kept files (src/lib/held-files.ts) one draft held and no longer holds, to forget: `seen` is that draft's own
+ * list (updated here), so a file another studio's draft holds is never dropped by this one.
+ */
+export function heldToDrop(seen: Set<string>, held: ReadonlySet<string>): string[] {
+  for (const id of held) seen.add(id);
+  const gone = [...seen].filter((id) => !held.has(id));
+  for (const id of gone) seen.delete(id);
+  return gone;
+}
+
 /** Abort uploads whose attachment is gone from the draft. Mount once, where the draft is read. */
 export function useUploadReaper(draft: Pick<Draft, "slots" | "refs" | "frames">) {
+  // A guest's kept files this draft has held: one it takes out is forgotten too (each studio page has its own draft).
+  const heldSeen = useRef(new Set<string>());
   useEffect(() => {
+    const values = [...Object.values(draft.slots), ...draft.refs, ...(draft.frames ?? []).map((f) => f.value)];
+    const held = new Set(values.map((v) => v?.held).filter((x): x is string => !!x));
+    for (const id of heldToDrop(heldSeen.current, held)) void dropHeld(id);
     if (!inflight.size) return;
-    const ids = new Set([...Object.values(draft.slots), ...draft.refs, ...(draft.frames ?? []).map((f) => f.value)].map((v) => v?.id).filter(Boolean));
+    const ids = new Set(values.map((v) => v?.id).filter(Boolean));
     for (const [id, e] of inflight) {
       if (ids.has(id)) e.seen = true;
       else if (e.seen) {
@@ -44,9 +61,10 @@ const MAX_AT_ONCE = 8;
  * id (never re-added if it was removed meanwhile). A file with no room (references full, or a
  * model that takes none) is never uploaded: the person is told why instead. Someone whose upload
  * would be refused (a guest, an account with neither its own GPU nor its own key) gets that card
- * at once, before any preview is placed.
+ * at once, before any preview is placed. With `hold` (a guest, hosted runs on), a file is kept in this browser
+ * instead of uploaded, until the guest signs up (src/lib/held-files.ts).
  */
-export function useAttach(slots: InputSlot[], refMax: number) {
+export function useAttach(slots: InputSlot[], refMax: number, { hold = false }: { hold?: boolean } = {}) {
   const { config, draft, setDraft } = useStudio();
   // The latest draft, to check for room before an upload starts (callbacks outlive renders).
   const latest = useRef(draft);
@@ -58,6 +76,11 @@ export function useAttach(slots: InputSlot[], refMax: number) {
   /** Upload a file: `place` runs once with the local preview, the result replaces it by id. */
   const start = useCallback(
     (file: File, place: (v: SlotValue) => void, kind?: MediaKind) => {
+      if (hold) {
+        const v = heldSlot(file, nanoid(8), kind);
+        if (v) place(v);
+        return;
+      }
       if (askFirst()) return;
       const id = nanoid(8);
       const entry = { ac: new AbortController(), seen: false };
@@ -83,7 +106,7 @@ export function useAttach(slots: InputSlot[], refMax: number) {
         { signal: entry.ac.signal },
       );
     },
-    [setDraft, askFirst],
+    [setDraft, askFirst, hold],
   );
 
   const kinds = useMemo(() => new Set<MediaKind>(acceptedKinds(slots, config.multiRef)), [slots, config.multiRef]);
@@ -119,7 +142,7 @@ export function useAttach(slots: InputSlot[], refMax: number) {
   const attachFiles = useCallback(
     (files: File[]) => {
       // A paste, a drop on the page or the "+" menu: one card for the lot, and no toast about kinds or room on top.
-      if (askFirst()) return;
+      if (!hold && askFirst()) return;
       const frames = latest.current.frames;
       // Frames mode: each still becomes the next frame, up to ten.
       const usable = files.filter((f) => (frames ? kindOfFile(f) === "image" : kinds.has(kindOfFile(f))));
@@ -137,7 +160,7 @@ export function useAttach(slots: InputSlot[], refMax: number) {
       if (rejected.length) noRoom();
       for (const i of placed) start(batch[i], place);
     },
-    [askFirst, kinds, start, place, noRoom, slots, config.multiRef, refMax],
+    [askFirst, hold, kinds, start, place, noRoom, slots, config.multiRef, refMax],
   );
 
   /** A slot tile: replace its value (an upload it held is cancelled by the reaper). A drawing belongs to the image it was made on. */

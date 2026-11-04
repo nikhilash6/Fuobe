@@ -102,13 +102,21 @@ gets no answer, the last answer (or none) stands for 5 seconds (60 for a guest) 
 | `POST /v1/account-event` | `{ event: "created" \| "verified" \| "signed-in" \| "deleted", account: AccountFacts }` | `{ ok: true }` |
 | `POST /v1/interest` | `{ account, key }` | `{ ok: true, text }` |
 
+The price check before Run shows the quote's `text` (and `sub`) as they are. Under the toolbar (and in the price's
+tooltip) it shows where a new run would stand in line and the wait, about: the quote's `etaS`, else the line's own
+estimate. A quote with `allowed: false` turns Run off and puts its `text` in the price slot, with its `action` link or
+`offer`. Fuobe also refuses the check itself, with the words the run would get, for the policy's limits
+(`code: "limit"`) and for what this install's GPUs don't take (`code: "not-offered"`: a model, a kind, LoRAs, files
+or a chain's later step), so Run never fails on them once pressed. The page asks for a quote again by itself: every
+15 s while it is refused, every 30 s while it is allowed, and at once when a run starts or ends.
+
 `shown` is the price the person saw before pressing Run. A service must never charge more than it: when the price would
 be higher, it refuses with `price-changed` and the new quote, and the person sees the new price before running again.
 
-A reserve's `text` is shown on the result once it succeeded ("7 units"). A run that set an `amount` above 0 aside and
-then failed or was stopped says "Not charged"; a run whose hold set nothing aside says nothing about a charge. `maxWaitMs` is how long the run may wait in
-line before a GPU first takes it; past it the row fails and is refunded. Once a GPU has taken it, the limit is over: a
-run that goes back in line (a GPU paused or restarted) keeps its place and waits there.
+A reserve's `text` is shown on the result once it succeeded ("7 units"). A run that fails or is removed says "Not
+charged" only when its reserve answer set an amount aside (`amount` above 0). `maxWaitMs` is how long the run may wait
+in line before a GPU first takes it; past it the row fails and is refunded. Once a GPU has taken it, the limit is over:
+a run that goes back in line (a GPU paused or restarted) keeps its place and waits there.
 
 `class` puts the run in a class of the line: `"paid"` runs go before `"free"` ones (no `class`: `"free"`). The
 install's own jobs come after both. `boostMs` is a head start inside the class, at most a day: the run stands in line as

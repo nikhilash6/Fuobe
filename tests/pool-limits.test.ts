@@ -81,6 +81,15 @@ const post = async (body: Record<string, unknown>, cookie: string, headers: Reco
   return { status: r.status, headers: r.headers, body: (await r.json()) as { items?: { id: string; place?: string }[]; code?: string; error?: string } };
 };
 
+/** Wait (up to 5 s) until `ok` holds: work the route left running in the background has landed. */
+async function waitFor(ok: () => boolean): Promise<void> {
+  const end = Date.now() + 5000;
+  while (!ok()) {
+    if (Date.now() > end) throw new Error("timed out waiting");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 /** Runs on this install's GPUs an account has made. */
 const poolRuns = (id: string) =>
   (db().prepare("SELECT COUNT(DISTINCT COALESCE(batch_id, id)) AS n FROM generations WHERE json_extract(request_json, '$.account') = ? AND json_extract(request_json, '$.place') = 'pool'").get(id) as { n: number }).n;
@@ -295,7 +304,8 @@ describe("runs waiting, runs an hour, runs from one address", () => {
     expect((await post({ ...IMAGE, ...SHOWN }, b.cookie, { "x-forwarded-for": "198.51.100.4" })).status).toBe(201);
     const kept = db().prepare("SELECT addr FROM pool_admissions WHERE addr IS NOT NULL").all() as { addr: string }[];
     expect(kept.length).toBeGreaterThan(0);
-    expect(kept.every((r) => /^[0-9a-f]{32}$/.test(r.addr) && !r.addr.includes("203"))).toBe(true);
+    // A salted hash, never the address itself (a hash's hex digits may hold "203" by chance: the address never).
+    expect(kept.every((r) => /^[0-9a-f]{32}$/.test(r.addr) && !r.addr.includes("203.0.113.9"))).toBe(true);
   });
 });
 
@@ -509,7 +519,7 @@ describe("a run's price facts", () => {
     const r = await post({ ...IMAGE, params: { numOutputs: 3 }, ...SHOWN }, a.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(r.body.items!.length).toBeGreaterThan(1);
-    await until(() => r.body.items!.every((g) => taskOf(g.id)));
+    await waitFor(() => r.body.items!.every((g) => !!taskOf(g.id)));
     expect(hosted.queueFacts(a.id, "z-image-turbo-t2i").mine).toEqual({ waiting: 1, running: 0 });
     expect((await post({ ...IMAGE, ...SHOWN }, a.cookie)).status).toBe(201);
     const sent = (fake.calls_of("/v1/reserve").at(-1)!.body as { queue: { mine: { waiting: number } } }).queue;
@@ -549,8 +559,9 @@ describe("a run's price facts", () => {
     expect(r.body.code).toBe("not-offered");
     expect(poolRuns(a.id)).toBe(0);
     expect(fake.holds.size).toBe(holds);
-    // Its price check says the same: not here.
-    expect((await preview(film, a.cookie)).body.place).toBeUndefined();
+    // Its price check says the same before Run: not offered here, so Run stays off.
+    const check = (await preview(film, a.cookie)).body as { quote?: { allowed: boolean; code?: string } };
+    expect(check.quote).toMatchObject({ allowed: false, code: "not-offered" });
   });
 
   it("every step must be one the policy allows: a later step's model it leaves out stops the run before anything is made", () => {
@@ -562,5 +573,142 @@ describe("a run's price facts", () => {
     expect(hostedRun.stepsProblem(billing.OPEN_POLICY, steps([["oss-z-image-turbo", "comfyui"], ["fal-flux", "fal"]]))).not.toBeNull();
     expect(hostedRun.stepsProblem({ ...billing.OPEN_POLICY, pool: { allow: ["oss-z-image-turbo"] } }, steps([["oss-z-image-turbo", "comfyui"], ["some-llm", "llm"]]))).toBeNull();
     expect(hostedRun.pricedSteps(steps([["oss-z-image-turbo", "comfyui"], ["oss-z-image-turbo", "comfyui"], ["some-llm", "llm"]]))).toEqual([expect.objectContaining({ model: "oss-z-image-turbo", jobs: 2 })]);
+  });
+});
+
+describe("the price check before Run and the run itself", async () => {
+  const { PLACEHOLDER } = await import("@/lib/composer");
+  const { HOSTED_GUEST_WORDS, HOSTED_WORDS } = await import("@/server/hosted");
+  const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
+  /** A Fuobe DoP effect: its start frame is made first on another model, then animated. */
+  const EFFECT = { feature: "video", presetId: "effect-acid", modelId: "fuobe-dop", op: "i2v", prompt: "a dancer", inputs: { images: [PLACEHOLDER.image] } };
+  const LORAS = { ...IMAGE, loras: [{ file: "x.safetensors", url: "https://huggingface.co/x/x.safetensors" }] };
+  const THREE_D = { feature: "3d", modelId: "oss-pixal3d", op: "image-to-3d", prompt: "", inputs: { images: [PLACEHOLDER.image] } };
+  const NO_LIMITS = { activeRuns: 0, waiting: 0, runsPerHour: 0 };
+
+  it("agree on every case: what the run would be refused for, the price check refuses before Run, in the same words", async () => {
+    const cases: { name: string; req: Record<string, unknown>; policy?: Record<string, unknown>; refused?: string }[] = [
+      { name: "taken", req: IMAGE },
+      { name: "a chain, every step taken", req: EFFECT },
+      { name: "a model the policy denies", req: IMAGE, policy: { pool: { deny: ["oss-z-image-turbo"] } }, refused: HOSTED_WORDS.notOffered },
+      { name: "a kind the policy keeps off", req: IMAGE, policy: { kinds: { image: false } }, refused: HOSTED_WORDS.notOffered },
+      { name: "extra LoRAs", req: LORAS, refused: HOSTED_WORDS.loras },
+      { name: "a kind of file the policy keeps off", req: EFFECT, policy: { uploads: { image: false, video: false, audio: false } }, refused: HOSTED_WORDS.inputs },
+      { name: "a chain whose later step the policy denies", req: EFFECT, policy: { pool: { deny: ["fuobe-mixed-media"] } }, refused: HOSTED_WORDS.notOffered },
+      { name: "a 3D model", req: THREE_D, refused: OWN_GPU_TOOL_MESSAGE },
+    ];
+    const a = account();
+    const acct = auth.accountById(a.id)!;
+    for (const c of cases) {
+      withBilling({ limits: NO_LIMITS, ...(c.policy ?? {}) });
+      const req = { ...c.req, account: a.id } as never;
+      const run = await hostedRun.decidePlace(acct, req, undefined);
+      const check = await hostedRun.poolQuote(acct, req, undefined);
+      if (!c.refused) {
+        expect(run.kind, c.name).toBe("pool");
+        expect(check?.quote.allowed, c.name).toBe(true);
+        continue;
+      }
+      expect(run.kind, c.name).toBe("refuse");
+      expect(run.kind === "refuse" && run.refusal.body.error, c.name).toBe(c.refused);
+      expect(check?.quote, c.name).toMatchObject({ allowed: false, text: c.refused });
+    }
+  });
+
+  it("a guest's price check plans every step of a chain too, and words its refusals for someone with no Settings yet", async () => {
+    withBilling({ limits: NO_LIMITS });
+    expect((await hostedRun.poolQuote(null, EFFECT as never, undefined))?.quote.allowed).toBe(true);
+    // A later step this install's GPUs don't take: refused before Run, never only once the run starts after sign-up.
+    withBilling({ limits: NO_LIMITS, pool: { deny: ["fuobe-mixed-media"] } });
+    expect((await hostedRun.poolQuote(null, EFFECT as never, undefined))?.quote).toMatchObject({ allowed: false, code: "not-offered", text: HOSTED_GUEST_WORDS.notOffered });
+    withBilling({ limits: NO_LIMITS, pool: { deny: ["oss-z-image-turbo"] } });
+    const denied = await hostedRun.poolQuote(null, IMAGE as never, undefined);
+    expect(denied?.quote).toMatchObject({ allowed: false, text: HOSTED_GUEST_WORDS.notOffered });
+    expect(denied?.quote.text).not.toMatch(/Settings|your own GPU/);
+    withBilling({ limits: NO_LIMITS });
+    expect((await hostedRun.poolQuote(null, LORAS as never, undefined))?.quote.text).toBe(HOSTED_GUEST_WORDS.loras);
+    // Planned as nobody's: nothing of the plan is kept.
+    expect((db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.account') = 'guest:plan'").get() as { n: number }).n).toBe(0);
+  });
+
+  it("asks for the client's address only when the policy counts runs per address, and keeps its salt without writing again", async () => {
+    const salted = () => !!db().prepare("SELECT 1 FROM settings WHERE key = 'pool.addressSalt'").get();
+    const from = "203.0.113.20";
+    const preview = async (cookie: string) => {
+      const text = JSON.stringify(IMAGE);
+      const r = await generationsRoute.POST(
+        new Request(`http://${HOST}/api/generations?preview=1`, {
+          method: "POST",
+          headers: { ...SITE_HEADERS, cookie, "content-type": "application/json", "content-length": String(Buffer.byteLength(text)), "x-forwarded-for": from },
+          body: text,
+        }),
+      );
+      return (await r.json()) as { quote?: { allowed: boolean } };
+    };
+    db().prepare("DELETE FROM settings WHERE key = 'pool.addressSalt'").run();
+    globalThis.__fuobeAddressSalt = undefined;
+    process.env.FUOBE_TRUST_PROXY = "1";
+    const a = account();
+    // Hosted runs off: nothing of it at all.
+    delete process.env.FUOBE_HOSTED_RUNS;
+    await preview(a.cookie);
+    expect(salted()).toBe(false);
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    // No count per address in the policy: the address isn't read.
+    withBilling({ limits: NO_LIMITS });
+    expect((await preview(a.cookie)).quote?.allowed).toBe(true);
+    expect(salted()).toBe(false);
+    // Counted per address: read, under a salt made once.
+    withBilling({ limits: { ...NO_LIMITS, addressRunsPerHour: 5 } });
+    expect((await preview(a.cookie)).quote?.allowed).toBe(true);
+    expect(salted()).toBe(true);
+    const ask = () => limits.clientAddress(new Request("http://x/", { headers: { "x-forwarded-for": from } }));
+    const first = ask();
+    // Kept in memory after that: the settings row isn't written (nor read) for each check.
+    db().prepare("DELETE FROM settings WHERE key = 'pool.addressSalt'").run();
+    expect(ask()).toBe(first);
+    expect(salted()).toBe(false);
+  });
+});
+
+describe("a run on this install's GPUs that can't finish", async () => {
+  const { getGeneration } = await import("@/server/generations");
+  const { POOL_WORDS } = await import("@/lib/relay");
+  const { HIDDEN_WORDS } = await import("@/server/output-checks");
+  const fail = (id: string, error: string) => db().prepare("UPDATE generations SET status = 'failed', error = ?, completed_at = ? WHERE id = ?").run(error, Date.now(), id);
+  const hide = (id: string) => {
+    fail(id, HIDDEN_WORDS);
+    db().prepare("INSERT INTO output_checks (asset_id, generation_id, state, asked_at, tries, next_at) VALUES (?, ?, 'hidden', ?, 0, ?)").run(`asset-${id}`, id, Date.now(), Date.now());
+  };
+  const FREE = { shown: { amount: 0, priceVersion: "v0" } };
+
+  it("says Not charged only when its hold set an amount aside", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    fake.price = { amount: 0, version: "v0" };
+    const a = account();
+    const free = await post({ ...IMAGE, ...FREE }, a.cookie);
+    expect(free.status, JSON.stringify(free.body)).toBe(201);
+    const freeId = free.body.items![0].id;
+    fail(freeId, "the worker stopped");
+    const g = getGeneration(freeId)!;
+    expect(g.place).toBe("pool");
+    expect(g.notCharged).toBeUndefined();
+    expect(g.error).toBe(POOL_WORDS.failed);
+    // Removed by the output checks: their sentence, without the charge.
+    const hidden = await post({ ...IMAGE, ...FREE }, a.cookie);
+    const hiddenId = hidden.body.items![0].id;
+    hide(hiddenId);
+    expect(getGeneration(hiddenId)!.error).toBe("This result was removed by the studio's checks.");
+    expect(getGeneration(hiddenId)!.notCharged).toBeUndefined();
+    // Something set aside: it says so.
+    fake.price = { amount: 7, version: "v7" };
+    const paid = await post({ ...IMAGE, ...SHOWN }, a.cookie);
+    expect(paid.status, JSON.stringify(paid.body)).toBe(201);
+    const paidId = paid.body.items![0].id;
+    hide(paidId);
+    expect(getGeneration(paidId)).toMatchObject({ notCharged: true, error: HIDDEN_WORDS });
+    // That the hold set something aside stays the server's: never sent with the request.
+    expect("charged" in getGeneration(paidId)!.request).toBe(false);
+    expect((JSON.parse((db().prepare("SELECT request_json FROM generations WHERE id = ?").get(paidId) as { request_json: string }).request_json) as { charged?: boolean }).charged).toBe(true);
   });
 });

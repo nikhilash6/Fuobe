@@ -3,23 +3,33 @@
 import { Brush, PenLine, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAskBeforeUpload } from "@/lib/api";
 import { SketchEditor, type SketchMode } from "./sketch-editor";
 import { useStudio } from "./studio-context";
 
-/** "Paint area" / "Draw" buttons next to the first image, and the resulting drawing chip. */
-export function SketchTools({ modes, image, autoOpen }: { modes: SketchMode[]; image: string; autoOpen?: SketchMode }) {
+/**
+ * "Paint area" / "Draw" buttons next to the first image, and the resulting drawing chip. `held`: the image is a guest's,
+ * kept in the browser until sign-up (hosted runs on); a drawing is uploaded as it is saved, so the guest is asked to sign
+ * up first, and the editor doesn't open by itself.
+ */
+export function SketchTools({ modes, image, autoOpen, held = false }: { modes: SketchMode[]; image: string; autoOpen?: SketchMode; held?: boolean }) {
   const { draft, setDraft } = useStudio();
   const [editing, setEditing] = useState<SketchMode | null>(null);
   const opened = useRef<string | null>(null);
   const current = draft.slots.sketch;
   const mode: SketchMode | null = draft.slots.mask?.ref ? "mask" : current?.ref ? "draw" : null;
+  const askFirst = useAskBeforeUpload({ hold: false });
+  const edit = (m: SketchMode | null) => {
+    if (held && askFirst()) return;
+    setEditing(m);
+  };
 
   useEffect(() => {
-    if (autoOpen && !current && opened.current !== image) {
+    if (autoOpen && !held && !current && opened.current !== image) {
       opened.current = image;
       setEditing(autoOpen);
     }
-  }, [autoOpen, image, current]);
+  }, [autoOpen, held, image, current]);
 
   const clear = () =>
     setDraft((d) => {
@@ -35,7 +45,7 @@ export function SketchTools({ modes, image, autoOpen }: { modes: SketchMode[]; i
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                onClick={() => setEditing(mode)}
+                onClick={() => edit(mode)}
                 className="size-full overflow-hidden rounded-xl border-2 border-primary bg-muted"
                 aria-label={mode === "mask" ? "Edit the painted area" : "Edit the drawing"}
               >
@@ -61,7 +71,7 @@ export function SketchTools({ modes, image, autoOpen }: { modes: SketchMode[]; i
           <Tooltip key={m}>
             <TooltipTrigger asChild>
               <button
-                onClick={() => setEditing(m)}
+                onClick={() => edit(m)}
                 // Generate points here when the painted area is what it's waiting for.
                 data-slot-key={m === "mask" ? "mask" : "sketch"}
                 className="flex size-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-primary/50 bg-brand-faint text-brand-text transition-colors hover:border-primary"

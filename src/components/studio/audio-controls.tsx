@@ -72,7 +72,8 @@ export function VoicePicker({
     setOpen(false);
   };
   // Someone whose upload would be refused (a guest, an account with no GPU or key) gets its card, not the file chooser.
-  const askFirst = useAskBeforeUpload();
+  // (A voice sample is uploaded as it is picked: a guest signs up first, even where a studio keeps its pictures.)
+  const askFirst = useAskBeforeUpload({ hold: false });
   const clean = useMaybeClean();
   const upload = () => {
     if (!askFirst()) return file.current?.click();

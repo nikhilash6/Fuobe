@@ -11,6 +11,8 @@ import { onAttr, TAB_PILL, TabRow, useFadeOn } from "@/components/ui/tab-row";
 import { useProgressive } from "@/components/use-progressive";
 import { CardChip, badgeKey, parseBadgeKey } from "@/components/gpu/readiness-chip";
 import { useGpuBadges } from "@/hooks/use-gpu";
+import { usePoolRules, useTryFree } from "@/hooks/use-pool-rules";
+import { poolRunsPreset } from "@/lib/pool-rules";
 import { useEngineMode, useViewer } from "@/lib/api";
 import { categoryFrom, skippedInAll } from "@/lib/gallery-category";
 import { matchesSearch, previewFlip, readMoreTap, searchText, TAP_TO_READ, type PresetCardData } from "@/lib/preset-cards";
@@ -63,6 +65,8 @@ export const PresetCard = memo(function PresetCard({
   gpuName?: string;
 }) {
   const badge = engine !== "cloud" ? parseBadgeKey(gpu) : null;
+  // Hosted runs on, and this preset runs on this studio's GPUs for the viewer: the card says it can be tried there.
+  const tryFree = useTryFree()?.(preset) && !badge;
   const Icon = PRESET_ICONS[preset.icon] ?? Sparkles;
   const { ref, playing, asked, handlers } = usePreviewPlayback<HTMLAnchorElement>(preset.id, preset.preview);
   const [more, setMore] = useState(false);
@@ -95,6 +99,11 @@ export const PresetCard = memo(function PresetCard({
         {badge && (
           <span className="pointer-events-none absolute top-1.5 right-1.5">
             <CardChip badge={badge} gpu={gpuName} />
+          </span>
+        )}
+        {tryFree && (
+          <span data-try-free className="pointer-events-none absolute top-1.5 right-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10.5px] font-semibold text-primary-foreground">
+            Try free
           </span>
         )}
         <CardPending />
@@ -252,13 +261,17 @@ export function PresetGallery({
   }, [categories]);
   const [q, setQ] = useState("");
   const [runsOnChoice, setRunsOn] = useState<RunsOn>("all");
+  // For a viewer with no GPU of its own (hosted runs), a preset only this studio's GPUs could run, and which they keep
+  // off, is left out (src/lib/pool-rules.ts): nothing here fails at Run for it.
+  const rules = usePoolRules();
+  const offered = useMemo(() => (rules ? presets.filter((p) => !p.open || p.cloud || poolRunsPreset(rules, p.id)) : presets), [presets, rules]);
   // "both" until hydrated, so the server HTML and the first client render agree.
   const mode = useEngineMode();
   const locked = mode === "both" ? undefined : mode;
   const runsOn: RunsOn = locked ?? runsOnChoice;
   const query = useDeferredValue(q.trim().toLowerCase());
 
-  const index = useMemo(() => presets.map((p) => [p, searchText(p)] as const), [presets]);
+  const index = useMemo(() => offered.map((p) => [p, searchText(p)] as const), [offered]);
   const cats = useMemo(() => ["All", ...categories], [categories]);
   const list = useMemo(
     () =>
@@ -294,7 +307,7 @@ export function PresetGallery({
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder={`Search ${presets.length} ${noun}`}
+              placeholder={`Search ${offered.length} ${noun}`}
               aria-label={`Search ${noun}`}
               className="h-9 w-full rounded-full border bg-background pr-9 pl-9 text-[14px] outline-none placeholder:text-subtle-foreground focus:border-primary focus:ring-4 focus:ring-brand-faint [&::-webkit-search-cancel-button]:hidden"
             />
@@ -311,7 +324,7 @@ export function PresetGallery({
           </div>
           <div className="flex items-center justify-between gap-2 sm:ml-auto sm:justify-end">
             <span className="order-last text-[12px] whitespace-nowrap text-muted-foreground tabular-nums sm:order-first sm:mr-2" aria-live="polite">
-              {list.length === presets.length || (cat === "All" && !query && runsOn === "all") ? `${presets.length} ${noun}` : `${list.length} of ${presets.length}`}
+              {list.length === offered.length || (cat === "All" && !query && runsOn === "all") ? `${offered.length} ${noun}` : `${list.length} of ${offered.length}`}
             </span>
             <RunsOnControl value={runsOn} onChange={setRunsOn} locked={locked} owner={!!viewer?.owner} />
           </div>

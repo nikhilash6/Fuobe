@@ -1,0 +1,21 @@
+"use client";
+
+import { useEngineMode, useHydrated, useStatus } from "@/lib/api";
+import { tryFreeFor, type PoolRules } from "@/lib/pool-rules";
+
+/**
+ * What this studio's GPUs keep off for this viewer (hosted runs on, no GPU of its own): pickers leave it out
+ * (src/lib/pool-rules.ts). Undefined when nothing is kept off, with hosted runs off, or for a viewer with its own GPU.
+ */
+export function usePoolRules(): PoolRules | undefined {
+  const v = useStatus().data?.viewer;
+  return v?.hosted && !v.gpu.connected ? v.pool : undefined;
+}
+
+/** "Try free" on preset cards (tryFreeFor), once the page has hydrated: null until then, and with hosted runs off. */
+export function useTryFree(): ((p: { id: string; open: boolean }) => boolean) | null {
+  const hydrated = useHydrated();
+  const v = useStatus().data?.viewer;
+  const mode = useEngineMode();
+  return hydrated ? tryFreeFor(v, mode) : null;
+}

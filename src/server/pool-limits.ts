@@ -63,11 +63,26 @@ export function poolRunCounts(accountId: string): { active: number; waiting: num
   return { active: r.active, waiting: r.waiting };
 }
 
-/** The salt the client addresses are kept under: made once per install, never sent anywhere. */
+declare global {
+  var __fuobeAddressSalt: { db: unknown; salt: string } | undefined;
+}
+
+/**
+ * The salt the client addresses are kept under: made once per install, never sent anywhere. Read (and made, the first
+ * time) once per process and database, so counting an address never takes the database's write lock again.
+ */
 function salt(): string {
   const d = db();
-  d.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('pool.addressSalt', ?)").run(crypto.randomBytes(32).toString("hex"));
-  return (d.prepare("SELECT value FROM settings WHERE key = 'pool.addressSalt'").get() as { value: string }).value;
+  const kept = globalThis.__fuobeAddressSalt;
+  if (kept?.db === d) return kept.salt;
+  const read = () => (d.prepare("SELECT value FROM settings WHERE key = 'pool.addressSalt'").get() as { value: string } | undefined)?.value;
+  let value = read();
+  if (!value) {
+    d.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('pool.addressSalt', ?)").run(crypto.randomBytes(32).toString("hex"));
+    value = read()!;
+  }
+  globalThis.__fuobeAddressSalt = { db: d, salt: value };
+  return value;
 }
 
 /**
@@ -86,8 +101,11 @@ const since = (column: "account" | "addr", value: string, from: number) =>
 /** Seconds until the oldest of an hour's runs leaves the hour. */
 const retryAfter = (oldest: number | null, now: number) => Math.max(60, Math.ceil(((oldest ?? now) + HOUR - now) / 1000));
 
-/** The first of the policy's limits this run would pass, or null. */
-export function poolLimitRefusal(accountId: string, policy: Pick<Policy, "limits">, addr: string | null, now = Date.now()): LimitRefusal | null {
+/**
+ * The first of the policy's limits this run would pass, or null. `addr` may be a function: it is asked only when the
+ * policy counts runs per address.
+ */
+export function poolLimitRefusal(accountId: string, policy: Pick<Policy, "limits">, addr: string | null | (() => string | null), now = Date.now()): LimitRefusal | null {
   const lim = policy.limits ?? ({} as Policy["limits"]);
   const positive = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
   const activeMax = positive(lim.activeRuns);
@@ -103,8 +121,9 @@ export function poolLimitRefusal(accountId: string, policy: Pick<Policy, "limits
     const h = since("account", accountId, now - HOUR);
     if (h.n >= hourMax) return { status: 429, error: POOL_LIMIT_WORDS.hourly, code: "limit", retryAfterS: retryAfter(h.oldest, now) };
   }
-  if (addrMax && addr) {
-    const h = since("addr", addr, now - HOUR);
+  const address = addrMax ? (typeof addr === "function" ? addr() : addr) : null;
+  if (address) {
+    const h = since("addr", address, now - HOUR);
     if (h.n >= addrMax) return { status: 429, error: POOL_LIMIT_WORDS.address, code: "limit", retryAfterS: retryAfter(h.oldest, now) };
   }
   return null;

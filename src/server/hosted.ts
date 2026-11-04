@@ -102,6 +102,13 @@ export const HOSTED_WORDS = {
   waitedTooLong: "This studio's GPUs were busy, so it didn't run. Not charged.",
 };
 
+/** The same refusals for a guest, who has no Settings to connect a GPU in yet. */
+export const HOSTED_GUEST_WORDS = {
+  notOffered: "This one isn't offered here. Pick another model.",
+  loras: "Extra LoRAs aren't offered here. Run without them.",
+  inputs: "This kind of file can't be used here. Use a picture instead.",
+};
+
 /** May this model (and app) run on this install's GPUs under this policy? */
 export function poolAllows(p: Pick<Policy, "pool">, modelId: string, presetId?: string | null): boolean {
   const m = p.pool ?? {};

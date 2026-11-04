@@ -28,6 +28,7 @@ import { ConnectField, useSettings } from "@/components/connect-field";
 import { FAL_KEYS_URL } from "@/lib/connections";
 import { CLOUD_KEY } from "@/lib/your-keys";
 import { RUNS_CHANGED_EVENT } from "@/lib/guest-access";
+import { refreshPriceChecks } from "@/lib/hosted";
 
 /**
  * The cards a public studio shows when something is refused (watchGuestRefusals): "Create a free
@@ -120,6 +121,7 @@ export function GuestPrompt() {
     // A run started from a toast (not a page's own button): the lists show it.
     const runs = () => {
       for (const key of ["generations", "library", "library-facets"]) void qc.invalidateQueries({ queryKey: [key] });
+      refreshPriceChecks(qc);
     };
     window.addEventListener(CONNECT_GPU_EVENT, gpu);
     window.addEventListener(RUNS_CHANGED_EVENT, runs);

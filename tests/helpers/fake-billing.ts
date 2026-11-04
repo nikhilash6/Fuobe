@@ -60,6 +60,8 @@ export interface FakeBilling {
   guestPolicy: Record<string, unknown> | null;
   /** Extra fields of every reserve answer that sets a price aside (a class, say). */
   reserveExtra: Record<string, unknown>;
+  /** The quote every price check gets instead of the allowed one (a refusal: busy, a limit…); null: allowed. */
+  quoteAnswer: Record<string, unknown> | null;
   /** How many times each (hold, generation) pair was reported. */
   reportCount: (holdId: string, generationId: string) => number;
   calls_of: (path: string) => Recorded[];
@@ -86,6 +88,7 @@ export async function startFakeBilling(): Promise<FakeBilling> {
     policy: { ...FAKE_POLICY },
     guestPolicy: null,
     reserveExtra: {},
+    quoteAnswer: null,
     reportCount: (h, g) => reportCounts.get(`${h} ${g}`) ?? 0,
     calls_of: (p) => f.calls.filter((c) => c.path.split("?")[0] === p),
   };
@@ -109,7 +112,7 @@ export async function startFakeBilling(): Promise<FakeBilling> {
     const b = (body ?? {}) as Record<string, unknown>;
     if (p === "/v1/health") return json(200, { ok: true, version: "test" });
     if (p === "/v1/policy") return json(200, !new URLSearchParams(path.split("?")[1] ?? "").get("account") && f.guestPolicy ? f.guestPolicy : f.policy);
-    if (p === "/v1/quote") return json(200, quote());
+    if (p === "/v1/quote") return json(200, f.quoteAnswer ?? quote());
     if (p === "/v1/reserve") {
       const requestId = String(b.requestId);
       const again = [...f.holds.entries()].find(([, h]) => h.requestId === requestId);

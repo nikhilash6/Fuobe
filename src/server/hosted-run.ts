@@ -27,13 +27,14 @@ import { PLACE_ASK_HEADER } from "@/lib/guest-access";
 import { createGenerations, outputKind, plannedSteps, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { poolLane } from "./computer/pool";
-import { HOSTED_WORDS, inputCounts, poolAllows, poolOnWorkers, poolReady, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
+import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolOnWorkers, poolReady, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
 import type { RunStamp } from "./run-stamp";
 import { readRef } from "./storage";
 import { ACCOUNT_LIMITS } from "./account-files";
+import { poolLimitRefusal } from "./pool-limits";
 import { runAsTenant } from "./tenant";
 
 /**
@@ -85,6 +86,9 @@ const OWN: PlaceDecision = { kind: "own" };
 
 /** What an account whose own GPU didn't answer is asked, when its run named no place (never moved and charged unasked). */
 export const OWN_GPU_QUIET = "Your GPU isn't answering right now. Run this on this studio's GPUs instead, or try again when your GPU is back.";
+
+/** A run this install's GPUs won't take, refused in the words the price check before Run gives too. */
+const notOffered = (error: string): PlaceDecision => ({ kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
 
 const askPlace = (): Refusal => ({ status: 409, body: { error: OWN_GPU_QUIET, code: "own-gpu-offline" }, headers: { [PLACE_ASK_HEADER]: "1" } });
 
@@ -162,6 +166,54 @@ export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]
   return [...out.values()];
 }
 
+/** Why this install's GPUs won't take a run: a 3D model, a model or kind not offered there, LoRAs, or a kind of file. */
+export type GateReason = "model3d" | "notOffered" | "loras" | "inputs";
+
+/** The words for a gate's reason: an account may connect its own GPU in Settings, a guest has nowhere to do that yet. */
+export function gateWords(reason: GateReason, guest: boolean): string {
+  if (reason === "model3d") return OWN_GPU_TOOL_MESSAGE;
+  return (guest ? HOSTED_GUEST_WORDS : HOSTED_WORDS)[reason];
+}
+
+/**
+ * The one check of whether this install's GPUs take a run, shared by the run itself (decidePlace) and the price check
+ * before Run (poolQuote), so the two always agree: its output kind (no 3D there), the policy's model, app and kind
+ * lists, a worker allowed its lane, LoRAs, the kinds of file it sends, and every later step of a chain (planned only
+ * once the cheaper checks pass). `p` null: the billing service didn't answer, so only what needs no policy is checked.
+ * Passed, it gives the planned steps for the run's one price.
+ */
+export function poolGate(
+  p: Policy | null,
+  planned: Planned,
+  req: GenerationRequest,
+  planSteps: () => PlannedStep[] | null,
+): { ok: true; steps: PlannedStep[] | null } | { ok: false; reason: GateReason } {
+  const kind = outputKind(planned.op, planned.model);
+  if (kind === "model3d") return { ok: false, reason: "model3d" };
+  if (p && (!poolAllows(p, planned.model.id, req.presetId) || !kindAllowed(p, kind))) return { ok: false, reason: "notOffered" };
+  // Nothing of this install's would ever run it (no worker is allowed its lane): never a run that waits for nothing.
+  if (!poolTakes(planned.route.endpoint)) return { ok: false, reason: "notOffered" };
+  if (req.loras?.length) return { ok: false, reason: "loras" };
+  if (p) {
+    const inputs = inputCounts(req);
+    const takes = (k: "image" | "video" | "audio") => p.uploads[k] && poolTakesFiles(k);
+    if ((inputs.image && !takes("image")) || (inputs.video && !takes("video")) || (inputs.audio && !takes("audio"))) return { ok: false, reason: "inputs" };
+  }
+  // Every step of a chain, not only its first: each one the policy must allow, and the run is priced for all of them.
+  const steps = planSteps();
+  if (steps && p && stepsProblem(p, steps)) return { ok: false, reason: "notOffered" };
+  return { ok: true, steps };
+}
+
+/**
+ * The account a guest's price check plans a chain's later steps under: no real account has it (account ids hold no
+ * colon), and nothing planned under it is kept (plannedSteps throws every row away).
+ */
+const GUEST_PLAN = "guest:plan";
+
+/** Every row a run would make on this install's GPUs, for an account or (planned as nobody's) for a guest's price check. */
+const stepsFor = (account: Account | null, req: GenerationRequest) => poolSteps(account?.id ?? GUEST_PLAN, req);
+
 /** Is the account's own GPU there to run now? */
 async function ownGpuOnline(accountId: string): Promise<boolean> {
   const gpu = accountGpu(accountId);
@@ -219,19 +271,8 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
   }
   if (p === undefined) p = await billingPolicy(account.id);
   if (!p) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("paused", BILLING_PAUSED) };
-  const notHere = (error: string): PlaceDecision => (ownFallback ? OWN : { kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
   // Closed to this account: its own GPU (or today's "Connect your GPU"); asked for by name, said so.
-  if (!p.hosted) return wish === "pool" ? notHere(HOSTED_WORDS.notHosted) : OWN;
-  if (outputKind(planned.op, planned.model) === "model3d") return ownFallback ? OWN : { kind: "refuse", refusal: { status: 403, body: { error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, headers: {} } };
-  if (!poolAllows(p, planned.model.id, asked.presetId)) return notHere(HOSTED_WORDS.notOffered);
-  if (!kindAllowed(p, outputKind(planned.op, planned.model))) return notHere(HOSTED_WORDS.notOffered);
-  // Nothing of this install's would ever run it (no worker is allowed its lane): never a run that waits for nothing.
-  if (!poolTakes(planned.route.endpoint)) return notHere(HOSTED_WORDS.notOffered);
-  if (asked.loras?.length) return notHere(HOSTED_WORDS.loras);
-  const inputs = inputCounts(asked);
-  const policy = p;
-  const takes = (kind: "image" | "video" | "audio") => policy.uploads[kind] && poolTakesFiles(kind);
-  if ((inputs.image && !takes("image")) || (inputs.video && !takes("video")) || (inputs.audio && !takes("audio"))) return notHere(HOSTED_WORDS.inputs);
+  if (!p.hosted) return wish === "pool" ? notOffered(HOSTED_WORDS.notHosted) : OWN;
   // Planned, checked and priced for the outputs it would make there (the policy's cap per run).
   const { req, capped } = poolRequest(asked, p);
   if (capped) {
@@ -241,13 +282,17 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
       return OWN;
     }
   }
-  // Every step of a chain, not only its first: each one the policy must allow, and the run is priced for all of them.
-  const steps = poolSteps(account.id, req);
-  const problem = steps && stepsProblem(p, steps);
-  if (problem) return notHere(problem);
+  // The same check as the price check before Run (poolGate): what this install's GPUs can't take goes to the account's
+  // own GPU when it has one and didn't ask for this install's; otherwise it is refused in the same words.
+  const gate = poolGate(p, planned, req, () => stepsFor(account, req));
+  if (!gate.ok) {
+    if (ownFallback) return OWN;
+    const error = gateWords(gate.reason, false);
+    return gate.reason === "model3d" ? { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } } : notOffered(error);
+  }
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
   if (ownOffline) return { kind: "refuse", refusal: askPlace() };
-  return { kind: "pool", planned, policy: p, steps: steps ? pricedSteps(steps) : undefined, req, capped };
+  return { kind: "pool", planned, policy: p, steps: gate.steps ? pricedSteps(gate.steps) : undefined, req, capped };
 }
 
 /** The input files of a request, for the moderation service: their kind and sha256 (pictures' previews: not sent yet). */
@@ -354,14 +399,36 @@ export async function reservePool(
   };
 }
 
+/** Where a new run would stand in line on this install's GPUs right now (1: next), and the wait, about (null: unknown). */
+export interface PoolLine {
+  place: number;
+  etaSeconds: number | null;
+}
+
+/** A price check's answer for a run this install's GPUs won't take, in the words the run itself would get. */
+const notOfferedQuote = (text: string): Quote => ({ allowed: false, amount: 0, priceVersion: "", text, code: "not-offered" });
+
 /**
- * A price check on this install's GPUs (hosted runs on): the plan there and the billing service's quote (no service:
- * free, and Run keeps its own words). Null when the run wouldn't go there (its own GPU, its own key, today's answer).
+ * A price check on this install's GPUs (hosted runs on): the plan there, the billing service's quote (no service: free,
+ * and Run keeps its own words) and where the run would stand in line. Null when the run wouldn't go there (its own GPU,
+ * its own key, today's answer).
+ *
+ * The quote is refused before Run for what the run itself would be refused for (the same poolGate as decidePlace, and
+ * the route's limits), so Run is off and says why instead of failing once pressed: a model, a kind, LoRAs, files or a
+ * chain's later step this install's GPUs don't take (for a viewer with no GPU of its own to send them to instead), and
+ * the policy's limits on runs at once, runs in line and runs an hour. A guest's refusal names nothing it can't do yet.
+ * `addr`: the client's address as the hourly count keeps it (pool-limits.ts clientAddress), asked for only when the
+ * policy counts runs per address.
  */
-export async function poolQuote(account: Account | null, asked: GenerationRequest, wish: PlaceWish): Promise<{ planned: Planned; quote: Quote } | null> {
+export async function poolQuote(
+  account: Account | null,
+  asked: GenerationRequest,
+  wish: PlaceWish,
+  o: { addr?: () => string | null } = {},
+): Promise<{ planned: Planned; quote: Quote; line: PoolLine } | null> {
   if (!hostedRunsOn() || wish === "own" || !poolReady()) return null;
   // A guest is priced under the billing service's policy for guests (none set: as an account would be, once signed up).
-  const p = account ? await billingPolicy(account.id) : billingConfigured() ? await billingPolicy(null) : null;
+  const p = await billingPolicy(account?.id ?? null);
   // Priced for the outputs it would make: the studio's cap per run, and the policy's when lower (as the run is).
   const { req } = poolRequest(asked, p);
   let planned: Planned;
@@ -371,14 +438,25 @@ export async function poolQuote(account: Account | null, asked: GenerationReques
     return null;
   }
   if (planned.route.provider !== "comfyui") return null;
-  if (account && wish !== "pool" && !prefersPool(p) && accountGpu(account.id) && (await ownGpuOnline(account.id))) return null;
-  const kind = outputKind(planned.op, planned.model);
-  if (p && (!p.hosted || !poolAllows(p, planned.model.id, req.presetId) || !kindAllowed(p, kind))) return null;
-  if (!poolTakes(planned.route.endpoint)) return null;
-  // Priced once for every step of a chain that uses this install's GPUs (a step it can't take there: not offered here).
-  const steps = account ? poolSteps(account.id, req) : null;
-  if (steps && p && stepsProblem(p, steps)) return null;
-  const facts = { ...runFacts(req, planned, kind), ...(steps && { steps: pricedSteps(steps) }) };
-  const q = await billingQuote(account ? accountFacts(account) : null, facts, queueFacts(account?.id ?? null, planned.route.endpoint));
-  return { planned, quote: q };
+  const hasGpu = !!account && !!accountGpu(account.id);
+  if (account && hasGpu && wish !== "pool" && !prefersPool(p) && (await ownGpuOnline(account.id))) return null;
+  if (p && !p.hosted) return null;
+  const line = (facts: { ahead: number; etaS: number | null }, q?: Quote): PoolLine => ({ place: Math.max(0, facts.ahead) + 1, etaSeconds: q?.etaS ?? facts.etaS ?? null });
+  // What this install's GPUs won't take goes to the viewer's own GPU when it has one (as the run would); otherwise the
+  // price check says so, and Run stays off.
+  const gate = poolGate(p, planned, req, () => stepsFor(account, req));
+  if (!gate.ok) {
+    if (hasGpu && wish !== "pool") return null;
+    return { planned, quote: notOfferedQuote(gateWords(gate.reason, !account)), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
+  }
+  // Priced once for every step of a chain that uses this install's GPUs.
+  const facts = { ...runFacts(req, planned, outputKind(planned.op, planned.model)), ...(gate.steps && { steps: pricedSteps(gate.steps) }) };
+  const queue = queueFacts(account?.id ?? null, planned.route.endpoint);
+  let q = await billingQuote(account ? accountFacts(account) : null, facts, queue);
+  // The policy's limits on this account's runs here, as the run would meet them (pool-limits.ts): said before Run.
+  if (q.allowed && account && p) {
+    const over = poolLimitRefusal(account.id, p, o.addr ?? null);
+    if (over) q = { ...q, allowed: false, code: "limit", text: over.error };
+  }
+  return { planned, quote: q, line: line(queue, q) };
 }

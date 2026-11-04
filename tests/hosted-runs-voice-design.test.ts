@@ -78,7 +78,8 @@ describe("Design a voice on this install's GPUs", () => {
   it("the policy's deny list keeps a voice designer off; the hosted Qwen3-TTS on fal is never priced there", async () => {
     fake.policy = { ...FAKE_POLICY, pool: { deny: ["oss-voxcpm2"] } };
     billing.resetBillingCache();
-    expect(await poolQuote(account, design("oss-voxcpm2"), undefined)).toBeNull();
+    // Refused by the price check, so Run is off before it is pressed (an account with no GPU of its own to run it on).
+    expect((await poolQuote(account, design("oss-voxcpm2"), undefined))?.quote).toMatchObject({ allowed: false, code: "not-offered" });
     expect(await poolQuote(account, design("oss-qwen3-tts"), undefined)).not.toBeNull();
     expect(await poolQuote(account, { ...design("qwen-3-tts"), engine: "cloud" }, undefined)).toBeNull();
     expect((await decidePlace(account, { ...design("qwen-3-tts"), engine: "cloud" }, undefined)).kind).toBe("own");
