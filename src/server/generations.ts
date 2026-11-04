@@ -101,7 +101,7 @@ import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } 
 import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
 import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
-import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
+import { placeInLine, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { poolLane } from "./computer/pool";
 import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
@@ -1755,7 +1755,8 @@ function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: Ret
   if (!req.account) return submitNow(id, route, providerId, plan, req, index);
   // On this install's GPUs (hosted runs): as the account, on this install's ComfyUI server only.
   if (req.place === "pool") {
-    if (providerId !== "comfyui") {
+    // (A run is checked against the same table before it is made: hosted-run.ts stepsProblem.)
+    if (!poolRunsProvider(providerId)) {
       update(id, { status: "failed", error: OWN_GPU_ONLY, completed_at: Date.now(), message: null });
       submitting().delete(id);
       return Promise.resolve();

@@ -68,16 +68,20 @@ type Policy = {
 };
 ```
 
-`megapixels` is the size of each picture or frame the run makes, about: the canvas the request names, else its aspect
-ratio and resolution (the model's defaults where it names none). It is null for sound, text and 3D.
+`megapixels` is the size of each picture or frame the run makes, about, as its workflow makes it: the canvas the
+workflow binds (a canvas the request names counts only there; else the aspect ratio and resolution, the model's
+defaults where the request names none), or for a workflow sized by its input (an edit, an upscale, a face swap) the
+input's size, an upscale's times its factor, within the workflow's limits. It is null for sound, text and 3D.
 
 `steps` lists every step of the run that uses this install's GPUs, the run's own step first: a chain (a film of
 several shots, a picture and then a step on it) is priced once, with one quote and one hold, for one press of Run.
-Steps that need no model (joins, trims) and text steps are left out: they cost nothing. Every step must be one the
-policy allows (`pool`, `kinds`), or the run isn't offered here.
+Steps that need no model (joins, trims) are left out: they cost nothing. Every step must be one the policy allows
+(`pool`, `kinds`) and one this install's GPUs can run (a ComfyUI step: not a text step, a step made in the browser or
+a cloud model), or the run isn't offered here. It is refused before Run, never part way through.
 
 3D runs (Image to 3D and the other 3D tools) aren't offered on this install's GPUs yet, whatever `kinds.model3d` says.
-They run on the account's own GPU, as before; an account with no GPU of its own is asked to connect one.
+They run on the account's own GPU, as before. An account with no GPU of its own is told the tool isn't available here
+(403, `code: "own-gpu-tool"`).
 
 The policy's limits count runs on this install's GPUs only, never runs on the account's own GPU or key (those keep the
 install's own limits). A run is one press of Run: its jobs and chain steps count once. `activeRuns` counts runs going
