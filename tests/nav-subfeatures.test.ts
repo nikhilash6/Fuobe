@@ -116,7 +116,7 @@ describe("the catalogue of studio features", () => {
 
 describe("who sees a studio's features", () => {
   it("keeps the owner's own modes the owner's, in every place", () => {
-    for (const id of ["genjutsu-picture", "cinema-blockout", "canvas-skills", "assist-memory", "assist-scheduled", "video-tools-restore"]) {
+    for (const id of ["genjutsu-picture", "canvas-skills", "assist-memory", "assist-scheduled", "video-tools-restore"]) {
       expect(entry(id)!.visibility, id).toEqual(["owner"]);
       for (const kind of VISITORS) expect(entriesFor(kind).some((e) => e.id === id), `${kind}: ${id}`).toBe(false);
     }
@@ -129,6 +129,22 @@ describe("who sees a studio's features", () => {
       const hub = areaSections("studios", kind).flatMap((s) => (s.subs ?? []).flatMap((x) => x.ids));
       for (const id of hub) expect(visibleTo(entry(id)!, kind), `${kind}: ${id}`).toBe(true);
     }
+  });
+
+  it("links Cinema Studio's Blockout for everyone: a guest sees it (and is offered a free account on a run), an account uses it", () => {
+    expect(entry("cinema-blockout")!.visibility).toBeUndefined();
+    expect(OWNER_RUNS.has("cinema-blockout")).toBe(false);
+    for (const kind of [...VISITORS, "owner" as const]) {
+      expect(studioSubs("cinema", kind, "list").map((e) => e.id), String(kind)).toEqual(["cinema-blockout"]);
+      expect(studioSubs("cinema", kind, "sheet").map((e) => e.id), String(kind)).toEqual(["cinema-blockout"]);
+      // The Studios menu's Cinema column has no room for it, for anyone, as before: the sheet, /studios and search carry it.
+      expect(studioSubs("cinema", kind, "menu"), String(kind)).toEqual([]);
+    }
+    // It opens the project list on Blockout: with no project yet (a guest, a new account) the list says to start one, and
+    // a guest's New project is the free sign-up card.
+    const list = read("src/components/cinema/projects-view.tsx");
+    expect(list).toContain("Blockout to film: start a new project to film it in.");
+    expect(list).toContain('askToSignUp("run")');
   });
 
   it("links Genjutsu's Finish for everyone exactly when its page shows it to everyone", () => {
@@ -221,11 +237,11 @@ describe("finding a studio's features", () => {
       const r = find(kind, q);
       return [...r.best, ...r.groups.flatMap((g) => g.hits)].map((h) => h.id);
     };
-    expect(hits("owner", "blockout")).toContain("cinema-blockout");
     expect(hits("owner", "skills as canvases")).toContain("canvas-skills");
     expect(hits("owner", "scheduled")).toContain("assist-scheduled");
+    // Cinema Studio's Blockout is everyone's ("Cinema Studio › Blockout").
+    for (const kind of [...VISITORS, "owner" as const]) expect(hits(kind, "blockout"), String(kind)).toContain("cinema-blockout");
     for (const kind of VISITORS) {
-      expect(hits(kind, "blockout"), String(kind)).not.toContain("cinema-blockout");
       expect(hits(kind, "skills as canvases"), String(kind)).not.toContain("canvas-skills");
       expect(hits(kind, "assist memory"), String(kind)).not.toContain("assist-memory");
     }

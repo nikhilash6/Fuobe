@@ -252,9 +252,13 @@ describe("the Studios sheet", () => {
     const people = at("/", () => sheet({ group: "people" }));
     expect(pills(people)).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "Finish"]);
     // Pages that say "isn't available here" to a visitor, and the owner's own modes, aren't linked for them.
-    for (const w of ["From a selfie", "From Reference", "From picture", "Split soundtrack", "Remove dialogue", "Blockout"]) {
+    for (const w of ["From a selfie", "From Reference", "From picture", "Split soundtrack", "Remove dialogue"]) {
       for (const g of LAUNCHER_GROUPS) expect(pills(at("/", () => sheet({ group: g.id }))), `${g.id}: ${w}`).not.toContain(w);
     }
+    // Cinema Studio's Blockout is linked for everyone (a guest is offered a free account on a run).
+    const film = at("/", () => sheet({ group: "film" }));
+    expect(pills(film)).toContain("Blockout");
+    expect(hrefs(film)).toContain("/cinema?blockout=1");
     // Image to 3D runs for visitors with an account (on their own GPU or key): its modes are linked too.
     const finish = at("/", () => sheet({ group: "finish" }));
     expect(pills(finish)).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export", "From an image", "From several images", "From text", "Pick an object", "Splat"]);

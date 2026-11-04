@@ -137,11 +137,11 @@ describe("/studios", () => {
       for (const c of s.chips) expect(s.cards.map((x) => entry(x)!.href), `${s.id}: ${c}`).not.toContain(entry(c)!.href);
       for (const x of s.subs ?? []) for (const c of x.ids) expect(hrefs.has(entry(c)!.href), `${s.id}: ${c}`).toBe(false);
     }
-    // The owner's own (Genjutsu's From picture, Cinema Studio's Blockout) are theirs alone.
+    // The owner's own (Genjutsu's From picture) are theirs alone; Cinema Studio's Blockout is everyone's.
     const owner = areaSections("studios", "owner");
     expect(owner.find((s) => s.id === "people")!.subs!.find((x) => x.parent === "genjutsu")!.ids).toContain("genjutsu-picture");
     expect(owner.find((s) => s.id === "film")!.subs!.find((x) => x.parent === "cinema")!.ids).toEqual(["cinema-blockout"]);
-    expect(subsOf("film", "cinema")).toEqual([]);
+    expect(subsOf("film", "cinema")).toEqual(["cinema-blockout"]);
   });
 });
 
