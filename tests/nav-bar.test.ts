@@ -174,7 +174,7 @@ describe("the launcher's columns", () => {
     expect(subs("marketing")).toEqual(["Click to Ad", "Ads Studio", "Ad Multiplier"]);
     expect(subs("genjutsu")).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert"]);
     expect(subs("upscale")).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export"]);
-    expect(subs("audio")).toEqual(["Dialogue", "Voice change", "Design a voice", "See all 13"]);
+    expect(subs("audio")).toEqual(["Speech", "Dialogue", "Voice change", "See all 13"]);
     expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 10"]);
     for (const w of ["Click to Ad", "Ads Studio", "Ad Multiplier", "Motion transfer", "FPS Boost"]) expect(words(html)).toContain(w);
     // Under a hairline, quieter than a row, with no picture and no line of their own (nav-subs.css: 24 px

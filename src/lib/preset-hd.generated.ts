@@ -392,6 +392,7 @@ export const PRESET_HD: Record<string, { w: number[]; v: string; still?: number;
   "effect-x-ray": { "w":[640,1024], "v":"055a919f", "rest":"/examples/effect-x-ray/1/out-peak.jpg" },
   "effect-yacht": { "w":[640,1024], "v":"d7624fc9", "rest":"/examples/effect-yacht/1/out-peak.jpg" },
   "genjutsu-group-swap": { "w":[640,1024], "v":"a3ff8a5b" },
+  "genjutsu-lake-swap": { "w":[640,1024], "v":"6f88761f" },
   "motion-360-orbit": { "w":[1024], "v":"74f9599a", "still":768 },
   "motion-3d-rotation": { "w":[640,1024], "v":"3daf79c7", "rest":"/examples/motion-3d-rotation/1/out-peak.jpg" },
   "motion-action-run": { "w":[640,1024], "v":"94bfee7d", "rest":"/examples/motion-action-run/1/out-peak.jpg" },

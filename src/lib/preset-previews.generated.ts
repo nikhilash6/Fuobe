@@ -123,10 +123,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-asmr-promo": {
-    "poster": "/previews/presets/app-asmr-promo.jpg?v=5f28135d",
+    "poster": "/previews/presets/app-asmr-promo.jpg?v=856ea044",
+    "video": "/previews/presets/app-asmr-promo.mp4?v=2e4fba85",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-banana-eating": {
@@ -396,10 +397,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-gtai": {
-    "poster": "/previews/presets/app-gtai.jpg?v=e60da9e5",
+    "poster": "/previews/presets/app-gtai.jpg?v=70d70cc3",
+    "video": "/previews/presets/app-gtai.mp4?v=90f91e55",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-hairstyle-try-on": {
@@ -1699,10 +1701,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-flashback": {
-    "poster": "/previews/presets/effect-flashback.jpg?v=6157620a",
+    "poster": "/previews/presets/effect-flashback.jpg?v=dafe7b09",
+    "video": "/previews/presets/effect-flashback.mp4?v=ed878300",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-floating-fall": {
@@ -2189,10 +2192,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-monstrosity": {
-    "poster": "/previews/presets/effect-monstrosity.jpg?v=1bf657eb",
+    "poster": "/previews/presets/effect-monstrosity.jpg?v=ee6e6213",
+    "video": "/previews/presets/effect-monstrosity.mp4?v=832700de",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-moonwalk": {
@@ -2627,10 +2631,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-shocked": {
-    "poster": "/previews/presets/effect-shocked.jpg?v=b1756a81",
+    "poster": "/previews/presets/effect-shocked.jpg?v=caf7f7f6",
+    "video": "/previews/presets/effect-shocked.mp4?v=751e33ab",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-silhouette": {
@@ -2751,10 +2756,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-static-posing": {
-    "poster": "/previews/presets/effect-static-posing.jpg?v=2e6033fe",
+    "poster": "/previews/presets/effect-static-posing.jpg?v=a48dbc1d",
+    "video": "/previews/presets/effect-static-posing.mp4?v=4bfbcf52",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-stop-world": {
@@ -3053,6 +3059,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "minimax-h3",
     "variant": "group-swap"
   },
+  "genjutsu-lake-swap": {
+    "poster": "/previews/presets/genjutsu-lake-swap.jpg?v=fdc7a542",
+    "video": "/previews/presets/genjutsu-lake-swap.mp4?v=e69b4798",
+    "run": "home-genjutsu-2026-11",
+    "engine": "comfyui",
+    "model": "minimax-h3",
+    "variant": "recast-wipe"
+  },
   "motion-360-orbit": {
     "poster": "/previews/presets/motion-360-orbit.jpg?v=ba99707c",
     "run": "comfyui-previews-2026-10",
@@ -3266,10 +3280,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-dolly-zoom-out": {
-    "poster": "/previews/presets/motion-dolly-zoom-out.jpg?v=257a152c",
+    "poster": "/previews/presets/motion-dolly-zoom-out.jpg?v=ee82081f",
+    "video": "/previews/presets/motion-dolly-zoom-out.mp4?v=321a4b4f",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-double-dolly": {
@@ -3848,10 +3863,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-truck-right": {
-    "poster": "/previews/presets/motion-truck-right.jpg?v=402be31e",
+    "poster": "/previews/presets/motion-truck-right.jpg?v=dac09ab2",
+    "video": "/previews/presets/motion-truck-right.mp4?v=1ba7594a",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-whip-pan": {

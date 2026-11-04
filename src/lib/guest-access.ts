@@ -170,8 +170,11 @@ export function accountGeneration(method: string, pathname: string): string | un
  */
 export function accountOwnRead(pathname: string): boolean {
   if (ACCOUNT_LISTS.has(pathname)) return true;
-  return pathname === "/api/generations" || pathname === "/api/account/gpu" || pathname === "/api/account/keys" || GPU_READS.has(pathname) || COMPUTER_READ.test(pathname) || PAIRING_READS.has(pathname);
+  return pathname === "/api/generations" || pathname === "/api/account/gpu" || pathname === "/api/account/keys" || ACCOUNT_CANVASES.test(pathname) || GPU_READS.has(pathname) || COMPUTER_READ.test(pathname) || PAIRING_READS.has(pathname);
 }
+
+/** An account's own canvases (src/app/api/account/canvases): the routes read and change its own boards only. */
+const ACCOUNT_CANVASES = /^\/api\/account\/canvases(\/[^/]+)?$/;
 
 /** The Library's counts and its Uploads (its stored files): each route answers an account with its own only. */
 const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets"]);
@@ -208,6 +211,8 @@ export function accountMayChange(method: string, pathname: string, search: strin
   if (COMPUTER_CHANGES.some(([m, p]) => m === method && p.test(pathname))) return true;
   if ((method === "POST" && pathname === "/api/gpu/pair") || (method === "DELETE" && /^\/api\/gpu\/paired\/[^/]+$/.test(pathname))) return true;
   if (method === "POST" && (pathname === "/api/uploads" || pathname === "/api/media/probe")) return true;
+  // Its own canvases: save a board, rename it, save its pages, delete it (the routes take its own boards only).
+  if ((method === "POST" && pathname === "/api/account/canvases") || ((method === "PATCH" || method === "DELETE") && /^\/api\/account\/canvases\/[^/]+$/.test(pathname))) return true;
   // "Report this result", and a click on an offer the billing service sent (each route checks the rest).
   if (method === "POST" && (pathname === "/api/reports" || pathname === "/api/billing/interest")) return true;
   // Like, pin or review many of its own runs at once (the route checks each is its own, and refuses the rest).

@@ -29,7 +29,7 @@ import { FUOBE_REPO } from "@/lib/connections";
 import { HOME_LIVE, presetHref, type HomeShowcase } from "@/lib/home-showcase";
 import { area } from "@/lib/nav-areas";
 import { studioCount } from "@/lib/nav-model";
-import { staggered } from "@/lib/preview-playback";
+import { staggered, type AutoPlay } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 import { plainTagline } from "@/lib/plain-tagline";
 import type { PresetCardData } from "@/lib/preset-cards";
@@ -146,7 +146,7 @@ function Cards({
   );
 }
 
-/** Home's preset rows (Effects, Camera motions), for an area page that shows them the same way. */
+/** Home's preset rows (Camera motions, Effects), for an area page that shows them the same way. */
 export const PresetRail = Cards;
 
 /**
@@ -366,6 +366,7 @@ export function DestinationsSection({
   allCount,
   allNoun,
   after,
+  auto,
 }: {
   id: string;
   title: string;
@@ -386,11 +387,22 @@ export function DestinationsSection({
   allNoun?: string;
   /** Pills only the viewer's island adds (the owner's), after the others. */
   after?: React.ReactNode;
+  /** When the cards' clips play by themselves (StudioCard): Home's row, "always", like the preset rows above it. */
+  auto?: AutoPlay;
 }) {
   const items = cards.map((s, i) => (
     <div key={s.href} className={grid ? "min-w-0" : RAIL_ITEM}>
       {s.card ? (
-        <StudioCard href={s.href} label={s.label} line={s.line} card={s.card} zoom={!s.card.preview.video} place={staggered(i)} sizes={grid ? GRID_SIZES : STUDIO_SIZES} />
+        <StudioCard
+          href={s.href}
+          label={s.label}
+          line={s.line}
+          card={s.card}
+          zoom={!s.card.preview.video}
+          place={staggered(i)}
+          sizes={grid ? GRID_SIZES : STUDIO_SIZES}
+          auto={auto}
+        />
       ) : s.drawn === "live" ? (
         <DrawnCard href={s.href} label={s.label} line={s.line}>
           {/* A picture inside the link: its own controls stay out of reach (the card is one tap). */}
@@ -454,6 +466,7 @@ export function StudiosSection({ facts, studios, audioTools, pills }: Pick<HomeS
       all={area("studios").href}
       allCount={studioCount()}
       allNoun="studios"
+      auto="always"
       data-reveal className={cn(SECTION, "[--cv:529px] sm:[--cv:1597px] md:[--cv:1482px] lg:[--cv:770px] xl:[--cv:795px]")}
     />
   );

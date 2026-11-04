@@ -12,25 +12,29 @@ export const HOME_BENTO_MEDIA: Record<string, string> = {
   "/previews/home/rotation-1024.mp4": "3f5507ab",
   "/previews/home/rotation-1536.mp4": "87d3d4f1",
   "/previews/home/rotation-2048.mp4": "5804eda4",
-  "/previews/home/genjutsu-640.mp4": "dc3680bd",
-  "/previews/home/genjutsu-768.mp4": "003cd587",
-  "/previews/home/genjutsu-1024.mp4": "4a1c92ad",
+  "/previews/home/genjutsu-couple-640.mp4": "e5853e3f",
+  "/previews/home/genjutsu-couple-768.mp4": "8c5bd7e5",
+  "/previews/home/genjutsu-couple-1024.mp4": "a167fe74",
+  "/previews/home/genjutsu-lakeside-640.mp4": "620fd65a",
+  "/previews/home/genjutsu-lakeside-768.mp4": "347a8d35",
+  "/previews/home/genjutsu-lakeside-1024.mp4": "7bd2e563",
   "/previews/home/reel-sand-storm-640.avif": "6e339255",
   "/previews/home/reel-sand-storm-1024.avif": "13b5d74a",
   "/previews/home/rotation-640.avif": "c69b0d7b",
   "/previews/home/rotation-1024.avif": "23d2a89b",
   "/previews/home/rotation-1536.avif": "b3df3778",
   "/previews/home/rotation-2048.avif": "bcc9ccc5",
-  "/previews/home/genjutsu-640.avif": "5773faa7",
-  "/previews/home/genjutsu-768.avif": "be299a65",
-  "/previews/home/genjutsu-1024.avif": "c7c045c3",
+  "/previews/home/genjutsu-couple-640.avif": "e050404a",
+  "/previews/home/genjutsu-couple-768.avif": "4d693b3a",
+  "/previews/home/genjutsu-couple-1024.avif": "1748efab",
+  "/previews/home/genjutsu-couple-split-640.avif": "fc57af53",
+  "/previews/home/genjutsu-couple-split-768.avif": "69d8990b",
+  "/previews/home/genjutsu-couple-split-1024.avif": "0e726fb0",
   "/previews/home/reel-sand-storm-1024.jpg": "cab53f24",
   "/previews/home/rotation-1024.jpg": "61a2cbc9",
-  "/previews/home/genjutsu-1024.jpg": "1b5d1a56",
+  "/previews/home/genjutsu-couple-1024.jpg": "5b931a56",
   "/previews/home/image-4-480.avif": "5a6d07a1",
   "/previews/home/image-4-768.avif": "ef9d1b4d",
-  "/previews/home/genjutsu-original-240.avif": "ecc3f2d0",
-  "/previews/home/genjutsu-original-480.avif": "c0db35a8",
   "/previews/home/board-photo.webp": "47432641",
   "/previews/home/board-film.webp": "db007869"
 };
@@ -55,11 +59,18 @@ export const HOME_BENTO_REEL = [
   }
 ];
 
+/**
+ * The Genjutsu tile's reel, in the order it plays: each clip's copies' name, its length in frames (its held last frames
+ * too), the words either side of its divider, where the divider is on each frame (a share of the frame's width, the
+ * swap left of it), and the frame its fade out starts on.
+ */
+export const HOME_BENTO_GENJUTSU = [{"name":"genjutsu-couple","frames":132,"fps":24,"labels":["Original","Swapped"],"fadeFrom":124,"line":[-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.0234,-0.0038,0.0278,0.0698,0.12,0.176,0.235,0.294,0.35,0.4002,0.4422,0.4738,0.4934,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5066,0.5262,0.5578,0.5998,0.65,0.706,0.765,0.824,0.88,0.9302,0.9722,1.0038,1.0234,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03]},{"name":"genjutsu-lakeside","frames":132,"fps":24,"labels":["Original","Swapped"],"fadeFrom":124,"line":[-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.03,-0.0282,-0.0228,-0.0138,-0.0013,0.0146,0.0339,0.0563,0.0818,0.1101,0.141,0.1745,0.2101,0.2477,0.2871,0.3279,0.3699,0.4128,0.4562,0.5,0.5438,0.5872,0.6301,0.6721,0.7129,0.7523,0.7899,0.8255,0.859,0.8899,0.9182,0.9437,0.9661,0.9854,1.0013,1.0138,1.0228,1.0282,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03,1.03]}];
+
 /** Each poster's mean colour (by its clip's name): the tile shows it until the poster is in. */
 export const HOME_BENTO_TINT: Record<string, string> = {
   "reel-sand-storm": "#b06c4c",
   "rotation": "#bfbeb6",
-  "genjutsu": "#786b54"
+  "genjutsu-couple": "#9f8a6b"
 };
 
 export const HOME_BENTO_WAVE = {

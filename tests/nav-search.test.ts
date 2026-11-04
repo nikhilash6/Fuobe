@@ -96,8 +96,10 @@ describe("search by what you want to make", () => {
     const first = (q: string) => searchNav(q, GUEST).best[0];
     expect(first("music")).toMatchObject({ label: "Music", hint: "Audio", href: "/audio/music" });
     expect(first("background music").label).toBe("Music");
-    expect(first("voiceover")).toMatchObject({ label: "Speech", hint: "Audio", href: "/audio" });
-    expect(first("voice over for my video").href).toBe("/audio");
+    expect(first("voiceover")).toMatchObject({ label: "Speech", hint: "Audio", href: "/audio/speech" });
+    expect(searchNav("voice over for my video", GUEST).best.slice(0, 2).map((h) => h.href)).toContain("/audio/speech");
+    // "audio": the studio, then Clean up voice (the mode it opens on, its highlight).
+    expect(searchNav("audio", GUEST).best.slice(0, 2).map((h) => h.label)).toEqual(["Audio", "Clean up voice"]);
     expect(first("sound effect")).toMatchObject({ label: "Sound effects", href: "/audio/sfx" });
     expect(first("whoosh").label).toBe("Sound effects");
     expect(searchNav("sound", GUEST).best.slice(0, 3).map((h) => h.label)).toEqual(expect.arrayContaining(["Audio", "Sound effects"]));

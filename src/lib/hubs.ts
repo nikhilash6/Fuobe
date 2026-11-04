@@ -27,14 +27,15 @@ export const HUB_MODES: Record<HubKind, HubMode[]> = {
     { id: "hdr", label: "SDR to HDR" },
     { id: "export", label: "Export" },
   ],
+  // Clean up voice leads: /audio opens on it, and every list of Audio's modes starts with it.
   audio: [
+    { id: "clean", label: "Clean up voice" },
     { id: "speech", label: "Speech" },
     { id: "dialogue", label: "Dialogue" },
     { id: "voice-change", label: "Voice change" },
     { id: "design", label: "Design a voice" },
     { id: "translate", label: "Translate", selfHostedOnly: true },
     { id: "transcribe", label: "Transcribe" },
-    { id: "clean", label: "Clean up voice" },
     { id: "split", label: "Split soundtrack", selfHostedOnly: true },
     { id: "sfx", label: "Sound effects" },
     { id: "music", label: "Music" },
@@ -57,6 +58,14 @@ export const HUB_MODES: Record<HubKind, HubMode[]> = {
     { id: "join", label: "Join clips" },
     { id: "colors", label: "Match colors" },
   ],
+};
+
+/**
+ * A hub whose own URL opened another mode before, and the link params only that mode reads: /audio opened on Speech
+ * until Clean up voice came first, so an old `/audio?voice=…`, `?prompt=…` or `?model=…` link opens Speech (src/proxy.ts).
+ */
+export const FORMER_HOME: Partial<Record<HubKind, { mode: string; params: readonly string[] }>> = {
+  audio: { mode: "speech", params: ["voice", "prompt", "model", "preset", "example", "lyrics"] },
 };
 
 /** The URL of one mode: the hub itself for the first one, else /<hub>/<mode>. */

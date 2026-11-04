@@ -420,10 +420,9 @@ describe("the mixer", () => {
 });
 
 describe("Split soundtrack in the Audio hub", () => {
-  it("is a mode after Transcribe and Clean up voice, with its own path", () => {
+  it("is a mode after Transcribe, with its own path", () => {
     const ids = HUB_MODES.audio.map((m) => m.id);
-    expect(ids.indexOf("split")).toBe(ids.indexOf("clean") + 1);
-    expect(ids.indexOf("clean")).toBe(ids.indexOf("transcribe") + 1);
+    expect(ids.indexOf("split")).toBe(ids.indexOf("transcribe") + 1);
     expect(HUB_MODES.audio.find((m) => m.id === "split")?.label).toBe("Split soundtrack");
     expect(modeHref("audio", "split")).toBe("/audio/split");
   });

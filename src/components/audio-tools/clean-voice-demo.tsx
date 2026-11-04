@@ -17,10 +17,10 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Clean up voice's demo, for anyone who hasn't cleaned a file of their own yet: a photo of a woman talking in a busy
- * brasserie, and one tap to hear her. Both takes (the room as recorded, her voice alone) start together through Web Audio,
- * one AudioContext with a gain each, so a switch happens at the same moment in her speech; the picture softens with the
- * sound. What happens when is decided in src/lib/av/clean-voice-demo.ts.
+ * Clean up voice's demo, for anyone who hasn't cleaned a file of their own yet: a photo of a woman talking in a noisy
+ * restaurant, and one tap to take the noise away. Both takes (the room as recorded, her voice alone) start together
+ * through Web Audio, one AudioContext with a gain each, so a switch happens at the same moment in her speech; the picture
+ * softens with the sound. What happens when is decided in src/lib/av/clean-voice-demo.ts.
  */
 
 type Win = Window & { webkitAudioContext?: typeof AudioContext };
@@ -221,16 +221,16 @@ export function CleanVoiceDemo({
       <header className="grid gap-1.5">
         <span className="text-[12px] font-medium tracking-[.06em] text-muted-foreground uppercase">{name}</span>
         <h2 id={headingId} className="font-heading text-[clamp(34px,7vw,48px)] leading-[1.05] tracking-[-.01em] text-balance">
-          Hear her, not the room.
+          Studio-clean voice from any recording.
         </h2>
         <p className="max-w-[52ch] text-[15px] leading-[1.55] text-muted-foreground">
-          A phone recording from a packed brasserie: music, clatter and every other table. Tap play and the room falls away while she keeps talking.
+          Recorded on a phone in a noisy restaurant. Press play and the noise disappears while she keeps talking.
         </p>
       </header>
 
       <div
         role="group"
-        aria-label="Demo: a woman talking in a busy brasserie"
+        aria-label="Demo: a woman talking in a noisy restaurant"
         onClick={tap}
         className="relative isolate aspect-[4/3] w-full max-w-full cursor-pointer touch-manipulation overflow-hidden rounded-xl bg-media [-webkit-tap-highlight-color:transparent]"
       >
@@ -243,7 +243,7 @@ export function CleanVoiceDemo({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={DEMO_MEDIA.room}
-            alt="A woman talking at a marble table in a packed Paris brasserie, waiters and diners behind her"
+            alt="A woman talking at a marble table in a busy restaurant, waiters and diners behind her"
             width={1280}
             height={960}
             fetchPriority="high"
@@ -267,7 +267,7 @@ export function CleanVoiceDemo({
           aria-live="polite"
         >
           <span className={cn("size-2 rounded-full motion-reduce:animate-none", state.clean ? "bg-[#7ee2b8]" : "bg-[#ffb347]", playing && !state.clean && "animate-live-dot")} />
-          <span data-demo-state>{state.clean ? "Voice only" : "Busy brasserie"}</span>
+          <span data-demo-state>{state.clean ? "Voice only" : "Noisy restaurant"}</span>
         </span>
 
         <span
