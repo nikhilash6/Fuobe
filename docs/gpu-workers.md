@@ -245,7 +245,9 @@ local ComfyUI work counts as another program.
 
 When no studio job has come for a minute, the worker frees its own ComfyUI's memory (`/free`) and writes
 `siteWaiting: 0`, so your local work can go on. If no "yielded" comes within 3 minutes, the worker says so in its log
-and in its beat (`waiting-for-yield:no-answer`). It goes on waiting, with the jobs kept in line.
+and in its beat (`waiting-for-yield:no-answer`). It goes on waiting, with the jobs kept in line. While it waits,
+Settings → Workers shows "Waiting for local ComfyUI work to make room", with the helper's estimate of the start when
+there is one, never "Ready".
 
 **Limits that only the PC sets.** The studio can never change these:
 

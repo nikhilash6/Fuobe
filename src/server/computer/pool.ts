@@ -79,7 +79,7 @@ const factsOf = (w: WorkerRow) => json<ComputerFacts>(w.facts_json, {});
 const hoursOf = (w: WorkerRow): Hours | null => parseHours(json<unknown>(w.hours_json, null));
 const benchOf = (w: WorkerRow) => json<Record<string, { medianMs?: number; p90Ms?: number; loadMs?: number; peakVramBytes?: number }>>(w.bench_json, {});
 
-export type WorkerState = "new" | "idle" | "busy" | "draining" | "paused" | "outside-hours" | "gpu-busy" | "comfy-down" | "offline";
+export type WorkerState = "new" | "idle" | "busy" | "draining" | "paused" | "outside-hours" | "gpu-busy" | "comfy-down" | "waiting-for-yield" | "offline";
 
 /** The state in one word, and in words for the owner ("Paused here until 16:30", "Your GPU is busy (blender.exe)"). */
 export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerState; words: string } {
@@ -99,7 +99,14 @@ export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerStat
   if (!h.inside) return { state: "outside-hours", words: h.nextChangeAt ? `Outside its hours (back at ${clock(h.nextChangeAt, tz)})` : "No hours set" };
   const busy = (db().prepare(`SELECT COUNT(*) AS n FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting')`).get(w.id) as { n: number }).n > 0;
   if (w.drain) return busy ? { state: "draining", words: "Finishing its job, then pausing" } : { state: "paused", words: "Paused after its last job" };
-  return busy ? { state: "busy", words: "Running a job" } : { state: "idle", words: "Ready" };
+  if (busy) return { state: "busy", words: "Running a job" };
+  // Studio jobs first: local ComfyUI work on its machine holds the GPU, and the worker waits for it to make room. Not a
+  // pause: its jobs keep their place. `local_until` is the estimate of the start, when there is one.
+  if (why.startsWith("waiting-for-yield")) {
+    if (why.endsWith(":no-answer")) return { state: "waiting-for-yield", words: "Waiting for local ComfyUI work to make room (no answer after 3 minutes)" };
+    return { state: "waiting-for-yield", words: `Waiting for local ComfyUI work to make room${w.local_until ? ` (starts about ${clock(w.local_until, tz)})` : ""}` };
+  }
+  return { state: "idle", words: "Ready" };
 }
 
 /** May this worker take a new task now (4.3: paused in neither place, not draining, inside its hours, new enough, heard from)? */

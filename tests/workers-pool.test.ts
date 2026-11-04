@@ -369,6 +369,44 @@ describe("people's runs this worker may take now (the beat's claimableNow)", () 
   });
 });
 
+describe("a worker waiting for local ComfyUI work to make room", () => {
+  /** A beat that says the worker waits for its turn (not paused), with the helper's estimate of the start. */
+  const waits = (w: W, why: string, until: number | null) =>
+    pool.workerBeat(row(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1.0.0", local: { paused: false, why, until }, gpu: {}, inventoryHash: null, running: [], stopped: [] }), clock);
+
+  it("says so in its state and the owner's list, never Ready, and its jobs keep their place", () => {
+    const w = worker("waits");
+    const id = task({ account: "acct-1" });
+    const a = waits(w, "waiting-for-yield", clock + 4 * MIN);
+    // Not a pause: it may still claim, and nothing goes back in line.
+    expect(a.runner).toBe(true);
+    expect(a.worker.pauseNow).toBe(false);
+    expect(a.claimableNow).toBe(1);
+    expect(pool.workerState(row(w), clock)).toMatchObject({ state: "waiting-for-yield", words: expect.stringMatching(/^Waiting for local ComfyUI work to make room \(starts about \d\d:\d\d\)$/) });
+    expect(row(w).state).toBe("waiting-for-yield");
+    const view = pool.listWorkers(clock).find((x) => x.id === w.id)!;
+    expect(view.state).toBe("waiting-for-yield");
+    expect(view.words).not.toBe("Ready");
+    expect(state(id).state).toBe("waiting");
+    // No estimate yet.
+    waits(w, "waiting-for-yield", null);
+    expect(pool.workerState(row(w), clock).words).toBe("Waiting for local ComfyUI work to make room");
+  });
+
+  it("with no answer after 3 minutes, says that, and a job it runs shows first", () => {
+    const w = worker("no-answer");
+    waits(w, "waiting-for-yield:no-answer", null);
+    expect(pool.workerState(row(w), clock)).toEqual({ state: "waiting-for-yield", words: "Waiting for local ComfyUI work to make room (no answer after 3 minutes)" });
+    task({ account: "acct-1" });
+    expect(claim(w)).not.toBeNull();
+    expect(pool.workerState(row(w), clock)).toEqual({ state: "busy", words: "Running a job" });
+    // Its turn came: Ready again.
+    waits(w, "", null);
+    db().prepare("UPDATE relay_tasks SET state = 'done' WHERE worker_id = ?").run(w.id);
+    expect(pool.workerState(row(w), clock)).toEqual({ state: "idle", words: "Ready" });
+  });
+});
+
 describe("routes", () => {
   it("the beat's answer carries claimableNow", async () => {
     clock = Date.now();
