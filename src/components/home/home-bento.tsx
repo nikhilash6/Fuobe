@@ -1,6 +1,7 @@
 import { ArrowRight, ArrowUpRight, Play, Sparkles, Video } from "lucide-react";
 import { preload } from "react-dom";
 import { BentoClip, BentoMotion, BentoReel, LiveTyping, NumbersLink } from "@/components/home/bento-islands";
+import { BentoVoice } from "@/components/home/bento-voice";
 import { PausePreviews } from "@/components/home/home-islands";
 import { IntentLink } from "@/components/intent-link";
 import { CountUp } from "@/components/ui/count-up";
@@ -27,6 +28,11 @@ const SIZES = {
    * times 4/3: up to 560 px on a 1920 x 1080 screen); two columns on a tablet; the full row on a phone.
    */
   genjutsu: "(min-width: 1024px) 560px, (min-width: 768px) 470px, calc(100vw - 32px)",
+  /**
+   * The Audio tile: from lg four of the fourteen columns and a third of the grid tall (wider than 4:3, so its width:
+   * up to 320 px), a column on a tablet (230 px, squarer: its height times 4/3), the full row on a phone.
+   */
+  voice: "(min-width: 1024px) 320px, (min-width: 768px) 290px, calc(100vw - 32px)",
 };
 
 /**
@@ -93,7 +99,10 @@ function Copy({ tile, bigMeta }: { tile: BentoTile; bigMeta?: boolean }) {
   );
 }
 
-/** One tile: the whole of it is one link, named by its kind, title and where it goes. */
+/**
+ * One tile: the whole of it is one link, named by its kind, title and where it goes. (The Audio tile holds a demo's
+ * buttons, so only its words are its link: bento-voice.tsx.)
+ */
 function Tile({ tile, area, children, bigMeta }: { tile: BentoTile; area: string; children?: React.ReactNode; bigMeta?: boolean }) {
   return (
     <IntentLink href={tile.href} aria-label={tile.label} data-tile={tile.key} className={cn(s.tile, area)}>
@@ -163,7 +172,8 @@ function CanvasBoard({ board }: { board: Bento["canvas"] }) {
  * Home's first screen: the page's headline over a grid of tiles, one per kind of media Fuobe makes, each a real
  * picture, clip or sound from the studio it opens. A server component: the words, numbers, links and stills are all
  * in the HTML; the clips, the typing, the motion switch and the numbers tile's launcher are small islands
- * (bento-islands.tsx). Nothing in it depends on who is looking.
+ * (bento-islands.tsx), and so is the Audio tile, Clean up voice's demo to play (bento-voice.tsx). Nothing in it depends
+ * on who is looking.
  */
 export function HomeBento({ bento }: { bento: Bento }) {
   const { tiles } = bento;
@@ -230,14 +240,13 @@ export function HomeBento({ bento }: { bento: Bento }) {
           <BentoClip id={bento.threeD.id} clips={bento.threeD.clips} />
         </Tile>
 
-        <Tile tile={tiles.audio} area={s.audio}>
-          <span aria-hidden className={s.wave} style={{ "--wave-s": `${bento.wave.seconds}s` } as React.CSSProperties}>
-            {bento.wave.bars.map((h, i) => (
-              <i key={i} style={{ "--h": h, "--d": `${((i / bento.wave.bars.length) * bento.wave.seconds).toFixed(3)}s` } as React.CSSProperties} />
-            ))}
-            <span className={s.playhead} />
-          </span>
-        </Tile>
+        {/* Clean up voice's demo, to hear right here: its words open the studio (bento-voice.tsx). */}
+        <BentoVoice
+          tile={tiles.audio}
+          area={s.audio}
+          room={<Pic pic={bento.voice.room} sizes={SIZES.voice} fetchPriority="low" />}
+          quiet={<Pic pic={bento.voice.quiet} sizes={SIZES.voice} fetchPriority="low" />}
+        />
 
         <NumbersLink href={tiles.numbers.href} aria-label={tiles.numbers.label} aria-haspopup="dialog" data-tile="numbers" className={cn(s.tile, s.numbers)}>
           <dl aria-hidden className={s.figures}>

@@ -68,6 +68,9 @@ export const HINTS = {
   unsupported: "This browser can't play the demo's sound.",
 } as const;
 
+/** The chip over the photo: what is heard now (the studio's demo and Home's Audio tile say the same). */
+export const stateLabel = (clean: boolean) => (clean ? "Voice only" : "Noisy restaurant");
+
 export const DEMO_START: DemoState = { phase: "idle", clean: false, auto: true, ramp: 0, run: 0, flash: 0, hint: HINTS.ready };
 
 /** Playing or paused: both clips exist and keep their place. */
