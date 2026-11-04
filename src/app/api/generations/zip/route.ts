@@ -23,8 +23,9 @@ const zipResponse = (entries: ZipEntry[], size: number, body: ReadableStream<Uin
  *
  * A signed-in account (public sign-up) zips its own runs only: an id that isn't its own is left out, exactly as one
  * that doesn't exist, so the answer never says whether someone else's run is there (none of its own: 404). It zips up
- * to ACCOUNT_LIMITS.zipRuns runs and zipBytes bytes, one zip at a time (429 while one is going). Its `?check=1` answers
- * {files, size} (or the refusal) without the zip, so the page can say why first. A guest gets the sign-up card.
+ * to ACCOUNT_LIMITS.zipRuns runs and zipBytes bytes, one zip at a time (429 while one is going). `?check=1` (anyone
+ * signed in) answers {files, size} (or the refusal) without the zip, so the page can say why first
+ * (src/lib/zip-download.ts). A guest gets the sign-up card.
  */
 export async function GET(request: Request) {
   await connection();
@@ -52,5 +53,6 @@ export async function GET(request: Request) {
   if (!entries.length) return Response.json({ error: NOTHING }, { status: 404 });
   const size = zipSize(entries);
   if (size > ZIP_MAX_BYTES) return Response.json({ error: "That's over 4 GB. Download fewer items at a time." }, { status: 413 });
+  if (sp.get("check") === "1") return Response.json({ files: entries.length, size });
   return zipResponse(entries, size, zipStream(entries));
 }
