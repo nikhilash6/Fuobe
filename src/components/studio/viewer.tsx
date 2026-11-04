@@ -23,6 +23,7 @@ import { LayersStack, ModelViewer, TextReader, VideoFileCard } from "./result-me
 import { ReviewSelect } from "@/components/library/review";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { NextSteps } from "@/components/nav/next-steps";
+import { AiTag, useAiTag } from "./ai-tag";
 
 
 /** One line of the details; `center` lines the label up with a control (the Review picker) instead of a text value's first line. */
@@ -59,6 +60,7 @@ function metaText(o: OutputFile | undefined, key: string): string | undefined {
 function Details({ g, index }: { g: Generation; index: number }) {
   const p = g.request.params ?? {};
   const title = userTitle(g);
+  const aiTag = useAiTag();
   if (g.feature === "upload") {
     return (
       <div className="space-y-4">
@@ -75,6 +77,7 @@ function Details({ g, index }: { g: Generation; index: number }) {
     <div className="space-y-4">
       <div>
         <p className="font-heading text-[20px] leading-snug">{title}</p>
+        {aiTag && <AiTag className="mt-1.5 inline-block bg-muted text-muted-foreground backdrop-blur-none" />}
         {g.prompt && g.prompt !== title && <p className="mt-1 line-clamp-6 text-[12px] leading-relaxed break-words text-muted-foreground">{g.modelId === "local-motion" ? "Words" : "Sent to the model"}: {g.prompt}</p>}
         {g.prompt && (
           <button
@@ -87,7 +90,7 @@ function Details({ g, index }: { g: Generation; index: number }) {
       </div>
       <div className="divide-y rounded-lg border px-3">
         <Row label="Model" value={g.modelName ?? g.modelId} />
-        <Row label="Made on" value={g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "In your browser" : g.engine === "open" ? "Your GPU" : "Cloud"} />
+        <Row label="Made on" value={g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "In your browser" : g.place === "pool" ? "This studio" : g.engine === "open" ? "Your GPU" : "Cloud"} />
         <Row label="Mode" value={OPERATION_LABELS[g.op]} />
         <Row label={g.modelId.startsWith("fuobe-soul") ? "Look" : "Preset"} value={g.presetName} />
         <Row label="Finish" value={finishText(g.outputs[index])} />

@@ -1,10 +1,10 @@
 "use client";
 
 import { Cloud, Copy, Cpu, Download, FolderDown, Heart, MoreHorizontal, RotateCcw, Sparkles, Trash2, Wrench, X } from "lucide-react";
-import { lineWords } from "@/lib/hosted";
+import { lineWords } from "@/lib/pool-line";
 import { openGpuSetup } from "@/hooks/use-gpu";
 import { useLocalJob } from "@/components/gpu/computer-runner";
-import { jobFraction, jobWords } from "@/lib/relay";
+import { jobFraction, jobWords, POOL_WORDS } from "@/lib/relay";
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -32,6 +32,7 @@ import { PlaceholderChip } from "@/components/demo-mode";
 import { Viewer } from "./viewer";
 import { NextSteps } from "@/components/nav/next-steps";
 import { reservedRowHeight, useArrival, useEnter, useFollowRow, useLiveRun } from "./feed-motion";
+import { AiTag, useAiTag } from "./ai-tag";
 
 export { MediaThumb } from "./result-media";
 export { downloadName } from "@/lib/library";
@@ -52,10 +53,20 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   // Its % and time left come from its own steps then, so they agree with "step 9 of 12".
   const local = useLocalJob(g.id, now);
   useLiveRun(g.id);
-  const label = (local && jobWords(local.job, g.kind, g.message ?? undefined, local.comfy)) ?? (g.status === "queued" ? (g.message ?? "Queued") : (g.message ?? "Generating…"));
+  // On this studio's GPUs (hosted runs) a run shows only where it is: "In line" with its place and wait (again after any
+  // recovery, its place kept, with no progress from an earlier attempt), then "Working" with its progress.
+  const pool = g.place === "pool";
+  const inLine = pool && g.status === "queued";
+  const label = pool
+    ? inLine
+      ? g.queue
+        ? lineWords(g.queue)
+        : POOL_WORDS.inLine
+      : (g.message ?? POOL_WORDS.working)
+    : ((local && jobWords(local.job, g.kind, g.message ?? undefined, local.comfy)) ?? (g.status === "queued" ? (g.message ?? "Queued") : (g.message ?? "Generating…")));
   const steps = local ? jobFraction(local.job) : null;
   const saving = local && (local.job.phase === "saving" || local.job.phase === "done");
-  const fraction = local ? (saving ? null : steps) : g.progress;
+  const fraction = local ? (saving ? null : steps) : inLine ? null : g.progress;
   const pct = fraction != null ? Math.round(fraction * 100) : null;
   // When progress moved (not every poll: each one rewrites updatedAt) gives the pace, so the time left.
   // Keyed by id: a chain's tile moves on to its next step's generation.
@@ -71,7 +82,7 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   return (
     // max-w-full: in a grid row stretched by a taller neighbour (a card with a footer), h-full + aspect-ratio would
     // otherwise make the tile wider than its column and spill over the next card.
-    <div className="relative h-full max-w-full overflow-hidden rounded-xl bg-muted" style={{ aspectRatio: ratio }}>
+    <div className="relative h-full max-w-full overflow-hidden rounded-xl bg-muted" style={{ aspectRatio: ratio }} data-run-state={pool ? (inLine ? "in-line" : "working") : undefined}>
       <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
       {local?.preview && (
         // eslint-disable-next-line @next/next/no-img-element -- a live frame from the person's own ComfyUI (a blob: address)
@@ -126,11 +137,19 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
 }
 
 export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number; onRetry: () => void }) {
+  // A run on this studio's GPUs that couldn't finish: one plain sentence (the server's), nothing technical.
+  const poolFailed = g.place === "pool" && g.status === "failed";
   return (
     <div className="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style={{ aspectRatio: Math.max(ratio, 0.8) }}>
       <div className="min-h-0 space-y-1 overflow-hidden">
-        <p className="text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
-        {g.error && <p className="line-clamp-5 text-[12px] leading-snug break-words whitespace-pre-line text-muted-foreground">{g.error}</p>}
+        {poolFailed ? (
+          <p className="line-clamp-5 text-[13px] leading-snug font-medium break-words">{g.error || POOL_WORDS.failed}</p>
+        ) : (
+          <>
+            <p className="text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
+            {g.error && <p className="line-clamp-5 text-[12px] leading-snug break-words whitespace-pre-line text-muted-foreground">{g.error}</p>}
+          </>
+        )}
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {g.status === "failed" && g.fix && (
@@ -177,6 +196,8 @@ interface FeedApi {
   retry: (g: Generation) => void;
   runner: RunnerOptions;
   reuse?: (g: Generation) => void;
+  /** Pictures and clips carry an "AI-generated" tag (hosted runs on). */
+  aiTag?: boolean;
 }
 
 const FeedCtx = createContext<FeedApi | null>(null);
@@ -243,6 +264,7 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
         className={cn("absolute", o.kind === "text" ? "bottom-2" : o.draftId ? "top-11" : "top-2", audio && canHover && "group-focus-within/tile:opacity-0 group-hover/tile:opacity-0 focus-within:opacity-100! has-data-[state=open]:opacity-100!")}
       />
       {g.favorite && <Heart className={cn("absolute top-2 right-2 size-4 fill-highlight text-highlight drop-shadow", audio && canHover && "group-focus-within/tile:opacity-0 group-hover/tile:opacity-0")} />}
+      {feed.aiTag && (o.kind === "image" || o.kind === "video") && <AiTag className={cn("absolute bottom-2 left-2", canHover && "transition-opacity group-focus-within/tile:opacity-0 group-hover/tile:opacity-0")} />}
       {canHover && hot === "bar" && (
         <TileActions
           g={g}
@@ -321,7 +343,6 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest, first 
             <span className="before:mr-1.5 before:content-['·']">{timeAgo(g.createdAt)}</span>
             {/* A run its provider never took (a refused key, an empty balance) cost nothing: said, not priced. */}
             {/* On this studio's GPUs (hosted runs): the billing service's words for its charge, or that it cost nothing. */}
-            {g.queue ? <span className="before:mr-1.5 before:content-['·']">{lineWords(g.queue)}</span> : null}
             {g.stage === "checking" ? <span className="before:mr-1.5 before:content-['·']">Checking</span> : null}
             {g.place === "pool" ? (
               g.notCharged ? (
@@ -444,6 +465,7 @@ export function Feed({
     reuseRef.current = onReuse;
   });
   const hasReuse = !!onReuse;
+  const aiTag = useAiTag();
   const openAt = useCallback((g: Generation, index: number) => setOpen({ id: g.id, index }), []);
   const api = useMemo<FeedApi>(
     () => ({
@@ -451,8 +473,9 @@ export function Feed({
       retry: (g) => createRef.current.mutate(g.request, { onError: (e) => toastError(e) }),
       reuse: hasReuse ? (g) => reuseRef.current?.(g) : undefined,
       runner: { onOpen: openAt, onReuse: hasReuse ? (g) => reuseRef.current?.(g) : undefined },
+      ...(aiTag && { aiTag }),
     }),
-    [openAt, hasReuse],
+    [openAt, hasReuse, aiTag],
   );
   if (!items.length) return <>{empty}</>;
   // The feed is newest first: the next steps go under the first finished result.

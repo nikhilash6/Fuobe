@@ -1,12 +1,14 @@
 import http from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FAKE_POLICY, listenInRange, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
 import { tempDir } from "./helpers/temp-dir";
 
 // The price check before Run (`?preview=1`) on hosted runs: where a new run would stand in line and the wait, and a
 // refusal (busy, a limit, a model or files this install's GPUs don't take) said before Run is pressed, in the words the
-// run itself would get. With hosted runs off the answer is as before.
+// run itself would get. A run's state reads the same from the list and from its own route (a refresh, a second
+// device). With hosted runs off every answer is as before.
+vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 const dir = tempDir("fuobe-hosted-price-check-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -25,6 +27,8 @@ process.env.COMFYUI_URL = comfy.url;
 
 const auth = await import("@/server/auth");
 const generationsRoute = await import("@/app/api/generations/route");
+const oneRoute = await import("@/app/api/generations/[id]/route");
+const { POOL_WORDS } = await import("@/lib/relay");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const billing = await import("@/server/billing");
@@ -181,6 +185,34 @@ describe("the price check with hosted runs on", () => {
     expect(r.body.place).toBe("pool");
     expect(r.body.quote).toMatchObject({ allowed: true });
     expect(r.body.line?.place).toBe(2);
+  });
+});
+
+describe("a run's state after a refresh or on a second device", () => {
+  beforeEach(() => {
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    process.env.FUOBE_HOSTED_FREE = "1";
+  });
+  const list = async () => {
+    const r = await generationsRoute.GET(new Request("http://localhost:3000/api/generations", { headers: { host: "localhost:3000", cookie } }));
+    return ((await r.json()) as { items: Record<string, unknown>[] }).items;
+  };
+  const one = async (id: string) => (await (await oneRoute.GET(new Request(`http://localhost:3000/api/generations/${id}`), { params: Promise.resolve({ id }) } as never)).json()) as Record<string, unknown>;
+  const state = (g: Record<string, unknown> | undefined) => g && { status: g.status, message: g.message, progress: g.progress, queue: g.queue ?? null, place: g.place };
+
+  it("the list and the run's own route say the same: In line with its place, then Working with its progress", async () => {
+    waitingRun(other);
+    const id = waitingRun(a);
+    const listed = state((await list()).find((g) => g.id === id));
+    expect(listed).toEqual({ status: "queued", message: POOL_WORDS.inLine, progress: null, queue: { place: 2, etaSeconds: null }, place: "pool" });
+    expect(state(await one(id))).toEqual(listed);
+    // A worker has it: Working, with its progress, and no place in line.
+    const now = Date.now();
+    db().prepare("INSERT INTO generation_runs (id, submitted_at, started_at) VALUES (?, ?, ?)").run(id, now, now);
+    db().prepare("UPDATE generations SET status = 'running', progress = 0.5 WHERE id = ?").run(id);
+    const working = state((await list()).find((g) => g.id === id));
+    expect(working).toEqual({ status: "running", message: POOL_WORDS.working, progress: 0.5, queue: null, place: "pool" });
+    expect(state(await one(id))).toEqual(working);
   });
 });
 
