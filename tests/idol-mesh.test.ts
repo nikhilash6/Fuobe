@@ -126,6 +126,8 @@ describe("Idol 3D quick mesh: the model and From an image", () => {
     expect(m3d.MODELS_3D.image.open).toEqual([
       expect.objectContaining({ id: "oss-pixal3d" }),
       expect.objectContaining({ id: "oss-trellis2" }),
+      // Photo to 3D's Idol 3D Mesh (its own graph, with an orbit clip) sits before Hunyuan3D 2.1.
+      expect.objectContaining({ id: "oss-idol-3d" }),
       expect.objectContaining({ id: "oss-hunyuan3d-21" }),
       { id: "oss-idol-mesh", note: "Rough mesh, vertex colours, no textures · 8 GB GPU" },
     ]);
