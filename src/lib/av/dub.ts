@@ -153,6 +153,29 @@ export interface PrepareInput {
   title?: string;
   /** Open engine: the voice split (default DEFAULT_VOICE_SPLIT). The cloud ignores it. */
   voiceSplit?: VoiceSplit;
+  /**
+   * "gpu": the translations run on the asker's own ComfyUI (Qwen3.5 4B, GPU_TRANSLATE_MODEL), never on the install's
+   * AI helper: a signed-in account's dub, on either engine. Default: the install's text model (DUB_STEP_MODELS).
+   */
+  translator?: "gpu";
+  /** The video's length (seconds): how long a GPU translation may write. */
+  seconds?: number;
+}
+
+/** The ComfyUI translator an account's dub uses (translate-qwen35-textgen): on its own GPU, timings kept. */
+export const GPU_TRANSLATE_MODEL = "oss-qwen35-translate";
+
+/**
+ * The GPU translator's instruction: the transcript reaches it as the chained JSON list of timed lines, and its answer is
+ * one "start-end: text" line per line, which the result reads back as timed lines.
+ */
+export const GPU_TRANSLATE_INSTRUCTION =
+  'The text below is a JSON list of subtitle lines. Each line has a "start" and an "end" time in seconds and its "text". Translate the text of every line into {language}. Write one line per item, in the same order, as start-end: translation, with the start and end numbers exactly as given (for example 0.5-2.75: translation). Keep each translation about as long as the original so it can be spoken in the same time. Output only those lines.\n\n';
+
+/** How many tokens the GPU translator may write for a video this long (about 10 a second, within its limits). */
+export function gpuTranslateTokens(seconds?: number): number {
+  if (!seconds || !(seconds > 0)) return 8192;
+  return Math.min(16_384, Math.max(2048, Math.ceil(seconds * 10)));
 }
 
 /** Step 1 (both engines): the voice to clone, the timed transcript and one translation per target language. */
@@ -168,9 +191,13 @@ export function prepareSteps(o: PrepareInput): DubStep[] {
     chain: [{ slot: "prompt" }],
     request: {
       ...base,
-      modelId: o.engine === "open" ? DUB_STEP_MODELS.open.translate : DUB_STEP_MODELS.cloud.translate,
+      modelId: o.translator === "gpu" ? GPU_TRANSLATE_MODEL : o.engine === "open" ? DUB_STEP_MODELS.open.translate : DUB_STEP_MODELS.cloud.translate,
       op: "translate",
-      params: { targetLanguage: lang.name, ...(from && { sourceLanguage: from }) },
+      params: {
+        targetLanguage: lang.name,
+        ...(from && { sourceLanguage: from }),
+        ...(o.translator === "gpu" && { extra: { instruction: GPU_TRANSLATE_INSTRUCTION, maxTokens: gpuTranslateTokens(o.seconds) } }),
+      },
       step: step(`Translate · ${lang.name}`, i, of),
     },
   });

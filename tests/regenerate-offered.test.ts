@@ -79,25 +79,26 @@ describe("Regenerate while it is switched off", () => {
 });
 
 describe("tools a guest or an account can't open", () => {
-  it("leaves Restore & colourise and Remove dialogue out of a visitor's result menus, and keeps them for the owner", () => {
+  it("leaves Restore & colourise out of a visitor's result menus, keeps it for the owner, and offers Remove dialogue to both", () => {
     const owner = ids(gen());
     expect(owner).toContain("restore-video");
     const visitor = ids(gen(), { visitor: true });
     expect(visitor).not.toContain("restore-video");
-    expect(visitor).not.toContain("remove-dialogue");
+    // An account runs Remove dialogue on its own GPU (tests/account-audio.test.ts).
+    expect(visitor).toContain("remove-dialogue");
     expect(ids(upload(), { visitor: true })).not.toContain("restore-video");
   });
 
-  it("leaves Clean up dialogue out of a visitor's result menus and keeps it for the owner; Remove a person is everyone's", () => {
+  it("offers Remove a person and Clean up dialogue in a visitor's result menus, as the owner's", () => {
     // An uploaded clip gets both (a clip with sound).
     expect(ids(upload())).toEqual(expect.arrayContaining(["remove-person", "clean-dialogue"]));
     const visitor = ids(upload(), { visitor: true });
-    // An account runs Remove a person on its own GPU (tests/account-video-tools.test.ts); a guest signs up there.
+    // An account runs both on its own GPU (tests/account-video-tools.test.ts, account-audio.test.ts); a guest signs up there.
     expect(visitor).toContain("remove-person");
-    expect(visitor).not.toContain("clean-dialogue");
+    expect(visitor).toContain("clean-dialogue");
   });
 
-  it("leaves Restore & colourise's Video tools tab out for a visitor; Remove a person's tab is everyone's", () => {
+  it("leaves Restore & colourise's Video tools tab out for a visitor; Remove a person's and Remove dialogue's tabs are everyone's", () => {
     const tabs = Object.fromEntries(HUB_MODES["video-tools"].map((m) => [m.id, m.ownerOnly ?? false]));
     expect(tabs).toMatchObject({ restore: true, "remove-person": false, "remove-dialogue": false, matte: false, evolution: false, "remove-object": false });
   });

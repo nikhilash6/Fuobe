@@ -251,10 +251,8 @@ describe("the Studios sheet", () => {
     expect(words(sell)).toContain("Marketing Studio");
     const people = at("/", () => sheet({ group: "people" }));
     expect(pills(people)).toEqual(["From Reference", "Build from scratch", "From a description", "Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
-    // Pages that say "isn't available here" to a visitor, and the owner's own modes, aren't linked for them.
-    for (const w of ["Split soundtrack", "Remove dialogue"]) {
-      for (const g of LAUNCHER_GROUPS) expect(pills(at("/", () => sheet({ group: g.id }))), `${g.id}: ${w}`).not.toContain(w);
-    }
+    // Split soundtrack and Remove dialogue run for visitors with an account (on their own GPU or key): linked too.
+    for (const w of ["Split soundtrack", "Remove dialogue"]) expect(LAUNCHER_GROUPS.some((g) => pills(at("/", () => sheet({ group: g.id }))).includes(w)), w).toBe(true);
     // Cinema Studio's Blockout is linked for everyone (a guest is offered a free account on a run).
     const film = at("/", () => sheet({ group: "film" }));
     expect(pills(film)).toContain("Blockout");

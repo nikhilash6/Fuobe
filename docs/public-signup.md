@@ -275,13 +275,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the account's ComfyUI can't be reached, the run fails and says so. A cloud model, an AI helper or
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
   (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
-  plan with the studio's own AI helpers or keep projects of their own. So do the Audio hub's Split
-  soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`), though their price
-  checks work, priced for the account's own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
-  soundtrack isn't available here", "Edit speech isn't available here", "Remove dialogue isn't
-  available here"), with their upload and run off. Result menus don't offer Remove dialogue, Clean up
-  dialogue or Edit speech to a guest or an account, and Captions doesn't offer them "Fix this line"
-  (it opens Edit speech). Restore & colourise is left out of the Video tools tabs and the result menus for them.
+  plan with the studio's own AI helpers or keep projects of their own. The Audio tools have their own routes (below).
+  Restore & colourise is left out of the Video tools tabs and the result menus for them.
   A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
   MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
   song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2,
@@ -383,6 +378,23 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   owner's library answers 404. Katana's runs are its own projects (`GET /api/katana`, `GET`/`DELETE
   /api/katana/<id>`): up to 50, another account's or the owner's read as 404, deleted with the account. A guest gets
   the sign-up card.
+- **Audio tools.** An account runs Split soundtrack and Clean up dialogue, Video tools → Remove dialogue, Edit speech,
+  Loop / extend, Join and Clean up voice (`POST /api/audio-tools`) the same way as Genjutsu's: every step on its own
+  ComfyUI, or on its own fal.ai or Replicate key where a step is a cloud model, with only its own files, after the same
+  checks, and a run counts once against its limits. Its price check is its own run's. Its stems, clean dialogue,
+  edited speech and mixes are its own runs, to reopen in the mixer, open and download, and Export mix keeps the WAV as
+  one of its runs (above). Edit speech runs on the account's own GPU only (AuK's files and a 24 GB card): its tab and
+  page carry the "own setup" label (`audio:edit-speech`), and its upload and run ask an account without a GPU to
+  connect one. Result menus offer Remove dialogue, Clean up dialogue and Edit speech, and Captions offers "Fix this line".
+  A guest gets the sign-up card.
+- **Translate & dub.** An account keeps dubs of its own (`GET`/`POST /api/dub`, `GET`/`PATCH`/`DELETE /api/dub/<id>`,
+  `POST /api/dub/<id>/voice`): up to 50, in the account project store, deleted with the account. Another account's dub,
+  or the owner's, reads as not found (404), and the owner's list never shows an account's. A dub (one shot on its own
+  key, or step by step) and the voice of each language run the same way as Genjutsu's: every step on its own ComfyUI
+  or key, with only its own video. Its translations run on its own GPU (Qwen3.5 4B, `oss-qwen35-translate`), never on
+  the studio's AI helper, on either engine: a cloud step-by-step dub with a key and no GPU is asked to connect one. Its
+  reviewed lines are saved with its dub, and its dubbed videos are its own runs, to open and download. A guest gets the
+  sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.
