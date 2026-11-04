@@ -788,10 +788,11 @@ try {
         check(bare.every((c) => c.chip && !c.svg), `${label}: cards without a cover (${bare.length}) show "No cover yet" and no diagram`, bare.map((c) => `${c.name}${c.svg ? " svg" : ""}${c.chip ? "" : " no-chip"}`).join(", "));
       }
       if (device.viewport.width === 1440 && who === "guest") {
-        // A playing card never shows the clip before its peak window (the photo that went in).
+        // A card resting on its peak plays the effect's whole published clip when hovered, as the effect's own gallery
+        // card does: from its first frame (the photo that went in), through the change and the finished scene, looping.
         const loc = p.locator("article").filter({ has: p.locator("video") });
         const n = Math.min(await loc.count(), 7);
-        const early = [];
+        const partial = [];
         for (let i = 0; i < n; i++) {
           const c = loc.nth(i);
           await c.scrollIntoViewIfNeeded();
@@ -799,15 +800,17 @@ try {
           const src = await c.locator("video").first().getAttribute("src");
           const peak = peakAt.get((src ?? "").split("?")[0]);
           let min = Infinity;
-          for (let k = 0; k < 14; k++) {
+          let max = 0;
+          // Long enough for a whole loop of the longest clip, so a card that was already playing comes back to its start.
+          for (let k = 0; k < 24; k++) {
             await p.waitForTimeout(300);
             const t = await c.locator("video").first().evaluate((v) => (v.paused && v.currentTime === 0 ? null : v.currentTime));
-            if (t !== null) min = Math.min(min, t);
+            if (t !== null) [min, max] = [Math.min(min, t), Math.max(max, t)];
           }
-          if (peak !== undefined && min < peak - 0.6 - 0.15) early.push(`${src} ${min.toFixed(2)} < ${peak}`);
+          if (!(min < 0.75) || (peak !== undefined && max < peak - 0.4)) partial.push(`${src} ${min.toFixed(2)}-${max.toFixed(2)}${peak !== undefined ? ` (peak ${peak})` : ""}`);
           await p.mouse.move(0, 0);
         }
-        check(n > 0 && early.length === 0, `${label}: hovered clips play only around their peak, loops included`, early.join("; "));
+        check(n > 0 && partial.length === 0, `${label}: hovered clips play from their first frame through their peak, loops included`, partial.join("; "));
         if (shots) await shot(p, "canvas-1440-guest");
       }
       await ctx.close();
