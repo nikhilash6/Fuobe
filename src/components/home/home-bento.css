@@ -224,15 +224,21 @@
 
 /* ---------------------------------------------------------------- grid */
 
+/*
+ * The reel leads; Live edit, the highlight, is the next biggest and sits right by it (right under it on a phone), and
+ * Genjutsu comes next. From lg the grid is twelve narrow columns, so the top two rows (the reel, Live edit, then the
+ * image and 3D tiles stacked) and the bottom row (Genjutsu, audio, the numbers, canvas) each split it their own way.
+ */
 .hb-grid {
   display: grid;
   gap: var(--bento-gap);
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-areas:
     "video video"
+    "live live"
+    "genjutsu genjutsu"
     "image three"
-    "restore restore"
-    "live audio"
+    "audio audio"
     "canvas canvas"
     "numbers numbers";
 }
@@ -240,14 +246,19 @@
   .hb-video {
     aspect-ratio: 3 / 2;
   }
+  /* Wide enough to show the whole portrait, short enough that the reel and it fit a phone's first screen. */
+  .hb-live {
+    aspect-ratio: 16 / 10;
+  }
+  .hb-genjutsu {
+    aspect-ratio: 3 / 2;
+  }
   .hb-image,
-  .hb-three,
-  .hb-live,
-  .hb-audio {
+  .hb-three {
     aspect-ratio: 1;
   }
-  .hb-restore {
-    aspect-ratio: 2 / 1;
+  .hb-audio {
+    aspect-ratio: 5 / 2;
   }
   .hb-canvas {
     aspect-ratio: 16 / 9;
@@ -258,22 +269,22 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-rows: repeat(4, 210px) auto;
     grid-template-areas:
-      "video video image"
-      "video video three"
-      "restore restore audio"
-      "live canvas canvas"
+      "video video live"
+      "video video live"
+      "genjutsu genjutsu image"
+      "audio canvas three"
       "numbers numbers numbers";
   }
 }
 @media (min-width: 1024px) {
   .hb-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     grid-template-rows: repeat(3, minmax(0, 1fr));
     height: clamp(var(--grid-min), calc(var(--content-h) - var(--bento-head) - var(--head-top) - 3.25rem), 760px);
     grid-template-areas:
-      "video video image audio"
-      "video video three restore"
-      "numbers live canvas restore";
+      "video video video video video video live live live live image image"
+      "video video video video video video live live live live three three"
+      "genjutsu genjutsu genjutsu genjutsu audio audio numbers numbers numbers canvas canvas canvas";
   }
 }
 .hb-video {
@@ -288,8 +299,8 @@
 .hb-three {
   grid-area: three;
 }
-.hb-restore {
-  grid-area: restore;
+.hb-genjutsu {
+  grid-area: genjutsu;
 }
 .hb-numbers {
   grid-area: numbers;
@@ -472,6 +483,14 @@
 @container (min-width: 540px) {
   .hb-video .hb-title {
     font-size: 44px;
+  }
+}
+/* From lg the live tile is the second biggest: its title a size up from the small tiles'. */
+@media (min-width: 1024px) {
+  @container (min-width: 360px) {
+    .hb-live .hb-title {
+      font-size: 34px;
+    }
   }
 }
 
@@ -678,108 +697,59 @@
   height: 45%;
 }
 
-/* ---------------------------------------------------------------- restore: a split that sweeps */
+/* ---------------------------------------------------------------- genjutsu: the swap, and the clip as it was */
 
-.hb-before {
-  clip-path: inset(0 50% 0 0);
+/* The couple's faces sit in the top half of the clip (from 16 % to 43 % of its height in every frame): a wide, short
+   tile keeps them in view. */
+.hb-genjutsu > .hb-pic .hb-fill,
+.hb-genjutsu .hb-clip video {
+  object-position: 50% 22%;
 }
-/* The line moves by transform, across the tile's own width (cqw: the tile is a container), so it never lays out again. */
-.hb-split {
+/*
+ * The original clip's first frame, in a small window in the tile's top corner: what went in, beside what came out. On
+ * a layer over the clip and the shade, its size from the tile's own width (the tile is a container), so it never lays
+ * out again.
+ */
+.hb-original {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  transform: translateX(50cqw);
-  width: 2px;
-  margin-left: -1px;
-  background: #fff;
-  box-shadow: 0 0 10px rgb(0 0 0 / 50%);
+  z-index: 1;
+  top: 10px;
+  right: 10px;
+  width: clamp(76px, 27cqw, 132px);
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgb(255 255 255 / 55%);
+  background: #222228;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 40%);
   pointer-events: none;
 }
-.hb-split > span {
+.hb-original-label {
   position: absolute;
-  top: 40%;
-  left: 50%;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  margin: -15px 0 0 -15px;
-  border-radius: 999px;
-  background: #fff;
-  color: #0d0d0f;
-}
-.hb-bento[data-play] .hb-before {
-  animation: bento-wipe 9s ease-in-out infinite;
-  animation-play-state: paused;
-}
-.hb-bento[data-play] .hb-split {
-  animation: bento-split 9s ease-in-out infinite;
-  animation-play-state: paused;
-}
-.hb-bento[data-play="1"] .hb-before,
-.hb-bento[data-play="1"] .hb-split {
-  animation-play-state: running;
-}
-@keyframes bento-wipe {
-  0%,
-  100% {
-    clip-path: inset(0 50% 0 0);
-  }
-  25% {
-    clip-path: inset(0 28% 0 0);
-  }
-  75% {
-    clip-path: inset(0 72% 0 0);
-  }
-}
-@keyframes bento-split {
-  0%,
-  100% {
-    transform: translateX(50cqw);
-  }
-  25% {
-    transform: translateX(72cqw);
-  }
-  75% {
-    transform: translateX(28cqw);
-  }
-}
-.hb-side {
-  position: absolute;
-  top: 12px;
-  height: 24px;
+  left: 5px;
+  bottom: 5px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
-  padding: 0 9px;
+  padding: 0 6px;
   border-radius: 999px;
   background: rgb(13 13 15 / 78%);
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  pointer-events: none;
 }
-.hb-side.hb-left {
-  left: 12px;
-}
-.hb-side.hb-right {
-  right: 12px;
+@container (min-width: 300px) {
+  .hb-original {
+    top: 12px;
+    right: 12px;
+  }
 }
 /* The reel's clips and its still: a wide, short tile crops from the bottom, so the head always shows (a clip framed
    otherwise sets its own object-position: HOME_BENTO_REEL). */
 .hb-video .hb-fill,
 .hb-video .hb-clip video {
   object-position: 50% 0%;
-}
-/* The pair's framing: a phone's and a tablet's wide tile keeps her face in its upper half; from lg the tall crop is centred on her. */
-.hb-restore .hb-fill {
-  object-position: 50% 12%;
-}
-@media (min-width: 1024px) {
-  .hb-restore .hb-fill {
-    object-position: 50% 30%;
-  }
 }
 
 /* ---------------------------------------------------------------- numbers */
@@ -914,6 +884,22 @@
   border: 1px solid rgb(255 255 255 / 16%);
   font-size: 12.5px;
   pointer-events: none;
+}
+/* The live tile is the first screen's highlight: on its big tile the field is a size up. */
+@container (min-width: 340px) {
+  .hb-pill {
+    top: 16px;
+    left: 16px;
+    max-width: calc(100% - 32px);
+    min-width: min(calc(100% - 32px), 190px);
+    height: 38px;
+    padding: 0 14px;
+    gap: 8px;
+    font-size: 14px;
+  }
+  .hb-caret {
+    height: 17px;
+  }
 }
 .hb-pill > svg {
   flex: none;
@@ -1122,8 +1108,6 @@
   .hb-bento .hb-kenburns,
   .hb-bento .hb-wave > i,
   .hb-bento .hb-playhead,
-  .hb-bento .hb-before,
-  .hb-bento .hb-split,
   .hb-bento .hb-caret,
   .hb-bento .hb-edges path {
     animation: none !important;

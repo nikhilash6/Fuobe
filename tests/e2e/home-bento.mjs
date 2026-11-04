@@ -13,7 +13,7 @@
 // 1. Every width (390, 768, 1024, 1280, 1440, 1920), light and dark, as a guest and as the owner: no sideways scroll,
 //    one h1, the headline in its own words ("Make anything:" on one line; the second line whole from 768, and on a
 //    phone two lines that break before "finished film,"), it rose into place once, and the first screen holds what it
-//    should (a phone: the video tile and the two under it; from 1024: all eight). A picture of each (--shots), and a
+//    should (a phone: the video tile and the live tile under it; from 1024: all eight). A picture of each (--shots), and a
 //    contact sheet of them all.
 // 1b. Sharp at every width and pixel ratio (1x, 2x, 3x): every picture on the first screen is at least as wide as its
 //    box shows it (object-fit: cover, times the ratio), up to the widest copy there is, and so is each clip once it
@@ -36,7 +36,7 @@
 //    is in, the headline looks as on a quick load (its picture within 1 level in 255 on average).
 // 3. Every tile's link answers 200, and the numbers tile opens every studio (the launcher; a phone's sheet).
 // 4. Reduced motion and Save-Data: no clip is fetched or played, nothing moves by itself (the headline is still, the
-//    split rests at 50 %, the live words stay), and the tiles keep their stills.
+//    live words stay), and the tiles keep their stills.
 // 5. Pause previews stops the reel and freezes every animation; pressed again, they go on.
 // 6. Weight: what the page downloads before `load` (clips aside), at 390 and 1440, reported; the first screen's own
 //    stills stay under 420 KB (the clips' posters are encoded close to their clips' first frames, and a 3x phone or a
@@ -90,7 +90,9 @@ const WIDTHS = [
   { w: 1440, h: 900 },
   { w: 1920, h: 1080 },
 ];
-const TILES = ["video", "image", "audio", "threeD", "restore", "numbers", "live", "canvas"];
+const TILES = ["video", "live", "image", "threeD", "genjutsu", "audio", "numbers", "canvas"];
+/** The tiles that play a clip by themselves (the reel, the 3D clip, Genjutsu's swap): each only once it is on screen. */
+const MOVING = ["video", "threeD", "genjutsu"];
 /** The widest copy of a clip (scripts/gen-home-bento.mjs), where its element doesn't say (a reel clip's data-max). */
 const CLIP_MAX = 2048;
 /**
@@ -241,9 +243,9 @@ if (run("1"))
         );
         if (v.phone) {
           const bottom = l.vh - 64;
-          const first = ["video", "image", "threeD"];
+          const first = ["video", "live"];
           const out = first.filter((t) => l.tiles[t].top < 0 || l.tiles[t].bottom > bottom);
-          check(`${tag}: the video tile and the two under it on the first screen`, out.length === 0, first.map((t) => `${t} ${Math.round(l.tiles[t].bottom)}`).join(", ") + ` ≤ ${bottom}`);
+          check(`${tag}: the video tile and the live tile under it on the first screen`, out.length === 0, first.map((t) => `${t} ${Math.round(l.tiles[t].bottom)}`).join(", ") + ` ≤ ${bottom}`);
           check(`${tag}: every tile at least 44 px to tap`, TILES.every((t) => l.tiles[t].w >= 44 && l.tiles[t].h >= 44));
         }
         if (v.w >= 1024) {
@@ -271,8 +273,15 @@ const watchSwap = () => {
   new PerformanceObserver((list) => {
     for (const e of list.getEntries()) if (!e.hadRecentInput) window.__shifts2.push({ v: e.value, at: Math.round(e.startTime) });
   }).observe({ type: "layout-shift", buffered: true });
+  const MOVING = ["video", "threeD", "genjutsu"];
+  // A tile below the fold plays only once it is scrolled to: the ones wholly on the first screen are watched.
+  const onScreen = () =>
+    MOVING.filter((t) => {
+      const r = document.querySelector(`#home-bento [data-tile=${t}]`)?.getBoundingClientRect();
+      return r && r.top >= 0 && r.bottom <= innerHeight;
+    });
   const look = () => {
-    for (const t of ["video", "threeD"]) {
+    for (const t of MOVING) {
       const tile = document.querySelector(`#home-bento [data-tile=${t}]`);
       if (!tile) continue;
       for (const el of tile.querySelectorAll("svg.lucide-play, [class*=play-glyph]")) {
@@ -281,7 +290,8 @@ const watchSwap = () => {
       }
       if (!window.__shown[t] && tile.querySelector("video[data-ready]")) window.__shown[t] = Math.round(performance.now());
     }
-    if (performance.now() < 15_000 && !(window.__shown.video && window.__shown.threeD)) requestAnimationFrame(look);
+    const on = onScreen();
+    if (performance.now() < 15_000 && !(on.length && on.every((t) => window.__shown[t]))) requestAnimationFrame(look);
   };
   requestAnimationFrame(look);
 };
@@ -294,9 +304,17 @@ if (run("1b"))
       const page = await ctx.newPage();
       await page.addInitScript(watchSwap);
       await open(page);
-      // The clips start once their tile's still is up and on screen: wait until each has its first frame.
+      // The clips start once their tile's still is up and on screen: wait until each on the first screen has its first frame.
+      const moving = await page.evaluate(
+        (all) =>
+          all.filter((t) => {
+            const r = document.querySelector(`#home-bento [data-tile=${t}]`).getBoundingClientRect();
+            return r.top >= 0 && r.bottom <= innerHeight;
+          }),
+        MOVING,
+      );
       await page
-        .waitForFunction(() => ["video", "threeD"].every((t) => [...document.querySelectorAll(`#home-bento [data-tile=${t}] video`)].some((x) => x.videoWidth > 0)), null, { timeout: 12_000 })
+        .waitForFunction((ts) => ts.every((t) => [...document.querySelectorAll(`#home-bento [data-tile=${t}] video`)].some((x) => x.videoWidth > 0)), moving, { timeout: 12_000 })
         .catch(() => {});
       await page.waitForTimeout(300);
       const s = await sharpness(page);
@@ -304,7 +322,7 @@ if (run("1b"))
       const clips = s.filter((x) => x.what.endsWith(".mp4"));
       check(
         `sharp at ${v.w}@${dpr}x: ${s.length} pictures and clips at least their box x ratio`,
-        bad.length === 0 && new Set(clips.map((x) => x.tile)).size === 2,
+        bad.length === 0 && moving.every((t) => clips.some((x) => x.tile === t)),
         (bad.length ? bad : clips).map((x) => `${x.tile} ${x.what} ${x.has} for ${x.need} (max ${x.max})`).join("; "),
       );
       sharpNotes.push(`${v.w}@${dpr}x: ${s.map((x) => `${x.tile} ${x.what} ${x.has}/${x.need}`).join(", ")}`);
@@ -312,8 +330,8 @@ if (run("1b"))
       check(`no play sign at ${v.w}@${dpr}x on the tiles that play by themselves`, w.signs.length === 0, JSON.stringify(w.signs.slice(0, 3)));
       // Nothing shifts as a clip takes over from its still (from 100 ms before it shows to 600 ms after).
       const atSwap = w.shifts.filter((x) => Object.values(w.shown).some((t) => x.at >= t - 100 && x.at <= t + 600));
-      check(`no layout shift at the swap at ${v.w}@${dpr}x`, atSwap.length === 0 && Object.keys(w.shown).length === 2, `${JSON.stringify(w.shown)} load ${w.load}; ${JSON.stringify(atSwap)}`);
-      if (dpr === 2 || (v.phone && dpr === 3)) notes.push(`clips shown at ${v.w}@${dpr}x: video ${w.shown.video} ms, 3D ${w.shown.threeD} ms (load ${w.load} ms)`);
+      check(`no layout shift at the swap at ${v.w}@${dpr}x`, atSwap.length === 0 && moving.every((t) => w.shown[t]), `${JSON.stringify(w.shown)} load ${w.load}; ${JSON.stringify(atSwap)}`);
+      if (dpr === 2 || (v.phone && dpr === 3)) notes.push(`clips shown at ${v.w}@${dpr}x: video ${w.shown.video} ms, 3D ${w.shown.threeD} ms, Genjutsu ${w.shown.genjutsu} ms (load ${w.load} ms)`);
       await ctx.close();
     }
 
@@ -348,8 +366,10 @@ if (run("1c"))
     const ctx = await browser.newContext({ ...(v.phone ? PHONE : {}), viewport: { width: v.w, height: v.h }, deviceScaleFactor: dpr });
     const page = await ctx.newPage();
     await open(page);
-    await page.waitForFunction(() => ["video", "threeD"].every((t) => document.querySelector(`#home-bento [data-tile=${t}] video[data-ready]`)), null, { timeout: 12_000 }).catch(() => {});
-    for (const tile of ["video", "threeD"]) {
+    // Each moving tile, scrolled to where it isn't on the first screen (a phone's 3D and Genjutsu tiles).
+    for (const tile of MOVING) {
+      await page.locator(`#home-bento [data-tile=${tile}]`).scrollIntoViewIfNeeded();
+      await page.waitForFunction((t) => document.querySelector(`#home-bento [data-tile=${t}] video[data-ready]`), tile, { timeout: 12_000 }).catch(() => {});
       if (!(await page.locator(`#home-bento [data-tile=${tile}] video[data-ready]`).count())) {
         check(`the swap at ${v.w}@${dpr}x, ${tile}: its clip plays`, false);
         continue;
@@ -789,11 +809,9 @@ if (run("4")) {
   const state = await page.evaluate(() => ({
     play: document.getElementById("home-bento").dataset.play ?? null,
     videos: [...document.querySelectorAll("#home-bento video")].filter((v) => v.getAttribute("src") && !v.paused).length,
-    split: getComputedStyle(document.querySelector("#home-bento [data-tile=restore] picture:nth-of-type(2) img")).clipPath,
     headline: document.querySelector("#home-bento h1").parentElement.getAnimations({ subtree: true }).length,
   }));
   check("reduced motion: nothing moves by itself", state.play === null && state.videos === 0 && clips.length === 0 && state.headline === 0, JSON.stringify({ ...state, clips: clips.length }));
-  check("reduced motion: the split rests at 50 %", /inset\(0(px)? 50%/.test(state.split), state.split);
   check("reduced motion: the live words stay", a === b, `${JSON.stringify(a)} / ${JSON.stringify(b)}`);
   await ctx.close();
 

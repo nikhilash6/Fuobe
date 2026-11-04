@@ -12,26 +12,23 @@ export const HOME_BENTO_MEDIA: Record<string, string> = {
   "/previews/home/rotation-1024.mp4": "3f5507ab",
   "/previews/home/rotation-1536.mp4": "87d3d4f1",
   "/previews/home/rotation-2048.mp4": "5804eda4",
-  "/previews/home/ba-before-640.avif": "8adbdbd7",
-  "/previews/home/ba-before-960.avif": "7f7f2735",
-  "/previews/home/ba-before-1280.avif": "7b757bc9",
-  "/previews/home/ba-before-tall-432.avif": "af0e8f74",
-  "/previews/home/ba-before-tall-691.avif": "aaafef5d",
-  "/previews/home/ba-after-640.avif": "4ad38a6c",
-  "/previews/home/ba-after-960.avif": "670dbb52",
-  "/previews/home/ba-after-1280.avif": "61952772",
-  "/previews/home/ba-after-tall-432.avif": "71f125b7",
-  "/previews/home/ba-after-tall-691.avif": "46271396",
+  "/previews/home/genjutsu-640.mp4": "17ae2073",
+  "/previews/home/genjutsu-1024.mp4": "6611d454",
   "/previews/home/reel-sand-storm-640.avif": "6e339255",
   "/previews/home/reel-sand-storm-1024.avif": "13b5d74a",
   "/previews/home/rotation-640.avif": "c69b0d7b",
   "/previews/home/rotation-1024.avif": "23d2a89b",
   "/previews/home/rotation-1536.avif": "b3df3778",
   "/previews/home/rotation-2048.avif": "bcc9ccc5",
+  "/previews/home/genjutsu-640.avif": "78148871",
+  "/previews/home/genjutsu-1024.avif": "61b49f42",
   "/previews/home/reel-sand-storm-1024.jpg": "cab53f24",
   "/previews/home/rotation-1024.jpg": "61a2cbc9",
+  "/previews/home/genjutsu-1024.jpg": "c69400ea",
   "/previews/home/image-4-480.avif": "5a6d07a1",
   "/previews/home/image-4-768.avif": "ef9d1b4d",
+  "/previews/home/genjutsu-original-240.avif": "ecc3f2d0",
+  "/previews/home/genjutsu-original-480.avif": "c0db35a8",
   "/previews/home/board-photo.webp": "47432641",
   "/previews/home/board-film.webp": "db007869"
 };
@@ -59,7 +56,8 @@ export const HOME_BENTO_REEL = [
 /** Each poster's mean colour (by its clip's name): the tile shows it until the poster is in. */
 export const HOME_BENTO_TINT: Record<string, string> = {
   "reel-sand-storm": "#b06c4c",
-  "rotation": "#bfbeb6"
+  "rotation": "#bfbeb6",
+  "genjutsu": "#796c56"
 };
 
 export const HOME_BENTO_WAVE = {

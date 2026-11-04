@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { APPS, EFFECTS, MODELS, MOTIONS, getPreset, modelCounts } from "@/lib/catalog";
+import { APPS, EFFECTS, MODELS, MOTIONS, modelCounts } from "@/lib/catalog";
 import { getTemplate } from "@/lib/catalog/canvas";
 import { FORBIDDEN_WORDS } from "@/lib/examples/catalog";
 import { HUB_MODES } from "@/lib/hubs";
@@ -30,7 +30,8 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const { BENTO_BOARD, BENTO_CLIPS, BENTO_CLIP_WIDTHS, BENTO_HREFS, BENTO_BEFORE_AFTER, BENTO_IMAGE_EXAMPLE, BENTO_REEL, BENTO_REEL_ID, livePhrases, openModelsOf } = await import("@/lib/home-bento");
+const { BENTO_BOARD, BENTO_CLIPS, BENTO_CLIP_WIDTHS, BENTO_GENJUTSU, BENTO_GENJUTSU_WIDTHS, BENTO_HREFS, BENTO_IMAGE_EXAMPLE, BENTO_REEL, BENTO_REEL_ID, GENJUTSU_ORIGINAL, livePhrases, openModelsOf } =
+  await import("@/lib/home-bento");
 const { HOME_BEFORE_AFTER, HOME_EFFECTS, HOME_MOTIONS, HOME_REVEALS, HOME_STUDIOS, homeShowcase, navLabel } = await import("@/lib/home-showcase");
 const { HomeBento } = await import("@/components/home/home-bento");
 
@@ -84,6 +85,32 @@ describe("Home's first screen", () => {
     }
   });
 
+  it("plays Genjutsu's group swap in the widths its render covers, cut as it is (no crossfade), beside the original", () => {
+    const g = bento.genjutsu;
+    expect(g.id).toBe(BENTO_GENJUTSU.id);
+    // Its own id in the playback store: the studio's card lower down may play the same cover.
+    expect(g.id).not.toBe(BENTO_GENJUTSU.cover);
+    expect(g.clips.map((c) => c.w)).toEqual([...BENTO_GENJUTSU_WIDTHS]);
+    for (const c of g.clips) {
+      expect(c.src).toMatch(new RegExp(`^/previews/home/genjutsu-${c.w}\\.mp4\\?v=[0-9a-f]{8}$`));
+      expect(mp4Size(file(c.src))).toEqual({ w: c.w, h: (c.w * 3) / 4 });
+      // Five seconds of the take (120 frames at 24 fps), looped as it is.
+      expect(mp4Seconds(file(c.src))).toBeCloseTo(5, 1);
+    }
+    expect(g.poster.avif.map((a) => a.w)).toEqual([...BENTO_GENJUTSU_WIDTHS]);
+    for (const a of g.poster.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/genjutsu-${a.w}\\.avif\\?v=`));
+    expect(g.poster.fallback).toMatch(/^\/previews\/home\/genjutsu-1024\.jpg\?v=/);
+    // The window: the original clip's first frame, the example's own published input.
+    expect(g.original.fallback.split("?")[0]).toBe(GENJUTSU_ORIGINAL);
+    expect(html).toContain(">Original<");
+    expect(bento.tiles.genjutsu.href).toBe("/genjutsu");
+  });
+
+  it("leaves Colorize off the first screen", () => {
+    expect(html).not.toMatch(/colorize|Bring an old photo/i);
+    expect(Object.keys(bento.tiles)).not.toContain("restore");
+  });
+
   it("plays Sand Storm and One Take in turn, on the first one's first frame", () => {
     const v = bento.video;
     expect(v.id).toBe(BENTO_REEL_ID);
@@ -105,17 +132,12 @@ describe("Home's first screen", () => {
   });
 
   it("lists every picture at its real width", async () => {
-    const pictures: BentoPicture[] = [bento.video.poster, bento.threeD.poster, bento.image, bento.restore.before, bento.restore.after];
+    const pictures: BentoPicture[] = [bento.video.poster, bento.threeD.poster, bento.image, bento.genjutsu.poster, bento.genjutsu.original, ...bento.live.frames];
     for (const p of pictures)
-      for (const a of [...p.avif, ...(p.tall ?? [])]) {
+      for (const a of p.avif) {
         const m = await sharp(file(a.src)).metadata();
         expect(m.width, a.src).toBe(a.w);
       }
-    // The tall crop is 3:5.
-    for (const a of bento.restore.after.tall ?? []) {
-      const m = await sharp(file(a.src)).metadata();
-      expect(m.width! / m.height!).toBeCloseTo(0.6, 2);
-    }
   });
 
   it("gives each tile a copy at least as wide as it shows, up to the widest there is", () => {
@@ -141,9 +163,12 @@ describe("Home's first screen", () => {
       expect(widest).toBeGreaterThanOrEqual(1024);
       expect(pickWidth(c.clips, 1068).w).toBe(widest >= 1536 ? 1536 : widest);
     }
-    // The before/after pair covers a 3x phone (358 px wide) and the tall tile on a 2x 1920 screen.
-    expect(Math.max(...bento.restore.after.avif.map((a) => a.w))).toBeGreaterThanOrEqual(358 * 3);
-    expect(Math.max(...(bento.restore.after.tall ?? []).map((a) => a.w))).toBeGreaterThanOrEqual(602);
+    // The live tile, the next biggest, covers a 3x phone (358 px wide) and its tile on a 2x 1440 screen (405 px under cover).
+    for (const f of bento.live.frames) expect(Math.max(...f.avif.map((a) => a.w))).toBeGreaterThanOrEqual(Math.max(358 * 3, 405 * 2));
+    // Genjutsu's clip is its render's own 1024 px, never made up past that: a 2x laptop's tile (376 px) gets it.
+    expect(pickWidth(bento.genjutsu.clips, 376 * 2).w).toBe(1024);
+    // The original's window (at most 132 px) is covered on a 3x screen.
+    expect(Math.max(...bento.genjutsu.original.avif.map((a) => a.w))).toBeGreaterThanOrEqual(132 * 3);
   });
 
   it("opens a real page from every tile, named by the navigation or the catalog", () => {
@@ -151,9 +176,8 @@ describe("Home's first screen", () => {
       const seg = href.split(/[?#]/)[0].replace(/^\//, "");
       return fs.existsSync(path.join(root, "src", "app", "(studio)", seg, "page.tsx"));
     };
-    for (const href of [BENTO_HREFS.video, BENTO_HREFS.image, BENTO_HREFS.audio, BENTO_HREFS.threeD, BENTO_HREFS.live, BENTO_HREFS.canvas]) expect(route(href), href).toBe(true);
-    expect(fs.existsSync(path.join(root, "src", "app", "(studio)", "apps", "[id]", "page.tsx"))).toBe(true);
-    expect(APPS.some((a) => a.id === BENTO_BEFORE_AFTER)).toBe(true);
+    for (const href of [BENTO_HREFS.video, BENTO_HREFS.image, BENTO_HREFS.audio, BENTO_HREFS.threeD, BENTO_HREFS.genjutsu, BENTO_HREFS.live, BENTO_HREFS.canvas])
+      expect(route(href), href).toBe(true);
     const plan = JSON.parse(fs.readFileSync(path.join(root, "src", "lib", "examples", "plan.json"), "utf8")) as { id: string; surface: string; output?: string }[];
     expect(plan.find((r) => r.id === BENTO_IMAGE_EXAMPLE.id)).toMatchObject({ surface: "studio:image", output: BENTO_IMAGE_EXAMPLE.out });
     expect(BENTO_HREFS.numbers).toBe("#home-studios");
@@ -166,19 +190,19 @@ describe("Home's first screen", () => {
     expect(t.threeD.cta).toBe(`Open ${navLabel("/image-to-3d")}`);
     expect(t.live.cta).toBe(`Open ${navLabel("/live-edit")}`);
     expect(t.canvas.cta).toBe(`Open ${navLabel("/canvas")}`);
-    expect(t.restore.cta).toBe(`Open ${getPreset(BENTO_BEFORE_AFTER)!.name}`);
+    expect(t.genjutsu.cta).toBe(`Open ${navLabel("/genjutsu")}`);
   });
 
   it("makes every tile one link with a name, in the grid's reading order", () => {
     const links = [...html.matchAll(/<a [^>]*>/g)].map((m) => m[0]);
     const tiles = links.filter((a) => a.includes("data-tile="));
-    expect(tiles.map((a) => /data-tile="([^"]+)"/.exec(a)![1])).toEqual(["video", "image", "audio", "threeD", "restore", "numbers", "live", "canvas"]);
+    expect(tiles.map((a) => /data-tile="([^"]+)"/.exec(a)![1])).toEqual(["video", "live", "image", "threeD", "genjutsu", "audio", "numbers", "canvas"]);
     for (const a of tiles) {
       const label = /aria-label="([^"]+)"/.exec(a)?.[1];
       expect(label, a).toBeTruthy();
       expect(label!.length).toBeGreaterThan(10);
     }
-    const KINDS = { video: "Video", image: "Image", audio: "Audio", threeD: "3D", restore: "Before and after", live: "Live edit", canvas: "Canvas" };
+    const KINDS = { video: "Video", image: "Image", audio: "Audio", threeD: "3D", genjutsu: "Genjutsu", live: "Live edit", canvas: "Canvas" };
     for (const [key, kind] of Object.entries(KINDS)) {
       const t = bento.tiles[key as keyof typeof KINDS];
       expect(t.label).toBe(`${kind}: ${t.title}. ${t.cta}`);
@@ -195,7 +219,7 @@ describe("Home's first screen", () => {
     expect(h1).toContain("finished film,");
     expect(h1).toContain("one place.");
     // The note under it, both sentences whole, and nothing hidden shipped with it.
-    expect(html).toContain("Film, stills, sound, 3D, live edits and whole pipelines. Each tile opens the studio that makes it.");
+    expect(html).toContain("Film, live edits, swaps, stills, sound, 3D and whole pipelines. Each tile opens the studio that makes it.");
     expect(html).not.toMatch(/data-hero|hb-eyebrow|hb-vignette/);
   });
 
@@ -244,6 +268,7 @@ describe("Home's first screen", () => {
     // The video tile plays its reel under its own id; the 3D tile's preset plays nowhere else.
     const ids = [
       BENTO_REEL_ID,
+      BENTO_GENJUTSU.id,
       ...Object.values(BENTO_CLIPS),
       ...[...HOME_EFFECTS, ...HOME_MOTIONS, ...HOME_REVEALS].map((r) => r.id),
       ...HOME_BEFORE_AFTER.map((p) => p.id),
@@ -280,7 +305,7 @@ describe("Home's first screen", () => {
     expect(bento.live.frames).toHaveLength(4);
     for (const [i, f] of bento.live.frames.entries()) {
       const fr = demo.frames[`s${i}`];
-      expect(f.avif.map((a) => a.src)).toEqual([fr.small, fr.mid]);
+      expect(f.avif.map((a) => a.src)).toEqual([fr.small, fr.mid, fr.src]);
       expect(f.fallback).toBe(fr.webp);
     }
   });

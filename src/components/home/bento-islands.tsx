@@ -232,7 +232,9 @@ export function BentoClip({ id, clips, progress }: { id: string; clips: Sized[];
 
   return (
     <span ref={ref} aria-hidden className={s.clip} onPointerEnter={handlers.onPointerEnter} onPointerLeave={handlers.onPointerLeave}>
-      {clip && <video ref={video} src={clip} muted loop playsInline preload="auto" data-ready={ready || undefined} onLoadedData={() => setReady(true)} />}
+      {clip && (
+        <video ref={video} src={clip} muted loop playsInline preload="auto" data-max={Math.max(...clips.map((c) => c.w))} data-ready={ready || undefined} onLoadedData={() => setReady(true)} />
+      )}
       {progress && (
         <span className={s.progress}>
           <i ref={bar} />
