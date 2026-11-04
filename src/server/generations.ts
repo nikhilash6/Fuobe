@@ -2535,7 +2535,7 @@ async function pollOne(r: Row): Promise<void> {
       await adapterFor(r.provider, account)
         .cancel?.(ctx)
         .catch(() => {});
-      update(r.id, {
+      updateLive(r.id, {
         status: "failed",
         error: run.started_at || deadline
           ? `Timed out after ${Math.round(limitMs / 60_000)} minutes`
@@ -2554,24 +2554,24 @@ async function pollOne(r: Row): Promise<void> {
     if (!res) throw pollError;
     if (startsNow) db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(Date.now(), r.id);
     // Back in line (a worker paused, went quiet or gave it back): no progress of the attempt before is kept.
-    update(r.id, { status: res.state, progress: ownClocks && res.state === "queued" ? null : (res.progress ?? r.progress), message: res.message ?? null });
+    updateLive(r.id, { status: res.state, progress: ownClocks && res.state === "queued" ? null : (res.progress ?? r.progress), message: res.message ?? null });
     return;
   }
   if (res.state === "failed") {
     // What the GPU was missing (a model, a node class): the tile offers "Fix it", and the GPU's check counts as stale.
-    update(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(res.fix && { fix_json: JSON.stringify(res.fix) }) });
+    updateLive(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(res.fix && { fix_json: JSON.stringify(res.fix) }) });
     // (A run on this install's GPUs says nothing about the account's own GPU.)
     if (res.fix && !onPool) markStale(account ? `acct:${account}` : "install");
     return;
   }
   // The Watermark Remover gave the original back (no clean repair was possible): no new result, the run says what to try.
   if (r.op === "watermark-remove" && (res.outputs as RichOutput[]).some((o) => rejectedRepair(o.meta?.quality as WatermarkQuality | undefined))) {
-    update(r.id, { status: "failed", error: WATERMARK_COPY.rejected, completed_at: Date.now(), message: null });
+    updateLive(r.id, { status: "failed", error: WATERMARK_COPY.rejected, completed_at: Date.now(), message: null });
     return;
   }
   // A Watermark Remover scan with no report the page can read fails in words (never a page that waits for marks forever).
   if (r.op === "watermark-scan" && !(res.outputs as RichOutput[]).some((o) => parseScanReport(o.text))) {
-    update(r.id, { status: "failed", error: WATERMARK_COPY.scanFailed, completed_at: Date.now(), message: null });
+    updateLive(r.id, { status: "failed", error: WATERMARK_COPY.scanFailed, completed_at: Date.now(), message: null });
     return;
   }
   // A Watermark Remover result keeps how it was asked, next to the repair's verdict: the marks removed (as checked) and how.
@@ -2591,7 +2591,7 @@ async function pollOne(r: Row): Promise<void> {
   // deploy's overlap never both save them, and the second never ends a saved run as failed).
   if (!claimFinish(r.id)) return;
   // Mark first so a slow download isn't polled twice.
-  update(r.id, { status: "running", progress: 0.99, message: "Saving results" });
+  updateLive(r.id, { status: "running", progress: 0.99, message: "Saving results" });
   const outputs: OutputFile[] = [];
   // An account's job keeps at most 16 outputs, and a result it can't save fails the job (never a link to its ComfyUI).
   const dropped = account && res.outputs.length > ACCOUNT_LIMITS.outputsPerJob ? res.outputs.length - ACCOUNT_LIMITS.outputsPerJob : 0;
@@ -2604,7 +2604,7 @@ async function pollOne(r: Row): Promise<void> {
     try {
       outputs.push(await mosaicOutput(r, res.outputs as RichOutput[]));
     } catch (e) {
-      update(r.id, { status: "failed", error: (e as Error).message, completed_at: Date.now(), message: null });
+      updateLive(r.id, { status: "failed", error: (e as Error).message, completed_at: Date.now(), message: null });
       return;
     }
   } else {
@@ -2622,7 +2622,7 @@ async function pollOne(r: Row): Promise<void> {
             if (left) fs.rmSync(left, { force: true });
           }
           const why = e instanceof AccountFilesFull ? e.message : "We couldn't save this result. Press Retry.";
-          update(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null });
+          updateLive(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null });
           return;
         }
         outputs.push({ url: o.url, kind: o.kind ?? r.kind, ...inlineText(o.text, o.meta), ...(o.draftId ? { draftId: o.draftId } : {}) });
@@ -2640,7 +2640,7 @@ async function pollOne(r: Row): Promise<void> {
     }
     for (const o of cards) deleteAsset(o.assetId!);
     if (cards.size && cards.size === outputs.length) {
-      update(r.id, { status: "failed", error: BLOCKED_CARD_MESSAGE, completed_at: Date.now(), message: null });
+      updateLive(r.id, { status: "failed", error: BLOCKED_CARD_MESSAGE, completed_at: Date.now(), message: null });
       return;
     }
     if (cards.size) outputs.splice(0, outputs.length, ...outputs.filter((o) => !cards.has(o)));
@@ -2651,7 +2651,7 @@ async function pollOne(r: Row): Promise<void> {
     if (!measured) {
       // Nothing of a failed build is kept, the owner's included.
       for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
-      update(r.id, { status: "failed", error: NO_SUBJECT_MESSAGE, completed_at: Date.now(), message: null });
+      updateLive(r.id, { status: "failed", error: NO_SUBJECT_MESSAGE, completed_at: Date.now(), message: null });
       return;
     }
     outputs.splice(0, outputs.length, ...measured);
@@ -2670,7 +2670,7 @@ async function pollOne(r: Row): Promise<void> {
   // stored now and the row stays running until it's done, so a restart resumes it from them. The turntable
   // is rendered after the job has succeeded (src/server/model3d-finish.ts).
   if (modelToFinish(r, outputs) >= 0) {
-    update(r.id, { outputs_json: JSON.stringify(outputs), external_meta_json: JSON.stringify({ ...ctx.meta, finishing: true }), message: "Finishing the 3D model" });
+    updateLive(r.id, { outputs_json: JSON.stringify(outputs), external_meta_json: JSON.stringify({ ...ctx.meta, finishing: true }), message: "Finishing the 3D model" });
     resumeFinish({ ...r, outputs_json: JSON.stringify(outputs) });
     return;
   }
@@ -2679,13 +2679,32 @@ async function pollOne(r: Row): Promise<void> {
     holdForCheck(r.id, outputs);
     return;
   }
-  update(r.id, {
+  updateLive(r.id, {
     status: "succeeded",
     outputs_json: JSON.stringify(outputs),
     progress: 1,
     message: dropped ? `Kept ${ACCOUNT_LIMITS.outputsPerJob} of ${ACCOUNT_LIMITS.outputsPerJob + dropped} results` : null,
     completed_at: Date.now(),
   });
+}
+
+/**
+ * Change a run the runner looked at, only while it still goes (queued or running) and no other app process holds its
+ * turn to save its results. A look that took a while (a slow poll, a deploy's overlap) never takes a run another
+ * process saved, failed or canceled meanwhile back to an earlier state, and never fails a run another process is
+ * saving. Returns whether the change was made.
+ */
+export function updateLive(id: string, fields: Partial<Row>, now = Date.now()): boolean {
+  const keys = Object.keys(fields);
+  if (!keys.length) return false;
+  return (
+    db()
+      .prepare(
+        `UPDATE generations SET ${keys.map((k) => `${k} = @${k}`).join(", ")}, updated_at = @__now WHERE id = @__id AND status IN ('queued', 'running')
+           AND NOT EXISTS (SELECT 1 FROM generation_runs WHERE id = @__id AND finish_by IS NOT NULL AND finish_by != @__me AND finish_until >= @__now)`,
+      )
+      .run({ ...fields, __now: now, __id: id, __me: runnerToken() }).changes > 0
+  );
 }
 
 /** How long an app process holds the turn to save a finished run's results (it renews it as it goes). */

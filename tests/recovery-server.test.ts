@@ -57,7 +57,7 @@ const { NextRequest } = await import("next/server");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
-const { getGeneration, ensureRunner } = await import("@/server/generations");
+const { getGeneration, ensureRunner, updateLive } = await import("@/server/generations");
 const pool = await import("@/server/computer/pool");
 const tasks = await import("@/server/computer/tasks");
 const billing = await import("@/server/billing");
@@ -1213,6 +1213,31 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     // Its turn runs out: this process saves the result.
     db().prepare("UPDATE generation_runs SET finish_until = ? WHERE id = ?").run(Date.now() - 1, id);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("a look at a run that comes back after another process saved it, or while another process saves it, changes nothing", async () => {
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
+    const saved = getGeneration(id)!;
+    // A slow look from before the save says it still works, or that it failed: the saved run stays as it is.
+    expect(updateLive(id, { status: "running", progress: 0.5, message: POOL_WORDS.working })).toBe(false);
+    expect(updateLive(id, { status: "failed", error: "Timed out after 45 minutes", completed_at: Date.now() })).toBe(false);
+    expect(getGeneration(id)).toMatchObject({ status: "succeeded", outputs: saved.outputs });
+    // A run another process is saving now: a look here neither fails it nor moves it back.
+    const next = (await pressRun()).id;
+    db().prepare("UPDATE generation_runs SET finish_by = 'another-process', finish_until = ? WHERE id = ?").run(Date.now() + 60_000, next);
+    expect(updateLive(next, { status: "failed", error: "Timed out after 45 minutes", completed_at: Date.now() })).toBe(false);
+    expect(getGeneration(next)?.status).toBe("queued");
+    // Its turn runs out (that process stopped): this one may change it again.
+    db().prepare("UPDATE generation_runs SET finish_until = ? WHERE id = ?").run(Date.now() - 1, next);
+    expect(updateLive(next, { message: POOL_WORDS.inLine })).toBe(true);
+    await workAll(d);
+    expect((await ended(next))?.status).toBe("succeeded");
   });
 
   it("both processes' sweeps meet over a finished run's report: one sends it, so the service gets it once", async () => {
