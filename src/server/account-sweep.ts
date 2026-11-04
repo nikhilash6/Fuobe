@@ -4,6 +4,7 @@ import path from "node:path";
 import { RETENTION_MS, runAccountDeletedHooks } from "./account-files";
 import { clearAccountLoras } from "./account-loras";
 import { accountById, deleteAccount, readAccountIds, setAccountDisabled } from "./auth";
+import { strayAccountIds } from "./auth-store";
 import { accountEvent, accountFacts } from "./billing";
 import { db } from "./db";
 import { handOversDone } from "./generations";
@@ -98,7 +99,9 @@ export async function sweepAccountFiles(now = Date.now()): Promise<{ uploads: nu
   if (owning.length) {
     try {
       const live = readAccountIds();
-      if (live.size) gone = owning.filter((id) => !live.has(id));
+      // Accounts only an auth.json set aside unread lists (an older build may have signed them up): kept while it is there.
+      const waiting = strayAccountIds();
+      if (live.size) gone = owning.filter((id) => !live.has(id) && !waiting.has(id));
       else console.warn(`[fuobe] account sweep: the sign-in data lists no accounts, but ${owning.length} own files here; nothing removed`);
     } catch (e) {
       console.warn(`[fuobe] account sweep: skipped removing deleted accounts' files (${(e as Error).message})`);

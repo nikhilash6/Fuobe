@@ -307,7 +307,7 @@ describe("admin tokens: every admin route asks for its scope", () => {
     const a = auth.createAccount(`owner-view-${++n}@example.com`, "long enough");
     const res = await routes.accounts.GET(req("/api/admin/accounts", { cookie: ownerCookie }));
     expect(res.status).toBe(200);
-    expect(Object.keys((await res.json()) as object).sort()).toEqual(["items", "total", "totals"]);
+    expect(Object.keys((await res.json()) as object).sort()).toEqual(["items", "signInNotices", "total", "totals"]);
     const off = await routes.account.PATCH(req(`/api/admin/accounts/${a.id}`, { cookie: ownerCookie, method: "PATCH", body: { disabled: true } }), ctx({ id: a.id }));
     expect(await off.json()).toMatchObject({ id: a.id, disabled: true });
     const denied = await routes.accounts.GET(req("/api/admin/accounts"));

@@ -94,7 +94,7 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 
 | Call | Request | Answer |
 |---|---|---|
-| `GET /api/admin/accounts` | `q` (the email contains it, up to 100 characters), `email` (exactly that address), `format=csv` | `{ total, items, totals }`; with `q` or `email`, also `matched`. `total` and `totals` always cover every account. CSV: a `text/csv` download |
+| `GET /api/admin/accounts` | `q` (the email contains it, up to 100 characters), `email` (exactly that address), `format=csv` | `{ total, items, totals, signInNotices }`; with `q` or `email`, also `matched`. `total` and `totals` always cover every account. `signInNotices` lists each `auth.json` that was found in the data folder after the sign-in data moved into the database. Each one was set aside without being read ([Sign-in data](SELF-HOSTING.md#sign-in-data)). An entry gives `{ file, foundAt, reason, counts }`. `reason` is `stray`, `unreadable` or `import-failed`. `counts` is `{ accounts, tokens, accountsNotInDatabase }`, or `null` when the file isn't sign-in data. An entry stays in the list until you delete its file. CSV: a `text/csv` download |
 | `GET /api/admin/accounts/{id}` | | one account with its numbers; 404 `No such account` |
 | `PATCH /api/admin/accounts/{id}` | exactly one of `{ disabled: boolean }` or `{ signOut: true }` | the account (no numbers) |
 | `DELETE /api/admin/accounts/{id}` | | 204 |

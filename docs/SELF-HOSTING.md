@@ -83,7 +83,7 @@ The password, the sign-in secret, API tokens and accounts are kept in the databa
 - On the first start of this version, `auth.json` moves into the database in one go, checked before it is saved. A crash part-way changes nothing, and the next start does it again.
 - For 10 minutes after that, `auth.json` is kept up to date, in case a server of the older version still runs on the same folder (for example during a deploy that starts the new server before it stops the old one).
 - Then it is renamed to `auth.json.migrated-<date and time>`, which is kept as a backup, and a note takes its place. Every older version reads the note as "sign-in is on and nobody can sign in", so it never opens the studio without a password.
-- If `auth.json` can't be read, nothing moves and sign-in stays on with nobody signed in until you fix or restore the file. If its data can't be moved (two accounts with the same email, for example), nothing changes, and the server answers every request with 503. Its log says why and which entry, by its place in the list (for example "account 7"), never by email.
+- If `auth.json` can't be read, nothing moves and sign-in stays on with nobody signed in until you fix or restore the file. If its data can't be moved (two accounts with the same email, for example), nothing changes, and visitors get a short "Back in a moment" page (status 503) on every request, so a deploy never switches to that server. The server log says why and which entry, by its place in the list (for example "account 7"), never by email. The same page shows when the database's sign-in tables can't be read.
 
 The backup `auth.json.migrated-<…>` holds the password hash, the sign-in secret, API tokens and every account (with its email, password hash, GPU link and sealed keys) as they were at the upgrade, including accounts deleted since. Keep it as private as `fuobe.db`, and delete it once you won't go back to an older version.
 
@@ -97,7 +97,21 @@ The backup `auth.json.migrated-<…>` holds the password hash, the sign-in secre
 
 When you start this version again, it moves that `auth.json` back in, with what the older version changed (new accounts, a new password), and keeps it in step for 10 minutes again. This needs no step either.
 
-Don't copy `auth.json.migrated-<…>` back instead. It lacks the accounts made since the upgrade, and the older version removes the files of accounts it doesn't know. If an `auth.json` that the export didn't write is found after the move, this version doesn't read it on its own: it answers every request with 503 and says so in its log. Remove the file to keep the database's sign-in data, or start once with `FUOBE_AUTH_REIMPORT=1` to replace the database's sign-in data with what the file holds.
+Don't copy `auth.json.migrated-<…>` back instead. It lacks the accounts made since the upgrade, and the older version removes the files of accounts it doesn't know.
+
+**An `auth.json` found after the move.** The database stays the only source of sign-in data, and the site keeps working for everyone. When this version finds an `auth.json` that is not the note and not a file the export wrote (for example a backup copied back), it does not read it as sign-in data. Within a minute, it does these steps:
+
+- It renames the file to `auth.json.stray-<date and time>`, readable by the server's user only. Fuobe never deletes it.
+- It puts the note back in place of `auth.json`.
+- It writes a line to the server log.
+- It shows a notice to the owner in Settings → Accounts, and in `signInNotices` of `GET /api/admin/accounts`. The notice gives only the file's name and its counts: accounts, API tokens, and accounts that are not in the database.
+
+Nothing in that file signs anyone in or opens the studio. It does not change the password or the sign-in secret either. The accounts that only that file lists keep their files while the file stays in the data folder. When you don't need the file, delete it, and the notice goes away. To use the file instead of the database's sign-in data, do these steps:
+
+1. Copy it back to `auth.json`.
+2. Start the server once with `FUOBE_AUTH_REIMPORT=1`. The file then replaces the database's sign-in data, and it is moved in exactly like the first upgrade.
+
+If its data can't be moved in, nothing changes, and the file is set aside again.
 
 ## Environment variables
 
@@ -108,7 +122,7 @@ Don't copy `auth.json.migrated-<…>` back instead. It lacks the accounts made s
 | `FUOBE_TRUST_PROXY=1` | Behind a reverse proxy: trust the last `X-Forwarded-For` hop, so wrong passwords, and too many wrong share links, lock out only that visitor (60 s). Without it, everyone shares one limit: passwords are slowed to one attempt every 4 s and never locked, and wrong share links past 100 a minute get 429 while real links still open |
 | `FUOBE_ALLOW_PRIVATE_URLS=1` | Let inputs, product links and project sources be fetched from private / LAN addresses (they are refused by default), and let Assist connectors use plain http beyond localhost (without it a connector needs https unless it is on localhost; a private https address is accepted, with a warning that Claude can only reach it through a public tunnel) |
 | `FUOBE_DATA_DIR` | Where the database (with the sign-in data) and files live (default `./data`). Back up `secrets.key` there with `fuobe.db`: it opens the fal.ai and Replicate keys accounts saved ([Your keys](public-signup.md#your-keys)), which must be added again without it |
-| `FUOBE_AUTH_REIMPORT=1` | For one start only: an `auth.json` found after sign-in data moved into the database replaces the database's sign-in data ([Sign-in data](#sign-in-data)). Remove it after that start |
+| `FUOBE_AUTH_REIMPORT=1` | For one start only: an `auth.json` found after sign-in data moved into the database replaces the database's sign-in data, instead of being set aside unread ([Sign-in data](#sign-in-data)). Remove it after that start |
 | `FUOBE_DEMO_MODE` | `off` (default: a run with nothing connected asks you to connect one) or `on` (placeholder results, for a tour: every run makes a labelled placeholder). The old `auto` reads as `off`, and a saved `auto` is cleared on start |
 | `FUOBE_SKILLS_DIR` | Where Assist's built-in skills are read from (default `./skills`) |
 | `FUOBE_ENGINE_MODE`, `FUOBE_CLOUD_PROVIDER`, `FUOBE_ENHANCE_PROVIDER`, `FUOBE_LLM_PROVIDER` | The Settings choices above |

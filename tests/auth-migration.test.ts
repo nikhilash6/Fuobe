@@ -89,6 +89,13 @@ function veryOldLocked(dir: string): boolean {
   return !!d.password && !verify("") && !verify("owner password") && !d.secret && !d.tokens?.length && !d.accounts?.length;
 }
 
+/** The auth.json files set aside unread after the move (auth.json.stray-<UTC time>). */
+const strays = (dir: string) =>
+  fs
+    .readdirSync(dir)
+    .filter((f) => f.startsWith("auth.json.stray-"))
+    .sort();
+
 /** The note in place of auth.json: JSON, so every older build reads it, and locked for each of them. */
 function isNote(dir: string): boolean {
   const d = JSON.parse(fs.readFileSync(authFile(dir), "utf8"));
@@ -213,7 +220,7 @@ describe("a new install", () => {
     expect(srv.store.authStoreMode()).toBe("done");
   });
 
-  it("moves in an auth.json put there before the first change; one put back after is never read on its own", async () => {
+  it("moves in an auth.json put there before the first change; one put back after keeps serving, is set aside unread, and the owner is told", async () => {
     const dir = tempDir("fuobe-auth-drop-");
     let srv = await server(dir);
     expect(srv.auth.authEnabled()).toBe(false);
@@ -221,25 +228,45 @@ describe("a new install", () => {
     expect(srv.auth.authEnabled()).toBe(true);
     expect(srv.auth.checkPassword("dropped password")).toBe(true);
     expect(srv.marker()).toMatchObject({ source: "auth.json", state: "bridge" });
-    // Put aside, then an auth.json without a password put back: not read, and nobody gets in (503) until it goes.
+    // Put aside, then an auth.json without a password put back (read, it would open the studio).
     globalThis.__fuobeAuthClock = () => Date.now() + 11 * MIN;
     expect(srv.store.authStoreMode()).toBe("done");
+    const putBack = JSON.stringify({ secret: "", tokens: [] }, null, 2);
     legacyWrite(dir, { secret: "", tokens: [] });
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warns = vi.spyOn(console, "warn").mockImplementation(() => {});
     srv = await server(dir);
-    expect(srv.store.authStoreMode()).toBe("failed");
-    expect(srv.store.authStoreFailed()).toBe(true);
+    // The site keeps serving, from the database: sign-in on, the password as it was.
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(srv.store.authStoreFailed()).toBe(false);
     expect(srv.auth.authEnabled()).toBe(true);
-    expect(srv.auth.checkPassword("dropped password")).toBe(false);
-    expect(() => srv.auth.readAccountIds()).toThrow();
-    expect(errors.mock.calls.flat().join("\n")).toMatch(/FUOBE_AUTH_REIMPORT=1/);
-    errors.mockRestore();
-    // Removed: the database's sign-in data again, and the note in its place.
-    fs.rmSync(authFile(dir));
+    expect(srv.auth.checkPassword("dropped password")).toBe(true);
+    expect(srv.auth.readAccountIds().size).toBe(0);
+    // Set aside, unread and as it was, readable by the server's user only; the note back in place of auth.json.
+    const stray = strays(dir);
+    expect(stray).toHaveLength(1);
+    expect(fs.readFileSync(path.join(dir, stray[0]), "utf8")).toBe(putBack);
+    if (process.platform !== "win32") expect(fs.statSync(path.join(dir, stray[0])).mode & 0o777).toBe(0o600);
+    expect(isNote(dir)).toBe(true);
+    // The owner is told: the file's name and its counts, nothing from inside it.
+    expect(srv.store.signInNotices()).toEqual([{ file: stray[0], foundAt: expect.any(Number), reason: "stray", counts: { accounts: 0, tokens: 0, accountsNotInDatabase: 0 } }]);
+    expect(warns.mock.calls.flat().join("\n")).toContain(stray[0]);
+    expect(errors).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+    // Visitors see the site, not an error: /login answers and a page asks for sign-in.
+    const { proxy } = await import("@/proxy");
+    const { NextRequest } = await import("next/server");
+    expect(proxy(new NextRequest("http://localhost:3000/login")).status).toBe(200);
+    expect(proxy(new NextRequest("http://localhost:3000/")).status).toBe(307);
+    // Another start: nothing new to set aside, the notice stays while the file is there.
     srv = await server(dir);
     expect(srv.store.authStoreMode()).toBe("done");
+    expect(strays(dir)).toEqual(stray);
+    expect(srv.store.signInNotices()).toHaveLength(1);
+    // The owner deletes the file: the notice goes.
+    fs.rmSync(path.join(dir, stray[0]));
+    expect(srv.store.signInNotices()).toEqual([]);
     expect(srv.auth.checkPassword("dropped password")).toBe(true);
-    expect(isNote(dir)).toBe(true);
   });
 });
 
@@ -505,6 +532,11 @@ describe("going back to an older build, and forward again", () => {
     expect(srv.store.authStoreMode()).toBe("done");
     expect(backups()).toHaveLength(2);
     expect(isNote(dir)).toBe(true);
+    // The export and its way back are never taken for a stray file.
+    globalThis.__fuobeAuthClock = () => Date.now() + 13 * MIN;
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(strays(dir)).toEqual([]);
+    expect(srv.store.signInNotices()).toEqual([]);
   });
 
   it("an export the older build never used: back to the database as it was", async () => {
@@ -550,7 +582,7 @@ describe("going back to an older build, and forward again", () => {
     expect(legacyRead(dir2)).toEqual({ secret: "", tokens: [] });
   });
 
-  it("a backup copied back over auth.json: unchanged it is put aside again; changed by an older build it fails closed, and nothing is swept", async () => {
+  it("a backup copied back over auth.json: unchanged it is put aside again; changed by an older build it is set aside, the site keeps serving, and nothing is swept", async () => {
     const { dir, after } = await moved("fuobe-auth-putback-");
     let srv = await server(dir);
     expect(srv.store.authStoreMode()).toBe("done");
@@ -561,28 +593,41 @@ describe("going back to an older build, and forward again", () => {
     expect(srv.store.authStoreMode()).toBe("done");
     expect(isNote(dir)).toBe(true);
     expect(srv.auth.accountById(after.id)).toBeDefined();
-    // Copied back, and an older build signed someone up there.
+    expect(strays(dir)).toEqual([]);
+    // Copied back, and an older build signed someone up there (and that account made a file here).
     const old = JSON.parse(fs.readFileSync(backup, "utf8"));
     old.accounts.push({ id: "acctputback000001", email: "putback@example.com", hash: hashPw("putback password"), createdAt: Date.now() });
     legacyWrite(dir, old);
-    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-    srv = await server(dir);
-    expect(srv.store.authStoreMode()).toBe("failed");
-    expect(() => srv.auth.readAccountIds()).toThrow(); // the account sweep stops: nobody's files are removed
-    expect(srv.auth.accountById(after.id)).toBeUndefined(); // closed, not gone
-    errors.mockRestore();
-    // A running server notices a file put back within a minute.
-    fs.rmSync(authFile(dir));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     srv = await server(dir);
     expect(srv.store.authStoreMode()).toBe("done");
+    expect(srv.store.authStoreFailed()).toBe(false);
+    // The database's accounts go on; the file's new account isn't one.
+    expect(srv.auth.accountById(after.id)).toBeDefined();
+    expect(srv.auth.checkAccount("after-move@example.com", "long enough")?.id).toBe(after.id);
+    expect(srv.auth.checkAccount("putback@example.com", "putback password")).toBeNull();
+    expect(strays(dir)).toHaveLength(1);
+    expect(isNote(dir)).toBe(true);
+    expect(srv.store.signInNotices()[0].counts).toEqual({ accounts: 5, tokens: 3, accountsNotInDatabase: 1 });
+    // The sweep keeps the files of the account only that file lists, while it is there.
+    const { saveFile, getAsset } = await import("@/server/storage");
+    const { sweepAccountFiles } = await import("@/server/account-sweep");
+    const png = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex");
+    const theirs = saveFile({ data: png, contentType: "image/png", source: "upload", accountId: "acctputback000001" });
+    expect((await sweepAccountFiles()).accounts).toBe(0);
+    expect(getAsset(theirs.id)).toBeDefined();
+    // A running server notices a file put back within a minute (and sets it aside under a name of its own).
     legacyWrite(dir, old);
     expect(srv.store.authStoreMode()).toBe("done");
+    expect(strays(dir)).toHaveLength(1);
     globalThis.__fuobeAuthClock = () => Date.now() + 61_000;
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(srv.store.authStoreMode()).toBe("failed");
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(strays(dir)).toHaveLength(2);
+    expect(isNote(dir)).toBe(true);
     vi.restoreAllMocks();
     globalThis.__fuobeAuthClock = undefined;
-    // Moved in when asked: the file as it is.
+    // Moved in when asked: the owner copies the file back and starts once with FUOBE_AUTH_REIMPORT=1.
+    fs.copyFileSync(path.join(dir, strays(dir)[0]), authFile(dir));
     process.env.FUOBE_AUTH_REIMPORT = "1";
     try {
       srv = await server(dir);
@@ -593,6 +638,138 @@ describe("going back to an older build, and forward again", () => {
     } finally {
       delete process.env.FUOBE_AUTH_REIMPORT;
     }
+    // Once the set-aside files are gone, the sweep may remove files of accounts the database doesn't have.
+    for (const f of strays(dir)) fs.rmSync(path.join(dir, f));
+    expect(srv.store.signInNotices()).toEqual([]);
+  });
+});
+
+describe("an auth.json that turns up after the move", () => {
+  /** An older install moved in and put aside: the database is the store. */
+  async function settled(prefix: string) {
+    const o = await olderInstall(prefix);
+    expect(o.srv.store.authStoreMode()).toBe("bridge");
+    globalThis.__fuobeAuthClock = () => Date.now() + 11 * MIN;
+    expect(o.srv.store.authStoreMode()).toBe("done");
+    globalThis.__fuobeAuthClock = undefined;
+    return o;
+  }
+
+  it("with another password, secret, tokens and accounts: none of it takes effect, and nothing of it is logged", async () => {
+    const { dir, fx } = await settled("fuobe-auth-stray-");
+    const secret = crypto.randomBytes(32).toString("hex");
+    const token = `fuobe_${crypto.randomBytes(24).toString("base64url")}`;
+    const intruder = { id: "acctintruder00001", email: "intruder@example.com", hash: hashPw("intruder password"), createdAt: Date.now() };
+    const stray = {
+      password: hashPw("stray password"),
+      secret,
+      tokens: [{ id: "tokx", name: "x", hash: sha(token), prefix: token.slice(0, 12), createdAt: Date.now() }],
+      accounts: [intruder],
+      publicSignup: false,
+    };
+    legacyWrite(dir, stray);
+    const logs = [vi.spyOn(console, "warn").mockImplementation(() => {}), vi.spyOn(console, "error").mockImplementation(() => {}), vi.spyOn(console, "info").mockImplementation(() => {})];
+    const srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    // The database's password, cookies, tokens and accounts work as before.
+    expect(srv.auth.checkPassword("owner password")).toBe(true);
+    expect(srv.auth.validSession(fx.cookies.owner)).toBe(true);
+    expect(srv.auth.validToken(`Bearer ${fx.tokens[0]}`)).toBe(true);
+    expect(srv.auth.checkAccount("first@example.com", "first password")?.id).toBe("acct00000000000001");
+    expect(srv.auth.publicSignupSetting()).toBe(true);
+    // The file's never do: its password, its token, its account, a cookie signed with its secret.
+    expect(srv.auth.checkPassword("stray password")).toBe(false);
+    expect(srv.auth.validToken(`Bearer ${token}`)).toBe(false);
+    expect(srv.auth.checkAccount("intruder@example.com", "intruder password")).toBeNull();
+    const exp = Date.now() + DAY;
+    expect(srv.auth.validSession(`${exp}.${mac(`${secret}.${sha(stray.password)}`, String(exp))}`)).toBe(false);
+    expect(srv.auth.validSession(`${exp}.${intruder.id}.${mac(`${secret}.${sha(intruder.hash)}`, `${exp}.${intruder.id}`)}`)).toBe(false);
+    expect((srv.db().prepare("SELECT secret, password_hash FROM auth_install").get() as { secret: string; password_hash: string })).toEqual({
+      secret: fx.data.secret,
+      password_hash: fx.data.password,
+    });
+    expect(srv.auth.readAccountIds().has(intruder.id)).toBe(false);
+    // An older build pointed at this folder reads the note again, and stays locked.
+    expect(isNote(dir)).toBe(true);
+    expect(veryOldLocked(dir)).toBe(true);
+    // Counts only, in the log and the notice.
+    expect(srv.store.signInNotices()[0].counts).toEqual({ accounts: 1, tokens: 1, accountsNotInDatabase: 1 });
+    const logged = logs.flatMap((l) => l.mock.calls.flat()).join("\n");
+    for (const s of [intruder.email, intruder.hash, secret, stray.password, sha(token), ...fx.data.accounts.map((a) => a.email)]) expect(logged).not.toContain(s);
+    expect(JSON.stringify(srv.store.signInNotices())).not.toContain("intruder");
+    vi.restoreAllMocks();
+  });
+
+  it("a file that isn't sign-in data, and FUOBE_AUTH_REIMPORT=1 with data that can't go in: set aside, and the site keeps serving", async () => {
+    const { dir, fx } = await settled("fuobe-auth-stray-bad-");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fs.writeFileSync(authFile(dir), "{ not json");
+    let srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(srv.auth.validSession(fx.cookies.owner)).toBe(true);
+    expect(isNote(dir)).toBe(true);
+    expect(srv.store.signInNotices()).toMatchObject([{ reason: "unreadable", counts: null }]);
+    const bad = structuredClone(fx.data);
+    bad.accounts[1].email = bad.accounts[0].email;
+    bad.password = hashPw("a password that must not win");
+    legacyWrite(dir, bad);
+    process.env.FUOBE_AUTH_REIMPORT = "1";
+    try {
+      srv = await server(dir);
+      expect(srv.store.authStoreMode()).toBe("done");
+    } finally {
+      delete process.env.FUOBE_AUTH_REIMPORT;
+    }
+    expect(srv.store.authStoreFailed()).toBe(false);
+    expect(srv.auth.checkPassword("owner password")).toBe(true);
+    expect(srv.auth.checkPassword("a password that must not win")).toBe(false);
+    expect(srv.auth.listAccounts()).toHaveLength(4);
+    expect(isNote(dir)).toBe(true);
+    expect(srv.store.signInNotices().map((n) => n.reason)).toEqual(["import-failed", "unreadable"]);
+    vi.restoreAllMocks();
+  });
+
+  it("a file that turns up during a change: the change is saved in the database, and the file is set aside at the next look", async () => {
+    const { dir } = await settled("fuobe-auth-stray-write-");
+    const srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const made = srv.store.authWrite(() => {
+      legacyWrite(dir, { password: hashPw("mid-write password"), secret: "b".repeat(64), tokens: [] });
+      return srv.auth.normalizeEmail("During@Example.com");
+    });
+    expect(made).toBe("during@example.com");
+    srv.auth.setPassword("changed password");
+    expect(srv.auth.checkPassword("changed password")).toBe(true);
+    // Not read while it waits for the next look.
+    expect(srv.auth.checkPassword("mid-write password")).toBe(false);
+    globalThis.__fuobeAuthClock = () => Date.now() + 61_000;
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(strays(dir)).toHaveLength(1);
+    expect(isNote(dir)).toBe(true);
+    expect(srv.auth.checkPassword("changed password")).toBe(true);
+    expect(srv.auth.checkPassword("mid-write password")).toBe(false);
+    vi.restoreAllMocks();
+  });
+
+  it.skipIf(process.platform === "win32")("a link in place of auth.json: kept as a link, what it points to never read or changed", async () => {
+    const { dir } = await settled("fuobe-auth-stray-link-");
+    const elsewhere = path.join(tempDir("fuobe-auth-elsewhere-"), "other.json");
+    fs.writeFileSync(elsewhere, JSON.stringify({ password: hashPw("linked password"), secret: "c".repeat(64), tokens: [] }), { mode: 0o644 });
+    fs.rmSync(authFile(dir));
+    fs.symlinkSync(elsewhere, authFile(dir));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(srv.auth.checkPassword("linked password")).toBe(false);
+    expect(fs.lstatSync(authFile(dir)).isSymbolicLink()).toBe(false);
+    expect(isNote(dir)).toBe(true);
+    const [kept] = strays(dir);
+    expect(fs.readlinkSync(path.join(dir, kept))).toBe(elsewhere);
+    expect(fs.statSync(elsewhere).mode & 0o777).toBe(0o644);
+    expect(srv.store.signInNotices()).toMatchObject([{ reason: "unreadable", counts: null }]);
+    vi.restoreAllMocks();
   });
 });
 
@@ -647,6 +824,30 @@ describe("a crash, or another server, while moving in", () => {
     expect(after.auth.listAccounts()).toHaveLength(4);
     expect(after.count("auth_accounts")).toBe(4);
     expect(JSON.parse(after.marker()!.counts_json as string)).toMatchObject({ accounts: 4 });
+  }, 60_000);
+
+  it("servers looking at a stray auth.json at the same moment set it aside once, and all keep serving", async () => {
+    const { dir, srv } = await olderInstall("fuobe-auth-stray-race-");
+    expect(srv.store.authStoreMode()).toBe("bridge");
+    globalThis.__fuobeAuthClock = () => Date.now() + 11 * MIN;
+    expect(srv.store.authStoreMode()).toBe("done");
+    globalThis.__fuobeAuthClock = undefined;
+    globalThis.__fuobeDb?.close();
+    globalThis.__fuobeDb = undefined;
+    legacyWrite(dir, { password: hashPw("raced password"), secret: "d".repeat(64), tokens: [] });
+    const go = path.join(dir, "go");
+    const runs = [1, 2, 3, 4].map(() => child(dir, go, "start", "-"));
+    await new Promise((r) => setTimeout(r, 2500));
+    fs.writeFileSync(go, "");
+    const done = await Promise.all(runs);
+    for (const d of done) expect(d.code, d.out).toBe(0);
+    expect(done.map((d) => result(d.out))).toEqual(Array(4).fill({ mode: "done", accounts: 4 }));
+    expect(fs.readdirSync(dir).filter((f) => f.startsWith("auth.json.stray-"))).toHaveLength(1);
+    expect(isNote(dir)).toBe(true);
+    const after = await server(dir);
+    expect(after.store.signInNotices()).toHaveLength(1);
+    expect(after.auth.checkPassword("owner password")).toBe(true);
+    expect(after.auth.checkPassword("raced password")).toBe(false);
   }, 60_000);
 
   it("sign-ups with one email at the same moment on several servers: one account", async () => {
@@ -738,9 +939,46 @@ describe("an auth.json that can't be read, or can't go in", () => {
       const { proxy } = await import("@/proxy");
       const { NextRequest } = await import("next/server");
       for (const p of ["/login", "/", "/api/auth/public"]) expect(proxy(new NextRequest(`http://localhost:3000${p}`)).status, p).toBe(503);
+      await expectBackSoon(proxy, NextRequest);
     });
   }
+
+  it("a database whose sign-in tables can't be used: fails closed, and visitors get a calm page, never why", async () => {
+    const dir = tempDir("fuobe-auth-db-broken-");
+    // A table of the same name with other columns (made by something else) is never used.
+    const Database = (await import("better-sqlite3")).default;
+    const d = new Database(path.join(dir, "fuobe.db"));
+    d.exec("CREATE TABLE auth_accounts (id TEXT PRIMARY KEY, name TEXT)");
+    d.close();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("failed");
+    expect(srv.auth.authEnabled()).toBe(true);
+    expect(srv.auth.checkPassword("")).toBe(false);
+    expect(() => srv.auth.setPassword("a password")).toThrow();
+    expect(srv.store.signInNotices()).toEqual([]);
+    const { proxy } = await import("@/proxy");
+    const { NextRequest } = await import("next/server");
+    await expectBackSoon(proxy, NextRequest);
+    vi.restoreAllMocks();
+  });
 });
+
+/** Every request gets a calm "back in a moment" (503, so a deploy never switches to it), and no word about why. */
+async function expectBackSoon(proxy: (r: import("next/server").NextRequest) => Response, Req: typeof import("next/server").NextRequest) {
+  const page = proxy(new Req("http://localhost:3000/login"));
+  expect(page.status).toBe(503);
+  expect(page.headers.get("content-type")).toMatch(/text\/html/);
+  expect(page.headers.get("retry-after")).toBe("30");
+  const html = await page.text();
+  expect(html).toContain("Back in a moment");
+  const api = proxy(new Req("http://localhost:3000/api/auth/me"));
+  expect(api.status).toBe(503);
+  const body = await api.text();
+  expect(JSON.parse(body).error).toMatch(/back in a moment/);
+  for (const text of [html, body]) for (const word of [/sign-in/i, /database/i, /auth\.json/i, /\blogs?\b/i, /can't read/i]) expect(text).not.toMatch(word);
+}
 
 describe("100,000 accounts", () => {
   it("move in once, and every lookup stays quick", async () => {

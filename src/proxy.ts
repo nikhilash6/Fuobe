@@ -86,7 +86,27 @@ function pass(request: NextRequest): NextResponse {
  * chose (next-themes' "theme" key, read before the first paint).
  */
 function plain404(title: string, text: string, back?: { href: string; label: string }, home = back ? "Home" : "Back to Home"): NextResponse {
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${title} · Fuobe</title><link rel="icon" href="/icon.svg" type="image/svg+xml"><script>try{var t=localStorage.getItem("theme");if(t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.className="dark"}catch(e){}</script><style>
+  return new NextResponse(plainPage(title, text, `${back ? `<a class="back" href="${back.href}">${back.label}</a>` : ""}<a class="go" href="/">${home}</a>`, COMPASS), {
+    status: 404,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
+/**
+ * What every visitor gets while the server can't use its sign-in data (src/server/auth-store.ts authStoreFailed): a calm
+ * "back in a moment" in the same look, that tries again by itself; an API call gets the same in a sentence. Never why:
+ * the server log tells the owner. Still a 503 (with Retry-After), so a new release in this state is never switched to.
+ */
+function backSoon(request: NextRequest): NextResponse {
+  const headers = { "Cache-Control": "no-store", "Retry-After": "30" };
+  if (request.nextUrl.pathname.startsWith("/api/")) return NextResponse.json({ error: "Fuobe will be back in a moment. Please try again shortly." }, { status: 503, headers });
+  const html = plainPage("Back in a moment", "Fuobe is getting ready. This page tries again by itself.", '<a class="go" href="">Try again</a>', CLOCK, 30);
+  return new NextResponse(html, { status: 503, headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } });
+}
+
+/** The page plain404 and backSoon show: the heading, a line, the buttons, and an icon; `refresh` reloads it after that many seconds. */
+function plainPage(title: string, text: string, nav: string, icon: string, refresh?: number): string {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ""}<title>${title} · Fuobe</title><link rel="icon" href="/icon.svg" type="image/svg+xml"><script>try{var t=localStorage.getItem("theme");if(t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.className="dark"}catch(e){}</script><style>
 :root{color-scheme:light;--bg:#fff;--fg:#1e1e1f;--muted:#6e6e71;--line:#e8e8e9;--brand:#5d4bdb;--faint:#efedfc}
 .dark{color-scheme:dark;--bg:#121213;--fg:#fafafb;--muted:#a9a9ab;--line:rgba(255,255,255,.14);--brand:#6a5ee7;--faint:#25223d}
 body{margin:0;min-height:100svh;display:flex;flex-direction:column;background:var(--bg);color:var(--fg);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -97,15 +117,16 @@ p{margin:8px 0 0;color:var(--muted);text-wrap:pretty}nav{margin-top:28px;display
 nav a{display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:999px;text-decoration:none;font-weight:500;font-size:14px}
 .go{background:var(--brand);color:#fff}.back{border:1px solid var(--line);color:var(--fg)}a:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .mark{display:grid;place-items:center;width:48px;height:48px;border-radius:16px;background:var(--faint);color:var(--brand)}
-</style></head><body><header><a href="/">${LOGO}<span>Fuobe</span></a></header><main><span class="mark" aria-hidden="true">${COMPASS}</span><h1>${title}</h1><p>${text}</p><nav>${back ? `<a class="back" href="${back.href}">${back.label}</a>` : ""}<a class="go" href="/">${home}</a></nav></main></body></html>`;
-  return new NextResponse(html, { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+</style></head><body><header><a href="/">${LOGO}<span>Fuobe</span></a></header><main><span class="mark" aria-hidden="true">${icon}</span><h1>${title}</h1><p>${text}</p><nav>${nav}</nav></main></body></html>`;
 }
 
-/** The Fuobe mark (src/app/icon.svg) and the 404's compass (lucide's Compass, as NotFoundState shows). */
+/** The Fuobe mark (src/app/icon.svg), the 404's compass (lucide's Compass, as NotFoundState shows) and backSoon's clock (lucide's Clock). */
 const LOGO =
   '<svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#5d4bdb"/><g transform="translate(5.5 5.5) scale(0.875)" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m12.296 3.464 3.02 3.956"/><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m6.18 5.276 3.1 3.899"/></g></svg>';
 const COMPASS =
   '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/></svg>';
+const CLOCK =
+  '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
 
 const behindHttps = (request: NextRequest) => request.nextUrl.protocol === "https:";
 
@@ -329,9 +350,9 @@ function safeDecode(s: string): string {
 export function proxy(request: NextRequest) {
   // Sign-in data that can't be used (the database, or an auth.json that couldn't be moved into it): nothing is served,
   // not even /login, so a new release in this state is never switched to and the studio is never open by mistake.
-  if (authStoreFailed()) {
-    return new NextResponse("Fuobe can't read its sign-in data. The server log says why.", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "30" } });
-  }
+  // Visitors get a calm "back in a moment" (503); the server log says why. An auth.json that turns up after the move is
+  // not this: it is set aside and the site keeps serving.
+  if (authStoreFailed()) return backSoon(request);
   // DNS rebinding: a page whose own name now points at this machine. Every method, reads too. With a
   // password set the sign-in check below already stops it (the session cookie belongs to the real name).
   if (!authEnabled() && !hostAllowed(request.headers.get("host") ?? request.nextUrl.host)) {

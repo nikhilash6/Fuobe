@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Images, Loader2, Trash2, UserX, UserCheck } from "lucide-react";
+import { Download, Images, Info, Loader2, Trash2, UserX, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -51,11 +51,42 @@ export async function adminCall<T>(url: string, method = "GET", body?: unknown):
   return j;
 }
 
+/**
+ * An auth.json found in the data folder after sign-in data moved into the database, set aside unread (src/server/auth-store.ts):
+ * its name and counts only. `counts` is null when the file isn't sign-in data.
+ */
+export interface SignInNoticeRow {
+  file: string;
+  foundAt: number;
+  reason: "stray" | "unreadable" | "import-failed";
+  counts: { accounts: number; tokens: number; accountsNotInDatabase: number } | null;
+}
+
+/** The owner's note about one set-aside auth.json: what it is, that nothing in it is used, and what to do about it. */
+function SignInNotice({ notice: n }: { notice: SignInNoticeRow }) {
+  const c = n.counts;
+  const plural = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+  return (
+    <p role="status" className="flex items-start gap-1.5 rounded-lg bg-warning/10 px-2.5 py-2 text-[12px] text-foreground">
+      <Info className="mt-0.5 size-3.5 shrink-0 text-warning" />
+      <span className="min-w-0">
+        {n.reason === "import-failed" ? "An auth.json that FUOBE_AUTH_REIMPORT=1 couldn't move in" : "An auth.json"} was found in the data folder ({timeAgo(n.foundAt)}) and
+        set aside as <code className="break-all">{n.file}</code>. Sign-in goes on from the database: nothing in that file is used.{" "}
+        {c
+          ? `It lists ${plural(c.accounts, "account", "accounts")} (${c.accountsNotInDatabase} not in the database) and ${plural(c.tokens, "API token", "API tokens")}. `
+          : "It isn't sign-in data Fuobe can read. "}
+        {c && c.accountsNotInDatabase > 0 ? "Their files are kept while the file is there. " : ""}
+        Delete the file to clear this note, or see “Sign-in data” in the self-hosting guide to use it instead.
+      </span>
+    </p>
+  );
+}
+
 /** Everyone who signed up, with their numbers (the owner only). Settings and the runs page share it; it refreshes while runs are going. */
 export function useAdminAccounts(enabled: boolean) {
   return useQuery({
     queryKey: ["admin-accounts"],
-    queryFn: () => adminCall<{ total: number; items: AccountRow[]; totals: AccountTotals }>("/api/admin/accounts"),
+    queryFn: () => adminCall<{ total: number; items: AccountRow[]; totals: AccountTotals; signInNotices?: SignInNoticeRow[] }>("/api/admin/accounts"),
     enabled,
     refetchInterval: (q) => (q.state.data?.totals.running ? 15_000 : false),
   });
@@ -177,6 +208,7 @@ export function AccountsAdmin() {
         </div>
       ) : (
         <div className="min-w-0 space-y-3">
+          {q.data.signInNotices?.map((n) => <SignInNotice key={n.file} notice={n} />)}
           {total > 0 && (
             <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
               <Stat label="Runs in 24 hours">{q.data.totals.runsDay}</Stat>
