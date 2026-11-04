@@ -19453,7 +19453,7 @@
       ],
       "vramGb": 0,
       "license": "RE-USE weights OpenMDW-1.1 (NVIDIA; 'ready for commercial use' on the card; the card's safety section points to the NVIDIA Open Model License for use-case limits); ComfyUI-RE-USE code MIT with adapted RE-USE code OpenMDW-1.1",
-      "validated": false,
+      "validated": true,
       "notes": "CPU OK; about 1 GB VRAM with chunking. audio = an audio file or a video (LoadAudio reads a video's soundtrack without decoding frames). REUSELoader model NemotronLabs-RE-USE (voice only) or NemotronLabs-RE-USE-laughter (keeps laughs and breaths a little more), 39 MB each; device auto. REUSEEnhance rate: the model's STFT scales with the rate (a 40 ms window at any rate), so work grows about linearly with it; above the source rate it fills the empty high band (bandwidth extension). Chunks from the free memory (2-20 s on CUDA, 5-10 s on a CPU) joined with 1 s raised-cosine crossfades; Cancel works between chunks. room_tone_db mixes the original back under the clean voice (Strength: Full -60 = off, Natural -24, Light -14); level match input brings the speech level back (the model is about 3 dB quieter), peak at most -1 dBFS. Measured under a busy RTX 5090 (worst cases): 0.26 s of work per second of audio at 16 kHz, 1.4 at 48 kHz with Triton (about 6x slower without); i9 CPU with numba: 4 at 16 kHz, 15 at 48 kHz. It keeps the main speaker and removes everything else (other voices, music, effects): voice-clean-bed-reuse keeps the music and effects. The Mamba layer is a plain-PyTorch rewrite (no mamba-ssm): it matches the reference maths numerically, but it is not NVIDIA's code path."
     },
     {
