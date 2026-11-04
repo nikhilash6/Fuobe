@@ -174,8 +174,18 @@ export function accountOwnRead(pathname: string): boolean {
 /** An account's own canvases (src/app/api/account/canvases): the routes read and change its own boards only. */
 const ACCOUNT_CANVASES = /^\/api\/account\/canvases(\/[^/]+)?$/;
 
-/** The Library's counts and its Uploads (its stored files): each route answers an account with its own only. */
-const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets"]);
+/**
+ * The Library's counts, its Uploads (its stored files) and a zip of its runs (the Library's Download, a result's
+ * Download all, Shorts' Download parts): each route answers an account with its own only.
+ */
+const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets", "/api/generations/zip"]);
+
+/**
+ * A signed-in account's zip of its own runs (/api/generations/zip; src/server/account-files.ts ACCOUNT_LIMITS): at most
+ * this many runs and this many bytes in one zip, one zip at a time. The Library sends at most this many.
+ */
+export const ACCOUNT_ZIP_MAX_RUNS = 200;
+export const ACCOUNT_ZIP_MAX_BYTES = 2 ** 30;
 
 /**
  * "Use the ComfyUI on this computer": the routes the person's own Fuobe tab runs their jobs through. Each takes whose
@@ -287,6 +297,8 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   // Apps made in one go from the account's own pictures (src/server/tool-runs.ts): AI Influencer, Photodump, Fashion
   // Factory, Character Sheet, Turnaround and Fly around.
   /^\/api\/(influencer|photodump|photodump\/fashion|photodump\/character|turnaround|fly-around)$/,
+  // Cinema Studio: a take in the account's own project, a retry and a 2K finish of one of its takes.
+  /^\/api\/cinema\/projects\/[^/]+\/(generate|items\/[^/]+\/(retry|finish))$/,
 ];
 
 /**
@@ -298,6 +310,14 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
 export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   // Character Swap Studio: the list, a project, its prices, its decisions, and stopping its jobs.
   /^\/api\/swap-studio\/projects(\/[^/]+(\/(decisions|estimate|stop|takes\/stop))?)?$/,
+  // Shorts Studio: its own sessions (start one, a new take, stitch again, pick a take, rename, delete) and its own
+  // presets. Enhance isn't here: it isn't offered on an account's own GPU yet.
+  /^\/api\/shorts\/sessions(\/[^/]+(\/stitch|\/segments\/[^/]+(\/primary)?)?)?$/,
+  /^\/api\/shorts\/presets(\/[^/]+)?$/,
+  // Cinema Studio: its projects, folders, takes, grid tiles and AI Director chat (the Director's built-in breakdown:
+  // no AI helper, GPU or key), and a ready film made as its own project (src/server/cinema.ts).
+  /^\/api\/cinema\/projects(\/[^/]+(\/(director|folders|items|folders\/[^/]+|items\/[^/]+\/tiles))?)?$/,
+  /^\/api\/starters\/cinema\.[^/]+$/,
 ];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));

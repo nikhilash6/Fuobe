@@ -219,7 +219,6 @@ describe("accounts never run on the owner's keys or GPU", () => {
     // Everything else wouldn't run on it even once connected: said first, with no Connect your GPU card.
     for (const p of [
       "/api/canvases/c1/run",
-      "/api/cinema/projects/p1/generate",
       "/api/layers/l1/jobs",
       "/api/katana/k1/retry",
       "/api/enhance",
@@ -227,7 +226,6 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/faceless/episodes/e1/render",
       "/api/content-factory/claude",
       // A run route that ignores ?preview=1 isn't a price check.
-      "/api/cinema/projects/p1/generate?preview=1",
       "/api/faceless/episodes/e1/estimate",
       // Restore & colourise: its run and its prompt writer.
       "/api/restore",
@@ -237,15 +235,22 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/remove-object/reroll",
       // Plan layout plans with the studio's own AI helper.
       "/api/layout/plan",
-      // Regenerate in Faceless, Shorts segments and Cinema takes (n7-10): studio jobs, like their renders.
+      // Regenerate in Faceless and Shorts segments (n7-10): studio jobs, like their renders.
       "/api/faceless/episodes/e1/regenerate",
       "/api/shorts/sessions/s1/segments/0/enhance",
-      "/api/cinema/projects/p1/items/g1/finish",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
       expect((await r.json()).code, p).toBe("own-gpu-tool");
+    }
+    // Cinema Studio's takes run on its own GPU or key (tests/account-cinema.test.ts): with neither, connect one first. A
+    // run route that ignores ?preview=1 isn't a price check.
+    for (const p of ["/api/cinema/projects/p1/generate", "/api/cinema/projects/p1/generate?preview=1", "/api/cinema/projects/p1/items/g1/finish"]) {
+      const r = proxy(req(p, { method: "POST", cookie }));
+      expect(r.status, p).toBe(403);
+      expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBe("1");
+      expect((await r.json()).code, p).toBe("connect-gpu");
     }
     // Owner-only routes say so (not "connect your GPU").
     expect(proxy(req("/api/mcp", { method: "POST", cookie })).headers.get(access.CONNECT_GPU_HEADER)).toBeNull();
@@ -265,10 +270,10 @@ describe("accounts never run on the owner's keys or GPU", () => {
 describe("accounts never see or change the owner's library", () => {
   const families: Record<string, { lists: string[]; records: string[]; changes: [string, string][] }> = {
     generations: {
-      // (/api/generations, its facets and its bulk changes go to the routes, which take only the account's own runs:
-      // tests/account-gpu.test.ts, tests/public-signup-visitors.test.ts.)
+      // (/api/generations, its facets, its zip and its bulk changes go to the routes, which take only the account's own runs:
+      // tests/account-gpu.test.ts, tests/public-signup-visitors.test.ts, tests/account-zip.test.ts.)
       lists: ["/api/generations/trash"],
-      records: ["/api/generations/g1", "/api/generations/zip?ids=g1"],
+      records: ["/api/generations/g1"],
       changes: [["PATCH", "/api/generations/g1"], ["DELETE", "/api/generations/g1"], ["DELETE", "/api/generations/trash"], ["POST", "/api/generations/g1/cancel"]],
     },
     // (POST /api/uploads is the account's own: the route checks it, tests/account-uploads.test.ts; so is the list of its
@@ -279,7 +284,8 @@ describe("accounts never see or change the owner's library", () => {
     layers: { lists: ["/api/layers"], records: ["/api/layers/l1"], changes: [["POST", "/api/layers"], ["PATCH", "/api/layers/l1"], ["DELETE", "/api/layers/l1"], ["POST", "/api/layers/l1/versions"]] },
     elements: { lists: ["/api/elements"], records: ["/api/elements/e1"], changes: [["POST", "/api/elements"], ["PATCH", "/api/elements/e1"], ["DELETE", "/api/elements/e1"]] },
     canvases: { lists: ["/api/canvases"], records: ["/api/canvases/c1"], changes: [["POST", "/api/canvases"], ["PATCH", "/api/canvases/c1"], ["DELETE", "/api/canvases/c1"], ["POST", "/api/canvases/c1/duplicate"]] },
-    cinema: { lists: ["/api/cinema/projects"], records: ["/api/cinema/projects/p1", "/api/cinema/projects/p1/items"], changes: [["POST", "/api/cinema/projects"], ["PATCH", "/api/cinema/projects/p1"], ["DELETE", "/api/cinema/projects/p1"]] },
+    // (Cinema Studio's projects go to the routes, which answer an account with its own projects only:
+    // tests/account-cinema.test.ts.)
     storyboards: { lists: [], records: ["/api/storyboards"], changes: [["POST", "/api/storyboards"]] },
     assist: {
       lists: ["/api/assist/projects", "/api/assist/memory"],

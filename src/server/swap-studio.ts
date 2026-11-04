@@ -172,8 +172,6 @@ function mustProject(id: string): SwapProject {
   return p;
 }
 
-/** Whether this account has a Character Swap project with this id (its page opens only its own). */
-export const accountHasProject = (accountId: string, id: string): boolean => !!getAccountProject(accountId, ACCOUNT_KIND, id);
 
 /** Change a project in one synchronous read-modify-write (no await inside: nothing else runs between). */
 function mutate(id: string, fn: (p: SwapProject) => SwapProject): SwapProject {

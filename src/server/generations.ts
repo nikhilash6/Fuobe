@@ -494,6 +494,12 @@ export const ASSET_REFS: AssetRef[] = [
   { table: "swap_projects", cols: ["data_json"], what: "Character Swap project", name: "name" },
   // A user skill's bundled text files: its recipe.json names the files a run starts from (an example, a fixed logo).
   { table: "skills", cols: ["files_json"], what: "skill", key: "name", name: "title" },
+  // An account's own boards and projects (public sign-up): a board's pages (its nodes' pictures and clips), and a
+  // project's data (a Shorts session or preset, a Cinema project, a Character Swap project…) and its list line (a
+  // short's final video, a swap's character picture). `key` is set so an owner's dry run never deletes these rows
+  // (skill-runs.ts STUDIO_TABLES).
+  { table: "account_canvases", cols: ["pages_json"], what: "account canvas", key: "id", name: "name" },
+  { table: "account_projects", cols: ["data_json", "summary_json"], what: "account project", key: "id", name: "name" },
 ];
 
 /**
@@ -556,6 +562,7 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_workers.allow_json": "the lanes the owner lets a worker run, with their delays",
   "relay_workers.seen_json": "the countries and network hashes a worker's token was used from",
   "relay_pairings.facts_json": "what a paired ComfyUI said about itself: its name, GPU and version",
+  "account_canvases.summary_json": "an account board's list line: node and page counts, and its outline (node types, places and short labels)",
 };
 
 /** The query that finds the rows of one ASSET_REFS table naming a file (@id), except the purged generation's own (@g). */

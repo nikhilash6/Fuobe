@@ -32,7 +32,7 @@ it (files, uploads, projects, settings values, tokens) answer 401 "Sign up to se
 Every change a guest sends (generate, upload, save a setting, create a project…) answers 401. The
 studio shows a "Create a free account to run this" card with **Sign up** and **Log in**. Where
 signing up wouldn't help, a guest gets an account's answer instead: 403 `assist-owner` for Assist,
-and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Shorts, Katana,
+and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Katana,
 Marketing…). The pages of those tools say so up front and turn off their upload and Generate.
 What is drawn in the browser itself is open to try: Click to Ad's animated end card and Marketing
 Studio's code-drawn templates (Kinetic Motion) take a guest's words and play live (a code-drawn
@@ -77,7 +77,7 @@ An account is signed in, but it sees the owner's studio as a guest does:
   owner's results, files, uploads, folders, shares, projects (Layers, Cinema, Canvas, storyboards,
   elements…) and Assist threads are hidden: the lists come back empty, and other reads answer 403.
   Every change to them (create, rename, move, share, delete) answers 403 with `code: "library"`.
-  Accounts have their own uploads and runs (below), but no projects yet.
+  Accounts have their own uploads and runs (below), and their own Cinema Studio projects.
   A Canvas Kinetic node renders in the owner's browser; keeping its run on the board
   (`PUT /api/canvases/<id>/runs/<node>`) is a canvas change like any other (403 `library` for an account, 401
   for a guest), and it takes only the owner's own finished Kinetic Motion results.
@@ -99,7 +99,8 @@ An account is signed in, but it sees the owner's studio as a guest does:
   board shows read-only with its steps editable in Nodes. Assist, Cinema Studio,
   Storyboard, Elements, Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and
   Marketing Studio show their ready-made starters the same way (`<studio>/start/<id>`); making one
-  (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`. A starter without its
+  (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`, except Cinema Studio's
+  ready films, which an account makes as its own project (a guest gets the sign-up card). A starter without its
   cover yet is the owner's only: its card, its words and its page (404 for anyone else). Storyboard's
   ready stories with a cover also fill its composer for anyone (`/storyboard?starter=<id>`), and the
   Library's "Make your first" row links to pages everyone can open.
@@ -117,6 +118,13 @@ An account is signed in, but it sees the owner's studio as a guest does:
   the sign-up form says so. An account's delete is for good (it has no Trash): a result's ⋯ menu and the
   Library's selection bar say **Delete for good…** and ask first, and its space comes
   back at once. The live-updates stream isn't sent to accounts: their studios poll instead.
+- **It downloads its own runs as one zip.** The Library's **Download**, a result's **Download all** and Shorts'
+  **Download parts** go to `GET /api/generations/zip`, which zips the account's own runs only: another account's run or
+  the owner's is left out, exactly as one that doesn't exist (none of its own: 404), so the answer never says whether
+  it is there. A file held for its check is left out too. One zip takes up to 200 runs and 1 GB (413 past either), and
+  an account makes one zip at a time (429 while one is going; a download that stops, or stalls for 2 minutes, frees
+  it). The zip is streamed from the files, so it uses no disk or memory. The Library asks first (`?check=1`), so a
+  refusal shows as a message. A guest gets the sign-up card.
 - **Its own uploads are its own.** Only the account that uploaded a file can use it in a run, and
   no other account can open it. See [Uploads](#uploads).
 - **Results made in the browser are its own runs too.** A motion clip rendered in
@@ -259,13 +267,15 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   with the open-source engine: the Image, Video and Audio studios (their input modes too: edit,
   inpaint, extend, lipsync, reframe, upscale, image to video…), every camera motion and effect,
   and the apps that take a picture, a clip or a sound. Their chained steps (multi-shot films,
-  Frames mode, Extend, relit effects) run there too, as the account's own. Polls,
+  Frames mode, Extend, relit effects) run there too, as the account's own. So does a 3D model (the
+  Image to 3D and Photo to 3D apps, and an image result's "Make it 3D", which opens Photo to 3D), on
+  the account's own GPU or key; it is finished as Image to 3D's models are (below), and on this
+  install's GPUs (hosted runs) 3D isn't offered yet. Polls,
   uploads, outputs and cancels go there, and nothing falls back to the studio's own providers. If
   the account's ComfyUI can't be reached, the run fails and says so. A cloud model, an AI helper or
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
-  (Canvas, Cinema, Shorts, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
-  plan with the studio's own AI helpers or keep projects of their own. A 3D model sent here answers the
-  same: Image to 3D has its own route (below). So do the Audio hub's Split
+  (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
+  plan with the studio's own AI helpers or keep projects of their own. So do the Audio hub's Split
   soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
   turnaround video (`POST /api/turnaround`), though their price checks work, priced for the account's
   own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
@@ -323,6 +333,25 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   its limits: a take that waits for the one before it starts later in the same run. The pictures a project names (the
   character, an imported anchor) and its clips are the account's own. Its assembled clips are its own runs, to open and
   download. The checks are `src/server/swap-studio-account.ts`.
+- **Shorts Studio.** An account makes its own shorts the same way (`POST /api/shorts/sessions`), on its own ComfyUI or
+  on its own fal.ai or Replicate key on the cloud engine: each segment's cut, restyle and the stitch under the clip's
+  sound are runs of its own, with only its own files, and a short counts once against its limits. A new take of a
+  segment (`POST /api/shorts/sessions/<id>/segments/<n>`) and Stitch again (`.../stitch`) go through the same checks.
+  Its shorts and the presets it makes from its own pictures are its own projects (`src/server/account-projects.ts`):
+  its History, a short's page (`/shorts/<id>`) and its preset list show only its own, and another account's or the
+  owner's read as not found (404). It keeps up to 50 shorts. Deleting a short deletes its runs for good (an account
+  has no Trash). It downloads the full video, each part, and "Download parts" as one zip of its own runs.
+  Enhance (`.../enhance`) isn't offered to it yet (403 `own-gpu-tool`). A guest gets the sign-up card.
+- **Cinema Studio.** An account makes, reopens and runs its own projects (`/api/cinema/projects/**`): up to 50,
+  each with its folders, takes, Director settings, brief and AI Director chat, deleted with the account. Another
+  account's project, or the owner's, reads as not found (404), and the owner's lists never show an account's. A take
+  (`POST .../generate`, World mode and Blockout to film included), a retry (`.../items/<id>/retry`) and a 2K finish
+  (`.../items/<id>/finish`) run the same way as Genjutsu's: every step on the account's ComfyUI or its own fal.ai or
+  Replicate key, with only its own files, after the same checks. A project's cover and a grid's tiles must be its own
+  files. Its AI Director writes the shot breakdown without the studio's AI helper (no GPU or key needed). Its Delete
+  deletes a take for good (it has no Trash). "Create 3D scene" and an exact orbit run there too: on its GPU their first
+  step is a 3D model, finished on this server under its limits as Image to 3D's are. Saving a still as an element, the
+  elements list and sharing a project are left out: those are the owner's library. A guest gets the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

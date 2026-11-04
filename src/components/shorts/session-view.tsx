@@ -25,7 +25,7 @@ import { Viewer } from "@/components/studio/viewer";
 import { chainState, ENHANCE_COPY, formatSeconds, segmentSeconds, stitchCurrent, stitchSteps, takeSteps, type ChainState, type ShortsSessionSegment } from "@/lib/catalog/shorts";
 import { finishLengthProblem, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import { originalSoundLabel, originalSoundOn } from "@/lib/av/original-sound";
-import { useEngineMode } from "@/lib/api";
+import { useEngineMode, useIsOwner } from "@/lib/api";
 import type { Generation } from "@/lib/catalog/types";
 import { formatCost, ratioValue, timeAgo } from "@/lib/format";
 import { downloadHref, downloadName } from "@/lib/library";
@@ -99,6 +99,8 @@ function Session({ s }: { s: View }) {
   const router = useRouter();
   const actions = useShortsActions(s.id);
   const engineMode = useEngineMode();
+  // The studio's owner keeps a Trash; a signed-in account's short is its own runs (deleted for good, its parts zipped as the owner's are).
+  const owner = useIsOwner();
   const [open, setOpen] = useState<Generation | null>(null);
   const [confirm, setConfirm] = useState(false);
   const gens = s.generations;
@@ -278,7 +280,7 @@ function Session({ s }: { s: View }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this short?</AlertDialogTitle>
-            <AlertDialogDescription>Its segments and videos move to the Trash, where you can restore them for 30 days.</AlertDialogDescription>
+            <AlertDialogDescription>{owner ? "Its segments and videos move to the Trash, where you can restore them for 30 days." : "Its segments and videos are deleted for good."}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it</AlertDialogCancel>
@@ -287,7 +289,7 @@ function Session({ s }: { s: View }) {
               onClick={() =>
                 actions.remove.mutate(s.id, {
                   onSuccess: () => {
-                    toast("Moved to Trash");
+                    toast(owner ? "Moved to Trash" : "Deleted");
                     router.push("/shorts?tab=history");
                   },
                   onError: (e) => toastError(e),

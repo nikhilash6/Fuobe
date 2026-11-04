@@ -110,14 +110,15 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     for (const p of ["/api/turnaround/estimate", "/api/turnaround?preview=1", "/api/audio-tools?preview=1"]) expect(passed(proxy(req(p, { method: "POST" }))), p).toBe(true);
     // Signing up wouldn't run these (an account's own GPU or key doesn't either): the account's answer, not the card.
-    for (const p of ["/api/audio-tools", "/api/shorts/sessions", "/api/katana", "/api/marketing/runs", "/api/layers/l1/jobs", "/api/layout/plan"]) {
+    for (const p of ["/api/audio-tools", "/api/katana", "/api/marketing/runs", "/api/layers/l1/jobs", "/api/layout/plan"]) {
       const r = proxy(req(p, { method: "POST" }));
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.GUEST_HEADER), p).toBeNull();
       expect(await r.json(), p).toEqual({ error: access.OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" });
     }
-    // The studios' runs, an upload and a save to the library: signing up is the next step there.
-    for (const p of ["/api/generations", "/api/turnaround", "/api/media/probe", "/api/audio-tools/export?offset=0", "/api/canvases"]) {
+    // The studios' runs, the apps and tools an account runs on its own GPU (Turnaround, Shorts), an upload and a save to
+    // the library: signing up is the next step there.
+    for (const p of ["/api/generations", "/api/turnaround", "/api/shorts/sessions", "/api/media/probe", "/api/audio-tools/export?offset=0", "/api/canvases"]) {
       const r = proxy(req(p, { method: "POST" }));
       expect(r.status, p).toBe(401);
       expect(r.headers.get(access.GUEST_HEADER), p).toBe("1");
@@ -150,13 +151,15 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     auth.setAccountGpu(a.id, { url: "https://gpu.example" });
     expect(passed(proxy(req("/api/generations", { method: "POST", cookie })))).toBe(true);
     expect(passed(proxy(req("/api/turnaround", { method: "POST", cookie })))).toBe(true);
-    for (const p of ["/api/audio-tools", "/api/cinema/projects/p1/generate", "/api/layout/plan"]) {
+    for (const p of ["/api/audio-tools", "/api/layout/plan"]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
       expect((await r.json()).code, p).toBe("own-gpu-tool");
     }
     expect(passed(proxy(req("/api/audio-tools/export?offset=0", { method: "POST", cookie })))).toBe(true);
+    // Cinema Studio's takes run on its own GPU too (tests/account-cinema.test.ts).
+    expect(passed(proxy(req("/api/cinema/projects/p1/generate", { method: "POST", cookie })))).toBe(true);
   });
 
   it("keeps the owner's runs and saves unchanged", () => {

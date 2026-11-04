@@ -61,9 +61,9 @@ const { saveFile } = await import("@/server/storage");
 const { runAsTenant } = await import("@/server/tenant");
 const { ACCOUNT_LIMITS } = await import("@/server/account-files");
 const { accountProjectsWith, getAccountProject } = await import("@/server/account-projects");
-const { accountHasProject, ensureSwapStudioRunner } = await import("@/server/swap-studio");
+const { ensureSwapStudioRunner } = await import("@/server/swap-studio");
 const { ACCOUNT_CLIP_BYTES } = await import("@/lib/clip-limit");
-const { recordExists } = await import("@/server/records");
+const { accountRecordExists, recordExists } = await import("@/server/records");
 
 const CLIP = fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4"));
 
@@ -253,9 +253,14 @@ describe("an account's projects are its own", () => {
     // Kept with the account, never in the owner's table.
     expect(getAccountProject(a, "swap", mine)).not.toBeNull();
     expect(recordExists({ kind: "swap-project", ids: [mine] })).toBe(false);
-    expect(accountHasProject(a, mine)).toBe(true);
-    expect(accountHasProject(b, mine)).toBe(false);
-    expect(accountHasProject(a, owners)).toBe(false);
+    // Its page opens for it alone (the proxy answers anyone else a 404 before the page streams).
+    const page = { kind: "swap-project" as const, ids: [mine] };
+    expect(accountRecordExists(page, a)).toBe(true);
+    expect(accountRecordExists(page, b)).toBe(false);
+    expect(accountRecordExists({ kind: "swap-project", ids: [owners] }, a)).toBe(false);
+    expect(passed(viaProxy(`/character-swap/${mine}`, "GET", "a"))).toBe(true);
+    expect(viaProxy(`/character-swap/${mine}`, "GET", "b").status).toBe(404);
+    expect(viaProxy(`/character-swap/${owners}`, "GET", "a").status).toBe(404);
     // Its list has it (and never the owner's); B's and the owner's lists don't.
     expect((await list("a")).map((x) => x.id)).toEqual([mine]);
     expect(await list("b")).toEqual([]);
