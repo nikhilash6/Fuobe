@@ -760,8 +760,10 @@ describe("a worker's own reports: giving a job back, its execution time, the inp
     expect(state(id).attempts).toBe(1);
     pool.backInLine(state(id), { blame: true });
     const again = await routed(w, id);
+    // A new claim starts its own count of sends, and results kept from an earlier try add none.
+    expect(state(id).attempts).toBe(0);
     expect((await again.say({ event: "sent", promptId: again.t.promptId, kept: true })).status).toBe(200);
-    expect(state(id).attempts).toBe(1);
+    expect(state(id).attempts).toBe(0);
     const done = await again.say({ event: "finished", entry, execMs: 4 * MIN, device: "Test GPU <b>", kept: true });
     expect(done.status).toBe(200);
     expect(state(id).state).not.toBe("queued");

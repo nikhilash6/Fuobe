@@ -139,6 +139,72 @@ describe("one job at a time", () => {
   });
 });
 
+describe("a job its worker's ComfyUI loses", () => {
+  const plan = () => ({ error: "unused" });
+  /** The worker sends the job to its ComfyUI, which starts it. */
+  const sendAndRun = (id: string) => {
+    tasks.report(rowOf(id), { event: "sent", promptId: crypto.randomUUID() }, plan);
+    tasks.report(rowOf(id), { event: "running", value: 1, max: 4 }, plan);
+  };
+  const lose = (id: string) => tasks.report(rowOf(id), { event: "gone" }, plan);
+
+  it("after a pause put it back in line, one loss on the next claim sends it again, and no attempt is used", () => {
+    const w = standInWorker();
+    const a = accountTask();
+    beatAs(w);
+    expect(claimAs(w)?.id).toBe(a.id);
+    sendAndRun(a.id);
+    // The worker pauses at once: the job goes back in line at no cost.
+    beatAs(w, Date.now(), { paused: true, why: "here-now" }, [{ task: a.id }]);
+    expect(rowOf(a.id).state).toBe("waiting");
+    beatAs(w);
+    expect(claimAs(w)?.id).toBe(a.id);
+    sendAndRun(a.id);
+    // Its ComfyUI restarts once: the worker sends it again on this claim.
+    expect(lose(a.id).state).toBe("sending");
+    expect(rowOf(a.id).requeues).toBe(0);
+  });
+
+  it("lost by a worker that went quiet, then once by another worker's ComfyUI: it sends again there", () => {
+    const first = standInWorker("first");
+    const a = accountTask();
+    beatAs(first);
+    expect(claimAs(first)?.id).toBe(a.id);
+    sendAndRun(a.id);
+    db().prepare("UPDATE relay_workers SET seen_at = ? WHERE id = ?").run(Date.now() - 3 * MIN, first.id);
+    pool.sweepPool();
+    expect(rowOf(a.id).state).toBe("waiting");
+    expect(rowOf(a.id).requeues).toBe(1);
+    const second = standInWorker("second");
+    beatAs(second);
+    expect(claimAs(second)?.id).toBe(a.id);
+    sendAndRun(a.id);
+    expect(lose(a.id).state).toBe("sending");
+    expect(rowOf(a.id).requeues).toBe(1);
+  });
+
+  it("lost twice on one claim: back in line with its place as one attempt, and the third such attempt fails it", () => {
+    const w = standInWorker();
+    const a = accountTask({ rankAt: Date.now() - 5 * MIN });
+    const rank = rowOf(a.id).rank_at;
+    for (let i = 1; i <= pool.MAX_ATTEMPTS; i++) {
+      beatAs(w);
+      expect(claimAs(w)?.id).toBe(a.id);
+      sendAndRun(a.id);
+      expect(lose(a.id).state).toBe("sending");
+      sendAndRun(a.id);
+      const answer = lose(a.id);
+      if (i < pool.MAX_ATTEMPTS) {
+        expect(answer.state).toBe("waiting");
+        expect(rowOf(a.id).requeues).toBe(i);
+        expect(rowOf(a.id).rank_at).toBe(rank);
+      }
+    }
+    expect(rowOf(a.id).state).toBe("failed");
+    expect(rowOf(a.id).error).not.toBe("lost");
+  });
+});
+
 describe("back in line", () => {
   it("a requeue keeps the job's place (rank_at), and once a worker took it, its wait limit is over", () => {
     const w = standInWorker();

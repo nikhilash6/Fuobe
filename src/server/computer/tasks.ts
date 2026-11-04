@@ -530,7 +530,9 @@ export function takeTask(t: TaskRow, device: string, now: number, fields: Partia
   const lease = crypto.randomBytes(32).toString("hex");
   const resume = t.state === "waiting" || t.device !== device ? undefined : (t.state as ClaimedTask["resume"]);
   const fresh = t.state === "waiting" || t.device !== device;
-  setTask(t.id, { device, lease_hash: hash(lease), state: t.state === "waiting" ? "sending" : t.state, claimed_at: now, device_seen_at: now, ...fields });
+  // A worker's task taken afresh starts its own count of sends: its ComfyUI may lose it once and get it again on this
+  // claim (the report "gone"). Across claims, only its requeues count (pool.ts MAX_ATTEMPTS).
+  setTask(t.id, { device, lease_hash: hash(lease), state: t.state === "waiting" ? "sending" : t.state, claimed_at: now, device_seen_at: now, ...(fresh && t.pools && { attempts: 0 }), ...fields });
   if (fresh) rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
   const inputs: TaskInput[] = inputsOf(t.id).map((i) => ({ n: i.n!, name: i.name, size: i.size, sha256: i.sha256, contentType: i.content_type }));
   return {
@@ -719,6 +721,12 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
         return { ok: true };
       }
       if (t.state === "sending") return { ok: true };
+      // A worker's ComfyUI lost it a second time on this claim: back in line as a lost attempt, with its place kept (the
+      // line's one budget: pool.ts MAX_ATTEMPTS).
+      if (t.pools && poolLost) {
+        poolLost(t);
+        return { ok: true };
+      }
       endTask(t.id, "failed", { error: "lost" });
       return { ok: true };
     case "comfy-down":
@@ -918,6 +926,10 @@ export const setPoolClocks = (fn: (t: TaskRow, now: number) => TaskRow) => (pool
 /** A worker gives its task back to the line (pool.ts sets this too). */
 let poolGiveBack: ((t: TaskRow, why: GiveBackWhy) => void) | null = null;
 export const setPoolGiveBack = (fn: (t: TaskRow, why: GiveBackWhy) => void) => (poolGiveBack = fn);
+
+/** A worker's ComfyUI lost its task again: it goes back in line as a lost attempt (pool.ts sets this too). */
+let poolLost: ((t: TaskRow) => void) | null = null;
+export const setPoolLost = (fn: (t: TaskRow) => void) => (poolLost = fn);
 
 /** The execution time (ms) and GPU name a worker reported with a finished job, as the workers' log keeps them. */
 export interface ExecFacts {

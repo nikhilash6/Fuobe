@@ -5,7 +5,7 @@ import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type Compu
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
-import { cleanFacts, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setPoolGiveBack, setTask, takeTask, taskById, type TaskRow } from "./tasks";
+import { cleanFacts, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setPoolGiveBack, setPoolLost, setTask, takeTask, taskById, type TaskRow } from "./tasks";
 import { queueSettings, runCeilingMs } from "../queue-settings";
 import { createWorker, offerNextToken, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 
@@ -558,6 +558,12 @@ setPoolGiveBack((t, why) => {
   }
   backInLine(t, { blame: true, why: GAVE_BACK_WORDS });
 });
+
+/**
+ * A worker's ComfyUI lost its task twice on one claim (each loss sends it again once): it goes back in line with its
+ * place kept, and counts as an attempt, so another worker is preferred and the third attempt fails it.
+ */
+setPoolLost((t) => backInLine(t, { blame: true }));
 
 // ---------------------------------------------------------------------------
 // Place in line and the wait (4.4)
