@@ -169,7 +169,7 @@ function start(
   w: W,
   s: Studio,
   p: Pc,
-  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelsCheckMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number; now?: () => number; sleep?: (ms: number) => Promise<void> } = {},
+  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelsCheckMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number; now?: () => number; sleep?: (ms: number) => Promise<void>; env?: Record<string, string | undefined> } = {},
 ) {
   const ctrl = new AbortController();
   const cfg = {
@@ -210,6 +210,7 @@ function start(
     },
     ...(o.rescanMs && { rescanMs: o.rescanMs }),
     ...(o.modelsCheckMs && { modelsCheckMs: o.modelsCheckMs }),
+    ...(o.env && { env: o.env }),
   });
   const r = { ctrl, done };
   running.push(r);
@@ -739,6 +740,43 @@ describe("its model folders", () => {
       const { id } = addTask();
       expect((await ended(id)).state).toBe("done");
       expect(p.logs.some((l) => /Saved its next token/.test(l))).toBe(true);
+    } finally {
+      delete process.env.FUOBE_WORKER_TOKEN_DAYS;
+    }
+  });
+
+  it("a token from FUOBE_WORKER_TOKEN: it never takes a next one or writes a token to a file, and says when its token ends", async () => {
+    process.env.FUOBE_WORKER_TOKEN_DAYS = "2";
+    try {
+      const w = addWorker();
+      const s = studio();
+      const p = pc();
+      const beats: Record<string, unknown>[] = [];
+      s.intercept = (q, init) => {
+        if (q === "/api/gpu/computer/beat") beats.push(JSON.parse(String(init.body)));
+        return undefined;
+      };
+      // Half its life is gone: a worker that saves tokens would be given the next one now.
+      const ends = Date.now() + 60 * 60_000;
+      db().prepare("UPDATE relay_workers SET expires_at = ? WHERE id = ?").run(ends, w.id);
+      start(w, s, p, { env: { FUOBE_WORKER_TOKEN: w.token } });
+      const { id } = addTask();
+      expect((await ended(id)).state).toBe("done");
+      await until(() => beats.length >= 3);
+      // It never says it saves tokens, so the studio offers none, and its token stays the one it has.
+      expect(beats.every((b) => b.canRotateToken === false)).toBe(true);
+      expect(s.tokens).toEqual([]);
+      expect(fs.existsSync(path.join(p.home, "worker.json"))).toBe(false);
+      const row = db().prepare("SELECT token_hash, next_token_hash FROM relay_workers WHERE id = ?").get(w.id) as { token_hash: string; next_token_hash: string | null };
+      expect(row.token_hash).toBe(crypto.createHash("sha256").update(w.token).digest("hex"));
+      expect(row.next_token_hash).toBeNull();
+      // It says when its token ends, once, so it is replaced in the environment in time.
+      const said = await until(() => {
+        const lines = p.logs.filter((l) => /FUOBE_WORKER_TOKEN/.test(l));
+        return lines.length ? lines : null;
+      });
+      expect(said).toHaveLength(1);
+      expect(said[0]).toContain(new Date(ends).toISOString().slice(0, 10));
     } finally {
       delete process.env.FUOBE_WORKER_TOKEN_DAYS;
     }

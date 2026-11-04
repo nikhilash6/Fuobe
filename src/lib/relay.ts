@@ -204,6 +204,11 @@ export interface WorkerAnswer {
    * call on. The old token stops at the new one's first use. Given again after 10 minutes if it was never used.
    */
   token?: { value: string; expiresAt: number };
+  /**
+   * When its token stops working, for a token with a lifetime (absent: it never expires). A worker that can't save a next
+   * token (one given in its environment) says so before then.
+   */
+  tokenExpiresAt?: number;
 }
 
 /** What a worker says in its beat, on top of a browser's. */

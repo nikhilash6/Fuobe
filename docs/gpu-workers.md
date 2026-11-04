@@ -69,6 +69,8 @@ or press Disconnect in ComfyUI (`POST /api/gpu/computer/unpair`). A disconnected
    Settings → Workers (the setting is `comfyWhere=workers`).
 
 On a machine with no keyboard, set `FUOBE_WORKER_TOKEN` and `FUOBE_WORKER_SITE` so that the token stays out of files.
+The worker never rotates a token from the environment: with a token lifetime set, replace it there before it ends (see
+"A token's lifetime" below).
 
 ### Install and update
 
@@ -519,6 +521,12 @@ minutes. A paired ComfyUI's token keeps no lifetime. The worker program sends `c
 next token in `worker.json` first, then uses it. If it can't save it, it keeps the token it has and gets the next one
 again later. An older worker program doesn't rotate its token: update every worker before you set the lifetime, or
 its token expires at the end of its lifetime and the worker stops until you rotate its token in Settings → Workers.
+Every beat answer for a token with a lifetime also says when it ends (`worker.tokenExpiresAt`).
+
+A worker whose token comes from `FUOBE_WORKER_TOKEN` never rotates it. That token stays out of files, and every start
+uses the environment's token, so a next token saved in `worker.json` would not survive a restart. Such a worker sends
+`canRotateToken: false` and writes the token's end date to its log once. Before that date, press **New token** in
+Settings → Workers and put the new token in `FUOBE_WORKER_TOKEN`.
 
 **Where a token is used from.** For a pool worker, the studio remembers the countries (Cloudflare's `cf-ipcountry`)
 and the networks (an IPv4 address's /24 or an IPv6 address's /64, read only with `FUOBE_TRUST_PROXY=1`) its token was
@@ -528,8 +536,8 @@ its target), at most once an hour each.
 
 - `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, canRotateToken?, local: { paused, why,
   until }, gpu: { otherApps, tempC }, inventoryHash, warmLane, held, slept? }`. The answer adds `worker: { paused, pauseNow,
-  drain, autoResume, insideHours, nextChangeAt, lanes, minProtocol, sendInventory, token? }` (`token`: the next token,
-  above).
+  drain, autoResume, insideHours, nextChangeAt, lanes, minProtocol, sendInventory, token?, tokenExpiresAt? }` (`token`:
+  the next token, above; `tokenExpiresAt`: when the token ends, for a token with a lifetime).
   - `protocol` is 2 for a worker that says which inputs it takes, makes clips and sound again, and keeps its ComfyUI
     behind the guard.
   - `held` (optional) names the jobs whose finished results the worker keeps on its disk. A pause now sends those

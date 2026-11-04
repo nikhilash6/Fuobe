@@ -149,7 +149,7 @@ export function siteOf(answer) {
 
 /**
  * Run until `signal` aborts or the studio stops it. Returns why it ended: "aborted" (Ctrl+C, the scheduled task's end),
- * "signed-out" (the studio doesn't know its token) or "disconnected". `deps`: { fetch, now, sleep, readGpu, log, home,
+ * "signed-out" (the studio doesn't know its token) or "disconnected". `deps`: { fetch, now, sleep, readGpu, log, home, env,
  * signal, requirements, ComputerRunner, rules, pins, allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own
  * options), readCounters, readListeners, gpuEveryMs }.
  */
@@ -292,11 +292,17 @@ async function work(saved, deps, owner) {
   const api = retrying(fetchFn, { now, sleep, signal: deps.signal, log });
   // Its token: worker.json's, until the studio gives it the next one (a token with a lifetime, docs/gpu-workers.md).
   let token = cfg.token;
+  // A token given in FUOBE_WORKER_TOKEN stays out of files, and the environment's token is the one every start uses: so
+  // it never takes a next token (saved in worker.json, the next start would still use the old one, which stops working
+  // once the new one is used). It says when its token ends instead, so it can be replaced in time.
+  const envToken = !!(deps.env ?? process.env).FUOBE_WORKER_TOKEN;
+  const canRotate = !!deps.home && !envToken;
+  let endWarned = null;
   const call = (p, init = {}) => api(`${site}${p}`, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${token}`, "User-Agent": `FuobeWorker/${VERSION}` } });
   /** The studio's next token: saved in worker.json first, then used from the next call on (the old one stops then). */
   const takeToken = (next) => {
     if (!next || typeof next.value !== "string" || !NEXT_TOKEN.test(next.value) || next.value === token) return;
-    if (!deps.home) return;
+    if (!canRotate) return;
     try {
       saveConfig(deps.home, { ...savedConfig(deps.home), token: next.value });
     } catch (e) {
@@ -408,8 +414,8 @@ async function work(saved, deps, owner) {
         return {
           protocol: PROTOCOL,
           version: VERSION,
-          // It saves the next token a beat answer gives it.
-          canRotateToken: !!deps.home,
+          // It saves the next token a beat answer gives it (never one for a token from the environment).
+          canRotateToken: canRotate,
           local: pause,
           gpu: gpuInfo,
           inventoryHash: invHash,
@@ -429,6 +435,12 @@ async function work(saved, deps, owner) {
         if (min > PROTOCOL && answer?.worker?.minProtocol !== a.worker.minProtocol) log("The studio needs a newer worker program: it sends this one no jobs. Update the worker (docs/gpu-workers.md, \"Install and update\").");
         answer = a;
         takeToken(a?.worker?.token);
+        // A token from the environment with a lifetime: said once for each end date, so it is replaced there in time.
+        const ends = Number(a?.worker?.tokenExpiresAt);
+        if (envToken && Number.isFinite(ends) && ends > 0 && ends !== endWarned) {
+          endWarned = ends;
+          log(`Its token comes from FUOBE_WORKER_TOKEN, so it saves no next one: it stops working on ${new Date(ends).toISOString().slice(0, 10)}. Before then, make a new token in Settings → Workers and put it in FUOBE_WORKER_TOKEN.`);
+        }
         // The owner's switch on the Workers page wins over worker.json; null leaves worker.json's.
         const s = a?.worker?.autoResume;
         gpu.o.autoResume = typeof s === "boolean" ? s : !!cfg.autoResume;

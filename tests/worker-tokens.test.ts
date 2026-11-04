@@ -45,7 +45,10 @@ describe("a pool worker's token lifetime", () => {
   it("off by default: no expiry, and no next token in any beat answer", () => {
     const w = pool.addWorker(`no-expiry-${++n}`);
     expect(row(w.id).expires_at).toBeNull();
-    expect(beat(w.id, 2, Date.now() + 400 * DAY).worker.token).toBeUndefined();
+    const answer = beat(w.id, 2, Date.now() + 400 * DAY).worker;
+    expect(answer.token).toBeUndefined();
+    // No end date to tell it either.
+    expect(answer.tokenExpiresAt).toBeUndefined();
   });
 
   it("with a lifetime: the next token once half is gone, to a worker that says it saves tokens; the old one stops at its first use", () => {
@@ -55,6 +58,8 @@ describe("a pool worker's token lifetime", () => {
     expect(row(w.id).expires_at).toBe(t0 + 10 * DAY);
     // More than half left: nothing yet. A worker that doesn't say it saves tokens never gets one, whatever its protocol.
     expect(beat(w.id, 2, t0 + 4 * DAY).worker.token).toBeUndefined();
+    // Every beat answer says when its token ends (a worker with its token in its environment says so on its PC).
+    expect(beat(w.id, 2, t0 + 4 * DAY, false).worker.tokenExpiresAt).toBe(t0 + 10 * DAY);
     expect(beat(w.id, 2, t0 + 6 * DAY, false).worker.token).toBeUndefined();
     expect(beat(w.id, 3, t0 + 6 * DAY, false).worker.token).toBeUndefined();
     expect(pool.cleanBeat({ protocol: 2, canRotateToken: "yes" }).canRotateToken).toBeUndefined();
