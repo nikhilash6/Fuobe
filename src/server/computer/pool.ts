@@ -61,7 +61,10 @@ export const classRank = (t: Pick<TaskRow, "class" | "account">): number => (t.c
 const LINE_ORDER = `${CLASS_RANK}, rank_at, created_at, id`;
 /** The columns the line's counts read (never a task's graph or files). */
 const LINE_COLS = "id, principal, pools, only_worker, stop, lane, needs_json, created_at, rank_at, est_ms, tried_json, worker_id, claimed_at, account, class";
-/** A task a worker took that is still sending its files to its ComfyUI this long after the claim goes back in line. */
+/**
+ * A task a worker took that is still sending its files to its ComfyUI this long after the claim (or after its ComfyUI lost
+ * it and it began sending them again on the same claim) goes back in line.
+ */
 export const SENDING_MS = 15 * 60_000;
 /** The time a worker has to send a finished job's results up. */
 export const SAVING_MS = 15 * 60_000;
@@ -519,6 +522,7 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?:
       worker_id: null,
       requeues,
       sent_at: null,
+      sending_since: null,
       started_at: null,
       down_at: null,
       down_why: null,
@@ -534,7 +538,8 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?:
 
 /**
  * The workers' clocks: a task whose worker went silent for 2 minutes (or was revoked), whose ComfyUI was down for 2
- * minutes, or that is still sending its files 15 minutes after the claim goes back in line; a task no worker has taken
+ * minutes, or that is still sending its files 15 minutes after the claim (or after it began sending them again) goes
+ * back in line; a task no worker has taken
  * yet that is still waiting past its wait limit fails, not charged. (Once a worker took it, the wait limit is over: a
  * task back in line waits in its place until a worker runs it, or its attempts run out.)
  */
@@ -555,7 +560,9 @@ function sweepLine(d: ReturnType<typeof db>, now: number): void {
   for (const t of held) {
     const silent = !t.w_seen || now - t.w_seen > RELAY_TIMES.poolSilentMs || !!t.w_revoked;
     const down = !!t.down_at && now - t.down_at > RELAY_TIMES.poolComfyDownMs;
-    const stuck = t.state === "sending" && !!t.claimed_at && now - t.claimed_at > SENDING_MS;
+    // Sending since its claim, or since its ComfyUI lost it and it began sending again on the same claim.
+    const sendingSince = t.sending_since ?? t.claimed_at;
+    const stuck = t.state === "sending" && !!sendingSince && now - sendingSince > SENDING_MS;
     if (silent || down || stuck) {
       backInLine(t, { blame: true, why: silent ? "The GPU running this stopped answering, three times. Press Retry." : down ? "ComfyUI kept stopping on the GPUs. Press Retry." : "The GPUs couldn't start this run. Press Retry.", ...(silent && !t.w_revoked && { lostAt: now }) });
     }

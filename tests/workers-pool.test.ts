@@ -499,6 +499,81 @@ describe("a worker whose model folder isn't there yet (a drive still locked afte
   });
 });
 
+describe("a job its worker's ComfyUI keeps losing", () => {
+  const unused = () => ({ error: "unused" });
+  const say = (id: string, e: Parameters<typeof tasks.report>[1]) => tasks.report(state(id), e, unused, clock);
+
+  it("sending it again never moves the attempt's deadline, and a second loss on one claim puts it back in line", () => {
+    const id = task({ account: "acct-lost" });
+    const w = worker("loses-jobs");
+    const c = claim(w)!;
+    const claimedAt = state(id).claimed_at!;
+    const deadline = pool.attemptDeadline(state(id))!.at;
+    expect(deadline).toBe(claimedAt + pool.attemptLimitMs(LANE_A));
+    // Results kept from before go up (no new render), then its ComfyUI "loses" the job: it sends its files again.
+    say(id, { event: "sent", promptId: c.promptId, kept: true });
+    clock += MIN;
+    say(id, { event: "gone" });
+    expect(state(id).state).toBe("sending");
+    expect(state(id).claimed_at).toBe(claimedAt);
+    expect(pool.attemptDeadline(state(id))!.at).toBe(deadline);
+    // The second loss on this claim: back in line with its place kept, counted as an attempt.
+    say(id, { event: "sent", promptId: c.promptId, kept: true });
+    clock += MIN;
+    say(id, { event: "gone" });
+    expect(state(id).state).toBe("waiting");
+    expect(state(id).requeues).toBe(1);
+  });
+
+  it("a worker that sends kept results and then says it lost them, again and again, can't hold a person's run: it ends", () => {
+    const id = task({ account: "acct-loop" });
+    const w = worker("loops");
+    const firstDeadline = (() => {
+      claim(w);
+      return pool.attemptDeadline(state(id))!.at;
+    })();
+    for (let i = 0; i < 200 && !["failed", "done", "canceled"].includes(state(id).state); i++) {
+      beat(w);
+      if (state(id).state === "waiting") claim(w);
+      const now = state(id);
+      if (now.state === "sending") say(id, { event: "sent", promptId: now.prompt_id ?? "p", kept: true });
+      else if (now.state === "queued") say(id, { event: "gone" });
+      clock += MIN;
+    }
+    const end = state(id);
+    expect(end.state).toBe("failed");
+    expect(end.requeues).toBe(3);
+    // Long before what its first attempt's deadline would have allowed.
+    expect(clock).toBeLessThan(firstDeadline);
+  });
+
+  it("a job sending its files again for 15 minutes on the same claim goes back in line", () => {
+    const id = task({ account: "acct-resend" });
+    const w = worker("slow-resend");
+    const c = claim(w)!;
+    say(id, { event: "sent", promptId: c.promptId });
+    // The worker beats every minute meanwhile (a silent one would lose the job for that instead).
+    const minutes = (n: number) => {
+      for (let i = 0; i < n; i++) {
+        clock += MIN;
+        beat(w, {}, [id]);
+      }
+    };
+    // Lost after 10 minutes: it sends again from then, so 6 more minutes (16 since the claim) is not yet too long.
+    minutes(10);
+    say(id, { event: "gone" });
+    minutes(6);
+    pool.sweepPool(clock);
+    expect(state(id).state).toBe("sending");
+    expect(state(id).requeues).toBe(0);
+    // 16 minutes of sending again: back in line, counted as an attempt.
+    minutes(10);
+    pool.sweepPool(clock);
+    expect(state(id).state).toBe("waiting");
+    expect(state(id).requeues).toBe(1);
+  });
+});
+
 describe("a worker's list of model files", () => {
   const inventoryRoute = () => import("@/app/api/gpu/computer/inventory/route");
   const beatWith = (w: W, inventoryHash: string | null) =>
@@ -826,7 +901,7 @@ describe("a worker's own reports: giving a job back, its execution time, the inp
     expect((await fourth.say({ event: "give-back", why: "stalled" })).body.state).toBe("waiting");
   });
 
-  it("results kept from an earlier try go up as no new attempt, keep their own time, and add no time to the lane", async () => {
+  it("results kept from an earlier try go up without running again, keep their own time, and add no time to the lane", async () => {
     clock = Date.now();
     const entry = { status: { status_str: "success", completed: true }, outputs: {} };
     // Made 10 minutes ago; it ran, its worker stopped before the studio heard, and it went back in line.
@@ -837,10 +912,12 @@ describe("a worker's own reports: giving a job back, its execution time, the inp
     expect(state(id).attempts).toBe(1);
     pool.backInLine(state(id), { blame: true });
     const again = await routed(w, id);
-    // A new claim starts its own count of sends, and results kept from an earlier try add none.
+    // A new claim starts its own count of sends. Results kept from an earlier try count as one send of this claim (a
+    // ComfyUI that then "loses" them twice sends the job back in line), and are not another try in line.
     expect(state(id).attempts).toBe(0);
     expect((await again.say({ event: "sent", promptId: again.t.promptId, kept: true })).status).toBe(200);
-    expect(state(id).attempts).toBe(0);
+    expect(state(id).attempts).toBe(1);
+    expect(state(id).requeues).toBe(1);
     const done = await again.say({ event: "finished", entry, execMs: 4 * MIN, device: "Test GPU <b>", kept: true });
     expect(done.status).toBe(200);
     expect(state(id).state).not.toBe("queued");

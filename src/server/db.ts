@@ -1007,6 +1007,8 @@ const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_tasks", "worker_id", "TEXT"],
   // The class a task waits in: "paid", "free" or "owner" (pool.ts LINE_ORDER).
   ["relay_tasks", "class", "TEXT"],
+  // Since when a worker's task has been sending its files again on the same claim (NULL: since its claim).
+  ["relay_tasks", "sending_since", "INTEGER"],
   // A pool worker's next token (workers.ts offerNextToken) and where its token was used from (hashed networks).
   ["relay_workers", "next_token_hash", "TEXT"],
   ["relay_workers", "next_expires_at", "INTEGER"],

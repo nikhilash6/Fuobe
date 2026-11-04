@@ -113,6 +113,8 @@ export interface TaskRow {
   created_at: number;
   updated_at: number;
   claimed_at: number | null;
+  /** A worker's task sending its files again on the same claim (its ComfyUI lost it): since when. NULL: since its claim. */
+  sending_since: number | null;
   sent_at: number | null;
   started_at: number | null;
   finished_at: number | null;
@@ -531,8 +533,9 @@ export function takeTask(t: TaskRow, device: string, now: number, fields: Partia
   const resume = t.state === "waiting" || t.device !== device ? undefined : (t.state as ClaimedTask["resume"]);
   const fresh = t.state === "waiting" || t.device !== device;
   // A worker's task taken afresh starts its own count of sends: its ComfyUI may lose it once and get it again on this
-  // claim (the report "gone"). Across claims, only its requeues count (pool.ts MAX_ATTEMPTS).
-  setTask(t.id, { device, lease_hash: hash(lease), state: t.state === "waiting" ? "sending" : t.state, claimed_at: now, device_seen_at: now, ...(fresh && t.pools && { attempts: 0 }), ...fields });
+  // claim (the report "gone"). Across claims, only its requeues count (pool.ts MAX_ATTEMPTS). Its sending clock starts at
+  // the claim.
+  setTask(t.id, { device, lease_hash: hash(lease), state: t.state === "waiting" ? "sending" : t.state, claimed_at: now, device_seen_at: now, ...(fresh && t.pools && { attempts: 0, sending_since: null }), ...fields });
   if (fresh) rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
   const inputs: TaskInput[] = inputsOf(t.id).map((i) => ({ n: i.n!, name: i.name, size: i.size, sha256: i.sha256, contentType: i.content_type }));
   return {
@@ -654,8 +657,9 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
     case "sent": {
       const promptId = typeof e.promptId === "string" && UUID.test(e.promptId) ? e.promptId : typeof e.promptId === "string" && /^[\w-]{1,64}$/.test(e.promptId) ? e.promptId : null;
       if (!promptId) throw new RelayError(400, "Bad prompt id");
-      // Results a worker kept from an earlier try go up instead: no new attempt.
-      setTask(t.id, { ...seen, state: "queued", prompt_id: promptId, sent_at: now, attempts: t.attempts + (t.pools && e.kept ? 0 : 1) });
+      // Results a worker kept from an earlier try go up instead of a new render. Each send counts toward this claim's
+      // sends all the same, so a ComfyUI that "loses" a job twice on one claim (a resend after each) sends it back in line.
+      setTask(t.id, { ...seen, state: "queued", prompt_id: promptId, sent_at: now, attempts: t.attempts + 1 });
       return { ok: true };
     }
     case "refused":
@@ -715,8 +719,9 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       return { ok: true };
     case "gone":
       if (t.attempts < 2 && t.state !== "sending") {
-        // A worker's task sends its files again: its sending clock (pool.ts SENDING_MS) starts again too.
-        setTask(t.id, { ...seen, state: "sending", note: "resent", started_at: null, ...(t.pools && { claimed_at: now }) });
+        // A worker's task sends its files again: its sending clock (pool.ts SENDING_MS) starts again from now. The
+        // attempt's own deadline stays where its claim put it (pool.ts attemptDeadline).
+        setTask(t.id, { ...seen, state: "sending", note: "resent", started_at: null, ...(t.pools && { sending_since: now }) });
         rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
         return { ok: true };
       }
