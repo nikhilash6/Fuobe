@@ -41,7 +41,8 @@
 //    2.5 s late, and with the HTML in two parts (cut after the second line's first words, 1.5 s apart, by a proxy) and
 //    the fonts 1.5 s late, no layout shift moves anything in the h1, the cut line stays unseen until whole, and once all
 //    is in, the headline looks as on a quick load (its picture within 1 level in 255 on average).
-// 3. Every tile's link answers 200, and the numbers tile opens every studio (the launcher; a phone's sheet).
+// 3. Every tile's link answers 200 (the Audio tile's is its words: the tile holds Clean up voice's demo, checked on its
+//    own by tests/e2e/home-voice.mjs), and the numbers tile opens every studio (the launcher; a phone's sheet).
 // 4. Reduced motion and Save-Data: no clip is fetched or played, nothing moves by itself (the headline is still, the
 //    live words stay), and the tiles keep their stills.
 // 5. Pause previews stops the reel and freezes every animation; pressed again, they go on.
@@ -49,7 +50,8 @@
 //    stills stay under 420 KB (the clips' posters are encoded close to their clips' first frames, and a 3x phone or a
 //    2x laptop gets the video tile's widest still). The clips are reported on their own.
 // 7. The composer: /?new=1 brings it into view with the focus; a plain visit stays at the top (no autofocus jump).
-// 8. Every tile is a named link, and Tab reaches them in the grid's reading order with a visible ring.
+// 8. Every tile is a named link (the Audio tile: its words), and Tab reaches them in the grid's reading order (through
+//    the Audio tile's buttons) with a visible ring.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -984,7 +986,8 @@ if (run("3")) {
   const ctx = await browser.newContext(DESKTOP);
   const page = await ctx.newPage();
   await open(page);
-  const hrefs = await page.$$eval("#home-bento [data-tile]", (as) => as.map((a) => [a.dataset.tile, a.getAttribute("href")]));
+  // Each tile's link: the tile itself, or (the Audio tile) the link inside it.
+  const hrefs = await page.$$eval("#home-bento [data-tile]", (els) => els.map((el) => [el.dataset.tile, (el.matches("a") ? el : el.querySelector("a[href]"))?.getAttribute("href") ?? ""]));
   check("eight tiles, in the grid's reading order", hrefs.map((h) => h[0]).join() === TILES.join(), hrefs.map((h) => h[0]).join());
   for (const [tile, href] of hrefs) {
     if (href.startsWith("#")) {
@@ -1186,10 +1189,12 @@ if (run("8")) {
   const names = await page.$$eval("#home-bento a", (as) => as.map((a) => a.getAttribute("aria-label") ?? a.textContent.trim()));
   check("every link on the first screen has a name", names.length === 8 && names.every((n) => n && n.length > 5), names.join(" | "));
   await page.locator("#home-bento h1").click();
+  // The tile each Tab lands in, once per tile (the Audio tile's switch, play button and link are all in it).
   const order = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 16 && order.length < TILES.length; i++) {
     await page.keyboard.press("Tab");
-    order.push(await page.evaluate(() => document.activeElement?.dataset?.tile ?? document.activeElement?.tagName));
+    const at = await page.evaluate(() => document.activeElement?.closest("[data-tile]")?.dataset.tile ?? document.activeElement?.tagName);
+    if (order.at(-1) !== at) order.push(at);
   }
   check("Tab reaches the tiles in reading order", order.join() === TILES.join(), order.join());
   await page.keyboard.press("Shift+Tab");

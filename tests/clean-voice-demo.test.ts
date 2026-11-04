@@ -16,6 +16,7 @@ import {
   HINTS,
   isRunning,
   playLabel,
+  stateLabel,
   SWITCH_RAMP,
   switchDue,
   type DemoAudioContext,
@@ -129,6 +130,12 @@ describe("the demo's story", () => {
     expect(switchDue(demoReducer(playing, tap), AUTO_AT)).toBe(false);
     expect(switchDue(run(tap, started, at(AUTO_AT)), AUTO_AT + 1)).toBe(false);
     expect(switchDue(run(tap, started, { type: "choose", clean: false }), AUTO_AT + 1)).toBe(false);
+  });
+
+  it("says what is heard on the chip, the same on the studio's demo and on Home's Audio tile", () => {
+    expect(stateLabel(DEMO_START.clean)).toBe("Noisy restaurant");
+    expect(stateLabel(run(tap, started, at(AUTO_AT)).clean)).toBe("Voice only");
+    expect(stateLabel(run(tap, started, at(AUTO_AT), { type: "choose", clean: false }).clean)).toBe("Noisy restaurant");
   });
 });
 

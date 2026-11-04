@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Media and data for Home's first screen (src/components/home/home-bento.tsx): the video tile's reel of clips and its
- * poster, the 3D tile's clip and its poster, each in several widths, AVIF copies of pictures the site already
- * publishes, and the Audio tile's waveform, read from the Audio studio's own sample. Nothing is rendered: every file is a
+ * poster, the 3D tile's clip and its poster, each in several widths, and AVIF copies of pictures the site already
+ * publishes (the Audio tile's two photos among them, from Clean up voice's demo). Nothing is rendered: every file is a
  * copy of a published picture or of the full-size render a published clip was cut from, so the tiles show exactly what
  * the studios show, only sharper.
  *
@@ -13,6 +13,9 @@
  *   rotation-{640,1024,1536,2048}.{mp4,avif}  the turning gown (the 3D tile) at four widths, and each one's first frame
  *   reel-sand-storm-1024.jpg, rotation-1024.jpg the 1024 px clips' first frames, for a browser without AVIF
  *   image-4-{480,768}.avif                the Image studio's example 4
+ *   voice-{room,quiet}-{480,768,1024}.avif  Clean up voice's demo photos (public/samples/clean-voice/): the restaurant,
+ *                                         and the same photo softened around her, which the Audio tile shows once the
+ *                                         noise is off; voice-{room,quiet}-1024.jpg for a browser without AVIF
  *   genjutsu-<name>-{640,768,1024}.mp4    each clip of the Genjutsu tile's reel (WIPES): a swap shown as it happens, the
  *                                         original clip and the swapped one under a divider that sweeps across them
  *   genjutsu-couple-{640,768,1024}.avif   the reel's first clip's first frame at each width: the tile's poster
@@ -22,7 +25,7 @@
  *   board-{photo,film}.webp               the Canvas board's photo and a frame of its film, 168 px squares
  * and src/lib/home-bento.generated.ts: each file's content version, the reel (its clips in order, each one's length and
  * framing, and where set how long it holds its last frame and fades out), the Genjutsu reel (each clip's labels and
- * where its divider is on every frame), each poster's mean colour, and the waveform.
+ * where its divider is on every frame), and each poster's mean colour.
  *
  * The reel: the video tile plays these clips one after another, each once, and crossfades into the next (after the
  * last, back to the first). Each is a stretch of its preset's full-size render: `from` (its first frame in the render)
@@ -47,10 +50,6 @@
  * Without it those files are kept as they are (and versioned; a reel clip in the widths it has), the posters are made
  * again from the clips kept, and so is the rest.
  *
- * The waveform: the Clean up voice sample decoded to 8 kHz mono, its loudness (RMS) in WAVE_BARS equal slices, scaled
- * so the loudest is 1, with a floor of WAVE_FLOOR so a pause still shows a bar. It is keyed by the sample's own
- * version, so a new sample needs a new run (tests/home-bento.test.ts checks it).
- *
  * Run: node scripts/gen-home-bento.mjs            make every file and the generated module
  *      node scripts/gen-home-bento.mjs --dry-run  make and measure, write nothing
  * Needs ffmpeg on PATH (or FUOBE_FFMPEG).
@@ -70,10 +69,6 @@ const OUT_TS = path.join(ROOT, "src", "lib", "home-bento.generated.ts");
 const DRY = process.argv.includes("--dry-run");
 const argAt = process.argv.indexOf("--masters");
 const MASTERS = argAt > 0 ? process.argv[argAt + 1] : process.env.FUOBE_HOME_MASTERS;
-
-export const WAVE_BARS = 48;
-export const WAVE_FLOOR = 0.12;
-const WAVE_SOURCE = "/samples/clean-voice/clean.m4a";
 
 /**
  * The video tile's reel, in the order it plays: each clip's preset, the name of its copies here, the stretch of its
@@ -206,10 +201,26 @@ const BOARD_THUMBS = [
   { name: "board-photo.webp", from: "/examples/effect-pearl-earring/1/in-image.jpg" },
   { name: "board-film.webp", from: "/previews/presets/peak/effect-pearl-earring.jpg" },
 ];
-/** Each copy: its name under previews/home, the published file it comes from, its width, and a crop where it has one. */
+/**
+ * The Audio tile's photos (BENTO_VOICE in src/lib/home-bento.ts): Clean up voice's demo photos, in the widths the tile
+ * shows them at (up to a 3x phone's full row), and as a JPEG at FALLBACK_WIDTH.
+ */
+const VOICE = [
+  { name: "voice-room", from: "/samples/clean-voice/room.webp" },
+  { name: "voice-quiet", from: "/samples/clean-voice/quiet.webp" },
+];
+const VOICE_WIDTHS = [480, 768, 1024];
+/**
+ * Each copy: its name under previews/home (an AVIF, or a JPEG where it ends in .jpg), the published file it comes from,
+ * its width, and a crop where it has one.
+ */
 const STILLS = [
   { name: "image-4-480.avif", from: "/examples/image/4/out.jpg", width: 480 },
   { name: "image-4-768.avif", from: "/examples/image/4/out.jpg", width: 768 },
+  ...VOICE.flatMap((v) => [
+    ...VOICE_WIDTHS.map((width) => ({ name: `${v.name}-${width}.avif`, from: v.from, width })),
+    { name: `${v.name}-${FALLBACK_WIDTH}.jpg`, from: v.from, width: FALLBACK_WIDTH },
+  ]),
 ];
 /** AVIF quality: the copies sit under a dark shade, and each tile takes one at least as wide as it shows. */
 const QUALITY = 55;
@@ -281,24 +292,6 @@ function frameAt(file, n) {
 
 /** A clip's first frame as a PNG, decoded from the encoded file as a browser shows it. */
 const firstFrame = (file) => frameAt(file, 0);
-
-/** The sample's loudness in `bars` slices, 0..1, the loudest 1, none under `floor`. */
-export function waveform(samples, bars = WAVE_BARS, floor = WAVE_FLOOR) {
-  const per = Math.floor(samples.length / bars);
-  const rms = Array.from({ length: bars }, (_, i) => {
-    let sum = 0;
-    for (let j = i * per; j < (i + 1) * per; j++) sum += samples[j] * samples[j];
-    return Math.sqrt(sum / per);
-  });
-  const max = Math.max(...rms) || 1;
-  return rms.map((r) => Math.max(floor, Math.round((r / max) * 1000) / 1000));
-}
-
-function readWave() {
-  const raw = ffmpeg(["-v", "error", "-i", path.join(PUBLIC, WAVE_SOURCE), "-ac", "1", "-ar", "8000", "-f", "s16le", "-"]);
-  const samples = new Int16Array(raw.buffer, raw.byteOffset, Math.floor(raw.length / 2));
-  return { wave: waveform(Array.from(samples, (s) => s / 32768)), seconds: samples.length / 8000 };
-}
 
 /**
  * A reel clip as the generated list holds it (and src/lib/home-reel.ts ReelClip reads it): `hold` and `fade` only where set.
@@ -384,7 +377,8 @@ async function main() {
       ...s,
       make: () => {
         const img = sharp(path.join(PUBLIC, s.from));
-        return (s.crop ? img.extract(s.crop) : img).resize(s.width).avif({ quality: QUALITY, effort: 6 }).toBuffer();
+        const sized = (s.crop ? img.extract(s.crop) : img).resize(s.width);
+        return (s.name.endsWith(".jpg") ? sized.jpeg({ quality: 85, mozjpeg: true }) : sized.avif({ quality: QUALITY, effort: 6 })).toBuffer();
       },
     })),
     ...BOARD_THUMBS.map((s) => ({ ...s, make: () => sharp(path.join(PUBLIC, s.from)).resize(THUMB, THUMB, { fit: "cover", position: "attention" }).webp({ quality: 72 }).toBuffer() })),
@@ -405,14 +399,12 @@ async function main() {
     const { channels } = await sharp(path.join(OUT_DIR, `${c.name}-${FALLBACK_WIDTH}.jpg`)).stats();
     tints[c.name] = `#${channels.slice(0, 3).map((ch) => Math.round(ch.mean).toString(16).padStart(2, "0")).join("")}`;
   }
-  const { wave, seconds } = readWave();
-  console.log(`stills ${(total / 1024).toFixed(1)} KB (clips aside) Â· waveform ${wave.length} bars over ${seconds.toFixed(2)} s`);
+  console.log(`stills ${(total / 1024).toFixed(1)} KB (clips aside)`);
   if (DRY) return;
-  const source = contentVersion([path.join(PUBLIC, WAVE_SOURCE)]);
   const body = `/**
  * Home's first screen (src/components/home/home-bento.tsx): the content version of each file made for it, the video
- * tile's reel, and the Audio tile's waveform, read from the Clean up voice sample (its version is \`wave.source\`). Generated by
- * scripts/gen-home-bento.mjs: run it again rather than editing.
+ * tile's reel and the Genjutsu tile's, and each poster's mean colour. Generated by scripts/gen-home-bento.mjs: run it
+ * again rather than editing.
  */
 export const HOME_BENTO_MEDIA: Record<string, string> = ${JSON.stringify(versions, null, 2)};
 
@@ -442,12 +434,6 @@ export const HOME_BENTO_GENJUTSU = ${JSON.stringify(
 /** Each poster's mean colour (by its clip's name): the tile shows it until the poster is in. */
 export const HOME_BENTO_TINT: Record<string, string> = ${JSON.stringify(tints, null, 2)};
 
-export const HOME_BENTO_WAVE = {
-  src: ${JSON.stringify(WAVE_SOURCE)},
-  source: ${JSON.stringify(source)},
-  seconds: ${Math.round(seconds * 100) / 100},
-  bars: ${JSON.stringify(wave)},
-};
 `;
   fs.writeFileSync(OUT_TS, body);
   console.log(`wrote ${path.relative(ROOT, OUT_TS)}`);

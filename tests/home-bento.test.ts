@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,11 +9,12 @@ import { getTemplate } from "@/lib/catalog/canvas";
 import { FORBIDDEN_WORDS } from "@/lib/examples/catalog";
 import { HUB_MODES } from "@/lib/hubs";
 import { studioCount } from "@/lib/nav-model";
-import { HOME_BENTO_MEDIA, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
+import { HOME_BENTO_MEDIA } from "@/lib/home-bento.generated";
 import { contentVersion } from "../scripts/eval/lib/covers.mjs";
 import { WIPES, lineAt } from "../scripts/gen-home-bento.mjs";
 import sharp from "sharp";
 import type { BentoPicture } from "@/lib/home-bento";
+import { DEMO_MEDIA, DEMO_START, demoReducer } from "@/lib/av/clean-voice-demo";
 import { coverWidth, pickWidth } from "@/lib/media-pick";
 import { mp4Seconds, mp4Size } from "./helpers/mp4-length";
 
@@ -31,10 +31,11 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const { BENTO_BOARD, BENTO_CLIPS, BENTO_CLIP_WIDTHS, BENTO_GENJUTSU, BENTO_GENJUTSU_WIDTHS, BENTO_HREFS, BENTO_IMAGE_EXAMPLE, BENTO_REEL, BENTO_REEL_ID, livePhrases, openModelsOf } =
+const { BENTO_BOARD, BENTO_CLIPS, BENTO_CLIP_WIDTHS, BENTO_GENJUTSU, BENTO_GENJUTSU_WIDTHS, BENTO_HREFS, BENTO_IMAGE_EXAMPLE, BENTO_REEL, BENTO_REEL_ID, BENTO_VOICE, livePhrases, openModelsOf } =
   await import("@/lib/home-bento");
 const { HOME_BEFORE_AFTER, HOME_EFFECTS, HOME_MOTIONS, HOME_REVEALS, HOME_STUDIOS, homeShowcase, navLabel } = await import("@/lib/home-showcase");
 const { HomeBento } = await import("@/components/home/home-bento");
+const { voiceButton } = await import("@/components/home/bento-voice");
 
 const root = process.cwd();
 const file = (url: string) => path.join(root, "public", url.split("?")[0]);
@@ -165,7 +166,7 @@ describe("Home's first screen", () => {
   });
 
   it("lists every picture at its real width", async () => {
-    const pictures: BentoPicture[] = [bento.video.poster, bento.threeD.poster, bento.image, bento.genjutsu.poster, bento.genjutsu.still, ...bento.live.frames];
+    const pictures: BentoPicture[] = [bento.video.poster, bento.threeD.poster, bento.image, bento.genjutsu.poster, bento.genjutsu.still, bento.voice.room, bento.voice.quiet, ...bento.live.frames];
     for (const p of pictures)
       for (const a of p.avif) {
         const m = await sharp(file(a.src)).metadata();
@@ -211,6 +212,10 @@ describe("Home's first screen", () => {
   it("opens a real page from every tile, named by the navigation or the catalog", () => {
     const route = (href: string) => {
       const seg = href.split(/[?#]/)[0].replace(/^\//, "");
+      const [hub, mode] = seg.split("/");
+      // A hub's mode on its own page (/audio/clean): the hub's [mode] page, for a mode it has.
+      if (mode && hub in HUB_MODES)
+        return HUB_MODES[hub as keyof typeof HUB_MODES].some((m) => m.id === mode) && fs.existsSync(path.join(root, "src", "app", "(studio)", hub, "[mode]", "page.tsx"));
       return fs.existsSync(path.join(root, "src", "app", "(studio)", seg, "page.tsx"));
     };
     for (const href of [BENTO_HREFS.video, BENTO_HREFS.image, BENTO_HREFS.audio, BENTO_HREFS.threeD, BENTO_HREFS.genjutsu, BENTO_HREFS.live, BENTO_HREFS.canvas])
@@ -223,7 +228,9 @@ describe("Home's first screen", () => {
     const t = bento.tiles;
     expect(t.video.cta).toBe(`Open ${navLabel("/cinema")}`);
     expect(t.image.cta).toBe(`Open ${navLabel("/image")}`);
-    expect(t.audio.cta).toBe(`Open ${navLabel("/audio")}`);
+    // The Audio tile plays Clean up voice's demo, and opens that mode's own page.
+    expect(BENTO_HREFS.audio).toBe("/audio/clean");
+    expect(t.audio.cta).toBe(`Open ${HUB_MODES.audio.find((m) => m.id === "clean")!.label}`);
     expect(t.threeD.cta).toBe(`Open ${navLabel("/image-to-3d")}`);
     expect(t.live.cta).toBe(`Open ${navLabel("/live-edit")}`);
     expect(t.canvas.cta).toBe(`Open ${navLabel("/canvas")}`);
@@ -233,8 +240,13 @@ describe("Home's first screen", () => {
   it("makes every tile one link with a name, in the grid's reading order", () => {
     const links = [...html.matchAll(/<a [^>]*>/g)].map((m) => m[0]);
     const tiles = links.filter((a) => a.includes("data-tile="));
-    expect(tiles.map((a) => /data-tile="([^"]+)"/.exec(a)![1])).toEqual(["video", "live", "genjutsu", "image", "threeD", "audio", "numbers", "canvas"]);
-    for (const a of tiles) {
+    // Every tile is its link but the Audio tile, which holds the demo's buttons: its words are its link.
+    expect([...html.matchAll(/<(?:a|div) [^>]*data-tile="([^"]+)"/g)].map((m) => m[1])).toEqual(["video", "live", "genjutsu", "image", "threeD", "audio", "numbers", "canvas"]);
+    expect(tiles.map((a) => /data-tile="([^"]+)"/.exec(a)![1])).toEqual(["video", "live", "genjutsu", "image", "threeD", "numbers", "canvas"]);
+    const audioLink = links.find((a) => a.includes(`href="${BENTO_HREFS.audio}"`));
+    expect(audioLink).toBeTruthy();
+    expect(links).toHaveLength(8);
+    for (const a of [...tiles, audioLink!]) {
       const label = /aria-label="([^"]+)"/.exec(a)?.[1];
       expect(label, a).toBeTruthy();
       expect(label!.length).toBeGreaterThan(10);
@@ -247,8 +259,8 @@ describe("Home's first screen", () => {
     // The numbers tile opens the studios list in place, and says so.
     expect(bento.tiles.numbers.label).toBe(`${bento.numbers[0].value} studios, ${bento.numbers[1].value} apps, ${bento.numbers[2].value} effects and camera moves. Opens all studios`);
     expect(tiles.find((a) => a.includes('data-tile="numbers"'))).toContain('aria-haspopup="dialog"');
-    // No link or button inside a tile: the whole tile is the one target.
-    for (const chunk of html.split("data-tile=").slice(1)) expect(chunk.split("</a>")[0]).not.toMatch(/<(a|button)\b/);
+    // No link or button inside a tile: the whole tile is the one target (the Audio tile is a group of its own).
+    for (const chunk of html.split("data-tile=").slice(1).filter((c) => !c.startsWith('"audio"'))) expect(chunk.split("</a>")[0]).not.toMatch(/<(a|button)\b/);
     // The page's only h1: the headline, in its own words; "finished film," and "one place." never break apart.
     expect(html.match(/<h1\b/g)).toHaveLength(1);
     const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/.exec(html)![1].replace(/<[^>]+>/g, "");
@@ -316,20 +328,51 @@ describe("Home's first screen", () => {
     expect(home).not.toHaveProperty("wall");
   });
 
-  it("draws the Audio tile from the sample's own loudness", () => {
-    expect(bento.wave.bars).toHaveLength(48);
-    for (const b of bento.wave.bars) {
-      expect(b).toBeGreaterThanOrEqual(0.12);
-      expect(b).toBeLessThanOrEqual(1);
+  it("plays Clean up voice's demo in the Audio tile: tap to listen, Noise on / Noise off, and its words open the studio", () => {
+    const tile = /<div [^>]*data-tile="audio"[\s\S]*?<\/a>/.exec(html)![0];
+    // A named group: the demo's buttons, then the link to the studio, named as every tile's link is.
+    expect(tile).toMatch(/^<div role="group" aria-label="Clean up voice: a woman talking in a noisy restaurant"/);
+    expect(tile).toContain('data-phase="idle"');
+    const buttons = [...tile.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((m) => [m[0], m[1].replace(/<[^>]+>/g, "")] as const);
+    expect(buttons.map(([, text]) => text)).toEqual(["Noise on", "Noise off", "Tap to listen"]);
+    expect(buttons.every(([b]) => b.includes('type="button"'))).toBe(true);
+    // Noise on is pressed before anything plays; the chip says what is heard, in a live region.
+    expect(buttons[0][0]).toContain('aria-pressed="true"');
+    expect(buttons[1][0]).toContain('aria-pressed="false"');
+    expect(tile).toMatch(/<span [^>]*aria-live="polite"[^>]*>[\s\S]*?<span data-demo-state="true">Noisy restaurant<\/span>/);
+    expect(tile).toContain(`href="${BENTO_HREFS.audio}"`);
+    expect(tile).toContain(`aria-label="${bento.tiles.audio.label}"`);
+    expect(bento.tiles.audio.label).toBe("Audio: Studio-clean voice. Open Clean up voice");
+    // Nothing plays or downloads before a tap: no sound in the HTML, and the softened photo only once reached for.
+    for (const f of [DEMO_MEDIA.noisy, DEMO_MEDIA.clean]) expect(html).not.toContain(f);
+    expect(html).not.toMatch(/<audio\b/);
+    expect(tile).toContain(`/previews/home/${BENTO_VOICE.room}-480.avif?v=`);
+    expect(tile).not.toContain(`/previews/home/${BENTO_VOICE.quiet}-`);
+    // Its photos: the demo's own, in three widths, and a JPEG for a browser without AVIF.
+    for (const [pic, name] of [
+      [bento.voice.room, BENTO_VOICE.room],
+      [bento.voice.quiet, BENTO_VOICE.quiet],
+    ] as const) {
+      expect(pic.avif.map((a) => a.w)).toEqual([...BENTO_VOICE.widths]);
+      for (const a of pic.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/${name}-${a.w}\\.avif\\?v=`));
+      expect(pic.fallback).toMatch(new RegExp(`^/previews/home/${name}-1024\\.jpg\\?v=`));
     }
-    expect(Math.max(...bento.wave.bars)).toBe(1);
-    // Made from the sample as it is now: a new sample needs node scripts/gen-home-bento.mjs again.
-    expect(contentVersion([file(HOME_BENTO_WAVE.src)])).toBe(HOME_BENTO_WAVE.source);
-    const ffmpeg = spawnSync("ffmpeg", ["-v", "error", "-i", file(HOME_BENTO_WAVE.src), "-ac", "1", "-ar", "8000", "-f", "s16le", "-"], { maxBuffer: 64 << 20 });
-    if (ffmpeg.status === 0) {
-      const samples = new Int16Array(ffmpeg.stdout.buffer, ffmpeg.stdout.byteOffset, Math.floor(ffmpeg.stdout.length / 2));
-      expect(samples.length / 8000).toBeCloseTo(HOME_BENTO_WAVE.seconds, 1);
-    }
+    // A 3x phone's full row (358 px) gets the widest copy; a 2x laptop's tile (320 px wide) the 768.
+    expect(pickWidth(bento.voice.room.avif, 358 * 3).w).toBe(1024);
+    expect(pickWidth(bento.voice.room.avif, coverWidth(319, 148, 4 / 3, 2)).w).toBe(768);
+  });
+
+  it("names the Audio tile's play button for each moment of the demo", () => {
+    const tap = { type: "tap" } as const;
+    const loading = demoReducer(DEMO_START, tap);
+    const playing = demoReducer(loading, { type: "started" });
+    const paused = demoReducer(playing, tap);
+    const done = demoReducer(playing, { type: "ended" });
+    const failed = demoReducer(loading, { type: "failed" });
+    expect([DEMO_START, loading, playing, paused, done, failed].map((st) => voiceButton(st).label)).toEqual(["Tap to listen", "Loading…", "Pause", "Resume", "Play again", "Try again"]);
+    // Only loading shows the spinner.
+    expect(voiceButton(loading).spin).toBe(true);
+    expect([DEMO_START, playing, paused].some((st) => voiceButton(st).spin)).toBe(false);
   });
 
   it("types the Live edit session's own words before the pictures they made", () => {

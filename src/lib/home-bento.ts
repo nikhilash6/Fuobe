@@ -11,7 +11,7 @@ import { getTemplate } from "@/lib/catalog/canvas";
 import { runsOn } from "@/lib/catalog/engines";
 import type { ModelDef } from "@/lib/catalog/types";
 import { EXAMPLE_MEDIA } from "@/lib/examples/media.generated";
-import { HOME_BENTO_GENJUTSU, HOME_BENTO_MEDIA, HOME_BENTO_REEL, HOME_BENTO_TINT, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
+import { HOME_BENTO_GENJUTSU, HOME_BENTO_MEDIA, HOME_BENTO_REEL, HOME_BENTO_TINT } from "@/lib/home-bento.generated";
 import type { ReelClip, ReelWipe } from "@/lib/home-reel";
 import type { Demo } from "@/lib/live/demo";
 import { presetCover } from "@/lib/preset-covers";
@@ -46,6 +46,13 @@ export const BENTO_GENJUTSU = { id: "home-genjutsu", cover: "genjutsu-group-swap
 export const BENTO_GENJUTSU_WIDTHS = [640, 768, 1024] as const;
 /** The Canvas board the canvas tile draws: the same film as /canvas's "What's a canvas?". */
 export const BENTO_BOARD = "effect-chain-pearl-earring";
+/**
+ * The Audio tile: Clean up voice's own demo, played in the tile (src/components/home/bento-voice.tsx, with the studio's
+ * sound: src/components/audio-tools/use-clean-voice-demo.ts). Its photos are copies of the demo's, made by
+ * scripts/gen-home-bento.mjs in these widths: `room` as it is, and `quiet`, the room softened around her, which shows
+ * once the noise is off.
+ */
+export const BENTO_VOICE = { room: "voice-room", quiet: "voice-quiet", widths: [480, 768, 1024] } as const;
 /** The Live edit steps the live tile plays: the session's first three changes (Home's Live edit section plays them all). */
 export const BENTO_LIVE_STEPS = ["s0", "s1", "s2", "s3"];
 
@@ -53,7 +60,7 @@ export const BENTO_LIVE_STEPS = ["s0", "s1", "s2", "s3"];
 export const BENTO_HREFS = {
   video: "/cinema",
   image: `/image?example=${BENTO_IMAGE_EXAMPLE.id}`,
-  audio: "/audio",
+  audio: "/audio/clean",
   threeD: "/image-to-3d",
   genjutsu: "/genjutsu",
   numbers: "#home-studios",
@@ -243,6 +250,11 @@ export async function homeBento(f: BentoFacts) {
     },
     clips: widths.map((w) => ({ src: made(`/previews/home/${name}-${w}.mp4`), w })),
   });
+  // The Audio tile's photos, each in its widths, and a JPEG at 1024 px for a browser without AVIF.
+  const voicePic = (name: string): BentoPicture => ({
+    avif: BENTO_VOICE.widths.map((w) => ({ src: made(`/previews/home/${name}-${w}.avif`), w })),
+    fallback: made(`/previews/home/${name}-${BENTO_CLIP_FALLBACK}.jpg`),
+  });
   const tile = (key: BentoKey, kind: string, meta: string, title: string, cta: string): BentoTile => ({
     key,
     meta,
@@ -256,7 +268,7 @@ export async function homeBento(f: BentoFacts) {
     tiles: {
       video: tile("video", "Video", `${f.videoModels} video models · ${f.motions} camera moves`, "Films, ads and shorts", "Open Cinema Studio"),
       image: tile("image", "Image", `Image · ${f.imageModels} models`, "Portraits and campaigns", "Open Image"),
-      audio: tile("audio", "Audio", `Audio · ${f.soundTools} sound tools`, "Voice, music, sound effects", "Open Audio"),
+      audio: tile("audio", "Audio", `Audio · ${f.soundTools} sound tools`, "Studio-clean voice", "Open Clean up voice"),
       threeD: tile("threeD", "3D", `3D · ${f.models3d} models`, "Spin it in 3D", "Open Image to 3D"),
       genjutsu: tile("genjutsu", "Genjutsu", "Genjutsu", "Swap anyone in a clip", "Open Genjutsu"),
       numbers: {
@@ -274,7 +286,7 @@ export async function homeBento(f: BentoFacts) {
     } satisfies BentoPicture,
     threeD: moving(BENTO_CLIPS.threeD, BENTO_CLIP_FILES.threeD),
     genjutsu: genjutsu(),
-    wave: { bars: HOME_BENTO_WAVE.bars, seconds: HOME_BENTO_WAVE.seconds },
+    voice: { room: voicePic(BENTO_VOICE.room), quiet: voicePic(BENTO_VOICE.quiet) },
     live: { frames: BENTO_LIVE_STEPS.map(frame), phrases: livePhrases(demo) },
     canvas: board(),
     numbers: [
