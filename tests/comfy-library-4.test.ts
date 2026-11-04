@@ -124,16 +124,8 @@ describe("round-4 ComfyUI workflows", () => {
       "speech-tts-auk",
       "video-matte-vrmbg3",
       "video-key-corridorkey",
-      "qwen-image-21-live-edit",
       // Qwen-Image 2.1's speeds, its next scene and its 16 GB route: unvalidated like their base graphs until
       // they run on a GPU (tests/qwen21-fast.test.ts).
-      "qwen-image-21-t2i-fast",
-      "qwen-image-21-t2i-details",
-      "qwen-image-21-edit-fast",
-      "qwen-image-21-edit-details",
-      "qwen-image-21-inpaint-fast",
-      "qwen-image-21-outpaint-fast",
-      "qwen-image-21-next-scene",
       "qwen-image-21-t2i-small",
       "qwen-image-21-edit-small",
       "krea2-inpaint",
@@ -167,7 +159,6 @@ describe("round-4 ComfyUI workflows", () => {
       // check and a real render (workflows/comfyui/gpu-tested.json, src/server/genjutsu-live.ts).
       "video-group-swap-h3-one-by-one",
       "image-from-picture-prepare",
-      "video-scene-describe",
       "video-from-picture-solar",
       "video-from-picture-h3",
       "video-motion-transfer-h3",
