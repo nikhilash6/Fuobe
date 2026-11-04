@@ -27,7 +27,7 @@ import { PLACE_ASK_HEADER } from "@/lib/guest-access";
 import { createGenerations, outputKind, plannedSteps, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { poolLane } from "./computer/pool";
-import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolOnWorkers, poolReady, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
+import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
@@ -104,11 +104,10 @@ const stepEndpoint = (s: PlannedStep): string | undefined => {
 };
 
 /**
- * A step that needs no model and no graphics memory (a join, a trim, a mux): light work that costs nothing and that every
- * policy allows. Text steps and steps made in the browser cost nothing either.
+ * A ComfyUI step that needs no model and no graphics memory (a join, a trim, a mux): light work that costs nothing and
+ * that every policy allows.
  */
 function freeStep(s: PlannedStep): boolean {
-  if (s.provider === "llm" || s.provider === "local" || s.provider === "mock") return true;
   if (s.provider !== "comfyui") return false;
   const endpoint = stepEndpoint(s);
   if (!endpoint) return false;
@@ -132,12 +131,14 @@ export function poolSteps(accountId: string, req: GenerationRequest): PlannedSte
 
 /**
  * The first step of a run that this install's GPUs may not take under the policy (its model or app not offered, a kind
- * the policy leaves out, a model no worker is allowed, a cloud model), in words; null when every step may run there.
- * A light ComfyUI step (a join) costs nothing and every policy allows it, but it still runs there: something there must
- * take it, or the run's other steps would finish and their join would wait for nothing.
+ * the policy leaves out, a model no worker is allowed, a cloud model, a text step or one made in the browser: steps that
+ * can't run there), in words; null when every step may run there. A light ComfyUI step (a join) costs nothing and every
+ * policy allows it, but it still runs there: something there must take it, or the run's other steps would finish and
+ * their join would wait for nothing.
  */
 export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
   for (const s of steps) {
+    if (!poolRunsProvider(s.provider)) return HOSTED_WORDS.notOffered;
     if (freeStep(s)) {
       if (s.provider === "comfyui" && !poolTakes(stepEndpoint(s))) return HOSTED_WORDS.notOffered;
       continue;
@@ -153,7 +154,7 @@ export function stepsProblem(p: Policy, steps: PlannedStep[]): string | null {
 export function pricedSteps(steps: PlannedStep[]): NonNullable<RunFacts["steps"]> {
   const out = new Map<string, NonNullable<RunFacts["steps"]>[number]>();
   for (const s of steps) {
-    if (freeStep(s)) continue;
+    if (freeStep(s) || !poolRunsProvider(s.provider)) continue;
     const key = `${s.modelId} ${s.op}`;
     const had = out.get(key);
     if (had) {

@@ -48,7 +48,8 @@ const { visitorStatus } = await import("@/server/account-gpu");
 const { loadManifest } = await import("@/server/providers/comfyui");
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
-const { PLACE_ASK_HEADER } = await import("@/lib/guest-access");
+const { getModel } = await import("@/lib/catalog");
+const { CONNECT_GPU_HEADER, OWN_GPU_TOOL_MESSAGE, PLACE_ASK_HEADER } = await import("@/lib/guest-access");
 const hosted = await import("@/server/hosted");
 const { getGeneration } = await import("@/server/generations");
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
@@ -307,6 +308,21 @@ describe("runs waiting, runs an hour, runs from one address", () => {
     // A salted hash, never the address itself (a hash's hex digits may hold "203" by chance: the address never).
     expect(kept.every((r) => /^[0-9a-f]{32}$/.test(r.addr) && !r.addr.includes("203.0.113.9"))).toBe(true);
   });
+
+  it("a run's address hash goes two hours on, even when no other run comes", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0, addressRunsPerHour: 5 } });
+    process.env.FUOBE_TRUST_PROXY = "1";
+    const a = account();
+    expect((await post({ ...IMAGE, ...SHOWN }, a.cookie, { "x-forwarded-for": "203.0.113.77" })).status).toBe(201);
+    const kept = () => (db().prepare("SELECT COUNT(*) AS n FROM pool_admissions WHERE account = ?").get(a.id) as { n: number }).n;
+    expect(kept()).toBe(1);
+    // Two hours and a minute pass with no other run here; the runner turns as it always does.
+    db().prepare("UPDATE pool_admissions SET at = ? WHERE account = ?").run(Date.now() - 121 * 60_000, a.id);
+    globalThis.__fuobePoolAdmissionsPruned = 0;
+    await tick();
+    expect(kept()).toBe(0);
+    expect((db().prepare("SELECT COUNT(*) AS n FROM pool_admissions WHERE at < ?").get(Date.now() - 120 * 60_000) as { n: number }).n).toBe(0);
+  });
 });
 
 describe("where a run goes", () => {
@@ -445,6 +461,26 @@ describe("where a run goes", () => {
     expect(hostedRun.kindAllowed({}, "model3d")).toBe(true);
   });
 
+  it("3D isn't offered on this install's GPUs yet, even with kinds.model3d on: an account with no GPU of its own is told the tool isn't available here", async () => {
+    withBilling({ kinds: { model3d: true }, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account();
+    const uploadsRoute = await import("@/app/api/uploads/route");
+    const { TINY_PNG } = await import("./helpers/fake-comfy-runner");
+    const up = await uploadsRoute.POST(
+      new Request(`http://${HOST}/api/uploads`, { method: "POST", headers: { ...SITE_HEADERS, cookie: a.cookie, "content-type": "image/png", "x-file-name": "photo.png", "content-length": String(TINY_PNG.length) }, body: new Uint8Array(TINY_PNG) }),
+    );
+    expect(up.status).toBe(201);
+    const { url } = (await up.json()) as { url: string };
+    const holds = fake.holds.size;
+    const r = await post({ feature: "image-to-3d", modelId: "oss-pixal3d", op: "image-to-3d", inputs: { images: [url] }, ...SHOWN }, a.cookie);
+    expect(r.status, JSON.stringify(r.body)).toBe(403);
+    expect(r.body.code).toBe("own-gpu-tool");
+    expect(r.body.error).toBe(OWN_GPU_TOOL_MESSAGE);
+    expect(r.headers.get(CONNECT_GPU_HEADER)).toBeNull();
+    expect(poolRuns(a.id)).toBe(0);
+    expect(fake.holds.size).toBe(holds);
+  });
+
   it("a guest's policy that gets no answer isn't asked for again on every page for a while", async () => {
     withBilling();
     fake.down = "error";
@@ -493,6 +529,32 @@ describe("a run's price facts", () => {
     expect(filmRun.steps?.find((s) => s.model === "oss-wan22-14b-fast")?.jobs).toBe(2);
     expect(filmRun.steps?.every((s) => s.model === "oss-wan22-14b-fast"), JSON.stringify(filmRun.steps)).toBe(true);
     expect(poolRuns(a.id)).toBe(2);
+  });
+
+  it("send the size a run really makes: an upscale of a large picture its upscaled size, never a size the request names that its workflow doesn't use", async () => {
+    withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account();
+    const sharp = (await import("sharp")).default;
+    const big = await sharp({ create: { width: 2000, height: 1500, channels: 3, background: "#468" } })
+      .png()
+      .toBuffer();
+    const uploadsRoute = await import("@/app/api/uploads/route");
+    const up = await uploadsRoute.POST(
+      new Request(`http://${HOST}/api/uploads`, { method: "POST", headers: { ...SITE_HEADERS, cookie: a.cookie, "content-type": "image/png", "x-file-name": "big.png", "content-length": String(big.length) }, body: new Uint8Array(big) }),
+    );
+    expect(up.status).toBe(201);
+    const { url } = (await up.json()) as { url: string };
+    // SeedVR2's 4x, held to its 4096 px limit (2.04x): 4080 × 3060, whatever size the request names.
+    const upscale = { feature: "image", modelId: "oss-seedvr2-image", op: "upscale-image", inputs: { images: [url] }, params: { extra: { width: 64, height: 64 } }, ...SHOWN };
+    const r = await post(upscale, a.cookie);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const run = (fake.calls_of("/v1/reserve").at(-1)!.body as { run: { model: string; megapixels: number | null } }).run;
+    expect(run).toMatchObject({ model: "oss-seedvr2-image", megapixels: 12.48 });
+    // ESRGAN's model makes it 4 times as large: 8000 × 6000.
+    expect(hosted.requestMegapixels({ ...upscale, modelId: "oss-upscale-image" } as never, "image", "oss-upscale-image", "upscale-image-esrgan")).toBe(48);
+    // A workflow that binds its canvas makes the canvas the request names (a layout's), on its grid.
+    const endpoint = getModel(IMAGE.modelId)!.routes.find((x) => x.provider === "comfyui")!.endpoint;
+    expect(hosted.requestMegapixels({ ...IMAGE, params: { extra: { width: 1280, height: 720 } } } as never, "image", IMAGE.modelId, endpoint)).toBe(0.92);
   });
 
   it("under the policy's cap on outputs, the price check and the run plan, price and make the same run", async () => {
@@ -569,10 +631,13 @@ describe("a run's price facts", () => {
     const p = { ...billing.OPEN_POLICY, pool: { deny: ["oss-qwen-image-edit"] } };
     expect(hostedRun.stepsProblem(p, steps([["oss-z-image-turbo", "comfyui"]]))).toBeNull();
     expect(hostedRun.stepsProblem(p, steps([["oss-z-image-turbo", "comfyui"], ["oss-qwen-image-edit", "comfyui"]]))).not.toBeNull();
-    // A cloud step can't run here; a text step costs nothing and is always allowed.
+    // A cloud step can't run here, and neither can a text step or one made in the browser: the run is refused before
+    // Run, never part way through.
     expect(hostedRun.stepsProblem(billing.OPEN_POLICY, steps([["oss-z-image-turbo", "comfyui"], ["fal-flux", "fal"]]))).not.toBeNull();
-    expect(hostedRun.stepsProblem({ ...billing.OPEN_POLICY, pool: { allow: ["oss-z-image-turbo"] } }, steps([["oss-z-image-turbo", "comfyui"], ["some-llm", "llm"]]))).toBeNull();
-    expect(hostedRun.pricedSteps(steps([["oss-z-image-turbo", "comfyui"], ["oss-z-image-turbo", "comfyui"], ["some-llm", "llm"]]))).toEqual([expect.objectContaining({ model: "oss-z-image-turbo", jobs: 2 })]);
+    for (const provider of ["llm", "local", "mock"]) {
+      expect(hostedRun.stepsProblem({ ...billing.OPEN_POLICY, pool: { allow: ["oss-z-image-turbo"] } }, steps([["oss-z-image-turbo", "comfyui"], ["some-step", provider]])), provider).toBe(hosted.HOSTED_WORDS.notOffered);
+    }
+    expect(hostedRun.pricedSteps(steps([["oss-z-image-turbo", "comfyui"], ["oss-z-image-turbo", "comfyui"]]))).toEqual([expect.objectContaining({ model: "oss-z-image-turbo", jobs: 2 })]);
   });
 });
 

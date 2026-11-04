@@ -65,6 +65,19 @@ export function poolRunCounts(accountId: string): { active: number; waiting: num
 
 declare global {
   var __fuobeAddressSalt: { db: unknown; salt: string } | undefined;
+  /** When this process last forgot old admissions (prunePoolAdmissions). */
+  var __fuobePoolAdmissionsPruned: number | undefined;
+}
+
+/**
+ * Forget the runs (and the client addresses, kept as salted hashes) older than KEEP_MS: the hourly counts read only the
+ * last hour. The runner calls this on every turn, so nothing stays longer, whether or not another run comes; it looks at
+ * most once a minute in each process (`force`: now).
+ */
+export function prunePoolAdmissions(now = Date.now(), force = false): number {
+  if (!force && now - (globalThis.__fuobePoolAdmissionsPruned ?? 0) < 60_000) return 0;
+  globalThis.__fuobePoolAdmissionsPruned = now;
+  return db().prepare("DELETE FROM pool_admissions WHERE at < ?").run(now - KEEP_MS).changes;
 }
 
 /**
@@ -157,7 +170,7 @@ export function admitRun<T>(o: { accountId: string; pool: { policy: Pick<Policy,
         const value = make();
         if (o.pool) {
           d.prepare("INSERT INTO pool_admissions (account, addr, at) VALUES (?, ?, ?)").run(o.accountId, o.pool.addr, now);
-          d.prepare("DELETE FROM pool_admissions WHERE at < ?").run(now - KEEP_MS);
+          prunePoolAdmissions(now, true);
         }
         return { ok: true, value };
       })

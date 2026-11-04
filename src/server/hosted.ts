@@ -1,6 +1,8 @@
 import "server-only";
 import { getModel } from "@/lib/catalog";
-import { computeDimensions } from "@/lib/comfy";
+import { computeDimensions, fitCanvas } from "@/lib/comfy";
+import { h3Canvas, isH3Graph } from "@/lib/h3-prompt";
+import { imageSize } from "@/lib/image-size";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { billingConfigured, type Policy, type QueueFacts, type RunFacts } from "./billing";
 import { lineFacts, poolLane, queueOfGeneration, workersAllowed } from "./computer/pool";
@@ -8,8 +10,9 @@ import { db } from "./db";
 import { loadIndex } from "./gpu/index-file";
 import { hostedRunsOn } from "./hosted-switch";
 import { poolRunCounts } from "./pool-limits";
-import { installComfyLocal, onInstallComfy, workerFor, workersTake } from "./providers/comfyui";
+import { getWorkflow, installComfyLocal, onInstallComfy, workerFor, workersTake } from "./providers/comfyui";
 import { getSetting, withCandidates } from "./settings";
+import { localHead, storedMedia } from "./storage";
 import { runAsTenant } from "./tenant";
 
 /**
@@ -80,6 +83,14 @@ export function poolTakes(endpoint: string | undefined): boolean {
   const picks = workflowPicks(endpoint);
   return picks.length > 0 && picks.every((id) => workersAllowed(poolLane(id)));
 }
+
+/**
+ * The steps a run on this install's GPUs can carry out there: ComfyUI's. The price check, the run's admission and its
+ * submit read this one table, so a run is refused before Run when a step of it couldn't run there (a text step, a step
+ * made in the browser, a cloud model), never part way through.
+ */
+const POOL_PROVIDERS: ReadonlySet<string> = new Set(["comfyui"]);
+export const poolRunsProvider = (provider: string): boolean => POOL_PROVIDERS.has(provider);
 
 /** May a run on this install's GPUs send them this kind of file (the workers take only the kinds the install allows)? */
 export const poolTakesFiles = (kind: "image" | "video" | "audio"): boolean => !poolOnWorkers() || workersTake(kind);
@@ -202,21 +213,117 @@ export function placeInLine(generationId: string): { place: number; etaSeconds: 
   return { place: before + 1, etaSeconds: typical === null ? null : Math.round(((before + 1) * typical) / 1000) };
 }
 
+type Size = { width: number; height: number };
+const megapixelsOf = (s: Size) => Math.round((s.width * s.height) / 10_000) / 100;
+const positive = (v: unknown): number | null => ((typeof v === "number" || typeof v === "string") && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
+
+/** The size of a request's first input picture (else clip), from its file's header; null when it can't be read. */
+function inputSize(req: GenerationRequest): Size | null {
+  const i = req.inputs ?? {};
+  const picture = i.images?.[0] ?? i.endImage;
+  const head = picture ? localHead(picture) : null;
+  const still = head ? imageSize(head) : null;
+  if (still) return still;
+  const clip = i.video ?? i.videos?.[0];
+  const info = clip ? storedMedia(clip)?.info : null;
+  return info?.width && info.height ? { width: info.width, height: info.height } : null;
+}
+
+/** An upscale model's own factor, from its file's name (RealESRGAN_x4plus, 4x-UltraSharp: 4). */
+function modelFactor(name: unknown): number {
+  const m = typeof name === "string" ? /(?:^|[^a-z0-9])x(\d)(?:[^0-9]|$)|(?:^|[^a-z0-9])(\d)x(?:[^a-z0-9]|$)/i.exec(name) : null;
+  return m ? Number(m[1] ?? m[2]) : 1;
+}
+
 /**
- * The megapixels of each picture or frame a request makes, about: the canvas it names (params.extra.width and height),
- * else its aspect ratio and resolution (the model's defaults where it names none). Null for sound, text and 3D.
+ * The size of each picture or frame a ComfyUI workflow makes, about, as the provider binds its graph (comfyui.ts
+ * prepare): the canvas the graph binds (the request's own canvas only where the workflow binds one, else its aspect ratio
+ * and resolution within the workflow's limits); or, for a workflow that takes its size from its input (an edit, an
+ * upscale, a face swap), the input's size, an upscale's times its factor, within the workflow's limits. Undefined when
+ * there's no such workflow, null when its input can't be read.
  */
-export function requestMegapixels(req: GenerationRequest, kind: RunFacts["kind"], modelId: string): number | null {
-  if (kind !== "image" && kind !== "video") return null;
+function workflowSize(req: GenerationRequest, endpoint: string, modelId: string): Size | null | undefined {
+  let found: ReturnType<typeof getWorkflow>;
+  try {
+    found = getWorkflow(endpoint);
+  } catch {
+    return undefined;
+  }
+  const { manifest, workflow } = found;
+  const b = manifest.bindings as Record<string, { node: string; input: string }[] | undefined>;
+  const d = (manifest.defaults ?? {}) as Record<string, unknown>;
   const extra = (req.params?.extra ?? {}) as Record<string, unknown>;
-  const w = Number(extra.width);
-  const h = Number(extra.height);
+  // A bound value: the request's, else the workflow's default, else what its graph holds.
+  const valueOf = (key: string): unknown => {
+    if (extra[key] !== undefined) return extra[key];
+    if (d[key] !== undefined) return d[key];
+    const at = b[key]?.[0];
+    return at ? (workflow[at.node]?.inputs as Record<string, unknown> | undefined)?.[at.input] : undefined;
+  };
+  const maxW = Number(manifest.limits?.maxWidth ?? Infinity);
+  const maxH = Number(manifest.limits?.maxHeight ?? Infinity);
+  const src = inputSize(req);
+  if (b.width && b.height) {
+    const [w, h] = [positive(extra.width), positive(extra.height)];
+    if (w && h) return fitCanvas(w, h, manifest.limits);
+    const model = getModel(modelId);
+    const asked = req.params?.aspectRatio ?? model?.defaults?.aspectRatio;
+    const h3 = isH3Graph(manifest.id);
+    // "auto" (or H3 from a still) keeps the input's shape when its header says it.
+    const follows = !asked || asked === "auto" || (h3 && !!b.image);
+    const shape = follows && src ? `${src.width}:${src.height}` : asked === "auto" ? undefined : asked;
+    if (h3) return h3Canvas(shape);
+    const multiple = Number(manifest.limits?.dimensionMultiple ?? 16);
+    const dims = computeDimensions(shape, req.params?.resolution ?? model?.defaults?.resolution, { width: Number(d.width ?? 1024), height: Number(d.height ?? 1024) }, multiple);
+    const k = Math.min(1, maxW / dims.width, maxH / dims.height);
+    return { width: Math.max(multiple, Math.floor((dims.width * k) / multiple) * multiple), height: Math.max(multiple, Math.floor((dims.height * k) / multiple) * multiple) };
+  }
+  if (!src) return null;
+  let size: Size = { ...src };
+  // What it scales its input to: so many megapixels, an upscale model's factor and a scale, a shorter side.
+  const mp = b.megapixels ? positive(valueOf("megapixels")) : null;
+  if (mp) {
+    const k = Math.sqrt((mp * 1e6) / (size.width * size.height));
+    size = { width: size.width * k, height: size.height * k };
+  }
+  let factor = b.upscaleModel ? modelFactor(valueOf("upscaleModel")) : 1;
+  if (b.scale) {
+    const scale = positive(valueOf("scale")) ?? 1;
+    // SeedVR2 lowers its scale to fit its limits, to a 0.01 step (comfyui.ts); the others scale as asked.
+    factor *= manifest.id === "upscale-image-seedvr2" ? Math.min(scale, Math.floor(Math.min(maxW / size.width, maxH / size.height) * 100) / 100) : scale;
+  }
+  size = { width: size.width * factor, height: size.height * factor };
+  const short = b.shortSide ? positive(valueOf("shortSide")) : null;
+  if (short) {
+    const k = short / Math.min(size.width, size.height);
+    size = { width: size.width * k, height: size.height * k };
+  }
+  // Padding out (an outpaint) adds to the canvas.
+  const pad = (key: string) => (b[key] ? (positive(valueOf(key)) ?? 0) : 0);
+  size = { width: size.width + pad("padLeft") + pad("padRight"), height: size.height + pad("padTop") + pad("padBottom") };
+  const k = Math.min(1, maxW / size.width, maxH / size.height);
+  return { width: Math.round(size.width * k), height: Math.round(size.height * k) };
+}
+
+/**
+ * The megapixels of each picture or frame a run makes, about. A ComfyUI run (every run on this install's GPUs): the size
+ * its workflow makes (workflowSize), never a size the request names that its workflow doesn't bind. A cloud run: the
+ * canvas the request names (params.extra.width and height), else its aspect ratio and resolution (the model's defaults
+ * where it names none). Null for sound, text and 3D, and for a run sized by an input that can't be read.
+ */
+export function requestMegapixels(req: GenerationRequest, kind: RunFacts["kind"], modelId: string, comfyEndpoint?: string): number | null {
+  if (kind !== "image" && kind !== "video") return null;
   const model = getModel(modelId);
-  const size =
-    Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0
-      ? { width: w, height: h }
-      : computeDimensions(req.params?.aspectRatio ?? model?.defaults?.aspectRatio, req.params?.resolution ?? model?.defaults?.resolution, {});
-  return Math.round((size.width * size.height) / 10_000) / 100;
+  const byAsk = () => computeDimensions(req.params?.aspectRatio ?? model?.defaults?.aspectRatio, req.params?.resolution ?? model?.defaults?.resolution, {});
+  if (comfyEndpoint) {
+    const size = workflowSize(req, comfyEndpoint, modelId);
+    if (size !== undefined) return size ? megapixelsOf(size) : null;
+    // A workflow it picks at run time (a join of n clips): as asked.
+    return megapixelsOf(byAsk());
+  }
+  const extra = (req.params?.extra ?? {}) as Record<string, unknown>;
+  const [w, h] = [positive(extra.width), positive(extra.height)];
+  return megapixelsOf(w && h ? { width: w, height: h } : byAsk());
 }
 
 /** The facts the billing service prices a run by (from a planned request: previewGeneration's answer). */
@@ -239,7 +346,7 @@ export function runFacts(
     provider: p.providerId,
     jobs: p.jobs,
     outputsPerJob: p.jobs > 0 ? Math.max(1, Math.round(p.outputs / p.jobs)) : 1,
-    megapixels: requestMegapixels(req, kind, p.model.id),
+    megapixels: requestMegapixels(req, kind, p.model.id, p.providerId === "comfyui" ? endpoint : undefined),
     seconds: req.params?.duration ?? (kind === "video" ? (model?.defaults?.duration ?? null) : null),
     fps: req.params?.fps ?? null,
     loras: p.loras.applied.length,

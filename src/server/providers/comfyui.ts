@@ -2378,18 +2378,23 @@ export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_b
     if (frames.length > ACCOUNT_LIMITS.framesPerJob) return { error: `Your ComfyUI made ${frames.length} EXR frames. A run on your GPU keeps up to ${ACCOUNT_LIMITS.framesPerJob}: export a shorter clip.` };
     outputs = [...outputs.filter((o) => o.meta?.role !== "frames").slice(0, ACCOUNT_LIMITS.outputsPerJob), ...frames];
     if (!diskHasRoom()) return { error: ACCOUNT_MESSAGES.diskLow };
-    budget = Math.min(accountTotalBytes(account) - accountUsage(account).total, diskFreeBytes() - diskFloorBytes());
+    budget = accountTotalBytes(account) - accountUsage(account).total;
     if (budget <= 0) return { error: filesFullMessage(account) };
-  } else {
-    // The owner's job: never past the disk's free floor. On the workers also never more results than its workflow says
-    // it makes (at least 16), and EXR frames up to the same number as an account's: a worker token that reports a
-    // made-up history can't fill the server's disk. (The owner's own computer keeps every result, as before.)
+    // On the workers, never past the disk's free floor either: a worker token that reports a made-up history can't fill
+    // the server's disk. (A run on the account's own GPU keeps the room its files have, as before.)
     if (t.pools) {
-      const frames = outputs.filter((o) => o.meta?.role === "frames");
-      if (frames.length > ACCOUNT_LIMITS.framesPerJob) return { error: `ComfyUI made ${frames.length} EXR frames. A run keeps up to ${ACCOUNT_LIMITS.framesPerJob}: export a shorter clip.` };
-      const declared = extraOf(t).outputs ?? 0;
-      outputs = [...outputs.filter((o) => o.meta?.role !== "frames").slice(0, Math.max(ACCOUNT_LIMITS.outputsPerJob, declared)), ...frames];
+      const disk = diskFreeBytes() - diskFloorBytes();
+      if (disk <= 0) return { error: ACCOUNT_MESSAGES.diskLow };
+      budget = Math.min(budget, disk);
     }
+  } else if (t.pools) {
+    // The owner's job on the workers: never past the disk's free floor, never more results than its workflow says it
+    // makes (at least 16), and EXR frames up to the same number as an account's: a worker token that reports a made-up
+    // history can't fill the server's disk. (The owner's own computer keeps every result, as before.)
+    const frames = outputs.filter((o) => o.meta?.role === "frames");
+    if (frames.length > ACCOUNT_LIMITS.framesPerJob) return { error: `ComfyUI made ${frames.length} EXR frames. A run keeps up to ${ACCOUNT_LIMITS.framesPerJob}: export a shorter clip.` };
+    const declared = extraOf(t).outputs ?? 0;
+    outputs = [...outputs.filter((o) => o.meta?.role !== "frames").slice(0, Math.max(ACCOUNT_LIMITS.outputsPerJob, declared)), ...frames];
     budget = diskFreeBytes() - Math.min(diskFloorBytes(), OWNER_DISK_FLOOR_BYTES);
     if (budget <= 0) return { error: "There's no room on this server's disk to keep this result. Free some space, then press Retry." };
   }

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import Database from "better-sqlite3";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { tempDir } from "./helpers/temp-dir";
 
@@ -136,6 +137,44 @@ describe("one job at a time", () => {
     pool.sweepPool(gone + MIN);
     expect(rowOf(a.id).state).toBe("sending");
     expect(rowOf(a.id).requeues).toBe(0);
+  });
+
+  it("a requeue decided on an earlier read of a job changes nothing once its worker has taken it again with a new lease", () => {
+    const w = standInWorker();
+    const a = accountTask();
+    beatAs(w);
+    expect(claimAs(w)?.id).toBe(a.id);
+    // What another app process read of the job a moment ago, as its sweep found the worker silent.
+    const before = rowOf(a.id);
+    // Meanwhile the worker came back and asked again: the same job, with a new lease.
+    beatAs(w);
+    expect(claimAs(w, [])?.id).toBe(a.id);
+    const now = rowOf(a.id);
+    expect(now.lease_hash).not.toBe(before.lease_hash);
+    // The requeue from that earlier read lands late: the job stays with its worker, its lease works, no attempt counted.
+    expect(pool.backInLine(before, { blame: true })).toBe(false);
+    expect(rowOf(a.id)).toMatchObject({ state: now.state, worker_id: w.id, lease_hash: now.lease_hash, requeues: 0 });
+  });
+
+  it("the sweep reads and changes the line in one step with the write lock, so another process's claim never lands in between", () => {
+    const w = standInWorker();
+    accountTask();
+    beatAs(w);
+    // Another app process on the same database holds the write lock.
+    const other = new Database(db().name);
+    const wait = db().pragma("busy_timeout", { simple: true }) as number;
+    other.exec("BEGIN IMMEDIATE");
+    db().pragma("busy_timeout = 20");
+    try {
+      // The sweep waits for the lock before it reads anything (here, past its short wait: busy), never reading the line
+      // while the other process may still change it.
+      expect(() => pool.sweepPool()).toThrow(/busy|locked/i);
+    } finally {
+      other.exec("ROLLBACK");
+      other.close();
+      db().pragma(`busy_timeout = ${wait}`);
+    }
+    expect(() => pool.sweepPool()).not.toThrow();
   });
 });
 

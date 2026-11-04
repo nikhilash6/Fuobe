@@ -77,6 +77,7 @@ import { CONNECT_GPU_MESSAGE, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/
 import { outsideTenant, runAsTenant, tenant, tenantAccount } from "./tenant";
 import { generationAccount } from "./account-library";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "./account-files";
+import { prunePoolAdmissions } from "./pool-limits";
 import { checkAccountLoras } from "./account-loras";
 import { missingFilesMessage, type MissingFiles } from "@/lib/missing-files";
 import { Readable } from "node:stream";
@@ -100,7 +101,7 @@ import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } 
 import { accountSend } from "./account-send";
 import { stamped, stampOf, withoutStamp, withRunStamp } from "./run-stamp";
 import { POOL_WORDS, RELAY_WORDS } from "@/lib/relay";
-import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
+import { placeInLine, poolRunsProvider, poolWaitMs, runOnPool } from "./hosted";
 import { poolLane } from "./computer/pool";
 import { runCeilingMs } from "./queue-settings";
 import { sweepBilling } from "./billing-outbox";
@@ -233,8 +234,8 @@ function poolMessage(r: Pick<Row, "status" | "message">): string | null {
 /**
  * A pool row's failure as the account reads it: Fuobe's own plain words about the account's side (its files are full, a
  * picture it can't use, it stopped the run) and the output check's words (a result it removed) as they are; anything
- * else (whatever the GPUs, ComfyUI or a worker said) one plain sentence. "Not charged" stays only on a run that had
- * something set aside (`charged`).
+ * else (whatever the GPUs, ComfyUI, a worker or the server's own state said) one plain sentence. "Not charged" stays only
+ * on a run that had something set aside (`charged`).
  */
 function poolError(id: string, error: string | null, charged: boolean): string | null {
   if (!error) return error;
@@ -244,12 +245,24 @@ function poolError(id: string, error: string | null, charged: boolean): string |
   return charged ? error : error.replace(/\s*Not charged\.$/, "");
 }
 
+/**
+ * The words a pool row's failure keeps as they are: about the account's own side only (a file it sent, its files full,
+ * it stopped the run) and the safety and output checks. Words about the server's own state (its disk, its upload or
+ * finish limits) become the one plain sentence.
+ */
 const PLAIN_POOL_ERRORS = (() => {
   let set: Set<string> | undefined;
+  const m = ACCOUNT_MESSAGES;
   return () =>
     (set ??= new Set<string>([
-      // The account's own side only: its files, and a file it sent (never the server's own state, such as low disk).
-      ...(["imageTooBig", "imageTooManyPixels", "audioTooBig", "videoTooBig", "fileTooBig", "wrongType", "uploadsFull", "filesFull"] as const).map((k) => ACCOUNT_MESSAGES[k]),
+      m.imageTooBig,
+      m.imageTooManyPixels,
+      m.audioTooBig,
+      m.videoTooBig,
+      m.fileTooBig,
+      m.wrongType,
+      m.uploadsFull,
+      m.filesFull,
       RELAY_WORDS.stopped,
       POOL_WORDS.failed,
       BLOCKED_CARD_MESSAGE,
@@ -1748,7 +1761,8 @@ function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: Ret
   if (!req.account) return submitNow(id, route, providerId, plan, req, index);
   // On this install's GPUs (hosted runs): as the account, on this install's ComfyUI server only.
   if (req.place === "pool") {
-    if (providerId !== "comfyui") {
+    // (A run is checked against the same table before it is made: hosted-run.ts stepsProblem.)
+    if (!poolRunsProvider(providerId)) {
       update(id, { status: "failed", error: OWN_GPU_ONLY, completed_at: Date.now(), message: null });
       submitting().delete(id);
       return Promise.resolve();
@@ -2209,6 +2223,12 @@ async function tick(): Promise<void> {
     // service. Neither does anything while no service is set.
     if (moderationConfigured()) await sweepOutputChecks();
     void sweepBilling();
+    // The hourly run counts forget a run (and the client address it came from) two hours on, whether more runs come.
+    try {
+      prunePoolAdmissions();
+    } catch (e) {
+      console.warn(`[generations] run counts: ${(e as Error).message}`);
+    }
   } finally {
     state.busy = false;
   }
@@ -2249,6 +2269,14 @@ function runningLimitMs(r: Pick<Row, "provider">, meta: Record<string, unknown>,
   if (r.provider !== "comfyui" || (account && !onPool)) return TIMEOUT_MS;
   const wf = typeof meta.workflowId === "string" && !meta.workflowId.includes("{") ? meta.workflowId : null;
   return runCeilingMs(wf ? poolLane(wf) : null);
+}
+
+/**
+ * Is the run's job a task for the workers? An account's run on this install's GPUs that went to the workers, or one the
+ * provider marked so when it handed the job over (the owner's jobs on the workers too).
+ */
+function workersTask(meta: Record<string, unknown>, onPool: boolean): boolean {
+  return typeof meta.relay === "string" && (onPool || meta.workers === true);
 }
 
 /** Order by: the owner's rows (no account in the request) before accounts'. */
@@ -2305,9 +2333,9 @@ async function pollOne(r: Row): Promise<void> {
     }
     // A job for the workers keeps its task's own clocks (pool.ts): its wait limit until a worker first takes it, then
     // the deadline of the attempt a worker holds, from its claim (the worker's own run limit and stall rule end an
-    // attempt first). No clock of the runner's ends it, even when a poll of it fails (the next tick asks again).
-    const workerJob = typeof ctx.meta.relay === "string" && (ctx.meta.workers === true || onPool);
-    const ownClocks = workerJob || (!!res && (res.state === "queued" || res.state === "running") && !!res.ownClocks);
+    // attempt first). No clock of the runner's ends it, even when a poll of it fails (a busy database in a deploy's
+    // overlap): the next tick asks again.
+    const ownClocks = workersTask(ctx.meta, onPool) || (!!res && (res.state === "queued" || res.state === "running") && !!res.ownClocks);
     if (ownClocks && res?.state === "queued" && run.started_at) {
       db().prepare("UPDATE generation_runs SET started_at = NULL WHERE id = ?").run(r.id);
       run = { ...run, started_at: null };

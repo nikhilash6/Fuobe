@@ -185,6 +185,8 @@ export function cleanBeat(b: unknown): WorkerBeat {
 export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatAnswer & { worker: WorkerAnswer } {
   const d = db();
   const device = `wkr-${w.id}`;
+  // With the write lock from the start (IMMEDIATE): what it reads of the line is still so when it writes, even while
+  // another app process on the same database (a deploy's overlap) writes too.
   return d.transaction(() => {
     // A worker back after going silent finds its task back in line first (its lease no longer works).
     sweepPool(now);
@@ -251,7 +253,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
         ...(nextToken && { token: nextToken }),
       },
     };
-  })();
+  }).immediate();
 }
 
 /**
@@ -331,7 +333,7 @@ export function workerClaim(w: WorkerRow, running: string[], now = Date.now()): 
     if (held.length || !eligible(fresh, now)) return null;
     const t = pick(fresh, now);
     return t ? claimed(t, fresh, device, now) : null;
-  })();
+  }).immediate();
 }
 
 function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): ClaimedTask {
@@ -466,33 +468,42 @@ export function lineOrder(rows: TaskRow[], fairShare: boolean): TaskRow[] {
  * A task goes back in line: its worker let it go (`blame: false`: a pause, at no cost to anyone) or lost it (silent,
  * its ComfyUI down: the worker is noted in tried_json and it counts as an attempt). The third lost attempt fails it.
  * The old worker's lease stops working, so its late calls get 409.
+ *
+ * Only the task as `t` read it: one that has moved on since (another app process put it back in line, or a worker took
+ * it again with a new lease) stays as it is now, and no attempt is counted. Returns whether it changed.
  */
-export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?: boolean; lostAt?: number }): void {
-  const tried = json<string[]>(t.tried_json, []);
-  const requeues = t.requeues + (o.blame ? 1 : 0);
-  if (o.blame && (requeues >= MAX_ATTEMPTS || o.last)) {
-    endTask(t.id, "failed", { error: o.why ?? "The GPUs couldn't finish this run. Press Retry.", requeues, tried_json: JSON.stringify([...new Set([...tried, t.worker_id ?? ""])].filter(Boolean)) }, true);
-    return;
-  }
-  if (t.worker_id) logWorkerJob("requeued", t, t.worker_id);
-  // A live worker that let it go hears the stop in its beat answer; one that went silent finds its lease gone when it
-  // comes back (409), and takes the prompt off its own ComfyUI. It keeps its rank, so it keeps its place in line, and
-  // its wait limit no longer applies (a worker took it once).
-  setTask(t.id, {
-    state: "waiting",
-    lease_hash: null,
-    worker_id: null,
-    requeues,
-    sent_at: null,
-    started_at: null,
-    down_at: null,
-    down_why: null,
-    note: "resent",
-    ...(o.blame && t.worker_id && { tried_json: JSON.stringify([...new Set([...tried, t.worker_id])]) }),
-    // Lost because its worker went quiet: noted, so a sleep the worker reports later takes the blame back (forgiveSleep).
-    ...(o.lostAt && t.worker_id && { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), lost: { worker: t.worker_id, at: o.lostAt } }) }),
-  });
-  db().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
+export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?: boolean; lostAt?: number }): boolean {
+  const d = db();
+  return d.transaction((): boolean => {
+    const now = taskById(t.id);
+    if (!now || now.state !== t.state || now.worker_id !== t.worker_id || now.lease_hash !== t.lease_hash || now.requeues !== t.requeues) return false;
+    const tried = json<string[]>(t.tried_json, []);
+    const requeues = t.requeues + (o.blame ? 1 : 0);
+    if (o.blame && (requeues >= MAX_ATTEMPTS || o.last)) {
+      endTask(t.id, "failed", { error: o.why ?? "The GPUs couldn't finish this run. Press Retry.", requeues, tried_json: JSON.stringify([...new Set([...tried, t.worker_id ?? ""])].filter(Boolean)) }, true);
+      return true;
+    }
+    if (t.worker_id) logWorkerJob("requeued", t, t.worker_id);
+    // A live worker that let it go hears the stop in its beat answer; one that went silent finds its lease gone when it
+    // comes back (409), and takes the prompt off its own ComfyUI. It keeps its rank, so it keeps its place in line, and
+    // its wait limit no longer applies (a worker took it once).
+    setTask(t.id, {
+      state: "waiting",
+      lease_hash: null,
+      worker_id: null,
+      requeues,
+      sent_at: null,
+      started_at: null,
+      down_at: null,
+      down_why: null,
+      note: "resent",
+      ...(o.blame && t.worker_id && { tried_json: JSON.stringify([...new Set([...tried, t.worker_id])]) }),
+      // Lost because its worker went quiet: noted, so a sleep the worker reports later takes the blame back (forgiveSleep).
+      ...(o.lostAt && t.worker_id && { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), lost: { worker: t.worker_id, at: o.lostAt } }) }),
+    });
+    d.prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
+    return true;
+  }).immediate();
 }
 
 /**
@@ -503,6 +514,12 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?:
  */
 export function sweepPool(now = Date.now()): void {
   const d = db();
+  // One step with the write lock (IMMEDIATE), on every path (the runner's look at a run too): what it reads is still so
+  // when it writes, even while another app process on the same database claims or requeues.
+  d.transaction(() => sweepLine(d, now)).immediate();
+}
+
+function sweepLine(d: ReturnType<typeof db>, now: number): void {
   const held = d
     .prepare(
       `SELECT t.*, w.seen_at AS w_seen, w.revoked_at AS w_revoked FROM relay_tasks t LEFT JOIN relay_workers w ON w.id = t.worker_id

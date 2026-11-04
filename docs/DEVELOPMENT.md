@@ -24,6 +24,24 @@ bash docs/handoff/verify.sh <branch> <out-dir>  # a branch as it will land, in a
 
 On a disk with less free space than public sign-up keeps for accounts (20 GB or a tenth of the disk), `tests/gpu-api.test.ts` gets 503s: run Vitest with `FUOBE_ACCOUNT_DISK_FREE_GB=1`, as `verify.sh` does.
 
+### Recovery checks
+
+`tests/recovery-server.test.ts` checks that an account's run on this install's GPUs comes through crashes, pauses,
+retries and a deploy. Each check asks three things: the result arrives exactly once, the run shows only "In line",
+"Working" and its result, and the run is charged once. The checks use stand-ins from `tests/helpers/`:
+
+- `standin-comfy.ts`: a ComfyUI that can crash, hang, refuse a prompt, run out of memory or lose a prompt.
+- `standin-billing.ts`: a billing service ([billing-hook.md](billing-hook.md)) on HTTP or a socket, that can stop, start
+  again and be slow.
+- `worker-driver.ts`: the worker's runner on the real worker routes, with a worker token. A test can stop it after any
+  step.
+- `app-process.ts`: a second app process on the same database, as during a deploy.
+- `run-watch.ts`: every look at a run (a refresh, a second session, the list), checked against the three states.
+
+All of them listen on free high ports. A check that the studio can't pass yet is an `it.fails`, named with its
+scenario and the reason. `tests/recovery-worker.test.ts` holds the worker program's own checks. They skip until the
+worker program's recovery parts are in the tree.
+
 ## Browser checks
 
 Browser checks (the app must be running; demo mode is fine; Playwright and Chromium are picked up from the repo, a global install or `$CHROMIUM_PATH`):
