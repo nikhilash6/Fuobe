@@ -1,34 +1,62 @@
 /*
- * A studio's features under it in the Studios menu (mega-panel SubLinks). With a mouse: 24 px names in a column, two to
- * a row's 48 px (an odd number gets a 24 px pad), so the columns' rows stay in line. On a touch screen: pills that wrap,
- * 32 px to see and 44 px to tap. Below the height its column has room for, a studio with data-subs-line (Genjutsu)
- * lists them as one wrapped line of names instead. In a layer (unlike nav-states.css), so a utility that hides the
- * list still wins.
+ * A studio's features under it in the Studios menu (mega-panel SubLinks), on the menus' 4 px grid:
+ *   text      a feature's name starts on its studio's text column: the lead card's title (12 px in), or the row's name
+ *             from 1440 px (48 px in, after its thumbnail). Below 1440 px a row has no thumbnail and its name sits on the
+ *             column's edge, so its features take the card's 12 px column.
+ *   line      a 1 px hairline on the studio's lead-in: the card's left edge (and a row's, below 1440 px), the thumbnail's
+ *             centre from 1440 px. It ends at the last shown feature's bottom, never past it.
+ *   rhythm    with a mouse, 24 px names in a column; the row after the list follows 4 px below it, as rows follow rows.
+ *             On a touch screen, pills that wrap, 32 px to see and 44 px to tap. Below the height its column has room
+ *             for, a studio with data-subs-line (Genjutsu) lists them as wrapped lines of 24 px names instead.
+ * In a layer (unlike nav-states.css), so a utility that hides the list still wins.
  */
 @layer components {
   .nav-subs {
+    /* --subs-text: where the names start; --subs-pad: a link's inline padding (its hover fill reaches that far out). */
+    --subs-text: 12px;
+    --subs-pad: 8px;
+    position: relative;
     display: flex;
     flex-direction: column;
+    padding-left: calc(var(--subs-text) - var(--subs-pad));
+  }
+  .nav-subs::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 1px;
+    background-color: var(--border);
+    pointer-events: none;
   }
   .nav-subs > li > a {
     min-height: 24px;
-    padding-inline: 8px;
+    padding-inline: var(--subs-pad);
     border-radius: 8px;
     font-size: 12.5px;
     line-height: 16px;
   }
-  .nav-subs[data-odd] {
-    padding-bottom: 24px;
+  @media (min-width: 1440px) {
+    .nav-subs[data-under] {
+      --subs-text: 48px;
+    }
+    .nav-subs[data-under]::before {
+      left: 17px;
+    }
   }
   @media (pointer: coarse) {
     .nav-subs {
       flex-direction: row;
       flex-wrap: wrap;
-      gap: 12px 6px;
-      padding-block: 8px 12px;
+      gap: 12px 8px;
+      padding-block: 8px;
+      /* A pill's border keeps 4 px off the line; from 1440 px under a row its words start on the row's name. */
+      padding-left: max(4px, calc(var(--subs-text) - 12px));
     }
-    .nav-subs[data-odd] {
-      padding-bottom: 12px;
+    .nav-subs::before {
+      top: 8px;
+      bottom: 8px;
     }
     .nav-subs > li > a {
       min-height: 32px;
@@ -45,27 +73,12 @@
   }
   @media (not (pointer: coarse)) and (max-height: 799.98px) {
     .nav-subs[data-subs-line] {
+      --subs-pad: 4px;
       flex-direction: row;
       flex-wrap: wrap;
-      /* Two lines of names make a 50 px list: with the row it hangs from (its own line left out), two whole rows. */
-      padding-block: 4px 6px;
-    }
-    .nav-subs[data-subs-line] > li {
-      display: flex;
-      align-items: center;
-    }
-    /* A dot after each name but the last: a line that wraps starts on a name. */
-    .nav-subs[data-subs-line] > li:not(:last-child)::after {
-      content: "\00B7";
-      color: var(--muted-foreground);
-    }
-    /* The last one shown: the links after it (data-from) need a taller window. */
-    .nav-subs[data-subs-line] > li:not([data-from]):not(:has(~ li:not([data-from])))::after {
-      content: none;
+      column-gap: 4px;
     }
     .nav-subs[data-subs-line] > li > a {
-      min-height: 20px;
-      padding-inline: 2px;
       font-size: 12px;
     }
     /* The open feature reads by its weight here: no pip beside a name in a line. */

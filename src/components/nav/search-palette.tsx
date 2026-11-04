@@ -347,7 +347,7 @@ export function PaletteBody({
             )}
             {result.best.length > 0 && (
               <CommandPrimitive.Group heading="Best matches" className={cn("mb-4", sectionHeading)}>
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-col gap-1">
                   {result.best.map((h) => (
                     <BestRow key={h.key} hit={h} onPick={pickHit} />
                   ))}
@@ -356,7 +356,7 @@ export function PaletteBody({
             )}
             {result.also.length > 0 && (
               <CommandPrimitive.Group heading="Also try" className={cn("mb-4", sectionHeading)}>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-x-2 gap-y-1 sm:grid-cols-2">
                   {result.also.map((h) => (
                     <AlsoTile key={h.key} hit={h} onPick={pickHit} />
                   ))}
@@ -365,14 +365,16 @@ export function PaletteBody({
             )}
             {result.groups.map((g) => (
               <CommandPrimitive.Group key={g.kind} heading={g.label} className={cn("mb-4", sectionHeading)}>
-                {g.hits.map((h) => (
-                  <HitRow key={h.key} hit={h} onPick={pickHit} />
-                ))}
+                <div className="flex flex-col gap-1">
+                  {g.hits.map((h) => (
+                    <HitRow key={h.key} hit={h} onPick={pickHit} />
+                  ))}
+                </div>
               </CommandPrimitive.Group>
             ))}
             {recentItems.length > 0 && (
               <CommandPrimitive.Group heading={KIND_LABELS.recent} className={cn("mb-4", sectionHeading)}>
-                <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-x-2 gap-y-1 sm:grid-cols-2">
                   {recentItems.map((g) => (
                     <RecentRow key={g.id} g={g} onOpen={onOpenRecent} />
                   ))}
@@ -393,7 +395,7 @@ export function PaletteBody({
         </CommandPrimitive.Group>
         {!searching && recentItems.length > 0 && (
           <CommandPrimitive.Group heading="Jump back in" className={cn("mt-3 border-t pt-3", sectionHeading)}>
-            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-x-2 gap-y-1 sm:grid-cols-2">
               {recentItems.slice(0, 4).map((g) => (
                 <RecentRow key={g.id} g={g} onOpen={onOpenRecent} />
               ))}

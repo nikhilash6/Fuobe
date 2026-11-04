@@ -110,17 +110,31 @@ function EnterCap() {
   );
 }
 
-/** A tool's studio before its name ("Audio › Clean up voice"), or a preset's gallery ("Camera motions › Dolly In"). */
-function Name({ hit, crumb, className }: { hit: NavHit; crumb?: string; className?: string }) {
+/**
+ * A tool's studio before its name ("Audio › Clean up voice"), or a preset's gallery ("Camera motions › Dolly In").
+ * `stack`: a two-line row's name, whose crumb moves to its second line on a phone (Line), so the name is never cut for it.
+ */
+function Name({ hit, crumb, stack, className }: { hit: NavHit; crumb?: string; stack?: boolean; className?: string }) {
   return (
-    <span className={cn("block truncate", className)}>
+    <span data-hit-name={stack ? "stack" : ""} className={cn("block truncate", className)}>
       {crumb && (
-        <>
+        <span className={cn(stack && "max-sm:hidden")}>
           <span className="font-medium text-muted-foreground">{crumb}</span>
           <ChevronRight aria-hidden className="mx-1 inline size-3 align-[-1px] text-muted-foreground" />
-        </>
+        </span>
       )}
       {hit.label}
+    </span>
+  );
+}
+
+/** A two-line row's second line: what the hit is, after its crumb on a phone (Name's `stack`). */
+function Line({ hit, crumb }: { hit: NavHit; crumb?: string }) {
+  const what = hit.what ?? hit.hint;
+  return (
+    <span className="truncate text-[12.5px] text-muted-foreground">
+      {crumb && crumb !== what && <span className="sm:hidden">{what ? `${crumb} · ` : crumb}</span>}
+      {what}
     </span>
   );
 }
@@ -134,12 +148,12 @@ export function BestRow({ hit, onPick }: { hit: NavHit; onPick: (h: NavHit) => v
       value={hit.key}
       onSelect={() => onPick(hit)}
       aria-current={useCurrent(hit.href)}
-      className={cn("group/hit flex h-[58px] cursor-pointer items-center gap-3.5 rounded-xl py-[5px] pr-3 pl-2", selected)}
+      className={cn("group/hit flex h-14 cursor-pointer items-center gap-3 rounded-xl py-1 pr-3 pl-2", selected)}
     >
       <HitCover hit={hit} size="thumb" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <Name hit={hit} crumb={crumbOf(hit)} className="text-[14.5px] font-semibold" />
-        <span className="truncate text-[12.5px] text-muted-foreground">{hit.what ?? hit.hint}</span>
+        <Name hit={hit} crumb={crumbOf(hit)} stack className="text-[14.5px] font-semibold" />
+        <Line hit={hit} crumb={crumbOf(hit)} />
       </span>
       <Tag hit={hit} />
       <EnterCap />
@@ -154,12 +168,12 @@ export function AlsoTile({ hit, onPick }: { hit: NavHit; onPick: (h: NavHit) => 
       value={hit.key}
       onSelect={() => onPick(hit)}
       aria-current={useCurrent(hit.href)}
-      className={cn("group/hit flex h-14 min-w-0 cursor-pointer items-center gap-3 rounded-xl py-[5px] pr-3 pl-2", selected)}
+      className={cn("group/hit flex h-14 min-w-0 cursor-pointer items-center gap-3 rounded-xl py-1 pr-3 pl-2", selected)}
     >
       <HitCover hit={hit} size="chip" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <Name hit={hit} crumb={crumbOf(hit)} className="text-[14px] font-semibold" />
-        <span className="truncate text-[12.5px] text-muted-foreground">{hit.what ?? hit.hint}</span>
+        <Name hit={hit} crumb={crumbOf(hit)} stack className="text-[14px] font-semibold" />
+        <Line hit={hit} crumb={crumbOf(hit)} />
       </span>
       <Tag hit={hit} />
     </CommandPrimitive.Item>
@@ -192,7 +206,7 @@ export function StudioTile({ e, onPick }: { e: NavEntry; onPick: (e: NavEntry) =
       keywords={[e.label]}
       onSelect={() => onPick(e)}
       aria-current={useCurrent(e.href)}
-      className={cn("group/hit flex h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-[10px] pr-2 pl-2 md:h-10", selected)}
+      className={cn("group/hit flex h-11 min-w-0 cursor-pointer items-center gap-3 rounded-[10px] pr-2 pl-2 md:h-10", selected)}
     >
       <CoverThumb id={e.cover} size="row" icon={e.icon} />
       <span className="line-clamp-2 min-w-0 text-[13px] leading-[1.2] font-medium text-foreground group-aria-[current=page]/hit:font-semibold">

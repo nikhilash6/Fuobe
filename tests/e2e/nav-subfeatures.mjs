@@ -169,18 +169,19 @@ try {
       }
       check((await panel(p).locator('[data-group="sell"] > ul > li > a[href="/ads"]').count()) === 0, `${label}: Ads Studio is under Marketing Studio, not a row of its own`);
       const allSubs = Object.values(r.subs).flat();
-      // 24 px with a mouse (two to a row); a name in a line 20 px, its neighbours a dot away.
-      const short = allSubs.filter((s) => s.h < (s.line ? 19.5 : 23.5));
-      check(short.length === 0, `${label}: every link 24 px tall (20 in a line)`, short.map((s) => `${s.label} ${s.h}`).join(", "));
-      // The columns' rows stay in line (from 800 px: below it Genjutsu's line takes what it needs): every row's top is a
-      // whole number of 48 px rows from the first one's.
+      // 24 px with a mouse, in a column or in wrapped lines (two to a row's 48 px).
+      const short = allSubs.filter((s) => s.h < 23.5);
+      check(short.length === 0, `${label}: every link 24 px tall`, short.map((s) => `${s.label} ${s.h}`).join(", "));
+      // The columns' rows keep one grid (from 800 px: below it Genjutsu's lines take what they need): a list ends where
+      // its last feature does and the next row follows 4 px below, as rows follow rows, so every row's top is a whole
+      // number of 24 px (half a row) from the first one's.
       if (size.width >= 1280 && size.height >= 800 && r.rows.length) {
         const base = Math.min(...r.rows);
         const off = r.rows.filter((t) => {
-          const m = (((t - base) % 48) + 48) % 48;
-          return m > 2.5 && m < 45.5;
+          const m = (((t - base) % 24) + 24) % 24;
+          return m > 1 && m < 23;
         });
-        check(off.length === 0, `${label}: the columns' rows stay in line`, off.map(Math.round).join(", "));
+        check(off.length === 0, `${label}: the columns' rows keep one 24 px grid`, off.map(Math.round).join(", "));
       }
       if (who !== "owner") {
         const said = OWNER_SUBS.filter((w) => allSubs.some((s) => s.label === w));

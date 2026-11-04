@@ -27,17 +27,17 @@ function Tile({ entry, current }: { entry: MegaItem; current: boolean }) {
       <IntentLink
         href={entry.href}
         aria-current={current ? "page" : undefined}
-        className="nav-row nav-mark-under group/tile flex flex-col items-center gap-1 rounded-[16px] px-0.5 pt-0.5 pb-1.5 text-center"
+        className="nav-row nav-mark-under group/tile flex flex-col items-center gap-1 rounded-[16px] px-0.5 pt-0.5 pb-1 text-center"
       >
         <span className="relative">
-          <CoverThumb id={entry.navCover} cover={entry.cover} icon={entry.icon} size="tile" eager className="size-13" />
+          <CoverThumb id={entry.navCover} cover={entry.cover} icon={entry.icon} size="tile" eager className="size-12" />
           {fresh && (
             <span aria-hidden className="absolute -top-1 -right-1.5 rounded-full bg-highlight px-1 py-px text-[9px] leading-none font-semibold text-highlight-foreground">
               New
             </span>
           )}
         </span>
-        <span aria-hidden className="line-clamp-2 text-[11px] leading-[1.2] text-foreground/85 group-aria-[current=page]/tile:font-semibold group-aria-[current=page]/tile:text-foreground">
+        <span aria-hidden className="line-clamp-3 min-h-[26px] text-[11px] leading-[13px] text-foreground/85 group-aria-[current=page]/tile:font-semibold group-aria-[current=page]/tile:text-foreground">
           {entry.short ?? entry.label}
         </span>
         <span className="sr-only">
@@ -85,11 +85,11 @@ function SheetSubs({ items, kind, current }: { items: MegaItem[]; kind: ViewerKi
 function SeeAllTile({ href, label, name }: { href: string; label: string; name: string }) {
   return (
     <li className="min-w-0">
-      <IntentLink href={href} aria-label={name} className="nav-row group/tile flex flex-col items-center gap-1 rounded-[16px] px-0.5 pt-0.5 pb-1.5 text-center text-brand-text">
-        <span aria-hidden className="grid size-13 place-items-center rounded-[14px] border border-dashed border-border-strong bg-brand-faint/40">
+      <IntentLink href={href} aria-label={name} className="nav-row group/tile flex flex-col items-center gap-1 rounded-[16px] px-0.5 pt-0.5 pb-1 text-center text-brand-text">
+        <span aria-hidden className="grid size-12 place-items-center rounded-[14px] border border-dashed border-border-strong bg-brand-faint/40">
           <ArrowRight className="size-5" />
         </span>
-        <span aria-hidden className="line-clamp-2 text-[11px] leading-[1.2] font-medium">
+        <span aria-hidden className="line-clamp-3 min-h-[26px] text-[11px] leading-[13px] font-medium">
           {label}
         </span>
       </IntentLink>
@@ -227,9 +227,9 @@ export function StudiosSheet({ family = "studios", group: initial, onSearch }: {
         ) : !model ? (
           <ul aria-hidden className="grid grid-cols-5 gap-x-1 pb-1">
             {Array.from({ length: 30 }, (_, i) => (
-              <li key={i} className="flex flex-col items-center gap-1 px-0.5 pt-0.5 pb-1.5">
-                <span className="size-13 rounded-[14px] bg-muted" />
-                <span className="h-3 w-10 rounded bg-muted/60" />
+              <li key={i} className="flex flex-col items-center gap-1 px-0.5 pt-0.5 pb-1">
+                <span className="size-12 rounded-[14px] bg-muted" />
+                <span className="h-[26px] w-10 rounded bg-muted/60" />
               </li>
             ))}
           </ul>
@@ -240,7 +240,7 @@ export function StudiosSheet({ family = "studios", group: initial, onSearch }: {
                 <NewBoardButton />
               </Suspense>
             )}
-            <ul aria-label={area.panel} className="grid grid-cols-2 gap-x-2 gap-y-1 pb-1">
+            <ul aria-label={area.panel} className="grid grid-cols-2 gap-2 pb-1">
               {items.map((e) => (
                 <BoardCard key={e.id} entry={e} current={e.id === current} />
               ))}
