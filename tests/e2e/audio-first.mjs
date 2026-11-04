@@ -7,7 +7,7 @@
 //    covers or clips).
 // 2. The other tabs still open their own pages (Speech at /audio/speech, Music), and Clean up voice brings /audio back.
 // 3. Old links: /audio/clean is the same tool with its tab selected; /audio?mode=speech and ?mode=music land on their
-//    pages; /audio/speech?voice=… keeps the voice for the composer.
+//    pages; links made for Speech when it was /audio (/audio?voice=…, ?prompt=…, ?model=…) open Speech, query kept.
 // 4. The Studios menu (desktop launcher, phone sheet's Sound chip) lists Clean up voice right after the Audio studio,
 //    and search for "audio" shows Audio, then Clean up voice.
 import fs from "node:fs";
@@ -101,6 +101,18 @@ for (const [label, device] of [
   }
   await openRoute(p, `${app}/audio/speech`);
   check(await p.getByRole("heading", { name: "Give it a voice" }).first().isVisible(), `${label}: /audio/speech is the Speech composer`);
+  // Links made for Speech when it was /audio (a voice sample, words, a model from search) still open Speech.
+  for (const q of ["?voice=%2Fapi%2Ffiles%2Fuploads%2Fa.wav", "?prompt=Hello%20there", "?model=elevenlabs-v4"]) {
+    await openRoute(p, `${app}/audio${q}`);
+    const speech = await p.getByRole("heading", { name: "Give it a voice" }).first().isVisible();
+    // The same query (the composer may write it back as "Hello+there").
+    const kept = new URL(p.url()).searchParams.toString() === new URLSearchParams(q).toString();
+    check(new URL(p.url()).pathname === "/audio/speech" && kept && speech, `${label}: an old /audio${q} link opens Speech`, path_(p));
+    if (q.startsWith("?prompt=")) {
+      const words = await p.locator("textarea").first().inputValue().catch(() => "");
+      check(words.includes("Hello there"), `${label}: its words are in the composer`, words.slice(0, 40));
+    }
+  }
 
   // 4. The menus and search.
   if (label === "1440") {

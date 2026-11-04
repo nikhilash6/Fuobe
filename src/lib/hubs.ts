@@ -60,6 +60,14 @@ export const HUB_MODES: Record<HubKind, HubMode[]> = {
   ],
 };
 
+/**
+ * A hub whose own URL opened another mode before, and the link params only that mode reads: /audio opened on Speech
+ * until Clean up voice came first, so an old `/audio?voice=…`, `?prompt=…` or `?model=…` link opens Speech (src/proxy.ts).
+ */
+export const FORMER_HOME: Partial<Record<HubKind, { mode: string; params: readonly string[] }>> = {
+  audio: { mode: "speech", params: ["voice", "prompt", "model", "preset", "example", "lyrics"] },
+};
+
 /** The URL of one mode: the hub itself for the first one, else /<hub>/<mode>. */
 export function modeHref(kind: HubKind, mode: string, query?: Record<string, string>): string {
   const path = HUB_MODES[kind][0].id === mode ? `/${kind}` : `/${kind}/${mode}`;

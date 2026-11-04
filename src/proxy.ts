@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { APPS } from "@/lib/catalog/apps";
-import { modeHref, type HubKind } from "@/lib/hubs";
+import { FORMER_HOME, modeHref, type HubKind } from "@/lib/hubs";
 import { hiddenStarterPage, recordForPath, unknownHubMode, unknownStarterPage } from "@/lib/record-pages";
 import { countsAsView, SHARE_VIEW_HEADER, shareRoute } from "@/lib/share";
 import {
@@ -328,14 +328,22 @@ function openShare(request: NextRequest, token: string, file: boolean): NextResp
 
 /**
  * An old `/audio?mode=music` link (any case: ?mode=Music too): that mode's own page, without the mode in its query.
- * An unknown mode lands on the hub's 404 (unknownHubMode).
+ * An unknown mode lands on the hub's 404 (unknownHubMode). An old link to the mode the hub opened on before, known by
+ * the params only that mode reads (`/audio?voice=…` is Speech's, FORMER_HOME), opens that mode with its whole query.
  */
 function hubModeLink(request: NextRequest): URL | null {
   const kind = /^\/(audio|video-tools|upscale)\/?$/.exec(request.nextUrl.pathname)?.[1] as HubKind | undefined;
-  const mode = kind && request.nextUrl.searchParams.get("mode")?.trim().toLowerCase();
+  const sp = request.nextUrl.searchParams;
+  const former = kind ? FORMER_HOME[kind] : undefined;
+  if (kind && former && !sp.has("mode") && former.params.some((k) => sp.has(k))) {
+    const url = new URL(modeHref(kind, former.mode), request.url);
+    url.search = request.nextUrl.search;
+    return url;
+  }
+  const mode = kind && sp.get("mode")?.trim().toLowerCase();
   if (!kind || !mode || !/^[a-z0-9-]+$/.test(mode)) return null;
   const url = new URL(modeHref(kind, mode), request.url);
-  for (const [k, v] of request.nextUrl.searchParams) if (k !== "mode") url.searchParams.append(k, v);
+  for (const [k, v] of sp) if (k !== "mode") url.searchParams.append(k, v);
   return url;
 }
 
