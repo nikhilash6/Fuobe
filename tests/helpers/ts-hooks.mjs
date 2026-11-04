@@ -1,6 +1,8 @@
 /**
  * Lets a child `node` process load the server's TypeScript the way the tests do: "@/…" from src, the "server-only"
- * stub, and imports written without an extension. Used with --import tests/helpers/ts-register.mjs.
+ * stub, imports written without an extension (a package's own files too, "next/server"), and JSON imports without an
+ * import attribute. Used with
+ * --import tests/helpers/ts-register.mjs.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -19,12 +21,20 @@ export async function resolve(specifier, context, next) {
   }
   const file = base && tryFile(base);
   if (file) return { url: pathToFileURL(file).href, shortCircuit: true };
-  return next(specifier, context);
+  try {
+    return await next(specifier, context);
+  } catch (e) {
+    // A package's file named without its extension ("next/server"), as the bundler allows.
+    if (e?.code !== "ERR_MODULE_NOT_FOUND" || specifier.startsWith(".") || !specifier.includes("/") || specifier.endsWith(".js")) throw e;
+    return next(`${specifier}.js`, context);
+  }
 }
 
-/** TypeScript to JavaScript (the typescript package, as the editor sees it), as ES modules. */
+/** TypeScript to JavaScript (the typescript package, as the editor sees it), as ES modules; JSON as the bundler reads it. */
 let ts;
 export async function load(url, context, next) {
+  // The server imports JSON files (the catalog) with no import attribute, as the bundler allows.
+  if (url.startsWith("file:") && url.endsWith(".json")) return { format: "json", source: fs.readFileSync(fileURLToPath(url), "utf8"), shortCircuit: true };
   if (!url.startsWith("file:") || !/\.tsx?$/.test(url)) return next(url, context);
   ts ??= (await import("typescript")).default;
   const source = fs.readFileSync(fileURLToPath(url), "utf8");
