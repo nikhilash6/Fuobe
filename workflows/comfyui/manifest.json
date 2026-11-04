@@ -28357,7 +28357,7 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta's SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT · SolarRenderer LoRAs (rank 64): MiniMax H3 Community License; SolarRenderer code Apache-2.0 · Metric3D BSD-2-Clause",
-      "validated": false,
+      "validated": true,
       "notes": "video = the fitted part, image = the approved first frame. params.extra.openjutsu: seconds (17k+5 frames at 24 fps), quality 480p | 720p (canvas clamped to 2048 px), motion 0 | 512 | 768, seed, scene (the editable description, opening the detailed description). Parts over 170 frames need SolarRenderer's long-clip patch, which the install script applies.",
       "autoDownloads": [
         "Metric3D vit-small (metric_depth_vit_small_800k.pth) -> custom_nodes/comfyui_controlnet_aux/ckpts/JUGGHM/Metric3D (fetched on first run unless placed there)"
@@ -28459,7 +28459,7 @@
       ],
       "vramGb": 24,
       "license": "MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta's SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT · Metric3D BSD-2-Clause",
-      "validated": false,
+      "validated": true,
       "notes": "A second renderer for From picture, on native MiniMax H3; the same settings as video-from-picture-solar.",
       "autoDownloads": [
         "Metric3D vit-small (metric_depth_vit_small_800k.pth) -> custom_nodes/comfyui_controlnet_aux/ckpts/JUGGHM/Metric3D (fetched on first run unless placed there)"
