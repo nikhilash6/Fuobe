@@ -104,7 +104,8 @@ export function mediaOf(wf: Pick<IndexWorkflow, "core" | "packs">): ("video" | "
 
 /**
  * A worker's verified files and node packs (PUT /api/gpu/computer/inventory), and the kinds of input it takes (`media`:
- * a worker without a way to make clips and sound again takes pictures only). No `media`: every kind.
+ * a worker without a way to make clips and sound again takes pictures only). No `media` (a worker from before workers
+ * made clips and sound again): pictures only.
  */
 export interface Inventory {
   files: FileNeed[];
@@ -129,7 +130,7 @@ export function lanesFor(
   sha: Sha,
 ): { lanes: string[]; workflows: string[]; missing: { lane: string; label: string; files: string[]; bytes: number }[] } {
   const packs = new Set(inv.nodePacks.map((p) => p.name));
-  const takes = new Set<string>(inv.media ?? MEDIA_KINDS);
+  const takes = new Set<string>(inv.media ?? ["image"]);
   const ok = new Map<string, boolean>();
   const workflows: string[] = [];
   const lacking = new Map<string, Map<string, number>>();

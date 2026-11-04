@@ -546,7 +546,8 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
     case "sent": {
       const promptId = typeof e.promptId === "string" && UUID.test(e.promptId) ? e.promptId : typeof e.promptId === "string" && /^[\w-]{1,64}$/.test(e.promptId) ? e.promptId : null;
       if (!promptId) throw new RelayError(400, "Bad prompt id");
-      setTask(t.id, { ...seen, state: "queued", prompt_id: promptId, sent_at: now, attempts: t.attempts + 1 });
+      // Results a worker kept from an earlier try go up instead: no new attempt.
+      setTask(t.id, { ...seen, state: "queued", prompt_id: promptId, sent_at: now, attempts: t.attempts + (t.pools && e.kept ? 0 : 1) });
       return { ok: true };
     }
     case "refused":
@@ -570,7 +571,7 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       const entries = e.event === "finished" ? [e.entry] : e.entries;
       if (!Array.isArray(entries) || entries.some((x) => !x || typeof x !== "object")) throw new RelayError(400, "Bad history entry");
       // A worker's measured execution time and GPU, kept with the task for metering.
-      const exec = execFields(e);
+      const exec = execFields(e, t);
       const extra = (more: Record<string, unknown> = {}) => ({ ...(exec || Object.keys(more).length ? { extra_json: JSON.stringify({ ...extraOf(t), ...(exec && { exec }), ...more }) } : {}) });
       const p = plan(entries, e.event === "passes");
       if ("follow" in p) {
@@ -812,15 +813,29 @@ export const setPoolClocks = (fn: (t: TaskRow, now: number) => TaskRow) => (pool
 let poolGiveBack: ((t: TaskRow, why: GiveBackWhy) => void) | null = null;
 export const setPoolGiveBack = (fn: (t: TaskRow, why: GiveBackWhy) => void) => (poolGiveBack = fn);
 
-/** The execution time (ms, at most a week) and GPU name a worker reported with a finished job, as kept. */
+/** A task's run ceiling (pool.ts sets this): the most a worker's reported execution time may be. */
+let poolCeiling: ((t: TaskRow) => number) | null = null;
+export const setPoolCeiling = (fn: (t: TaskRow) => number) => (poolCeiling = fn);
+
+/** The execution time (ms) and GPU name a worker reported with a finished job, as kept. */
 export interface ExecFacts {
   ms: number;
   device?: string;
 }
 
-function execFields(e: ReportEvent): ExecFacts | null {
+/** ComfyUI starts a job as soon as it takes it, a little before the studio hears "sent": the time allowed for that. */
+const SENT_SLACK_MS = 60_000;
+
+/**
+ * The execution time a worker reports, held to what is possible: at most a day, at most the task's run ceiling, and at
+ * most the time since it sent the job to its ComfyUI (or, with no send noted, since the task was made). Results kept from
+ * an earlier try ran before their "sent" (it notes only the upload): for them, the time since the task was made.
+ */
+function execFields(e: ReportEvent, t: TaskRow, now = Date.now()): ExecFacts | null {
   if (e.event !== "finished" && e.event !== "passes") return null;
-  const ms = typeof e.execMs === "number" && Number.isFinite(e.execMs) && e.execMs >= 0 ? Math.min(Math.round(e.execMs), 7 * 24 * 3_600_000) : null;
+  const since = e.kept ? t.created_at : (t.sent_at ?? t.created_at);
+  const most = Math.max(0, Math.min(24 * 3_600_000, poolCeiling?.(t) ?? Infinity, now - since + SENT_SLACK_MS));
+  const ms = typeof e.execMs === "number" && Number.isFinite(e.execMs) && e.execMs >= 0 ? Math.min(Math.round(e.execMs), most) : null;
   if (ms === null) return null;
   const device = typeof e.device === "string" && e.device.trim() ? e.device.trim().slice(0, FACT_LIMITS.text) : undefined;
   return { ms, ...(device && { device }) };

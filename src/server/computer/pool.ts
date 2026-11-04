@@ -5,7 +5,7 @@ import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type Compu
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
-import { cleanFacts, endTask, getTask, json, noteProgress, setPoolClocks, setPoolGiveBack, setTask, takeTask, type TaskRow } from "./tasks";
+import { cleanFacts, endTask, getTask, json, noteProgress, setPoolCeiling, setPoolClocks, setPoolGiveBack, setTask, takeTask, type TaskRow } from "./tasks";
 import { createWorker, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 
 /**
@@ -16,16 +16,38 @@ import { createWorker, revokeWorker, rotateWorker, type WorkerRow } from "./work
  * lanes, and the owner's controls. Nothing here runs unless the owner adds a worker.
  */
 
-/** The oldest worker program this studio still talks to. */
-export const MIN_PROTOCOL = 1;
+/**
+ * The oldest worker program that may take tasks: 2 says which inputs it takes, makes every clip and sound again, checks
+ * every input against its rules, and keeps its ComfyUI behind the guard. An older one is told to update.
+ */
+export const MIN_PROTOCOL = 2;
 /** A task avoids workers that lost or failed it, unless no other worker that can run it beat this recently. */
 export const RETRY_WINDOW_MS = 10 * 60_000;
 /** Attempts in all before a task fails. */
 export const MAX_ATTEMPTS = 3;
 /** A worker that beat this recently may claim. */
 const FRESH_BEAT_MS = 30_000;
-/** The run limit: 3 × the lane's p90 on that worker, at least 5 minutes, at most 45. */
-export const runLimitMs = (p90?: number | null) => Math.min(45 * 60_000, Math.max(5 * 60_000, 3 * (p90 ?? 0)));
+/** The longest one attempt at a job may run on a worker (the generation's own clock is the same 45 minutes). */
+export const RUN_CEILING_MS = 45 * 60_000;
+/** Run ceilings of their own for some lanes (none yet: every lane has RUN_CEILING_MS). */
+const LANE_CEILINGS: Readonly<Record<string, number>> = {};
+/** A lane's run ceiling. */
+export const runCeilingMs = (lane?: string | null) => (lane && LANE_CEILINGS[lane]) || RUN_CEILING_MS;
+/** A job that makes no progress for this long goes back in line (a worker's own worker.json may set another). */
+export const STALL_MS = 10 * 60_000;
+/** Stall limits of their own for some lanes (none yet: every lane has STALL_MS). */
+const LANE_STALLS: Readonly<Record<string, number>> = {};
+/** A lane's stall limit, which the claim gives the worker. */
+export const stallLimitMs = (lane?: string | null) => (lane && LANE_STALLS[lane]) || STALL_MS;
+/**
+ * The run limit of one attempt: 3 × the lane's p90 on that worker plus its model load, at least 10 minutes, and never
+ * past the lane's run ceiling. With no p90 yet (a new worker, a new lane), the ceiling: a first long job finishes.
+ */
+export const runLimitMs = (p90?: number | null, lane?: string | null, loadMs?: number | null) => {
+  const ceiling = runCeilingMs(lane);
+  if (!p90 || p90 <= 0) return ceiling;
+  return Math.min(ceiling, Math.max(10 * 60_000, 3 * p90 + Math.max(0, loadMs ?? 0)));
+};
 /** The owner's own tasks go ahead of everyone else's by this much (rank_at = created_at - boost). */
 export const OWNER_BOOST_MS = 24 * 60 * 60_000;
 
@@ -53,6 +75,7 @@ export function workerState(w: WorkerRow, now = Date.now()): { state: WorkerStat
   const tz = hoursOf(w) && "tz" in hoursOf(w)! ? (hoursOf(w) as { tz: string }).tz : undefined;
   if (!w.seen_at) return { state: "new", words: "Not connected yet" };
   if (now - w.seen_at > RELAY_TIMES.poolSilentMs) return { state: "offline", words: "Offline" };
+  if ((w.protocol ?? 0) < MIN_PROTOCOL) return { state: "paused", words: "Takes no jobs until its worker program is updated" };
   const why = w.local_why ?? "";
   if (w.paused_local) {
     if (why.startsWith("gpu-busy")) return { state: "gpu-busy", words: `Your GPU is busy${why.includes(":") ? ` (${why.split(":").slice(1).join(":")})` : ""}` };
@@ -112,6 +135,7 @@ export function cleanBeat(b: unknown): WorkerBeat {
     warmLane: text(o.warmLane, 16),
     running: Array.isArray(o.running) ? (o.running.slice(0, MAX_RUNNING) as WorkerBeat["running"]) : [],
     stopped: Array.isArray(o.stopped) ? o.stopped.filter((x): x is string => typeof x === "string").slice(0, 64) : [],
+    held: Array.isArray(o.held) ? o.held.filter((x): x is string => typeof x === "string").slice(0, 16) : [],
   };
 }
 
@@ -147,8 +171,11 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     // and the worker takes their prompts off its ComfyUI.
     const stopNow = !!fresh.stop_now || (b.local.paused && !!b.local.why && (b.local.why === "here-now" || b.local.why.startsWith("gpu-busy")));
     if (stopNow) {
+      const held = new Set(b.held ?? []);
       for (const t of d.prepare("SELECT * FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting')").all(w.id) as TaskRow[]) {
-        if (t.state === "collecting") continue; // Its result is being saved: let it finish.
+        // Its result is being saved, or the worker keeps the finished results on its disk (the studio may not have heard
+        // that it finished): let it send them, which needs no GPU, instead of running the job again.
+        if (t.state === "collecting" || held.has(t.id)) continue;
         backInLine(t, { blame: false });
         stops.push({ task: t.id, promptId: t.prompt_id, ...(t.prefix && { prefix: t.prefix }) });
       }
@@ -164,6 +191,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       runner: eligible(fresh, now),
       heldElsewhere: false,
       waiting,
+      claimableNow: claimableNow(fresh, now),
       stops,
       worker: {
         paused: !!fresh.paused_server,
@@ -178,6 +206,20 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       },
     };
   })();
+}
+
+/**
+ * People's tasks (an account's, never the owner's own) this worker may claim right now: in its pool, in a lane it is
+ * allowed and able to run, with the files and VRAM they need, past their delays, and ending before its hours do. Its
+ * own pause doesn't count here (its PC reads this to know whether a person's run waits for it); a pause on the website,
+ * a drain, an older worker program or being outside its hours does.
+ */
+export function claimableNow(w: WorkerRow, now = Date.now()): number {
+  if (w.kind !== "pool" || w.revoked_at || w.paused_server || w.drain || (w.protocol ?? 0) < MIN_PROTOCOL || !hoursAt(hoursOf(w), now).inside) return 0;
+  const rows = db()
+    .prepare("SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND account IS NOT NULL AND INSTR(',' || pools || ',', ?) > 0 ORDER BY rank_at LIMIT ?")
+    .all(`,${w.pool},`, LOOK_AT) as TaskRow[];
+  return rows.filter((t) => fits(t, w, now) && retryOk(t, w, now) && beforeWindowEnds(t, w, now)).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +241,8 @@ export function saveInventory(w: WorkerRow, raw: unknown): { lanes: string[]; wo
     const name = text(x?.name, 128);
     return name ? [{ name, commit: text(x?.commit, 64) }] : [];
   });
-  // The kinds of input it takes (none said: every kind, as before workers said so).
+  // The kinds of input it takes. None said: an older worker, which doesn't make clips and sound again, so lanesFor gives
+  // it pictures only (the list is kept as sent, so its hash stays the one the worker computes).
   const media = Array.isArray(o.media) ? MEDIA_KINDS.filter((k) => (o.media as unknown[]).includes(k)) : undefined;
   const inv: Inventory = { files, nodePacks, ...(media && { media }) };
   const r = lanesFor(loadIndex(), inv, sha);
@@ -247,13 +290,16 @@ export function workerClaim(w: WorkerRow, running: string[], now = Date.now()): 
 
 function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): ClaimedTask {
   const needs = json<Needs | null>(t.needs_json, null);
-  const p90 = t.lane ? benchOf(w)[t.lane]?.p90Ms : undefined;
+  const bench = t.lane ? benchOf(w)[t.lane] : undefined;
   const c = takeTask(t, device, now, { worker_id: w.id });
   return {
     ...c,
     lane: t.lane ?? undefined,
     estMs: estOn(t, w),
-    runLimitMs: runLimitMs(p90),
+    // A job given back once for running past its limit gets the whole run ceiling on its next try (a lane's times may
+    // come from shorter jobs than this one); past that, it fails.
+    runLimitMs: runLimitedOf(t) ? runCeilingMs(t.lane) : runLimitMs(bench?.p90Ms, t.lane, bench?.loadMs),
+    stallMs: stallLimitMs(t.lane),
     notAfter: t.not_after,
     attempt: t.requeues + 1,
     models: needs?.files ?? [],
@@ -318,10 +364,10 @@ function pick(w: WorkerRow, now: number): TaskRow | null {
  * its ComfyUI down: the worker is noted in tried_json and it counts as an attempt). The third lost attempt fails it.
  * The old worker's lease stops working, so its late calls get 409.
  */
-export function backInLine(t: TaskRow, o: { blame: boolean; why?: string }): void {
+export function backInLine(t: TaskRow, o: { blame: boolean; why?: string; last?: boolean }): void {
   const tried = json<string[]>(t.tried_json, []);
   const requeues = t.requeues + (o.blame ? 1 : 0);
-  if (o.blame && requeues >= MAX_ATTEMPTS) {
+  if (o.blame && (requeues >= MAX_ATTEMPTS || o.last)) {
     endTask(t.id, "failed", { error: o.why ?? "The GPUs couldn't finish this run. Press Retry.", requeues, tried_json: JSON.stringify([...new Set([...tried, t.worker_id ?? ""])].filter(Boolean)) }, true);
     return;
   }
@@ -368,15 +414,28 @@ setPoolClocks((t, now) => {
   return getTask(t.principal, t.id) ?? t;
 });
 
-/** The words of a run whose worker gave it back the third time. */
-export const GAVE_BACK_WORDS = "This run couldn't finish. Press Retry.";
+/** The words of a run that a worker gave back for the last time. */
+export const GAVE_BACK_WORDS = "This run couldn't finish.";
+
+/** A task a worker gave back for running past its run limit (its next try gets the whole run ceiling). */
+const runLimitedOf = (t: TaskRow) => json<{ runLimited?: boolean }>(t.extra_json, {}).runLimited === true;
 
 /**
  * A worker gives its task back (it stalled, ran past its run limit, or takes clips or sound the worker can't make
  * again): it goes back in line with its place kept, and counts as an attempt, so another worker that can run it is
- * preferred and the third time fails it.
+ * preferred and the third time fails it. Past its run limit a second time (that try had the whole run ceiling), it
+ * fails at once: one more try would only hold a GPU as long again.
  */
-setPoolGiveBack((t) => backInLine(t, { blame: true, why: GAVE_BACK_WORDS }));
+setPoolGiveBack((t, why) => {
+  if (why === "run-limit") {
+    if (runLimitedOf(t)) return backInLine(t, { blame: true, why: GAVE_BACK_WORDS, last: true });
+    setTask(t.id, { extra_json: JSON.stringify({ ...json<Record<string, unknown>>(t.extra_json, {}), runLimited: true }) });
+  }
+  backInLine(t, { blame: true, why: GAVE_BACK_WORDS });
+});
+
+/** A worker's reported execution time is never more than its task's run ceiling. */
+setPoolCeiling((t) => runCeilingMs(t.lane));
 
 // ---------------------------------------------------------------------------
 // Place in line and the wait (4.4)

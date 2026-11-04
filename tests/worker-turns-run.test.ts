@@ -67,7 +67,8 @@ function addWorker(): W {
 }
 
 let gens = 0;
-function addTask(): string {
+/** A person's run for the workers, or (`owner`) one of the owner's own, which no turn is asked for. */
+function addTask(o: { owner?: boolean } = {}): string {
   const gid = `turns-gen-${++gens}`;
   const now = Date.now();
   db()
@@ -78,16 +79,17 @@ function addTask(): string {
     principal: "owner",
     generationId: gid,
     graph: { "1": { class_type: "LoadImage", inputs: { image: input } }, "3": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } }, "9": { class_type: "SaveImage", inputs: { images: ["1", 0], filename_prefix: "fuobe/worker-test" } } },
-    pool: { pools: ["pool"], rankAt: now, lane: "small", needs: { workflowId: "wf-test", files: [], packs: [], minVramBytes: 0 } },
+    // A person's run (an account's): the studio counts it in the beat's claimableNow.
+    pool: { pools: ["pool"], ...(!o.owner && { account: "turns-account" }), rankAt: now, lane: "small", needs: { workflowId: "wf-test", files: [], packs: [], minVramBytes: 0 } },
   }).id;
 }
 
 /**
- * fetch for the worker: the studio's routes for SITE, its own ComfyUI for the rest. With `claimable`, the beat's answer
- * carries claimableNow (the jobs waiting for this worker's pool), as a studio that supports turns sends it.
+ * fetch for the worker: the studio's real routes for SITE (the beat's claimableNow is the studio's own), its own
+ * ComfyUI for the rest. With `older`, the beat's answer has no claimableNow, as from a studio that doesn't say.
  */
-function router(w: W, o: { claimable: boolean }) {
-  // The test may switch the count on later (the same object).
+function router(w: W, o: { older: boolean }) {
+  // The test may switch `older` off later (the same object).
   const api = apiAs(routes, null);
   return async (url: string, init: RequestInit = {}) => {
     if (!String(url).startsWith(SITE)) return realFetch(url, init);
@@ -96,10 +98,10 @@ function router(w: W, o: { claimable: boolean }) {
     if (p === "/api/gpu/computer/inventory") return Response.json({ ok: true, lanes: ["small"], workflows: ["wf-test"], missing: [] });
     expect(new Headers(init.headers).get("authorization")).toBe(`Bearer ${w.token}`);
     const res = await api(p, init);
-    if (p !== "/api/gpu/computer/beat" || !o.claimable || !res.ok) return res;
-    const body = await res.json();
-    const n = (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE state = 'waiting' AND INSTR(',' || pools || ',', ',pool,') > 0").get() as { n: number }).n;
-    return Response.json({ ...body, claimableNow: n });
+    if (p !== "/api/gpu/computer/beat" || !o.older || !res.ok) return res;
+    const body = (await res.json()) as Record<string, unknown>;
+    delete body.claimableNow;
+    return Response.json(body);
   };
 }
 
@@ -172,7 +174,7 @@ afterEach(async () => {
   }
 });
 
-function start(w: W, p: Pc, gpu: ReturnType<typeof fakeGpu>, o: { claimable?: boolean; lockOwners?: string[]; studio?: { claimable: boolean } } = {}) {
+function start(w: W, p: Pc, gpu: ReturnType<typeof fakeGpu>, o: { lockOwners?: string[]; studio?: { older: boolean } } = {}) {
   const ctrl = new AbortController();
   const cfg = {
     site: SITE,
@@ -189,7 +191,7 @@ function start(w: W, p: Pc, gpu: ReturnType<typeof fakeGpu>, o: { claimable?: bo
     gpuLockComfyOwners: o.lockOwners ?? [],
   };
   const done = runWorker(cfg, {
-    fetch: router(w, o.studio ?? { claimable: o.claimable ?? true }),
+    fetch: router(w, o.studio ?? { older: false }),
     home: p.home,
     signal: ctrl.signal,
     requirements: { folders: [], files: {}, packs: {}, workflows: {} },
@@ -288,16 +290,32 @@ describe("studio jobs first", () => {
     const w = addWorker();
     const p = pc();
     addTask();
-    const studio = { claimable: false };
+    const studio = { older: true };
     start(w, p, fakeGpu(p, { workMb: 9000 }), { studio });
     await until(() => workerRow(w).local_why?.startsWith("gpu-busy"));
     expect(workerRow(w).local_why).toBe("gpu-busy:ComfyUI on port 8188");
     expect(site(p)?.siteWaiting ?? 0).toBe(0);
     // The studio starts to send the count: the pause ends with no cool-down, and a turn is asked for.
-    studio.claimable = true;
+    studio.older = false;
     await until(() => workerRow(w).local_why === "waiting-for-yield");
     expect(site(p)?.siteWaiting).toBe(1);
     expect(p.logs.some((l) => /no longer keeps it paused/.test(l))).toBe(true);
+  });
+
+  it("only the owner's own job waits: the studio counts none, so no turn is asked for and local ComfyUI work goes on", async () => {
+    const w = addWorker();
+    const p = pc();
+    const id = addTask({ owner: true });
+    start(w, p, fakeGpu(p, { workMb: 9000 }));
+    // The studio's real beat says 0 (not "unknown"): turns work, local ComfyUI work is no other program, and no
+    // turn begins for the owner's own job.
+    await until(() => comfyAnswers(p));
+    await sleep(2_000);
+    expect(site(p)?.siteWaiting ?? 0).toBe(0);
+    expect(workerRow(w).paused_local).toBe(0);
+    expect(workerRow(w).local_why).toBeNull();
+    expect(task(id).state).toBe("waiting");
+    expect(p.logs.some((l) => /make room|Another program/.test(l))).toBe(false);
   });
 
   it("me first: the pause shortcut during a turn writes siteWaiting 0 and keeps the job in line; a resume asks again", async () => {

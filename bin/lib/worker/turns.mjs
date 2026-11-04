@@ -1,10 +1,12 @@
 // Studio jobs first (docs/gpu-workers.md): while local ComfyUI work holds the GPU, the worker asks for a turn through two
 // small files in a folder that worker.json names, and a helper on the PC's side answers.
 //
-// - site.json, which the worker writes on every beat: { siteWaiting, oldestWaitS, interrupt, at }. siteWaiting counts
-//   the studio's jobs this worker may take now (the beat's claimableNow) plus the one it runs. While a turn lasts it is
-//   at least 1, and it goes to 0 when the studio has had no job for it for a minute (the worker then frees its own
-//   ComfyUI's memory), when it is paused, or when a local cap is reached.
+// - site.json, which the worker writes on every beat: { siteWaiting, oldestWaitS, interrupt, interruptAt, at }.
+//   siteWaiting counts the studio's jobs this worker may take now (the beat's claimableNow) plus the one it runs. While
+//   a turn lasts it is at least 1, and it goes to 0 when the studio has had no job for it for a minute (the worker then
+//   frees its own ComfyUI's memory), when it is paused, or when a local cap is reached. interruptAt names one interrupt
+//   the worker allows (the time it allowed it): the helper stops at most one local job per interruptAt value. Both
+//   interrupt and interruptAt go back to false and null once the helper answers after that time.
 // - yielded.json, which the helper writes: { state: "yielding" | "yielded", at, startsAt? }. A fresh "yielded" lets the
 //   worker start at once. "yielding" may carry the helper's estimate of the start (startsAt), which the beat passes on.
 //
@@ -58,8 +60,9 @@ const dayOf = (t) => {
 
 /**
  * The turns on this PC. `step(t, facts)` runs once a loop and says what to write and whether to wait:
- * { siteWaiting, oldestWaitS, interrupt, waitForYield, late, startsAt, ended } — `ended` is "idle" when a turn ended
- * because no job came for a minute (free its own ComfyUI's memory), "stopped" when it ended for any other reason.
+ * { siteWaiting, oldestWaitS, interrupt, interruptAt, waitForYield, late, startsAt, ended } — `interruptAt` is the time
+ * the one allowed interrupt was given (null with none), `ended` is "idle" when a turn ended because no job came for a
+ * minute (free its own ComfyUI's memory), "stopped" when it ended for any other reason.
  */
 export class SiteTurns {
   /** `o`: { folder, stateFile, maxHoursPerDay, interruptGapMin, neverInterrupt, graceMs }. */
@@ -121,9 +124,10 @@ export class SiteTurns {
   /**
    * `f`: { may (the worker may ask for a turn now: the folder is there, the studio says what it can take, nothing pauses
    * it), claimable (the beat's claimableNow), busy (a studio job runs here), workHolds (local ComfyUI work holds more
-   * than busyVramMb), workThere (local ComfyUI work listens at all), serverInterrupt, oldestWaitS (the studio's, when
-   * it says), unsure (another program showed in one reading, which may still become a pause: no new turn begins, and a
-   * turn that has begun goes on, so one reading never makes the helper let go and ask again) }.
+   * than busyVramMb), workThere (local ComfyUI work listens at all), serverInterrupt (a request to stop local work
+   * instead of letting it finish; the beat has none, so the worker passes false), unsure (another program showed in one
+   * reading, which may still become a pause: no new turn begins, and a turn that has begun goes on, so one reading never
+   * makes the helper let go and ask again) }.
    */
   step(t, f) {
     const day = dayOf(t);
@@ -153,7 +157,7 @@ export class SiteTurns {
     }
     if (!this.active) {
       this.waitSince = null;
-      return { siteWaiting: 0, oldestWaitS: 0, interrupt: false, waitForYield: false, late: false, startsAt: null, ended };
+      return { siteWaiting: 0, oldestWaitS: 0, interrupt: false, interruptAt: null, waitForYield: false, late: false, startsAt: null, ended };
     }
     if (f.workHolds) this.neededYield = true;
     // The local ComfyUI work closed: nothing to wait for any more.
@@ -172,16 +176,23 @@ export class SiteTurns {
       this.waitingSince = null;
       if (yielded) this.interrupt = false;
     }
+    // The helper answered after the interrupt was allowed (it is making room, or has): the interrupt has been seen.
+    if (this.interrupt) {
+      const y = readYielded(this.o.folder);
+      if (y && y.at >= this.saved.lastInterruptAt) this.interrupt = false;
+    }
     if (this.o.neverInterrupt || f.serverInterrupt !== true) this.interrupt = false;
     if (t - this.savedAt >= 30_000) this.save(t);
+    // How long people's jobs have waited for this worker, as it saw them (the beat doesn't say).
     this.waitSince = claimable > 0 ? (this.waitSince ?? t) : null;
-    const oldestWaitS = finite(f.oldestWaitS) ? Math.max(0, Math.round(f.oldestWaitS)) : this.waitSince === null ? 0 : Math.round((t - this.waitSince) / 1000);
+    const oldestWaitS = this.waitSince === null ? 0 : Math.round((t - this.waitSince) / 1000);
     const y = waitForYield ? readYielded(this.o.folder) : null;
     return {
       // Jobs it may not take now (paused, with one still finishing) don't count.
       siteWaiting: Math.max(1, (may ? claimable : 0) + (f.busy ? 1 : 0)),
       oldestWaitS,
       interrupt: this.interrupt,
+      interruptAt: this.interrupt ? this.saved.lastInterruptAt : null,
       waitForYield,
       late: waitForYield && t - this.waitingSince >= TURNS.lateMs,
       startsAt: y?.state === "yielding" && y.at >= this.startAt - 1000 ? y.startsAt : null,

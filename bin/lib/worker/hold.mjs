@@ -2,7 +2,9 @@
 // studio hears of it, the worker copies every file the job's history entries name into hold/<task id>/ with a note of
 // the entries (held.json). The results stay there until the studio has them all. If the worker or its ComfyUI stops in
 // between, the next claim gives the job back to this worker, and it uploads the kept files from where the studio's copy
-// got to, instead of running the job again. Kept results of a job that is no longer this worker's are deleted.
+// got to, instead of running the job again. The beat names the jobs kept here, so a pause doesn't send them back in
+// line. Kept results are deleted when the studio has them all, when the worker takes another job, when the studio no
+// longer has the job, or after a day.
 import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
@@ -112,6 +114,35 @@ export class Hold {
   /** Let go of one task's kept results. */
   drop(id) {
     if (TASK_ID.test(String(id))) fs.rmSync(path.join(this.dir, id), { recursive: true, force: true });
+  }
+
+  /**
+   * Let go of kept results older than `maxAgeMs` (by the time they were kept), and of anything else in the folder that
+   * old (a copy that stopped halfway). Returns the task ids let go.
+   */
+  expire(now, maxAgeMs) {
+    let names = [];
+    try {
+      names = fs.readdirSync(this.dir);
+    } catch {
+      return [];
+    }
+    const gone = [];
+    for (const name of names) {
+      const p = path.join(this.dir, name);
+      let at = this.has(name) ? Number(this.note(name)?.at) : NaN;
+      if (!Number.isFinite(at)) {
+        try {
+          at = fs.statSync(p).mtimeMs;
+        } catch {
+          continue;
+        }
+      }
+      if (now - at < maxAgeMs) continue;
+      fs.rmSync(p, { recursive: true, force: true });
+      gone.push(name);
+    }
+    return gone;
   }
 
   /** Let go of every task's kept results but `keep`'s, and of anything else in the folder. */

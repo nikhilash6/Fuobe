@@ -19,12 +19,13 @@ import { fileURLToPath } from "node:url";
 import { StayAwake } from "./awake.mjs";
 import { allowedNodes, cleanJob, emptyFolders, graphCheck, inputRules } from "./checks.mjs";
 import { folders, GuardMissing, OwnComfy, PortBusy } from "./comfy.mjs";
-import { PROTOCOL, readControl, writeControl, writeStatus } from "./config.mjs";
+import { ffmpegOf, PROTOCOL, readControl, writeControl, writeStatus } from "./config.mjs";
 import { GpuWatch, othersOf, readGpu } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
 import { inventoryHash, modelFiles, packFolders } from "./inventory.mjs";
 import { readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
-import { ffmpegVersion, mediaKind, reencode } from "./media.mjs";
+import { takeLock, workerLives } from "./lock.mjs";
+import { ffmpegVersion, fileSize, mediaKind, outputCap, reencode } from "./media.mjs";
 import { retrying } from "./retry.mjs";
 import { SiteTurns, writeSite } from "./turns.mjs";
 
@@ -49,11 +50,47 @@ const HOUR = 3_600_000;
 /** The worker looks at its model folders again this often (a folder that comes back after a restart counts). */
 export const RESCAN_MS = 10 * 60_000;
 
+/** Kept results that the studio hasn't taken for this long are deleted (the studio drops its jobs after a day). */
+export const HOLD_MAX_AGE_MS = 24 * HOUR;
+
+/**
+ * While it may not work, it asks for the job of its kept results at most this often after the studio said it has none
+ * for it (the job may still come back to it once it may work again, so the results stay).
+ */
+export const HELD_RETRY_MS = 60_000;
+
+/** The port an older setup saved for every worker; a worker.json that still pins it gets a free port at each start. */
+export const OLD_SETUP_PORT = 8190;
+
+/** The settings as the worker uses them: a port that an older setup saved (8190) is no pin (the same object otherwise). */
+export const withoutOldPort = (cfg) => (Number(cfg?.port) === OLD_SETUP_PORT ? { ...cfg, port: null } : cfg);
+
+/** An address on a private network: 10.x, 172.16.x to 172.31.x, 192.168.x, or IPv6 fc00::/7. */
+export function privateHost(hostname) {
+  const h = String(hostname).replace(/^\[|\]$/g, "");
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    return m.slice(1).every((x) => Number(x) <= 255) && (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168));
+  }
+  return /^f[cd][0-9a-f]{0,2}:/i.test(h);
+}
+
+/** The studio's address uses http (allowed only on this PC, or on a private network with allowHttpSite). */
+export const plainHttp = (site) => {
+  try {
+    return new URL(String(site)).protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Why the studio's address won't do, or null: it must be https, so the token and people's files never cross the
- * network in the clear. This PC itself (127.0.0.1, localhost) may use http, for tests.
+ * network in the clear. This PC itself (127.0.0.1, localhost) may use http, for tests. An address on a private network
+ * may use http only when worker.json says `allowHttpSite: true` (`o` is the settings).
  */
-export function siteProblem(site) {
+export function siteProblem(site, o = {}) {
   let u;
   try {
     u = new URL(String(site));
@@ -62,6 +99,9 @@ export function siteProblem(site) {
   }
   if (u.protocol === "https:") return null;
   if (u.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname)) return null;
+  if (u.protocol === "http:" && privateHost(u.hostname)) {
+    return o?.allowHttpSite === true ? null : "The studio's address must start with https://. For an http:// address on your own network, set allowHttpSite to true in worker.json.";
+  }
   return "The studio's address must start with https://.";
 }
 
@@ -82,16 +122,11 @@ const arrayBuffer = (buf) => buf.buffer.slice(buf.byteOffset, buf.byteOffset + b
 const count = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
 
 /**
- * What the beat says for studio jobs first: { claimable (the studio's jobs this worker may take now; null when the studio
- * doesn't say, and then local ComfyUI work counts as another program, as before), oldestWaitS, interrupt }.
+ * What the beat says for studio jobs first: { claimable }, the beat's claimableNow (people's jobs this worker may take
+ * now). It is null when the studio doesn't say, and then local ComfyUI work counts as another program, as before.
  */
 export function siteOf(answer) {
-  const w = answer?.worker ?? {};
-  return {
-    claimable: count(answer?.claimableNow) ?? count(w.claimableNow),
-    oldestWaitS: count(answer?.oldestWaitS) ?? count(w.oldestWaitS),
-    interrupt: w.yieldInterrupt === true || answer?.yieldInterrupt === true,
-  };
+  return { claimable: count(answer?.claimableNow) };
 }
 
 /**
@@ -100,13 +135,31 @@ export function siteOf(answer) {
  * signal, requirements, ComputerRunner, rules, pins, allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own
  * options), readCounters, readListeners, gpuEveryMs }.
  */
-export async function runWorker(cfg, deps) {
+export async function runWorker(saved, deps) {
+  // One worker at a time on a worker folder: a second one would stop the first one's ComfyUI, empty its folders and
+  // take its job. It refuses to start instead (WorkerRunning), before it touches anything.
+  fs.mkdirSync(saved.workDir, { recursive: true });
+  const lock = await takeLock(saved.workDir, { commandLineOf: deps.comfy?.commandLineOf });
+  try {
+    return await work(saved, deps, lock.owner);
+  } finally {
+    lock.release();
+  }
+}
+
+/** The worker's loop, with the worker folder's lock held (`owner`: { pid, id, script }, the lock's). */
+async function work(saved, deps, owner) {
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   const log = deps.log ?? ((line) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${line}`));
+  const cfg = withoutOldPort(saved);
+  if (cfg !== saved) log(`worker.json pins port ${OLD_SETUP_PORT}, from an older setup: its ComfyUI takes a free port at each start instead. Run fuobe worker setup again to save the new settings.`);
   const fetchFn = deps.fetch ?? fetch;
-  const problem = siteProblem(cfg.site);
+  const problem = siteProblem(cfg.site, cfg);
   if (problem) throw new Error(problem);
+  if (cfg.allowHttpSite === true && plainHttp(cfg.site) && privateHost(new URL(cfg.site).hostname)) {
+    log("The studio's address uses http:// (allowHttpSite): its token and people's files cross your network unencrypted.");
+  }
   const index = deps.requirements ?? loadRequirements();
   const { ComputerRunner } = deps.ComputerRunner ? { ComputerRunner: deps.ComputerRunner } : await import("./dist/computer-runner.mjs");
   const site = cfg.site.replace(/\/+$/, "");
@@ -120,7 +173,9 @@ export async function runWorker(cfg, deps) {
   const hold = new Hold(path.join(cfg.workDir, "hold"));
   const allowed = deps.allowed ?? allowedNodes(cfg.allowNodesFile);
   const rules = deps.rules ?? inputRules();
-  const comfy = new OwnComfy(cfg, { now, fetch: fetchFn, folderNames: index.folders ?? [], log, ...deps.comfy });
+  const comfy = new OwnComfy(cfg, { now, fetch: fetchFn, folderNames: index.folders ?? [], log, owner, workerLives: (rec) => workerLives(rec, { commandLineOf: deps.comfy?.commandLineOf }), ...deps.comfy });
+  // Only its own ComfyUI, and only while the process it started is up and ready: never whatever listens on that port.
+  const own = (url, init) => (comfy.alive() && comfy.ready ? comfy.fetch(url, init) : Promise.reject(new Error("Its own ComfyUI isn't running")));
   // A ComfyUI that a stopped worker left running is stopped now, before anything else uses the GPU.
   await comfy.stopLeftover();
   // Studio jobs first: only with a turns folder set in worker.json. Without one, every program counts the same, as before.
@@ -139,8 +194,16 @@ export async function runWorker(cfg, deps) {
   // Two busy readings in a row pause it when it tells programs apart (a reading can catch memory on its way).
   const gpu = new GpuWatch({ autoResume: !!cfg.autoResume, resumeAfterMs: (cfg.resumeAfterMin ?? 10) * 60_000, resumeBelowC: cfg.resumeBelowC ?? 75, busyReadings: turns ? 2 : 1 });
   const awake = deps.awake ?? new StayAwake({ now, log });
-  const ffmpeg = await (deps.ffmpegVersion ?? ffmpegVersion)(cfg.ffmpeg);
-  log(ffmpeg ? "ffmpeg is there: it takes clips and sound, and makes each one again first." : "No ffmpeg set (ffmpeg in worker.json): it takes pictures only.");
+  // ffmpeg: worker.json's, or the PATH's when worker.json names none (an older setup's never did).
+  const ffmpegBin = ffmpegOf(cfg);
+  const ffmpeg = ffmpegBin ? await (deps.ffmpegVersion ?? ffmpegVersion)(ffmpegBin) : null;
+  log(
+    ffmpeg
+      ? `ffmpeg is there${cfg.ffmpeg === undefined ? " (on the PATH)" : ""}: it takes clips and sound, and makes each one again first.`
+      : ffmpegBin
+        ? `No working ffmpeg at ${ffmpegBin}: it takes pictures only. Set ffmpeg in worker.json (its full path), or run fuobe worker setup again.`
+        : "No ffmpeg (ffmpeg in worker.json): it takes pictures only.",
+  );
   let comfyTrouble = null;
   let troubleAt = 0;
   let answer = null;
@@ -153,17 +216,23 @@ export async function runWorker(cfg, deps) {
   let busyJob = false;
   let job = Promise.resolve();
   let lastTask = null;
+  let heldRetryAt = 0;
+  let holdCheckedAt = -Infinity;
+  // Its ComfyUI's start, while it goes on (beats go on meanwhile), and the signal that ends a start when the worker stops.
+  let starting = null;
+  const stopStarts = new AbortController();
+  deps.signal?.addEventListener("abort", () => stopStarts.abort(), { once: true });
   let guardMissingAt = -Infinity;
   // Studio jobs first: the last port table, the last split of the GPU's memory, and the last turn step.
   let listing = null;
   let listedAt = -Infinity;
   let split = null;
-  let turn = { siteWaiting: 0, oldestWaitS: 0, interrupt: false, waitForYield: false, late: false, startsAt: null, ended: null };
+  let turn = { siteWaiting: 0, oldestWaitS: 0, interrupt: false, interruptAt: null, waitForYield: false, late: false, startsAt: null, ended: null };
   let siteWritten = "";
   let siteAt = 0;
   let siteFailed = false;
   const writeTurn = (t, body) => {
-    const key = JSON.stringify([body.siteWaiting, body.interrupt]);
+    const key = JSON.stringify([body.siteWaiting, body.interruptAt]);
     siteWritten = key;
     siteAt = t;
     try {
@@ -202,7 +271,7 @@ export async function runWorker(cfg, deps) {
 
   async function scan() {
     packs = packFolders(cfg.comfyDir, index);
-    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json"), deps.pins), nodePacks: packs.map(({ name, commit }) => ({ name, commit })), media: inv.media };
+    inv = { files: await modelFiles(cfg.modelDirs ?? [], index, path.join(cfg.workDir, "hash-cache.json"), deps.pins, { comfyDir: cfg.comfyDir }), nodePacks: packs.map(({ name, commit }) => ({ name, commit })), media: inv.media };
     invHash = inventoryHash(inv);
   }
   // One look at a time; the next beat carries a changed hash, and the studio then asks for the list.
@@ -238,14 +307,20 @@ export async function runWorker(cfg, deps) {
     // Without ffmpeg it takes no clip or sound: another worker that can make them again runs the job.
     if (!ffmpeg) return "give-back";
     const made = path.join(cacheDir, `${input.sha256}.${kind}`);
+    const cap = outputCap(data.length);
     if (!fs.existsSync(made)) {
       const part = `${made}.part`;
-      if (!(await (deps.reencode ?? reencode)({ ffmpeg: cfg.ffmpeg, kind, name: input.name, src: kept, dst: part }))) {
+      if (!(await (deps.reencode ?? reencode)({ ffmpeg: ffmpegBin, kind, name: input.name, src: kept, dst: part, capBytes: cap }))) {
         fs.rmSync(part, { force: true });
-        log(`Job ${t.id}: ffmpeg couldn't read one of its ${kind === "video" ? "clips" : "sounds"}.`);
+        log(`Job ${t.id}: ffmpeg couldn't make one of its ${kind === "video" ? "clips" : "sounds"} again (unreadable, or over ${Math.round(cap / 2 ** 20)} MB).`);
         return "input-unreadable";
       }
       fs.renameSync(part, made);
+    }
+    // Never more than the cap into memory.
+    if (fileSize(made) >= cap) {
+      fs.rmSync(made, { force: true });
+      return "input-unreadable";
     }
     return arrayBuffer(fs.readFileSync(made));
   }
@@ -253,8 +328,7 @@ export async function runWorker(cfg, deps) {
   const runner = new ComputerRunner(
     {
       api: call,
-      // Only its own ComfyUI, and only while the process it started is up: never whatever else listens on that port.
-      local: (url, init) => (comfy.alive() && comfy.ready ? comfy.fetch(url, init) : Promise.reject(new Error("Its own ComfyUI isn't running"))),
+      local: own,
       sha256: async (data) => sha256(Buffer.from(data)),
       origin: site,
       socket: typeof WebSocket === "function" ? (url) => (comfy.ready ? new WebSocket(comfy.rebase(url), { headers: comfy.headers() }) : null) : undefined,
@@ -275,11 +349,13 @@ export async function runWorker(cfg, deps) {
       },
       ended: async (t, phase) => {
         log(`Job ${t.id} ${phase}.`);
-        // Done: the studio has every result. Otherwise its kept results wait for the next claim to say whose job it is.
+        // Done: the studio has every result. Otherwise its kept results wait for the next claim to say whose job it is,
+        // after a while (so a studio that won't take them now doesn't keep its ComfyUI from starting).
         if (phase === "done") hold.drop(t.id);
+        else if (hold.has(t.id)) heldRetryAt = now() + HELD_RETRY_MS;
         delete crashes[t.id];
         saveCrashes();
-        await cleanJob(f, comfy.base, (url, init) => comfy.fetch(url, init));
+        await cleanJob(f, comfy.base, own);
         emptyCache();
       },
       beatExtra: () => ({
@@ -289,8 +365,13 @@ export async function runWorker(cfg, deps) {
         gpu: gpuInfo,
         inventoryHash: invHash,
         warmLane: null,
+        // The jobs whose results it keeps: a pause doesn't send them back in line, so they go up instead of running again.
+        held: hold.ids().slice(0, 16),
       }),
       onBeat: (a) => {
+        // A studio that takes jobs only from a newer worker program: say so once (it sends this worker none).
+        const min = Number(a?.worker?.minProtocol);
+        if (min > PROTOCOL && answer?.worker?.minProtocol !== a.worker.minProtocol) log("The studio needs a newer worker program: it sends this one no jobs. Update the worker (docs/gpu-workers.md, \"Install and update\").");
         answer = a;
         // The owner's switch on the Workers page wins over worker.json; null leaves worker.json's.
         const s = a?.worker?.autoResume;
@@ -299,21 +380,32 @@ export async function runWorker(cfg, deps) {
       worker: {
         hold,
         input: takeInput,
-        stallMs: (cfg.stallMin ?? 10) * 60_000,
+        // The studio's stall limit comes with each job; a stallMin in worker.json wins over it on this PC.
+        stallMs: 10 * 60_000,
+        stallLocalMs: Number(cfg.stallMin) > 0 ? Number(cfg.stallMin) * 60_000 : null,
         free: () => comfy.free(),
         crashes: (t) => crashes[t.id] ?? 0,
         stuck: async () => {
           log("Its ComfyUI didn't let go of a job: starting it again.");
           await comfy.stop();
         },
-        claimed: async (t) => {
-          // Kept results of any other job aren't this worker's any more (one job at a time).
-          hold.dropAllBut(t?.id ?? null);
-          if (!t) return;
+        claimed: async (t, o = {}) => {
+          if (!t) {
+            // No job for it now. Its kept results stay (their job may come back to it); while it may not work it asks
+            // again for them only after a while. Its copies of inputs go.
+            if (o.onlyHeld) heldRetryAt = now() + HELD_RETRY_MS;
+            emptyCache();
+            return;
+          }
+          // Another job, given to a worker that may work: the kept results of any other job aren't this worker's any
+          // more (one job at a time).
+          if (!o.onlyHeld) hold.dropAllBut(t.id);
+          else if (!hold.has(t.id)) heldRetryAt = now() + HELD_RETRY_MS;
           comfy.task = t.id;
-          // Another job than the one its ComfyUI last had: nothing of that one stays.
+          // Another job than the one its ComfyUI last had: nothing of that one stays, in its ComfyUI or in the inputs.
           if (t.id !== lastTask) {
-            await cleanJob(f, comfy.base, (url, init) => comfy.fetch(url, init));
+            await cleanJob(f, comfy.base, own);
+            emptyCache();
             lastTask = t.id;
           }
         },
@@ -478,8 +570,8 @@ export async function runWorker(cfg, deps) {
           busy: busyJob && jobUsesGpu && !stopNow,
           workHolds,
           workThere: !!split && (split.work.pids.length > 0 || !!split.work.lock),
-          serverInterrupt: s.interrupt,
-          oldestWaitS: s.oldestWaitS,
+          // The beat has no request to interrupt local work, and no wait of its own: the worker counts the wait itself.
+          serverInterrupt: false,
         });
         if (turn.waitForYield && !was.waitForYield) log("Local ComfyUI work holds the GPU: asking it to make room for the studio's jobs.");
         if (turn.late && !was.late) log("Local ComfyUI work hasn't made room after 3 minutes: still waiting, with the jobs kept in line.");
@@ -488,43 +580,57 @@ export async function runWorker(cfg, deps) {
           log("No studio job for a minute: its ComfyUI lets go of its memory for local work.");
           if (comfy.ready && !busyJob) await comfy.free();
         }
-        if (turns.folderOk() && (beaten || JSON.stringify([turn.siteWaiting, turn.interrupt]) !== siteWritten || t - siteAt >= 5000)) {
-          writeTurn(t, { siteWaiting: turn.siteWaiting, oldestWaitS: turn.oldestWaitS, interrupt: turn.interrupt });
+        if (turns.folderOk() && (beaten || JSON.stringify([turn.siteWaiting, turn.interruptAt]) !== siteWritten || t - siteAt >= 5000)) {
+          writeTurn(t, { siteWaiting: turn.siteWaiting, oldestWaitS: turn.oldestWaitS, interrupt: turn.interrupt, interruptAt: turn.interruptAt });
         }
         // No new job while local ComfyUI work holds the GPU, unless a turn has begun and it made room.
         holdBack = turn.waitForYield || (turnsReady(t) && workHolds && turn.siteWaiting === 0) || gpu.busyInARow > 0;
       }
+      // Kept results go up before its ComfyUI starts (they need none, and a start can take minutes), unless the studio
+      // said a moment ago that their job isn't this worker's now.
+      const heldFirst = hold.ids().length > 0 && t >= heldRetryAt && (!busyJob || !jobUsesGpu);
       if (mayWork()) {
-        if (!comfy.alive() && !comfyTrouble && t >= comfy.restartAt) {
+        if (!comfy.alive() && !starting && !comfyTrouble && t >= comfy.restartAt && !heldFirst) {
           if (comfy.crashedTooOften(t)) {
             comfyTrouble = "comfy-crashes";
             log("ComfyUI keeps stopping: pausing for an hour.");
           } else {
-            try {
-              log("Starting its own ComfyUI.");
-              // The packs by their folder names on disk, which is what ComfyUI matches (whatever the catalog's case).
-              await comfy.start(packs.map((p) => p.folder));
-            } catch (e) {
-              if (e instanceof PortBusy) {
-                comfyTrouble = "port-busy";
-                troubleAt = t;
-                log(`${e.message}: it won't start ComfyUI there, and won't connect to it.`);
-              } else if (e instanceof GuardMissing) {
-                // Not again for an hour: it would only start the same ComfyUI again.
-                comfyTrouble = "comfy-crashes";
-                guardMissingAt = t;
-                log(`${e.message}: it won't use it, and pauses for an hour.`);
-              } else log(`ComfyUI didn't start: ${e.message}`);
-            }
+            log("Starting its own ComfyUI.");
+            // In the background: beats go on while it starts. The packs by their folder names on disk, which is what
+            // ComfyUI matches (whatever the catalog's case).
+            starting = comfy
+              .start(
+                packs.map((p) => p.folder),
+                { signal: stopStarts.signal },
+              )
+              .catch((e) => {
+                if (stopStarts.signal.aborted) return;
+                if (e instanceof PortBusy) {
+                  comfyTrouble = "port-busy";
+                  troubleAt = now();
+                  log(`${e.message}: it won't start ComfyUI there, and won't connect to it.`);
+                } else if (e instanceof GuardMissing) {
+                  // Not again for an hour: it would only start the same ComfyUI again.
+                  comfyTrouble = "comfy-crashes";
+                  guardMissingAt = now();
+                  log(`${e.message}: it won't use it, and pauses for an hour.`);
+                } else if (mayWork()) log(`ComfyUI didn't start: ${e.message}`);
+              })
+              .finally(() => (starting = null));
           }
         }
-        if (comfy.ready && answer?.runner && !busyJob && !holdBack) take();
+        if (comfy.ready && answer?.runner && !busyJob && !holdBack && !heldFirst) take();
       } else if (comfy.alive() && (stopNow || !busyJob)) {
         log("Stopping its own ComfyUI (paused).");
         await comfy.stop();
       }
-      // Kept results go up even while it may not work (or waits for its turn): they need no GPU and no ComfyUI.
-      if (!busyJob && answer && hold.ids().length && !(mayWork() && comfy.ready && !holdBack)) take({ onlyHeld: true });
+      // Kept results the studio never took are deleted after a day.
+      if (t - holdCheckedAt >= 60_000) {
+        holdCheckedAt = t;
+        for (const id of hold.expire(t, HOLD_MAX_AGE_MS)) log(`Deleted the kept results of job ${id}: the studio didn't take them for a day.`);
+      }
+      // Kept results go up first, and even while it may not work (or waits for its turn): they need no GPU and no ComfyUI.
+      if (!busyJob && answer && heldFirst) take({ onlyHeld: true });
       // Awake while it holds a job, has results to send, or waits for work.
       awake.set(!!answer?.worker && (busyJob || hold.ids().length > 0 || !!mayWork()));
       // A taken port is tried again (a bind test, never a connection) once a minute.
@@ -544,7 +650,11 @@ export async function runWorker(cfg, deps) {
     await Promise.race([job, new Promise((r) => setTimeout(r, 10_000).unref?.())]);
     awake.set(false);
     // No turn any more: local ComfyUI work may go on at once.
-    if (turns?.folderOk()) writeTurn(now(), { siteWaiting: 0, oldestWaitS: 0, interrupt: false });
+    if (turns?.folderOk()) writeTurn(now(), { siteWaiting: 0, oldestWaitS: 0, interrupt: false, interruptAt: null });
+    // A start under way ends first (it stops at the signal), so no ComfyUI is left behind.
+    stopStarts.abort();
+    await comfy.stop();
+    await starting;
     await comfy.stop();
     emptyFolders(f);
     emptyCache();

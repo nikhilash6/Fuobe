@@ -3,7 +3,12 @@
 // file (metadata, chapters, subtitles, attachments, data streams) is kept. Only ffmpeg ever reads the file as it came,
 // in its own short-lived process at low priority. A worker without ffmpeg takes pictures only: it says so in its
 // inventory, so no job that reads a clip or a sound comes to it.
+//
+// ffmpeg reads the file only as a plain local file in one of a short list of container formats: no playlist, list or
+// reference format that would make it open other files or addresses. What it writes has limits too: at most an hour,
+// at most 4096 pixels on the long side, and a size cap. A result that reaches the cap is refused.
 import { execFile, spawn } from "node:child_process";
+import fs from "node:fs";
 import os from "node:os";
 
 const VIDEO_EXT = new Set(["mp4", "m4v", "mov", "mkv", "webm", "avi", "gif", "mpg", "mpeg", "wmv", "flv", "3gp", "ts", "mts", "m2ts"]);
@@ -29,7 +34,25 @@ export function mediaKind(input, graph) {
   return null;
 }
 
-const EVEN = ["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"];
+/**
+ * What a clip or a sound made again may be: at most `maxSeconds` long and `maxSide` pixels on its long side, and at
+ * most `bytesPerInput` times its input's size, never under `minBytes` and never over `maxBytes`.
+ */
+export const MEDIA_LIMITS = { maxSeconds: 3600, maxSide: 4096, maxBytes: 2 * 2 ** 30, minBytes: 256 * 2 ** 20, bytesPerInput: 8 };
+
+/** The size cap of what ffmpeg writes for an input of `inputBytes`. */
+export const outputCap = (inputBytes) => Math.min(MEDIA_LIMITS.maxBytes, Math.max(MEDIA_LIMITS.minBytes, MEDIA_LIMITS.bytesPerInput * (Number(inputBytes) || 0)));
+
+/**
+ * The container formats ffmpeg may read a job's file as (its readers' names: "mov" covers MP4, MOV, M4A and 3GP, and
+ * "matroska" covers MKV and WebM). No playlist, list or reference format.
+ */
+export const INPUT_FORMATS = ["mov", "matroska", "avi", "gif", "mpegts", "mpeg", "flv", "asf", "wav", "mp3", "flac", "ogg", "aac", "aiff"];
+
+/** Down to `maxSide` pixels on the long side when bigger, keeping the shape, with even sides (H.264 and VP9 need them). */
+const side = (dim) => `trunc(min(${dim}\\,${MEDIA_LIMITS.maxSide})/2)*2`;
+export const FIT = `scale=w=if(gte(iw\\,ih)\\,${side("iw")}\\,-2):h=if(gte(iw\\,ih)\\,-2\\,${side("ih")})`;
+const EVEN = ["-vf", FIT];
 const H264 = [...EVEN, "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p"];
 const VIDEO = {
   mp4: [...H264, "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-f", "mp4"],
@@ -38,7 +61,7 @@ const VIDEO = {
   mkv: [...H264, "-c:a", "aac", "-b:a", "192k", "-f", "matroska"],
   webm: [...EVEN, "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-row-mt", "1", "-crf", "20", "-b:v", "0", "-c:a", "libopus", "-b:a", "160k", "-f", "webm"],
   avi: [...H264, "-c:a", "libmp3lame", "-q:a", "2", "-f", "avi"],
-  gif: ["-an", "-filter_complex", "[0:v:0]split[a][b];[a]palettegen[p];[b][p]paletteuse", "-f", "gif"],
+  gif: ["-an", "-filter_complex", `[0:v:0]${FIT},split[a][b];[a]palettegen[p];[b][p]paletteuse`, "-f", "gif"],
 };
 const AUDIO = {
   wav: ["-c:a", "pcm_s24le", "-f", "wav"],
@@ -58,16 +81,33 @@ const AUDIO = {
 /**
  * ffmpeg's arguments to make `src` again as `dst`: the first video stream and the first sound stream for a clip (the
  * format its name says: H.264 and AAC in MP4 when it says nothing ffmpeg writes well), the first sound stream for a
- * sound; no metadata, chapters, subtitles or data.
+ * sound; no metadata, chapters, subtitles or data. ffmpeg reads `src` only as a local file (`file:` is the only protocol
+ * it may use) in one of INPUT_FORMATS, and writes at most MEDIA_LIMITS.maxSeconds and `capBytes`.
  */
-export function encodeArgs(kind, name, src, dst) {
+export function encodeArgs(kind, name, src, dst, capBytes = MEDIA_LIMITS.maxBytes) {
   const ext = extOf(name);
-  const head = ["-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-i", src, "-map_metadata", "-1", "-map_chapters", "-1", "-sn", "-dn"];
+  const head = [
+    "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+    "-protocol_whitelist", "file", "-format_whitelist", INPUT_FORMATS.join(","),
+    "-i", `file:${src}`,
+    "-map_metadata", "-1", "-map_chapters", "-1", "-sn", "-dn",
+    "-t", String(MEDIA_LIMITS.maxSeconds), "-fs", String(Math.floor(capBytes)),
+  ];
+  const out = `file:${dst}`;
   if (kind === "video") {
     const fmt = VIDEO[ext] ?? VIDEO.mp4;
-    return ext === "gif" ? [...head, ...fmt, dst] : [...head, "-map", "0:v:0", "-map", "0:a:0?", ...fmt, dst];
+    return ext === "gif" ? [...head, ...fmt, out] : [...head, "-map", "0:v:0", "-map", "0:a:0?", ...fmt, out];
   }
-  return [...head, "-vn", "-map", "0:a:0", ...(AUDIO[ext] ?? AUDIO.wav), dst];
+  return [...head, "-vn", "-map", "0:a:0", ...(AUDIO[ext] ?? AUDIO.wav), out];
+}
+
+/** A file's size in bytes (0 when it isn't there). */
+export function fileSize(file) {
+  try {
+    return fs.statSync(file).size;
+  } catch {
+    return 0;
+  }
 }
 
 /** ffmpeg's version line, or null when there is no working ffmpeg at `bin`. */
@@ -83,13 +123,13 @@ export function ffmpegVersion(bin) {
 
 /**
  * Make a clip or a sound again (`encodeArgs`) in its own process at low priority, stopped after `timeoutMs`. True when
- * ffmpeg made it.
+ * ffmpeg made it under `capBytes` (ffmpeg stops writing at the cap, so a file that reached it is cut short: false).
  */
-export function reencode({ ffmpeg, kind, name, src, dst, timeoutMs = 20 * 60_000, spawnFn = spawn }) {
+export function reencode({ ffmpeg, kind, name, src, dst, capBytes = outputCap(fileSize(src)), timeoutMs = 20 * 60_000, spawnFn = spawn }) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawnFn(ffmpeg, encodeArgs(kind, name, src, dst), { stdio: ["ignore", "ignore", "ignore"], windowsHide: true });
+      child = spawnFn(ffmpeg, encodeArgs(kind, name, src, dst, capBytes), { stdio: ["ignore", "ignore", "ignore"], windowsHide: true });
     } catch {
       return resolve(false);
     }
@@ -98,6 +138,10 @@ export function reencode({ ffmpeg, kind, name, src, dst, timeoutMs = 20 * 60_000
     } catch {}
     const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
     child.once("error", () => (clearTimeout(timer), resolve(false)));
-    child.once("exit", (code) => (clearTimeout(timer), resolve(code === 0)));
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      const size = fileSize(dst);
+      resolve(code === 0 && size > 0 && size < capBytes);
+    });
   });
 }

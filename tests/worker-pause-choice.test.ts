@@ -67,6 +67,28 @@ describe("me first", () => {
     const gpu = { readGpu: async () => ({ usedMb: 9700, tempC: 40, apps: [] }), readCounters: async () => parseCounters(typeperf([[4242, 9000], [77, 650]])), readListeners: async () => LISTING };
     expect(await worker(["baseline"], { ...a.io, gpu })).toBe(0);
     expect(JSON.parse(fs.readFileSync(path.join(home, "worker.json"), "utf8"))).toEqual({ site: "https://studio.example", workDir: "D:\\w", desktopBaselineMb: 700 });
+    expect(a.out.join("")).toContain("Counted: 700 MB, mostly dwm (process 77, 650 MB)");
     expect(await worker(["baseline"], { ...a.io, gpu: { ...gpu, readCounters: async () => null } })).toBe(1);
+  });
+
+  it("baseline leaves out the running worker's own ComfyUI, and saves at most its cap with a warning", async () => {
+    const home = tempDir("fuobe-worker-home-");
+    const workDir = tempDir("fuobe-worker-work-");
+    fs.writeFileSync(path.join(home, "worker.json"), JSON.stringify({ site: "https://studio.example", workDir }));
+    // The worker runs: its own ComfyUI (pid 5000 on port 31400) holds 18 GB.
+    fs.writeFileSync(path.join(workDir, "comfyui.pid"), JSON.stringify({ pid: 5000, port: 31_400 }));
+    const listing = { listeners: [...LISTING.listeners, { port: 31_400, pid: 5000 }], names: { ...LISTING.names, "5000": "python", "6000": "game" } };
+    const a = io([], home);
+    const gpu = { readGpu: async () => ({ usedMb: 18_650, tempC: 40, apps: [] }), readCounters: async () => parseCounters(typeperf([[5000, 18_000], [77, 650]])), readListeners: async () => listing };
+    expect(await worker(["baseline"], { ...a.io, gpu })).toBe(0);
+    expect(JSON.parse(fs.readFileSync(path.join(home, "worker.json"), "utf8")).desktopBaselineMb).toBe(650);
+    expect(a.out.join("")).toContain("Not counted: the worker's own ComfyUI (18000 MB)");
+    // A game left open: the cap, and the game named.
+    const b = io([], home);
+    const game = { ...gpu, readGpu: async () => ({ usedMb: 30_650, tempC: 40, apps: [] }), readCounters: async () => parseCounters(typeperf([[5000, 18_000], [6000, 12_000], [77, 650]])) };
+    expect(await worker(["baseline"], { ...b.io, gpu: game })).toBe(0);
+    expect(JSON.parse(fs.readFileSync(path.join(home, "worker.json"), "utf8")).desktopBaselineMb).toBe(4096);
+    expect(b.out.join("")).toMatch(/game \(process 6000, 12000 MB\)/);
+    expect(b.out.join("")).toMatch(/another GPU program was open/);
   });
 });

@@ -40,8 +40,11 @@ export type GiveBackWhy = (typeof GIVE_BACK)[number];
 
 /** What the tab reports about one task. */
 export type ReportEvent =
-  /** ComfyUI took the prompt (`promptId`: the id it answered, the server's own unless an older ComfyUI minted one). */
-  | { event: "sent"; promptId: string; number?: number }
+  /**
+   * ComfyUI took the prompt (`promptId`: the id it answered, the server's own unless an older ComfyUI minted one).
+   * `kept`: a worker sends results it kept from an earlier try instead (nothing new runs, so it isn't another attempt).
+   */
+  | { event: "sent"; promptId: string; number?: number; kept?: boolean }
   /** ComfyUI's /prompt refused it (its answer, as it was). */
   | { event: "refused"; status: number; body: unknown }
   /** Waiting in ComfyUI's queue: how many prompts are before it. */
@@ -50,14 +53,15 @@ export type ReportEvent =
   | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number }
   /**
    * Finished: its /history entry. A worker adds the most VRAM it took (for the benchmarks), how long its ComfyUI spent
-   * executing the job (`execMs`: execution only, no waits, no uploads) and its GPU's name (`device`).
+   * executing the job (`execMs`: execution only, no waits, no uploads), its GPU's name (`device`), and `kept` when the
+   * results are ones it kept from an earlier try (their time doesn't count toward the lane's times).
    */
-  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string }
+  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string; kept?: boolean }
   /**
    * A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. The
-   * last one (not running) is the job's end: a worker adds `execMs` and `device` as for "finished".
+   * last one (not running) is the job's end: a worker adds `execMs`, `device` and `kept` as for "finished".
    */
-  | { event: "passes"; running: boolean; entries: HistoryEntryLike[]; execMs?: number; device?: string }
+  | { event: "passes"; running: boolean; entries: HistoryEntryLike[]; execMs?: number; device?: string; kept?: boolean }
   /** A worker gives the task back to the line (it counts as an attempt). */
   | { event: "give-back"; why: GiveBackWhy }
   /** ComfyUI has no trace of it (restarted): the server sends it again once. */
@@ -129,10 +133,14 @@ export interface ClaimedTask {
   /** Collecting: the files still to upload, and how far each got. */
   wanted?: WantedFile[];
   received?: { n: number; bytes: number; done: boolean }[];
-  /** A worker's task (docs/gpu-workers.md): its lane, how long it should take there, when to stop it, and its files. */
+  /**
+   * A worker's task (docs/gpu-workers.md): its lane, how long it should take there, when to stop it (`runLimitMs`: running
+   * past it; `stallMs`: no progress for that long), and its files.
+   */
   lane?: string;
   estMs?: number | null;
   runLimitMs?: number;
+  stallMs?: number;
   notAfter?: number | null;
   attempt?: number;
   models?: { folder: string; name: string; size: number; sha256: string | null }[];
@@ -167,6 +175,8 @@ export interface BeatAnswer {
   waiting: number;
   /** Prompts to take off this computer's ComfyUI. */
   stops: { task: string; promptId: string; prefix?: string }[];
+  /** A worker's: people's tasks (never the owner's own) it may claim now; its own pause doesn't count here. */
+  claimableNow?: number;
   /** A worker's own (docs/gpu-workers.md): what the studio says about it now. */
   worker?: WorkerAnswer;
 }
@@ -206,6 +216,8 @@ export interface WorkerBeat {
   warmLane: string | null;
   running: { task: string; position?: number; value?: number; max?: number; node?: string; nodesDone?: number }[];
   stopped: string[];
+  /** The tasks whose finished results the worker keeps on its disk (a stop-now leaves them its own, to send them up). */
+  held?: string[];
 }
 
 /** Task timings (DESIGN 5.5): the runner lease, how often the tab beats, when a computer counts as gone. */
@@ -376,9 +388,9 @@ export function tabFailureWords(reason: TabFailure, status?: number): string {
     case "model-unverified":
       return "The GPU that took this run refused it: it needs a model file that GPU couldn't verify.";
     case "input-crashed":
-      return "This run stopped twice at the same point. Try another file or different settings.";
+      return "This run couldn't finish with these files or settings.";
     case "input-unreadable":
-      return "A clip or a sound in this run couldn't be read. Try another file.";
+      return "A clip or sound in this run couldn't be read.";
     default:
       return `Your ComfyUI answered HTTP ${Number.isInteger(status) ? status : "?"}. Check that it's running, then press Retry.`;
   }

@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { GpuWatch } from "../bin/lib/worker/gpu.mjs";
-import { measureBaseline, parseCounters, parseListeners, pickGpu, readLock, splitMemory, unknownHolder, workPids } from "../bin/lib/worker/local-work.mjs";
+import { BASELINE_CAP_MB, measureBaseline, parseCounters, parseListeners, pickGpu, readLock, splitMemory, unknownHolder, workPids } from "../bin/lib/worker/local-work.mjs";
 import { readYielded, SiteTurns, TURNS, writeSite } from "../bin/lib/worker/turns.mjs";
 import { siteOf } from "../bin/lib/worker/run.mjs";
 import { tempDir } from "./helpers/temp-dir";
@@ -124,9 +124,28 @@ describe("the port table and the GPU counters", () => {
   });
 
   it("measures the desktop's share at setup, without local ComfyUI work", async () => {
-    const mb = await measureBaseline({ localComfyPorts: [8188, 8199] }, { readGpu: async () => ({ usedMb: 9700, tempC: 40, apps: [] }), readCounters: async () => parseCounters(typeperf([[4242, 9000], [77, 650]])), readListeners: async () => LISTING });
-    expect(mb).toBe(700);
+    const m = await measureBaseline({ localComfyPorts: [8188, 8199] }, { readGpu: async () => ({ usedMb: 9700, tempC: 40, apps: [] }), readCounters: async () => parseCounters(typeperf([[4242, 9000], [77, 650]])), readListeners: async () => LISTING });
+    expect(m).toMatchObject({ mb: 700, measuredMb: 700, capped: false, usedMb: 9700, ownMb: 0, workMb: 9000, top: [{ pid: 77, mb: 650, name: "dwm" }] });
     expect(await measureBaseline({}, { readGpu: async () => ({ usedMb: 1, tempC: 1, apps: [] }), readCounters: async () => null })).toBeNull();
+  });
+
+  it("leaves out the worker's own ComfyUI, by its pid file: its process and the one on its port (a venv's real Python)", async () => {
+    const workDir = tempDir("fuobe-worker-baseline-");
+    // The worker runs: its ComfyUI started as pid 900 (a venv's python.exe), whose own Python (pid 901) listens on 31400
+    // and holds 18 GB of models.
+    fs.writeFileSync(path.join(workDir, "comfyui.pid"), JSON.stringify({ pid: 900, port: 31_400, marker: "comfy_guard.py" }));
+    const listing = { listeners: [...LISTING.listeners, { port: 31_400, pid: 901 }], names: { ...LISTING.names, "901": "python" } };
+    const deps = { readGpu: async () => ({ usedMb: 18_600, tempC: 40, apps: [] }), readCounters: async () => parseCounters(typeperf([[900, 0], [901, 18_000], [77, 600]])), readListeners: async () => listing };
+    expect(await measureBaseline({ workDir, localComfyPorts: [8188, 8199] }, deps)).toMatchObject({ mb: 600, ownMb: 18_000, capped: false });
+    // Without the pid file (an older worker folder), it would count as the desktop's: capped, and said so.
+    const blind = await measureBaseline({ workDir: tempDir("fuobe-worker-baseline-"), localComfyPorts: [8188, 8199] }, deps);
+    expect(blind).toMatchObject({ mb: BASELINE_CAP_MB, measuredMb: 18_600, capped: true });
+    expect(blind!.top[0]).toEqual({ pid: 901, mb: 18_000, name: "python" });
+  });
+
+  it("saves at most its cap: a game left open is named instead of hiding programs from then on", async () => {
+    const m = await measureBaseline({ localComfyPorts: [8188, 8199] }, { readGpu: async () => ({ usedMb: 12_700, tempC: 40, apps: [] }), readCounters: async () => parseCounters(typeperf([[5555, 12_000], [77, 650]])), readListeners: async () => LISTING });
+    expect(m).toMatchObject({ mb: BASELINE_CAP_MB, measuredMb: 12_700, capped: true, top: [{ pid: 5555, mb: 12_000, name: "game" }, { pid: 77, mb: 650, name: "dwm" }] });
   });
 });
 
@@ -211,6 +230,21 @@ describe("turns", () => {
     expect(turns.step(T0 + 30_000, { ...facts, may: false, unsure: true })).toMatchObject({ siteWaiting: 0, ended: "stopped" });
   });
 
+  it("allows one interrupt, named by the time it was allowed, until the helper answers after it", () => {
+    const a = setup({ interruptGapMin: 30 });
+    expect(a.turns.step(T0, { ...facts, serverInterrupt: true })).toMatchObject({ interrupt: true, interruptAt: T0 });
+    // Still the same one interrupt while the helper hasn't answered: a helper stops one job per interruptAt.
+    expect(a.turns.step(T0 + 1000, { ...facts, serverInterrupt: true })).toMatchObject({ interrupt: true, interruptAt: T0, waitForYield: true });
+    // An answer from before it was allowed doesn't count.
+    answer(a.folder, { state: "yielding", at: T0 - 5000 });
+    expect(a.turns.step(T0 + 2000, { ...facts, serverInterrupt: true })).toMatchObject({ interrupt: true, interruptAt: T0 });
+    // The helper is making room, after the interrupt was allowed: it has seen it, and the flag goes.
+    answer(a.folder, { state: "yielding", at: T0 + 2500, startsAt: T0 + 60_000 });
+    expect(a.turns.step(T0 + 3000, { ...facts, serverInterrupt: true })).toMatchObject({ interrupt: false, interruptAt: null, waitForYield: true });
+    // Still inside the gap: no second interrupt in this turn.
+    expect(a.turns.step(T0 + 4000, { ...facts, serverInterrupt: true })).toMatchObject({ interrupt: false, interruptAt: null });
+  });
+
   it("asks for an interrupt only when the studio does, at most once per gap, and never when the PC says never", () => {
     const a = setup({ interruptGapMin: 30 });
     expect(a.turns.step(T0, { ...facts, serverInterrupt: true }).interrupt).toBe(true);
@@ -273,17 +307,19 @@ describe("turns", () => {
     expect(t.folderOk()).toBe(false);
   });
 
-  it("reads the beat's count, the oldest wait and the interrupt switch; absent means it doesn't say", () => {
-    expect(siteOf({ claimableNow: 2, oldestWaitS: 40, worker: { yieldInterrupt: true } })).toEqual({ claimable: 2, oldestWaitS: 40, interrupt: true });
-    expect(siteOf({ worker: { claimableNow: 1 } })).toEqual({ claimable: 1, oldestWaitS: null, interrupt: false });
-    expect(siteOf({ waiting: 9, worker: {} })).toEqual({ claimable: null, oldestWaitS: null, interrupt: false });
+  it("reads only the beat's claimableNow (a count); absent, or anything else, means the studio doesn't say", () => {
+    expect(siteOf({ claimableNow: 2 })).toEqual({ claimable: 2 });
+    expect(siteOf({ claimableNow: 0 })).toEqual({ claimable: 0 });
+    // Fields the protocol doesn't have are not read.
+    expect(siteOf({ worker: { claimableNow: 1, yieldInterrupt: true }, oldestWaitS: 40 })).toEqual({ claimable: null });
+    expect(siteOf({ waiting: 9, claimableNow: -1, worker: {} })).toEqual({ claimable: null });
     expect(siteOf(null).claimable).toBeNull();
   });
 
-  it("the oldest wait: the studio's when it says, else how long this worker has seen jobs waiting", () => {
+  it("the oldest wait: how long this worker has seen people's jobs waiting for it", () => {
     const { turns } = setup();
     expect(turns.step(T0, { ...facts, workHolds: false }).oldestWaitS).toBe(0);
     expect(turns.step(T0 + 30_000, { ...facts, workHolds: false }).oldestWaitS).toBe(30);
-    expect(turns.step(T0 + 31_000, { ...facts, workHolds: false, oldestWaitS: 95 }).oldestWaitS).toBe(95);
+    expect(turns.step(T0 + 31_000, { ...facts, workHolds: false, claimable: 0 }).oldestWaitS).toBe(0);
   });
 });

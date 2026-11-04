@@ -13,6 +13,7 @@
 // usual share (measured at setup).
 import { execFile } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 import { CONTEXT_ALLOWANCE_MB } from "./gpu.mjs";
 
 /** ComfyUI's own default port and the next few: where local ComfyUIs listen unless worker.json says otherwise. */
@@ -192,9 +193,26 @@ export function splitMemory(o) {
   return { ownMb: torchOwn, workMb: 0, othersMb: rest, who: o.lock !== null && o.lock !== undefined ? "another program" : (named ?? "another program"), work: { pids: [], port: null }, source: o.lock !== null && o.lock !== undefined ? "lock" : "total" };
 }
 
+/** The most `fuobe worker baseline` saves: a desktop alone uses less, so more means another program was open. */
+export const BASELINE_CAP_MB = 4096;
+
+/** The worker's own ComfyUI as its pid file in the worker folder says ({ pid, port }), or null when it has none. */
+export function ownComfyOf(workDir) {
+  try {
+    const rec = JSON.parse(fs.readFileSync(path.join(workDir, "comfyui.pid"), "utf8"));
+    const pid = Number.isInteger(rec?.pid) && rec.pid > 0 ? rec.pid : null;
+    const port = Number.isInteger(rec?.port) && rec.port > 0 ? rec.port : null;
+    return pid || port ? { pid, port } : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The desktop's usual share of the GPU, measured once at setup with no game or other GPU program open: the used memory
- * minus local ComfyUI work, from the counters. Null when the counters or the port table can't be read.
+ * minus local ComfyUI work and minus the worker's own ComfyUI (by its pid file: its process, and the one on its port),
+ * from the counters. Null when the counters or the port table can't be read. Otherwise { mb (what to save: at most
+ * BASELINE_CAP_MB), measuredMb, capped, usedMb, ownMb, workMb, top (the biggest of the rest: [{ name, pid, mb }]) }.
  */
 export async function measureBaseline(cfg, deps = {}) {
   const { readGpu } = await import("./gpu.mjs");
@@ -203,6 +221,18 @@ export async function measureBaseline(cfg, deps = {}) {
   const counters = await (deps.readCounters ?? readCounters)(cfg.gpuCounters);
   const listing = counters ? await (deps.readListeners ?? readListeners)(cfg.powershell) : null;
   if (!counters || !listing) return null;
-  const split = splitMemory({ usedMb: reading.usedMb, apps: reading.apps, counters, listing, own: { pid: null, port: null, running: false, mb: null }, ports: cfg.localComfyPorts, excludePorts: cfg.localComfyExcludePorts, excludePids: cfg.localComfyExcludePids, baselineMb: 0, gpu: cfg.gpuLuid });
-  return Math.round(split.othersMb);
+  const mine = cfg.workDir ? ownComfyOf(cfg.workDir) : null;
+  const own = { pid: mine?.pid ?? null, port: mine?.port ?? null, running: false, mb: null };
+  const o = { ports: cfg.localComfyPorts, excludePorts: cfg.localComfyExcludePorts, excludePids: cfg.localComfyExcludePids };
+  const split = splitMemory({ usedMb: reading.usedMb, apps: reading.apps, counters, listing, own, ...o, baselineMb: 0, gpu: cfg.gpuLuid });
+  // The rest, by process, for the owner to see what was counted.
+  const pids = workPids(listing, { ...o, ownPid: own.pid, ownPort: own.port });
+  const gpu = pickGpu(counters, cfg.gpuLuid);
+  const top = counters
+    .filter((c) => c.gpu === gpu && c.mb > 0 && !pids.own.has(c.pid) && !pids.work.has(c.pid))
+    .sort((a, b) => b.mb - a.mb)
+    .slice(0, 5)
+    .map((c) => ({ pid: c.pid, mb: Math.round(c.mb), name: listing.names?.[c.pid] ?? reading.apps?.find((a) => a.pid === c.pid)?.name ?? "a program" }));
+  const measuredMb = Math.round(split.othersMb);
+  return { mb: Math.min(measuredMb, BASELINE_CAP_MB), measuredMb, capped: measuredMb > BASELINE_CAP_MB, usedMb: Math.round(reading.usedMb), ownMb: Math.round(split.ownMb), workMb: Math.round(split.workMb), top };
 }

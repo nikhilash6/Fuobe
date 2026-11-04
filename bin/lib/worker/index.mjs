@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, parseFor, readControl, readStatus, saveConfig, syncedFolder, workerHome, writeControl } from "./config.mjs";
+import { loadConfig, parseFor, readControl, readStatus, saveConfig, savedConfig, syncedFolder, workerHome, writeControl } from "./config.mjs";
 import { installScript } from "./install.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -25,16 +25,6 @@ export async function choosePause(io) {
   return null;
 }
 
-/** worker.json as saved (no defaults, no token from the environment). */
-function savedConfig(home) {
-  try {
-    const c = JSON.parse(fs.readFileSync(path.join(home, "worker.json"), "utf8"));
-    return c && typeof c === "object" ? c : {};
-  } catch {
-    return {};
-  }
-}
-
 /** The worker command. Returns the exit code. */
 export async function worker(args, io) {
   const [sub = "status", ...rest] = args;
@@ -53,8 +43,8 @@ export async function worker(args, io) {
         io.stderr.write("The worker's shared parts aren't built. Run: node scripts/build-worker.mjs\n");
         return 2;
       }
-      const { runWorker, siteProblem } = await import("./run.mjs");
-      const problem = siteProblem(cfg.site);
+      const { runWorker, siteProblem, withoutOldPort } = await import("./run.mjs");
+      const problem = siteProblem(cfg.site, cfg);
       if (problem) {
         io.stderr.write(`${problem} Run: fuobe worker setup\n`);
         return 2;
@@ -63,10 +53,17 @@ export async function worker(args, io) {
       // Ctrl+C, or a stop from the system: the worker stops its ComfyUI and cleans up before it exits (finished results
       // stay for its next start).
       const off = (io.onStop ?? io.onInterrupt)?.(() => ctrl.abort());
-      say(`Fuobe worker for ${cfg.site}. ${cfg.port ? `Its own ComfyUI uses port ${cfg.port}` : "Its own ComfyUI takes a free local port at each start"}. Ctrl+C stops it.`);
+      const port = withoutOldPort(cfg).port;
+      say(`Fuobe worker for ${cfg.site}. ${port ? `Its own ComfyUI uses port ${port}` : "Its own ComfyUI takes a free local port at each start"}. Ctrl+C stops it.`);
       let why;
       try {
         why = await runWorker(cfg, { home, signal: ctrl.signal });
+      } catch (e) {
+        // Another worker runs on this worker folder: this one leaves it alone. Not 0, so a scheduled start tries again later.
+        const { WorkerRunning } = await import("./lock.mjs");
+        if (!(e instanceof WorkerRunning)) throw e;
+        io.stderr.write(`${e.message}\n`);
+        return 4;
       } finally {
         off?.();
       }
@@ -121,15 +118,23 @@ export async function worker(args, io) {
     }
     case "baseline": {
       // The desktop's usual share of the GPU, for studio jobs first. Local ComfyUI work may stay open; it isn't counted.
-      const { measureBaseline } = await import("./local-work.mjs");
-      const mb = await measureBaseline(loadConfig(home, io.env), io.gpu ?? {});
-      if (mb === null) {
+      // The worker's own ComfyUI isn't counted either, so the worker may keep running.
+      const { BASELINE_CAP_MB, measureBaseline } = await import("./local-work.mjs");
+      const m = await measureBaseline(loadConfig(home, io.env), io.gpu ?? {});
+      if (m === null) {
         io.stderr.write("Couldn't read the GPU counters or the port table on this PC, so nothing changed.\n");
         return 1;
       }
-      saveConfig(home, { ...savedConfig(home), desktopBaselineMb: mb });
-      say(`The desktop uses about ${mb} MB of the GPU's memory. Saved as desktopBaselineMb in worker.json.`);
-      say("Measure again with no game or other GPU program open if that number looks too high.");
+      saveConfig(home, { ...savedConfig(home), desktopBaselineMb: m.mb });
+      say(`The GPU's memory in use: ${m.usedMb} MB. Not counted: the worker's own ComfyUI (${m.ownMb} MB) and local ComfyUI work (${m.workMb} MB).`);
+      if (m.top.length) say(`Counted: ${m.measuredMb} MB, mostly ${m.top.map((p) => `${p.name} (process ${p.pid}, ${p.mb} MB)`).join(", ")}.`);
+      if (m.capped) {
+        say(`That is more than a desktop uses: another GPU program was open. Saved ${BASELINE_CAP_MB} MB as desktopBaselineMb in worker.json, the most it saves.`);
+        say("Close the programs above and measure again.");
+      } else {
+        say(`The desktop uses about ${m.mb} MB of the GPU's memory. Saved as desktopBaselineMb in worker.json.`);
+        say("Measure again with no game or other GPU program open if that number looks too high.");
+      }
       return 0;
     }
     case "install": {
@@ -163,8 +168,8 @@ async function setup(home, io, say) {
   const ask = async (q, def, o = {}) => ((await io.ask(`${q}${def ? ` [${def}]` : ""}: `, o)) || def || "").trim();
   say("Set up this PC as a Fuobe worker. It takes the studio's jobs over HTTPS and runs them on its own ComfyUI.");
   const site = await ask("The studio's address", old.site ?? "https://");
-  const { siteProblem } = await import("./run.mjs");
-  const bad = siteProblem(site);
+  const { OLD_SETUP_PORT, siteProblem } = await import("./run.mjs");
+  const bad = siteProblem(site, old);
   if (bad) {
     io.stderr.write(`${bad}\n`);
     return 2;
@@ -190,10 +195,10 @@ async function setup(home, io, say) {
   }
   // ffmpeg makes every clip and sound again before its ComfyUI reads them. Without it, the worker takes pictures only.
   const { ffmpegVersion } = await import("./media.mjs");
-  const ffmpegAnswer = await ask("ffmpeg's path, for clips and sound (leave empty for pictures only)", old.ffmpeg ?? ((await ffmpegVersion("ffmpeg")) ? "ffmpeg" : ""));
+  const ffmpegAnswer = await ask("ffmpeg's path, for clips and sound (- for pictures only)", old.ffmpeg ?? ((await ffmpegVersion("ffmpeg")) ? "ffmpeg" : "-"));
   const ffmpeg = ffmpegAnswer && ffmpegAnswer !== "-" ? ffmpegAnswer : null;
   if (ffmpeg && !(await ffmpegVersion(ffmpeg))) {
-    io.stderr.write(`There's no working ffmpeg at ${ffmpeg}. Give its full path, or leave it empty for pictures only.\n`);
+    io.stderr.write(`There's no working ffmpeg at ${ffmpeg}. Give its full path, or - for pictures only.\n`);
     return 2;
   }
   const autoResume = /^y/i.test(await ask("Resume by itself when the GPU has been free for 10 minutes? (y/N)", old.autoResume ? "y" : "n"));
@@ -203,8 +208,12 @@ async function setup(home, io, say) {
     const { spawnSync } = await import("node:child_process");
     spawnSync("attrib", ["+I", workDir], { windowsHide: true });
   }
-  // No port is kept: its ComfyUI takes a free one at random at each start (`port` in worker.json pins one by hand).
-  saveConfig(home, { ...old, port: null, site: site.replace(/\/+$/, ""), token: token || old.token, comfyDir, modelDirs, workDir, ffmpeg, autoResume });
+  // A port pinned by hand stays; the one every older setup saved (8190) goes, so its ComfyUI takes a free port at random
+  // at each start. Only what was asked here changes: the rest of worker.json stays as it was, with no defaults written in.
+  const saved = savedConfig(home);
+  const port = Number(saved.port) === OLD_SETUP_PORT ? null : (saved.port ?? null);
+  // A token given in FUOBE_WORKER_TOKEN stays out of the file.
+  saveConfig(home, { ...saved, port, site: site.replace(/\/+$/, ""), token: token || saved.token, comfyDir, modelDirs, workDir, ffmpeg, autoResume });
   writeControl(home, { paused: true, now: false, until: null });
   say(`Saved in ${path.join(home, "worker.json")} (readable by you only). The worker starts paused here.`);
   say("Next: fuobe worker run. Resume it here with fuobe worker resume, and on the website in Settings → Workers.");

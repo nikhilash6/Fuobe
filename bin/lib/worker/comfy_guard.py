@@ -11,8 +11,12 @@ X-Fuobe-Worker-Key. A web page that points its own name at 127.0.0.1 (DNS rebind
 nothing.
 
 One request needs no key: GET /fuobe-worker/hello with X-Fuobe-Worker-Challenge (16 to 128 hex digits). The answer is
-the challenge signed with the key (HMAC-SHA-256) and this process's id. The worker checks both before it sends the key,
-so a program that took the port first never learns it.
+the challenge signed with the key (HMAC-SHA-256), this process's id and its parent's (a venv's python.exe on Windows
+starts the real Python as a child of its own). The worker checks both before it sends the key, so a program that took
+the port first never learns it.
+
+The worker starts this file in Python's isolated mode (-I), so its own folder is never on the import path. That mode
+also ignores PYTHONIOENCODING, which this file applies to its output itself.
 
 Only the Python standard library and aiohttp (which ComfyUI needs anyway).
 """
@@ -58,7 +62,7 @@ def make_middleware(web, key: str, host: str):
             challenge = request.headers.get(CHALLENGE_HEADER, "")
             if not CHALLENGE.match(challenge):
                 return web.Response(status=403)
-            return web.json_response({"proof": proof(key, challenge), "pid": os.getpid()})
+            return web.json_response({"proof": proof(key, challenge), "pid": os.getpid(), "ppid": os.getppid()})
         if not allowed(request.headers, key, host):
             return web.Response(status=403)
         return await handler(request)
@@ -87,7 +91,22 @@ def port_of(args: list[str]) -> int:
     raise SystemExit("The worker's guard needs --port")
 
 
+def output_encoding(env) -> None:
+    """PYTHONIOENCODING ("encoding[:errors]") for this process's output, as Python applies it outside isolated mode."""
+    value = env.get("PYTHONIOENCODING", "")
+    if not value or not sys.flags.ignore_environment:
+        return
+    encoding, _, errors = value.partition(":")
+    options = {k: v for k, v in (("encoding", encoding), ("errors", errors)) if v}
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(**options)
+        except (AttributeError, LookupError, ValueError):
+            pass
+
+
 def main(argv: list[str]) -> None:
+    output_encoding(os.environ)
     key = os.environ.pop(KEY_ENV, "")
     if len(key) < 32:
         raise SystemExit("The worker's guard has no key: start ComfyUI from the worker")

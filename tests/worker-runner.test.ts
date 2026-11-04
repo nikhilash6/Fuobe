@@ -67,7 +67,7 @@ function worker(): W {
 }
 
 function beat(w: W) {
-  pool.workerBeat(row(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 1, version: "1.0.0", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }));
+  pool.workerBeat(row(w), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1.0.0", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }));
 }
 
 let gens = 0;
@@ -119,11 +119,17 @@ const hooks = (o: Partial<WorkerHooks> = {}): WorkerHooks => ({
   ...o,
 });
 
-function runner(s: ReturnType<typeof studio>, worker?: WorkerHooks) {
+function runner(s: ReturnType<typeof studio>, worker?: WorkerHooks, now?: () => number) {
   return new ComputerRunner(
-    { api: s.call, local: (url, init) => realFetch(url, init), socket: (url) => new WebSocket(url) as never, sha256, origin: SITE, sleep: (ms) => sleep(Math.min(ms, 30)), ...(worker && { worker }) },
+    { api: s.call, local: (url, init) => realFetch(url, init), socket: (url) => new WebSocket(url) as never, sha256, origin: SITE, sleep: (ms) => sleep(Math.min(ms, 30)), ...(worker && { worker }), ...(now && { now }) },
     { device: "worker", port: fake.port, clientId: "client-worker-01" },
   );
+}
+
+/** A clock on which each real millisecond is `x` of the runner's (600: a real second is ten minutes). */
+function fastClock(x: number) {
+  const start = Date.now();
+  return () => start + (Date.now() - start) * x;
 }
 
 /** Claim the next job as a worker's runner does, and run it (or `edit` it first). */
@@ -188,7 +194,8 @@ describe("a worker's runner", () => {
     const s = studio(w);
     fake.opts.failNext = "never";
     const t0 = Date.now();
-    await runner(s, hooks({ stallMs: 600 })).claimAndRun();
+    // The PC's own stall limit (600 ms here) wins over the claim's.
+    await runner(s, hooks({ stallLocalMs: 600 })).claimAndRun();
     const took = Date.now() - t0;
     expect(state(id)).toMatchObject({ state: "waiting", requeues: 1, worker_id: null });
     expect(s.reports.at(-1)).toEqual({ event: "give-back", why: "stalled" });
@@ -201,15 +208,86 @@ describe("a worker's runner", () => {
     expect(state(id).state).toBe("done");
   });
 
+  it("the stall limit comes with the claim (the studio's), over the worker's own default", async () => {
+    const w = worker();
+    const id = task();
+    const s = studio(w);
+    fake.opts.failNext = "never";
+    let given: number | undefined;
+    // The worker's default is an hour; the claim's limit is the one obeyed (2 minutes here: a real 200 ms on this clock).
+    await claimAndRun(runner(s, hooks({ stallMs: 60 * 60_000 }), fastClock(600)), s, (t) => ((given = t.stallMs), { ...t, stallMs: 2 * 60_000 }));
+    expect(given).toBe(pool.STALL_MS);
+    expect(state(id)).toMatchObject({ state: "waiting", requeues: 1 });
+    expect(s.reports.at(-1)).toEqual({ event: "give-back", why: "stalled" });
+  });
+
   it("a job past its run limit goes back to the line", async () => {
     const w = worker();
     const id = task();
     const s = studio(w);
+    // About 20 minutes of running on the runner's clock, with an 11-minute limit.
     fake.opts.steps = 40;
     fake.opts.stepMs = 50;
-    await claimAndRun(runner(s, hooks()), s, (t) => ({ ...t, runLimitMs: 500 }));
+    await claimAndRun(runner(s, hooks({ stallLocalMs: 60 * 60_000 }), fastClock(600)), s, (t) => ({ ...t, runLimitMs: 11 * 60_000 }));
     expect(state(id)).toMatchObject({ state: "waiting", requeues: 1 });
     expect(s.reports.at(-1)).toEqual({ event: "give-back", why: "run-limit" });
+  });
+
+  it("a worker with no times for the lane runs a 20-minute first job to the end (the claim's limit is the run ceiling)", async () => {
+    const w = worker();
+    const id = task();
+    const s = studio(w);
+    // About 20 minutes on the runner's clock (a cold model load and a long render), with the limit the studio gives.
+    fake.opts.steps = 40;
+    fake.opts.stepMs = 50;
+    let limit: number | undefined;
+    const clock = fastClock(600);
+    const t0 = clock();
+    await claimAndRun(runner(s, hooks({ stallLocalMs: 60 * 60_000 }), clock), s, (t) => ((limit = t.runLimitMs), t));
+    expect(clock() - t0).toBeGreaterThan(19 * 60_000);
+    expect(limit).toBe(pool.RUN_CEILING_MS);
+    expect(state(id).state).toBe("done");
+    expect(s.reports.some((x) => x.event === "give-back")).toBe(false);
+  });
+
+  it("an older studio's 5-minute limit for a lane with no times isn't obeyed: the job runs to the end", async () => {
+    const w = worker();
+    const id = task();
+    const s = studio(w);
+    fake.opts.steps = 40;
+    fake.opts.stepMs = 15;
+    await claimAndRun(runner(s, hooks({ stallLocalMs: 60 * 60_000 }), fastClock(600)), s, (t) => ({ ...t, runLimitMs: 5 * 60_000 }));
+    expect(state(id).state).toBe("done");
+    expect(s.reports.some((x) => x.event === "give-back")).toBe(false);
+  });
+
+  it("the run limit counts from when its ComfyUI starts the job, not while the job waits in ComfyUI's queue", async () => {
+    const w = worker();
+    const id = task();
+    const s = studio(w);
+    // Another prompt holds its ComfyUI for about 10 minutes first; the job itself then runs about 3, under an 11-minute limit.
+    fake.opts.steps = 20;
+    fake.opts.stepMs = 15;
+    fake.foreign(1_000);
+    await claimAndRun(runner(s, hooks({ stallLocalMs: 60 * 60_000 }), fastClock(600)), s, (t) => ({ ...t, runLimitMs: 11 * 60_000 }));
+    expect(state(id).state).toBe("done");
+    expect(s.reports.some((x) => x.event === "give-back")).toBe(false);
+  });
+
+  it("after running out of memory, only the retry's own time is reported", async () => {
+    const w = worker();
+    const id = task();
+    const s = studio(w);
+    fake.opts.failNext = "oom";
+    // The first try (which runs out of memory) takes as long as the retry would; only the retry's time counts.
+    fake.opts.steps = 10;
+    fake.opts.stepMs = 30;
+    await runner(s, hooks()).claimAndRun();
+    expect(state(id).state).toBe("done");
+    const finished = s.reports.find((x) => x.event === "finished")!;
+    const entry = finished.entry as { status?: { messages?: [string, { timestamp?: number }][] } };
+    const stamps = (entry.status?.messages ?? []).map(([, d]) => d.timestamp).filter((x): x is number => typeof x === "number");
+    expect(finished.execMs).toBe(Math.max(...stamps) - Math.min(...stamps));
   });
 
   it("a job its ComfyUI stopped on twice fails in plain words; the worker goes on", async () => {
@@ -381,5 +459,32 @@ describe("results kept until the studio has them", () => {
     expect(fs.readdirSync(holdDir)).toEqual([]);
     expect(() => hold.folder("../x")).toThrow();
     expect(path.basename(hold.folder(t.id))).toBe(t.id);
+  });
+
+  it("lets go of kept results the studio never took after a day, and of a half-made copy that old", async () => {
+    const holdDir = tempDir("fuobe-worker-hold-");
+    const hold = new Hold(holdDir);
+    const t = { id: "CCCCCCCCCCCCCCCC", promptId: "00000000-0000-4000-8000-000000000003" } as ClaimedTask;
+    await hold.keep(t, { kind: "finished", entries: [{ status: { status_str: "success", completed: true }, outputs: {} }] } as HeldResults, async () => new Response(FAKE_PNG));
+    fs.mkdirSync(path.join(holdDir, "DDDDDDDDDDDDDDDD"));
+    const day = 24 * 3_600_000;
+    expect(hold.expire(Date.now(), day)).toEqual([]);
+    expect(hold.ids()).toEqual([t.id]);
+    expect(hold.expire(Date.now() + day + 60_000, day).sort()).toEqual(["CCCCCCCCCCCCCCCC", "DDDDDDDDDDDDDDDD"]);
+    expect(fs.readdirSync(holdDir)).toEqual([]);
+  });
+
+  it("a claim with nothing for it says so with whether it was for kept results only, and the kept results stay", async () => {
+    const w = worker();
+    const s = studio(w);
+    const holdDir = tempDir("fuobe-worker-hold-");
+    const hold = new Hold(holdDir);
+    const kept = { id: "EEEEEEEEEEEEEEEE", promptId: "00000000-0000-4000-8000-000000000004" } as ClaimedTask;
+    await hold.keep(kept, { kind: "finished", entries: [{ status: { status_str: "success", completed: true }, outputs: {} }] } as HeldResults, async () => new Response(FAKE_PNG));
+    const seen: [string | null, boolean][] = [];
+    const r = runner(s, hooks({ hold: hold as never, claimed: (t, o) => void seen.push([t?.id ?? null, o.onlyHeld]) }));
+    expect(await r.claimAndRun({ onlyHeld: true })).toBe(false);
+    expect(seen).toEqual([[null, true]]);
+    expect(hold.ids()).toEqual([kept.id]);
   });
 });

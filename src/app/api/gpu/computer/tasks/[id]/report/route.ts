@@ -18,11 +18,13 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
   const e = b.event;
   if (typeof e !== "string" || !EVENTS.has(e)) return null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+  // A worker's results kept from an earlier try (nothing new runs).
+  const kept = b.kept === true ? { kept: true } : {};
   // A worker's measured execution time and GPU name, with a finished job.
-  const exec = { ...(num(b.execMs) !== undefined && { execMs: num(b.execMs) }), ...(typeof b.device === "string" && { device: b.device }) };
+  const exec = { ...measured(b), ...kept };
   switch (e) {
     case "sent":
-      return typeof b.promptId === "string" ? { event: e, promptId: b.promptId, number: num(b.number) } : null;
+      return typeof b.promptId === "string" ? { event: e, promptId: b.promptId, number: num(b.number), ...kept } : null;
     case "refused":
       return { event: e, status: num(b.status) ?? 400, body: b.body };
     case "queued":
@@ -42,6 +44,13 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
     default:
       return { event: e as "gone" | "stopped" };
   }
+}
+
+/** A worker's measured run: its ComfyUI's time on the job (at most a day) and its GPU's name, as far as each is sound. */
+function measured(b: Record<string, unknown>): { execMs?: number; device?: string } {
+  const ms = typeof b.execMs === "number" && Number.isFinite(b.execMs) && b.execMs >= 0 && b.execMs <= 24 * 3_600_000 ? Math.round(b.execMs) : undefined;
+  const device = typeof b.device === "string" ? b.device.replace(/[^\p{L}\p{N} ._:()+/-]/gu, "").trim().slice(0, 120) : "";
+  return { ...(ms !== undefined && { execMs: ms }), ...(device && { device }) };
 }
 
 /** The most a report about this job may weigh now: a finished entry while ComfyUI has it, a refusal while it sends. */
@@ -99,8 +108,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
     // Where the job is now (it may have moved while the body arrived).
     const t = leased(principal, id, lease);
     const answer = report(t, event, (entries, passes) => onComputer(t.principal, () => planRelayOutputs(t, entries, passes)));
-    // A worker's finished job counts toward its lane's times there.
-    if (t.pools && (event.event === "finished" || event.event === "passes") && answer.state !== "running") noteFinished(t, Date.now(), event.event === "finished" ? event.peakVramBytes : undefined);
+    // A worker's finished job counts toward its lane's times there (not results kept from an earlier try: their time
+    // there would be only the upload's).
+    if (t.pools && (event.event === "finished" || event.event === "passes") && answer.state !== "running" && !event.kept) noteFinished(t, Date.now(), event.event === "finished" ? event.peakVramBytes : undefined);
     return Response.json(answer, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return relayAnswer(e);

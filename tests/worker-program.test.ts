@@ -6,6 +6,7 @@ import { GpuWatch, othersOf, parseApps, parseGpu } from "../bin/lib/worker/gpu.m
 import { cleanJob, vetGraph } from "../bin/lib/worker/checks.mjs";
 import { comfyArgs, OwnComfy, PortBusy, portFree } from "../bin/lib/worker/comfy.mjs";
 import { parseFor, syncedFolder } from "../bin/lib/worker/config.mjs";
+import { worker } from "../bin/lib/worker/index.mjs";
 import { localPause } from "../bin/lib/worker/run.mjs";
 import { inventoryHash as workerHash } from "../bin/lib/worker/inventory.mjs";
 import { tempDir } from "./helpers/temp-dir";
@@ -141,6 +142,24 @@ describe("cleanup (check 13) and setup", () => {
   it("refuses a synced folder", () => {
     expect(syncedFolder("C:\\Users\\me\\OneDrive\\Worker")).toBe(true);
     expect(syncedFolder("D:\\FuobeWorker")).toBe(false);
+  });
+
+  it("setup again keeps a port pinned by hand and the rest of worker.json, drops the older setups' 8190, and adds no defaults", async () => {
+    const setupWith = async (saved: Record<string, unknown>) => {
+      const home = tempDir("fuobe-worker-setup-home-");
+      const comfyDir = tempDir("fuobe-worker-setup-comfy-");
+      fs.writeFileSync(path.join(comfyDir, "main.py"), "");
+      fs.writeFileSync(path.join(home, "worker.json"), JSON.stringify(saved));
+      const answers = ["https://studio.example", `fuobe_wkr_${"a".repeat(43)}`, comfyDir, path.join(comfyDir, "models"), path.join(tempDir("fuobe-worker-setup-work-"), "w"), "-", "n"];
+      const io = { env: { FUOBE_WORKER_HOME: home }, home, stdout: { write: () => {} }, stderr: { write: () => {} }, ask: async () => answers.shift() ?? "" };
+      expect(await worker(["setup"], io)).toBe(0);
+      return JSON.parse(fs.readFileSync(path.join(home, "worker.json"), "utf8")) as Record<string, unknown>;
+    };
+    const kept = await setupWith({ port: 41_000, stallMin: 7, yieldFolder: "C:/turns" });
+    expect(kept).toMatchObject({ port: 41_000, stallMin: 7, yieldFolder: "C:/turns", site: "https://studio.example", ffmpeg: null, autoResume: false });
+    for (const key of ["hungMin", "busyVramMb", "localComfyPorts", "allowHttpSite"]) expect(kept).not.toHaveProperty(key);
+    expect((await setupWith({ port: 8190 })).port).toBeNull();
+    expect((await setupWith({})).port).toBeNull();
   });
 
   it("hashes its inventory the way the studio does", async () => {

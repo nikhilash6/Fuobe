@@ -4,7 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export const PROTOCOL = 1;
+/** 2: it says which inputs it takes, makes every clip and sound again, and keeps its ComfyUI behind the guard. */
+export const PROTOCOL = 2;
 
 /** Where the worker keeps its settings: %LOCALAPPDATA%\FuobeWorker on Windows, ~/.config/fuobe-worker elsewhere. */
 export function workerHome(env = process.env, home = os.homedir()) {
@@ -16,12 +17,14 @@ export function workerHome(env = process.env, home = os.homedir()) {
 export const DEFAULTS = {
   /** Its ComfyUI's port: none set takes a free one at random at each start (`port` in worker.json pins one). */
   port: null,
-  /** A job that makes no progress for this many minutes goes back to the line, and a stuck ComfyUI is started again. */
-  stallMin: 10,
+  // stallMin (no default): a job that makes no progress for this many minutes goes back to the line. The studio gives
+  // its limit with each job; a stallMin in worker.json wins over it on this PC.
   /** Its ComfyUI answering nothing for this many minutes is stuck: the worker stops it and starts it again. */
   hungMin: 3,
-  /** ffmpeg, which makes every clip and sound again before its ComfyUI reads them. None: the worker takes pictures only. */
-  ffmpeg: null,
+  // ffmpeg (no default): the ffmpeg that makes every clip and sound again before its ComfyUI reads them. Not in
+  // worker.json: the ffmpeg on the PATH, when there is one. null or "-": none, and the worker takes pictures only.
+  /** A studio address with http:// on a private network (10.x, 172.16-31.x, 192.168.x, fd00::/8): allowed only when true. */
+  allowHttpSite: false,
   /** Another program's VRAM above this pauses the worker. */
   busyVramMb: 1024,
   /** The automatic resume: off unless switched on for this PC (here, or on the studio's Workers page). */
@@ -80,6 +83,15 @@ export function loadConfig(home, env = process.env) {
 }
 
 export const saveConfig = (home, c) => writePrivate(file(home, "worker.json"), c);
+
+/** worker.json as saved: no defaults, no token or address from the environment. */
+export const savedConfig = (home) => {
+  const c = readJson(file(home, "worker.json"), {});
+  return c && typeof c === "object" && !Array.isArray(c) ? c : {};
+};
+
+/** The ffmpeg to use: worker.json's, else the PATH's when worker.json doesn't name one; null for none ("-" or null). */
+export const ffmpegOf = (cfg) => (cfg.ffmpeg === undefined ? "ffmpeg" : cfg.ffmpeg && cfg.ffmpeg !== "-" ? String(cfg.ffmpeg) : null);
 
 /** The pause switch on this PC: { paused, now, until, at }. */
 export const readControl = (home) => readJson(file(home, "control.json"), { paused: false });

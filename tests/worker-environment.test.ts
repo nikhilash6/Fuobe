@@ -4,8 +4,8 @@ import net from "node:net";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { inputRules } from "../bin/lib/worker/checks.mjs";
-import { comfyArgs, comfyEnv, OFFLINE_ENV, OwnComfy } from "../bin/lib/worker/comfy.mjs";
-import { modelFiles, nodePacks, packFolders } from "../bin/lib/worker/inventory.mjs";
+import { comfyArgs, comfyEnv, defaultPathsFlag, modelPathsYaml, OFFLINE_ENV, OwnComfy } from "../bin/lib/worker/comfy.mjs";
+import { modelFiles, nodePacks, packFolders, yamlModelDirs } from "../bin/lib/worker/inventory.mjs";
 import { minVramBytesFor, needsOf, VRAM_TOLERANCE } from "@/lib/lanes";
 import type { RequirementIndex } from "@/lib/gpu/types";
 import { tempDir } from "./helpers/temp-dir";
@@ -69,6 +69,99 @@ describe("the worker's model files", () => {
     ]);
     // The hashes are kept, so the next start reads nothing again.
     expect(Object.keys(JSON.parse(fs.readFileSync(cache, "utf8")))).toHaveLength(3);
+  });
+
+  it("counts only the copy ComfyUI finds first: a wrong copy in an earlier folder isn't made up for by a good one later", async () => {
+    const a = tempDir("fuobe-worker-models-a-");
+    const b = tempDir("fuobe-worker-models-b-");
+    for (const d of [a, b]) fs.mkdirSync(path.join(d, "loras"));
+    // The same name and size in both: the first folder's copy is another file.
+    fs.writeFileSync(path.join(a, "loras", "x.safetensors"), "EVIL!");
+    fs.writeFileSync(path.join(b, "loras", "x.safetensors"), "GOOD!");
+    // A folder (not a file) under the name doesn't count as a copy, as for ComfyUI: the next folder's file is the one.
+    fs.mkdirSync(path.join(a, "loras", "y.safetensors"));
+    fs.writeFileSync(path.join(b, "loras", "y.safetensors"), "GOOD!");
+    const index = { files: { x: { folder: "loras", file: "x.safetensors", sizeBytes: 5 }, y: { folder: "loras", file: "y.safetensors", sizeBytes: 5 } } };
+    const pins = { "loras/x.safetensors": sha("GOOD!"), "loras/y.safetensors": sha("GOOD!") };
+    const cache = path.join(tempDir("fuobe-worker-cache-"), "hash-cache.json");
+    expect(await modelFiles([a, b], index, cache, pins)).toEqual([{ folder: "loras", name: "y.safetensors", size: 5, sha256: sha("GOOD!") }]);
+    // The good copy first: reported.
+    expect((await modelFiles([b, a], index, cache, pins)).map((f) => f.name).sort()).toEqual(["x.safetensors", "y.safetensors"]);
+  });
+
+  it("refuses a file that ComfyUI's own models folder or its own extra_model_paths.yaml has with other content", async () => {
+    const models = tempDir("fuobe-worker-models-");
+    const comfyDir = tempDir("fuobe-worker-comfy-");
+    const extra = tempDir("fuobe-worker-extra-");
+    fs.mkdirSync(path.join(models, "loras"));
+    fs.mkdirSync(path.join(models, "diffusion_models"));
+    for (const f of ["a", "b", "c", "d"]) fs.writeFileSync(path.join(models, "loras", `${f}.safetensors`), "GOOD!");
+    fs.writeFileSync(path.join(models, "diffusion_models", "u.safetensors"), "GOOD!");
+    // ComfyUI's own models folder: another a, and the same b; its older name for diffusion_models (unet) holds another u.
+    fs.mkdirSync(path.join(comfyDir, "models", "loras"), { recursive: true });
+    fs.mkdirSync(path.join(comfyDir, "models", "unet"), { recursive: true });
+    fs.writeFileSync(path.join(comfyDir, "models", "loras", "a.safetensors"), "EVIL!");
+    fs.writeFileSync(path.join(comfyDir, "models", "loras", "b.safetensors"), "GOOD!");
+    fs.writeFileSync(path.join(comfyDir, "models", "unet", "u.safetensors"), "EVIL!");
+    // Its own extra_model_paths.yaml adds a folder with another c (another size, too).
+    fs.mkdirSync(path.join(extra, "my-loras"));
+    fs.writeFileSync(path.join(extra, "my-loras", "c.safetensors"), "EVIL!!!");
+    fs.writeFileSync(path.join(comfyDir, "extra_model_paths.yaml"), `other:\n    base_path: ${extra}\n    loras: my-loras/\n`);
+    type F = { folder: string; file: string; sizeBytes: number };
+    const entries: [string, F][] = [..."abcd"].map((f) => [f, { folder: "loras", file: `${f}.safetensors`, sizeBytes: 5 }]);
+    const index: { files: Record<string, F> } = { files: Object.fromEntries([...entries, ["u", { folder: "diffusion_models", file: "u.safetensors", sizeBytes: 5 }]]) };
+    const pins = Object.fromEntries(Object.values(index.files).map((f) => [`${f.folder}/${f.file}`, sha("GOOD!")]));
+    const found = await modelFiles([models], index, path.join(models, "hash-cache.json"), pins, { comfyDir });
+    expect(found.map((f) => f.name).sort()).toEqual(["b.safetensors", "d.safetensors"]);
+    // The worker's model folder is ComfyUI's own models folder (setup's default): the same files, all reported.
+    const same = await modelFiles([path.join(comfyDir, "models")], { files: { b: index.files.b } }, path.join(models, "hash-cache.json"), pins, { comfyDir });
+    expect(same.map((f) => f.name)).toEqual(["b.safetensors"]);
+  });
+
+  it("reads the folders an extra_model_paths.yaml adds as ComfyUI does", () => {
+    const dir = path.resolve("/comfy");
+    const text = [
+      "# ComfyUI's own example shape",
+      "a111:",
+      "    base_path: ~/sd # a comment",
+      "    is_default: true",
+      "    checkpoints: models/Stable-diffusion",
+      "    unet: models/unet",
+      "    loras: |",
+      "         models/Lora",
+      "         models/LyCORIS",
+      "    clip: \"models/clip\"",
+      "rel:",
+      "    base_path: ../shared",
+      "    vae: vae",
+      "noBase:",
+      "    upscale_models: up",
+      "nothing:",
+    ].join("\n");
+    const d = yamlModelDirs(text, dir, {}, path.resolve("/home/me"));
+    expect(d.checkpoints).toEqual([path.normalize(path.resolve("/home/me/sd/models/Stable-diffusion"))]);
+    expect(d.diffusion_models).toEqual([path.normalize(path.resolve("/home/me/sd/models/unet"))]);
+    expect(d.loras).toEqual([path.resolve("/home/me/sd/models/Lora"), path.resolve("/home/me/sd/models/LyCORIS")].map((p) => path.normalize(p)));
+    expect(d.text_encoders).toEqual([path.normalize(path.resolve("/home/me/sd/models/clip"))]);
+    expect(d.vae).toEqual([path.resolve("/shared/vae")]);
+    expect(d.upscale_models).toEqual([path.resolve("/comfy/up")]);
+    expect(d.is_default).toBeUndefined();
+  });
+
+  it("puts its model folders first in ComfyUI's search, in their order, when its ComfyUI knows is_default", () => {
+    const first = modelPathsYaml(["D:/a", "E:/b"], ["loras"], { first: true });
+    expect(first).toBe(['fuobe_worker_1:', '  base_path: "E:/b"', "  is_default: true", "  loras: loras", 'fuobe_worker_0:', '  base_path: "D:/a"', "  is_default: true", "  loras: loras", ""].join("\n"));
+    // ComfyUI (folder_paths.add_model_folder_path) puts each is_default folder at the front, in the order it reads them.
+    const search = ["<its own models>/loras"];
+    for (const m of first.matchAll(/base_path: "(.+)"/g)) search.unshift(`${m[1]}/loras`);
+    expect(search).toEqual(["D:/a/loras", "E:/b/loras", "<its own models>/loras"]);
+    // An older ComfyUI stops on is_default: none, in the order given.
+    expect(modelPathsYaml(["D:/a", "E:/b"], ["loras"])).toBe(['fuobe_worker_0:', '  base_path: "D:/a"', "  loras: loras", 'fuobe_worker_1:', '  base_path: "E:/b"', "  loras: loras", ""].join("\n"));
+    const comfyDir = tempDir("fuobe-worker-comfy-");
+    expect(defaultPathsFlag(comfyDir)).toBe(false);
+    fs.mkdirSync(path.join(comfyDir, "utils"));
+    fs.writeFileSync(path.join(comfyDir, "utils", "extra_config.py"), 'is_default = False\nif "is_default" in conf:\n    is_default = conf.pop("is_default")\n');
+    expect(defaultPathsFlag(comfyDir)).toBe(true);
   });
 });
 

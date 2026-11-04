@@ -137,18 +137,25 @@ interface Pc {
   comfyDir: string;
   countFile: string;
   logs: string[];
+  /** When each log line was written. */
+  logAt: number[];
   awake: boolean[];
 }
 
 function pc(): Pc {
   const base = tempDir("fuobe-worker-pc-");
-  const p = { home: path.join(base, "home"), workDir: path.join(base, "work"), comfyDir: path.join(base, "comfy"), countFile: path.join(base, "prompts.txt"), logs: [], awake: [] };
+  const p = { home: path.join(base, "home"), workDir: path.join(base, "work"), comfyDir: path.join(base, "comfy"), countFile: path.join(base, "prompts.txt"), logs: [], logAt: [], awake: [] };
   for (const d of [p.home, p.workDir, p.comfyDir]) fs.mkdirSync(d, { recursive: true });
   return p;
 }
 
 /** Start `fuobe worker run` in this process (its ComfyUI a stand-in process of its own). */
-function start(w: W, s: Studio, p: Pc, o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[] } = {}) {
+function start(
+  w: W,
+  s: Studio,
+  p: Pc,
+  o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[]; readGpu?: () => Promise<unknown>; gpuEveryMs?: number; port?: number } = {},
+) {
   const ctrl = new AbortController();
   const cfg = {
     site: SITE,
@@ -165,6 +172,7 @@ function start(w: W, s: Studio, p: Pc, o: { steps?: number; stepMs?: number; fai
     stallMin: o.stallMin ?? 10,
     hungMin: o.hungMin ?? 3,
     ffmpeg: o.ffmpeg ?? null,
+    ...(o.port && { port: o.port }),
   };
   const done = runWorker(cfg, {
     fetch: router(w, s),
@@ -175,11 +183,15 @@ function start(w: W, s: Studio, p: Pc, o: { steps?: number; stepMs?: number; fai
     rules: RULES,
     pins: o.pins ?? {},
     allowed: ALLOWED,
-    readGpu: async () => null,
+    readGpu: o.readGpu ?? (async () => null),
+    ...(o.gpuEveryMs && { gpuEveryMs: o.gpuEveryMs }),
     ...(o.ffmpeg === undefined || o.ffmpeg === null ? { ffmpegVersion: async () => null } : {}),
     awake: { set: (on: boolean) => void (p.awake.at(-1) !== on && p.awake.push(on)) },
     sleep: (ms: number) => sleep(Math.min(ms, 50)),
-    log: (line: string) => void p.logs.push(line),
+    log: (line: string) => {
+      p.logs.push(line);
+      p.logAt.push(Date.now());
+    },
     ...(o.rescanMs && { rescanMs: o.rescanMs }),
   });
   const r = { ctrl, done };
@@ -223,6 +235,42 @@ function raw(port: number, p: string, headers: Record<string, string>): Promise<
 }
 
 describe("a worker keeps its jobs going", () => {
+  it("a second worker on the same worker folder refuses to start, and leaves the first one's ComfyUI, folders and job alone", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const { id } = addTask();
+    start(w, s, p, { steps: 40, stepMs: 150 });
+    const comfy = await until(async () => {
+      const c = comfyOf(p);
+      return c && ((await fakeStats(c.port).catch(() => null))?.step ?? 0) >= 2 ? c : null;
+    });
+    // Files of the first one's job in its folders now.
+    fs.writeFileSync(path.join(p.workDir, "input", "in-use.png"), FAKE_PNG);
+    fs.writeFileSync(path.join(p.workDir, "temp", "in-use.txt"), "the first worker's");
+    const logs = p.logs.length;
+    // The same worker.json run again (by hand, while the scheduled one runs).
+    const second = start(w, s, p);
+    await expect(second.done).rejects.toThrow(/Another worker is running on this worker folder/);
+    // Nothing of the first one's was touched: its ComfyUI runs, its folders and its job are as they were.
+    expect(comfyOf(p)).toEqual(comfy);
+    expect(() => process.kill(comfy.pid, 0)).not.toThrow();
+    expect(fs.existsSync(path.join(p.workDir, "input", "in-use.png"))).toBe(true);
+    expect(fs.existsSync(path.join(p.workDir, "temp", "in-use.txt"))).toBe(true);
+    expect(p.logs.slice(logs).some((l) => /Stopped a ComfyUI|Starting its own ComfyUI/.test(l))).toBe(false);
+    const t = await ended(id);
+    expect(t.state).toBe("done");
+    expect(prompts(p)).toBe(1);
+    expect(fs.existsSync(path.join(p.workDir, "crashes.json")) ? Object.keys(JSON.parse(fs.readFileSync(path.join(p.workDir, "crashes.json"), "utf8"))) : []).toEqual([]);
+    // Once the first one has stopped, a worker on that folder starts as usual.
+    running[0].ctrl.abort();
+    await running[0].done;
+    const third = start(w, s, p);
+    await until(() => p.logs.slice(logs).some((l) => /Starting its own ComfyUI/.test(l)));
+    third.ctrl.abort();
+    expect(await third.done).toBe("aborted");
+  });
+
   it("its ComfyUI is killed at 50%: the output arrives (and its guard refuses another Host and a missing key)", async () => {
     const w = addWorker();
     const s = studio();
@@ -265,13 +313,22 @@ describe("a worker keeps its jobs going", () => {
     expect(["input", "output", "temp"].flatMap((d) => fs.readdirSync(path.join(p.workDir, d)))).toEqual([]);
     expect(comfyOf(p)).toBeNull();
     expect(p.awake.at(-1)).toBe(false);
-    s.intercept = null;
+    // The next start sends the kept results before it starts its ComfyUI (which can take minutes on a real PC).
+    let uploadAt = 0;
+    s.intercept = (q, init) => {
+      if (q.includes("/outputs/") && init.method === "PUT") uploadAt ||= Date.now();
+      return undefined;
+    };
+    const before = p.logs.length;
     start(w, s, p);
     const t = await ended(id);
     expect(t.state).toBe("done");
     expect(fs.readFileSync(tasks.outputFile(id, 0)).equals(FAKE_PNG)).toBe(true);
     expect(prompts(p)).toBe(1);
     expect(new Hold(path.join(p.workDir, "hold")).ids()).toEqual([]);
+    const startedAt = await until(() => p.logs.slice(before).some((l) => /Starting its own ComfyUI/.test(l)) && p.logAt[p.logs.findIndex((l, i) => i >= before && /Starting its own ComfyUI/.test(l))]);
+    expect(uploadAt).toBeGreaterThan(0);
+    expect(uploadAt).toBeLessThanOrEqual(startedAt);
   });
 
   it("stopped before the studio heard it finished: the next start, paused here, sends the kept results without its ComfyUI", async () => {
@@ -297,6 +354,45 @@ describe("a worker keeps its jobs going", () => {
     expect(prompts(p)).toBe(1);
     expect(comfyOf(p)).toBeNull();
     expect(tasks.execOf(t)?.ms).toBeTypeOf("number");
+  });
+
+  it("stopped after keeping its results, restarted under a pause-now (the shortcut's pause): the output arrives, with one prompt", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const { id } = addTask();
+    const first = start(w, s, p);
+    s.intercept = (q, init) => {
+      if (!q.endsWith("/report") || JSON.parse(String(init.body)).event !== "finished") return undefined;
+      first.ctrl.abort();
+      return new Response("stopping", { status: 503 });
+    };
+    await first.done;
+    expect(state(id).state).toBe("running");
+    expect(new Hold(path.join(p.workDir, "hold")).ids()).toEqual([id]);
+    s.intercept = null;
+    // Another program now listens on a port the worker.json pins: nothing at all may reach it.
+    const hits: string[] = [];
+    const other = http.createServer((q, res) => {
+      hits.push(`${q.method} ${q.url}`);
+      res.end("{}");
+    });
+    await new Promise<void>((r) => other.listen(0, "127.0.0.1", () => r()));
+    try {
+      // Paused now, as the pause shortcut does: the studio sends a paused worker's jobs back, but not one whose results
+      // it keeps; those go up with no ComfyUI.
+      fs.writeFileSync(path.join(p.home, "control.json"), JSON.stringify({ paused: true, now: true }));
+      start(w, s, p, { port: (other.address() as { port: number }).port });
+      const t = await ended(id);
+      expect(t.state).toBe("done");
+      expect(fs.readFileSync(tasks.outputFile(id, 0)).equals(FAKE_PNG)).toBe(true);
+      expect(prompts(p)).toBe(1);
+      expect(comfyOf(p)).toBeNull();
+      expect(hits).toEqual([]);
+      expect(new Hold(path.join(p.workDir, "hold")).ids()).toEqual([]);
+    } finally {
+      other.close();
+    }
   });
 
   it("its ComfyUI hangs: the job is given back within the stall limit, then runs to the end", async () => {
@@ -359,9 +455,51 @@ http.createServer((q, s) => {
   s.writeHead(200, { "content-type": "application/json" }); s.end(JSON.stringify({ system: {}, devices: [] }));
 }).listen(port, "127.0.0.1");`,
     );
-    start(w, s, p, { command: [process.execPath, hung, "{port}"], hungMin: 0.05 });
+    // A real GPU reading every 200 ms, so the main loop also asks its ComfyUI for its own memory each time: a ComfyUI
+    // that takes the connection and never answers must not hold the loop (and its beats) up.
+    const t0 = Date.now();
+    start(w, s, p, { command: [process.execPath, hung, "{port}"], hungMin: 0.05, readGpu: async () => ({ usedMb: 500, tempC: 40, apps: [] }), gpuEveryMs: 200 });
     await until(() => p.logs.some((l) => /stopped answering/.test(l)), 60_000);
+    expect(Date.now() - t0).toBeLessThan(30_000);
+    const beats = s.calls.filter((c) => c.endsWith("/beat")).length;
+    await sleep(12_000);
+    expect(s.calls.filter((c) => c.endsWith("/beat")).length).toBeGreaterThan(beats);
     await until(() => p.logs.filter((l) => /Starting its own ComfyUI/.test(l)).length >= 2, 30_000);
+  });
+
+  it("its ComfyUI takes a long time to start: the worker goes on beating meanwhile", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const slow = path.join(p.comfyDir, "slow.mjs");
+    // Proves itself at once, but answers "not ready" (503) for 14 seconds, as a ComfyUI that loads many node packs does.
+    fs.writeFileSync(
+      slow,
+      `import http from "node:http"; import crypto from "node:crypto";
+const key = process.env.FUOBE_WORKER_GUARD_KEY; const port = Number(process.argv[2]); const readyAt = Date.now() + 14000;
+http.createServer((q, s) => {
+  if (q.headers.host !== "127.0.0.1:" + port) { s.writeHead(403); return s.end(); }
+  if (q.url.startsWith("/fuobe-worker/hello") && !q.headers["x-fuobe-worker-key"]) {
+    s.writeHead(200, { "content-type": "application/json" });
+    return s.end(JSON.stringify({ proof: crypto.createHmac("sha256", key).update(String(q.headers["x-fuobe-worker-challenge"])).digest("hex"), pid: process.pid }));
+  }
+  if (q.headers["x-fuobe-worker-key"] !== key) { s.writeHead(403); return s.end(); }
+  if (Date.now() < readyAt) { s.writeHead(503); return s.end(); }
+  s.writeHead(200, { "content-type": "application/json" }); s.end(JSON.stringify({ system: {}, devices: [] }));
+}).listen(port, "127.0.0.1");`,
+    );
+    const beatsAt: number[] = [];
+    s.intercept = (q) => {
+      if (q === "/api/gpu/computer/beat") beatsAt.push(Date.now());
+      return undefined;
+    };
+    start(w, s, p, { command: [process.execPath, slow, "{port}"] });
+    const at = (re: RegExp) => until(() => p.logs.some((l) => re.test(l)) && p.logAt[p.logs.findIndex((l) => re.test(l))], 60_000);
+    const startedAt = await at(/Starting its own ComfyUI/);
+    const readyAt = await at(/^Ready$/);
+    expect(readyAt - startedAt).toBeGreaterThan(10_000);
+    // Beats went on while it started (one every 10 s with no job).
+    expect(beatsAt.filter((b) => b > startedAt && b < readyAt).length).toBeGreaterThanOrEqual(1);
   });
 
   it("a ComfyUI that answers without its guard is stopped and not started again for an hour", async () => {

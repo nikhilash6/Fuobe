@@ -68,14 +68,30 @@ export const folders = (workDir) => ({
   temp: path.join(workDir, "temp"),
 });
 
-/** extra_model_paths.yaml: the model folders, for reading. */
-export function modelPathsYaml(modelDirs, folderNames) {
+/**
+ * extra_model_paths.yaml: the model folders, for reading. With `o.first` (a ComfyUI that knows `is_default`), its search
+ * looks in them before anywhere else, in the order given: before its own models folder and the folders that its own
+ * extra_model_paths.yaml adds. ComfyUI puts each `is_default` folder at the front of its list, so they are written in
+ * reverse. The worker checks the copy that this search finds first (inventory.mjs).
+ */
+export function modelPathsYaml(modelDirs, folderNames, o = {}) {
   const lines = [];
-  modelDirs.forEach((dir, i) => {
-    lines.push(`fuobe_worker_${i}:`, `  base_path: ${JSON.stringify(dir)}`);
+  const entries = modelDirs.map((dir, i) => [dir, i]);
+  for (const [dir, i] of o.first ? entries.reverse() : entries) {
+    lines.push(`fuobe_worker_${i}:`, `  base_path: ${JSON.stringify(dir)}`, ...(o.first ? ["  is_default: true"] : []));
     for (const f of folderNames) lines.push(`  ${f}: ${f}`);
-  });
+  }
   return `${lines.join("\n")}\n`;
+}
+
+/** This ComfyUI reads `is_default` in an extra_model_paths.yaml (an older one stops on it). */
+export function defaultPathsFlag(comfyDir) {
+  for (const file of [path.join(comfyDir ?? "", "utils", "extra_config.py"), path.join(comfyDir ?? "", "main.py")]) {
+    try {
+      if (fs.readFileSync(file, "utf8").includes("is_default")) return true;
+    } catch {}
+  }
+  return false;
 }
 
 /** This ComfyUI can leave out its partner nodes (the paid API nodes): its own argument list names the flag. */
@@ -148,6 +164,22 @@ export function comfyEnv(env = process.env, extra = {}) {
     out[k] = v;
   }
   return { ...out, ...OFFLINE_ENV };
+}
+
+/**
+ * How long a request to its ComfyUI waits for the answer to begin: a plain request, one that sends a body (an input, a
+ * prompt), and the quick ones that the worker's main loop waits for (a look at its memory, freeing its memory).
+ */
+export const REQUEST_MS = { plain: 15_000, withBody: 120_000, loop: 5_000 };
+
+/**
+ * Python's flags for the guard: isolated mode (-I: neither the guard's folder nor the user's site folder is on the
+ * import path, and PYTHON* variables don't apply to it), with UTF-8 mode kept as PYTHONUTF8 asks (the guard applies
+ * PYTHONIOENCODING itself). ComfyUI's own child processes still get every variable of its environment.
+ */
+export function guardFlags(env = {}) {
+  const utf8 = env.PYTHONUTF8;
+  return ["-I", ...(utf8 === "1" || utf8 === "0" ? ["-X", `utf8=${utf8}`] : [])];
 }
 
 /** At most this many times an hour its ComfyUI may stop by itself with no job running; then the worker pauses itself. */
@@ -226,7 +258,9 @@ export class OwnComfy {
   /**
    * @param cfg the worker's settings (comfyDir, workDir, port (pins one), modelDirs, comfyEnv, python; `comfyCommand`
    *   replaces the whole command, for tests, with {port} in it, and `comfyGuard` says that command keeps the guard)
-   * @param o { now, log, fetch, folderNames, env (this PC's environment), commandLineOf, killTree, randomPort (tests) }
+   * @param o { now, log, fetch, folderNames, env (this PC's environment), commandLineOf, killTree, randomPort (tests),
+   *   owner (the worker that starts it: { pid, id, script }, kept in the pid file), workerLives (does a worker that a pid
+   *   file names still run?) }
    */
   constructor(cfg, o = {}) {
     this.cfg = cfg;
@@ -247,8 +281,9 @@ export class OwnComfy {
     this.log = null;
   }
 
+  /** This start's address (port 0, which nothing answers, while no ComfyUI of its own is up). */
   get base() {
-    return `http://127.0.0.1:${this.port ?? this.cfg.port ?? 0}`;
+    return `http://127.0.0.1:${this.port ?? 0}`;
   }
 
   get pid() {
@@ -289,22 +324,50 @@ export class OwnComfy {
     return this.guarded && this.key ? { [GUARD.key]: this.key } : {};
   }
 
-  /** A request to its own ComfyUI (its address and key are this start's). */
-  fetch(url, init = {}) {
+  /**
+   * A request to its own ComfyUI (its address and key are this start's), only while the process it started is up: never
+   * to whatever listens on an old port. A ComfyUI that takes the connection but doesn't answer is given up on after
+   * `answerMs` (REQUEST_MS.plain, or REQUEST_MS.withBody for a request with a body; `init.signal` replaces it). Only the
+   * wait for the answer counts: a long download of a result isn't cut short.
+   */
+  fetch(url, init = {}, answerMs = init.body ? REQUEST_MS.withBody : REQUEST_MS.plain) {
+    if (!this.alive() || !this.port) return Promise.reject(new Error("Its own ComfyUI isn't running"));
     const headers = new Headers(init.headers);
     for (const [k, v] of Object.entries(this.headers())) headers.set(k, v);
-    return (this.o.fetch ?? fetch)(this.rebase(url), { ...init, headers }).then((res) => {
-      this.answeredAt = (this.o.now ?? Date.now)();
-      return res;
-    });
+    let timer = null;
+    let signal = init.signal;
+    if (!signal) {
+      const ctrl = new AbortController();
+      timer = setTimeout(() => ctrl.abort(new Error("Its ComfyUI didn't answer in time")), answerMs);
+      timer.unref?.();
+      signal = ctrl.signal;
+    }
+    return (this.o.fetch ?? fetch)(this.rebase(url), { ...init, headers, signal }).then(
+      (res) => {
+        if (timer) clearTimeout(timer);
+        this.answeredAt = (this.o.now ?? Date.now)();
+        return res;
+      },
+      (e) => {
+        if (timer) clearTimeout(timer);
+        throw e;
+      },
+    );
   }
 
-  /** A ComfyUI left running by a worker that stopped without stopping it (its pid file says): stop it. True when it did. */
+  /**
+   * A ComfyUI left running by a worker that stopped without stopping it (its pid file says): stop it. True when it did.
+   * One whose worker still runs (another worker on this folder) is left alone, with its pid file.
+   */
   async stopLeftover() {
     let rec;
     try {
       rec = JSON.parse(fs.readFileSync(this.pidFile, "utf8"));
     } catch {
+      return false;
+    }
+    if (rec?.worker && rec.worker.id !== this.o.owner?.id && (await this.o.workerLives?.(rec.worker))) {
+      this.o.log?.("The ComfyUI in its pid file belongs to a worker that still runs: left alone.");
       return false;
     }
     let stopped = false;
@@ -321,51 +384,65 @@ export class OwnComfy {
     return stopped;
   }
 
-  /** The process on the port proves it is the one the worker started, and has this start's key. */
+  /**
+   * The process on the port proves it has this start's key and is the one the worker started: its own process id, or
+   * its parent's (a venv's python.exe on Windows starts the real Python as a process of its own).
+   */
   async proven(pid) {
     const challenge = crypto.randomBytes(16).toString("hex");
-    const r = await (this.o.fetch ?? fetch)(`${this.base}${GUARD.hello}`, { headers: { [GUARD.challenge]: challenge } });
+    const r = await (this.o.fetch ?? fetch)(`${this.base}${GUARD.hello}`, { headers: { [GUARD.challenge]: challenge }, signal: AbortSignal.timeout(REQUEST_MS.plain) });
     if (!r.ok) return false;
     const a = await r.json().catch(() => ({}));
     const want = crypto.createHmac("sha256", this.key).update(challenge).digest("hex");
-    if (typeof a.proof !== "string" || a.proof.length !== want.length || !crypto.timingSafeEqual(Buffer.from(a.proof), Buffer.from(want)) || a.pid !== pid) {
+    if (typeof a.proof !== "string" || a.proof.length !== want.length || !crypto.timingSafeEqual(Buffer.from(a.proof), Buffer.from(want)) || !(a.pid === pid || a.ppid === pid)) {
       throw new PortBusy(`Another program answered on port ${this.port}`);
     }
     return true;
   }
 
-  /** Start its own ComfyUI and wait until it answers. Throws PortBusy when the port is taken, GuardMissing without the guard. */
-  async start(packs = []) {
+  /**
+   * Start its own ComfyUI and wait until it answers. Throws PortBusy when the port is taken, GuardMissing without the
+   * guard. `o.signal` ends a start under way (its ComfyUI stops, and it throws).
+   */
+  async start(packs = [], o = {}) {
     if (this.alive()) return;
+    const ended = () => new Error("Its ComfyUI's start was called off");
     await this.stopLeftover();
     this.port = await pickPort(this.cfg.port, this.o.randomPort);
     if (!(await portFree(this.port))) throw new PortBusy(`Port ${this.port} is in use by another program`);
+    if (o.signal?.aborted) {
+      this.port = null;
+      throw ended();
+    }
     const f = folders(this.cfg.workDir);
     for (const dir of Object.values(f)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(this.cfg.workDir, "extra_model_paths.yaml"), modelPathsYaml(this.cfg.modelDirs ?? [], this.o.folderNames ?? []));
+    fs.writeFileSync(path.join(this.cfg.workDir, "extra_model_paths.yaml"), modelPathsYaml(this.cfg.modelDirs ?? [], this.o.folderNames ?? [], { first: defaultPathsFlag(this.cfg.comfyDir) }));
     this.key = crypto.randomBytes(32).toString("hex");
     let cmd;
     let marker;
     if (this.cfg.comfyCommand) {
       cmd = this.cfg.comfyCommand.map((a) => String(a).replaceAll("{port}", String(this.port)));
       marker = cmd.slice(1).find((a) => /[\\/]/.test(a)) ?? cmd.join(" ");
-    } else {
-      // The guard is written fresh into the worker folder at each start, and ComfyUI starts through it.
-      const guard = path.join(this.cfg.workDir, "guard", "comfy_guard.py");
-      fs.mkdirSync(path.dirname(guard), { recursive: true });
-      fs.copyFileSync(path.join(here, "comfy_guard.py"), guard);
-      cmd = [this.cfg.python || pythonFor(this.cfg.comfyDir), "-s", guard, path.join(this.cfg.comfyDir, "main.py"), ...comfyArgs(this.cfg, packs, { port: this.port, partnerFlag: partnerFlag(this.cfg.comfyDir) })];
-      marker = guard;
     }
     this.crashes = this.crashes.filter((c) => (this.o.now ?? Date.now)() - c.at < 3_600_000);
     this.expectExit = false;
     this.ready = false;
     const env = { ...comfyEnv(this.o.env ?? process.env, this.cfg.comfyEnv), ...(this.guarded && { [GUARD.env]: this.key }) };
+    if (!this.cfg.comfyCommand) {
+      // The guard is written into an emptied folder at each start (nothing else stays beside it), and ComfyUI starts
+      // through it in Python's isolated mode: no script folder, no user site and no PYTHON* variable on its import path.
+      const guard = path.join(this.cfg.workDir, "guard", "comfy_guard.py");
+      fs.rmSync(path.dirname(guard), { recursive: true, force: true });
+      fs.mkdirSync(path.dirname(guard), { recursive: true });
+      fs.copyFileSync(path.join(here, "comfy_guard.py"), guard);
+      cmd = [this.cfg.python || pythonFor(this.cfg.comfyDir), ...guardFlags(env), guard, path.join(this.cfg.comfyDir, "main.py"), ...comfyArgs(this.cfg, packs, { port: this.port, partnerFlag: partnerFlag(this.cfg.comfyDir) })];
+      marker = guard;
+    }
     // Its working folder is the worker folder: a node that writes a relative path writes there, not into ComfyUI's.
     const child = spawn(cmd[0], cmd.slice(1), { cwd: this.cfg.workDir, env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     this.child = child;
     this.startedAt = (this.o.now ?? Date.now)();
-    if (child.pid) fs.writeFileSync(this.pidFile, JSON.stringify({ pid: child.pid, port: this.port, marker, at: this.startedAt }), { mode: 0o600 });
+    if (child.pid) fs.writeFileSync(this.pidFile, JSON.stringify({ pid: child.pid, port: this.port, marker, at: this.startedAt, worker: this.o.owner ?? null }), { mode: 0o600 });
     this.log?.close();
     const log = (this.log = new RotatingLog(path.join(this.cfg.workDir, "comfyui.log")));
     child.stdout.on("data", (d) => log.write(d));
@@ -382,6 +459,10 @@ export class OwnComfy {
     // Only now, with its own process up, does the worker talk to the port: first the proof, then with the key.
     let proof = !this.guarded;
     for (let i = 0; i < 360; i++) {
+      if (o.signal?.aborted) {
+        await this.stop();
+        throw ended();
+      }
       if (!this.alive()) throw new Error("ComfyUI stopped while starting (see comfyui.log in the worker folder)");
       try {
         if (!proof) proof = await this.proven(child.pid);
@@ -390,7 +471,7 @@ export class OwnComfy {
           if (r.ok) {
             if (this.guarded) {
               // Without the key it must refuse: else the guard isn't there, and the worker won't use this ComfyUI.
-              const open = await (this.o.fetch ?? fetch)(`${this.base}/system_stats`).catch(() => null);
+              const open = await (this.o.fetch ?? fetch)(`${this.base}/system_stats`, { signal: AbortSignal.timeout(REQUEST_MS.plain) }).catch(() => null);
               if (open?.status !== 403) {
                 await this.stop();
                 throw new GuardMissing("Its ComfyUI answered without the worker's guard");
@@ -430,16 +511,18 @@ export class OwnComfy {
     }
     this.child = null;
     this.key = null;
+    // No address any more: nothing is sent to that port until the next start has proved its own process there.
+    this.port = null;
     fs.rmSync(this.pidFile, { force: true });
     this.log?.close();
     this.log = null;
   }
 
-  /** Its own VRAM, from its own /system_stats (MB), or null. */
+  /** Its own VRAM, from its own /system_stats (MB), or null (also when it doesn't answer within REQUEST_MS.loop). */
   async vramMb() {
     if (!this.ready) return null;
     try {
-      const s = await (await this.fetch(`${this.base}/system_stats`)).json();
+      const s = await (await this.fetch(`${this.base}/system_stats`, { signal: AbortSignal.timeout(REQUEST_MS.loop) })).json();
       const d = s?.devices?.[0];
       const bytes = d?.torch_vram_total ?? null;
       return typeof bytes === "number" ? Math.round(bytes / 2 ** 20) : null;
@@ -448,10 +531,13 @@ export class OwnComfy {
     }
   }
 
-  /** Free its memory: models unloaded, caches emptied (before a retry after running out of memory). */
+  /**
+   * Free its memory: models unloaded, caches emptied (before a retry after running out of memory, and for local work
+   * after a turn). ComfyUI only notes the request, so it answers at once: it waits at most REQUEST_MS.loop.
+   */
   async free() {
     if (!this.ready) return;
-    await this.fetch(`${this.base}/free`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unload_models: true, free_memory: true }) }).catch(() => null);
+    await this.fetch(`${this.base}/free`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unload_models: true, free_memory: true }) }, REQUEST_MS.loop).catch(() => null);
   }
 
   /** Nothing of a job stays in it: the running prompt stopped, the queue and the whole history emptied. */

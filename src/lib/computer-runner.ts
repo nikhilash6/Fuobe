@@ -95,6 +95,8 @@ export interface WorkerHooks {
     /** One kept file, or null. */
     file(t: ClaimedTask, w: ResultFile): Promise<Blob | null>;
     has(taskId: string): boolean;
+    /** Let go of one task's kept results. */
+    drop(taskId: string): void;
   };
   /**
    * An input as its ComfyUI gets it. `read` fetches it from the studio (or says why it couldn't); the worker may keep a
@@ -102,16 +104,23 @@ export interface WorkerHooks {
    * worker can't, the job goes back to the line ("give-back").
    */
   input(t: ClaimedTask, i: TaskInput, read: () => Promise<ArrayBuffer | TabFailure>): Promise<ArrayBuffer | TabFailure | "give-back">;
-  /** A job with no progress for this long (ms) goes back to the line. */
+  /**
+   * A job with no progress for this long (ms) goes back to the line: the claim's `stallMs` (the studio's limit), else
+   * this. `stallLocalMs`, when the PC sets one, wins over both.
+   */
   stallMs: number;
+  stallLocalMs?: number | null;
   /** Free its ComfyUI's memory (before the one retry after it ran out). */
   free(): Promise<void>;
   /** How many times its ComfyUI stopped while it ran this task. */
   crashes(t: ClaimedTask): number;
   /** Its ComfyUI won't let go of a prompt: stop it (the worker starts it again). */
   stuck(): Promise<void>;
-  /** What a claim answered, before the job runs: a task, or null (none was this worker's or waiting for it). */
-  claimed(t: ClaimedTask | null): void | Promise<void>;
+  /**
+   * What a claim answered, before the job runs: a task, or null (none was this worker's or waiting for it).
+   * `onlyHeld`: the claim was made only to send kept results (the worker may not take other work now).
+   */
+  claimed(t: ClaimedTask | null, o: { onlyHeld: boolean }): void | Promise<void>;
 }
 
 /** ComfyUI's words for running out of memory (lib/gpu/fix-codes.ts says the same). */
@@ -186,7 +195,20 @@ export interface RunnerView {
   facts?: ComputerFacts;
 }
 
-class Stopped extends Error {}
+/** The job stops here. `gone`: the studio no longer has it for this principal (404), so nothing of it is worth keeping. */
+class Stopped extends Error {
+  constructor(readonly gone = false) {
+    super(gone ? "The studio no longer has this job" : "Stopped");
+  }
+}
+
+/**
+ * The shortest run limit a worker obeys: a claim's runLimitMs below this (an older studio's 5-minute floor for a lane
+ * it has no times for) is ignored, and the stall rule and the studio's own clocks still apply.
+ */
+export const MIN_RUN_LIMIT_MS = 10 * 60_000;
+/** The shortest stall limit a worker takes from a claim (a shorter one would give back jobs between two looks). */
+export const MIN_STALL_MS = 60_000;
 
 const PROGRESS_EVERY_MS = 500;
 const POLL_MS = 1000;
@@ -426,7 +448,7 @@ export class ComputerRunner {
         throw new Stopped();
       }
       // The job ended or another tab has it: this tab lets go.
-      if (res.status === 404 || res.status === 409) throw new Stopped();
+      if (res.status === 404 || res.status === 409) throw new Stopped(res.status === 404);
       if (res.status === 429 && this.now() < until) {
         await this.sleep(retryAfter(res));
         continue;
@@ -549,14 +571,14 @@ export class ComputerRunner {
       const res = await this.deps.api("/api/gpu/computer/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device: this.o.device, running }) });
       if (res.status !== 200) {
         if (res.status === 401) this.stop("signed-out");
-        if (res.status === 204) await this.deps.worker?.claimed(null);
+        if (res.status === 204) await this.deps.worker?.claimed(null, { onlyHeld: !!o.onlyHeld });
         return false;
       }
       const { task } = (await res.json()) as { task: ClaimedTask };
       this.leases.set(task.id, task.lease);
       const worker = this.deps.worker;
       if (worker) {
-        await worker.claimed(task);
+        await worker.claimed(task, { onlyHeld: !!o.onlyHeld });
         // Only kept results now: any other job waits for its ComfyUI (one never sent goes back to the line at once).
         if (o.onlyHeld && !worker.hold.has(task.id)) {
           await this.deps.api(`/api/gpu/computer/tasks/${task.id}/release`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lease: task.lease }) }).catch(() => null);
@@ -613,9 +635,10 @@ export class ComputerRunner {
       let wanted = t.wanted;
       let phase = t.resume ?? "sending";
       if (held && phase !== "collecting") {
-        // The studio hasn't heard that it finished (or it went back in line since, and came back here).
-        if (phase === "sending") await this.report(t, { event: "sent", promptId: t.promptId });
-        const a = await this.report(t, this.endReport(held));
+        // The studio hasn't heard that it finished (or it went back in line since, and came back here). Nothing runs
+        // again: the reports say so, so this isn't another attempt and its time isn't a new one for the lane.
+        if (phase === "sending") await this.report(t, { event: "sent", promptId: t.promptId, kept: true });
+        const a = await this.report(t, this.endReport(held, true));
         if (a.stop) throw new Stopped();
         if (!a.wanted) return this.job(t, { phase: a.state === "done" ? "done" : "failed" });
         wanted = a.wanted;
@@ -656,15 +679,22 @@ export class ComputerRunner {
       if (!entries) entries = await this.ownEntries(t);
       await this.collect(t, wanted, entries, t.received ?? []);
     } catch (e) {
-      if (e instanceof Stopped) return this.job(t, { phase: "failed" });
+      if (e instanceof Stopped) {
+        // The studio has no such job any more: a worker's kept results of it are of no use.
+        if (e.gone) this.deps.worker?.hold.drop(t.id);
+        return this.job(t, { phase: "failed" });
+      }
       throw e;
     }
   }
 
-  /** A worker's report of a finished job: its entries, its ComfyUI's execution time and its GPU's name. */
-  private endReport(held: HeldResults): ReportEvent {
+  /**
+   * A worker's report of a finished job: its entries, its ComfyUI's execution time and its GPU's name (`kept`: results
+   * kept from an earlier try).
+   */
+  private endReport(held: HeldResults, kept = false): ReportEvent {
     const device = deviceName(this.view.facts?.device);
-    const exec = { ...(held.execMs !== undefined && { execMs: Math.round(held.execMs) }), ...(device && { device }) };
+    const exec = { ...(held.execMs !== undefined && { execMs: Math.round(held.execMs) }), ...(device && { device }), ...(kept && { kept }) };
     return held.kind === "passes" ? { event: "passes", running: false, entries: held.entries.map(slim), ...exec } : { event: "finished", entry: slim(held.entries[0] ?? {}), ...exec };
   }
 
@@ -832,9 +862,8 @@ export class ComputerRunner {
     let lastSent = 0;
     let lastKey = "";
     let following: string | undefined;
-    // A worker's watchdog: when the job started here, and when it last moved (a step, a node, its place, a pass).
-    const began = this.now();
-    let movedAt = began;
+    // A worker's watchdog: when the job last moved (a step, a node, its place, a pass).
+    let movedAt = this.now();
     let moveKey = "";
     const moved = (key: string) => {
       if (key !== moveKey) {
@@ -842,11 +871,16 @@ export class ComputerRunner {
         movedAt = this.now();
       }
     };
-    // Execution time: what ComfyUI's entries say, else the time it was seen running here.
+    // The run limit counts from when its ComfyUI first runs the job (its wait in ComfyUI's own queue doesn't count). A
+    // limit under MIN_RUN_LIMIT_MS (an older studio's floor for a lane it has no times for) isn't one to obey.
+    const runLimit = t.runLimitMs && t.runLimitMs >= MIN_RUN_LIMIT_MS ? t.runLimitMs : null;
+    // The stall limit: the PC's own when it sets one, else the claim's (at least MIN_STALL_MS), else the worker's default.
+    const stallMs = worker ? (worker.stallLocalMs ?? (t.stallMs && t.stallMs >= MIN_STALL_MS ? t.stallMs : worker.stallMs)) : Infinity;
+    // Execution time: what ComfyUI's entries say, else the time it was seen running here. After the retry for running
+    // out of memory, only the retry's own time counts (the first try was this worker's, not the run's).
     let runningSince: number | null = null;
-    let spentMs = 0;
     let oomRetried = false;
-    const execOf = (entries: HistoryEntryLike[]) => spentMs + (execTime(entries) ?? (runningSince !== null ? this.now() - runningSince : 0));
+    const execOf = (entries: HistoryEntryLike[]) => execTime(entries) ?? (runningSince !== null ? this.now() - runningSince : 0);
     const exec = (ms: number) => {
       const device = deviceName(this.view.facts?.device);
       return worker ? { execMs: Math.round(ms), ...(device && { device }) } : {};
@@ -854,8 +888,8 @@ export class ComputerRunner {
     for (;;) {
       if (!this.alive) throw new Stopped();
       if (worker) {
-        if (t.runLimitMs && this.now() - began > t.runLimitMs) return { giveBack: "run-limit" };
-        if (this.now() - movedAt > worker.stallMs) return { giveBack: "stalled" };
+        if (runLimit && runningSince !== null && this.now() - runningSince > runLimit) return { giveBack: "run-limit" };
+        if (this.now() - movedAt > stallMs) return { giveBack: "stalled" };
       }
       if (following) {
         // A meta-batch: its passes run under new ids, all with its prefix.
@@ -867,6 +901,7 @@ export class ComputerRunner {
         }
         const queued = [...(q.queue_running ?? []), ...(q.queue_pending ?? [])].filter((r) => hasPrefix(r[2], following!));
         const running = queued.length > 0;
+        if (running) runningSince ??= this.now();
         const passes = Object.values(await this.read<Record<string, HistoryEntryLike>>("/history?max_items=64").catch(() => ({}))).filter((e) => hasPrefix(e.prompt?.[2], following!));
         const ev = this.events.get(String(queued[0]?.[1] ?? ""));
         moved(JSON.stringify([queued.map((r) => r[1]), passes.length, ev?.value, ev?.node, ev?.nodesDone]));
@@ -889,7 +924,6 @@ export class ComputerRunner {
         // A worker's ComfyUI ran out of memory: free it, and send the prompt once more before saying anything.
         if (worker && !oomRetried && outOfMemory(w.entry)) {
           oomRetried = true;
-          spentMs = execOf([w.entry]);
           runningSince = null;
           await worker.free().catch(() => {});
           if (await this.resend(t)) {

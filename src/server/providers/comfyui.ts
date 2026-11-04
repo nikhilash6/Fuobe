@@ -2322,8 +2322,10 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   if (!found) return { state: "failed", error: "This run was lost. Press Retry." };
   const t = checkClocks(found);
   // A run on the workers: while it waits, its place in line; once a worker has it, that worker's reports (a worker that
-  // goes quiet gives it back to the line, pool.ts, so no "open Fuobe on your computer").
-  if (t.pools && t.state === "waiting") return { state: "queued", message: t.note === "resent" ? "Back in line for another GPU" : poolWaitWords(t) };
+  // goes quiet gives it back to the line, pool.ts, so no "open Fuobe on your computer"). Back in line after an attempt
+  // (a worker paused, went quiet, gave it back), it shows its kept place as any waiting run does, and once a worker has
+  // it again, the usual words: never a restart.
+  if (t.pools && t.state === "waiting") return { state: "queued", message: poolWaitWords(t) };
   const p = taskProgress(t.id);
   const kind = extraOf(t).made ?? made ?? "image";
   const waitMs = tenantAccount() ? ACCOUNT_LIMITS.queueMs : 4 * 3_600_000;
@@ -2340,7 +2342,7 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
       return { state: "queued", message, timeoutError: RELAY_WORDS.waitedTooLong(waitMs) };
     }
     case "sending":
-      return { state: "queued", message: down ?? (t.note === "resent" ? RELAY_WORDS.resent : sendingWords(inputKinds(t))), timeoutError: RELAY_WORDS.waitedTooLong(waitMs), ...(sentAt && { sentAt }) };
+      return { state: "queued", message: down ?? (t.note === "resent" && !t.pools ? RELAY_WORDS.resent : sendingWords(inputKinds(t))), timeoutError: RELAY_WORDS.waitedTooLong(waitMs), ...(sentAt && { sentAt }) };
     case "queued":
       return { state: "queued", message: down ?? queueWords(p?.position), ...(sentAt && { sentAt }) };
     case "running": {
