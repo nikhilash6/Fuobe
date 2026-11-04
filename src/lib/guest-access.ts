@@ -272,7 +272,7 @@ export const anyoneMayReport = (method: string, pathname: string): boolean => me
 /**
  * The tools an account runs on its own GPU or key, beside the studios' generations. Each route makes an account's checks
  * itself (src/server/account-tool-run.ts: its own files, its limits, its GPU or key for every step) and refuses a guest
- * with the sign-up card. Genjutsu's "Describe my character" isn't here: it uses the studio's own AI helper.
+ * with the sign-up card. Genjutsu's "Describe my character" runs its GPU describer on the account's own GPU.
  */
 export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/genjutsu(\/(scene|transcribe))?$/,
@@ -280,6 +280,8 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/storyboards(\/[^/]+\/film)?$/,
   // Image to 3D's runs (a model, a splat, a rig, a retexture): the model is finished on this server under the account's limits.
   /^\/api\/image-to-3d$/,
+  // Genjutsu's "Describe my character": the GPU describer on the account's own GPU.
+  /^\/api\/genjutsu\/describe$/,
 ];
 
 /**

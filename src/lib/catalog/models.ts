@@ -1416,6 +1416,18 @@ const open: ModelDef[] = [
     routes: [comfy("describe-video", "video-scene-describe", "Qwen3-VL 8B at 2 frames a second, then rewritten for the picture")],
     options: { maxImages: 1 },
   }),
+  // Genjutsu's "Describe my character" on a GPU: who the character in one picture is and what they wear.
+  o({
+    id: "oss-character-describe",
+    name: "Describe my character",
+    vendor: "Qwen × Openjutsu",
+    family: "utility",
+    kind: "text",
+    tagline: "Who the character in your picture is and what they wear, in one sentence for the swap · 12 GB GPU",
+    hidden: true,
+    routes: [comfy("write", "character-describe-qwen3vl", "Qwen3-VL 8B on core TextGenerate, the picture at 1024 px")],
+    options: { maxImages: 1, minImages: 1, promptless: true },
+  }),
   o({
     id: "oss-from-picture",
     name: "From picture",

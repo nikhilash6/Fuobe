@@ -92,9 +92,17 @@ export function useGenjutsuRun() {
   });
 }
 
-/** "Describe my character": the engine's text model writes the description from the character picture. */
+/**
+ * "Describe my character": the site's AI helper answers with the description (the owner's cloud engine); otherwise the
+ * GPU describer starts and the page reads the description from its run's text (describeFromRun).
+ */
 export function useDescribeCharacter() {
-  return useMutation({ mutationFn: (b: { engine: Engine; image: string }) => send<{ description: string }>("/api/genjutsu/describe", "POST", b) });
+  return useMutation({
+    mutationFn: (b: { engine: Engine; image: string; requestId?: string }) => send<{ description: string } | { id: string; modelId: string }>("/api/genjutsu/describe", "POST", b),
+    onSuccess: (r) => {
+      if ("id" in r) kick();
+    },
+  });
 }
 
 /** From picture's "What happens": the describer starts on the part (the page waits for its text). */

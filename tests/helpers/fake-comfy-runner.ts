@@ -12,7 +12,8 @@
  * history lists that many Qwen-Image-Layered layers, node 60), `frames` (an EXR export: a preview clip, node 5, and
  * that many frames, node 3), `historyError` (/history answers HTTP 500 and then sends nothing), `uploadStatus` (the HTTP
  * status /upload/image answers, e.g. 500 to fail every upload), `refuseClass` (/prompt answers "not in list" for a graph with
- * a node of that class), `echo` (an image output is the last picture uploaded, so a result lines up with its photo).
+ * a node of that class), `echo` (an image output is the last picture uploaded, so a result lines up with its photo),
+ * `text` (a SaveText output, node 5: the history carries the words and /view serves them as the .txt file).
  * This file runs under plain Node too: only erasable TypeScript.
  */
 import http from "node:http";
@@ -34,6 +35,8 @@ export interface FakeComfyOptions {
   /** /prompt answers "not in list" for a graph with a node of this class (a file that node loads isn't there). */
   refuseClass?: string;
   echo?: boolean;
+  /** A text result (SaveText, node 5): these words in the history and in the .txt file /view serves. */
+  text?: string;
 }
 
 export interface FakeLogEntry {
@@ -176,6 +179,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         const done = { status: { completed: true, status_str: "success" } };
         const list = (n: number, ext: string) => Array.from({ length: n }, (_, i) => ({ filename: `fake_${String(i + 1).padStart(5, "0")}_.${ext}`, subfolder: "", type: "output" }));
         if (opts.layers) return json(200, { [id]: { ...done, outputs: { "60": { images: list(opts.layers, "png") } } } });
+        if (opts.text !== undefined) return json(200, { [id]: { ...done, outputs: { "5": { text: [opts.text], files: [{ filename: "fake_00001_.txt", subfolder: "fuobe", type: "output" }] } } } });
         if (opts.frames) return json(200, { [id]: { ...done, outputs: { "5": { gifs: list(1, "mp4") }, "3": { images: list(opts.frames, "exr") } } } });
         if (opts.output === "model3d") return json(200, { [id]: { ...done, outputs: { "900": { "3d": [{ filename: "fake_00001_.glb", subfolder: "3D", type: "output" }] } } } });
         const file = opts.output === "image" ? { filename: "fake_00001_.png", subfolder: "", type: "output" } : { filename: "fake_00001.mp4", subfolder: "", type: "output" };
@@ -203,6 +207,10 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
           return;
         }
         const name = url.searchParams.get("filename") ?? "";
+        if (name.endsWith(".txt")) {
+          res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+          return res.end(opts.text ?? "");
+        }
         if (name.endsWith(".exr")) {
           res.writeHead(200, { "content-type": "image/x-exr" });
           return res.end(Buffer.from("762f3101", "hex"));

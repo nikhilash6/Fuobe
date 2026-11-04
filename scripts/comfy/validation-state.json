@@ -1450,5 +1450,11 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T20:57:16.610Z"
+  },
+  "character-describe-qwen3vl": {
+    "sha256": "6a86fddcfb1b757f828b99e681f93b5e5fe6b09db010552a3bbba6aab9dd1e70",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-04T21:31:23.012Z"
   }
 }

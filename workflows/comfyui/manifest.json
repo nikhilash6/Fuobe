@@ -28216,6 +28216,48 @@
       "notes": "image = the approved first frame (left out for the clip's own person: pass 1 is then the description). params.extra.openjutsu: seconds, ownPerson. About 15-40 s."
     },
     {
+      "id": "character-describe-qwen3vl",
+      "title": "Describe my character: Qwen3-VL 8B writes who the character in one picture is and what they wear (core TextGenerate)",
+      "capability": "write",
+      "file": "character-describe-qwen3vl.json",
+      "source": "hand-built (scripts/comfy/hand-built/character-describe-qwen3vl.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "1",
+            "input": "image"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "5",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "5",
+          "kind": "text"
+        }
+      ],
+      "defaults": {},
+      "limits": {},
+      "models": [
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 12,
+      "license": "Qwen3-VL 8B: Apache-2.0",
+      "validated": true,
+      "notes": "Genjutsu's Character swap, \"Describe my character\": image = the character's picture, scaled to 1024 px on its longest side. One sentence of 35 to 60 words in the form the swap prompt and the anchor brief take (who and their apparent age, build, face, hair, skin tone, each garment with its colour, fabric and cut, shoes, jewellery and accessories). The instruction is fixed in the graph: no text from the run goes in. Greedy decoding (sampling off): the same picture gives the same words. Same text encoder file as Qwen-Image 2.1 (no new download). About 4 s on an RTX 5090 once the model is loaded."
+    },
+    {
       "id": "video-from-picture-solar",
       "title": "From picture, the video: SolarRenderer (MiniMax H3 + its 4-step and control LoRAs) animates the approved first frame with the part's motion as Metric3D normals; the clip's sound kept",
       "capability": "video-from-picture",

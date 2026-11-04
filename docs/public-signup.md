@@ -287,8 +287,10 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   clip's words for Character swap, `POST /api/genjutsu/transcribe`). Each step of the run (the cut, the swap, the joins,
   the sound) is a run of its own on the account's ComfyUI, or on its own fal.ai or Replicate key on the cloud engine,
   with only its own files, and the whole run counts once against its limits. Its results show under "Your Genjutsu" and
-  in its own runs, to open and download. "Describe my character" uses the studio's AI helper, so it isn't offered: the
-  account describes the character in its own words. A guest gets the sign-up card. The checks are
+  in its own runs, to open and download. "Describe my character" (`POST /api/genjutsu/describe`) runs the GPU describer
+  on the account's own ComfyUI: a core graph (Qwen3-VL 8B through TextGenerate, `character-describe-qwen3vl`) reads
+  only the account's own picture, takes no text from the request and saves under a name the server makes; the page
+  fills the description from that run's text. A guest gets the sign-up card. The checks are
   `src/server/account-tool-run.ts`.
 - **Storyboard.** An account makes boards the same way (`POST /api/storyboards`), and the film of a board
   (`POST /api/storyboards/<id>/film`). Every frame, shot and join is a run of its own on the account's ComfyUI, or on

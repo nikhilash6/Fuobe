@@ -69,6 +69,7 @@ import type { ExampleRowData } from "@/lib/examples/types";
 import { againWhere, placeholdersOn } from "@/lib/demo-mode";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
+import { cleanDescription } from "@/lib/character-description";
 import { CharacterControls, CharacterFacts, qualityOff } from "./character-panel";
 import { voiceFirstDefault } from "@/lib/av/voice-first";
 import { useVoiceFirstLive, useVoiceFirstShown } from "@/components/audio-tools/voice-first-switch";
@@ -316,13 +317,31 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
   const [listening, setListening] = useState(false);
   const alive = useRef<AbortController | null>(null);
   useEffect(() => () => alive.current?.abort(), []);
-  const describeCharacter = () => {
+  // "Describe my character": the site's AI helper answers at once (the owner's cloud engine); otherwise the GPU describer
+  // runs and its text fills the field when it is done. A guest gets the sign-up card, an account without a GPU "Connect
+  // your GPU".
+  const describeGuard = useSubmitGuard();
+  const [describingCharacter, setDescribingCharacter] = useState(false);
+  const describeAlive = useRef<AbortController | null>(null);
+  useEffect(() => () => describeAlive.current?.abort(), []);
+  const describeCharacter = async () => {
     const image = refs.find((r) => !r.uploading)?.ref;
     if (!image) return;
-    describeMutation
-      .mutateAsync({ engine, image })
-      .then((r) => setCharacter((c) => ({ ...c, description: r.description })))
-      .catch((e: Error) => !refusalShown(e) && toast.error(friendly(e.message)));
+    describeAlive.current?.abort();
+    const ctl = new AbortController();
+    describeAlive.current = ctl;
+    setDescribingCharacter(true);
+    try {
+      const r = await describeGuard(`${engine} ${image}`, (requestId) => describeMutation.mutateAsync({ engine, image, requestId }));
+      if (!r) return;
+      const text = "description" in r ? r.description : cleanDescription((await waitForGeneration(r.id, { signal: ctl.signal })).outputs.find((o) => o.kind === "text")?.text);
+      if (text) setCharacter((c) => ({ ...c, description: text }));
+      else toast("Couldn't describe this picture", { description: "Describe your character in your own words." });
+    } catch (e) {
+      if (!ctl.signal.aborted && !refusalShown(e as Error)) toast.error(friendly((e as Error).message));
+    } finally {
+      if (describeAlive.current === ctl) setDescribingCharacter(false);
+    }
   };
   const fillClipWords = async () => {
     if (!clip?.url || !range) return;
@@ -1128,8 +1147,8 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                   seed={seed}
                   onSeed={setSeed}
                   seedProblem={seedProblem(seedNumber)}
-                  // Describing uses the studio's own AI helper: the owner's. Everyone else describes the character in words.
-                  describe={owner ? { run: describeCharacter, busy: describeMutation.isPending, blocked: refs.some((r) => !r.uploading) ? null : "Add your character's picture to describe it" } : undefined}
+                  // Everyone sees it: an account describes on its own GPU, a guest is offered the free account first.
+                  describe={{ run: () => void describeCharacter(), busy: describingCharacter, blocked: refs.some((r) => !r.uploading) ? null : "Add your character's picture to describe it" }}
                   words={{ run: () => void fillClipWords(), busy: listening, blocked: clip?.url && !clip.uploading && range ? null : "Add the clip first" }}
                   voiceFirst={voiceFirstShown ? { on: cleanFirst, onChange: setVoiceFirst, seconds: duration } : undefined}
                 />

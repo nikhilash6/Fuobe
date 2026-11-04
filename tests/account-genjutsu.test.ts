@@ -138,51 +138,41 @@ async function start(body: unknown, who: string): Promise<Response> {
 }
 
 describe("the proxy opens Genjutsu's runs to accounts, and keeps the sign-up card for guests", () => {
-  it("a guest gets the sign-up card on a run, the part's words and what happens; describing stays the owner's", async () => {
-    for (const p of ["/api/genjutsu", "/api/genjutsu/scene", "/api/genjutsu/transcribe"]) {
+  it("a guest gets the sign-up card on a run, the part's words, what happens and describing the character", async () => {
+    for (const p of ["/api/genjutsu", "/api/genjutsu/scene", "/api/genjutsu/transcribe", "/api/genjutsu/describe"]) {
       const r = viaProxy(p, "POST");
       expect(r.status, p).toBe(401);
       expect(r.headers.get(access.GUEST_HEADER), p).toBe("1");
       expect((await r.json()).error).toBe(access.GUEST_RUN_MESSAGE);
     }
-    const d = viaProxy("/api/genjutsu/describe", "POST");
-    expect(d.status).toBe(403);
-    expect((await d.json()).code).toBe("own-gpu-tool");
     // A price check stays open to everyone.
     expect(passed(viaProxy("/api/genjutsu/estimate", "POST"))).toBe(true);
   });
 
   it("an account with its own GPU reaches the routes; one with neither a GPU nor a key is asked to connect one", async () => {
-    for (const p of ["/api/genjutsu", "/api/genjutsu/scene", "/api/genjutsu/transcribe"]) {
+    for (const p of ["/api/genjutsu", "/api/genjutsu/scene", "/api/genjutsu/transcribe", "/api/genjutsu/describe"]) {
       expect(passed(viaProxy(p, "POST", "a")), p).toBe(true);
       const r = viaProxy(p, "POST", "c");
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.CONNECT_GPU_HEADER)).toBe("1");
       expect((await r.json()).code).toBe("connect-gpu");
     }
-    // Describing uses the studio's own AI helper: never an account's.
-    const d = viaProxy("/api/genjutsu/describe", "POST", "a");
-    expect(d.status).toBe(403);
-    expect((await d.json()).code).toBe("own-gpu-tool");
-    expect(access.ownGpuRun("POST", "/api/genjutsu/describe")).toBe(false);
+    // Describing runs the GPU describer on the account's own GPU (tests/account-genjutsu-describe.test.ts).
+    expect(access.ownGpuRun("POST", "/api/genjutsu/describe")).toBe(true);
     expect(access.ownGpuRun("GET", "/api/genjutsu")).toBe(false);
     expect(access.ownGpuRun("POST", "/api/genjutsu/examples")).toBe(false);
   });
 
-  it("the routes refuse a guest themselves, and describing refuses anyone but the owner", async () => {
+  it("the routes refuse a guest themselves", async () => {
     for (const [route, p] of [
       [genjutsuRoute, "/api/genjutsu"],
       [sceneRoute, "/api/genjutsu/scene"],
       [transcribeRoute, "/api/genjutsu/transcribe"],
+      [describeRoute, "/api/genjutsu/describe"],
     ] as const) {
       const r = await route.POST(json(p, "POST", {}));
       expect(r.status, p).toBe(401);
       expect(r.headers.get(access.GUEST_HEADER)).toBe("1");
-    }
-    for (const who of [undefined, "a"]) {
-      const r = await describeRoute.POST(json("/api/genjutsu/describe", "POST", { engine: "open", image: "/api/files/x.png" }, who));
-      expect(r.status).toBe(403);
-      expect((await r.json()).code).toBe("own-gpu-tool");
     }
   });
 });

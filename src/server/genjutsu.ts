@@ -20,6 +20,7 @@ import {
   type CharacterOptions,
 } from "@/lib/catalog/character-swap";
 import { ACCESS_PLACE } from "@/lib/model-access";
+import { CHARACTER_DESCRIBER, cleanDescription, DESCRIBE_PICTURE } from "@/lib/character-description";
 import { openCapNote, SHARPEN_COPY, SHARPEN_SIGMA_RANGE } from "@/lib/catalog/sharpen";
 import {
   ALL_FEATURES,
@@ -60,7 +61,7 @@ import type { Engine, Generation, GenerationRequest, PixelPoint, ProviderId } fr
 import { silenceWriter } from "./canvas";
 import { createPipeline } from "./chains";
 import { llmText, llmTextBackend } from "./enhance";
-import { AccountRunError, ConnectComfyError, createGenerations, previewChained } from "./generations";
+import { AccountRunError, ConnectComfyError, createGenerations, previewChained, previewGeneration } from "./generations";
 import { db } from "./db";
 import { genjutsuLive } from "./genjutsu-live";
 import { decodePng } from "./png";
@@ -747,13 +748,18 @@ const DESCRIBE_SYSTEM =
   "apparent age range, build, face, hair, skin tone, clothing, shoes, accessories and their colours. No pose, background, lighting, camera or art style, " +
   "no names, no guesses about personality. One plain sentence under 60 words, starting with \"a\" or \"an\", no quotes, no preamble.";
 
-export const DescribeSchema = z.object({ engine: z.enum(["cloud", "open"]), image: z.string().startsWith("/api/files/").max(500) });
+export const DescribeSchema = z.object({
+  engine: z.enum(["cloud", "open"]),
+  image: z.string().startsWith("/api/files/").max(500),
+  /** A client's id for this click: a repeat gets the describer the first one started (an account's). */
+  requestId: z.string().min(8).max(100).optional(),
+});
 
 /**
- * "Describe my character": the engine's text model looks at the character picture and writes the description the
- * prompt and the anchor brief carry (Akatz Labs found generic prompts weak). Cloud: Claude, else a local model; your
- * GPU: a local vision model (Ollama, LM Studio or Unsloth Studio). A text model switched off in Settings → Models &
- * licences doesn't answer.
+ * "Describe my character" on the site's AI helper (the owner's, on the cloud engine): the text model looks at the
+ * character picture and writes the description the prompt and the anchor brief carry (Akatz Labs found generic prompts
+ * weak). Claude, else a local model. A text model switched off in Settings → Models & licences doesn't answer. On the
+ * open engine, and for an account always, the GPU describer writes it instead (describeRequest).
  */
 export async function describeCharacter(body: z.infer<typeof DescribeSchema>): Promise<{ description: string }> {
   mustMatchMode(body.engine);
@@ -773,13 +779,36 @@ export async function describeCharacter(body: z.infer<typeof DescribeSchema>): P
   }
   if (!/^image\/(png|jpeg|webp|gif)$/.test(file.contentType)) throw new ShortsError("Describe works on a PNG, JPEG or WebP picture", 422);
   const answer = await llmText(DESCRIBE_SYSTEM, "Describe the character in this picture.", [{ data: file.data, contentType: file.contentType }], { ollamaOnly: body.engine === "open" });
-  const description = answer
-    ?.replace(/^["“'\s]+|["”'\s]+$/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/[.\s]+$/, "")
-    .slice(0, CHARACTER_SWAP.maxDescriptionChars);
+  const description = cleanDescription(answer);
   if (!description) throw new ShortsError(body.engine === "open" ? `${cap(localLabel())} didn't describe the picture — it needs a vision model (qwen3-vl, gemma3…)` : "The text model didn't answer — try again, or describe your character in your own words", 422);
   return { description };
+}
+
+/**
+ * "Describe my character" on a GPU: Qwen3-VL 8B reads the picture in ComfyUI (workflow character-describe-qwen3vl, its
+ * instruction fixed in the graph) and writes the description as a Genjutsu step; the page reads its text when it is
+ * done (src/lib/character-description.ts tidies it). The owner's open engine runs it on the install's GPU; an account's
+ * runs on its own, after its run's checks (src/server/account-tool-run.ts). Nothing the person types goes in.
+ */
+export function describeRequest(body: z.infer<typeof DescribeSchema>): GenerationRequest {
+  mustMatchMode("open");
+  if (!DESCRIBE_PICTURE.test(body.image.split(/[?#]/)[0])) throw new ShortsError("Describe works on a PNG, JPEG or WebP picture", 422);
+  if (!isOffered(CHARACTER_DESCRIBER, "open")) throw new ShortsError(`Describing is switched off in ${ACCESS_PLACE} — describe your character in your own words`, 422);
+  return {
+    feature: GENJUTSU.stepFeature,
+    batchTitle: "Genjutsu · your character",
+    modelId: CHARACTER_DESCRIBER,
+    op: "write",
+    inputs: { images: [body.image] },
+    step: { label: "Describe the character", index: 0, of: 1 },
+  };
+}
+
+/** The owner's describer run on the open engine: refused, not faked, where it would only be a demo (no GPU). */
+export function describeOnGpu(body: z.infer<typeof DescribeSchema>): { id: string; modelId: string } {
+  const req = describeRequest(body);
+  if (previewGeneration(req).demo) throw new ShortsError("Describing needs your GPU: connect it, or describe your character in your own words", 422);
+  return startStep(req);
 }
 
 export const SceneSchema = z.object({
