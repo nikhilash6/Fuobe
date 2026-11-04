@@ -104,6 +104,8 @@ function standInWorker() {
   db()
     .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ? WHERE id = ?")
     .run(JSON.stringify({ lanes: lanes.map((l) => l.lane), workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), w.id);
+  // Connected: its worker program beat a moment ago.
+  db().prepare("UPDATE relay_workers SET seen_at = ?, protocol = ?, paused_local = 0 WHERE id = ?").run(Date.now(), pool.MIN_PROTOCOL, w.id);
   return w;
 }
 

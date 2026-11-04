@@ -354,6 +354,13 @@ worker that has its model files first. The same check keeps an account's run out
 take it: a worker must be allowed the lane, its last list of files must have the workflow's files and node packs, and
 it must have the VRAM.
 
+When every worker that could run an account's run is away right now (paused on the website or on its PC, draining,
+outside its hours, silent for over 2 minutes, or never connected), the price check says "Starting soon" and Run is
+off. Run pressed then makes no run and gives the same words (503, code `busy`). The price check asks again by itself,
+and Run comes back on once one of those workers is back. A worker that waits for local ComfyUI work to make room is
+not away: runs go in line for it. An account with its own GPU gets its run there instead, unless it asked for this
+install's GPUs.
+
 **The place in line.** A waiting job's place counts every job that a worker able to run it would serve first, whatever
 its lane: one GPU serves every lane it has in this order. The wait adds the rest of the jobs those workers run now,
 the lane's load time when none has it warm, and the job's own run (the lane's median on the quickest worker, else the

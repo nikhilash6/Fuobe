@@ -8,7 +8,7 @@ import { plainFailure, RunWatch, type RunLike } from "./helpers/run-watch";
 import { FREE_RUNS_POLICY, startStandInBilling, type StandInBilling } from "./helpers/standin-billing";
 import { startStandInComfy, type StandInComfy } from "./helpers/standin-comfy";
 import { tempDir } from "./helpers/temp-dir";
-import { workerDriver, type WorkerDriver } from "./helpers/worker-driver";
+import { DRIVER_PROTOCOL, workerDriver, type WorkerDriver } from "./helpers/worker-driver";
 
 /**
  * Recovery checks for accounts' runs on this install's GPUs, on the studio's side: a stand-in ComfyUI, the worker's
@@ -68,6 +68,7 @@ const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { getModel } = await import("@/lib/catalog");
 const { POOL_WORDS } = await import("@/lib/relay");
+const { HOSTED_WORDS } = await import("@/server/hosted");
 const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 
 type TaskRow = import("@/server/computer/tasks").TaskRow;
@@ -147,14 +148,18 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 // The studio's side
 
-/** A worker the owner added and resumed, allowed every lane (or `lanes`), able to run every workflow. */
-function standInWorker(name = "stand-in", o: { paused?: boolean; lanes?: string[] } = {}) {
+/**
+ * A worker the owner added and resumed, allowed every lane (or `lanes`), able to run every workflow, and connected (its
+ * worker program beat a moment ago: `connected` false, never).
+ */
+function standInWorker(name = "stand-in", o: { paused?: boolean; lanes?: string[]; connected?: boolean } = {}) {
   const w = pool.addWorker(name);
   const lanes = o.lanes ?? allLanes(loadIndex(), sha).map((l) => l.lane);
   pool.patchWorker(w.id, { paused: !!o.paused, hours: { always: true }, allow: Object.fromEntries(lanes.map((l) => [l, { delayMs: 0 }])), claimAfterMs: 0 });
   db()
     .prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ? WHERE id = ?")
     .run(JSON.stringify({ lanes, workflows: loadManifest().workflows.map((x) => x.id) }), JSON.stringify({ vramBytes: 96 * 2 ** 30 }), w.id);
+  if (o.connected !== false) db().prepare("UPDATE relay_workers SET seen_at = ?, protocol = ?, paused_local = 0 WHERE id = ?").run(Date.now(), DRIVER_PROTOCOL, w.id);
   return w;
 }
 
@@ -654,12 +659,19 @@ describe("the worker steps aside for another program", () => {
     const back = taskOf(id)!;
     expect(back.state).toBe("waiting");
     expect(back.requeues, "a step aside costs no attempt").toBe(0);
-    // The game runs for 40 minutes, past the run's 20 minute wait limit. Near its end, another account's run comes in.
+    // The game runs for 40 minutes, past the run's 20 minute wait limit. Near its end, another account presses Run: with
+    // the only worker stepped aside, it is told the run starts soon, and no run is made that would wait for nothing.
     await pass(35 * MIN, [d], watch);
-    const theirs = (await pressRun(IMAGE, b1)).id;
+    const all = () => (db().prepare('SELECT COUNT(*) AS n FROM generations').get() as { n: number }).n;
+    const rows = all();
+    const holds = svc.holds.size;
+    const theirs = await run(IMAGE, b1);
+    expect(theirs.status, JSON.stringify(theirs.body)).toBe(503);
+    expect(theirs.body).toMatchObject({ error: HOSTED_WORDS.startingSoon, code: "busy" });
+    expect(all()).toBe(rows);
+    expect(svc.holds.size).toBe(holds);
     await pass(5 * MIN, [d], watch);
     expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
-    expect(getGeneration(theirs)?.queue?.place).toBe(2);
     // The game ends: it runs first, in its place, and settles against the hold it was given at Run.
     const hold = holdOf(id);
     d.pause(null);
@@ -782,24 +794,45 @@ describe("a run that can never succeed here", () => {
 });
 
 describe("no worker online", () => {
-  it("with every worker paused, the price check says Free and nothing of the wait today, so Run stays on", async () => {
+  it("with every worker paused, the price check says it starts soon, so Run is off", async () => {
     standInWorker("paused", { paused: true });
     const q = await priceCheck(IMAGE);
     expect(q.status, JSON.stringify(q.body)).toBe(200);
     expect(q.body.place).toBe("pool");
-    expect(q.body.quote).toMatchObject({ allowed: true, text: "Free" });
-    expect(q.body.quote?.code).toBeUndefined();
+    expect(q.body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
+    // A guest is told the same.
+    const g = await priceCheck(IMAGE, "");
+    expect(g.body.quote).toMatchObject({ allowed: false, code: "busy", text: HOSTED_WORDS.startingSoon });
   });
 
-  it("a run made while every worker is paused waits In line in its place, then ends at its wait limit today", async () => {
-    clock();
-    standInWorker("paused", { paused: true });
+  it("Run pressed while every worker is away makes no run that would wait for nothing, in the same words; once one is back, Run works", async () => {
+    const away = [
+      standInWorker("paused here", { connected: true }),
+      standInWorker("never connected", { connected: false }),
+      standInWorker("silent", {}),
+      standInWorker("outside its hours", {}),
+    ];
+    db().prepare("UPDATE relay_workers SET paused_local = 1, local_why = 'gpu-busy:game.exe' WHERE id = ?").run(away[0].id);
+    db().prepare("UPDATE relay_workers SET seen_at = ? WHERE id = ?").run(Date.now() - 3 * MIN, away[2].id);
+    pool.patchWorker(away[3].id, { hours: { tz: "UTC", days: {} } });
+    const rows = made();
+    const holds = svc.holds.size;
+    const r = await run(IMAGE);
+    expect(r.status, JSON.stringify(r.body)).toBe(503);
+    expect(r.body).toMatchObject({ error: HOSTED_WORDS.startingSoon, code: "busy" });
+    expect(made()).toBe(rows);
+    expect(svc.holds.size).toBe(holds);
+    // The silent one beats again: Run is back on, and the run goes in line.
+    db().prepare("UPDATE relay_workers SET seen_at = ? WHERE id = ?").run(Date.now(), away[2].id);
+    expect((await priceCheck(IMAGE)).body.quote).toMatchObject({ allowed: true, text: "Free" });
     const { id } = await pressRun();
-    const watch = watchOf(id);
-    await pass(10 * MIN, [], watch);
-    expect(watch.problems({ place: 1 })).toEqual([]);
-    await pass(15 * MIN, [], watch);
-    await expectFreeFailure(id);
+    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
+  });
+
+  it("a worker making room for local work first is on: the run goes in line", async () => {
+    const w = standInWorker();
+    db().prepare("UPDATE relay_workers SET local_why = 'waiting-for-yield' WHERE id = ?").run(w.id);
+    expect((await priceCheck(IMAGE)).body.quote).toMatchObject({ allowed: true, text: "Free" });
   });
 });
 

@@ -745,10 +745,15 @@ export function poolLane(workflowId: string): string {
  * waits in line for it). A run that no worker could ever take is refused before Run, never left to wait for nothing.
  */
 export function workersCanRun(workflowId: string | null): boolean {
+  return ableWorkers(workflowId).length > 0;
+}
+
+/** The workers that may and can run this workflow (any workflow: null), whatever their state now (workersCanRun). */
+function ableWorkers(workflowId: string | null): WorkerRow[] {
   const needs = workflowId ? needsOf(loadIndex(), workflowId) : null;
   const lane = workflowId ? poolLane(workflowId) : null;
   // (Runs made here go to the "pool" pool: poolFields.)
-  return poolWorkers().some((w) => {
+  return poolWorkers().filter((w) => {
     if (w.pool !== "pool") return false;
     const allow = allowOf(w);
     const cap = capableOf(w);
@@ -756,6 +761,37 @@ export function workersCanRun(workflowId: string | null): boolean {
     if (!needs || !(lane! in allow) || !cap.workflows.includes(workflowId)) return false;
     return needs.minVramBytes <= (factsOf(w).vramBytes ?? 0);
   });
+}
+
+/**
+ * Is a worker on to take work soon: connected and heard from within the silence limit, paused neither on the website
+ * nor on its PC (a game or another program on its GPU counts as paused), not draining, new enough, and inside its
+ * hours? A worker that makes room for local ComfyUI work first is on: people's runs keep their place and it takes them
+ * next.
+ */
+function onSoon(w: WorkerRow, now: number): boolean {
+  return (
+    !w.revoked_at &&
+    !(w.expires_at && w.expires_at <= now) &&
+    !w.paused_server &&
+    !w.paused_local &&
+    !w.drain &&
+    (w.protocol ?? 0) >= MIN_PROTOCOL &&
+    !!w.seen_at &&
+    now - w.seen_at <= RELAY_TIMES.poolSilentMs &&
+    hoursAt(hoursOf(w), now).inside
+  );
+}
+
+/**
+ * Is every worker that could run this workflow (any workflow: null) away now: paused, draining, outside its hours,
+ * silent, or never connected? A run made then would wait for nothing until its wait limit ended it, so the price check
+ * and Run say "Starting soon" instead and nothing is made. False when no worker could run it at all (workersCanRun
+ * refuses that) or one is on.
+ */
+export function workersAway(workflowId: string | null, now = Date.now()): boolean {
+  const able = ableWorkers(workflowId);
+  return able.length > 0 && !able.some((w) => onSoon(w, now));
 }
 
 /**

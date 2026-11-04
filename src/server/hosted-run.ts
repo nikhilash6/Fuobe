@@ -29,7 +29,7 @@ import { PLACE_ASK_HEADER } from "@/lib/guest-access";
 import { createGenerations, outputKind, plannedSteps, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { poolLane } from "./computer/pool";
-import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
+import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolAway, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
@@ -327,6 +327,10 @@ export async function decidePlace(account: Account, asked: GenerationRequest, wi
     const error = gateWords(gate.reason, false);
     return gate.reason === "model3d" ? { kind: "refuse", refusal: { status: 403, body: { error, code: "own-gpu-tool" }, headers: {} } } : notOffered(error);
   }
+  // Every GPU here that could run it is off for now (paused, silent, outside its hours): a run made now would only wait
+  // until its wait limit ended it. It goes to the account's own GPU as any run these GPUs can't take now, else it isn't
+  // made, in the words the price check gave before Run.
+  if (poolAway(planned.route.endpoint)) return ownFallback ? OWN : { kind: "refuse", refusal: billingRefusal("busy", HOSTED_WORDS.startingSoon) };
   // Its own GPU didn't answer the check: asked, never moved to this install's GPUs (and charged) without a word.
   if (ownOffline) return { kind: "refuse", refusal: askPlace() };
   return { kind: "pool", planned, policy: p, steps: gate.steps ? pricedSteps(gate.steps) : undefined, req, capped, light: lightRun(gate.steps) };
@@ -445,6 +449,9 @@ export interface PoolLine {
   etaSeconds: number | null;
 }
 
+/** A price check's answer while every GPU that could run it is off for now: Run is off, and the wait is said. */
+const startingSoonQuote = (): Quote => ({ allowed: false, amount: 0, priceVersion: "", text: HOSTED_WORDS.startingSoon, code: "busy", etaS: null });
+
 /** A price check's answer for a run this install's GPUs won't take, in the words the run itself would get. */
 const notOfferedQuote = (text: string): Quote => ({ allowed: false, amount: 0, priceVersion: "", text, code: "not-offered" });
 
@@ -488,6 +495,12 @@ export async function poolQuote(
   if (!gate.ok) {
     if (hasGpu && wish !== "pool") return null;
     return { planned, quote: notOfferedQuote(gateWords(gate.reason, !account)), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
+  }
+  // Every GPU here that could run it is off for now: Run is off and says it starts soon (the price check asks again by
+  // itself, and Run comes back on once one is back), never a run that would wait for nothing.
+  if (poolAway(planned.route.endpoint)) {
+    if (hasGpu && wish !== "pool") return null;
+    return { planned, quote: startingSoonQuote(), line: line(queueFacts(account?.id ?? null, planned.route.endpoint)) };
   }
   // Light work only (joins, trims): free, and never counted against the policy's limits, so the service isn't asked.
   if (lightRun(gate.steps)) {
