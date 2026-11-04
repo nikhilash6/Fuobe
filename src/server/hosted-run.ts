@@ -28,7 +28,8 @@ import { getModel } from "@/lib/catalog";
 import { PLACE_ASK_HEADER } from "@/lib/guest-access";
 import { createGenerations, outputKind, plannedSteps, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
-import { poolLane } from "./computer/pool";
+import { attemptLimitMs, MAX_ATTEMPTS, poolLane } from "./computer/pool";
+import { holdTiming } from "./queue-settings";
 import { HOSTED_GUEST_WORDS, HOSTED_WORDS, inputCounts, poolAllows, poolAllowsRun, poolAway, poolOnWorkers, poolReady, poolRunsProvider, poolTakes, poolTakesFiles, POOL_LANE, queueFacts, runFacts, runOnPool, workflowPicks } from "./hosted";
 import { withRunStamp } from "./run-stamp";
 import { hostedRunsOn } from "./hosted-switch";
@@ -414,12 +415,16 @@ export async function reservePool(
   const base: RunStamp = { place: "pool", ...(checkOutputs && { checkOutputs: true }) };
   if (!billingConfigured()) return { ok: true, stamp: base };
   const kind = outputKind(planned.op, planned.model);
+  const run: RunFacts = { ...runOnPool(account.id, () => runFacts(req, planned, kind)), ...(steps?.length && { steps }) };
   const a = await reserve({
     requestId: nanoid(16),
     account: accountFacts(account),
-    run: { ...runOnPool(account.id, () => runFacts(req, planned, kind)), ...(steps?.length && { steps }) },
+    run,
     queue: queueFacts(account.id, planned.route.endpoint),
     shown: shown ?? { amount: 0, priceVersion: "" },
+    // How long its hold must stay open once a worker first takes it: every attempt at its lanes' run ceilings, and the
+    // time it may spend back in line (the queue's settings).
+    timing: holdTiming(run.steps?.length ? run.steps : [{ lane: run.lane, jobs: run.jobs }], MAX_ATTEMPTS, attemptLimitMs),
   });
   if (!a) return { ok: true, stamp: base };
   if (!a.ok) {

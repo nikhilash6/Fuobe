@@ -130,7 +130,7 @@ beforeEach(async () => {
   process.env.FUOBE_BILLING_URL = svc.address;
   process.env.FUOBE_BILLING_TOKEN = svc.token;
   delete process.env.FUOBE_HOSTED_FREE;
-  Object.assign(svc, { priced: false, slowMs: 0, gather: null, maxWaitMs: 20 * MIN, holdLifeMs: 105 * MIN, policy: JSON.parse(JSON.stringify(FREE_RUNS_POLICY)) });
+  Object.assign(svc, { priced: false, slowMs: 0, gather: null, maxWaitMs: 20 * MIN, holdLifeMs: 105 * MIN, readTiming: true, policy: JSON.parse(JSON.stringify(FREE_RUNS_POLICY)) });
   await svc.start();
   await comfy.start();
   comfy.inner.restart({ stall: false, failNext: undefined, loseNext: 0, steps: 4, stepMs: 20 });
@@ -999,6 +999,47 @@ describe("the run ceiling per lane", () => {
     await workAll(d);
     expect(long).toBe(true);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
+  });
+
+  it("its hold asks to stay open for the lane's run ceiling and the time back in line: a long run that went back in line still settles against its own hold", async () => {
+    clock();
+    // A 3 hour lane, and an hour back in line covered. The service's own fixed rule (2 hours after the wait limit) would
+    // close the hold before this run ends.
+    qs.saveQueueSettings({ ...qs.queueSettings(), runCeilingS: { default: 2700, lanes: { [imageLane()]: 3 * 3600 } }, pausedBudgetS: 3600 });
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const reserve = svc.callsOf("/v1/reserve").at(-1)!.body as { timing?: { runMs: number; pausedMs: number } };
+    const attempt = pool.SENDING_MS + 2 * 3 * 3_600_000 + pool.SAVING_MS;
+    expect(reserve.timing).toEqual({ runMs: pool.MAX_ATTEMPTS * attempt, pausedMs: 3_600_000 });
+    const hold = svc.holds.get(holdOf(id)!)!;
+    expect(hold.closeBy - hold.createdAt).toBe(svc.maxWaitMs + pool.MAX_ATTEMPTS * attempt + 3_600_000);
+    const watch = watchOf(id);
+    comfy.inner.opts.steps = 6;
+    comfy.inner.opts.stepMs = 100;
+    const d = driver(w);
+    // A game takes the GPU 10 minutes in, for 40 minutes: the run goes back in line in its place.
+    const stepped = stepAsideWhenRunning(d, watch, "gpu-busy:game.exe", () => pass(10 * MIN, [d], watch));
+    await workAll(d);
+    expect(stepped()).toBe(true);
+    await pass(40 * MIN, [d], watch);
+    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
+    // Back, it runs for two and a half hours.
+    d.pause(null);
+    let long = false;
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step === "running" && !long) {
+        long = true;
+        await pass(150 * MIN, [d], watch);
+      }
+    });
+    await workAll(d);
+    expect(long).toBe(true);
+    await expectOnce(id, watch, { place: 1 });
+    expect(Date.now()).toBeGreaterThan(hold.createdAt + svc.maxWaitMs + svc.holdLifeMs);
+    expect(svc.reportsFor(id)).toEqual([{ holdId: hold.id, kind: "settle", status: "succeeded" }]);
+    expect(svc.late).toEqual([]);
   });
 
   it("a run past its lane's ceiling is stopped by its worker and put back in line once, with its place kept; past it again, it ends in plain words", async () => {

@@ -317,12 +317,27 @@ export async function quote(account: AccountFacts | null, run: RunFacts, queue: 
  */
 export const RESERVE_RETRY = { forMs: 60_000, firstMs: 500, mostMs: 8_000 };
 
+/** What a reserve sends (docs/billing-hook.md). */
+export interface ReserveInput {
+  requestId: string;
+  account: AccountFacts;
+  run: RunFacts;
+  queue: QueueFacts | null;
+  shown: { amount: number; priceVersion: string };
+  /**
+   * How long the run's hold must stay open once a worker first takes the run, so its report always comes before the
+   * hold's deadline: `runMs`, every attempt of every job at its lane's run ceiling, and `pausedMs`, the time a started
+   * run may spend back in line. The service adds the run's wait limit (`maxWaitMs`) before the first start.
+   */
+  timing?: { runMs: number; pausedMs: number };
+}
+
 /**
  * Set the run's price aside before it is created. No service: null (no hold; the run is free). The service down: tried
  * again with the same request id (RESERVE_RETRY: the service makes one hold for it however often it hears it), then a
  * `paused` refusal in plain words. Never throws.
  */
-export async function reserve(input: { requestId: string; account: AccountFacts; run: RunFacts; queue: QueueFacts | null; shown: { amount: number; priceVersion: string } }): Promise<ReserveAnswer | null> {
+export async function reserve(input: ReserveInput): Promise<ReserveAnswer | null> {
   if (!billingConfigured()) return null;
   const start = Date.now();
   for (let attempt = 0; ; attempt++) {

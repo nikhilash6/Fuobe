@@ -116,7 +116,7 @@ GPUs wait until it answers again.
 | Call | Request | Answer |
 |---|---|---|
 | `POST /v1/quote` | `{ account: AccountFacts \| null, run: RunFacts, queue: QueueFacts \| null }` | `Quote` |
-| `POST /v1/reserve` | `{ requestId, account: AccountFacts, run: RunFacts, queue: QueueFacts \| null, shown: { amount, priceVersion } }` | `{ ok: true, holdId, amount, boostMs, maxWaitMs, pools?, class?, text }` or `{ ok: false, code: RefuseCode \| "price-changed", text, quote?, action?, offer? }` |
+| `POST /v1/reserve` | `{ requestId, account: AccountFacts, run: RunFacts, queue: QueueFacts \| null, shown: { amount, priceVersion }, timing?: { runMs, pausedMs } }` | `{ ok: true, holdId, amount, boostMs, maxWaitMs, pools?, class?, text }` or `{ ok: false, code: RefuseCode \| "price-changed", text, quote?, action?, offer? }` |
 | `POST /v1/release` | `{ holdId, reason: "not-created" }` | `{ ok: true }` |
 | `POST /v1/settle` | `{ holdId, generationId, rows, status: "succeeded", final: { outputs, megapixels, seconds }, providerUsd, gpuMs, device, reachedProvider }` | `{ ok: true, charged }` |
 | `POST /v1/refund` | `{ holdId, generationId, rows, status: "failed" \| "canceled" \| "hidden" \| "unchecked", reason, reachedProvider, gpuMs, device }` | `{ ok: true, text }` |
@@ -139,6 +139,12 @@ A reserve's `text` is shown on the result once it succeeded ("7 units"). A run t
 charged" only when its reserve answer set an amount aside (`amount` above 0). `maxWaitMs` is how long the run may wait
 in line before a GPU first takes it; past it the row fails and is refunded. Once a GPU has taken it, the limit is over:
 a run that goes back in line (a GPU paused or restarted) keeps its place and waits there.
+
+`timing` says how long the hold must stay open after a GPU first takes the run, so the run's reports always come
+before the hold's deadline. `runMs` gives every job of every step all its attempts, each at its lane's run ceiling
+with the time to send its files and results. `pausedMs` is the time a started run may spend back in line (the queue's
+`pausedBudgetS`, two hours unless the owner sets another). A service sets the deadline to at least now + `maxWaitMs` +
+`runMs` + `pausedMs`. A run past it still delivers its result. A service that doesn't read `timing` keeps its own rule.
 
 `class` puts the run in a class of the line: `"paid"` runs go before `"free"` ones (no `class`: `"free"`). The
 install's own jobs come after both. `boostMs` is a head start inside the class, at most a day: the run stands in line as

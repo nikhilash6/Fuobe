@@ -9,8 +9,9 @@
  *
  * By default every run is free: the quote says "Free" with an amount of 0, and a reserve sets nothing aside. `priced`
  * gives runs a price (`price` per run). A reserve must name its request (`requestId`, else 400), and a repeated
- * reserve with the same request id is the same hold. A hold is kept until its deadline (`closeBy`: the run's wait limit plus `holdLifeMs`); a report after it is
- * refused and counted as late.
+ * reserve with the same request id is the same hold. A hold is kept until its deadline (`closeBy`: the run's wait limit plus the time the
+ * reserve's `timing` asks for, or `holdLifeMs` when it sends none or `readTiming` is off); a report after it is refused
+ * and counted as late.
  */
 import fs from "node:fs";
 import http from "node:http";
@@ -52,8 +53,10 @@ export interface StandInBilling {
   policy: Record<string, unknown>;
   /** The longest a run may wait before its first start (the reserve's maxWaitMs). */
   maxWaitMs: number;
-  /** How long a hold lasts after its run's wait limit. */
+  /** How long a hold lasts after its run's wait limit, when the reserve asks for no time of its own. */
   holdLifeMs: number;
+  /** Read the reserve's `timing` (on by default). Off: every hold lasts `holdLifeMs`, as a service with a fixed rule. */
+  readTiming: boolean;
   /** Wait this long before every answer. */
   slowMs: number;
   /**
@@ -117,6 +120,7 @@ export async function startStandInBilling(o: { socket?: boolean; token?: string 
     policy: JSON.parse(JSON.stringify(FREE_RUNS_POLICY)) as Record<string, unknown>,
     maxWaitMs: 20 * 60_000,
     holdLifeMs: 2 * 3_600_000,
+    readTiming: true,
     slowMs: 0,
     gather: null as StandInBilling["gather"],
   };
@@ -172,7 +176,11 @@ export async function startStandInBilling(o: { socket?: boolean; token?: string 
       const shown = (body.shown ?? {}) as { amount?: number };
       const q = quote();
       if (q.amount > Number(shown.amount ?? 0)) return json(200, { ok: false, code: "price-changed", text: `It now costs ${q.amount}.`, quote: q });
-      const h: StandInHold = { id: `hold_${++n}`, requestId, account, amount: q.amount, createdAt: now, closeBy: now + f.maxWaitMs + f.holdLifeMs, released: false, reports: new Map() };
+      // The deadline: the run's wait limit, then the time the reserve asks for after its first start (`timing`), else
+      // the stand-in's own fixed time.
+      const t = (body.timing ?? null) as { runMs?: unknown; pausedMs?: unknown } | null;
+      const asked = t && typeof t.runMs === "number" && typeof t.pausedMs === "number" ? t.runMs + t.pausedMs : null;
+      const h: StandInHold = { id: `hold_${++n}`, requestId, account, amount: q.amount, createdAt: now, closeBy: now + f.maxWaitMs + (f.readTiming && asked !== null ? asked : f.holdLifeMs), released: false, reports: new Map() };
       f.holds.set(h.id, h);
       return ok(h);
     }

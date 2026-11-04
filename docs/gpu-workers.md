@@ -328,6 +328,7 @@ in that class came.
 | `ownerWaitLimitS` | How long the owner's own jobs may wait before a worker first takes them, in seconds. `null`: no limit | `null` |
 | `fairShare` | Each class goes round its accounts (above). Off: strict order | `false` |
 | `pickAllowanceMs` | How long a job in a worker's warm lane may go ahead of an older one (above). 0: strict order | `0` |
+| `pausedBudgetS` | How long, in all, a run that has started may spend back in line while its worker steps aside, and still be inside the deadline its hold asks for ([billing-hook.md](billing-hook.md)). A run past it still delivers its result | `7200` (2 hours) |
 
 A worker's run limit for one attempt is 3 times the lane's 90th percentile on that worker plus its model load, at
 least 10 minutes and never past the lane's run ceiling. With no measured run in the lane yet, it is the ceiling.

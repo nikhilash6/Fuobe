@@ -12,6 +12,9 @@ import { db } from "./db";
  *   next job goes after every other account's job that came before it and is the first of its own.
  * - `pickAllowanceMs`: how long a job in the lane a worker has loaded may go ahead of an older one in another lane, so a
  *   worker doesn't reload its models for every job (0: strict order).
+ * - `pausedBudgetS`: how long, in all, a run that has started may spend back in line while its worker steps aside (another
+ *   program on its GPU, a pause) and still be inside its hold's deadline. With the run ceiling, it sets the time a run
+ *   asks its hold to stay open (holdTiming). A run past it still delivers its result.
  *
  * Kept in the settings table under one key, as JSON. Nothing set: the defaults, which are today's fixed values.
  */
@@ -21,15 +24,17 @@ export interface QueueSettings {
   ownerWaitLimitS: number | null;
   fairShare: boolean;
   pickAllowanceMs: number;
+  pausedBudgetS: number;
 }
 
-export const QUEUE_DEFAULTS: QueueSettings = { runCeilingS: { default: 2700, lanes: {} }, ownerWaitLimitS: null, fairShare: false, pickAllowanceMs: 0 };
+export const QUEUE_DEFAULTS: QueueSettings = { runCeilingS: { default: 2700, lanes: {} }, ownerWaitLimitS: null, fairShare: false, pickAllowanceMs: 0, pausedBudgetS: 7200 };
 
 /** The bounds each value may take. */
 export const QUEUE_BOUNDS = {
   ceilingS: { min: 60, max: 24 * 3600 },
   ownerWaitS: { min: 60, max: 7 * 24 * 3600 },
   pickAllowanceMs: { min: 0, max: 3_600_000 },
+  pausedBudgetS: { min: 0, max: 7 * 24 * 3600 },
   lanes: 200,
 };
 
@@ -74,7 +79,7 @@ const inRange = (v: unknown, b: { min: number; max: number }): v is number => wh
 export function checkQueuePatch(body: unknown, base: QueueSettings = queueSettings()): { settings: QueueSettings } | { error: string } {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { error: "Send the settings as an object" };
   const b = body as Record<string, unknown>;
-  const known = ["runCeilingS", "ownerWaitLimitS", "fairShare", "pickAllowanceMs"];
+  const known = ["runCeilingS", "ownerWaitLimitS", "fairShare", "pickAllowanceMs", "pausedBudgetS"];
   const unknown = Object.keys(b).filter((k) => !known.includes(k));
   if (unknown.length) return { error: `Unknown setting: ${unknown[0]}` };
   const out = copy(base);
@@ -110,6 +115,11 @@ export function checkQueuePatch(body: unknown, base: QueueSettings = queueSettin
     if (!inRange(b.pickAllowanceMs, p)) return { error: `pickAllowanceMs is ${p.min} to ${p.max}` };
     out.pickAllowanceMs = b.pickAllowanceMs;
   }
+  if (b.pausedBudgetS !== undefined) {
+    const p = QUEUE_BOUNDS.pausedBudgetS;
+    if (!inRange(b.pausedBudgetS, p)) return { error: `pausedBudgetS is ${p.min} to ${p.max} seconds` };
+    out.pausedBudgetS = b.pausedBudgetS;
+  }
   return { settings: out };
 }
 
@@ -125,6 +135,22 @@ export function saveQueueSettings(s: QueueSettings): QueueSettings {
 export function runCeilingMs(lane: string | null | undefined, s: QueueSettings = queueSettings()): number {
   const own = lane ? s.runCeilingS.lanes[lane] : undefined;
   return (own ?? s.runCeilingS.default) * 1000;
+}
+
+/**
+ * How long a run on this install's GPUs asks its hold to stay open once a worker first takes it (the billing service adds
+ * the run's wait limit before that): `runMs`, every job of every step given all its attempts (`attemptMs`: the longest
+ * one attempt may take in a lane, from its claim to its results sent, which its run ceiling sets), and `pausedMs`, the
+ * time a started run may spend back in line (pausedBudgetS).
+ */
+export function holdTiming(
+  steps: { lane: string | null; jobs: number }[],
+  attempts: number,
+  attemptMs: (lane: string | null) => number,
+  s: QueueSettings = queueSettings(),
+): { runMs: number; pausedMs: number } {
+  const runMs = steps.reduce((sum, j) => sum + Math.max(1, Math.floor(j.jobs) || 1) * attempts * attemptMs(j.lane), 0);
+  return { runMs, pausedMs: s.pausedBudgetS * 1000 };
 }
 
 /** How long the owner's own job on the workers may wait for its first start (ms), or undefined for no limit. */
