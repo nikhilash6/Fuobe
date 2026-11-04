@@ -11,17 +11,25 @@ import { getTemplate } from "@/lib/catalog/canvas";
 import { runsOn } from "@/lib/catalog/engines";
 import type { ModelDef } from "@/lib/catalog/types";
 import { EXAMPLE_MEDIA } from "@/lib/examples/media.generated";
-import { HOME_BENTO_MEDIA, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
+import { HOME_BENTO_MEDIA, HOME_BENTO_REEL, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
+import type { ReelClip } from "@/lib/home-reel";
 import type { Demo } from "@/lib/live/demo";
 import { presetCover } from "@/lib/preset-covers";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { templateCover } from "@/lib/template-covers";
 
-/** The preset whose clip each moving tile plays (no other card on Home plays these: tests/home-showcase.test.ts). */
-export const BENTO_CLIPS = { video: "motion-catwalk", threeD: "app-3d-rotation" } as const;
+/** The preset whose clip the 3D tile plays (no other card on Home plays it: tests/home-showcase.test.ts). */
+export const BENTO_CLIPS = { threeD: "app-3d-rotation" } as const;
 /** Each clip's copies here (scripts/gen-home-bento.mjs): its name, and the widths it and its poster come in. */
-export const BENTO_CLIP_FILES = { video: "catwalk", threeD: "rotation" } as const;
+export const BENTO_CLIP_FILES = { threeD: "rotation" } as const;
 export const BENTO_CLIP_WIDTHS = [640, 1024, 1536, 2048] as const;
+/**
+ * The presets the video tile plays in turn, in this order: scripts/gen-home-bento.mjs (REEL) cuts each one's stretch
+ * and frames it. The first one's first frame is the tile's poster.
+ */
+export const BENTO_REEL = HOME_BENTO_REEL.map((c) => c.id);
+/** The video tile's id in the playback store: its own, as it plays several presets (one of them may be a card lower down). */
+export const BENTO_REEL_ID = "home-reel";
 /** The width of the JPEG copy of each clip's first frame, for a browser without AVIF. */
 export const BENTO_CLIP_FALLBACK = 1024;
 /** The Image studio's example the image tile shows and opens with (src/lib/examples/plan.json). */
@@ -64,6 +72,13 @@ export interface BentoMovingTile {
   clips: { src: string; w: number }[];
 }
 
+/** The video tile: its id in the playback store, its poster (the first clip's first frame) and its clips in order. */
+export interface BentoReelTile {
+  id: string;
+  poster: BentoPicture;
+  reel: ReelClip[];
+}
+
 export interface BentoTile {
   key: BentoKey;
   /** The small line over the title: what kind of media, and how much of it. */
@@ -95,6 +110,9 @@ export interface BentoFacts {
  * same test as modelCounts().open (src/lib/catalog/counts.ts), so the kinds add up to its total.
  */
 export const openModelsOf = (kind: ModelDef["kind"], models: readonly ModelDef[] = MODELS) => models.filter((m) => isListed(m) && runsOn(m, "open") && m.kind === kind).length;
+
+/** The widths a file of the copies named `name` comes in (`<name>-<width>.<ext>`), as scripts/gen-home-bento.mjs made them. */
+const widthsOf = (name: string, ext: string) => BENTO_CLIP_WIDTHS.filter((w) => HOME_BENTO_MEDIA[`/previews/home/${name}-${w}.${ext}`]);
 
 /** A file made by scripts/gen-home-bento.mjs, with its version. */
 function made(file: string): string {
@@ -153,11 +171,10 @@ function board() {
 
 /** Everything the first screen shows, computed once per build with the rest of Home (homeShowcase). */
 export async function homeBento(f: BentoFacts) {
-  const video = presetCover(BENTO_CLIPS.video);
   const threeD = presetCover(BENTO_CLIPS.threeD);
   const restore = getPreset(BENTO_BEFORE_AFTER);
   const baV = PRESET_BEFORE_AFTER[BENTO_BEFORE_AFTER];
-  if (!video?.video || !threeD?.video || !restore || !baV) throw new Error("Home's first screen names a clip or an app without its published media");
+  if (!threeD?.video || !restore || !baV || BENTO_REEL.some((id) => !presetCover(id)?.video)) throw new Error("Home's first screen names a clip or an app without its published media");
   const demo = await readDemo();
   const frame = (id: string) => {
     const fr = demo.frames[id];
@@ -169,6 +186,23 @@ export async function homeBento(f: BentoFacts) {
     tall: [432, 691].map((w) => ({ src: made(`/previews/home/ba-${side}-tall-${w}.avif`), w })),
     fallback: `/previews/presets/ba/960/${BENTO_BEFORE_AFTER}-${side}.jpg?v=${baV}`,
   });
+  // The video tile's reel: each clip in the widths it comes in, and the first one's first frame as the poster, in its
+  // widths (and a JPEG at 1024 px for a browser without AVIF).
+  const reel = (): BentoReelTile => {
+    const first = HOME_BENTO_REEL[0];
+    return {
+      id: BENTO_REEL_ID,
+      poster: {
+        avif: widthsOf(first.name, "avif").map((w) => ({ src: made(`/previews/home/${first.name}-${w}.avif`), w })),
+        fallback: made(`/previews/home/${first.name}-${BENTO_CLIP_FALLBACK}.jpg`),
+      },
+      reel: HOME_BENTO_REEL.map((c) => {
+        const widths = widthsOf(c.name, "mp4");
+        if (!widths.length) throw new Error(`Home's video tile names ${c.name}, which scripts/gen-home-bento.mjs didn't make`);
+        return { id: c.id, position: c.position, clips: widths.map((w) => ({ src: made(`/previews/home/${c.name}-${w}.mp4`), w })) };
+      }),
+    };
+  };
   // A moving tile: its poster (the clip's first frame) and its clip, each in every width; for a browser without AVIF, the
   // 1024 px clip's first frame as a JPEG.
   const moving = (key: keyof typeof BENTO_CLIPS): BentoMovingTile => {
@@ -206,7 +240,7 @@ export async function homeBento(f: BentoFacts) {
       live: tile("live", "Live edit", "Live edit", "Type it, watch it change", "Open Live edit"),
       canvas: tile("canvas", "Canvas", "Canvas", "Chain any step, end to end", "Open Canvas"),
     },
-    video: moving("video"),
+    video: reel(),
     image: {
       avif: [480, 768].map((w) => ({ src: made(`/previews/home/image-4-${w}.avif`), w })),
       fallback: example(BENTO_IMAGE_EXAMPLE.out),

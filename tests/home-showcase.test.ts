@@ -24,7 +24,7 @@ import {
   presetHref,
   roundedDown,
 } from "@/lib/home-showcase";
-import { BENTO_CLIPS } from "@/lib/home-bento";
+import { BENTO_CLIPS, BENTO_REEL } from "@/lib/home-bento";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { onPeak, thumbOf } from "@/lib/preset-cards";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
@@ -57,7 +57,10 @@ const CLIP_PENDING = ["motion-flying"];
 
 const studioIds = HOME_STUDIOS.flatMap((s) => (s.id ? [s.id] : []));
 const rows = [...HOME_EFFECTS, ...HOME_MOTIONS, ...HOME_REVEALS];
-/** Every preset whose clip plays on Home: the first screen's two, the rows, the before/after and the studio cards. */
+/**
+ * Every preset whose clip plays on Home under its own id: the 3D tile's, the rows, the before/after and the studio
+ * cards. The video tile plays its reel (BENTO_REEL) under an id of its own, so a camera move in it may also have its card.
+ */
 const homeIds = [...Object.values(BENTO_CLIPS), ...rows.map((r) => r.id), ...HOME_BEFORE_AFTER.map((p) => p.id), ...studioIds];
 /** Effects whose first frame is the strong one, so their card rests on the poster as the camera motions' do (none now). */
 const ON_POSTER: string[] = [];
@@ -69,7 +72,7 @@ const clipSeconds = (url: string) => mp4Seconds(path.join(root, "public", url.sp
 
 describe("Home's showcase", () => {
   it("names real presets, each with its cover and, where the slot plays one, its clip", () => {
-    for (const id of homeIds) {
+    for (const id of [...homeIds, ...BENTO_REEL]) {
       expect(getPreset(id), id).toBeDefined();
       const cover = PRESET_PREVIEWS[id];
       expect(cover, `${id} has a real cover`).toBeDefined();

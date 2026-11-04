@@ -1,5 +1,5 @@
 import { ArrowRight, ArrowUpRight, ChevronsLeftRight, Play, Sparkles, Video } from "lucide-react";
-import { BentoClip, BentoMotion, LiveTyping, NumbersLink } from "@/components/home/bento-islands";
+import { BentoClip, BentoMotion, BentoReel, LiveTyping, NumbersLink } from "@/components/home/bento-islands";
 import { PausePreviews } from "@/components/home/home-islands";
 import { IntentLink } from "@/components/intent-link";
 import { CountUp } from "@/components/ui/count-up";
@@ -25,7 +25,8 @@ const TALL_MEDIA = "(min-width: 1024px)";
 
 /**
  * A picture in AVIF where the browser takes it, its published JPEG or WebP where not; a picture with a `tall` crop
- * takes it from lg. Decorative: the tile's link names it.
+ * takes it from lg. `position`: its object-position, where it differs from its tile's. Decorative: the tile's link
+ * names it.
  */
 function Pic({
   pic,
@@ -33,12 +34,14 @@ function Pic({
   className,
   loading = "eager",
   fetchPriority,
+  position,
 }: {
   pic: BentoPicture;
   sizes: string;
   className?: string;
   loading?: "eager" | "lazy";
   fetchPriority?: "high" | "low";
+  position?: string;
 }) {
   return (
     <picture className={s.pic}>
@@ -54,6 +57,7 @@ function Pic({
         decoding="async"
         draggable={false}
         className={cn(s.fill, className)}
+        style={position ? { objectPosition: position } : undefined}
       />
     </picture>
   );
@@ -177,8 +181,8 @@ export function HomeBento({ bento }: { bento: Bento }) {
 
       <div className={s.grid}>
         <Tile tile={tiles.video} area={s.video} bigMeta>
-          <Pic pic={bento.video.poster} sizes={SIZES.video} fetchPriority="high" />
-          <BentoClip id={bento.video.id} clips={bento.video.clips} progress />
+          <Pic pic={bento.video.poster} sizes={SIZES.video} fetchPriority="high" position={bento.video.reel[0].position} />
+          <BentoReel id={bento.video.id} reel={bento.video.reel} progress />
           <span aria-hidden className={s.badge}>
             <Video className="size-3.5" /> Video
           </span>

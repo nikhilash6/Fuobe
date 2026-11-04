@@ -1,38 +1,45 @@
 #!/usr/bin/env node
 /**
- * Media and data for Home's first screen (src/components/home/home-bento.tsx): its two clips and their posters in two
- * widths, AVIF copies of pictures the site already publishes, and the Audio tile's waveform, read from the Audio
- * studio's own sample. Nothing is rendered: every file is a copy of a published picture or of the full-size render a
- * published clip was cut from, so the tiles show exactly what the studios show, only sharper.
+ * Media and data for Home's first screen (src/components/home/home-bento.tsx): the video tile's reel of clips and its
+ * poster, the 3D tile's clip and its poster, each in several widths, AVIF copies of pictures the site already
+ * publishes, and the Audio tile's waveform, read from the Audio studio's own sample. Nothing is rendered: every file is a
+ * copy of a published picture or of the full-size render a published clip was cut from, so the tiles show exactly what
+ * the studios show, only sharper.
  *
  * Output (public/previews/home/):
- *   catwalk-{640,1024,1536,2048}.{mp4,avif}   the catwalk clip at four widths, and each one's first frame as its poster
- *   rotation-{640,1024,1536,2048}.{mp4,avif}  the turning gown (the 3D tile), the same way
- *   catwalk-1024.jpg, rotation-1024.jpg       the 1024 px clips' first frames, for a browser without AVIF
+ *   reel-<name>-{640,1024}.mp4                each clip of the video tile's reel (REEL), and at 1536 and 2048 where its
+ *                                             2048 px master is in the masters folder
+ *   reel-one-take-<width>.avif                the reel's first clip's first frame at each of its widths: the tile's poster
+ *   rotation-{640,1024,1536,2048}.{mp4,avif}  the turning gown (the 3D tile) at four widths, and each one's first frame
+ *   reel-one-take-1024.jpg, rotation-1024.jpg the 1024 px clips' first frames, for a browser without AVIF
  *   image-4-{480,768}.avif                the Image studio's example 4
  *   ba-{before,after}-{640,960,1280}.avif       Colorize's before and after (4:3)
  *   ba-{before,after}-tall-{432,691}.avif       the same pair, a 3:5 crop for the tall tile
  *   board-{photo,film}.webp               the Canvas board's photo and a frame of its film, 168 px squares
- * and src/lib/home-bento.generated.ts: each file's content version, and the waveform.
+ * and src/lib/home-bento.generated.ts: each file's content version, the reel (its clips in order, each one's length and
+ * framing), and the waveform.
  *
- * The clips: the published clip's own cut (scripts/eval/lib/covers.mjs: its first CLIP_SECONDS at CLIP_FPS, looped
- * the same way), made again from the full-size render instead of the 512 px copy, in H.264 High (a CRF per clip,
- * faststart, no sound), tagged BT.709 so every browser shows its colours the same way. Each tile picks the width its
- * box needs on the screen it is on (bento-islands.tsx).
+ * The reel: the video tile plays these clips one after another, each once, and crossfades into the next (after the
+ * last, back to the first). Each is a stretch of its preset's full-size render: `from` (its first frame in the render)
+ * and `frames` long, at CLIP_FPS, with no loop of its own. The 3D tile's clip is the published clip's own cut
+ * (scripts/eval/lib/covers.mjs: its first CLIP_SECONDS at CLIP_FPS, looped the same way), made again from the full-size
+ * render instead of the 512 px copy. All are H.264 High (a CRF per clip and width, faststart, no sound), tagged BT.709
+ * so every browser shows their colours the same way. Each tile picks the width its box needs on the screen it is on
+ * (bento-islands.tsx).
  *
- * The posters: each clip's own first frame, decoded from the encoded file the way a browser shows it (BT.709, limited
- * range), at POSTER_QUALITY: the tile shows it until its clip plays, and the clip takes over on that same frame, so the
- * swap can't be seen. They are made again from the clips on every run, with or without masters.
+ * The posters: the reel's first clip's and the 3D clip's own first frame, decoded from the encoded file the way a
+ * browser shows it (BT.709, limited range), at POSTER_QUALITY: the tile shows it until its clip plays, and the clip
+ * takes over on that same frame, so the swap can't be seen. They are made again from the clips on every run, with or without masters.
  *
  * Masters: the full-size renders are not in the repo. With --masters <dir> (or FUOBE_HOME_MASTERS) the clips, their
  * posters and the before/after copies are made from the files in it:
- *   <dir>/motion-catwalk.mp4, <dir>/app-3d-rotation.mp4          the renders the published clips were cut from
- *   <dir>/motion-catwalk-2048.mkv, <dir>/app-3d-rotation-2048.mkv the same renders upscaled to 2048 x 1536, every frame
- *                                                                 (SeedVR2 7B, lossless FFV1, BT.709), for the 1536 and
- *                                                                 2048 px copies
+ *   <dir>/<preset>.mp4             the full-size render each reel clip and the 3D clip are cut from (1024 x 768, 24 fps)
+ *   <dir>/<preset>-2048.mkv        the same render upscaled to 2048 x 1536, every frame (SeedVR2 7B, lossless FFV1,
+ *                                  BT.709), for the 1536 and 2048 px copies: the 3D clip needs it; a reel clip without
+ *                                  one comes at 640 and 1024 only
  *   <dir>/app-colorize-before.png, <dir>/app-colorize-after.png  Colorize's pair at full size (1536 x 1152)
- * Without it those files are kept as they are (and versioned), the posters are made again from the clips kept, and so
- * is the rest.
+ * Without it those files are kept as they are (and versioned; a reel clip in the widths it has), the posters are made
+ * again from the clips kept, and so is the rest.
  *
  * The waveform: the Clean up voice sample decoded to 8 kHz mono, its loudness (RMS) in WAVE_BARS equal slices, scaled
  * so the loudest is 1, with a floor of WAVE_FLOOR so a pause still shows a bar. It is keyed by the sample's own
@@ -71,15 +78,28 @@ const BA_APP = "app-colorize";
  */
 const BA_TALL = { left: 422, top: 0, width: 691, height: 1152 };
 /**
- * The two clips: their published preset, the name of their copies here, and the CRF each width is encoded at (the
+ * The video tile's reel, in the order it plays: each clip's preset, the name of its copies here, the stretch of its
+ * render it plays (`from`, its first frame; `frames`, at CLIP_FPS), where the tile anchors it (its object-position:
+ * the tile is wider than the 4:3 clip, so only its top and bottom are cropped), and the CRF each width is encoded at
+ * (chosen on close crops of faces and fine detail against the render; a busy picture, such as One Take's leaves, costs
+ * more bits). The stretches are the ones that hold up frame by frame at the tile's size: One Take from the arch to its
+ * look back (the render's last frame), Sand Storm until the sand fills the frame, Crane Over the Head from the profile
+ * to the view. The first clip's first frame is the tile's poster.
+ */
+export const REEL = [
+  { id: "motion-one-take", name: "reel-one-take", from: 28, frames: 96, position: "50% 15%", crf: { 640: 22, 1024: 23, 1536: 27, 2048: 28 } },
+  { id: "effect-sand-storm", name: "reel-sand-storm", from: 0, frames: 84, position: "50% 0%", crf: { 640: 22, 1024: 22, 1536: 26, 2048: 27 } },
+  { id: "motion-crane-over-the-head", name: "reel-crane-over", from: 36, frames: 88, position: "50% 0%", crf: { 640: 22, 1024: 22, 1536: 26, 2048: 27 } },
+];
+/**
+ * The 3D tile's clip: its published preset, the name of its copies here, and the CRF each width is encoded at (the
  * wider copies, made from the 2048 px master, at a higher CRF: their pixels are smaller on the screen).
  */
-const CLIPS = [
-  { key: "motion-catwalk", name: "catwalk", crf: { 640: 24, 1024: 24, 1536: 28, 2048: 29 } },
-  { key: "app-3d-rotation", name: "rotation", crf: { 640: 23, 1024: 23, 1536: 27, 2048: 28 } },
-];
+const LOOPS = [{ key: "app-3d-rotation", name: "rotation", crf: { 640: 23, 1024: 23, 1536: 27, 2048: 28 } }];
 /** The widths each clip and its poster are made at: a tile takes the first at least as wide as its box needs. */
 const CLIP_WIDTHS = [640, 1024, 1536, 2048];
+/** The widths a reel clip is made at from its render alone (wider ones need its 2048 px master). */
+const RENDER_WIDTHS = [640, 1024];
 /** From this width up, a clip is made from its 2048 px master (`<key>-2048.mkv`) instead of the render itself. */
 const HD_FROM = 1536;
 /** The width of each clip's first frame as a JPEG, the poster for a browser without AVIF (BENTO_CLIP_FALLBACK). */
@@ -130,6 +150,17 @@ function loopAt(src, width) {
   return { all: stream(looped), frames: looped.length };
 }
 
+/**
+ * A reel clip at `width`: `frames` frames from frame `from` of the render (at CLIP_FPS), played once, no loop. Returns
+ * its y4m stream.
+ */
+function cutAt(src, width, from, frames) {
+  const y4m = ffmpeg(["-v", "error", "-i", src, "-an", "-sn", "-dn", "-vf", `fps=${CLIP_FPS},trim=start_frame=${from}:end_frame=${from + frames},setpts=PTS-STARTPTS,scale=${width}:-2:flags=lanczos,format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
+  const got = readY4m(y4m).frames.length;
+  if (got !== frames) throw new Error(`${path.basename(src)} has ${got} frames from frame ${from}, not ${frames}`);
+  return y4m;
+}
+
 /** H.264 High, the published clip's loop, muted, its index at the front so it starts before it has all loaded. */
 function encodeClipBuffer(y4m, crf) {
   const out = path.join(os.tmpdir(), `gen-home-bento-${process.pid}.mp4`);
@@ -175,8 +206,23 @@ async function main() {
   const versions = {};
   let total = 0;
   // Made from the masters when there are any; without them the files already here are kept (and versioned).
+  // The reel's widths: 640 and 1024 from each render, the wider ones from its 2048 px master where there is one;
+  // without masters, the widths already here.
+  const reelWidths = (c) =>
+    CLIP_WIDTHS.filter((w) =>
+      MASTERS ? RENDER_WIDTHS.includes(w) || fs.existsSync(master(`${c.id}-2048.mkv`)) : fs.existsSync(path.join(OUT_DIR, `${c.name}-${w}.mp4`)),
+    );
+  const reel = REEL.map((c) => ({ ...c, widths: reelWidths(c) }));
+  for (const c of reel) if (!RENDER_WIDTHS.every((w) => c.widths.includes(w))) throw new Error(`${c.name} is made from the full-size renders: run with --masters <dir>`);
   const fromMasters = [
-    ...CLIPS.flatMap((c) =>
+    ...reel.flatMap((c) =>
+      c.widths.map((w) => ({
+        name: `${c.name}-${w}.mp4`,
+        clip: true,
+        make: () => encodeClipBuffer(cutAt(master(RENDER_WIDTHS.includes(w) ? `${c.id}.mp4` : `${c.id}-2048.mkv`), w, c.from, c.frames), c.crf[w]),
+      })),
+    ),
+    ...LOOPS.flatMap((c) =>
       CLIP_WIDTHS.map((w) => ({
         name: `${c.name}-${w}.mp4`,
         clip: true,
@@ -205,8 +251,9 @@ async function main() {
     }
     if (!DRY) versions[`/previews/home/${s.name}`] = contentVersion([out]);
   }
-  // Each clip's poster, from the clip as it is now (just made, or kept).
-  const posters = CLIPS.flatMap((c) => CLIP_WIDTHS.map((w) => ({ name: `${c.name}-${w}.avif`, clip: `${c.name}-${w}.mp4` })));
+  // Each poster, from its clip as it is now (just made, or kept): the reel's first clip's, and the 3D clip's.
+  const posterSets = [{ name: reel[0].name, widths: reel[0].widths }, ...LOOPS.map((c) => ({ name: c.name, widths: CLIP_WIDTHS }))];
+  const posters = posterSets.flatMap((c) => c.widths.map((w) => ({ name: `${c.name}-${w}.avif`, clip: `${c.name}-${w}.mp4` })));
   const jobs = [
     ...posters.map((p) => ({
       ...p,
@@ -216,7 +263,7 @@ async function main() {
       },
     })),
     // For a browser without AVIF: the FALLBACK_WIDTH clip's first frame as a JPEG.
-    ...CLIPS.map((c) => ({
+    ...posterSets.map((c) => ({
       name: `${c.name}-${FALLBACK_WIDTH}.jpg`,
       make: () => sharp(firstFrame(path.join(OUT_DIR, `${c.name}-${FALLBACK_WIDTH}.mp4`))).jpeg({ quality: 85, mozjpeg: true }).toBuffer(),
     })),
@@ -244,11 +291,18 @@ async function main() {
   if (DRY) return;
   const source = contentVersion([path.join(PUBLIC, WAVE_SOURCE)]);
   const body = `/**
- * Home's first screen (src/components/home/home-bento.tsx): the content version of each still made for it, and the
- * Audio tile's waveform, read from the Clean up voice sample (its version is \`wave.source\`). Generated by
+ * Home's first screen (src/components/home/home-bento.tsx): the content version of each file made for it, the video
+ * tile's reel, and the Audio tile's waveform, read from the Clean up voice sample (its version is \`wave.source\`). Generated by
  * scripts/gen-home-bento.mjs: run it again rather than editing.
  */
 export const HOME_BENTO_MEDIA: Record<string, string> = ${JSON.stringify(versions, null, 2)};
+
+/** The video tile's reel, in the order it plays: each clip's preset, its copies' name, its length and its framing. */
+export const HOME_BENTO_REEL = ${JSON.stringify(
+    REEL.map(({ id, name, frames, position }) => ({ id, name, frames, fps: CLIP_FPS, position })),
+    null,
+    2,
+  )};
 
 export const HOME_BENTO_WAVE = {
   src: ${JSON.stringify(WAVE_SOURCE)},

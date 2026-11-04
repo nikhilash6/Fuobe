@@ -1,11 +1,12 @@
 // Home's first screen in a real browser (src/components/home/home-bento.tsx). Run it on a production server
 // (`next build`, then `next start -p <port>`): the weight and layout-shift numbers mean little on a dev server.
 //
-// Usage: node tests/e2e/home-bento.mjs [appUrl] [--shots <dir>] [--weight-only]   (pnpm test:e2e:home)
+// Usage: node tests/e2e/home-bento.mjs [appUrl] [--shots <dir>] [--weight-only] [--only 1b,1c,1d,4,5]   (pnpm test:e2e:home)
 //   E2E_BROWSER=webkit or firefox: run it in that engine (tests/e2e/_browser.mjs).
 //   E2E_OWNER_PASSWORD: the studio's password, when it has one; the owner's pass signs in with it. Without one the
 //   studio is the owner's, and the guest's pass is skipped.
 //   --weight-only: only measure what the first screen downloads (to compare another build, such as main's).
+//   --only <ids>: run only these numbered parts (the weight, 6, always runs unless --weight-only is all that's asked).
 //
 // 1. Every width (390, 768, 1024, 1280, 1440, 1920), light and dark, as a guest and as the owner: no sideways scroll,
 //    one h1, the headline in its own words ("Make anything:" on one line; the second line whole from 768, and on a
@@ -14,10 +15,15 @@
 //    contact sheet of them all.
 // 1b. Sharp at every width and pixel ratio (1x, 2x, 3x): every picture on the first screen is at least as wide as its
 //    box shows it (object-fit: cover, times the ratio), up to the widest copy there is, and so is each clip once it
-//    plays. No play sign on a tile that plays by itself, at any moment from the first paint until both clips play, and
-//    nothing shifts as a clip takes over from its still.
+//    plays (up to the widest copy of that clip). No play sign on a tile that plays by itself, at any moment from the
+//    first paint until both tiles play, and nothing shifts as a clip takes over from its still.
 // 1c. The swap: each tile's still is its clip's first frame (the clip at frame 0 over it differs by under 3 levels in
 //    255 on average), at 390@3x and 1440@2x.
+// 1d. The video tile's reel, at 390@3x and 1440@2x, light and dark: its still is One Take's first frame; it plays One
+//    Take, Sand Storm and Crane Over the Head in that order and back to One Take, each crossfading into the next; each
+//    clip framed as listed (its object-position); never more than the clip playing and the next one loaded, the next
+//    asked for only once the current one plays; off screen it pauses, back on screen it goes on. A picture of each
+//    clip in the tile (--shots). Under reduced motion a hover plays One Take alone, on a loop.
 // 2. Layout shift under 0.01 at 390 and 1440, through a load and a scroll to the bottom and back.
 // 2b. The headline holds still when its parts come late, at 390@3x, 768 and 1440@2x (Chromium): with every font file
 //    2.5 s late, and with the HTML in two parts (cut after the second line's first words, 1.5 s apart, by a proxy) and
@@ -26,10 +32,10 @@
 // 3. Every tile's link answers 200, and the numbers tile opens every studio (the launcher; a phone's sheet).
 // 4. Reduced motion and Save-Data: no clip is fetched or played, nothing moves by itself (the headline is still, the
 //    split rests at 50 %, the live words stay), and the tiles keep their stills.
-// 5. Pause previews stops the catwalk and freezes every animation; pressed again, they go on.
+// 5. Pause previews stops the reel and freezes every animation; pressed again, they go on.
 // 6. Weight: what the page downloads before `load` (clips aside), at 390 and 1440, reported; the first screen's own
 //    stills stay under 420 KB (the clips' posters are encoded close to their clips' first frames, and a 3x phone or a
-//    2x laptop gets the catwalk's 1536 px still). The clips are reported on their own.
+//    2x laptop gets the video tile's widest still). The clips are reported on their own.
 // 7. The composer: /?new=1 brings it into view with the focus; a plain visit stays at the top (no autofocus jump).
 // 8. Every tile is a named link, and Tab reaches them in the grid's reading order with a visible ring.
 import assert from "node:assert/strict";
@@ -39,9 +45,12 @@ import { createRequire } from "node:module";
 import { DESKTOP, ENGINE, launch, PHONE, root } from "./_browser.mjs";
 
 const args = process.argv.slice(2);
-const app = (args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--shots") ?? "http://localhost:3620").replace(/\/$/, "");
+const app = (args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--shots" && args[i - 1] !== "--only") ?? "http://localhost:3620").replace(/\/$/, "");
 const shotsDir = args.includes("--shots") ? args[args.indexOf("--shots") + 1] : undefined;
 const weightOnly = args.includes("--weight-only");
+const only = args.includes("--only") ? args[args.indexOf("--only") + 1].split(",") : undefined;
+/** Whether part `id` runs (all of them, unless --weight-only or --only says otherwise). */
+const run = (id) => !weightOnly && (!only || only.includes(id));
 if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
 
 const browser = await launch();
@@ -61,8 +70,11 @@ const WIDTHS = [
   { w: 1920, h: 1080 },
 ];
 const TILES = ["video", "image", "audio", "threeD", "restore", "numbers", "live", "canvas"];
-/** The widest copy of each clip (scripts/gen-home-bento.mjs). */
+/** The widest copy of a clip (scripts/gen-home-bento.mjs), where its element doesn't say (a reel clip's data-max). */
 const CLIP_MAX = 2048;
+/** The video tile's reel, in order, and how each clip is framed (HOME_BENTO_REEL). */
+const REEL = ["motion-one-take", "effect-sand-storm", "motion-crane-over-the-head"];
+const REEL_POSITION = { "motion-one-take": "50% 15%", "effect-sand-storm": "50% 0%", "motion-crane-over-the-head": "50% 0%" };
 const HEADLINE = "Make anything: From an idea to a finished film, in one place.";
 
 /** A context as `who`; null when that viewer can't be had here (a guest needs a studio with a password). */
@@ -164,7 +176,8 @@ const sharpness = (page) =>
       const r = v.getBoundingClientRect();
       const need = Math.ceil(Math.max(r.width, (r.height * v.videoWidth) / v.videoHeight) * dpr);
       const what = new URL(v.currentSrc).pathname.split("/").pop();
-      out.push({ what, tile: v.closest("[data-tile]").dataset.tile, has: v.videoWidth, need, max: CLIP_MAX, ok: v.videoWidth >= Math.min(need, CLIP_MAX) * 0.98 });
+      const max = Number(v.dataset.max) || CLIP_MAX;
+      out.push({ what, tile: v.closest("[data-tile]").dataset.tile, has: v.videoWidth, need, max, ok: v.videoWidth >= Math.min(need, max) * 0.98 });
     }
     return out;
   }, CLIP_MAX);
@@ -172,7 +185,7 @@ const sharpness = (page) =>
 // ------------------------------------------------------------------------------------------- 1. every width
 const shots = [];
 const sharpNotes = [];
-if (!weightOnly)
+if (run("1"))
   for (const who of ["guest", "owner"]) {
     for (const scheme of ["light", "dark"]) {
       for (const v of WIDTHS) {
@@ -246,7 +259,7 @@ const watchSwap = () => {
 };
 
 // ------------------------------------------------------------------------------------------- 1b. sharp at every ratio
-if (!weightOnly)
+if (run("1b"))
   for (const v of WIDTHS)
     for (const dpr of [1, 2, 3]) {
       const ctx = await browser.newContext({ ...(v.phone ? PHONE : {}), viewport: { width: v.w, height: v.h }, deviceScaleFactor: dpr });
@@ -255,7 +268,7 @@ if (!weightOnly)
       await open(page);
       // The clips start once their tile's still is up and on screen: wait until each has its first frame.
       await page
-        .waitForFunction(() => [...document.querySelectorAll("#home-bento [data-tile] video")].filter((x) => x.videoWidth > 0).length >= 2, null, { timeout: 12_000 })
+        .waitForFunction(() => ["video", "threeD"].every((t) => [...document.querySelectorAll(`#home-bento [data-tile=${t}] video`)].some((x) => x.videoWidth > 0)), null, { timeout: 12_000 })
         .catch(() => {});
       await page.waitForTimeout(300);
       const s = await sharpness(page);
@@ -263,7 +276,7 @@ if (!weightOnly)
       const clips = s.filter((x) => x.what.endsWith(".mp4"));
       check(
         `sharp at ${v.w}@${dpr}x: ${s.length} pictures and clips at least their box x ratio`,
-        bad.length === 0 && clips.length === 2,
+        bad.length === 0 && new Set(clips.map((x) => x.tile)).size === 2,
         (bad.length ? bad : clips).map((x) => `${x.tile} ${x.what} ${x.has} for ${x.need} (max ${x.max})`).join("; "),
       );
       sharpNotes.push(`${v.w}@${dpr}x: ${s.map((x) => `${x.tile} ${x.what} ${x.has}/${x.need}`).join(", ")}`);
@@ -299,7 +312,7 @@ async function swapDiff(page, tile) {
   for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
   return { diff: sum / a.length, withClip, still };
 }
-if (!weightOnly)
+if (run("1c"))
   for (const [v, dpr] of [
     [WIDTHS[0], 3],
     [WIDTHS[4], 2],
@@ -307,7 +320,7 @@ if (!weightOnly)
     const ctx = await browser.newContext({ ...(v.phone ? PHONE : {}), viewport: { width: v.w, height: v.h }, deviceScaleFactor: dpr });
     const page = await ctx.newPage();
     await open(page);
-    await page.waitForFunction(() => document.querySelectorAll("#home-bento [data-tile] video[data-ready]").length >= 2, null, { timeout: 12_000 }).catch(() => {});
+    await page.waitForFunction(() => ["video", "threeD"].every((t) => document.querySelector(`#home-bento [data-tile=${t}] video[data-ready]`)), null, { timeout: 12_000 }).catch(() => {});
     for (const tile of ["video", "threeD"]) {
       if (!(await page.locator(`#home-bento [data-tile=${tile}] video[data-ready]`).count())) {
         check(`the swap at ${v.w}@${dpr}x, ${tile}: its clip plays`, false);
@@ -323,6 +336,124 @@ if (!weightOnly)
     }
     await ctx.close();
   }
+
+// ------------------------------------------------------------------------------------------- 1d. the reel
+/**
+ * Logs the video tile's reel from the first paint: the clip on screen (data-reel) each time it changes, and every
+ * moment it holds more than one clip, with each one's state; the time each clip's element first asks for its file is
+ * logged on the test's side (the same clock: Date.now()).
+ */
+const watchReel = () => {
+  window.__reel = { turns: [], most: 0, both: [], playing: {}, fades: 0 };
+  const look = () => {
+    const span = document.querySelector("#home-bento [data-tile=video] .hb-clip");
+    if (span) {
+      const at = span.dataset.reel;
+      const last = window.__reel.turns.at(-1);
+      if (at !== undefined && last?.i !== at) window.__reel.turns.push({ i: at, t: Date.now() });
+      const vids = [...span.querySelectorAll("video")];
+      window.__reel.most = Math.max(window.__reel.most, vids.length);
+      for (const v of vids) if (!v.paused && !window.__reel.playing[v.dataset.clip + "@" + at]) window.__reel.playing[v.dataset.clip + "@" + at] = Date.now();
+      const shown = vids.filter((v) => v.hasAttribute("data-ready"));
+      if (shown.length > 1) {
+        const o = Number(getComputedStyle(shown.at(-1)).opacity);
+        if (o > 0.05 && o < 0.95) window.__reel.fades++;
+      }
+      if (vids.length > 1 && window.__reel.both.length < 400) window.__reel.both.push({ t: Date.now(), clips: vids.map((v) => v.dataset.clip) });
+    }
+    requestAnimationFrame(look);
+  };
+  requestAnimationFrame(look);
+};
+if (run("1d")) {
+  for (const [v, dpr] of [
+    [WIDTHS[0], 3],
+    [WIDTHS[4], 2],
+  ])
+    for (const scheme of ["light", "dark"]) {
+      const tag = `${v.w}@${dpr}x ${scheme}`;
+      const ctx = await browser.newContext({ ...(v.phone ? PHONE : {}), viewport: { width: v.w, height: v.h }, deviceScaleFactor: dpr, colorScheme: scheme });
+      const page = await ctx.newPage();
+      const asked = [];
+      page.on("request", (r) => {
+        const m = /\/previews\/home\/(reel-[a-z-]+)-(\d+)\.mp4/.exec(r.url());
+        if (m) asked.push({ name: m[1], w: Number(m[2]), t: Date.now() });
+      });
+      await page.addInitScript(watchReel);
+      await open(page);
+      // The still: One Take's first frame, framed as its clip is.
+      const still = await page.evaluate(() => {
+        const img = document.querySelector("#home-bento [data-tile=video] picture img");
+        return { src: new URL(img.currentSrc || img.src).pathname.split("/").pop(), pos: getComputedStyle(img).objectPosition };
+      });
+      check(`reel ${tag}: the still is One Take's first frame, framed as its clip`, /^reel-one-take-\d+\.(avif|jpg)$/.test(still.src) && still.pos === REEL_POSITION[REEL[0]], JSON.stringify(still));
+      // Round the reel once and into One Take again (about 11 s), a picture of each clip as it plays.
+      const seen = [];
+      const deadline = Date.now() + 25_000;
+      while (Date.now() < deadline) {
+        const turns = await page.evaluate(() => window.__reel.turns.map((x) => x.i));
+        for (const i of turns.slice(seen.length)) {
+          seen.push(i);
+          if (seen.length > REEL.length) continue;
+          // Halfway through the clip: well after its fade in.
+          await page.waitForTimeout(1600);
+          const now = await page.evaluate(() => {
+            const vids = [...document.querySelectorAll("#home-bento [data-tile=video] video")];
+            const shown = vids.filter((x) => x.hasAttribute("data-ready"));
+            const top = shown[0];
+            return top ? { clip: top.dataset.clip, pos: getComputedStyle(top).objectPosition, w: top.videoWidth, paused: top.paused, t: top.currentTime } : null;
+          });
+          check(`reel ${tag}: clip ${Number(i) + 1} is ${REEL[i]}, playing, framed ${REEL_POSITION[REEL[i]]}`, now?.clip === REEL[i] && now.pos === REEL_POSITION[REEL[i]] && !now.paused, JSON.stringify(now));
+          if (shotsDir) await page.locator("#home-bento [data-tile=video]").screenshot({ path: path.join(shotsDir, `reel-${v.w}-${scheme}-${Number(i) + 1}-${REEL[i]}.png`) });
+        }
+        if (seen.length > REEL.length) break;
+        await page.waitForTimeout(150);
+      }
+      const r = await page.evaluate(() => window.__reel);
+      check(`reel ${tag}: plays the clips in order and back to the first`, seen.join() === "0,1,2,0", seen.join());
+      check(`reel ${tag}: each clip crossfades into the next`, r.fades >= 3, `${r.fades} frames mid-fade`);
+      check(`reel ${tag}: never more than the clip playing and the next one`, r.most <= 2, String(r.most));
+      // Each clip asked for only once the one before it plays; at most one ahead of the clip on screen.
+      const order = asked.map((a) => a.name);
+      const firstAsk = (name) => asked.find((a) => a.name === name)?.t;
+      const names = REEL.map((id) => `reel-${{ "motion-one-take": "one-take", "effect-sand-storm": "sand-storm", "motion-crane-over-the-head": "crane-over" }[id]}`);
+      const aheadOk = names.slice(1).every((name, i) => {
+        const t = firstAsk(name);
+        const prevPlays = r.playing[`${REEL[i]}@${i}`];
+        return t !== undefined && prevPlays !== undefined && t >= prevPlays - 100;
+      });
+      check(`reel ${tag}: each clip loads only once the one before it plays`, aheadOk, `asked ${order.join(" ")}; playing ${JSON.stringify(r.playing)}`);
+      const widths = [...new Set(asked.map((a) => `${a.name}-${a.w}`))];
+      notes.push(`reel ${tag}: ${widths.join(", ")}`);
+      // Off screen it pauses; back on screen it goes on.
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await page.waitForTimeout(900);
+      const off = await page.evaluate(() => [...document.querySelectorAll("#home-bento [data-tile=video] video")].map((x) => x.paused));
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(1500);
+      const on = await page.evaluate(() => [...document.querySelectorAll("#home-bento [data-tile=video] video[data-ready]")].map((x) => x.paused));
+      check(`reel ${tag}: pauses off screen, plays again in view`, off.length > 0 && off.every(Boolean) && on.some((p) => !p), `off ${off} on ${on}`);
+      await ctx.close();
+    }
+
+  // Reduced motion: nothing plays by itself; a hover plays One Take alone, on a loop.
+  const ctx = await browser.newContext({ ...DESKTOP, reducedMotion: "reduce" });
+  const page = await ctx.newPage();
+  const asked = [];
+  page.on("request", (r) => /\/previews\/home\/reel-/.test(r.url()) && r.url().includes(".mp4") && asked.push(new URL(r.url()).pathname.split("/").pop()));
+  await open(page);
+  await page.waitForTimeout(2500);
+  const before = asked.length;
+  await page.locator("#home-bento [data-tile=video]").hover();
+  await page.waitForTimeout(6500);
+  const st = await page.evaluate(() => [...document.querySelectorAll("#home-bento [data-tile=video] video")].map((x) => ({ clip: x.dataset.clip, loop: x.loop, paused: x.paused })));
+  check(
+    "reduced motion: no reel clip until asked; a hover plays One Take alone, on a loop",
+    before === 0 && st.length === 1 && st[0].clip === REEL[0] && st[0].loop && !st[0].paused && asked.every((a) => a.startsWith("reel-one-take-")),
+    JSON.stringify({ before, st, asked }),
+  );
+  await ctx.close();
+}
 
 // ------------------------------------------------------------------------------------------- 2. layout shift
 async function cls(v) {
@@ -354,7 +485,7 @@ async function cls(v) {
   await ctx.close();
   return { firstScreen, ...all };
 }
-if (!weightOnly)
+if (run("2"))
   for (const v of [WIDTHS[0], WIDTHS[4]]) {
     const r = await cls(v);
     check(`layout shift at ${v.w}: first screen ${r.firstScreen.toFixed(4)}, whole page ${r.cls.toFixed(4)}`, r.firstScreen < 0.01, JSON.stringify(r.shifts.slice(0, 4)));
@@ -431,7 +562,7 @@ async function headlineShot(page) {
   return page.locator("#home-bento h1").screenshot();
 }
 
-if (!weightOnly && ENGINE === "chromium") {
+if (run("2b") && ENGINE === "chromium") {
   const sharp = createRequire(path.join(root, "package.json"))("sharp");
   const diff = async (a, b) => {
     const [x, y] = await Promise.all([a, b].map((p) => sharp(p).removeAlpha().raw().toBuffer({ resolveWithObject: true })));
@@ -510,7 +641,7 @@ if (!weightOnly && ENGINE === "chromium") {
 }
 
 // ------------------------------------------------------------------------------------------- 3. links
-if (!weightOnly) {
+if (run("3")) {
   const ctx = await browser.newContext(DESKTOP);
   const page = await ctx.newPage();
   await open(page);
@@ -540,7 +671,7 @@ if (!weightOnly) {
 }
 
 // ------------------------------------------------------------------------------------------- 4. reduced motion, Save-Data
-if (!weightOnly) {
+if (run("4")) {
   const ctx = await browser.newContext({ ...DESKTOP, reducedMotion: "reduce" });
   const page = await ctx.newPage();
   const clips = [];
@@ -578,7 +709,7 @@ if (!weightOnly) {
 }
 
 // ------------------------------------------------------------------------------------------- 5. pause previews
-if (!weightOnly) {
+if (run("5")) {
   const ctx = await browser.newContext(DESKTOP);
   const page = await ctx.newPage();
   await open(page);
@@ -592,7 +723,7 @@ if (!weightOnly) {
     return v && !v.paused && v.currentTime > 0.2;
   }, null, { timeout: 8000 }).catch(() => {});
   const before = await playing();
-  check("the catwalk plays by itself", !!before && !before.paused, JSON.stringify(before));
+  check("the reel plays by itself", !!before && !before.paused, JSON.stringify(before));
   await page.getByRole("button", { name: "Pause previews" }).click();
   await page.waitForTimeout(400);
   const after = await page.evaluate(() => ({
@@ -678,6 +809,7 @@ async function weight(v) {
     media,
   };
 }
+if (weightOnly || run("6"))
 for (const v of [WIDTHS[0], WIDTHS[3], WIDTHS[4], WIDTHS[5]]) {
   const r = await weight(v);
   // The whole page's total is reported (main's own script and fonts are most of it: compare with --weight-only on
@@ -688,7 +820,7 @@ for (const v of [WIDTHS[0], WIDTHS[3], WIDTHS[4], WIDTHS[5]]) {
 }
 
 // ------------------------------------------------------------------------------------------- 7. composer
-if (!weightOnly) {
+if (run("7")) {
   const ctx = await browser.newContext(DESKTOP);
   const page = await ctx.newPage();
   await open(page);
@@ -706,7 +838,7 @@ if (!weightOnly) {
 }
 
 // ------------------------------------------------------------------------------------------- 8. names and Tab order
-if (!weightOnly) {
+if (run("8")) {
   const ctx = await browser.newContext(DESKTOP);
   const page = await ctx.newPage();
   await open(page);

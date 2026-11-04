@@ -545,6 +545,10 @@
 .hb-clip video:not([data-ready]) {
   opacity: 0;
 }
+/* The video tile's reel: the next clip fades in over the one ending (REEL_FADE_MS, src/lib/home-reel.ts). */
+.hb-clip video[data-in] {
+  transition-duration: 0.5s;
+}
 
 /* ---------------------------------------------------------------- image: a slow push in */
 
@@ -759,7 +763,8 @@
 .hb-side.hb-right {
   right: 12px;
 }
-/* The catwalk clip and its still: a wide, short tile crops from the bottom, so the model's head always shows. */
+/* The reel's clips and its still: a wide, short tile crops from the bottom, so the head always shows (a clip framed
+   otherwise sets its own object-position: HOME_BENTO_REEL). */
 .hb-video .hb-fill,
 .hb-video .hb-clip video {
   object-position: 50% 0%;

@@ -30,7 +30,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const { BENTO_BOARD, BENTO_CLIPS, BENTO_CLIP_WIDTHS, BENTO_HREFS, BENTO_BEFORE_AFTER, BENTO_IMAGE_EXAMPLE, livePhrases, openModelsOf } = await import("@/lib/home-bento");
+const { BENTO_BOARD, BENTO_CLIPS, BENTO_CLIP_WIDTHS, BENTO_HREFS, BENTO_BEFORE_AFTER, BENTO_IMAGE_EXAMPLE, BENTO_REEL, BENTO_REEL_ID, livePhrases, openModelsOf } = await import("@/lib/home-bento");
 const { HOME_BEFORE_AFTER, HOME_EFFECTS, HOME_MOTIONS, HOME_REVEALS, HOME_STUDIOS, homeShowcase, navLabel } = await import("@/lib/home-showcase");
 const { HomeBento } = await import("@/components/home/home-bento");
 
@@ -64,11 +64,8 @@ describe("Home's first screen", () => {
     for (const m of html.matchAll(/(?:src|srcSet)="([^"]+)"/g)) for (const part of m[1].split(", ")) expect(part.split(" ")[0], part).toMatch(versioned);
   });
 
-  it("plays the catwalk and the turning gown in four widths, at the length of their published clips", () => {
-    const tiles = [
-      { tile: bento.video, name: "catwalk", published: "motion-catwalk", seconds: 4 },
-      { tile: bento.threeD, name: "rotation", published: "app-3d-rotation", seconds: 3.04 },
-    ];
+  it("plays the turning gown in four widths, at the length of its published clip", () => {
+    const tiles = [{ tile: bento.threeD, name: "rotation", published: "app-3d-rotation", seconds: 3.04 }];
     for (const { tile, name, published, seconds } of tiles) {
       expect(tile.id).toBe(published);
       expect(tile.clips.map((c) => c.w)).toEqual([...BENTO_CLIP_WIDTHS]);
@@ -85,6 +82,26 @@ describe("Home's first screen", () => {
       for (const a of tile.poster.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/${name}-${a.w}\\.avif\\?v=`));
       expect(tile.poster.fallback).toMatch(new RegExp(`^/previews/home/${name}-1024\\.jpg\\?v=`));
     }
+  });
+
+  it("plays One Take, Sand Storm and Crane Over the Head in turn, on the first one's first frame", () => {
+    const v = bento.video;
+    expect(v.id).toBe(BENTO_REEL_ID);
+    expect(v.reel.map((c) => c.id)).toEqual(["motion-one-take", "effect-sand-storm", "motion-crane-over-the-head"]);
+    expect(v.reel.map((c) => c.id)).toEqual(BENTO_REEL);
+    for (const c of v.reel) {
+      // At least the 640 and 1024 px copies, each a width a still or clip comes in, narrowest first.
+      expect(c.clips.map((x) => x.w).slice(0, 2)).toEqual([640, 1024]);
+      for (const x of c.clips) expect(BENTO_CLIP_WIDTHS).toContain(x.w);
+      expect(c.position).toMatch(/^\d+% \d+%$/);
+    }
+    // The poster: the first clip's first frame, in the widths that clip comes in, and a JPEG at 1024 px.
+    const first = v.reel[0];
+    expect(v.poster.avif.map((a) => a.w)).toEqual(first.clips.map((x) => x.w));
+    for (const a of v.poster.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/reel-one-take-${a.w}\\.avif\\?v=`));
+    expect(v.poster.fallback).toMatch(/^\/previews\/home\/reel-one-take-1024\.jpg\?v=/);
+    // It is framed as its clip is: the poster's position is the first clip's, on the page.
+    expect(html).toContain(`object-position:${first.position}`);
   });
 
   it("lists every picture at its real width", async () => {
@@ -106,7 +123,7 @@ describe("Home's first screen", () => {
     expect(coverWidth(173, 173, 4 / 3, 3)).toBe(692);
     expect(coverWidth(569, 419, 4 / 3, 2)).toBe(1138);
     expect(coverWidth(476, 210, 4 / 3, 2)).toBe(952);
-    const clips = bento.video.clips;
+    const clips = bento.threeD.clips;
     expect(pickWidth(clips, 300).w).toBe(640);
     expect(pickWidth(clips, 640).w).toBe(640);
     expect(pickWidth(clips, 641).w).toBe(1024);
@@ -116,7 +133,14 @@ describe("Home's first screen", () => {
     expect(pickWidth(clips, 1728).w).toBe(2048);
     // Past the widest copy (its 2048 px master): the widest, never stretched further.
     expect(pickWidth(clips, 2400).w).toBe(2048);
-    for (const t of [bento.video, bento.threeD]) expect(Math.max(...t.clips.map((c) => c.w))).toBe(2048);
+    expect(Math.max(...bento.threeD.clips.map((c) => c.w))).toBe(2048);
+    // Each reel clip comes at least 1024 px wide (its render's own size), wider only from its 2048 px master: a 3x phone
+    // (1068) gets the 1536 px copy where there is one, else the widest there is.
+    for (const c of bento.video.reel) {
+      const widest = Math.max(...c.clips.map((x) => x.w));
+      expect(widest).toBeGreaterThanOrEqual(1024);
+      expect(pickWidth(c.clips, 1068).w).toBe(widest >= 1536 ? 1536 : widest);
+    }
     // The before/after pair covers a 3x phone (358 px wide) and the tall tile on a 2x 1920 screen.
     expect(Math.max(...bento.restore.after.avif.map((a) => a.w))).toBeGreaterThanOrEqual(358 * 3);
     expect(Math.max(...(bento.restore.after.tall ?? []).map((a) => a.w))).toBeGreaterThanOrEqual(602);
@@ -217,7 +241,9 @@ describe("Home's first screen", () => {
   });
 
   it("plays each clip in one place on Home (the playback store keys by id)", () => {
+    // The video tile plays its reel under its own id; the 3D tile's preset plays nowhere else.
     const ids = [
+      BENTO_REEL_ID,
       ...Object.values(BENTO_CLIPS),
       ...[...HOME_EFFECTS, ...HOME_MOTIONS, ...HOME_REVEALS].map((r) => r.id),
       ...HOME_BEFORE_AFTER.map((p) => p.id),
