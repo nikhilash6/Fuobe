@@ -67,6 +67,17 @@ describe("a run's tile on this studio's GPUs", () => {
     expect(html).toContain(">Working<");
     expect(html).toContain("40%");
   });
+  it("working with a preview picture: the picture shows under Working; in line, none", () => {
+    const src = "/api/generations/g1/preview?at=123";
+    const working = render(createElement(PendingTile, { g: gen({ place: "pool", status: "running", message: POOL_WORDS.working, progress: 0.4, preview: src }), ratio: 1 }));
+    expect(working).toContain(`src="${src}"`);
+    expect(working).toContain(">Working<");
+    const inLine = render(createElement(PendingTile, { g: gen({ place: "pool", status: "queued", message: POOL_WORDS.inLine, preview: src }), ratio: 1 }));
+    expect(inLine).not.toContain("<img");
+    // The owner's own job on the workers shows its picture too.
+    const owner = render(createElement(PendingTile, { g: gen({ status: "running", message: "Generating", progress: 0.4, preview: src }), ratio: 1 }));
+    expect(owner).toContain(`src="${src}"`);
+  });
   it("a run that can't finish: one plain sentence, and Retry", () => {
     const html = render(createElement(FailedTile, { g: gen({ place: "pool", status: "failed", error: POOL_WORDS.failed, notCharged: true }), ratio: 1, onRetry: () => {} }));
     expect(html).toContain(POOL_WORDS.failed.replace("'", "&#x27;"));

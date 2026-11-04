@@ -85,8 +85,8 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   // The bar: the steps, or how much of the result has reached the studio.
   const bar = saving ? Math.round((local.job.phase === "done" ? 1 : (local.job.saved ?? 0)) * 100) : pct;
   const where = local ? (local.here ? "Keep this tab open" : "Running in another Fuobe tab") : null;
-  // A live frame: from the ComfyUI on this computer, or (Working on this studio's GPUs) the latest preview picture.
-  const frame = local?.preview ?? (pool && !inLine ? g.preview : undefined);
+  // A live frame: from the ComfyUI on this computer, or (Working on the workers) the latest preview picture.
+  const frame = local?.preview ?? (g.status === "running" ? g.preview : undefined);
   return (
     // max-w-full: in a grid row stretched by a taller neighbour (a card with a footer), h-full + aspect-ratio would
     // otherwise make the tile wider than its column and spill over the next card.
