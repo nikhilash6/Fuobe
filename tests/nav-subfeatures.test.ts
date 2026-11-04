@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { MODEL3D_MODES } from "@/lib/av/model3d";
+import { MODEL3D_MODES, readModel3dLink } from "@/lib/av/model3d";
 import { GENJUTSU_MODES } from "@/lib/catalog/genjutsu";
 import { HUB_MODES, type HubKind } from "@/lib/hubs";
 import { megaSubs, studiosMenu } from "@/lib/mega-menus";
@@ -85,7 +85,9 @@ describe("the catalogue of studio features", () => {
     for (const id of STUDIO_SUBS.genjutsu.ids) expect(GENJUTSU_MODES.map((m) => m.id), id).toContain(query(id).get("mode"));
     expect(read("src/components/genjutsu/genjutsu-studio.tsx")).toMatch(/fresh\("mode"\)/);
     for (const id of STUDIO_SUBS["image-to-3d"].ids) expect(MODEL3D_MODES.map((m) => m.id), id).toContain(query(id).get("mode"));
-    expect(read("src/components/model3d/model3d-studio.tsx")).toMatch(/params\.get\("mode"\)/);
+    // Image to 3D reads its link through readModel3dLink (src/lib/av/model3d.ts), which takes ?mode=.
+    expect(read("src/components/model3d/model3d-studio.tsx")).toContain("readModel3dLink(params)");
+    for (const id of STUDIO_SUBS["image-to-3d"].ids) expect(readModel3dLink(query(id)).mode, id).toBe(query(id).get("mode"));
     const sheet = read("src/components/fashion/character-sheet.tsx");
     expect(sheet).toContain('<TabFromLink param="mode" ids={MODE_IDS}');
     for (const id of STUDIO_SUBS["character-sheet"].ids) expect(sheet, id).toContain(`["${query(id).get("mode")}", "${entry(id)!.label}"]`);
@@ -93,7 +95,8 @@ describe("the catalogue of studio features", () => {
     expect(dump).toContain('<TabFromLink param="tab" ids={TAB_IDS}');
     expect(dump).toContain(`["${query("photodump-instadump").get("tab")}", "From a selfie"]`);
     expect(read("src/components/canvas/canvas-list.tsx")).toContain('params.get("tab") === "skills"');
-    expect(read("src/components/cinema/projects-view.tsx")).toContain('useSearchParams().get("blockout") === "1"');
+    // Cinema reads ?blockout=1 (and World mode's ?world=1) in its project list.
+    expect(read("src/components/cinema/projects-view.tsx")).toContain('params.get("blockout") === "1"');
   });
 
   it("calls every feature by its studio's own name for it", () => {
