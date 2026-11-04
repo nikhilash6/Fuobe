@@ -106,6 +106,7 @@ node tests/e2e/eval-review.mjs                 # the report and blind review pag
 - `docs/HANDOFF.md` and `docs/handoff/` — how the build continues: where things stand, the owner's rules and decisions, the queue of packages with their briefs (`queue.json`), how to run a package's stages, and how to check and describe a PR (`verify.sh`, `pr-describe.js`, `pr-docs.js`)
 - `docs/workers/tribe-v2.md` — the optional, non-commercial TRIBE v2 worker contract for the Virality predictor
 - `scripts/comfy/` — the pipeline that exports and validates the ComfyUI workflow library
+- [`docs/adding-a-model.md`](adding-a-model.md) — the checklist for a new model, workflow or node pack: pins, first-run files, the worker's input rules, VRAM and CPU work, and the tests that check them
 - `scripts/eval/` — the Fuobe Originals evaluation harness: suites, metrics, blind review and the promote rule
 - `skills/` — Assist's built-in skills (`<name>/SKILL.md` in the Agent Skills format: name, description and compatibility, with Fuobe's own fields under `metadata`: title, when_to_use, icon, studio, tags, offline hints); a skill of your own can also carry a `recipe.json` that lets it run by itself (see [`skills/README.md`](../skills/README.md)); `.agents/skills/fuobe/` teaches another agent to drive Fuobe through MCP or the CLI
 

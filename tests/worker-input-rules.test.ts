@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { graphCheck, vetGraph } from "../bin/lib/worker/checks.mjs";
-import { loaderInput, pathProblem } from "../bin/lib/worker/rules.mjs";
+import { inputProblem, loaderInput, pathProblem, ruleProblem, textPathProblem, verifiedIndex } from "../bin/lib/worker/rules.mjs";
 import { allowedNodeList, filePins, inputRules, missingRules, readCatalog, UNPINNED_FILES, unpinnedFiles } from "../scripts/lib/worker-catalog.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
@@ -17,6 +17,7 @@ const catalog = readCatalog(root) as unknown as {
   manifest: { workflows: { id: string; file: string }[] };
   requirements: { files: Record<string, { folder: string; file: string }> };
   pins: Record<string, unknown>;
+  firstRun: unknown;
 };
 const rules = inputRules(catalog);
 const allowed = new Set(allowedNodeList(root, catalog));
@@ -139,6 +140,31 @@ describe("the worker's input rules", () => {
     expect(check({ "1": { class_type: "UNETLoader", inputs: { unet_name: "C:x.safetensors", weight_dtype: "default" } } })).toBe("unsafe-path");
   });
 
+  it("a model input takes only a verified file, whatever its name ends with, or the catalog's own values that name no file", () => {
+    const none = { byName: verifiedIndex([]), staged: [] };
+    const loras = { kind: "model-file", folders: ["loras"] };
+    for (const v of ["x.pt2", "x.engine", "x.json", "DBS-BSRNN-DnR/config.json", "x", "None"]) expect(ruleProblem(loras, v, none), v).toBe("model-unverified");
+    const some = { byName: verifiedIndex([{ folder: "loras", name: "x.pt2" }, { folder: "loras", name: "sub/x.engine" }]), staged: [] };
+    expect(ruleProblem(loras, "x.pt2", some)).toBeNull();
+    expect(ruleProblem(loras, "sub/x.engine", some)).toBeNull();
+    expect(ruleProblem({ kind: "model-file", folders: ["vae"] }, "x.pt2", some)).toBe("model-unverified");
+    // The catalog's own values that name no file pass as they are; nothing else does.
+    const withNone = { kind: "model-file", folders: ["loras"], plain: ["None"] };
+    expect(ruleProblem(withNone, "None", none)).toBeNull();
+    for (const v of ["none", "None.pt2", "default", "../None"]) expect(ruleProblem(withNone, v, none), v).not.toBeNull();
+    // The rules builder lists those values, and only for a model input whose catalog has them.
+    const fake = (values: string[]) => ({
+      graphs: Object.fromEntries(values.map((v, i) => [`${i}.json`, { "1": { class_type: "LoraLoaderModelOnly", inputs: { model: ["2", 0], lora_name: v, strength_model: 1 } } }])),
+      manifest: { workflows: [] },
+      requirements: { files: {}, workflows: {} },
+      pins: {},
+    });
+    expect(inputRules(fake(["a.safetensors", "None"])).inputs.LoraLoaderModelOnly.lora_name).toEqual({ kind: "model-file", folders: [], plain: ["None"] });
+    expect(inputRules(fake(["a.safetensors", "b.pt2"])).inputs.LoraLoaderModelOnly.lora_name).toEqual({ kind: "model-file", folders: [] });
+    // An input with no rule: a .pt2 file needs verifying too.
+    expect(inputProblem("SomeNode", "weights", "x.pt2", { rules, staged: [], byName: verifiedIndex([]) })).toBe("model-unverified");
+  });
+
   it("downloads stay the catalog's: no other repository id", () => {
     expect(check({ "1": speech, "3": asr({ model: "someone/other-model" }) })).toBe("unsafe-path");
     expect(check({ "1": speech, "3": asr({ model: "Qwen/Qwen3-ASR-1.7B-hf" }) })).toBeNull();
@@ -153,6 +179,68 @@ describe("the worker's input rules", () => {
     const text = "Scene 2: 50% off, wait.. C:/ isn't a path here ~ http://x";
     expect(check({ "1": { class_type: "CLIPTextEncode", inputs: { text, clip: ["2", 0] } } })).toBeNull();
     expect(check({ "1": { class_type: "StringConcatenate", inputs: { string_a: text, string_b: text, delimiter: "" } } })).toBeNull();
+    // A text encoder's prompt for each of its encoders is a prompt too, whatever it starts with.
+    const one = (cls: string, input: string, v: unknown) => inputProblem(cls, input, v, { rules, staged: SENT, byName: new Map() });
+    for (const input of ["clip_l", "t5xxl"]) expect(one("CLIPTextEncodeFlux", input, "../x and C:/y, a calm shot"), input).toBeNull();
+    // Text the run fills that isn't a prompt keeps the path checks.
+    expect(one("ManualSigmas", "sigmas", "../x and C:/y")).toBe("unsafe-path");
+  });
+
+  it("other free text (settings written as text or JSON, values filled per run) holds no path", () => {
+    // Inputs that take text the studio writes, or a value it fills per run: no rule, but no path either.
+    const free = [
+      ["MiniMaxH3ChainPlanModern", "plan_json"],
+      ["H3RelayReviewWindows", "window_controls"],
+      ["QWMDetect", "boxes_json"],
+      ["JsonExtractString", "json_string"],
+      ["ImageResizeKJv2", "pad_color"],
+    ] as const;
+    for (const [cls, input] of free) {
+      expect(rules.inputs[cls]?.[input], `${cls}.${input}`).toBeUndefined();
+      expect(rules.text[cls], `${cls}.${input}`).toContain(input);
+    }
+    const one = (cls: string, input: string, v: unknown) => inputProblem(cls, input, v, { rules, staged: SENT, byName: new Map() });
+    const paths = [
+      "C:/Users/x/secret.mp4",
+      "C:secret.mp4",
+      "//host/share/x",
+      "\\\\host\\share\\x",
+      "/etc/passwd",
+      "/x",
+      "~/x",
+      "../../../Users/x",
+      "file:///etc/passwd",
+      "%USERPROFILE%\\x",
+      "$HOME/x",
+      "x\u0000y",
+      "C:\\Users\\x\\a secret file.mp4",
+      "/etc/x and more words",
+      "see ../../x for it",
+      "see ../x for it",
+      JSON.stringify({ shots: [{ id: "a", prompt: "A calm shot.", video: "../../../Users/x/v.mp4" }] }),
+      JSON.stringify({ boxes: [], path: "C:/Users/x" }),
+      JSON.stringify({ "/etc/passwd": 1 }),
+      JSON.stringify(["~/x"]),
+    ];
+    for (const [cls, input] of free) for (const v of paths) expect(one(cls, input, v), `${cls}.${input}: ${v}`).toBe("unsafe-path");
+    // Settings and per-run values as the studio writes them stay as they are.
+    const fine = [
+      "16:9",
+      "00:00:05",
+      "50% faster",
+      "0, 0, 0",
+      "auto (1088 -> 1080, 2176 -> 2160)",
+      "dpm++_sde",
+      "#ffffff",
+      "",
+      JSON.stringify({ coordinate_space: "pixels", boxes: [] }),
+      JSON.stringify({ shots: [{ id: "intro", prompt: "Describe the opening: a wide shot, then a slow push in. Scene 2: 50% faster." }] }, null, 2),
+    ];
+    for (const [cls, input] of free) for (const v of fine) expect(one(cls, input, v), `${cls}.${input}: ${v}`).toBeNull();
+    // Numbers, and a link from another node (text built by another node), as before.
+    expect(one("ImageScale", "width", 512)).toBeNull();
+    expect(one("QWMDetect", "boxes_json", ["2", 0])).toBeNull();
+    expect(textPathProblem(["C:/x", "fine"])).toBe("unsafe-path");
   });
 
   it("pins a SHA-256 for nearly every model file the catalog names", () => {
@@ -162,14 +250,12 @@ describe("the worker's input rules", () => {
     for (const sha of Object.values(pins)) expect(sha).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("pins every model file a workflow for workers needs, but for a known list of gaps that may only shrink", () => {
+  it("pins every model file a workflow for workers needs, but for the known list of gaps", () => {
     const gaps = unpinnedFiles(catalog);
     // A new workflow file with no pin would quietly keep that workflow off every worker: pin it (model-pins.json).
+    // (tests/adding-a-model.test.ts checks that the list, which holds every unpinned file of the catalog, only shrinks.)
     const fresh = Object.keys(gaps).filter((f) => !UNPINNED_FILES.includes(f));
     expect(fresh, fresh.map((f) => `${f} (${gaps[f].join(", ")})`).join("\n")).toEqual([]);
-    // A gap that has a pin now: take it off the list.
-    const pinned = UNPINNED_FILES.filter((f) => !gaps[f]);
-    expect(pinned, pinned.join("\n")).toEqual([]);
   });
 });
 

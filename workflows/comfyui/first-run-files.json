@@ -1,0 +1,4 @@
+{
+ "about": "Files a node fetches by itself the first time it runs: the workflows with autoDownloads in scripts/comfy/library.spec.mjs. Each file is listed with its pin, so it can be put in place on a machine before the workflow runs there: path (under the ComfyUI folder), url (at a fixed revision), sizeBytes and sha256. Kept by hand (docs/adding-a-model.md); tests/adding-a-model.test.ts checks it.",
+ "workflows": {}
+}

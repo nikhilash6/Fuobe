@@ -39,8 +39,15 @@ export async function worker(args, io) {
         io.stderr.write("This worker isn't set up yet. Run: fuobe worker setup\n");
         return 2;
       }
-      if (!["computer-runner.mjs", "allowed-nodes.json", "input-rules.json", "file-pins.json"].every((f) => fs.existsSync(path.join(here, "dist", f)))) {
+      const dist = io.distDir ?? path.join(here, "dist");
+      if (!["computer-runner.mjs", "allowed-nodes.json", "input-rules.json", "file-pins.json"].every((f) => fs.existsSync(path.join(dist, f)))) {
         io.stderr.write("The worker's shared parts aren't built. Run: node scripts/build-worker.mjs\n");
+        return 2;
+      }
+      // Parts built from other files than this checkout (an update whose build didn't run) are never used.
+      const { distProblem } = await import("./stamp.mjs");
+      if (distProblem(io.rootDir ?? path.resolve(here, "../../.."), dist)) {
+        io.stderr.write("The worker's shared parts were built from other files than this checkout. Run: node scripts/build-worker.mjs\n");
         return 2;
       }
       const { runWorker, siteProblem, withoutOldPort } = await import("./run.mjs");
