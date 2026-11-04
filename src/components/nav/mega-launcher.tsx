@@ -144,7 +144,7 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
             /* Spoken "Studios, 29 studios": the visible words start the name (no separate label to drift from them). */
             <span className="inline-flex items-center gap-1.5">
               {area.label}
-              <span className="sr-only">,</span>
+              <span className="sr-only">, </span>
               <span className="rounded-full bg-brand-faint px-1.5 py-px text-[11px] leading-4 font-semibold text-brand-text tabular-nums">{n}</span>
               <span className="sr-only"> studios</span>
             </span>

@@ -454,7 +454,7 @@ describe("menu items: one button each, the area's page inside its menu", () => {
     expect(item(html, "more")).not.toContain("data-href");
     // Its spoken name starts with its visible words ("Studios, 29 studios"): the count's words are hidden text, not a label.
     expect(item(html, "studios")).not.toContain("aria-label=");
-    expect(html).toMatch(new RegExp(`Studios<span class="sr-only">,</span><span[^>]*>${studioCount()}</span><span class="sr-only"> studios</span>`));
+    expect(html).toMatch(new RegExp(`Studios<span class="sr-only">, </span><span[^>]*>${studioCount()}</span><span class="sr-only"> studios</span>`));
     // The Studios item is still the launcher's disclosure button (search hands focus back to it).
     expect(item(html, "studios")).toContain("data-studios-trigger");
     for (const name of ["Create menu", "Studios menu", "Apps menu", "Motions &amp; effects menu", "Canvas menu"]) expect(html, name).not.toContain(`aria-label="${name}"`);

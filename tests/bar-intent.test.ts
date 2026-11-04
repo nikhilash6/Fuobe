@@ -41,6 +41,14 @@ describe("the menu state", () => {
     expect(barMenus(closed, { type: "close", now: 20 })).toBe(closed);
   });
 
+  it("keys pressed inside a menu the pointer opened pin it (leaving no longer closes it); for another menu they do nothing", () => {
+    const s = open(CLOSED_MENUS, "create");
+    const k = barMenus(s, { type: "keys", id: "create" });
+    expect(k).toMatchObject({ id: "create", mode: "pinned", clicked: true, seq: s.seq, prev: s.prev });
+    expect(barMenus(s, { type: "keys", id: "apps" })).toBe(s);
+    expect(barMenus(k, { type: "keys", id: "create" })).toBe(k);
+  });
+
   it("a mouse click never pins: on a menu the pointer opened it only marks it clicked; the next click closes it", () => {
     const hover = open(CLOSED_MENUS, "create");
     const clicked = barMenus(hover, { type: "click", id: "create", via: "pointer", now: 30 });

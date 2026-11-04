@@ -90,6 +90,8 @@ export const shows = (el: Element) =>
   typeof (el as HTMLElement).checkVisibility === "function" ? (el as HTMLElement).checkVisibility() : el.getClientRects().length > 0;
 
 const now = () => performance.now();
+/** Keys that move focus inside an open menu. */
+const MOVE_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Tab"]);
 const isKeyboard = () => typeof document !== "undefined" && document.documentElement.dataset.input === "keyboard";
 const box = (el: Element | null | undefined): Box | null => {
   if (!el) return null;
@@ -378,6 +380,12 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
         if ((e.target as Element).closest("a[href]")) close(id);
       },
       onKeyDown(e) {
+        // Keys moving inside a menu the pointer opened take it over: it no longer closes as the pointer leaves.
+        const s = state();
+        if (MOVE_KEYS.has(e.key) && s.id === id && s.mode === "hover") {
+          if (timer?.kind === "close") clear();
+          act({ type: "keys", id });
+        }
         gridKey(e);
       },
     };

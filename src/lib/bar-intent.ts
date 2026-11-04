@@ -50,6 +50,8 @@ export type BarMenuAction =
    * pointer opened marks it clicked (a tap also pins it); a click on a clicked one closes it.
    */
   | { type: "click"; id: BarMenuId; via: MenuVia; now: number }
+  /** Keys pressed inside the open menu `id` took it over: it no longer closes as the pointer leaves (the next click does). */
+  | { type: "keys"; id: BarMenuId }
   /** Close the open menu, or (with `id`) only if `id` is the open one. */
   | { type: "close"; id?: BarMenuId; now: number };
 
@@ -74,6 +76,8 @@ export function barMenus(s: BarMenuState, a: BarMenuAction): BarMenuState {
       }
       return barMenus(s, { type: "open", id: a.id, mode: mouse ? "hover" : "pinned", via: a.via, clicked: true, now: a.now });
     }
+    case "keys":
+      return s.id === a.id && s.mode !== "pinned" ? { ...s, mode: "pinned", clicked: true } : s;
     case "close": {
       if (s.id === null || (a.id !== undefined && a.id !== s.id)) return s;
       return { ...s, id: null, prev: null, group: undefined, mode: "hover", clicked: false, closedAt: a.now };
