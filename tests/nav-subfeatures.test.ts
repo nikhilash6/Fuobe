@@ -153,8 +153,10 @@ describe("who sees a studio's features", () => {
       }
     }
     expect(studioSubs("audio", "owner", "sheet").map((e) => e.id)).toContain("audio-split");
-    expect(studioSubs("image-to-3d", "owner", "menu").length).toBe(3);
-    expect(studioSubs("image-to-3d", "guest", "menu")).toEqual([]);
+    // Image to 3D runs for accounts too (on their own GPU or key): its modes are linked for everyone.
+    for (const kind of [...VISITORS, "owner" as const]) expect(studioSubs("image-to-3d", kind, "menu").length, String(kind)).toBe(3);
+    expect(studioSubs("character-sheet", "owner", "sheet").length).toBe(3);
+    expect(studioSubs("character-sheet", "guest", "sheet")).toEqual([]);
     // Search still finds them, as before.
     expect(entriesFor("guest").some((e) => e.id === "audio-split")).toBe(true);
   });

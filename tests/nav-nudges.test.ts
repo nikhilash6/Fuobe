@@ -113,14 +113,15 @@ describe("Keep going with this: under a finished result", () => {
     expect(out.length).toBeGreaterThanOrEqual(Math.min(3, all.length - 1));
   });
 
-  it("sends only the owner to the studios that run on a self-hosted Fuobe (Character Sheet, Image to 3D)", () => {
+  it("sends only the owner to Character Sheet (it runs on a self-hosted Fuobe); Image to 3D is everyone's", () => {
     viewer.visitor = false;
     expect(hrefs(steps(person())).some((h) => h.startsWith("/character-sheet?image="))).toBe(true);
     expect(hrefs(steps(product())).some((h) => h.startsWith("/image-to-3d?image="))).toBe(true);
     viewer.visitor = true;
     for (const g of [person(), product(), gen([{ kind: "image" }])]) {
-      for (const h of hrefs(steps(g))) expect(h).not.toMatch(/^\/(character-sheet|image-to-3d)\b/);
+      for (const h of hrefs(steps(g))) expect(h).not.toMatch(/^\/character-sheet\b/);
     }
+    expect(hrefs(steps(product())).some((h) => h.startsWith("/image-to-3d?image="))).toBe(true);
   });
 
   it("goes on from clips, sounds and 3D models too", () => {

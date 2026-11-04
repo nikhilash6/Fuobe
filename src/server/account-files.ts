@@ -58,6 +58,8 @@ export const ACCOUNT_LIMITS = {
   gpuChecksPerMinute: 10,
   /** Fuobe Soul's finished pictures (the look's grade made in the browser) stored per hour: a run's 4 outputs, 60 runs. */
   finishesPerHour: 240,
+  /** 3D models finished on this server (the web GLB, model3d-finish.ts) per hour; past it a model is kept as it came. */
+  modelFinishesPerHour: 60,
 } as const;
 
 export const RETENTION_MS = { upload: ACCOUNT_LIMITS.uploadDays * DAY, run: ACCOUNT_LIMITS.runDays * DAY };

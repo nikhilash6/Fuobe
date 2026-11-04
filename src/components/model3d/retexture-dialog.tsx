@@ -8,10 +8,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { uploadFile, useCreateGeneration } from "@/lib/api";
+import { uploadFile } from "@/lib/api";
 import { RETEXTURE_MODELS, RETEXTURE_PROMPT_MAX, RETEXTURE_SIZES, retextureRequest, type RetextureModel } from "@/lib/av/model3d";
 import { toastError } from "@/lib/refusals";
-import { priceLine, useRunPreview } from "./hooks";
+import { priceLine, useCreate3d, useRunPreview } from "./hooks";
 
 const SIZE_LABEL: Record<(typeof RETEXTURE_SIZES)[number], string> = { "2k": "2K textures", "4k": "4K textures", "8k": "8K textures" };
 
@@ -20,7 +20,7 @@ const SIZE_LABEL: Record<(typeof RETEXTURE_SIZES)[number], string> = { "2k": "2K
  * both are given). Cloud only (fal.ai): no open retexturer runs in ComfyUI here.
  */
 export function RetextureDialog({ glb, open, onOpenChange, cloudAllowed }: { glb: string; open: boolean; onOpenChange: (v: boolean) => void; cloudAllowed: boolean }) {
-  const create = useCreateGeneration();
+  const create = useCreate3d();
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<{ url: string; preview: string } | null>(null);
   const [uploading, setUploading] = useState(false);

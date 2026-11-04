@@ -34,7 +34,8 @@ import { ShortsError } from "./shorts";
  *   ("Your keys"); never the install's GPU, keys or AI helper (accountRun: 403 connect-gpu, add-key or own-gpu-tool);
  * - the GPU pre-flight on its own ComfyUI (409 gpu-setup with the guided fix), and the LoRAs a step adds (409
  *   comfy_missing_model);
- * - the moderation service's check, when one is set (hosted-run.ts moderateRun).
+ * - the moderation service's check, when one is set (hosted-run.ts moderateRun);
+ * - a 3D model only on the account's own GPU or key (model3dAllowed): its finish runs on this server under its limits.
  *
  * Then the tool's own start runs inside asAccount (tenant.ts): every generation it creates is stamped as the account's,
  * reads only its files and goes to its GPU or key. Where a run goes is decided in one place (`placeOf`): today always the
@@ -138,8 +139,14 @@ export interface ToolStep {
   deps?: number;
 }
 
-/** Where an account's tool run goes. Today always its own GPU or key ("own"); hosted runs add the install's GPUs. */
-export type ToolPlace = { kind: "own" };
+/** Where an account's tool run goes. Today always its own GPU or key ("own"); hosted runs add the install's GPUs ("pool"). */
+export type ToolPlace = { kind: "own" } | { kind: "pool" };
+
+/**
+ * Whether a run placed here may make a 3D model. A 3D model is finished on this server under the account's own limits
+ * (model3d-finish.ts): allowed on the account's own GPU or key, never on this install's GPUs (hosted runs don't offer 3D yet).
+ */
+export const model3dAllowed = (place: ToolPlace): boolean => place.kind === "own";
 
 /**
  * Where this run goes. The one place a tool run's placement is decided: hosted runs (hosted-run.ts decidePlace, the
@@ -244,7 +251,7 @@ export async function runAccountTool<T>(request: Request, account: Account, run:
   let kind: MediaKind = "video";
   let onKey = false;
   try {
-    // Each step's provider must be one the account has; a 3D model is finished on the server (not for accounts yet).
+    // Each step's provider must be one the account has; a 3D model only where model3dAllowed says.
     const planned: Planned[] = steps.map((s) => ({ step: s, p: asAccount(id, () => previewChained(s.request, s.deps ?? 0)) }));
     if (place.kind === "own") {
       for (const provider of new Set(planned.map((x) => x.p.route.provider))) {
@@ -252,7 +259,7 @@ export async function runAccountTool<T>(request: Request, account: Account, run:
         if ("error" in own) return back(refusalResponse(own));
       }
     }
-    if (planned.some(({ p }) => outputKind(p.op, p.model) === "model3d" && p.model.id !== ANY_ANGLE.buildModel)) return back(ownGpuTool());
+    if (!model3dAllowed(place) && planned.some(({ p }) => outputKind(p.op, p.model) === "model3d" && p.model.id !== ANY_ANGLE.buildModel)) return back(ownGpuTool());
     // GPU pre-flight on its own ComfyUI: a step sure to fail for something missing stops the run with the plan that
     // fixes it (never when the check is unknown). Each workflow once.
     const target = gpuTargetFor(request, "read");

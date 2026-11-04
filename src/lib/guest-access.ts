@@ -278,6 +278,8 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/genjutsu(\/(scene|transcribe))?$/,
   // Storyboard: a board, and its film (the route reads the account's own board only).
   /^\/api\/storyboards(\/[^/]+\/film)?$/,
+  // Image to 3D's runs (a model, a splat, a rig, a retexture): the model is finished on this server under the account's limits.
+  /^\/api\/image-to-3d$/,
 ];
 
 /**

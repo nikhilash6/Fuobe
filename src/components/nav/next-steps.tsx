@@ -14,10 +14,12 @@ import { CoverThumb } from "./cover-thumb";
 const NOUN: Record<string, string> = { image: "picture", video: "clip", audio: "sound", model3d: "model" };
 
 /**
- * Studios that read a handed-over picture with their own small reader (`HandoffImage` below). Both run on a
- * self-hosted Fuobe only, so a guest or an account is never sent there.
+ * Studios that read a handed-over picture with their own small reader (`HandoffImage` below). Image to 3D runs for an
+ * account too (on its own GPU or key); Character Sheet on a self-hosted Fuobe only, so a guest or an account is never
+ * sent there.
  */
 const ADAPTERS = { characterSheet: true, imageTo3d: true } as const;
+const VISITOR_ADAPTERS = { imageTo3d: true } as const;
 
 /** The heading over the steps: "Keep going with this picture" (clip, sound, model). */
 export function keepGoingTitle(kind: string | undefined): string {
@@ -51,7 +53,7 @@ export function NextSteps({
   const engineMode = useEngineMode();
   const visitor = useLikelyVisitor();
   const titleId = useId();
-  const steps = keepGoing(g, index, { engineMode, visitor, adapters: visitor ? undefined : ADAPTERS }, max + (skip?.length ?? 0))
+  const steps = keepGoing(g, index, { engineMode, visitor, adapters: visitor ? VISITOR_ADAPTERS : ADAPTERS }, max + (skip?.length ?? 0))
     .filter((s) => !skip?.includes(s.id))
     .slice(0, max);
   if (!steps.length) return null;

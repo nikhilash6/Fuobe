@@ -16,10 +16,9 @@ import { FailedTile, PendingTile } from "@/components/studio/feed";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
-import { SelfHostNote } from "@/components/self-host-note";
 import { HandoffImage } from "@/components/nav/next-steps";
 import { ExampleRow } from "@/components/studio/example-row";
-import { useCreateGeneration, useEngine, useGenerations, useHydrated, useIsOwner, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { useEngine, useGenerations, useHydrated, useIsOwner, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
   FINAL_3D,
   IDOL_QUALITIES,
@@ -53,7 +52,7 @@ import { keepOffered, offered } from "@/lib/model-access";
 import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
-import { priceLine, useRunPreview } from "./hooks";
+import { priceLine, useCreate3d, useRunPreview } from "./hooks";
 import { ModelCard } from "./model-card";
 import { RefineOption } from "./refine-option";
 import { OtherSides, useOtherSidesOffered } from "./other-sides";
@@ -242,11 +241,12 @@ function ModePicker({ mode, onChange }: { mode: Model3dMode; onChange: (m: Model
  */
 export function Model3dStudio({ info, examples }: { info: Record<string, Model3dInfo>; examples?: ExampleRowData | null }) {
   const [engine, setEngine, engineMode] = useEngine();
-  // A 3D model is finished on this server, so accounts don't get Image to 3D yet, even on their own GPU or key: said up
-  // front, and the uploads and Make it 3D are off, instead of a run the server refuses.
+  // An account makes its models on its own GPU or key (POST /api/image-to-3d); a guest gets the sign-up card when it
+  // uploads or runs. The extras that need this studio's own setup (Refine detail, the TRELLIS.2 final) stay the owner's.
   const visitor = useLikelyVisitor();
+  const owner = useIsOwner();
   const access = useModelAccess();
-  const create = useCreateGeneration();
+  const create = useCreate3d();
   const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d", "app:app-photo-to-3d", MODEL3D_FILM_FEATURE], limit: 24 });
   const [mode, setMode] = useState<Model3dMode>("image");
   const router = useRouter();
@@ -342,16 +342,13 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
     ...(idol && { quality: idolQuality, photoCrop: idolPhoto, ...(engine === "open" && { trimSpikes: idolTrim }) }),
   };
   const uploading = !!photo?.uploading || VIEW_SIDES.some((s) => views[s]?.uploading);
-  // A guest or an account reads why the button is off, not a step on an upload that is off too.
-  const blocker = visitor ? "Image to 3D isn't available here" : (model3dBlocker(input) ?? (uploading ? "Uploading…" : null));
+  const blocker = model3dBlocker(input) ?? (uploading ? "Uploading…" : null);
   // The price before anything is attached: placeholders stand in for the files and the words.
   const priced: GenerationRequest | null = modelId
     ? model3dRequest({ ...input, photo: input.photo || PLACEHOLDER, views: { front: PLACEHOLDER, left: PLACEHOLDER, ...sides }, prompt: input.prompt?.trim() || "an object" })
     : null;
   const preview = useRunPreview(engineKnown ? priced : null);
-  // A free run (open weights) is free on a self-hosted Fuobe: a guest or an account reads that, not "your ComfyUI".
-  const free = !!preview.data && !preview.data.demo && (preview.data.engine === "open" || preview.data.costUsd === 0);
-  const price = visitor && free ? "Not available here" : priceLine(preview.data);
+  const price = priceLine(preview.data);
   const cloudAllowed = engineMode !== "open";
   // Hi3D runs on your GPU only: offered while the install runs open models and the model is switched on.
   const refineAllowed = !visitor && engineMode !== "cloud" && offered(access, HI3D_MODEL, "open");
@@ -359,7 +356,6 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
   const finalAllowed = !visitor && engineMode !== "cloud" && offered(access, FINAL_3D.model, "open");
   const refining = refineAllowed && engine === "open" && (mode === "image" || mode === "multi") && refine !== null ? refine : null;
   const go = () => {
-    if (visitor) return;
     if (blocker) return void toast(blocker, { id: "3d-blocker" });
     create.mutate(withRefine(model3dRequest(input), engine, refining), {
       onSuccess: () =>
@@ -384,14 +380,12 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
   }, []);
   const showsMade = mode === "multi" && VIEW_SIDES.some((s) => s !== "front" && !!views[s] && madeSides.includes(views[s]!.ref));
   return (
-    <ToolShell title="Image to 3D" selfHostedOnly>
+    <ToolShell title="Image to 3D">
       <Suspense fallback={null}>
         <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} onImage={fromImage} />
         <HandoffImage onImage={takeHandoff} />
       </Suspense>
-      <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]}>
-        {visitor && <SelfHostNote className="mt-3 max-w-xl">Image to 3D isn&apos;t available here.</SelfHostNote>}
-      </ToolHero>
+      <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]} />
       <ModePicker mode={mode} onChange={pickMode} />
       {rigHint && (
         <p role="status" className="mx-auto mt-4 max-w-[880px] rounded-2xl border bg-brand-faint px-4 py-3 text-[13px] text-brand-text">
@@ -414,8 +408,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
           <Panel title="Photos of each side" aside={<span className="text-[12px] text-muted-foreground">{Object.keys(sides).length} of 4</span>}>
             {/* Four 80 px slots in a row when the panel has room for them (22rem), two by two when it doesn't. */}
             <div className="@container">
-              {/* A guest's or an account's photos would be uploaded for a model that can't be made here. */}
-              <div inert={visitor} className={cn("grid grid-cols-2 justify-items-center gap-2 @[22rem]:grid-cols-4", visitor && "opacity-50")}>
+              <div className="grid grid-cols-2 justify-items-center gap-2 @[22rem]:grid-cols-4">
                 {VIEW_SIDES.map((s) => (
                   <div key={s} className="flex flex-col items-center gap-1">
                     <MediaSlot label={SIDE_LABELS[s]} kind="image" value={views[s] ?? null} onChange={setSide(s)} required={s === "front"} size="lg" caption />
@@ -454,7 +447,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
           </Panel>
         ) : (
           <div className="grid min-w-0 gap-3">
-            <div inert={visitor} className={cn("min-w-0", visitor && "opacity-50")}>
+            <div className="min-w-0">
               <MediaDrop
                 kind="image"
                 value={photo}
@@ -517,7 +510,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[12px] text-muted-foreground">{choices.find((m) => m.id === modelId)?.note}</p>
+                <p className="text-[12px] text-muted-foreground">{modelNote(choices.find((m) => m.id === modelId)?.note, owner)}</p>
               </div>
               {!idolSplat && (mode === "image" || mode === "multi") && <RefineOption engine={engine} value={refine} onChange={setRefine} openAllowed={refineAllowed} onUseGpu={() => setEngine("open")} />}
               {idol && (
@@ -534,11 +527,12 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
                   {MAKE_3D_HINT}
                 </p>
               )}
-              <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
+              <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
               </Button>
               <p className="mt-2 text-[12px] text-muted-foreground" aria-live="polite">
-                {visitor ? blocker : <>{blocker ? `${blocker} · ` : ""}{preview.isError ? (preview.error as Error).message : (price ?? "Working out the price…")}</>}
+                {blocker ? `${blocker} · ` : ""}
+                {preview.isError ? (preview.error as Error).message : (price ?? "Working out the price…")}
               </p>
               <p className="mt-1 text-[12px] text-muted-foreground">
                 {idolSplat
@@ -549,7 +543,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
                     ? engine === "open"
                       ? "Cuts the subject out and comes with an orbit video."
                       : "Cuts the subject out, ready to download."
-                    : engine === "open"
+                    : engine === "open" && owner
                       ? "Comes with a turntable video of your model."
                       : "Download your model, or record a turntable right here."}
               </p>
@@ -557,7 +551,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
           )}
         </Panel>
       </div>
-      {examples && (visitor || (results.isSuccess && !items.length)) && <ExampleRow row={examples} layout="column" maxWidth={880} className="mt-12" />}
+      {examples && results.isSuccess && !items.length && <ExampleRow row={examples} layout="column" maxWidth={880} className="mt-12" />}
       <section id="your-3d-models" className="mx-auto mt-12 max-w-[880px] scroll-mt-6" aria-labelledby="models3d">
         {(results.isLoading || items.length > 0) && (
           <h3 id="models3d" className="mb-3 font-heading text-[22px]">
@@ -579,6 +573,14 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
       </section>
     </ToolShell>
   );
+}
+
+/**
+ * A model's note under the picker. This studio renders the turntable of a model made on its own GPU; anyone else's
+ * model comes without one (its card records one in the browser), so their note leaves it out.
+ */
+function modelNote(note: string | undefined, owner: boolean): string | undefined {
+  return owner ? note : note?.replace(/, with a turntable video$/, "");
 }
 
 /** Retry runs the same request; a step of the open text-to-3D chain starts the chain again from the words. */
@@ -603,7 +605,7 @@ function ResultCard({
   finalAllowed: boolean;
   onFinal: (photo: string) => void;
 }) {
-  const create = useCreateGeneration();
+  const create = useCreate3d();
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
   if (g.kind === "video") return <FilmCard g={g} />;

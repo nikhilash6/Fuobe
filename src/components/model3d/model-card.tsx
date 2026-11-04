@@ -5,8 +5,9 @@ import Link from "next/link";
 import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { uploadFile, useEngine, useHydrated, useIsOwner } from "@/lib/api";
-import { FINAL_3D, animateSpinHref, animationName, finalBuildHref, FRONT_YAW, model3dView, photorealAngle, photorealBody, stillOf, turnOrbit, type Model3dView } from "@/lib/av/model3d";
+import { uploadFile, useEngine, useHydrated, useIsOwner, useModelAccess } from "@/lib/api";
+import { offered } from "@/lib/model-access";
+import { FINAL_3D, RETEXTURE_MODELS, animateSpinHref, animationName, finalBuildHref, FRONT_YAW, model3dView, photorealAngle, photorealBody, stillOf, turnOrbit, type Model3dView } from "@/lib/av/model3d";
 import { anyAngleHref } from "@/lib/catalog/any-angle";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { useFlyAround } from "@/components/fly-around-run";
@@ -138,8 +139,12 @@ export function ModelCard({
   const [filming, setFilming] = useState<number | null>(null);
   const pendingFilm = useRef(false);
   const photorealStand = engine === "open" ? "/api/files/placeholder.mp4" : undefined;
-  const photoreal = photorealBody(view, engine, photorealStand, drawn);
+  // Filmed by this studio's own worker (WorldCast), so the owner's only.
+  const photoreal = owner ? photorealBody(view, engine, photorealStand, drawn) : null;
   const fly = useFlyAround(photoreal && !view.rigged && (view.glb || view.turntable) ? photoreal : null);
+  // Retexture's cloud models, where this viewer may run one (an account's own key runs only the ones checked live).
+  const access = useModelAccess();
+  const canRetexture = RETEXTURE_MODELS.some((m) => offered(access, m.id, "cloud"));
   const photoSrc = view.photo ?? drawn;
   const recordFilm = async (el: HTMLElement) => {
     setFilming(0);
@@ -231,7 +236,7 @@ export function ModelCard({
     pendingFilm.current = true;
     setShow("3d");
   };
-  const canFilm = !!photoreal && !view.rigged && (engine === "cloud" || (view.glb ? canRecord && !failed : !!view.turntable));
+  const canFilm = owner && !!photoreal && !view.rigged && (engine === "cloud" || (view.glb ? canRecord && !failed : !!view.turntable));
   const filmBusy = filming !== null || fly.run.isPending;
   const spin = view.rigged ? null : animateSpinHref(view, recorded?.saved);
   // Draft then final (idol-6): an Idol 3D splat's picture, rebuilt as a textured mesh with TRELLIS.2.
@@ -474,7 +479,7 @@ export function ModelCard({
               </Link>
             </Button>
           )}
-          {view.glb && !view.rigged && !view.splat && g.op !== "splat" && (
+          {view.glb && !view.rigged && !view.splat && g.op !== "splat" && canRetexture && (
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => setRetexturing(true)}>
               <Paintbrush className="size-3.5" /> Retexture
             </Button>

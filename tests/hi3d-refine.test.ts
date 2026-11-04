@@ -24,6 +24,7 @@ const { inferOperation, planGeneration } = await import("@/lib/catalog/plan");
 const { OPERATION_OUTPUT } = await import("@/lib/catalog/types");
 const { buildLicenceList, licenceInfo, licenceTerms, NODE_PACKS } = await import("@/lib/licences");
 const { OWN_GPU_TOOL_MESSAGE } = await import("@/lib/guest-access");
+const { withRunStamp } = await import("@/server/run-stamp");
 const hi3d = await import("@/lib/av/hi3d");
 const m3d = await import("@/lib/av/model3d");
 const print = await import("@/lib/print3d");
@@ -183,9 +184,10 @@ describe("the chain per engine", () => {
     }
   });
 
-  it("accounts: refused like every 3D model, before anything is queued", () => {
-    expect(() => gens.createGenerations({ ...hi3d.refineRequest({ glb: "/api/files/placeholder.glb", photo }), account: "acct-1" })).toThrow(OWN_GPU_TOOL_MESSAGE);
-    expect(() => gens.createGenerations({ ...hi3d.withRefine(m3d.model3dRequest({ engine: "open", mode: "image", photo }), "open", 1024), account: "acct-1" })).toThrow(OWN_GPU_TOOL_MESSAGE);
+  it("accounts: on this install's GPUs refused like every 3D model, before anything is queued", () => {
+    const onPool = <T,>(fn: () => T) => gens.asAccount("acct-1", () => withRunStamp({ place: "pool" }, fn));
+    expect(() => onPool(() => gens.createGenerations(hi3d.refineRequest({ glb: "/api/files/placeholder.glb", photo })))).toThrow(OWN_GPU_TOOL_MESSAGE);
+    expect(() => onPool(() => gens.createGenerations(hi3d.withRefine(m3d.model3dRequest({ engine: "open", mode: "image", photo }), "open", 1024)))).toThrow(OWN_GPU_TOOL_MESSAGE);
   });
 
   it("is free on the open engine, and the refined GLB gets the server's finish", () => {

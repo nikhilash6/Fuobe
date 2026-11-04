@@ -8,10 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateGeneration } from "@/lib/api";
 import { ANIMATION_LIBRARY_URL, ANIMATION_MAX, ANIMATION_PRESETS, animationId, rigRequest } from "@/lib/av/model3d";
 import { toastError } from "@/lib/refusals";
-import { priceLine, useRunPreview } from "./hooks";
+import { priceLine, useCreate3d, useRunPreview } from "./hooks";
 
 const NONE = "none";
 const NUMBER = "number";
@@ -21,7 +20,7 @@ const NUMBER = "number";
  * animated GLB the card plays. Cloud only (fal.ai): UniRig, the open rigger, has no verified ComfyUI pack.
  */
 export function RigDialog({ glb, open, onOpenChange, cloudAllowed }: { glb: string; open: boolean; onOpenChange: (v: boolean) => void; cloudAllowed: boolean }) {
-  const create = useCreateGeneration();
+  const create = useCreate3d();
   const [pick, setPick] = useState<string>("30");
   const [typed, setTyped] = useState("");
   const animation = pick === NONE ? null : pick === NUMBER ? animationId(typed) : Number(pick);

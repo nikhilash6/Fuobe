@@ -1027,9 +1027,9 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   const catalogModel = getModel(original.modelId);
   const found = catalogModel && offeredFor(catalogModel, original.engine);
   const shotModel = found && dualEngine(found) ? onEngine(found, engineFor(found, original.engine)) : found;
-  // An account's 3D model would be finished on this server, outside its own limits: not yet (the route refuses first).
+  // An account's 3D model is finished on this server under its own limits (model3d-finish.ts); on this install's GPUs it isn't offered yet.
   // Any Angle's 3D view is the exception: a splat and its turntable, nothing to finish here.
-  if (original.account && shotModel?.kind === "model3d" && shotModel.id !== ANY_ANGLE.buildModel) throw new Error(OWN_GPU_TOOL_MESSAGE);
+  if (original.account && original.place === "pool" && shotModel?.kind === "model3d" && shotModel.id !== ANY_ANGLE.buildModel) throw new Error(OWN_GPU_TOOL_MESSAGE);
   if (!opts.dependsOn && shotModel?.options.multiShot?.mode === "concat" && (original.params?.shots?.filter((x) => x.prompt.trim()).length ?? 0) > 1) {
     return createShotFilm(original, shotModel);
   }
