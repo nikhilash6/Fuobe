@@ -174,8 +174,18 @@ export function accountOwnRead(pathname: string): boolean {
 /** An account's own canvases (src/app/api/account/canvases): the routes read and change its own boards only. */
 const ACCOUNT_CANVASES = /^\/api\/account\/canvases(\/[^/]+)?$/;
 
-/** The Library's counts and its Uploads (its stored files): each route answers an account with its own only. */
-const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets"]);
+/**
+ * The Library's counts, its Uploads (its stored files) and a zip of its runs (the Library's Download, a result's
+ * Download all, Shorts' Download parts): each route answers an account with its own only.
+ */
+const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets", "/api/generations/zip"]);
+
+/**
+ * A signed-in account's zip of its own runs (/api/generations/zip; src/server/account-files.ts ACCOUNT_LIMITS): at most
+ * this many runs and this many bytes in one zip, one zip at a time. The Library sends at most this many.
+ */
+export const ACCOUNT_ZIP_MAX_RUNS = 200;
+export const ACCOUNT_ZIP_MAX_BYTES = 2 ** 30;
 
 /**
  * "Use the ComfyUI on this computer": the routes the person's own Fuobe tab runs their jobs through. Each takes whose

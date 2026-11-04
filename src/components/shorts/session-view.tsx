@@ -99,7 +99,7 @@ function Session({ s }: { s: View }) {
   const router = useRouter();
   const actions = useShortsActions(s.id);
   const engineMode = useEngineMode();
-  // The studio's owner keeps a Trash and downloads the parts as one zip; a signed-in account's short is its own runs.
+  // The studio's owner keeps a Trash; a signed-in account's short is its own runs (deleted for good, its parts zipped as the owner's are).
   const owner = useIsOwner();
   const [open, setOpen] = useState<Generation | null>(null);
   const [confirm, setConfirm] = useState(false);
@@ -192,7 +192,7 @@ function Session({ s }: { s: View }) {
                 <Download className="size-4" /> Download full video
               </a>
             )}
-            {owner && parts.length > 0 && (
+            {parts.length > 0 && (
               <a href={`/api/generations/zip?ids=${parts.join(",")}`} className="inline-flex h-9 items-center gap-1.5 rounded-full border bg-background px-4 text-[13px] font-medium hover:bg-accent">
                 <FolderDown className="size-4" /> Download parts{parts.length < s.segments.length ? ` (${parts.length})` : ""}
               </a>

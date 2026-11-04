@@ -118,6 +118,13 @@ An account is signed in, but it sees the owner's studio as a guest does:
   the sign-up form says so. An account's delete is for good (it has no Trash): a result's ⋯ menu and the
   Library's selection bar say **Delete for good…** and ask first, and its space comes
   back at once. The live-updates stream isn't sent to accounts: their studios poll instead.
+- **It downloads its own runs as one zip.** The Library's **Download**, a result's **Download all** and Shorts'
+  **Download parts** go to `GET /api/generations/zip`, which zips the account's own runs only: another account's run or
+  the owner's is left out, exactly as one that doesn't exist (none of its own: 404), so the answer never says whether
+  it is there. A file held for its check is left out too. One zip takes up to 200 runs and 1 GB (413 past either), and
+  an account makes one zip at a time (429 while one is going; a download that stops, or stalls for 2 minutes, frees
+  it). The zip is streamed from the files, so it uses no disk or memory. The Library asks first (`?check=1`), so a
+  refusal shows as a message. A guest gets the sign-up card.
 - **Its own uploads are its own.** Only the account that uploaded a file can use it in a run, and
   no other account can open it. See [Uploads](#uploads).
 - **Results made in the browser are its own runs too.** A motion clip rendered in
@@ -331,7 +338,7 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   Its shorts and the presets it makes from its own pictures are its own projects (`src/server/account-projects.ts`):
   its History, a short's page (`/shorts/<id>`) and its preset list show only its own, and another account's or the
   owner's read as not found (404). It keeps up to 50 shorts. Deleting a short deletes its runs for good (an account
-  has no Trash). It downloads the full video and each part; "Download parts" as one zip is the owner's for now.
+  has no Trash). It downloads the full video, each part, and "Download parts" as one zip of its own runs.
   Enhance (`.../enhance`) isn't offered to it yet (403 `own-gpu-tool`). A guest gets the sign-up card.
 - **Cinema Studio.** An account makes, reopens and runs its own projects (`/api/cinema/projects/**`): up to 50,
   each with its folders, takes, Director settings, brief and AI Director chat, deleted with the account. Another

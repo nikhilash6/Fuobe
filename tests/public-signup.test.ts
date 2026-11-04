@@ -270,10 +270,10 @@ describe("accounts never run on the owner's keys or GPU", () => {
 describe("accounts never see or change the owner's library", () => {
   const families: Record<string, { lists: string[]; records: string[]; changes: [string, string][] }> = {
     generations: {
-      // (/api/generations, its facets and its bulk changes go to the routes, which take only the account's own runs:
-      // tests/account-gpu.test.ts, tests/public-signup-visitors.test.ts.)
+      // (/api/generations, its facets, its zip and its bulk changes go to the routes, which take only the account's own runs:
+      // tests/account-gpu.test.ts, tests/public-signup-visitors.test.ts, tests/account-zip.test.ts.)
       lists: ["/api/generations/trash"],
-      records: ["/api/generations/g1", "/api/generations/zip?ids=g1"],
+      records: ["/api/generations/g1"],
       changes: [["PATCH", "/api/generations/g1"], ["DELETE", "/api/generations/g1"], ["DELETE", "/api/generations/trash"], ["POST", "/api/generations/g1/cancel"]],
     },
     // (POST /api/uploads is the account's own: the route checks it, tests/account-uploads.test.ts; so is the list of its
