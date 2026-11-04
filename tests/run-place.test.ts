@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { checkedPool, composerPlace, IN_BROWSER, mainModel, placePrice, runPlace, type RunPlaceInput } from "@/lib/run-place";
+import { quoteBody } from "@/lib/hosted";
+import { checkedPool, composerOnPool, composerPlace, IN_BROWSER, mainModel, openCheckPlace, placePrice, runPlace, type RunPlaceInput } from "@/lib/run-place";
 
 /** Where a run happens and what it costs, for each audience and engine (the composers' place chip and send button). */
 const fmt = (usd: number) => `$${usd.toFixed(2)}`;
@@ -201,6 +202,42 @@ describe("where a composer's run goes, and the place it names", () => {
   });
   it("this studio's GPUs first while its own GPU is online: shown, but not named, so the server can still use its own GPU", () => {
     expect(composerPlace(null, true, true)).toEqual({ runOn: "pool", place: undefined });
+  });
+});
+
+describe("the price check asks with the place the run names", () => {
+  const req = { feature: "image", modelId: "oss-z-image-turbo", prompt: "a fox" };
+  it("named: with it; named none (the server decides): with none, so the answer is where the run would really go", () => {
+    expect(JSON.parse(quoteBody(req, "pool")!)).toEqual({ ...req, place: "pool" });
+    expect(JSON.parse(quoteBody(req, undefined)!)).toEqual(req);
+    expect(quoteBody(null, "pool")).toBeNull();
+  });
+
+  it("a composer's run is one on this studio's GPUs when named there, or when its check says the server sends it there", () => {
+    // Named: as named, whatever the check says.
+    expect(composerOnPool("pool", undefined, false)).toBe(true);
+    expect(composerOnPool("own", { place: "pool" }, true)).toBe(false);
+    // Named none (this studio's GPUs first, its own GPU online): a model they don't take (LoRAs, a model kept off) gets
+    // no pool answer, so it runs on its own GPU, with its own GPU's check before Run and no pool price.
+    const lora = { place: undefined };
+    expect(composerOnPool(undefined, lora, true)).toBe(false);
+    expect(composerOnPool(undefined, null, true)).toBe(false);
+    expect(composerOnPool(undefined, { place: "pool" }, false)).toBe(true);
+    // No answer yet for a changed draft: the last answer stands meanwhile.
+    expect(composerOnPool(undefined, undefined, true)).toBe(true);
+    expect(composerOnPool(undefined, undefined, false)).toBe(false);
+  });
+
+  it("an app's tool: \"pool\" with no GPU of its own; none with one while this studio puts its GPUs first; else no check", () => {
+    const v = (o: Partial<{ audience: "owner" | "account" | "guest"; gpu: boolean; hosted: boolean; preferPool: boolean }> = {}) => ({ audience: "account" as const, gpu: false, hosted: true, preferPool: false, ...o });
+    expect(openCheckPlace(v())).toBe("pool");
+    expect(openCheckPlace(v({ audience: "guest" }))).toBe("pool");
+    expect(openCheckPlace(v({ gpu: true, preferPool: true }))).toBeUndefined();
+    expect(openCheckPlace(v({ gpu: true }))).toBeNull();
+    expect(openCheckPlace(v({ hosted: false }))).toBeNull();
+    expect(openCheckPlace(v({ audience: "owner" }))).toBeNull();
+    expect(openCheckPlace(v(), true)).toBeNull();
+    expect(openCheckPlace(null)).toBeNull();
   });
 });
 

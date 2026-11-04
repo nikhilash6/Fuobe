@@ -159,9 +159,12 @@ export function poolRunState(check: HostedCheck | null | undefined): { refused: 
   return { refused: false, text: q.text, ...(q.sub && { sub: q.sub }), ...(check?.line && { wait: lineWords(check.line) }) };
 }
 
-/** The request as the price check sends it: the run, plus where it should go. */
-export function quoteBody(req: GenerationRequest | null, runOn: RunOn): string | null {
-  return req ? JSON.stringify({ ...req, place: runOn }) : null;
+/**
+ * The request as the price check sends it: the run, plus the place the run itself names (none: the server decides, as it
+ * does for the run, so the check answers for where the run would really go).
+ */
+export function quoteBody(req: GenerationRequest | null, place: RunOn | undefined): string | null {
+  return req ? JSON.stringify(place ? { ...req, place } : req) : null;
 }
 
 /** "Tell me when": an offer's click goes to the billing service, which counts it. */

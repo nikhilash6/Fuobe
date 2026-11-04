@@ -194,6 +194,30 @@ export function composerPlace(pick: "own" | "pool" | null, ownOnline: boolean, p
   return preferPool ? { runOn: "pool", place: undefined } : { runOn: "own", place: "own" };
 }
 
+/**
+ * Is a composer's run one on this studio's GPUs (their price and place in line, no check of the person's own GPU, the
+ * price shown sent with it)? A run that names its place: that place. One that names none (this studio's GPUs first while
+ * the person's own GPU is online, so the server decides): only once the price check, asked with no place either, says the
+ * run goes there. A model those GPUs don't take then runs on the person's own GPU, as before. `checked` undefined: no
+ * answer for this draft yet, so `last` (what the check said for the draft before) stands meanwhile.
+ */
+export function composerOnPool(place: "own" | "pool" | undefined, checked: { place?: "pool" } | null | undefined, last: boolean): boolean {
+  if (place) return place === "pool";
+  return checked === undefined ? last : checked?.place === "pool";
+}
+
+/**
+ * The place an app's own tool names in its price check, as its run names it: "pool" for a viewer with no GPU of its own;
+ * none for one whose own GPU is there while this studio puts its GPUs first (the server then sends what they don't take
+ * to that GPU, and the check says so). Null: no check (the owner, hosted runs off, a tool for the person's own GPU only,
+ * or a viewer whose runs go to its own GPU).
+ */
+export function openCheckPlace(v: { audience: RunAudience; gpu: boolean; hosted: boolean; preferPool: boolean } | null, ownGpuOnly = false): "pool" | undefined | null {
+  if (!v || ownGpuOnly || v.audience === "owner" || !v.hosted) return null;
+  if (!v.gpu) return "pool";
+  return v.preferPool ? undefined : null;
+}
+
 /** Drawn in this browser (a Kinetic template, Click to Ad's end card): the same place and price whoever looks. */
 export const IN_BROWSER: RunPlace = runPlace({ audience: "guest", engine: "browser", format: String });
 

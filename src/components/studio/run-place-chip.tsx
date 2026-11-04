@@ -11,7 +11,7 @@ import type { Engine, GenerationRequest } from "@/lib/catalog/types";
 import { CONNECT_GPU_EVENT, signInHref, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { formatCost } from "@/lib/format";
 import { quoteBody, useHostedQuote, useSettled } from "@/lib/hosted";
-import { checkedPool, runPlace, type RunAudience, type RunPlace, type RunPlaceInput } from "@/lib/run-place";
+import { checkedPool, openCheckPlace, runPlace, type RunAudience, type RunPlace, type RunPlaceInput } from "@/lib/run-place";
 import { cn } from "@/lib/utils";
 import { chipBase, chipIdle } from "./chip";
 import { EngineSwitch } from "./engine-switch";
@@ -55,8 +55,11 @@ export function useRunPlace(input: Omit<RunPlaceInput, "audience" | "format" | "
  */
 export function useOpenRunPlace(models: readonly string[], request: GenerationRequest | null, o: { count?: number; ownGpuOnly?: boolean } = {}): RunPlace | null {
   const viewer = useRunViewer();
-  const mayPool = !!viewer && !o.ownGpuOnly && viewer.audience !== "owner" && viewer.hosted && (!viewer.gpu || viewer.preferPool);
-  const checked = useHostedQuote(useSettled(mayPool ? quoteBody(request, "pool") : null)).data;
+  // Asked with the place the tool's run names (none for an account whose own GPU is there while this studio puts its
+  // GPUs first: the server then sends what they don't take to that GPU, and the check answers so).
+  const place = openCheckPlace(viewer, o.ownGpuOnly);
+  const mayPool = place !== null;
+  const checked = useHostedQuote(useSettled(mayPool ? quoteBody(request, place) : null)).data;
   if (!viewer) return null;
   // This studio's GPUs only on the server's word (as the studio composer asks it): a model it doesn't offer there, or
   // no complete run to check yet, is your GPU (connect it, or sign up).

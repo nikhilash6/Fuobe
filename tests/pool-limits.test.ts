@@ -360,6 +360,29 @@ describe("where a run goes", () => {
     expect(named.body.code).toBe("not-offered");
   });
 
+  it("with this install's GPUs first, the price check of a run that names no place answers for where it really goes", async () => {
+    withBilling({ prefer: "pool", pool: { deny: ["oss-z-image-turbo"] }, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account({ gpu: "online" });
+    const LORA = { loras: [{ file: "x.safetensors", url: "https://huggingface.co/x/x.safetensors" }] };
+    type Check = { place?: string; quote?: { allowed: boolean; code?: string } };
+    // A model they keep off: no pool place and no quote (Run stays on, and it runs on its own GPU).
+    const kept = (await preview(IMAGE, a.cookie)).body as Check;
+    expect(kept.place).toBeUndefined();
+    expect(kept.quote).toBeUndefined();
+    // Named there, it is refused before Run, as the run would be.
+    const named = (await preview({ ...IMAGE, place: "pool" }, a.cookie)).body as Check;
+    expect(named.place).toBe("pool");
+    expect(named.quote).toMatchObject({ allowed: false, code: "not-offered" });
+    // One they take, named none: this install's GPUs, with its price; with LoRAs, its own GPU again.
+    withBilling({ prefer: "pool", limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const taken = (await preview(IMAGE, a.cookie)).body as Check;
+    expect(taken.place).toBe("pool");
+    expect(taken.quote).toMatchObject({ allowed: true });
+    const lora = (await preview({ ...IMAGE, ...LORA }, a.cookie)).body as Check;
+    expect(lora.place).toBeUndefined();
+    expect(lora.quote).toBeUndefined();
+  });
+
   it("an own GPU that doesn't answer: a run that named no place is asked about, never moved and charged", async () => {
     withBilling({ limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
     const a = account({ gpu: "offline" });

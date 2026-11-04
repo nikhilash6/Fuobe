@@ -20,7 +20,7 @@ import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { poolRunState, quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
-import { composerPlace } from "@/lib/run-place";
+import { composerOnPool, composerPlace } from "@/lib/run-place";
 import { PoolNote } from "./pool-note";
 import { poolRunsModel } from "@/lib/pool-rules";
 import { HoldFilesCtx } from "@/lib/held-files";
@@ -644,11 +644,22 @@ export function Composer({ docked }: { docked: boolean }) {
   // (The place the run names: none when the default is the studio's GPUs only because the studio puts them first.)
   const { runOn, place: runPlace } = composerPlace(runOnPick, ownOnline, viewerInfo?.prefer === "pool");
   const hostedHere = !!viewerInfo?.hosted && model?.engine === "open";
-  const poolPrice = hostedHere && runOn === "pool";
-  const wantPrice = poolPrice ? quoteBody(signed.request, runOn) : null;
+  // The price check is asked with the place the run itself names: none while the studio puts its GPUs first and the
+  // account's own GPU is online, so it answers for where the server would really send the run.
+  const askPool = hostedHere && runOn === "pool";
+  const wantPrice = askPool ? quoteBody(signed.request, runPlace) : null;
   const priceBody = useSettled(wantPrice);
   const priceQuery = useHostedQuote(priceBody);
   const hostedCheck = priceQuery.data;
+  // What the check last said of a run that names no place, kept while it asks again for a changed draft.
+  const [lastOnPool, setLastOnPool] = useState(true);
+  const checkedOnPool = hostedCheck === undefined ? null : hostedCheck?.place === "pool";
+  if (checkedOnPool !== null && checkedOnPool !== lastOnPool) setLastOnPool(checkedOnPool);
+  // A run on this studio's GPUs (their price and line, no pre-flight of the account's own GPU, the price shown sent with
+  // it): named there, or the check says the server sends it there. What they don't take runs on its own GPU, as before.
+  const poolPrice = askPool && composerOnPool(runPlace, hostedCheck, lastOnPool);
+  // Where the place switch says it runs.
+  const shownOn: RunOn = runOn === "pool" && hostedHere && !poolPrice ? "own" : runOn;
   // The price check has answered for the draft as it is now (not one typed a moment ago).
   const priceSettled = !wantPrice || (priceBody === wantPrice && priceQuery.isFetched && !priceQuery.isFetching);
   const hostedQuote = hostedCheck?.quote;
@@ -1690,11 +1701,11 @@ export function Composer({ docked }: { docked: boolean }) {
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setRunOn(runOn === "own" ? "pool" : "own")}
-            aria-label={`Runs on ${runOn === "own" ? "your GPU" : "this studio's GPUs"}. Switch`}
+            onClick={() => setRunOn(shownOn === "own" ? "pool" : "own")}
+            aria-label={`Runs on ${shownOn === "own" ? "your GPU" : "this studio's GPUs"}. Switch`}
             className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground underline decoration-border-strong underline-offset-2 hover:text-foreground"
           >
-            {runOn === "own" ? "Your GPU" : "This studio's GPUs"}
+            {shownOn === "own" ? "Your GPU" : "This studio's GPUs"}
           </button>
         )}
         {costText && (

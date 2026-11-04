@@ -389,7 +389,10 @@ With it on:
 - An account with no GPU of its own can run in the studios (generations, camera motions, effects, apps).
 - An account whose own GPU is online runs there by default, unless the billing service's policy puts the studio's
   GPUs first (`prefer: "pool"`). The composer shows where a run goes ("Your GPU" or "This studio's GPUs"), and the
-  person can pick either. When the account's own GPU doesn't answer and the run named no place, the run is not moved
+  person can pick either. With the studio's GPUs first and no pick, the price check names no place, as the run does,
+  so it answers for where the server will really send the run: what the studio's GPUs don't take shows and runs as a
+  run on the account's own GPU, with its own GPU's check before Run. When the account's own GPU doesn't answer and the
+  run named no place, the run is not moved
   to the studio's GPUs: the page asks first, and runs it there if the person says so. A run the studio's GPUs wouldn't
   take (a model or a kind not offered there, extra LoRAs, a file kind they don't take, Image to 3D, the billing service
   not answering) goes to the account's own GPU as before, and waits for it there.
