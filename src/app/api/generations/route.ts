@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     return refuse(403, r.error, { code: r.code, ...(r.provider && { provider: r.provider }) }, headers);
   };
   // Beside the request (never in it): the place the client prefers, and the price it showed (hosted runs, billing hook).
-  const { wish, shown } = readWishes(body);
+  const { wish, shown } = readWishes(body, request.headers);
   const refusedBy = (r: Refusal) => {
     if (account) unhit(`run:${account.id}`);
     return refuse(r.status, r.body.error, r.body, r.headers);

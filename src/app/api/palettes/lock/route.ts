@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { bodyTooBig, guestRun, toolViewer, toolWishes } from "@/server/account-tool-run";
 import { createLockedRun, SignatureSchema } from "@/server/palettes";
 import { ClientExtra } from "@/server/request-schema";
+import { runToolForAccount } from "@/server/tool-runs";
 
 const Hex = z.string().regex(/^#?[0-9a-fA-F]{6}$/);
 
@@ -31,12 +33,40 @@ const RequestSchema = z.object({
   signature: SignatureSchema,
 });
 
-const Body = z.object({ request: RequestSchema, colors: z.array(Hex).min(1).max(16), strength: z.number().min(0).max(1).optional() });
+const Body = z.object({
+  request: RequestSchema,
+  colors: z.array(Hex).min(1).max(16),
+  strength: z.number().min(0).max(1).optional(),
+  /** Client nonce: a repeat of it (a second click) gets the run the first one started (an account's). */
+  requestId: z.string().max(64).optional(),
+});
 
-/** Make the images, then recolour each one to the palette (open engine: a chained palette-transfer step). */
+/**
+ * Make the images, then recolour each one to the palette (open engine: a chained palette-transfer step). The owner's run
+ * as always; an account's with only its own pictures, after the checks every tool run gets (src/server/tool-runs.ts),
+ * on its own GPU or on this install's GPUs; a guest signs up first.
+ */
 export async function POST(request: Request) {
+  const viewer = toolViewer(request);
+  if (viewer.kind === "guest") return guestRun();
+  if (viewer.kind === "account") {
+    const big = bodyTooBig(request);
+    if (big) return big;
+  }
+  const wishes = viewer.kind === "account" ? await toolWishes(request) : {};
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") }, { status: 400 });
+  if (viewer.kind === "account") {
+    const { request: asked, colors, strength, requestId } = parsed.data;
+    return runToolForAccount(request, viewer.account, {
+      tool: "palette-lock",
+      files: asked.inputs?.images ?? [],
+      requestId,
+      wishes,
+      start: () => createLockedRun(asked as Parameters<typeof createLockedRun>[0], colors, strength),
+      ok: ({ items }, gpuWarning) => Response.json({ items, ...(gpuWarning && { gpuWarning }) }, { status: 201 }),
+    });
+  }
   try {
     const { items } = createLockedRun(parsed.data.request as Parameters<typeof createLockedRun>[0], parsed.data.colors, parsed.data.strength);
     return Response.json({ items }, { status: 201 });

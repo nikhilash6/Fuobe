@@ -846,16 +846,16 @@ export function Composer({ docked }: { docked: boolean }) {
     const sent = signature.apply(
       buildRequest(config.feature, songDraft(draft, model, config.slots), resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)),
     );
+    // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
+    const hosted = viewerInfo?.hosted ? { ...(runPlace && { place: runPlace }), ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
     // Open palette lock: the images are recoloured to the palette by a chained step (POST /api/palettes/lock).
-    if (sent.lock) return signature.lock.mutate({ request: sent.request, colors: sent.lock.colors }, { onError: (e) => toastError(e) });
+    if (sent.lock) return signature.lock.mutate({ request: sent.request, colors: sent.lock.colors, ...hosted }, { onError: (e) => toastError(e) });
     // If the server's pre-flight stops it (409 gpu-setup), the guided fix that opens can try again, or run it anyway.
     setGpuRetry(
       () => submitRef.current(),
       () => submitRef.current(true),
       model?.kind,
     );
-    // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
-    const hosted = viewerInfo?.hosted ? { ...(runPlace && { place: runPlace }), ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
     const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
     const body = { ...withVoiceFirst, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
     create.mutate(body, {

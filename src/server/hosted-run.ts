@@ -25,7 +25,7 @@ import {
   type RunFacts,
 } from "./billing";
 import { getModel } from "@/lib/catalog";
-import { PLACE_ASK_HEADER } from "@/lib/guest-access";
+import { PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER } from "@/lib/guest-access";
 import { createGenerations, outputKind, plannedSteps, previewChained, previewGeneration, type PlannedStep } from "./generations";
 import { loadIndex } from "./gpu/index-file";
 import { poolLane } from "./computer/pool";
@@ -49,15 +49,29 @@ import { runAsTenant } from "./tenant";
 export type PlaceWish = "own" | "pool" | undefined;
 
 /** The client's preference and the price it showed, read from the body beside the request (never part of it). */
-export function readWishes(body: unknown): { wish: PlaceWish; shown: { amount: number; priceVersion: string } | null } {
+export function readWishes(body: unknown, headers?: Headers): { wish: PlaceWish; shown: { amount: number; priceVersion: string } | null } {
   const b = (body ?? {}) as { place?: unknown; shown?: unknown };
-  const wish = b.place === "own" || b.place === "pool" ? b.place : undefined;
-  const s = b.shown as { amount?: unknown; priceVersion?: unknown } | null | undefined;
-  const shown =
-    s && typeof s === "object" && Number.isFinite(s.amount) && Number(s.amount) >= 0 && typeof s.priceVersion === "string" && s.priceVersion.length <= 200
-      ? { amount: Math.floor(Number(s.amount)), priceVersion: s.priceVersion }
-      : null;
-  return { wish, shown };
+  const wish = placeWish(b.place) ?? placeWish(headers?.get(RUN_PLACE_HEADER));
+  return { wish, shown: shownPrice(b.shown) ?? shownPrice(headerJson(headers?.get(RUN_SHOWN_HEADER))) };
+}
+
+const placeWish = (v: unknown): PlaceWish => (v === "own" || v === "pool" ? v : undefined);
+
+function shownPrice(v: unknown): { amount: number; priceVersion: string } | null {
+  const s = v as { amount?: unknown; priceVersion?: unknown } | null | undefined;
+  return s && typeof s === "object" && Number.isFinite(s.amount) && Number(s.amount) >= 0 && typeof s.priceVersion === "string" && s.priceVersion.length <= 200
+    ? { amount: Math.floor(Number(s.amount)), priceVersion: s.priceVersion }
+    : null;
+}
+
+/** A header's URI-encoded JSON (RUN_SHOWN_HEADER), or null when it isn't one. */
+function headerJson(v: string | null | undefined): unknown {
+  if (!v || v.length > 600) return null;
+  try {
+    return JSON.parse(decodeURIComponent(v));
+  } catch {
+    return null;
+  }
 }
 
 /** A refusal the route sends as it is. */

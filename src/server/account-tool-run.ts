@@ -182,6 +182,7 @@ export async function toolPriceCheck(
   const v = toolViewer(request);
   if (v.kind === "owner") return null;
   const account = v.kind === "account" ? v.account : null;
+  wish ??= headerWishes(request).place;
   if (!poolMayTake(account, wish)) return null;
   let steps: ToolStep[];
   try {
@@ -194,15 +195,25 @@ export async function toolPriceCheck(
 }
 
 /**
- * What a tool's run body carries beside the tool's own fields (hosted-run.ts readWishes): the place the client prefers
- * and the price it showed before Run. Read from a copy, before the route reads the body itself.
+ * What a tool's run carries beside the tool's own fields (hosted-run.ts readWishes): the place the client prefers and
+ * the price it showed before Run, from its body or, for a tool whose body has no field for them, its headers
+ * (RUN_PLACE_HEADER, RUN_SHOWN_HEADER). Read from a copy, before the route reads the body itself.
  */
 export async function toolWishes(request: Request): Promise<{ place?: PlaceWish; shown?: { amount: number; priceVersion: string } | null }> {
   const raw = await request
     .clone()
     .json()
     .catch(() => null);
-  const { wish, shown } = readWishes(raw);
+  const { wish, shown } = readWishes(raw, request.headers);
+  return { ...(wish && { place: wish }), shown };
+}
+
+/**
+ * The place and price a run carries in its headers only (RUN_PLACE_HEADER, RUN_SHOWN_HEADER): what runAccountTool and
+ * a tool's price check read when the route passed none, so a tool that reads its body itself needs no change for them.
+ */
+export function headerWishes(request: Request): { place?: PlaceWish; shown: { amount: number; priceVersion: string } | null } {
+  const { wish, shown } = readWishes(null, request.headers);
   return { ...(wish && { place: wish }), shown };
 }
 
@@ -290,8 +301,11 @@ function errorResponse(e: unknown): Response {
  * Check and start an account's tool run (see the header). The answer is the tool's own value, or the response that
  * refuses it. Nothing is queued unless every check passed; a refused run doesn't count against the account's hour.
  */
-export async function runAccountTool<T>(request: Request, account: Account, run: AccountToolRun<T>): Promise<AccountToolResult<T>> {
+export async function runAccountTool<T>(request: Request, account: Account, asked: AccountToolRun<T>): Promise<AccountToolResult<T>> {
   const id = account.id;
+  // The place and price the route didn't pass come from the request's headers (a tool that reads its body itself).
+  const sent = headerWishes(request);
+  const run: AccountToolRun<T> = { ...asked, place: asked.place ?? sent.place, shown: asked.shown ?? sent.shown };
   const no = (response: Response): AccountToolResult<T> => ({ ok: false, response });
   if (!diskHasRoom()) return no(refuse(503, ACCOUNT_MESSAGES.diskLow));
   if (accountUsage(id).total >= accountTotalBytes(id)) return no(refuse(413, filesFullMessage(id)));

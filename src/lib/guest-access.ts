@@ -299,6 +299,8 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/(influencer|photodump|photodump\/fashion|photodump\/character|turnaround|fly-around)$/,
   // Cinema Studio: a take in the account's own project, a retry and a 2K finish of one of its takes.
   /^\/api\/cinema\/projects\/[^/]+\/(generate|items\/[^/]+\/(retry|finish))$/,
+  // The Image studio's palette lock: its images, then each recoloured to the palette (src/server/palettes.ts).
+  /^\/api\/palettes\/lock$/,
 ];
 
 /**
@@ -345,6 +347,21 @@ export const PLACE_ASK_HEADER = "x-fuobe-place-ask";
 
 /** Fired when a run started from a toast or a card (not from a page's own button), so the lists show it. */
 export const RUNS_CHANGED_EVENT = "fuobe:runs-changed";
+
+/**
+ * Where a run's client would like it to go ("own" or "pool"), as a header: for a tool whose body has no field for it.
+ * A body's own `place` wins (src/server/hosted-run.ts readWishes).
+ */
+export const RUN_PLACE_HEADER = "x-fuobe-place";
+
+/**
+ * The price a run's client showed before Run, as a header (`{ amount, priceVersion }` as URI-encoded JSON): for a tool
+ * whose body has no field for it, and for a run sent again at a changed price. A body's own `shown` wins.
+ */
+export const RUN_SHOWN_HEADER = "x-fuobe-shown";
+
+/** A price shown, as RUN_SHOWN_HEADER carries it. */
+export const shownHeader = (s: { amount: number; priceVersion: string }): string => encodeURIComponent(JSON.stringify({ amount: s.amount, priceVersion: s.priceVersion }));
 
 /** Set on an account's refused run: the client shows "Connect your GPU to run this". */
 export const CONNECT_GPU_HEADER = "x-fuobe-connect-gpu";
