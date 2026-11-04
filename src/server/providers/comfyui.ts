@@ -113,7 +113,7 @@ import {
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
-import { poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords } from "../computer/pool";
+import { attemptDeadline, poolFacts, poolFields, poolLane, poolWaitMs, poolWaitWords, workersAllowed } from "../computer/pool";
 import { ownerWaitMs } from "../queue-settings";
 
 export const WORKFLOW_DIR = path.join(process.cwd(), "workflows", "comfyui");
@@ -269,6 +269,9 @@ export function installComfyLocal(worker: ComfyWorker = "main"): boolean {
 
 /** Said when a run on this install's GPUs can't go where it was planned (its row's own words then say it plainly). */
 export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this machine, so runs of accounts don't go to it.";
+
+/** Said to the owner when no worker is allowed the lane of a job sent to the workers. */
+export const NO_WORKER_FOR_LANE = "No worker is allowed to run this model yet. Allow its lane for a worker in Settings → Workers.";
 
 /**
  * Every VideoHelperSuite save node of a graph for the workers saves no metadata: the prompt and the machine's own clock never
@@ -2431,14 +2434,16 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   if (!t.pools) return pollTask(principal, t, meta, manifest, made);
   // A run on the workers: while it waits, its place in line; once a worker has it, that worker's reports (a worker that
   // goes quiet gives it back to the line, pool.ts, so no "open Fuobe on your computer"). It keeps its task's clocks
-  // (pool.ts): its wait limit until a worker first takes it, then each attempt's own running time. Back in line after an
-  // attempt (a worker paused, went quiet, gave it back), it shows its kept place as any waiting run does, and once a
-  // worker has it again, the usual words: never a restart.
+  // (pool.ts): its wait limit until a worker first takes it, then the deadline of each attempt from its claim. Back in
+  // line after an attempt (a worker paused, went quiet, gave it back), it shows its kept place as any waiting run does,
+  // and once a worker has it again, the usual words: never a restart.
   const res: PollResult = t.state === "waiting" ? { state: "queued", message: poolWaitWords(t) } : await pollTask(principal, t, meta, manifest, made);
   if (res.state !== "queued" && res.state !== "running") return res;
+  const deadline = attemptDeadline(t);
+  const clocks = { ownClocks: true as const, ...(deadline && { deadline }) };
   // An account's run says only where it is: in line, or working on it (the owner's own runs keep the workers' words).
-  if (!tenantAccount()) return { state: res.state, progress: res.progress, message: res.message, ownClocks: true };
-  return t.state === "waiting" ? { state: "queued", message: POOL_WORDS.inLine, ownClocks: true } : { state: "running", progress: res.progress, message: POOL_WORDS.working, ownClocks: true };
+  if (!tenantAccount()) return { state: res.state, progress: res.progress, message: res.message, ...clocks };
+  return t.state === "waiting" ? { state: "queued", message: POOL_WORDS.inLine, ...clocks } : { state: "running", progress: res.progress, message: POOL_WORDS.working, ...clocks };
 }
 
 /** Where a task is (on someone's computer, or with a worker), in the words its tile shows. */
@@ -2556,6 +2561,9 @@ export const comfyProvider: ProviderAdapter = {
     if (computer) {
       const metaBatch = !!meta.metaBatch;
       const forPool = onWorkers(computer);
+      // The owner's job that no worker is allowed to run would wait with no end (the owner's jobs have no wait limit
+      // unless the owner sets one): it is refused now, as an account's run is.
+      if (forPool && computer === "owner" && !workersAllowed(poolLane(manifest.id))) throw new ProviderError(NO_WORKER_FOR_LANE);
       const task = createTask({
         principal: computer,
         generationId,
@@ -2578,7 +2586,8 @@ export const comfyProvider: ProviderAdapter = {
                 poolFields(manifest.id, { account: computer.slice(5), class: runStamp()?.class ?? "free", boostMs: runStamp()?.boostMs, waitMs: runStamp()?.waitMs || poolWaitMs() }),
         }),
       });
-      return { externalId: task.promptId, meta: { ...meta, generationId, relay: task.id }, payload: wf };
+      // (`workers`: the run keeps its task's clocks, pool.ts, even when a poll of it fails.)
+      return { externalId: task.promptId, meta: { ...meta, generationId, relay: task.id, ...(forPool && { workers: true }) }, payload: wf };
     }
     // A run on this install's workers with no account behind it is never sent anywhere.
     if (onPoolWorkers()) throw new ProviderError(ON_COMPUTER_ONLY);

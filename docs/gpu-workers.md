@@ -316,7 +316,7 @@ in that class came.
 
 | Setting | What it does | Default |
 |---|---|---|
-| `runCeilingS` | `{ default, lanes }`: the longest one attempt at a job may run, in seconds, with a value per lane that overrides the default. It ends the run's own clock, and a worker's run limit is never longer | `{ "default": 2700, "lanes": {} }` (45 minutes) |
+| `runCeilingS` | `{ default, lanes }`: the longest one attempt at a job may run, in seconds, with a value per lane that overrides the default. A worker's run limit is never longer, and the run's own clock is set from it (below) | `{ "default": 2700, "lanes": {} }` (45 minutes) |
 | `ownerWaitLimitS` | How long the owner's own jobs may wait before a worker first takes them, in seconds. `null`: no limit | `null` |
 | `fairShare` | Each class goes round its accounts (above). Off: strict order | `false` |
 | `pickAllowanceMs` | How long a job in a worker's warm lane may go ahead of an older one (above). 0: strict order | `0` |
@@ -328,9 +328,19 @@ If a worker stops answering for 2 minutes, its ComfyUI is down for 2 minutes, or
 15 minutes after the worker claimed it (or after its ComfyUI lost the job and the worker sent it again), its job goes
 back to the queue. The worker is added to the job's
 `tried_json` list, and the input reads start again. The old worker's late calls get 409, and it deletes that prompt.
-After the third lost attempt, the job fails. A job that is put back because of a pause does not count as an attempt,
-and neither does one lost while the worker's PC slept, once the worker says so (`slept` in its next beat).
-The run's own clocks follow the queue's: each attempt gets its own running time.
+If the worker's ComfyUI loses the job (it restarted), the worker sends it again once on the same claim. If ComfyUI loses
+it a second time on that claim, the job goes back to the queue as a lost attempt. After the third lost attempt, the job
+fails. A job that is put back because of a pause does not count as an attempt, and neither does one lost while the
+worker's PC slept, once the worker says so (`slept` in its next beat).
+
+The run's own clocks follow the queue's, even when a check of the run fails. No wait limit of the run's own ends a job
+for the workers, and each attempt gets its own time from its claim: 15 minutes to send the files, the lane's run
+ceiling twice (one more try after running out of memory) and 15 minutes to send the results. The worker's run limit
+and stall limit, and the sending clock, end an attempt long before that. While a job is back in the queue, it shows no
+progress from the attempt before.
+
+A job of the owner's that no worker is allowed to run is refused when it is sent, as an account's run is. Allow its
+lane for a worker first.
 
 **The place in line.** A waiting job's place counts every job that a worker able to run it would serve first, whatever
 its lane: one GPU serves every lane it has in this order. The wait adds the rest of the jobs those workers run now,

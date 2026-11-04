@@ -45,9 +45,10 @@ const tasks = await import("@/server/computer/tasks");
 const pool = await import("@/server/computer/pool");
 const billing = await import("@/server/billing");
 const qs = await import("@/server/queue-settings");
-const { loadManifest, comfyProvider, onComputer } = await import("@/server/providers/comfyui");
+const { loadManifest, comfyProvider, onComputer, NO_WORKER_FOR_LANE } = await import("@/server/providers/comfyui");
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
+const { POOL_WORDS } = await import("@/lib/relay");
 
 const HOST = "localhost:3000";
 const SITE_HEADERS = { host: HOST, "sec-fetch-site": "same-origin", origin: `http://${HOST}` };
@@ -194,6 +195,23 @@ describe("classes", () => {
     expect(second.not_after! - second.created_at).toBeGreaterThanOrEqual(3600_000 - 1000);
     expect(second.not_after! - second.created_at).toBeLessThanOrEqual(3600_000 + 1000);
   });
+
+  it("the owner's job that no worker is allowed to run is refused at once, never left waiting", async () => {
+    const w = standInWorker();
+    const workflow = loadManifest().workflows[0].id;
+    const lane = pool.poolLane(workflow);
+    const route = { provider: "comfyui", endpoint: workflow, op: "t2i" } as never;
+    const submit = (gid: string) => onComputer("owner", () => comfyProvider.submit({ route, input: { prompt: "a lighthouse" } as never, generationId: gid } as never));
+    const others = Object.fromEntries(allLanes(loadIndex(), sha).filter((l) => l.lane !== lane).map((l) => [l.lane, { delayMs: 0 }]));
+    pool.patchWorker(w.id, { allow: others });
+    const before = (db().prepare("SELECT COUNT(*) AS n FROM relay_tasks").get() as { n: number }).n;
+    await expect(submit("owner-gen-refused")).rejects.toThrow(NO_WORKER_FOR_LANE);
+    expect((db().prepare("SELECT COUNT(*) AS n FROM relay_tasks").get() as { n: number }).n).toBe(before);
+    // Allowed the lane again (paused or not), it goes in line.
+    pool.patchWorker(w.id, { allow: { ...others, [lane]: { delayMs: 0 } }, paused: true });
+    const t = rowOf(String(((await submit("owner-gen-allowed")).meta as { relay: string }).relay));
+    expect(t.state).toBe("waiting");
+  });
 });
 
 describe("the billing service's class and head start", () => {
@@ -280,6 +298,17 @@ describe("the pick allowance", () => {
 });
 
 describe("the run ceiling", () => {
+  it("a workflow's lane is worked out once for the catalog, so the runner reads it at no cost on every poll", () => {
+    const lanes = allLanes(loadIndex(), sha);
+    for (const l of lanes) for (const id of l.workflows) expect(pool.poolLane(id), id).toBe(l.lane);
+    expect(pool.poolLane("no-such-workflow")).toBe("small");
+    expect(pool.lanesCatalog().map((l) => l.lane)).toEqual(lanes.map((l) => l.lane));
+    // Working the lanes out takes milliseconds each time; a thousand lookups take far less than that many times over.
+    const t0 = performance.now();
+    for (let i = 0; i < 1000; i++) pool.poolLane(lanes[i % lanes.length].workflows[0]);
+    expect(performance.now() - t0).toBeLessThan(1000);
+  });
+
   it("a worker's run limit never passes its lane's ceiling, and with no measured run it is the ceiling", () => {
     const [a, b] = allLanes(loadIndex(), sha).map((l) => l.lane);
     expect(pool.runLimitMs(null, a)).toBe(45 * MIN);
@@ -291,10 +320,10 @@ describe("the run ceiling", () => {
     expect(pool.runLimitMs(15 * MIN, b, 5 * MIN)).toBe(50 * MIN);
   });
 
-  it("a run longer than 45 minutes in a lane with a 60 minute ceiling goes on, and past 60 it stops", async () => {
-    const w = standInWorker();
+  /** An account's run through the run route, and its task once the runner made it. */
+  async function accountRun(prompt: string) {
     const r = await generationsRoute.POST(
-      new Request(`http://${HOST}/api/generations`, { method: "POST", headers: { ...SITE_HEADERS, cookie, "content-type": "application/json" }, body: JSON.stringify({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a long one" }) }),
+      new Request(`http://${HOST}/api/generations`, { method: "POST", headers: { ...SITE_HEADERS, cookie, "content-type": "application/json" }, body: JSON.stringify({ feature: "image", modelId: "oss-z-image-turbo", prompt }) }),
     );
     const body = (await r.json()) as { items?: { id: string }[] };
     expect(r.status, JSON.stringify(body)).toBe(201);
@@ -305,23 +334,101 @@ describe("the run ceiling", () => {
       await new Promise((res) => setTimeout(res, 20));
       t = taskOf(id);
     }
-    qs.saveQueueSettings({ ...qs.queueSettings(), runCeilingS: { default: 2700, lanes: { [t!.lane!]: 3600 } } });
+    expect(t).toBeDefined();
+    return { id, t: t! };
+  }
+  const tick = () => globalThis.__fuobeRunner?.tick();
+  const claimedAgo = (taskId: string, ms: number) => tasks.setTask(taskId, { claimed_at: Date.now() - ms });
+  const startedAgo = (id: string, ms: number) => db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(Date.now() - ms, id);
+
+  it("a run longer than 45 minutes in a lane with a 60 minute ceiling goes on; past 60 its worker gives it back, and the run's own clock only backs that up", async () => {
+    const w = standInWorker();
+    const { id, t } = await accountRun("a long one");
+    qs.saveQueueSettings({ ...qs.queueSettings(), runCeilingS: { default: 2700, lanes: { [t.lane!]: 3600 } } });
     beatAs(w);
     const got = claimAs(w)!;
-    expect(got.id).toBe(t!.id);
+    expect(got.id).toBe(t.id);
     expect(got.runLimitMs).toBe(60 * MIN);
-    tasks.setTask(t!.id, { state: "running", started_at: Date.now() });
-    await globalThis.__fuobeRunner?.tick();
+    tasks.setTask(t.id, { state: "running", started_at: Date.now() });
+    await tick();
     expect(getGeneration(id)?.status).toBe("running");
-    const startedAgo = (ms: number) => db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(Date.now() - ms, id);
-    startedAgo(50 * MIN);
+    // 50 minutes, then 61, into the attempt: the worker's run limit decides, not the run's clock.
+    for (const ago of [50 * MIN, 61 * MIN]) {
+      claimedAgo(t.id, ago);
+      startedAgo(id, ago);
+      beatAs(w);
+      await tick();
+      expect(getGeneration(id)?.status).toBe("running");
+    }
+    // An attempt that outlasts every clock of the worker's (its files' sending time, the ceiling twice and the time to
+    // send its results) is ended by the run's own clock.
+    expect(pool.attemptLimitMs(t.lane)).toBe(pool.SENDING_MS + 2 * 60 * MIN + pool.SAVING_MS);
+    claimedAgo(t.id, pool.attemptLimitMs(t.lane) + MIN);
     beatAs(w);
-    await globalThis.__fuobeRunner?.tick();
-    expect(getGeneration(id)?.status).toBe("running");
-    startedAgo(61 * MIN);
-    beatAs(w);
-    await globalThis.__fuobeRunner?.tick();
+    await tick();
     expect(getGeneration(id)?.status).toBe("failed");
+    expect(getGeneration(id)?.error).toBe(POOL_WORDS.failed);
+  });
+
+  it("a job a worker gives back and takes again between two polls gets its whole time again", async () => {
+    const w = standInWorker();
+    const { id, t } = await accountRun("given back and taken again");
+    beatAs(w);
+    const first = claimAs(w)!;
+    expect(first.id).toBe(t.id);
+    tasks.report(rowOf(t.id), { event: "sent", promptId: first.promptId }, () => ({ error: "unused" }));
+    tasks.report(rowOf(t.id), { event: "running", value: 1, max: 4 }, () => ({ error: "unused" }));
+    await tick();
+    expect(getGeneration(id)?.status).toBe("running");
+    // The first attempt began long ago, past the lane's ceiling (45 minutes).
+    claimedAgo(t.id, 70 * MIN);
+    startedAgo(id, 70 * MIN);
+    // The worker gives it back (it stalled) and takes it again before the next poll.
+    tasks.report(rowOf(t.id), { event: "give-back", why: "stalled" }, () => ({ error: "unused" }));
+    expect(rowOf(t.id).state).toBe("waiting");
+    beatAs(w);
+    expect(claimAs(w)?.id).toBe(t.id);
+    await tick();
+    const g = getGeneration(id)!;
+    expect(g.status).toBe("running");
+    expect(g.message).toBe(POOL_WORDS.working);
+  });
+
+  it("a poll that fails never ends a run in line by the runner's own wait, an account's or the owner's", async () => {
+    standInWorker();
+    const { id } = await accountRun("a poll that fails");
+    // The owner's own job on the workers (no wait limit unless the owner sets one).
+    const owner = await generationsRoute.POST(
+      new Request(`http://${HOST}/api/generations`, {
+        method: "POST",
+        headers: { ...SITE_HEADERS, cookie: `${auth.SESSION_COOKIE}=${auth.createSession().value}`, "content-type": "application/json" },
+        body: JSON.stringify({ feature: "image", modelId: "oss-z-image-turbo", prompt: "the owner's own" }),
+      }),
+    );
+    const ownerBody = (await owner.json()) as { items?: { id: string }[] };
+    expect(owner.status, JSON.stringify(ownerBody)).toBe(201);
+    const ownerId = ownerBody.items![0].id;
+    for (let i = 0; i < 100 && !taskOf(ownerId); i++) {
+      await tick();
+      await new Promise((res) => setTimeout(res, 20));
+    }
+    expect(taskOf(ownerId)?.class).toBe("owner");
+    await tick();
+    // By the runner's own count, both waited past every wait limit it knows (their tasks keep the real ones), and each
+    // poll fails (the database is busy).
+    for (const g of [id, ownerId]) db().prepare("UPDATE generation_runs SET submitted_at = ?, started_at = NULL WHERE id = ?").run(Date.now() - 5 * 60 * MIN, g);
+    const spy = vi.spyOn(comfyProvider, "poll").mockRejectedValue(new Error("database is locked"));
+    try {
+      await tick();
+      await tick();
+      expect(spy).toHaveBeenCalled();
+      for (const g of [id, ownerId]) expect(getGeneration(g)?.status, g).toBe("queued");
+      expect(getGeneration(id)?.message).toBe(POOL_WORDS.inLine);
+    } finally {
+      spy.mockRestore();
+    }
+    await tick();
+    for (const g of [id, ownerId]) expect(getGeneration(g)?.status, g).toBe("queued");
   });
 });
 

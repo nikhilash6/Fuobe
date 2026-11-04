@@ -184,7 +184,8 @@ export function toGeneration(r: Row): Generation {
     op: r.op,
     kind: r.kind,
     status: r.status,
-    progress: r.progress,
+    // In line on this install's GPUs (again, after an attempt): no progress.
+    progress: pool && r.status === "queued" ? null : r.progress,
     message: pool ? poolMessage(r) : r.message,
     prompt: r.prompt,
     request,
@@ -243,7 +244,8 @@ const PLAIN_POOL_ERRORS = (() => {
   let set: Set<string> | undefined;
   return () =>
     (set ??= new Set<string>([
-      ...Object.values(ACCOUNT_MESSAGES),
+      // The account's own side only: its files, and a file it sent (never the server's own state, such as low disk).
+      ...(["imageTooBig", "imageTooManyPixels", "audioTooBig", "videoTooBig", "fileTooBig", "wrongType", "uploadsFull", "filesFull"] as const).map((k) => ACCOUNT_MESSAGES[k]),
       RELAY_WORDS.stopped,
       POOL_WORDS.failed,
       BLOCKED_CARD_MESSAGE,
@@ -2298,17 +2300,21 @@ async function pollOne(r: Row): Promise<void> {
       recordSubmission(r.id, res.sentAt);
       run = { submitted_at: res.sentAt, started_at: null };
     }
-    // A job for the workers keeps its task's own clocks (its wait limit until a worker first takes it): back in line
-    // after an attempt, its next attempt gets its own running time, and no wait limit of the runner's ends it.
-    const ownClocks = !!res && (res.state === "queued" || res.state === "running") && !!res.ownClocks;
+    // A job for the workers keeps its task's own clocks (pool.ts): its wait limit until a worker first takes it, then
+    // the deadline of the attempt a worker holds, from its claim (the worker's own run limit and stall rule end an
+    // attempt first). No clock of the runner's ends it, even when a poll of it fails (the next tick asks again).
+    const workerJob = typeof ctx.meta.relay === "string" && (ctx.meta.workers === true || onPool);
+    const ownClocks = workerJob || (!!res && (res.state === "queued" || res.state === "running") && !!res.ownClocks);
     if (ownClocks && res?.state === "queued" && run.started_at) {
       db().prepare("UPDATE generation_runs SET started_at = NULL WHERE id = ?").run(r.id);
       run = { ...run, started_at: null };
     }
     // A job that has just left the queue gets its full running time from now.
     const startsNow = res?.state === "running" && !run.started_at;
-    const limitMs = runningLimitMs(r, ctx.meta, account, onPool);
-    const overdue = run.started_at ? now - run.started_at > limitMs : !ownClocks && !startsNow && now - run.submitted_at > queueMs;
+    const deadline = ownClocks && (res?.state === "queued" || res?.state === "running") ? res.deadline : undefined;
+    // (Worked out only for a started job: a queued one never reads it.)
+    const limitMs = ownClocks ? (deadline?.ms ?? 0) : run.started_at ? runningLimitMs(r, ctx.meta, account, onPool) : 0;
+    const overdue = ownClocks ? !!deadline && now > deadline.at : run.started_at ? now - run.started_at > limitMs : !startsNow && now - run.submitted_at > queueMs;
     if (overdue) {
       // Stop the provider's job too, so it doesn't keep rendering (or billing) for nothing.
       await adapterFor(r.provider, account)
@@ -2316,7 +2322,7 @@ async function pollOne(r: Row): Promise<void> {
         .catch(() => {});
       update(r.id, {
         status: "failed",
-        error: run.started_at
+        error: run.started_at || deadline
           ? `Timed out after ${Math.round(limitMs / 60_000)} minutes`
           : res?.state === "queued" && res.timeoutError
             ? res.timeoutError
@@ -2332,7 +2338,8 @@ async function pollOne(r: Row): Promise<void> {
     }
     if (!res) throw pollError;
     if (startsNow) db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(Date.now(), r.id);
-    update(r.id, { status: res.state, progress: res.progress ?? r.progress, message: res.message ?? null });
+    // Back in line (a worker paused, went quiet or gave it back): no progress of the attempt before is kept.
+    update(r.id, { status: res.state, progress: ownClocks && res.state === "queued" ? null : (res.progress ?? r.progress), message: res.message ?? null });
     return;
   }
   if (res.state === "failed") {

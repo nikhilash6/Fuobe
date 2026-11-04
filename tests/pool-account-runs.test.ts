@@ -57,6 +57,7 @@ const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { ComputerRunner } = await import("@/lib/computer-runner");
 const { POOL_WORDS } = await import("@/lib/relay");
+const { ACCOUNT_MESSAGES } = await import("@/server/account-files");
 
 const HOST = "localhost:3000";
 const SITE_HEADERS = { host: HOST, "sec-fetch-site": "same-origin", origin: `http://${HOST}` };
@@ -379,6 +380,39 @@ describe("the line", () => {
     expect(g.message).toBe(POOL_WORDS.inLine);
   });
 
+  it("back in line after an attempt, it shows In line with no progress from the attempt before", async () => {
+    const w = standInWorker();
+    const r = await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse at dusk" });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const id = r.body.items![0].id;
+    const t = (await until(() => taskOf(id)))!;
+    beatAs(w);
+    const got = claimAs(w)!;
+    expect(got.id).toBe(t.id);
+    tasks.report(rowOf(t.id), { event: "sent", promptId: got.promptId }, () => ({ error: "unused" }));
+    tasks.report(rowOf(t.id), { event: "running", value: 3, max: 4 }, () => ({ error: "unused" }));
+    const working = await until(() => {
+      const g = getGeneration(id);
+      return g?.status === "running" && (g.progress ?? 0) > 0 ? g : null;
+    });
+    expect(working?.message).toBe(POOL_WORDS.working);
+    // The worker pauses at once (its owner pressed the pause): the run goes back in line.
+    pool.workerBeat(
+      db().prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as never,
+      pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: true, why: "here-now", until: null }, gpu: {}, running: [{ task: t.id }], stopped: [] }),
+    );
+    const back = await until(() => {
+      const g = getGeneration(id);
+      return g?.status === "queued" ? g : null;
+    });
+    expect(back?.message).toBe(POOL_WORDS.inLine);
+    expect(back?.progress).toBeNull();
+    expect((db().prepare("SELECT progress FROM generations WHERE id = ?").get(id) as { progress: number | null }).progress).toBeNull();
+    // A row in line never shows a progress it kept from before.
+    db().prepare("UPDATE generations SET progress = 0.6 WHERE id = ?").run(id);
+    expect(getGeneration(id)?.progress).toBeNull();
+  });
+
   it("place and wait count every task ahead in the order the workers serve them, whatever its lane", () => {
     const w = standInWorker();
     const lanes = allLanes(loadIndex(), sha).map((l) => l.lane);
@@ -417,6 +451,15 @@ describe("what an account reads about its run", () => {
     // Fuobe's own words about the account's side stay as they are.
     db().prepare("UPDATE generations SET error = ? WHERE id = ?").run("Your files have reached 3 GB. Delete some runs to make room.", id);
     expect(getGeneration(id)!.error).toBe("Your files have reached 3 GB. Delete some runs to make room.");
+    for (const words of [ACCOUNT_MESSAGES.imageTooBig, ACCOUNT_MESSAGES.wrongType, ACCOUNT_MESSAGES.uploadsFull]) {
+      db().prepare("UPDATE generations SET error = ? WHERE id = ?").run(words, id);
+      expect(getGeneration(id)!.error).toBe(words);
+    }
+    // Words about the server's own state (its disk, how busy it is) are not the account's to act on: one plain sentence.
+    for (const words of [ACCOUNT_MESSAGES.diskLow, ACCOUNT_MESSAGES.finishBusy, ACCOUNT_MESSAGES.finishRate, ACCOUNT_MESSAGES.uploadsBusy]) {
+      db().prepare("UPDATE generations SET error = ? WHERE id = ?").run(words, id);
+      expect(getGeneration(id)!.error, words).toBe(POOL_WORDS.failed);
+    }
   });
 
   it("its output check is part of Working, and a stopped run says Not charged only when its hold set something aside", () => {

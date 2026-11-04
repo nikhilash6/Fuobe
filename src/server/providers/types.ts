@@ -32,11 +32,12 @@ export interface RemoteOutput {
  * What a poll found. A job on someone's own computer (comfyui.ts) also says when it reached their ComfyUI (`sentAt`: the
  * queue clock starts there, not while it waited for their tab), what to say if it waits too long (`timeoutError`), and
  * what was missing when it failed (`fix`: the tile's "Fix it"). A job for the workers keeps its task's own clocks
- * (`ownClocks`): the runner then sets no wait limit of its own, and its running time counts from the attempt now running.
+ * (`ownClocks`): the runner then sets no wait limit of its own, and ends it only past the deadline of the attempt a
+ * worker holds now (`deadline`: when, and how long that attempt may last).
  */
 export type PollResult =
-  | { state: "queued"; progress?: number; message?: string; sentAt?: number; timeoutError?: string; ownClocks?: true }
-  | { state: "running"; progress?: number; message?: string; sentAt?: number; ownClocks?: true }
+  | { state: "queued"; progress?: number; message?: string; sentAt?: number; timeoutError?: string; ownClocks?: true; deadline?: { at: number; ms: number } }
+  | { state: "running"; progress?: number; message?: string; sentAt?: number; ownClocks?: true; deadline?: { at: number; ms: number } }
   | { state: "succeeded"; outputs: RemoteOutput[]; message?: string }
   | { state: "failed"; error: string; fix?: GenerationFix };
 

@@ -63,6 +63,21 @@ const LINE_ORDER = `${CLASS_RANK}, rank_at, created_at, id`;
 const LINE_COLS = "id, principal, pools, only_worker, stop, lane, needs_json, created_at, rank_at, est_ms, tried_json, worker_id, claimed_at, account, class";
 /** A task a worker took that is still sending its files to its ComfyUI this long after the claim goes back in line. */
 export const SENDING_MS = 15 * 60_000;
+/** The time a worker has to send a finished job's results up. */
+export const SAVING_MS = 15 * 60_000;
+/**
+ * The longest one attempt of a worker's task may last, from its claim: SENDING_MS to send its files, its lane's run
+ * ceiling twice (a worker sends a job once more after its ComfyUI ran out of memory, with its run limit counted again)
+ * and SAVING_MS to send its results. The worker's own run limit and stall rule, and the sending clock, end an attempt
+ * well before; this is only the run's backstop (generations.ts).
+ */
+export const attemptLimitMs = (lane?: string | null) => SENDING_MS + 2 * runCeilingMs(lane) + SAVING_MS;
+/** When the attempt a worker holds now must have ended (none while the task waits in line). */
+export function attemptDeadline(t: Pick<TaskRow, "state" | "claimed_at" | "lane">): { at: number; ms: number } | undefined {
+  if (t.state === "waiting" || !t.claimed_at) return undefined;
+  const ms = attemptLimitMs(t.lane);
+  return { at: t.claimed_at + ms, ms };
+}
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
@@ -653,9 +668,22 @@ function memo<A, R>(fn: (a: A) => R): (a: A) => R {
 // ---------------------------------------------------------------------------
 // Making tasks for workers
 
+/** The catalog's lanes, worked out once for each requirements index (loadIndex keeps one until its file changes). */
+const lanesByIndex = new WeakMap<ReturnType<typeof loadIndex>, { lanes: ReturnType<typeof allLanes>; byWorkflow: Map<string, string> }>();
+function catalogLanes(): { lanes: ReturnType<typeof allLanes>; byWorkflow: Map<string, string> } {
+  const index = loadIndex();
+  let kept = lanesByIndex.get(index);
+  if (!kept) {
+    const lanes = allLanes(index, sha);
+    kept = { lanes, byWorkflow: new Map(lanes.flatMap((l) => l.workflows.map((id) => [id, l.lane] as const))) };
+    lanesByIndex.set(index, kept);
+  }
+  return kept;
+}
+
 /** The lane a workflow's tasks go in (a workflow the catalog doesn't know: the small lane). */
 export function poolLane(workflowId: string): string {
-  return allLanes(loadIndex(), sha).find((l) => l.workflows.includes(workflowId))?.lane ?? "small";
+  return catalogLanes().byWorkflow.get(workflowId) ?? "small";
 }
 
 /**
@@ -899,4 +927,4 @@ export function queueView(now = Date.now()) {
 }
 
 /** Every lane in this studio's catalog, for the owner to allow per worker. */
-export const lanesCatalog = () => allLanes(loadIndex(), sha).map((l) => ({ lane: l.lane, label: l.label, workflows: l.workflows.length }));
+export const lanesCatalog = () => catalogLanes().lanes.map((l) => ({ lane: l.lane, label: l.label, workflows: l.workflows.length }));
