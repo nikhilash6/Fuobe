@@ -54,6 +54,8 @@ export interface BillingRefusalDetail {
   action?: BillingAction;
   offer?: BillingOffer;
   quote?: HostedQuote;
+  /** A changed price: the same run sent again at the new price (true when it started). */
+  runAgain?: () => Promise<boolean>;
 }
 
 /** Fired for every refusal marked x-fuobe-billing (watchGuestRefusals): the billing card opens. */

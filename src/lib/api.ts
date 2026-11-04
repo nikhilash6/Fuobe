@@ -28,7 +28,7 @@ import {
 import { fetchWithin, READ_LIMIT_MS } from "./fetch-within";
 import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folder } from "./library";
 import { markRefusalShown, refusalShown, responseError } from "./refusals";
-import { PLACE_ASK_HEADER, RUNS_CHANGED_EVENT } from "./guest-access";
+import { PLACE_ASK_HEADER, RUN_PLACE_HEADER, RUN_SHOWN_HEADER, RUNS_CHANGED_EVENT, shownHeader } from "./guest-access";
 import type { PoolRules } from "./pool-rules";
 import { HoldFilesCtx } from "./held-files";
 import { postFile } from "./upload";
@@ -1434,6 +1434,29 @@ async function runOnPool(sent: string): Promise<void> {
   }
 }
 
+/**
+ * A run sent again as it was first sent, with headers added (a changed price shown, or this studio's GPUs asked for):
+ * every tool reads them (RUN_SHOWN_HEADER, RUN_PLACE_HEADER), whatever its body. True when it started.
+ */
+export async function sendRunAgain(input: RequestInfo | URL, init: RequestInit | undefined, add: Record<string, string>): Promise<boolean> {
+  const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+  for (const [k, v] of Object.entries(add)) headers.set(k, v);
+  try {
+    const res = await window.fetch(input instanceof Request ? input.url : input, { ...init, method: init?.method ?? "POST", headers });
+    if (res.ok) {
+      window.dispatchEvent(new Event(RUNS_CHANGED_EVENT));
+      return true;
+    }
+    await json(res).catch((e: unknown) => void (refusalShown(e) || toast.error((e as Error).message)));
+  } catch {
+    toast.error("That didn't start. Try again.");
+  }
+  return false;
+}
+
+/** A body a run can be sent again with (a string: a form or a stream is read once). */
+const resendable = (input: RequestInfo | URL, init: RequestInit | undefined): boolean => !(input instanceof Request) && (init?.body === undefined || typeof init.body === "string");
+
 export function watchGuestRefusals(): void {
   const w = window as typeof window & { __fuobeGuestFetch?: boolean };
   if (w.__fuobeGuestFetch) return;
@@ -1471,18 +1494,26 @@ export function watchGuestRefusals(): void {
       res
         .clone()
         .json()
-        .then((b: Omit<BillingRefusalDetail, "code">) => window.dispatchEvent(new CustomEvent<BillingRefusalDetail>(BILLING_EVENT, { detail: { ...b, code: billing } })))
+        .then((b: Omit<BillingRefusalDetail, "code">) => {
+          // A changed price: the card offers to run it at the new price (the same run, sent again with that price shown).
+          const q = b.quote;
+          const again =
+            billing === "price-changed" && method === "POST" && q && resendable(input, init) ? () => sendRunAgain(input, init, { [RUN_SHOWN_HEADER]: shownHeader(q) }) : undefined;
+          window.dispatchEvent(new CustomEvent<BillingRefusalDetail>(BILLING_EVENT, { detail: { ...b, code: billing, ...(again && { runAgain: again }) } }));
+        })
         .catch(() => {});
     }
     // A run that named no place, whose account's own GPU didn't answer: offered on this studio's GPUs, never moved there
     // by itself.
-    if (res.status === 409 && res.headers.get(PLACE_ASK_HEADER) === "1" && method === "POST" && requestPath(input) === "/api/generations" && typeof init?.body === "string") {
+    if (res.status === 409 && res.headers.get(PLACE_ASK_HEADER) === "1" && method === "POST" && resendable(input, init)) {
       markRefusalShown(res);
-      const sent = init.body;
+      const sent = init?.body;
+      // The studios' runs carry the place in their body; a tool's run in a header (every tool reads it).
+      const again = requestPath(input) === "/api/generations" && typeof sent === "string" ? () => void runOnPool(sent) : () => void sendRunAgain(input, init, { [RUN_PLACE_HEADER]: "pool" });
       res
         .clone()
         .json()
-        .then((b: { error?: string }) => toast(b.error ?? "Your GPU isn't answering right now.", { action: { label: "Run on this studio's GPUs", onClick: () => void runOnPool(sent) } }))
+        .then((b: { error?: string }) => toast(b.error ?? "Your GPU isn't answering right now.", { action: { label: "Run on this studio's GPUs", onClick: again } }))
         .catch(() => {});
     }
     // A run the GPU pre-flight stopped (something missing on the viewer's ComfyUI): the guided fix opens with its plan.

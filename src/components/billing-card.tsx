@@ -34,6 +34,17 @@ export function BillingCard() {
   const r = refusal;
   const link = safeLink(r?.action?.url);
   const changed = r?.code === "price-changed";
+  const [sending, setSending] = useState(false);
+  const runAgain = changed ? r?.runAgain : undefined;
+  const sendAgain = async () => {
+    if (!runAgain) return;
+    setSending(true);
+    const started = await runAgain().finally(() => setSending(false));
+    if (started) {
+      setOpen(false);
+      void qc.invalidateQueries({ queryKey: ["generations"] });
+    }
+  };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-sm">
@@ -46,7 +57,7 @@ export function BillingCard() {
           {changed && r?.quote?.text && (
             <p className="text-[13px] text-muted-foreground">
               Now: <span className="font-medium text-foreground">{r.quote.text}</span>
-              {r.quote.sub ? ` · ${r.quote.sub}` : ""}. Press Generate again to run it at this price.
+              {r.quote.sub ? ` · ${r.quote.sub}` : ""}.{runAgain ? "" : " Press Generate again to run it at this price."}
             </p>
           )}
           {r?.offer && <p className="text-[13px] text-muted-foreground">{r.offer.text}</p>}
@@ -71,7 +82,12 @@ export function BillingCard() {
                 </a>
               </Button>
             )}
-            {!link && !r?.offer && (
+            {runAgain && (
+              <Button size="sm" disabled={sending} onClick={() => void sendAgain()}>
+                Run at this price
+              </Button>
+            )}
+            {!link && !r?.offer && !runAgain && (
               <Button size="sm" onClick={() => setOpen(false)}>
                 OK
               </Button>
