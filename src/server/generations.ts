@@ -527,6 +527,7 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_workers.bench_json": "a worker's job times in each lane",
   "relay_workers.hours_json": "a worker's hours: a time zone and windows",
   "relay_workers.allow_json": "the lanes the owner lets a worker run, with their delays",
+  "relay_workers.seen_json": "the countries and network hashes a worker's token was used from",
   "relay_pairings.facts_json": "what a paired ComfyUI said about itself: its name, GPU and version",
 };
 
