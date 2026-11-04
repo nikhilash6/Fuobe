@@ -24,6 +24,7 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Viewer } from "@/components/studio/viewer";
 import { chainState, ENHANCE_COPY, formatSeconds, segmentSeconds, stitchCurrent, stitchSteps, takeSteps, type ChainState, type ShortsSessionSegment } from "@/lib/catalog/shorts";
 import { finishLengthProblem, REGEN_OFFERED } from "@/lib/catalog/regenerate";
+import { originalSoundLabel, originalSoundOn } from "@/lib/av/original-sound";
 import { useEngineMode } from "@/lib/api";
 import type { Generation } from "@/lib/catalog/types";
 import { formatCost, ratioValue, timeAgo } from "@/lib/format";
@@ -214,6 +215,12 @@ function Session({ s }: { s: View }) {
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-xl bg-muted/50 p-3 text-[12px]">
             <dt className="text-muted-foreground">Preset</dt>
             <dd className="truncate">{s.look.name}</dd>
+            {s.source.hasAudio && (
+              <>
+                <dt className="text-muted-foreground">Sound</dt>
+                <dd className="truncate">{originalSoundLabel(originalSoundOn(s.settings.originalSound, s.engine))}</dd>
+              </>
+            )}
             <dt className="text-muted-foreground">Engine</dt>
             <dd className="flex items-center gap-1">
               {s.engine === "open" ? <Cpu className="size-3" /> : <Cloud className="size-3" />}
