@@ -122,7 +122,8 @@ export class SiteTurns {
    * `f`: { may (the worker may ask for a turn now: the folder is there, the studio says what it can take, nothing pauses
    * it), claimable (the beat's claimableNow), busy (a studio job runs here), workHolds (local ComfyUI work holds more
    * than busyVramMb), workThere (local ComfyUI work listens at all), serverInterrupt, oldestWaitS (the studio's, when
-   * it says) }.
+   * it says), unsure (another program showed in one reading, which may still become a pause: no new turn begins, and a
+   * turn that has begun goes on, so one reading never makes the helper let go and ask again) }.
    */
   step(t, f) {
     const day = dayOf(t);
@@ -131,7 +132,7 @@ export class SiteTurns {
     this.lastTickAt = t;
     const may = !!f.may && this.capLeft(t);
     const claimable = Math.max(0, Math.floor(Number(f.claimable) || 0));
-    const want = (may && claimable > 0) || !!f.busy;
+    const want = ((may && claimable > 0) || !!f.busy) && (this.active || !f.unsure);
     let ended = null;
     if (want) {
       if (!this.active) {

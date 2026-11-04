@@ -471,8 +471,9 @@ export async function runWorker(cfg, deps) {
         const workHolds = (split?.workMb ?? 0) > busyMb;
         const was = turn;
         turn = turns.step(t, {
-          // A busy reading that may still turn into a pause asks for nothing.
-          may: turnsReady(t) && !pause.paused && !!mayWork() && gpu.busyInARow === 0,
+          may: turnsReady(t) && !pause.paused && !!mayWork(),
+          // A busy reading that may still turn into a pause begins no turn and ends none (no new job starts either).
+          unsure: gpu.busyInARow > 0,
           claimable: s.claimable,
           busy: busyJob && jobUsesGpu && !stopNow,
           workHolds,

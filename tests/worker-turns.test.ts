@@ -198,6 +198,19 @@ describe("turns", () => {
     expect(turns.step(T0 + 3000, { ...facts, may: false })).toMatchObject({ siteWaiting: 0, waitForYield: false });
   });
 
+  it("one reading that may still become a pause begins no turn and ends none", () => {
+    const { folder, turns } = setup();
+    // Not in a turn: an unsure reading asks for nothing.
+    expect(turns.step(T0, { ...facts, unsure: true })).toMatchObject({ siteWaiting: 0, waitForYield: false });
+    // In a turn, with the answer in: the reading leaves it as it is, and the answer still counts.
+    expect(turns.step(T0 + 1000, facts)).toMatchObject({ siteWaiting: 2, waitForYield: true });
+    answer(folder, { state: "yielded", at: T0 + 1500 });
+    expect(turns.step(T0 + 20_000, { ...facts, unsure: true })).toMatchObject({ siteWaiting: 2, waitForYield: false, ended: null });
+    expect(turns.step(T0 + 25_000, facts)).toMatchObject({ siteWaiting: 2, waitForYield: false, ended: null });
+    // The second busy reading pauses the worker: the turn ends at once.
+    expect(turns.step(T0 + 30_000, { ...facts, may: false, unsure: true })).toMatchObject({ siteWaiting: 0, ended: "stopped" });
+  });
+
   it("asks for an interrupt only when the studio does, at most once per gap, and never when the PC says never", () => {
     const a = setup({ interruptGapMin: 30 });
     expect(a.turns.step(T0, { ...facts, serverInterrupt: true }).interrupt).toBe(true);

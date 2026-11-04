@@ -173,7 +173,9 @@ The worker never connects to your other ComfyUIs. It reads three things only:
    a process that it doesn't know holds GPU memory.
 2. **Windows' GPU counters** (`\GPU Process Memory(pid_<n>_*)\Dedicated Usage`, read with `typeperf`). These are the
    numbers that Task Manager shows for each process. `nvidia-smi` gives the total only, because its per-process memory
-   reads `[N/A]` on Windows.
+   reads `[N/A]` on Windows. The worker reads the graphics card whose processes hold the most memory. On a PC with
+   more than one card, set `gpuLuid` to the card's part of the counter name (for example
+   `0x00000000_0x0000d1b5_0`, the luid and the phys number).
 3. **A GPU lock file** (`gpuLockFile`), only when the counters or the port table can't be read. If the first word of
    the lock names an owner in `gpuLockComfyOwners`, the GPU's memory counts as local ComfyUI work. Any other owner
    counts as another program, and so does no lock at all.
@@ -182,7 +184,8 @@ Every 5 seconds, the worker splits the GPU's used memory three ways. **Others** 
 minus local ComfyUI work, minus the desktop's usual share (`desktopBaselineMb`). Run `fuobe worker baseline` once,
 with no game open, to measure that share. Local ComfyUI work may stay open while you measure.
 
-- If others are above `busyVramMb` in two readings in a row, the worker pauses as before ("Your GPU is busy").
+- If others are above `busyVramMb` in two readings in a row, the worker pauses as before ("Your GPU is busy"). After
+  one such reading, it starts no new job, and a turn stays as it is: it doesn't begin, and it doesn't end.
 - If only local ComfyUI work holds more than `busyVramMb`, the worker asks for a turn and waits. While it waits, its
   jobs keep their place in the line. This is not a pause: there is no cool-down, and the studio does not send its jobs
   back.

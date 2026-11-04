@@ -7,11 +7,13 @@
  *   claims within 5 s of the answer; a minute after the last job it lets go and writes 0.
  * - A game holds the GPU: the busy pause, and no turn is asked for.
  * - The studio doesn't say what the worker can take: local ComfyUI work pauses it, as before.
+ * - Me first: the pause shortcut during a turn writes siteWaiting 0, and the job keeps its place.
  * - The counters fail: a lock that names ComfyUI work leads to a turn.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { worker } from "../bin/lib/worker/index.mjs";
 import { runWorker } from "../bin/lib/worker/run.mjs";
 import { inputRules, readCatalog } from "../scripts/lib/worker-catalog.mjs";
 import { FAKE_PNG } from "./helpers/fake-local-comfy";
@@ -296,6 +298,27 @@ describe("studio jobs first", () => {
     await until(() => workerRow(w).local_why === "waiting-for-yield");
     expect(site(p)?.siteWaiting).toBe(1);
     expect(p.logs.some((l) => /no longer keeps it paused/.test(l))).toBe(true);
+  });
+
+  it("me first: the pause shortcut during a turn writes siteWaiting 0 and keeps the job in line; a resume asks again", async () => {
+    const w = addWorker();
+    const p = pc();
+    const id = addTask();
+    start(w, p, fakeGpu(p, { workMb: 9000 }));
+    await until(() => workerRow(w).local_why === "waiting-for-yield");
+    expect(site(p)?.siteWaiting).toBe(1);
+    const io = { env: { FUOBE_WORKER_HOME: p.home }, home: p.home, stdout: { write: () => {} }, stderr: { write: () => {} }, ask: async () => "2" };
+    expect(await worker(["pause", "--choose"], io)).toBe(0);
+    await until(() => workerRow(w).local_why === "here-now");
+    await until(() => site(p)?.siteWaiting === 0);
+    expect(workerRow(w).local_until).toBeGreaterThan(Date.now() + 3_500_000);
+    // An answer that comes now starts nothing: the pause by hand wins.
+    fs.writeFileSync(path.join(p.turns, "yielded.json"), JSON.stringify({ state: "yielded", at: Date.now() }));
+    await sleep(1500);
+    expect(task(id).state).toBe("waiting");
+    expect(site(p)?.siteWaiting).toBe(0);
+    expect(await worker(["resume"], io)).toBe(0);
+    await until(() => (site(p)?.siteWaiting ?? 0) >= 1);
   });
 
   it("the counters fail: a lock that names ComfyUI work leads to a turn, any other owner to the busy pause", async () => {
