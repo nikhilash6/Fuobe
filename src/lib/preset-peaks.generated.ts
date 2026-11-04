@@ -61,7 +61,7 @@ export const PRESET_PEAKS: Record<string, { at: number; from: number; v: string 
   "app-what-s-next": { "at": 3.5625, "from": 0.1875, "v": "ad80d920" },
   "app-zoom-out": { "at": 3.5625, "from": 0.0208, "v": "e2bcb936" },
   "effect-acid": { "at": 3.5625, "from": 0.3542, "v": "5dd1cc1f" },
-  "effect-agamemnon": { "at": 3.5625, "from": 0.3125, "v": "665eb99f" },
+  "effect-agamemnon": { "at": 3.5625, "from": 0.7708, "v": "dba14a42" },
   "effect-akrill": { "at": 3.5625, "from": 0.2708, "v": "a5148de3" },
   "effect-angel-wings": { "at": 3.5625, "from": 0.6042, "v": "0527eb83" },
   "effect-aquarium": { "at": 3.5625, "from": 0.1042, "v": "8b679f01" },
