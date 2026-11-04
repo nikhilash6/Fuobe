@@ -299,6 +299,14 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/cinema\/projects\/[^/]+\/(generate|items\/[^/]+\/(retry|finish))$/,
   // The photo apps: Photodump, Fashion Factory, Character Sheet, AI Influencer, and a retry of its own photo.
   /^\/api\/(photodump(\/(fashion|character|retry))?|influencer)$/,
+  // Video tools: Remove object (a mask preview, and "Redo from here" on its own removal), Evolution (its direction is
+  // Fuobe's offline writer's), Mixed Media (a preview frame, and "Try again" on its own render), Turnaround video and
+  // Fly around (Image to 3D's "Film it photoreal"), and Katana (a retry or Run again of its own run).
+  /^\/api\/remove-object(\/(preview|reroll))?$/,
+  /^\/api\/evolution(\/direction)?$/,
+  /^\/api\/mixed-media(\/(preview|retry))?$/,
+  /^\/api\/(turnaround|fly-around)$/,
+  /^\/api\/katana(\/[^/]+\/retry)?$/,
 ];
 
 /**
@@ -320,6 +328,9 @@ export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   /^\/api\/starters\/cinema\.[^/]+$/,
   // Photodump and Fashion Factory: its own packs and its own characters (src/server/photodump.ts).
   /^\/api\/photodump\/(packs|characters)(\/[^/]+)?$/,
+  // Katana: its own runs (the list, one run, forgetting one), and how far its own Mixed Media render's frames are.
+  /^\/api\/katana(\/[^/]+)?$/,
+  /^\/api\/mixed-media\/progress$/,
 ];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));

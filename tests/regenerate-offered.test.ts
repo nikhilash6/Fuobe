@@ -88,17 +88,17 @@ describe("tools a guest or an account can't open", () => {
     expect(ids(upload(), { visitor: true })).not.toContain("restore-video");
   });
 
-  it("leaves Remove a person and Clean up dialogue out of a visitor's result menus, and keeps them for the owner", () => {
+  it("leaves Clean up dialogue out of a visitor's result menus and keeps it for the owner; Remove a person is everyone's", () => {
     // An uploaded clip gets both (a clip with sound).
     expect(ids(upload())).toEqual(expect.arrayContaining(["remove-person", "clean-dialogue"]));
     const visitor = ids(upload(), { visitor: true });
-    expect(visitor).not.toContain("remove-person");
+    // An account runs Remove a person on its own GPU (tests/account-video-tools.test.ts); a guest signs up there.
+    expect(visitor).toContain("remove-person");
     expect(visitor).not.toContain("clean-dialogue");
-    expect(ids(gen(), { visitor: true })).not.toContain("remove-person");
   });
 
-  it("leaves Restore & colourise's and Remove a person's Video tools tabs out for a visitor: Remove dialogue's page says it isn't available here", () => {
+  it("leaves Restore & colourise's Video tools tab out for a visitor; Remove a person's tab is everyone's", () => {
     const tabs = Object.fromEntries(HUB_MODES["video-tools"].map((m) => [m.id, m.ownerOnly ?? false]));
-    expect(tabs).toMatchObject({ restore: true, "remove-person": true, "remove-dialogue": false, matte: false, evolution: false });
+    expect(tabs).toMatchObject({ restore: true, "remove-person": false, "remove-dialogue": false, matte: false, evolution: false, "remove-object": false });
   });
 });

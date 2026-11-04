@@ -276,15 +276,12 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
   (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
   plan with the studio's own AI helpers or keep projects of their own. So do the Audio hub's Split
-  soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
-  turnaround video (`POST /api/turnaround`), though their price checks work, priced for the account's
-  own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
+  soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`), though their price
+  checks work, priced for the account's own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
   soundtrack isn't available here", "Edit speech isn't available here", "Remove dialogue isn't
   available here"), with their upload and run off. Result menus don't offer Remove dialogue, Clean up
   dialogue or Edit speech to a guest or an account, and Captions doesn't offer them "Fix this line"
-  (it opens Edit speech). Restore & colourise
-  and Remove a person (its mask preview and "Redo from here", `POST /api/remove-object/preview` and
-  `/reroll`, answer `own-gpu-tool` too) are left out of the Video tools tabs and the result menus for them.
+  (it opens Edit speech). Restore & colourise is left out of the Video tools tabs and the result menus for them.
   A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
   MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
   song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2,
@@ -329,8 +326,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   finished on this server (the web GLB the viewer loads) under its limits (`src/server/model3d-finish.ts`): one account's
   finish at a time across the server, at low priority; a model over 300 MB, a server or account short of room, or more
   than 60 finishes in an hour keep the model as it came (still viewable and downloadable). Its turntable is recorded in
-  the browser ("Record turntable"), not on the server. Refine detail, the TRELLIS.2 final, Idol 3D's other sides and
-  Film it photoreal stay the owner's, and Retexture opens once its cloud models pass a live call. On this install's
+  the browser ("Record turntable"), not on the server. Film it photoreal runs as a Fly around (below). Refine detail, the TRELLIS.2 final and Idol 3D's other sides stay
+  the owner's, and Retexture opens once its cloud models pass a live call. On this install's
   GPUs (hosted runs) 3D isn't offered yet. A guest gets the sign-up card.
 - **Character Swap Studio.** An account keeps Character Swap projects of its own (`/character-swap`; `GET`/`POST
   /api/swap-studio/projects`, `GET`/`PATCH`/`DELETE /api/swap-studio/projects/<id>`): its own only (another account's,
@@ -371,6 +368,21 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   sheets), and a retried photo replaces the failed one for good (it has no Trash). The price is its run's: free on its
   GPU, its own key's price on the cloud engine. A guest gets the sign-up card on Generate, on Create pack, on New
   character and before choosing a photo.
+- **Video tools, Turnaround video, Fly around and Katana.** An account runs Remove object and Remove a person
+  (`POST /api/remove-object`, its mask preview `.../preview` and "Redo from here" `.../reroll`), Evolution
+  (`POST /api/evolution`), Mixed Media (`POST /api/mixed-media`, a preview frame `.../preview` and "Try again"
+  `.../retry`), Turnaround video (`POST /api/turnaround`), Fly around (`POST /api/fly-around`: Image to 3D's "Film it
+  photoreal" and the exact orbits) and Katana (`POST /api/katana`, `.../<id>/retry`) the same way as Genjutsu's: every
+  step on the account's ComfyUI or its own fal.ai or Replicate key, with only its own files, after the same checks, and
+  a run counts once against its limits. Their price checks are priced for the account's own GPU or key. Their results
+  are its own runs (each tool's history, "Your …" feeds and its runs list), to open and download. "Redo from here" and
+  "Try again" take only its own removal or render, and a Mixed Media render's frame count (`GET
+  /api/mixed-media/progress`) answers for its own renders only (anyone else's reads as 404). Evolution's direction
+  (`POST /api/evolution/direction`, and a run sent without one) is written by Fuobe's offline writer, never the studio's
+  AI helper. Turnaround and Fly around never use the studio's WorldCast worker for an account; a character from the
+  owner's library answers 404. Katana's runs are its own projects (`GET /api/katana`, `GET`/`DELETE
+  /api/katana/<id>`): up to 50, another account's or the owner's read as 404, deleted with the account. A guest gets
+  the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

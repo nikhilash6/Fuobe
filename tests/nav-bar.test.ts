@@ -175,7 +175,7 @@ describe("the launcher's columns", () => {
     expect(subs("genjutsu")).toEqual(["Motion transfer", "Character swap", "Object swap", "Restyle", "Insert", "From picture", "Finish"]);
     expect(subs("upscale")).toEqual(["Image", "Video", "FPS Boost", "SDR to HDR", "Export"]);
     expect(subs("audio")).toEqual(["Speech", "Dialogue", "Voice change", "See all 15"]);
-    expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 11"]);
+    expect(subs("video-tools")).toEqual(["Relight", "Captions", "Remove object", "See all 12"]);
     for (const w of ["Click to Ad", "Ads Studio", "Ad Multiplier", "Motion transfer", "FPS Boost"]) expect(words(html)).toContain(w);
     // Under a hairline, quieter than a row, with no picture and no line of their own (nav-subs.css: 24 px
     // names with a mouse, 44 px pills to tap on a touch screen).

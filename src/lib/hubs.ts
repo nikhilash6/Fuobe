@@ -50,10 +50,10 @@ export const HUB_MODES: Record<HubKind, HubMode[]> = {
   "video-tools": [
     { id: "matte", label: "Remove background" },
     { id: "green-screen", label: "Green screen" },
-    { id: "remove-object", label: "Remove object", selfHostedOnly: true },
+    { id: "remove-object", label: "Remove object" },
     { id: "remove-dialogue", label: "Remove dialogue", selfHostedOnly: true },
-    { id: "remove-person", label: "Remove a person", ownerOnly: true, selfHostedOnly: true },
-    { id: "evolution", label: "Evolution", selfHostedOnly: true },
+    { id: "remove-person", label: "Remove a person" },
+    { id: "evolution", label: "Evolution" },
     { id: "restore", label: "Restore & colourise", ownerOnly: true, selfHostedOnly: true },
     { id: "relight", label: "Relight" },
     { id: "depth", label: "Depth map" },

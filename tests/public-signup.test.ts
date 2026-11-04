@@ -220,7 +220,6 @@ describe("accounts never run on the owner's keys or GPU", () => {
     for (const p of [
       "/api/canvases/c1/run",
       "/api/layers/l1/jobs",
-      "/api/katana/k1/retry",
       "/api/enhance",
       "/api/brands/b1/chat",
       "/api/faceless/episodes/e1/render",
@@ -230,9 +229,6 @@ describe("accounts never run on the owner's keys or GPU", () => {
       // Restore & colourise: its run and its prompt writer.
       "/api/restore",
       "/api/restore/prompt",
-      // Remove a person on H3: its mask preview and "Redo from here".
-      "/api/remove-object/preview",
-      "/api/remove-object/reroll",
       // Plan layout plans with the studio's own AI helper.
       "/api/layout/plan",
       // Regenerate in Faceless and Shorts segments (n7-10): studio jobs, like their renders.
@@ -244,9 +240,17 @@ describe("accounts never run on the owner's keys or GPU", () => {
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
       expect((await r.json()).code, p).toBe("own-gpu-tool");
     }
-    // Cinema Studio's takes run on its own GPU or key (tests/account-cinema.test.ts): with neither, connect one first. A
-    // run route that ignores ?preview=1 isn't a price check.
-    for (const p of ["/api/cinema/projects/p1/generate", "/api/cinema/projects/p1/generate?preview=1", "/api/cinema/projects/p1/items/g1/finish"]) {
+    // Cinema Studio's takes and the video tools (Remove a person's mask preview and "Redo from here", Katana's retry) run
+    // on its own GPU or key (tests/account-cinema.test.ts, tests/account-video-tools.test.ts): with neither, connect one
+    // first. A run route that ignores ?preview=1 isn't a price check.
+    for (const p of [
+      "/api/cinema/projects/p1/generate",
+      "/api/cinema/projects/p1/generate?preview=1",
+      "/api/cinema/projects/p1/items/g1/finish",
+      "/api/remove-object/preview",
+      "/api/remove-object/reroll",
+      "/api/katana/k1/retry",
+    ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBe("1");

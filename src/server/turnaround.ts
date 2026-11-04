@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import { routesFor } from "@/lib/catalog/plan";
 import { planTurnaround, routeOfModel, type TurnaroundContext, type TurnaroundInput, type TurnaroundPlan, type TurnaroundPreview, type TurnStep } from "@/lib/catalog/turnaround";
-import type { Generation } from "@/lib/catalog/types";
+import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { needsConsent } from "@/lib/catalog/training";
 import { getElement } from "./elements";
 import { cancelGeneration, createGenerations, previewChained, previewGeneration } from "./generations";
@@ -201,6 +201,17 @@ export interface TurnaroundResult {
  * when it was confirmed (GenerationRequest.consentAt; the training's time for a character trained with it).
  */
 export function createTurnaround(input: TurnaroundRequest): TurnaroundResult {
+  return startTurnaround(planTurnaroundRun(input));
+}
+
+/** A planned turnaround: its steps (consent recorded) and its priced preview. Nothing is created yet. */
+export interface TurnaroundRun {
+  steps: TurnStep[];
+  preview: TurnaroundPreview;
+}
+
+/** Plan and check every step (nothing is created); a blocker is a TurnaroundError. */
+export function planTurnaroundRun(input: TurnaroundRequest): TurnaroundRun {
   const preview = previewTurnaround(input);
   if (preview.blocker) throw new TurnaroundError(preview.blocker);
   const plan = planTurnaround(input, turnaroundContext());
@@ -208,7 +219,15 @@ export function createTurnaround(input: TurnaroundRequest): TurnaroundResult {
     const consentAt = input.consent ? Date.now() : input.consentOnFile;
     for (const s of plan.steps) s.request.consentAt = consentAt;
   }
+  return { steps: plan.steps, preview };
+}
+
+/** A planned turnaround's steps as the requests they make, with how many earlier steps each waits for (account-tool-run.ts). */
+export const turnaroundSteps = (r: TurnaroundRun): { request: GenerationRequest; deps: number }[] => r.steps.map((s) => ({ request: s.request, deps: s.after?.length ?? 0 }));
+
+/** Start a planned turnaround as one batch, the film first. */
+export function startTurnaround(r: TurnaroundRun): TurnaroundResult {
   const batchId = nanoid(10);
-  const items = runTurnaroundSteps(plan.steps, batchId);
-  return { final: items[0], items, filmId: items[0].id, batchId, plan: preview };
+  const items = runTurnaroundSteps(r.steps, batchId);
+  return { final: items[0], items, filmId: items[0].id, batchId, plan: r.preview };
 }
