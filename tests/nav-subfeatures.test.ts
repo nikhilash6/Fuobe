@@ -116,7 +116,7 @@ describe("the catalogue of studio features", () => {
 
 describe("who sees a studio's features", () => {
   it("keeps the owner's own modes the owner's, in every place", () => {
-    for (const id of ["genjutsu-picture", "cinema-blockout", "canvas-skills", "assist-memory", "assist-scheduled", "audio-song", "video-tools-restore"]) {
+    for (const id of ["genjutsu-picture", "cinema-blockout", "canvas-skills", "assist-memory", "assist-scheduled", "video-tools-restore"]) {
       expect(entry(id)!.visibility, id).toEqual(["owner"]);
       for (const kind of VISITORS) expect(entriesFor(kind).some((e) => e.id === id), `${kind}: ${id}`).toBe(false);
     }

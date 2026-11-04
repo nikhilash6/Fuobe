@@ -278,8 +278,12 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
   MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
   song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2,
-  Fuobe Animation's cloud half, Kandinsky 6.0, Kandinsky VSR, Bria green screen and Bria guided cut-out) answers `own-gpu-tool` for a guest or an account, even on its own key, and is left out
-  of its pickers; Audio → Extend & remix is left out of the Audio tabs. Each opens once a live call passes.
+  Fuobe Animation's cloud half, Kandinsky 6.0, Kandinsky VSR, Bria green screen and Bria guided cut-out) runs on an
+  account's own key like any paid model: it stays in the account's pickers once it has a key, an account without the
+  key is asked for it (`add-key`), and a guest gets the sign-up card. Audio → Extend & remix shows to everyone, its tab
+  marked "Use your own fal.ai key". `src/lib/own-setup.ts` labels these and every other item that runs only on a
+  visitor's own GPU or key (`ownSetupOnly`, `ownSetupLabel`, `ownSetupStep`), and the hosted runs never place one on
+  this studio's GPUs or keys.
   "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
   A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
   have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.
@@ -310,6 +314,15 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the browser ("Record turntable"), not on the server. Refine detail, the TRELLIS.2 final, Idol 3D's other sides and
   Film it photoreal stay the owner's, and Retexture opens once its cloud models pass a live call. On this install's
   GPUs (hosted runs) 3D isn't offered yet. A guest gets the sign-up card.
+- **Character Swap Studio.** An account keeps Character Swap projects of its own (`/character-swap`; `GET`/`POST
+  /api/swap-studio/projects`, `GET`/`PATCH`/`DELETE /api/swap-studio/projects/<id>`): its own only (another account's,
+  or the owner's, reads as 404; a guest gets the sign-up card), up to 50 of 1 MB each and 120 saves a minute, deleted
+  with the account. Every job in a project (a clip's 24 fps copy or browser copy, its words, a mask, a scene anchor,
+  queued takes, Sharpen, the assembly) is a run of its own on the account's ComfyUI, or on its own fal.ai key on the
+  cloud engine, with only its own uploads and results, after the same checks as Genjutsu's. A queue counts once against
+  its limits: a take that waits for the one before it starts later in the same run. The pictures a project names (the
+  character, an imported anchor) and its clips are the account's own. Its assembled clips are its own runs, to open and
+  download. The checks are `src/server/swap-studio-account.ts`.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

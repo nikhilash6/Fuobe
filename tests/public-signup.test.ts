@@ -235,8 +235,6 @@ describe("accounts never run on the owner's keys or GPU", () => {
       // Remove a person on H3: its mask preview and "Redo from here".
       "/api/remove-object/preview",
       "/api/remove-object/reroll",
-      // Character Swap Studio's Sharpen: a studio job, like its assembly.
-      "/api/swap-studio/projects/p1/sharpen",
       // Plan layout plans with the studio's own AI helper.
       "/api/layout/plan",
       // Regenerate in Faceless, Shorts segments and Cinema takes (n7-10): studio jobs, like their renders.

@@ -282,6 +282,8 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/image-to-3d$/,
   // Genjutsu's "Describe my character": the GPU describer on the account's own GPU.
   /^\/api\/genjutsu\/describe$/,
+  // Character Swap Studio's jobs on an account's own project (src/server/swap-studio-account.ts).
+  /^\/api\/swap-studio\/projects\/[^/]+\/(anchors|assemble|clips|masks|prepare|queue|sharpen|transcribe)$/,
 ];
 
 /**
@@ -290,7 +292,10 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
  * A guest's change gets the sign-up card; its reads go by guestRead. A tool adds its routes here when it opens to
  * accounts.
  */
-export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [];
+export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
+  // Character Swap Studio: the list, a project, its prices, its decisions, and stopping its jobs.
+  /^\/api\/swap-studio\/projects(\/[^/]+(\/(decisions|estimate|stop|takes\/stop))?)?$/,
+];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));
 

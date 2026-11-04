@@ -1266,8 +1266,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
                     engine={engine}
                     maker={maker}
                     cut={cut}
-                    // Character Swap Studio's projects are the owner's for now: anyone else gets the link to the studio.
-                    onOpenStudio={owner ? () => void openStudio() : undefined}
+                    onOpenStudio={() => void openStudio()}
                     opening={opening}
                     waiting={clip?.uploading || refs.some((x) => x.uploading) ? "waiting for the upload" : null}
                   />}
