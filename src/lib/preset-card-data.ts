@@ -10,6 +10,7 @@
 import type { Preset } from "./catalog/types";
 import { presetCard, proceduralPreview, previewScene, type PresetCardData, type PresetPreview } from "./preset-cards";
 import { PRESET_PREVIEWS } from "./preset-previews.generated";
+import { STUDIO_COVERS } from "./studio-covers";
 
 export function previewFor(p: Pick<Preset, "id" | "type" | "name" | "category">): PresetPreview {
   // A real cover, rendered and measured by the evaluation harness (pnpm eval:covers), replaces the procedural one.
@@ -20,3 +21,17 @@ export function previewFor(p: Pick<Preset, "id" | "type" | "name" | "category">)
 
 /** What a gallery card needs, and nothing else. */
 export const toPresetCard = (p: Preset): PresetCardData => presetCard(p, previewFor(p));
+
+/** The hue a card without a preset's look is tinted with while its cover loads (lookHue's own fallback). */
+const STUDIO_HUE = 282;
+
+/**
+ * A studio cover's card (studio-covers.ts), drawn as a preset's: its real cover, its name and its line. Undefined for
+ * an id that isn't a studio's cover, or one whose cover isn't made yet.
+ */
+export function studioCoverCard(id: string): PresetCardData | undefined {
+  const s = Object.hasOwn(STUDIO_COVERS, id) ? STUDIO_COVERS[id] : undefined;
+  if (!s || !PRESET_PREVIEWS[id]) return undefined;
+  const preview = previewFor({ id, type: "app", name: s.name, category: s.category });
+  return { id, name: s.name, description: s.description, category: s.category, icon: s.icon, hue: STUDIO_HUE, cloud: false, open: true, preview };
+}

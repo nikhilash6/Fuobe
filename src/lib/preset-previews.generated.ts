@@ -3045,6 +3045,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "minimax-h3",
     "variant": "lean-json"
   },
+  "genjutsu-group-swap": {
+    "poster": "/previews/presets/genjutsu-group-swap.jpg?v=c019a8ad",
+    "video": "/previews/presets/genjutsu-group-swap.mp4?v=9a336732",
+    "run": "genjutsu-examples-2026-11",
+    "engine": "comfyui",
+    "model": "minimax-h3",
+    "variant": "group-swap"
+  },
   "motion-360-orbit": {
     "poster": "/previews/presets/motion-360-orbit.jpg?v=ba99707c",
     "run": "comfyui-previews-2026-10",

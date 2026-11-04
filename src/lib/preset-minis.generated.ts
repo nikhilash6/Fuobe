@@ -392,6 +392,7 @@ export const PRESET_MINIS: Record<string, string> = {
   "effect-world-morphing": "f46c6b00",
   "effect-x-ray": "84874aa3",
   "effect-yacht": "f170ee86",
+  "genjutsu-group-swap": "492e2945",
   "motion-360-orbit": "2fd0ecf2",
   "motion-3d-rotation": "8d4cc601",
   "motion-action-run": "a3923a64",

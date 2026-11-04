@@ -18,6 +18,7 @@ import { PRESET_HD } from "@/lib/preset-hd.generated";
 import { presetHdFiles } from "@/lib/preset-hd";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
+import { STUDIO_COVERS } from "@/lib/studio-covers";
 import { mp4Seconds } from "./helpers/mp4-length";
 
 /*
@@ -42,8 +43,10 @@ const versionOf = (...files: string[]) => {
 const beforeAfterFiles = (id: string) => [1280, 960, 512].flatMap((w) => ["before", "after"].map((side) => `/previews/presets/ba/${w}/${id}-${side}.jpg`));
 
 describe("the preset covers manifest", () => {
-  it("lists catalog presets (or Soul looks) only, in the order the generator writes them", () => {
-    const ids = new Set([...APPS, ...MOTIONS, ...EFFECTS].map((p) => p.id).concat(SOUL_LOOK_CARDS.map((l) => l.id)));
+  it("lists catalog presets (or Soul looks, or a studio's own covers) only, in the order the generator writes them", () => {
+    const ids = new Set([...APPS, ...MOTIONS, ...EFFECTS].map((p) => p.id).concat(SOUL_LOOK_CARDS.map((l) => l.id), Object.keys(STUDIO_COVERS)));
+    // A studio's cover never shares a preset's id: its card would be taken for the preset's.
+    for (const id of Object.keys(STUDIO_COVERS)) expect(getPreset(id), id).toBeUndefined();
     const keys = entries.map(([k]) => k);
     expect(keys).toEqual([...keys].sort((a, b) => a.localeCompare(b)));
     for (const k of keys) expect(ids.has(k), `${k} is a preset or Soul look`).toBe(true);

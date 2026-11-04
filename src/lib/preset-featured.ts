@@ -5,6 +5,7 @@
  * listed here (a new one) comes after the listed ones, in catalog order.
  */
 import { interleaveByCategory } from "@/lib/preset-cards";
+import { isStudioCover } from "@/lib/studio-covers";
 
 const ORDER: Record<"app" | "motion" | "effect", string[]> = {
   app: [
@@ -137,8 +138,11 @@ export const FEATURED_BANDS = Math.max(...Object.values(FEATURED).map((b) => b.l
 
 const RANK = new Map(Object.values(FEATURED).flatMap((bands) => bands.flatMap((ids, band) => ids.map((id, at) => [id, { band, at }] as const))));
 
-/** The id's band (0 is the first), or FEATURED_BANDS when it isn't listed. */
-export const featuredBand = (id: string) => RANK.get(id)?.band ?? FEATURED_BANDS;
+/**
+ * The id's band (0 is the first), or FEATURED_BANDS when it isn't listed. A studio's own cover (studio-covers.ts) is
+ * the example its studio picked to lead with, so it takes the first band.
+ */
+export const featuredBand = (id: string) => RANK.get(id)?.band ?? (isStudioCover(id) ? 0 : FEATURED_BANDS);
 
 /** Featured first: by band, then place in it; ids not listed keep their order after the listed ones. */
 function featuredFirst<T extends { id: string }>(items: readonly T[]): T[] {
