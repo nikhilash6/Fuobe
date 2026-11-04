@@ -49,6 +49,7 @@ import {
   MODE_TARGETS,
   OPEN_TARGET_PROBLEM,
   resolutionWords,
+  SCENE_ACTIONS,
   SOURCE_LABELS,
   TARGET_LABELS,
   type GenjutsuLook,
@@ -225,6 +226,13 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   const options = keepOffered(makersFor(engine, mode, target, open), (m) => makerOffered(m, isOn)).filter((m) => mode !== "finish" || m.tool === finish.tool);
   const group = isCharacter && !!maker?.group;
   const sceneEdit = mode === "swap" && !!maker?.actions;
+  // Scene edit with only some of its actions open to this viewer: start on one that is.
+  const actionOpen = open(SCENE_ACTIONS.find((a) => a.id === action)!.feature);
+  const firstOpenAction = SCENE_ACTIONS.find((a) => open(a.feature))?.id;
+  if (sceneEdit && !actionOpen && firstOpenAction && firstOpenAction !== action) {
+    setAction(firstOpenAction);
+    setObjectEdit((o) => ({ ...o, action: firstOpenAction }));
+  }
   const fresh = !!(maker?.group || maker?.actions || maker?.review || maker?.tool);
   const references = mode === "restyle" || (sceneEdit && action === "remove") || (mode === "picture" && picture.ownPerson) || (mode === "finish" && finish.tool === "colours") ? [] : ready(refs);
   const showRefs = mode !== "restyle" && !(sceneEdit && action === "remove") && !(mode === "picture" && picture.ownPerson) && !(mode === "finish" && finish.tool === "colours");

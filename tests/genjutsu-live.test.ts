@@ -44,9 +44,10 @@ describe("Genjutsu's live gate", () => {
     expect(Object.values(genjutsuLive(validated, write("bad.json", "{not json"))).some(Boolean)).toBe(false);
   });
 
-  it("the committed record opens nothing yet, and the page passes the gate to the studio", () => {
-    expect(JSON.parse(fs.readFileSync(path.join(ROOT, "workflows/comfyui/gpu-tested.json"), "utf8"))).toEqual({ features: {} });
-    expect(Object.values(genjutsuLive()).some(Boolean)).toBe(false);
+  it("the committed record opens only the features that passed, and the page passes the gate to the studio", () => {
+    const record = JSON.parse(fs.readFileSync(path.join(ROOT, "workflows/comfyui/gpu-tested.json"), "utf8")) as { features: Record<string, { passed: boolean }> };
+    expect(Object.keys(record.features).sort()).toEqual(["finish-colours", "group-swap"]);
+    expect(Object.entries(genjutsuLive()).filter(([, on]) => on).map(([k]) => k).sort()).toEqual(["finish-colours", "group-swap"]);
     const page = fs.readFileSync(path.join(ROOT, "src/app/(studio)/genjutsu/page.tsx"), "utf8");
     expect(page).toMatch(/<GenjutsuStudio examples=\{exampleRow\("tool:genjutsu"\)\} live=\{genjutsuLive\(\)\} \/>/);
     // The studio shows a feature when it is live or the viewer is the owner.

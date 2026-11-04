@@ -29,6 +29,7 @@ const sceneRoute = await import("@/app/api/genjutsu/scene/route");
 const { estimateGenjutsu, NOT_HERE } = await import("@/server/genjutsu");
 const generationsRoute = await import("@/app/api/generations/route");
 const { directRunFeatures } = await import("@/lib/catalog/genjutsu");
+const { genjutsuLive } = await import("@/server/genjutsu-live");
 
 const passed = (r: Response) => r.headers.get("x-middleware-next") === "1";
 const req = (url: string, init: { method?: string; cookie?: string } = {}) => {
@@ -52,14 +53,21 @@ afterEach(() => {
 });
 
 const src = { duration: 12, fps: 16, width: 72, height: 128, hasAudio: true };
+// Features that haven't passed their GPU test yet (workflows/comfyui/gpu-tested.json).
 const bodies = () => [
-  { engine: "open", mode: "finish", finish: { tool: "colours" }, source: { url: clip, ...src }, range: { start: 0, end: 12 } },
+  { engine: "open", mode: "finish", finish: { tool: "faces" }, references: [clip], source: { url: clip, ...src }, range: { start: 0, end: 10 } },
   { engine: "open", mode: "picture", picture: { stage: "frame" }, references: [clip], source: { url: clip, ...src }, range: { start: 0, end: 6 } },
   { engine: "open", mode: "swap", target: "type", object: { action: "remove", target: "the handbag" }, source: { url: clip, ...src }, range: { start: 0, end: 6 } },
+  { engine: "open", mode: "swap", target: "type", object: { action: "background", target: "the people" }, source: { url: clip, ...src }, range: { start: 0, end: 6 } },
+  { engine: "open", mode: "character", modelId: "oss-h3-group-swap", references: [clip, clip], character: { onePerPerson: true }, source: { url: clip, ...src }, range: { start: 0, end: 6 } },
+];
+// Features that passed: a visitor's price check isn't refused by the gate.
+const opened = () => [
+  { engine: "open", mode: "finish", finish: { tool: "colours" }, source: { url: clip, ...src }, range: { start: 0, end: 12 } },
   { engine: "open", mode: "character", modelId: "oss-h3-group-swap", references: [clip, clip], source: { url: clip, ...src }, range: { start: 0, end: 6 } },
 ];
 
-describe("Genjutsu's Openjutsu features before they open", () => {
+describe("Genjutsu's Openjutsu features before and after they open", () => {
   it("a guest's and an account's price check is refused in words; the owner's goes through", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     const cookie = auth.createSession(auth.createAccount(`oj${++n}@example.com`, "long enough").id).value;
@@ -77,6 +85,14 @@ describe("Genjutsu's Openjutsu features before they open", () => {
     }
   });
 
+  it("a feature that passed its GPU test opens to visitors", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    for (const b of opened()) {
+      const r = await estimateRoute.POST(call("/api/genjutsu/estimate", b));
+      expect((await r.json()).error ?? "", b.mode).not.toBe(NOT_HERE);
+    }
+  });
+
   it("a visitor's existing Genjutsu modes are as before", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     const r = await estimateRoute.POST(call("/api/genjutsu/estimate", { engine: "open", mode: "motion", references: [clip], source: { url: clip, ...src }, range: { start: 0, end: 6 } }));
@@ -90,6 +106,8 @@ describe("Genjutsu's Openjutsu features before they open", () => {
     const runs = [
       { feature: "genjutsu", modelId: "oss-h3-group-swap", op: "group-swap", inputs: { video: clip, images: [clip] } },
       { feature: "genjutsu", modelId: "oss-h3-scene-edit", op: "scene-edit", inputs: { video: clip }, params: { extra: { openjutsu: { action: "remove" } } } },
+      { feature: "genjutsu", modelId: "oss-h3-scene-edit", op: "scene-edit", inputs: { video: clip }, params: { extra: { openjutsu: { action: "background" } } } },
+      { feature: "genjutsu", modelId: "oss-h3-group-swap", op: "group-swap", inputs: { video: clip, images: [clip, clip] }, params: { extra: { openjutsu: { onePerPerson: true } } } },
       { feature: "genjutsu", modelId: "oss-from-picture-frame", op: "picture-frame", inputs: { video: clip, images: [clip] } },
       { feature: "genjutsu", modelId: "oss-scene-describe", op: "describe-video", inputs: { video: clip } },
       { feature: "genjutsu", modelId: "oss-from-picture", op: "picture-video", inputs: { video: clip, images: [clip] } },
@@ -104,11 +122,18 @@ describe("Genjutsu's Openjutsu features before they open", () => {
           body: JSON.stringify(body),
         }),
       );
+    const live = genjutsuLive();
     for (const b of runs) {
+      const open = directRunFeatures(b.modelId, (b.params?.extra?.openjutsu ?? {}) as Record<string, unknown>)!.every((f) => live[f]);
       for (const [who, preview] of [[cookie, false], [cookie, true], [undefined, true]] as const) {
         const r = await send(b, who, preview);
-        expect(r.status, `${b.modelId} ${who ? "account" : "guest"}${preview ? " price check" : ""}`).toBe(403);
         const j = await r.json();
+        // A feature that passed goes past the gate (other rules may still stop it: here the clip isn't the visitor's).
+        if (open) {
+          expect(j.code ?? "", `${b.modelId} ${who ? "account" : "guest"}${preview ? " price check" : ""}`).not.toBe("own-gpu-tool");
+          continue;
+        }
+        expect(r.status, `${b.modelId} ${who ? "account" : "guest"}${preview ? " price check" : ""}`).toBe(403);
         expect(j.code).toBe("own-gpu-tool");
         expect(j.error).toBe(access.OWN_GPU_TOOL_MESSAGE);
       }
