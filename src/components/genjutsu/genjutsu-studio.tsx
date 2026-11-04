@@ -25,6 +25,7 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SketchEditor, type Stroke } from "@/components/studio/sketch-editor";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
 import { openInStudio } from "@/components/swap-studio/hooks";
+import { limitMb, useClipLimit } from "@/lib/clip-limit";
 import { ExampleRow } from "@/components/studio/example-row";
 import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { useEngine, useGenerations, useIsOwner, useModelAccess, useSoundLive, useStatus } from "@/lib/api";
@@ -84,9 +85,9 @@ import { ModeExample, ModeExampleRow } from "./mode-example";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { exampleFor, MARKED_NOTE, OWN_CHARACTER_FIELDS, partLimits, sameRecipe, toRecipe, type GenjutsuExampleCard, type ModeExamples } from "@/lib/examples/genjutsu";
 
-/** The upload box's line: the mode's own window (Character swap: 5–15 s of one shot). */
-const limits = (mode: GenjutsuMode) =>
-  `MP4, MOV or WebM · ${mode === "character" ? `${CHARACTER_SWAP.minSeconds}–${CHARACTER_SWAP.maxSeconds}` : mode === "picture" ? "2–15" : mode === "finish" ? "up to 60" : `${GENJUTSU.minSeconds}–${GENJUTSU.maxSeconds}`} s are used · ${GENJUTSU.maxBytes / 1024 / 1024} MB`;
+/** The upload box's line: the mode's own window (Character swap: 5–15 s of one shot), and the clip size the viewer may upload. */
+const limits = (mode: GenjutsuMode, maxBytes: number) =>
+  `MP4, MOV or WebM · ${mode === "character" ? `${CHARACTER_SWAP.minSeconds}–${CHARACTER_SWAP.maxSeconds}` : mode === "picture" ? "2–15" : mode === "finish" ? "up to 60" : `${GENJUTSU.minSeconds}–${GENJUTSU.maxSeconds}`} s are used · ${limitMb(maxBytes)} MB`;
 
 interface Paint {
   mask: string;
@@ -141,7 +142,9 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
   const shownExamples = owner && ownerExamples.data ? ownerExamples.data : modeExamples;
   const access = useModelAccess();
   const [mode, setModeState] = useState<GenjutsuMode>("motion");
-  const source = useSourceClip(GENJUTSU.maxBytes);
+  // The clip size this viewer may upload: an account's is smaller than the studio's own (src/lib/clip-limit.ts).
+  const clipMax = useClipLimit(GENJUTSU.maxBytes);
+  const source = useSourceClip(clipMax);
   const clip = source.clip;
   const trimmer = useRef<VideoTrimmerHandle>(null);
   const [range, setRange] = useState<TrimRange | null>(null);
@@ -836,7 +839,7 @@ export function GenjutsuStudio({ examples, modeExamples, live }: { examples?: Ex
         {!clip ? (
           <ClipDrop
             accept={GENJUTSU.accept}
-            limits={limits(mode)}
+            limits={limits(mode, clipMax)}
             onFile={(f) => {
               const err = source.pick(f);
               if (err) toast.error(err);
