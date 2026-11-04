@@ -337,18 +337,22 @@ If a worker stops answering for 2 minutes, its ComfyUI is down for 2 minutes, or
 back to the queue. The worker is added to the job's
 `tried_json` list, and the input reads start again. The old worker's late calls get 409, and it deletes that prompt.
 If the worker's ComfyUI loses the job (it restarted), the worker sends it again once on the same claim. If ComfyUI loses
-it a second time on that claim, the job goes back to the queue as a lost attempt. After the third lost attempt, the job
-fails. A job that is put back because of a pause does not count as an attempt, and neither does one lost while the
-worker's PC slept, once the worker says so (`slept` in its next beat).
+it a second time on that claim, the job goes back to the queue as a lost attempt. Results the worker kept from an
+earlier try count as one send of the claim too. After the third lost attempt, the job fails. A job that is put back
+because of a pause does not count as an attempt, and neither does one lost while the worker's PC slept, once the
+worker says so (`slept` in its next beat).
 
 The run's own clocks follow the queue's, even when a check of the run fails. No wait limit of the run's own ends a job
 for the workers, and each attempt gets its own time from its claim: 15 minutes to send the files, the lane's run
-ceiling twice (one more try after running out of memory) and 15 minutes to send the results. The worker's run limit
-and stall limit, and the sending clock, end an attempt long before that. While a job is back in the queue, it shows no
-progress from the attempt before.
+ceiling twice (one more try after running out of memory) and 15 minutes to send the results. Sending the files again
+on the same claim starts the 15-minute sending clock again, but never moves the attempt's own deadline. The worker's
+run limit and stall limit, and the sending clock, end an attempt long before that. While a job is back in the queue,
+it shows no progress from the attempt before.
 
-A job of the owner's that no worker is allowed to run is refused when it is sent, as an account's run is. Allow its
-lane for a worker first.
+A job of the owner's that no worker can run is refused when it is sent, as an account's run is. Allow its lane for a
+worker that has its model files first. The same check keeps an account's run out of the line when no worker could ever
+take it: a worker must be allowed the lane, its last list of files must have the workflow's files and node packs, and
+it must have the VRAM.
 
 **The place in line.** A waiting job's place counts every job that a worker able to run it would serve first, whatever
 its lane: one GPU serves every lane it has in this order. The wait adds the rest of the jobs those workers run now,
@@ -554,7 +558,9 @@ its target), at most once an hour each.
 - `PUT /api/gpu/computer/inventory`: `{ files: [{ folder, name, size, sha256 }], nodePacks: [{ name, commit }], media }`
   → `{ lanes, workflows, missing }`. `media` lists the kinds of input that the worker takes (`image`, `video`,
   `audio`). With no `media` (a worker from before it was added, which doesn't make clips and sound again), the studio
-  counts pictures only.
+  counts pictures only. A file's `name` is the requirements index's name for it inside its folder, subfolders and all
+  (`bigvgan_vocoder/config.json`). The studio keeps only the files the index names, and hashes the list as it was
+  sent, so its hash equals the worker's `inventoryHash`.
 - `POST /api/gpu/computer/claim`: the browser's claimed task plus
   `{ lane, estMs, runLimitMs, stallMs, notAfter, attempt, models }`. See "The run limit" above for `runLimitMs`.
   `stallMs` is how long the job may go with no progress before the worker gives it back (see "The stall limit"). A
