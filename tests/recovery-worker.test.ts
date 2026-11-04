@@ -63,6 +63,8 @@ let studio: {
   outbox: typeof import("@/server/billing-outbox");
   generations: typeof import("@/app/api/generations/route");
   one: typeof import("@/app/api/generations/[id]/route");
+  proxy: typeof import("@/proxy").proxy;
+  NextRequest: typeof import("next/server").NextRequest;
   lanes: () => string[];
   workflows: () => string[];
 };
@@ -88,6 +90,8 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
       outbox: await import("@/server/billing-outbox"),
       generations: await import("@/app/api/generations/route"),
       one: await import("@/app/api/generations/[id]/route"),
+      proxy: (await import("@/proxy")).proxy,
+      NextRequest: (await import("next/server")).NextRequest,
       lanes: () => allLanes(loadIndex(), sha).map((l) => l.lane),
       workflows: () => loadManifest().workflows.map((x) => x.id),
     };
@@ -183,15 +187,26 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
     return { id, task: t! };
   }
 
-  /** Every place the account looks from. */
+  /** GET /api/generations/<id> as a session's browser asks it: the sign-in proxy first, then the route. */
+  const sessionGet = async (id: string, cookie: string) => {
+    const url = `/api/generations/${id}`;
+    const passed = await studio.proxy(new studio.NextRequest(`http://${HOST}${url}`, { headers: { ...SITE_HEADERS, cookie } }));
+    return passed.headers.get("x-middleware-next") === "1" ? studio.one.GET(request(url, cookie), { params: Promise.resolve({ id }) } as never) : passed;
+  };
+
+  /** Every place the account looks from (an answer that isn't OK is a look that can't find the run); the other account is refused. */
   const watchOf = (id: string, cookie = a1) =>
-    new RunWatch({
-      refresh: () => studio.getGeneration(id),
-      session: async () => {
-        const r = await studio.one.GET(request(`/api/generations/${id}`, cookie), { params: Promise.resolve({ id }) } as never);
-        return r.ok ? ((await r.json()) as RunLike) : null;
+    new RunWatch(
+      {
+        refresh: () => studio.getGeneration(id),
+        session: async () => {
+          const r = await sessionGet(id, cookie);
+          if (!r.ok) throw new Error(`GET /api/generations/${id} answered ${r.status}`);
+          return (await r.json()) as RunLike;
+        },
       },
-    });
+      { "another account": async () => (await sessionGet(id, cookie === a1 ? b1 : a1)).status },
+    );
 
   /** Look at the run until it ends (the runner turning by hand), then the three checks. */
   async function expectOnce(id: string, watch: RunWatch, o: { prompts?: () => number; promptsWanted?: number; place?: number } = {}) {
@@ -308,7 +323,8 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
         readGpu: async () => null,
         sleep: (ms: number) => sleep(Math.min(ms, 50)),
         log: (line: string) => void p.logs.push(line),
-        ...(o.rescanMs && { rescanMs: o.rescanMs }),
+        // The folders are looked at again on both clocks: a full rescan, and the check for model folders that were missing.
+        ...(o.rescanMs && { rescanMs: o.rescanMs, modelsCheckMs: o.rescanMs }),
         ...o.gpu,
       }) as Promise<unknown>,
     };
@@ -318,7 +334,7 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
 
   // -------------------------------------------------------------------------
 
-  it("REL-3: its ComfyUI killed at 50%: the output arrives", async () => {
+  it("its ComfyUI killed at 50%: the output arrives", async () => {
     const w = addWorker();
     const p = pc();
     const { id } = await pressRun();
@@ -329,7 +345,7 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
     await expectOnce(id, watch);
   });
 
-  it("REL-3: its ComfyUI hangs: the job goes back in line within the stall limit, keeps its place, and the output arrives", async () => {
+  it("its ComfyUI hangs: the job goes back in line within the stall limit, keeps its place, and the output arrives", async () => {
     const w = addWorker();
     const p = pc();
     const { id } = await pressRun();
@@ -339,7 +355,7 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
     expect(prompts(p)).toBeGreaterThanOrEqual(2);
   });
 
-  it("REL-3: its ComfyUI runs out of memory: it frees memory, tries once more, and the output arrives", async () => {
+  it("its ComfyUI runs out of memory: it frees memory, tries once more, and the output arrives", async () => {
     const w = addWorker();
     const p = pc();
     const { id } = await pressRun();
@@ -348,7 +364,7 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
     await expectOnce(id, watch, { prompts: () => prompts(p), promptsWanted: 2 });
   });
 
-  it("REL-4: the worker killed mid-render and started again: the output arrives once", async () => {
+  it("the worker killed mid-render and started again: the output arrives once", async () => {
     const w = addWorker();
     const p = pc();
     const { id } = await pressRun();
@@ -361,7 +377,7 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
     await expectOnce(id, watch);
   });
 
-  it("REL-5: the worker stopped after its render and before the upload: the output arrives, from exactly one prompt", async () => {
+  it("the worker stopped after its render and before the upload: the output arrives, from exactly one prompt", async () => {
     const w = addWorker();
     const p = pc();
     const { id } = await pressRun();
@@ -379,29 +395,29 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
     await expectOnce(id, watch, { prompts: () => prompts(p), promptsWanted: 1 });
   });
 
-  it("REL-14: its ComfyUI refuses the job's input 7 times: the studio sends the input once, and the output arrives", async () => {
+  it("the job's input doesn't reach its ComfyUI 7 times (the connection drops): the studio sends the input once, and the output arrives", async () => {
     const w = addWorker();
     const p = pc();
     const { id } = await pressRun(a1, { input: true });
     const watch = watchOf(id);
-    let refused = 0;
+    let dropped = 0;
     let fetched = 0;
     start(w, p, {
       intercept: (url) => {
         if (url.includes("/inputs/")) fetched++;
-        if (url.includes("/upload/image") && refused < 7) {
-          refused++;
-          return new Response("busy", { status: 500 });
+        if (url.includes("/upload/image") && dropped < 7) {
+          dropped++;
+          throw new TypeError("fetch failed");
         }
         return undefined;
       },
     });
     await expectOnce(id, watch);
-    expect(refused).toBe(7);
+    expect(dropped).toBe(7);
     expect(fetched).toBe(1);
   });
 
-  it("REL-15: a job whose input crashes its ComfyUI fails in plain words, not charged, and the next account's run finishes", async () => {
+  it("a job whose input crashes its ComfyUI fails in plain words, refunded, and the next account's run finishes", async () => {
     const w = addWorker();
     const p = pc();
     const bad = await pressRun(a1);
@@ -416,7 +432,7 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
     }, 50);
     try {
       await until(() => done(studio.getGeneration(bad.id)), 120_000);
-      expect(plainFailure(studio.getGeneration(bad.id)!, { held: true })).toEqual([]);
+      expect(plainFailure(studio.getGeneration(bad.id)!, { charged: false })).toEqual([]);
       await expectOnce(next.id, watch, { place: 2 });
       expect(svc.reportsFor(bad.id).map((r) => r.kind)).toEqual(["refund"]);
     } finally {
@@ -424,7 +440,7 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
     }
   });
 
-  it("REL-18: the PC sleeps for 5 minutes mid-run, then wakes: the output arrives once, and the job lost no attempt", async () => {
+  it("the PC sleeps for 5 minutes mid-run, then wakes: the output arrives once, and the job lost no attempt", async () => {
     vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
     const w = addWorker();
     const p = pc();
@@ -450,7 +466,7 @@ describe.skipIf(!PROGRAM)("the worker program's recovery (accounts' runs, end to
     expect(taskOf(id)!.requeues).toBe(0);
   });
 
-  it("REL-19: a model folder missing at start and added a minute later: the waiting job is taken within one look at the folders", async () => {
+  it("a model folder missing at start and added a minute later: the waiting job is taken within one look at the folders", async () => {
     const w = addWorker();
     const p = pc();
     const models = path.join(p.home, "models");

@@ -4,7 +4,8 @@
  * high port:
  *
  * - /api/gpu/computer/*: the worker routes, as the studio serves them.
- * - GET /__app/generation/<id>: a run as GET /api/generations/<id> answers it.
+ * - GET /__app/generation/<id>: a run as GET /api/generations/<id> answers the session in the request's cookie, through
+ *   the sign-in proxy (src/proxy.ts) first, as a browser's request comes.
  * - POST /__app/tick: one turn of its runner (it never turns on its own), and every run that turn polls.
  * - POST /__app/billing: one sweep of its billing reports.
  * - POST /__app/pause { marker, release }: the next result it moves into the files folder waits there, with `marker`
@@ -53,6 +54,8 @@ const { ensureRunner } = await import("@/server/generations");
 const { sweepBilling } = await import("@/server/billing-outbox");
 const { loadRoutes, apiAs } = await import("./computer-tab");
 const one = await import("@/app/api/generations/[id]/route");
+const { proxy } = await import("@/proxy");
+const { NextRequest } = await import("next/server");
 const routes = await loadRoutes();
 
 // Its runner turns only when asked (reading a run starts no timer of its own again: the cleared ones stay in place).
@@ -87,7 +90,11 @@ const server = http.createServer(async (req, res) => {
     }
     const g = /^\/__app\/generation\/([^/]+)$/.exec(url.pathname);
     if (g && req.method === "GET") {
-      return await send(await one.GET(new Request(`http://localhost:3000/api/generations/${g[1]}`), { params: Promise.resolve({ id: g[1] }) } as never));
+      const page = `http://localhost:3000/api/generations/${g[1]}`;
+      const headers: Record<string, string> = { host: "localhost:3000", "sec-fetch-site": "same-origin", ...(req.headers.cookie && { cookie: req.headers.cookie }) };
+      const passed = await proxy(new NextRequest(page, { headers }));
+      if (passed.headers.get("x-middleware-next") !== "1") return await send(passed);
+      return await send(await one.GET(new Request(page, { headers }), { params: Promise.resolve({ id: g[1] }) } as never));
     }
     if (url.pathname === "/__app/tick") {
       await state.tick();

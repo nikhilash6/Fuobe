@@ -193,8 +193,32 @@ describe("the stand-in billing service", () => {
         await sleep(400);
         expect(await call(svc, "/v1/health")).toEqual({ ok: true });
       });
+
+      it("stays stopped when stopped again before downFor's time is up", async () => {
+        await svc.downFor(150);
+        await svc.stop();
+        await sleep(400);
+        expect(svc.up()).toBe(false);
+        await expect(call(svc, "/v1/health")).rejects.toThrow();
+        await svc.start();
+      });
+
+      it("refuses a reserve that names no request", async () => {
+        const holds = svc.holds.size;
+        await expect(call(svc, "/v1/reserve", { account, run: {}, queue: null, shown: { amount: 0, priceVersion: "free" } })).rejects.toThrow();
+        expect(svc.callsOf("/v1/reserve").at(-1)?.body).not.toHaveProperty("requestId");
+        expect(svc.holds.size).toBe(holds);
+      });
     });
   }
+
+  it("never listens again after close, even with a downFor still to come back", async () => {
+    const svc = await startStandInBilling();
+    await svc.downFor(100);
+    await svc.close();
+    await sleep(300);
+    expect(svc.up()).toBe(false);
+  });
 
   it("is slow when told to be, holds answers until others come, refuses unknown callers, prices runs when told to, and refuses a report after its hold closed", async () => {
     const svc = await startStandInBilling();
@@ -266,7 +290,42 @@ describe("what the harness checks", () => {
       await w.look();
       expect(w.problems({ place: 2 }).join("\n"), JSON.stringify(g)).toMatch(why);
     }
-    expect(plainFailure({ status: "failed", error: POOL_WORDS.failed, notCharged: true }, { held: true })).toEqual([]);
-    expect(plainFailure({ status: "failed", error: "Can't reach ComfyUI", fix: {} }, { held: true })).toHaveLength(3);
+    // A waiting run shows its place.
+    const placeless = new RunWatch({ a: at({ status: "queued", message: POOL_WORDS.inLine, queue: null }) });
+    await placeless.look();
+    expect(placeless.problems().join("\n")).toMatch(/no place in line/);
+  });
+
+  it("counts a look that can't find the run, and a run that shows to another account", async () => {
+    const run = { status: "queued", message: POOL_WORDS.inLine, queue: { place: 1, etaSeconds: null } };
+    const w = new RunWatch(
+      {
+        here: async () => run as never,
+        gone: async () => null,
+        broken: async () => {
+          throw new Error("GET answered 500");
+        },
+      },
+      { refused: async () => 403, "not found": async () => 404, "another account": async () => 200, failing: async () => 500 },
+    );
+    await w.look();
+    expect(w.problems({ place: 1 })).toEqual([
+      "the run is missing from gone",
+      "the run is missing from broken (GET answered 500)",
+      "the run answered 200 to another account, not a refusal",
+      "the run answered 500 to failing, not a refusal",
+    ]);
+    expect(w.seen.map((s) => s.where)).toEqual(["here"]);
+  });
+
+  it("knows a run that can't finish: one plain sentence, and Not charged only when something was set aside", () => {
+    expect(POOL_WORDS.failed.match(/[.!?](\s|$)/g)).toHaveLength(1);
+    expect(plainFailure({ status: "failed", error: POOL_WORDS.failed, notCharged: true }, { charged: true })).toEqual([]);
+    expect(plainFailure({ status: "failed", error: POOL_WORDS.failed }, { charged: true })).toEqual(["it doesn't say Not charged"]);
+    // A free run: nothing was set aside, so nothing is said about a charge.
+    expect(plainFailure({ status: "failed", error: POOL_WORDS.failed }, { charged: false })).toEqual([]);
+    expect(plainFailure({ status: "failed", error: POOL_WORDS.failed, notCharged: true }, { charged: false })).toEqual(["it says Not charged, but nothing was set aside"]);
+    expect(plainFailure({ status: "failed", error: "Can't reach ComfyUI", fix: {} }, { charged: true })).toHaveLength(3);
+    expect(plainFailure({ status: "failed", error: "This one couldn't be made. Press Retry to try again." }, { charged: false })).toEqual([expect.stringMatching(/its words are/)]);
   });
 });

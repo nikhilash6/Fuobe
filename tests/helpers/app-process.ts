@@ -15,8 +15,11 @@ export interface AppProcess {
   url: string;
   /** Its worker routes, for a worker driver's via(). */
   api: (p: string, init?: RequestInit) => Promise<Response>;
-  /** A run as GET /api/generations/<id> answers it there. */
-  generation: (id: string) => Promise<Record<string, unknown> | null>;
+  /**
+   * A run as GET /api/generations/<id> answers it there to a session (its cookie), through the sign-in proxy. An answer
+   * that isn't OK throws, with its status.
+   */
+  generation: (id: string, cookie: string) => Promise<Record<string, unknown>>;
   /** One turn of its runner, and every run that turn polls. */
   tick: () => Promise<void>;
   /** One sweep of its billing reports. */
@@ -72,9 +75,10 @@ export async function startAppProcess(o: { dataDir: string; env?: Record<string,
   return {
     url,
     api: (p, init = {}) => realFetch(`${url}${p}`, init),
-    generation: async (id) => {
-      const r = await realFetch(`${url}/__app/generation/${encodeURIComponent(id)}`);
-      return r.ok ? ((await r.json()) as Record<string, unknown>) : null;
+    generation: async (id, cookie) => {
+      const r = await realFetch(`${url}/__app/generation/${encodeURIComponent(id)}`, { headers: { cookie } });
+      if (!r.ok) throw new Error(`GET /api/generations/${id} answered ${r.status} in the other process`);
+      return (await r.json()) as Record<string, unknown>;
     },
     tick: () => post("/__app/tick"),
     sweepBilling: () => post("/__app/billing"),

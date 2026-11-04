@@ -14,12 +14,15 @@ import { workerDriver, type WorkerDriver } from "./helpers/worker-driver";
  * limits only). Each check asks the same three things of the run:
  *
  * - its output arrives exactly once (one result in the run, one file kept, one prompt where nothing went wrong);
- * - every look at it (a refresh, a second session, the list) shows only "In line" with its place, "Working", then the
- *   result: a recovery shows "In line" again with its place kept, and never an error or a word about the machines;
+ * - every look at it shows only "In line" with its place, "Working", then the result: a recovery shows "In line" again
+ *   with its place kept, and never an error or a word about the machines. The looks are a refresh, the account's
+ *   session and a second session on another device (each through the sign-in proxy, as a browser asks), its list, and
+ *   with two app processes the other one too. Each look must find the run, and another account must be refused it;
  * - nothing is charged twice (one hold, one report).
  *
- * A check that fails because the studio can't do it yet is kept as `it.fails`, named with its scenario and the reason.
- * The worker's own scenarios are in tests/recovery-worker.test.ts.
+ * Where the studio can't do something yet, the check is of what it does today, named for it, so that it fails the day
+ * the studio learns it: then it becomes a check of the new behaviour. The worker's own scenarios are in
+ * tests/recovery-worker.test.ts.
  */
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
@@ -46,6 +49,8 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 const auth = await import("@/server/auth");
 const generationsRoute = await import("@/app/api/generations/route");
 const oneRoute = await import("@/app/api/generations/[id]/route");
+const { proxy } = await import("@/proxy");
+const { NextRequest } = await import("next/server");
 const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
@@ -173,32 +178,68 @@ async function priceCheck(body: Record<string, unknown>, cookie = a1) {
   return { status: r.status, body: (await r.json()) as { place?: string; quote?: { allowed: boolean; text: string; code?: string; etaS?: number | null }; error?: string; code?: string } };
 }
 
-/** A run as a session reads it (GET /api/generations/<id>). */
+/** A GET as a browser sends it: the sign-in proxy (src/proxy.ts) first, then the route when the proxy passes it on. */
+async function browserGet(url: string, cookie: string, route: (req: Request) => Promise<Response>): Promise<Response> {
+  const headers = { ...SITE_HEADERS, cookie };
+  const p = await proxy(new NextRequest(`http://${HOST}${url}`, { headers }));
+  if (p.headers.get("x-middleware-next") !== "1") return p;
+  return route(new Request(`http://${HOST}${url}`, { headers }));
+}
+
+/** GET /api/generations/<id> as a session's browser asks it: the answer's status, and the run when it was there. */
+async function sessionGet(cookie: string, id: string): Promise<{ status: number; run: RunLike | null }> {
+  const r = await browserGet(`/api/generations/${id}`, cookie, (req) => oneRoute.GET(req, { params: Promise.resolve({ id }) } as never));
+  return { status: r.status, run: r.ok ? ((await r.json()) as RunLike) : null };
+}
+
+/** A run as a session reads it (an answer that isn't OK throws: a person would see an error). */
 const sessionRead = (cookie: string) => async (id: string) => {
-  const r = await oneRoute.GET(request(`/api/generations/${id}`, { cookie }), { params: Promise.resolve({ id }) } as never);
-  return r.ok ? ((await r.json()) as RunLike) : null;
+  const { status, run } = await sessionGet(cookie, id);
+  if (!run) throw new Error(`GET /api/generations/${id} answered ${status}`);
+  return run;
 };
 
-/** A run as the session's list shows it (GET /api/generations). */
+/** A run as the session's list shows it (GET /api/generations, page by page), or null when the list hasn't got it. */
 const listRead = (cookie: string) => async (id: string) => {
-  const r = await generationsRoute.GET(request("/api/generations?limit=50", { cookie }));
-  return ((await r.json()) as { items: (RunLike & { id: string })[] }).items.find((g) => g.id === id) ?? null;
+  let before = "";
+  for (let page = 0; page < 20; page++) {
+    const r = await browserGet(`/api/generations?limit=50${before && `&before=${before}`}`, cookie, (req) => generationsRoute.GET(req));
+    if (!r.ok) throw new Error(`GET /api/generations answered ${r.status}`);
+    const items = ((await r.json()) as { items: (RunLike & { id: string; createdAt: number })[] }).items;
+    const g = items.find((x) => x.id === id);
+    if (g) return g;
+    if (items.length < 50) return null;
+    const last = items[items.length - 1];
+    before = `${last.createdAt}:${last.id}`;
+  }
+  return null;
 };
 
-/** Every place the run's account looks from: a refresh, its session, a second session on another device, and its list. */
+/**
+ * Every place the run's account looks from: a refresh, its session, a second session on another device, and its list.
+ * Another account's session and list must never show it.
+ */
 function watchOf(id: string, extra: Record<string, () => Promise<RunLike | null>> = {}) {
-  return new RunWatch({
-    refresh: () => getGeneration(id) as RunLike | null,
-    session: () => sessionRead(a1)(id),
-    "second session": () => sessionRead(a2)(id),
-    list: () => listRead(a1)(id),
-    ...extra,
-  });
+  return new RunWatch(
+    {
+      refresh: () => getGeneration(id) as RunLike | null,
+      session: () => sessionRead(a1)(id),
+      "second session": () => sessionRead(a2)(id),
+      list: () => listRead(a1)(id),
+      ...extra,
+    },
+    {
+      "another account": async () => (await sessionGet(b1, id)).status,
+      "another account's list": async () => ((await listRead(b1)(id)) ? 200 : 404),
+    },
+  );
 }
 
 const taskOf = (generationId: string) => db().prepare("SELECT * FROM relay_tasks WHERE generation_id = ? ORDER BY created_at DESC").get(generationId) as TaskRow | undefined;
 const assetsOf = (generationId: string) => (db().prepare("SELECT COUNT(*) AS n FROM assets WHERE generation_id = ?").get(generationId) as { n: number }).n;
 const holdOf = (generationId: string) => (db().prepare("SELECT json_extract(request_json, '$.hold') AS hold FROM generations WHERE id = ?").get(generationId) as { hold: string | null }).hold;
+/** Runs account A has made. */
+const made = () => (db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.account') = ?").get(A) as { n: number }).n;
 const done = (g: { status: string } | null | undefined) => !!g && g.status !== "queued" && g.status !== "running";
 
 /** Turn the runner until `fn` says yes (or the tries run out: the last answer). */
@@ -212,6 +253,9 @@ async function until<T>(fn: () => T | Promise<T>, tries = 300): Promise<T> {
   return v;
 }
 
+/** The run once it has ended (the runner turning until then). */
+const ended = (id: string) => until(() => (done(getGeneration(id)) ? (getGeneration(id) as RunLike) : null));
+
 /** Press Run and wait for the run's task in the workers' line. */
 async function pressRun(body: Record<string, unknown> = IMAGE, cookie = a1) {
   const r = await run(body, cookie);
@@ -222,10 +266,14 @@ async function pressRun(body: Record<string, unknown> = IMAGE, cookie = a1) {
   return { id, task: t! };
 }
 
-/** The worker takes jobs and runs them until there is none (or it stops). */
+/**
+ * The worker takes jobs and runs them until there is none (or it stops). Every beat answer must let it take jobs
+ * (unless the test paused it here): a worker the studio refuses fails here, never as a run that waits.
+ */
 async function workAll(d: WorkerDriver, max = 10) {
   for (let i = 0; i < max; i++) {
-    await d.beat();
+    const a = await d.beat();
+    if (a && !d.pausedHere) expect(a.runner, `the studio lets the worker take jobs: ${JSON.stringify(a.worker)}`).toBe(true);
     const r = await d.runOne();
     if (r !== true) return r;
   }
@@ -246,12 +294,12 @@ async function reportsOf(id: string, want = 1) {
  * charged once (one hold, one settle).
  */
 async function expectOnce(id: string, watch: RunWatch, o: { outputs?: number; prompts?: number; place?: number } = {}) {
-  const g = await until(() => (done(getGeneration(id)) ? getGeneration(id) : null));
+  const g = await ended(id);
   await watch.look();
   expect(watch.problems({ place: o.place }), JSON.stringify(watch.path())).toEqual([]);
   expect(g?.status, g?.error ?? "").toBe("succeeded");
-  expect(g!.outputs.length).toBe(o.outputs ?? 1);
-  expect(assetsOf(id), "files kept for the run").toBe(g!.outputs.length);
+  expect(g!.outputs!.length).toBe(o.outputs ?? 1);
+  expect(assetsOf(id), "files kept for the run").toBe(g!.outputs!.length);
   if (o.prompts !== undefined) expect(comfy.postsOf(taskOf(id)!.prompt_id), "prompts its ComfyUI got").toBe(o.prompts);
   const hold = holdOf(id);
   expect(hold, "the run's hold").toBeTruthy();
@@ -262,9 +310,17 @@ async function expectOnce(id: string, watch: RunWatch, o: { outputs?: number; pr
   return g!;
 }
 
+/** A free run that ended without its result: in plain words, refunded once. */
+async function expectFreeFailure(id: string) {
+  const g = await ended(id);
+  expect(plainFailure(g!, { charged: false }), JSON.stringify(g)).toEqual([]);
+  expect(await reportsOf(id)).toEqual([{ holdId: holdOf(id), kind: "refund", status: "failed" }]);
+  return g!;
+}
+
 // ---------------------------------------------------------------------------
 
-describe("REL-0: an account's run reaches the workers", () => {
+describe("an account's run reaches the workers", () => {
   it("with no ComfyUI address, it becomes the account's task, a stand-in worker renders it, and it shows only In line, Working and the result", async () => {
     const w = standInWorker();
     // Every run free: the price says only "Free".
@@ -278,6 +334,7 @@ describe("REL-0: an account's run reaches the workers", () => {
     expect(task.pools).toBe("pool");
     const watch = watchOf(id);
     await watch.look();
+    expect(watch.seen.length).toBe(4);
     expect(watch.seen.every((s) => s.status === "queued" && s.place === 1)).toBe(true);
 
     const d = driver(w);
@@ -289,6 +346,7 @@ describe("REL-0: an account's run reaches the workers", () => {
     expect(await workAll(d)).toBe(false);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
     expect(watch.path("session")).toEqual(["queued", "running", "succeeded"]);
+    expect(watch.path("second session")).toEqual(["queued", "running", "succeeded"]);
     // The worker's ComfyUI got its prompt from the worker, under the task's own prompt id.
     expect(comfy.log().filter((e) => e.prompt?.prompt_id === task.prompt_id).map((e) => e.prompt?.client_id)).toEqual([expect.stringMatching(/^worker-/)]);
     expect(svc.holdsOf(A).filter((h) => h.reports.has(id))).toHaveLength(1);
@@ -333,7 +391,7 @@ function lookAtEveryStep(d: WorkerDriver, watch: RunWatch) {
 }
 
 describe("a worker that stops and starts again", () => {
-  it("REL-5 (the studio's side): stopped right after the studio heard its job finished, and started again with its ComfyUI still up, it sends the result: one prompt, one output", async () => {
+  it("stopped right after the studio heard its job finished, and started again with its ComfyUI still up, it sends the result: one prompt, one output", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
     const watch = watchOf(id);
@@ -359,6 +417,7 @@ describe("a worker that stops and starts again", () => {
     first.stopAfter("claim");
     await first.beat();
     expect(await first.runOne()).toBe("stopped");
+    await tick();
     await watch.look();
     const again = driver(w);
     lookAtEveryStep(again, watch);
@@ -379,7 +438,7 @@ describe("a worker that stops and starts again", () => {
   });
 });
 
-describe("REL-1: a refresh, a second session and the list see the same run", () => {
+describe("a refresh, a second session and the list see the same run", () => {
   it("in line behind another account's run, then working, then its result: every look shows the same state, place and step", async () => {
     const w = standInWorker();
     const theirs = await pressRun(IMAGE, b1);
@@ -409,25 +468,27 @@ describe("REL-1: a refresh, a second session and the list see the same run", () 
   });
 });
 
-describe("REL-2: a network drop at submit", () => {
-  it.fails("REL-2 (not built: the run route reads no request id from the client and makes a new reserve request id for every press, so a resend makes a second run and hold)", async () => {
+describe("a press of Run sent twice (a network drop at submit)", () => {
+  it("makes a second run and a second hold today: the run route reads no request id from the page, so each press reserves under an id of its own", async () => {
     standInWorker();
     const holds = svc.holds.size;
-    const made = () => (db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.account') = ?").get(A) as { n: number }).n;
     const rows = made();
     const press = { ...IMAGE, requestId: `press-${crypto.randomUUID()}` };
     const first = await run(press);
     // The answer never reached the page: it sends the same press again.
     const again = await run(press);
     expect(first.status, JSON.stringify(first.body)).toBe(201);
-    expect([200, 201]).toContain(again.status);
-    expect(again.body.items?.[0]?.id).toBe(first.body.items![0].id);
-    expect(made() - rows, "runs made").toBe(1);
-    expect(svc.holds.size - holds, "holds made").toBe(1);
+    expect(again.status, JSON.stringify(again.body)).toBe(201);
+    expect(again.body.items![0].id).not.toBe(first.body.items![0].id);
+    expect(made() - rows, "runs made").toBe(2);
+    expect(svc.holds.size - holds, "holds made").toBe(2);
+    const ids = svc.callsOf("/v1/reserve").slice(-2).map((c) => (c.body as { requestId?: string }).requestId);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).not.toContain(press.requestId);
   });
 });
 
-describe("REL-6: the worker steps aside for another program", () => {
+describe("the worker steps aside for another program", () => {
   it("a game takes the GPU for 40 minutes from minute 15: the run goes back in line in its place, waits past its wait limit, and its output arrives with no error", async () => {
     clock();
     const w = standInWorker();
@@ -449,11 +510,13 @@ describe("REL-6: the worker steps aside for another program", () => {
     await pass(5 * MIN, [d], watch);
     expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
     expect(getGeneration(theirs)?.queue?.place).toBe(2);
-    // The game ends: it runs first, in its place.
+    // The game ends: it runs first, in its place, and settles against the hold it was given at Run.
+    const hold = holdOf(id);
     d.pause(null);
     lookAtEveryStep(d, watch);
     await workAll(d);
     await expectOnce(id, watch, { place: 1 });
+    expect(svc.reportsFor(id).map((r) => r.holdId)).toEqual([hold]);
   });
 
   it("with the studio's own wait limit (no billing service), the same: a run a worker took once never fails at the wait limit", async () => {
@@ -473,7 +536,7 @@ describe("REL-6: the worker steps aside for another program", () => {
       d.pause(null);
       lookAtEveryStep(d, watch);
       await workAll(d);
-      const g = await until(() => (done(getGeneration(id)) ? getGeneration(id) : null));
+      const g = await ended(id);
       await watch.look();
       expect(watch.problems({ place: 1 })).toEqual([]);
       expect(g?.status).toBe("succeeded");
@@ -485,17 +548,15 @@ describe("REL-6: the worker steps aside for another program", () => {
   });
 });
 
-describe("REL-8: retries", () => {
-  it.fails("REL-8 (not built: a second lost prompt fails the run: the worker's resend allows one, apart from the line's requeues)", async () => {
+describe("retries", () => {
+  it("a second lost prompt ends the run today: the worker's resend allows one, apart from the line's own tries", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
-    const watch = watchOf(id);
     const d = driver(w);
     let crashes = 0;
     d.onStep(async (step) => {
       await tick();
-      await watch.look();
-      // Its ComfyUI crashes twice while running the job (it comes back empty), then works.
+      // Its ComfyUI crashes twice while running the job (it comes back empty).
       if (step === "running" && crashes < 2) {
         crashes++;
         await comfy.crash();
@@ -504,14 +565,14 @@ describe("REL-8: retries", () => {
     });
     await workAll(d);
     expect(crashes).toBe(2);
-    await expectOnce(id, watch, { place: 1 });
+    expect(d.steps).toContain("gone");
+    await expectFreeFailure(id);
   });
 });
 
-describe("REL-9: a run that can never succeed here", () => {
+describe("a run that can never succeed here", () => {
   /** A worker that may run every lane but the picture model's. */
   const workerWithoutTheModel = () => standInWorker("without-the-model", { lanes: allLanes(loadIndex(), sha).map((l) => l.lane).filter((l) => l !== imageLane()) });
-  const made = () => (db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.account') = ?").get(A) as { n: number }).n;
 
   it("no worker has the model: Run is refused and nothing is made (no run, no task, no hold)", async () => {
     workerWithoutTheModel();
@@ -525,39 +586,38 @@ describe("REL-9: a run that can never succeed here", () => {
     expect(svc.holds.size).toBe(holds);
   });
 
-  it.fails("REL-9 (not built: the price check of a run no worker may take answers as if the account ran it itself, so Run stays on)", async () => {
+  it("its price check answers as for the account's own run today (no place, no quote), so Run stays on until the refusal", async () => {
     workerWithoutTheModel();
     const q = await priceCheck(IMAGE);
-    expect(q.body.quote, JSON.stringify(q.body)).toMatchObject({ allowed: false });
+    expect(q.status, JSON.stringify(q.body)).toBe(200);
+    expect(q.body.place).toBeUndefined();
+    expect(q.body.quote).toBeUndefined();
   });
 });
 
-describe("REL-10: no worker online", () => {
-  it.fails("REL-10 (not built: with every worker paused the price check says nothing of the wait, so Run stays on)", async () => {
+describe("no worker online", () => {
+  it("with every worker paused, the price check says Free and nothing of the wait today, so Run stays on", async () => {
     standInWorker("paused", { paused: true });
     const q = await priceCheck(IMAGE);
-    expect(q.body.quote, JSON.stringify(q.body)).toMatchObject({ allowed: false, code: "busy" });
+    expect(q.status, JSON.stringify(q.body)).toBe(200);
+    expect(q.body.place).toBe("pool");
+    expect(q.body.quote).toMatchObject({ allowed: true, text: "Free" });
+    expect(q.body.quote?.code).toBeUndefined();
   });
 
-  it.fails("REL-10 (not built: a run made while every worker is paused fails at its wait limit)", async () => {
+  it("a run made while every worker is paused waits In line in its place, then ends at its wait limit today", async () => {
     clock();
     standInWorker("paused", { paused: true });
-    const holds = svc.holds.size;
-    const r = await run(IMAGE);
-    // Refused before Run, with nothing made…
-    if (r.status !== 201) {
-      expect(svc.holds.size).toBe(holds);
-      return;
-    }
-    // …or made, and then it never times out: it waits in line until a worker is back.
-    const id = r.body.items![0].id;
+    const { id } = await pressRun();
     const watch = watchOf(id);
-    await pass(25 * MIN, [], watch);
+    await pass(10 * MIN, [], watch);
     expect(watch.problems({ place: 1 })).toEqual([]);
+    await pass(15 * MIN, [], watch);
+    await expectFreeFailure(id);
   });
 });
 
-describe("REL-12: one job per worker", () => {
+describe("one job per worker", () => {
   it("a second claim while the worker holds a job gets nothing new, and a job left sending goes back in line in its place", async () => {
     clock();
     const w = standInWorker();
@@ -576,6 +636,7 @@ describe("REL-12: one job per worker", () => {
     expect(await claim([mine.task.id])).toBe(204);
     expect(await claim([])).toBe(mine.task.id);
     expect(taskOf(theirs.id)!.state).toBe("waiting");
+    await tick();
     await watch.look();
     // It never sends the job to its ComfyUI: 15 minutes after the claim the job goes back in line, still first.
     await pass(16 * MIN, [d], watch);
@@ -590,7 +651,7 @@ describe("REL-12: one job per worker", () => {
   });
 });
 
-describe("REL-16: the billing service down or restarting", () => {
+describe("the billing service down or restarting", () => {
   it("a run that finishes while the service is down settles once when it is back, and its account sees no error", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
@@ -610,36 +671,19 @@ describe("REL-16: the billing service down or restarting", () => {
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 
-  it.fails("REL-16 (not built: Run pressed while the service is down is refused at once; the reserve isn't tried again while the service comes back)", async () => {
-    const w = standInWorker();
+  it("Run pressed while the service is down is refused at once today, and nothing is made: the reserve isn't tried again while the service comes back", async () => {
+    standInWorker();
     // The account's policy is known from its price check.
     expect((await priceCheck(IMAGE)).body.quote?.allowed).toBe(true);
+    const rows = made();
+    const holds = svc.holds.size;
     await svc.downFor(10_000);
     const r = await run(IMAGE);
-    expect(r.status, JSON.stringify(r.body)).toBe(201);
-    const id = r.body.items![0].id;
-    const watch = watchOf(id);
-    await workAll(driver(w));
-    await expectOnce(id, watch, { place: 1 });
-  });
-});
-
-describe("REL-17: a hold's deadline", () => {
-  it("a run paused for 40 minutes, then finished, settles against its own hold", async () => {
-    clock();
-    const w = standInWorker();
-    const { id } = await pressRun();
-    const hold = holdOf(id)!;
-    const watch = watchOf(id);
-    const d = driver(w);
-    stepAsideWhenRunning(d, watch);
-    await workAll(d);
-    await pass(40 * MIN, [d], watch);
-    d.pause(null);
-    lookAtEveryStep(d, watch);
-    await workAll(d);
-    await expectOnce(id, watch, { place: 1 });
-    expect(svc.reportsFor(id).map((r) => r.holdId)).toEqual([hold]);
+    expect(r.status, JSON.stringify(r.body)).toBe(503);
+    expect(r.body.code).toBe("paused");
+    expect(made()).toBe(rows);
+    await svc.start();
+    expect(svc.holds.size).toBe(holds);
   });
 });
 
@@ -665,43 +709,38 @@ describe("the run ceiling per lane", () => {
     await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 
-  it.fails("the run ceiling (not built: past its lane's ceiling a run fails at once; it isn't stopped and put back in line once first)", async () => {
+  it("a run past its lane's ceiling ends at its first pass today, in plain words: it isn't stopped and put back in line once first", async () => {
     clock();
     qs.saveQueueSettings({ ...qs.queueSettings(), runCeilingS: { default: 2700, lanes: { [imageLane()]: 600 } } });
     const w = standInWorker();
     const { id } = await pressRun();
-    const watch = watchOf(id);
     const d = driver(w);
     const after: string[] = [];
     d.onStep(async (step) => {
       await tick();
-      await watch.look();
       if (step === "running" && after.length < 2) {
-        // Each attempt runs past the 10 minute ceiling.
-        await pass(11 * MIN, [d], watch);
+        // The attempt runs past the 10 minute ceiling.
+        await pass(11 * MIN, [d]);
         after.push(getGeneration(id)!.status);
       }
     });
     await workAll(d);
-    await until(() => done(getGeneration(id)), 50);
-    // The first time it is stopped and goes back in line; the second time the run ends, in plain words, not charged.
-    expect(after[0]).toBe("queued");
-    expect(plainFailure(getGeneration(id) as RunLike, { held: true })).toEqual([]);
-    expect(await reportsOf(id)).toEqual([{ holdId: holdOf(id), kind: "refund", status: "failed" }]);
+    expect(after[0]).toBe("failed");
+    await expectFreeFailure(id);
   });
 });
 
-describe("REL-7: a deploy while results are being sent", () => {
-  it.fails("REL-7 (not built: the worker gives up on a result after 3 failed parts in a row, so a burst of 503s from a deploy fails the run)", async () => {
+describe("a deploy while results are being sent", () => {
+  it("a burst of 503s while the result is sent ends the run today: the worker gives up after 3 failed parts in a row", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
-    const watch = watchOf(id);
     const d = driver(w);
-    lookAtEveryStep(d, watch);
+    d.onStep(() => tick());
     // The studio answers 503 to the next 6 parts of its result, as a deploy's proxy does for a few seconds.
     d.answer("part", 503, 6);
     await workAll(d);
-    await expectOnce(id, watch, { prompts: 1, place: 1 });
+    expect(d.calls.filter((c) => c.startsWith("part")).length).toBeGreaterThanOrEqual(3);
+    await expectFreeFailure(id);
   });
 });
 
@@ -718,10 +757,13 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     await app2?.stop();
   });
 
+  /** The run as the account's session reads it from the other process. */
+  const there = (id: string) => async () => (await app2.generation(id, a1)) as unknown as RunLike;
+
   it("the other process serves the worker and a session: the same run, the same state", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
-    const watch = watchOf(id, { "other process": () => app2.generation(id) as Promise<RunLike | null> });
+    const watch = watchOf(id, { "other process": there(id) });
     const d = driver(w);
     d.via(app2.api);
     lookAtEveryStep(d, watch);
@@ -729,12 +771,14 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     expect(d.calls.some((c) => c.startsWith("part"))).toBe(true);
     await expectOnce(id, watch, { prompts: 1, place: 1 });
     expect(watch.seen.filter((s) => s.where === "other process").map((s) => s.status)).toContain("succeeded");
+    // The other process refuses the run to another account's session too.
+    await expect(app2.generation(id, b1)).rejects.toThrow(/answered 403/);
   });
 
-  it.fails("REL-1 (not built: a step the worker reports is kept only in the memory of the process that took the report, so the other process's sessions see none)", async () => {
+  it("a step the worker reports to the other process isn't seen here today: live progress stays in the memory of the process that took the report, so every look shows no step", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
-    const watch = watchOf(id, { "other process": () => app2.generation(id) as Promise<RunLike | null> });
+    const watch = watchOf(id, { "other process": there(id) });
     comfy.inner.opts.steps = 10;
     comfy.inner.opts.stepMs = 200;
     const d = driver(w);
@@ -747,19 +791,18 @@ describe("two app processes on one database (a deploy's overlap)", () => {
       steps.push((await watch.look()).map((s) => s.progress));
     });
     await workAll(d);
-    expect(steps.length, "looks while it ran").toBeGreaterThan(0);
-    for (const at of steps) for (const p of at) expect(p ?? 0, "the step every look shows").toBeGreaterThan(0);
+    expect(steps.length, "looks while the worker said it was past step 2").toBeGreaterThan(0);
+    for (const at of steps) for (const p of at) expect(p ?? 0, "the step a look shows").toBe(0);
+    await expectOnce(id, watch, { prompts: 1, place: 1 });
   });
 
-  it.fails("REL-7 (not built: no runner lease or atomic finalize: while one process saves a finished run's result, the other saves it too, and the run ends failed)", async () => {
+  it("while one process saves a finished run's result, the other saves it too today, and the run ends failed: no runner lease or one-time finalize", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
-    const watch = watchOf(id, { "other process": () => app2.generation(id) as Promise<RunLike | null> });
     const d = driver(w);
     // This process's runner turns at every step but the result's parts: the result is saved below.
     d.onStep(async (step) => {
       if (step !== "part") await tick();
-      await watch.look();
     });
     await d.beat();
     expect(await d.runOne()).toBe(true);
@@ -772,10 +815,10 @@ describe("two app processes on one database (a deploy's overlap)", () => {
     await tick();
     pause.release();
     await theirs;
-    await expectOnce(id, watch, { prompts: 1, place: 1 });
+    await expectFreeFailure(id);
   });
 
-  it.fails("REL-7 (not built: both processes send a finished run's report when their sweeps meet, so it is reported twice)", async () => {
+  it("both processes send a finished run's report today when their sweeps meet, so the service gets it twice", async () => {
     const w = standInWorker();
     const { id } = await pressRun();
     const watch = watchOf(id);
@@ -790,11 +833,15 @@ describe("two app processes on one database (a deploy's overlap)", () => {
       process.env.FUOBE_BILLING_URL = svc.address;
     }
     expect(outbox.queueReports()).toBeGreaterThan(0);
-    // Both sweeps at once: the service answers a report only once a second one has come, or after 4 seconds (one
-    // sender, as it should be).
+    // Both sweeps at once: the service answers a report only once a second one has come, or after 4 seconds.
     svc.gather = { path: "/v1/settle", count: 2, maxMs: 4000 };
     await Promise.all([outbox.drainOutbox(), app2.sweepBilling()]);
     svc.gather = null;
-    await expectOnce(id, watch, { prompts: 1, place: 1 });
+    const g = await ended(id);
+    await watch.look();
+    expect(watch.problems({ place: 1 })).toEqual([]);
+    expect(g?.status).toBe("succeeded");
+    const settle = { holdId: holdOf(id), kind: "settle", status: "succeeded" };
+    expect(svc.reportsFor(id)).toEqual([settle, settle]);
   });
 });

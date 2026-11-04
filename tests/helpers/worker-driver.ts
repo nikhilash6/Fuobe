@@ -10,11 +10,19 @@
  * - say it is paused here (`pause`), as a worker that stepped aside for another program does in its beats.
  *
  * Start a new driver with the same token to bring the worker back.
+ *
+ * Its beats speak the worker program's own protocol (bin/lib/worker/config.mjs), so it is the worker the studio expects
+ * today. A beat answer that says the studio needs a newer worker program throws: a driver the studio would never give a
+ * job must fail loudly, never look like a feature that isn't built.
  */
 import { ComputerRunner } from "@/lib/computer-runner";
 import type { BeatAnswer } from "@/lib/relay";
+import { PROTOCOL } from "../../bin/lib/worker/config.mjs";
 import { apiAs, sha256, type ComputerRoutes } from "./computer-tab";
 import type { StandInComfy } from "./standin-comfy";
+
+/** The protocol the driver's beats speak: the worker program's. */
+export const DRIVER_PROTOCOL: number = PROTOCOL;
 
 /** The steps a worker's job goes through, by the call it makes to the studio. */
 export type WorkerStep = "beat" | "claim" | "input" | "sent" | "queued" | "running" | "finished" | "passes" | "gone" | "failed" | "part" | "release" | "other";
@@ -45,6 +53,8 @@ export interface WorkerDriver {
   via: (api: StudioApi | null) => void;
   /** Its beats say it paused here (`why` as the worker program says it: "gpu-busy:<program>", "here-now"), or not. */
   pause: (why: string | null) => void;
+  /** Why its beats say it paused here (null: they don't). */
+  readonly pausedHere: string | null;
   /**
    * Called after each answered step, before the worker reads the answer (a test acts at that moment: crash the ComfyUI,
    * restart the app, …). A report's event comes with it.
@@ -137,7 +147,7 @@ export function workerDriver(o: {
       sha256,
       origin: "http://localhost:3000",
       sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, o.sleepCapMs ?? 50))),
-      beatExtra: () => ({ protocol: 1, version: "test", local: { paused: !!paused, why: paused, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null }),
+      beatExtra: () => ({ protocol: DRIVER_PROTOCOL, version: "test", local: { paused: !!paused, why: paused, until: null }, gpu: { otherApps: [], tempC: null }, inventoryHash: null, warmLane: null }),
       // As the worker program does when a job ends here: its prompt leaves its ComfyUI's history (once its ComfyUI has
       // stopped it, when the job was taken back).
       ended: async (t) => {
@@ -162,7 +172,15 @@ export function workerDriver(o: {
     get dead() {
       return dead;
     },
-    beat: () => (dead ? Promise.resolve(null) : Promise.race([runner.beat(), diedP.then(() => null)])),
+    beat: async () => {
+      if (dead) return null;
+      const a = await Promise.race([runner.beat(), diedP.then(() => null)]);
+      const min = a?.worker?.minProtocol;
+      if (typeof min === "number" && min > DRIVER_PROTOCOL) {
+        throw new Error(`The studio takes jobs only from worker programs that speak protocol ${min}; this driver speaks ${DRIVER_PROTOCOL}`);
+      }
+      return a;
+    },
     runOne: async () => {
       if (dead) return "stopped";
       const r = await Promise.race([runner.claimAndRun(), diedP]);
@@ -179,6 +197,9 @@ export function workerDriver(o: {
     },
     pause: (why) => {
       paused = why;
+    },
+    get pausedHere() {
+      return paused;
     },
     onStep: (fn) => {
       hook = fn;

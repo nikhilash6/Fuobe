@@ -8,8 +8,8 @@
  * - reached over HTTP on a random high port, or over a Unix socket (a named pipe on Windows).
  *
  * By default every run is free: the quote says "Free" with an amount of 0, and a reserve sets nothing aside. `priced`
- * gives runs a price (`price` per run). A repeated reserve with the same request id is the same
- * hold. A hold is kept until its deadline (`closeBy`: the run's wait limit plus `holdLifeMs`); a report after it is
+ * gives runs a price (`price` per run). A reserve must name its request (`requestId`, else 400), and a repeated
+ * reserve with the same request id is the same hold. A hold is kept until its deadline (`closeBy`: the run's wait limit plus `holdLifeMs`); a report after it is
  * refused and counted as late.
  */
 import fs from "node:fs";
@@ -162,7 +162,9 @@ export async function startStandInBilling(o: { socket?: boolean; token?: string 
     if (p === "/v1/policy") return json(200, f.policy);
     if (p === "/v1/quote") return json(200, quote());
     if (p === "/v1/reserve") {
-      const requestId = String(body.requestId ?? "");
+      // Every reserve names its request (one per press of Run): a repeat with the same id is the same hold.
+      const requestId = typeof body.requestId === "string" ? body.requestId : "";
+      if (!requestId) return json(400, { error: "requestId is required" });
       const account = String((body.account as { id?: unknown } | undefined)?.id ?? "");
       const same = [...f.holds.values()].find((h) => h.requestId === requestId);
       const ok = (h: StandInHold) => json(200, { ok: true, holdId: h.id, amount: h.amount, boostMs: 0, maxWaitMs: f.maxWaitMs, class: "free", text: f.priced ? `${h.amount} units` : "Free" });
@@ -213,8 +215,17 @@ export async function startStandInBilling(o: { socket?: boolean; token?: string 
       } else s.listen(port, "127.0.0.1", done);
     });
 
+  // A start that downFor() set for later. stop(), start() and close() cancel it, so it never undoes a later stop or
+  // listens again after the tests have closed the service.
+  let comeBack: NodeJS.Timeout | undefined;
+  const cancelComeBack = () => {
+    clearTimeout(comeBack);
+    comeBack = undefined;
+  };
+
   const stop = () =>
     new Promise<void>((resolve) => {
+      cancelComeBack();
       const s = server;
       server = null;
       if (!s) return resolve();
@@ -224,6 +235,7 @@ export async function startStandInBilling(o: { socket?: boolean; token?: string 
 
   await listen();
   const start = async () => {
+    cancelComeBack();
     if (!server) await listen();
   };
 
@@ -235,7 +247,10 @@ export async function startStandInBilling(o: { socket?: boolean; token?: string 
     start,
     downFor: async (ms: number) => {
       await stop();
-      setTimeout(() => void start().catch(() => {}), ms);
+      comeBack = setTimeout(() => {
+        comeBack = undefined;
+        void start().catch(() => {});
+      }, ms);
     },
     callsOf: (p: string) => f.calls.filter((c) => c.path.split("?")[0] === p),
     holdsOf: (account: string) => [...f.holds.values()].filter((h) => h.account === account),
