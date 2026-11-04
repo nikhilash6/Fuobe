@@ -276,9 +276,11 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
   (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
   plan with the studio's own AI helpers or keep projects of their own. So do the Audio hub's Split
-  soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
-  turnaround video (`POST /api/turnaround`), though their price checks work, priced for the account's
-  own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
+  soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`), though
+  their price checks work, priced for the account's own GPU. AI Influencer, Photodump, Fashion Factory,
+  Character Sheet, Turnaround, Fly around and the Image studio's palette lock (`POST /api/palettes/lock`)
+  run for an account with its own pictures, after the checks every tool run gets
+  (`src/server/account-tool-run.ts`); characters and saved packs stay the owner's library. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
   soundtrack isn't available here", "Edit speech isn't available here", "Remove dialogue isn't
   available here"), with their upload and run off. Result menus don't offer Remove dialogue, Clean up
   dialogue or Edit speech to a guest or an account, and Captions doesn't offer them "Fix this line"
