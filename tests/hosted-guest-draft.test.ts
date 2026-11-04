@@ -70,6 +70,17 @@ describe("the draft a guest keeps through sign-up", () => {
     expect(draftLib.heldValues(kept).map((v) => v.held)).toEqual(["h1", "f1"]);
   });
 
+  it("keeps reference clips and sounds as it keeps references", () => {
+    const clip = value({ id: "c1", held: "c1", kind: "video", preview: "blob:c" });
+    const sound = value({ id: "s1", held: "s1", kind: "audio", preview: "blob:s" });
+    const kept = draftLib.keepDraft(draft({ refClips: [clip, value({ id: "c2", kind: "video", uploading: true, preview: "blob:u" })], refAudios: [sound] }));
+    expect(kept.refClips).toEqual([{ ...clip, preview: "" }]);
+    expect(kept.refAudios).toEqual([{ ...sound, preview: "" }]);
+    expect(draftLib.heldValues(kept).map((v) => v.held)).toEqual(["c1", "s1"]);
+    // A draft with none keeps none.
+    expect("refClips" in draftLib.keepDraft(draft())).toBe(false);
+  });
+
   it("is saved per page for a day, and read back", () => {
     draftLib.saveDraft("/image", draft({ prompt: "kept" }));
     expect(draftLib.readDraft<Kept>("/image")?.prompt).toBe("kept");

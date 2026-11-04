@@ -26,18 +26,25 @@ export interface DraftValue {
 export interface DraftLike<V extends DraftValue = DraftValue> {
   slots: Partial<Record<string, V | null>>;
   refs: V[];
+  /** Reference clips and sounds (MiniMax H3's reference mode). */
+  refClips?: V[];
+  refAudios?: V[];
   frames?: { value: V; at: number }[];
 }
 
-/** Every attachment of a draft passed through `fn` (null takes it out: an empty slot, a reference or a frame gone). */
+/**
+ * Every attachment of a draft passed through `fn` (null takes it out: an empty slot, a reference, a reference clip or
+ * sound, or a frame gone).
+ */
 export function mapValues<D extends DraftLike>(d: D, fn: (v: D["refs"][number]) => D["refs"][number] | null): D {
   const slots = Object.fromEntries(Object.entries(d.slots).map(([k, v]) => [k, v ? fn(v) : v])) as D["slots"];
-  const refs = d.refs.map(fn).filter((v): v is D["refs"][number] => !!v);
+  const list = (vs: D["refs"]) => vs.map(fn).filter((v): v is D["refs"][number] => !!v);
+  const refs = list(d.refs);
   const frames = d.frames?.flatMap((f) => {
     const v = fn(f.value);
     return v ? [{ ...f, value: v }] : [];
   });
-  return { ...d, slots, refs, ...(d.frames && { frames }) };
+  return { ...d, slots, refs, ...(d.refClips && { refClips: list(d.refClips) }), ...(d.refAudios && { refAudios: list(d.refAudios) }), ...(d.frames && { frames }) };
 }
 
 /** The attachments a draft keeps in this browser, by kept-file id. */
