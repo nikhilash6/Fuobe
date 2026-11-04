@@ -85,7 +85,7 @@ describe("Home's first screen", () => {
     }
   });
 
-  it("plays Genjutsu's group swap in the widths its render covers, cut as it is (no crossfade), beside the original", () => {
+  it("plays Genjutsu's group swap in the widths its render covers, faded out before it loops (no crossfade), beside the original", () => {
     const g = bento.genjutsu;
     expect(g.id).toBe(BENTO_GENJUTSU.id);
     // Its own id in the playback store: the studio's card lower down may play the same cover.
@@ -94,8 +94,8 @@ describe("Home's first screen", () => {
     for (const c of g.clips) {
       expect(c.src).toMatch(new RegExp(`^/previews/home/genjutsu-${c.w}\\.mp4\\?v=[0-9a-f]{8}$`));
       expect(mp4Size(file(c.src))).toEqual({ w: c.w, h: (c.w * 3) / 4 });
-      // Five seconds of the take (120 frames at 24 fps), looped as it is.
-      expect(mp4Seconds(file(c.src))).toBeCloseTo(5, 1);
+      // Five seconds of the take (120 frames at 24 fps), then its last frame held a third of a second as it fades out.
+      expect(mp4Seconds(file(c.src))).toBeCloseTo(128 / 24, 1);
     }
     expect(g.poster.avif.map((a) => a.w)).toEqual([...BENTO_GENJUTSU_WIDTHS]);
     for (const a of g.poster.avif) expect(a.src).toMatch(new RegExp(`^/previews/home/genjutsu-${a.w}\\.avif\\?v=`));
@@ -165,8 +165,9 @@ describe("Home's first screen", () => {
     }
     // The live tile, the next biggest, covers a 3x phone (358 px wide) and its tile on a 2x 1440 screen (405 px under cover).
     for (const f of bento.live.frames) expect(Math.max(...f.avif.map((a) => a.w))).toBeGreaterThanOrEqual(Math.max(358 * 3, 405 * 2));
-    // Genjutsu's clip is its render's own 1024 px, never made up past that: a 2x laptop's tile (376 px) gets it.
-    expect(pickWidth(bento.genjutsu.clips, 376 * 2).w).toBe(1024);
+    // Genjutsu's clip is never made up past its render's own 1024 px: a 2x laptop's tile (376 px) gets 768, a 3x phone 1024.
+    expect(pickWidth(bento.genjutsu.clips, 376 * 2).w).toBe(768);
+    expect(pickWidth(bento.genjutsu.clips, 358 * 3).w).toBe(1024);
     // The original's window (at most 132 px) is covered on a 3x screen.
     expect(Math.max(...bento.genjutsu.original.avif.map((a) => a.w))).toBeGreaterThanOrEqual(132 * 3);
   });

@@ -138,7 +138,9 @@ const layout = (page) =>
   page.evaluate((tiles) => {
     const box = (el) => {
       const r = el.getBoundingClientRect();
-      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height };
+      // Its title's size: the live tile, the highlight, is second only to the video tile.
+      const title = el.querySelector("[class*=title]");
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height, title: title ? parseFloat(getComputedStyle(title).fontSize) : 0 };
     };
     const h1 = document.querySelector("#home-bento h1");
     const [line1, line2] = h1.querySelectorAll(":scope > span");
@@ -248,6 +250,14 @@ if (run("1"))
           check(`${tag}: the video tile and the live tile under it on the first screen`, out.length === 0, first.map((t) => `${t} ${Math.round(l.tiles[t].bottom)}`).join(", ") + ` ≤ ${bottom}`);
           check(`${tag}: every tile at least 44 px to tap`, TILES.every((t) => l.tiles[t].w >= 44 && l.tiles[t].h >= 44));
         }
+        // The live tile is the highlight: the biggest after the video tile, its title no smaller than any but the video's.
+        const area = (t) => l.tiles[t].w * l.tiles[t].h;
+        const rest = TILES.filter((t) => t !== "video" && t !== "live" && t !== "numbers");
+        check(
+          `${tag}: the live tile second only to the video tile`,
+          rest.every((t) => area("live") > area(t) && l.tiles.live.title >= l.tiles[t].title) && area("video") > area("live"),
+          ["video", "live", ...rest].map((t) => `${t} ${Math.round(l.tiles[t].w)}x${Math.round(l.tiles[t].h)}/${l.tiles[t].title}`).join(", "),
+        );
         if (v.w >= 1024) {
           const out = TILES.filter((t) => l.tiles[t].bottom > l.vh || l.tiles[t].top < 0);
           check(`${tag}: all eight tiles on the first screen`, out.length === 0, out.join(", "));

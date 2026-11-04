@@ -250,8 +250,9 @@
   .hb-live {
     aspect-ratio: 16 / 10;
   }
+  /* Shorter than the live tile above it, which is the bigger one; the couple's faces still show whole. */
   .hb-genjutsu {
-    aspect-ratio: 3 / 2;
+    aspect-ratio: 16 / 9;
   }
   .hb-image,
   .hb-three {
@@ -267,12 +268,13 @@
 @media (min-width: 768px) {
   .hb-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-rows: repeat(4, 210px) auto;
+    /* The reel and the live tile a little taller than the rows under them: the live tile is the bigger one. */
+    grid-template-rows: 230px 230px 210px 210px auto;
     grid-template-areas:
       "video video live"
       "video video live"
-      "genjutsu genjutsu image"
-      "audio canvas three"
+      "genjutsu image three"
+      "audio canvas canvas"
       "numbers numbers numbers";
   }
 }
@@ -485,8 +487,16 @@
     font-size: 44px;
   }
 }
-/* From lg the live tile is the second biggest: its title a size up from the small tiles'. */
+/* From a tablet the live tile is the second biggest: its title a size up from the small tiles', and from lg two. */
+@media (min-width: 768px) {
+  .hb-live .hb-title {
+    font-size: 28px;
+  }
+}
 @media (min-width: 1024px) {
+  .hb-live .hb-title {
+    font-size: 30px;
+  }
   @container (min-width: 360px) {
     .hb-live .hb-title {
       font-size: 34px;
@@ -506,12 +516,6 @@
 @container (max-height: 200px) {
   .hb-meta {
     display: none;
-  }
-  .hb-board {
-    width: min(200px, 100% - 28px);
-  }
-  .hb-node-label {
-    font-size: 10px;
   }
 }
 
@@ -705,6 +709,14 @@
 .hb-genjutsu .hb-clip video {
   object-position: 50% 22%;
 }
+/* From lg the tile is a short strip with its title over the lower half: the faces sit higher in it, clear of the
+   words, their heads still whole when the camera pushes in. */
+@media (min-width: 1024px) {
+  .hb-genjutsu > .hb-pic .hb-fill,
+  .hb-genjutsu .hb-clip video {
+    object-position: 50% 40%;
+  }
+}
 /*
  * The original clip's first frame, in a small window in the tile's top corner: what went in, beside what came out. On
  * a layer over the clip and the shade, its size from the tile's own width (the tile is a container), so it never lays
@@ -743,6 +755,12 @@
   .hb-original {
     top: 12px;
     right: 12px;
+  }
+}
+/* From lg the strip is short: a smaller window keeps to its corner, clear of the man's face as the camera moves. */
+@media (min-width: 1024px) {
+  .hb-original {
+    width: clamp(64px, 22cqw, 132px);
   }
 }
 /* The reel's clips and its still: a wide, short tile crops from the bottom, so the head always shows (a clip framed
@@ -1049,6 +1067,22 @@
 }
 /* A narrow tile keeps the steps words whole: the icons step aside. */
 @container (max-width: 259.98px) {
+  .hb-step svg {
+    display: none;
+  }
+}
+/*
+ * A short tile (from lg, the bottom row at 1024 x 768 to 1440 x 900) has about 66 px over its words: the board sits
+ * from its top, a little smaller, the steps' words whole without their icons, and the two pictures keep to themselves
+ * (the film's play mark and glow say which is which), so nothing reaches the edge or the title.
+ */
+@container (max-height: 200px) {
+  .hb-board {
+    top: 10px;
+    translate: -50% 0;
+    width: min(196px, 100% - 28px);
+  }
+  .hb-node-label,
   .hb-step svg {
     display: none;
   }

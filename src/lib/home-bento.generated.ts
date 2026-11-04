@@ -12,19 +12,21 @@ export const HOME_BENTO_MEDIA: Record<string, string> = {
   "/previews/home/rotation-1024.mp4": "3f5507ab",
   "/previews/home/rotation-1536.mp4": "87d3d4f1",
   "/previews/home/rotation-2048.mp4": "5804eda4",
-  "/previews/home/genjutsu-640.mp4": "17ae2073",
-  "/previews/home/genjutsu-1024.mp4": "6611d454",
+  "/previews/home/genjutsu-640.mp4": "dc3680bd",
+  "/previews/home/genjutsu-768.mp4": "003cd587",
+  "/previews/home/genjutsu-1024.mp4": "4a1c92ad",
   "/previews/home/reel-sand-storm-640.avif": "6e339255",
   "/previews/home/reel-sand-storm-1024.avif": "13b5d74a",
   "/previews/home/rotation-640.avif": "c69b0d7b",
   "/previews/home/rotation-1024.avif": "23d2a89b",
   "/previews/home/rotation-1536.avif": "b3df3778",
   "/previews/home/rotation-2048.avif": "bcc9ccc5",
-  "/previews/home/genjutsu-640.avif": "78148871",
-  "/previews/home/genjutsu-1024.avif": "61b49f42",
+  "/previews/home/genjutsu-640.avif": "5773faa7",
+  "/previews/home/genjutsu-768.avif": "be299a65",
+  "/previews/home/genjutsu-1024.avif": "c7c045c3",
   "/previews/home/reel-sand-storm-1024.jpg": "cab53f24",
   "/previews/home/rotation-1024.jpg": "61a2cbc9",
-  "/previews/home/genjutsu-1024.jpg": "c69400ea",
+  "/previews/home/genjutsu-1024.jpg": "1b5d1a56",
   "/previews/home/image-4-480.avif": "5a6d07a1",
   "/previews/home/image-4-768.avif": "ef9d1b4d",
   "/previews/home/genjutsu-original-240.avif": "ecc3f2d0",
@@ -57,7 +59,7 @@ export const HOME_BENTO_REEL = [
 export const HOME_BENTO_TINT: Record<string, string> = {
   "reel-sand-storm": "#b06c4c",
   "rotation": "#bfbeb6",
-  "genjutsu": "#796c56"
+  "genjutsu": "#786b54"
 };
 
 export const HOME_BENTO_WAVE = {

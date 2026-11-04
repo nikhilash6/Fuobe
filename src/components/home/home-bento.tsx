@@ -14,16 +14,16 @@ import "./home-bento.css";
  * tile's width or, where the tile is the squarer shape, its height times 4/3, so the browser picks a copy that sharp.
  */
 const SIZES = {
-  video: "(min-width: 1024px) 572px, (min-width: 768px) 576px, calc(100vw - 32px)",
+  video: "(min-width: 1024px) 572px, (min-width: 768px) 630px, calc(100vw - 32px)",
   /**
    * The live tile: from lg a third of the grid wide and two rows tall (up to 570 px under cover on a 1920 x 1080
    * screen), two rows tall on a tablet, the full row on a phone.
    */
-  live: "(min-width: 1024px) 570px, (min-width: 768px) 580px, calc(100vw - 32px)",
+  live: "(min-width: 1024px) 570px, (min-width: 768px) 630px, calc(100vw - 32px)",
   /** A 4:3 picture in a square tile on a phone (half the row): cropped at its sides, so 4/3 of the tile's width. */
   square: "(min-width: 1024px) 274px, (min-width: 768px) 320px, calc((100vw - 44px) * 0.667)",
-  /** The Genjutsu tile: a third of the grid wide from lg, two columns on a tablet, the full row on a phone. */
-  genjutsu: "(min-width: 1024px) 376px, (min-width: 768px) 476px, calc(100vw - 32px)",
+  /** The Genjutsu tile: a third of the grid wide from lg, one column on a tablet (its 4:3 clip under cover: 280 px), the full row on a phone. */
+  genjutsu: "(min-width: 1024px) 376px, (min-width: 768px) 280px, calc(100vw - 32px)",
   /** The original's window in the Genjutsu tile (home-bento.css: at most 132 px wide). */
   original: "132px",
 };
