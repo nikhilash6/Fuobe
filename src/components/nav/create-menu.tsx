@@ -54,7 +54,9 @@ export function CreateList({ variant, onNavigate }: { variant: "menu" | "sheet";
     return (
       <>
         {/* The area's own page: first in Tab order (the item, then See all, then the rows), at the top right. */}
-        <SeeAllRow href={CREATE_AREA_HREF} name="See all of Create" data-see-all className="absolute top-1.5 right-1.5 h-8" />
+        <div className="absolute top-1.5 right-1.5 z-10">
+          <SeeAllRow href={CREATE_AREA_HREF} name="See all of Create" data-see-all className="h-8" />
+        </div>
         <div className="grid grid-cols-2 gap-x-1.5">
           {columns.map((c, i) => (
             <div key={c.label} role="group" aria-labelledby={`${ids}-${i}`} className="flex min-w-0 flex-col">

@@ -45,7 +45,10 @@ export type BarMenuAction =
    * own click or key (the next click closes it).
    */
   | { type: "open"; id: BarMenuId; mode: MenuMode; via: MenuVia; group?: string; clicked?: boolean; now: number }
-  /** A click or tap on an item: open it pinned; pin it when the pointer opened it; close it when pinned. */
+  /**
+   * A click or tap on an item: open it (a tap pins it; a mouse click opens it as a hover does); a click on a menu the
+   * pointer opened marks it clicked (a tap also pins it); a click on a clicked one closes it.
+   */
   | { type: "click"; id: BarMenuId; via: MenuVia; now: number }
   /** Close the open menu, or (with `id`) only if `id` is the open one. */
   | { type: "close"; id?: BarMenuId; now: number };
@@ -63,11 +66,13 @@ export function barMenus(s: BarMenuState, a: BarMenuAction): BarMenuState {
       return { id: a.id, mode: a.mode, via: a.via, clicked: !!a.clicked, group: a.group, prev: s.id, closedAt: s.closedAt, seq: s.seq + 1 };
     }
     case "click": {
+      // The mouse never pins: a menu it opens or clicks still closes once the pointer leaves it (keys and taps pin).
+      const mouse = a.via === "pointer";
       if (s.id === a.id) {
-        if (!s.clicked) return { ...s, mode: "pinned", via: a.via, clicked: true };
+        if (!s.clicked) return mouse ? { ...s, clicked: true } : { ...s, mode: "pinned", via: a.via, clicked: true };
         return barMenus(s, { type: "close", id: a.id, now: a.now });
       }
-      return barMenus(s, { type: "open", id: a.id, mode: "pinned", via: a.via, clicked: true, now: a.now });
+      return barMenus(s, { type: "open", id: a.id, mode: mouse ? "hover" : "pinned", via: a.via, clicked: true, now: a.now });
     }
     case "close": {
       if (s.id === null || (a.id !== undefined && a.id !== s.id)) return s;
@@ -111,6 +116,16 @@ export function restDue(r: Rest, rest: number = NAV_INTENT.rest, cap: number = N
   return Math.min(r.anchor.t + rest, r.enterAt + cap);
 }
 
+/**
+ * The pointer is still travelling across the bar: over the last `window` ms it moved more than `min` px sideways. The
+ * rest's cap (the menu opens anyway after restCap) waits while it is, so a slow drift along the bar opens nothing.
+ */
+export function travelling(moves: readonly Move[], now: number, window = 150, min = 12): boolean {
+  const recent = moves.filter((m) => now - m.t <= window);
+  if (recent.length < 2) return false;
+  return Math.abs(recent[recent.length - 1].x - recent[0].x) > min;
+}
+
 /* ----- The safe triangle: the pointer heading from an item into its open menu. ----- */
 
 export interface Pt {
@@ -144,9 +159,10 @@ const inBox = (p: Pt, b: Box) => p.x >= b.left && p.x <= b.right && p.y >= b.top
 /**
  * The pointer is on its way into the open menu: inside the triangle from where it left the item (`exit`) to the menu's
  * two top corners (widened by `pad`), still moving (the last move under `stop` ms ago, faster than 0.05 px/ms) and
- * downwards. `moves`: the last few pointer moves, oldest first.
+ * downwards (at least `slope` px down per px across: a drift along the bar is not heading in). `moves`: the last few
+ * pointer moves, oldest first.
  */
-export function aiming(exit: Pt | null, menu: Box | null, moves: readonly Move[], now: number, pad = 8, stop: number = NAV_INTENT.aimStop): boolean {
+export function aiming(exit: Pt | null, menu: Box | null, moves: readonly Move[], now: number, pad = 8, stop: number = NAV_INTENT.aimStop, slope = 0.05): boolean {
   if (!exit || !menu || moves.length < 2) return false;
   const last = moves[moves.length - 1];
   const first = moves[0];
@@ -154,7 +170,7 @@ export function aiming(exit: Pt | null, menu: Box | null, moves: readonly Move[]
   const dt = Math.max(1, last.t - first.t);
   const dx = last.x - first.x;
   const dy = last.y - first.y;
-  if (dy <= 0 || Math.hypot(dx, dy) / dt < 0.05) return false;
+  if (dy <= 0 || dy < Math.abs(dx) * slope || Math.hypot(dx, dy) / dt < 0.05) return false;
   if (inBox(last, menu)) return true;
   return inTriangle(last, exit, { x: menu.left - pad, y: menu.top }, { x: menu.right + pad, y: menu.top });
 }

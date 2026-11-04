@@ -4,7 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { MEGA_AREAS, megaMove, megaPanelId, TILE_COLS, type MegaId } from "@/lib/mega-menus";
 import { launcherActive, studioCount, subActive } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
-import { BarScrim, useBarMenu } from "./bar-menus";
+import { useBarMenu } from "./bar-menus";
 import { BarTrigger } from "./bar-split";
 import { menuReady, warmMenu } from "./mega-data";
 import { useSearchPalette } from "./search-context";
@@ -139,12 +139,14 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
         id={id}
         panelId={megaPanelId(id)}
         href={area.href}
-        name={n !== undefined ? `${area.label}, ${n} studios` : undefined}
         label={
           n !== undefined ? (
+            /* Spoken "Studios, 29 studios": the visible words start the name (no separate label to drift from them). */
             <span className="inline-flex items-center gap-1.5">
               {area.label}
+              <span className="sr-only">,</span>
               <span className="rounded-full bg-brand-faint px-1.5 py-px text-[11px] leading-4 font-semibold text-brand-text tabular-nums">{n}</span>
+              <span className="sr-only"> studios</span>
             </span>
           ) : (
             area.label
@@ -157,14 +159,15 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
         data-mega={id}
         data-mega-trigger={id}
         data-studios-trigger={id === "studios" || undefined}
-        className={className}
+        /* Open, its hit area reaches down to the panel: resting in the gap between them keeps the menu. */
+        className={cn("data-[open]:after:absolute data-[open]:after:inset-x-0 data-[open]:after:top-full data-[open]:after:h-2 data-[open]:after:content-['']", className)}
       />
       <section
         ref={surfaceRef}
         id={megaPanelId(id)}
         data-mega-panel={id}
         data-phase={phase}
-        data-enter={entered}
+        data-mega-enter={entered}
         aria-label={area.panel}
         hidden={phase === "gone"}
         inert={phase !== "open"}
@@ -198,12 +201,3 @@ export function MegaLauncher({ id, active, className }: { id: MegaId; active?: b
     </>
   );
 }
-
-/** The bar's Studios item (MegaLauncher for Studios). */
-export function StudiosLauncher(props: { active?: boolean }) {
-  return <MegaLauncher id="studios" {...props} />;
-}
-
-/** Kept names: the dimmed page under the bar's menus (one for all six: BarScrim). */
-export const MegaScrim = BarScrim;
-export const LauncherScrim = BarScrim;

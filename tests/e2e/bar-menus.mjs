@@ -279,6 +279,7 @@ try {
       [1500, 0],
       [600, 0],
       [300, 1],
+      [200, 1],
     ]) {
       await away(p);
       await glide(p, { x: wm.x, y: wm.y }, Infinity);
@@ -290,6 +291,20 @@ try {
       // Menus opened from nothing (once one is open, the next items switch to theirs: that is a menubar).
       const opens = fs.filter((f, i) => i && f.open.length && !fs[i - 1].open.length).length;
       check(opens <= most, `5: a glide from the wordmark to search at ${speed} px/s opens ${most ? "at most one menu" : "nothing"}`, `${opens}: ${[...new Set(fs.flatMap((f) => f.open))].join()}`);
+    }
+    // A slow drift along the widest item (150 px/s, longer than the rest's 600 ms cap): nothing opens while it moves.
+    {
+      await away(p);
+      const mo = await item(p, "motions");
+      // From the bar just under it, so the pointer comes onto the item already moving.
+      await glide(p, { x: mo.left + 6, y: mo.bottom + 6 }, Infinity);
+      await sleep(300);
+      await mark(p);
+      const t0 = await pageNow(p);
+      await glide(p, { x: mo.right - 4, y: mo.y }, (mo.w - 8) / 0.9);
+      const t1 = await pageNow(p);
+      const fs = await frames(p);
+      check(!fs.some((f) => f.t >= t0 && f.t <= t1 && f.open.length), `5: a slow drift across Motions & effects (${((mo.w - 8) / 0.9).toFixed(0)} px/s for 900 ms) opens nothing while it moves`);
     }
     // 6. With Studios open, away along the bar to search: one close, the dimmed page fades once.
     await away(p);
@@ -365,6 +380,41 @@ try {
     fs = await frames(p);
     const crossed = await arrive(p);
     check(fs.every((f) => f.open.join() === "create"), "8: Create → its right column across the Studios item: no switch, no close", `crossed Studios: ${crossed.studios != null}; ${[...new Set(fs.map((f) => f.open.join()))].join(" / ")}`);
+    // Straight lines from the middle of an item to its menu's far rows, fast and slow, at 1440 and 1280.
+    for (const vp of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }]) {
+      await p.setViewportSize(vp);
+      await sleep(300);
+      const lines = [
+        ["create", async () => {
+          const c = await rect(p, '[data-bar-card="create"] > div');
+          const r1 = await rect(p, '[data-bar-card="create"] [data-col="1"][data-row="0"]');
+          return { x: r1?.x ?? c.right - 60, y: c.top + 14 };
+        }],
+        ["studios", async () => ({ x: vp.width - 120, y: 300 })],
+        ["studios", async () => {
+          const it = await item(p, "studios");
+          const pn = await rect(p, '[data-mega-panel="studios"]');
+          return { x: it.x + 260, y: pn.top + 24 };
+        }],
+      ];
+      for (const [id, target] of lines) {
+        for (const speed of [700, 1500]) {
+          await away(p);
+          const it = await item(p, id);
+          await glide(p, { x: it.x, y: it.y }, Infinity);
+          await p.waitForFunction((id) => window.__bmState().open.includes(id), id, { timeout: 2000 });
+          await sleep(250);
+          const to = await target();
+          await mark(p);
+          await glide(p, to, speed);
+          await sleep(400);
+          fs = await frames(p);
+          const seen = [...new Set(fs.map((f) => f.open.join()))].join(" / ");
+          check(fs.every((f) => f.open.join() === id), `8: ${vp.width} ${id} → (${to.x.toFixed(0)}, ${to.y.toFixed(0)}) at ${speed} px/s: no switch, no close`, seen);
+        }
+      }
+    }
+    await p.setViewportSize({ width: 1440, height: 900 });
     await ctx.close();
   }
 
@@ -396,21 +446,30 @@ try {
       await sleep(delay);
       await mark(p);
       await p.mouse.click(r.x, r.y);
+      await sleep(250);
+      const fs = await frames(p);
+      check(fs.every((f) => f.open.includes("studios")), `9 (A): a click ${delay} ms after a hover open keeps it open (never closes it)`);
+      // The mouse never pins: leaving closes it as for any hover menu (Stripe, Vercel, Apple).
       await glide(p, { x: 700, y: 895 }, Infinity);
       await sleep(800);
-      const fs = await frames(p);
-      check(fs.every((f) => f.open.includes("studios")), `9 (A): a click ${delay} ms after a hover open pins it (never closes); leaving keeps it`);
-      await p.mouse.click(r.x, r.y);
-      await sleep(200);
+      check(!(await now(p)).open.length, `9 (A): after that click, leaving with the mouse closes it`);
     }
     // A click during the rest wait opens it, pinned.
     await away(p);
     const ap = await item(p, "apps");
     await glide(p, { x: ap.x, y: ap.y }, Infinity);
     await p.mouse.click(ap.x, ap.y);
-    await glide(p, { x: 700, y: 895 }, Infinity);
-    await sleep(800);
-    check((await now(p)).open.join() === "apps", "9 (A): a click during the rest wait opens it pinned");
+    await sleep(250);
+    check((await now(p)).open.join() === "apps", "9 (A): a click during the rest wait opens it");
+    await p.mouse.click(ap.x, ap.y);
+    await sleep(250);
+    check(!(await now(p)).open.length, "9 (A): the next click on it closes it");
+    // A double click counts once: the menu stays open.
+    await away(p);
+    await glide(p, { x: ap.x, y: ap.y }, Infinity);
+    await p.mouse.dblclick(ap.x, ap.y);
+    await sleep(300);
+    check((await now(p)).open.join() === "apps", "9 (A): a double click on an item leaves its menu open");
     await p.keyboard.press("Escape");
     await sleep(200);
     // Ctrl-click: the area's page in a new tab; the menu state does not change (here: Studios, opened by resting on it).
@@ -700,6 +759,106 @@ try {
       await p.keyboard.press("Escape");
       await sleep(150);
     }
+    await ctx.close();
+  }
+
+  // ---------- 20. Typing elsewhere keeps its keys; 21. a resize that hides the open item closes it; 22. switches
+  // never show a panel past the sheet's edge; 23. Create's See all sits at the card's top right ----------
+  {
+    const ctx = await context();
+    const p = await open(ctx);
+    await away(p);
+    await p.evaluate(() => {
+      const t = document.createElement("textarea");
+      t.id = "bm-prompt";
+      t.style.cssText = "position:fixed;left:20px;bottom:20px;z-index:100;width:200px;height:40px";
+      document.body.append(t);
+      t.focus();
+    });
+    await p.keyboard.type("abc");
+    for (const id of ["studios", "create"]) {
+      const it = await item(p, id);
+      await glide(p, { x: it.x, y: it.y }, Infinity);
+      await p.waitForFunction((id) => window.__bmState().open.includes(id), id, { timeout: 2000 });
+      const row = await rect(p, id === "create" ? '[data-bar-card="create"] [data-col="0"][data-row="1"]' : '[data-mega-panel="studios"] [data-col="1"][data-row="1"]');
+      await glide(p, { x: row.x, y: row.y }, 900);
+      await sleep(200);
+      const during = await p.evaluate(() => document.activeElement?.id);
+      await glide(p, { x: 700, y: 880 }, 1500);
+      await sleep(700);
+      await p.keyboard.type("d");
+      const v = await p.evaluate(() => ({ id: document.activeElement?.id, v: document.getElementById("bm-prompt").value }));
+      check(during === "bm-prompt" && v.id === "bm-prompt" && v.v === "abcd", `20: passing over ${id}'s rows while typing keeps focus and keys in the field`, `${during} / ${v.id} / ${v.v}`);
+      await p.evaluate(() => (document.getElementById("bm-prompt").value = "abc"));
+    }
+    await p.evaluate(() => document.getElementById("bm-prompt").remove());
+
+    // 21. Canvas shows only from 1440: open it, narrow the window, the menu closes and no highlight is left.
+    await away(p);
+    const cv = await item(p, "canvas");
+    await glide(p, { x: cv.x, y: cv.y }, Infinity);
+    await p.mouse.click(cv.x, cv.y);
+    await p.waitForFunction(() => window.__bmState().open.includes("canvas"), null, { timeout: 2000 });
+    await p.setViewportSize({ width: 1300, height: 900 });
+    await sleep(500);
+    const after = await p.evaluate(() => ({ open: window.__bmState().open, on: document.querySelector("[data-bar-indicator]")?.hasAttribute("data-on") }));
+    check(!after.open.length && !after.on, "21: a resize that hides Canvas closes its menu, with no highlight left on the bar", JSON.stringify(after));
+    // (The pointer off the bar first: Canvas comes back under it otherwise, and a rest there opens it.)
+    await glide(p, { x: 700, y: 880 }, Infinity);
+    await p.setViewportSize({ width: 1440, height: 900 });
+    await sleep(400);
+    check(!(await now(p)).open.length, "21: back to 1440, it stays closed");
+
+    // 22. Between two big panels the painted part of each one ends at the sheet's edge (never text on the bare page).
+    for (const [a, b] of [["apps", "studios"], ["studios", "apps"], ["canvas", "motions"], ["apps", "motions"]]) {
+      await away(p);
+      const ra = await item(p, a);
+      const rb = await item(p, b);
+      await glide(p, { x: ra.x, y: ra.y }, Infinity);
+      await p.waitForFunction((a) => window.__bmState().open.includes(a), a, { timeout: 2000 });
+      await sleep(400);
+      const watch = p.evaluate(async () => {
+        let worst = 0;
+        let both = 0;
+        const end = performance.now() + 500;
+        while (performance.now() < end) {
+          const sheet = document.querySelector("[data-mega-sheet]").getBoundingClientRect();
+          let shown = 0;
+          for (const s of document.querySelectorAll("[data-mega-panel]:not([hidden])")) {
+            const cs = getComputedStyle(s);
+            const op = Number(cs.opacity);
+            if (op < 0.05) continue;
+            if (op > 0.3) shown++;
+            const r = s.getBoundingClientRect();
+            // The cut at its bottom: inset's third length, a calc of the panel's own height (100%) while it moves.
+            const inset = /^inset\(0px 0px (.+?)(?: 0px)?\)$/.exec(cs.clipPath)?.[1] ?? "0px";
+            const js = inset.replaceAll("100%", `${r.height}px`).replaceAll("px", "").replaceAll("max(", "Math.max(").replaceAll("calc(", "(");
+            const cut = Number(Function(`return (${js})`)()) || 0;
+            const bottom = r.bottom - cut;
+            worst = Math.max(worst, bottom - sheet.bottom);
+          }
+          if (shown > 1) both++;
+          await new Promise(requestAnimationFrame);
+        }
+        return { worst, both };
+      });
+      await sleep(30);
+      await glide(p, { x: rb.x, y: rb.y }, Infinity);
+      const w = await watch;
+      check(w.worst <= 2, `22: ${a} → ${b}: no panel shows past the sheet's edge during the switch`, `${w.worst.toFixed(0)} px`);
+      check(w.both <= 1, `22: ${a} → ${b}: never two panels' words clearly at once`, `${w.both} frames`);
+    }
+
+    // 23. Create's See all: top right of the card, out of the rows' flow.
+    await away(p);
+    const cr = await item(p, "create");
+    await glide(p, { x: cr.x, y: cr.y }, Infinity);
+    await p.waitForFunction(() => window.__bmState().open.includes("create"), null, { timeout: 2000 });
+    await sleep(300);
+    const sa = await rect(p, '[data-bar-card="create"] [data-see-all]');
+    const card = await rect(p, '[data-bar-card="create"] > div');
+    const head = await rect(p, '[data-bar-card="create"] [role="group"]');
+    check(!!sa && !!card && !!head && card.right - sa.right <= 12 && sa.top - card.top <= 12 && head.top - card.top <= 12, "23: Create's See all sits at the card's top right; the headings start at the top", JSON.stringify({ sa, card: card && { top: card.top, right: card.right }, head: head?.top }));
     await ctx.close();
   }
 

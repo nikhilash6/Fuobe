@@ -358,8 +358,4 @@ export const NAV_INTENT = {
   aimStop: 60,
   /** A hover open waits at most this long for its menu's data. */
   dataWait: 150,
-  /** A loading menu shows its skeleton only after this long. */
-  skeletonGrace: 150,
-  /** The dimmed page starts to fade only once nothing has been open this long. */
-  scrimHold: 120,
 } as const;

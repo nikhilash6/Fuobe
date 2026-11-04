@@ -9,6 +9,7 @@ import {
   restStart,
   switchDirection,
   switchesAtOnce,
+  travelling,
   type BarMenuState,
   type Move,
 } from "@/lib/bar-intent";
@@ -40,12 +41,16 @@ describe("the menu state", () => {
     expect(barMenus(closed, { type: "close", now: 20 })).toBe(closed);
   });
 
-  it("a click opens pinned, pins a menu the pointer opened (never closes it), and closes a pinned one", () => {
+  it("a mouse click never pins: on a menu the pointer opened it only marks it clicked; the next click closes it", () => {
     const hover = open(CLOSED_MENUS, "create");
-    const pinned = barMenus(hover, { type: "click", id: "create", via: "pointer", now: 30 });
-    expect(pinned).toMatchObject({ id: "create", mode: "pinned" });
-    const closed = barMenus(pinned, { type: "click", id: "create", via: "pointer", now: 60 });
+    const clicked = barMenus(hover, { type: "click", id: "create", via: "pointer", now: 30 });
+    expect(clicked).toMatchObject({ id: "create", mode: "hover", clicked: true });
+    const closed = barMenus(clicked, { type: "click", id: "create", via: "pointer", now: 60 });
     expect(closed.id).toBeNull();
+    // From nothing, a mouse click opens it as a hover does (it closes once the mouse leaves).
+    expect(barMenus(CLOSED_MENUS, { type: "click", id: "apps", via: "pointer", now: 0 })).toMatchObject({ id: "apps", mode: "hover", clicked: true });
+    // A tap on a menu the pointer opened pins it.
+    expect(barMenus(hover, { type: "click", id: "create", via: "touch", now: 30 })).toMatchObject({ id: "create", mode: "pinned", clicked: true });
     const fresh = barMenus(CLOSED_MENUS, { type: "click", id: "more", via: "touch", now: 0 });
     expect(fresh).toMatchObject({ id: "more", mode: "pinned", via: "touch" });
     // A click on another item while one is open switches to it, pinned.
@@ -53,14 +58,14 @@ describe("the menu state", () => {
   });
 
   it("a click on a menu reached by moving from a pinned one pins it; only a menu its own click opened closes", () => {
-    const pinned = barMenus(CLOSED_MENUS, { type: "click", id: "studios", via: "pointer", now: 0 });
+    const pinned = barMenus(CLOSED_MENUS, { type: "click", id: "studios", via: "touch", now: 0 });
     expect(pinned.clicked).toBe(true);
     // Onto Apps with the pointer: it takes over, pinned (a menubar), but not by its own click.
     const moved = open(pinned, "apps", "pinned");
     expect(moved).toMatchObject({ id: "apps", mode: "pinned", clicked: false });
-    const click1 = barMenus(moved, { type: "click", id: "apps", via: "pointer", now: 10 });
+    const click1 = barMenus(moved, { type: "click", id: "apps", via: "touch", now: 10 });
     expect(click1).toMatchObject({ id: "apps", mode: "pinned", clicked: true });
-    expect(barMenus(click1, { type: "click", id: "apps", via: "pointer", now: 20 }).id).toBeNull();
+    expect(barMenus(click1, { type: "click", id: "apps", via: "touch", now: 20 }).id).toBeNull();
     // A key open counts as the item's own (Enter next closes it).
     const key = barMenus(CLOSED_MENUS, { type: "open", id: "canvas", mode: "pinned", via: "key", clicked: true, now: 0 });
     expect(barMenus(key, { type: "click", id: "canvas", via: "key", now: 5 }).id).toBeNull();
@@ -162,8 +167,26 @@ describe("the safe triangle", () => {
     expect(aiming(exit, card, path([[110, 36, 0], [120, 38, 16], [130, 40, 32]]), 32 + NAV_INTENT.aimStop + 1)).toBe(false);
   });
 
+  it("holds for a shallow line into a wide panel, not for a drift along the bar", () => {
+    // Studios to its far-right column: 1000 px across, 270 down.
+    const panel = { left: 0, top: 56, right: 1440, bottom: 700 };
+    const from = { x: 330, y: 30 };
+    expect(aiming(from, panel, path([[340, 33, 0], [380, 44, 16], [420, 55, 32]]), 40)).toBe(true);
+    // Along the bar with a slight sag: switches at once.
+    expect(aiming(from, panel, path([[340, 30, 0], [380, 31, 16], [420, 32, 32]]), 40)).toBe(false);
+  });
+
   it("is off without an exit point or a menu", () => {
     expect(aiming(null, card, path([[110, 36, 0], [130, 40, 32]]), 40)).toBe(false);
     expect(aiming(exit, null, path([[110, 36, 0], [130, 40, 32]]), 40)).toBe(false);
+  });
+});
+
+describe("travelling: a drift along the bar", () => {
+  const at = (pts: [number, number][]) => pts.map(([x, t]) => ({ x, y: 30, t }));
+  it("is on while the pointer keeps moving sideways (200 px/s), off once it settles", () => {
+    expect(travelling(at([[100, 0], [103, 16], [106, 32], [110, 48], [113, 64], [116, 80], [119, 96]]), 100)).toBe(true);
+    expect(travelling(at([[100, 0], [102, 40], [103, 80], [104, 120]]), 130)).toBe(false);
+    expect(travelling(at([[100, 0], [140, 16]]), 400)).toBe(false);
   });
 });

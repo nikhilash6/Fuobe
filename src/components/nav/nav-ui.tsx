@@ -28,10 +28,6 @@ export interface NavUi {
   menuAct(a: BarMenuAction): BarMenuState;
   /** The menu state now (for timers and handlers: never a render behind). */
   menuNow(): BarMenuState;
-  /** Opens a menu pinned (by its own button), or closes the open one (null). */
-  setOpenMenu(v: BarMenuId | null): void;
-  /** The column the open menu was opened for (openArea(id, group)): it takes focus first. */
-  menuGroup: string | undefined;
   /** Where focus goes back to when the menu closes with Esc: what opened it, when that was not its own button. */
   menuReturnTo(): HTMLElement | null;
   sheet: NavSheet | null;
@@ -66,15 +62,6 @@ export function NavUiProvider({ covers, children }: { covers: NavCovers; childre
     return next;
   }, []);
   const menuNow = useCallback(() => menuRef.current, []);
-  // Opened or closed by a menu's own button: focus goes back to it. openArea() says otherwise.
-  const setOpenMenu = useCallback(
-    (id: BarMenuId | null) => {
-      menuReturn.current = null;
-      const now = performance.now();
-      menuAct(id ? { type: "open", id, mode: "pinned", via: "pointer", clicked: true, now } : { type: "close", now });
-    },
-    [menuAct],
-  );
   const menuReturnTo = useCallback(() => menuReturn.current, []);
   const setSheet = useCallback((v: NavSheet | null) => setSheetState((s) => ({ sheet: v, family: v === "studios" && s.sheet === "studios" ? s.family : "studios" })), []);
   const openArea = useCallback((id: MegaId, group?: string) => {
@@ -95,8 +82,6 @@ export function NavUiProvider({ covers, children }: { covers: NavCovers; childre
       menu,
       menuAct,
       menuNow,
-      setOpenMenu,
-      menuGroup: menu.id ? menu.group : undefined,
       menuReturnTo,
       sheet: sheet.sheet,
       setSheet,
@@ -105,7 +90,7 @@ export function NavUiProvider({ covers, children }: { covers: NavCovers; childre
       openArea,
       openStudios,
     }),
-    [menu, sheet, menuAct, menuNow, setOpenMenu, menuReturnTo, setSheet, openArea, openStudios],
+    [menu, sheet, menuAct, menuNow, menuReturnTo, setSheet, openArea, openStudios],
   );
 
   return (
@@ -120,8 +105,6 @@ const CLOSED: NavUi = {
   menu: CLOSED_MENUS,
   menuAct: () => CLOSED_MENUS,
   menuNow: () => CLOSED_MENUS,
-  setOpenMenu: () => {},
-  menuGroup: undefined,
   menuReturnTo: () => null,
   sheet: null,
   setSheet: () => {},

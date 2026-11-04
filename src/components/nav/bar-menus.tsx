@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   aiming,
@@ -9,6 +9,7 @@ import {
   restStart,
   switchDirection,
   switchesAtOnce,
+  travelling,
   type BarMenuAction,
   type BarMenuId,
   type BarMenuState,
@@ -29,7 +30,8 @@ import { useNavUi } from "./nav-ui";
  *   mouse     resting on an item opens its menu (NAV_INTENT.rest; a glide along the bar opens nothing); while one is
  *             open, moving onto another item switches at once, unless the pointer is heading into the open menu (the
  *             safe triangle, a short hold). A menu the pointer opened closes a moment after the pointer leaves it.
- *   click     opens a menu pinned (a click on a menu the pointer opened pins it; a click on a pinned one closes it).
+ *   click     toggles: a click opens the menu (it still closes once the mouse leaves it, as a hover-opened one does); a
+ *             click on a menu the pointer opened keeps it; the next click closes it. A double click counts once.
  *             Ctrl/Cmd-click or a middle click opens the item's page in a new tab.
  *   touch/pen never hover: a tap toggles, a tap on another item switches, a tap outside only closes.
  *   keys      Enter/Space toggle (focus stays on the item); ArrowDown/ArrowUp open and focus the first/last row;
@@ -136,7 +138,28 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
     );
     timer = t;
   };
-  const isAiming = (id: BarMenuId) => aiming(exit, box(parts.get(id)?.surface), moves.slice(-4), now());
+  /** The pointer's way just now: its last few moves of the last 100 ms (or its last two, after a pause). */
+  const recentMoves = (t: number) => {
+    const recent = moves.filter((m) => t - m.t <= 100);
+    return recent.length >= 2 ? recent.slice(-4) : moves.slice(-2);
+  };
+  const isAiming = (id: BarMenuId) => {
+    const t = now();
+    return aiming(exit, box(parts.get(id)?.surface), recentMoves(t), t);
+  };
+  const track = (x: number, y: number) => {
+    moves.push({ x, y, t: now() });
+    if (moves.length > 10) moves.shift();
+  };
+  /**
+   * A menu is going (closing, or replaced by `to`) with focus on one of its rows: focus moves to its item (or to the
+   * new menu's item) instead of falling to the page. Focus is only ever in a menu that the keys or the item already had.
+   */
+  const handBack = (from: BarMenuId, to?: BarMenuId) => {
+    const a = document.activeElement;
+    if (!a || !parts.get(from)?.surface?.contains(a)) return;
+    parts.get(to ?? from)?.trigger?.focus({ preventScroll: true });
+  };
 
   const open = (id: BarMenuId, mode: "hover" | "pinned", via: MenuVia) => {
     clear();
@@ -146,6 +169,7 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
   /** Onto another item while a menu is open (or just closed): it takes over at once, in the open one's mode. */
   const switchTo = (id: BarMenuId) => {
     const s = state();
+    if (s.id) handBack(s.id, id);
     open(id, s.id ? s.mode : "hover", "pointer");
   };
   const close = (id: BarMenuId, focusBack = false) => {
@@ -153,6 +177,7 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
     if (s.id !== id) return;
     clear();
     const back = focusBack ? (s.via === "area" && returnTo()?.isConnected ? returnTo() : parts.get(id)?.trigger) : null;
+    if (!back) handBack(id);
     act({ type: "close", id, now: now() });
     back?.focus();
   };
@@ -168,7 +193,20 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
     go();
   };
   const armRest = (id: BarMenuId) => {
-    if (rest) arm("open", id, restDue(rest) - now(), () => hoverOpen(id));
+    if (!rest) return;
+    const r = rest;
+    const due = restDue(r);
+    // Due by the cap (the pointer never stopped): it opens only if the pointer is not still drifting along the bar.
+    const capped = due < r.anchor.t + NAV_INTENT.rest;
+    arm("open", id, due - now(), () => {
+      const t = now();
+      if (capped && travelling(moves, t)) {
+        const last = moves[moves.length - 1];
+        rest = restStart(last.x, last.y, t);
+        return armRest(id);
+      }
+      hoverOpen(id);
+    });
   };
   const armClose = (id: BarMenuId, held = 0) => {
     arm("close", id, held ? 50 : NAV_INTENT.grace, () => {
@@ -176,7 +214,20 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
       if (s.id !== id || s.mode !== "hover" || hoverOn === id || overSurface === id) return;
       // Still heading into the menu (a long diagonal): hold the close a little longer.
       if (held < NAV_INTENT.aimMax && isAiming(id)) return armClose(id, held + 50);
+      handBack(id);
       act({ type: "close", id, now: now() });
+    });
+  };
+  /**
+   * Crossing `id` on the way into the open menu: its switch waits (aimHold), and a little longer while the pointer
+   * keeps heading in (a wide item crossed slowly), up to aimMax; a stop or a turn along the bar switches at once.
+   */
+  const holdSwitch = (id: BarMenuId, held = 0) => {
+    arm("switch", id, held ? 50 : NAV_INTENT.aimHold, () => {
+      if (hoverOn !== id) return;
+      const s = state();
+      if (s.id && s.id !== id && held < NAV_INTENT.aimMax && isAiming(s.id)) return holdSwitch(id, held + 50);
+      switchTo(id);
     });
   };
   const warm = (id: BarMenuId) => parts.get(id)?.warm?.();
@@ -215,8 +266,11 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
           return;
         }
         if (switchesAtOnce(s, now())) {
-          // Crossing this item on the way into an open card (Create, More): hold the switch a moment.
-          if (s.id && !parts.get(s.id)?.big && isAiming(s.id)) return arm("switch", id, NAV_INTENT.aimHold, () => hoverOn === id && switchTo(id));
+          // The browser sends enter before the move that caused it: count this point first, so the check below sees
+          // where the pointer is now, not where it was inside the item it left.
+          track(e.clientX, e.clientY);
+          // Crossing this item on the way into the open menu (a diagonal from its item): hold the switch a moment.
+          if (s.id && isAiming(s.id)) return holdSwitch(id);
           return switchTo(id);
         }
         rest = restStart(e.clientX, e.clientY, now());
@@ -248,13 +302,15 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
         if (s.mode === "hover") armClose(id);
       },
       onClick(e) {
+        const pt = (e.nativeEvent as PointerEvent).pointerType;
+        // A mouse double click counts once (its second click would close what the first opened); two quick taps are two.
+        if (e.detail > 1 && (pt || lastType) === "mouse") return;
         const href = hubOf(id);
         if ((e.ctrlKey || e.metaKey) && href) {
           e.preventDefault();
           newTab(href);
           return;
         }
-        const pt = (e.nativeEvent as PointerEvent).pointerType;
         const via: MenuVia = e.detail === 0 && !pt ? "key" : (pt || lastType) === "mouse" ? "pointer" : "touch";
         clear();
         rest = null;
@@ -299,10 +355,14 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
       },
       onPointerMove(e) {
         // The mouse moves the keyboard's place: the row under it takes focus (quietly: the ring is the keyboard's), so the
-        // arrow keys go on from where the mouse left off and only one row is ever highlighted.
+        // arrow keys go on from where the mouse left off and only one row is ever highlighted. Only while focus is
+        // already this menu's (its item, a row) or nowhere: a field being typed in keeps focus, and its keys.
         if (e.pointerType !== "mouse") return;
+        const a = document.activeElement;
+        const p = parts.get(id);
+        if (a && a !== document.body && !p?.trigger?.contains(a) && !p?.surface?.contains(a)) return;
         const at = (e.target as HTMLElement).closest<HTMLElement>("[data-col]");
-        if (at && at !== document.activeElement) at.focus({ preventScroll: true });
+        if (at && at !== a) at.focus({ preventScroll: true });
       },
       onPointerLeave(e) {
         if (e.pointerType !== "mouse") return;
@@ -350,16 +410,36 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
     const onMove = (e: PointerEvent) => {
       lastType = e.pointerType;
       if (e.pointerType !== "mouse") return;
-      moves.push({ x: e.clientX, y: e.clientY, t: now() });
-      if (moves.length > 6) moves.shift();
+      track(e.clientX, e.clientY);
     };
-    const swallowClick = () => {
+    /** Drops the click of this one tap (where it pressed, soon after); a tap that became a scroll leaves no blocker. */
+    const swallowClick = (down: PointerEvent) => {
       const stop = (ev: MouseEvent) => {
+        done();
+        if (Math.hypot(ev.clientX - down.clientX, ev.clientY - down.clientY) >= 10) return;
         ev.preventDefault();
         ev.stopPropagation();
       };
-      document.addEventListener("click", stop, { capture: true, once: true });
-      window.setTimeout(() => document.removeEventListener("click", stop, true), 800);
+      const cancel = (ev: PointerEvent) => {
+        if (ev.pointerId === down.pointerId) done();
+      };
+      const t = window.setTimeout(() => done(), 500);
+      const done = () => {
+        window.clearTimeout(t);
+        document.removeEventListener("click", stop, true);
+        document.removeEventListener("pointercancel", cancel, true);
+      };
+      document.addEventListener("click", stop, true);
+      document.addEventListener("pointercancel", cancel, true);
+    };
+    /** A resize hid the open menu's item (the bar drops items as it narrows): its menu closes with it. */
+    const onResize = () => {
+      const s = state();
+      const t = s.id ? parts.get(s.id)?.trigger : null;
+      if (s.id && (!t || !shows(t))) {
+        clear();
+        act({ type: "close", id: s.id, now: now() });
+      }
     };
     const onDown = (e: PointerEvent) => {
       lastType = e.pointerType;
@@ -370,7 +450,7 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
       if (target?.closest?.("[data-bar-menu]") || parts.get(s.id)?.surface?.contains(target)) return;
       close(s.id);
       // A tap meant to dismiss never follows a link on the dimmed page under it.
-      if (e.pointerType === "touch" || e.pointerType === "pen") swallowClick();
+      if (e.pointerType === "touch" || e.pointerType === "pen") swallowClick(e);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
@@ -399,12 +479,14 @@ export function createBarController(act: (a: BarMenuAction) => BarMenuState, sta
     document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("keydown", onKey);
     document.addEventListener("focusout", onFocusOut);
+    window.addEventListener("resize", onResize);
     return () => {
       clear();
       document.removeEventListener("pointermove", onMove, true);
       document.removeEventListener("pointerdown", onDown, true);
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("focusout", onFocusOut);
+      window.removeEventListener("resize", onResize);
     };
   };
 
@@ -483,16 +565,27 @@ export function BarMenusProvider({ children }: { children: React.ReactNode }) {
   return <BarCtx.Provider value={ctl}>{children}</BarCtx.Provider>;
 }
 
-/** A new page (a link, back, a notification) closes the open menu. Reads the path: render it inside Suspense. */
+/**
+ * A new page (a link, back or forward, a notification; a change of query counts) closes the open menu, unless the
+ * pointer opened it and is on it now (it rested on an item while the page was loading). Reads the URL: render it
+ * inside Suspense.
+ */
 export function CloseMenusOnRoute() {
   const pathname = usePathname();
+  const query = useSearchParams().toString();
+  const url = `${pathname}?${query}`;
+  const ctl = useBarController();
   const { menuNow, menuAct } = useNavUi();
-  const at = useRef(pathname);
+  const at = useRef(url);
   useEffect(() => {
-    if (at.current === pathname) return;
-    at.current = pathname;
-    if (menuNow().id) menuAct({ type: "close", now: performance.now() });
-  }, [pathname, menuNow, menuAct]);
+    if (at.current === url) return;
+    at.current = url;
+    const s = menuNow();
+    if (!s.id) return;
+    const p = ctl?.part(s.id);
+    const held = s.mode === "hover" && (!!p?.trigger?.matches(":hover") || !!p?.surface?.matches(":hover"));
+    if (!held) menuAct({ type: "close", now: performance.now() });
+  }, [url, ctl, menuNow, menuAct]);
   return null;
 }
 
@@ -528,7 +621,13 @@ export function useBarMenu(id: BarMenuId, { big = false, ready, warm }: { big?: 
   const other = open ? menu.prev : menu.id;
   const sideways = big && !!other && !!ctl?.part(other)?.big;
   const dir = open ? switchDirection(menu.prev, id) : switchDirection(id, menu.id);
-  const motion = sideways && dir ? (open ? { "--enter-x": `calc(var(--motion-d2) * ${dir})`, "--enter-y": "0px", "--enter-delay": "var(--motion-stagger)" } : { "--exit-x": `calc(var(--motion-d2) * ${-dir})`, "--exit-y": "0px" }) : {};
+  // The old content is gone (two thirds of fast) before the new one starts (two staggers): never two panels' words at once.
+  const motion =
+    sideways && dir
+      ? open
+        ? { "--enter-x": `calc(var(--motion-d2) * ${dir})`, "--enter-y": "0px", "--enter-delay": "calc(var(--motion-stagger) * 2)" }
+        : { "--exit-x": `calc(var(--motion-d2) * ${-dir})`, "--exit-y": "0px", "--exit-fade": "calc(var(--motion-fast) * .67)" }
+      : {};
   return {
     open,
     phase,
@@ -556,22 +655,24 @@ export function BarIndicator() {
       el.removeAttribute("data-on");
       return;
     }
+    /** Puts the highlight on the item; false when the item is hidden (a narrower window). */
     const place = () => {
       const host = el.parentElement?.getBoundingClientRect();
       const r = trig.getBoundingClientRect();
-      if (!host || !r.width) return;
+      if (!host || !r.width) return false;
       el.style.width = `${r.width}px`;
       el.style.height = `${r.height}px`;
       el.style.translate = `${r.left - host.left}px ${r.top - host.top}px`;
+      return true;
     };
     // Slides only from one open item to the next; from nothing it shows in place. The slide moves transform only: the
     // box takes the new item's size at once and starts scaled to the old one's width, then settles (FLIP).
     const slide = el.hasAttribute("data-on") && !!menu.prev;
     const was = slide ? { w: parseFloat(el.style.width), t: el.style.translate } : null;
     el.removeAttribute("data-slide");
-    place();
+    const shown = place();
     const w = parseFloat(el.style.width);
-    if (was && w > 0 && was.w > 0) {
+    if (shown && was && w > 0 && was.w > 0) {
       const to = el.style.translate;
       el.style.translate = was.t;
       el.style.scale = `${was.w / w} 1`;
@@ -580,13 +681,15 @@ export function BarIndicator() {
       el.style.translate = to;
       el.style.scale = "1 1";
     } else el.style.scale = "1 1";
-    el.setAttribute("data-on", "");
-    const ro = new ResizeObserver(place);
+    el.toggleAttribute("data-on", shown);
+    // No highlight left between the items that show when its item hides.
+    const follow = () => el.toggleAttribute("data-on", place());
+    const ro = new ResizeObserver(follow);
     ro.observe(trig);
-    window.addEventListener("resize", place);
+    window.addEventListener("resize", follow);
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", place);
+      window.removeEventListener("resize", follow);
     };
   }, [ctl, menu.id, menu.prev]);
   return <span ref={ref} aria-hidden data-bar-indicator className="pointer-events-none absolute top-0 left-0 rounded-[10px] print:hidden" />;
@@ -602,11 +705,13 @@ export function BarStage() {
   const ref = useRef<HTMLDivElement>(null);
   const big = menu.id && ctl?.part(menu.id)?.big ? menu.id : null;
   const morph = !!big && !!menu.prev && !!ctl?.part(menu.prev)?.big;
+  const phase = usePresence(!!big);
   useLayoutEffect(() => {
-    const stage = ref.current;
+    // On the bar, so the panels read it too: during a switch each one is cut at the sheet's moving edge (motion.css).
+    const host = ref.current?.closest<HTMLElement>("[data-top-bar]") ?? ref.current;
     const panel = big ? ctl?.part(big)?.surface : null;
-    if (!stage || !panel) return;
-    const set = () => stage.style.setProperty("--panel-h", `${panel.offsetHeight}px`);
+    if (!host || !panel) return;
+    const set = () => host.style.setProperty("--panel-h", `${panel.offsetHeight}px`);
     set();
     const ro = new ResizeObserver(set);
     ro.observe(panel);
@@ -617,6 +722,7 @@ export function BarStage() {
       ref={ref}
       aria-hidden
       data-mega-stage
+      data-phase={phase}
       data-open={big ? "" : undefined}
       data-morph={morph ? "" : undefined}
       className="pointer-events-none absolute inset-x-0 top-full h-[calc(100dvh-3.5rem)] overflow-hidden print:hidden"

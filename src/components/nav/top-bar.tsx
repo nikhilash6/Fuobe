@@ -263,15 +263,28 @@ export function warmBar(): void {
   loadMenusNow(ids);
 }
 
-/** Soon after the page is ready (idle, or 1.5 s at the latest), so the first hover never meets a skeleton. */
+/**
+ * Soon after the page has loaded (its first media come first; then idle, or 1.5 s at the latest), so the first hover
+ * never meets a skeleton. The pointer or focus coming near the bar warms the menus at once (MainNav).
+ */
 function MenuPrefetch() {
   useEffect(() => {
-    if (typeof window.requestIdleCallback !== "function") {
-      const t = window.setTimeout(warmBar, 300);
-      return () => window.clearTimeout(t);
+    let stop = () => {};
+    const schedule = () => {
+      if (typeof window.requestIdleCallback !== "function") {
+        const t = window.setTimeout(warmBar, 300);
+        stop = () => window.clearTimeout(t);
+        return;
+      }
+      const h = window.requestIdleCallback(warmBar, { timeout: 1500 });
+      stop = () => window.cancelIdleCallback(h);
+    };
+    if (document.readyState === "complete") schedule();
+    else {
+      window.addEventListener("load", schedule, { once: true });
+      stop = () => window.removeEventListener("load", schedule);
     }
-    const h = window.requestIdleCallback(warmBar, { timeout: 1500 });
-    return () => window.cancelIdleCallback(h);
+    return () => stop();
   }, []);
   return null;
 }
