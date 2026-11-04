@@ -5,6 +5,7 @@ import { getModel, getPreset, MODELS } from "@/lib/catalog";
 import type { StudioConfig } from "@/components/studio/studio-context";
 import { HOME_CAPTION_MAX } from "@/lib/home-showcase";
 import { HUB_MODES, type HubKind } from "@/lib/hubs";
+import { GENJUTSU_MODES } from "@/lib/catalog/genjutsu";
 import { appStudio, EDIT_STUDIO, IMAGE_STUDIO, INPAINT_STUDIO, UPSCALE_STUDIO, VIDEO_STUDIO } from "@/lib/studios";
 import { EXAMPLE_MEDIA } from "@/lib/examples/media.generated";
 import { EXAMPLE_CAPTION_MAX, EXAMPLE_WORDS_MAX, EXAMPLES_HEADING, MORE_HEADING, exampleFits, type ExampleCard, type ExampleMedia } from "@/lib/examples/types";
@@ -38,6 +39,9 @@ function pageExists(surface: string): boolean {
     if (!(hub in HUB_MODES)) return false;
     return !mode || HUB_MODES[hub as HubKind].some((m) => m.id === mode);
   }
+  // A Genjutsu mode's examples: the Genjutsu page, on that mode (?mode=).
+  const genjutsu = /^genjutsu\/([a-z]+)$/.exec(name);
+  if (kind === "tool" && genjutsu) return GENJUTSU_MODES.some((m) => m.id === genjutsu[1]);
   return fs.existsSync(path.join(root, "src", "app", "(studio)", ...name.split("/"), "page.tsx"));
 }
 

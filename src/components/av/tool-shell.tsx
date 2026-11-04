@@ -76,9 +76,9 @@ export function ToolHero({ title, subtitle, children }: { title: string; subtitl
 }
 
 /** A titled card section (setup steps, review, results). */
-export function Panel({ title, aside, children, className }: { title?: React.ReactNode; aside?: React.ReactNode; children: React.ReactNode; className?: string }) {
+export function Panel({ title, aside, children, className, id }: { title?: React.ReactNode; aside?: React.ReactNode; children: React.ReactNode; className?: string; id?: string }) {
   return (
-    <section className={cn("rounded-2xl border bg-background p-3 shadow-soft sm:p-4", className)}>
+    <section id={id} className={cn("rounded-2xl border bg-background p-3 shadow-soft sm:p-4", className)}>
       {(title || aside) && (
         <div className="mb-3 flex min-w-0 items-center gap-2">
           {title && <h3 className="min-w-0 truncate text-[13px] font-semibold">{title}</h3>}

@@ -13,6 +13,12 @@
  *   frame-in    the same from a clip's first frame ("at": "last" for its last)
  *   mask-in     a painted area: a black-and-white PNG, as it is
  *   still-out   a picture shown as an output: JPEG q84, 960 px at most, plus its poster (<name>.512.webp)
+ *   clip-show   a before → after loop shown as an output (a Genjutsu mode's example): "before" (the clip that went in)
+ *               and "after" (the result) baked into one muted H.264 mp4, 1024×768, 24 fps, 1.2 MB at most, as "layout":
+ *               "inset" (the result fills the frame, the clip plays in a rounded window bottom-left) or "wipe" (the clip
+ *               for 1 s, then a thin line sweeps left to right over 1.4 s and leaves the result). Plus its first frame
+ *               (<name>.poster.webp, 1024 px, so the loop starts with no jump) and the result near its end
+ *               (<name>.peak.webp, 512 px: where a card rests, and what reduced motion shows)
  * A published file is never replaced or removed (a run may name it): a copy whose file exists with other bytes stops
  * the script. A new version gets a new path. A file a run reads sits under /examples/ or /samples/ only: a still from
  * elsewhere in public/ (a preset's before/after, which its own script rewrites) is copied in first.
@@ -93,7 +99,91 @@ async function make(job, dry) {
     const jpg = await sharp(fs.readFileSync(from)).resize({ width: 960, height: 960, fit: "inside", withoutEnlargement: true }).toColorspace("srgb").jpeg({ quality: 84, mozjpeg: true }).toBuffer();
     return [put(to, jpg, dry), put(withExt(to, ".512.webp"), await poster(jpg), dry)];
   }
+  if (op === "clip-show") return clipShow(job, dry);
   throw new Error(`${to}: unknown op ${op}`);
+}
+
+const SHOW = { w: 1024, h: 768, fps: 24, maxBytes: 1_200_000 };
+
+/** A clip's frame count and length (ffprobe). */
+function probe(file) {
+  const out = execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", file]).toString().trim();
+  return Number(out);
+}
+
+/** The rounded window's alpha (white inside) and its frame (white at 85 %), as PNGs for ffmpeg. */
+async function insetMasks(dir, w, h, r, border) {
+  const mask = path.join(dir, "mask.png");
+  const frame = path.join(dir, "frame.png");
+  const svg = (W, H, R, fill) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="black" fill-opacity="0"/><rect width="${W}" height="${H}" rx="${R}" ry="${R}" fill="${fill}"/></svg>`);
+  await sharp({ create: { width: w, height: h, channels: 3, background: "#000" } }).composite([{ input: svg(w, h, r, "#fff") }]).greyscale().png().toFile(mask);
+  await sharp(svg(w + 2 * border, h + 2 * border, r + border, "rgba(255,255,255,0.85)")).png().toFile(frame);
+  return { mask, frame };
+}
+
+/** The before → after loop, encoded until it fits; then its poster and its resting still. */
+async function clipShow(job, dry) {
+  const { to, before, after, layout } = job;
+  if (layout !== "inset" && layout !== "wipe") throw new Error(`${to}: clip-show takes layout "inset" or "wipe"`);
+  const frames = Math.min(probe(before), probe(after));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-example-show-"));
+  const { w, h, fps } = SHOW;
+  const norm = (i, W, H) => `[${i}:v]fps=${fps},scale=${W}:${H}:flags=lanczos,setsar=1,format=yuv420p,trim=end_frame=${frames},setpts=PTS-STARTPTS`;
+  let inputs;
+  let graph;
+  if (layout === "inset") {
+    // The source at 30 %, 24 px from the bottom-left corners, 12 px round, a 2 px white frame.
+    const iw = 308;
+    const ih = 230;
+    const b = 2;
+    const x = 24;
+    const y = h - 24 - ih;
+    const { mask, frame } = await insetMasks(dir, iw, ih, 12, b);
+    inputs = ["-i", after, "-i", before, "-loop", "1", "-i", mask, "-loop", "1", "-i", frame];
+    graph = [
+      `${norm(0, w, h)}[A]`,
+      `${norm(1, iw, ih)}[B]`,
+      `[2:v]format=gray,scale=${iw}:${ih}[M]`,
+      `[B][M]alphamerge[BM]`,
+      `[A][3:v]overlay=${x - b}:${y - b}:shortest=1[A1]`,
+      `[A1][BM]overlay=${x}:${y}:shortest=1,format=yuv420p[out]`,
+    ].join(";");
+  } else {
+    // 0–1 s the source; 1–2.4 s a line sweeps (ease in-out) and leaves the result on its left; then the result.
+    const p = "clip((t-1)/1.4\,0\,1)";
+    const X = `(${w}*if(lt(${p}\,0.5)\,2*${p}*${p}\,1-pow(-2*${p}+2\,2)/2))`;
+    const d = (frames / fps).toFixed(4);
+    inputs = ["-i", before, "-i", after];
+    graph = [
+      `${norm(0, w, h)}[A]`,
+      `${norm(1, w, h)}[B]`,
+      `color=black:s=${w}x${h}:r=${fps}:d=${d}[m0]`,
+      `color=white:s=${w}x${h}:r=${fps}:d=${d}[m1]`,
+      `[m0][m1]overlay=x='${X}-${w}':y=0:eval=frame,format=gray[M]`,
+      `[B][M]alphamerge[BM]`,
+      `[A][BM]overlay=0:0:shortest=1[W]`,
+      `color=black@0.25:s=8x${h}:r=${fps}:d=${d}[S]`,
+      `color=white:s=2x${h}:r=${fps}:d=${d}[L]`,
+      `[W][S]overlay=x='${X}-4':y=0:eval=frame:enable='between(t\,1\,2.4)'[W1]`,
+      `[W1][L]overlay=x='${X}-1':y=0:eval=frame:enable='between(t\,1\,2.4)',format=yuv420p[out]`,
+    ].join(";");
+  }
+  const mp4 = path.join(dir, "show.mp4");
+  let data;
+  for (const crf of [24, 26, 28, 30, 32]) {
+    execFileSync("ffmpeg", ["-v", "error", "-y", ...inputs, "-filter_complex", graph, "-map", "[out]", "-frames:v", String(frames), "-an", "-c:v", "libx264", "-profile:v", "high", "-preset", "slow", "-crf", String(crf), "-pix_fmt", "yuv420p", "-r", String(fps), "-movflags", "+faststart", "-map_metadata", "-1", "-threads", "1", mp4]);
+    data = fs.readFileSync(mp4);
+    if (data.length <= SHOW.maxBytes) break;
+  }
+  if (data.length > SHOW.maxBytes) throw new Error(`${to}: the loop is ${data.length} bytes, over ${SHOW.maxBytes}`);
+  const first = frameOf(mp4);
+  const posterWebp = await fitting((q) => sharp(first).webp({ quality: q }).toBuffer(), [78, 70, 62, 54], 90_000);
+  const peakPng = path.join(dir, "peak.png");
+  execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", ((frames / fps) - 0.45).toFixed(3), "-i", mp4, "-frames:v", "1", peakPng]);
+  const peakWebp = await fitting((q) => sharp(fs.readFileSync(peakPng)).resize({ width: 512 }).webp({ quality: q }).toBuffer(), [78, 70, 62], 40_000);
+  fs.rmSync(dir, { recursive: true, force: true });
+  console.log(`${to}: ${frames} frames, ${(data.length / 1e6).toFixed(2)} MB`);
+  return [put(to, data, dry), put(withExt(to, ".poster.webp"), posterWebp, dry), put(withExt(to, ".peak.webp"), peakWebp, dry)];
 }
 
 /** An input's inset copy, where there is one. */
@@ -104,6 +194,9 @@ function thumbFor(pub) {
 
 /** An output's poster, where there is one. */
 function posterFor(pub) {
+  // A clip-show loop's first frame.
+  const first = withExt(pub, ".poster.webp");
+  if (first !== pub && fs.existsSync(abs(first))) return first;
   const ba = /^\/previews\/presets\/ba\/960\/(.+)$/.exec(pub);
   if (ba) return `/previews/presets/ba/512/${ba[1]}`;
   const own = withExt(pub, ".512.webp");

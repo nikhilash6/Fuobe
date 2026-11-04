@@ -21,6 +21,8 @@ import {
   UPSCALE_STUDIO,
   VIDEO_STUDIO,
 } from "@/lib/studios";
+import { getMaker, GENJUTSU_MODES, requestFeatures, type GenjutsuMode } from "@/lib/catalog/genjutsu";
+import { exampleSettings, genjutsuSurface, recipeProblem, type GenjutsuExampleCard, type ModeExamples } from "./genjutsu";
 import { EXAMPLE_MEDIA, type ExampleMediaFile } from "./media.generated";
 import plan from "./plan.json";
 import {
@@ -34,6 +36,8 @@ import {
   type ExampleRequest,
   type ExampleRowData,
   type ExampleSurface,
+  type GenjutsuExampleLoad,
+  type GenjutsuRecipe,
 } from "./types";
 
 /** One row of plan.json. */
@@ -44,8 +48,16 @@ export interface PlanRow {
   rank: number;
   caption: string;
   words?: string;
-  /** "draft" (the default): the composer's own path. "look": a sheet to look at. */
-  load?: "draft" | "look";
+  /** "draft" (the default): the composer's own path. "look": a sheet to look at. "genjutsu": a Genjutsu mode's example. */
+  load?: "draft" | "look" | "genjutsu";
+  /** A Genjutsu mode's example (load "genjutsu"): its loop's layout, what went in, the recipe, and the example's own inputs. */
+  genjutsu?: {
+    layout: GenjutsuExampleLoad["layout"];
+    went: string;
+    recipe: GenjutsuRecipe;
+    /** The fields about the example's own clip and photos (who is who): never on the card, used by the tests' exact remake. */
+    own?: Record<string, unknown>;
+  };
   presetId?: string;
   modelId?: string;
   /** App settings, option key → choice value. */
@@ -174,7 +186,7 @@ function outputMedia(row: PlanRow): ExampleMedia {
     return { src: `/previews/presets/ba/960/${id}-after.jpg?v=${v}`, kind: "image", poster: `/previews/presets/ba/512/${id}-after.jpg?v=${v}`, w: 960, h: 720 };
   }
   const f = EXAMPLE_MEDIA[out] ?? fail(row, `its output ${out} isn't a published example file`);
-  return { src: versioned(out, f), kind: mediaKind(f.type), ...(f.poster && { poster: f.poster }), ...(f.w && { w: f.w, h: f.h }) };
+  return { src: versioned(out, f), kind: mediaKind(f.type), ...(f.poster && { poster: f.poster }), ...(f.w && { w: f.w, h: f.h }), ...(row.rest && { rest: restOf(row, row.rest) }) };
 }
 
 /** The request a row runs: its preset, model, words, settings and files, in a past run's shape. */
@@ -222,14 +234,15 @@ function buildCard(row: PlanRow): ExampleCard {
     if (slots && !def) fail(row, `${row.surface} has no ${slot} slot`);
     const media = inputMedia(row, path);
     if (def && def.accept !== media.kind) fail(row, `${slot} takes ${def.accept}, not ${media.kind}`);
-    inputs.push({ slot, ...(def?.label && { label: def.label }), media });
+    const label = row.load === "genjutsu" ? (GENJUTSU_INPUT_LABEL[slot.replace(/\d+$/, "")] ?? fail(row, `a Genjutsu example's inputs are clip, photo1… (not ${slot})`)) : def?.label;
+    inputs.push({ slot, ...(label && { label }), media });
   }
   // An inpaint's picture with its painted area tinted shows what went in; the plain picture and the black-and-white
   // area it was made from stay out of the card (the request still has them).
   const shown = inputs.some((i) => i.slot === "sketch") ? inputs.filter((i) => i.slot !== "image" && i.slot !== "mask") : inputs;
   if (row.modelId && !getModel(row.modelId)) fail(row, `names model ${row.modelId}, which isn't in the catalog`);
-  const load: ExampleCard["load"] = row.load === "look" ? { via: "look" } : { via: "draft", request: requestOf(row, preset) };
-  const chips = chipsOf(row, preset);
+  const load: ExampleCard["load"] = row.load === "genjutsu" ? genjutsuLoad(row) : row.load === "look" ? { via: "look" } : { via: "draft", request: requestOf(row, preset) };
+  const chips = load.via === "genjutsu" ? exampleSettings(load.recipe) : chipsOf(row, preset);
   return {
     id: row.id,
     caption: row.caption,
@@ -239,6 +252,26 @@ function buildCard(row: PlanRow): ExampleCard {
     output: outputMedia(row),
     load,
   };
+}
+
+/** What a Genjutsu example's inputs are called on its card ("What went in"). */
+const GENJUTSU_INPUT_LABEL: Record<string, string> = { clip: "Clip", photo: "Photo", look: "Look", product: "Product" };
+
+/** A Genjutsu mode's example: its surface names the mode, and its recipe passes the same checks a pasted setup does. */
+function genjutsuLoad(row: PlanRow): GenjutsuExampleLoad {
+  const [kind, name] = splitSurface(row.surface);
+  const [tool, mode] = name.split("/");
+  if (kind !== "tool" || tool !== "genjutsu" || !GENJUTSU_MODES.some((m) => m.id === mode)) fail(row, "a Genjutsu example's surface is tool:genjutsu/<mode>");
+  const g = row.genjutsu ?? fail(row, "a Genjutsu example needs its recipe (genjutsu: { layout, went, recipe })");
+  if (g.layout !== "inset" && g.layout !== "wipe") fail(row, `its layout ${g.layout} is neither inset nor wipe`);
+  if (!g.went.trim() || g.went.length > 60) fail(row, "what went in is 1 to 60 characters");
+  const problem = recipeProblem(g.recipe, mode as GenjutsuMode);
+  if (problem) fail(row, problem);
+  const r = g.recipe;
+  const maker = getMaker(r.model, r.engine)!;
+  const needs = requestFeatures({ mode: r.mode, maker, character: r.character, object: r.object, picture: r.picture ? { ...r.picture, stage: "frame" } : undefined, finish: r.finish });
+  if (!row.output.endsWith(".mp4")) fail(row, "a Genjutsu example shows a clip (clip-show)");
+  return { via: "genjutsu", layout: g.layout, went: g.went, recipe: r, needs };
 }
 
 /** Every example, by surface, ranked. */
@@ -326,6 +359,16 @@ export function exampleRow(surface: ExampleSurface): ExampleRowData | null {
   if (!hub || !only || !STUDIO_EXAMPLES[hub]) return null;
   const borrowed = fallbackCards(hub, only);
   return borrowed.length ? { heading: MORE_HEADING, cards: borrowed, surface } : null;
+}
+
+/** Each Genjutsu mode's examples, best first (the page picks the one a viewer may see: exampleFor in ./genjutsu). */
+export function genjutsuExamples(): ModeExamples {
+  const out: ModeExamples = {};
+  for (const m of GENJUTSU_MODES) {
+    const cards = (ALL.bySurface.get(genjutsuSurface(m.id)) ?? []) as GenjutsuExampleCard[];
+    if (cards.length) out[m.id] = cards;
+  }
+  return out;
 }
 
 /** The surface of a camera motion's or effect's page in the Video studio (/video?preset=<id>). */

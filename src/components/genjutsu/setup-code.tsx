@@ -11,7 +11,7 @@ import { decodeSetup, encodeSetup, type GenjutsuSetup } from "@/lib/catalog/genj
 
 /**
  * Higgsfield's "share a setup by code", done locally: Copy setup puts a link with the settings as a short code
- * (/genjutsu?setup=gj1.…) on the clipboard; Paste setup reads a code or such a link back. The clip itself isn't in
+ * (/genjutsu?setup=gj2.…) on the clipboard; Paste setup reads a code or such a link back. The clip itself isn't in
  * it; reference images are files of this install.
  */
 export function SetupCode({ setup, onPaste }: { setup: GenjutsuSetup; onPaste: (s: GenjutsuSetup) => void }) {
@@ -24,7 +24,7 @@ export function SetupCode({ setup, onPaste }: { setup: GenjutsuSetup; onPaste: (
   };
   const paste = () => {
     const s = decodeSetup(text);
-    if (!s) return void toast.error("That isn't a Genjutsu setup code (they start with gj1.)");
+    if (!s) return void toast.error("That isn't a Genjutsu setup code (they start with gj1. or gj2.)");
     onPaste(s);
     setOpen(false);
     setText("");
@@ -53,7 +53,7 @@ export function SetupCode({ setup, onPaste }: { setup: GenjutsuSetup; onPaste: (
             <label htmlFor="gj-setup-code" className="block text-[13px] font-medium">
               Paste a setup code or link
             </label>
-            <Input id="gj-setup-code" value={text} onChange={(e) => setText(e.target.value)} placeholder="gj1.… or a /genjutsu?setup= link" className="h-8 text-[13px]" autoFocus />
+            <Input id="gj-setup-code" value={text} onChange={(e) => setText(e.target.value)} placeholder="gj2.… or a /genjutsu?setup= link" className="h-8 text-[13px]" autoFocus />
             <div className="flex justify-end">
               <Button type="submit" size="sm" className="rounded-full" disabled={!text.trim()}>
                 Use this setup

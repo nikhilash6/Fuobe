@@ -6141,6 +6141,134 @@ export const EXAMPLE_MEDIA: Record<string, ExampleMediaFile> = {
   "w": 512,
   "h": 384
  },
+ "/examples/genjutsu-character/1/in-clip.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 20494,
+  "sha256": "7330bccee37efff3bb27bbc6f4b19af7398ef161ed6d157357d7dfcb3c581025",
+  "v": "7330bcce",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-character/1/in-clip.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 130131,
+  "sha256": "a58db65b7b8fc4dce9dc4d43543f5a898a7eea187c7cb9007101babea48ec021",
+  "v": "a58db65b",
+  "w": 1024,
+  "h": 768,
+  "thumb": "/examples/genjutsu-character/1/in-clip.384.webp?v=7330bcce"
+ },
+ "/examples/genjutsu-character/1/in-photo1.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 4976,
+  "sha256": "cf0b29f874fa35dda2b5d75a9511c98f20fd0a6d94b15398b70856f091029086",
+  "v": "cf0b29f8",
+  "w": 288,
+  "h": 384
+ },
+ "/examples/genjutsu-character/1/in-photo1.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 123959,
+  "sha256": "3fdc4cab67154768eb713fd54326513a255cc24952928273fa68f77307a77e03",
+  "v": "3fdc4cab",
+  "w": 960,
+  "h": 1280,
+  "thumb": "/examples/genjutsu-character/1/in-photo1.384.webp?v=cf0b29f8"
+ },
+ "/examples/genjutsu-character/1/in-photo2.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 4618,
+  "sha256": "d199b904def0bb29a9c51de463133cf46aac892af9054b643723a600f40046a5",
+  "v": "d199b904",
+  "w": 288,
+  "h": 384
+ },
+ "/examples/genjutsu-character/1/in-photo2.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 103273,
+  "sha256": "ece6a208a4ab17f1c254b922ff53a1d356ee9761ba6a4e4ac448a0048aafa3ea",
+  "v": "ece6a208",
+  "w": 960,
+  "h": 1280,
+  "thumb": "/examples/genjutsu-character/1/in-photo2.384.webp?v=d199b904"
+ },
+ "/examples/genjutsu-character/1/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 1109131,
+  "sha256": "6d2fb1db6121dae6bf41f8a99bae62432b446750211f863aedc3d565f0cb858a",
+  "v": "6d2fb1db",
+  "poster": "/examples/genjutsu-character/1/show.poster.webp?v=6639a27c"
+ },
+ "/examples/genjutsu-character/1/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 32068,
+  "sha256": "a0a5bb65804309a65094690c2741a0915f4c0bffd940b35ba34518a702a0d0f1",
+  "v": "a0a5bb65",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/genjutsu-character/1/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 73134,
+  "sha256": "6639a27ce3efd0d00863b3bd03be3b39b32132233b1889d3bc7840516bc2de03",
+  "v": "6639a27c",
+  "w": 1024,
+  "h": 768
+ },
+ "/examples/genjutsu-finish/1/in-clip.384.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 22564,
+  "sha256": "1d9631ed9ec00dd0ea869293e218cfef72a1ea78a3019a8ba7c6cd830aec6859",
+  "v": "1d9631ed",
+  "w": 384,
+  "h": 288
+ },
+ "/examples/genjutsu-finish/1/in-clip.jpg": {
+  "role": "in",
+  "type": "image/jpeg",
+  "bytes": 132258,
+  "sha256": "052a0f08de9d10ba1c7db6adf383d2a0db0d11ec9eeb3ce001b49e6a5a0e3d08",
+  "v": "052a0f08",
+  "w": 1024,
+  "h": 768,
+  "thumb": "/examples/genjutsu-finish/1/in-clip.384.webp?v=1d9631ed"
+ },
+ "/examples/genjutsu-finish/1/show.mp4": {
+  "role": "show",
+  "type": "video/mp4",
+  "bytes": 929162,
+  "sha256": "5fcb43976934bb5380a9f8ce6b1a7a9dbd672ba795e6d0dbcde4c4bc82358543",
+  "v": "5fcb4397",
+  "poster": "/examples/genjutsu-finish/1/show.poster.webp?v=e86785a4"
+ },
+ "/examples/genjutsu-finish/1/show.peak.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 20826,
+  "sha256": "72772e4cacbb0938f7647cb7546375ff3ff18a8e4248b43c6fb9865a126c4202",
+  "v": "72772e4c",
+  "w": 512,
+  "h": 384
+ },
+ "/examples/genjutsu-finish/1/show.poster.webp": {
+  "role": "show",
+  "type": "image/webp",
+  "bytes": 77530,
+  "sha256": "e86785a43477f83144837904306d04ffcfb0872469ab09109a00eb2e47fce8e9",
+  "v": "e86785a4",
+  "w": 1024,
+  "h": 768
+ },
  "/examples/image/1/out.512.webp": {
   "role": "show",
   "type": "image/webp",
