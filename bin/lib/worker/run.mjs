@@ -8,6 +8,10 @@
 // out of memory is freed and the job sent once more; a job its ComfyUI stopped on twice fails, not the worker; inputs are
 // read from the studio once and every clip and sound is made again by ffmpeg (media.mjs); the PC stays awake while it
 // holds a job or waits for one (awake.mjs); and it looks at its model folders again every 10 minutes.
+//
+// Studio jobs first (turns.mjs, local-work.mjs): with a turns folder set, local ComfyUI work on the PC is told apart
+// from other programs. Another program still pauses the worker as before. Local ComfyUI work instead gets a request for
+// a turn, and the worker waits for the answer with its jobs kept in their place.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -19,8 +23,10 @@ import { PROTOCOL, readControl, writeControl, writeStatus } from "./config.mjs";
 import { GpuWatch, othersOf, readGpu } from "./gpu.mjs";
 import { Hold } from "./hold.mjs";
 import { inventoryHash, modelFiles, packFolders } from "./inventory.mjs";
+import { readCounters, readListeners, readLock, splitMemory, unknownHolder } from "./local-work.mjs";
 import { ffmpegVersion, mediaKind, reencode } from "./media.mjs";
 import { retrying } from "./retry.mjs";
+import { SiteTurns, writeSite } from "./turns.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "../../..");
@@ -73,12 +79,26 @@ export function localPause(control, gpu, comfyTrouble, now) {
 
 const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
 const arrayBuffer = (buf) => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+const count = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+
+/**
+ * What the beat says for studio jobs first: { claimable (the studio's jobs this worker may take now; null when the studio
+ * doesn't say, and then local ComfyUI work counts as another program, as before), oldestWaitS, interrupt }.
+ */
+export function siteOf(answer) {
+  const w = answer?.worker ?? {};
+  return {
+    claimable: count(answer?.claimableNow) ?? count(w.claimableNow),
+    oldestWaitS: count(answer?.oldestWaitS) ?? count(w.oldestWaitS),
+    interrupt: w.yieldInterrupt === true || answer?.yieldInterrupt === true,
+  };
+}
 
 /**
  * Run until `signal` aborts or the studio stops it. Returns why it ended: "aborted" (Ctrl+C, the scheduled task's end),
  * "signed-out" (the studio doesn't know its token) or "disconnected". `deps`: { fetch, now, sleep, readGpu, log, home,
  * signal, requirements, ComputerRunner, rules, pins, allowed, ffmpegVersion, reencode, awake, rescanMs, comfy (OwnComfy's own
- * options) }.
+ * options), readCounters, readListeners, gpuEveryMs }.
  */
 export async function runWorker(cfg, deps) {
   const now = deps.now ?? Date.now;
@@ -103,7 +123,21 @@ export async function runWorker(cfg, deps) {
   const comfy = new OwnComfy(cfg, { now, fetch: fetchFn, folderNames: index.folders ?? [], log, ...deps.comfy });
   // A ComfyUI that a stopped worker left running is stopped now, before anything else uses the GPU.
   await comfy.stopLeftover();
-  const gpu = new GpuWatch({ autoResume: !!cfg.autoResume, resumeAfterMs: (cfg.resumeAfterMin ?? 10) * 60_000, resumeBelowC: cfg.resumeBelowC ?? 75 });
+  // Studio jobs first: only with a turns folder set in worker.json. Without one, every program counts the same, as before.
+  const turns = cfg.yieldFolder
+    ? new SiteTurns({
+        folder: cfg.yieldFolder,
+        stateFile: path.join(deps.home ?? cfg.workDir, "turns.json"),
+        maxHoursPerDay: cfg.yieldMaxHoursPerDay,
+        interruptGapMin: cfg.interruptGapMin,
+        neverInterrupt: !!cfg.neverInterrupt,
+        graceMs: deps.turnGraceMs,
+      })
+    : null;
+  if (turns && !turns.folderOk()) log(`The turns folder ${cfg.yieldFolder} isn't there: local ComfyUI work counts as another program until it is.`);
+  const busyMb = cfg.busyVramMb ?? 1024;
+  // Two busy readings in a row pause it when it tells programs apart (a reading can catch memory on its way).
+  const gpu = new GpuWatch({ autoResume: !!cfg.autoResume, resumeAfterMs: (cfg.resumeAfterMin ?? 10) * 60_000, resumeBelowC: cfg.resumeBelowC ?? 75, busyReadings: turns ? 2 : 1 });
   const awake = deps.awake ?? new StayAwake({ now, log });
   const ffmpeg = await (deps.ffmpegVersion ?? ffmpegVersion)(cfg.ffmpeg);
   log(ffmpeg ? "ffmpeg is there: it takes clips and sound, and makes each one again first." : "No ffmpeg set (ffmpeg in worker.json): it takes pictures only.");
@@ -120,6 +154,26 @@ export async function runWorker(cfg, deps) {
   let job = Promise.resolve();
   let lastTask = null;
   let guardMissingAt = -Infinity;
+  // Studio jobs first: the last port table, the last split of the GPU's memory, and the last turn step.
+  let listing = null;
+  let listedAt = -Infinity;
+  let split = null;
+  let turn = { siteWaiting: 0, oldestWaitS: 0, interrupt: false, waitForYield: false, late: false, startsAt: null, ended: null };
+  let siteWritten = "";
+  let siteAt = 0;
+  let siteFailed = false;
+  const writeTurn = (t, body) => {
+    const key = JSON.stringify([body.siteWaiting, body.interrupt]);
+    siteWritten = key;
+    siteAt = t;
+    try {
+      writeSite(cfg.yieldFolder, { ...body, at: t });
+      siteFailed = false;
+    } catch (e) {
+      if (!siteFailed) log(`Couldn't write to the turns folder: ${e.message}`);
+      siteFailed = true;
+    }
+  };
 
   // How often its ComfyUI stopped while running each task (a task that stops it twice fails, not the worker).
   const crashFile = path.join(cfg.workDir, "crashes.json");
@@ -269,17 +323,62 @@ export async function runWorker(cfg, deps) {
   );
 
   const mayWork = () => !pause.paused && answer?.worker && !answer.worker.paused && answer.worker.insideHours && !answer.worker.drain;
-  const state = () => (pause.paused ? `Paused here (${pause.why})` : !answer ? "Connecting" : answer.worker?.paused ? "Paused on the website" : !answer.worker?.insideHours ? "Outside its hours" : answer.worker?.drain ? "Finishing, then pausing" : comfy.ready ? "Ready" : "Starting ComfyUI");
+  const state = () =>
+    pause.paused
+      ? `Paused here (${pause.why})`
+      : !answer
+        ? "Connecting"
+        : answer.worker?.paused
+          ? "Paused on the website"
+          : !answer.worker?.insideHours
+            ? "Outside its hours"
+            : answer.worker?.drain
+              ? "Finishing, then pausing"
+              : turn.waitForYield
+                ? "Waiting for local ComfyUI work to make room (its jobs keep their place)"
+                : comfy.ready
+                  ? "Ready"
+                  : "Starting ComfyUI";
+  // A job that runs on its ComfyUI (not only sending kept results, which needs no GPU).
+  let jobUsesGpu = false;
   const take = (o) => {
     busyJob = true;
+    jobUsesGpu = !o?.onlyHeld;
     job = runner
       .claimAndRun(o)
       .catch((e) => log(`A job stopped: ${e.message}`))
       .finally(() => {
         busyJob = false;
+        jobUsesGpu = false;
         comfy.task = null;
       });
   };
+
+  /** Turns work now: the folder is there, the studio said what this worker can take, and today's hours aren't used up. */
+  const turnsReady = (t) => !!turns && turns.folderOk() && !!answer && siteOf(answer).claimable !== null && turns.capLeft(t);
+
+  /** The GPU's memory split three ways, from the counters and the port table (looked at again every 30 s, or sooner when a new process holds memory). */
+  async function splitNow(t, reading, own) {
+    const counters = await (deps.readCounters ?? readCounters)(cfg.gpuCounters);
+    if (counters && (t - listedAt >= 30_000 || (listing && unknownHolder(counters, listing, own.pid, busyMb)))) {
+      listing = await (deps.readListeners ?? readListeners)(cfg.powershell);
+      listedAt = t;
+    }
+    return splitMemory({
+      usedMb: reading.usedMb,
+      apps: reading.apps,
+      counters,
+      listing,
+      own,
+      ports: cfg.localComfyPorts,
+      excludePorts: cfg.localComfyExcludePorts,
+      excludePids: cfg.localComfyExcludePids,
+      baselineMb: cfg.desktopBaselineMb,
+      lock: readLock(cfg.gpuLockFile),
+      lockOwners: cfg.gpuLockComfyOwners,
+      gpu: cfg.gpuLuid,
+    });
+  }
 
   let beatAt = 0;
   let lastState = "";
@@ -298,12 +397,26 @@ export async function runWorker(cfg, deps) {
         gpu.clear();
         gpu.clearedAt = control.resumedAt;
       }
-      // The GPU, every 5 s, from nvidia-smi only.
-      if (t - lastGpuAt >= 5000) {
+      // The GPU, every 5 s: nvidia-smi's total, and with a turns folder the GPU counters and the port table too.
+      if (t - lastGpuAt >= (deps.gpuEveryMs ?? 5000)) {
         lastGpuAt = t;
         const reading = await (deps.readGpu ?? readGpu)(cfg.nvidiaSmi);
         if (reading) {
-          const verdict = othersOf(reading, { running: comfy.alive(), mb: await comfy.vramMb(), pid: comfy.pid }, cfg.busyVramMb ?? 1024);
+          const own = { running: comfy.alive(), mb: await comfy.vramMb(), pid: comfy.pid, port: comfy.alive() ? comfy.port : null };
+          let verdict;
+          if (turns) {
+            split = await splitNow(t, reading, own);
+            // Local ComfyUI work is asked for a turn only while turns work (the folder, the studio's count, the caps);
+            // otherwise it counts as another program, as before.
+            const othersBusy = split.othersMb > busyMb;
+            const workBusy = !turnsReady(t) && split.workMb > busyMb;
+            verdict = { busy: othersBusy || workBusy, who: othersBusy ? split.who : `ComfyUI${split.work.port ? ` on port ${split.work.port}` : ""}`, othersMb: split.othersMb, cause: othersBusy ? null : "work" };
+            // A pause that only local ComfyUI work caused ends once turns work again (the next day, the folder back).
+            if (!verdict.busy && gpu.paused && gpu.cause === "work") {
+              gpu.clear();
+              log("Local ComfyUI work no longer keeps it paused: back to work.");
+            }
+          } else verdict = othersOf(reading, own, busyMb);
           const was = gpu.paused;
           gpu.update(verdict, reading.tempC, t);
           gpuInfo = { otherApps: reading.apps.filter((a) => a.pid !== comfy.pid).map((a) => ({ pid: a.pid, name: a.name, vramBytes: (a.usedMb ?? 0) * 2 ** 20 })), tempC: reading.tempC };
@@ -318,12 +431,17 @@ export async function runWorker(cfg, deps) {
         log("Its ComfyUI stopped answering: starting it again.");
         await comfy.stop();
       }
-      const next = localPause(control, gpu, comfyTrouble, t) ?? { paused: false, why: null, until: null };
-      const changed = next.paused !== pause.paused || next.why !== pause.why;
+      let next = localPause(control, gpu, comfyTrouble, t) ?? { paused: false, why: null, until: null };
+      // Waiting for its turn is not a pause: its jobs keep their place in the line. The helper's estimate of the start
+      // goes with it.
+      if (!next.paused && turn.waitForYield) next = { paused: false, why: turn.late ? "waiting-for-yield:no-answer" : "waiting-for-yield", until: turn.startsAt };
+      const changed = next.paused !== pause.paused || next.why !== pause.why || next.until !== pause.until;
       pause = next;
-      // A new pause, or every 5 s while busy and 10 s otherwise: beat.
-      if (changed || t - beatAt >= (busyJob ? 5000 : 10_000)) {
+      // A new pause, or every 5 s while busy or in a turn and 10 s otherwise: beat.
+      let beaten = false;
+      if (changed || t - beatAt >= (busyJob || turn.siteWaiting > 0 ? 5000 : 10_000)) {
         beatAt = t;
+        beaten = true;
         try {
           const a = await runner.beat();
           if (runner.view.stopped) {
@@ -345,6 +463,36 @@ export async function runWorker(cfg, deps) {
       if (t - scannedAt >= (deps.rescanMs ?? RESCAN_MS) && !scanning) void rescan();
       // Its own ComfyUI runs only while it may work; a pause (and a stop-now) frees the GPU.
       const stopNow = (pause.paused && (pause.why === "here-now" || pause.why?.startsWith("gpu-busy"))) || answer?.worker?.pauseNow;
+      // Studio jobs first: the turn, from what the beat said and what holds the GPU; site.json on every beat, on a change,
+      // and every 5 s (the helper counts a file older than 15 s as gone).
+      let holdBack = false;
+      if (turns) {
+        const s = siteOf(answer);
+        const workHolds = (split?.workMb ?? 0) > busyMb;
+        const was = turn;
+        turn = turns.step(t, {
+          // A busy reading that may still turn into a pause asks for nothing.
+          may: turnsReady(t) && !pause.paused && !!mayWork() && gpu.busyInARow === 0,
+          claimable: s.claimable,
+          busy: busyJob && jobUsesGpu && !stopNow,
+          workHolds,
+          workThere: !!split && (split.work.pids.length > 0 || !!split.work.lock),
+          serverInterrupt: s.interrupt,
+          oldestWaitS: s.oldestWaitS,
+        });
+        if (turn.waitForYield && !was.waitForYield) log("Local ComfyUI work holds the GPU: asking it to make room for the studio's jobs.");
+        if (turn.late && !was.late) log("Local ComfyUI work hasn't made room after 3 minutes: still waiting, with the jobs kept in line.");
+        if (was.waitForYield && !turn.waitForYield && turn.siteWaiting > 0) log("Local ComfyUI work made room: starting.");
+        if (turn.ended === "idle") {
+          log("No studio job for a minute: its ComfyUI lets go of its memory for local work.");
+          if (comfy.ready && !busyJob) await comfy.free();
+        }
+        if (turns.folderOk() && (beaten || JSON.stringify([turn.siteWaiting, turn.interrupt]) !== siteWritten || t - siteAt >= 5000)) {
+          writeTurn(t, { siteWaiting: turn.siteWaiting, oldestWaitS: turn.oldestWaitS, interrupt: turn.interrupt });
+        }
+        // No new job while local ComfyUI work holds the GPU, unless a turn has begun and it made room.
+        holdBack = turn.waitForYield || (turnsReady(t) && workHolds && turn.siteWaiting === 0) || gpu.busyInARow > 0;
+      }
       if (mayWork()) {
         if (!comfy.alive() && !comfyTrouble && t >= comfy.restartAt) {
           if (comfy.crashedTooOften(t)) {
@@ -369,13 +517,13 @@ export async function runWorker(cfg, deps) {
             }
           }
         }
-        if (comfy.ready && answer?.runner && !busyJob) take();
+        if (comfy.ready && answer?.runner && !busyJob && !holdBack) take();
       } else if (comfy.alive() && (stopNow || !busyJob)) {
         log("Stopping its own ComfyUI (paused).");
         await comfy.stop();
       }
-      // Kept results go up even while it may not work: they need no GPU and no ComfyUI.
-      if (!busyJob && answer && hold.ids().length && !(mayWork() && comfy.ready)) take({ onlyHeld: true });
+      // Kept results go up even while it may not work (or waits for its turn): they need no GPU and no ComfyUI.
+      if (!busyJob && answer && hold.ids().length && !(mayWork() && comfy.ready && !holdBack)) take({ onlyHeld: true });
       // Awake while it holds a job, has results to send, or waits for work.
       awake.set(!!answer?.worker && (busyJob || hold.ids().length > 0 || !!mayWork()));
       // A taken port is tried again (a bind test, never a connection) once a minute.
@@ -394,6 +542,8 @@ export async function runWorker(cfg, deps) {
     runner.stop();
     await Promise.race([job, new Promise((r) => setTimeout(r, 10_000).unref?.())]);
     awake.set(false);
+    // No turn any more: local ComfyUI work may go on at once.
+    if (turns?.folderOk()) writeTurn(now(), { siteWaiting: 0, oldestWaitS: 0, interrupt: false });
     await comfy.stop();
     emptyFolders(f);
     emptyCache();

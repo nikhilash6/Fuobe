@@ -30,6 +30,25 @@ export const DEFAULTS = {
   resumeAfterMin: 10,
   resumeBelowC: 75,
   nvidiaSmi: "nvidia-smi",
+  /**
+   * Studio jobs first: a folder for the two turn files (site.json, yielded.json). None: every program that uses the GPU
+   * pauses the worker, as before. The PC's setup makes the folder; the worker never makes it.
+   */
+  yieldFolder: null,
+  /** Local ComfyUI work: python processes that listen on a port in this range, [low, high]. */
+  localComfyPorts: [8188, 8199],
+  /** Ports and process ids in that range that never count as local ComfyUI work. */
+  localComfyExcludePorts: [],
+  localComfyExcludePids: [],
+  /** The desktop's usual share of the GPU's memory, measured at setup (`fuobe worker baseline`). */
+  desktopBaselineMb: 0,
+  /** Only when the GPU counters can't be read: a lock file, and the owners it may name that count as ComfyUI work. */
+  gpuLockFile: null,
+  gpuLockComfyOwners: [],
+  /** Local caps the studio can't change: hours of turns a day, minutes between two interrupts, and never interrupt. */
+  yieldMaxHoursPerDay: 20,
+  interruptGapMin: 30,
+  neverInterrupt: false,
 };
 
 const file = (home, name) => path.join(home, name);
