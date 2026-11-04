@@ -38,9 +38,10 @@ retries and a deploy. Each check asks three things: the result arrives exactly o
 - `app-process.ts`: a second app process on the same database, as during a deploy.
 - `run-watch.ts`: every look at a run (a refresh, a second session, the list), checked against the three states.
 
-All of them listen on free high ports. A check that the studio can't pass yet is an `it.fails`, named with its
-scenario and the reason. `tests/recovery-worker.test.ts` holds the worker program's own checks. They skip until the
-worker program's recovery parts are in the tree.
+All of them listen on free high ports. A check of something the studio can't do yet checks what it does today, and its
+name says so. The day the studio learns it, that check fails and becomes a check of the new behaviour.
+`tests/recovery-worker.test.ts` holds the worker program's own checks. They run the worker program against a stand-in
+ComfyUI. Its first check fails when one of the worker program's recovery parts is missing.
 
 ## Browser checks
 
