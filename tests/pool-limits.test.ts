@@ -435,6 +435,24 @@ describe("where a run goes", () => {
     expect(hostedRun.kindAllowed({}, "model3d")).toBe(true);
   });
 
+  it("3D isn't offered on this install's GPUs yet, even with kinds.model3d on: an account with no GPU of its own is asked to connect one", async () => {
+    withBilling({ kinds: { model3d: true }, limits: { activeRuns: 0, waiting: 0, runsPerHour: 0 } });
+    const a = account();
+    const uploadsRoute = await import("@/app/api/uploads/route");
+    const { TINY_PNG } = await import("./helpers/fake-comfy-runner");
+    const up = await uploadsRoute.POST(
+      new Request(`http://${HOST}/api/uploads`, { method: "POST", headers: { ...SITE_HEADERS, cookie: a.cookie, "content-type": "image/png", "x-file-name": "photo.png", "content-length": String(TINY_PNG.length) }, body: new Uint8Array(TINY_PNG) }),
+    );
+    expect(up.status).toBe(201);
+    const { url } = (await up.json()) as { url: string };
+    const holds = fake.holds.size;
+    const r = await post({ feature: "image-to-3d", modelId: "oss-pixal3d", op: "image-to-3d", inputs: { images: [url] }, ...SHOWN }, a.cookie);
+    expect(r.status, JSON.stringify(r.body)).toBe(403);
+    expect(r.body.code).toBe("own-gpu-tool");
+    expect(poolRuns(a.id)).toBe(0);
+    expect(fake.holds.size).toBe(holds);
+  });
+
   it("a guest's policy that gets no answer isn't asked for again on every page for a while", async () => {
     withBilling();
     fake.down = "error";

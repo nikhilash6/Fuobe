@@ -76,6 +76,9 @@ several shots, a picture and then a step on it) is priced once, with one quote a
 Steps that need no model (joins, trims) and text steps are left out: they cost nothing. Every step must be one the
 policy allows (`pool`, `kinds`), or the run isn't offered here.
 
+3D runs (Image to 3D and the other 3D tools) aren't offered on this install's GPUs yet, whatever `kinds.model3d` says.
+They run on the account's own GPU, as before; an account with no GPU of its own is asked to connect one.
+
 The policy's limits count runs on this install's GPUs only, never runs on the account's own GPU or key (those keep the
 install's own limits). A run is one press of Run: its jobs and chain steps count once. `activeRuns` counts runs going
 now (waiting or running), `waiting` those not started yet, `runsPerHour` those started in the last hour, and

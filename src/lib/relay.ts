@@ -354,7 +354,7 @@ export const RELAY_WORDS = {
 export const POOL_WORDS = {
   inLine: "In line",
   working: "Working",
-  failed: "This one couldn't be made. Press Retry to try again.",
+  failed: "This one couldn't be made.",
 } as const;
 
 /** A script's open-source run (an API token) while the owner's ComfyUI is on the owner's computer. */
