@@ -79,7 +79,9 @@ offer the worker as a download. Use a git checkout at a signed release tag:
 4. Check it out: `git checkout <tag>`.
 5. Install the build's tools: `pnpm install --frozen-lockfile`. The build needs TypeScript, which is a development
    dependency.
-6. Build the worker's parts: `node scripts/build-worker.mjs`.
+6. Build the worker's parts: `node scripts/build-worker.mjs`. The build stamps the parts with the files that it read.
+   The worker starts only when that stamp matches its checkout. After an update, it asks for this step until you run
+   it.
 
 **Release tags.** A maintainer makes each release tag with `git tag -s <version>` (a signed, annotated tag) and pushes
 it. Get the maintainer's public key from a source that you trust, and import it before step 3. Until the repository
@@ -103,7 +105,11 @@ The worker always starts and stops its own ComfyUI process. It never uses a Comf
 - uses its own `user`, `input`, `output` and `temp` folders in the worker folder;
 - gets the model folders through `extra_model_paths.yaml`;
 - starts with `--disable-metadata` and `--disable-auto-launch`, and with `--disable-partner-nodes` when that ComfyUI
-  has the flag (the worker reads ComfyUI's `comfy/cli_args.py` to find out);
+  has the flag (the worker reads ComfyUI's `comfy/cli_args.py` to find out). That flag covers only ComfyUI's own save
+  nodes. Two save nodes write the run's graph all the same, so the worker takes care of them: it sets `save_metadata`
+  to `false` on every VideoHelperSuite save node (`VHS_VideoCombine`) of each graph before its ComfyUI gets it (else
+  the node writes the graph and the PC's local time into each clip), and it takes the `<metadata>` element out of each
+  SVG result from ComfyUI's SVG save node before it keeps or sends the result;
 - loads only the custom node packs that the worker found (`--disable-all-custom-nodes --whitelist-custom-nodes …`).
   The worker finds a pack whatever the case of its folder name, and gives ComfyUI the folder name as it is on disk;
 - gets only the environment variables that it needs: the system's own, `PATH`, the temp folder, the user folders
@@ -294,7 +300,8 @@ does not count as an attempt.
 
 ### What the worker checks itself
 
-Before its ComfyUI gets a graph, the worker checks all of these. The studio cannot change these checks:
+Before its ComfyUI gets a graph, the worker checks all of these. The studio cannot change these checks. To add a model,
+a workflow or a node pack that workers run, follow [Adding a model, a workflow or a node pack](adding-a-model.md).
 
 1. Every node type is on the allowlist that is built into the worker (`bin/lib/worker/dist/allowed-nodes.json`, made
    by `scripts/build-worker.mjs` from the catalog's workflows and the graph builders). For your own workflows, pass
@@ -314,15 +321,18 @@ Before its ComfyUI gets a graph, the worker checks all of these. The studio cann
 4. Inputs with no rule that do not take free text hold no path. A name is refused if it has a `:`, `%`, `~` or `..`.
    Any value is refused if it starts with `/`, `\`, `~` or a drive (`C:`), or if it holds an address (`://`), an
    encoded or variable part (`%2e`, `%TEMP%`), a `..` step or a Windows device name (`CON`, `NUL`, `COM1`…).
-   Prompts, lyrics and captions keep any text.
-5. Every model file that the graph names is one that the worker verified, by its exact name. A file with the same
-   name in another folder does not count.
+   Prompts, lyrics and captions keep any text. Other text (a size, a colour, settings written as text or as JSON) is
+   read only for the shape of a path, in each key and string of its JSON too. A drive path, a share, a rooted or home
+   path, a `..` step, an address or a variable is refused. `16:9` and `Scene 2: 50% faster` stay as they are.
+5. Every model file that the graph names is one that the worker verified, by its exact name, whatever the name ends
+   with. A file with the same name in another folder does not count. A model input takes no other value, except the
+   catalog's own values for that input that name no file.
 
 The worker reports a model file only when its SHA-256 matches the hash that the catalog pins for it
 (`bin/lib/worker/dist/file-pins.json`, from `requirements.json` and `model-pins.json`). A file that has no pinned hash
 is not reported, so no job that needs it comes to the worker. The worker keeps the hashes it computed, so a restart
 does not read the files again. The catalog's files that still have no pin are listed in `UNPINNED_FILES`
-(`scripts/lib/worker-catalog.mjs`). A test fails when a workflow for workers needs a file that has no pin and is not on
+(`scripts/lib/worker-catalog.mjs`), the one list of them. A test fails when a catalog file has no pin and is not on
 that list, and when a file on the list gets a pin, so the list only gets shorter.
 
 The worker checks the copy that its ComfyUI loads:
@@ -364,7 +374,7 @@ list or any other format that would make ffmpeg open other files or addresses is
 What ffmpeg writes has limits too: at most one hour, at most 4096 pixels on the long side (a bigger picture is made
 smaller, in the same shape), and at most 8 times the input's size (at least 256 MB, at most 2 GB). A result that
 reaches the size cap is refused before the worker reads it. If ffmpeg cannot read a file, or its result is too big,
-the job fails with plain words ("A clip or a sound in this run couldn't be read").
+the job fails with plain words ("A clip or sound in this run couldn't be read.").
 
 Without `ffmpeg`, the worker takes pictures only. Its inventory says so (`media: ["image"]`), and the studio sends it no
 workflow that reads a clip or a sound. If such a job comes anyway, the worker gives it back to the line.
@@ -386,10 +396,12 @@ The worker keeps its jobs going by itself:
   seconds. The worker waits up to 2 minutes for a call, and up to an hour for a part of a result. It sends a call
   again only when that is safe. A proxy's page in place of the studio's answer (a 403 that is not JSON) never stops
   the worker.
-- **A job that stalls goes back to the line.** If a job makes no progress for `stallMin` minutes (10), or runs past the
-  run limit that the claim gives, the worker takes its prompt off its ComfyUI and gives the job back. The job keeps
-  its place in the line. If its ComfyUI does not let go of the prompt within 15 seconds, the worker stops ComfyUI and
+- **A job that stalls goes back to the line.** If a job makes no progress for its stall limit, or runs past the run
+  limit that the claim gives, the worker takes its prompt off its ComfyUI and gives the job back. The job keeps its
+  place in the line. If its ComfyUI does not let go of the prompt within 15 seconds, the worker stops ComfyUI and
   starts it again. A job that is given back counts as an attempt; the third time, it fails.
+- **The stall limit** comes with each claim (`stallMs`). The studio gives 10 minutes for every lane now. `stallMin`
+  in `worker.json` has no default; when you set it, its minutes win over the claim's limit on that PC.
 - **The run limit** counts from when its ComfyUI starts running the job (the model load included), not while the job
   waits. The studio gives 3 times the lane's 90th-percentile time on that worker plus the lane's model load, at least
   10 minutes and at most the run ceiling (45 minutes). For a lane with no times on that worker yet, it gives the run
@@ -440,8 +452,10 @@ token on every call, so a revoked token stops at once.
   → `{ lanes, workflows, missing }`. `media` lists the kinds of input that the worker takes (`image`, `video`,
   `audio`). With no `media` (a worker from before it was added, which doesn't make clips and sound again), the studio
   counts pictures only.
-- `POST /api/gpu/computer/claim`: the browser's claimed task plus `{ lane, estMs, runLimitMs, notAfter, attempt,
-  models }`. See "The run limit" above for `runLimitMs`.
+- `POST /api/gpu/computer/claim`: the browser's claimed task plus
+  `{ lane, estMs, runLimitMs, stallMs, notAfter, attempt, models }`. See "The run limit" above for `runLimitMs`.
+  `stallMs` is how long the job may go with no progress before the worker gives it back (see "The stall limit"). A
+  worker ignores a `stallMs` under one minute, and uses its own 10 minutes then.
 - `POST /api/gpu/computer/bench`: bench jobs for this worker only (none are defined yet). The times of every finished
   job also count: the last 20 jobs in each lane give the median and the 90th percentile.
 - Reports, inputs and results work as they do for the browser, with these additions:

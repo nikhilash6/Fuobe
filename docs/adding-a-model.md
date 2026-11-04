@@ -63,23 +63,35 @@ required rule is missing.
   }
   ```
 
-  `path` is where the node looks, under the ComfyUI folder. A Hugging Face link names a commit, never `main`. Put the
-  files in place on a worker before the workflow runs there.
+  `path` is where the node looks, under the ComfyUI folder: a model folder (`models/…`) or a folder inside the node pack
+  (`custom_nodes/<pack>/<folder>/…`), never the pack's own top level or anywhere else. A first-run file is data: the
+  test refuses code (`.py`, `.dll`, `.exe`, `.js` and the like) and Windows device names (`CON`, `NUL`…). A Hugging
+  Face link (`huggingface.co`, `hf.co` or a host under them) names a commit, never `main`. Put the files in place on a
+  worker before the workflow runs there.
+- A model file that a graph names and that a node fetches on its first run needs no entry in `model-pins.json` when
+  `first-run-files.json` lists it for that workflow, under the same file name. Naming it in `autoDownloads` is not
+  enough: the test counts it as a file with no pin.
 
 ## 4. The node allowlist and the input rules
 
 - Run `node scripts/build-worker.mjs` (`pnpm build` runs it first). It rebuilds `bin/lib/worker/dist/allowed-nodes.json`,
-  `input-rules.json` and `file-pins.json` from the catalog. Two builds of the same commit write the same files.
+  `input-rules.json` and `file-pins.json` from the catalog. Two builds of the same commit write the same files. It also
+  writes `build-stamp.json`, a hash of every file that it read. A worker starts only when the stamp matches its
+  checkout.
 - Every node input that could name a file, a folder, a download or code gets a rule, from the catalog's own values:
   a fixed value, one of a list, a number range, a file that the job sent, a save name that the studio makes, or a
   model file that the worker verified in its loader's folder.
 - A worker refuses a graph that links another node into an input with a rule, or that holds a value outside its
-  rule. An input with no rule that takes no free text may hold no path.
+  rule. An input with no rule that takes no free text may hold no path. Other text that isn't a prompt (settings
+  written as text or JSON, values the studio fills per run) may hold no path either.
+- A model input takes only a file that the worker verified, whatever its extension, or one of the catalog's own values
+  for that input that names no file.
 - The build stops, and writes nothing, when:
   - an input that writes or reads a file, or formats with code, has no rule (`REQUIRED_RULES` in
     `scripts/lib/worker-catalog.mjs`);
   - any catalog value that names a path, a download or code has no rule (`scripts/lib/catalog-checks.mjs`);
-  - the catalog links another node into such an input.
+  - the catalog links another node into any input that has a rule: a model file, a file that the job sends, a save
+    name or a fixed value. A worker would refuse every such graph.
 - Write a path, a download id or a format string in the graph as a fixed value. Never build one from other nodes.
 - A node that reads or writes a path it is given: add the input to `REQUIRED_RULES`, and give it a fixed value in the
   catalog (empty when the node allows "no file"). If the build reports a missing rule, add the rule. Never widen the
@@ -87,6 +99,10 @@ required rule is missing.
 - Bind a person's text only to inputs that take free text (prompts, captions, lyrics: `TEXT_NAME` in
   `bin/lib/worker/rules.mjs`). An input named for a file or a folder keeps the catalog's values, so a run that sends
   other text there is refused.
+- An input that the run fills with text that isn't a prompt (typed `STRING` in `object_info.subset.json`, or text in
+  the catalog when that file doesn't name the input) gets no rule. The test lists every such input, and the list must
+  match `FREE_TEXT_INPUTS` (`scripts/lib/worker-catalog.mjs`). Add an input there only after you read its node's code
+  and see that it never uses the value as a path. Otherwise give the input a fixed value, or bind it to nothing.
 
 ## 5. Inputs and outputs
 
@@ -96,9 +112,14 @@ required rule is missing.
   with ffmpeg on the worker before its ComfyUI reads them ([Clips and sound](gpu-workers.md#clips-and-sound)). The
   worker knows a clip or a sound by its type, its name or the loader that reads it.
 - Save results under the save name that the studio makes: bind `filename_prefix` to `filenamePrefix`.
-- VideoHelperSuite's save node (`VHS_VideoCombine`) writes the prompt and the local time into a clip unless
-  `save_metadata` is `false`. Set `"save_metadata": false` in every new graph. The worker's ComfyUI also starts with
-  `--disable-metadata`.
+- The worker's ComfyUI starts with `--disable-metadata`. That flag covers only ComfyUI's own save nodes.
+- VideoHelperSuite's save node (`VHS_VideoCombine`) writes the run's graph and the local time into a clip unless
+  `save_metadata` is `false`, whatever `--disable-metadata` says. Set `"save_metadata": false` in every new graph. A
+  worker sets `save_metadata` to `false` on every such node of each graph before its ComfyUI gets it, so this matters
+  for runs on a person's own GPU.
+- ComfyUI's SVG save node (`SaveSVGNode`) writes the run's graph into every SVG, whatever `--disable-metadata` says. A
+  worker takes that `<metadata>` element out of each SVG result. Prefer a save node that writes none. The test counts
+  every graph with such a node as one that keeps metadata.
 
 ## 6. VRAM, lanes and CPU work
 
@@ -109,9 +130,10 @@ required rule is missing.
   size.
 - NVFP4 files need a Blackwell card. The queue doesn't read a card's generation, so leave lanes with NVFP4 files off an
   older card's allowed lanes. Give smaller and older cards an fp8 or GGUF workflow where one exists.
-- A workflow that loads no model file, fetches none on its first run and has `vramGb: 0` is CPU work: joins, trims,
-  adding sound, Ken Burns, still to clip. The index marks it `"cpu": true`, so it is never counted as GPU work. Set
-  `vramGb` above 0 when any node of the workflow uses the GPU.
+- A workflow that loads no model file, fetches none on its first run and has `vramGb: 0` (the number 0, written in the
+  entry) is CPU work: joins, trims, adding sound, Ken Burns, still to clip. The index marks it `"cpu": true`. Nothing
+  in the studio reads the marker yet. The index build stops when an entry has no `vramGb` number, so a workflow never
+  becomes CPU work by mistake. Set `vramGb` above 0 when any node of the workflow uses the GPU.
 
 ## 7. The rest of the studio
 
@@ -134,11 +156,15 @@ required rule is missing.
 
 ## Known gaps
 
-`tests/adding-a-model.test.ts` lists what isn't done yet. Each list may only shrink: the test fails when something new
-joins it, and when something on it is fixed but still listed.
+These lists hold what isn't done yet. Each list may only shrink: `tests/adding-a-model.test.ts` fails when something
+new joins it, and when something on it is fixed but still listed.
 
-- `UNPINNED_FILES`: model files with no SHA-256 pin yet. No worker runs the workflows that need them.
-- `FIRST_RUN_GAPS`: workflows whose first-run files aren't in `first-run-files.json` yet.
-- `KEEPS_METADATA`: workflows whose save node still writes metadata into a clip.
+- `UNPINNED_FILES` (`scripts/lib/worker-catalog.mjs`, the one list of them): model files with no SHA-256 pin yet. A
+  file of the index is listed as `folder/file`. A file that only a graph names (a node fetches it on its first run) is
+  listed by its name, until `first-run-files.json` pins it. No worker runs the workflows that need them.
+- `FIRST_RUN_GAPS` (`tests/adding-a-model.test.ts`): workflows whose first-run files aren't in
+  `first-run-files.json` yet.
+- `KEEPS_METADATA` (`tests/adding-a-model.test.ts`): workflows whose save node still writes metadata into a result.
+  A worker takes it out of its own results (section 5), so the list matters for runs on a person's own GPU.
 
 Never add to these lists. Pin the file, list the first-run files, or set `save_metadata` to `false` instead.

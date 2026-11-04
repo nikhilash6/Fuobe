@@ -9,7 +9,8 @@
 //   { kind: "range", min, max, integer }     a number from min to max
 //   { kind: "input-file" }                   a file this job sent, under the name the studio gave it
 //   { kind: "output-name" }                  a save name the studio makes: plain name parts, no path
-//   { kind: "model-file", folders }          a model file this worker verified (in one of those model folders)
+//   { kind: "model-file", folders, plain? }  a model file this worker verified (in one of those model folders), or
+//                                            one of the catalog's own values that name no file ("plain")
 // Every ruled input takes a value written in the graph, never a link from another node.
 
 /** Input names that name a file, a folder or an address. */
@@ -29,11 +30,14 @@ export const pathNamed = (name) => nameWords(name).some((w) => PATH_WORDS.has(w)
 /** Loader classes whose input names a file in the input folder (as the shared runner's graphProblem sees them). */
 export const loaderInput = (cls, input) => (cls === "AUSBOSS_NODES_ImageCropRotatePad" && input === "image") || (/^(Load|VHS_Load)/.test(cls) && /image|video|audio|file|path|directory/i.test(input));
 
-/** Inputs that take free text (prompts, lyrics, captions, expressions): the path check doesn't read them. */
-export const TEXT_NAME = /^(text|texts|prompt|prompts|positive|negative|caption|captions|lyrics|tags|style|instruct|instruction|hints|string|string_[a-z]|value|expression)$|^(.+_)?(prompt|text|description|caption|instruction)$|^values\.[a-z0-9_]+$/i;
+/**
+ * Inputs that take free text (prompts, lyrics, captions, expressions, and the prompts that a text encoder takes for
+ * each of its encoders: clip_l, clip_g, t5xxl): the path check doesn't read them.
+ */
+export const TEXT_NAME = /^(text|texts|prompt|prompts|positive|negative|caption|captions|lyrics|tags|style|instruct|instruction|hints|string|string_[a-z]|value|expression|clip_l|clip_g|t5xxl)$|^(.+_)?(prompt|text|description|caption|instruction)$|^values\.[a-z0-9_]+$/i;
 
 /** File names that hold weights (or pickled code). */
-export const MODEL_EXT = /\.(safetensors|gguf|ckpt|pt|pth|bin|sft|onnx|pkl|pickle)$/i;
+export const MODEL_EXT = /\.(safetensors|gguf|ckpt|pt|pt2|pth|bin|sft|onnx|pkl|pickle)$/i;
 
 /** A save name the studio makes: name parts of letters, digits, "_", "-" and ".", joined by "/"; no "..". */
 const OUTPUT_NAME = /^(?!.*\.\.)[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(\/[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}){0,7}$/;
@@ -73,6 +77,63 @@ export function valueProblem(v) {
     } catch {}
   }
   return pathProblem(v);
+}
+
+/** A ".." step in a path. */
+const DOT_DOT = /(^|[\\/])\.\.([\\/]|$)/;
+/** A variable some nodes expand ("%TEMP%", "$HOME", "${HOME}"). */
+const VARIABLE = /%[A-Za-z_][A-Za-z0-9_]*%|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/;
+/**
+ * Path shapes that words with spaces never take: a drive path, a share, a rooted path with two parts, a home path, a
+ * ".." step (at the start of a word too).
+ */
+const PATH_IN_WORDS = [/^[A-Za-z]:[\\/]/, /^[\\/]{2}[^\\/\s]/, /^\/[^\s/]+\//, /^~[\\/]/, DOT_DOT, /(^|\s)\.\.[\\/]/];
+
+/** One string of free text, read for path shapes: true when it names a path. */
+function pathShape(s) {
+  if (/\0/.test(s)) return true;
+  const t = s.trim();
+  if (!/\s/.test(t)) return /^[\\/~]/.test(t) || /^[A-Za-z]:/.test(t) || t.includes("://") || DOT_DOT.test(t) || VARIABLE.test(t);
+  return PATH_IN_WORDS.some((r) => r.test(t));
+}
+
+/** A JSON object or list written as text: its keys and its strings, every one. None for anything else. */
+export function jsonStrings(v) {
+  if (typeof v !== "string" || !/^\s*[[{]/.test(v)) return [];
+  try {
+    const parsed = JSON.parse(v);
+    if (!parsed || typeof parsed !== "object") return [];
+    const out = [];
+    const walk = (x) => {
+      if (typeof x === "string") out.push(x);
+      else if (Array.isArray(x)) x.forEach(walk);
+      else if (x && typeof x === "object") {
+        for (const [k, y] of Object.entries(x)) {
+          out.push(k);
+          walk(y);
+        }
+      }
+    };
+    walk(parsed);
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Free text that isn't a prompt (a node's settings written as text, or a value the studio fills per run: a size, a
+ * language, a plan written as JSON): "unsafe-path" when it, or any key or string of a JSON value it holds, names a path.
+ * A value with no spaces is refused when it starts with "/", "\" or "~", starts with a drive ("C:"), holds an address
+ * ("://"), takes a ".." step, or holds a variable ("%TEMP%", "$HOME"). Words with spaces are refused only for a drive
+ * path ("C:\"), a share ("\\host"), a rooted path with two parts ("/etc/x"), a home path ("~/x") and a ".." step, so
+ * "16:9", "50% faster" and "auto (1088 -> 1080)" stay as they are.
+ */
+export function textPathProblem(v) {
+  for (const s of strings(v)) {
+    if (pathShape(s) || jsonStrings(s).some(pathShape)) return "unsafe-path";
+  }
+  return null;
 }
 
 const same = (a, b) => a === b || (typeof a === "object" && a !== null && typeof b === "object" && b !== null && JSON.stringify(a) === JSON.stringify(b));
@@ -131,8 +192,11 @@ export function ruleProblem(rule, v, ctx) {
     case "output-name":
       return typeof v === "string" && OUTPUT_NAME.test(v) ? null : "unsafe-path";
     case "model-file":
+      // A file this worker verified, whatever its name ends with (a loader may take any extension). Only the catalog's
+      // own values that name no file ("plain": "None", say) need no file.
       if (typeof v !== "string" || pathProblem(v)) return "unsafe-path";
-      return !MODEL_EXT.test(v) || modelVerified(v, rule.folders, ctx.byName) ? null : "model-unverified";
+      if (Array.isArray(rule.plain) && rule.plain.includes(v)) return null;
+      return modelVerified(v, rule.folders, ctx.byName) ? null : "model-unverified";
     default:
       return "unsafe-path";
   }
@@ -149,15 +213,16 @@ export function ruleFor(rules, cls, input) {
 
 /**
  * The first problem with one input, or null. `ctx`: { rules, staged, byName }.
- * In order: its rule; a closed class's unknown input; free text; an unknown input named for a file; the second layer
- * and the model check on everything else.
+ * In order: its rule; a closed class's unknown input; a prompt (any text); other free text (path shapes only); an
+ * unknown input named for a file; the second layer and the model check on everything else.
  */
 export function inputProblem(cls, input, v, ctx) {
   const rule = ruleFor(ctx.rules, cls, input);
   if (rule) return ruleProblem(rule, v, ctx);
   const closed = ctx.rules?.closed?.[cls];
   if (closed && !closed.includes(input)) return "unsafe-path";
-  if (TEXT_NAME.test(input) || ctx.rules?.text?.[cls]?.includes(input)) return null;
+  if (TEXT_NAME.test(input)) return null;
+  if (ctx.rules?.text?.[cls]?.includes(input)) return textPathProblem(v);
   if (pathNamed(input) && (isLink(v) || (v !== "" && [...strings(v)].some((s) => s !== "")))) return "unsafe-path";
   if (isLink(v) && v.length === 2 && typeof v[0] === "string") return null;
   let worst = null;

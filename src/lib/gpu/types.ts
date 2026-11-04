@@ -90,8 +90,9 @@ export interface IndexWorkflow {
   /** On a graph a real ComfyUI accepted. */
   validated?: true;
   /**
-   * CPU work: no model file, no first-run download and no VRAM (joins, trims, adding sound, Ken Burns). It is never
-   * counted as GPU work. Derived by scripts/comfy/build-requirements.mjs (cpuWork).
+   * CPU work: no model file, no first-run download and `vramGb: 0` written in the manifest (joins, trims, adding sound,
+   * Ken Burns). A marker only: nothing in the studio reads it yet. Derived by scripts/comfy/build-requirements.mjs
+   * (cpuWork).
    */
   cpu?: true;
 }

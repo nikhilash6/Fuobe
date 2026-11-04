@@ -3,17 +3,19 @@
 //
 //   - allowedNodes: every node type the catalog's workflows and the graph builders use.
 //   - inputRules: a rule for each node input that could name a file, a folder, a download or code, taken from the
-//     catalog's own values. The worker refuses a value outside its rule, and a link from another node into it.
+//     catalog's own values. The worker refuses a value outside its rule, and a link from another node into it, so the
+//     build stops when the catalog links into an input that has a rule.
 //   - filePins: the SHA-256 of every model file the catalog names, from requirements.json and model-pins.json.
 import fs from "node:fs";
 import path from "node:path";
-import { loaderInput, MODEL_EXT, pathNamed, TEXT_NAME, valueProblem } from "../../bin/lib/worker/rules.mjs";
+import { jsonStrings, loaderInput, MODEL_EXT, pathNamed, TEXT_NAME, textPathProblem, valueProblem } from "../../bin/lib/worker/rules.mjs";
+import { builderSources } from "../../bin/lib/worker/stamp.mjs";
 
 const SKIP = new Set(["requirements.json", "manifest.json", "model-pins.json", "first-run-files.json"]);
 
 /**
- * The catalog: its workflow graphs by file name, its manifest, its requirement index and its model pins. `dir` is the
- * library folder (workflows/comfyui under the root unless given).
+ * The catalog: its workflow graphs by file name, its manifest, its requirement index, its model pins and its pinned
+ * first-run files. `dir` is the library folder (workflows/comfyui under the root unless given).
  */
 export function readCatalog(root, dir = path.join(root, "workflows/comfyui")) {
   const read = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
@@ -25,18 +27,22 @@ export function readCatalog(root, dir = path.join(root, "workflows/comfyui")) {
     } catch {}
   }
   const pinsFile = path.join(dir, "model-pins.json");
-  return { graphs, manifest: read("manifest.json"), requirements: read("requirements.json"), pins: fs.existsSync(pinsFile) ? read("model-pins.json") : {} };
+  const firstRunFile = path.join(dir, "first-run-files.json");
+  return {
+    graphs,
+    manifest: read("manifest.json"),
+    requirements: read("requirements.json"),
+    pins: fs.existsSync(pinsFile) ? read("model-pins.json") : {},
+    firstRun: fs.existsSync(firstRunFile) ? read("first-run-files.json") : { workflows: {} },
+  };
 }
 
 const nodesOf = (graph) => Object.entries(graph ?? {}).filter(([, n]) => n && typeof n === "object" && typeof n.class_type === "string");
 
-/** Every source file of the graph builders (they add nodes of their own: LoRA loaders, joins, overlays…). */
-function builderSources(root) {
-  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : /\.tsx?$/.test(e.name) ? [path.join(dir, e.name)] : []));
-  return [...walk(path.join(root, "src/lib")), ...walk(path.join(root, "src/server"))];
-}
-
-/** The node allowlist: the catalog's node types, the ones the graph builders add, and the LoRA loaders. */
+/**
+ * The node allowlist: the catalog's node types, the ones the graph builders add (builderSources: they add nodes of
+ * their own, such as LoRA loaders, joins and overlays), and the LoRA loaders.
+ */
 export function allowedNodeList(root, catalog = readCatalog(root)) {
   const nodes = new Set();
   for (const wf of Object.values(catalog.requirements.workflows ?? {})) {
@@ -62,6 +68,12 @@ const ALWAYS_PINNED = { StringFormat: ["f_string"], AILab_Qwen3ASRSubtitle: ["ou
 const isLink = (v) => Array.isArray(v);
 /** A path or a download id ("org/name"): no spaces, and a slash. */
 const looksLikePath = (v) => typeof v === "string" && !/\s/.test(v) && /[\\/]/.test(v);
+
+/** A name with a file's extension (".json", ".engine", ".safetensors"…). */
+const FILE_EXT = /\.[A-Za-z0-9_]{1,12}$/;
+
+/** A path, a download id or a model file's name: no spaces, and a slash or a model file's extension. */
+const namesFile = (v) => looksLikePath(v) || (typeof v === "string" && !/\s/.test(v) && MODEL_EXT.test(v));
 
 /** Sort key for values of mixed types (so the built file is stable). */
 const valueKey = (v) => `${typeof v}:${JSON.stringify(v)}`;
@@ -112,14 +124,18 @@ export function inputRules(catalog) {
   const inputs = {};
   const text = {};
   const closed = new Set();
-  const set = (p, rule) => ((inputs[p.cls] ??= {})[p.input] = rule);
+  // A worker refuses a link into any input that has a rule, so a catalog graph that links into one could never run on
+  // a worker: the build stops instead.
+  const set = (p, rule) => {
+    if (p.links) throw new Error(`${p.cls}.${p.input} names a file, a download or code, and the catalog links into it: give it a literal value`);
+    (inputs[p.cls] ??= {})[p.input] = rule;
+  };
   const pinned = (p, extra = []) => {
     const values = [...new Map([...p.literals, ...extra.map((v) => [valueKey(v), v])]).values()].sort((a, b) => valueKey(a).localeCompare(valueKey(b)));
     return values.length === 1 ? { kind: "literal", value: values[0] } : { kind: "enum", values };
   };
   const addText = (p) => (text[p.cls] ??= []).push(p.input);
   const pin = (p, close) => {
-    if (p.links) throw new Error(`${p.cls}.${p.input} names a file, a download or code, and the catalog links into it: give it a literal value`);
     set(p, pinned(p, [...p.defaults.values()]));
     if (close) closed.add(p.cls);
   };
@@ -136,15 +152,18 @@ export function inputRules(catalog) {
     else if (p.input === "filename_prefix" || b.includes("filenamePrefix")) set(p, { kind: "output-name" });
     // A model file, by its name in a model folder.
     else if (!named && !strings.some(looksLikePath) && (p.folders.size || b.some((x) => MODEL_BINDING.test(x)) || strings.some((v) => MODEL_EXT.test(v) && !/\s/.test(v)))) {
-      set(p, { kind: "model-file", folders: [...p.folders].sort() });
+      // The worker takes only a file it verified, or one of these catalog values that name no file ("None", say).
+      const plain = [...new Set(strings.filter((v) => v !== "" && !FILE_EXT.test(v)))].sort();
+      set(p, { kind: "model-file", folders: [...p.folders].sort(), ...(plain.length && { plain }) });
     }
     // Code, or an input named for a file or folder: the catalog's values only, and the class takes only the catalog's inputs.
     else if (ALWAYS_PINNED[p.cls]?.includes(p.input) || named) pin(p, true);
     // Prompts, captions, lyrics, expressions.
     else if (TEXT_NAME.test(p.input)) addText(p);
-    // A value that is a path, a download (an org/name id) or anything else the second layer refuses: pinned. (A value
+    // A value that is a path, a download (an org/name id) or anything else the second layer refuses, or text (JSON
+    // settings, say) that the worker's check of free text refuses or that holds a path or a model file: pinned. (A value
     // the studio fills per run is pinned only when it looks like a path or an id.)
-    else if (b.length ? strings.some(looksLikePath) : strings.some((v) => looksLikePath(v) || (!/\s/.test(v) && valueProblem(v)))) pin(p, false);
+    else if (b.length ? strings.some(looksLikePath) : strings.some((v) => looksLikePath(v) || (!/\s/.test(v) && valueProblem(v)) || textPathProblem(v) || jsonStrings(v).some(namesFile))) pin(p, false);
     // Filled per run (a size, a seed, a language, a setting), or written as prose in the catalog.
     else if (b.length || strings.some((v) => /\s/.test(v))) addText(p);
   }
@@ -190,23 +209,59 @@ export function missingRules(rules, allowed) {
 }
 
 /**
- * Model files that workflows for workers need and that have no SHA-256 pin yet ("folder/file"). A worker never reports
- * such a file, so no worker runs a workflow that needs one. Their repositories need a signed-in account to read the
- * hashes (`node scripts/comfy/build-requirements.mjs --refresh-pins` with HF_TOKEN); the LTX-2.5 entries also need
- * their exact sizes and a pinned revision. The list may only shrink: a test fails when a new file has no pin, and when
- * a file here gets one.
+ * Inputs the studio fills per run with text that isn't a prompt, and that have no rule ("Class.input"). Each is a
+ * setting that its node reads as text or as a choice, never as a file: touches, boxes and points written as JSON,
+ * numbers written as text, a colour, a size, a profile. A person's text reaches them, and the worker refuses any value
+ * that takes a path's shape (rules.mjs textPathProblem). tests/adding-a-model.test.ts (perRunTextInputs) fails when the
+ * catalog fills another such input per run: add it here only when its node never reads it as a path, or give it a
+ * rule. It also fails when an input here is no longer filled per run.
+ */
+export const FREE_TEXT_INPUTS = [
+  "AUSBOSS_NODES_MaskByTouch.touches",
+  "Add Subtitles To Frames.font_color",
+  "H3CharacterSwapPrepareVideo.resolution",
+  "H3CharacterSwapSelectSubject.selection",
+  "H3CharacterSwapWindowPlan.history_frames",
+  "H3CharacterSwapWindowPlan.window_frames",
+  "H3RelayReviewWindows.window_controls",
+  "ManualSigmas.sigmas",
+  "OpenH3RegenPrepareDraft.size",
+  "OpenH3RegenUpscale.resolution",
+  "QWMDetect.boxes_json",
+  "SAM3_Detect.negative_coords",
+  "SAM3_Detect.positive_coords",
+  "VHS_VideoCombine.profile",
+];
+
+/**
+ * Model files the catalog names that have no SHA-256 pin yet: the one list of them. A file of the requirement index is
+ * "folder/file". A file that only a graph names is its bare name: a node fetches it on its first run, and
+ * first-run-files.json doesn't pin it yet. A worker never reports such a file, so no worker runs a workflow that needs
+ * one. The index files' repositories need a signed-in account to read the hashes
+ * (`node scripts/comfy/build-requirements.mjs --refresh-pins` with HF_TOKEN); the LTX-2.5 entries also need their exact
+ * sizes and a pinned revision. The list may only shrink: tests/adding-a-model.test.ts fails when a file has no pin and
+ * isn't here, and when a file here gets one; tests/worker-input-rules.test.ts fails when a file that a workflow for
+ * workers needs has no pin and isn't here.
  */
 export const UNPINNED_FILES = [
+  "diffusion_models/flux3-image-klein-base-bf16.safetensors",
   "diffusion_models/flux3-image-klein-base-int8-convrot.safetensors",
+  "diffusion_models/flux3-image-klein-base-nvfp4.safetensors",
+  "diffusion_models/flux3-image-klein-bf16.safetensors",
   "diffusion_models/flux3-image-klein-int8-convrot.safetensors",
+  "diffusion_models/flux3-image-klein-nvfp4.safetensors",
   "diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
   "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+  "loras/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors",
   "loras/ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
   "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
   "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors",
   "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
   "vae/ltx-2.5-audio-vae-bf16.safetensors",
   "vae/ltx-2.5-video-vae-bf16.safetensors",
+  "rife49.pth",
+  "video_depth_anything_vitl.pth",
+  "video_depth_anything_vits.pth",
 ];
 
 /** The files that workflows for workers (not isolated) need and that have no pin: "folder/file" → the workflows. */

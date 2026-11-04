@@ -86,11 +86,11 @@ export function canonical(v) {
 export const indexHash = (index) => crypto.createHash('sha256').update(canonical({ ...index, hash: undefined })).digest('hex');
 
 /**
- * CPU work: a manifest workflow that loads no model file, fetches none on its first run and needs no graphics memory
- * (joins, trims, adding sound, Ken Burns, still to clip). The index marks it `cpu: true`, so it is never counted as GPU
- * work.
+ * CPU work: a manifest workflow that loads no model file, fetches none on its first run and says it needs no graphics
+ * memory (`vramGb: 0`, written as a number): joins, trims, adding sound, Ken Burns, still to clip. The index marks it
+ * `cpu: true`. A missing or misspelt vramGb never makes a workflow CPU work (buildIndex refuses it).
  */
-export const cpuWork = (wf) => !(wf.models ?? []).length && !(wf.autoDownloads ?? []).length && !(Number(wf.vramGb) > 0);
+export const cpuWork = (wf) => typeof wf.vramGb === 'number' && wf.vramGb === 0 && !(wf.models ?? []).length && !(wf.autoDownloads ?? []).length;
 
 /**
  * Build the index from the library's inputs. Pure: no file or network access.
@@ -176,6 +176,7 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       problems.push(`${wf.id}: no workflow graph`);
       continue;
     }
+    if (typeof wf.vramGb !== 'number' || !Number.isFinite(wf.vramGb) || wf.vramGb < 0) problems.push(`${wf.id}: vramGb must be a number of GB (0 when no node uses graphics memory)`);
     const core = new Set();
     const byPack = {};
     for (const n of wf.customNodes) byPack[n.name] ??= new Set();
