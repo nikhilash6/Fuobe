@@ -394,6 +394,7 @@ export const PRESET_MINIS: Record<string, string> = {
   "effect-yacht": "f170ee86",
   "genjutsu-group-swap": "492e2945",
   "genjutsu-lake-swap": "7e50fd4a",
+  "kinetic-runway-titles": "29f050d3",
   "motion-360-orbit": "2fd0ecf2",
   "motion-3d-rotation": "8d4cc601",
   "motion-action-run": "a3923a64",

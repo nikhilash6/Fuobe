@@ -41,6 +41,17 @@ export const STUDIO_COVERS: Record<string, StudioCover> = {
     icon: "UserRound",
     href: "/genjutsu?mode=character",
   },
+  // Home's and the menus' Kinetic Motion card: Runway Titles drawn by Kinetic itself at the card's own 4:3 shape (no
+  // model, no GPU). It opens on the finished piece, "GOLDEN HOUR" with "Spring" in script over the gold gown in a
+  // Marrakech courtyard; a light sweeps across the title, the words dissolve, then cut in again letter by letter as
+  // the photo pushes in, and the script draws itself on. The loop ends on the frame it starts with.
+  "kinetic-runway-titles": {
+    name: "Runway Titles",
+    description: "A giant title cuts in letter by letter over a full-bleed fashion photo, with a script word drawn on.",
+    category: "Kinetic",
+    icon: "LetterText",
+    href: "/kinetic?scene=lookbook",
+  },
 };
 
 /** Whether an id is a studio's cover (not a preset's). */

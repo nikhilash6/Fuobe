@@ -3067,6 +3067,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "minimax-h3",
     "variant": "recast-wipe"
   },
+  "kinetic-runway-titles": {
+    "poster": "/previews/presets/kinetic-runway-titles.jpg?v=d14eb1ab",
+    "video": "/previews/presets/kinetic-runway-titles.mp4?v=6fe4fce8",
+    "run": "home-kinetic-2026-11",
+    "engine": "kinetic",
+    "model": "kinetic-motion",
+    "variant": "runway-titles"
+  },
   "motion-360-orbit": {
     "poster": "/previews/presets/motion-360-orbit.jpg?v=ba99707c",
     "run": "comfyui-previews-2026-10",

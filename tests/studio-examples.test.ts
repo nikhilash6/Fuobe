@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getPreset, MODELS } from "@/lib/catalog";
 import { GENJUTSU_MODES } from "@/lib/catalog/genjutsu";
 import { HOME_CAPTION_MAX, HOME_WALL } from "@/lib/home-showcase";
+import { KINETIC_SCENES } from "@/lib/motion/kinetic-catalog";
 import { thumbOf } from "@/lib/preset-cards";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
@@ -153,6 +154,12 @@ describe("the studios' examples", () => {
     for (const [id, c] of Object.entries(STUDIO_COVERS)) {
       const url = new URL(c.href, "https://fuobe.com");
       expect(url.pathname, id).toBe(`/${c.category.toLowerCase()}`);
+      // Kinetic's cover opens the scene it shows, by the scene's own name (kinetic-catalog.ts).
+      if (c.category === "Kinetic") {
+        const scene = KINETIC_SCENES.find((s) => s.slug === url.searchParams.get("scene"));
+        expect(scene?.name, id).toBe(c.name);
+        continue;
+      }
       const modes: string[] = c.category === "Genjutsu" ? GENJUTSU_MODES.map((m) => m.id) : [];
       expect(modes, id).toContain(url.searchParams.get("mode"));
       if (!url.searchParams.has("example")) continue;
