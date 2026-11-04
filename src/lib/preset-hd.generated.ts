@@ -139,7 +139,7 @@ export const PRESET_HD: Record<string, { w: number[]; v: string; still?: number;
   "app-zooms": { "w":[640,1024], "v":"63bdec9a" },
   "effect-acid": { "w":[640,1024], "v":"ce7d1136" },
   "effect-act-natural": { "w":[640,1024], "v":"89cc3e40", "rest":"/examples/effect-act-natural/1/out-peak.jpg" },
-  "effect-agamemnon": { "w":[640,1024], "v":"e9eb0753" },
+  "effect-agamemnon": { "w":[640,1024], "v":"9a6a449d" },
   "effect-agent-reveal": { "w":[640,1024], "v":"11219636", "rest":"/examples/effect-agent-reveal/1/out-peak.jpg" },
   "effect-air-bending": { "w":[1024], "v":"abb57363", "still":768 },
   "effect-akrill": { "w":[640,1024], "v":"fb5b8645" },
