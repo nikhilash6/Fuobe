@@ -123,7 +123,8 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 A log row is `{ id, at, actor: "owner" | "token" | "system", token: { id, name } | null, action, target, detail, status }`.
 `token.name` is the name the token had at the time. Actions: `account.disable`, `account.enable`, `account.signout`,
 `account.delete`, `run.delete`, `outputs.hide`, `outputs.unhide`, `outputs.remove`, `worker.add`, `worker.change`,
-`worker.rotate`, `worker.revoke`, `queue.settings` (with the values before and after), `token.create`, `token.revoke`,
+`worker.rotate`, `worker.revoke`, `worker.revoke_all` (Sign everyone out with every API token), `queue.settings` (with
+the values before and after), `token.create`, `token.revoke`,
 `token.revoke_all`, `settings.comfy_where` (where ComfyUI runs, with the values before and after); a token's reads
 `accounts.list`, `accounts.csv`, `account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action
 every 10 minutes); reads of accounts' content by a token or the owner: `runs.content` (one row per reader and account

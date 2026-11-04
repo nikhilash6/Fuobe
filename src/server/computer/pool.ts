@@ -861,15 +861,32 @@ export interface WorkerPatch {
   revoke?: boolean;
 }
 
+/** A worker's token stops at once, and its tasks go back in line at once (not the worker's fault). */
+function revokePoolWorker(id: string, now: number): void {
+  revokeWorker(id, now);
+  for (const t of db().prepare("SELECT * FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting')").all(id) as TaskRow[]) backInLine(t, { blame: false });
+}
+
+/**
+ * Every worker's token stops at once (Settings → Security → Sign everyone out, with every API token), and their tasks go
+ * back in line with their places kept. People's own paired ComfyUIs keep theirs. Returns how many workers it revoked.
+ */
+export function revokeAllWorkers(now = Date.now()): number {
+  const d = db();
+  return d.transaction(() => {
+    const ids = (d.prepare("SELECT id FROM relay_workers WHERE kind = 'pool' AND revoked_at IS NULL").all() as { id: string }[]).map((r) => r.id);
+    for (const id of ids) revokePoolWorker(id, now);
+    return ids.length;
+  })();
+}
+
 /** The owner changes a worker. Each change reaches it at its next beat. */
 export function patchWorker(id: string, p: WorkerPatch, now = Date.now()): { view: WorkerView | null; token?: string } {
   const d = db();
   const w = d.prepare("SELECT * FROM relay_workers WHERE id = ? AND kind = 'pool' AND revoked_at IS NULL").get(id) as WorkerRow | undefined;
   if (!w) return { view: null };
   if (p.revoke) {
-    revokeWorker(id, now);
-    // Its tasks go back in line at once (not the worker's fault).
-    for (const t of d.prepare("SELECT * FROM relay_tasks WHERE worker_id = ? AND state IN ('sending','queued','running','collecting')").all(id) as TaskRow[]) backInLine(t, { blame: false });
+    revokePoolWorker(id, now);
     return { view: null };
   }
   const set: Record<string, unknown> = {};

@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { audit, revokeAllAdminTokens } from "@/server/admin-tokens";
 import { authEnabled, SESSION_COOKIE, sessionCookieOf, signOutEveryone, validSession } from "@/server/auth";
+import { revokeAllWorkers } from "@/server/computer/pool";
 
 /**
  * Settings → Security → Sign everyone out: a new session secret, so every signed-in browser (the owner's, this one
  * too, and every account's) has to sign in again. It works while FUOBE_PASSWORD is set. Only from the owner's
  * signed-in browser (an API token can't do it). With { tokens: true }, every API token is revoked too, admin tokens
- * included.
+ * included, and every worker's token (their jobs go back in line; people's own paired ComfyUIs stay paired).
  */
 export async function POST(request: Request) {
   if (!authEnabled()) return Response.json({ error: "Set a password first. Without one, nobody signs in." }, { status: 400 });
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
   if (tokensRevoked) {
     const n = revokeAllAdminTokens();
     if (n) audit({ kind: "owner" }, "token.revoke_all", null, { count: n }, 200);
+    const workers = revokeAllWorkers();
+    if (workers) audit({ kind: "owner" }, "worker.revoke_all", null, { count: workers }, 200);
   }
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
   return Response.json(

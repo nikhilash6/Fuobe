@@ -254,7 +254,7 @@ function SignOutEveryone({ tokens }: { tokens: number }) {
           <div className="flex items-start gap-2">
             <Checkbox id={`${id}-tokens`} className="mt-0.5" checked={revoke} onCheckedChange={(v) => setRevoke(!!v)} />
             <Label htmlFor={`${id}-tokens`} className="text-[13px] leading-snug font-normal">
-              Also revoke every API token{tokens > 0 ? ` (${tokens})` : ""}. Scripts and agents that use one stop working until you give them a new one.
+              Also revoke every API token{tokens > 0 ? ` (${tokens})` : ""}. Scripts, agents and workers that use one stop working until you give them a new one.
             </Label>
           </div>
           <AlertDialogFooter>

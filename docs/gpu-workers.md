@@ -493,7 +493,10 @@ The worker keeps its jobs going by itself:
 
 Every worker call carries `Authorization: Bearer fuobe_wkr_…`. A worker token works only on `/api/gpu/computer/*` and
 gets 403 everywhere else. It is never the owner, and an owner API token can never act as a worker. The studio reads the
-token on every call, so a revoked token stops at once.
+token on every call, so a revoked token stops at once. **Settings → Security → Sign everyone out** with **Also revoke
+every API token** revokes every worker's token too. Their jobs go back to the queue with their places kept, and the
+admin log gets one `worker.revoke_all` row. Add each worker again to give it a new token. People's own paired
+ComfyUIs keep theirs.
 
 **A token's lifetime.** With `FUOBE_WORKER_TOKEN_DAYS` set (unset or 0: a token never expires, as before), a pool
 worker's token lasts that many days. A worker added before the lifetime was set gets it from its first call after. Once

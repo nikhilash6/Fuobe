@@ -472,8 +472,60 @@ describe("admin tokens: accounts and files", () => {
     expect(res.status).toBe(200);
     expect((await routes.queue.GET(req("/api/admin/queue", { token }))).status).toBe(401);
     expect(admin.liveAdminTokenCount()).toBe(0);
-    expect(auditRows().at(-1)).toMatchObject({ actor: "owner", action: "token.revoke_all", status: 200 });
-    expect(JSON.parse(auditRows().at(-1)!.detail_json!).count).toBeGreaterThanOrEqual(1);
+    const row = auditRows().findLast((r) => r.action === "token.revoke_all");
+    expect(row).toMatchObject({ actor: "owner", action: "token.revoke_all", status: 200 });
+    expect(JSON.parse(row!.detail_json!).count).toBeGreaterThanOrEqual(1);
+    ownerCookie = auth.createSession().value;
+  });
+
+  it("Sign everyone out with every API token stops every worker's token too, and their jobs go back in line; paired ComfyUIs stay", async () => {
+    const pool = await import("@/server/computer/pool");
+    const tasks = await import("@/server/computer/tasks");
+    const { principalOf } = await import("@/server/computer/http");
+    const { setSetting } = await import("@/server/settings");
+    setSetting("comfyWhere", "workers");
+    const w = pool.addWorker(`panic-${++n}`);
+    pool.patchWorker(w.id, { paused: false, hours: { always: true }, allow: { small: { delayMs: 0 } }, claimAfterMs: 0 });
+    db().prepare("UPDATE relay_workers SET lanes_json = ?, facts_json = ? WHERE id = ?").run(JSON.stringify({ lanes: ["small"], workflows: ["wf-panic"] }), JSON.stringify({ vramBytes: 2 ** 34 }), w.id);
+    const a = auth.createAccount(`panic-${++n}@example.com`, "long enough");
+    const paired = workers.createWorker({ name: `paired-${++n}`, kind: "personal", principal: `acct:${a.id}` });
+    const gid = `panic-run-${++n}`;
+    const now = Date.now();
+    db()
+      .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', 'queued', ?, '[]', ?, ?)")
+      .run(gid, JSON.stringify({ account: a.id, place: "pool" }), now, now);
+    const t = tasks.createTask({
+      principal: `acct:${a.id}`,
+      generationId: gid,
+      graph: { "1": { class_type: "SaveImage", inputs: { filename_prefix: "x" } } },
+      pool: { pools: ["pool"], account: a.id, rankAt: now, lane: "small", needs: { workflowId: "wf-panic", files: [], packs: [], minVramBytes: 0 } },
+    });
+    const worker = () => workers.getWorker(w.id)!;
+    pool.workerBeat(worker(), pool.cleanBeat({ device: `wkr-${w.id}`, protocol: 2, version: "1", local: { paused: false, why: null, until: null }, gpu: {}, inventoryHash: null, running: [], stopped: [] }));
+    expect(pool.workerClaim(worker(), [])?.id).toBe(t.id);
+    const call = (token: string) => principalOf(new Request("http://localhost:3000/api/gpu/computer/beat", { method: "POST", headers: { host: "localhost:3000", authorization: `Bearer ${token}` } }));
+    expect(call(w.token)).not.toBeInstanceOf(Response);
+
+    const res = await routes.sessions.POST(req("/api/auth/sessions", { cookie: ownerCookie, method: "POST", body: { tokens: true } }));
+    expect(res.status).toBe(200);
+    expect((call(w.token) as Response).status).toBe(401);
+    // Its job waits in line again with its place, at no cost.
+    const back = db().prepare("SELECT state, requeues, worker_id FROM relay_tasks WHERE id = ?").get(t.id) as { state: string; requeues: number; worker_id: string | null };
+    expect(back).toEqual({ state: "waiting", requeues: 0, worker_id: null });
+    // A person's own paired ComfyUI keeps its token.
+    expect(workers.workerFromAuth(`Bearer ${paired.token}`, null)?.id).toBe(paired.id);
+    const row = auditRows().findLast((r) => r.action === "worker.revoke_all");
+    expect(row).toMatchObject({ actor: "owner", status: 200 });
+    expect(JSON.parse(row!.detail_json!).count).toBe(1);
+    ownerCookie = auth.createSession().value;
+  });
+
+  it("Sign everyone out without the API tokens leaves workers as they are", async () => {
+    const pool = await import("@/server/computer/pool");
+    const w = pool.addWorker(`calm-${++n}`);
+    const res = await routes.sessions.POST(req("/api/auth/sessions", { cookie: ownerCookie, method: "POST", body: {} }));
+    expect(res.status).toBe(200);
+    expect(workers.getWorker(w.id)?.revoked_at).toBeNull();
     ownerCookie = auth.createSession().value;
   });
 });
