@@ -279,10 +279,24 @@ export function writeIndex(dir = LIBRARY) {
 // ---------------------------------------------------------------------------
 // --refresh-pins: revisions, sizes and sha256 from Hugging Face (maintainers; network)
 
+/** The largest file kept in git itself (not LFS) that a refresh reads to hash. */
+export const SMALL_FILE_BYTES = 1024 * 1024;
+
+/** A small file's sha256, read at a revision; it must be exactly `size` bytes. */
+async function smallFileSha(fetchImpl, g, sha, filePath, size, headers) {
+  const prefix = g.kind === 'datasets' ? 'datasets/' : '';
+  const r = await fetchImpl(`https://huggingface.co/${prefix}${g.repo}/resolve/${sha}/${filePath.split('/').map(encodeURIComponent).join('/')}`, { headers });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const bytes = Buffer.from(await r.arrayBuffer());
+  if (bytes.length !== size) throw new Error('size differs');
+  return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
 /**
  * Pin every manifest URL: the repo's current revision (GET /api/<kind>/<repo>/revision/main) and, at that revision,
- * each file's size and LFS sha256 (POST /api/<kind>/<repo>/paths-info/<sha>). URLs already at a commit keep it.
- * Files that can't be read (gated without HF_TOKEN, moved) keep their old pin, or none; they are returned in `failed`.
+ * each file's size and LFS sha256 (POST /api/<kind>/<repo>/paths-info/<sha>), or for a small file kept in git itself
+ * (up to SMALL_FILE_BYTES) the sha256 of its bytes at that revision. URLs already at a commit keep it. Files that can't
+ * be read (gated without HF_TOKEN, moved) keep their old pin, or none; they are returned in `failed`.
  */
 export async function refreshPins(dir = LIBRARY, { token = process.env.HF_TOKEN, fetchImpl = fetch, log = console.log } = {}) {
   const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
@@ -331,7 +345,11 @@ export async function refreshPins(dir = LIBRARY, { token = process.env.HF_TOKEN,
           continue;
         }
         const size = e.lfs?.size ?? e.size;
-        pins[it.url] = { revision: sha, sizeBytes: size, ...(e.lfs?.oid && /^[0-9a-f]{64}$/.test(e.lfs.oid) && { sha256: e.lfs.oid }) };
+        // A large file's sha256 is its LFS oid. A small file kept in git itself (a config.json) has none: it is read
+        // at that revision and hashed.
+        let sha256 = e.lfs?.oid && /^[0-9a-f]{64}$/.test(e.lfs.oid) ? e.lfs.oid : null;
+        if (!e.lfs && Number.isInteger(size) && size <= SMALL_FILE_BYTES) sha256 = await smallFileSha(fetchImpl, g, sha, it.path, size, headers).catch(() => null);
+        pins[it.url] = { revision: sha, sizeBytes: size, ...(sha256 && { sha256 }) };
       }
       log(`✓ ${g.repo}@${sha.slice(0, 8)}: ${g.items.length} file(s)`);
     } catch (e) {

@@ -2,7 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { graphCheck, vetGraph } from "../bin/lib/worker/checks.mjs";
 import { loaderInput, pathProblem } from "../bin/lib/worker/rules.mjs";
-import { allowedNodeList, filePins, inputRules, missingRules, readCatalog } from "../scripts/lib/worker-catalog.mjs";
+import { allowedNodeList, filePins, inputRules, missingRules, readCatalog, UNPINNED_FILES, unpinnedFiles } from "../scripts/lib/worker-catalog.mjs";
 import { tempDir } from "./helpers/temp-dir";
 
 process.env.FUOBE_DATA_DIR = tempDir("fuobe-worker-rules-");
@@ -160,6 +160,16 @@ describe("the worker's input rules", () => {
     const all = Object.keys(catalog.requirements.files);
     expect(Object.keys(pins).length / all.length).toBeGreaterThan(0.9);
     for (const sha of Object.values(pins)) expect(sha).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("pins every model file a workflow for workers needs, but for a known list of gaps that may only shrink", () => {
+    const gaps = unpinnedFiles(catalog);
+    // A new workflow file with no pin would quietly keep that workflow off every worker: pin it (model-pins.json).
+    const fresh = Object.keys(gaps).filter((f) => !UNPINNED_FILES.includes(f));
+    expect(fresh, fresh.map((f) => `${f} (${gaps[f].join(", ")})`).join("\n")).toEqual([]);
+    // A gap that has a pin now: take it off the list.
+    const pinned = UNPINNED_FILES.filter((f) => !gaps[f]);
+    expect(pinned, pinned.join("\n")).toEqual([]);
   });
 });
 

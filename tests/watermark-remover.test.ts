@@ -193,9 +193,12 @@ describe("6. requirements and pins", () => {
     expect(c.bash).toContain(`[ -s ${target} ] || curl -L --fail -o ${target} "${SAM_URL}"`);
     expect(c.bash).toContain(`printf '%s  %s\\n' ${SAM_SHA} ${target} | sha256sum -c - || rm -f ${target}`);
     expect(c.powershell).toContain(`.Hash -ne "${SAM_SHA.toUpperCase()}") { Remove-Item -Force`);
-    // Other packs' files a listing can't see but that have no checksum (DBS configs) aren't fetched this way.
+    // Only files a listing can't see that have a checksum come this way: the DBS configs (pinned now) do, the rest don't.
     const dbs = commandsFor([{ kind: "pack-install", pack: "ComfyUI-DBS" }], { inv, idx: requirements });
-    expect(dbs.bash).not.toContain("sha256sum");
+    const fetched = [...dbs.bash.matchAll(/\| sha256sum -c - \|\| rm -f "\$COMFY\/models\/([^"]+)"/g)].map((m) => m[1]).sort();
+    expect(fetched).toEqual(["dbs/DBS-BSRNN-DnR/config.json", "dbs/DBS-TIGER-DnR/config.json"]);
+    const unpinned = (Object.values(requirements.files) as { file: string; presence: string; sha256?: string }[]).filter((f) => f.presence === "unobservable" && !f.sha256);
+    for (const f of unpinned) expect(dbs.bash).not.toContain(f.file);
   });
 });
 

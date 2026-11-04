@@ -187,6 +187,42 @@ export function missingRules(rules, allowed) {
   return REQUIRED_RULES.filter(([cls, input]) => allowed.includes(cls) && !rules.inputs[cls]?.[input]).map(([cls, input]) => `${cls}.${input}`);
 }
 
+/**
+ * Model files that workflows for workers need and that have no SHA-256 pin yet ("folder/file"). A worker never reports
+ * such a file, so no worker runs a workflow that needs one. Their repositories need a signed-in account to read the
+ * hashes (`node scripts/comfy/build-requirements.mjs --refresh-pins` with HF_TOKEN); the LTX-2.5 entries also need
+ * their exact sizes and a pinned revision. The list may only shrink: a test fails when a new file has no pin, and when
+ * a file here gets one.
+ */
+export const UNPINNED_FILES = [
+  "diffusion_models/flux3-image-klein-base-int8-convrot.safetensors",
+  "diffusion_models/flux3-image-klein-int8-convrot.safetensors",
+  "diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+  "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+  "loras/ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
+  "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+  "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors",
+  "text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+  "vae/ltx-2.5-audio-vae-bf16.safetensors",
+  "vae/ltx-2.5-video-vae-bf16.safetensors",
+];
+
+/** The files that workflows for workers (not isolated) need and that have no pin: "folder/file" → the workflows. */
+export function unpinnedFiles(catalog) {
+  const pins = filePins(catalog);
+  const out = {};
+  for (const [id, wf] of Object.entries(catalog.requirements.workflows ?? {})) {
+    if (wf.isolated) continue;
+    for (const k of wf.files ?? []) {
+      const f = catalog.requirements.files?.[k];
+      if (!f) continue;
+      const key = `${f.folder}/${f.file}`;
+      if (!pins[key]) (out[key] ??= []).push(id);
+    }
+  }
+  return Object.fromEntries(Object.keys(out).sort().map((k) => [k, out[k].sort()]));
+}
+
 /** The SHA-256 of every model file the catalog names ("folder/file" → hex), from its index or its model pins. */
 export function filePins(catalog) {
   const pins = catalog.pins ?? {};
