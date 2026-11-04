@@ -64,9 +64,10 @@ The easiest way to write one is not to: **Make a skill from this…** on a resul
 in the Library, builds the recipe from the steps behind your results, and you pick which inputs change.
 
 A recipe runs on an engine only after a free **Test run** has passed there: Fuobe plans and prices
-every step. The test run also runs it once with placeholder results (a studio step runs as a demo too,
-and what it opened is deleted after), so nothing runs for real and nothing is spent; a run doesn't wait
-for that part. A retired, switched-off or repriced model asks for a new test run (**Test again**). Fuobe
+every step. The test run also runs it once with placeholder results (not for a studio tool step on its
+own, which is priced only; beside other steps a studio step runs as a demo too, and what it opened is
+deleted after), so nothing runs for real and nothing is spent; a run doesn't wait for that part. A
+retired, switched-off or repriced model asks for a new test run (**Test again**). Fuobe
 writes the `verified` dates itself: an uploaded `recipe.json` loses them and starts unchecked, and a
 downloaded `.zip` leaves out this install's checks (and, unless you ask, the examples and where the
 recipe came from). The built-in skills here carry no recipe and can't be checked: duplicate one
