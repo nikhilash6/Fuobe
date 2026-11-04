@@ -271,7 +271,7 @@ export function installComfyLocal(worker: ComfyWorker = "main"): boolean {
 export const POOL_NOT_LOCAL = "This install's ComfyUI address isn't on this machine, so runs of accounts don't go to it.";
 
 /** Said to the owner when no worker is allowed the lane of a job sent to the workers. */
-export const NO_WORKER_FOR_LANE = "No worker is allowed to run this model yet. Allow its lane for a worker in Settings → Workers.";
+export const NO_WORKER_FOR_LANE = "No worker is allowed to run this model yet. Allow its lane for a worker in Settings → Open-source engine · ComfyUI → Workers.";
 
 /**
  * Every VideoHelperSuite save node of a graph for the workers saves no metadata: the prompt and the machine's own clock never

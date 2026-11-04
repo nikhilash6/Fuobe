@@ -579,8 +579,8 @@ describe("clips and sound", () => {
     expect(sent.equals(original)).toBe(false);
     expect(sent.subarray(4, 8).toString("latin1")).toBe("ftyp");
     expect(sent.includes("private-note")).toBe(false);
-    // Its copies of people's files went with the job.
-    expect(fs.existsSync(path.join(p.workDir, "cache"))).toBe(false);
+    // Its copies of people's files went with the job (the worker clears them just after its last report).
+    expect(await until(() => !fs.existsSync(path.join(p.workDir, "cache")), 10_000)).toBe(true);
   });
 
   it("without ffmpeg it takes pictures only, and gives a job with a clip back to the line", async () => {
