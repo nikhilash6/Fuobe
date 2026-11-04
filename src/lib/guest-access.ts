@@ -295,6 +295,10 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
 export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   // Character Swap Studio: the list, a project, its prices, its decisions, and stopping its jobs.
   /^\/api\/swap-studio\/projects(\/[^/]+(\/(decisions|estimate|stop|takes\/stop))?)?$/,
+  // Shorts Studio: its own sessions (start one, a new take, stitch again, pick a take, rename, delete) and its own
+  // presets. Enhance isn't here: it isn't offered on an account's own GPU yet.
+  /^\/api\/shorts\/sessions(\/[^/]+(\/stitch|\/segments\/[^/]+(\/primary)?)?)?$/,
+  /^\/api\/shorts\/presets(\/[^/]+)?$/,
 ];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));

@@ -153,10 +153,12 @@ describe("Open-H3 Regenerate while it is held", () => {
     const source = saveFile({ data: fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4")), contentType: "video/mp4", source: "upload", name: "beach day.mp4" }).url;
     const s = await shorts.createSession({ engine: "open", presetId: "shorts-claymation", source: { url: source, name: "beach day.mp4" }, range: { start: 0, end: 12 }, aspectRatio: "9:16", language: "auto" } as never);
     const takes = s.segments[1].takes.length;
-    await refused(() => enhanceRoute.POST(json("POST", { requestId: "held-enhance-1" }), params({ id: s.id, index: "1" })), R.REGEN_COPY.heldEnhance);
+    // The owner's Enhance (anyone else's is refused before it is read: tests/account-shorts.test.ts).
+    const asOwner = (body?: unknown) => new Request("http://localhost:3000/api", { method: "POST", headers: { cookie: owner, host: "localhost:3000", "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    await refused(() => enhanceRoute.POST(asOwner({ requestId: "held-enhance-1" }), params({ id: s.id, index: "1" })), R.REGEN_COPY.heldEnhance);
     expect(shorts.getSession(s.id).segments[1].takes).toHaveLength(takes);
     // A missing segment is still not found.
-    expect((await enhanceRoute.POST(json("POST"), params({ id: s.id, index: "9" }))).status).toBe(404);
+    expect((await enhanceRoute.POST(asOwner(), params({ id: s.id, index: "9" }))).status).toBe(404);
   });
 
   it("refuses Faceless's Regenerate to 1080p on an episode", async () => {

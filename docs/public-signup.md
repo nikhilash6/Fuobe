@@ -32,7 +32,7 @@ it (files, uploads, projects, settings values, tokens) answer 401 "Sign up to se
 Every change a guest sends (generate, upload, save a setting, create a project…) answers 401. The
 studio shows a "Create a free account to run this" card with **Sign up** and **Log in**. Where
 signing up wouldn't help, a guest gets an account's answer instead: 403 `assist-owner` for Assist,
-and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Shorts, Katana,
+and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Katana,
 Marketing…). The pages of those tools say so up front and turn off their upload and Generate.
 What is drawn in the browser itself is open to try: Click to Ad's animated end card and Marketing
 Studio's code-drawn templates (Kinetic Motion) take a guest's words and play live (a code-drawn
@@ -263,7 +263,7 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   uploads, outputs and cancels go there, and nothing falls back to the studio's own providers. If
   the account's ComfyUI can't be reached, the run fails and says so. A cloud model, an AI helper or
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
-  (Canvas, Cinema, Shorts, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
+  (Canvas, Cinema, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
   plan with the studio's own AI helpers or keep projects of their own. A 3D model sent here answers the
   same: Image to 3D has its own route (below). So do the Audio hub's Split
   soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
@@ -323,6 +323,15 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   its limits: a take that waits for the one before it starts later in the same run. The pictures a project names (the
   character, an imported anchor) and its clips are the account's own. Its assembled clips are its own runs, to open and
   download. The checks are `src/server/swap-studio-account.ts`.
+- **Shorts Studio.** An account makes its own shorts the same way (`POST /api/shorts/sessions`), on its own ComfyUI or
+  on its own fal.ai or Replicate key on the cloud engine: each segment's cut, restyle and the stitch under the clip's
+  sound are runs of its own, with only its own files, and a short counts once against its limits. A new take of a
+  segment (`POST /api/shorts/sessions/<id>/segments/<n>`) and Stitch again (`.../stitch`) go through the same checks.
+  Its shorts and the presets it makes from its own pictures are its own projects (`src/server/account-projects.ts`):
+  its History, a short's page (`/shorts/<id>`) and its preset list show only its own, and another account's or the
+  owner's read as not found (404). It keeps up to 50 shorts. Deleting a short deletes its runs for good (an account
+  has no Trash). It downloads the full video and each part; "Download parts" as one zip is the owner's for now.
+  Enhance (`.../enhance`) isn't offered to it yet (403 `own-gpu-tool`). A guest gets the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

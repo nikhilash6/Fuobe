@@ -7,8 +7,8 @@
  *
  * Options for tests: `loras` (GET /models/loras), `delayMs` (until the history says done), `drip` (the history
  * answers one byte every 2 s, never finishing), `huge` (/view streams without end), `promptId` (the job id /prompt
- * answers), `missing` (a file /prompt answers "not in list" for), `output` ("video", "image" or "model3d": a one-triangle
- * GLB), `layers` (the
+ * answers), `missing` (a file /prompt answers "not in list" for), `output` ("video", "image", "model3d": a one-triangle
+ * GLB, or "both": a clip and a picture, as a step that cuts a clip and keeps its first frame), `layers` (the
  * history lists that many Qwen-Image-Layered layers, node 60), `frames` (an EXR export: a preview clip, node 5, and
  * that many frames, node 3), `historyError` (/history answers HTTP 500 and then sends nothing), `uploadStatus` (the HTTP
  * status /upload/image answers, e.g. 500 to fail every upload), `refuseClass` (/prompt answers "not in list" for a graph with
@@ -27,7 +27,7 @@ export interface FakeComfyOptions {
   huge?: boolean;
   promptId?: string;
   missing?: string;
-  output?: "video" | "image" | "model3d";
+  output?: "video" | "image" | "model3d" | "both";
   layers?: number;
   frames?: number;
   historyError?: boolean;
@@ -185,6 +185,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
         if (opts.frames) return json(200, { [id]: { ...done, outputs: { "5": { gifs: list(1, "mp4") }, "3": { images: list(opts.frames, "exr") } } } });
         if (opts.output === "model3d") return json(200, { [id]: { ...done, outputs: { "900": { "3d": [{ filename: "fake_00001_.glb", subfolder: "3D", type: "output" }] } } } });
         if (opts.nodes?.length) return json(200, { [id]: { ...done, outputs: Object.fromEntries(opts.nodes.map((n, i) => [n, { gifs: [{ filename: `fake_${n}_${i + 1}.mp4`, subfolder: "", type: "output" }] }])) } });
+        if (opts.output === "both") return json(200, { [id]: { ...done, outputs: { "900": { gifs: list(1, "mp4") }, "901": { images: list(1, "png") } } } });
         const file = opts.output === "image" ? { filename: "fake_00001_.png", subfolder: "", type: "output" } : { filename: "fake_00001.mp4", subfolder: "", type: "output" };
         const key = opts.output === "image" ? "images" : "gifs";
         return json(200, { [id]: { status: { completed: true, status_str: "success" }, outputs: { "900": { [key]: [file] } } } });
