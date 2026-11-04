@@ -116,8 +116,8 @@ the environment, removes it from there, and puts a check in front of every reque
 Before the worker sends the key, the process on the port must prove two things. It signs a random challenge with the
 key (`GET /fuobe-worker/hello`, HMAC-SHA-256), and it names its process id, which must be the one that the worker
 started. A program that took the port first learns nothing. When ComfyUI is ready, the worker also checks that a
-request without the key is refused. If it is not refused, the guard is missing, and the worker does not use that
-ComfyUI.
+request without the key is refused. If it is not refused, the guard is missing. The worker then stops that ComfyUI,
+does not use it, and pauses itself for an hour ("comfy-crashes").
 
 **A ComfyUI left running.** The worker writes its ComfyUI's process id to `comfyui.pid` in the worker folder. If the
 worker stops without stopping ComfyUI (a crash), the next start finds that file. It stops that process, but only when
@@ -258,6 +258,9 @@ The worker keeps its jobs going by itself:
   run limit that the claim gives, the worker takes its prompt off its ComfyUI and gives the job back. The job keeps
   its place in the line. If its ComfyUI does not let go of the prompt within 15 seconds, the worker stops ComfyUI and
   starts it again. A job that is given back counts as an attempt; the third time, it fails.
+- **A ComfyUI that stops answering** for `hungMin` minutes (3) is stopped and started again.
+- **A job that the studio took back** (its token for the job no longer works, for example after the worker was out of
+  touch) is stopped in its ComfyUI at once, so it never keeps the GPU busy for nothing.
 - **Out of memory.** The worker frees its ComfyUI's memory (`/free`) and sends the job once more. Only a second time
   fails the job.
 - **Inputs are read once.** The worker keeps a copy of each input (by its SHA-256) while its job runs, so a job that

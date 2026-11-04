@@ -242,6 +242,8 @@ export class OwnComfy {
     this.onCrash = null;
     /** The task its ComfyUI runs now (the worker says), so a crash counts against it. */
     this.task = null;
+    /** When it last answered anything (a ComfyUI that stops answering is stuck). */
+    this.answeredAt = 0;
     this.log = null;
   }
 
@@ -291,7 +293,10 @@ export class OwnComfy {
   fetch(url, init = {}) {
     const headers = new Headers(init.headers);
     for (const [k, v] of Object.entries(this.headers())) headers.set(k, v);
-    return (this.o.fetch ?? fetch)(this.rebase(url), { ...init, headers });
+    return (this.o.fetch ?? fetch)(this.rebase(url), { ...init, headers }).then((res) => {
+      this.answeredAt = (this.o.now ?? Date.now)();
+      return res;
+    });
   }
 
   /** A ComfyUI left running by a worker that stopped without stopping it (its pid file says): stop it. True when it did. */
@@ -392,6 +397,7 @@ export class OwnComfy {
               }
             }
             this.ready = true;
+            this.answeredAt = (this.o.now ?? Date.now)();
             return;
           }
         }

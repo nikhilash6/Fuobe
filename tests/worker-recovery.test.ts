@@ -7,6 +7,8 @@
  * - The worker stops after the render and before the upload (or before the studio heard it finished): the output
  *   arrives after the next start, and its ComfyUI got exactly one prompt. Paused here, it still sends kept results.
  * - Its ComfyUI hangs: the job is given back within the stall limit, and then runs to the end.
+ * - A job the studio took back mid-run stops in its ComfyUI at once.
+ * - A ComfyUI that stops answering is stopped and started again; one that answers without its guard is not used.
  * - A request to its ComfyUI with another Host or without the key is refused.
  * - A clip is made again by ffmpeg before its ComfyUI sees it; without ffmpeg, the job goes back to the line.
  * - A model file that turns up later is reported within one look at its folders.
@@ -146,7 +148,7 @@ function pc(): Pc {
 }
 
 /** Start `fuobe worker run` in this process (its ComfyUI a stand-in process of its own). */
-function start(w: W, s: Studio, p: Pc, o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; ffmpeg?: string | null; rescanMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string> } = {}) {
+function start(w: W, s: Studio, p: Pc, o: { steps?: number; stepMs?: number; failNext?: string; stallMin?: number; hungMin?: number; ffmpeg?: string | null; rescanMs?: number; modelDirs?: string[]; requirements?: unknown; pins?: Record<string, string>; command?: string[] } = {}) {
   const ctrl = new AbortController();
   const cfg = {
     site: SITE,
@@ -154,13 +156,14 @@ function start(w: W, s: Studio, p: Pc, o: { steps?: number; stepMs?: number; fai
     comfyDir: p.comfyDir,
     workDir: p.workDir,
     modelDirs: o.modelDirs ?? [],
-    comfyCommand: [
+    comfyCommand: o.command ?? [
       process.execPath, "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", FAKE, "--port", "{port}", "--cors", "off",
       "--steps", String(o.steps ?? 4), "--step-ms", String(o.stepMs ?? 40), "--worker-guard", "1", "--count-file", p.countFile,
       ...(o.failNext ? ["--fail-next", o.failNext] : []),
     ],
     comfyGuard: true,
     stallMin: o.stallMin ?? 10,
+    hungMin: o.hungMin ?? 3,
     ffmpeg: o.ffmpeg ?? null,
   };
   const done = runWorker(cfg, {
@@ -311,6 +314,74 @@ describe("a worker keeps its jobs going", () => {
     const t = await ended(id);
     expect(t).toMatchObject({ state: "done", requeues: 1 });
     expect(prompts(p)).toBe(2);
+  });
+
+  it("a job taken from it mid-run (its lease no longer works): its prompt stops at once, and the job runs again", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const { id } = addTask();
+    start(w, s, p, { steps: 30, stepMs: 200 });
+    const comfy = await until(async () => {
+      const c = comfyOf(p);
+      return c && ((await fakeStats(c.port).catch(() => null))?.step ?? 0) >= 3 ? c : null;
+    });
+    // The studio puts the job back in line (as when it lost touch with the worker): its next report gets 409.
+    pool.backInLine(state(id), { blame: false });
+    const stopped = await until(async () => {
+      const st = await fakeStats(comfy.port);
+      return st.running === null || (st.step !== null && st.step < 3) ? st : null;
+    }, 10_000);
+    expect(stopped).toBeTruthy();
+    const t = await ended(id);
+    expect(t.state).toBe("done");
+    expect(prompts(p)).toBe(2);
+  });
+
+  it("its ComfyUI stops answering: the worker stops it and starts it again", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const hung = path.join(p.comfyDir, "hung.mjs");
+    // Answers as a guarded ComfyUI for a few seconds, then never again (hung).
+    fs.writeFileSync(
+      hung,
+      `import http from "node:http"; import crypto from "node:crypto";
+const key = process.env.FUOBE_WORKER_GUARD_KEY; const port = Number(process.argv[2]); const until = Date.now() + 3000;
+http.createServer((q, s) => {
+  if (Date.now() > until) return;
+  if (q.headers.host !== "127.0.0.1:" + port) { s.writeHead(403); return s.end(); }
+  if (q.url.startsWith("/fuobe-worker/hello") && !q.headers["x-fuobe-worker-key"]) {
+    s.writeHead(200, { "content-type": "application/json" });
+    return s.end(JSON.stringify({ proof: crypto.createHmac("sha256", key).update(String(q.headers["x-fuobe-worker-challenge"])).digest("hex"), pid: process.pid }));
+  }
+  if (q.headers["x-fuobe-worker-key"] !== key) { s.writeHead(403); return s.end(); }
+  s.writeHead(200, { "content-type": "application/json" }); s.end(JSON.stringify({ system: {}, devices: [] }));
+}).listen(port, "127.0.0.1");`,
+    );
+    start(w, s, p, { command: [process.execPath, hung, "{port}"], hungMin: 0.05 });
+    await until(() => p.logs.some((l) => /stopped answering/.test(l)), 60_000);
+    await until(() => p.logs.filter((l) => /Starting its own ComfyUI/.test(l)).length >= 2, 30_000);
+  });
+
+  it("a ComfyUI that answers without its guard is stopped and not started again for an hour", async () => {
+    const w = addWorker();
+    const s = studio();
+    const p = pc();
+    const open = path.join(p.comfyDir, "open.mjs");
+    // Proves itself with the key, but answers every request without it: the guard isn't there.
+    fs.writeFileSync(
+      open,
+      `import http from "node:http"; import crypto from "node:crypto"; const key = process.env.FUOBE_WORKER_GUARD_KEY;
+http.createServer((q, s) => { s.writeHead(200, { "content-type": "application/json" });
+  s.end(JSON.stringify(q.url.startsWith("/fuobe-worker/hello") ? { proof: crypto.createHmac("sha256", key).update(String(q.headers["x-fuobe-worker-challenge"])).digest("hex"), pid: process.pid } : { system: {}, devices: [] })); }).listen(Number(process.argv[2]), "127.0.0.1");`,
+    );
+    start(w, s, p, { command: [process.execPath, open, "{port}"] });
+    await until(() => p.logs.some((l) => /without the worker's guard/.test(l)), 60_000);
+    await sleep(3_000);
+    expect(p.logs.filter((l) => /Starting its own ComfyUI/.test(l))).toHaveLength(1);
+    expect(comfyOf(p)).toBeNull();
+    expect(p.logs.some((l) => /comfy-crashes/.test(l))).toBe(true);
   });
 
   it("stops when the studio no longer knows its token, and says so", async () => {

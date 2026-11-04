@@ -581,7 +581,8 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
         const asked = JSON.parse(body.toString("utf8") || "{}") as { prompt_id?: string };
         entry.body = asked;
         const id = asked.prompt_id;
-        if (id && running?.id === id) cancel(id);
+        // ComfyUI's own: a prompt id stops that prompt; none stops whatever runs.
+        if (running && (!id || running.id === id)) cancel(running.id);
         return reply(200, {});
       }
       if (p.startsWith("/history/")) {

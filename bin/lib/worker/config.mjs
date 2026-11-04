@@ -18,6 +18,8 @@ export const DEFAULTS = {
   port: null,
   /** A job that makes no progress for this many minutes goes back to the line, and a stuck ComfyUI is started again. */
   stallMin: 10,
+  /** Its ComfyUI answering nothing for this many minutes is stuck: the worker stops it and starts it again. */
+  hungMin: 3,
   /** ffmpeg, which makes every clip and sound again before its ComfyUI reads them. None: the worker takes pictures only. */
   ffmpeg: null,
   /** Another program's VRAM above this pauses the worker. */

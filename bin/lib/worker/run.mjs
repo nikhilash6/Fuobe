@@ -38,6 +38,8 @@ export function loadRequirements(file = path.join(ROOT, "workflows/comfyui/requi
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
+const HOUR = 3_600_000;
+
 /** The worker looks at its model folders again this often (a folder that comes back after a restart counts). */
 export const RESCAN_MS = 10 * 60_000;
 
@@ -117,6 +119,7 @@ export async function runWorker(cfg, deps) {
   let busyJob = false;
   let job = Promise.resolve();
   let lastTask = null;
+  let guardMissingAt = -Infinity;
 
   // How often its ComfyUI stopped while running each task (a task that stops it twice fails, not the worker).
   const crashFile = path.join(cfg.workDir, "crashes.json");
@@ -308,7 +311,13 @@ export async function runWorker(cfg, deps) {
           if (was && !gpu.paused) log("The GPU stayed free for the whole cool-down: resuming.");
         }
       }
-      if (comfyTrouble === "comfy-crashes" && !comfy.crashedTooOften(t)) comfyTrouble = null;
+      if (comfyTrouble === "comfy-crashes" && !comfy.crashedTooOften(t) && t - guardMissingAt >= HOUR) comfyTrouble = null;
+      // A ComfyUI that stopped answering (hung) is stopped; the next turn starts it again. Every beat looks at it (its
+      // /system_stats), so one that answers anything at all is never taken for hung.
+      if (comfy.alive() && comfy.ready && t - comfy.answeredAt > (cfg.hungMin ?? 3) * 60_000) {
+        log("Its ComfyUI stopped answering: starting it again.");
+        await comfy.stop();
+      }
       const next = localPause(control, gpu, comfyTrouble, t) ?? { paused: false, why: null, until: null };
       const changed = next.paused !== pause.paused || next.why !== pause.why;
       pause = next;
@@ -352,8 +361,10 @@ export async function runWorker(cfg, deps) {
                 troubleAt = t;
                 log(`${e.message}: it won't start ComfyUI there, and won't connect to it.`);
               } else if (e instanceof GuardMissing) {
+                // Not again for an hour: it would only start the same ComfyUI again.
                 comfyTrouble = "comfy-crashes";
-                log(`${e.message}: it won't use it.`);
+                guardMissingAt = t;
+                log(`${e.message}: it won't use it, and pauses for an hour.`);
               } else log(`ComfyUI didn't start: ${e.message}`);
             }
           }
