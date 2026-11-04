@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import type { PromptInputHandle } from "@/components/studio/prompt-input";
-import { useElements, useEngine, useSaveElement } from "@/lib/api";
+import { useElements, useEngine, useIsOwner, useSaveElement } from "@/lib/api";
 import { rigError, type CinemaFolder, type DirectorSettings, type DirectorShot } from "@/lib/catalog/cinema";
 import type { StudioElement } from "@/lib/catalog/elements";
 import type { OutputFile } from "@/lib/catalog/types";
@@ -212,7 +212,11 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
   const { project, folders, spentUsd, context } = data;
   const id = project.id;
   const router = useRouter();
-  const share = useShare();
+  // Sharing a project and saving elements keep to the studio's library: the owner's only. A signed-in account's project
+  // is its own, with everything else here.
+  const owner = useIsOwner();
+  const shareApi = useShare();
+  const share = owner ? shareApi : null;
   const [engine, setEngine, engineMode] = useEngine();
   const [view, setView] = useState<CinemaView>({ kind: "home" });
   const [nested, setNested] = useState(true);
@@ -377,7 +381,9 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
       setDraft((d) => (d.refs.some((r) => r.ref === url) ? {} : { refs: [...d.refs, { id: nanoid(6), ref: url, preview: url, kind }] }));
       toast("Added to references", { duration: 1500 });
     },
-    onSaveElement: (g, url, kind) =>
+    onSaveElement: !owner
+      ? undefined
+      : (g, url, kind) =>
       saveElement.mutate(
         { name: nameFrom(g.take?.prompt ?? g.request.prompt, kind === "character" ? "New character" : "New location"), kind, references: [url] },
         {
@@ -454,13 +460,14 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
       }}
       counts={counts}
       onDropItems={(ids, f) => void actions.move(ids, f).then(() => toast(`Moved ${ids.length} take${ids.length > 1 ? "s" : ""}`, { duration: 1500 }))}
+      elements={owner}
       className="h-full"
     />
   );
   const sidePanel = panel && (
     <SidePanel project={project} tab={panel} setTab={setPanel} onClose={() => setPanel(null)} onLoadShot={onLoadShot} promptText={draft.prompt} />
   );
-  const builderProps = { projectId: id, folderId, engine, settings, context, brief: project.brief.body };
+  const builderProps = { projectId: id, folderId, engine, settings, context, brief: project.brief.body, canSave: owner };
   const proposedShot = Number(search.get("shot")) || 0;
 
   return (

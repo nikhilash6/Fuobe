@@ -284,6 +284,8 @@ export const ACCOUNT_TOOL_RUNS: readonly RegExp[] = [
   /^\/api\/genjutsu\/describe$/,
   // Character Swap Studio's jobs on an account's own project (src/server/swap-studio-account.ts).
   /^\/api\/swap-studio\/projects\/[^/]+\/(anchors|assemble|clips|masks|prepare|queue|sharpen|transcribe)$/,
+  // Cinema Studio: a take in the account's own project, a retry and a 2K finish of one of its takes.
+  /^\/api\/cinema\/projects\/[^/]+\/(generate|items\/[^/]+\/(retry|finish))$/,
 ];
 
 /**
@@ -299,6 +301,10 @@ export const ACCOUNT_PROJECT_ROUTES: RegExp[] = [
   // presets. Enhance isn't here: it isn't offered on an account's own GPU yet.
   /^\/api\/shorts\/sessions(\/[^/]+(\/stitch|\/segments\/[^/]+(\/primary)?)?)?$/,
   /^\/api\/shorts\/presets(\/[^/]+)?$/,
+  // Cinema Studio: its projects, folders, takes, grid tiles and AI Director chat (the Director's built-in breakdown:
+  // no AI helper, GPU or key), and a ready film made as its own project (src/server/cinema.ts).
+  /^\/api\/cinema\/projects(\/[^/]+(\/(director|folders|items|folders\/[^/]+|items\/[^/]+\/tiles))?)?$/,
+  /^\/api\/starters\/cinema\.[^/]+$/,
 ];
 
 export const accountProjectRoute = (pathname: string): boolean => ACCOUNT_PROJECT_ROUTES.some((r) => r.test(pathname));

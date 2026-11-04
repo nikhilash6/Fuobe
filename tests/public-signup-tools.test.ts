@@ -146,13 +146,15 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     const cookie = auth.createSession(a.id).value;
     auth.setAccountGpu(a.id, { url: "https://gpu.example" });
     expect(passed(proxy(req("/api/generations", { method: "POST", cookie })))).toBe(true);
-    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/cinema/projects/p1/generate", "/api/layout/plan"]) {
+    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/layout/plan"]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
       expect((await r.json()).code, p).toBe("own-gpu-tool");
     }
     expect(passed(proxy(req("/api/audio-tools/export?offset=0", { method: "POST", cookie })))).toBe(true);
+    // Cinema Studio's takes run on its own GPU too (tests/account-cinema.test.ts).
+    expect(passed(proxy(req("/api/cinema/projects/p1/generate", { method: "POST", cookie })))).toBe(true);
   });
 
   it("keeps the owner's runs and saves unchanged", () => {

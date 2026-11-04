@@ -190,7 +190,9 @@ describe("Open-H3 Regenerate while it is held", () => {
     expect(await settle(g.id)).toMatchObject({ status: "succeeded" });
     // Offered by the catalog as a free redraw on your GPU, refused while it is held.
     expect(R.finishIn2k(gens.getGeneration(g.id)!, "both")?.perSecond).toBeNull();
-    await refused(() => finishRoute.POST(json("POST"), params({ id: project.id, generationId: g.id })), R.REGEN_COPY.heldFinish);
+    // The owner's take (the route answers anyone else with their own projects only).
+    const asOwner = new Request("http://x/api", { method: "POST", headers: { "Content-Type": "application/json", cookie: owner } });
+    await refused(() => finishRoute.POST(asOwner, params({ id: project.id, generationId: g.id })), R.REGEN_COPY.heldFinish);
     expect(cinema.listItems(project.id).map((x) => x.id)).toEqual([g.id]);
   });
 });

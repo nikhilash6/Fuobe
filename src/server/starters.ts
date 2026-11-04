@@ -17,7 +17,8 @@ import { createChannel, listChannels, updateChannel } from "./faceless";
  * fills a composer (Assist, Storyboard, Content Factory, Explainer) or links to one (the Library's) is opened, not made.
  *
  * Guests get 401 and accounts 403 "library" before this runs (LIBRARY_CHANGES in src/lib/guest-access.ts): a starter
- * is saved to the owner's library.
+ * is saved to the owner's library. The one exception is a Cinema Studio film for a signed-in account: made inside its
+ * own work (asAccount), it is that account's own project (src/server/cinema.ts reads and makes the asker's projects).
  */
 
 export class StarterError extends Error {

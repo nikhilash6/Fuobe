@@ -57,7 +57,7 @@ import { getModel } from "@/lib/catalog";
 import type { CinemaFolder } from "@/lib/catalog/cinema";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { formatCost, timeAgo } from "@/lib/format";
-import { useEngineMode, useLikelyVisitor } from "@/lib/api";
+import { useEngineMode, useIsOwner, useLikelyVisitor } from "@/lib/api";
 import { finishedTakes, finishIn2k, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { cn } from "@/lib/utils";
@@ -177,17 +177,22 @@ export interface FeedHandlers {
   onUseTake: (g: CinemaGeneration, o: OutputFile) => void;
   onAnimate: (url: string) => void;
   onReference: (url: string, kind: OutputFile["kind"]) => void;
-  onSaveElement: (g: CinemaGeneration, url: string, kind: "character" | "location") => void;
+  /** Save a still as an element (absent where elements can't be saved: they are the owner's library). */
+  onSaveElement?: (g: CinemaGeneration, url: string, kind: "character" | "location") => void;
   /** "Create 3D scene" from a still (asks first, with the price). */
-  onCreateScene: (g: CinemaGeneration, url: string) => void;
+  onCreateScene?: (g: CinemaGeneration, url: string) => void;
   onOpenScene: (g: CinemaGeneration) => void;
   /** What building a scene costs on the current engine ("Free", "≈ $0.03"). */
   scenePrice: string;
 }
 
-/** A grid contact sheet and its tiles are one take: moving any of them to the Trash moves the lot. */
-export function deleteLabel(g: CinemaGeneration): string {
+/**
+ * A grid contact sheet and its tiles are one take: moving any of them to the Trash moves the lot. `forever`: whoever has
+ * no Trash (a signed-in account) deletes it for good.
+ */
+export function deleteLabel(g: CinemaGeneration, forever = false): string {
   const tiles = g.tiles?.length ?? (g.feature === "cinema-grid" && g.outputs.length > 1 ? g.outputs.length - 1 : 0);
+  if (forever) return tiles ? `Delete grid (sheet + ${tiles} tiles)` : "Delete take";
   return tiles ? `Move grid to Trash (sheet + ${tiles} tiles)` : "Move take to Trash";
 }
 
@@ -202,6 +207,8 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
   const guard = useSubmitGuard();
   // Remove a person runs on a self-hosted Fuobe only: a guest or an account isn't sent there.
   const visitor = useLikelyVisitor();
+  // The Trash is the owner's: anyone else's Delete is for good.
+  const owner = useIsOwner();
   const o = u.output;
   const elsewhere = foreign(u.g, projectId);
   // Finish in 2K: a MiniMax H3 take below 2K (fal renders it again at 2K; your GPU redraws it with Open-H3 Regenerate),
@@ -236,21 +243,27 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
         )}
         {o?.kind === "image" && !u.scene && (
           <>
-            <DropdownMenuItem onClick={() => handlers.onCreateScene(u.g, o.url)}>
-              <Box /> Create 3D scene <span className="ml-auto text-[11.5px] text-muted-foreground">{handlers.scenePrice}</span>
-            </DropdownMenuItem>
+            {handlers.onCreateScene && (
+              <DropdownMenuItem onClick={() => handlers.onCreateScene?.(u.g, o.url)}>
+                <Box /> Create 3D scene <span className="ml-auto text-[11.5px] text-muted-foreground">{handlers.scenePrice}</span>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={() => handlers.onAnimate(o.url)}>
               <Clapperboard /> Animate (start frame)
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handlers.onReference(o.url, "image")}>
               <ImagePlus /> Use as reference
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handlers.onSaveElement(u.g, o.url, "character")}>
-              <UserRoundPlus /> Save as character
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handlers.onSaveElement(u.g, o.url, "location")}>
-              <MapPin /> Save as location
-            </DropdownMenuItem>
+            {handlers.onSaveElement && (
+              <>
+                <DropdownMenuItem onClick={() => handlers.onSaveElement?.(u.g, o.url, "character")}>
+                  <UserRoundPlus /> Save as character
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handlers.onSaveElement?.(u.g, o.url, "location")}>
+                  <MapPin /> Save as location
+                </DropdownMenuItem>
+              </>
+            )}
           </>
         )}
         {o?.kind === "video" && (
@@ -333,7 +346,7 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={() => onDelete([u.g.id])}>
-          <Trash2 /> {deleteLabel(u.g)}
+          <Trash2 /> {deleteLabel(u.g, !owner)}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -514,14 +527,16 @@ function TileView({
                     </TooltipTrigger>
                     <TooltipContent>Animate: use as the start frame</TooltipContent>
                   </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button type="button" onClick={() => handlers.onCreateScene(g, u.output!.url)} className="grid size-7 place-items-center rounded-lg text-white/90 hover:bg-white/20 hover:text-white" aria-label={`Create 3D scene · ${handlers.scenePrice}`}>
-                        <Box className="size-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Create 3D scene · {handlers.scenePrice}</TooltipContent>
-                  </Tooltip>
+                  {handlers.onCreateScene && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" onClick={() => handlers.onCreateScene?.(g, u.output!.url)} className="grid size-7 place-items-center rounded-lg text-white/90 hover:bg-white/20 hover:text-white" aria-label={`Create 3D scene · ${handlers.scenePrice}`}>
+                          <Box className="size-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Create 3D scene · {handlers.scenePrice}</TooltipContent>
+                    </Tooltip>
+                  )}
                 </>
               )
             )}
@@ -666,7 +681,9 @@ export function CinemaFeed({
   }, [all, prefs.split]);
 
   const layoutCls = prefs.layout === "square" ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5" : prefs.layout === "masonry" ? "columns-2 gap-3 sm:columns-3 lg:columns-4 2xl:columns-5" : "space-y-2";
-  // Delete moves to the Trash (the takes stay filed in their project): Undo puts them back.
+  // Delete moves to the Trash (the takes stay filed in their project): Undo puts them back. Whoever has no Trash (a
+  // signed-in account) deletes for good.
+  const owner = useIsOwner();
   const del = async (list: string[]) => {
     setSelected(new Set());
     try {
@@ -675,6 +692,7 @@ export function CinemaFeed({
       toastError(e);
       return;
     }
+    if (!owner) return void toast(list.length > 1 ? `${list.length} takes deleted` : "Deleted", { id: "cinema-trash", duration: 3000 });
     toast(list.length > 1 ? `${list.length} takes moved to Trash` : "Moved to Trash", {
       id: "cinema-trash",
       duration: 6000,
@@ -797,7 +815,7 @@ export function CinemaFeed({
             </DropdownMenu>
           )}
           <button type="button" onClick={() => void del(live)} className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium text-destructive hover:bg-destructive/10">
-            <Trash2 className="size-3.5" /> Move to Trash
+            <Trash2 className="size-3.5" /> {owner ? "Move to Trash" : "Delete"}
           </button>
         </div>
       )}

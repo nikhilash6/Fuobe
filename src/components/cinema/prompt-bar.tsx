@@ -14,7 +14,7 @@ import { PromptInput, ELEMENT_ICONS, type PromptInputHandle } from "@/components
 import { ShotsEditor } from "@/components/studio/shots-editor";
 import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { uploadFile, useAssets, useIsOwner, useModelAccess, useStatus } from "@/lib/api";
+import { uploadFile, useAssets, useModelAccess, useStatus } from "@/lib/api";
 import { offered } from "@/lib/model-access";
 import { getModel } from "@/lib/catalog";
 import {
@@ -359,8 +359,6 @@ export function PromptBar(props: PromptBarProps) {
   // Reference clips make the take reference-to-video: the first image is then a reference, not the start frame.
   const refMode = plan.steps.find((s) => s.key === "main")?.request.op === "ref2v";
   const video = draft.mode === "video";
-  // Exact orbits start with a 3D depth step and run on the studio's own GPU: the owner's for now.
-  const owner = useIsOwner();
   const action = input.action;
   const busy = generate.isPending || preparing;
   // The take's length: the main clip, plus what an extend adds (Fuobe Cinema past 20 s in the cloud).
@@ -674,7 +672,7 @@ export function PromptBar(props: PromptBarProps) {
       </div>
 
       {video && <MoveChips moves={draft.moves} onChange={(moves) => setDraft(withMoves(draft, moves))} />}
-      {video && owner && action === "generate" && takesExact(draft.moves[0]) && (
+      {video && action === "generate" && takesExact(draft.moves[0]) && (
         <div className="px-2 pb-1.5">
           <ExactOrbitControls compact engine={engine} value={draft.exact ?? null} defaults={exactDefaults(draft.moves[0])} onChange={(exact) => setDraft({ exact })} />
         </div>

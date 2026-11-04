@@ -77,7 +77,7 @@ An account is signed in, but it sees the owner's studio as a guest does:
   owner's results, files, uploads, folders, shares, projects (Layers, Cinema, Canvas, storyboards,
   elements…) and Assist threads are hidden: the lists come back empty, and other reads answer 403.
   Every change to them (create, rename, move, share, delete) answers 403 with `code: "library"`.
-  Accounts have their own uploads and runs (below), but no projects yet.
+  Accounts have their own uploads and runs (below), and their own Cinema Studio projects.
   A Canvas Kinetic node renders in the owner's browser; keeping its run on the board
   (`PUT /api/canvases/<id>/runs/<node>`) is a canvas change like any other (403 `library` for an account, 401
   for a guest), and it takes only the owner's own finished Kinetic Motion results.
@@ -99,7 +99,8 @@ An account is signed in, but it sees the owner's studio as a guest does:
   board shows read-only with its steps editable in Nodes. Assist, Cinema Studio,
   Storyboard, Elements, Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and
   Marketing Studio show their ready-made starters the same way (`<studio>/start/<id>`); making one
-  (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`. A starter without its
+  (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`, except Cinema Studio's
+  ready films, which an account makes as its own project (a guest gets the sign-up card). A starter without its
   cover yet is the owner's only: its card, its words and its page (404 for anyone else). Storyboard's
   ready stories with a cover also fill its composer for anyone (`/storyboard?starter=<id>`), and the
   Library's "Make your first" row links to pages everyone can open.
@@ -263,7 +264,7 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   uploads, outputs and cancels go there, and nothing falls back to the studio's own providers. If
   the account's ComfyUI can't be reached, the run fails and says so. A cloud model, an AI helper or
   the studio's local LLM is refused; "Enhance prompt" uses Fuobe's offline wording. Other tools
-  (Canvas, Cinema, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
+  (Canvas, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
   plan with the studio's own AI helpers or keep projects of their own. A 3D model sent here answers the
   same: Image to 3D has its own route (below). So do the Audio hub's Split
   soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
@@ -332,6 +333,16 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   owner's read as not found (404). It keeps up to 50 shorts. Deleting a short deletes its runs for good (an account
   has no Trash). It downloads the full video and each part; "Download parts" as one zip is the owner's for now.
   Enhance (`.../enhance`) isn't offered to it yet (403 `own-gpu-tool`). A guest gets the sign-up card.
+- **Cinema Studio.** An account makes, reopens and runs its own projects (`/api/cinema/projects/**`): up to 50,
+  each with its folders, takes, Director settings, brief and AI Director chat, deleted with the account. Another
+  account's project, or the owner's, reads as not found (404), and the owner's lists never show an account's. A take
+  (`POST .../generate`, World mode and Blockout to film included), a retry (`.../items/<id>/retry`) and a 2K finish
+  (`.../items/<id>/finish`) run the same way as Genjutsu's: every step on the account's ComfyUI or its own fal.ai or
+  Replicate key, with only its own files, after the same checks. A project's cover and a grid's tiles must be its own
+  files. Its AI Director writes the shot breakdown without the studio's AI helper (no GPU or key needed). Its Delete
+  deletes a take for good (it has no Trash). "Create 3D scene" and an exact orbit run there too: on its GPU their first
+  step is a 3D model, finished on this server under its limits as Image to 3D's are. Saving a still as an element, the
+  elements list and sharing a project are left out: those are the owner's library. A guest gets the sign-up card.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.
