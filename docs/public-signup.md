@@ -307,12 +307,12 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   fills the description from that run's text. A guest gets the sign-up card. The checks are
   `src/server/account-tool-run.ts`.
   The modes and options that haven't yet passed a real render on this studio's GPU (Group swap's "one by one", Object
-  swap's Change it, Remove it and New background, From picture with its Light, own person and H3 renderer choices, Fix
-  faces, MiniMax H3 Motion transfer, and "Clean the voice first" for the clip's words, in Genjutsu and Character Swap
-  Studio) show to everyone, marked with what they run on ("Runs on your own GPU · 24 GB", `src/lib/own-setup.ts`). An
-  account runs them on its own GPU (or key, for Clean the voice first); without one it gets "Connect your GPU"
+  swap's Change it, Remove it and New background, From picture with its Light and own person choices, Fix faces and
+  MiniMax H3 Motion transfer) show to everyone, marked with what they run on ("Runs on your own GPU · 24 GB",
+  `src/lib/own-setup.ts`). An account runs them on its own GPU; without one it gets "Connect your GPU"
   (`connect-gpu`). The mark leaves by itself once the feature's graphs are validated and its pass is recorded in
-  `workflows/comfyui/gpu-tested.json` (`genjutsuLive`, `soundLive`). Cinema Studio's World mode carries the same mark
+  `workflows/comfyui/gpu-tested.json` (`genjutsuLive`; "Clean the voice first", in Genjutsu and Character Swap
+  Studio, works the same way through `soundLive`). Cinema Studio's World mode carries the same mark
   until its graph is validated (`src/server/own-setup-live.ts`), and Image to 3D's "Trim spikes" says what it runs on.
 - **Storyboard.** An account makes boards the same way (`POST /api/storyboards`), and the film of a board
   (`POST /api/storyboards/<id>/film`). Every frame, shot and join is a run of its own on the account's ComfyUI, or on

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getModel, MODELS } from "@/lib/catalog";
 import { HOSTED_UNTESTED_ENDPOINTS, isHostedUntested } from "@/lib/catalog/hosted-untested";
-import { OWN_SETUP_IDS, ownSetupDetail, ownSetupLabel, ownSetupOnly, ownSetupShort, ownSetupStep, type OwnSetup } from "@/lib/own-setup";
+import { OWN_SETUP_IDS, ownSetupDetail, ownSetupItem, ownSetupLabel, ownSetupOnly, ownSetupShort, ownSetupStep, type OwnSetup } from "@/lib/own-setup";
 
 /**
  * "Runs with your own setup" (src/lib/own-setup.ts): the items a visitor sees and runs only on its own GPU or its own
@@ -83,7 +83,8 @@ const engineOf = (id: string) => (getModel(id)?.engines && getModel(id)!.engines
 describe("own setup: what a visitor needs", () => {
   it("names a setup for every item of the sweep", () => {
     expect(SKIPPED.length).toBeGreaterThan(0);
-    for (const [item, ids] of Object.entries(INVENTORY)) for (const id of ids) expect(ownSetupOnly(id, engineOf(id)), `${item}: ${id}`).not.toBeNull();
+    // An item whose GPU pass is recorded (gpu-tested.json) has dropped its label; it still has its setup in the table.
+    for (const [item, ids] of Object.entries(INVENTORY)) for (const id of ids) expect(ownSetupOnly(id, engineOf(id)) ?? ownSetupItem(id), `${item}: ${id}`).not.toBeNull();
   });
 
   it("puts every cloud model no live call has passed yet on the visitor's own key, by its route's provider", () => {
