@@ -83,9 +83,17 @@ several shots, a picture and then a step on it, MiniMax H3 at 2K with its finish
 quote and one hold, for one press of Run.
 Steps of CPU work are left out: they cost nothing. The requirements index marks these `cpu`: no model file, no
 graphics memory and no card their nodes need, such as filters, trims, joins, adding sound and Ken Burns moves. A step
-whose nodes run on the card (RTX Video) is GPU work. Every step must be one the policy allows (`pool`, `kinds`) and one
-this install's GPUs can run (a ComfyUI step: not a text step, a step made in the browser or a cloud model), or the run
-isn't offered here. It is refused before Run, never part way through.
+whose nodes run on the card (RTX Video) is GPU work. A text step inside the run (a script, lyrics, a translation)
+is written by the install's AI helper: it is left out too, and never counted. Every other step must be one the policy
+allows (`pool`, `kinds`) and one this install's GPUs can run (a ComfyUI step: not a step made in the browser or a
+cloud model), or the run isn't offered here. It is refused before Run, never part way through.
+
+A tool's run (Shorts, Cinema Studio, Storyboard, the apps, the palette lock and every other tool an account runs) goes
+through the same gate as a studio run: every step is checked, the run is priced once from every step, held once, and
+counted once. Its price check answers `{ place: "pool", quote, line }` beside the tool's own answer when the run would
+go to this install's GPUs. A tool whose body has no field for the place or the price shown reads them from the request's
+headers: `x-fuobe-place` (`own` or `pool`) and `x-fuobe-shown` (`{ amount, priceVersion }` as URI-encoded JSON). A
+field in the body wins.
 
 A run made only of CPU work is free and never counted. Fuobe asks the service for no quote and no hold, and the run
 counts against none of the policy's limits. For now it still waits in the same line on this install's GPUs as GPU work.
@@ -132,6 +140,8 @@ or a chain's later step), so Run never fails on them once pressed. The page asks
 
 `shown` is the price the person saw before pressing Run. A service must never charge more than it: when the price would
 be higher, it refuses with `price-changed` and the new quote, and the person sees the new price before running again.
+The card that shows it offers "Run at this price": the same run is sent again with the new price in `x-fuobe-shown`, so
+a run started without a price check (a result's Upscale, a retry, Run again) runs at the price the person accepted.
 
 A reserve's `text` is shown on the result once it succeeded ("7 units"). A run that fails or is removed says "Not
 charged" only when its reserve answer set an amount aside (`amount` above 0). `maxWaitMs` is how long the run may wait
