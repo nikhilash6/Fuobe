@@ -3287,6 +3287,19 @@ const local: ModelDef[] = [
     options: {},
     hidden: true,
   },
+  // Split soundtrack's Export mix: the stems at the levels set in the mixer, written as a WAV in the browser.
+  {
+    id: "local-mix",
+    name: "Stem mix",
+    vendor: "Fuobe",
+    family: "local",
+    engine: "open",
+    kind: "audio",
+    tagline: "The stems at the levels you set, mixed in your browser",
+    routes: [{ op: "mix", provider: "local", endpoint: "webaudio" }],
+    options: {},
+    hidden: true,
+  },
   // Ads Studio: a creative composited over its visual (headline, copy, CTA, logo in the brand fonts), saved from the browser.
   {
     id: "local-ad-compose",

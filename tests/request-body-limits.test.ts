@@ -75,8 +75,9 @@ describe("M-3: the proxy holds at most a few MB of any request body", () => {
       expect((await r.call(form(r.path))).status, `${r.name}: guest`).toBe(["finish", "mix export"].includes(r.name) ? 401 : 403);
       expect((await r.call(form(r.path, { cookie: owner, headers: { origin: "http://evil.example" } }))).status, `${r.name}: cross-site`).toBe(403);
     }
-    // An account: only its own run's finish passes the proxy's rules, and "g1" isn't its own.
-    for (const r of BIG) expect((await r.call(form(r.path, { cookie: account }))).status, `${r.name}: account`).toBe(403);
+    // An account: its own Export mix passes the proxy's rules (the route then reads the WAV: a form isn't one), and its own
+    // run's finish does too, but "g1" isn't its own.
+    for (const r of BIG) expect((await r.call(form(r.path, { cookie: account }))).status, `${r.name}: account`).toBe(r.name === "mix export" ? 415 : 403);
   });
 
   it("each lets the owner through to the route's own checks", async () => {

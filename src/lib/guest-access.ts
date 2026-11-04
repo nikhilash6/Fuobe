@@ -119,8 +119,6 @@ export function isPriceCheck(method: string, pathname: string, search: string): 
  * the MCP endpoint…) is refused with "Connect your GPU": it never spends the owner's keys or GPU.
  */
 const LIBRARY_CHANGES: [methods: string, path: RegExp][] = [
-  // Split soundtrack's Export mix: a WAV saved, in parts, as an asset of the owner's Library (no account's upload).
-  ["POST", /^\/api\/audio-tools\/export$/],
   ["POST", /^\/api\/folders$/],
   ["PATCH DELETE", /^\/api\/folders\/[^/]+$/],
   ["PATCH DELETE", /^\/api\/generations\/[^/]+$/],
@@ -199,7 +197,8 @@ const GPU_READS = new Set(["/api/gpu/readiness", "/api/gpu/badges", "/api/gpu/pl
  * A change an account may send: signing out, its own GPU and its check, its own fal.ai and Replicate keys, price checks
  * (reads go by guestRead, as a guest's), an upload (the route checks it: src/app/api/uploads, which the proxy's matcher
  * leaves out), a look at its own clip's header (the route reads only its own files), and a result it made in its
- * browser (POST /api/generations/local: the route takes its own Kinetic Motion clips only).
+ * browser (POST /api/generations/local: a Kinetic Motion clip, a colour grade or a Relight blend of its own files;
+ * POST /api/audio-tools/export: Split soundtrack's Export mix), kept as its own run.
  */
 export function accountMayChange(method: string, pathname: string, search: string): boolean {
   if (method === "POST" && pathname === "/api/auth/logout") return true;
@@ -217,10 +216,13 @@ export function accountMayChange(method: string, pathname: string, search: strin
   if (method === "POST" && (pathname === "/api/reports" || pathname === "/api/billing/interest")) return true;
   // Like, pin or review many of its own runs at once (the route checks each is its own, and refuses the rest).
   if (method === "POST" && pathname === "/api/generations/bulk") return true;
-  // A Kinetic Motion clip it rendered in its browser and uploaded, recorded as its own run (the route checks the files
-  // are its own, its run rate and the studio's checks; a grade or a Relight blend stays the owner's there). No model
-  // runs, so it needs no GPU or key of its own.
+  // A result it made in its browser and uploaded (a Kinetic Motion clip, a colour grade, a Relight blend), recorded as
+  // its own run (the route checks the files are its own, its run rate and the studio's checks). No model runs, so it
+  // needs no GPU or key of its own.
   if (method === "POST" && pathname === "/api/generations/local") return true;
+  // Split soundtrack's Export mix, sent in parts and kept as its own run (the route checks its room, its run rate and
+  // the studio's checks; the proxy's matcher leaves this route out, which runs the proxy itself).
+  if (method === "POST" && pathname === "/api/audio-tools/export") return true;
   return isPriceCheck(method, pathname, search);
 }
 
@@ -292,9 +294,10 @@ export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU, or add a fal.ai or 
 /** The same, on a studio with paid models off (no keys). */
 export const CONNECT_GPU_UPLOAD_OPEN_MESSAGE = "Connect your GPU to add your own files.";
 /**
- * Sent with the upload of a Kinetic Motion clip (or its poster) rendered in the browser, set to "1". Saving one needs no
- * model, so an account with neither its own GPU nor its own key may upload it too: an MP4 or WebM clip, or a PNG
- * poster, within the account's space and upload limits (src/app/api/uploads).
+ * Sent with the upload of a result rendered in the browser (a Kinetic Motion clip or its poster, a colour grade, a
+ * Relight blend), set to "1". Saving one needs no model, so an account with neither its own GPU nor its own key may
+ * upload it too: an MP4 or WebM clip, or a PNG picture, within the account's space and upload limits
+ * (src/app/api/uploads).
  */
 export const KINETIC_UPLOAD_HEADER = "x-fuobe-kinetic";
 /** An account with neither its own GPU nor its own key (the proxy's answer to a run): the card it opens offers both. */

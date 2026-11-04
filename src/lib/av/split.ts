@@ -14,6 +14,9 @@ import { clock, type ToolPlan } from "./audio-tools";
 
 export const SPLIT_FEATURE = "audio-split";
 export const SPLIT_MODEL = "oss-dbs-separate";
+/** An account's Export mix, kept as one of its runs (the owner's is an upload in the Library). */
+export const MIX_FEATURE = "audio-split-mix";
+export const MIX_MODEL = "local-mix";
 /** Putting a mix back on its video: the open stream-copy mux, or fal's merge on the cloud. */
 export const REMUX_FEATURE = "audio-split-remux";
 export const REMUX_MODELS: Record<Engine, string> = {
