@@ -22,7 +22,7 @@ import {
   type TaskInput,
   type WantedFile,
 } from "@/lib/relay";
-import { DATA_DIR, db } from "../db";
+import { DATA_DIR, db, WORKER_JOBS_KEEP_MS } from "../db";
 
 /**
  * "Use the ComfyUI on this computer" (DESIGN.md): the server keeps each ComfyUI job of a run on someone's computer as a
@@ -164,6 +164,90 @@ export function getTask(principal: Principal, id: string): TaskRow | null {
     return t && poolsOf(t).includes(principal.slice(5)) ? t : null;
   }
   return (rdb().prepare("SELECT * FROM relay_tasks WHERE id = ? AND principal = ?").get(id, principal) as TaskRow | undefined) ?? null;
+}
+
+/** A task as it is now, by its id: the server's own read of a task it already holds. */
+export const taskById = (id: string): TaskRow | null => (rdb().prepare("SELECT * FROM relay_tasks WHERE id = ?").get(id) as TaskRow | undefined) ?? null;
+
+/** What the workers' log says happened to a task. */
+export type WorkerJobEvent = "claimed" | "finished" | "requeued" | "done" | "failed" | "canceled";
+
+declare global {
+  var __fuobeWorkerJobsPruned: number | undefined;
+}
+
+/**
+ * Add a row to the workers' log (worker_jobs): which worker took which task, when, and what became of it, with the run's
+ * measured time and device when the worker said them. Only ids, times and those facts: never a prompt, a file or an
+ * account's details. Rows are never changed; each is kept a year, as the admin API's log is, then removed.
+ */
+export function logWorkerJob(event: WorkerJobEvent, t: Pick<TaskRow, "id" | "generation_id" | "principal" | "lane">, workerId: string | null, now = Date.now(), run: { execMs?: number; device?: string } = {}): void {
+  try {
+    const name = workerId ? ((rdb().prepare("SELECT name FROM relay_workers WHERE id = ?").get(workerId) as { name: string } | undefined)?.name ?? null) : null;
+    rdb()
+      .prepare("INSERT INTO worker_jobs (at, event, worker_id, worker_name, task_id, generation_id, principal, lane, exec_ms, device) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(now, event, workerId, name, t.id, t.generation_id, t.principal, t.lane ?? null, run.execMs ?? null, run.device ?? null);
+    if (now - (globalThis.__fuobeWorkerJobsPruned ?? 0) > 24 * 60 * 60_000) {
+      globalThis.__fuobeWorkerJobsPruned = now;
+      rdb().prepare("DELETE FROM worker_jobs WHERE at < ?").run(Date.now() - WORKER_JOBS_KEEP_MS - 60_000);
+    }
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't write the workers' log: ${(e as Error).message}`);
+  }
+}
+
+/** A row of the workers' log as the owner reads it. */
+export interface WorkerJobRow {
+  id: number;
+  at: number;
+  event: WorkerJobEvent;
+  workerId: string | null;
+  workerName: string | null;
+  taskId: string;
+  generationId: string;
+  principal: string;
+  lane: string | null;
+  execMs: number | null;
+  device: string | null;
+}
+
+export interface WorkerJobQuery {
+  limit: number;
+  before?: number;
+  worker?: string;
+  generation?: string;
+}
+
+/** The workers' log query from a URL: `before` (a row id), `limit` (1 to 200, 50), `worker`, `generation`. */
+export function workerJobsQueryFrom(sp: URLSearchParams): WorkerJobQuery | { error: string } {
+  const before = sp.get("before");
+  if (before !== null && !/^\d{1,15}$/.test(before)) return { error: "before is a row id" };
+  const raw = sp.get("limit");
+  const limit = raw === null ? 50 : Math.trunc(Number(raw));
+  if (!Number.isFinite(limit) || limit < 1 || limit > 200) return { error: "limit is 1 to 200" };
+  const worker = sp.get("worker");
+  if (worker !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(worker)) return { error: "worker is a worker id" };
+  const generation = sp.get("generation");
+  if (generation !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(generation)) return { error: "generation is a run id" };
+  return { limit, ...(before !== null && { before: Number(before) }), ...(worker !== null && { worker }), ...(generation !== null && { generation }) };
+}
+
+/** The workers' log, newest first; `next` is the last row's id (pass it as `before`), null on the last page. */
+export function listWorkerJobs(q: WorkerJobQuery): { items: WorkerJobRow[]; next: string | null } {
+  const filters: [string, string | number | undefined][] = [
+    ["id < ?", q.before],
+    ["worker_id = ?", q.worker],
+    ["generation_id = ?", q.generation],
+  ];
+  const used = filters.filter((f): f is [string, string | number] => f[1] !== undefined);
+  const where = used.length ? `WHERE ${used.map((f) => f[0]).join(" AND ")}` : "";
+  const rows = rdb()
+    .prepare(`SELECT * FROM worker_jobs ${where} ORDER BY id DESC LIMIT ?`)
+    .all(...used.map((f) => f[1]), q.limit) as { id: number; at: number; event: WorkerJobEvent; worker_id: string | null; worker_name: string | null; task_id: string; generation_id: string; principal: string; lane: string | null; exec_ms: number | null; device: string | null }[];
+  return {
+    items: rows.map((r) => ({ id: r.id, at: r.at, event: r.event, workerId: r.worker_id, workerName: r.worker_name, taskId: r.task_id, generationId: r.generation_id, principal: r.principal, lane: r.lane, execMs: r.exec_ms, device: r.device })),
+    next: rows.length === q.limit ? String(rows[rows.length - 1].id) : null,
+  };
 }
 
 /** The pools that may take a task (none: a browser computer's). */
@@ -479,9 +563,11 @@ export function inputFor(t: TaskRow, n: number): { path: string; size: number; c
  * computer's ComfyUI is taken off it there (the computer hears it at its next beat): a cancel, or a timeout.
  */
 export function endTask(id: string, state: "done" | "failed" | "canceled", fields: Partial<TaskRow> = {}, takeOff = state === "canceled") {
-  const t = rdb().prepare("SELECT state, device FROM relay_tasks WHERE id = ?").get(id) as { state: RelayState; device: string | null } | undefined;
+  const t = taskById(id);
   const stop = takeOff && t && t.device && (SENT_STATES as readonly string[]).includes(t.state) ? 1 : 0;
   setTask(id, { state, finished_at: Date.now(), down_at: null, down_why: null, ...(stop && { stop }), ...fields });
+  // A task a worker held ends: the workers' log says how.
+  if (t?.pools && t.worker_id && (ACTIVE_STATES as readonly string[]).includes(t.state)) logWorkerJob(state, t, t.worker_id);
   progressMap().delete(id);
   for (const i of rdb().prepare("SELECT name FROM relay_inputs WHERE task_id = ?").all(id) as { name: string }[]) fs.rmSync(inputFile(i.name), { force: true });
   rdb().prepare("DELETE FROM relay_inputs WHERE task_id = ?").run(id);
@@ -531,7 +617,7 @@ export interface ReportAnswer {
  */
 export function report(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike[], last: boolean) => FinishedPlan, now = Date.now()): ReportAnswer {
   const a = reportOnce(t, e, plan, now);
-  return { ...a, state: getTask(t.principal, t.id)?.state ?? t.state };
+  return { ...a, state: taskById(t.id)?.state ?? t.state };
 }
 
 function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike[], last: boolean) => FinishedPlan, now: number): ReportAnswer {
@@ -598,7 +684,8 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
     }
     case "gone":
       if (t.attempts < 2 && t.state !== "sending") {
-        setTask(t.id, { ...seen, state: "sending", note: "resent", started_at: null });
+        // A worker's task sends its files again: its sending clock (pool.ts SENDING_MS) starts again too.
+        setTask(t.id, { ...seen, state: "sending", note: "resent", started_at: null, ...(t.pools && { claimed_at: now }) });
         rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
         return { ok: true };
       }
@@ -677,7 +764,7 @@ export async function receivePart(
   const bytes = o.offset + got.bytes;
   const done = bytes === o.total;
   if (done) fs.renameSync(part, file);
-  const fresh = getTask(t.principal, t.id);
+  const fresh = taskById(t.id);
   const list = json<Received[]>(fresh?.received_json ?? null, all).map((r) => (r.n === n ? { n, bytes, total: o.total, done, ...(contentType && { contentType }) } : r));
   setTask(t.id, { received_json: JSON.stringify(list), device_seen_at: Date.now() });
   if (list.every((r) => r.done)) endTask(t.id, "done");
@@ -792,7 +879,7 @@ export function checkClocks(t: TaskRow, now = Date.now()): TaskRow {
   if (t.device_seen_at && now - t.device_seen_at > RELAY_TIMES.silentMs) endTask(t.id, "failed", { error: "silent" }, true);
   else if (t.down_at && now - t.down_at > RELAY_TIMES.comfyDownMs) endTask(t.id, "failed", { error: "down" }, true);
   else return t;
-  return getTask(t.principal, t.id) ?? t;
+  return taskById(t.id) ?? t;
 }
 
 /** A task for workers keeps the workers' clocks (pool.ts sets this, so this file needn't import it). */

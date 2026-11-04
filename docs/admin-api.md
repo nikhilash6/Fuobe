@@ -43,7 +43,7 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | `outputs:hide` | `POST /api/admin/outputs/hide` |
 | `outputs:moderate` | `POST /api/admin/outputs/hide`, `/unhide` and `/remove` |
 | `reports:read` | `GET /api/admin/reports` (reporters' emails included) |
-| `workers:read` | `GET /api/admin/workers`, `GET /api/admin/workers/download` |
+| `workers:read` | `GET /api/admin/workers`, `GET /api/admin/workers/jobs`, `GET /api/admin/workers/download` |
 | `workers:write` | `PATCH /api/admin/workers/{id}`: pause, resume, drain, hours, lanes, revoke |
 | `workers:tokens` | `POST /api/admin/workers`, and `PATCH /api/admin/workers/{id}` with `rotate`: both answer with a worker token. A worker receives accounts' queued jobs with their input files and sends back the results, so give this scope only to a tool you'd trust with those |
 | `queue:read` | `GET /api/admin/queue` |
@@ -109,6 +109,7 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `GET /api/admin/workers` | | `{ workers, lanes }` |
 | `POST /api/admin/workers` | `{ name, pool? }` | 201 `{ id, token }`: the worker's token, once |
 | `PATCH /api/admin/workers/{id}` | any of `paused`, `pauseNow`, `drain`, `autoResume`, `hours`, `allow`, `claimAfterMs`, `switchAfterMs`, `rotate` (needs `workers:tokens`), `revoke` | `{ worker, token? }`: a new worker token after `rotate`, once |
+| `GET /api/admin/workers/jobs` | `before`, `limit` (1 to 200, 50), `worker`, `generation` | `{ items, next }`: the workers' log, newest first. Each item: `{ id, at, event, workerId, workerName, taskId, generationId, principal, lane, execMs, device }` ([gpu-workers.md](gpu-workers.md)) |
 | `GET /api/admin/workers/download` | | the worker program, `fuobe-worker.zip` |
 | `GET /api/admin/audit` | `before` (the last page's `next`), `limit` (1 to 200, default 50), `actor` (`owner` or `token`), `token` (a token id), `action`, `changes=1` (changes only: no reads, file views or refusals) | `{ items, next }` |
 | `GET /api/admin/tokens/self` | | `{ id, name, prefix, scopes, expiresAt, createdAt }` |

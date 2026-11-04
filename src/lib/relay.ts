@@ -37,10 +37,13 @@ export type ReportEvent =
   | { event: "queued"; position: number }
   /** Running: the sampler's steps, and the node. */
   | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number }
-  /** Finished: its /history entry (a worker adds the most VRAM it took, for the benchmarks). */
-  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number }
+  /**
+   * Finished: its /history entry. A worker adds the most VRAM it took (for the benchmarks), the time its ComfyUI spent
+   * running the job (`execMs`: not the wait, the files or the upload) and its GPU's name (`device`).
+   */
+  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number; execMs?: number; device?: string }
   /** A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. */
-  | { event: "passes"; running: boolean; entries: HistoryEntryLike[] }
+  | { event: "passes"; running: boolean; entries: HistoryEntryLike[]; execMs?: number; device?: string }
   /** ComfyUI has no trace of it (restarted): the server sends it again once. */
   | { event: "gone" }
   /** The tab can't use ComfyUI: it doesn't answer, or (`why: "setting"`) it answers without Fuobe's setting. */
@@ -145,6 +148,8 @@ export interface BeatAnswer {
   heldElsewhere: boolean;
   /** Tasks waiting for a computer. */
   waiting: number;
+  /** A worker's own: people's tasks it may claim right now (its lanes, files, VRAM and hours), its own pause aside. */
+  claimableNow?: number;
   /** Prompts to take off this computer's ComfyUI. */
   stops: { task: string; promptId: string; prefix?: string }[];
   /** A worker's own (docs/gpu-workers.md): what the studio says about it now. */

@@ -2,7 +2,7 @@ import { RELAY_LIMITS, TAB_FAILURES, type ReportEvent } from "@/lib/relay";
 import { gateAsProxy, readBodyWithin } from "@/server/direct-gate";
 import { callerKey, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
 import { noteFinished } from "@/server/computer/bench";
-import { leased, report, type TaskRow } from "@/server/computer/tasks";
+import { leased, logWorkerJob, report, type TaskRow } from "@/server/computer/tasks";
 import { onComputer, planRelayOutputs } from "@/server/providers/comfyui";
 import { enter } from "@/server/rate";
 
@@ -28,9 +28,9 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
     case "running":
       return { event: e, value: num(b.value), max: num(b.max), nodesDone: num(b.nodesDone), ...(typeof b.node === "string" && { node: b.node }) };
     case "finished":
-      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }) } : null;
+      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }), ...measured(b) } : null;
     case "passes":
-      return Array.isArray(b.entries) && b.entries.length <= 64 ? { event: e, running: b.running === true, entries: b.entries as never } : null;
+      return Array.isArray(b.entries) && b.entries.length <= 64 ? { event: e, running: b.running === true, entries: b.entries as never, ...measured(b) } : null;
     case "failed":
       return typeof b.reason === "string" && (TAB_FAILURES as readonly string[]).includes(b.reason) ? { event: e, reason: b.reason as never, status: num(b.status) } : null;
     case "comfy-down":
@@ -38,6 +38,13 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
     default:
       return { event: e as "gone" | "stopped" };
   }
+}
+
+/** A worker's measured run: its ComfyUI's time on the job (at most a day) and its GPU's name, as far as each is sound. */
+function measured(b: Record<string, unknown>): { execMs?: number; device?: string } {
+  const ms = typeof b.execMs === "number" && Number.isFinite(b.execMs) && b.execMs >= 0 && b.execMs <= 24 * 3_600_000 ? Math.round(b.execMs) : undefined;
+  const device = typeof b.device === "string" ? b.device.replace(/[^\p{L}\p{N} ._:()+/-]/gu, "").trim().slice(0, 120) : "";
+  return { ...(ms !== undefined && { execMs: ms }), ...(device && { device }) };
 }
 
 /** The most a report about this job may weigh now: a finished entry while ComfyUI has it, a refusal while it sends. */
@@ -95,8 +102,11 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
     // Where the job is now (it may have moved while the body arrived).
     const t = leased(principal, id, lease);
     const answer = report(t, event, (entries, passes) => onComputer(t.principal, () => planRelayOutputs(t, entries, passes)));
-    // A worker's finished job counts toward its lane's times there.
-    if (t.pools && (event.event === "finished" || event.event === "passes") && answer.state !== "running") noteFinished(t, Date.now(), event.event === "finished" ? event.peakVramBytes : undefined);
+    // A worker's finished job counts toward its lane's times there, and the workers' log keeps its measured run.
+    if (t.pools && (event.event === "finished" || event.event === "passes") && answer.state !== "running") {
+      noteFinished(t, Date.now(), event.event === "finished" ? event.peakVramBytes : undefined);
+      if (t.worker_id) logWorkerJob("finished", t, t.worker_id, Date.now(), { execMs: event.execMs, device: event.device });
+    }
     return Response.json(answer, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return relayAnswer(e);

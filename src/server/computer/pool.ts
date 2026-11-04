@@ -5,7 +5,7 @@ import { RELAY_TIMES, SENT_STATES, type BeatAnswer, type ClaimedTask, type Compu
 import { clock, hoursAt, parseHours, type Hours } from "@/lib/worker-hours";
 import { db } from "../db";
 import { loadIndex } from "../gpu/index-file";
-import { cleanFacts, endTask, getTask, json, noteProgress, setPoolClocks, setTask, takeTask, type TaskRow } from "./tasks";
+import { cleanFacts, endTask, json, logWorkerJob, noteProgress, setPoolClocks, setTask, takeTask, taskById, type TaskRow } from "./tasks";
 import { createWorker, revokeWorker, rotateWorker, type WorkerRow } from "./workers";
 
 /**
@@ -28,6 +28,15 @@ const FRESH_BEAT_MS = 30_000;
 export const runLimitMs = (p90?: number | null) => Math.min(45 * 60_000, Math.max(5 * 60_000, 3 * (p90 ?? 0)));
 /** The owner's own tasks go ahead of everyone else's by this much (rank_at = created_at - boost). */
 export const OWNER_BOOST_MS = 24 * 60 * 60_000;
+/**
+ * The order workers serve waiting tasks in: by rank (a requeued task keeps its own, so it keeps its place), then by
+ * when it was made. The claim and the place in line read the same order.
+ */
+const LINE_ORDER = "rank_at, created_at, id";
+/** The columns the line's counts read (never a task's graph or files). */
+const LINE_COLS = "id, pools, only_worker, stop, lane, needs_json, created_at, rank_at, est_ms, tried_json, worker_id, claimed_at, account";
+/** A task a worker took that is still sending its files to its ComfyUI this long after the claim goes back in line. */
+export const SENDING_MS = 15 * 60_000;
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
@@ -164,6 +173,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       runner: eligible(fresh, now),
       heldElsewhere: false,
       waiting,
+      claimableNow: claimableNow(fresh, now),
       stops,
       worker: {
         paused: !!fresh.paused_server,
@@ -178,6 +188,20 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
       },
     };
   })();
+}
+
+/**
+ * People's tasks (an account's, never the owner's own) this worker may claim right now: in its pool, in a lane it is
+ * allowed and able to run, with the files and VRAM they need, past their delays, and ending before its hours do. Its
+ * own pause doesn't count here (its machine reads this to know whether a person's run waits for it); a pause on the website,
+ * a drain or being outside its hours does.
+ */
+export function claimableNow(w: WorkerRow, now = Date.now()): number {
+  if (w.kind !== "pool" || w.revoked_at || w.paused_server || w.drain || !hoursAt(hoursOf(w), now).inside) return 0;
+  const rows = db()
+    .prepare(`SELECT ${LINE_COLS} FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND account IS NOT NULL AND INSTR(',' || pools || ',', ?) > 0 ORDER BY ${LINE_ORDER} LIMIT ?`)
+    .all(`,${w.pool},`, LOOK_AT) as TaskRow[];
+  return rows.filter((t) => fits(t, w, now) && retryOk(t, w, now) && beforeWindowEnds(t, w, now)).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,10 +246,11 @@ export function inventoryHash(inv: Inventory): string {
 const LOOK_AT = 200;
 
 /**
- * A worker asks for work, inside one transaction: first a task it had and lost track of; then, if it may take work, the
- * best waiting task it can run (its pool, its allowed lanes and their delays, the files and VRAM it needs, the retry
- * rule, and the end of its hours). Sticky lanes: its warm lane goes first until another lane's best task has waited
- * longer than switch_after_ms (and is older).
+ * A worker asks for work, inside one transaction: first a task it had and lost track of; then, if it holds none and may
+ * take work, the best waiting task it can run (its pool, its allowed lanes and their delays, the files and VRAM it
+ * needs, the retry rule, and the end of its hours). One task at a time: a worker that holds a task gets nothing new
+ * until that one ends or goes back in line, so one worker's token never holds more than one person's job. Sticky
+ * lanes: its warm lane goes first until another lane's best task has waited longer than switch_after_ms (and is older).
  */
 export function workerClaim(w: WorkerRow, running: string[], now = Date.now()): ClaimedTask | null {
   const d = db();
@@ -233,11 +258,10 @@ export function workerClaim(w: WorkerRow, running: string[], now = Date.now()): 
   return d.transaction((): ClaimedTask | null => {
     sweepPool(now);
     const fresh = d.prepare("SELECT * FROM relay_workers WHERE id = ?").get(w.id) as WorkerRow;
-    const mine = (d.prepare(`SELECT * FROM relay_tasks WHERE worker_id = ? AND device = ? AND state IN ('sending','queued','running','collecting') AND stop = 0 ORDER BY rank_at`).all(fresh.id, device) as TaskRow[]).find(
-      (t) => !running.includes(t.id),
-    );
+    const held = d.prepare(`SELECT * FROM relay_tasks WHERE worker_id = ? AND device = ? AND state IN ('sending','queued','running','collecting') AND stop = 0 ORDER BY ${LINE_ORDER}`).all(fresh.id, device) as TaskRow[];
+    const mine = held.find((t) => !running.includes(t.id));
     if (mine) return claimed(mine, fresh, device, now);
-    if (!eligible(fresh, now)) return null;
+    if (held.length || !eligible(fresh, now)) return null;
     const t = pick(fresh, now);
     return t ? claimed(t, fresh, device, now) : null;
   })();
@@ -246,7 +270,10 @@ export function workerClaim(w: WorkerRow, running: string[], now = Date.now()): 
 function claimed(t: TaskRow, w: WorkerRow, device: string, now: number): ClaimedTask {
   const needs = json<Needs | null>(t.needs_json, null);
   const p90 = t.lane ? benchOf(w)[t.lane]?.p90Ms : undefined;
-  const c = takeTask(t, device, now, { worker_id: w.id });
+  if (t.state === "waiting") logWorkerJob("claimed", t, w.id, now);
+  // A worker that lost track of its own task gets it again with its first claim's time, so the sending clock (SENDING_MS)
+  // is never wound back by asking again.
+  const c = takeTask(t, device, now, { worker_id: w.id, ...(t.state !== "waiting" && t.device === device && t.claimed_at && { claimed_at: t.claimed_at }) });
   return {
     ...c,
     lane: t.lane ?? undefined,
@@ -297,7 +324,7 @@ function beforeWindowEnds(t: TaskRow, w: WorkerRow, now: number): boolean {
 
 function pick(w: WorkerRow, now: number): TaskRow | null {
   const rows = db()
-    .prepare("SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND INSTR(',' || pools || ',', ?) > 0 ORDER BY rank_at LIMIT ?")
+    .prepare(`SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND INSTR(',' || pools || ',', ?) > 0 ORDER BY ${LINE_ORDER} LIMIT ?`)
     .all(`,${w.pool},`, LOOK_AT) as TaskRow[];
   const ok = rows.filter((t) => fits(t, w, now) && retryOk(t, w, now) && beforeWindowEnds(t, w, now));
   if (!ok.length) return null;
@@ -323,8 +350,10 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string }): voi
     endTask(t.id, "failed", { error: o.why ?? "The GPUs couldn't finish this run. Press Retry.", requeues, tried_json: JSON.stringify([...new Set([...tried, t.worker_id ?? ""])].filter(Boolean)) }, true);
     return;
   }
+  if (t.worker_id) logWorkerJob("requeued", t, t.worker_id);
   // A live worker that let it go hears the stop in its beat answer; one that went silent finds its lease gone when it
-  // comes back (409), and takes the prompt off its own ComfyUI.
+  // comes back (409), and takes the prompt off its own ComfyUI. It keeps its rank, so it keeps its place in line, and
+  // its wait limit no longer applies (a worker took it once).
   setTask(t.id, {
     state: "waiting",
     lease_hash: null,
@@ -341,8 +370,10 @@ export function backInLine(t: TaskRow, o: { blame: boolean; why?: string }): voi
 }
 
 /**
- * The workers' clocks: a task whose worker went silent for 2 minutes (or was revoked), or whose ComfyUI was down for 2
- * minutes, goes back in line; a task still waiting past its wait limit fails, not charged.
+ * The workers' clocks: a task whose worker went silent for 2 minutes (or was revoked), whose ComfyUI was down for 2
+ * minutes, or that is still sending its files 15 minutes after the claim goes back in line; a task no worker has taken
+ * yet that is still waiting past its wait limit fails, not charged. (Once a worker took it, the wait limit is over: a
+ * task back in line waits in its place until a worker runs it, or its attempts run out.)
  */
 export function sweepPool(now = Date.now()): void {
   const d = db();
@@ -355,15 +386,18 @@ export function sweepPool(now = Date.now()): void {
   for (const t of held) {
     const silent = !t.w_seen || now - t.w_seen > RELAY_TIMES.poolSilentMs || !!t.w_revoked;
     const down = !!t.down_at && now - t.down_at > RELAY_TIMES.poolComfyDownMs;
-    if (silent || down) backInLine(t, { blame: true, why: silent ? "The GPU running this stopped answering, three times. Press Retry." : "ComfyUI kept stopping on the GPUs. Press Retry." });
+    const stuck = t.state === "sending" && !!t.claimed_at && now - t.claimed_at > SENDING_MS;
+    if (silent || down || stuck) {
+      backInLine(t, { blame: true, why: silent ? "The GPU running this stopped answering, three times. Press Retry." : down ? "ComfyUI kept stopping on the GPUs. Press Retry." : "The GPUs couldn't start this run. Press Retry." });
+    }
   }
-  const late = d.prepare("SELECT id FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND not_after IS NOT NULL AND not_after < ?").all(now) as { id: string }[];
+  const late = d.prepare("SELECT id FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND claimed_at IS NULL AND not_after IS NOT NULL AND not_after < ?").all(now) as { id: string }[];
   for (const t of late) endTask(t.id, "failed", { error: "The GPUs were busy. Not charged." });
 }
 
 setPoolClocks((t, now) => {
   sweepPool(now);
-  return getTask(t.principal, t.id) ?? t;
+  return taskById(t.id) ?? t;
 });
 
 // ---------------------------------------------------------------------------

@@ -110,8 +110,12 @@ A job for the workers belongs to the owner. It names the pools that may take it 
   with no big file is in the lane `small`.
 - what it needs: the workflow, its files (folder, name, exact size, and SHA-256 where it is pinned), its node packs
   and its VRAM;
-- `rank_at`: `created_at` minus a boost. The owner's jobs get a one-day boost.
-- a wait limit (`FUOBE_POOL_WAIT_MIN`, 30 minutes). Past it, the job fails with "The GPUs were busy".
+- `rank_at`: `created_at` minus a boost. The owner's jobs get a one-day boost. A job that goes back in line keeps
+  its `rank_at`, so it keeps its place.
+- a wait limit (`FUOBE_POOL_WAIT_MIN`, 30 minutes, or what the billing service set for an account's run). It applies
+  only until a worker first takes the job: past it, a job that no worker took fails with "The GPUs were busy".
+- how many results its workflow makes. An owner's job keeps no more than that (and at least 16), as an account's job
+  keeps at most 16. Results are never saved past the disk's free floor.
 
 A worker gets a job only when all of these are true, all in one SQLite transaction:
 
@@ -121,15 +125,29 @@ A worker gets a job only when all of these are true, all in one SQLite transacti
 - it has the workflow's files and packs (from its inventory) and enough VRAM;
 - the retry rule allows it: a worker that lost or failed the job gets it again only when no other worker that can run
   the job was heard from in the last 10 minutes;
-- near the end of its hours, the job's estimate fits before the window closes.
+- near the end of its hours, the job's estimate fits before the window closes;
+- it holds no other job. A worker runs one job at a time: while it holds one, a claim gives it that job again when
+  it lost track of it, and nothing new.
 
-The lowest `rank_at` goes first. A worker keeps to its warm lane (the models that it has loaded) until another lane's
-best job has waited longer than `switch_after_ms` (30 minutes) and is older.
+The lowest `rank_at` goes first (then the oldest). A worker keeps to its warm lane (the models that it has loaded)
+until another lane's best job has waited longer than `switch_after_ms` (30 minutes) and is older.
 
-If a worker stops answering for 2 minutes, or its ComfyUI is down for 2 minutes, its job goes back to the queue. The
-worker is added to the job's `tried_json` list, and the input reads start again. The old worker's late calls get 409,
-and it deletes that prompt. After the third lost attempt, the job fails. A job that is put back because of a pause
-does not count as an attempt.
+If a worker stops answering for 2 minutes, its ComfyUI is down for 2 minutes, or the job is still sending its files
+15 minutes after the worker claimed it (or after its ComfyUI lost the job and the worker sent it again), its job goes
+back to the queue. The worker is added to the job's
+`tried_json` list, and the input reads start again. The old worker's late calls get 409, and it deletes that prompt.
+After the third lost attempt, the job fails. A job that is put back because of a pause does not count as an attempt.
+The run's own clocks follow the queue's: each attempt gets its own running time.
+
+**The place in line.** A waiting job's place counts every job that a worker able to run it would serve first, whatever
+its lane: one GPU serves every lane it has in this order. The wait adds the rest of the jobs those workers run now,
+the lane's load time when none has it warm, and the job's own run (the lane's median on the quickest worker, else the
+median of the workers' measured runs). The billing service's line facts (`QueueFacts`) read the same line.
+
+**The workers' log.** `worker_jobs` keeps which worker took which job, when, and how it ended (`claimed`,
+`finished` with the measured run, `requeued`, `done`, `failed`, `canceled`). It holds ids, times and those facts
+only. Rows are only added, and each is kept a year, like the admin API's log. The owner reads it at
+`GET /api/admin/workers/jobs` ([admin-api.md](admin-api.md)).
 
 ### What the worker checks itself
 
@@ -156,7 +174,8 @@ token on every call, so a revoked token stops at once.
 
 - `POST /api/gpu/computer/beat`: the browser's beat plus `{ protocol, version, local: { paused, why, until }, gpu: {
   otherApps, tempC }, inventoryHash, warmLane }`. The answer adds `worker: { paused, pauseNow, drain, autoResume,
-  insideHours, nextChangeAt, lanes, minProtocol, sendInventory }`.
+  insideHours, nextChangeAt, lanes, minProtocol, sendInventory }` and `claimableNow`: how many people's jobs (an
+  account's, never the owner's) this worker may claim right now by its lanes, files, VRAM and hours, its own pause aside.
 - `PUT /api/gpu/computer/inventory`: `{ files: [{ folder, name, size, sha256 }], nodePacks: [{ name, commit }] }` →
   `{ lanes, workflows, missing }`.
 - `POST /api/gpu/computer/claim`: the browser's claimed task plus `{ lane, estMs, runLimitMs, notAfter, attempt,
@@ -164,7 +183,9 @@ token on every call, so a revoked token stops at once.
 - `POST /api/gpu/computer/bench`: bench jobs for this worker only (none are defined yet). The times of every finished
   job also count: the last 20 jobs in each lane give the median and the 90th percentile.
 - Reports, inputs and results work as they do for the browser. `failed` can also give `unknown-node`, `unsafe-path`
-  or `model-unverified` as the reason.
+  or `model-unverified` as the reason. `finished` (and the last `passes`) can add `execMs`, the time its ComfyUI
+  spent running the job (not waits, files or the upload), and `device`, its GPU's name. The billing service gets
+  them as `gpuMs` and `device`. A job that ran more than once counts once: the attempt whose result was kept.
 
 Each worker counts against its own rate limits, so three workers that beat every 5 seconds never hold each other up.
 

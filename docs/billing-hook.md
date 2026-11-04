@@ -78,7 +78,15 @@ type Policy = {
 be higher, it refuses with `price-changed` and the new quote, and the person sees the new price before running again.
 
 A reserve's `text` is shown on the result once it succeeded ("7 units"). `maxWaitMs` is how long the run may wait in
-line; past it the row fails and is refunded.
+line before a GPU first takes it; past it the row fails and is refunded. Once a GPU has taken it, the limit is over: a
+run that goes back in line (a GPU paused or restarted) keeps its place and waits there.
+
+On the workers ([gpu-workers.md](gpu-workers.md)), `queue` counts the line the way the workers serve it: `ahead` is
+every task the workers that may run this one would serve first, whatever its model, and `lane` is the workflow's lane.
+A report's `gpuMs` is the time the workers' ComfyUI spent running the row's jobs, as they measured it (no waits, no
+files, no upload). A job that ran more than once counts once, for the attempt whose result was kept. `device` is the
+GPU's name. Elsewhere `gpuMs` is the row's time from its start to its end, and
+`device` is null.
 
 Example (arbitrary numbers):
 

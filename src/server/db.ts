@@ -699,11 +699,15 @@ export const MIGRATIONS: string[] = [
 /** The place of the sign-in tables' migration in MIGRATIONS (27). */
 const AUTH_MIGRATION = MIGRATIONS.indexOf(AUTH_TABLES);
 
+/** How long the workers' log keeps a row (as long as the admin API's log). */
+export const WORKER_JOBS_KEEP_MS = 365 * 24 * 60 * 60_000;
+
 /**
  * "Use the ComfyUI on this computer" (src/server/computer/tasks.ts). relay_runners: each principal's computer (the one
  * that runs its waiting jobs, until its lease lapses) and what its tab said about its ComfyUI. relay_tasks: one per
  * ComfyUI job of a run on someone's computer, with the graph as the server built it and where the job is. relay_inputs:
- * the files staged for a job, under the names ComfyUI gets. Safe to run on every start.
+ * the files staged for a job, under the names ComfyUI gets. worker_jobs: which worker took which task and when, and what
+ * became of it (rows are only added; each is kept a year, like the admin API's log). Safe to run on every start.
  */
 export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
     principal TEXT PRIMARY KEY,
@@ -807,7 +811,27 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
     state TEXT NOT NULL DEFAULT 'waiting',
     principal TEXT,
     worker_id TEXT
-  );`;
+  );
+  CREATE TABLE IF NOT EXISTS worker_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at INTEGER NOT NULL,
+    event TEXT NOT NULL,
+    worker_id TEXT,
+    worker_name TEXT,
+    task_id TEXT NOT NULL,
+    generation_id TEXT NOT NULL,
+    principal TEXT NOT NULL,
+    lane TEXT,
+    exec_ms INTEGER,
+    device TEXT
+  );
+  CREATE INDEX IF NOT EXISTS worker_jobs_at ON worker_jobs(at);
+  CREATE INDEX IF NOT EXISTS worker_jobs_generation ON worker_jobs(generation_id);
+  CREATE INDEX IF NOT EXISTS worker_jobs_worker ON worker_jobs(worker_id);
+  CREATE TRIGGER IF NOT EXISTS worker_jobs_no_update BEFORE UPDATE ON worker_jobs BEGIN SELECT RAISE(ABORT, 'worker_jobs only grows'); END;
+  CREATE TRIGGER IF NOT EXISTS worker_jobs_kept BEFORE DELETE ON worker_jobs
+    WHEN OLD.at > CAST(strftime('%s', 'now') AS INTEGER) * 1000 - ${WORKER_JOBS_KEEP_MS}
+    BEGIN SELECT RAISE(ABORT, 'worker_jobs rows are kept a year'); END;`;
 
 /**
  * The optional external services' tables (billing.ts, moderation.ts). billing_outbox: every settle, refund and release
