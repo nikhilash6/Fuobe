@@ -181,7 +181,7 @@ export function missingModelDirs(modelDirs) {
 }
 
 /** The same file, by its full path (whatever its case on Windows). */
-const samePath =(a, b) => (process.platform === "win32" ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
+const samePath = (a, b) => (process.platform === "win32" ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
 
 /**
  * The verified files: for every file the catalog names with a pinned SHA-256 (`pins`, else the index's own), the copy
