@@ -31,6 +31,7 @@ async function server(dir: string) {
   globalThis.__fuobeDb = undefined;
   globalThis.__fuobeAuthTablesError = undefined;
   globalThis.__fuobeSecretKey = undefined;
+  globalThis.__fuobeAuthReimportTaken = undefined;
   process.env.FUOBE_DATA_DIR = dir;
   vi.resetModules();
   const auth = await import("@/server/auth");
@@ -626,8 +627,8 @@ describe("going back to an older build, and forward again", () => {
     expect(isNote(dir)).toBe(true);
     vi.restoreAllMocks();
     globalThis.__fuobeAuthClock = undefined;
-    // Moved in when asked: the owner copies the file back and starts once with FUOBE_AUTH_REIMPORT=1.
-    fs.copyFileSync(path.join(dir, strays(dir)[0]), authFile(dir));
+    // Moved in when asked: the owner stops the server, renames the file back and starts once with FUOBE_AUTH_REIMPORT=1.
+    fs.renameSync(path.join(dir, strays(dir)[0]), authFile(dir));
     process.env.FUOBE_AUTH_REIMPORT = "1";
     try {
       srv = await server(dir);
@@ -768,7 +769,93 @@ describe("an auth.json that turns up after the move", () => {
     const [kept] = strays(dir);
     expect(fs.readlinkSync(path.join(dir, kept))).toBe(elsewhere);
     expect(fs.statSync(elsewhere).mode & 0o777).toBe(0o644);
+    expect(srv.store.signInNotices()).toMatchObject([{ reason: "link", counts: null }]);
+    vi.restoreAllMocks();
+  });
+
+  it.skipIf(process.platform === "win32")("a named pipe in place of auth.json: never opened, set aside, and the site keeps serving", async () => {
+    const { dir } = await settled("fuobe-auth-stray-fifo-");
+    fs.rmSync(authFile(dir));
+    expect(spawnSync("mkfifo", [authFile(dir)]).status).toBe(0);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(srv.auth.checkPassword("owner password")).toBe(true);
+    expect(isNote(dir)).toBe(true);
+    expect(strays(dir)).toHaveLength(1);
     expect(srv.store.signInNotices()).toMatchObject([{ reason: "unreadable", counts: null }]);
+    vi.restoreAllMocks();
+  });
+
+  it("a changed copy of the note (another password and secret): set aside, the note put back, and every older build stays locked", async () => {
+    const { dir, fx } = await settled("fuobe-auth-stray-like-");
+    const note = JSON.parse(fs.readFileSync(authFile(dir), "utf8"));
+    const secret = "d".repeat(64);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const like of [
+      { ...note, password: hashPw("like password"), secret },
+      { ...note, password: hashPw("like password"), secret, unreadable: undefined },
+      { [Object.keys(note)[0]]: "x", password: hashPw("like password"), secret, tokens: [] },
+    ]) {
+      legacyWrite(dir, like);
+      const srv = await server(dir);
+      expect(srv.store.authStoreMode()).toBe("done");
+      expect(srv.auth.checkPassword("like password")).toBe(false);
+      expect(srv.auth.checkPassword("owner password")).toBe(true);
+      expect((srv.db().prepare("SELECT secret FROM auth_install").get() as { secret: string }).secret).toBe(fx.data.secret);
+      expect(isNote(dir)).toBe(true);
+      expect(veryOldLocked(dir)).toBe(true);
+      expect(srv.store.signInNotices()[0]).toMatchObject({ reason: "stray", counts: { accounts: 0, tokens: 0, accountsNotInDatabase: 0 } });
+    }
+    expect(strays(dir)).toHaveLength(3);
+    expect(warn.mock.calls.flat().join("\n")).not.toContain(secret);
+    vi.restoreAllMocks();
+  });
+
+  it("FUOBE_AUTH_REIMPORT=1 left set: it counts for the first look after a start only", async () => {
+    const { dir } = await settled("fuobe-auth-stray-flag-");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    process.env.FUOBE_AUTH_REIMPORT = "1";
+    try {
+      const srv = await server(dir);
+      expect(srv.store.authStoreMode()).toBe("done");
+      legacyWrite(dir, { password: hashPw("later password"), secret: "e".repeat(64), tokens: [] });
+      globalThis.__fuobeAuthClock = () => Date.now() + 61_000;
+      expect(srv.store.authStoreMode()).toBe("done");
+      expect(srv.auth.checkPassword("later password")).toBe(false);
+      expect(srv.auth.checkPassword("owner password")).toBe(true);
+      expect(strays(dir)).toHaveLength(1);
+      expect(isNote(dir)).toBe(true);
+    } finally {
+      delete process.env.FUOBE_AUTH_REIMPORT;
+    }
+    vi.restoreAllMocks();
+  });
+
+  it("a note that can't be written in its place: nothing piles up, and the file is set aside at a later look", async () => {
+    const { dir } = await settled("fuobe-auth-stray-busy-");
+    const srv = await server(dir);
+    expect(srv.store.authStoreMode()).toBe("done");
+    legacyWrite(dir, { password: hashPw("busy password"), secret: "f".repeat(64), tokens: [] });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const rename = vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw Object.assign(new Error("busy"), { code: "EBUSY" });
+    });
+    for (const later of [61_000, 122_000]) {
+      globalThis.__fuobeAuthClock = () => Date.now() + later;
+      expect(srv.store.authStoreMode()).toBe("done");
+    }
+    rename.mockRestore();
+    expect(strays(dir)).toEqual([]);
+    expect(fs.readdirSync(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    expect(srv.store.signInNotices()).toEqual([]);
+    expect(srv.auth.checkPassword("busy password")).toBe(false);
+    expect(srv.auth.checkPassword("owner password")).toBe(true);
+    globalThis.__fuobeAuthClock = () => Date.now() + 183_000;
+    expect(srv.store.authStoreMode()).toBe("done");
+    expect(strays(dir)).toHaveLength(1);
+    expect(isNote(dir)).toBe(true);
+    expect(srv.store.signInNotices()).toHaveLength(1);
     vi.restoreAllMocks();
   });
 });

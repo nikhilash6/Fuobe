@@ -25,13 +25,14 @@
  * "exported". The next start of this build moves that file back in (with what the older build changed in it) and
  * bridges again.
  *
- * Any other auth.json found once the store was moved (a backup copied back, a file from elsewhere) is never read as
- * sign-in data: the database stays the store and the site keeps serving. The file is set aside unread as
- * auth.json.stray-<UTC time> (readable by this user only, never deleted here), the note goes back in its place, the log
- * says so, and the owner sees a notice in Settings → Accounts and the admin API (its counts and its name only). Nothing in
- * it signs anyone in, opens the studio, changes the password or the cookie secret. The accounts it lists that the
- * database doesn't have keep their files while it is there (the account sweep skips them), so the owner can still choose
- * it: a start with FUOBE_AUTH_REIMPORT=1 moves an auth.json in, as it is, over the database's sign-in data.
+ * Any other auth.json found once the store was moved (a backup copied back, a file from elsewhere, a changed copy of the
+ * note, a link) is never read as sign-in data: the database stays the store and the site keeps serving. The file is set
+ * aside unread as auth.json.stray-<UTC time> (readable by this user only, never deleted here), the note goes back in its
+ * place, the log says so, and the owner sees a notice in Settings → Accounts and the admin API (its counts and its name
+ * only). Nothing in it signs anyone in, opens the studio, changes the password or the cookie secret. The accounts it lists
+ * that the database doesn't have keep their files while it is there (the account sweep skips them), so the owner can
+ * still choose it: a start with FUOBE_AUTH_REIMPORT=1 moves an auth.json in, as it is, over the database's sign-in data
+ * (on that start's first look only).
  */
 import "server-only";
 import type Database from "better-sqlite3";
@@ -102,6 +103,8 @@ declare global {
   /** Tests: called while moving auth.json in, after half the accounts (a crash in the middle). */
   var __fuobeAuthImportFault: (() => void) | undefined;
   var __fuobeAuthStoreTimer: NodeJS.Timeout | undefined;
+  /** FUOBE_AUTH_REIMPORT=1 was looked at by this process (it counts on the first look only). */
+  var __fuobeAuthReimportTaken: boolean | undefined;
 }
 
 const now = () => globalThis.__fuobeAuthClock?.() ?? Date.now();
@@ -184,30 +187,65 @@ function statKey(): string | null {
 
 type FileRead = { data: AuthJson; key: string | null; sha: string } | { error: string };
 
-function readFile(): FileRead {
+/** The largest auth.json read as sign-in data (100,000 accounts are about 30 MB). */
+const AUTH_READ_MAX = 128 * 1024 * 1024;
+const NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
+/** A named pipe opens at once and reads as empty, instead of waiting for a writer. */
+const NONBLOCK = fs.constants.O_NONBLOCK ?? 0;
+
+/**
+ * A plain file's bytes and stat key, opened without waiting: a named pipe, a device or a folder is never read, nor a file
+ * over `max`. `follow`: through a symbolic link (an older install may keep auth.json behind one); otherwise a link isn't
+ * opened at all.
+ */
+function readBytes(file: string, follow: boolean, max: number): { raw: Buffer; key: string } | { error: string } {
+  let fd: number | undefined;
   try {
-    const key = statKey();
-    const raw = fs.readFileSync(AUTH_FILE);
-    const parsed = parse(raw);
-    if ("error" in parsed) return parsed;
-    return { data: parsed.data, key, sha: crypto.createHash("sha256").update(raw).digest("hex") };
+    if (!follow && !fs.lstatSync(file).isFile()) return { error: "not a plain file" };
+    fd = fs.openSync(file, fs.constants.O_RDONLY | NONBLOCK | (follow ? 0 : NOFOLLOW));
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) return { error: "not a plain file" };
+    if (st.size > max) return { error: "too big" };
+    return { raw: fs.readFileSync(fd), key: `${st.mtimeMs}:${st.size}:${st.ino}` };
   } catch (e) {
     return { error: (e as NodeJS.ErrnoException).code ?? "can't be read" };
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
 }
 
-/** A file's text as sign-in data, or why it isn't: "tombstone" for the note. */
-function parse(raw: Buffer): { data: AuthJson } | { error: string } {
+/** auth.json as sign-in data. Once the store was moved (`follow` false) a link in its place is never followed. */
+function readFile(follow = true): FileRead {
+  const got = readBytes(AUTH_FILE, follow, AUTH_READ_MAX);
+  if ("error" in got) return got;
+  const parsed = parse(got.raw);
+  if ("error" in parsed) return parsed;
+  return { data: parsed.data, key: got.key, sha: crypto.createHash("sha256").update(got.raw).digest("hex") };
+}
+
+/** A file's text as a JSON object, or why it isn't (never the parser's message: it quotes the file). */
+function parseObject(raw: Buffer): { data: AuthJson } | { error: string } {
   let data: AuthJson | null;
   try {
     data = JSON.parse(raw.toString("utf8")) as AuthJson | null;
   } catch {
-    // Never the parser's message: it quotes the file.
     return { error: raw.toString("utf8").startsWith(TEXT_TOMBSTONE_HEAD) ? "tombstone" : "not valid JSON" };
   }
   if (!data || typeof data !== "object" || Array.isArray(data)) return { error: "not an object" };
-  if (isTombstone(data)) return { error: "tombstone" };
   return { data };
+}
+
+/** What parse calls a changed copy of the note: the note's key with no accounts or tokens, but not the note itself. */
+const LIKE_NOTE = "like the note";
+
+/** A file's text as sign-in data, or why it isn't: "tombstone" for the note, LIKE_NOTE for a changed copy of it. */
+function parse(raw: Buffer): { data: AuthJson } | { error: string } {
+  const parsed = parseObject(raw);
+  if ("error" in parsed) return parsed;
+  const kind = noteKind(parsed.data);
+  if (kind === "note") return { error: "tombstone" };
+  if (kind === "like") return { error: LIKE_NOTE };
+  return parsed;
 }
 
 /**
@@ -234,12 +272,19 @@ const TOMBSTONE = `${JSON.stringify(
 const TEXT_TOMBSTONE_HEAD = "This is not Fuobe's sign-in file any more.";
 
 /**
- * The note, also after an older build that let its owner in (FUOBE_PASSWORD) wrote it again: it holds no accounts, no
- * tokens and no public sign-up. One that does is sign-in data an older build added, which is never ignored.
+ * "note": the note as this build writes it, whatever else it holds: the password nobody can match, no secret, no tokens,
+ * no accounts, no public sign-up and `unreadable: true`, so every older build stays locked on it.
+ * "like": the note's key with no accounts, tokens or public sign-up, but changed (another password or a secret: an older
+ * build started with FUOBE_PASSWORD writes that, and so could anyone who can write in the folder). An older build could
+ * let someone in with it, so it is never left in place once the store was moved: it is set aside like any other file.
+ * null: anything else.
  */
-function isTombstone(data: AuthJson): boolean {
+function noteKind(data: AuthJson): "note" | "like" | null {
   const some = (v: unknown) => Array.isArray(v) && v.length > 0;
-  return data[TOMBSTONE_KEY] !== undefined && !some(data.accounts) && !some(data.tokens) && !data.publicSignup;
+  if (data[TOMBSTONE_KEY] === undefined || some(data.accounts) || some(data.tokens) || data.publicSignup) return null;
+  const locked =
+    data.password === "00:00" && !data.secret && data.unreadable === true && Array.isArray(data.tokens) && (data.accounts === undefined || Array.isArray(data.accounts));
+  return locked ? "note" : "like";
 }
 
 /**
@@ -250,15 +295,21 @@ function isTombstone(data: AuthJson): boolean {
 function writeAtomic(file: string, text: string): string {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`;
-  fs.writeFileSync(tmp, text, { mode: 0o600 });
-  const st = fs.statSync(tmp);
-  fs.renameSync(tmp, file);
-  return `${st.mtimeMs}:${st.size}:${st.ino}`;
+  try {
+    fs.writeFileSync(tmp, text, { mode: 0o600 });
+    const st = fs.statSync(tmp);
+    fs.renameSync(tmp, file);
+    return `${st.mtimeMs}:${st.size}:${st.ino}`;
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
 }
 
 function writeTombstone(): void {
   try {
-    if (fs.existsSync(AUTH_FILE) && fs.readFileSync(AUTH_FILE, "utf8") === TOMBSTONE) return;
+    const got = readBytes(AUTH_FILE, false, 64 * 1024);
+    if (!("error" in got) && got.raw.toString("utf8") === TOMBSTONE) return;
     writeAtomic(AUTH_FILE, TOMBSTONE);
   } catch (e) {
     console.warn(`[fuobe] Couldn't write the note in place of auth.json (${(e as NodeJS.ErrnoException).code ?? (e as Error).message})`);
@@ -658,7 +709,22 @@ function retire(): void {
   if (m?.state === "done") afterMove(m);
 }
 
-const reimportAsked = () => process.env.FUOBE_AUTH_REIMPORT?.trim() === "1";
+/**
+ * FUOBE_AUTH_REIMPORT=1, on this process's first look at the store only (the start it was set for): a flag left in the
+ * server's settings never moves in an auth.json that turns up later. On globalThis, so every copy of this module in
+ * the process shares it.
+ */
+function takeReimport(): boolean {
+  if (globalThis.__fuobeAuthReimportTaken) return false;
+  globalThis.__fuobeAuthReimportTaken = true;
+  const asked = process.env.FUOBE_AUTH_REIMPORT?.trim() === "1";
+  if (asked) {
+    console.warn(
+      "[fuobe] FUOBE_AUTH_REIMPORT=1 is set: it counts for this start only (an auth.json in the data folder now replaces the database's sign-in data). Remove it from the server's settings.",
+    );
+  }
+  return asked;
+}
 
 const EXPORTED_BACK =
   "Remove auth.json to keep the database's sign-in data, or start once with FUOBE_AUTH_REIMPORT=1 to replace the database's sign-in data with it. See \"Sign-in data\" in docs/SELF-HOSTING.md.";
@@ -677,43 +743,62 @@ function hold(mode: "unreadable" | "failed", message: string): AuthStoreMode {
  * - exported: the file scripts/auth-export.mjs wrote, maybe changed by the older build since: moved back in.
  * - Any other auth.json (a backup copied back, a file from elsewhere, one that can't be read): never read as sign-in
  *   data, which could bring back a revoked token or an old password. It is set aside unread (setAside) and the site
- *   keeps serving from the database. With FUOBE_AUTH_REIMPORT=1 it is moved in instead.
+ *   keeps serving from the database. On a start with FUOBE_AUTH_REIMPORT=1 (`asked`) it is moved in instead.
+ * Here auth.json is never read through a link, nor when it is a named pipe, a device or too big: those are set aside.
  */
-function afterMove(m: Marker): AuthStoreMode {
+function afterMove(m: Marker, asked = false): AuthStoreMode {
   s.done = true;
   s.fileCheckedAt = now();
   s.held = null;
-  const key = statKey();
-  const file = key === null ? null : readFile();
-  const note = file === null || ("error" in file && file.error === "tombstone");
+  const file = lexists(AUTH_FILE) ? readFile(false) : null;
+  const isNote = (f: FileRead | null) => f === null || ("error" in f && f.error === "tombstone");
+  const note = isNote(file);
   if (m.state === "exported") {
-    if (note) {
+    const like = (f: FileRead | null) => f !== null && "error" in f && f.error === LIKE_NOTE;
+    if (note || like(file)) {
+      // Back to done, only while auth.json is still not an export (scripts/auth-export.mjs puts its file in place while
+      // it holds the write lock, so an export that lands now is seen here).
+      let back = false;
+      let again: FileRead | null = file;
       immediate(() => {
-        if (marker()?.state === "exported") sql("UPDATE auth_migration SET state = 'done', exported_version = NULL WHERE id = 1").run();
+        if (marker()?.state !== "exported") return;
+        again = lexists(AUTH_FILE) ? readFile(false) : null;
+        if (!isNote(again) && !like(again)) return;
+        sql("UPDATE auth_migration SET state = 'done', exported_version = NULL WHERE id = 1").run();
+        back = true;
       });
-      writeTombstone();
+      if (!back) {
+        s.fileCheckedAt = 0; // look again at the next request
+        return "done";
+      }
+      if (like(again)) setAside("stray");
+      else writeTombstone();
       return "done";
     }
     if ("error" in file!) return hold("unreadable", `${AUTH_FILE} can't be read (${file.error}).`);
-    return reimport(file!, "exported");
+    return reimport(file!, "exported", asked);
   }
   if (note) {
-    if (file === null) writeTombstone();
+    // Missing, or an earlier form of the note: this build's note (written only when it differs).
+    writeTombstone();
     return "done";
   }
-  if (!("error" in file!)) {
+  if (file && !("error" in file)) {
     if (m.source === "auth.json" && file.sha === m.json_sha256) {
       putAside(m);
       return "done";
     }
-    if (reimportAsked()) return reimport(file, "asked");
+    if (asked) return reimport(file, "asked", true);
   }
-  setAside("error" in file! ? "unreadable" : "stray");
+  setAside("error" in file! && file.error !== LIKE_NOTE ? "unreadable" : "stray");
   return "done";
 }
 
-/** Why an auth.json was set aside: sign-in data, a file that isn't sign-in data, or one FUOBE_AUTH_REIMPORT=1 couldn't move in. */
-export type StrayReason = "stray" | "unreadable" | "import-failed";
+/**
+ * Why an auth.json was set aside: sign-in data, a file that isn't sign-in data, a symbolic link (never followed), or one
+ * FUOBE_AUTH_REIMPORT=1 couldn't move in.
+ */
+export type StrayReason = "stray" | "unreadable" | "link" | "import-failed";
 
 /** What a set-aside file lists, for the owner's notice: counts only (null when it isn't sign-in data). */
 export interface StrayCounts {
@@ -725,27 +810,17 @@ export interface StrayCounts {
 
 /** The names setAside gives (and the only ones the notice and the account sweep read back). */
 const STRAY_NAME = /^auth\.json\.stray-\d{8}T\d{6}Z(?:-\d+)?$/;
-/** A set-aside file bigger than this isn't read for its counts. */
-const STRAY_READ_MAX = 128 * 1024 * 1024;
+/** A set-aside file bigger than this isn't read for its counts (it is read under the database's write lock). */
+const STRAY_READ_MAX = 64 * 1024 * 1024;
 /** Notices kept (the newest). */
 const STRAY_ROWS_MAX = 100;
 /** Account ids kept per file for the sweep. */
 const STRAY_IDS_MAX = 100_000;
-const NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 
 /** A plain file's bytes, never through a link (null: not a plain file, too big, or it can't be read). */
 function readPlain(file: string): Buffer | null {
-  let fd: number | undefined;
-  try {
-    fd = fs.openSync(file, fs.constants.O_RDONLY | NOFOLLOW);
-    const st = fs.fstatSync(fd);
-    if (!st.isFile() || st.size > STRAY_READ_MAX) return null;
-    return fs.readFileSync(fd);
-  } catch {
-    return null;
-  } finally {
-    if (fd !== undefined) fs.closeSync(fd);
-  }
+  const got = readBytes(file, false, STRAY_READ_MAX);
+  return "error" in got ? null : got.raw;
 }
 
 /** Readable by this user only, through the file itself (never a link put in its place). Not on Windows. */
@@ -753,7 +828,7 @@ function keepPrivate(file: string): void {
   if (process.platform === "win32") return;
   let fd: number | undefined;
   try {
-    fd = fs.openSync(file, fs.constants.O_RDONLY | NOFOLLOW);
+    fd = fs.openSync(file, fs.constants.O_RDONLY | NOFOLLOW | NONBLOCK);
     if (fs.fstatSync(fd).isFile()) fs.fchmodSync(fd, 0o600);
   } catch {
   } finally {
@@ -761,11 +836,20 @@ function keepPrivate(file: string): void {
   }
 }
 
+/**
+ * A second name for auth.json can't be made private on its own: the file has other names already (a hard link to a file
+ * something else serves, whose mode must not change), or another user owns it (its mode can't be changed).
+ */
+function sharedFile(st: fs.Stats): boolean {
+  if (process.platform === "win32") return false;
+  return st.nlink > 2 || (typeof process.getuid === "function" && st.uid !== process.getuid());
+}
+
 const sameFile = (a: fs.Stats, b: fs.Stats) => a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs;
 
 /** How many accounts and tokens a set-aside file lists, and the ids of its accounts the database doesn't have. */
 function strayFacts(raw: Buffer | null): { counts: StrayCounts | null; ids: string[] } {
-  const parsed = raw ? parse(raw) : null;
+  const parsed = raw ? parseObject(raw) : null;
   if (!parsed || "error" in parsed) return { counts: null, ids: [] };
   const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
   const accounts = list(parsed.data.accounts);
@@ -778,17 +862,44 @@ function strayFacts(raw: Buffer | null): { counts: StrayCounts | null; ids: stri
   return { counts: { accounts: accounts.length, tokens: list(parsed.data.tokens).length, accountsNotInDatabase: ids.size }, ids: [...ids].slice(0, STRAY_IDS_MAX) };
 }
 
+/** The second name setAside made for auth.json: what auth.json was then (and the link's text, for a link). */
+interface Kept {
+  target: string;
+  name: string;
+  kept: fs.Stats;
+  link: string | null;
+}
+
+/** auth.json is still the file setAside gave a second name (the same file, or the same link). */
+function stillKept(current: fs.Stats, c: Kept): boolean {
+  if (c.link !== null) {
+    try {
+      return current.isSymbolicLink() && fs.readlinkSync(AUTH_FILE) === c.link && sameFile(current, c.kept);
+    } catch {
+      return false;
+    }
+  }
+  return !current.isSymbolicLink() && !current.isDirectory() && sameFile(current, c.kept);
+}
+
 /**
  * An auth.json found once the store was moved, that isn't the note, the bridge's last copy or an export: kept as
  * auth.json.stray-<UTC time>, unread as sign-in data, and the note put back. Under the database's write lock, so two
  * servers never both act on one file. auth.json is never missing on the way (an older build would read "no file" as
- * "no password"): the file gets its second name by a link first, and the note then replaces auth.json by a rename, only
- * when auth.json is still the file that was kept (otherwise what is there now is looked at again next time).
+ * "no password"): the file gets its second name first (a hard link, or a copy), its notice row is written, and last the
+ * note replaces auth.json by a rename, only when auth.json is still the file that was kept (otherwise what is there now
+ * is looked at again next time). When a step fails, the transaction undoes the row, and the second name is removed
+ * again while auth.json still holds the same file, so a failure never piles up copies.
  */
 function setAside(reason: StrayReason): void {
-  let made: { name: string; counts: StrayCounts | null } | null = null;
+  let made: { name: string; counts: StrayCounts | null; link: boolean } | null = null;
+  let created: Kept | null = null;
+  let swapped = false;
   try {
     immediate(() => {
+      created = null;
+      swapped = false;
+      made = null;
       // Another server moved it in (FUOBE_AUTH_REIMPORT=1) or an export happened a moment ago: not this one's to do.
       if (marker()?.state !== "done") return;
       let before: fs.Stats;
@@ -797,42 +908,49 @@ function setAside(reason: StrayReason): void {
       } catch {
         return;
       }
-      // A folder (or a device…) named auth.json: nothing reads it, and nothing can be renamed over it.
-      if (!before.isFile() && !before.isSymbolicLink()) throw Object.assign(new Error("it is not a file"), { code: "not a file" });
+      // A folder named auth.json: nothing reads it, and nothing can be renamed over it.
+      if (before.isDirectory()) throw Object.assign(new Error("it is a folder"), { code: "a folder" });
       const name = freeName("stray", now());
       const target = path.join(DATA_DIR, name);
-      let linked = false;
+      let link: string | null = null;
+      let kept = before;
       if (before.isSymbolicLink()) {
         // A link to a file elsewhere: the same link under the new name (what it points to is never touched or read).
-        fs.symlinkSync(fs.readlinkSync(AUTH_FILE), target);
+        link = fs.readlinkSync(AUTH_FILE);
+        fs.symlinkSync(link, target);
       } else {
+        let linked = false;
         try {
           fs.linkSync(AUTH_FILE, target);
           linked = true;
         } catch (e) {
           const code = (e as NodeJS.ErrnoException).code;
-          if (code === "EEXIST" || code === "ENOENT") throw e;
-          // A file system without links.
-          fs.copyFileSync(AUTH_FILE, target, fs.constants.COPYFILE_EXCL);
+          // A named pipe or a device is never copied (that would read it).
+          if (code === "EEXIST" || code === "ENOENT" || !before.isFile()) throw e;
+          // A file system without links: a copy, below.
         }
+        if (linked) {
+          const st = fs.lstatSync(target);
+          if (sharedFile(st) && before.isFile()) {
+            // Its mode must stay as it is: a private copy instead.
+            fs.rmSync(target, { force: true });
+            linked = false;
+          } else kept = st;
+        }
+        if (!linked) fs.copyFileSync(AUTH_FILE, target, fs.constants.COPYFILE_EXCL);
       }
-      const raw = before.isSymbolicLink() ? null : readPlain(target);
+      created = { target, name, kept, link };
+      const raw = link !== null ? null : readPlain(target);
       const parsed = raw ? parse(raw) : null;
       if (parsed && "error" in parsed && parsed.error === "tombstone") {
         // The note itself, put there a moment ago: nothing to keep.
         fs.rmSync(target, { force: true });
+        created = null;
         return;
       }
       keepPrivate(target);
-      const kept = linked ? fs.lstatSync(target) : before;
-      let current: fs.Stats | null = null;
-      try {
-        current = fs.lstatSync(AUTH_FILE);
-      } catch {}
-      if (!current) writeTombstone();
-      else if (sameFile(current, kept)) writeAtomic(AUTH_FILE, TOMBSTONE);
       const facts = strayFacts(raw);
-      const why: StrayReason = reason === "import-failed" ? reason : facts.counts ? "stray" : "unreadable";
+      const why: StrayReason = reason === "import-failed" ? reason : link !== null ? "link" : facts.counts ? "stray" : "unreadable";
       sql("INSERT OR REPLACE INTO auth_stray_files (name, found_at, reason, counts_json, account_ids_json) VALUES (?, ?, ?, ?, ?)").run(
         name,
         now(),
@@ -845,15 +963,46 @@ function setAside(reason: StrayReason): void {
         if (!STRAY_NAME.test(r.name) || !lexists(path.join(DATA_DIR, r.name))) sql("DELETE FROM auth_stray_files WHERE name = ?").run(r.name);
       }
       sql("DELETE FROM auth_stray_files WHERE name NOT IN (SELECT name FROM auth_stray_files ORDER BY found_at DESC, name DESC LIMIT ?)").run(STRAY_ROWS_MAX);
-      made = { name, counts: facts.counts };
+      made = { name, counts: facts.counts, link: link !== null };
+      // Last: the note in place of auth.json (when this fails, the row above is undone).
+      let current: fs.Stats | null = null;
+      try {
+        current = fs.lstatSync(AUTH_FILE);
+      } catch {}
+      if (!current) {
+        writeTombstone();
+        swapped = true;
+      } else if (stillKept(current, created)) {
+        writeAtomic(AUTH_FILE, TOMBSTONE);
+        swapped = true;
+      }
     });
   } catch (e) {
-    warnOnce("stray", `An auth.json is in the data folder but couldn't be set aside (${(e as NodeJS.ErrnoException).code ?? (e as Error).message}). It is not read: sign-in goes on from the database.`);
+    const c = created as Kept | null;
+    const code = (e as NodeJS.ErrnoException).code ?? (e as Error).message;
+    let current: fs.Stats | null = null;
+    try {
+      current = fs.lstatSync(AUTH_FILE);
+    } catch {}
+    if (c && !swapped && current && stillKept(current, c)) {
+      // auth.json still holds what the second name holds: remove that name, and try again at the next look.
+      try {
+        fs.rmSync(c.target, { force: true });
+      } catch {}
+    } else if (c) {
+      warnOnce("stray", `An auth.json in the data folder was kept as ${c.name}, but its notice couldn't be saved (${code}). It is not read: sign-in goes on from the database.`);
+      return;
+    }
+    warnOnce("stray", `An auth.json is in the data folder but couldn't be set aside (${code}). It is not read: sign-in goes on from the database.`);
     return;
   }
   if (made) {
-    const { name, counts } = made as { name: string; counts: StrayCounts | null };
-    const what = counts ? `it lists ${counts.accounts} accounts (${counts.accountsNotInDatabase} not in the database) and ${counts.tokens} API tokens` : "it isn't sign-in data Fuobe can read";
+    const { name, counts, link } = made as { name: string; counts: StrayCounts | null; link: boolean };
+    const what = counts
+      ? `it lists ${counts.accounts} accounts (${counts.accountsNotInDatabase} not in the database) and ${counts.tokens} API tokens`
+      : link
+        ? "it is a symbolic link, never followed"
+        : "it isn't sign-in data Fuobe can read";
     console.warn(
       `[fuobe] An auth.json was found in the data folder after sign-in data moved into the database. It was not used: it is kept as ${name} (${what}), and sign-in goes on from the database. Delete that file when you don't need it, or see "Sign-in data" in docs/SELF-HOSTING.md to use it instead.`,
     );
@@ -865,12 +1014,11 @@ interface StrayRow {
   found_at: number;
   reason: StrayReason;
   counts_json: string | null;
-  account_ids_json: string | null;
 }
 
-/** The set-aside files still in the data folder, newest first. */
+/** The set-aside files still in the data folder, newest first (for the notices: never the account ids). */
 function strayRows(): StrayRow[] {
-  return (sql("SELECT * FROM auth_stray_files ORDER BY found_at DESC, name DESC").all() as StrayRow[]).filter(
+  return (sql("SELECT name, found_at, reason, counts_json FROM auth_stray_files ORDER BY found_at DESC, name DESC").all() as StrayRow[]).filter(
     (r) => STRAY_NAME.test(r.name) && lexists(path.join(DATA_DIR, r.name)),
   );
 }
@@ -880,7 +1028,7 @@ export interface SignInNotice {
   file: string;
   foundAt: number;
   reason: StrayReason;
-  /** null: the file isn't sign-in data Fuobe can read. */
+  /** null: the file isn't sign-in data Fuobe can read, or is a link (never followed). */
   counts: StrayCounts | null;
 }
 
@@ -900,7 +1048,11 @@ export function signInNotices(): SignInNotice[] {
  */
 export function strayAccountIds(): Set<string> {
   const ids = new Set<string>();
-  for (const r of strayRows()) for (const id of r.account_ids_json ? (JSON.parse(r.account_ids_json) as string[]) : []) ids.add(id);
+  const rows = sql("SELECT name, account_ids_json FROM auth_stray_files WHERE account_ids_json IS NOT NULL").all() as { name: string; account_ids_json: string }[];
+  for (const r of rows) {
+    if (!STRAY_NAME.test(r.name) || !lexists(path.join(DATA_DIR, r.name))) continue;
+    for (const id of JSON.parse(r.account_ids_json) as string[]) ids.add(id);
+  }
   return ids;
 }
 
@@ -937,14 +1089,14 @@ function putAside(m: Marker): void {
  * when nothing changed in the database since (else the database's changes would be lost): sign-in fails closed instead.
  * Then the bridge starts again (an older build may still run on the file), and puts the file aside under a new name.
  */
-function reimport(file: { data: AuthJson; key: string | null; sha: string }, why: "exported" | "asked"): AuthStoreMode {
+function reimport(file: { data: AuthJson; key: string | null; sha: string }, why: "exported" | "asked", asked: boolean): AuthStoreMode {
   let counts: Counts | null = null;
   try {
     immediate(() => {
       const m = marker();
       if (m?.state !== "done" && m?.state !== "exported") return; // another server did it
       const version = (sql("SELECT version FROM auth_install WHERE id = 1").get() as { version: number } | undefined)?.version ?? 0;
-      if (why === "exported" && m.exported_version !== version && !reimportAsked()) {
+      if (why === "exported" && m.exported_version !== version && !asked) {
         throw new DataError("sign-in data changed in the database after auth.json was exported");
       }
       const at = now();
@@ -994,7 +1146,8 @@ export function authStoreMode(): AuthStoreMode {
     db();
     if (globalThis.__fuobeAuthTablesError) return authStoreMode();
     const m = marker();
-    if (m?.state === "done" || m?.state === "exported") return afterMove(m);
+    const asked = takeReimport();
+    if (m?.state === "done" || m?.state === "exported") return afterMove(m, asked);
     s.done = false;
     s.held = null;
     if (m?.state === "bridge") return bridgeTick(m);
@@ -1023,7 +1176,7 @@ function beforeMove(): AuthStoreMode {
     s.bad = { key, mode: "unreadable", at: Date.now(), data: false };
     return failClosed(
       "unreadable",
-      file.error === "tombstone"
+      file.error === "tombstone" || file.error === LIKE_NOTE
         ? `${AUTH_FILE} says sign-in data is in the database, but the database has none: restore fuobe.db, or copy auth.json.migrated-<time> back to auth.json.`
         : `${AUTH_FILE} can't be read (${file.error}).`,
     );
@@ -1118,7 +1271,10 @@ export function authStoreVersion(): number {
   }
 }
 
-/** On start: move auth.json in now (not on the first request), and keep checking the bridge once a minute. */
+/**
+ * On start: move auth.json in now (not on the first request), and keep checking the bridge and auth.json at least once a
+ * minute (every 30 s, so a look never falls a few milliseconds short of FILE_CHECK_MS and waits a second minute).
+ */
 export function ensureAuthStore(): AuthStoreMode {
   const mode = authStoreMode();
   if (!globalThis.__fuobeAuthStoreTimer) {
@@ -1126,7 +1282,7 @@ export function ensureAuthStore(): AuthStoreMode {
       try {
         authStoreMode();
       } catch {}
-    }, 60_000);
+    }, FILE_CHECK_MS / 2);
     globalThis.__fuobeAuthStoreTimer.unref?.();
   }
   return mode;

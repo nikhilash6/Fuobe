@@ -108,10 +108,14 @@ Don't copy `auth.json.migrated-<…>` back instead. It lacks the accounts made s
 
 Nothing in that file signs anyone in or opens the studio. It does not change the password or the sign-in secret either. The accounts that only that file lists keep their files while the file stays in the data folder. When you don't need the file, delete it, and the notice goes away. To use the file instead of the database's sign-in data, do these steps:
 
-1. Copy it back to `auth.json`.
-2. Start the server once with `FUOBE_AUTH_REIMPORT=1`. The file then replaces the database's sign-in data, and it is moved in exactly like the first upgrade.
+1. Stop the server. Don't use a deploy that starts the new server before it stops the old one: a running server sets the file aside again within a minute.
+2. Rename (don't copy) `auth.json.stray-<…>` to `auth.json`.
+3. Start the server with `FUOBE_AUTH_REIMPORT=1`. The file then replaces the database's sign-in data, and it is moved in exactly like the first upgrade. The setting counts only for the server's first look at the sign-in data after it starts: an `auth.json` that turns up later is set aside as usual.
+4. Remove `FUOBE_AUTH_REIMPORT` from the server's settings.
 
 If its data can't be moved in, nothing changes, and the file is set aside again.
+
+A file that looks like the note but was changed (it has a password or a sign-in secret, for example) is set aside in the same way, and the note goes back in its place. So is a symbolic link named `auth.json`: Fuobe keeps the link under the new name and never opens what it points to.
 
 ## Environment variables
 
@@ -122,7 +126,7 @@ If its data can't be moved in, nothing changes, and the file is set aside again.
 | `FUOBE_TRUST_PROXY=1` | Behind a reverse proxy: trust the last `X-Forwarded-For` hop, so wrong passwords, and too many wrong share links, lock out only that visitor (60 s). Without it, everyone shares one limit: passwords are slowed to one attempt every 4 s and never locked, and wrong share links past 100 a minute get 429 while real links still open |
 | `FUOBE_ALLOW_PRIVATE_URLS=1` | Let inputs, product links and project sources be fetched from private / LAN addresses (they are refused by default), and let Assist connectors use plain http beyond localhost (without it a connector needs https unless it is on localhost; a private https address is accepted, with a warning that Claude can only reach it through a public tunnel) |
 | `FUOBE_DATA_DIR` | Where the database (with the sign-in data) and files live (default `./data`). Back up `secrets.key` there with `fuobe.db`: it opens the fal.ai and Replicate keys accounts saved ([Your keys](public-signup.md#your-keys)), which must be added again without it |
-| `FUOBE_AUTH_REIMPORT=1` | For one start only: an `auth.json` found after sign-in data moved into the database replaces the database's sign-in data, instead of being set aside unread ([Sign-in data](#sign-in-data)). Remove it after that start |
+| `FUOBE_AUTH_REIMPORT=1` | For one start only: an `auth.json` in the data folder when the server starts, after sign-in data moved into the database, replaces the database's sign-in data, instead of being set aside unread ([Sign-in data](#sign-in-data)). It counts only for the server's first look after it starts. Remove it after that start |
 | `FUOBE_DEMO_MODE` | `off` (default: a run with nothing connected asks you to connect one) or `on` (placeholder results, for a tour: every run makes a labelled placeholder). The old `auto` reads as `off`, and a saved `auto` is cleared on start |
 | `FUOBE_SKILLS_DIR` | Where Assist's built-in skills are read from (default `./skills`) |
 | `FUOBE_ENGINE_MODE`, `FUOBE_CLOUD_PROVIDER`, `FUOBE_ENHANCE_PROVIDER`, `FUOBE_LLM_PROVIDER` | The Settings choices above |

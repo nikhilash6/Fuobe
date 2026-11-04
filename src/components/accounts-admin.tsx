@@ -58,7 +58,7 @@ export async function adminCall<T>(url: string, method = "GET", body?: unknown):
 export interface SignInNoticeRow {
   file: string;
   foundAt: number;
-  reason: "stray" | "unreadable" | "import-failed";
+  reason: "stray" | "unreadable" | "link" | "import-failed";
   counts: { accounts: number; tokens: number; accountsNotInDatabase: number } | null;
 }
 
@@ -74,7 +74,9 @@ function SignInNotice({ notice: n }: { notice: SignInNoticeRow }) {
         set aside as <code className="break-all">{n.file}</code>. Sign-in goes on from the database: nothing in that file is used.{" "}
         {c
           ? `It lists ${plural(c.accounts, "account", "accounts")} (${c.accountsNotInDatabase} not in the database) and ${plural(c.tokens, "API token", "API tokens")}. `
-          : "It isn't sign-in data Fuobe can read. "}
+          : n.reason === "link"
+            ? "It is a link to another file, which Fuobe didn't open. "
+            : "It isn't sign-in data Fuobe can read. "}
         {c && c.accountsNotInDatabase > 0 ? "Their files are kept while the file is there. " : ""}
         Delete the file to clear this note, or see “Sign-in data” in the self-hosting guide to use it instead.
       </span>
