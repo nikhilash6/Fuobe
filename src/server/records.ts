@@ -35,7 +35,7 @@ export function recordExists(ref: RecordRef): boolean {
 }
 
 /** Record pages a tool keeps per account (public sign-up): the project kind it keeps them as (account-projects.ts). */
-const ACCOUNT_KINDS: Partial<Record<RecordRef["kind"], string>> = { shorts: "shorts", cinema: "cinema" };
+const ACCOUNT_KINDS: Partial<Record<RecordRef["kind"], string>> = { shorts: "shorts", cinema: "cinema", "swap-project": "swap" };
 
 /**
  * For a signed-in account: whether the record a page names is one of its own, on a page a tool keeps per account (null:

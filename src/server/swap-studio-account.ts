@@ -1,14 +1,12 @@
 import "server-only";
-import { headers } from "next/headers";
 import type { z } from "zod";
 import { GUEST_HEADER, GUEST_LIBRARY_MESSAGE } from "@/lib/guest-access";
 import { projectRefsProblem, projectSavesLimited } from "./account-projects";
 import { bodyTooBig, guestRun, refusalResponse, runAccountTool, toolViewer } from "./account-tool-run";
-import { requestViewer, type Account } from "./auth";
+import type { Account } from "./auth";
 import { AccountRunError, asAccount } from "./generations";
-import { recordExists } from "./records";
 import { body, handle } from "./shorts-schemas";
-import { accountHasProject, planSwapJob, startSwapJob, StudioError } from "./swap-studio";
+import { planSwapJob, startSwapJob, StudioError } from "./swap-studio";
 
 /**
  * Character Swap Studio for each kind of viewer (public sign-up), for its routes:
@@ -119,12 +117,3 @@ export function asViewer(request: Request, fn: (account: Account | null) => Resp
   return handle(() => asAccount(account.id, () => fn(account)), request);
 }
 
-/**
- * Whether the page of this project opens for whoever asks: an account opens only its own projects; the owner and a
- * guest the owner's (a guest's page then says to sign up).
- */
-export async function projectPageOpens(id: string): Promise<boolean> {
-  const viewer = requestViewer(new Request("http://fuobe.local/", { headers: await headers() }));
-  if (viewer.kind === "account") return accountHasProject(viewer.account.id, id);
-  return recordExists({ kind: "swap-project", ids: [id] });
-}
