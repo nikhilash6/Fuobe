@@ -77,7 +77,7 @@ harness measures what a user gets.
 | `pnpm eval:covers --from-masters <dir> --run <name>` | Turns rendered masters (one folder per preset id) into covers, merged into the same file |
 | `pnpm eval:history` | Lists runs, newest first, and the per-case scores of one case (`--case soul/v1-general`) |
 | `pnpm eval:validate` | Checks every case file, and that the generated suites match the research |
-| `pnpm eval:setup` | Creates the metrics venv with uv (`--identity`, `--download`, `--dinov2`, `--torch-backend`) |
+| `pnpm eval:setup` | Creates the metrics venv with uv (`--identity`, `--asr`, `--download`, `--dinov2`, `--torch-backend`) |
 | `pnpm eval:trash <runId>` | Moves the run's generations to the Trash of the Fuobe it ran on (`--dry-run` counts them). The run's folder here keeps its outputs and scores |
 
 Every command takes `--json`. Runs are named by id, by path, or as `latest`, `latest~1` (the run
@@ -136,8 +136,9 @@ One JSON file per Original in `cases/`. Later Original packages add their own fi
 | `splat` | Image to 3D → Splat on your GPU: Idol 3D against TripoSplat ([the rule](#the-splat-suite-splat-modes-defaults)) | 11 single objects from one picture each (product renders, product photos, a figurine, a stylised character, a person, thin parts, glass and chrome), 3 seeds | `idol-best` (the candidate), `idol-quick`, `triposplat-today`, `idol-photo-crop` (the photo cases only), `triposplat-cloud` (cloud: fal's TripoSplat, a reference for the haze and the price) | style (DINOv2, the orbit against the input picture), temporal, aesthetic, splat |
 
 `soul.json`, `soul-cinema.json`, `soul-hex.json`, `dop.json`, `dop-mix.json`, `dop-mixed-media.json` and `separation.json` are **generated** from the research. They come from
-`docs/research/higgsfield-image-studios.json` (the look ids) and
-`docs/research/fuobe-originals-recipes-5.json` (recipes, LoRAs, Soul Cinema's recipe, the motion map).
+`docs/research/higgsfield-image-studios.json` (the look ids),
+`docs/research/fuobe-originals-recipes-5.json` (recipes, LoRAs, Soul Cinema's recipe, the motion map) and
+`docs/research/dbs-separation-7.json` (the DBS models' licences in the separation suite).
 `soul-hex`'s palettes are Fuobe's own. Run
 `node scripts/eval/gen-cases.mjs` after the research changes, and don't edit the generated files by
 hand. `pnpm eval:validate` fails when they are out of date. The subject prompts are Fuobe's own. No

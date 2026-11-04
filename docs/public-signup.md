@@ -245,11 +245,13 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   (Canvas, Cinema, Shorts, Assist, Marketing…) answer 403 with `code: "own-gpu-tool"`, because they
   plan with the studio's own AI helpers or keep projects of their own. Image to 3D and text to 3D
   answer the same for now: a 3D model is finished on the server. So do the Audio hub's Split
-  soundtrack and Video tools → Remove dialogue (both `POST /api/audio-tools`) and the turnaround
-  video (`POST /api/turnaround`), though their price checks work, priced for the account's own
-  GPU. Split soundtrack's and Remove dialogue's pages say so up front ("Split soundtrack isn't
-  available here", "Remove dialogue isn't available here"), with their upload and run off. Result
-  menus don't offer Remove dialogue or Clean up dialogue to a guest or an account. Restore & colourise
+  soundtrack and Edit speech and Video tools → Remove dialogue (all `POST /api/audio-tools`) and the
+  turnaround video (`POST /api/turnaround`), though their price checks work, priced for the account's
+  own GPU. Split soundtrack's, Edit speech's and Remove dialogue's pages say so up front ("Split
+  soundtrack isn't available here", "Edit speech isn't available here", "Remove dialogue isn't
+  available here"), with their upload and run off. Result menus don't offer Remove dialogue, Clean up
+  dialogue or Edit speech to a guest or an account, and Captions doesn't offer them "Fix this line"
+  (it opens Edit speech). Restore & colourise
   and Remove a person (its mask preview and "Redo from here", `POST /api/remove-object/preview` and
   `/reroll`, answer `own-gpu-tool` too) are left out of the Video tools tabs and the result menus for them.
   A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
@@ -354,6 +356,12 @@ With it on:
   studio's GPUs"), and the person can pick either.
 - Every other tool still needs the account's own GPU ("This tool doesn't run on your own GPU yet" stays as it is).
   Image to 3D, extra LoRAs added to a request, and clips and sound as inputs stay on the account's own GPU.
+- A choice that needs an NVIDIA RTX card (RTX Video's upscale, frame generation and HDR) doesn't go to the studio's
+  GPUs when their last GPU check says the card can't run it, or that their ComfyUI lacks the RTX Video nodes. The run
+  goes to the account's own GPU when it has one, or answers 403 `not-offered` ("This one needs an NVIDIA RTX card, and
+  this studio's GPUs can't run it right now…").
+- When a billing service names the models that may run on the studio's GPUs, that applies to every model a run uses,
+  not only its main one.
 - An account can upload pictures for these runs. Clips and sound still need its own GPU or key.
 - A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in
   Settings → Your GPU and at `/connect`; the account menu says "Your GPU · Optional".
