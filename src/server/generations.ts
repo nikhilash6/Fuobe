@@ -2244,6 +2244,14 @@ function runningLimitMs(r: Pick<Row, "provider">, meta: Record<string, unknown>,
   return runCeilingMs(wf ? poolLane(wf) : null);
 }
 
+/**
+ * Is the run's job a task for the workers? An account's run on this install's GPUs that went to the workers, or one the
+ * provider marked so when it handed the job over (the owner's jobs on the workers too).
+ */
+function workersTask(meta: Record<string, unknown>, onPool: boolean): boolean {
+  return typeof meta.relay === "string" && (onPool || meta.workers === true);
+}
+
 /** Order by: the owner's rows (no account in the request) before accounts'. */
 const ACCOUNT_LAST = "(json_extract(request_json, '$.account') IS NOT NULL)";
 
@@ -2297,11 +2305,17 @@ async function pollOne(r: Row): Promise<void> {
       run = { submitted_at: res.sentAt, started_at: null };
     }
     // A job for the workers keeps its task's own clocks (its wait limit until a worker first takes it): back in line
-    // after an attempt, its next attempt gets its own running time, and no wait limit of the runner's ends it.
-    const ownClocks = !!res && (res.state === "queued" || res.state === "running") && !!res.ownClocks;
+    // after an attempt, its next attempt gets its own running time, and no wait limit of the runner's ends it. A poll that
+    // failed (a busy database in a deploy's overlap) changes none of that: the next poll looks again.
+    const ownClocks = res ? (res.state === "queued" || res.state === "running") && !!res.ownClocks : workersTask(ctx.meta, onPool);
     if (ownClocks && res?.state === "queued" && run.started_at) {
       db().prepare("UPDATE generation_runs SET started_at = NULL WHERE id = ?").run(r.id);
       run = { ...run, started_at: null };
+    }
+    // Each attempt is timed on its own: one a worker took (or sent again) after the running clock started restarts it.
+    if (ownClocks && res?.state === "running" && res.attemptAt && run.started_at && res.attemptAt > run.started_at) {
+      db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(res.attemptAt, r.id);
+      run = { ...run, started_at: res.attemptAt };
     }
     // A job that has just left the queue gets its full running time from now.
     const startsNow = res?.state === "running" && !run.started_at;

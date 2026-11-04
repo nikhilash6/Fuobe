@@ -59,7 +59,7 @@ const pool = await import("@/server/computer/pool");
 const billing = await import("@/server/billing");
 const outbox = await import("@/server/billing-outbox");
 const qs = await import("@/server/queue-settings");
-const { loadManifest } = await import("@/server/providers/comfyui");
+const { comfyProvider, loadManifest } = await import("@/server/providers/comfyui");
 const { loadIndex } = await import("@/server/gpu/index-file");
 const { allLanes } = await import("@/lib/lanes");
 const { getModel } = await import("@/lib/catalog");
@@ -546,6 +546,35 @@ describe("the worker steps aside for another program", () => {
       delete process.env.FUOBE_POOL_WAIT_MIN;
     }
   });
+
+  it("a look at the run that fails while it waits back in line past its wait limit changes nothing: it stays In line in its place, and its output arrives", async () => {
+    clock();
+    const w = standInWorker();
+    const { id } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    stepAsideWhenRunning(d, watch, "gpu-busy:game.exe");
+    await workAll(d);
+    expect(taskOf(id)!.state).toBe("waiting");
+    // The game runs 25 minutes, past the run's 20 minute wait limit.
+    await pass(25 * MIN, [d], watch);
+    expect(getGeneration(id)?.status).toBe("queued");
+    // One look of the runner's fails (a busy database in a deploy's overlap, say).
+    const spy = vi.spyOn(comfyProvider, "poll").mockRejectedValueOnce(new Error("database is locked"));
+    try {
+      await tick();
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(getGeneration(id)).toMatchObject({ status: "queued", message: POOL_WORDS.inLine, queue: { place: 1 } });
+    expect(taskOf(id)!.state).toBe("waiting");
+    // The game ends: it runs, and nothing was lost.
+    d.pause(null);
+    lookAtEveryStep(d, watch);
+    await workAll(d);
+    await expectOnce(id, watch, { place: 1 });
+  });
 });
 
 describe("retries", () => {
@@ -727,6 +756,39 @@ describe("the run ceiling per lane", () => {
     await workAll(d);
     expect(after[0]).toBe("failed");
     await expectFreeFailure(id);
+  });
+
+  it("each attempt has the lane's ceiling to itself: 7 minutes into a 10 minute ceiling its ComfyUI loses the job, the worker sends it again, and the output arrives once", async () => {
+    clock();
+    qs.saveQueueSettings({ ...qs.queueSettings(), runCeilingS: { default: 2700, lanes: { [imageLane()]: 600 } } });
+    const w = standInWorker();
+    const { id, task } = await pressRun();
+    const watch = watchOf(id);
+    const d = driver(w);
+    let crashed = false;
+    let resent = false;
+    d.onStep(async (step) => {
+      await tick();
+      await watch.look();
+      if (step !== "running") return;
+      if (!crashed) {
+        // The first attempt runs 7 minutes, then its ComfyUI restarts and loses the job.
+        crashed = true;
+        await pass(7 * MIN, [d], watch);
+        await comfy.crash();
+        await comfy.start();
+      } else if (!resent && d.steps.includes("gone")) {
+        // The worker sent it again: 4 minutes into this attempt (11 since the first began), it is still working.
+        resent = true;
+        await pass(4 * MIN, [d], watch);
+        expect(getGeneration(id)).toMatchObject({ status: "running", message: POOL_WORDS.working });
+      }
+    });
+    await workAll(d);
+    expect(crashed && resent).toBe(true);
+    await expectOnce(id, watch, { place: 1 });
+    // Its ComfyUI got the job twice (once per attempt), under the task's one prompt id.
+    expect(comfy.postsOf(task.prompt_id)).toBe(2);
   });
 });
 

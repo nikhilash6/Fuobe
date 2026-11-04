@@ -2435,9 +2435,14 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   // an attempt (a worker paused, went quiet, restarted), it keeps its place.
   const res: PollResult = t.state === "waiting" ? { state: "queued", message: t.note === "resent" ? "Back in line for another GPU" : poolWaitWords(t) } : await pollTask(principal, t, meta, manifest, made);
   if (res.state !== "queued" && res.state !== "running") return res;
+  // The attempt now running started when a worker took it (a claim) or sent it again (its ComfyUI lost it): its running
+  // time counts from then, whatever the attempts before it took.
+  const attempt = t.state !== "waiting" && t.claimed_at ? { attemptAt: t.claimed_at } : {};
   // An account's run says only where it is: in line, or working on it (the owner's own runs keep the workers' words).
-  if (!tenantAccount()) return { state: res.state, progress: res.progress, message: res.message, ownClocks: true };
-  return t.state === "waiting" ? { state: "queued", message: POOL_WORDS.inLine, ownClocks: true } : { state: "running", progress: res.progress, message: POOL_WORDS.working, ownClocks: true };
+  if (!tenantAccount()) {
+    return res.state === "running" ? { state: "running", progress: res.progress, message: res.message, ownClocks: true, ...attempt } : { state: "queued", progress: res.progress, message: res.message, ownClocks: true };
+  }
+  return t.state === "waiting" ? { state: "queued", message: POOL_WORDS.inLine, ownClocks: true } : { state: "running", progress: res.progress, message: POOL_WORDS.working, ownClocks: true, ...attempt };
 }
 
 /** Where a task is (on someone's computer, or with a worker), in the words its tile shows. */
@@ -2577,7 +2582,8 @@ export const comfyProvider: ProviderAdapter = {
                 poolFields(manifest.id, { account: computer.slice(5), class: runStamp()?.class ?? "free", boostMs: runStamp()?.boostMs, waitMs: runStamp()?.waitMs || poolWaitMs() }),
         }),
       });
-      return { externalId: task.promptId, meta: { ...meta, generationId, relay: task.id }, payload: wf };
+      // (`workers`: a task for the workers, whose own clocks time it even when a poll of it fails.)
+      return { externalId: task.promptId, meta: { ...meta, generationId, relay: task.id, ...(forPool && { workers: true }) }, payload: wf };
     }
     // A run on this install's workers with no account behind it is never sent anywhere.
     if (onPoolWorkers()) throw new ProviderError(ON_COMPUTER_ONLY);

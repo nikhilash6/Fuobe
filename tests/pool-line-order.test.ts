@@ -313,7 +313,11 @@ describe("the run ceiling", () => {
     tasks.setTask(t!.id, { state: "running", started_at: Date.now() });
     await globalThis.__fuobeRunner?.tick();
     expect(getGeneration(id)?.status).toBe("running");
-    const startedAgo = (ms: number) => db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(Date.now() - ms, id);
+    // The worker took it this long ago, and the run has been going since.
+    const startedAgo = (ms: number) => {
+      db().prepare("UPDATE generation_runs SET started_at = ? WHERE id = ?").run(Date.now() - ms, id);
+      db().prepare("UPDATE relay_tasks SET claimed_at = ? WHERE id = ?").run(Date.now() - ms, t!.id);
+    };
     startedAgo(50 * MIN);
     beatAs(w);
     await globalThis.__fuobeRunner?.tick();
