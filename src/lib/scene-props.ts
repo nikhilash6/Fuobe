@@ -194,7 +194,7 @@ export interface PropMakerStatus {
 
 /**
  * Why "Make a prop from a picture" (Idol 3D on your GPU, open source; Idol has no hosted route for this) can't run
- * here, or null when it can. The same rule as Make it 3D on image results (src/lib/connections.ts make3dOffered):
+ * here, or null when it can. The same rule as src/lib/connections.ts make3dOffered (Idol 3D on the open engine):
  * visitors make no 3D yet, Paid APIs only leaves the open engine out, the model can be off, and the GPU must be
  * connected (or placeholder results on). A splat already in the Library can be placed either way.
  */

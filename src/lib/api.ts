@@ -1079,9 +1079,9 @@ export function useEngine(): [Engine, (e: Engine) => void, EngineMode] {
 }
 
 /**
- * Whether results offer what runs on the owner's open engine (Make it 3D on a picture: Idol 3D on your GPU): the
- * install runs open models, ComfyUI is connected (or placeholder results are on), the viewer is the owner, and Idol 3D
- * is switched on in Settings → Models & licences. False until hydrated and while the status is unknown.
+ * Whether Idol 3D runs on the owner's open engine here (make3dOffered): the install runs open models, ComfyUI is
+ * connected (or placeholder results are on), the viewer is the owner, and Idol 3D is switched on in Settings → Models &
+ * licences. False until hydrated and while the status is unknown.
  */
 export function useOpenEngine(): boolean {
   const hydrated = useHydrated();

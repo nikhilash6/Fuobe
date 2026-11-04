@@ -209,8 +209,8 @@ export function openEngineReady(s: (ConnectionState & { viewer?: unknown }) | un
 }
 
 /**
- * Whether an image result offers Make it 3D (quick): the open engine can run for the owner (openEngineReady) and Idol 3D
- * is switched on for it in Settings → Models & licences.
+ * Whether Idol 3D can run here for the viewer: the open engine can run for the owner (openEngineReady) and Idol 3D is
+ * switched on for it in Settings → Models & licences. (A picture's Make it 3D opens Photo to 3D on every engine.)
  */
 export function make3dOffered(s: (ConnectionState & { viewer?: unknown; access?: AccessSummary }) | undefined): boolean {
   return openEngineReady(s) && offered(s?.access, "oss-idol", "open");
