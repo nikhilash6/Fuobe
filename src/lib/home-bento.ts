@@ -11,7 +11,7 @@ import { getTemplate } from "@/lib/catalog/canvas";
 import { runsOn } from "@/lib/catalog/engines";
 import type { ModelDef } from "@/lib/catalog/types";
 import { EXAMPLE_MEDIA } from "@/lib/examples/media.generated";
-import { HOME_BENTO_MEDIA, HOME_BENTO_REEL, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
+import { HOME_BENTO_MEDIA, HOME_BENTO_REEL, HOME_BENTO_TINT, HOME_BENTO_WAVE } from "@/lib/home-bento.generated";
 import type { ReelClip } from "@/lib/home-reel";
 import type { Demo } from "@/lib/live/demo";
 import { presetCover } from "@/lib/preset-covers";
@@ -58,11 +58,13 @@ export type BentoKey = keyof typeof BENTO_HREFS;
 /**
  * A picture in two or three widths: AVIF for the browsers that take it, the published JPEG for the rest. `tall`: a portrait
  * crop of it for a tile that is tall from lg (home-bento.tsx), so the picture is never stretched past its own pixels.
+ * `tint`: its mean colour, shown until it is in (a clip's poster).
  */
 export interface BentoPicture {
   avif: { src: string; w: number }[];
   fallback: string;
   tall?: { src: string; w: number }[];
+  tint?: string;
 }
 
 /** A tile's clip: its id in the playback store, its poster, and the clip in each width (the tile picks one). */
@@ -195,11 +197,12 @@ export async function homeBento(f: BentoFacts) {
       poster: {
         avif: widthsOf(first.name, "avif").map((w) => ({ src: made(`/previews/home/${first.name}-${w}.avif`), w })),
         fallback: made(`/previews/home/${first.name}-${BENTO_CLIP_FALLBACK}.jpg`),
+        tint: HOME_BENTO_TINT[first.name],
       },
       reel: HOME_BENTO_REEL.map((c) => {
         const widths = widthsOf(c.name, "mp4");
         if (!widths.length) throw new Error(`Home's video tile names ${c.name}, which scripts/gen-home-bento.mjs didn't make`);
-        return { id: c.id, position: c.position, clips: widths.map((w) => ({ src: made(`/previews/home/${c.name}-${w}.mp4`), w })) };
+        return { id: c.id, position: c.position, hold: c.hold, fade: c.fade, clips: widths.map((w) => ({ src: made(`/previews/home/${c.name}-${w}.mp4`), w })) };
       }),
     };
   };
@@ -212,6 +215,7 @@ export async function homeBento(f: BentoFacts) {
       poster: {
         avif: BENTO_CLIP_WIDTHS.map((w) => ({ src: made(`/previews/home/${name}-${w}.avif`), w })),
         fallback: made(`/previews/home/${name}-${BENTO_CLIP_FALLBACK}.jpg`),
+        tint: HOME_BENTO_TINT[name],
       },
       clips: BENTO_CLIP_WIDTHS.map((w) => ({ src: made(`/previews/home/${name}-${w}.mp4`), w })),
     };

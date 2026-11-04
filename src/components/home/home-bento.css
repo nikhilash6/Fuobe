@@ -545,9 +545,12 @@
 .hb-clip video:not([data-ready]) {
   opacity: 0;
 }
-/* The video tile's reel: the next clip fades in over the one ending (REEL_FADE_MS, src/lib/home-reel.ts). */
+/* The video tile's reel: the next clip fades in over the one ending, for the ending clip's fade (REEL_FADE_MS unless
+   it sets its own, src/lib/home-reel.ts; set inline). Slow at both ends and quick through the middle: two faces are
+   never half over each other for long. */
 .hb-clip video[data-in] {
   transition-duration: 0.5s;
+  transition-timing-function: cubic-bezier(0.6, 0, 0.4, 1);
 }
 
 /* ---------------------------------------------------------------- image: a slow push in */

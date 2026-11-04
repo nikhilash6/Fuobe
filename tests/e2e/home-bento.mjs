@@ -7,6 +7,8 @@
 //   studio is the owner's, and the guest's pass is skipped.
 //   --weight-only: only measure what the first screen downloads (to compare another build, such as main's).
 //   --only <ids>: run only these numbered parts (the weight, 6, always runs unless --weight-only is all that's asked).
+//   Under WebKit, the checks its Playwright build for Windows can't make (ENGINE_LIMITS) are reported as skipped, with
+//   the reason, when they fail.
 //
 // 1. Every width (390, 768, 1024, 1280, 1440, 1920), light and dark, as a guest and as the owner: no sideways scroll,
 //    one h1, the headline in its own words ("Make anything:" on one line; the second line whole from 768, and on a
@@ -24,6 +26,9 @@
 //    clip framed as listed (its object-position); never more than the clip playing and the next one loaded, the next
 //    asked for only once the current one plays; off screen it pauses, back on screen it goes on. A picture of each
 //    clip in the tile (--shots). Under reduced motion a hover plays Sand Storm alone, on a loop.
+// 1e. The reel when its second clip can't be had, at 1440@2x (Chromium): when that clip fails, the first loops and never
+//    stops on a frame; when it comes 6 s late, the first plays again rather than stop on its last frame (never stuck
+//    on one frame longer than REEL_STALL_MS and a little), and the second still comes in, at the end of a pass.
 // 2. Layout shift under 0.01 at 390 and 1440, through a load and a scroll to the bottom and back.
 // 2b. The headline holds still when its parts come late, at 390@3x, 768 and 1440@2x (Chromium): with every font file
 //    2.5 s late, and with the HTML in two parts (cut after the second line's first words, 1.5 s apart, by a proxy) and
@@ -56,9 +61,25 @@ if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
 const browser = await launch();
 const failures = [];
 const notes = [];
+/**
+ * The checks the Playwright WebKit build for Windows can't make, whatever the page does: under WebKit, one of these
+ * that fails is reported as skipped, with its reason.
+ */
+const ENGINE_LIMITS =
+  ENGINE === "webkit"
+    ? [
+        [/^sharp at /, "this WebKit build takes no AVIF (the narrower fallbacks) and reads a video's width as its box's"],
+        [/^the swap at /, "this WebKit build has no frame-accurate video timing (requestVideoFrameCallback)"],
+        [/each clip loads only once the one before it plays$/, "this WebKit build doesn't show media requests to the page"],
+        [/^reduced motion: no reel clip until asked/, "a looping video stops after one pass in this WebKit build"],
+        [/^Tab reaches the tiles|^a focused tile shows its ring/, "WebKit's Tab moves between form controls only, not links, unless the viewer turns that on"],
+      ]
+    : [];
 const check = (name, ok, detail = "") => {
-  console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail ? `  (${detail})` : ""}`);
-  if (!ok) failures.push(`${name} ${detail}`);
+  const limit = !ok && ENGINE_LIMITS.find(([re]) => re.test(name));
+  console.log(`${ok ? "ok  " : limit ? "skip" : "FAIL"} ${name}${detail ? `  (${detail})` : ""}`);
+  if (limit) notes.push(`skipped under ${ENGINE}: ${name} (${limit[1]})`);
+  else if (!ok) failures.push(`${name} ${detail}`);
 };
 
 const WIDTHS = [
@@ -72,11 +93,16 @@ const WIDTHS = [
 const TILES = ["video", "image", "audio", "threeD", "restore", "numbers", "live", "canvas"];
 /** The widest copy of a clip (scripts/gen-home-bento.mjs), where its element doesn't say (a reel clip's data-max). */
 const CLIP_MAX = 2048;
-/** The video tile's reel, in order, and how each clip is framed (HOME_BENTO_REEL). */
-const REEL = ["effect-sand-storm", "motion-one-take"];
-const REEL_POSITION = { "effect-sand-storm": "50% 0%", "motion-one-take": "50% 15%" };
-/** Each reel clip's copies' name (HOME_BENTO_REEL's name). */
-const REEL_NAME = { "effect-sand-storm": "reel-sand-storm", "motion-one-take": "reel-one-take" };
+/**
+ * The video tile's reel, in order (HOME_BENTO_REEL, read from src/lib/home-bento.generated.ts): each clip's preset, how
+ * it is framed, and its copies' name.
+ */
+const HOME_REEL = JSON.parse(/export const HOME_BENTO_REEL = (\[[\s\S]*?\n\]);/.exec(fs.readFileSync(path.join(root, "src/lib/home-bento.generated.ts"), "utf8"))[1]);
+const REEL = HOME_REEL.map((c) => c.id);
+const REEL_POSITION = Object.fromEntries(HOME_REEL.map((c) => [c.id, c.position]));
+const REEL_NAME = Object.fromEntries(HOME_REEL.map((c) => [c.id, c.name]));
+/** How long the reel waits for a late next clip before the clip on screen plays again (src/lib/home-reel.ts). */
+const REEL_STALL_MS = Number(/export const REEL_STALL_MS = (\d+);/.exec(fs.readFileSync(path.join(root, "src/lib/home-reel.ts"), "utf8"))[1]);
 const HEADLINE = "Make anything: From an idea to a finished film, in one place.";
 
 /** A context as `who`; null when that viewer can't be had here (a guest needs a studio with a password). */
@@ -346,7 +372,7 @@ if (run("1c"))
  * logged on the test's side (the same clock: Date.now()).
  */
 const watchReel = () => {
-  window.__reel = { turns: [], most: 0, both: [], playing: {}, fades: 0 };
+  window.__reel = { turns: [], most: 0, both: [], playing: {}, fades: 0, back: [], outT: new WeakMap() };
   const look = () => {
     const span = document.querySelector("#home-bento [data-tile=video] .hb-clip");
     if (span) {
@@ -360,6 +386,13 @@ const watchReel = () => {
       if (shown.length > 1) {
         const o = Number(getComputedStyle(shown.at(-1)).opacity);
         if (o > 0.05 && o < 0.95) window.__reel.fades++;
+        // The clip going out plays on to its end, or holds its last frame: it never jumps back while it shows through the
+        // fade (the clip coming in under 90 %), until it is let go of, its source gone, once the next one is in.
+        const out = shown[0];
+        const prev = window.__reel.outT.get(out);
+        if (prev !== undefined && o < 0.9 && out.hasAttribute("src") && out.currentTime < prev - 0.05 && out.currentTime < out.duration - 0.1)
+          window.__reel.back.push({ clip: out.dataset.clip, from: prev, to: out.currentTime, over: o, ended: out.ended, paused: out.paused });
+        window.__reel.outT.set(out, out.currentTime);
       }
       if (vids.length > 1 && window.__reel.both.length < 400) window.__reel.both.push({ t: Date.now(), clips: vids.map((v) => v.dataset.clip) });
     }
@@ -414,6 +447,7 @@ if (run("1d")) {
       const r = await page.evaluate(() => window.__reel);
       check(`reel ${tag}: plays the clips in order and back to the first`, seen.join() === [...REEL.keys(), 0].join(), seen.join());
       check(`reel ${tag}: each clip crossfades into the next`, r.fades >= REEL.length, `${r.fades} frames mid-fade`);
+      check(`reel ${tag}: the clip going out never jumps back under the fade`, r.back.length === 0, JSON.stringify(r.back.slice(0, 3)));
       check(`reel ${tag}: never more than the clip playing and the next one`, r.most <= 2, String(r.most));
       // Each clip asked for only once the one before it plays; at most one ahead of the clip on screen.
       const order = asked.map((a) => a.name);
@@ -455,6 +489,72 @@ if (run("1d")) {
     JSON.stringify({ before, st, asked }),
   );
   await ctx.close();
+}
+
+// ------------------------------------------------------------------------------------------- 1e. a late or failed clip
+/**
+ * Logs the reel's picture a frame at a time from the first paint: the clip on top (the last one shown), its time, and
+ * how long the picture has stayed the same; every time the clip on screen changes, where the clip going out was.
+ */
+const watchStill = () => {
+  window.__still = { longest: 0, since: 0, sig: "", samples: [], turns: [] };
+  const look = () => {
+    const span = document.querySelector("#home-bento [data-tile=video] .hb-clip");
+    const vids = span ? [...span.querySelectorAll("video[data-ready]")] : [];
+    const top = vids.at(-1);
+    const now = performance.now();
+    const w = window.__still;
+    if (top) {
+      const sig = `${top.dataset.clip}@${top.currentTime.toFixed(3)}`;
+      if (sig !== w.sig) {
+        w.sig = sig;
+        w.since = now;
+      } else w.longest = Math.max(w.longest, now - w.since);
+      if (vids.length > 1 && w.turns.at(-1)?.to !== top.dataset.clip)
+        w.turns.push({ from: vids[0].dataset.clip, to: top.dataset.clip, at: vids[0].currentTime, of: vids[0].duration });
+      if (w.samples.length < 2000) w.samples.push({ t: Math.round(now), clip: top.dataset.clip, ct: top.currentTime, n: span.querySelectorAll("video").length, loop: top.loop });
+    }
+    requestAnimationFrame(look);
+  };
+  requestAnimationFrame(look);
+};
+if (run("1e") && ENGINE === "chromium") {
+  const second = REEL_NAME[REEL[1]];
+  for (const mode of ["fails", "late"]) {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+    const page = await ctx.newPage();
+    await page.route(new RegExp(`/previews/home/${second}-\\d+\\.mp4`), async (route) => {
+      if (mode === "fails") return route.abort("failed");
+      await new Promise((r) => setTimeout(r, 6000));
+      return route.continue().catch(() => {});
+    });
+    await page.addInitScript(watchStill);
+    await open(page);
+    await page.waitForTimeout(mode === "fails" ? 14_000 : 22_000);
+    const w = await page.evaluate(() => window.__still);
+    const last = w.samples.slice(-40);
+    const moving = last.length > 1 && last.at(-1).ct !== last[0].ct;
+    if (mode === "fails") {
+      check(
+        `reel when ${REEL[1]} fails: ${REEL[0]} loops alone and never stops on a frame`,
+        moving && last.every((x) => x.clip === REEL[0] && x.n === 1 && x.loop) && w.longest < 700,
+        `longest still ${Math.round(w.longest)} ms; last ${JSON.stringify(last.at(-1))}`,
+      );
+    } else {
+      const into = w.turns.find((x) => x.to === REEL[1]);
+      check(
+        `reel when ${REEL[1]} is 6 s late: never stuck on one frame past ${REEL_STALL_MS} ms and a little`,
+        moving && w.longest < REEL_STALL_MS + 800,
+        `longest still ${Math.round(w.longest)} ms`,
+      );
+      check(
+        `reel when ${REEL[1]} is 6 s late: it still comes in, and every clip comes in at the end of a pass of the one before`,
+        !!into && into.from === REEL[0] && w.turns.every((x) => x.at >= x.of - 0.8),
+        JSON.stringify(w.turns),
+      );
+    }
+    await ctx.close();
+  }
 }
 
 // ------------------------------------------------------------------------------------------- 2. layout shift
@@ -697,12 +797,15 @@ if (run("4")) {
   check("reduced motion: the live words stay", a === b, `${JSON.stringify(a)} / ${JSON.stringify(b)}`);
   await ctx.close();
 
-  const sd = await browser.newContext(DESKTOP);
+  // The Save-Data header: through DevTools in Chromium, as the context's own header elsewhere (no DevTools session).
+  const sd = await browser.newContext(ENGINE === "chromium" ? DESKTOP : { ...DESKTOP, extraHTTPHeaders: { "Save-Data": "on" } });
   await sd.addInitScript(() => Object.defineProperty(navigator, "connection", { value: { saveData: true, effectiveType: "4g", addEventListener() {} }, configurable: true }));
   const sp = await sd.newPage();
-  const cdp = await sd.newCDPSession(sp);
-  await cdp.send("Network.enable");
-  await cdp.send("Network.setExtraHTTPHeaders", { headers: { "Save-Data": "on" } });
+  if (ENGINE === "chromium") {
+    const cdp = await sd.newCDPSession(sp);
+    await cdp.send("Network.enable");
+    await cdp.send("Network.setExtraHTTPHeaders", { headers: { "Save-Data": "on" } });
+  }
   const sdClips = [];
   sp.on("request", (r) => r.url().includes(".mp4") && sdClips.push(r.url()));
   await open(sp);
@@ -813,7 +916,8 @@ async function weight(v) {
     media,
   };
 }
-if (weightOnly || run("6"))
+// The weight is read through DevTools: Chromium only.
+if ((weightOnly || run("6")) && ENGINE === "chromium")
 for (const v of [WIDTHS[0], WIDTHS[3], WIDTHS[4], WIDTHS[5]]) {
   const r = await weight(v);
   // The whole page's total is reported (main's own script and fonts are most of it: compare with --weight-only on

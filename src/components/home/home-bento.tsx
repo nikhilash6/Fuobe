@@ -1,4 +1,5 @@
 import { ArrowRight, ArrowUpRight, ChevronsLeftRight, Play, Sparkles, Video } from "lucide-react";
+import { preload } from "react-dom";
 import { BentoClip, BentoMotion, BentoReel, LiveTyping, NumbersLink } from "@/components/home/bento-islands";
 import { PausePreviews } from "@/components/home/home-islands";
 import { IntentLink } from "@/components/intent-link";
@@ -25,8 +26,9 @@ const TALL_MEDIA = "(min-width: 1024px)";
 
 /**
  * A picture in AVIF where the browser takes it, its published JPEG or WebP where not; a picture with a `tall` crop
- * takes it from lg. `position`: its object-position, where it differs from its tile's. Decorative: the tile's link
- * names it.
+ * takes it from lg. `position`: its object-position, where it differs from its tile's. Its tint (a clip's poster) is
+ * its box's colour until it is in. `decoding`: "sync" for the picture that must land with the first screen.
+ * Decorative: the tile's link names it.
  */
 function Pic({
   pic,
@@ -35,6 +37,7 @@ function Pic({
   loading = "eager",
   fetchPriority,
   position,
+  decoding = "async",
 }: {
   pic: BentoPicture;
   sizes: string;
@@ -42,6 +45,7 @@ function Pic({
   loading?: "eager" | "lazy";
   fetchPriority?: "high" | "low";
   position?: string;
+  decoding?: "async" | "sync";
 }) {
   return (
     <picture className={s.pic}>
@@ -54,10 +58,10 @@ function Pic({
         height={Math.round((pic.avif.at(-1)!.w * 3) / 4)}
         loading={loading}
         fetchPriority={fetchPriority}
-        decoding="async"
+        decoding={decoding}
         draggable={false}
         className={cn(s.fill, className)}
-        style={position ? { objectPosition: position } : undefined}
+        style={position || pic.tint ? { objectPosition: position, backgroundColor: pic.tint } : undefined}
       />
     </picture>
   );
@@ -156,6 +160,15 @@ function CanvasBoard({ board }: { board: Bento["canvas"] }) {
  */
 export function HomeBento({ bento }: { bento: Bento }) {
   const { tiles } = bento;
+  // The video tile's still is the first screen's biggest picture: asked for from the head, before the body's HTML.
+  const still = bento.video.poster;
+  preload(still.avif.at(-1)!.src, {
+    as: "image",
+    type: "image/avif",
+    fetchPriority: "high",
+    imageSrcSet: still.avif.map((a) => `${a.src} ${a.w}w`).join(", "),
+    imageSizes: SIZES.video,
+  });
   return (
     <section id="home-bento" aria-labelledby="home-bento-title" className={s.bento}>
       <div className={s.head}>
@@ -181,7 +194,7 @@ export function HomeBento({ bento }: { bento: Bento }) {
 
       <div className={s.grid}>
         <Tile tile={tiles.video} area={s.video} bigMeta>
-          <Pic pic={bento.video.poster} sizes={SIZES.video} fetchPriority="high" position={bento.video.reel[0].position} />
+          <Pic pic={still} sizes={SIZES.video} fetchPriority="high" decoding="sync" position={bento.video.reel[0].position} />
           <BentoReel id={bento.video.id} reel={bento.video.reel} progress />
           <span aria-hidden className={s.badge}>
             <Video className="size-3.5" /> Video

@@ -17,7 +17,7 @@
  *   ba-{before,after}-tall-{432,691}.avif       the same pair, a 3:5 crop for the tall tile
  *   board-{photo,film}.webp               the Canvas board's photo and a frame of its film, 168 px squares
  * and src/lib/home-bento.generated.ts: each file's content version, the reel (its clips in order, each one's length and
- * framing), and the waveform.
+ * framing, and where set how long it holds its last frame and fades out), each poster's mean colour, and the waveform.
  *
  * The reel: the video tile plays these clips one after another, each once, and crossfades into the next (after the
  * last, back to the first). Each is a stretch of its preset's full-size render: `from` (its first frame in the render)
@@ -84,11 +84,12 @@ const BA_TALL = { left: 422, top: 0, width: 691, height: 1152 };
  * (chosen on close crops of faces and fine detail against the render; a busy picture, such as One Take's leaves, costs
  * more bits). The stretches are the ones that hold up frame by frame at the tile's size: One Take from the arch to its
  * look back (the render's last frame) and Sand Storm from the first gust until the sand has wrapped round her (the render's last second relights the shot). The first clip's first frame is the
- * tile's poster.
+ * tile's poster. `hold` and `fade` (ms, src/lib/home-reel.ts ReelClip): One Take ends on her face, so it holds that
+ * last frame a moment before the next clip comes in, and crossfades out quicker, so the two faces barely overlap.
  */
 export const REEL = [
   { id: "effect-sand-storm", name: "reel-sand-storm", from: 0, frames: 96, position: "50% 0%", crf: { 640: 22, 1024: 22, 1536: 26, 2048: 27 } },
-  { id: "motion-one-take", name: "reel-one-take", from: 28, frames: 96, position: "50% 15%", crf: { 640: 22, 1024: 23, 1536: 27, 2048: 28 } },
+  { id: "motion-one-take", name: "reel-one-take", from: 28, frames: 96, position: "50% 15%", hold: 450, fade: 350, crf: { 640: 22, 1024: 23, 1536: 27, 2048: 28 } },
 ];
 /**
  * The 3D tile's clip: its published preset, the name of its copies here, and the CRF each width is encoded at (the
@@ -198,6 +199,12 @@ function readWave() {
   return { wave: waveform(Array.from(samples, (s) => s / 32768)), seconds: samples.length / 8000 };
 }
 
+/**
+ * A reel clip as the generated list holds it (and src/lib/home-reel.ts ReelClip reads it): `hold` and `fade` only where set.
+ * @param {{ id: string; name: string; frames: number; position: string; hold?: number; fade?: number }} c
+ */
+export const reelEntry = ({ id, name, frames, position, hold, fade }) => ({ id, name, frames, fps: CLIP_FPS, position, ...(hold ? { hold } : {}), ...(fade ? { fade } : {}) });
+
 async function main() {
   if (!DRY) fs.mkdirSync(OUT_DIR, { recursive: true });
   if (MASTERS && !fs.existsSync(MASTERS)) throw new Error(`no masters folder at ${MASTERS}`);
@@ -285,6 +292,12 @@ async function main() {
     if (!fs.existsSync(out) || !fs.readFileSync(out).equals(buf)) fs.writeFileSync(out, buf);
     versions[`/previews/home/${s.name}`] = contentVersion([out]);
   }
+  // Each poster's mean colour: its tile's background until the picture is in, so the first paint is never an empty box.
+  const tints = {};
+  for (const c of posterSets) {
+    const { channels } = await sharp(path.join(OUT_DIR, `${c.name}-${FALLBACK_WIDTH}.jpg`)).stats();
+    tints[c.name] = `#${channels.slice(0, 3).map((ch) => Math.round(ch.mean).toString(16).padStart(2, "0")).join("")}`;
+  }
   const { wave, seconds } = readWave();
   console.log(`stills ${(total / 1024).toFixed(1)} KB (clips aside) Â· waveform ${wave.length} bars over ${seconds.toFixed(2)} s`);
   if (DRY) return;
@@ -298,10 +311,13 @@ export const HOME_BENTO_MEDIA: Record<string, string> = ${JSON.stringify(version
 
 /** The video tile's reel, in the order it plays: each clip's preset, its copies' name, its length and its framing. */
 export const HOME_BENTO_REEL = ${JSON.stringify(
-    REEL.map(({ id, name, frames, position }) => ({ id, name, frames, fps: CLIP_FPS, position })),
+    REEL.map(reelEntry),
     null,
     2,
   )};
+
+/** Each poster's mean colour (by its clip's name): the tile shows it until the poster is in. */
+export const HOME_BENTO_TINT: Record<string, string> = ${JSON.stringify(tints, null, 2)};
 
 export const HOME_BENTO_WAVE = {
   src: ${JSON.stringify(WAVE_SOURCE)},

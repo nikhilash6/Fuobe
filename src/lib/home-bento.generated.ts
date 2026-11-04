@@ -50,9 +50,17 @@ export const HOME_BENTO_REEL = [
     "name": "reel-one-take",
     "frames": 96,
     "fps": 24,
-    "position": "50% 15%"
+    "position": "50% 15%",
+    "hold": 450,
+    "fade": 350
   }
 ];
+
+/** Each poster's mean colour (by its clip's name): the tile shows it until the poster is in. */
+export const HOME_BENTO_TINT: Record<string, string> = {
+  "reel-sand-storm": "#b06c4c",
+  "rotation": "#bfbeb6"
+};
 
 export const HOME_BENTO_WAVE = {
   src: "/samples/clean-voice/clean.m4a",

@@ -1,8 +1,8 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { HOME_BENTO_MEDIA, HOME_BENTO_REEL } from "@/lib/home-bento.generated";
-import { REEL_FADE_MS, fadeDue, nextInReel, reelProgress, reelSources, type ReelClip } from "@/lib/home-reel";
-import { REEL } from "../scripts/gen-home-bento.mjs";
+import { REEL_FADE_MS, REEL_STALL_MS, fadeDue, fadeOf, holdOf, nextInReel, reelProgress, reelSources, type ReelClip } from "@/lib/home-reel";
+import { REEL, reelEntry } from "../scripts/gen-home-bento.mjs";
 import { mp4Seconds, mp4Size } from "./helpers/mp4-length";
 
 /*
@@ -21,7 +21,7 @@ describe("Home's video reel", () => {
     for (let i = 0; i < 6; i++) order.push(nextInReel(order.at(-1)!, n));
     expect(order).toEqual([0, 1, 0, 1, 0, 1, 0]);
     // The generated list is the script's, in the same order (run node scripts/gen-home-bento.mjs after changing REEL).
-    expect(HOME_BENTO_REEL).toEqual(REEL.map(({ id, name, frames, position }) => ({ id, name, frames, fps: 24, position })));
+    expect(HOME_BENTO_REEL).toEqual(REEL.map(reelEntry));
   });
 
   it("cuts each clip to its stretch of the render: that many frames at 24 fps, played once", () => {
@@ -71,5 +71,25 @@ describe("Home's video reel", () => {
     expect(reelProgress(1, 3, 2, 4)).toBeCloseTo(0.5, 5);
     expect(reelProgress(2, 3, 4, 4)).toBe(1);
     expect(reelProgress(1, 3, 1, NaN)).toBeCloseTo(1 / 3, 5);
+  });
+
+  it("lets a clip set its own fade, and hold its last frame before the next comes in", () => {
+    // A quicker fade starts later.
+    expect(fadeDue(3.6, 4, { fade: 350 })).toBe(false);
+    expect(fadeDue(3.7, 4, { fade: 350 })).toBe(true);
+    // A clip that holds is never due while it plays: its fade starts once it has ended and held.
+    expect(fadeDue(4, 4, { hold: 450 })).toBe(false);
+    expect([fadeOf({}), holdOf({})]).toEqual([REEL_FADE_MS, 0]);
+    expect([fadeOf({ fade: 350 }), holdOf({ hold: 450 })]).toEqual([350, 450]);
+    // One Take ends on her face: it holds a moment and fades out quicker than the reel's default; Sand Storm doesn't hold.
+    const [sand, take] = HOME_BENTO_REEL;
+    expect(holdOf(sand)).toBe(0);
+    expect(holdOf(take)).toBeGreaterThanOrEqual(300);
+    expect(holdOf(take)).toBeLessThanOrEqual(800);
+    expect(fadeOf(take)).toBeLessThan(REEL_FADE_MS);
+    expect(fadeOf(take)).toBeGreaterThanOrEqual(250);
+    // A late next clip: the clip on screen plays again rather than stop, but not before a phone has had time to start it.
+    expect(REEL_STALL_MS).toBeGreaterThanOrEqual(1000);
+    expect(REEL_STALL_MS).toBeLessThanOrEqual(3000);
   });
 });

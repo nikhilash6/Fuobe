@@ -5,15 +5,35 @@
  */
 import { pickWidth, type Sized } from "@/lib/media-pick";
 
-/** One clip of the reel: its preset, where the tile anchors it (object-position), and its copies in each width. */
+/**
+ * One clip of the reel: its preset, where the tile anchors it (object-position), and its copies in each width.
+ * `hold`: how long its last frame stays once it ends, before the next clip fades in over it (ms). Without one, the fade
+ * starts a fade's length before its end. `fade`: how long its crossfade into the next clip takes (ms; REEL_FADE_MS
+ * unless set).
+ */
 export interface ReelClip {
   id: string;
   position: string;
   clips: Sized[];
+  hold?: number;
+  fade?: number;
 }
 
-/** How long the crossfade from one clip into the next takes, in ms. */
+/** How long the crossfade from one clip into the next takes, in ms, unless the clip sets its own. */
 export const REEL_FADE_MS = 500;
+
+/**
+ * How long the reel waits for the next clip to start once the clip on screen has ended (and held its last frame), in
+ * ms. Past that, the clip on screen plays again from its start while the next one goes on loading: the tile never
+ * stops on one frame.
+ */
+export const REEL_STALL_MS = 1500;
+
+/** How long clip `c` takes to crossfade into the next one, in ms. */
+export const fadeOf = (c: Pick<ReelClip, "fade">): number => c.fade ?? REEL_FADE_MS;
+
+/** How long clip `c` holds its last frame once it ends, before the next one fades in, in ms. */
+export const holdOf = (c: Pick<ReelClip, "hold">): number => c.hold ?? 0;
 
 /** The clip that plays after clip `i` of `n`: the next one, and after the last the first. */
 export const nextInReel = (i: number, n: number): number => (i + 1) % n;
@@ -24,8 +44,11 @@ export const nextInReel = (i: number, n: number): number => (i + 1) % n;
  */
 export const reelSources = (reel: readonly ReelClip[], need: number): string[] => reel.map((c) => pickWidth(c.clips, need).src);
 
-/** Whether the crossfade into the next clip is due: the clip at `t` of its `d` seconds is within the fade of its end. */
-export const fadeDue = (t: number, d: number, fadeMs = REEL_FADE_MS): boolean => d > 0 && t >= d - fadeMs / 1000;
+/**
+ * Whether the crossfade into the next clip is due while clip `c` plays: at `t` of its `d` seconds, within its fade of
+ * its end. A clip that holds its last frame is never due while it plays: its fade starts once it has ended and held.
+ */
+export const fadeDue = (t: number, d: number, c: Pick<ReelClip, "fade" | "hold"> = {}): boolean => holdOf(c) === 0 && d > 0 && t >= d - fadeOf(c) / 1000;
 
 /** How far through the whole reel it is (0 to 1), playing clip `i` of `n` at `t` of its `d` seconds. */
 export const reelProgress = (i: number, n: number, t: number, d: number): number => (i + (d > 0 ? Math.min(1, Math.max(0, t / d)) : 0)) / n;
