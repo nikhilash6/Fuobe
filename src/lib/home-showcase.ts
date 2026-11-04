@@ -100,7 +100,8 @@ export const HOME_REVEALS = [
  */
 export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => string }[] = [
   { href: "/cinema", id: "motion-arc-left", line: (f) => `Direct a film shot by shot: camera, lens, light and ${f.cinemaMoves} moves.` },
-  { href: "/genjutsu", id: "genjutsu-group-swap", line: () => "Keep a clip’s motion. Change what’s in it." },
+  // A swap as it happens (studio-covers.ts): the original take, then the swapped one wiped in across it.
+  { href: "/genjutsu", id: "genjutsu-lake-swap", line: () => "Keep a clip’s motion. Change what’s in it." },
   { href: "/character-swap", id: "app-character-swap", line: () => "Put your character into whole clips, shot by shot." },
   { href: "/marketing", id: "app-macroshot-product", line: (f) => `From a product link to a finished ad. ${f.adTemplates} ad templates.` },
   { href: "/mixed-media", id: "effect-paper", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },

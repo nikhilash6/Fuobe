@@ -397,6 +397,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "effect-x-ray": ["9f8fe44f","a6920c65"],
   "effect-yacht": ["5d601bd5","6a471eed"],
   "genjutsu-group-swap": ["c019a8ad","9a336732"],
+  "genjutsu-lake-swap": ["fdc7a542","e69b4798"],
   "motion-360-orbit": "ba99707c",
   "motion-3d-rotation": ["712c496b","50336a9d"],
   "motion-action-run": ["9f7b047f","b7bccaad"],

@@ -74,7 +74,7 @@ const clipSeconds = (url: string) => mp4Seconds(path.join(root, "public", url.sp
 describe("Home's showcase", () => {
   it("names real presets (or a studio's own cover), each with its cover and, where the slot plays one, its clip", () => {
     for (const id of [...homeIds, ...BENTO_REEL]) {
-      // A studio card may show one of its studio's own examples instead (studio-covers.ts): Genjutsu's group swap.
+      // A studio card may show a cover of its studio's own instead (studio-covers.ts): Genjutsu's lake swap.
       expect(getPreset(id) ?? (studioIds.includes(id) && isStudioCover(id) ? STUDIO_COVERS[id] : undefined), id).toBeDefined();
       const cover = PRESET_PREVIEWS[id];
       expect(cover, `${id} has a real cover`).toBeDefined();

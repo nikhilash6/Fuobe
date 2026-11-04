@@ -3059,6 +3059,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "minimax-h3",
     "variant": "group-swap"
   },
+  "genjutsu-lake-swap": {
+    "poster": "/previews/presets/genjutsu-lake-swap.jpg?v=fdc7a542",
+    "video": "/previews/presets/genjutsu-lake-swap.mp4?v=e69b4798",
+    "run": "home-genjutsu-2026-11",
+    "engine": "comfyui",
+    "model": "minimax-h3",
+    "variant": "recast-wipe"
+  },
   "motion-360-orbit": {
     "poster": "/previews/presets/motion-360-orbit.jpg?v=ba99707c",
     "run": "comfyui-previews-2026-10",

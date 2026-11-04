@@ -14,7 +14,10 @@ export interface StudioCover {
   category: string;
   /** A key of PRESET_ICONS (src/components/preset-icons.ts). */
   icon: string;
-  /** Where its card opens in a row of examples: its studio, in the mode that made it, with that example in view. */
+  /**
+   * Where its card opens in a row of examples: its studio, in the mode that made it, with that example in view when it is
+   * one of the studio's examples (src/lib/examples/plan.json).
+   */
   href: string;
 }
 
@@ -26,6 +29,17 @@ export const STUDIO_COVERS: Record<string, StudioCover> = {
     category: "Genjutsu",
     icon: "Users",
     href: "/genjutsu?mode=character&example=genjutsu-character.1",
+  },
+  // Home's Genjutsu card: a character swap by a lake shown as it happens. The original take, then a divider sweeps the
+  // swapped one in across it, the two in step frame for frame, with "Original" and "Swapped" in the picture either side
+  // of the divider; it fades to dark before it loops, so two faces never blend. The clip of the first screen's Genjutsu
+  // tile (scripts/gen-home-bento.mjs, "genjutsu-lakeside"), with its labels drawn into the frame.
+  "genjutsu-lake-swap": {
+    name: "Character swap",
+    description: "One man swapped for another in the same take: the walk, the turn of the head and the lakeside light stay as filmed.",
+    category: "Genjutsu",
+    icon: "UserRound",
+    href: "/genjutsu?mode=character",
   },
 };
 

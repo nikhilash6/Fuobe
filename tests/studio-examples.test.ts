@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { getPreset, MODELS } from "@/lib/catalog";
+import { GENJUTSU_MODES } from "@/lib/catalog/genjutsu";
 import { HOME_CAPTION_MAX, HOME_WALL } from "@/lib/home-showcase";
 import { thumbOf } from "@/lib/preset-cards";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
@@ -147,13 +148,18 @@ describe("the studios' examples", () => {
     expect(own!.kind).toBe("Genjutsu");
     // No effect stands for Genjutsu: its row shows swaps of people.
     for (const e of row) expect(getPreset(e.card.id)?.type, e.card.id).not.toBe("effect");
-    // Every studio cover's link names its studio's mode and an example of that mode (plan.json).
+    // Every studio cover's link names its studio and a mode of it; one that names an example names one of that mode
+    // (plan.json). Home's lake swap is no example of the studio's: it opens Character swap.
     for (const [id, c] of Object.entries(STUDIO_COVERS)) {
       const url = new URL(c.href, "https://fuobe.com");
       expect(url.pathname, id).toBe(`/${c.category.toLowerCase()}`);
+      const modes: string[] = c.category === "Genjutsu" ? GENJUTSU_MODES.map((m) => m.id) : [];
+      expect(modes, id).toContain(url.searchParams.get("mode"));
+      if (!url.searchParams.has("example")) continue;
       const example = (plan as { id: string; surface: string }[]).find((r) => r.id === url.searchParams.get("example"));
       expect(example?.surface, id).toBe(`tool:${url.pathname.slice(1)}/${url.searchParams.get("mode")}`);
     }
+    expect(STUDIO_COVERS["genjutsu-lake-swap"].href).toBe("/genjutsu?mode=character");
   });
 
   it("stays on the server: the pages and the rows take only the examples' types", () => {
