@@ -13,7 +13,7 @@
  *   rotation-{640,1024,1536,2048}.{mp4,avif}  the turning gown (the 3D tile) at four widths, and each one's first frame
  *   reel-sand-storm-1024.jpg, rotation-1024.jpg the 1024 px clips' first frames, for a browser without AVIF
  *   image-4-{480,768}.avif                the Image studio's example 4
- *   genjutsu-{640,1024}.{mp4,avif}        Genjutsu's group swap (the Genjutsu tile) at two widths, and each one's first frame
+ *   genjutsu-{640,768,1024}.{mp4,avif}    Genjutsu's group swap (the Genjutsu tile) at three widths, and each one's first frame
  *   genjutsu-1024.jpg                     the 1024 px clip's first frame, for a browser without AVIF
  *   genjutsu-original-{240,480}.avif      the original clip's first frame, for the Genjutsu tile's window
  *   board-{photo,film}.webp               the Canvas board's photo and a frame of its film, 168 px squares
@@ -91,10 +91,15 @@ export const REEL = [
 const LOOPS = [{ key: "app-3d-rotation", name: "rotation", crf: { 640: 23, 1024: 23, 1536: 27, 2048: 28 } }];
 /**
  * The Genjutsu tile's clip (BENTO_GENJUTSU in src/lib/home-bento.ts): `frames` frames of its render from frame `from`,
- * played on a loop as they are (a crossfade at the seam would lay one face over another), at the widths its 1024 px
- * render covers, and the CRF each is encoded at.
+ * at the widths its 1024 px render covers, and the CRF each is encoded at. It plays on a loop, and its last frame is
+ * nothing like its first, so it holds that last frame `hold` frames and fades it to the tiles' dark colour over the
+ * last `fadeOut` (a crossfade at the seam would lay one face over another); its first frame, the poster, stays as it is.
  */
-export const CUTS = [{ key: "genjutsu-group-swap", name: "genjutsu", from: 0, frames: 120, widths: [640, 1024], crf: { 640: 22, 1024: 23 } }];
+export const CUTS = [
+  { key: "genjutsu-group-swap", name: "genjutsu", from: 0, frames: 120, hold: 8, fadeOut: 8, widths: [640, 768, 1024], crf: { 640: 24, 768: 24, 1024: 23 } },
+];
+/** The colour a clip fades out to before it loops: the tiles' dark media colour (globals.css --media). */
+const FADE_COLOR = "0x0d0d0f";
 /** The widths each clip and its poster are made at: a tile takes the first at least as wide as its box needs. */
 const CLIP_WIDTHS = [640, 1024, 1536, 2048];
 /** The widths a reel clip is made at from its render alone (wider ones need its 2048 px master). */
@@ -148,13 +153,16 @@ function loopAt(src, width) {
 }
 
 /**
- * A reel clip at `width`: `frames` frames from frame `from` of the render (at CLIP_FPS), played once, no loop. Returns
- * its y4m stream.
+ * A clip at `width`: `frames` frames from frame `from` of the render (at CLIP_FPS). A reel clip plays once, no loop;
+ * the Genjutsu clip (CUTS) then holds its last frame `hold` frames and fades out over its last `fadeOut`, ending on
+ * the fade colour. Returns its y4m stream.
  */
-function cutAt(src, width, from, frames) {
-  const y4m = ffmpeg(["-v", "error", "-i", src, "-an", "-sn", "-dn", "-vf", `fps=${CLIP_FPS},trim=start_frame=${from}:end_frame=${from + frames},setpts=PTS-STARTPTS,scale=${width}:-2:flags=lanczos,format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
+function cutAt(src, width, from, frames, { hold = 0, fadeOut = 0 } = {}) {
+  const total = frames + hold;
+  const tail = (hold ? `,tpad=stop_mode=clone:stop=${hold}` : "") + (fadeOut ? `,fade=t=out:start_frame=${total - fadeOut}:nb_frames=${fadeOut - 1}:color=${FADE_COLOR}` : "");
+  const y4m = ffmpeg(["-v", "error", "-i", src, "-an", "-sn", "-dn", "-vf", `fps=${CLIP_FPS},trim=start_frame=${from}:end_frame=${from + frames},setpts=PTS-STARTPTS,scale=${width}:-2:flags=lanczos${tail},format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
   const got = readY4m(y4m).frames.length;
-  if (got !== frames) throw new Error(`${path.basename(src)} has ${got} frames from frame ${from}, not ${frames}`);
+  if (got !== total) throw new Error(`${path.basename(src)} has ${got} frames from frame ${from}, not ${total}`);
   return y4m;
 }
 
@@ -236,7 +244,7 @@ async function main() {
       c.widths.map((w) => ({
         name: `${c.name}-${w}.mp4`,
         clip: true,
-        make: () => encodeClipBuffer(cutAt(master(`${c.key}.mp4`), w, c.from, c.frames), c.crf[w]),
+        make: () => encodeClipBuffer(cutAt(master(`${c.key}.mp4`), w, c.from, c.frames, c), c.crf[w]),
       })),
     ),
   ];

@@ -39,8 +39,8 @@ export const BENTO_IMAGE_EXAMPLE = { id: "image.4", out: "/examples/image/4/out.
  * a small window. Its id in the playback store is its own, so a card lower down can play the same clip.
  */
 export const BENTO_GENJUTSU = { id: "home-genjutsu", cover: "genjutsu-group-swap", name: "genjutsu", original: "genjutsu-original" } as const;
-/** The widths the Genjutsu clip comes in: its render is 1024 px wide, and nothing is made up past that. */
-export const BENTO_GENJUTSU_WIDTHS = [640, 1024] as const;
+/** The widths the Genjutsu clip comes in: its render is 1024 px wide, and nothing is made up past that (768 for a 2x laptop). */
+export const BENTO_GENJUTSU_WIDTHS = [640, 768, 1024] as const;
 /** The widths of the original's window (it shows at up to about 130 px wide: 480 covers a 3x screen). */
 export const BENTO_ORIGINAL_WIDTHS = [240, 480] as const;
 /** The example whose original clip's first frame the window shows (Genjutsu's Character swap example, src/lib/examples). */
