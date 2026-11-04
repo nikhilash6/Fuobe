@@ -56,7 +56,7 @@ function CreativeCard({ c, brand, ratio, product, n, onEdit }: { c: AdCreative; 
                     type="button"
                     onClick={() => retry.mutate(c.id, { onError: (e) => toastError(e) })}
                     className="mt-2 inline-flex h-7 items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent"
-                    title="Retry uses credits again"
+                    title="A retry is a new run: priced and billed again"
                   >
                     {retry.isPending ? <Loader2 className="size-3 animate-spin" /> : <RotateCcw className="size-3" />} Retry
                   </button>

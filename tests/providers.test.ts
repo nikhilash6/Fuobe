@@ -1,17 +1,14 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ModelDef, ModelRoute } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // Provider adapters read their keys from the settings table: give them a throwaway database.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-providers-"));
+const dir = tempDir("fuobe-providers-");
 process.env.FUOBE_DATA_DIR = dir;
 
 const { falProvider } = await import("@/server/providers/fal");
 const { replicateProvider } = await import("@/server/providers/replicate");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** Answer fetches from a table of URL → JSON body, in order of registration. */
 async function withFetch<T>(answers: Record<string, unknown>, fn: () => Promise<T>): Promise<{ result: T; urls: string[] }> {

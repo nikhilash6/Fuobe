@@ -8,6 +8,7 @@ import {
   blockerLine,
   slotCaption,
   costLabel,
+  saysYourGpu,
   filterModels,
   firstMissingSlot,
   groupModels,
@@ -306,11 +307,21 @@ describe("cost and mentions", () => {
     expect(costLabel({ demo: true, cost: 0.4 }, fmt)).toBe("Placeholder · free");
     expect(costLabel({ demo: true, cost: 0.4, compact: true }, fmt)).toBe("Placeholder");
     expect(costLabel({ demo: false, cost: 0 }, fmt)).toBe("Free");
+    expect(costLabel({ demo: false, cost: 0, gpu: true }, fmt)).toBe("Free · your GPU");
+    expect(costLabel({ demo: false, cost: 0, gpu: true, compact: true }, fmt)).toBe("Free · GPU");
+    expect(costLabel({ demo: true, cost: 0, gpu: true }, fmt)).toBe("Placeholder · free");
     expect(costLabel({ demo: false, cost: 0.4 }, fmt)).toBe("≈ $0.40");
     expect(costLabel({ demo: false, cost: null }, fmt)).toBe("");
     // A price the provider hasn't published (fal's MOSS-Image with LoRAs) is said, never shown as free.
     expect(costLabel({ demo: false, cost: null, unknown: true }, fmt)).toBe("Price unknown");
     expect(costLabel({ demo: false, cost: null, unknown: true, compact: true }, fmt)).toBe("Price unknown");
+  });
+  it("says \"your GPU\" only where the run surely uses it", () => {
+    expect(saysYourGpu("open", false)).toBe(true);
+    // A hosted studio: an account with no GPU connected runs on the studio's GPUs, so never "Free · your GPU".
+    expect(saysYourGpu("open", true)).toBe(false);
+    expect(costLabel({ demo: false, cost: 0, gpu: saysYourGpu("open", true) }, fmt)).toBe("Free");
+    expect(saysYourGpu("cloud", false)).toBe(false);
   });
   it("spots @mentions (spellcheck off)", () => {
     expect(hasMention("@Koi_Pond_Night at dusk")).toBe(true);

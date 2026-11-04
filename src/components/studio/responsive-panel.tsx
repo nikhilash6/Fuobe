@@ -18,6 +18,7 @@ export function ResponsivePanel({
   className,
   sheetClassName,
   align = "start",
+  focusSelf,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -29,9 +30,11 @@ export function ResponsivePanel({
   className?: string;
   sheetClassName?: string;
   align?: "start" | "center" | "end";
+  /** Desktop too: the popover itself takes focus on open, not its first control (whose tooltip would cover the panel). */
+  focusSelf?: boolean;
 }) {
   const mobile = useIsMobile();
-  // On phones the sheet itself takes focus, so the keyboard doesn't jump up over the list.
+  // On phones the sheet itself takes focus, so the keyboard doesn't jump up over the list (and the popover, with focusSelf).
   const focusSheet = (e: Event) => {
     e.preventDefault();
     (e.currentTarget as HTMLElement | null)?.focus();
@@ -62,7 +65,7 @@ export function ResponsivePanel({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       {withTip(<PopoverTrigger asChild>{inner}</PopoverTrigger>)}
-      <PopoverContent align={align} side="top" collisionPadding={12} aria-label={title} className={cn("max-h-[min(var(--radix-popover-content-available-height),640px)] w-[min(92vw,420px)] overflow-y-auto p-3", className)}>
+      <PopoverContent align={align} side="top" collisionPadding={12} aria-label={title} onOpenAutoFocus={focusSelf ? focusSheet : undefined} className={cn("max-h-[min(var(--radix-popover-content-available-height),640px)] w-[min(92vw,420px)] overflow-y-auto p-3", focusSelf && "outline-none", className)}>
         {children}
       </PopoverContent>
     </Popover>

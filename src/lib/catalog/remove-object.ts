@@ -13,7 +13,7 @@
 import { h3Canvas } from "./character-swap";
 import { joinGroups, type PlanStep } from "./shorts";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
-import { originalSoundProblem, separates, soundBack, SOUND_STEP_LABEL, soundOf, withSoundExtra, type SoundChoice } from "../av/original-sound";
+import { originalSoundOn, withOriginalSound, type OriginalSound } from "../av/original-sound";
 
 export type RemoveMode = "type" | "click" | "paint";
 
@@ -177,7 +177,7 @@ export const ERASERS: Eraser[] = [
     engine: "open",
     modes: ["type"],
     label: "Wan 2.1 VACE + SAM 3.1",
-    note: "Only the object's area changes · 24 GB GPU · Apache-2.0",
+    note: "Only the object's area changes · 24 GB GPU",
     window: VACE_WINDOW,
     keepsSound: true,
   },
@@ -186,7 +186,7 @@ export const ERASERS: Eraser[] = [
     engine: "open",
     modes: ["paint"],
     label: "Wan 2.1 VACE + SAM 3.1",
-    note: "SAM 3.1 follows what you painted · 24 GB GPU · Apache-2.0",
+    note: "SAM 3.1 follows what you painted · 24 GB GPU",
     window: VACE_PAINTED_WINDOW,
     keepsSound: true,
   },
@@ -195,7 +195,7 @@ export const ERASERS: Eraser[] = [
     engine: "open",
     modes: ["type"],
     label: "H3 Person Removal",
-    note: "People only: a clean first frame first, then MiniMax H3 with Akatz Labs' Person Remover LoRA rebuilds what was behind them · 24 GB GPU with offloading · MiniMax H3 Community License",
+    note: "People only: a clean first frame first, then MiniMax H3 with Akatz Labs' Person Remover LoRA rebuilds what was behind them · 24 GB GPU with offloading",
     keepsSound: false,
     cleanFrame: true,
   },
@@ -204,7 +204,7 @@ export const ERASERS: Eraser[] = [
     engine: "open",
     modes: ["type"],
     label: "VOID",
-    note: "Also removes shadows and reflections · 24–40 GB GPU · CogVideoX License: commercial use needs registration",
+    note: "Also removes shadows and reflections · 24–40 GB GPU",
     window: VOID_WINDOW,
     keepsSound: true,
     effects: true,
@@ -571,10 +571,10 @@ export interface RemovalPlanInput {
   /** Paint it: the mask of the range's first frame (white = remove). */
   mask?: string;
   seed?: number;
-  /** Original sound: what of the clip's sound goes back (src/lib/av/original-sound.ts; unset = Everything). */
-  sound?: SoundChoice;
   /** H3 Person Removal: how far the person's mask is grown, in pixels (default REMOVE.maskGrow.default). */
   maskGrow?: number;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts; the cloud: Everything only). */
+  originalSound?: OriginalSound;
 }
 
 export interface RemovalPlan {
@@ -624,8 +624,6 @@ function eraseRequest(input: RemovalPlanInput, p: Piece): Partial<GenerationRequ
  * - then the pieces are joined (folded when the join takes fewer clips) and the clip's own sound put back.
  */
 export function planRemoval(input: RemovalPlanInput): RemovalPlan {
-  const soundProblem = originalSoundProblem(input.engine, input.sound);
-  if (soundProblem) throw new Error(soundProblem);
   if (input.eraser.cleanFrame) return planPersonRemoval(input);
   const e = input.eraser;
   const t = REMOVE_TOOLS[input.engine];
@@ -638,8 +636,9 @@ export function planRemoval(input: RemovalPlanInput): RemovalPlan {
   const steps: PlanStep[] = [];
   const op = "remove-object" as const;
   const tracked = e.engine === "cloud" && (e.id === "bria-video-erase-mask" || (e.id === "bria-video-erase-points" && n > 1));
-  // A result that keeps its own sound still gets the chosen stems put back when the sound is split (Original sound).
-  const sound = !!input.source.hasAudio && (n > 1 || !e.keepsSound || separates(input.engine, input.sound));
+  // An eraser that keeps the clip's sound needs no sound step, unless only part of the sound goes back (Original sound).
+  const partSound = originalSoundOn(input.originalSound, input.engine) !== "everything";
+  const sound = !!input.source.hasAudio && (n > 1 || !e.keepsSound || partSound);
   const eraseFeature = (one: boolean) => (one && !sound ? { ...base, title: input.title } : helper);
 
   // What each piece's join input is: its erased window, or (an overlapping window) the window less its first frames.
@@ -737,8 +736,8 @@ export function planRemoval(input: RemovalPlanInput): RemovalPlan {
   // Erasers that work in whole frames leave out the last few (fewer than a step): the sound is cut to the picture's end,
   // except on the open engine, whose mux trims the sound to the picture itself.
   const end = e.window && e.engine === "cloud" ? pieces[n - 1].end : input.range.end;
-  const final = joinWithSound(steps, { engine: input.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: joined, sound, end, choice: input.sound });
-  return { steps, final, pieces, sound, tracked };
+  const final = joinWithSound(steps, { engine: input.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: joined, sound, end });
+  return { steps: withOriginalSound(steps, final, input.originalSound, input.engine, { seconds: end - input.range.start }), final, pieces, sound, tracked };
 }
 
 /**
@@ -822,8 +821,8 @@ function planPersonRemoval(input: RemovalPlanInput): RemovalPlan {
     },
   ];
   const piece: Piece = { index: 0, start: input.range.start, end: input.range.end };
-  const final = joinWithSound(steps, { engine: "open", title: input.title, base, helper, source: input.source, range: input.range, pieces: ["erase0"], sound, choice: input.sound });
-  return { steps, final, pieces: [piece], sound, tracked: false };
+  const final = joinWithSound(steps, { engine: "open", title: input.title, base, helper, source: input.source, range: input.range, pieces: ["erase0"], sound });
+  return { steps: withOriginalSound(steps, final, input.originalSound, "open", { seconds: input.range.end - input.range.start }), final, pieces: [piece], sound, tracked: false };
 }
 
 export interface JoinInput {
@@ -842,8 +841,6 @@ export interface JoinInput {
   end?: number;
   /** What the sound step says (default "Put the sound back"). */
   soundLabel?: string;
-  /** Original sound: what of the clip's sound goes back (src/lib/av/original-sound.ts; unset = Everything). */
-  choice?: SoundChoice;
 }
 
 /**
@@ -886,21 +883,15 @@ export function joinWithSound(steps: PlanStep[], j: JoinInput): string {
   const chain: ChainSlot[] = [{ slot: "video" }];
   const inputs: GenerationRequest["inputs"] = {};
   const end = j.end ?? j.range.end;
-  let from: { url: string } | { key: string } = { url: j.source.url };
-  if (!(wholeClip(j.range, j.source.duration) && end >= (j.source.duration ?? 0) - 0.05)) {
+  if (wholeClip(j.range, j.source.duration) && end >= (j.source.duration ?? 0) - 0.05) inputs.audio = j.source.url;
+  else {
     steps.push({ key: "sound", request: { ...j.helper, modelId: t.cut, op: "trim", inputs: { video: j.source.url }, params: { startTime: j.range.start, endTime: end }, step: { label: "Original sound", index: 1100, of: 1000 } } });
-    from = { key: "sound" };
+    after.push("sound");
+    chain.push({ slot: "audio" });
   }
-  // Original sound: all of it, or (open engine) the chosen stems of a split of that working clip.
-  const back = soundBack(steps, { engine: j.engine, choice: j.choice, from, helper: j.helper, seconds: end - j.range.start });
-  after.push(...back.after);
-  chain.push(...back.chain);
-  if (back.inputs) inputs.audio = back.inputs.audio;
-  const s = soundOf(j.choice);
-  const label = s === "everything" || j.engine !== "open" ? (j.soundLabel ?? "Put the sound back") : SOUND_STEP_LABEL[s];
   steps.push({
     key: "final",
-    request: withSoundExtra({ ...j.base, title: j.title, modelId: t.mux, op: "mux", ...(Object.keys(inputs).length ? { inputs } : {}), step: { label, index: 1200, of: 1000 } }, back),
+    request: { ...j.base, title: j.title, modelId: t.mux, op: "mux", ...(Object.keys(inputs).length ? { inputs } : {}), step: { label: j.soundLabel ?? "Put the sound back", index: 1200, of: 1000 } },
     after,
     chain,
   });

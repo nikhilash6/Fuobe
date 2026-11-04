@@ -6,7 +6,6 @@ import {
   anchorPrompt,
   CHARACTER_LICENCES,
   CHARACTER_SWAP,
-  characterLicenceLine,
   characterQuality,
   cutsInPart,
   cutWarning,
@@ -293,12 +292,6 @@ describe("Character swap: licences are information", () => {
       const wf = (manifest as { workflows: { id: string; license?: string }[] }).workflows.find((w) => w.id === id)!;
       expect(licenceInfo(wf.license!)).toMatchObject({ name: "MiniMax H3 Community License", class: "regions", excludes: "the US, the EU, the UK and South Korea", notices: ["MiniMax H3"] });
     }
-  });
-
-  it("the model picker's line says it, as information", () => {
-    expect(characterLicenceLine("open", "fuobe-character-swap")).toMatch(/not licensed in the US, the EU, the UK and South Korea.*show "MiniMax H3".*GPL-3.0/);
-    expect(characterLicenceLine("cloud", "fuobe-character-swap")).toMatch(/pay per second/);
-    expect(characterLicenceLine("cloud", "h3-max-recast")).toMatch(/closed H3 Max/);
   });
 
   it("the manifest's licence text reads as restricted regions with the notice (About & licences)", async () => {

@@ -1,5 +1,7 @@
 "use client";
 
+import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
+import { ORIGINAL_SOUND_FEATURE, originalSoundDefault, type OriginalSound } from "@/lib/av/original-sound";
 import { Brush, Cloud, Cpu, Dices, Download, Eraser as EraserIcon, Eye, Loader2, RotateCcw, Sparkles, Type, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -19,7 +21,7 @@ import { Feed } from "@/components/studio/feed";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SketchEditor, type Stroke } from "@/components/studio/sketch-editor";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
-import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess, useSoundLive } from "@/lib/api";
 import {
   CLICK_OPEN_PROBLEM,
   chooseEraser,
@@ -38,8 +40,6 @@ import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
-import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
-import { defaultSound, type SoundChoice } from "@/lib/av/original-sound";
 import { FrameStage, frameFromBlob, type Frame } from "./frame-stage";
 import { useRemovalActions, useRemovalEstimate, type RemovalBody } from "./hooks";
 import { VideoCompare } from "./video-compare";
@@ -84,7 +84,7 @@ const noSubscribe = () => () => {};
 /** ?person=1: a result's "Remove a person" link. */
 const personInUrl = () => new URLSearchParams(window.location.search).get("person") === "1";
 
-export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactNode; person?: boolean }) {
+export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) {
   const [engine, setEngine, engineMode] = useEngine();
   // Removing an object doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front,
   // and the upload, the mask preview and Remove are off, instead of a run the server refuses.
@@ -98,7 +98,6 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
   const [mode, setMode] = useState<RemoveMode>("type");
   const [prompt, setPrompt] = useState("");
   const [effects, setEffects] = useState(false);
-  const [soundPick, setSoundPick] = useState<SoundChoice | null>(null);
   // "Remove a person" (its own Video tools tab, or ?person=1 from a result's menu): H3 Person Removal on your GPU.
   const personLinked = useSyncExternalStore(noSubscribe, personInUrl, () => false);
   const personAsked = person || personLinked;
@@ -207,9 +206,10 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
   const ready = !!clip?.url && !clip.uploading && !clip.error && !!duration && !!range;
   const marked =
     mode === "type" ? everyone || !!prompt.trim() : mode === "click" ? points.some((p) => p.label !== "negative") : !!paint;
-  // Original sound: a person removed suggests Music & effects only (their speech goes too); a pick of your own stays.
-  const soundSuggested = defaultSound(engine, { personReplaced: !!eraser?.cleanFrame });
-  const sound: SoundChoice = soundPick ?? { sound: soundSuggested };
+  // What of the clip's sound goes back: Everything until the split has passed a real run, then Music & effects only when a person is removed on your GPU.
+  const [soundAsked, setOriginalSound] = useState<OriginalSound | null>(null);
+  const soundLiveNow = useSoundLive(ORIGINAL_SOUND_FEATURE);
+  const originalSound = soundAsked ?? originalSoundDefault({ replacesPerson: !!eraser?.cleanFrame, engine, live: soundLiveNow });
   const body: RemovalBody | null =
     ready && eraser && marked
       ? {
@@ -224,7 +224,7 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
           ...(h3 ? { maskGrow } : {}),
           source: { url: clip.url!, name: clip.name, duration, fps: clip.info?.fps, width: size.width, height: size.height, hasAudio: clip.info?.hasAudio },
           range: { start: range.startTime, end: range.endTime },
-          ...soundBody(engine, sound),
+          ...(engine === "open" && originalSound !== "everything" && { originalSound }),
         }
       : null;
   const estimate = useRemovalEstimate(body);
@@ -255,7 +255,8 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
               : estimate.isError
                 ? (estimate.error as Error).message
                 : null;
-  const blocker = visitor ? "Remove object isn't available here" : setupBlocker;
+  const toolName = personAsked ? "Remove a person" : "Remove object";
+  const blocker = visitor ? `${toolName} isn't available here` : setupBlocker;
 
   const start = () => {
     if (blocker || !body) return void toast(blocker ?? "Not ready yet", { id: "remove-blocker" });
@@ -280,7 +281,7 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
   const preview = useGeneration(previewOf?.id ?? null).data;
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
+    <ToolShell title="Video tools" wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title={personAsked ? "Remove a person from a video" : "Remove anything from a video"}
@@ -290,7 +291,7 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
               : `Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays${visitor ? "." : ", free on your own ComfyUI."}`
           }
         >
-          {visitor && <SelfHostNote className="mt-3 max-w-xl">Remove object isn&apos;t available here.</SelfHostNote>}
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">{toolName} isn&apos;t available here.</SelfHostNote>}
         </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>
@@ -373,7 +374,7 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
               </div>
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[112px]">
+            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               <Field label="How do you point at it?">
                 <Segmented
                   label="How do you point at it?"
@@ -487,7 +488,6 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
                 </p>
               )}
 
-              {clip && <OriginalSoundField engine={engine} value={sound} onChange={setSoundPick} hasAudio={clip.info?.hasAudio} suggested={soundSuggested} />}
               {personOnCloud && (
                 <div className="space-y-2 rounded-xl bg-muted/60 p-3 text-[13px]" role="status">
                   <p className="flex gap-1.5">
@@ -529,6 +529,7 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
                   </div>
                 </Field>
               )}
+              {clip?.info?.hasAudio !== false && <OriginalSoundPicker engine={engine} value={originalSound} onChange={setOriginalSound} />}
 
               <div className="space-y-3 border-t pt-3">
                 {body && est?.previewUsd != null && (
@@ -739,7 +740,7 @@ function RunPanel({ run, onAgain, onRedo }: { run: Run; onAgain: () => void; onR
         ) : (
           <div className="space-y-3">
             <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress * 100)} aria-label="Progress">
-              <div className={cn("h-full transition-[width]", state.status === "failed" ? "bg-destructive" : "bg-primary")} style={{ width: `${Math.max(4, state.progress * 100)}%` }} />
+              <div className={cn("h-full origin-left transition-transform duration-(--motion-slow) ease-standard", state.status === "failed" ? "bg-destructive" : "bg-primary")} style={{ transform: `scaleX(${(Math.max(4, state.progress * 100)) / 100})` }} />
             </div>
             <p className={cn("text-[13px]", state.status === "failed" ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
               {state.status === "failed" ? `${state.label}: ${state.error}` : state.label}

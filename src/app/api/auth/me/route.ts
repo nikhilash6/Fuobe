@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AccountError, accountGpu, authEnabled, createSession, publicSignup, SESSION_COOKIE, sessionCookieOf, sessionViewer, setAccountPassword, validToken, verifyAccount } from "@/server/auth";
 import { runnerFacts } from "@/server/computer/tasks";
 import { getSetting } from "@/server/settings";
+import { soundLive } from "@/server/sound-live";
 import { removeAccount } from "@/server/account-sweep";
 import { hit } from "@/server/rate";
 
@@ -18,6 +19,8 @@ export async function GET(request: Request) {
   const computer = account ? accountGpu(account.id)?.mode === "computer" : owner && !validToken(request.headers.get("authorization")) && getSetting("comfyWhere") === "computer";
   // Where that computer's tab last found ComfyUI (another browser of theirs starts looking there).
   const comfyPort = computer ? runnerFacts(account ? `acct:${account.id}` : "owner")?.port : undefined;
+  // The sound features that have passed a real run (src/server/sound-live.ts): their switches start on and show to everyone.
+  const live = Object.entries(soundLive()).flatMap(([k, v]) => (v ? [k] : []));
   return Response.json(
     {
       signedIn: owner || !!account,
@@ -25,6 +28,7 @@ export async function GET(request: Request) {
       publicSignup: open,
       ...(account && { account: { email: account.email } }),
       ...(computer && { computer: true, ...(comfyPort && { comfyPort }) }),
+      ...(live.length && { soundLive: live }),
     },
     { headers: { "Cache-Control": "no-store" } },
   );

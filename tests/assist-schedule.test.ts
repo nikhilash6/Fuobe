@@ -157,6 +157,8 @@ describe("what a scheduled run may start on its own", () => {
     expect(spendOf([{ costUsd: 0.15, demo: true }])).toBe(0);
     expect(spendOf([{ costUsd: 0.15, demo: false }, { costUsd: 0.5, demo: false }])).toBe(0.65);
     expect(spendOf([{ costUsd: null, demo: false }])).toBeNull();
+    // A price guessed before an earlier step's result exists can't count against a cap.
+    expect(spendOf([{ costUsd: 0.5, demo: false, estimate: true }])).toBeNull();
     expect(spendOf([{ costUsd: null, demo: false, error: "no input" }, { costUsd: 1, demo: false }])).toBe(1);
   });
 });

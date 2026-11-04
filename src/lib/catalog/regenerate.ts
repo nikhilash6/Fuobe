@@ -5,11 +5,18 @@
  * result at 2K (the same hosted model asked for a size it offers, never a stand-in for the open model).
  *
  * Nobody hosts the open model, so Regenerate · creative is GPU-only: the cloud engine says it runs on your GPU, and
- * Engine mode "Paid APIs only" hides it (the owner's rule of 10-30).
+ * Engine mode "Paid APIs only" hides it.
  */
 import type { ChainSlot, Generation, GenerationRequest, LoraRef, ModelOptions } from "./types";
 
 export const REGEN_MODEL = "oss-h3-regenerate";
+/**
+ * Whether Regenerate · creative is offered anywhere (the Upscale step, the finishing choice, the result links, the
+ * canvas node, the model picker, the GPU tools list). Off for now: its graph needs 48 GB of VRAM and its node pack,
+ * and it has not run on a real GPU yet. Switch it on after a full run on a card that fits it. The cloud's
+ * "Re-render at 2K" is separate and stays on.
+ */
+export const REGEN_OFFERED: boolean = false;
 export const REGEN_WORKFLOW = "video-regenerate-h3";
 /** The join a clip redrawn in 15 s parts ends with (packet by packet: every part has the same size and rate). */
 export const REGEN_JOIN = "oss-join-encoded";

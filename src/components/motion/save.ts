@@ -1,0 +1,148 @@
+"use client";
+
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useCallback, useRef, useState } from "react";
+import { toast } from "sonner";
+import { askToSignUp, uploadFile, useIsAccount, useIsGuest } from "@/lib/api";
+import type { Generation } from "@/lib/catalog/types";
+import { recipeKey, type Recipe } from "@/lib/motion/recipe";
+import { responseError, toastError } from "@/lib/refusals";
+
+/**
+ * Everything made here goes through Fuobe: a finished render is uploaded (POST /api/uploads, marked as a Kinetic Motion
+ * result: the owner, or any account, with or without its own GPU or key, since no model makes it) and recorded as a
+ * Kinetic Motion result (POST /api/generations/local), which shows in the Library (the owner's) or the account's own
+ * runs at once. The person downloads it from there, never straight from the page.
+ */
+
+const uploadKinetic = (file: File) => uploadFile(file, { kinetic: true });
+
+export const MOTION_MODEL = "local-motion";
+
+export interface MotionResult {
+  blob: Blob;
+  type: string;
+  /** Its last frame (a PNG): the saved clip's tile shows it. */
+  poster?: Blob;
+}
+
+export interface SaveMeta {
+  recipe: Recipe;
+  feature: string;
+  title: string;
+  /** The typed words, joined (what the Library shows and searches). */
+  prompt: string;
+  /** The person's own stored files the clip was made from (logo, product). */
+  images?: string[];
+}
+
+/** The files a result names as its inputs: its pictures (logo, product) and the clip under its words. */
+function inputsOf(meta: SaveMeta): { images?: string[]; video?: string } {
+  const images = (meta.images ?? []).filter((u) => u.startsWith("/api/files/")).slice(0, 4);
+  const video = meta.recipe.layers?.video?.src;
+  return { ...(images.length && { images }), ...(video && { video }) };
+}
+
+/** Records an uploaded Kinetic file as a result (a clip, or a frame, sheet or version picture). */
+async function record(meta: SaveMeta, output: { url: string; kind: "video" | "image"; contentType: string; meta?: { poster: string } }): Promise<Generation> {
+  const res = await fetch("/api/generations/local", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      feature: meta.feature,
+      modelId: MOTION_MODEL,
+      op: "motion",
+      prompt: meta.prompt.slice(0, 2000),
+      title: meta.title.slice(0, 200),
+      inputs: inputsOf(meta),
+      params: { extra: { motion: meta.recipe } },
+      output,
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as Generation & { error?: string };
+  if (!res.ok) throw responseError(res, body.error ?? "Couldn't save it. Try again.");
+  return body;
+}
+
+/** Uploads a rendered picture (a PNG frame, contact sheet or version) and records it as a result. */
+export async function saveMotionPicture(png: Blob, meta: SaveMeta): Promise<Generation> {
+  const asset = await uploadKinetic(new File([png], "kinetic-motion.png", { type: "image/png" }));
+  return record(meta, { url: asset.url, kind: "image", contentType: "image/png" });
+}
+
+/** Uploads a rendered clip and records it as a result; returns the result. */
+export async function saveMotionResult(clip: MotionResult, meta: SaveMeta): Promise<Generation> {
+  const ext = clip.type === "video/webm" ? "webm" : "mp4";
+  const [asset, poster] = await Promise.all([
+    uploadKinetic(new File([clip.blob], `kinetic-motion.${ext}`, { type: clip.type })),
+    clip.poster ? uploadKinetic(new File([clip.poster], "kinetic-motion.png", { type: "image/png" })).catch(() => null) : null,
+  ]);
+  return record(meta, { url: asset.url, kind: "video", contentType: asset.contentType ?? clip.type, ...(poster && { meta: { poster: poster.url } }) });
+}
+
+export type SavePhase = { kind: "idle" } | { kind: "rendering"; done: number; total: number } | { kind: "saving" } | { kind: "saved"; id: string };
+
+/**
+ * Render-then-save for a page: a guest is asked to sign up ("Create a free account") before anything renders; the owner
+ * and every account save (an account needs no GPU or key of its own for this). A look saves once per visit; a failed
+ * save keeps the rendered clip, so Try again uploads without rendering again.
+ */
+export function useMotionSave() {
+  const qc = useQueryClient();
+  const guest = useIsGuest();
+  const router = useRouter();
+  const account = useIsAccount();
+  const [phase, setPhase] = useState<SavePhase>({ kind: "idle" });
+  const rendered = useRef<{ key: string; clip: MotionResult } | null>(null);
+  const saved = useRef(new Map<string, string>());
+  const abort = useRef<AbortController | null>(null);
+
+  const save = useCallback(
+    async (meta: SaveMeta, render: (signal: AbortSignal, progress: (done: number, total: number) => void) => Promise<MotionResult>): Promise<Generation | null> => {
+      if (guest) {
+        askToSignUp("upload");
+        return null;
+      }
+      const key = recipeKey(meta.recipe);
+      if (saved.current.has(key)) {
+        toast(account ? "Already saved to your runs" : "Already saved to your Library", { action: { label: "Open", onClick: () => router.push("/library") } });
+        return null;
+      }
+      const ctl = new AbortController();
+      abort.current = ctl;
+      try {
+        let clip = rendered.current?.key === key ? rendered.current.clip : null;
+        if (!clip) {
+          setPhase({ kind: "rendering", done: 0, total: 1 });
+          clip = await render(ctl.signal, (done, total) => setPhase({ kind: "rendering", done, total }));
+          rendered.current = { key, clip };
+        }
+        setPhase({ kind: "saving" });
+        const g = await saveMotionResult(clip, meta);
+        saved.current.set(key, g.id);
+        setPhase({ kind: "saved", id: g.id });
+        void qc.invalidateQueries({ queryKey: ["generations"] });
+        toast.success(account ? "Saved to your runs" : "Saved to your Library", { action: { label: "Open", onClick: () => router.push("/library") } });
+        return g;
+      } catch (e) {
+        setPhase({ kind: "idle" });
+        if ((e as Error).name !== "AbortError") toastError(e, "Couldn't save it. Try again.");
+        return null;
+      } finally {
+        if (abort.current === ctl) abort.current = null;
+      }
+    },
+    [guest, account, qc, router],
+  );
+
+  const cancel = useCallback(() => abort.current?.abort(), []);
+  return { save, cancel, phase, label: account ? "Save to your runs" : "Save to Library" };
+}
+
+/** "Rendering 42 of 75", "Saving…", or null. */
+export function phaseLine(p: SavePhase): string | null {
+  if (p.kind === "rendering") return `Rendering ${p.done} of ${p.total}`;
+  if (p.kind === "saving") return "Saving…";
+  return null;
+}

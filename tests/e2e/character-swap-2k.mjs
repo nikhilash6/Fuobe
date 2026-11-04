@@ -1,4 +1,4 @@
-// Browser check of Character swap in 2K (n7-4-character-swap-2k).
+// Browser check of Character swap in 2K.
 // Usage: node tests/e2e/character-swap-2k.mjs [appUrl] [outDir]   (the app in demo mode: no keys, no ComfyUI)
 // At 1440 px and 390 px, light and dark: Character Swap Studio's Assemble → Finish with "Sharpen to 1080p / 2K / 4K"
 // (the sizes picked by keyboard and by touch, why a size can't be picked as text on the page, the price or GPU time, Run),
@@ -8,12 +8,13 @@
 // no page error and no console error. Screenshots go to outDir.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { DESKTOP, PHONE, launch, openRoute, root } from "./_browser.mjs";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
-const app = (args[0] ?? "http://localhost:3000").replace(/\/$/, "");
-const out = args[1] ?? fs.mkdtempSync("/tmp/fuobe-swap-2k-");
+const app = (args[0] ?? "http://localhost:3440").replace(/\/$/, "");
+const out = args[1] ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-swap-2k-"));
 fs.mkdirSync(out, { recursive: true });
 
 const failures = [];

@@ -10,6 +10,7 @@
  * Pure module: limits, prompts, the H3 window plan, who to swap, the anchor's prompt and models, licences as data.
  * The prompts follow Openjutsu's (MIT, Comfy Org 2026) and Akatz Labs' anchor brief (MIT, Akatz Labs 2026).
  */
+import { REGEN_OFFERED } from "./regenerate";
 import { isSharpenTier, type SharpenTier } from "./sharpen";
 import type { Engine, LoraRef, PixelPoint } from "./types";
 
@@ -160,6 +161,28 @@ export interface CharacterOptions {
   historyFrames?: number;
   /** 1080p / 2K / 4K on your GPU: the regenerate's start noise (sharpen.ts; for evaluations, the page leaves it). */
   sharpenSigma?: number;
+  /**
+   * Group swap (2–4 characters): who each character replaces, in words (index = the character), and where they were
+   * tapped on the part's first frame (0–1 of its width and height; only an aid for writing the words).
+   */
+  people?: { role: string; pin?: { x: number; y: number } }[];
+  /** Group swap with exactly 2 characters: a pass for each person (sharper, about twice as long). */
+  onePerPerson?: boolean;
+  /** Group swap: hats and big hair are masked too (a little slower). */
+  hats?: boolean;
+  /** Group swap: mouths follow the sound (on by default; off for music clips where nobody sings). */
+  mouthsFollowSound?: boolean;
+  /** Group swap: how far the redrawn area reaches past each person. */
+  edge?: "tight" | "normal" | "loose";
+  /** Group swap: the motion reference's long edge (512 standard, 768 high). */
+  motionDetail?: 512 | 768;
+}
+
+/** Who becomes who: the words a tap on the part's first frame writes (where the person stands). */
+export function roleFromPin(pin: { x: number; y: number }): string {
+  const side = pin.x < 1 / 3 ? "on the left" : pin.x > 2 / 3 ? "on the right" : "in the centre";
+  const depth = pin.y > 2 / 3 ? " in front" : pin.y < 1 / 3 ? " at the back" : "";
+  return `the person ${side}${depth}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,9 +198,12 @@ export function characterFinish(q: string | undefined): SharpenTier | null {
   return isSharpenTier(q) ? q : null;
 }
 
-/** The qualities each engine offers: your GPU regenerates 1080p, 2K and 4K; fal's H3 makes 2K and 4K (no 1080P). */
+/**
+ * The qualities each engine offers: your GPU regenerates 1080p, 2K and 4K with Open-H3 Regenerate (only while it is
+ * offered: REGEN_OFFERED); fal's H3 makes 2K and 4K (no 1080P).
+ */
 export const CHARACTER_QUALITIES: Record<Engine, CharacterChoice[]> = {
-  open: ["480p", "768p", "1080p", "2K", "4K"],
+  open: ["480p", "768p", ...(REGEN_OFFERED ? (["1080p", "2K", "4K"] as const) : [])],
   cloud: ["480p", "768p", "2K", "4K"],
 };
 
@@ -583,10 +609,3 @@ export const CHARACTER_LORAS: { file: string; name: string; url: string; licence
 ];
 
 export const characterLora = (file: string) => CHARACTER_LORAS.find((l) => l.file === file);
-
-/** One line for a model picker: the licence that matters most for the route, as information. */
-export function characterLicenceLine(engine: Engine, modelId: string): string {
-  if (modelId === "h3-max-recast") return "MiniMax's closed H3 Max through fal: pay per second, under fal's and MiniMax's terms";
-  const h3 = `MiniMax H3 Community License — not licensed in ${MINIMAX_H3_LICENCE.excludes}; commercial use over US$20M revenue needs MiniMax's OK; show "MiniMax H3"`;
-  return engine === "open" ? `${h3} · nodes GPL-3.0 · SAM License` : `${h3} · on fal, pay per second`;
-}

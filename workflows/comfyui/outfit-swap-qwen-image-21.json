@@ -1,0 +1,441 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP (Qwen3-VL 8B)"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "4": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "qwen-image-2.1-outfit-swap.safetensors",
+      "strength_model": 1
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Outfit Swap LoRA (keeps the picture in place)"
+    }
+  },
+  "10": {
+    "inputs": {
+      "image": "image_1.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image (the person, image 1)"
+    }
+  },
+  "11": {
+    "inputs": {
+      "image": "image_2.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image (the outfit, image 2)"
+    }
+  },
+  "20": {
+    "inputs": {
+      "image": [
+        "10",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "megapixels": 1.91,
+      "resolution_steps": 32
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "The person to about 2 MP on the 32 grid"
+    }
+  },
+  "21": {
+    "inputs": {
+      "image": [
+        "11",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "megapixels": 0.95,
+      "resolution_steps": 32
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "The outfit to about 1 MP on the 32 grid"
+    }
+  },
+  "22": {
+    "inputs": {
+      "image": [
+        "10",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "megapixels": 0.57,
+      "resolution_steps": 32
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "The person, small, for the two checks"
+    }
+  },
+  "23": {
+    "inputs": {
+      "image": [
+        "11",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "megapixels": 0.57,
+      "resolution_steps": 32
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "The outfit, small, for the describer"
+    }
+  },
+  "30": {
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "prompt": [
+        "53",
+        0
+      ],
+      "negative_prompt": "",
+      "resolution": 0,
+      "images.image_1": [
+        "20",
+        0
+      ],
+      "images.image_2": [
+        "21",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImage21",
+    "_meta": {
+      "title": "Text Encode Qwen Image 2.1 (person as image 1)"
+    }
+  },
+  "31": {
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "device": "auto",
+      "dtype": "default"
+    },
+    "class_type": "QwenImage21Cache",
+    "_meta": {
+      "title": "Qwen Image 2.1 Cache"
+    }
+  },
+  "32": {
+    "inputs": {
+      "seed": 0,
+      "steps": 25,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "31",
+        0
+      ],
+      "positive": [
+        "30",
+        0
+      ],
+      "negative": [
+        "30",
+        1
+      ],
+      "latent_image": [
+        "30",
+        2
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "33": {
+    "inputs": {
+      "samples": [
+        "32",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "34": {
+    "inputs": {
+      "image": [
+        "33",
+        0
+      ]
+    },
+    "class_type": "SplitImageWithAlpha",
+    "_meta": {
+      "title": "Drop the alpha"
+    }
+  },
+  "40": {
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "image": [
+        "22",
+        0
+      ],
+      "prompt": "Are the person's feet or shoes in this picture? Answer yes or no.",
+      "max_length": 16,
+      "sampling_mode": "off",
+      "thinking": true,
+      "use_default_template": true,
+      "mtp": "auto"
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "Are the feet in the picture"
+    }
+  },
+  "41": {
+    "inputs": {
+      "string": [
+        "40",
+        0
+      ],
+      "regex_pattern": "^\\s*yes\\b",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false
+    },
+    "class_type": "RegexMatch",
+    "_meta": {
+      "title": "Feet answer starts with yes"
+    }
+  },
+  "42": {
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "image": [
+        "22",
+        0
+      ],
+      "prompt": "Are the person's legs in this picture? Answer yes or no.",
+      "max_length": 16,
+      "sampling_mode": "off",
+      "thinking": true,
+      "use_default_template": true,
+      "mtp": "auto"
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "Are the legs in the picture"
+    }
+  },
+  "43": {
+    "inputs": {
+      "string": [
+        "42",
+        0
+      ],
+      "regex_pattern": "^\\s*yes\\b",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false
+    },
+    "class_type": "RegexMatch",
+    "_meta": {
+      "title": "Legs answer starts with yes"
+    }
+  },
+  "44": {
+    "inputs": {
+      "value": "You write short image-edit descriptions. Reply with one phrase only, no preamble, no quotes.\n\nLook at the clothing in this picture. Describe the outfit in one short phrase for an image editor: name every garment, the top, the bottom (skirt, shorts, trousers, dress) and any shoes or accessories, each with its color, pattern and the details that identify it (collar, straps, sleeves, trim, buttons, belt, chain). Start with 'the' and end with 'shown in image 2'. Do not describe the background or any person."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Describer: the whole outfit"
+    }
+  },
+  "45": {
+    "inputs": {
+      "value": "You write short image-edit descriptions. Reply with one phrase only, no preamble, no quotes.\n\nLook at the clothing in this picture. Describe the outfit in one short phrase for an image editor: name every garment, the top, the bottom (skirt, shorts, trousers, dress) and any accessories, each with its color, pattern and the details that identify it (collar, straps, sleeves, trim, buttons, belt, chain). Leave out shoes, boots and socks: the picture the outfit goes on does not show the feet. Start with 'the' and end with 'shown in image 2'. Do not describe the background or any person."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Describer: no feet in the picture"
+    }
+  },
+  "46": {
+    "inputs": {
+      "value": "You write short image-edit descriptions. Reply with one phrase only, no preamble, no quotes.\n\nLook at the clothing in this picture. The picture it goes on shows the person only from the chest or waist up, so describe only what is worn on the upper body, in one short phrase for an image editor: the outer layer (jacket, coat, cardigan, shirt, sweater, or the top of a dress or overalls) and what shows under it, each with its color, pattern and the details that identify it (collar, sleeves, buttons, trim, straps). Leave out trousers, skirts, shorts, the lower part of a dress, shoes and socks. Start with 'the' and end with 'shown in image 2'. Do not describe the background or any person."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Describer: no legs in the picture"
+    }
+  },
+  "47": {
+    "inputs": {
+      "switch": [
+        "41",
+        0
+      ],
+      "on_true": [
+        "44",
+        0
+      ],
+      "on_false": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "With or without shoes"
+    }
+  },
+  "48": {
+    "inputs": {
+      "switch": [
+        "43",
+        0
+      ],
+      "on_true": [
+        "47",
+        0
+      ],
+      "on_false": [
+        "46",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Whole outfit or top half"
+    }
+  },
+  "49": {
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "image": [
+        "23",
+        0
+      ],
+      "prompt": [
+        "48",
+        0
+      ],
+      "max_length": 200,
+      "sampling_mode": "off",
+      "thinking": true,
+      "use_default_template": true,
+      "mtp": "auto"
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "Describe the outfit"
+    }
+  },
+  "50": {
+    "inputs": {
+      "string": [
+        "49",
+        0
+      ],
+      "regex_pattern": "^[\\s\"']+|[\\s\"'.]+$",
+      "replace": "",
+      "case_insensitive": false,
+      "multiline": false,
+      "dotall": false,
+      "count": 0
+    },
+    "class_type": "RegexReplace",
+    "_meta": {
+      "title": "Trim stray quotes and spaces"
+    }
+  },
+  "53": {
+    "inputs": {
+      "values.a": "the person",
+      "values.b": [
+        "50",
+        0
+      ],
+      "values.c": "Replace everything they wear.",
+      "values.d": "",
+      "f_string": "Dress {a} in image 1 in {b}. Keep their face, hair, hands, pose and the background exactly the same. {c} {d}"
+    },
+    "class_type": "StringFormat",
+    "_meta": {
+      "title": "The request (who, the described outfit, shoes, the person's own words)"
+    }
+  },
+  "90": {
+    "inputs": {
+      "filename_prefix": "fuobe/outfit-swap",
+      "images": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

@@ -2,23 +2,23 @@
 
 import { ArchiveRestore, BookmarkPlus, CheckCheck, CheckSquare, ChevronUp, CircleDot, Download, FolderInput, Globe, Heart, Loader2, MoreHorizontal, Pin, PinOff, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AssetCard, cardRatio, type CardApi } from "@/components/library/asset-card";
 import { FilterBar, filterFields, filtersFor, hasFilters, NO_FILTERS, type Filters } from "@/components/library/filters";
+import { SkillSuggestions } from "@/components/skills/skill-suggestions";
 import { FolderDialog, FolderHeader, FolderStrip, MoveMenuItems } from "@/components/library/folders";
 import { ReviewMenuItems } from "@/components/library/review";
 import { UploadDeleteProvider } from "@/components/library/upload-delete";
+import { askDeleteForGood } from "@/components/studio/delete-for-good";
 import { useViewPrefs, ViewOptions, type ViewPrefs } from "@/components/library/view-options";
 import { openAddKey } from "@/components/keys/your-keys";
 import { PageShell } from "@/components/page-shell";
 import { useShare } from "@/components/share/share-provider";
 import { SharedLinks } from "@/components/share/shared-links";
 import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
-import { SkillSuggestionCard } from "@/components/skills/skill-suggestion";
 import { downloadUrl, ForeverConfirmProvider, useConfirmForever } from "@/components/studio/result-actions";
-import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { Viewer } from "@/components/studio/viewer";
 import {
   AlertDialog,
@@ -47,7 +47,10 @@ import { keyCombo, useModKey } from "@/lib/keys";
 import { buildEntries, folderAndDescendants, reviewInfo, splitByDate, toggleAll, TRASH_DAYS, type LibraryEntry } from "@/lib/library";
 import { isLayered, shownOutputs } from "@/lib/output-actions";
 import { isExpired } from "@/lib/share";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
+import { starterShown, type StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 
 type TabId = "all" | "images" | "videos" | "audio" | "text" | "3d" | "favorites" | "uploads" | "shared" | "trash";
@@ -224,14 +227,16 @@ function Cards({ entries, prefs, expanded, render, panel }: { entries: LibraryEn
   );
 }
 
-function Inner() {
-  const sp = useSearchParams();
-  const router = useRouter();
+function Inner({ starters: given }: { starters: StarterCardData[] }) {
+  const routed = useSearchParams();
+  // The params just set by go(): the History API hands them to useSearchParams in a transition, a frame later; shown at
+  // once until the router has them.
+  const [set, setSet] = useState<{ from: string; to: URLSearchParams } | null>(null);
+  if (set && set.from !== routed.toString()) setSet(null);
+  const sp = set && set.from === routed.toString() ? set.to : routed;
   const pathname = usePathname();
   const tab = TABS.find((t) => t.id === sp.get("tab")) ?? TABS[0];
   const folderId = sp.get("folder") ?? undefined;
-  // One run's results (a skill's History links here: /library?batch=<id>).
-  const batchId = sp.get("batch") ?? undefined;
   const trash = tab.id === "trash";
   const uploadsTab = tab.id === "uploads";
   // A guest or an account sees its own runs only; an account with neither its own GPU nor its own key can't add files yet.
@@ -265,11 +270,10 @@ function Inner() {
       // The Trash shows everything in it, helper steps too: deleting a Shorts session trashes its steps, and they can come back.
       ...(trash && { trashed: true, steps: true }),
       ...(folderId && !trash && (subtree ? { folderIds: subtree } : { folderId })),
-      ...(batchId && !trash && { batchId }),
       ...(dq && { q: dq }),
       ...filterFields(filters),
     }),
-    [tab, trash, folderId, subtree, batchId, dq, filters],
+    [tab, trash, folderId, subtree, dq, filters],
   );
   // Pinned results sit above the rest of the view (not in the Trash or Uploads); the Pinned filter shows only them.
   const split = !trash && !uploadsTab && !sharedTab && !filters.pinned;
@@ -280,6 +284,8 @@ function Inner() {
   // Trash or skills here (they're the studio owner's). Left out until /api/auth/me says it's the owner, so a visitor
   // never sees them flash in and out.
   const owner = useIsOwner();
+  // "Make your first": the covered starters the page carries, every one for the owner.
+  const { starters } = useStarters("library", given);
   const shareApi = useShare();
   const share = owner ? shareApi : null;
   const builder = useSkillBuilder();
@@ -415,7 +421,10 @@ function Inner() {
       else next.delete(k);
     }
     const s = next.toString();
-    router.replace(s ? `${pathname}?${s}` : pathname, { scroll: false });
+    setSet({ from: routed.toString(), to: next });
+    // The page reads no search params on the server: the native History API updates the address with no request (a
+    // router.replace waited a round trip before the tab moved), and useSearchParams follows.
+    window.history.replaceState(null, "", s ? `${pathname}?${s}` : pathname);
     window.scrollTo({ top: 0 });
   };
 
@@ -435,7 +444,7 @@ function Inner() {
   const missingFolder = !!folderId && !!folders.data && !folder && !trash;
 
   // The tab strip scrolls sideways on phones: fade the hidden edge and keep the active tab in view.
-  const [tabsRef, tabsFade] = useEdgeFade<HTMLDivElement>();
+  const tabsRef = useRef<HTMLElement>(null);
   const activeTab = useRef<HTMLButtonElement>(null);
   const focusTab = useRef(false);
   // Again once the counts load: tabs for kinds you have (Text, 3D) appear and shift the rest.
@@ -448,6 +457,8 @@ function Inner() {
 
   const loading = uploadsTab ? uploads.isLoading : lib.isLoading;
   const refreshing = !uploadsTab && lib.isPlaceholderData;
+  // The results fade in when another section's (or folder's) arrive, not while the last ones still show.
+  const resultsRef = useSwapFade<HTMLDivElement>(refreshing ? null : `${tab.id}:${folderId ?? ""}`);
   const count = (t: (typeof TABS)[number]) => {
     const f = facets.data;
     if (!f) return undefined;
@@ -541,6 +552,19 @@ function Inner() {
         </Empty>
       );
     if (uploadsTab) return <Empty title="No uploads yet">Files you add to a studio show up here.</Empty>;
+    // Nothing made yet: "Make your first" leads on All (a visitor's cards only those with their cover), then one quiet line.
+    if (tab.id === "all" && starters.some((s) => starterShown(s, !owner)))
+      return (
+        <>
+          <StarterSection surface="library" starters={given} />
+          <p className="mt-8 text-center text-[14px] text-muted-foreground">
+            Everything you make lands here.{" "}
+            <Link href="/image" className="text-brand-text underline underline-offset-2">
+              Create an image
+            </Link>
+          </p>
+        </>
+      );
     return (
       <Empty title="Your creations will appear here">
         Generate something and it lands here.{" "}
@@ -621,12 +645,11 @@ function Inner() {
       </div>
 
       {!folder && !foldersLoading && !missingFolder && (
-        <div
+        <TabRow
           ref={tabsRef}
-          style={tabsFade}
           role="tablist"
           aria-label="Library sections"
-          className="scrollbar-none mb-4 flex gap-4 overflow-x-auto border-b"
+          className="mb-4"
           onKeyDown={(e) => {
             // Arrow keys move between tabs (and open them), as in any tab strip.
             if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -648,21 +671,19 @@ function Inner() {
                 aria-selected={on}
                 tabIndex={on ? 0 : -1}
                 onClick={() => go({ tab: t.id === "all" ? undefined : t.id, folder: undefined })}
-                className={cn(
-                  "-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 border-transparent px-1 pb-2 text-[14px] whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                  on && "border-foreground font-medium text-foreground",
-                )}
+                className={TAB_PILL}
+                {...onAttr(on)}
               >
                 {t.label}
                 {n ? (
-                  <span className="min-w-4 font-mono text-[11px] text-muted-foreground tabular-nums" aria-label={`${n} items`}>
+                  <span className="tab-count min-w-4" aria-label={`${n} items`}>
                     {n}
                   </span>
                 ) : null}
               </button>
             );
           })}
-        </div>
+        </TabRow>
       )}
 
       {/* The folder row has its place from the first paint: arriving later, it pushed the filters and the cards down. */}
@@ -683,17 +704,9 @@ function Inner() {
 
       {!uploadsTab && !sharedTab && !missingFolder && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {batchId && !trash && (
-              <span className="inline-flex h-8 items-center gap-1 rounded-full bg-muted pr-1 pl-3 text-[13px] font-medium">
-                One run
-                <button type="button" onClick={() => go({ batch: undefined })} aria-label="Show everything" className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
-                  <X className="size-3.5" />
-                </button>
-              </span>
-            )}
-            <FilterBar value={filters} onChange={setFilters} facets={facets.data} subfolders={!!folder?.folders} scoped={!!folderId || !!batchId || tab.id !== "all" || !!dq} trash={trash} />
-          </div>
+          <FilterBar value={filters} onChange={setFilters} facets={facets.data} subfolders={!!folder?.folders} scoped={!!folderId || tab.id !== "all" || !!dq} trash={trash} />
+          {/* A chain made again and again, offered as a skill (All only; the owner's own runs). */}
+          {tab.id === "all" && !folderId && !dq && <SkillSuggestions />}
           {trash && (
             <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
               <span>Items stay here for {TRASH_DAYS} days.</span>
@@ -707,9 +720,7 @@ function Inner() {
         </div>
       )}
 
-      {/* A chain made often lately that no skill has yet: "Save it as a skill?" (the owner's, in All only). */}
-      {skillBuilder && tab.id === "all" && !folderId && !batchId && !dq && <SkillSuggestionCard onMake={(list) => skillBuilder.open(list)} />}
-
+      <div ref={resultsRef}>
       {sharedTab ? (
         <SharedLinks />
       ) : missingFolder ? (
@@ -805,9 +816,10 @@ function Inner() {
           </div>
         </div>
       )}
+      </div>
 
       {(selecting || selected.size > 0) && !uploadsTab && !sharedTab && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:pl-[var(--sidebar-width,0px)]">
+        <div className="pointer-events-none fixed inset-x-0 bottom-chrome z-30 flex justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div role="toolbar" aria-label="Selection" className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full border bg-background p-1.5 shadow-strong">
             {/* Phones show just the count, so every action fits at 390 px. */}
             <span className="shrink-0 px-2.5 text-[13px] font-medium whitespace-nowrap">
@@ -917,7 +929,7 @@ function Inner() {
                     </DropdownMenu>
                     <BarButton
                       icon={Trash2}
-                      label="Delete"
+                      label="Move to Trash"
                       destructive
                       disabled={!selectedGens.length}
                       onClick={() => {
@@ -926,6 +938,16 @@ function Inner() {
                       }}
                     />
                   </>
+                )}
+                {/* An account has no Trash: what it deletes goes for good, so it says so and asks first. */}
+                {account && !owner && !uploadsTab && (
+                  <BarButton
+                    icon={Trash2}
+                    label="Delete for good…"
+                    destructive
+                    disabled={!selectedGens.some((g) => g.feature !== "upload")}
+                    onClick={() => askDeleteForGood(selectedGens.filter((g) => g.feature !== "upload"), clear)}
+                  />
                 )}
               </>
             )}
@@ -1012,12 +1034,13 @@ function BarButton({ icon: Icon, label, onClick, disabled, destructive, classNam
   );
 }
 
-export function LibraryView() {
+/** starters: "Make your first" under an empty Library (catalog cards, from the page). */
+export function LibraryView({ starters = [] }: { starters?: StarterCardData[] }) {
   return (
     <Suspense fallback={null}>
       <ForeverConfirmProvider>
         <UploadDeleteProvider>
-          <Inner />
+          <Inner starters={starters} />
         </UploadDeleteProvider>
       </ForeverConfirmProvider>
     </Suspense>

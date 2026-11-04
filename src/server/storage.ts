@@ -10,6 +10,7 @@ import { tenant, tenantAccount } from "./tenant";
 import { accountInputLimit } from "./account-files";
 import { assetAccount, fileAccount, generationAccount } from "./account-library";
 import { otherHeaderInfo } from "./media-facts";
+import { exampleHead, exampleStat, isExampleRef, readExampleFile } from "./example-files";
 
 export const FILES_DIR = path.join(DATA_DIR, "files");
 
@@ -210,6 +211,26 @@ export function scratchDir(): string {
   return dir;
 }
 
+/**
+ * A provider's result already written to the scratch folder (a song's stems, unpacked from their zip there): its run
+ * keeps it as `scratch:<name>`, and saving the run moves the file in (adoptFile), counted against an account's room
+ * like any other result. The name is random and long, so a provider's answer can't point at another run's file.
+ */
+const SCRATCH_OUTPUT = /^scratch:(out-[A-Za-z0-9_-]{21}\.[a-z0-9]{1,5})$/;
+
+export function newScratchOutput(ext: string): { file: string; url: string } {
+  const name = `out-${nanoid(21)}.${ext.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "bin"}`;
+  return { file: path.join(scratchDir(), name), url: `scratch:${name}` };
+}
+
+/** The file a `scratch:` result names, when it is still there. */
+export function scratchOutputFile(url: string): string | null {
+  const m = SCRATCH_OUTPUT.exec(url);
+  if (!m) return null;
+  const file = path.join(scratchDir(), m[1]);
+  return fs.existsSync(file) ? file : null;
+}
+
 export function getAsset(id: string): Asset | null {
   const row = db().prepare("SELECT * FROM assets WHERE id = ?").get(id) as AssetRow | undefined;
   return row ? toAsset(row) : null;
@@ -255,6 +276,8 @@ export function absolutePath(relPath: string): string {
  * size (src/lib/image-size.ts). Null for a link elsewhere, a data URI or a file that's gone.
  */
 export function localHead(ref: string, maxBytes = 512 * 1024): Buffer | null {
+  // One of Fuobe's published example inputs: the same for everyone (example-files.ts).
+  if (isExampleRef(ref)) return exampleHead(ref, maxBytes);
   try {
     const rel = ref.startsWith("/api/files/") ? filesRel(ref) : /^[\w-]{6,40}$/.test(ref) ? getAsset(ref)?.relPath : undefined;
     if (!rel) return null;
@@ -294,6 +317,15 @@ export async function readRef(ref: string): Promise<{ data: Buffer; contentType:
     const contentType = m[1] ?? "application/octet-stream";
     const data = m[2] ? Buffer.from(m[3], "base64") : Buffer.from(decodeURIComponent(m[3]));
     return { data, contentType, name: `input.${EXT_BY_TYPE[contentType] ?? "bin"}` };
+  }
+  // One of Fuobe's published example inputs (a page's example, loaded into the composer): read from disk, never a link.
+  if (isExampleRef(ref)) {
+    const f = await readExampleFile(ref);
+    if (tenant()) {
+      const limit = accountInputLimit(f.contentType);
+      if (f.data.length > limit.bytes) throw new RefError(limit.message, 413);
+    }
+    return f;
   }
   if (ref.startsWith("/api/files/")) {
     // The same path guardRef checked: the query left out, decoded once, never a step out of its folder.
@@ -370,6 +402,8 @@ function ownsRef(ref: string, rel?: string | null): boolean {
  */
 export function guardRef(ref: string): void {
   if (!tenant() || ref.startsWith("data:")) return;
+  // Fuobe's published example inputs: an exact listed path, the same for everyone (example-files.ts).
+  if (isExampleRef(ref)) return;
   if (/^https?:\/\//i.test(ref)) throw new RefError(LINK_INPUT_MESSAGE, 403);
   const owner = ref.startsWith("/api/files/") ? (filesRel(ref) === null ? undefined : fileAccount(filesRel(ref)!)) : assetAccount(ref);
   if (owner === undefined) throw new RefError(GONE_MESSAGE, 404);
@@ -399,14 +433,16 @@ const OWNER_MOOV_BYTES = 64 * 1024 * 1024;
  * answer for those files stays as it was.
  */
 export function storedMedia(ref: string, opts: { allContainers?: boolean } = {}): { info: MediaInfo | null } | null {
-  const rel = filesRel(ref);
+  // One of Fuobe's published example inputs: its header is read the same way, for everyone (example-files.ts).
+  const example = isExampleRef(ref) ? exampleStat(ref) : null;
+  const rel = example ? `example:${ref}` : filesRel(ref);
   if (rel === null) return null;
-  if (tenant() && !ownsRef(ref, rel)) return null;
+  if (!example && tenant() && !ownsRef(ref, rel)) return null;
   let abs: string;
-  let st: fs.Stats;
+  let st: Pick<fs.Stats, "size" | "mtimeMs" | "isFile">;
   try {
-    abs = absolutePath(rel);
-    st = fs.statSync(/*turbopackIgnore: true*/ abs);
+    abs = example ? example.abs : absolutePath(rel);
+    st = example ? { size: example.bytes, mtimeMs: example.mtimeMs, isFile: () => true } : fs.statSync(/*turbopackIgnore: true*/ abs);
   } catch {
     return null;
   }

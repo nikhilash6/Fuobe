@@ -1,13 +1,13 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { CinemaGenerateInput } from "@/lib/catalog/cinema";
 import type { ModelDef } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 /** Fly path (build plan N7-5): Cinema's "Film this path" on both engines, the H3 Max payload, the Uni3C graph and the API. */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-cinema-path-"));
+const dir = tempDir("fuobe-cinema-path-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -31,7 +31,6 @@ beforeAll(() => {
   setSetting("enhanceProvider", "none");
 });
 afterEach(() => vi.useRealTimers());
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const STILL = "/api/files/uploads/still.png";
 const RENDER = "/api/files/uploads/render.webm";

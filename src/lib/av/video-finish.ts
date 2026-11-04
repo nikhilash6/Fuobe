@@ -122,13 +122,15 @@ export function wholeClipBytes(clip: ClipFacts, copies: number): number | undefi
 }
 
 /**
- * An open tool that decodes the whole clip (FPS Boost, SDR to HDR, EXR export): its name and the frame-sized
+ * An open tool that decodes the whole clip (FPS Boost, SDR to HDR, EXR export, Fix faces): its name and the frame-sized
  * copies of the clip it holds at its peak (`multiplier` = FPS Boost's m). Null for tools that work in passes.
  */
 export function wholeClipTool(op: Operation | undefined, format: VideoFormat | undefined, multiplier = 1): { what: string; copies: number; op: Operation } | null {
   if (op === "interpolate") return { what: "FPS Boost on the open engine", copies: multiplier >= 2 ? 2 + multiplier : 2, op };
   if (op === "sdr-to-hdr") return { what: "SDR to HDR on the open engine", copies: 2, op };
   if (op === "export-video" && format === "exr") return { what: "EXR export on the open engine", copies: 2, op };
+  // Fix faces decodes the whole clip and pastes the redrawn faces back at full size.
+  if (op === "face-fix-video") return { what: "Fix faces", copies: 2, op };
   return null;
 }
 

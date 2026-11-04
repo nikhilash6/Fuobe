@@ -1,16 +1,16 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
- * Design a voice on the server (nm10-voice-design): an Element voice keeps the model, the words and the take's line; fal's
+ * Design a voice on the server: an Element voice keeps the model, the words and the take's line; fal's
  * Qwen3-TTS routes send the right fields; a sample is cloned in two steps (clone-voice, then text-to-speech with the
  * embedding it returns), and a saved voice keeps that embedding so its next line skips the clone. No paid call is made:
  * fetch is stubbed and nothing reaches fal.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-voice-design-"));
+const dir = tempDir("fuobe-voice-design-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -33,9 +33,6 @@ const route = (op: string) => qwen.routes.find((r) => r.op === op)!;
 beforeAll(() => {
   setSetting("demoMode", "off");
   setSetting("enhanceProvider", "none");
-});
-afterAll(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 describe("Element voices keep a designed voice", () => {

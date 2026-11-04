@@ -43,7 +43,7 @@ Written on 2026-10-30, when PR #15 wrapped up the work so far, and revised the s
     - before/after reveal clips on 42 apps' preset covers.
 - **Accounts** are the owner's public sign-up on main. It is off by default, and `FUOBE_PUBLIC_SIGNUP=1` turns it on. With it on:
   - guests browse read-only
-  - anyone can sign up with an email; accounts live in `auth.json` with a scrypt hash
+  - anyone can sign up with an email; accounts live in SQLite (`fuobe.db`, `auth_accounts`) with a scrypt hash; an older `auth.json` moves in on the first start
   - accounts see a guest view of the owner's library and can't touch settings, keys or tokens. They upload their own files and run only on their own ComfyUI (Settings → Your GPU, checked on `/connect`).
 
   The PR #15 packages acc-1 (the Better Auth identity base) and acc-2 (the actor context on every route, with its integration fix 4e8359f) are dropped. The 55 remaining packages of the old accounts lane (acc-3 to acc-57) are dropped from the queue. The next accounts work starts with a new plan written with the owner, around public sign-up. [`research/accounts-8.md`](research/accounts-8.md) is background research only.

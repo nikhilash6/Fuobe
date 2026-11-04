@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-run-fairness-"));
+const dir = tempDir("fuobe-run-fairness-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -42,9 +40,6 @@ afterAll(async () => {
   globalThis.__fuobeTestGpuPort = undefined;
   globalThis.__fuobeTestDiskFree = undefined;
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const run = (image: string) => {

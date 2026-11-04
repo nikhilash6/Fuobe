@@ -31,6 +31,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
+import { CoverImg } from "@/components/template-cover";
+import { templateCover } from "@/lib/template-covers";
 import {
   conflictFor,
   CREATURE_TYPES,
@@ -102,9 +104,49 @@ export function pickRule(c: InfluencerCategory): string {
   return c.max === 1 ? "Pick one" : `Up to ${c.max}`;
 }
 
+/** A character type's real cover ("influencer/tier-<id>"), or undefined. */
+const tierCover = (id: InfluencerTier) => templateCover("influencer", `tier-${id}`);
+/** A row of character types shows photo cards only when every type in it has its cover; otherwise its icon tiles. */
+const allCovered = (ids: InfluencerTier[]) => ids.every((id) => tierCover(id));
+const HUMAN_PHOTOS = allCovered(HUMAN_TIERS.map((t) => t.id));
+const CREATURE_PHOTOS = allCovered(CREATURE_TYPES.map((c) => c.id));
+/** A photo card's width: a third of the panel. */
+const PHOTO_SIZES = "(min-width: 1024px) 200px, 33vw";
+
 /** The Character type panel: three human tiers, six creature types, then the species and body colour. */
 export function TierPanel({ state, onTier, onSpecies, onBodyColor }: { state: InfluencerState; onTier: (t: InfluencerTier) => void; onSpecies: (s?: string) => void; onBodyColor: (c?: string) => void }) {
   const creature = CREATURE_TYPES.find((c) => c.id === state.tier);
+  /** A type as a 4:5 photo card: its cover, its name and hint on a scrim. */
+  const photo = (id: InfluencerTier, label: string, hint: string) => {
+    const cover = tierCover(id)!;
+    const on = state.tier === id;
+    return (
+      <button
+        key={id}
+        type="button"
+        role="radio"
+        aria-checked={on}
+        tabIndex={radioTab(on)}
+        onClick={() => onTier(id)}
+        className={cn(
+          "group relative block aspect-[4/5] min-w-0 overflow-hidden rounded-xl bg-muted text-left ring-offset-2 ring-offset-background outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          on && "ring-2 ring-primary",
+        )}
+      >
+        <CoverImg frame={cover.frames[0]} sizes={PHOTO_SIZES} className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.03]" />
+        <span aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/65 to-transparent" />
+        <span className="absolute inset-x-2 bottom-2 min-w-0 text-white drop-shadow-sm">
+          <span className="block truncate text-[13px] font-medium">{label}</span>
+          <span className="block truncate text-[11.5px] leading-snug text-white/80">{hint}</span>
+        </span>
+        {on && (
+          <span aria-hidden className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground">
+            <Check className="size-3" />
+          </span>
+        )}
+      </button>
+    );
+  };
   const tile = (id: InfluencerTier, label: string, hint: string) => {
     const Icon = TIER_ICON[id];
     const on = state.tier === id;
@@ -136,11 +178,19 @@ export function TierPanel({ state, onTier, onSpecies, onBodyColor }: { state: In
       <div role="radiogroup" aria-label="Character type" onKeyDown={radioKeys} className="space-y-4">
         <div className="space-y-2">
           <p className="text-[12px] font-medium text-muted-foreground">Human</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">{HUMAN_TIERS.map((t) => tile(t.id, t.label, t.hint))}</div>
+          {HUMAN_PHOTOS ? (
+            <div className="grid grid-cols-3 gap-2">{HUMAN_TIERS.map((t) => photo(t.id, t.label, t.hint))}</div>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">{HUMAN_TIERS.map((t) => tile(t.id, t.label, t.hint))}</div>
+          )}
         </div>
         <div className="space-y-2">
           <p className="text-[12px] font-medium text-muted-foreground">Creature</p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{CREATURE_TYPES.map((c) => tile(c.id, c.label, `${c.species.length} species`))}</div>
+          {CREATURE_PHOTOS ? (
+            <div className="grid grid-cols-3 gap-2">{CREATURE_TYPES.map((c) => photo(c.id, c.label, `${c.species.length} species`))}</div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{CREATURE_TYPES.map((c) => tile(c.id, c.label, `${c.species.length} species`))}</div>
+          )}
         </div>
       </div>
       {creature && (

@@ -66,12 +66,56 @@ export function ensureFont(family: string | undefined, timeout = 2500): Promise<
 }
 
 let measureCtx: CanvasRenderingContext2D | null = null;
-export const measureText = (text: string, font: string) => {
+const oldstyleFaces = new Map<string, boolean>();
+
+/**
+ * Whether a face draws old-style figures by default: its "0" sits at x-height and its "8" rises above it (Cormorant,
+ * EB Garamond). Lining figures stand about as tall as each other.
+ */
+function oldstyle(family: string, weight: number): boolean {
+  const key = `${weight} ${family}`;
+  const known = oldstyleFaces.get(key);
+  if (known !== undefined) return known;
   measureCtx ??= document.createElement("canvas").getContext("2d");
-  if (!measureCtx) return text.length * 10;
+  if (!measureCtx) return false;
+  measureCtx.font = `${weight} 100px "${family}"`;
+  const tall = (s: string) => {
+    const m = measureCtx!.measureText(s);
+    return m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+  };
+  const zero = tall("0");
+  const eight = tall("8");
+  const out = eight > 0 && zero < eight * 0.86;
+  // Cache only once the face itself is in (a fallback face measured before it loads says nothing about it).
+  if (document.fonts?.check?.(`${weight} 100px "${family}"`)) oldstyleFaces.set(key, out);
+  return out;
+}
+
+/** Where a text's ink lies when drawn at (0, 0) with textBaseline "top": its top and bottom, its left and right. */
+function box(text: string, font: string): { top: number; bottom: number; left: number; right: number } {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return { top: 0, bottom: 10, left: 0, right: text.length * 10 };
   measureCtx.font = font;
-  return measureCtx.measureText(text).width;
-};
+  const base = measureCtx.textBaseline;
+  measureCtx.textBaseline = "top";
+  const m = measureCtx.measureText(text);
+  measureCtx.textBaseline = base;
+  return { top: -m.actualBoundingBoxAscent, bottom: m.actualBoundingBoxDescent, left: -m.actualBoundingBoxLeft, right: m.actualBoundingBoxRight };
+}
+
+/**
+ * A text's width in a CSS font; `measureText.oldstyle` tells whether a face's default figures are old-style, and
+ * `measureText.box` where its ink lies (for clips and alignment that hug the letters).
+ */
+export const measureText = Object.assign(
+  (text: string, font: string) => {
+    measureCtx ??= document.createElement("canvas").getContext("2d");
+    if (!measureCtx) return text.length * 10;
+    measureCtx.font = font;
+    return measureCtx.measureText(text).width;
+  },
+  { oldstyle, box },
+);
 
 function rounded(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();

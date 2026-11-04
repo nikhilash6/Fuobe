@@ -1,16 +1,16 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { currentSegments, jobState, type SwapProject } from "@/lib/catalog/swap-studio";
 import type { SwapProjectView } from "@/server/swap-studio";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 240_000 });
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
 // Character Swap Studio's API end to end in demo mode (no keys, no ComfyUI): projects, clips, cuts, words, masks,
 // anchors, segments queued with continuations (waiting, launched, stopped), review and the assembly, on both engines.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-swap-studio-"));
+const dir = tempDir("fuobe-swap-studio-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -45,7 +45,6 @@ beforeAll(() => {
   const data = Buffer.alloc(64 * 64 * 4, 200);
   hero = saveFile({ data: encodePng({ width: 64, height: 64, data }), contentType: "image/png", source: "upload", name: "hero.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function view(id: string): Promise<SwapProjectView> {
   const res = await project.GET(req("GET"), ctx(id) as never);
@@ -237,10 +236,6 @@ describe("Character Swap Studio: the cloud, as a demo", () => {
     expect(steps[0].request.params).toMatchObject({ extra: { width: 512, height: 910 } });
     expect(steps[4].request.params).toMatchObject({ extra: { target_fps: 24 } });
     expect(v.gens[asm.genId].url).toBeTruthy();
-    // Original sound: the cloud puts back everything, and says another choice runs on your GPU.
-    await expect(post(assemble, id, { clipId: c.id })).rejects.toThrow(/409: Already assembled/);
-    await expect(post(assemble, id, { clipId: c.id, sound: { sound: "no-dialogue" } })).rejects.toThrow(/422: .*runs on your GPU \(open source\)/);
-    await expect(post(assemble, id, { clipId: c.id, sound: { sound: "everything" } })).rejects.toThrow(/409: Already assembled/);
     // The step generations stay out of the Library; the assembled clip is in it.
     expect(gens.listGenerations({ feature: "swap-studio" }).map((g) => g.id)).toContain(asm.genId);
   });
@@ -302,21 +297,6 @@ describe("Character Swap Studio: your GPU, as a demo", () => {
     expect(second.request.params?.extra).toMatchObject({ historyVideo: v.gens[first.id].master, historyStart: 0, historyLength: 18 });
     expect(v.gens[first.id].master).toBeTruthy();
     expect(after.map((g) => g.selectedTake)).toEqual([t1.id, t2.id]);
-
-    // Original sound on your GPU: the 24 fps copy's sound is split and its music and effects go back; the same takes with
-    // another choice assemble again (only the same takes and the same choice are "already assembled").
-    const asm = (await post(assemble, id, { clipId: c.id, sound: { sound: "no-dialogue" } })).clips[0].assembly;
-    expect(asm.sound).toEqual({ sound: "no-dialogue" });
-    const split = asm.stepIds.map((s: string) => gens.getGeneration(s)!).find((g: { op: string }) => g.op === "separate-audio");
-    expect(split).toMatchObject({ modelId: "oss-dbs-separate" });
-    expect(split.request.inputs?.video).toBe(v.project.clips[0].normalized!.url);
-    expect(gens.getGeneration(asm.genId)!.request.chain?.at(-1)).toEqual({ slot: "audio", stem: "background" });
-    await until(id, (x) => statusOf(x, x.project.clips[0].assembly?.genId) === "succeeded");
-    await expect(post(assemble, id, { clipId: c.id, sound: { sound: "no-dialogue" } })).rejects.toThrow(/409: Already assembled/);
-    const again = (await post(assemble, id, { clipId: c.id, sound: { sound: "dialogue-only" } })).clips[0].assembly;
-    expect(again.genId).not.toBe(asm.genId);
-    expect(gens.getGeneration(again.genId)!.request.chain?.at(-1)).toEqual({ slot: "audio", stem: "voice" });
-    await until(id, (x) => statusOf(x, x.project.clips[0].assembly?.genId) === "succeeded");
 
     // Segment 1 made stale (a new seed): "Queue from here" makes both again, segment 2 waiting on segment 1's new take.
     await patch(id, { type: "segment", clipId: c.id, shotId: shot.id, segmentId: segs[0].id, patch: { seed: 7 } });

@@ -14,7 +14,7 @@
  *   Relight LoRA in the cloud), then animate it.
  * - Licences are information: a LoRA licensed for the user's GPU only (civitai "RentCivit") goes to the cloud route
  *   too, unless Settings → Models & licences keeps such LoRAs on the GPU (fitLoras then leaves it out, saying so); a
- *   non-commercial LoRA or one whose licence the research holds is used and said in the preset's line.
+ *   non-commercial LoRA or one whose licence the research holds is used (Thanks & licences lists it).
  * - The Mixed Media looks (32 effects, build plan O9) draw the start frame in the Mixed Media studio's look first
  *   (Fuobe Mixed Media: Z-Image Turbo + ControlNet with the look's LoRA, one seed), then animate it on the words.
  * - A preset with nothing of the Original's own in the cloud (no hostable LoRA, camera LoRA, hosted move, grade or
@@ -22,7 +22,7 @@
  *   becomes its cloud default only when the evaluation harness (scripts/eval, O8) promotes it. On the user's GPU it
  *   is Fuobe DoP (Wan 2.2 on the words, as before).
  */
-import { gpuOnlyLicence, libraryEntry, loraName, loraRef, triggerOf } from "./loras";
+import { gpuOnlyLicence, libraryEntry, loraRef, triggerOf } from "./loras";
 import { defaultValues, getMixedPreset, originalFrameRequest } from "./mixed-media";
 import { mixedLoras } from "./mixed-media-looks";
 import { DOP_RECIPES, OSS_LORAS, type DopRecipe, type OssLora } from "./oss-loras.generated";
@@ -264,17 +264,6 @@ export function dopPreset(p: Preset): Preset {
     cloud = { ...p.cloud, partner: true };
   }
 
-  const local = [...wan, ...ltx].filter(gpuOnlyLicence);
-  const used = [...wan, ...ltx, ...(open.modelId === LTX25_OPEN ? ltx25 : [])];
-  const nonCommercial = used.filter((l) => (l.licence ?? libraryEntry(l)?.licence)?.commercial === false);
-  // "Its trained style is", "Its trained styles are" or "One of its trained styles is": the LoRA files' names stay in
-  // the route, not in Details.
-  const its = (some: LoraRef[]) => {
-    const n = new Set(some.map(loraName)).size;
-    const of = new Set(used.map(loraName)).size;
-    if (n < of) return n > 1 ? "Some of its trained styles are" : "One of its trained styles is";
-    return n > 1 ? "Its trained styles are" : "Its trained style is";
-  };
   let parity: string;
   if (grade) parity = "Fuobe DoP animates your still, then your browser grades the clip.";
   else if (mixedLook && extras.prestep) {
@@ -284,15 +273,9 @@ export function dopPreset(p: Preset): Preset {
     // The relight is Qwen-Image 2.1 Turbo on your GPU, Qwen-Image-Edit 2509 with its Relight LoRA in the cloud.
     parity = "Fuobe DoP relights your still first, then animates it.";
   } else if (status === "mixed-media-route") parity = `${p.parity ? `${sentence(p.parity)} ` : ""}For a whole clip restyled frame by frame, use Mixed Media.`;
-  else if (!cloudSays && local.length) parity = `On your GPU, Fuobe DoP ${openSays}. ${its(local)} licensed for your GPU only.`;
   else if (!cloudSays) parity = `On your GPU, Fuobe DoP ${openSays}.`;
   else if (openSays === cloudSays) parity = `Fuobe DoP ${openSays}, on your GPU and in the cloud.`;
   else parity = `On your GPU, Fuobe DoP ${openSays}. In the cloud, it ${cloudSays}.`;
-  // A LoRA licensed for the GPU only (civitai lists no "Rent") rides along on Fuobe DoP in the cloud unless the admin
-  // keeps such LoRAs on the GPU (Settings → Models & licences, the owner's).
-  if (local.length && cloudSays) parity += ` ${its(local)} licensed for your GPU only.`;
-  if (nonCommercial.length) parity += ` ${its(nonCommercial)} for non-commercial use.`;
-  // A LoRA whose licence the research holds ("licence-hold": BTS, whose Hugging Face and civitai pages disagree) stays
-  // in the library; the preset runs on its words until it is evaluated, which the line above already says.
+  // A LoRA's licence (GPU only, non-commercial, held by the research) is information on Thanks & licences, not a line here.
   return { ...p, open, cloud, parity, ...extras };
 }

@@ -1,11 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { keyTimes, WORKFLOW_TIMING } from "@/lib/inbetween";
+import { tempDir } from "./helpers/temp-dir";
 
 // Fuobe Animation's runs in demo mode (no keys, no GPU): one row on your GPU, one clip per gap and a join in the cloud.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-inbetween-runs-"));
+const dir = tempDir("fuobe-inbetween-runs-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -15,7 +13,6 @@ const { saveFile } = await import("@/server/storage");
 const tools = await import("@/server/assist/tools");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63f8cfc0f01f0005000201a2e2b6a40000000049454e44ae426082", "hex");
 const frames = (n: number) => Array.from({ length: n }, () => saveFile({ data: png, contentType: "image/png", source: "upload" }).url);

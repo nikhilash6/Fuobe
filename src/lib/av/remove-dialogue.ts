@@ -20,8 +20,8 @@ import {
  *   the stream-copy mux (oss-mux): one stem for No dialogue (background) and Dialogue only (voice), which the provider
  *   runs as video-mux-audio-replace; the voice over the background at a lower level for Lower the music, which it runs
  *   as video-mux-audio. Concatenate Video with complete_audio copies the picture packet by packet.
- * - Cloud: none. DBS is hosted nowhere, and SAM Audio in its place is the owner's call, not taken
- *   (docs/handoff/owner-decisions.json samAudioCloud: false): the cloud engine says the tool runs on your GPU.
+ * - Cloud: none. DBS is hosted nowhere and no other model stands in for it: the cloud engine says the tool runs on
+ *   your GPU.
  */
 
 export const REMOVE_DIALOGUE_FEATURE = "remove-dialogue";
@@ -212,10 +212,10 @@ export function planRemoveDialogue(i: RemoveDialogueInput): RemoveDialoguePlan {
     musicDb,
     summary:
       outcome === "no-dialogue"
-        ? "Takes the talking out and keeps the music and sound effects. The picture is not re-encoded."
+        ? "Takes the talking out and keeps the music and sound effects. The picture stays exactly as it was."
         : outcome === "dialogue-only"
-          ? "Keeps only the talking: the music and sound effects go. The picture is not re-encoded."
-          : `Keeps the talking and lowers the music and sound effects by ${Math.abs(musicDb!)} dB under it. The picture is not re-encoded.`,
+          ? "Keeps only the talking: the music and sound effects go. The picture stays exactly as it was."
+          : `Keeps the talking and lowers the music and sound effects by ${Math.abs(musicDb!)} dB under it. The picture stays exactly as it was.`,
     notes: [
       outcome === "dialogue-only"
         ? "Music or effects the model takes for speech (singing, a shout in a crowd) stay with the dialogue."

@@ -332,7 +332,55 @@ export interface MarketingTemplate {
   /** Default on-image headline ("{product}" and "{brand}" fill in). */
   headline?: string;
   cta?: string;
+  /** Drawn by Fuobe Kinetic Motion in the browser (exact words, the brand's fonts and colours), not prompted to a model. */
+  render?: "code";
+  /** The Kinetic Motion scene that draws it (render: "code"). */
+  scene?: string;
+  /** The words the person types for it, in order. */
+  fields?: TemplateField[];
+  /** Its quick choices (2 to 4 groups). */
+  easy?: EasyGroup[];
+  /** It shows a picture: the product (a cut-out traces best), else the logo; or a photo that fills its panel. */
+  picture?: "product" | "photo";
+  /** Its length range when it differs from the format's (seconds). */
+  lengths?: { min: number; max: number; default: number };
+  /** Only the owner sees it and opens it (a new template not yet ready for everyone). */
+  ownerOnly?: true;
 }
+
+export interface TemplateField {
+  key: string;
+  label: string;
+  max: number;
+  /** Lines the box offers (1: a single-line field). */
+  lines: number;
+  /** A short tip under the field. */
+  hint?: string;
+}
+
+export interface EasyGroup {
+  id: string;
+  label: string;
+  choices: { id: string; label: string }[];
+  /** The choice picks the scene itself (`<scene family>/<choice id>`), as the end card's styles do. */
+  scene?: string;
+}
+
+/** The sizes a code-drawn template comes in. */
+export const KINETIC_SIZES = ["9:16", "4:5", "1:1", "16:9"] as const;
+
+const PACE: EasyGroup = { id: "pace", label: "Pace", choices: [{ id: "calm", label: "Calm" }, { id: "punchy", label: "Punchy" }] };
+const LOOK: EasyGroup = { id: "look", label: "Look", choices: [{ id: "light", label: "Light" }, { id: "dark", label: "Dark" }, { id: "brand", label: "Brand colour" }] };
+
+/** A code-drawn piece runs 5 to 8 seconds: its beats spread over the length, so a longer one has more to watch. */
+const CODE_LENGTHS = { min: 5, max: 8, default: 5 };
+
+/** A template drawn by code: its scene, the words it takes and its quick choices. */
+const code = (scene: string, fields: TemplateField[], extra: Partial<MarketingTemplate> = {}): Partial<MarketingTemplate> => ({ render: "code", scene, fields, easy: [PACE, LOOK], duration: 5, lengths: CODE_LENGTHS, ...extra });
+const field = (key: string, label: string, max: number, lines = 1, hint?: string): TemplateField => ({ key, label, max, lines, ...(hint && { hint }) });
+
+/** Whether a template is drawn by Kinetic Motion. */
+export const isCodeTemplate = (t: Pick<MarketingTemplate, "render"> | null | undefined): boolean => t?.render === "code";
 
 const t = (id: string, name: string, format: FormatId, look: TemplateLook, prompt: string, extra: Partial<MarketingTemplate> = {}): MarketingTemplate => ({
   id,
@@ -373,9 +421,14 @@ export const TEMPLATES: MarketingTemplate[] = [
   // Motion · 2D
   t("m2-sticker-pop", "Sticker Pop", "motion-2d", { scene: "collage", hue: 330, hue2: 60 }, "Flat 2D animation: the product pops in as a die-cut sticker, bouncy squash and stretch, doodled stars and sparkles burst around it on a flat colour background", { duration: 5 }),
   t("m2-paper-parade", "Paper Parade", "motion-2d", { scene: "collage", hue: 30, hue2: 200 }, "Paper cut-out animation: layered paper shapes slide in like a theatre set and the product rises from behind them, gentle stop-motion jitter", { duration: 5 }),
-  t("m2-line-reveal", "Line-Art Reveal", "motion-2d", { scene: "kinetic", hue: 160, hue2: 160 }, "A single continuous line draws the outline of the product, then the real product fills in inside it, clean minimal background", { duration: 5 }),
+  t("m2-line-reveal", "Line-Art Reveal", "motion-2d", { scene: "kinetic", hue: 160, hue2: 160 }, "A single continuous line draws the outline of the product, then the real product fills in inside it, clean minimal background", code("marketing/line-reveal", [field("headline", "Headline", 60, 2), field("cta", "Call to action", 30), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { picture: "product", aspect: "9:16", easy: [PACE, LOOK, { id: "line", label: "Line", choices: [{ id: "fine", label: "Fine" }, { id: "bold", label: "Bold" }] }] })),
   t("m2-comic-panels", "Comic Panels", "motion-2d", { scene: "split", hue: 50, hue2: 0 }, "Pop-art comic panels flip one after another, each showing the product from a new angle with halftone dots and bold outlines", { duration: 5 }),
-  t("m2-retro-starburst", "Retro Starburst", "motion-2d", { scene: "burst", hue: 25, hue2: 330 }, "A rotating retro starburst background in warm colours while the product spins slowly in the centre, groovy 70s motion graphics", { duration: 5 }),
+  t("m2-retro-starburst", "Retro Starburst", "motion-2d", { scene: "burst", hue: 25, hue2: 330 }, "A rotating retro starburst background in warm colours while the product spins slowly in the centre, groovy 70s motion graphics", code("marketing/starburst", [field("headline", "Headline", 40, 2), field("badge", "Badge", 12, 2), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { picture: "product", aspect: "9:16" })),
+  t("m2-offer-badge", "Offer Badge", "motion-2d", { scene: "badge", hue: 350, hue2: 40 }, "A starburst offer badge pops and turns, the product slides in under it and the call to action follows", code("marketing/offer-badge", [field("offer", "Offer", 14, 2), field("headline", "Headline", 40, 2), field("cta", "Call to action", 24), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { picture: "product", aspect: "9:16" })),
+  t("m2-midnight-drop", "Midnight Drop", "motion-2d", { scene: "kinetic", hue: 15, hue2: 0, dark: true }, "A launch countdown: the drop's name cuts in huge, the countdown flips into place tile by tile and the time and call to action follow on a dark field of moving light", { ...code("marketing/drop-countdown", [field("headline", "Drop name", 28, 2), field("count", "Countdown", 12, 1, "Type it as it should read, e.g. 03:12:45"), field("when", "When", 32), field("cta", "Call to action", 24), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { aspect: "9:16" }), ownerOnly: true }),
+  t("m2-nocturne", "Nocturne", "motion-2d", { scene: "noir", hue: 40, hue2: 270, dark: true }, "A fragrance reveal: ribbons of light cross a night field, the bottle rises into a pool of light and a fine serif name settles over it", { ...code("marketing/fragrance-reveal", [field("headline", "Name", 40, 2), field("line", "Line", 60, 2), field("cta", "Call to action", 24), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { picture: "product", aspect: "9:16" }), ownerOnly: true }),
+  t("m2-season-finale", "Season Finale", "motion-2d", { scene: "type", hue: 8, hue2: 30 }, "An editorial sale poster: a fashion photo, the sale in huge condensed type that bleeds off the frame, the offer on a highlighter and a tilted pill", { ...code("marketing/editorial-sale", [field("headline", "Headline", 24, 2), field("offer", "Offer", 28, 2), field("cta", "Call to action", 24), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { picture: "photo", aspect: "4:5" }), ownerOnly: true }),
+  t("m2-prism-stage", "Prism Stage", "motion-2d", { scene: "pedestal", hue: 150, hue2: 45, dark: true }, "A glass product spotlight: the product stands on a glass plinth inside rings of light while its name and a short line set beside it", { ...code("marketing/glass-spotlight", [field("headline", "Headline", 40, 2), field("line", "Line", 60, 2), field("cta", "Call to action", 24), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { picture: "product", aspect: "4:5" }), ownerOnly: true }),
   t("m2-grid-shuffle", "Grid Shuffle", "motion-2d", { scene: "cards", hue: 200, hue2: 280 }, "A Swiss-style grid of colour tiles shuffles and slides; one tile opens to reveal the product, crisp geometric transitions", { duration: 5 }),
 
   // Motion · hypermotion
@@ -393,14 +446,21 @@ export const TEMPLATES: MarketingTemplate[] = [
   t("mm-riso-loop", "Riso Loop", "motion-mixed", { scene: "type", hue: 350, hue2: 210 }, "Risograph-print look with grain and slight misregistration; the product cycles through two-colour duotone frames"),
   t("mm-y2k-desktop", "Y2K Desktop", "motion-mixed", { scene: "cards", hue: 190, hue2: 300 }, "A Y2K computer desktop: pop-up windows, chrome icons and a cursor open a window that shows the product"),
   t("mm-clay-diorama", "Clay Diorama", "motion-mixed", { scene: "pedestal", hue: 20, hue2: 140 }, "Claymation diorama: tiny clay props and a little set animate in stop motion around the real product"),
+  t("mm-marquee", "Marquee", "motion-mixed", { scene: "noir", hue: 280, hue2: 30, dark: true }, "An event announcement: a night photo, the event's name lit up in big warm type, the date, the place and the call to action set on the grid", { ...code("marketing/announcement", [field("headline", "Event", 32, 2), field("when", "When", 40), field("place", "Where", 48), field("cta", "Call to action", 24), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { picture: "photo", aspect: "9:16" }), ownerOnly: true }),
+  t("mm-runway-titles", "Runway Titles", "motion-mixed", { scene: "model", hue: 40, hue2: 20 }, "Fashion lookbook titles: a full-bleed editorial photo, a giant title cut in letter by letter with a script word laid over it and tiny facts in the corners", { ...code("marketing/lookbook", [field("headline", "Title", 28, 2), field("accent", "Script word", 20), field("line", "Line", 48), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { picture: "photo", aspect: "4:5" }), ownerOnly: true }),
   t("mm-halftone-collage", "Halftone Collage", "motion-mixed", { scene: "split", hue: 0, hue2: 50 }, "Halftone street-poster collage: cut-out shapes and the product slide in with punchy, rhythmic cuts"),
 
   // Motion · SaaS
-  t("ms-feature-cards", "Feature Cards", "motion-saas", { scene: "cards", hue: 250, hue2: 200 }, "Clean SaaS motion design: rounded feature cards fly in and stack, each one highlighting a benefit, soft gradients and smooth easing", { duration: 5 }),
-  t("ms-kinetic-headline", "Kinetic Headline", "motion-saas", { scene: "kinetic", hue: 210, hue2: 260 }, "Kinetic typography: the product's promise types itself out word by word with confident motion, then resolves to the logo", { duration: 5 }),
+  t("ms-kinetic-headline", "Kinetic Headline", "motion-saas", { scene: "kinetic", hue: 210, hue2: 260 }, "Kinetic typography: the product's promise types itself out word by word with confident motion, then resolves to the logo", code("marketing/kinetic-headline", [field("headline", "Headline", 90, 3, "Put *stars* round a word to highlight it"), field("cta", "Call to action", 24), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { aspect: "9:16", easy: [PACE, LOOK, { id: "align", label: "Align", choices: [{ id: "centre", label: "Centred" }, { id: "left", label: "Left" }] }] })),
+  t("ms-five-star-quote", "Five-Star Quote", "motion-saas", { scene: "stars", hue: 45, hue2: 30 }, "Five stars fill one by one, then a customer's words set line by line with their name", code("marketing/quote", [field("quote", "Quote", 180, 5, "Their words exactly, with your own quotation marks"), field("name", "Name", 48, 2), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { picture: "photo", aspect: "4:5" })),
+  t("ms-big-number", "Big Number", "motion-saas", { scene: "headline", hue: 230, hue2: 260, dark: true }, "One huge stat fills the frame and counts up to its value, a caption rises under it, and it ends on the logo", code("marketing/big-number", [field("stat", "The number", 12, 1, "Type it as it should read, e.g. 3× or 98%"), field("caption", "Caption", 60, 3), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { aspect: "4:5" })),
+  t("ms-logo-sting", "Logo Sting", "motion-saas", { scene: "burst", hue: 270, hue2: 210 }, "A short logo sting: geometric shapes converge and click together into the brand mark with a light flare", code("marketing/logo-sting", [field("tagline", "Line under the logo", 60, 2), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { aspect: "4:5" })),
   t("ms-device-float", "Device Float", "motion-saas", { scene: "float", hue: 220, hue2: 170 }, "A laptop and a phone float in a soft gradient space showing the app's interface, the camera drifts slowly between them", { duration: 5 }),
-  t("ms-dashboard-zoom", "Dashboard Zoom", "motion-saas", { scene: "cards", hue: 160, hue2: 220, dark: true }, "The camera pushes into a sleek dark dashboard; charts animate up and a key number counts to its value", { duration: 5 }),
-  t("ms-logo-sting", "Logo Sting", "motion-saas", { scene: "burst", hue: 270, hue2: 210 }, "A short logo sting: geometric shapes converge and click together into the brand mark with a light flare", { duration: 5 }),
+  t("ms-end-card", "Logo End Card", "motion-saas", { scene: "headline", hue: 160, hue2: 45, dark: true }, "An animated end card: the logo draws on, the line rises and the call-to-action pill pops", code("end-card/draw-on", [field("product", "Line", 60, 2), field("cta", "Call to action", 24), field("website", "Web address", 40)], { aspect: "9:16", duration: 4, lengths: { min: 2, max: 5, default: 4 }, easy: [{ id: "style", label: "Style", scene: "end-card", choices: [{ id: "draw-on", label: "Draw-on" }, { id: "rise", label: "Rise" }, { id: "iris", label: "Iris" }, { id: "split", label: "Split" }, { id: "glint", label: "Glint" }] }, { id: "mark", label: "Mark", choices: [{ id: "logo", label: "Logo" }, { id: "name", label: "Name" }] }] })),
+  t("ms-dashboard-zoom", "Dashboard Zoom", "motion-saas", { scene: "cards", hue: 160, hue2: 220, dark: true }, "The camera pushes into a sleek dark dashboard; charts animate up and a key number counts to its value", code("marketing/stat-dashboard", [field("stat", "Key number", 16, 1, "Type it as it should read, e.g. $1,284,000"), field("label", "What it measures", 60, 2), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { aspect: "4:5" })),
+  t("ms-feature-cards", "Feature Cards", "motion-saas", { scene: "cards", hue: 250, hue2: 200 }, "Clean SaaS motion design: rounded feature cards fly in and stack, each one highlighting a benefit, soft gradients and smooth easing", code("marketing/feature-cards", [field("headline", "Headline", 60, 2), field("point1", "First benefit", 60, 2), field("point2", "Second benefit", 60, 2), field("point3", "Third benefit", 60, 2), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { aspect: "4:5" })),
+  t("ms-stat-stack", "Stat Stack", "motion-saas", { scene: "headline", hue: 220, hue2: 15 }, "Three big numbers stacked on an editorial grid, each rolling up to its value with its label, the brand signing off at the foot", { ...code("marketing/stat-stack", [field("stat1", "First number", 10, 1, "Type it as it should read, e.g. 98%"), field("label1", "What it measures", 40), field("stat2", "Second number", 10), field("label2", "What it measures", 40), field("stat3", "Third number", 10), field("label3", "What it measures", 40), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { aspect: "4:5" }), ownerOnly: true }),
+  t("ms-kind-words", "Kind Words", "motion-saas", { scene: "stars", hue: 210, hue2: 40 }, "A testimonial carousel: three customers' words slide through one after another on cards, each with its stars and name", { ...code("marketing/testimonials", [field("quote1", "First quote", 120, 3), field("name1", "Name", 40), field("quote2", "Second quote", 120, 3), field("name2", "Name", 40), field("quote3", "Third quote", 120, 3), field("name3", "Name", 40), field("website", "Web address", 40), field("note", "Corner note", 24, 1, "A small fact for the corner, e.g. Collection 07 or Est. 2019")], { aspect: "4:5" }), ownerOnly: true }),
 
   // UGC · talking head
   t("ugc-honest-review", "Honest Review", "ugc-talking", { scene: "selfie", hue: 25, hue2: 200 }, "A relaxed, honest review straight to the phone camera: what they liked, one small catch and why they'd still buy it again", { setting: "bedroom" }),
@@ -477,10 +537,13 @@ export function looksLikeWebsite(s: string): boolean {
   }
 }
 
-export function templatesFor(category: MarketingCategory | "all", media: "all" | "image" | "video"): MarketingTemplate[] {
+/** A template the person may see and open (an owner-only one for the owner alone). */
+export const visibleTemplate = (x: Pick<MarketingTemplate, "ownerOnly"> | null | undefined, owner: boolean): boolean => !!x && (!x.ownerOnly || owner);
+
+export function templatesFor(category: MarketingCategory | "all", media: "all" | "image" | "video", owner = false): MarketingTemplate[] {
   return TEMPLATES.filter((x) => {
     const f = FORMATS[x.format];
-    return (category === "all" || f.category === category) && (media === "all" || f.kind === media);
+    return visibleTemplate(x, owner) && (category === "all" || f.category === category) && (media === "all" || f.kind === media);
   });
 }
 
@@ -587,7 +650,8 @@ export const CLICK_TO_AD = { aspect: "9:16", maxSeconds: 12, shots: 3 } as const
 /**
  * The card is drawn in the browser (brand colour, logo, product name, CTA; components/marketing/end-card.ts)
  * at the ad's 9:16 size, then held for 2–3 s: a gentle push-in on the cloud (fal image-to-video, zoom 1 → 1.05),
- * a still on the open engine. Without a drawn card the cloud puts the logo on the brand colour itself.
+ * a still on the open engine. Without a drawn card the cloud puts the logo on the brand colour itself. An animated
+ * card (Kinetic Motion's end-card styles, rendered in the browser) arrives as a clip and is joined as it is.
  */
 export const END_CARD = { seconds: 2.5, minSeconds: 2, maxSeconds: 3, zoomTo: 1.05, fps: 24, size: { w: 720, h: 1280 }, cta: "Shop now" } as const;
 
@@ -610,6 +674,11 @@ export interface EndCardInput {
   ad: string;
   /** The card the page drew (/api/files/…). */
   card?: string;
+  /**
+   * The animated card the page rendered (/api/files/… MP4, or WebM on the open engine): used as it is, in place of
+   * the still and its push-in.
+   */
+  clip?: string;
   /** Cloud, no drawn card: the brand-colour background and the logo overlay-image puts on it. */
   background?: string;
   logo?: string;
@@ -634,15 +703,33 @@ export interface EndCardInput {
  * The steps that make the end card and put it after the ad, and the key of the finished video. Cloud:
  * [overlay-image: the logo on the brand colour →] ken-burns (zoom 1 → 1.05) → a silent sound track under it
  * (merge-audio-video) → merge-videos after the ad. Open: video-append-endcard (the ad's sound kept, padded with
- * silence under the card), or still-to-clip + oss-join-sound1 for a clip the open engine didn't make.
+ * silence under the card), or still-to-clip + oss-join-sound1 for a clip the open engine didn't make. An animated card
+ * (a clip rendered in the page) goes through oss-join-sound1 with the ad, which re-encodes the ad at 25 fps.
  */
 export function endCardSteps(o: EndCardInput): { steps: EndCardStep[]; final: string } {
   const seconds = Math.max(END_CARD.minSeconds, Math.min(END_CARD.maxSeconds, o.seconds ?? END_CARD.seconds));
   const result = { feature: o.feature, title: o.title, batchTitle: o.title };
   const helper = { feature: `${o.feature}-step` };
   if (o.engine === "open") {
-    if (!o.card) throw new Error("The open engine needs the end card drawn on the page — turn End card off, or make the ad from Click to Ad");
     const M = END_CARD_MODELS.open;
+    // The animated card: joined after the ad (put first by the chain), keeping the ad's sound with silence under the card.
+    // Unlike the still card's append (which copies the ad's picture), this join re-encodes the ad too, at 25 fps and the
+    // run's resolution: a small generation loss on the ad itself. Not yet run end to end on a GPU (unit-tested plan only).
+    if (o.clip) {
+      return {
+        final: "endcard",
+        steps: [
+          {
+            key: "endcard",
+            label: "Adding the end card",
+            request: { ...result, modelId: M.join, op: "concat", prompt: o.title, inputs: { videos: [o.clip] }, params: { aspectRatio: o.aspectRatio, ...(o.resolution && { resolution: o.resolution }) } },
+            after: [o.ad],
+            chain: [{ slot: "videos", position: "first" }],
+          },
+        ],
+      };
+    }
+    if (!o.card) throw new Error("The open engine needs the end card drawn on the page — turn End card off, or make the ad from Click to Ad");
     if ((o.adEncodedBy ?? "comfyui") === "comfyui") {
       return {
         final: "endcard",
@@ -674,6 +761,18 @@ export function endCardSteps(o: EndCardInput): { steps: EndCardStep[]; final: st
   const M = END_CARD_MODELS.cloud;
   if (!o.silence) throw new Error("The end card needs its silent sound track");
   const steps: EndCardStep[] = [];
+  if (o.clip) {
+    // The animated card is the clip: it only needs its silent track (it can start at once, beside the ad), then the join.
+    steps.push({ key: "endcardSound", label: "End card sound", request: { ...helper, modelId: M.sound, op: "mux", inputs: { video: o.clip, audio: o.silence } } });
+    steps.push({
+      key: "endcard",
+      label: "Adding the end card",
+      request: { ...result, modelId: M.join, op: "concat", prompt: o.title, params: { aspectRatio: o.aspectRatio } },
+      after: [o.ad, "endcardSound"],
+      chain: [{ slot: "videos" }, { slot: "videos" }],
+    });
+    return { steps, final: "endcard" };
+  }
   if (!o.card) {
     if (!o.background || !o.logo) throw new Error("Add a logo to the brand kit for the end card, or turn End card off");
     steps.push({ key: "endcardArt", label: "End card", request: { ...helper, modelId: M.art, op: "overlay", inputs: { images: [o.background, o.logo] }, params: { position: { x: 0.5, y: 0.45 }, scale: 1 } } });
@@ -940,7 +1039,7 @@ export interface ModelChoice {
   note?: string;
   /** Its name, where the page has no model facts (Ads Studio's picture picker). */
   name?: string;
-  /** Listed with its note but not picked on this engine, and why: it runs on your GPU only (the owner's 10-30 rule). */
+  /** Listed with its note but not picked on this engine, and why: it runs on your GPU only. */
   unavailable?: string;
 }
 
@@ -978,7 +1077,7 @@ export const MARKETING_IMAGE_NOTE: Record<Engine, string> = {
 export const wordsOnTop = (engine: Engine, modelId: string, drawn = false): boolean => !drawn && (engine === "open" || modelId === MARKETING_IMAGE_MODEL);
 
 /**
- * "Words drawn by the model" (N7-8), a choice on the formats with words (Ads, Poster, Marketplace) and in Ads Studio:
+ * "Words drawn by the model", a choice on the formats with words (Ads, Poster, Marketplace) and in Ads Studio:
  * the copy's places (planAd, src/lib/layout-surfaces.ts) become a layout, and a model that reads boxes draws the
  * headline, the button and the product in them. Setting the words on top in the browser stays the default: it gives
  * your exact fonts. MOSS-Image on your GPU; MOSS-Image hosted on fal, Ideogram 4.5 or FLUX.3 in the cloud, each with
@@ -1149,6 +1248,9 @@ export interface MarketingRunMeta {
   input?: Record<string, unknown>;
   /** Click to Ad: the logo end card it ends on (the card the page drew; null: the kit's logo on its colour). */
   endCard?: string | null;
+  /** Click to Ad: the animated end card it ends on, and its style (none: the still card). */
+  endCardClip?: string | null;
+  endCardVariant?: string | null;
 }
 
 export interface MarketingRun {

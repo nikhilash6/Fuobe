@@ -3,7 +3,7 @@
 import { Loader2, Music2, PenLine, Sparkles, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
-import { writeLyrics } from "@/lib/api";
+import { useLikelyVisitor, writeLyrics } from "@/lib/api";
 import type { ModelDef } from "@/lib/catalog/types";
 import { INSTRUMENTAL, insertTag, isInstrumental, normalizeLyrics, promptWithLyrics, SECTION_TAGS, songLength, structureOf } from "@/lib/lyrics";
 import { toastError } from "@/lib/refusals";
@@ -35,6 +35,8 @@ export function LyricsEditor({
   const id = useId();
   const area = useRef<HTMLTextAreaElement>(null);
   const [writing, setWriting] = useState(false);
+  // "Write the lyrics" uses the install's AI helper, which guests and accounts can't call.
+  const visitor = useLikelyVisitor();
   const spec = model.options.lyrics ?? {};
   // Lyrics read after the description (Lyria 3.5) count with it.
   const length = spec.inPrompt && value.trim() ? promptWithLyrics(idea, value).length : normalizeLyrics(value).length;
@@ -74,15 +76,17 @@ export function LyricsEditor({
           {!spec.required && <span className="font-normal text-muted-foreground">optional</span>}
         </label>
         <span className="ml-auto flex items-center gap-1">
-          <button
-            type="button"
-            onClick={write}
-            disabled={writing}
-            className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] font-medium text-brand-text hover:bg-brand-faint disabled:opacity-60"
-          >
-            {writing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            {writing ? "Writing…" : "Write the lyrics"}
-          </button>
+          {!visitor && (
+            <button
+              type="button"
+              onClick={write}
+              disabled={writing}
+              className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] font-medium text-brand-text hover:bg-brand-faint disabled:opacity-60"
+            >
+              {writing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+              {writing ? "Writing…" : "Write the lyrics"}
+            </button>
+          )}
           {!spec.required && !spec.instrumentalModel && (
             <button
               type="button"

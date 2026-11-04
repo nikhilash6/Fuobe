@@ -1,15 +1,13 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FAKE_POLICY, listenInRange, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 // Design a voice on hosted runs (FUOBE_HOSTED_RUNS=1): an account with no GPU of its own may design a voice on this
 // install's ComfyUI like any open model, priced by the billing service as an audio run. A clone reads a voice sample,
 // so it follows the policy's audio uploads, and the hosted Qwen3-TTS on fal never runs there.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-hosted-voice-"));
+const dir = tempDir("fuobe-hosted-voice-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -39,7 +37,6 @@ afterAll(async () => {
   for (const k of ["FUOBE_HOSTED_RUNS", "FUOBE_BILLING_URL", "FUOBE_BILLING_TOKEN"]) delete process.env[k];
   await fake.close();
   await comfy.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 beforeEach(() => {
   billing.resetBillingCache();

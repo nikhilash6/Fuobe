@@ -1,21 +1,22 @@
 "use client";
 
+import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
+import type { OriginalSound } from "@/lib/av/original-sound";
 import { ArrowDown, Cloud, Cpu, Download, ImageIcon, Info, Loader2, Search, Sparkles, Wand2, X } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
-import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
-import type { SoundChoice } from "@/lib/av/original-sound";
 import { MediaThumb } from "@/components/studio/result-media";
 import { VideoTrimmer, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
 import { LookCard } from "@/components/shorts/preset-card";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { ClipBar, ClipDrop, costText, Field, Segmented, tabKeys } from "@/components/shorts/ui";
 import { clipDuration, clipSize, useSourceClip } from "@/components/shorts/use-source-clip";
-import { uploadFile, useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { uploadFile, useEngine, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { paidSuffix, placeholdersOn } from "@/lib/demo-mode";
 import { keepOffered, offered } from "@/lib/model-access";
 import {
   clampFps,
@@ -41,11 +42,15 @@ import type { Engine, Generation } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import type { TrimRange } from "@/lib/trim-range";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { MixedHistory } from "./history";
+import { HowReveal } from "./how-reveal";
 import { isFrameRender, renderSteps, useFramesProgress, useMixedActions, useMixedEstimate, useWatchedChain, useWatchedGeneration, type MixedBody } from "./hooks";
 import { AdvancedSettings, loadSaved } from "./settings";
 import { plainTagline } from "@/lib/plain-tagline";
+import { templateCover } from "@/lib/template-covers";
 
 type Tab = "presets" | "history" | "how";
 const TABS: { id: Tab; label: string }[] = [
@@ -74,8 +79,18 @@ const MODE_OPTIONS: { value: MixedMode; label: string; title: string }[] = [
 ];
 
 /** Mixed Media: pick a look, add a ≤10 s clip, tune the settings, preview one frame, render. */
-export function MixedStudio({ models, frameModels }: { models: Record<Engine, RestyleModelInfo[]>; frameModels: Record<Engine, RestyleModelInfo[]> }) {
+export function MixedStudio({
+  models,
+  frameModels,
+  how,
+}: {
+  models: Record<Engine, RestyleModelInfo[]>;
+  frameModels: Record<Engine, RestyleModelInfo[]>;
+  /** "How it works"'s reveal: one look playing out (studioExamples("mixed-media"), from the page). */
+  how?: StudioExampleRow;
+}) {
   const [tab, setTab] = useState<Tab>("presets");
+  const body = useSwapFade<HTMLDivElement>(tab);
   const [engine, setEngine, engineMode] = useEngine();
   // A render doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // upload, the preview and Generate are off, instead of a run the server refuses.
@@ -93,11 +108,10 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
     window.history.replaceState(null, "", url);
   };
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="sr-only font-heading text-[22px] leading-none sm:not-sr-only sm:truncate">Mixed Media</h1>
-        <div role="tablist" aria-label="Mixed Media" onKeyDown={tabKeys} className="fade-x scrollbar-none flex h-8 min-w-0 items-center overflow-x-auto rounded-full bg-muted p-0.5 sm:ml-4">
+        <TabRow role="tablist" aria-label="Mixed Media" onKeyDown={tabKeys} follow className="sm:ml-3">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -106,22 +120,24 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
               aria-selected={tab === t.id}
               tabIndex={tab === t.id ? 0 : -1}
               onClick={() => pick(t.id)}
-              className={cn("h-7 shrink-0 rounded-full px-3 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground", tab === t.id && "bg-background text-foreground shadow-soft")}
+              className={TAB_PILL}
+              {...onAttr(tab === t.id)}
             >
               {t.label}
             </button>
           ))}
-        </div>
+        </TabRow>
         <div className="ml-auto shrink-0">
           {/* A phone's header has room for the tabs, not "Add key" too. */}
           <EngineSwitch value={engine} onChange={setEngine} wordless selfHostedOnly />
         </div>
+        <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">
+      <div ref={body} className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-4 pb-28 sm:px-6 lg:pb-16">
         {tab === "history" ? (
           <MixedHistory onStart={() => pick("presets")} />
         ) : tab === "how" ? (
-          <How onStart={() => pick("presets")} cloud={engineMode !== "open"} />
+          <How onStart={() => pick("presets")} cloud={engineMode !== "open"} reveal={how} />
         ) : (
           <>
             <div className="mx-auto max-w-[720px] pt-8 pb-6 text-center sm:pt-12">
@@ -141,10 +157,11 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
   );
 }
 
-function How({ onStart, cloud }: { onStart: () => void; cloud: boolean }) {
+function How({ onStart, cloud, reveal }: { onStart: () => void; cloud: boolean; reveal?: StudioExampleRow }) {
   return (
     <div className="mx-auto max-w-[920px] pt-10">
       <h2 className="text-center font-heading text-[34px] leading-tight">How it works</h2>
+      {!!reveal?.tiles.length && <HowReveal row={reveal} />}
       <ol className="mt-8 grid gap-3 sm:grid-cols-2">
         {HOW.map((h, i) => (
           <li key={h.step} className="rounded-2xl border bg-background p-5">
@@ -189,7 +206,11 @@ function Workspace({ visitor, engine, models, frameModels }: { visitor: boolean;
   const [values, setValues] = useState<MixedValues>({});
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim().toLowerCase());
-  const list = useMemo(() => MIXED_PRESETS.filter((p) => !query || `${p.name} ${p.description}`.toLowerCase().includes(query)), [query]);
+  // Looks with a real cover lead; the rest keep their order after them.
+  const list = useMemo(() => {
+    const hits = MIXED_PRESETS.filter((p) => !query || `${p.name} ${p.description}`.toLowerCase().includes(query));
+    return [...hits.filter((p) => templateCover("mixed-media", p.id)), ...hits.filter((p) => !templateCover("mixed-media", p.id))];
+  }, [query]);
   const panel = useRef<HTMLElement>(null);
   const [panelVisible, setPanelVisible] = useState(false);
   useEffect(() => {
@@ -258,11 +279,11 @@ function Workspace({ visitor, engine, models, frameModels }: { visitor: boolean;
           </div>
         )}
       </section>
-      <aside ref={panel} id="mm-editor" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-16 lg:max-h-[calc(100svh-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
+      <aside ref={panel} id="mm-editor" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:max-h-[calc(var(--content-h)-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
         <Editor visitor={visitor} engine={engine} models={models} frameModels={frameModels} preset={preset} values={values} setValues={setValues} onClip={setHasClip} />
       </aside>
       {preset && !panelVisible && (
-        <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 lg:hidden">
+        <div className="fixed inset-x-3 bottom-[max(calc(var(--chrome-bottom)+0.75rem),env(safe-area-inset-bottom))] z-30 lg:hidden">
           <button
             type="button"
             onClick={() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
@@ -320,7 +341,6 @@ function Editor({
   const [fpsChoice, setFpsChoice] = useState<FpsChoice>(MIXED.defaultFps as number);
   const [manual, setManual] = useState<number>(MIXED.defaultFps);
   const [resolution, setResolution] = useState<MixedResolution>("1K");
-  const [sound, setSound] = useState<SoundChoice>({ sound: "everything" });
   // Frame by frame (the default, priced per frame), Smooth (the first frame, then carried through by depth) or, on the
   // cloud, Fast (one video-to-video pass). A mode the engine hasn't (Fast on your GPU) reads as Per frame.
   const [picked, setMode] = useState<MixedMode>("frames");
@@ -384,6 +404,8 @@ function Editor({
   // Original needs no anchor: frame 1 is drawn exactly as the preview was (same look, LoRA and seed).
   const anchor = cloud && !original && (frameMode || (fast && model?.image)) && previewImage && !anchorOff ? previewImage.url : undefined;
   const size = clipSize(clip);
+  // What of the clip's sound goes back (the cloud: all of it).
+  const [originalSound, setOriginalSound] = useState<OriginalSound>("everything");
 
   const body: MixedBody | null =
     preset && mmRange && !problem
@@ -406,11 +428,15 @@ function Editor({
           modelId,
           mode,
           ...(anchor ? { anchor } : {}),
-          ...soundBody(engine, sound),
+          ...(!cloud && originalSound !== "everything" && { originalSound }),
         }
       : null;
   const estimate = useMixedEstimate(body);
   const est = estimate.data;
+  // The preview frame is a run of its own: on the cloud its button says its price (the estimate's, per frame), else "· paid";
+  // nothing on your GPU (free) or while placeholders are on.
+  const placeholders = placeholdersOn(useStatus().data?.demoMode);
+  const previewPaid = cloud && !visitor && !(est ? est.demo : placeholders) ? paidSuffix(est?.previewUsd) : "";
 
   // A new clip, preset or engine starts without a preview (and so does another frame editor: the preview is its own work).
   const key = `${preset?.id}|${clip?.preview}|${engine}|${mode === "fast" ? "" : modelId}`;
@@ -577,8 +603,6 @@ function Editor({
         </Field>
       )}
 
-      <OriginalSoundField engine={engine} value={sound} onChange={setSound} hasAudio={clip?.info?.hasAudio} />
-
       {preset && <AdvancedSettings preset={preset} values={values} onChange={setValues} />}
 
       <Field
@@ -683,9 +707,14 @@ function Editor({
           )}
         >
           {previewBusy ? <Loader2 className="size-4 animate-spin" /> : <ImageIcon className="size-4" />}
-          {preview ? "Generate another preview frame" : "Generate preview frame"}
+          <span>
+            {preview ? "Generate another preview frame" : "Generate preview frame"}
+            {previewPaid}
+          </span>
         </button>
       </div>
+
+      {clip && clip.info?.hasAudio !== false && <OriginalSoundPicker engine={engine} value={originalSound} onChange={setOriginalSound} />}
 
       <div className="space-y-3 border-t pt-4">
         <div className="flex items-baseline justify-between gap-2">

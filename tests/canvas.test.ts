@@ -337,7 +337,7 @@ describe("canvas graph → plan", () => {
     const plan = planCanvas(g);
     expect(plan.errors).toEqual([]);
     expect(plan.steps).toHaveLength(3);
-    expect(plan.steps.every((s) => s.deps.length === 0 && s.request.prompt?.startsWith("Portrait of an elderly fisherman"))).toBe(true);
+    expect(plan.steps.every((s) => s.deps.length === 0 && s.request.prompt?.startsWith("Editorial beauty portrait"))).toBe(true);
     expect(new Set(plan.steps.map((s) => s.request.modelId)).size).toBe(3);
   });
 });
@@ -355,7 +355,7 @@ describe("canvas templates", () => {
     expect(graphEngine(g)).toBe(engine);
     const plan = planCanvas(g, { engineMode: engine });
     // Only the empty upload nodes need the user.
-    for (const e of plan.errors) expect(e.message).toMatch(/^(Add (an image|an audio clip|a video|a voice sample) to|Waiting on)/);
+    for (const e of plan.errors) expect(e.message).toMatch(/^(Row \d+: )?(Add (an image|an audio clip|a video|a voice sample) to|Waiting on)/);
     if (!plan.errors.length) expect(plan.steps.length).toBe(g.nodes.filter(isGenerator).length);
     if (engine === "open") expect(plan.costUsd).toBe(0);
   });
@@ -394,19 +394,19 @@ describe("canvas templates", () => {
       // The shot text is written from the script…
       expect(step(`beat${i}`).request).toMatchObject({ modelId: llm, op: "write" });
       expect(step(`beat${i}`).request.prompt).toContain(`shot ${i} of 3`);
-      expect(step(`beat${i}`).request.prompt).toContain("A paper boat sails down");
+      expect(step(`beat${i}`).request.prompt).toContain("emerald silk ball gown");
       // …and becomes the frame's prompt and the shot's prompt (with the frame as its start).
       expect(step(`frame${i}`)).toMatchObject({ deps: [`beat${i}`], request: { chain: [{ slot: "prompt" }] } });
       expect(step(`frame${i}`).request.prompt).toContain("{text}");
       expect(step(`shot${i}`).deps).toEqual([`beat${i}`, `frame${i}`]);
       expect(step(`shot${i}`).request.chain).toEqual([{ slot: "prompt" }, { slot: "images", position: "first" }]);
     }
-    // A new script changes what every shot is written from: no paper boat left anywhere.
+    // A new script changes what every shot is written from: no gown left anywhere.
     g.nodes.find((n) => n.id === "script")!.data.text = "An astronaut plants a flower on Mars";
     const again = planCanvas(g, { engineMode: engine });
     const prompts = again.steps.map((s) => s.request.prompt ?? "").join("\n");
     expect(prompts).toContain("An astronaut plants a flower on Mars");
-    expect(prompts).not.toMatch(/boat/i);
+    expect(prompts).not.toMatch(/gown/i);
   });
 
   it("disables palette entries with no model on an install's only engine", () => {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Fragment } from "react";
-import { ArrowRight, AudioLines, Box, CalendarClock, CornerDownLeft, ImageIcon, ListChecks, Plug, ScanEye, Sparkles, Undo2, Video, Zap, type LucideIcon } from "lucide-react";
+import { ArrowRight, AudioLines, Box, CalendarClock, ImageIcon, ListChecks, Plug, ScanEye, Sparkles, TextCursorInput, Undo2, Video, Zap, type LucideIcon } from "lucide-react";
 import { GitHubMark } from "@/components/github-mark";
 import { BeforeAfter } from "@/components/home/before-after";
 import {
@@ -16,18 +16,23 @@ import {
   StudioName,
   StudioPicture,
 } from "@/components/home/home-islands";
+import { PILL, PILL_ICON, PILL_TAP } from "@/components/home/pill";
 import { ShowcaseTile } from "@/components/home/showcase-tile";
+import { CountUp } from "@/components/ui/count-up";
 import { IntentLink } from "@/components/intent-link";
 import { LiveDemo } from "@/components/live/live-demo";
 import { NAV } from "@/components/nav-items";
 import { PresetCard } from "@/components/preset-gallery";
 import { ASSIST_SUGGESTIONS } from "@/lib/assist";
 import { WORKFLOWS_ON_GITHUB } from "@/lib/comfy-install";
-import { FUOBE_CREDITS, FUOBE_REPO } from "@/lib/connections";
+import { FUOBE_REPO } from "@/lib/connections";
 import { HOME_LIVE, presetHref, type HomeShowcase } from "@/lib/home-showcase";
+import { area } from "@/lib/nav-areas";
+import { studioCount } from "@/lib/nav-model";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 import { plainTagline } from "@/lib/plain-tagline";
+import type { PresetCardData } from "@/lib/preset-cards";
 
 /*
  * Home's sections under the wall. Server components: their words, numbers and links ship as HTML, and only the
@@ -44,35 +49,67 @@ const RAIL_ITEM = "w-[64%] shrink-0 snap-start sm:w-auto";
  */
 const SECTION = "home-cv -mx-4 mt-8 -mb-2 px-4 py-2 sm:mt-12";
 const H2 = "font-heading text-[24px] leading-tight sm:text-[28px]";
+const H1 = "font-heading text-[34px] leading-tight";
 const LINE = "mt-1 text-[15px] text-pretty text-muted-foreground";
 /** How wide a row's picture shows: two-thirds of a phone, then a third, a quarter, a sixth of the screen. */
 const CARD_SIZES = "(min-width: 1280px) 16vw, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 64vw";
 const STUDIO_SIZES = "(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 64vw";
+/** An area page's cards: two a row on a phone and a tablet, four from lg. */
+const GRID_SIZES = "(min-width: 1024px) 25vw, 50vw";
 
 const navIcon = (href: string) => NAV.flatMap((g) => g.items).find((i) => i.href === href)?.icon;
 
-function SectionHead({ id, title, count, all, line }: { id: string; title: string; count?: number; all?: string; line: string }) {
+/**
+ * A section's heading with its count and line, and a "See all" link. `as="h1"`: an area page's own heading (the
+ * PageHeader's size), with its search or quick start beside it (`children`).
+ */
+export function SectionHead({
+  id,
+  title,
+  count,
+  all,
+  allCount = count,
+  allNoun = title.toLowerCase(),
+  line,
+  as: Heading = "h2",
+  children,
+}: {
+  id: string;
+  title: string;
+  count?: number;
+  all?: string;
+  /** How many "See all" leads to, when the page it opens holds fewer than the heading counts (Home's studios). */
+  allCount?: number;
+  /** What "See all" names for a screen reader, and on screen too when `allCount` differs from `count`. */
+  allNoun?: string;
+  line: string;
+  as?: "h1" | "h2";
+  children?: React.ReactNode;
+}) {
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between gap-4">
-        <h2 id={id} className={H2}>
+        <Heading id={id} className={Heading === "h1" ? H1 : H2}>
           {title}
           {count !== undefined && (
             <span
               aria-hidden
               className="ml-2 inline-block rounded-full bg-muted px-2 align-[0.3em] font-sans text-[13px] leading-6 tracking-normal text-muted-foreground tabular-nums"
             >
-              {count}
+              <CountUp value={count} id={id} />
             </span>
           )}
-        </h2>
+        </Heading>
+        {children}
         {all && (
           <IntentLink
             href={all}
-            aria-label={`See all ${count} ${title.toLowerCase()}`}
-            className="group inline-flex shrink-0 items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+            aria-label={`See all ${allCount} ${allNoun}`}
+            // 44 px to tap: its hit area reaches past the words.
+            className="group relative inline-flex shrink-0 items-center gap-1 text-[13px] text-muted-foreground transition-colors after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] hover:text-foreground"
           >
-            See all {count} <ArrowRight className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+            See all {allCount}
+            {allCount !== count && ` ${allNoun}`} <ArrowRight className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
           </IntentLink>
         )}
       </div>
@@ -86,7 +123,18 @@ function SectionHead({ id, title, count, all, line }: { id: string; title: strin
  * xl the first `lg` (a rail costs no height, a grid does). The cards' own padding hangs outside the column, so each
  * picture lines up with the heading and the wall, 12 px from the next.
  */
-function Cards({ items, className, wide = items.length, lg = wide }: { items: HomeShowcase["effects"]; className: string; wide?: number; lg?: number }) {
+function Cards({
+  items,
+  className,
+  wide = items.length,
+  lg = wide,
+}: {
+  /** A card without a caption shows its description. */
+  items: { card: HomeShowcase["effects"][number]["card"]; caption?: string }[];
+  className: string;
+  wide?: number;
+  lg?: number;
+}) {
   return (
     <HomeRail className={cn("gap-0 scroll-px-2.5 max-sm:px-2.5 sm:-mx-1.5", className)}>
       {items.map(({ card, caption }, i) => (
@@ -98,10 +146,24 @@ function Cards({ items, className, wide = items.length, lg = wide }: { items: Ho
   );
 }
 
-/** The first pictures on the page: eight real covers, four on a phone. */
-export function ShowcaseWall({ wall }: { wall: HomeShowcase["wall"] }) {
+/** Home's preset rows (Effects, Camera motions), for an area page that shows them the same way. */
+export const PresetRail = Cards;
+
+/**
+ * The first pictures on the page: eight real covers, four on a phone. `label`: the section's name for screen readers;
+ * `foot`: the line under it (Home's says where the previews were rendered; an area page has none).
+ */
+export function ShowcaseWall({
+  wall,
+  label = "What Fuobe makes",
+  foot = true,
+}: {
+  wall: readonly { id: string; kind: string; caption: string; href: string; card: PresetCardData }[];
+  label?: string;
+  foot?: boolean;
+}) {
   return (
-    <section aria-label="What Fuobe makes" className="mt-6 sm:mt-8">
+    <section aria-label={label} className="mt-6 sm:mt-8">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:max-lg:grid-cols-2">
         {wall.map((t, i) => (
           <ShowcaseTile key={t.id} card={t.card} kind={t.kind} caption={t.caption} href={t.href} index={i} />
@@ -109,8 +171,12 @@ export function ShowcaseWall({ wall }: { wall: HomeShowcase["wall"] }) {
       </div>
       <div className="mt-3 flex items-center justify-between gap-3 text-[12px] text-muted-foreground">
         <p className="min-w-0">
-          <span className="sm:hidden">Rendered locally on ComfyUI, on one RTX 5090.</span>
-          <span className="max-sm:hidden">Every preview on this page was rendered locally on ComfyUI, on one RTX 5090.</span>
+          {foot && (
+            <>
+              <span className="sm:hidden">Rendered locally on ComfyUI, on one RTX 5090.</span>
+              <span className="max-sm:hidden">Every preview on this page was rendered locally on ComfyUI, on one RTX 5090.</span>
+            </>
+          )}
         </p>
         <PausePreviews />
       </div>
@@ -120,7 +186,7 @@ export function ShowcaseWall({ wall }: { wall: HomeShowcase["wall"] }) {
 
 export function EffectsSection({ facts, effects }: Pick<HomeShowcase, "facts" | "effects">) {
   return (
-    <section aria-labelledby="home-effects" className={cn(SECTION, "[--cv:336px] sm:[--cv:946px] md:[--cv:846px] lg:[--cv:691px] xl:[--cv:490px]")}>
+    <section aria-labelledby="home-effects" data-reveal className={cn(SECTION, "[--cv:336px] sm:[--cv:946px] md:[--cv:846px] lg:[--cv:691px] xl:[--cv:490px]")}>
       <SectionHead
         id="home-effects"
         title="Effects"
@@ -135,7 +201,7 @@ export function EffectsSection({ facts, effects }: Pick<HomeShowcase, "facts" | 
 
 export function MotionsSection({ facts, motions }: Pick<HomeShowcase, "facts" | "motions">) {
   return (
-    <section aria-labelledby="home-motions" className={cn(SECTION, "[--cv:336px] sm:[--cv:528px] md:[--cv:492px] lg:[--cv:293px] xl:[--cv:290px]")}>
+    <section aria-labelledby="home-motions" data-reveal className={cn(SECTION, "[--cv:336px] sm:[--cv:528px] md:[--cv:492px] lg:[--cv:293px] xl:[--cv:290px]")}>
       <SectionHead
         id="home-motions"
         title="Camera motions"
@@ -148,10 +214,19 @@ export function MotionsSection({ facts, motions }: Pick<HomeShowcase, "facts" | 
   );
 }
 
-export function AppsSection({ facts, beforeAfter, reveals }: Pick<HomeShowcase, "facts" | "beforeAfter" | "reveals">) {
+/**
+ * Apps on Home: a before and after, and the apps whose clip wipes from one to the other. /apps opens on the same section
+ * as its "Start here" (`start`): its own heading, no count and no "See all" (the page is all of them).
+ */
+export function AppsSection({ facts, beforeAfter, reveals, start }: Pick<HomeShowcase, "facts" | "beforeAfter" | "reveals"> & { start?: { title: string; line: string } }) {
+  const id = start ? "apps-start" : "home-apps";
   return (
-    <section aria-labelledby="home-apps" className={cn(SECTION, "[--cv:676px] sm:[--cv:1004px] md:[--cv:943px] lg:[--cv:957px] xl:[--cv:525px]")}>
-      <SectionHead id="home-apps" title="Apps" count={facts.apps} all="/apps" line="One click changes one thing and keeps the rest." />
+    <section aria-labelledby={id} data-reveal className={cn(SECTION, "[--cv:676px] sm:[--cv:1004px] md:[--cv:943px] lg:[--cv:957px] xl:[--cv:525px]")}>
+      {start ? (
+        <SectionHead id={id} title={start.title} line={start.line} />
+      ) : (
+        <SectionHead id={id} title="Apps" count={facts.apps} all="/apps" line="One click changes one thing and keeps the rest." />
+      )}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 xl:gap-4">
         <div className="min-w-0 xl:col-span-5 xl:pt-1.5">
           <BeforeAfter pairs={beforeAfter} />
@@ -169,11 +244,11 @@ export function AppsSection({ facts, beforeAfter, reveals }: Pick<HomeShowcase, 
 export function LiveEditSection() {
   const points: [LucideIcon, string][] = [
     [Zap, "Live frames as you type, on your own GPU"],
-    [CornerDownLeft, "Enter keeps a change; typing never does"],
-    [Undo2, "Undo, redo and compare every step"],
+    [TextCursorInput, "One prompt that keeps growing, always on your original"],
+    [Undo2, "Undo a change, or start fresh from the picture"],
   ];
   return (
-    <section aria-labelledby="home-live" className={cn(SECTION, "[--cv:720px] sm:[--cv:860px] md:[--cv:820px] lg:[--cv:470px] xl:[--cv:500px]")}>
+    <section aria-labelledby="home-live" data-reveal className={cn(SECTION, "[--cv:720px] sm:[--cv:860px] md:[--cv:820px] lg:[--cv:470px] xl:[--cv:500px]")}>
       <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-12 lg:gap-10">
         <LiveDemo className="aspect-[4/3] w-full shadow-strong lg:col-span-7" />
         <div className="min-w-0 lg:col-span-5">
@@ -203,7 +278,7 @@ export function LiveEditSection() {
 const WAVE = [
   0.3, 0.45, 0.7, 0.5, 0.85, 1, 0.75, 0.55, 0.4, 0.6, 0.9, 0.7, 0.45, 0.3, 0.5, 0.8, 0.95, 0.65, 0.4, 0.55, 0.75, 0.5, 0.35, 0.6, 0.8, 0.55, 0.35, 0.25,
 ];
-/** How many of the Audio card's tools it names where its card is narrowest (lg to xl, four cards a row beside the sidebar). */
+/** How many of the Audio card's tools it names where its card is narrowest (lg to xl, four cards a row). */
 const AUDIO_NARROW = 3;
 
 /**
@@ -241,47 +316,146 @@ function AudioCard({ href, label, line, tools }: { href: string; label: string; 
   );
 }
 
+/**
+ * A card with a picture drawn rather than a cover: Live edit's recorded session. Same frame,
+ * name and line as a studio's card.
+ */
+function DrawnCard({ href, label, line, children }: { href: string; label: string; line: string; children: React.ReactNode }) {
+  return (
+    <IntentLink href={href} className="group/studio flex min-w-0 flex-col gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <StudioPicture className="bg-media ring-1 ring-white/10">{children}</StudioPicture>
+      <StudioName label={label} line={line} />
+    </IntentLink>
+  );
+}
+
+/** A destination's card: a cover (a clip or a still), a drawn picture (Live edit's recorded session), or Audio's waveform. */
+export interface Destination {
+  href: string;
+  label: string;
+  line: string;
+  card?: HomeShowcase["studios"][number]["card"];
+  drawn?: "live";
+}
+
+/** A pill under the cards: its name, and its icon from the navigation. */
+export interface DestinationPill {
+  href: string;
+  label: string;
+  icon?: LucideIcon;
+}
+
+/**
+ * Home's "Studios and tools" section, and each section of an area page (/create, /studios): a heading with its count,
+ * one line, the cards (a phone's rail, two a row from sm, four from lg), then the rest as pills. More than eight pills
+ * scroll sideways on a phone in a long row; eight or fewer wrap. `className`: the section's own spacing.
+ */
+export function DestinationsSection({
+  id,
+  title,
+  count,
+  line,
+  cards,
+  audioTools,
+  pills,
+  pillsLabel,
+  className,
+  tap,
+  grid,
+  all,
+  allCount,
+  allNoun,
+  after,
+}: {
+  id: string;
+  title: string;
+  count?: number;
+  line: string;
+  cards: Destination[];
+  audioTools?: HomeShowcase["audioTools"];
+  pills: DestinationPill[];
+  pillsLabel: string;
+  className?: string;
+  /** Pills with a 44 px hit area (an area page; Home keeps its own). */
+  tap?: boolean;
+  /** Two cards a row on a phone instead of a rail (an area page, where every card should show at once). */
+  grid?: boolean;
+  /** "See all" beside the heading (SectionHead). */
+  all?: string;
+  allCount?: number;
+  allNoun?: string;
+  /** Pills only the viewer's island adds (the owner's), after the others. */
+  after?: React.ReactNode;
+}) {
+  const items = cards.map((s, i) => (
+    <div key={s.href} className={grid ? "min-w-0" : RAIL_ITEM}>
+      {s.card ? (
+        <StudioCard href={s.href} label={s.label} line={s.line} card={s.card} zoom={!s.card.preview.video} place={staggered(i)} sizes={grid ? GRID_SIZES : STUDIO_SIZES} />
+      ) : s.drawn === "live" ? (
+        <DrawnCard href={s.href} label={s.label} line={s.line}>
+          {/* A picture inside the link: its own controls stay out of reach (the card is one tap). */}
+          <div inert className="absolute inset-0">
+            <LiveDemo compact className="absolute inset-0 rounded-none" />
+          </div>
+        </DrawnCard>
+      ) : audioTools ? (
+        <AudioCard href={s.href} label={s.label} line={s.line} tools={audioTools} />
+      ) : null}
+    </div>
+  ));
+  return (
+    <section aria-labelledby={id} className={className}>
+      <SectionHead id={id} title={title} count={count} line={line} all={all} allCount={allCount} allNoun={allNoun} />
+      {cards.length > 0 &&
+        (grid ? (
+          <div className="grid grid-cols-2 gap-x-3 gap-y-4 lg:grid-cols-4">{items}</div>
+        ) : (
+          <HomeRail className="gap-3 sm:grid-cols-2 sm:gap-x-3 sm:gap-y-4 lg:grid-cols-4">{items}</HomeRail>
+        ))}
+      {(pills.length > 0 || after) && (
+        <>
+          {/* A section of pills only needs no label of its own: its heading is it. */}
+          {cards.length > 0 ? <h3 className="mt-6 mb-2 font-sans text-[13px] text-muted-foreground">{pillsLabel}</h3> : <h3 className="sr-only">{pillsLabel}</h3>}
+          {/* A phone scrolls many pills sideways in three rows; a few wrap. */}
+          <FadeRow>
+            <ul className={cn("flex flex-wrap gap-1.5", pills.length > 8 && "max-sm:w-[72rem]")}>
+              {pills.map((p) => {
+                const Icon = p.icon;
+                return (
+                  <li key={p.href}>
+                    <IntentLink href={p.href} className={cn(PILL, tap && PILL_TAP)}>
+                      {Icon && <Icon className={PILL_ICON} />}
+                      {p.label}
+                    </IntentLink>
+                  </li>
+                );
+              })}
+              {after}
+            </ul>
+          </FadeRow>
+        </>
+      )}
+    </section>
+  );
+}
+
+
 export function StudiosSection({ facts, studios, audioTools, pills }: Pick<HomeShowcase, "facts" | "studios" | "audioTools" | "pills">) {
   return (
-    <section aria-labelledby="home-studios" className={cn(SECTION, "[--cv:529px] sm:[--cv:1597px] md:[--cv:1482px] lg:[--cv:770px] xl:[--cv:795px]")}>
-      <SectionHead
-        id="home-studios"
-        title="Studios and tools"
-        count={facts.destinations}
-        line="Whole productions, start to finish: films, ads, shoots and series. Open any of them to look around, no account needed."
-      />
-      <HomeRail className="gap-3 sm:grid-cols-2 sm:gap-x-3 sm:gap-y-4 lg:grid-cols-4">
-        {studios.map((s, i) => (
-          <div key={s.href} className={RAIL_ITEM}>
-            {s.card ? (
-              <StudioCard href={s.href} label={s.label} line={s.line} card={s.card} zoom={!s.card.preview.video} place={staggered(i)} sizes={STUDIO_SIZES} />
-            ) : (
-              <AudioCard href={s.href} label={s.label} line={s.line} tools={audioTools} />
-            )}
-          </div>
-        ))}
-      </HomeRail>
-      <h3 className="mt-6 mb-2 font-sans text-[13px] text-muted-foreground">Also in Fuobe</h3>
-      {/* A phone scrolls the pills sideways in three rows. */}
-      <FadeRow>
-        <ul className="flex flex-wrap gap-1.5 max-sm:w-[72rem]">
-          {pills.map((p) => {
-            const Icon = navIcon(p.href);
-            return (
-              <li key={p.href}>
-                <IntentLink
-                  href={p.href}
-                  className="group inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors hover:bg-accent"
-                >
-                  {Icon && <Icon className="size-3.5 text-muted-foreground transition-colors group-hover:text-brand-text" />}
-                  {p.label}
-                </IntentLink>
-              </li>
-            );
-          })}
-        </ul>
-      </FadeRow>
-    </section>
+    <DestinationsSection
+      id="home-studios"
+      title="Studios and tools"
+      count={facts.destinations}
+      line="Whole productions, start to finish: films, ads, shoots and series. Open any of them to look around, no account needed."
+      cards={studios}
+      audioTools={audioTools}
+      pills={pills.map((p) => ({ ...p, icon: navIcon(p.href) }))}
+      pillsLabel="Also in Fuobe"
+      all={area("studios").href}
+      allCount={studioCount()}
+      allNoun="studios"
+      data-reveal className={cn(SECTION, "[--cv:529px] sm:[--cv:1597px] md:[--cv:1482px] lg:[--cv:770px] xl:[--cv:795px]")}
+    />
   );
 }
 
@@ -299,7 +473,7 @@ export function AssistSection({ facts, skills }: Pick<HomeShowcase, "facts" | "s
     [Plug, "Works with your other tools"],
   ];
   return (
-    <section aria-labelledby="home-assist" className={cn(SECTION, "[--cv:912px] sm:[--cv:831px] md:[--cv:911px] lg:[--cv:562px] xl:[--cv:480px]")}>
+    <section aria-labelledby="home-assist" data-reveal className={cn(SECTION, "[--cv:912px] sm:[--cv:831px] md:[--cv:911px] lg:[--cv:562px] xl:[--cv:480px]")}>
       <div className="grid gap-8 rounded-2xl border bg-card p-5 sm:p-7 lg:grid-cols-2">
         <div className="min-w-0">
           <AssistTag />
@@ -336,7 +510,7 @@ export function OpenSourceSection({ facts, newModels }: Pick<HomeShowcase, "fact
     { value: facts.presets, label: "presets: apps, camera motions and effects", href: "/effects" },
   ];
   return (
-    <section aria-labelledby="home-open" className={cn(SECTION, "[--cv:528px] sm:[--cv:494px] md:[--cv:571px] lg:[--cv:494px] xl:[--cv:363px]")}>
+    <section aria-labelledby="home-open" data-reveal className={cn(SECTION, "[--cv:528px] sm:[--cv:494px] md:[--cv:571px] lg:[--cv:494px] xl:[--cv:363px]")}>
       <h2 id="home-open" className={H2}>
         Open source, all the way down
       </h2>
@@ -401,7 +575,7 @@ const COMMANDS = ["git clone https://github.com/workingprototype/fuobe.git && cd
 
 export function StartSection() {
   return (
-    <section aria-labelledby="home-start" className={cn(SECTION, "[--cv:843px] sm:[--cv:726px] md:[--cv:748px] lg:[--cv:430px] xl:[--cv:427px]")}>
+    <section aria-labelledby="home-start" data-reveal className={cn(SECTION, "[--cv:843px] sm:[--cv:726px] md:[--cv:748px] lg:[--cv:430px] xl:[--cv:427px]")}>
       <h2 id="home-start" className={H2}>
         Your GPU. Your models. Your files.
       </h2>
@@ -457,10 +631,11 @@ export function StartSection() {
   );
 }
 
-/** The footer's own pages; the credits and the code are on GitHub. */
+/** The footer's own pages; the code is on GitHub. */
 const FOOTER_PAGES = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
+  { href: "/settings/licences", label: "Thanks & licences" },
 ];
 
 export function HomeFooter() {
@@ -477,9 +652,6 @@ export function HomeFooter() {
             {i.label}
           </Link>
         ))}
-        <a href={FUOBE_CREDITS} target="_blank" rel="noopener" className={link}>
-          Credits
-        </a>
         <a href={FUOBE_REPO} target="_blank" rel="noopener" className={link}>
           GitHub
         </a>

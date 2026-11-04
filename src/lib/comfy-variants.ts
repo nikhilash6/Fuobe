@@ -55,8 +55,30 @@ export const H3_ORBIT_GRAPH: Record<string, string> = { "minimax-h3-i2v": "minim
  */
 export const REUSE_BED_GRAPH: Record<string, string> = { "voice-clean-reuse": "voice-clean-bed-reuse" };
 
+/**
+ * Genjutsu's Openjutsu graphs (params.extra.openjutsu): Group swap one by one (exactly 2 characters, a pass each) and From
+ * picture on native H3 (the owner's renderer) run graphs of their own.
+ */
+export const OPENJUTSU_VARIANTS: Record<string, { key: string; value: unknown; graph: string }> = {
+  "video-group-swap-h3": { key: "onePerPerson", value: true, graph: "video-group-swap-h3-one-by-one" },
+  "video-from-picture-solar": { key: "renderer", value: "h3", graph: "video-from-picture-h3" },
+};
 /** YuE2 with a song attached (Audio → Music's "Song to cover"): the cover graph sings its melody with the new style and lyrics. */
 export const YUE2_COVER_GRAPH: Record<string, string> = { "music-yue2-song": "music-yue2-cover" };
+
+/**
+ * Outfit Swap with no photo of the outfit (one picture, the outfit in words): the same LoRA graph without image 2 and the
+ * describer.
+ */
+export const OUTFIT_WORDS_GRAPH: Record<string, string> = { "outfit-swap-qwen-image-21": "outfit-swap-qwen-image-21-text" };
+/** The Watermark Remover with a brushed area (inputs.mask, white = remove): the graph that reads the mask instead of boxes. */
+export const WATERMARK_BRUSH_GRAPH: Record<string, string> = { "image-watermark-remove-qwen21": "image-watermark-remove-qwen21-brush" };
+
+/**
+ * Graphs the GPU pre-flight checks along with the one that runs: a step whose next step is sure to follow (the Watermark
+ * Remover's scan, then its removal), so one setup plan covers the whole flow and nobody is stopped after the first step.
+ */
+export const COMPANION_GRAPHS: Record<string, string[]> = { "image-watermark-scan-qwen3vl": ["image-watermark-remove-qwen21"] };
 
 export interface VariantRequest {
   op: string;
@@ -69,6 +91,8 @@ export interface VariantRequest {
   audio2: boolean;
   /** An audio input is given (a song to cover). */
   audio?: boolean;
+  /** A painted mask is given (the Watermark Remover's brush). */
+  mask?: boolean;
   extra: Record<string, unknown>;
   /** Is this workflow in the library. */
   has: (id: string) => boolean;
@@ -112,10 +136,17 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
   const fromLatent = REGEN_LATENT_GRAPH[endpoint];
   if (fromLatent && typeof r.extra.latentFrom === "string" && r.extra.latentFrom && r.has(fromLatent)) endpoint = fromLatent;
+  const oj = OPENJUTSU_VARIANTS[endpoint];
+  const ojSettings = r.extra.openjutsu as Record<string, unknown> | undefined;
+  if (oj && ojSettings?.[oj.key] === oj.value && r.has(oj.graph)) endpoint = oj.graph;
   const cover = YUE2_COVER_GRAPH[endpoint];
   if (cover && r.audio && r.has(cover)) endpoint = cover;
+  const words = OUTFIT_WORDS_GRAPH[endpoint];
+  if (words && r.images < 2 && r.has(words)) endpoint = words;
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
+  const brush = WATERMARK_BRUSH_GRAPH[endpoint];
+  if (brush && r.mask && r.has(brush)) endpoint = brush;
   // Idol 3D's four views ("Make the other sides from the front"): the view graph, which needs the ComfyUI-Idol pack.
   return idolViewsGraph(endpoint, r.extra, r.has);
 }

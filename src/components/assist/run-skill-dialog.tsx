@@ -20,7 +20,7 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { useElements } from "@/lib/api";
 import type { Engine } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
-import { checkValues, isMediaType, parseRows, RECIPE_LIMITS, type RecipeEstimate, type RecipeParam, type RecipeView } from "@/lib/recipe";
+import { checkValues, isMediaType, parseRows, RECIPE_LIMITS, TEST_RUN_DONE, TEST_RUN_NOTE, type RecipeEstimate, type RecipeParam, type RecipeView } from "@/lib/recipe";
 import { DEMO_NOTE } from "@/lib/recipe-builder";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
@@ -32,7 +32,6 @@ import { SkillIcon } from "./skill-icon";
  * Run a skill with new inputs (package W1): a form made from its recipe's inputs, priced live before it runs, one
  * run or many from a pasted CSV, on an engine where the recipe was checked. No LLM: the server compiles the recipe.
  */
-/** `csv`: the Many tab starts with these rows (a canvas's Table, saved as a skill). */
 export function RunSkillDialog({ name, onClose, examples, intro, csv }: { name: string | null; onClose: () => void; examples?: boolean; intro?: string; csv?: string }) {
   return (
     <Dialog open={!!name} onOpenChange={(o) => !o && onClose()}>
@@ -46,7 +45,7 @@ export function RunSkillDialog({ name, onClose, examples, intro, csv }: { name: 
 /** `examples`: the form starts filled with the values the skill was made from (a skill just made: "Try it with new inputs"). */
 function RunForm({ name, onClose, examples, intro, csv }: { name: string; onClose: () => void; examples?: boolean; intro?: string; csv?: string }) {
   const view = useRecipe(name);
-  if (view.data) return <Loaded view={view.data} onClose={onClose} examples={examples} intro={intro} startCsv={csv} />;
+  if (view.data) return <Loaded view={view.data} onClose={onClose} examples={examples} intro={intro} csv={csv} />;
   return (
     <div className="space-y-3 p-6">
       <DialogTitle className="sr-only">Run a skill</DialogTitle>
@@ -83,20 +82,21 @@ function priceLine(e: RecipeEstimate | undefined, runs: number): string {
   return runs > 1 ? `${formatCost(e.total)} for ${runs} runs ${where}` : `${formatCost(e.total)} ${where}`;
 }
 
-function Loaded({ view, onClose, examples, intro, startCsv }: { view: RecipeView; onClose: () => void; examples?: boolean; intro?: string; startCsv?: string }) {
+function Loaded({ view, onClose, examples, intro, csv: rowsCsv }: { view: RecipeView; onClose: () => void; examples?: boolean; intro?: string; csv?: string }) {
   const { recipe, name } = view;
   const actions = useRecipeActions();
   const skillActions = useSkillActions();
   const qc = useQueryClient();
   const router = useRouter();
-  const [tab, setTab] = useState<"one" | "many">(startCsv ? "many" : "one");
+  // Rows handed over (a canvas's Table): the Many tab, filled.
+  const [tab, setTab] = useState<"one" | "many">(rowsCsv ? "many" : "one");
   const [values, setValues] = useState<Record<string, string | number | undefined>>(() =>
     Object.fromEntries(recipe.params.map((p) => [p.id, examples && !isMediaType(p.type) && p.example !== undefined && p.example !== null ? p.example : p.default])),
   );
   const [slots, setSlots] = useState<Record<string, SlotValue | null>>(() =>
     examples ? Object.fromEntries(recipe.params.flatMap((p) => (isMediaType(p.type) && typeof p.example === "string" && p.example ? [[p.id, { ref: p.example, preview: p.example, kind: p.type }]] : []))) : {},
   );
-  const [csv, setCsv] = useState(startCsv ?? "");
+  const [csv, setCsv] = useState(rowsCsv ?? "");
   const [engine, setEngine] = useState<Engine>(view.ready[0] ?? view.engines[0] ?? "cloud");
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState<"run" | "check" | "on" | null>(null);
@@ -134,11 +134,11 @@ function Loaded({ view, onClose, examples, intro, startCsv }: { view: RecipeView
     try {
       const r = await actions.verify(name);
       const passed = r.engines.filter((e) => e.plan.ok && (e.dryRun?.ok ?? true)).map((e) => (e.engine === "cloud" ? "Cloud" : "your GPU"));
-      if (r.ok) toast.success(`Checked — it runs on ${passed.join(" and ")}`, { description: "Priced, and run once on the demo provider for free." });
+      if (r.ok) toast.success(`Test run passed — it runs on ${passed.join(" and ")}`, { description: TEST_RUN_DONE });
       else {
         const why = r.engines.flatMap((e) => [...e.plan.errors, ...(e.dryRun?.problems ?? [])]);
         setProblems(why);
-        toast.error(passed.length ? `It runs on ${passed.join(" and ")} only` : "The check didn't pass", { description: why[0] });
+        toast.error(passed.length ? `It runs on ${passed.join(" and ")} only` : "The test run didn't pass", { description: why[0] });
       }
       const next = r.view.ready;
       if (next.length && !next.includes(engine)) setEngine(next[0]);
@@ -173,23 +173,20 @@ function Loaded({ view, onClose, examples, intro, startCsv }: { view: RecipeView
       const r = await actions.run(name, JSON.parse(key) as typeof body);
       const started = r.runs.filter((x) => !x.error);
       const failed = r.runs.filter((x) => x.error);
-      // A skill that spans studios: its later steps start by themselves; the toast opens the run's progress.
-      const waiting = [...new Set(started.flatMap((x) => x.waiting ?? []))];
-      if (started.some((x) => x.run)) {
-        const title = failed.length ? `Started ${started.length} of ${r.runs.length} runs` : started.length > 1 ? `Started ${started.length} runs` : "Started the run";
-        (failed.length ? toast.warning : toast.success)(title, {
-          description: failed.length ? failed[0].error : `${waiting.length ? `${waiting.join(", ")} start${waiting.length === 1 ? "s" : ""} by ${waiting.length === 1 ? "itself" : "themselves"} when the step before is done.` : `${view.title}: same steps, new take.`}${r.demo ? " A demo run — no provider connected." : ""}`,
-          action: { label: "See progress", onClick: () => router.push(`/assist/skills?skill=${encodeURIComponent(name)}`) },
-        });
-        onClose();
-        return;
-      }
       const href = started[0]?.href ?? "/library";
       const studio = href.startsWith("/library") ? "Library" : href.startsWith("/video-tools/captions") ? "Captions" : "the studio";
       const title = failed.length ? `Started ${started.length} of ${r.runs.length} runs` : started.length > 1 ? `Started ${started.length} runs` : "Started the run";
+      // A run in stages: its steps start one after another; the toast opens the skill, where each step's progress shows.
+      const staged = started.find((x) => x.skillRun);
       (failed.length ? toast.warning : toast.success)(title, {
-        description: failed.length ? failed[0].error : r.demo ? "A demo run — no provider connected" : `${view.title}: same steps, new take`,
-        action: { label: `Open in ${studio}`, onClick: () => router.push(href) },
+        description: failed.length
+          ? failed[0].error
+          : staged?.waiting?.length
+            ? `${staged.waiting.join(", ")} start${staged.waiting.length === 1 ? "s" : ""} when the step before is done`
+            : r.demo
+              ? "Placeholder results, free — placeholders are on in Settings"
+              : `${view.title}: same steps, new take`,
+        action: staged ? { label: "See its steps", onClick: () => router.push(`/assist/skills?skill=${encodeURIComponent(name)}`) } : { label: `Open in ${studio}`, onClick: () => router.push(href) },
       });
       onClose();
     } catch (e) {
@@ -230,18 +227,18 @@ function Loaded({ view, onClose, examples, intro, startCsv }: { view: RecipeView
           <div className="flex flex-col gap-3 rounded-xl bg-muted/60 px-4 py-3 sm:flex-row sm:items-center">
             <ShieldCheck className="size-5 shrink-0 text-brand-text" />
             <p className="min-w-0 flex-1 text-[13px]">
-              <span className="font-medium">Check it once first — it&apos;s free.</span> <span className="text-muted-foreground">Fuobe prices every step and runs it on the demo provider, so you know it works before you spend anything.</span>
+              <span className="font-medium">Do a free test run first.</span> <span className="text-muted-foreground">{TEST_RUN_NOTE}</span>
             </p>
             <Button size="sm" onClick={() => void check()} disabled={busy !== null}>
-              {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Check it (free)
+              {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Test run (free)
             </Button>
           </div>
         ) : recheck?.length ? (
-          <Notice tone="warn" action={<Button size="sm" variant="outline" onClick={() => void check()} disabled={busy !== null}>{busy === "check" ? <Loader2 className="animate-spin" /> : null} Re-check</Button>}>
-            Needs a re-check: {recheck[0]}
+          <Notice tone="warn" action={<Button size="sm" variant="outline" onClick={() => void check()} disabled={busy !== null}>{busy === "check" ? <Loader2 className="animate-spin" /> : null} Test again (free)</Button>}>
+            Needs a new test run: {recheck[0]}
           </Notice>
         ) : null}
-        {recipe.source?.demo && !Object.values(recipe.verified ?? {}).some((v) => v?.real) && <Notice tone="info">{DEMO_NOTE}.</Notice>}
+        {recipe.source?.demo && !view.madeReal && !Object.values(recipe.verified ?? {}).some((v) => v?.real) && <Notice tone="info">{DEMO_NOTE}.</Notice>}
         {problems.length > 0 && (
           <div role="alert" className="space-y-1 rounded-xl bg-destructive/10 px-3 py-2 text-[13px] text-destructive">
             {problems.slice(0, 6).map((p, i) => (
@@ -309,12 +306,7 @@ function Loaded({ view, onClose, examples, intro, startCsv }: { view: RecipeView
                   {est?.place?.fallback && <p>{est.place.fallback}.</p>}
                   {view.models.filter((m) => m.engine === engine).length > 0 && (
                     <p>
-                      Licences (for your information):{" "}
-                      {view.models
-                        .filter((m) => m.engine === engine)
-                        .map((m) => `${m.name} — ${m.licence}`)
-                        .join("; ")}
-                      . Turn models on or off in{" "}
+                      Turn models on or off in{" "}
                       <Link href="/settings/models" className="underline underline-offset-2">
                         Models &amp; licences
                       </Link>
@@ -329,7 +321,7 @@ function Loaded({ view, onClose, examples, intro, startCsv }: { view: RecipeView
       </div>
       <DialogFooter className="mx-0 mb-0 flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
         <p className={cn("min-w-0 text-[13px] break-words", estError ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
-          {!view.enabled ? "Switched off" : !ready ? "Check it first to see the price" : estError ?? (canPrice ? price : tab === "one" ? (tried ? Object.values(checked.errors)[0] : "Fill in the inputs to see the price") : rows ? (rows.errors[0] ?? "Fix the rows marked below") : "Paste rows to see the total")}
+          {!view.enabled ? "Switched off" : !ready ? "Do a test run first to see the price" : estError ?? (canPrice ? price : tab === "one" ? (tried ? Object.values(checked.errors)[0] : "Fill in the inputs to see the price") : rows ? (rows.errors[0] ?? "Fix the rows marked below") : "Paste rows to see the total")}
         </p>
         <div className="flex shrink-0 gap-1.5 max-sm:w-full">
           <Button variant="ghost" size="sm" onClick={onClose} className="max-sm:flex-1">
@@ -338,7 +330,14 @@ function Loaded({ view, onClose, examples, intro, startCsv }: { view: RecipeView
           <Button size="sm" onClick={() => void run()} disabled={busy !== null || !view.enabled || !ready || (canPrice && (!fresh || estimate.isFetching)) || (tried && !runnable)} className="max-sm:flex-[2]">
             {busy === "run" ? <Loader2 className="animate-spin" /> : <Play />}
             {runs > 1 ? `Run ${runs}` : "Run"}
-            {runnable && est && !est.demo && est.total ? ` · ${formatCost(est.total)}` : ""}
+            {runnable && est && !est.demo && est.total
+              ? ` · ${formatCost(est.total)}`
+              : runnable && est && !est.demo && est.engine === "open"
+                ? " on your GPU"
+                : // Some Cloud prices vary (the footer says so): still a paid run, said before the tap.
+                  runnable && est && !est.demo && est.total === null && est.engine === "cloud"
+                  ? " · paid"
+                  : ""}
           </Button>
         </div>
       </DialogFooter>

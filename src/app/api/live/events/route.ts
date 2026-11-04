@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { liveWho } from "@/server/live/access";
 import { onLiveStatus, type LiveStatus } from "@/server/live/comfy-live";
 import { sessionOf } from "@/server/live/sessions";
+import { onShutdown } from "@/server/shutdown";
 
 /**
  * Live edit's status for this tab (server-sent events): `status` (online, who runs on ComfyUI, the queue, whether
@@ -28,7 +29,9 @@ export async function GET(request: Request) {
       const status = (st: LiveStatus) => send(`event: status\ndata: ${JSON.stringify(st)}\n\n`);
       const off = s.gpu ? (status({ online: true, running: null, queue: 0, otherRan: false }), () => {}) : onLiveStatus(status);
       const ping = setInterval(() => send(": ping\n\n"), 15_000);
+      let unhook = () => {};
       stop = () => {
+        unhook();
         clearInterval(ping);
         off();
         try {
@@ -36,6 +39,8 @@ export async function GET(request: Request) {
         } catch {}
       };
       request.signal.addEventListener("abort", () => stop(), { once: true });
+      // Ends when the server starts stopping, so an update's old instance stops at once (src/server/shutdown.ts).
+      unhook = onShutdown(() => stop());
     },
     cancel() {
       stop();

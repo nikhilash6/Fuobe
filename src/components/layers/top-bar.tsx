@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import type { Engine } from "@/lib/catalog/types";
@@ -119,7 +119,7 @@ function SaveBadge({ state, onRetry }: { state: SaveState; onRetry: () => void }
   const bad = state === "error" || state === "conflict";
   const body = (
     <>
-      {state === "saved" ? <Check className="size-3.5 shrink-0" /> : bad ? <CloudOff className="size-3.5 shrink-0" /> : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+      {state === "saved" ? <Check className="motion-confirm size-3.5 shrink-0" /> : bad ? <CloudOff className="size-3.5 shrink-0" /> : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
       <span className="sr-only">{text}</span>
       <span className="hidden xl:inline" aria-hidden>
         {short}
@@ -172,7 +172,6 @@ export function TopBar(p: {
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:px-3">
-      <SidebarTrigger className="md:hidden" />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button asChild variant="ghost" size="icon-sm" aria-label="All projects">
@@ -248,7 +247,7 @@ export function TopBar(p: {
           </TooltipTrigger>
           <TooltipContent>{p.doc.nodes.length ? "Copy the layers as a design file (JSON)" : "Add a layer to copy as JSON."}</TooltipContent>
         </Tooltip>
-        {/* Icons only below 1024 px (names stay in the tooltips and aria labels), so a tablet with the sidebar open keeps both engines in reach. */}
+        {/* Icons only below 1024 px (names stay in the tooltips and aria labels), so a tablet keeps both engines in reach. */}
         <div className="flex shrink-0 max-lg:[&_a>span]:hidden max-lg:[&_button>span]:hidden">
           <EngineSwitch value={p.engine} onChange={p.setEngine} />
         </div>
@@ -305,6 +304,7 @@ export function TopBar(p: {
           </ol>
         </SheetContent>
       </Sheet>
+      <PhoneNavButton />
     </header>
   );
 }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { APPS } from "@/lib/catalog/apps";
 import { modeHref, type HubKind } from "@/lib/hubs";
-import { recordForPath, unknownHubMode } from "@/lib/record-pages";
+import { hiddenStarterPage, recordForPath, unknownHubMode, unknownStarterPage } from "@/lib/record-pages";
 import { countsAsView, SHARE_VIEW_HEADER, shareRoute } from "@/lib/share";
 import {
   ACCOUNT_LIBRARY_MESSAGE,
@@ -27,12 +27,13 @@ import {
   ownerOnly,
   ownGpuRun,
 } from "@/lib/guest-access";
-import { authEnabled, crossSite, hasCloudKey, hostAllowed, LoginGuard, publicSignup, sessionCookieOf, sessionViewer, validSession, validToken, type Account, type Viewer } from "@/server/auth";
+import { ADMIN_BEARER, authEnabled, crossSite, hasCloudKey, hostAllowed, LoginGuard, publicSignup, sessionCookieOf, sessionViewer, validSession, validToken, type Account, type Viewer } from "@/server/auth";
 import { fileAccount, generationAccount } from "@/server/account-library";
 import { hit } from "@/server/rate";
 import { recordExists } from "@/server/records";
 import { findShare, shareGuard, shareTargetExists } from "@/server/share-access";
 import { hostedRunsOn } from "@/server/hosted-switch";
+import { authStoreFailed } from "@/server/auth-store";
 
 /**
  * Paths that work signed out: the login page and its API (and share links: openShare). Sign-up and
@@ -47,6 +48,16 @@ const OPEN = new Set(["/login", "/api/auth/login", "/api/auth/signup", "/api/aut
 const WORKER_BEARER = /^Bearer\s+fuobe_wkr_/i;
 const workerRoute = (pathname: string) => pathname.startsWith("/api/gpu/computer/");
 
+/**
+ * An admin token (src/server/admin-tokens.ts) works only on the admin API; the route checks the token and its scope
+ * itself. Making, listing and revoking admin tokens is the owner's signed-in browser's only: /api/admin/tokens/self is
+ * how a token reads its own name and scopes. Anywhere else it is refused, whatever else the request carries.
+ */
+const adminRoute = (pathname: string) => {
+  const p = safeDecode(pathname);
+  return p.startsWith("/api/admin/") && (!/^\/api\/admin\/tokens(\/|$)/i.test(p) || p === "/api/admin/tokens/self");
+};
+
 const APP_IDS = new Set(APPS.map((a) => a.id));
 
 /**
@@ -59,7 +70,7 @@ const APP_IDS = new Set(APPS.map((a) => a.id));
 function pass(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
   const app = /^\/apps\/([^/]+)\/?$/.exec(pathname)?.[1];
-  if ((app && !APP_IDS.has(safeDecode(app))) || unknownHubMode(pathname)) return notFound(request);
+  if ((app && !APP_IDS.has(safeDecode(app))) || unknownHubMode(pathname) || unknownStarterPage(pathname)) return notFound(request);
   const record = recordForPath(pathname);
   if (record && !recordExists(record)) return notFound(request);
   return NextResponse.next();
@@ -316,6 +327,11 @@ function safeDecode(s: string): string {
 }
 
 export function proxy(request: NextRequest) {
+  // Sign-in data that can't be used (the database, or an auth.json that couldn't be moved into it): nothing is served,
+  // not even /login, so a new release in this state is never switched to and the studio is never open by mistake.
+  if (authStoreFailed()) {
+    return new NextResponse("Fuobe can't read its sign-in data. The server log says why.", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "30" } });
+  }
   // DNS rebinding: a page whose own name now points at this machine. Every method, reads too. With a
   // password set the sign-in check below already stops it (the session cookie belongs to the real name).
   if (!authEnabled() && !hostAllowed(request.headers.get("host") ?? request.nextUrl.host)) {
@@ -330,6 +346,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: "Blocked a request from another website. Use Fuobe from its own address (or add it to FUOBE_ALLOWED_ORIGINS)." }, { status: 403 });
   }
   const { pathname, search } = request.nextUrl;
+  if (ADMIN_BEARER.test(request.headers.get("authorization") ?? "")) {
+    return adminRoute(pathname)
+      ? NextResponse.next()
+      : NextResponse.json({ error: "An admin token only works on the admin API." }, { status: 403, headers: { "Cache-Control": "no-store" } });
+  }
   // Share links are read-only and public, password or not: exactly a share's page and its files.
   const read = request.method === "GET" || request.method === "HEAD";
   const share = read && shareRoute(pathname);
@@ -350,6 +371,8 @@ export function proxy(request: NextRequest) {
   const open = publicSignup(request.headers.get("host") ?? request.nextUrl.host);
   const viewer = viewerOf(request, open);
   if (viewer?.kind === "owner") return pass(request);
+  // A starter with no real cover yet is the owner's: anyone else gets a real 404, not its words.
+  if ((viewer || open) && read && hiddenStarterPage(pathname)) return notFound(request);
   if (viewer?.kind === "account") return account(request, viewer.account);
   if (open) return guest(request);
   if (pathname.startsWith("/api/")) {
@@ -362,13 +385,14 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Everything except build assets and the public folder's own files: the favicon and app icons,
-  // the demo samples, the preset covers, vendored scripts (the 3D viewer's meshopt decoder) and the
+  // the demo samples, the preset covers, the examples pages load (public/examples), vendored scripts (the 3D viewer's meshopt decoder), the
+  // motion templates' own type faces (public/fonts) and the
   // SVGs at the root. Generated SVGs under /api/files stay behind sign-in. The routes that take a file in a form
   // (/api/uploads, a Soul finish, a Layers render, a skill upload, an Assist source, an explainer document), and Split
   // soundtrack's mix export (a WAV in parts of 16 MB), make the same checks themselves (src/server/direct-gate.ts): the
   // proxy would hold the whole file in memory first. So do a computer's report of a finished job and its results
   // (src/app/api/gpu/computer/tasks), and live edit's kept master from a tab on its own computer (src/app/api/live/masters).
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico$|apple-icon\\.png$|samples/|previews/|vendor/|api/uploads$|api/generations/[^/]+/finish$|api/layers/renders$|api/assist/skills/upload$|api/assist/projects/[^/]+/sources$|api/explainer/document$|api/audio-tools/export$|api/gpu/computer/tasks/[^/]+/(?:report|outputs/[^/]+)$|api/live/masters$|[^/]+\\.svg$).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico$|apple-icon\\.png$|samples/|previews/|examples/|vendor/|fonts/|api/uploads$|api/generations/[^/]+/finish$|api/layers/renders$|api/assist/skills/upload$|api/assist/projects/[^/]+/sources$|api/explainer/document$|api/audio-tools/export$|api/gpu/computer/tasks/[^/]+/(?:report|outputs/[^/]+)$|api/live/masters$|[^/]+\\.svg$).*)",
   ],
 };

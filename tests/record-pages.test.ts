@@ -1,17 +1,16 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { recordForPath, unknownHubMode } from "@/lib/record-pages";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-records-"));
+const dir = tempDir("fuobe-records-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 const { db } = await import("@/server/db");
 const { recordExists } = await import("@/server/records");
 const { proxy } = await import("@/proxy");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** Where the proxy sent a page request: its own path, or the not-found page (with the status). */
 function routed(pathname: string): { status: number; to: string | null } {
@@ -54,8 +53,9 @@ describe("record pages (real 404s)", () => {
     };
     walk(app, []);
     expect(routes.length).toBeGreaterThan(40);
-    // Ids the catalog answers for (apps, hub modes), not stored records, and share tokens: the proxy checks those itself.
-    const catalog = /^\/(apps|audio|video-tools|upscale|s)\/\[/;
+    // Ids the catalog answers for (apps, hub modes, Canvas templates, ready-made starters' pages), not stored records, and
+    // share tokens: the proxy checks those itself.
+    const catalog = /^\/(apps|audio|video-tools|upscale|s|canvas\/start)\/\[|\/start\/\[id\]$/;
     for (const route of routes) {
       if (!route.includes("[")) {
         expect(recordForPath(route), route).toBeNull();

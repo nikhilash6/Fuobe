@@ -1,14 +1,12 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // The canvas Video concatenator on the open engine (r4/canvas-plus): each clip's fit pass (video-fit-clip: cut,
 // frame, 30 fps, its sound or silence) and the packet-copy join, as the provider binds them.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-canvas-comfy-"));
+const tmp = tempDir("fuobe-canvas-comfy-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -16,7 +14,6 @@ const { getModel } = await import("@/lib/catalog");
 const { describeNode } = await import("@/lib/catalog/canvas");
 const { planGeneration } = await import("@/lib/catalog/plan");
 const { getPreset } = await import("@/lib/catalog");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 async function prepare(id: string, input: GenInput, op: Operation, media: Record<string, MediaInfo> = {}) {
   return prepareWorkflow(id, { seed: 7, ...input }, {

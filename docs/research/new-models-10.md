@@ -18,7 +18,7 @@ _As of 2026-11-01. Machine-readable twin: [`new-models-10.json`](new-models-10.j
 
 ## 2. What is new, by area
 
-Columns: licence as written by the publisher; VRAM as published (guesses are marked); "hosted" means fal or Replicate (the only clouds the owner's rule counts); ComfyUI: native core, an official pack, or community. "In Fuobe": **yes** built, **queued** in docs/handoff/queue.json, **no** missing.
+Columns: licence as written by the publisher; VRAM as published (guesses are marked); "hosted" means fal or Replicate (the only clouds counted); ComfyUI: native core, an official pack, or community. "In Fuobe": **yes** built, **queued** in docs/handoff/queue.json, **no** missing.
 
 ### 2.1 Video generation (open)
 
@@ -61,7 +61,7 @@ Columns: licence as written by the publisher; VRAM as published (guesses are mar
 | **FLUX 3 Image Klein** + Base + prompt upsampler (10-13) | 5.6B t2i, edit, up to 10 references, layout boxes; 16 steps (Base 50) | FLUX Kommunity License v1.0 (non-commercial; commercial output for < US$5M revenue); Qwen3-VL-4B encoder Apache-2.0; gated "auto" | int8 DiT 5.83 GB, encoder int8 4.86 GB, upsampler w4a8 6.72 GB; B200 peak 25-31 GB; 17.8 GB measured by Freefield | native (templates 10-15) | fal `blackforestlabs/flux-3/klein/*` incl. `/lora` and trainers (10-26) | no (round 4 parked it on licence) |
 | Qwen-Image 2.1 speed: LightX2V Lightning 4-step (10-13), DMD2 2-step (10-23), Pruna P-Q-Image 6-step v0.2 (10-27), Fun Acc 4-step (09-24), Turbo8, Viggle Turbo | 2-8 steps at CFG 1 | Lightning Apache-2.0 (per comfyui-wiki; HF tag empty); the rest Qwen Research | LoRAs | LoRAs; Pruna ships official workflows | no | no (Fuobe has the official Turbo checkpoint) |
 | **Zen Image Edit** (09-22) | Qwen-Image 2.1 with a 0.8B encoder (17.5 → 1.7 GB) + a cleaner VAE | Qwen Research | ~17.5 GB resident | custom (two routes) | no | no |
-| Qwen-Image 2.1 LoRAs: Next-Scene, Multiple-Angles (72 views), AnyAngle, Consistency, Restore, Outfit Swap, Head Swap (BFS), Fun ControlNet Union | storyboards, angles, edits on frame, control | Next-Scene / Multiple-Angles Apache-2.0 (per comfyui-wiki); AnyAngle MIT; others vary | LoRAs; ControlNet 7.5 GB | LoRAs / custom | fal has 2509/2511 gallery LoRAs only (fal's own Qwen-Image 2.1 and its edit, read 11-02, take no LoRAs) | QMA angles built (qma-angles, open engine) |
+| Qwen-Image 2.1 LoRAs: Next-Scene, Multiple-Angles (72 views), AnyAngle, Consistency, Restore, Outfit Swap, Head Swap (BFS), Fun ControlNet Union | storyboards, angles, edits on frame, control | Next-Scene / Multiple-Angles Apache-2.0 (per comfyui-wiki); AnyAngle MIT; others vary | LoRAs; ControlNet 7.5 GB | LoRAs / custom | fal has 2509/2511 gallery LoRAs only (fal's own Qwen-Image 2.1 and its edit, read 11-02, take no LoRAs) | QMA angles built (open engine) |
 | Krea 2 BBOX (10-27), Kroma v0.3.1 (10-07), Krea 2 Turbo 2- and 3-step distills, Krea 2 Edit V2, Inpaint Edit, Lineart Edit, Anygles | layout boxes, speed, edits | Krea 2 Community; others unconfirmed | BBOX single files 26 GB | stock nodes / ComfyUI-Krea2Edit | no | Krea 2 family yes; these no |
 | MOSS-Image Edit LoRA (10-22, core node), Edit HQ v5 (10-25), Kromoss (10-19, Apache-2.0), rapid-moss 4-step, DMD 8-step, MAX ULTRA LoHa (4 MP), Destripe, Color/Depth control (core), KohakuMoss trainer | edits, speed, hi-res, control | mostly Apache-2.0 / unconfirmed | LoRAs | core edit node after v0.42.1 | no | MOSS-Image yes; control queued (`n7-11`); edit no |
 | Ming-Image 0.1 Design / Design-Layer (09-17) | design images, RGBA layer split | MIT | Comfy repack 162 GB, 80 GB GPU | Design native (v0.38) | no | no |
@@ -194,7 +194,7 @@ Value: how many Fuobe users would use it and how visible the improvement is (1-5
 | — | MOSS-Image Edit LoRA, Krea 2 BBOX / Edit V2 / 3-step, Anima Reference Adapter | 2 | 3 | 6 | next round |
 | — | Fish Audio Drama 3 locally (no ComfyUI node; ~40 GB) | 3 | 1 | 3 | watch |
 | — | Retexture on the open engine (UltraTex: licence and VRAM unconfirmed) | 2 | 2 | 4 | watch (Meshy retexture is in `nm10-hosted-catchup`) |
-| — | Realtime steering (H3 Max Director, Eden Live, Krea 3 Realtime): WebRTC sessions, a new runtime in Fuobe | 3 | 1 | 3 | owner's call |
+| — | Realtime steering (H3 Max Director, Eden Live, Krea 3 Realtime): WebRTC sessions, a new runtime in Fuobe | 3 | 1 | 3 | open |
 
 The build order in §6.1 groups these by priority: the H3 packages (ranks 5-6) are P0 despite a lower feasibility score because they upgrade the open engine's flagship video model, which most owners hit.
 
@@ -204,20 +204,20 @@ The build order in §6.1 groups these by priority: the H3 packages (ranks 5-6) a
 |---|---|---|
 | `n7-3-regenerate-2k` (and `n7-4`, `n7-10`) | ComfyUI core merged MiniMax H3 latent upscalers (PR #17412) and a Sol-H3-VAE loader (PR #17411) on 2026-10-28 (master, not v0.43.1). Sol-H3-VAE decodes 2K in 0.89 s instead of 14.5 s on a GB200. | After a pin bump (done in `nm10-h3-any-gpu`), use the core upscaler instead of installing the LBH pack, and test Sol-H3-VAE as the decoder. The rdh pack is still needed for the refine recipe. |
 | (n7-3 as built, 2026-11-01) | The CPU ComfyUI here is 0.41.0 (`fc04da91`): its `/object_info` has no core H3 latent upscaler and no Sol-H3-VAE loader. rdh9616's `OpenH3RegenUpscale` looks up LBH's `MinimaxH3LatentUpscaler3D` class by name (`__init__.py` L415-418) and raises without it, so the core upscaler alone would not serve the rdh graph. | n7-3 installs both packs (`OPEN_H3_REGEN=1`). Dropping the LBH pack needs the core upscaler in the pin and a change to the rdh node (or a graph on core nodes): revisit with `nm10-h3-any-gpu`'s pin bump. |
-| (nm10-h3-any-gpu, 2026-11-02) | Read at the source: #17412 adds core `MiniMaxH3LatentUpscaleWithModel` (model/latent/minimax) and teaches core `LatentUpscaleModelLoader` the H3 upscaler's state dict; #17411 teaches the core `VAELoader` the Sol decoder (no new node). Open-H3-Regenerate's `vae_fast/fast_h3_vae_noncausal_24l.safetensors` is byte-identical to Sol-H3-VAE's `sol_h3_vae.safetensors` (SHA-256 `8658f1e8…`, 6.47 GB); Comfy-Org repacks it as `minimax_h3_sol_vae_int8_convrot` (1.99 GB) and `_fp16` (3.6 GB) at `912b6e38`. Both PRs are on master only (v0.43.2 lacks them; master's `comfyui_version.py` still reads 0.43.0). | `install-comfyui.sh` keeps `fc04da91` as its default and names master `17ff1dcc` (2026-11-01, has both PRs) as an opt-in `COMFYUI_REF`: the library is not yet re-validated on it (the running CPU server here is still `fc04da91`), so the default moves, and Fast decode is offered, only after a session validates the whole library there. The LBH pack is unnecessary only for a graph built on the core nodes (`LatentUpscaleModelLoader` → `MiniMaxH3LatentUpscaleWithModel`) with the upscaler file Regenerate already pins (`minimax_h3_latent_upscaler_3d_conv_v1_bf16`, the same bytes as LBH's; its header has the three keys the core loader looks for, read 2026-11-02); rdh9616's `OpenH3RegenUpscale` still calls LBH's class by name, so `video-regenerate-h3` keeps both packs until its upscale step moves to the core nodes. Regenerate's fast decoder could move to the core `VAELoader` on the new pin (same file). |
-| `idol-1` … `idol-9` | `speridlabs/idol` is **hosted on fal** (active since 2026-10-30). idol-1 says "Idol is not on fal or Replicate (§6). Do not add a cloud half". | Under the owner's rule Idol now qualifies for a cloud route: fetch the schema and add the cloud half to idol-1 (or a small follow-up), labelled as Idol. |
+| (2026-11-02) | Read at the source: #17412 adds core `MiniMaxH3LatentUpscaleWithModel` (model/latent/minimax) and teaches core `LatentUpscaleModelLoader` the H3 upscaler's state dict; #17411 teaches the core `VAELoader` the Sol decoder (no new node). Open-H3-Regenerate's `vae_fast/fast_h3_vae_noncausal_24l.safetensors` is byte-identical to Sol-H3-VAE's `sol_h3_vae.safetensors` (SHA-256 `8658f1e8…`, 6.47 GB); Comfy-Org repacks it as `minimax_h3_sol_vae_int8_convrot` (1.99 GB) and `_fp16` (3.6 GB) at `912b6e38`. Both PRs are on master only (v0.43.2 lacks them; master's `comfyui_version.py` still reads 0.43.0). | `install-comfyui.sh` keeps `fc04da91` as its default and names master `17ff1dcc` (2026-11-01, has both PRs) as an opt-in `COMFYUI_REF`: the library is not yet re-validated on it (the running CPU server here is still `fc04da91`), so the default moves, and Fast decode is offered, only after a session validates the whole library there. The LBH pack is unnecessary only for a graph built on the core nodes (`LatentUpscaleModelLoader` → `MiniMaxH3LatentUpscaleWithModel`) with the upscaler file Regenerate already pins (`minimax_h3_latent_upscaler_3d_conv_v1_bf16`, the same bytes as LBH's; its header has the three keys the core loader looks for, read 2026-11-02); rdh9616's `OpenH3RegenUpscale` still calls LBH's class by name, so `video-regenerate-h3` keeps both packs until its upscale step moves to the core nodes. Regenerate's fast decoder could move to the core `VAELoader` on the new pin (same file). |
+| `idol-1` … `idol-9` | `speridlabs/idol` is **hosted on fal** (active since 2026-10-30). idol-1 says "Idol is not on fal or Replicate (§6). Do not add a cloud half". | Idol now qualifies for a cloud route: fetch the schema and add the cloud half to idol-1 (or a small follow-up), labelled as Idol. |
 | `qma-angles` | akhaliq's Qwen-Image-2.1 Multiple-Angles LoRA (72 framings; Apache-2.0 per comfyui-wiki), AnyAngle (MIT, renders from a splat or GLB), Krea 2 Anygles and Fisher Pose appeared. Speed LoRAs (`nm10-qwen21-fast`) can cut QMA's 30 steps. | Keep QMA (the owner's pick); record the alternatives; try the 4-step Lightning LoRA with QMA as an optional fast preview. |
 | `blockout-film` | fal `minimax/h3-max/3d-to-video` (09-16) turns a Blender / 3D proxy animation (≤ 15 s, ≤ 32 shots) plus references into a finished video; SolarRenderer (H3 LoRAs, 10-13) renders grey boxes, semantic maps or SMPL meshes in 4 steps on the open engine. | Both are the same task as the brief: offer H3 Max 3D-to-video as a cloud model under its own name next to Seedance 2.5, and record SolarRenderer as the open route to test. |
 | `inbetweening` | Pika H3 Flex FL2VA (first + last frame, 6 steps, with sound) and TaoMate-H3-FL2VA. | Optional H3 in-between route once `nm10-pika-flex` lands; Wan 2.2 FLF2V stays the default. |
 | `n7-4-character-swap-2k` / Character Swap Studio | Alissonerdx's H3 Character Swap v1.1 (80 MB dynamic-rank LoRA, better likeness; BFS-Character-Swap-Community-1.1 licence). | Record it; A/B against Akatz Labs' LoRA in the evaluation harness before offering it. |
 | `n7-9-worldcast-worker` | Hy-Nomas (Apache-2.0) is a different, steerable world model. | No change; `nm10-hy-nomas-world` reuses its camera-path pieces. |
-| `dbs-d3` / `dbs-d5` | fal added VEED Dubbing / Pro (10-28) and Mureka stems. | Neither is a DBS stand-in; use only under their own names, if at all. The owner's "no SAM Audio stand-in" rule is unaffected. |
+| `dbs-d3` / `dbs-d5` | fal added VEED Dubbing / Pro (10-28) and Mureka stems. | Neither is a DBS stand-in; use only under their own names, if at all. The "no SAM Audio stand-in" rule is unaffected. |
 | `archive-restore` | RTX Video Super Resolution and Kandinsky VSR give fast preview tiers. | Optional: reuse `nm10-rtx-video`'s graph as the "quick look" before the LTX restore. |
 | Soul ID training | fal's FLUX 3 Klein LoRA trainers (10-26). | Added as a target in `nm10-flux3-klein`. |
 
 ## 6. Build plan
 
-Rules this plan follows (docs/HANDOFF.md, "The owner's rules"): no Higgsfield API, keys or models; licences are information, not gates (every package records its licences in Settings → Models & licences, all switched on); each engine does all it can, the cloud uses only models hosted on fal or Replicate with no substitute model, and the open engine keeps every capability it has; no SAM Audio stand-in in the cloud (nothing here proposes one). Put each thing where people already work. Each brief in the JSON twin is self-contained and ends with the standard CLOUD, MAIN CHANGED and PUBLIC SIGN-UP paragraphs copied from the queue.
+Rules this plan follows (docs/HANDOFF.md): no Higgsfield API, keys or models; licences are information, not gates (every package records its licences in Settings → Models & licences, all switched on); each engine does all it can, the cloud uses only models hosted on fal or Replicate with no substitute model, and the open engine keeps every capability it has; no SAM Audio stand-in in the cloud (nothing here proposes one). Put each thing where people already work. Each brief in the JSON twin is self-contained and ends with the standard CLOUD, MAIN CHANGED and PUBLIC SIGN-UP paragraphs copied from the queue.
 
 ### 6.1 Order
 
@@ -275,7 +275,7 @@ Every brief also carries the standard CLOUD ONLY WHERE IT IS HOSTED, MAIN CHANGE
 
 _Lane R · priority P0 · effort medium · depends on none_
 
-**Why.** BFL's open 5.6B FLUX 3 Image Klein (2026-10-13) is the most-downloaded new image repo on Hugging Face (flux-3-image-klein-comfy is #1 trending image-to-image) and tops the open models on Artificial Analysis' October arena (1043 Elo vs Qwen-Image 2.1 1042, as cited by Freefield). Round 4 (comfyui-oss-4.md §h) parked it as 'opt-in only (licence)', which the owner's rule now overrules: licences are information. fal hosts the same model with LoRAs (2026-10-26) and a LoRA trainer, so it fits both engines exactly.
+**Why.** BFL's open 5.6B FLUX 3 Image Klein (2026-10-13) is the most-downloaded new image repo on Hugging Face (flux-3-image-klein-comfy is #1 trending image-to-image) and tops the open models on Artificial Analysis' October arena (1043 Elo vs Qwen-Image 2.1 1042, as cited by Freefield). Round 4 (comfyui-oss-4.md §h) parked it as 'opt-in only (licence)', which is now overruled: licences are information. fal hosts the same model with LoRAs (2026-10-26) and a LoRA trainer, so it fits both engines exactly.
 
 **Where it shows up.** Image studio model menu (Best list beside Ideogram 4 and Qwen-Image 2.1), Edit studio (multi-reference), Layout mode (the flux3 compiler already exists), Settings → LoRAs, Elements → Train (a new training target), Canvas image node, Assist.
 
@@ -289,7 +289,7 @@ Cloud engine (fal; fetch every schema with the existing scripts first): blackfor
 
 Training: add a training target "FLUX 3 Klein" in src/lib/catalog/training.ts on fal's trainer (price it from the schema/page; record the licence and the 'not blanket permission for commercial fine-tuning' line). On the open engine add an AI-Toolkit target only if AI-Toolkit (the version Fuobe pins) supports FLUX 3 Klein Base: check its config list and say what you found; otherwise the open engine trains nothing new for Klein and the target says 'cloud trainer'.
 
-Placements: Image studio Best list; Edit studio multi-reference (10 slots); the Canvas image node; Soul ID 'Train for' picker; Assist's model knowledge. Do not make it a default anywhere (Ideogram 4 / Qwen-Image 2.1 stay) unless the owner says so; note the arena result in the PR.
+Placements: Image studio Best list; Edit studio multi-reference (10 slots); the Canvas image node; Soul ID 'Train for' picker; Assist's model knowledge. Do not make it a default anywhere (Ideogram 4 / Qwen-Image 2.1 stay) for now; note the arena result in the PR.
 
 Tests: library test for the three graphs (bindings, limits, pins, sizes); payload tests for each fal route (LoRA list, bounding_boxes from compileFlux3, prompt expansion off with a layout, megapixel price at 1024 and 2048); training target pricing; browser checks of the Image studio picker, Edit with 10 references and the training dialog at 1440 and 390 px, light and dark, in demo mode. No GPU and no fal key here: say what waits for them.
 
@@ -416,7 +416,7 @@ Candidates (record licence, revision, size, settings for each; pick by test on t
 
 - Texture-Fix VAE for Qwen-Image 2.1 (2026-09-24): a retrained decoder that loads like any VAE.
 
-- akhaliq's Qwen-Image-2.1 Next-Scene LoRA (2026-10-07; Apache-2.0 per comfyui-wiki; the HF API refused an anonymous read: confirm) and Multiple-Angles LoRA (72 azimuth/elevation framings): the latter is only a note for qma-angles (the owner chose the QMA LoRA).
+- akhaliq's Qwen-Image-2.1 Next-Scene LoRA (2026-10-07; Apache-2.0 per comfyui-wiki; the HF API refused an anonymous read: confirm) and Multiple-Angles LoRA (72 azimuth/elevation framings): the latter is only a note for qma-angles (the QMA LoRA is the pick).
 
 Build:
 
@@ -656,7 +656,7 @@ Build:
 
 3. Cinema 'World' take: opening description, turns list (words + a camera move chip + seconds), Preview the path, Run turn, Redo from here (keeps earlier turns), Export (join with video-concat). Sound: Hy-Nomas makes none: offer the existing Foley / music tools after.
 
-4. CLOUD: Hy-Nomas is not hosted on fal or Replicate: open engine only ('Runs on your GPU (open source)'; 'Paid APIs only' hides it). fal's worlds models (H3 Max Director realtime WebRTC sessions with a 60 s minimum; Abot World 0; Lingbot World 2 'research' licence; Eden Live) are different models, not stand-ins: record them in the research JSON; whether to offer any of them under its own name is the owner's call.
+4. CLOUD: Hy-Nomas is not hosted on fal or Replicate: open engine only ('Runs on your GPU (open source)'; 'Paid APIs only' hides it). fal's worlds models (H3 Max Director realtime WebRTC sessions with a 60 s minimum; Abot World 0; Lingbot World 2 'research' licence; Eden Live) are different models, not stand-ins: record them in the research JSON; whether to offer any of them under its own name is the decision.
 
 5. Relation to queued work: n7-9-worldcast-worker (WorldCast fly-around from one photo) is a different model and stays; reuse its camera-path pieces if they landed first.
 
@@ -714,10 +714,10 @@ Models (primary pages)
 - Freefield: https://github.com/neuregex/freefield (via https://comfyui-wiki.com/en/news/2026-10-27-freefield)
 - Competitors: https://www.androidsage.com/2026/10/23/capcut-19-9-0-apk/ , https://letsdatascience.com/news/google-rolls-out-nano-banana-21-image-model-c6ac3b89 , https://globenewswire.com/news-release/2026/10/27/3389469/0/en/vidu-powers-china-s-first-ai-feature-length-film-demonstrating-its-full-cinematic-potential.html
 
-Fuobe (read only, `claude/fuobe-parity-4`)
+Fuobe (read only)
 - `src/lib/catalog/models.ts`, `src/lib/catalog/cloud-models.generated.ts`, `src/lib/studios.ts`, `src/lib/layout-prompt.ts`, `src/lib/catalog/keyframes.ts`, `src/lib/catalog/training.ts`, `workflows/comfyui/manifest.json`, `docs/FEATURES.md`, `docs/HANDOFF.md`, `docs/handoff/queue.json`, `docs/research/README.md`, `new-models-7.md`, `comfyui-oss.md`, `comfyui-oss-4.md`, `paid-model-apis*.json`.
 
-## Correction (qma-angles, 2026-11-02)
+## Correction (2026-11-02)
 
 - **fal now serves Qwen-Image 2.1**: `fal-ai/qwen-image-2.1` (text to image, $0.02 per megapixel) and `fal-ai/qwen-image-2.1/edit` (1-10 references, $0.0367 per megapixel). Neither shows in fal's model search yet, and neither takes LoRA URLs (no `/lora` twin), so LoRA features on 2.1 (QMA, Next-Scene, the speed LoRAs) stay on the open engine. A plain cloud Qwen-Image 2.1 model is now possible: a package of its own (research record, `gen-cloud-models.py`). Replicate still has no Qwen-Image 2.1.
 - The QMA camera-angles LoRA (gribbliest @ 13007eec, 318,820,224 bytes, Apache-2.0 on its card, non-commercial through its base) is recorded in `new-models-10.json` and in `fuobe-originals-recipes-5.json` adapterLoras (`qwen21-qma-angles`).

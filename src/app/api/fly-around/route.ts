@@ -4,7 +4,7 @@ import { priceAs } from "@/server/visitor";
 import { worldcastContextNow } from "@/server/worldcast-on";
 
 /**
- * Fly around (build plan N7-7): a still filmed along an exact camera path (an orbit's numbers, a preset or keys), on either
+ * Fly around: a still filmed along an exact camera path (an orbit's numbers, a preset or keys), on either
  * engine. `?preview=1` plans and prices it without running it. Fuobe DoP, Image to 3D, Canvas and Assist call it.
  */
 async function post(request: Request) {

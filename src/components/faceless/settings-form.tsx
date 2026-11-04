@@ -5,7 +5,7 @@ import { AtSign, ChevronDown, Film, Images, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { fileToList, MediaSlot, SlotPreview, type SlotValue } from "@/components/studio/media-slot";
+import { fileToList, SlotPreview, type SlotValue } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { useElements, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
@@ -15,15 +15,12 @@ import {
   ENGINE_MODELS,
   FACELESS_LENGTHS,
   MAX_STYLE_REFS,
-  MUSIC_CLIP_HINT,
-  MUSIC_CLIP_MIN_SECONDS,
   MUSIC_HINT,
-  type MusicClip,
   type EpisodeSettings,
   type PickerData,
 } from "@/lib/catalog/faceless";
-import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { ClipBed } from "./clip-bed";
 import { Section, Segmented, ToggleRow } from "./controls";
 import { NarratorList } from "./narrator";
 import { StyleGrid } from "./style-art";
@@ -110,77 +107,6 @@ export function ElementsPicker({ value, onChange }: { value: string[]; onChange:
           </button>
         );
       })}
-    </div>
-  );
-}
-
-/** Reads a clip's length in the browser (the bed's loop needs it); null when it can't be read. */
-function clipSeconds(url: string): Promise<number | null> {
-  return new Promise((resolve) => {
-    const v = document.createElement("video");
-    v.preload = "metadata";
-    v.muted = true;
-    const done = (n: number | null) => {
-      v.removeAttribute("src");
-      v.load();
-      resolve(n);
-    };
-    v.onloadedmetadata = () => done(Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null);
-    v.onerror = () => done(null);
-    v.src = url;
-  });
-}
-
-/**
- * "Use a clip's soundtrack as the bed": its music and sound effects (the talking taken out on your GPU) looped under
- * the voice instead of a generated bed. The cloud says it runs on your GPU and makes its own bed.
- */
-function MusicClipPicker({ engine, value, onChange }: { engine: Engine; value?: MusicClip; onChange: (v: MusicClip | undefined) => void }) {
-  const [slot, setSlot] = useState<SlotValue | null>(() => (value ? { ref: value.url, preview: value.url, kind: "video", name: value.name } : null));
-  const [problem, setProblem] = useState<string | null>(null);
-  const ref = slot && !slot.uploading ? slot.ref : null;
-  useEffect(() => {
-    if (!ref || ref === value?.url) return;
-    let live = true;
-    void clipSeconds(ref).then((n) => {
-      if (!live) return;
-      // A clip that can't be used leaves no bed behind it (never the clip it replaced).
-      if (n === null || n < MUSIC_CLIP_MIN_SECONDS) {
-        setProblem(n === null ? "Couldn't read this clip's length — try an MP4" : `Pick a clip of ${MUSIC_CLIP_MIN_SECONDS} s or more`);
-        onChange(undefined);
-        return;
-      }
-      setProblem(null);
-      onChange({ url: ref, ...(slot?.name ? { name: slot.name } : {}), duration: Math.round(n * 1000) / 1000 });
-    });
-    return () => {
-      live = false;
-    };
-    // Only when the uploaded clip changes; `value` follows it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ref]);
-  const open = engine === "open";
-  return (
-    <div className="flex min-w-0 items-start gap-3 rounded-xl border p-3" data-testid="music-clip">
-      {open && (
-        <MediaSlot
-          label="Clip for the music bed"
-          kind="video"
-          value={slot}
-          onChange={(v) => {
-            setSlot(v);
-            setProblem(null);
-            // Emptied, or a new clip on its way: the old bed goes until the new one's length is read.
-            if (!v || v.uploading || v.ref !== value?.url) onChange(undefined);
-          }}
-        />
-      )}
-      <div className="min-w-0 flex-1">
-        <span className="block text-[13px] font-medium">Use a clip&apos;s soundtrack as the bed</span>
-        <span className="block text-[12px] leading-snug text-muted-foreground">{MUSIC_CLIP_HINT[engine]}</span>
-        {open && value && !problem && <span className="mt-1 block truncate text-[12px] text-muted-foreground">{value.name ?? "Your clip"} · {Math.round(value.duration)} s{value.duration < 60 ? " · loops with a soft crossfade" : ""}</span>}
-        {open && problem && <span className="mt-1 block text-[12px] text-warning">{problem}</span>}
-      </div>
     </div>
   );
 }
@@ -273,8 +199,8 @@ export function EpisodeSettingsForm({
         <div className="grid gap-3 rounded-xl border p-3 sm:grid-cols-2">
           <ToggleRow label="Subtitles" hint="Burned into the video, timed to the voice" checked={value.subtitles} onChange={(subtitles) => onChange({ subtitles })} />
           <ToggleRow label="Background music" hint={MUSIC_HINT[value.engine]} checked={value.music} onChange={(music) => onChange({ music })} />
+          {kind === "faceless" && value.music && <ClipBed engine={value.engine} value={value.bedClip} onChange={(bedClip) => onChange({ bedClip })} />}
         </div>
-        {value.music && <MusicClipPicker engine={value.engine} value={value.musicClip} onChange={(musicClip) => onChange({ musicClip })} />}
       </Section>
 
       <Section title="Style" hint="Choose either a style preset or your own style references.">

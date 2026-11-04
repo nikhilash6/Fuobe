@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { getModel, getPreset } from "@/lib/catalog";
+import { ANY_ANGLE } from "@/lib/catalog/any-angle";
+import { NO_SUBJECT_MESSAGE, withFrontView } from "./any-angle";
 import { applyMentions } from "@/lib/catalog/elements";
 import { migrateRequest, replacedBy } from "@/lib/catalog/replaced";
 import { directorFieldWords } from "@/lib/catalog/cinema";
@@ -10,6 +12,7 @@ import { withSignatureWords } from "@/lib/catalog/palettes";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
 import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
+import { checkWatermarkBoxes, COPY as WATERMARK_COPY, parseScanReport, rejectedRepair, type WatermarkQuality } from "@/lib/watermark";
 import { sideMultipleProblem, upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
 import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, insertRangeProblem, portraitShapeProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
@@ -58,11 +61,10 @@ import { H3_TIER_PARAM, H3_UNET_PARAM } from "@/lib/gpu/h3-tier";
 import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qwen21-speed";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
-import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
+import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, createVoiceFirst, joinClips } from "./chains";
 import { chainedRefine } from "@/lib/av/hi3d";
+import { wantsVoiceFirst } from "@/lib/av/voice-first";
 import { createH3TwoKRun, createRegenerateRun, keepsH3Latent, regenSwitchedOff } from "./regenerate";
-import { createVoiceFirstRun, voiceFirstPlanFor } from "./voice-first";
-import { BED_NOTES, VOICE_FIRST_LABEL } from "@/lib/av/voice-first";
 import { H3_2K_STEPS_NOTE, h3TwoKRequests, REGEN_COPY, REGEN_MODEL, regenerateGraphLoras, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
 import { kandinskyPrompt } from "@/lib/kandinsky-prompt";
@@ -92,6 +94,7 @@ import type { PollContext, PollResult, ProviderAdapter, RemoteOutput } from "./p
 import { mediaFacts } from "./media-facts";
 import { renderPathVideo } from "./path-render";
 import { songFormat, songToolProblem } from "@/lib/lyrics";
+import { hostedUntested } from "@/lib/catalog/hosted-untested";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
@@ -104,7 +107,7 @@ import { sweepBilling } from "./billing-outbox";
 import { inDemoScope, outsideDemo } from "./demo-scope";
 import { moderationConfigured } from "./moderation";
 import { holdForCheck, sweepOutputChecks } from "./output-checks";
-import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir } from "./storage";
+import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir, scratchOutputFile } from "./storage";
 
 interface Row {
   id: string;
@@ -269,6 +272,8 @@ export interface ListOptions {
   favorites?: boolean;
   status?: string;
   statuses?: string[];
+  /** Only clips saved from this Marketing template (a Kinetic Motion recipe that names it). */
+  template?: string;
   /** Only the Trash, newest deletion first (`before` is then a deletedAt cursor). Otherwise the Trash is left out. */
   trashed?: boolean;
   folderId?: string;
@@ -328,6 +333,7 @@ export function listGenerations(o: ListOptions = {}): Generation[] {
   if (o.favorites) add("g.favorite = 1");
   if (o.status) add("g.status = ?", o.status);
   if (o.statuses?.length) oneOf("g.status", o.statuses);
+  if (o.template) add("json_extract(g.request_json, '$.params.extra.motion.controls.template') = ?", o.template);
   if (o.folderId) add("fi.folder_id = ?", o.folderId);
   if (o.folderIds?.length) oneOf("fi.folder_id", o.folderIds);
   if (o.pinned !== undefined) add(o.pinned ? "g.pinned_at IS NOT NULL" : "g.pinned_at IS NULL");
@@ -419,12 +425,12 @@ export const ASSET_REFS: AssetRef[] = [
   { table: "content_series", cols: ["data_json"], what: "Content Factory series", name: "COALESCE(json_extract(data_json, '$.name'), json_extract(data_json, '$.reference.title'))" },
   // Assist's scheduled tasks: the files the prompt runs with, and the files a skill task's inputs name.
   { table: "assist_schedules", cols: ["attachments_json", "skill_json"], what: "scheduled task", name: "title" },
+  // A skill run that waits across studios: its input values and each step's results.
+  { table: "skill_runs", cols: ["values_json", "state_json"], what: "skill run", name: "skill" },
   // Character Swap Studio: the character picture, each clip and its 24 fps copy, masks, anchors, takes and their masters.
   { table: "swap_projects", cols: ["data_json"], what: "Character Swap project", name: "name" },
   // A user skill's bundled text files: its recipe.json names the files a run starts from (an example, a fixed logo).
   { table: "skills", cols: ["files_json"], what: "skill", key: "name", name: "title" },
-  // A skill run that spans studios: the files its inputs name, and each step's results and studio page.
-  { table: "skill_runs", cols: ["values_json", "state_json"], what: "skill run", name: "skill" },
 ];
 
 /**
@@ -439,6 +445,14 @@ export const ASSET_FREE: Record<string, string> = {
   "generations.external_meta_json": "the provider's job handles",
   "billing_outbox.payload_json": "reports for the billing service: hold and run ids, counts and words, never a file",
   "reports_inbox.target_json": "what a report is about: a run, asset or share id, never a file",
+  "admin_tokens.scopes_json": "an admin token's scope names",
+  "admin_audit.detail_json": "small facts about an admin action: counts, ids and names, never a file's URL",
+  "auth_install.extra_json": "sign-in settings an older auth.json held that this build doesn't know",
+  "auth_migration.counts_json": "how many accounts, tokens and keys moved in from auth.json",
+  "auth_migration.backup_file": "the name auth.json was kept under in the data folder, never a served file",
+  "auth_tokens.extra_json": "an API token's fields this build doesn't know",
+  "auth_accounts.extra_json": "an account's fields this build doesn't know",
+  "auth_account_gpu.url": "the address of an account's own ComfyUI, never a Fuobe file",
   "shorts_sessions.range_json": "start and end times",
   "shorts_sessions.settings_json": "ratio, language, model and resolution",
   "shorts_sessions.segments_json": "generation ids of each take",
@@ -546,7 +560,8 @@ export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef
   const preferred = getSetting("cloudProvider");
   const routes = preferred === "auto" ? candidates : [...candidates].sort((a, b) => Number(b.provider === preferred) - Number(a.provider === preferred));
   const demo = getSetting("demoMode");
-  // A request marked demo (a skill recipe's free dry run) runs on the demo provider whatever Settings says.
+  // A request marked demo (a skill recipe's free dry run) runs on the demo provider whatever Settings says, as does
+  // anything a studio starts inside runAsDemo (a skill's dry run of a studio step, src/server/demo-scope.ts).
   if (demo === "on" || forceDemo || inDemoScope()) return { route: routes[0], demo: true };
   const takes = (r: ModelRoute) => !r.map?.maxImages || images <= r.map.maxImages;
   // A route that carries every LoRA wins (Replicate's Wan 2.2 takes one per expert, fal's takes a Mix), then one
@@ -723,6 +738,17 @@ function portraitProblem(plan: ReturnType<typeof planGeneration>, req: Generatio
  */
 export const mentionElements = () => (tenant() ? [] : listElements());
 
+/**
+ * A guest's or an account's candidates without the hosted routes no live call has passed yet (hosted-untested.ts): those
+ * run for the owner only. With nothing else to run on, the run is refused as a tool that isn't available here.
+ */
+function triedRoutes(m: ModelDef, routes: ModelRoute[]): ModelRoute[] {
+  if (!tenant()) return routes;
+  const tried = routes.filter((r) => !hostedUntested(m.id, r));
+  if (routes.length && !tried.length) throw new AccountRunError({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" });
+  return tried;
+}
+
 /** Resolve mentions and drawings, plan, enforce the engine mode and pick a provider route. */
 function prepare(original: GenerationRequest) {
   // @element mentions become reference images / LoRAs; the stored request keeps the mentions for "Reuse".
@@ -764,7 +790,7 @@ function prepare(original: GenerationRequest) {
   if (access.dropped.length) plan = { ...plan, loras: access.loras, prompt: withoutTriggers(plan.prompt, plan.loras.filter((l) => !access.loras.some((k) => k.file === l.file)), access.loras) };
   else if (access.loras.some((l, i) => l !== plan.loras[i])) plan = { ...plan, loras: access.loras };
   // A preset can route to another model than the one asked for: its routes that are on (or the switch that's off).
-  const { route, demo } = chooseRoute(offeredRoutes(plan.model, routesFor(plan.model, plan.op, plan.params)), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
+  const { route, demo } = chooseRoute(triedRoutes(plan.model, offeredRoutes(plan.model, routesFor(plan.model, plan.op, plan.params))), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
   // Qwen-Image 2.1's Options → Speed loads its speed's LoRA in the graph: that LoRA switched off holds the speed.
   const tier = route.provider === "comfyui" ? speedLora(route.endpoint, plan.params.extra) : undefined;
   if (tier && offeredLoras([{ file: tier.file }]).dropped.length) {
@@ -882,20 +908,14 @@ export function previewGeneration(asked: GenerationRequest) {
   };
   // PixeletedFace pixelates each picture's faces afterwards (createMosaicRun): fal's SAM 3.1 per picture in the cloud.
   let post = demo || moved.request.postMade ? 0 : postStepCost(plan.model.id, moved.request.presetId, plan.model.engine, plan.jobs * plan.perJobOutputs, getModel);
-  // "Clean the voice first" (voice-first.ts): its other steps are checked as the run checks them, and priced in.
-  const voiced = moved.request.voiceFirst ? voiceFirstExtra(moved.request, plan.model) : null;
-  if (voiced) {
-    if (voiced.costUsd !== null) post += voiced.costUsd;
-    notes.push(...voiced.notes);
-  }
   // MiniMax H3 at 2K on your GPU: each take's Open-H3 Regenerate finish is planned and priced beside its draft.
   const twoK = h3TwoKExtra(moved.request, plan.model, plan.op);
   if (twoK) {
     if (twoK.costUsd !== null) post += twoK.costUsd;
     notes.push(...twoK.notes);
   }
-  // A clean-voice step whose price isn't known leaves the run's price unknown too, never the main step's alone.
-  const priceUnknown = cost === null || voiced?.costUsd === null || twoK?.costUsd === null;
+  // A finish whose price isn't known leaves the run's price unknown too, never the main step's alone.
+  const priceUnknown = cost === null || twoK?.costUsd === null;
   return {
     model: plan.model,
     op: plan.op,
@@ -904,9 +924,8 @@ export function previewGeneration(asked: GenerationRequest) {
     demo,
     providerId,
     costUsd: priceUnknown || cost === null ? null : post ? Math.round((cost * plan.jobs + post) * 1000) / 1000 : cost * plan.jobs,
-    // The other steps the run makes beside its own model (Clean the voice first's, a 2K take's finish), so a policy and a
-    // price see them all.
-    ...((voiced?.steps.length || twoK?.steps.length) && { steps: [...(voiced?.steps ?? []), ...(twoK?.steps ?? [])] }),
+    // The other steps the run makes beside its own model (a 2K take's finish), so a policy and a price see them all.
+    ...(twoK?.steps.length && { steps: twoK.steps }),
     // The engine it runs on (a Fuobe Original picks one per request).
     engine: plan.model.engine,
     // What the route runs (the evaluation harness records it): the provider endpoint, the final prompt and the LoRAs it loads.
@@ -938,28 +957,6 @@ function h3TwoKExtra(req: GenerationRequest, model: ModelDef, op: Operation): { 
     notes: [H3_2K_STEPS_NOTE],
     steps: Array.from({ length: takes }, () => ({ model: p.model.id, op: p.op })),
   };
-}
-
-/** The steps "Clean the voice first" adds to a run (all but the run itself), checked and priced as the run makes them. */
-function voiceFirstExtra(req: GenerationRequest, model: ModelDef): { costUsd: number | null; notes: string[]; steps: { model: string; op: string }[] } | null {
-  const vf = voiceFirstPlanFor(req, model);
-  if (!vf) return null;
-  let costUsd: number | null = 0;
-  const steps: { model: string; op: string }[] = [];
-  for (const s of vf.steps) {
-    if (s.key === "main") continue;
-    let p: ReturnType<typeof previewChained>;
-    try {
-      p = previewChained(s.chain ? { ...s.request, chain: s.chain } : s.request, s.after?.length ?? 0);
-    } catch (e) {
-      throw new Error(`${VOICE_FIRST_LABEL} can't run: ${(e as Error).message}. Turn it off to run without it`);
-    }
-    costUsd = costUsd === null || p.costUsd === null ? null : costUsd + p.costUsd;
-    steps.push({ model: p.model.id, op: p.op });
-  }
-  const op = inferOperation(model, req);
-  const notes = op === "lipsync" && req.inputs?.video ? [vf.bed ? BED_NOTES.open : model.engine === "cloud" ? BED_NOTES.cloud : null].filter((x): x is string => !!x) : [];
-  return { costUsd: costUsd === null ? null : Math.round(costUsd * 10000) / 10000, notes, steps };
 }
 
 /** Preview a step that will wait for `deps` earlier steps: validated with placeholders in its chain slots, as createGenerations does. */
@@ -1007,9 +1004,10 @@ function stampTenant(asked: GenerationRequest, opts: CreateOptions): GenerationR
   return { ...stamped(asked), account: who, engine: accountEngineMode(who) === "open" ? "open" : asked.engine };
 }
 
-export function createGenerations(given: GenerationRequest, opts: CreateOptions = {}): Generation[] {
-  // A studio's dry run (src/server/demo-scope.ts): its rows say so, so their waiting steps stay demos too.
-  const asked = stampTenant(inDemoScope() && !given.demo ? { ...given, demo: true } : given, opts);
+export function createGenerations(sent: GenerationRequest, opts: CreateOptions = {}): Generation[] {
+  // Inside a skill's dry run of a studio step every row is a demo row, as the check's own rows are.
+  const given: GenerationRequest = inDemoScope() && !sent.demo ? { ...sent, demo: true } : sent;
+  const asked = stampTenant(given, opts);
   // A retired model or operation (a retry, an old script, a saved project) runs on what replaced it, and says so.
   const moved = currentRequest(asked);
   const original = withFinishOf(moved.request, opts.dependsOn);
@@ -1021,7 +1019,8 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   const found = catalogModel && offeredFor(catalogModel, original.engine);
   const shotModel = found && dualEngine(found) ? onEngine(found, engineFor(found, original.engine)) : found;
   // An account's 3D model would be finished on this server, outside its own limits: not yet (the route refuses first).
-  if (original.account && shotModel?.kind === "model3d") throw new Error(OWN_GPU_TOOL_MESSAGE);
+  // Any Angle's 3D view is the exception: a splat and its turntable, nothing to finish here.
+  if (original.account && shotModel?.kind === "model3d" && shotModel.id !== ANY_ANGLE.buildModel) throw new Error(OWN_GPU_TOOL_MESSAGE);
   if (!opts.dependsOn && shotModel?.options.multiShot?.mode === "concat" && (original.params?.shots?.filter((x) => x.prompt.trim()).length ?? 0) > 1) {
     return createShotFilm(original, shotModel);
   }
@@ -1046,16 +1045,13 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   // Fuobe DoP's relight effects: the start frame is relit first, then animated.
   const relight = !opts.dependsOn && shotModel ? relightStep(original, shotModel) : undefined;
   if (relight) return createRelitClip(original, relight);
+  // "Clean the voice first": the speech apart from the music and effects before a transcriber or a lip sync hears it.
+  if (!opts.dependsOn && shotModel && wantsVoiceFirst(original)) return createVoiceFirst(original, shotModel.engine, { batchId: opts.batchId });
   // Fuobe Soul's PixeletedFace look: the picture, then its faces pixelated (SAM 3.1 + a mosaic), also as a pipeline step or a
   // Canvas node (it waits for what they wait for). The picture made inside that run (postMade) runs as it is.
   if (!original.postMade && shotModel && soulPostStep(shotModel.id, original.presetId) === "face-mosaic") {
     const waitsFor = opts.dependsOn === undefined ? undefined : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
     return createMosaicRun(original, shotModel, { batchId: opts.batchId, dependsOn: waitsFor });
-  }
-  // "Clean the voice first": the clean voice, then the transcript or lip sync on it (and a lip re-sync's music back after).
-  if (!opts.dependsOn && original.voiceFirst && shotModel) {
-    const run = createVoiceFirstRun(original, shotModel, { batchId: opts.batchId });
-    if (run) return run;
   }
   // Open-H3 Regenerate: the draft preset from the clip's maker, and a clip over 15 s in 15 s parts joined (regenerate.ts).
   if (shotModel?.id === REGEN_MODEL) {
@@ -2364,6 +2360,29 @@ async function pollOne(r: Row): Promise<void> {
     if (res.fix) markStale(account ? `acct:${account}` : "install");
     return;
   }
+  // The Watermark Remover gave the original back (no clean repair was possible): no new result, the run says what to try.
+  if (r.op === "watermark-remove" && (res.outputs as RichOutput[]).some((o) => rejectedRepair(o.meta?.quality as WatermarkQuality | undefined))) {
+    update(r.id, { status: "failed", error: WATERMARK_COPY.rejected, completed_at: Date.now(), message: null });
+    return;
+  }
+  // A Watermark Remover scan with no report the page can read fails in words (never a page that waits for marks forever).
+  if (r.op === "watermark-scan" && !(res.outputs as RichOutput[]).some((o) => parseScanReport(o.text))) {
+    update(r.id, { status: "failed", error: WATERMARK_COPY.scanFailed, completed_at: Date.now(), message: null });
+    return;
+  }
+  // A Watermark Remover result keeps how it was asked, next to the repair's verdict: the marks removed (as checked) and how.
+  if (r.op === "watermark-remove") {
+    const req = JSON.parse(r.request_json) as GenerationRequest;
+    const asked = req.params?.extra?.boxes;
+    const mode = req.inputs?.mask ? "manual_mask" : asked !== undefined ? "manual_boxes" : "auto_qwen";
+    let marks: unknown[] | undefined;
+    try {
+      marks = mode === "manual_boxes" ? (JSON.parse(checkWatermarkBoxes(asked).json) as { boxes: unknown[] }).boxes : undefined;
+    } catch {
+      marks = undefined;
+    }
+    res = { ...res, outputs: (res.outputs as RichOutput[]).map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, watermark: { mode, ...(marks && { marks }) } } } : o)) };
+  }
   // Mark first so a slow download isn't polled twice.
   update(r.id, { status: "running", progress: 0.99, message: "Saving results" });
   const outputs: OutputFile[] = [];
@@ -2388,6 +2407,11 @@ async function pollOne(r: Row): Promise<void> {
       } catch (e) {
         if (account) {
           for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
+          // Stems unpacked to the scratch folder and not saved go now, not at the next sweep.
+          for (const rest of res.outputs as RichOutput[]) {
+            const left = rest.url ? scratchOutputFile(rest.url) : null;
+            if (left) fs.rmSync(left, { force: true });
+          }
           const why = e instanceof AccountFilesFull ? e.message : "We couldn't save this result. Press Retry.";
           update(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null });
           return;
@@ -2411,6 +2435,17 @@ async function pollOne(r: Row): Promise<void> {
       return;
     }
     if (cards.size) outputs.splice(0, outputs.length, ...outputs.filter((o) => !cards.has(o)));
+  }
+  // Any Angle's 3D view: its front view is measured on the turntable it rendered, and kept on the splat (meta.front).
+  if (r.model_id === ANY_ANGLE.buildModel) {
+    const measured = await withFrontView(JSON.parse(r.request_json) as GenerationRequest, outputs);
+    if (!measured) {
+      // Nothing of a failed build is kept, the owner's included.
+      for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
+      update(r.id, { status: "failed", error: NO_SUBJECT_MESSAGE, completed_at: Date.now(), message: null });
+      return;
+    }
+    outputs.splice(0, outputs.length, ...measured);
   }
   // Fuobe Soul: what follows in the browser (the look's grade, an overlay, Soul Cinema's 21:9 crop), on each image;
   // API clients read it as meta.
@@ -2691,17 +2726,24 @@ async function persistAccountOutput(o: RichOutput, generationId: string, account
   };
 }
 
+/** A result the provider already wrote to the scratch folder (a song's stems): the file, as the type the provider gave. */
+function scratchOutput(o: RichOutput): { path: string; contentType?: string } | null {
+  const file = scratchOutputFile(o.url);
+  return file ? { path: file, contentType: o.contentType } : null;
+}
+
 /**
- * A result a computer sent in (its task received and checked it, src/server/computer): moved into the files folder as it
- * is, no second copy, as the type its bytes said. An account's counts against its files first.
+ * A result a computer sent in (its task received and checked it, src/server/computer), or one the provider wrote to the
+ * scratch folder: moved into the files folder as it is, no second copy, as the type its bytes said. An account's counts
+ * against its files first (a result over its room is removed).
  */
 async function persistRelayOutput(o: RichOutput, generationId: string, account: string | undefined, linked: Record<string, unknown> | undefined): Promise<OutputFile> {
-  const file = relayFile(o.url);
+  const file = o.url.startsWith("scratch:") ? scratchOutput(o) : relayFile(o.url);
   if (!file) throw new Error("The result isn't here any more");
   const from = file.path;
   const contentType = o.contentType ?? file.contentType ?? "application/octet-stream";
   const size = fs.statSync(from).size;
-  if (account) roomFor(account, size);
+  if (account) roomFor(account, size, o.url.startsWith("scratch:") ? from : undefined);
   const asset = adoptFile({ from, contentType: account ? accountType(contentType) : contentType, source: "generation", generationId, ...(account && { accountId: account }) });
   const meta = relinkMain(linked, o.url, asset.url);
   const text = o.text ?? (asset.kind === "text" && asset.size <= MAX_INLINE_TEXT * 4 ? fs.readFileSync(absolutePath(asset.relPath), "utf8") : undefined);
@@ -2718,7 +2760,7 @@ async function persistRelayOutput(o: RichOutput, generationId: string, account: 
 async function persistOutput(o: RichOutput, generationId: string): Promise<OutputFile> {
   const linked = await persistArtifacts(o.meta, generationId, o.url);
   const account = tenantAccount();
-  if (o.url?.startsWith("relay:")) return persistRelayOutput(o, generationId, account, linked);
+  if (o.url?.startsWith("relay:") || o.url?.startsWith("scratch:")) return persistRelayOutput(o, generationId, account, linked);
   if (account && o.url && /^https?:\/\//.test(o.url)) return persistAccountOutput(o, generationId, account, linked);
   let data: Buffer;
   let contentType = o.contentType;
@@ -2891,14 +2933,19 @@ export function recordLocalGeneration(input: {
   modelId: string;
   op: Generation["op"];
   prompt: string;
+  /** What the tool calls its result, shown instead of the prompt. */
+  title?: string;
   inputs: GenerationRequest["inputs"];
   params?: GenerationRequest["params"];
-  output: { url: string; kind: OutputFile["kind"]; contentType?: string };
+  output: { url: string; kind: OutputFile["kind"]; contentType?: string; meta?: { poster: string }; width?: number; height?: number };
 }): Generation {
   const model = getModel(input.modelId);
-  if (!model || !model.routes.some((r) => r.provider === "local")) throw new Error("Not a browser tool");
+  // A browser tool's own result: the model's local route for this very step (a grade is not recorded as a Relight blend).
+  if (!model || !model.routes.some((r) => r.provider === "local" && r.op === input.op)) throw new Error("Not a browser tool");
   const now = Date.now();
-  const req: GenerationRequest = { feature: input.feature, modelId: input.modelId, op: input.op, prompt: input.prompt, inputs: input.inputs, params: input.params };
+  // Inside an account's work (the route's runAsTenant) the result is the account's own, as its runs are (stampTenant).
+  const account = tenantAccount();
+  const req: GenerationRequest = { feature: input.feature, modelId: input.modelId, op: input.op, prompt: input.prompt, ...(input.title && { title: input.title }), inputs: input.inputs, params: input.params, ...(account && { account }) };
   const row: Row = {
     id: nanoid(12),
     batch_id: null,

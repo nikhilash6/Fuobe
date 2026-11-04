@@ -41,7 +41,7 @@ export interface CinemaDraft {
   imageTool: "still" | "grid";
   prompt: string;
   moves: string[];
-  /** The first move as an exact orbit (N7-7): its numbers while the Exact switch is on. */
+  /** The first move as an exact orbit: its numbers while the Exact switch is on. */
   exact?: ExactOrbit | null;
   refs: RefItem[];
   /** Model picked per mode and engine ("video:cloud" → "kling-3"). */

@@ -12,7 +12,7 @@ import {
   tierOfGraph,
 } from "@/lib/gpu/h3-tier";
 
-// Package nm10-h3-any-gpu (docs/research/new-models-10.md §6.4): which MiniMax H3 build a card runs, at every memory and
+// MiniMax H3 on smaller cards (docs/research/new-models-10.md §6.4): which MiniMax H3 build a card runs, at every memory and
 // generation edge. The card names are /system_stats device names as ComfyUI reports them.
 const RTX5090 = "cuda:0 NVIDIA GeForce RTX 5090 : cudaMallocAsync";
 const RTX5070 = "cuda:0 NVIDIA GeForce RTX 5070 : cudaMallocAsync";

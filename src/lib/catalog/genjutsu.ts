@@ -27,7 +27,6 @@ import {
   CHARACTER_SWAP,
   CLOUD_NO_LORA,
   characterFinish,
-  characterLicenceLine,
   characterQuality,
   h3Canvas,
   partFrames,
@@ -62,12 +61,13 @@ import {
 import { firstFramePrompt, getShortsPreset, lookFromPreset, planShorts, segmentPrompt, SHORTS_TOOLS, type PlanStep, type ShortsLook } from "./shorts";
 import { getModel } from "./index";
 import { REPLACED_BY } from "./replaced";
+import { LOOK_IDS, lightWords, type LookId, type PaintKeyframe } from "../openjutsu-graphs";
 import { soulLook } from "./soul";
 import { filmSize, SHARPEN_COPY, sharpenPrompt, sharpenSteps, sharpenTierFor, type SharpenTier } from "./sharpen";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
-import { originalSoundProblem, separates, type SoundChoice } from "../av/original-sound";
+import { withOriginalSound, type OriginalSound } from "../av/original-sound";
 
-export type GenjutsuMode = "motion" | "character" | "swap" | "restyle" | "insert";
+export type GenjutsuMode = "motion" | "character" | "swap" | "restyle" | "insert" | "picture" | "finish";
 /** How you say what changes (Object swap and Insert) or who (Character swap): words, clicks on the first frame, or paint on it. */
 export type GenjutsuTarget = RemoveMode;
 /** Genjutsu's qualities; 2K and 4K are the Character swap's finishing sizes (sharpen.ts). */
@@ -105,16 +105,25 @@ export const GENJUTSU_MODES: { id: GenjutsuMode; label: string; hint: string; re
   { id: "swap", label: "Object swap", hint: "Swap a thing, a person or an outfit in the clip for your reference — everything else stays.", refs: "What goes in" },
   { id: "restyle", label: "Restyle", hint: "Pick a look or bring your own images. Every frame takes the look — motion, camera, and framing stay as filmed.", refs: "Characters (optional)" },
   { id: "insert", label: "Insert", hint: "Add your reference to the shot — say where, or paint the spot on the first frame.", refs: "What to add" },
+  {
+    id: "picture",
+    label: "From picture",
+    hint: "Your character, in your picture's own setting, moves exactly like the person in the clip. You check the first frame before the video is made.",
+    refs: "Your character",
+  },
+  { id: "finish", label: "Finish", hint: "Give a finished video sharper faces or a soft film finish.", refs: "Character photo" },
 ];
 
 export const getMode = (id: GenjutsuMode) => GENJUTSU_MODES.find((m) => m.id === id)!;
 
 /** The ways of saying what changes, per mode (Motion transfer and Restyle change the whole shot; Character swap says who). */
-export const MODE_TARGETS: Record<GenjutsuMode, GenjutsuTarget[]> = { motion: [], restyle: [], character: ["type", "click"], swap: ["type", "click", "paint"], insert: ["type", "paint"] };
+export const MODE_TARGETS: Record<GenjutsuMode, GenjutsuTarget[]> = { motion: [], restyle: [], character: ["type", "click"], swap: ["type", "click", "paint"], insert: ["type", "paint"], picture: [], finish: [] };
 
 export const TARGET_LABELS: Record<GenjutsuMode, Partial<Record<GenjutsuTarget, { label: string; hint: string }>>> = {
   motion: {},
   restyle: {},
+  picture: {},
+  finish: {},
   character: {
     type: { label: "Pick who", hint: "The largest, leftmost or rightmost person, or a number" },
     click: { label: "Click them", hint: "Click the person on the part's first frame" },
@@ -129,6 +138,161 @@ export const TARGET_LABELS: Record<GenjutsuMode, Partial<Record<GenjutsuTarget, 
     paint: { label: "Paint the spot", hint: "Brush where it goes on the first frame" },
   },
 };
+
+// ---------------------------------------------------------------------------
+// The Openjutsu modes: what opens to everyone on its own (each after its GPU test), and their settings
+
+/**
+ * One thing that opens to everyone on its own, once every workflow it needs has been accepted by ComfyUI and its GPU test
+ * passed (src/server/genjutsu-live.ts). Until then only the owner sees and runs it.
+ */
+export type GenjutsuFeature =
+  | "group-swap"
+  | "group-swap-one-by-one"
+  | "object-change"
+  | "object-remove"
+  | "object-background"
+  | "picture"
+  | "picture-light"
+  | "picture-own-person"
+  | "picture-h3-renderer"
+  | "finish-faces"
+  | "finish-colours"
+  | "motion-h3";
+
+export const GENJUTSU_FEATURES: Record<GenjutsuFeature, { mode: GenjutsuMode; workflows: string[]; maker: string }> = {
+  "group-swap": { mode: "character", workflows: ["video-group-swap-h3"], maker: "oss-h3-group-swap" },
+  "group-swap-one-by-one": { mode: "character", workflows: ["video-group-swap-h3-one-by-one"], maker: "oss-h3-group-swap" },
+  "object-change": { mode: "swap", workflows: ["video-scene-edit-h3"], maker: "oss-h3-scene-edit" },
+  "object-remove": { mode: "swap", workflows: ["video-scene-edit-h3"], maker: "oss-h3-scene-edit" },
+  "object-background": { mode: "swap", workflows: ["video-scene-edit-h3"], maker: "oss-h3-scene-edit" },
+  picture: { mode: "picture", workflows: ["image-from-picture-prepare", "video-scene-describe", "video-from-picture-solar"], maker: "oss-from-picture" },
+  "picture-light": { mode: "picture", workflows: ["image-from-picture-prepare"], maker: "oss-from-picture" },
+  "picture-own-person": { mode: "picture", workflows: ["image-from-picture-prepare"], maker: "oss-from-picture" },
+  "picture-h3-renderer": { mode: "picture", workflows: ["video-from-picture-h3"], maker: "oss-from-picture" },
+  "finish-faces": { mode: "finish", workflows: ["video-fix-faces-h3"], maker: "oss-h3-fix-faces" },
+  "finish-colours": { mode: "finish", workflows: ["video-fix-colours"], maker: "oss-fix-colours" },
+  "motion-h3": { mode: "motion", workflows: ["video-motion-transfer-h3"], maker: "oss-h3-motion" },
+};
+
+export const GENJUTSU_FEATURE_KEYS = Object.keys(GENJUTSU_FEATURES) as GenjutsuFeature[];
+
+/** Which features are open to this viewer: everything for the owner (and in tests), else what has passed. */
+export type FeatureCheck = (f: GenjutsuFeature) => boolean;
+export const ALL_FEATURES: FeatureCheck = () => true;
+
+/** Whether a mode shows for this viewer (the new modes need one of their features open). */
+export function modeOpen(mode: GenjutsuMode, open: FeatureCheck = ALL_FEATURES): boolean {
+  if (mode === "picture") return open("picture");
+  if (mode === "finish") return open("finish-faces") || open("finish-colours");
+  return true;
+}
+
+/** Scene edit's three actions. */
+export type SceneAction = "change" | "remove" | "background";
+export const SCENE_ACTIONS: { id: SceneAction; label: string; hint: string; feature: GenjutsuFeature }[] = [
+  { id: "change", label: "Change it", hint: "Name what changes and what it becomes. Add a picture to match it exactly.", feature: "object-change" },
+  { id: "remove", label: "Remove it", hint: "Name what goes. The space behind it is filled in, and the sound stays.", feature: "object-remove" },
+  { id: "background", label: "New background", hint: "The people stay as filmed. Say or show the new place.", feature: "object-background" },
+];
+
+/** Object swap on Scene edit: what changes and how. */
+export interface ObjectEdit {
+  action: SceneAction;
+  /** What SAM follows (several, comma-separated); for New background, what stays ("the people"). */
+  target?: string;
+  /** What it becomes; for Remove it, what shows there. */
+  becomes?: string;
+  biggestOnly?: boolean;
+  keepShape?: boolean;
+  edge?: "tight" | "normal" | "loose";
+  motionDetail?: 512 | 768;
+}
+
+/** From picture's settings: the first frame (stage "frame") or the video (stage "video", from an approved frame). */
+export interface PictureOptions {
+  stage: "frame" | "video";
+  light?: { look: LookId } | { words: string };
+  /** Relight the person already in the clip (no character picture). */
+  ownPerson?: boolean;
+  /** Own person: keep the frame's crop. */
+  keepCrop?: boolean;
+  /** Extra words for the pose ("arms crossed, chin up"). */
+  adjust?: string;
+  /** The approved first frame (stage video): a frame this install made. */
+  frame?: string;
+  /** What happens in the part, in words (the describer's, edited). */
+  scene?: string;
+  /** The owner's renderer choice (SolarRenderer by default). */
+  renderer?: "solar" | "h3";
+  /** Motion detail: 0 = match the video, else the motion reference's long edge. */
+  motionDetail?: 0 | 512 | 768;
+}
+
+/** Finish's settings: Fix faces or Fix colours. */
+export interface FinishOptions {
+  tool: "faces" | "colours";
+  faceStyle?: "photo" | "mouth";
+  chunkSeconds?: 4 | 6.5 | 10;
+  finish?: "soft" | "filmic" | "rich" | "off";
+  /** 0–1 (Orion's 0–0.5). */
+  strength?: number;
+  /** 0–1 (detail contrast 0 … −0.6). */
+  soften?: number;
+}
+
+/** The part a new maker takes (seconds): Group swap, Scene edit and From picture 2–15 s; Finish the whole clip. */
+export const OPENJUTSU_LIMITS = { minSeconds: 2, maxSeconds: 15, facesMaxSeconds: 10, coloursMaxSeconds: 60, maxCharacters: 4, roleChars: 80, lightChars: 300, sceneChars: 2000 } as const;
+
+/** The feature a request needs (null: an existing Genjutsu feature, always open). */
+export function requestFeatures(o: { mode: GenjutsuMode; maker: Maker; character?: CharacterOptions; object?: ObjectEdit; picture?: PictureOptions; finish?: FinishOptions }): GenjutsuFeature[] {
+  const m = o.maker;
+  if (m.group) return o.character?.onePerPerson ? ["group-swap", "group-swap-one-by-one"] : ["group-swap"];
+  if (m.actions) return [SCENE_ACTIONS.find((a) => a.id === (o.object?.action ?? "change"))!.feature];
+  if (m.review) {
+    const p = o.picture;
+    return [
+      "picture",
+      ...(p?.light ? (["picture-light"] as const) : []),
+      ...(p?.ownPerson ? (["picture-own-person"] as const) : []),
+      ...(p?.renderer === "h3" ? (["picture-h3-renderer"] as const) : []),
+    ];
+  }
+  if (m.tool) return [m.tool === "faces" ? "finish-faces" : "finish-colours"];
+  if (m.id === MOTION_H3) return ["motion-h3"];
+  return [];
+}
+
+/**
+ * The features a run of one of the new makers' models needs when it is sent straight to POST /api/generations (a script,
+ * the CLI, MCP), read from its params.extra.openjutsu: a viewer who isn't the owner runs it only when every one is open.
+ * Null for any other model.
+ */
+export function directRunFeatures(modelId: string, settings: Record<string, unknown> = {}): GenjutsuFeature[] | null {
+  const s = settings;
+  const light = typeof s.light === "string" && s.light.trim() !== "";
+  const own = s.ownPerson === true;
+  switch (modelId) {
+    case "oss-h3-group-swap":
+      return s.onePerPerson === true ? ["group-swap", "group-swap-one-by-one"] : ["group-swap"];
+    case "oss-h3-scene-edit":
+      return [(SCENE_ACTIONS.find((a) => a.id === s.action) ?? SCENE_ACTIONS[0]).feature];
+    case "oss-from-picture-frame":
+      return ["picture", ...(light ? (["picture-light"] as const) : []), ...(own ? (["picture-own-person"] as const) : [])];
+    case "oss-scene-describe":
+      return ["picture", ...(own ? (["picture-own-person"] as const) : [])];
+    case "oss-from-picture":
+      return ["picture", ...(s.renderer === "h3" ? (["picture-h3-renderer"] as const) : [])];
+    case "oss-h3-fix-faces":
+      return ["finish-faces"];
+    case "oss-fix-colours":
+      return ["finish-colours"];
+    case MOTION_H3:
+      return ["motion-h3"];
+    default:
+      return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Models ("makers")
@@ -185,12 +349,27 @@ export interface Maker {
    * can regenerate the whole frame instead of only the person (Openjutsu's use_mask; H3 Relay's graph has no switch).
    */
   h3?: { anchor: boolean; maskSwitch?: boolean };
+  /** The features that open it (the owner always sees it; others once one of these has passed its GPU test). */
+  features?: GenjutsuFeature[];
+  /** Group swap: 2–4 characters by role (Who becomes who). */
+  group?: boolean;
+  /** Scene edit: its actions. */
+  actions?: SceneAction[];
+  /** From picture: the first frame is made and approved before the video. */
+  review?: boolean;
+  /** Finish: the tool it is. */
+  tool?: "faces" | "colours";
+  /** The part it takes, when it isn't the mode's own (seconds). */
+  part?: { min: number; max: number };
 }
 
 /** fal's hosted Wan VACE (2.1 14B and 2.2 Fun): 17–241 frames (4n+1, the clip's own count and rate), at most 30 fps. */
 const VACE_CLOUD_WINDOW: FrameWindow = { cap: 241, step: 4, base: 1, min: 17 };
 const VACE_FUN_CLOUD = "wan-22-vace-inpaint";
 const FAL_RES = ["480p", "580p", "720p"];
+
+/** Motion transfer on MiniMax H3 (your GPU): the character photo is the look, the part's normals the motion. */
+export const MOTION_H3 = "oss-h3-motion";
 
 export const ORIGINALS = {
   motion: "fuobe-genjutsu-motion",
@@ -309,6 +488,20 @@ export const MAKERS: Maker[] = [
     keepsSound: true,
     qualities: ["480p", "720p"],
     promptOptional: true,
+  },
+  {
+    id: MOTION_H3,
+    engine: "open",
+    modes: ["motion"],
+    label: "MiniMax H3",
+    note: "Your character in their photo's setting · keeps the clip's sound · 2–15 s · free on your GPU (24 GB)",
+    source: "open",
+    refs: { min: 1, max: 1 },
+    keepsSound: true,
+    qualities: ["480p", "720p"],
+    promptOptional: true,
+    features: ["motion-h3"],
+    part: { min: OPENJUTSU_LIMITS.minSeconds, max: OPENJUTSU_LIMITS.maxSeconds },
   },
 
   // Character swap (Openjutsu, Akatz Labs' H3 Character Swap).
@@ -581,6 +774,86 @@ export const MAKERS: Maker[] = [
     readsLookImages: 2,
   },
 
+  // The Openjutsu modes (your GPU only): Group swap, Scene edit, From picture, Fix faces, Fix colours.
+  {
+    id: "oss-h3-group-swap",
+    engine: "open",
+    modes: ["character"],
+    targets: ["type", "click"],
+    label: "Group swap",
+    note: "Keeps the clip's sound · 2–15 s · up to 4 characters",
+    source: "open",
+    refs: { min: 1, max: OPENJUTSU_LIMITS.maxCharacters },
+    keepsSound: true,
+    qualities: ["480p", "720p", "1080p"],
+    promptOptional: true,
+    people: true,
+    group: true,
+    features: ["group-swap"],
+    part: { min: OPENJUTSU_LIMITS.minSeconds, max: OPENJUTSU_LIMITS.maxSeconds },
+  },
+  {
+    id: "oss-h3-scene-edit",
+    engine: "open",
+    modes: ["swap"],
+    targets: ["type", "paint"],
+    label: "Scene edit",
+    note: "Change a thing, remove it or put the people somewhere new · keeps the clip's sound · 2–15 s",
+    source: "open",
+    refs: { min: 0, max: 1 },
+    keepsSound: true,
+    qualities: ["480p", "720p", "1080p"],
+    promptOptional: true,
+    actions: ["change", "remove", "background"],
+    features: ["object-change", "object-remove", "object-background"],
+    part: { min: OPENJUTSU_LIMITS.minSeconds, max: OPENJUTSU_LIMITS.maxSeconds },
+  },
+  {
+    id: "oss-from-picture",
+    engine: "open",
+    modes: ["picture"],
+    label: "From picture",
+    note: "You check the first frame first · keeps the clip's sound · 2–15 s",
+    source: "open",
+    refs: { min: 1, max: 1 },
+    keepsSound: true,
+    qualities: ["480p", "720p"],
+    promptOptional: true,
+    review: true,
+    features: ["picture"],
+    part: { min: OPENJUTSU_LIMITS.minSeconds, max: OPENJUTSU_LIMITS.maxSeconds },
+  },
+  {
+    id: "oss-h3-fix-faces",
+    engine: "open",
+    modes: ["finish"],
+    label: "Face fix",
+    note: "Redraws small or soft faces to match your character's photo · up to 10 s",
+    source: "open",
+    refs: { min: 1, max: 1 },
+    keepsSound: true,
+    renders: "keeps your clip's size",
+    promptOptional: true,
+    tool: "faces",
+    features: ["finish-faces"],
+    part: { min: 1, max: OPENJUTSU_LIMITS.facesMaxSeconds },
+  },
+  {
+    id: "oss-fix-colours",
+    engine: "open",
+    modes: ["finish"],
+    label: "Colour finish",
+    note: "A soft film finish in seconds · up to 60 s",
+    source: "open",
+    refs: { min: 0, max: 0 },
+    keepsSound: true,
+    renders: "keeps your clip's size",
+    promptOptional: true,
+    tool: "colours",
+    features: ["finish-colours"],
+    part: { min: 1, max: OPENJUTSU_LIMITS.coloursMaxSeconds },
+  },
+
   // Insert (no Original yet: VACE inserts in a painted spot on both engines).
   {
     id: "oss-vace-insert",
@@ -613,31 +886,6 @@ export const LEGACY_MAKERS: Record<string, string> = {
 
 const SOURCE_RANK: Record<MakerSource, number> = { original: 0, open: 1, partner: 2 };
 
-/** The open weights under each model that isn't MiniMax H3 (docs/research/fuobe-originals-recipes-5.json, studios.genjutsu). */
-const WEIGHTS: Record<string, string> = {
-  [ORIGINALS.motion]: "Wan Animate weights: Apache-2.0",
-  [ORIGINALS.motionLite]: "Wan Animate weights: Apache-2.0",
-  [ORIGINALS.swap]: "Wan VACE weights: Apache-2.0 · SAM 3.1: Meta's SAM License",
-  [ORIGINALS.swapLite]: "Wan VACE weights: Apache-2.0 · SAM 3.1: Meta's SAM License",
-  [ORIGINALS.restyle]: "Wan 2.2 Fun VACE weights: Apache-2.0",
-  "scail-2": "SCAIL-2 weights: MIT",
-  "wan-motion": "Wan Animate weights: Apache-2.0",
-  "wan-22-animate-replace": "Wan 2.2 Animate weights: Apache-2.0",
-  "wan-22-vace-inpaint": "Wan 2.2 Fun VACE weights: Apache-2.0",
-  "oss-vace-insert": "Wan 2.1 VACE weights: Apache-2.0",
-};
-
-/**
- * A model's licence in one line, as information for the picker (the admin decides what runs, in Settings), with where
- * it runs unless the line it goes in already says (`where` false).
- */
-export function makerLicence(m: Maker, where = true): string {
-  if (m.h3 || m.id === "h3-max-recast") return characterLicenceLine(m.engine, m.id);
-  if (m.source === "partner") return "Closed model: pay per use, under its provider's terms";
-  const weights = WEIGHTS[m.id] ?? "Open weights";
-  return where ? `${weights} · ${m.engine === "open" ? "free on your GPU" : "on fal, pay per use"}` : weights;
-}
-
 /**
  * Whether Settings → Models & licences offers a picker entry: Lite and the full Original are one entry, offered while
  * either tier is on.
@@ -645,9 +893,11 @@ export function makerLicence(m: Maker, where = true): string {
 export const makerOffered = (m: Maker, on: (id: string) => boolean) => on(m.id) || (!!m.pair && on(m.pair));
 
 /** The models you can pick for this engine, mode and way of pointing: Fuobe's Original first, then open weights, then partners. */
-export function makersFor(engine: Engine, mode: GenjutsuMode, target?: GenjutsuTarget): Maker[] {
+export function makersFor(engine: Engine, mode: GenjutsuMode, target?: GenjutsuTarget, open: FeatureCheck = ALL_FEATURES): Maker[] {
   return MAKERS.filter((m) => {
     if (m.engine !== engine || !m.modes.includes(mode)) return false;
+    // A maker that hasn't opened yet: the owner's alone.
+    if (m.features && !m.features.some(open)) return false;
     if (MODE_TARGETS[mode].length && !(m.targets ?? []).includes(target ?? MODE_TARGETS[mode][0])) return false;
     // Lite and the full Original are one choice in the picker (Quality: Standard / High).
     if (m.tier === "high") return false;
@@ -679,11 +929,30 @@ export function chooseMaker(o: {
    * all of them off the pick stays, and its run names the switch).
    */
   offered?: (id: string) => boolean;
+  /** The features open to this viewer (default: all, as for the owner). */
+  open?: FeatureCheck;
+  /** Character swap: characters added (2 or more: a model that takes them). */
+  refs?: number;
+  /** Object swap: Scene edit's action (Remove it and New background need Scene edit). */
+  action?: SceneAction;
+  /** Finish: the tool. */
+  tool?: "faces" | "colours";
 }): { maker: Maker } | { problem: string } {
   const target = MODE_TARGETS[o.mode].length ? (o.target ?? MODE_TARGETS[o.mode][0]) : undefined;
   if (target && !MODE_TARGETS[o.mode].includes(target)) return { problem: `${getMode(o.mode).label} doesn't take ${target === "click" ? "clicks" : target === "paint" ? "paint" : "that"} — pick another way` };
   const on = o.offered;
-  const all = makersFor(o.engine, o.mode, target);
+  let all = makersFor(o.engine, o.mode, target, o.open);
+  // Two characters or more: only a model that takes them all (Group swap on your GPU, Recast in the cloud).
+  if (o.mode === "character" && (o.refs ?? 0) > 1) {
+    const many = all.filter((m) => m.refs.max >= (o.refs ?? 0));
+    if (many.length) all = many;
+  }
+  // Remove it and New background: Scene edit's actions.
+  if (o.mode === "swap" && o.action && o.action !== "change") {
+    all = all.filter((m) => m.actions?.includes(o.action!));
+    if (!all.length) return { problem: o.engine === "cloud" ? "Remove it and New background run on your GPU" : "Nothing on this engine does that yet" };
+  }
+  if (o.mode === "finish" && o.tool) all = all.filter((m) => m.tool === o.tool);
   const options = on ? keepOffered(all, (m) => makerOffered(m, on)) : all;
   if (!options.length) {
     if (o.engine === "cloud" && o.mode === "character" && target === "click") return { problem: CLOUD_CLICK_PROBLEM };
@@ -892,10 +1161,48 @@ export interface GenjutsuCheck {
   seed?: number;
   /** Character swap's settings (the LoRA and the window plan are checked). */
   character?: CharacterOptions;
+  object?: ObjectEdit;
+  picture?: PictureOptions;
+  finish?: FinishOptions;
+}
+
+/** The first thing that stops a request on one of the Openjutsu makers, in words, or null. */
+function openjutsuProblem(c: GenjutsuCheck): string | null {
+  const m = c.maker;
+  if (m.group) {
+    if (c.references < 1) return REFS_MISSING.character;
+    if (c.references > OPENJUTSU_LIMITS.maxCharacters) return "Up to four characters";
+    if (c.character?.onePerPerson && c.references < 2) return "Add a second character";
+    if (c.character?.onePerPerson && c.references > 2) return "One by one takes two characters";
+    return null;
+  }
+  if (m.actions) {
+    const action = c.object?.action ?? "change";
+    if (action === "change" && c.target === "paint") return c.mask ? null : "Paint over what changes";
+    if (action !== "background" && !c.object?.target?.trim() && !c.subject?.trim()) return action === "remove" ? "Name what goes" : "Name what changes";
+    return null;
+  }
+  if (m.review) {
+    const p = c.picture ?? { stage: "frame" };
+    if (p.ownPerson && !p.light) return "Pick a light, or turn off Keep the clip's own person";
+    if (p.light && "words" in p.light && !p.light.words.trim()) return "Say how the light looks";
+    if (!p.ownPerson && c.references < 1) return REFS_MISSING.picture;
+    if (p.stage === "video" && !p.frame) return "Make and pick the first frame first";
+    return null;
+  }
+  if (m.tool === "faces" && c.references < 1) return REFS_MISSING.finish;
+  return null;
 }
 
 /** What's wrong with the selection whatever the model, or null. */
-export function rangeProblem(source: Pick<RemoveSource, "duration">, range: RemoveRange, mode?: GenjutsuMode): string | null {
+export function rangeProblem(source: Pick<RemoveSource, "duration">, range: RemoveRange, mode?: GenjutsuMode, maker?: Maker): string | null {
+  if (maker?.part) {
+    const len = range.end - range.start;
+    if (!(len > 0) || range.start < 0) return "Pick a part of the clip";
+    if (source.duration !== undefined && range.end > source.duration + 0.05) return "The selection runs past the end of the clip";
+    if (len < maker.part.min - 0.05 || len > maker.part.max + 0.05) return maker.tool ? `Pick up to ${maker.part.max} seconds of the video` : `Pick a part between ${maker.part.min} and ${maker.part.max} seconds`;
+    return null;
+  }
   if (mode === "character") return partProblem(range, source.duration);
   const len = range.end - range.start;
   if (!(len > 0) || range.start < 0) return "Pick a part of the clip";
@@ -911,13 +1218,16 @@ const REFS_MISSING: Record<GenjutsuMode, string> = {
   swap: "Add a picture of what goes in",
   insert: "Add a picture of what to add",
   restyle: "",
+  picture: "Add a picture of your character",
+  finish: "Add the character photo",
 };
 
 /** The first thing that stops this request, in words, or null. */
 export function genjutsuProblem(c: GenjutsuCheck): string | null {
-  const general = rangeProblem(c.source, c.range, c.mode);
+  const general = rangeProblem(c.source, c.range, c.mode, c.maker);
   if (general) return general;
   const m = c.maker;
+  if (m.group || m.actions || m.review || m.tool) return openjutsuProblem(c);
   const len = c.range.end - c.range.start;
   const { width: w, height: h } = c.source;
   const target = MODE_TARGETS[c.mode].length ? (c.target ?? MODE_TARGETS[c.mode][0]) : undefined;
@@ -1002,8 +1312,13 @@ export interface GenjutsuPlanInput {
   seed?: number;
   /** Character swap's settings. */
   character?: CharacterOptions;
-  /** Original sound: what of the clip's sound goes back (src/lib/av/original-sound.ts; unset = Everything). */
-  sound?: SoundChoice;
+  object?: ObjectEdit;
+  picture?: PictureOptions;
+  finish?: FinishOptions;
+  /** Scene edit's painted area, as the pack's keyframe (the server reads it from the paint). */
+  paint?: PaintKeyframe[];
+  /** What of the clip's sound goes back where it is put back (src/lib/av/original-sound.ts; the cloud: Everything only). */
+  originalSound?: OriginalSound;
 }
 
 export interface GenjutsuPlan {
@@ -1024,7 +1339,7 @@ const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
 const pieceLabel = (p: Piece, n: number, what: string) => ({ label: n > 1 ? `Piece ${p.index + 1} of ${n} · ${what}` : what[0].toUpperCase() + what.slice(1), index: p.index, of: n });
 
-const OP: Record<GenjutsuMode, GenerationRequest["op"]> = { motion: "motion-transfer", character: "video-swap", swap: "video-swap", insert: "video-insert", restyle: "v2v" };
+const OP: Record<GenjutsuMode, GenerationRequest["op"]> = { motion: "motion-transfer", character: "video-swap", swap: "video-swap", insert: "video-insert", restyle: "v2v", picture: "picture-video", finish: "tone-video" };
 
 /** Steps on a model that runs on both engines say which one (Originals, the Soul look's first frame). */
 function pinEngines(steps: PlanStep[], engine: Engine): PlanStep[] {
@@ -1044,13 +1359,15 @@ function pinEngines(steps: PlanStep[], engine: Engine): PlanStep[] {
  * - then the pieces joined and the clip's own sound put back.
  */
 export function planGenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
-  const soundProblem = originalSoundProblem(input.maker.engine, input.sound);
-  if (soundProblem) throw new Error(soundProblem);
   const plan = planSteps(input);
-  return { ...plan, steps: pinEngines(plan.steps, input.maker.engine) };
+  // Original sound: where the clip's sound is put back (a maker that drops it, or several pieces), the part chosen.
+  const steps = plan.sound ? withOriginalSound(plan.steps, plan.final, input.originalSound, input.maker.engine, { seconds: input.range.end - input.range.start }) : plan.steps;
+  return { ...plan, steps: pinEngines(steps, input.maker.engine) };
 }
 
 function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {
+  const om = input.maker;
+  if (om.group || om.actions || om.review || om.tool || om.id === MOTION_H3) return planOpenjutsu(input);
   if (input.mode === "character" && input.maker.h3) return planCharacterSwap(input);
   if (input.mode === "restyle" && input.maker.id === ORIGINALS.restyle && input.maker.engine === "cloud") return planCloudRestyle(input);
   if (input.mode === "restyle" && input.maker.looks === "fuobe") return planFuobeRestyle(input);
@@ -1064,8 +1381,7 @@ function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {
   const helper = { feature: GENJUTSU.stepFeature, batchTitle: input.title };
   const steps: PlanStep[] = [];
   const op = OP[input.mode];
-  // A maker that keeps the clip's sound still gets the chosen stems put back when the sound is split (Original sound).
-  const sound = !!input.source.hasAudio && (n > 1 || !m.keepsSound || separates(m.engine, input.sound));
+  const sound = !!input.source.hasAudio && (n > 1 || !m.keepsSound);
   const own = (one: boolean) => (one && !sound ? { ...base, title: input.title } : helper);
   const refs = input.references.slice(0, m.refs.max);
   const images = refs.length ? { images: refs } : {};
@@ -1192,10 +1508,10 @@ function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {
       });
     });
     const end = m.window ? pieces[n - 1].end : input.range.end;
-    const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound, end, choice: input.sound });
+    const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound, end });
     return { steps, final, pieces: n, sound, tracked };
   }
-  const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound, choice: input.sound });
+  const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound });
   return { steps, final, pieces: n, sound, tracked: false };
 }
 
@@ -1374,23 +1690,9 @@ function planCharacterSwap(input: GenjutsuPlanInput): GenjutsuPlan {
       },
       ...(anchorOn ? { after: ["anchor"], chain: [anchorSlot()] } : {}),
     });
-    // Original sound other than Everything lays the chosen stems over the picture instead of the clip's own sound.
-    const split = !!input.source.hasAudio && separates("open", input.sound);
-    let picture = "swap";
-    if (sharpen) {
-      // The finish puts the part's whole sound back itself; with a split choice it is left silent and the stems go on below.
-      const finishOf = split ? openFinish({ ...input, source: { ...input.source, hasAudio: false } }, finish!, quality) : sharpen;
-      const done = finishOf(steps, promptWith(anchorOn));
-      if (!split) return { steps, final: done.final, pieces: 1, sound: done.sound, tracked: false, anchors: anchorOn ? 1 : 0 };
-      picture = done.final;
-    }
-    if (split) {
-      const last = steps.find((s) => s.key === picture)!;
-      last.request = { ...last.request, ...helper };
-      const final = joinWithSound(steps, { engine: "open", title: input.title, base, helper, source: input.source, range: input.range, pieces: [picture], sound: true, choice: input.sound });
-      return { steps, final, pieces: 1, sound: true, tracked: false, anchors: anchorOn ? 1 : 0 };
-    }
-    return { steps, final: "swap", pieces: 1, sound: false, tracked: false, anchors: anchorOn ? 1 : 0 };
+    if (!sharpen) return { steps, final: "swap", pieces: 1, sound: false, tracked: false, anchors: anchorOn ? 1 : 0 };
+    const done = sharpen(steps, promptWith(anchorOn));
+    return { steps, final: done.final, pieces: 1, sound: done.sound, tracked: false, anchors: anchorOn ? 1 : 0 };
   }
 
   // Cloud: fal's H3 takes 5–15 s of reference video and whole seconds of output, and needs a swap LoRA.
@@ -1454,6 +1756,161 @@ function planCharacterSwap(input: GenjutsuPlanInput): GenjutsuPlan {
 }
 
 // ---------------------------------------------------------------------------
+// The Openjutsu modes
+
+/** The part's size at a short edge (never larger than the clip), on even numbers. */
+export function fitSize(width: number, height: number, shortEdge: number): { width: number; height: number } {
+  const k = Math.min(1, shortEdge / Math.min(width, height));
+  return { width: Math.max(2, Math.round((width * k) / 2) * 2), height: Math.max(2, Math.round((height * k) / 2) * 2) };
+}
+
+/** The short edge each quality fits the part to (the pack's own 736p for 720p). */
+const SHORT_EDGE: Record<string, number> = { "480p": 480, "720p": 736, "1080p": 1080 };
+
+/** The scene edit's words for its plan (what goes, what it becomes). */
+export function sceneWords(o: ObjectEdit | undefined, subject?: string): { target: string; becomes: string } {
+  const action = o?.action ?? "change";
+  const target = (o?.target ?? subject ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  return { target: target || (action === "background" ? "the people" : ""), becomes: (o?.becomes ?? "").replace(/\s+/g, " ").trim().slice(0, 300) };
+}
+
+/**
+ * Group swap, Scene edit, From picture, Finish and Motion transfer's MiniMax H3 on your GPU: the part fitted first (24 fps, the quality's short edge,
+ * the clip's sound: video-fit-clip, so ComfyUI never decodes more of the clip than it needs), then one job on the
+ * Openjutsu graph with its settings (params.extra.openjutsu). From picture's first frame reads the clip itself (one frame).
+ */
+function planOpenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
+  const m = input.maker;
+  const base = { feature: GENJUTSU.feature, batchTitle: input.title, title: input.title };
+  const helper = { feature: GENJUTSU.stepFeature, batchTitle: input.title };
+  const seed = input.seed !== undefined ? { seed: input.seed } : {};
+  const start = r3(input.range.start);
+  const end = r3(input.range.end);
+  const steps: PlanStep[] = [];
+  const w = input.source.width;
+  const h = input.source.height;
+  const quality = qualityFor(m, input.quality) ?? "720p";
+  const fit = (size: { width: number; height: number } | null) => {
+    steps.push({
+      key: "part",
+      request: { ...helper, modelId: SHARPEN_TOOLS.fit, op: "trim", inputs: { video: input.source.url }, params: { startTime: start, endTime: end, fps: 24, ...(size ? { extra: { ...size } } : {}) }, step: { label: "The part at 24 fps", index: 0, of: 1 } },
+    });
+  };
+  const sized = (short: number) => (w && h ? fitSize(w, h, short) : null);
+  const job = (key: string, op: GenerationRequest["op"], label: string, images: string[], settings: Record<string, unknown>, own = base): PlanStep => ({
+    key,
+    request: { ...own, modelId: m.id, op, ...(images.length ? { inputs: { images } } : {}), params: { ...seed, ...(m.qualities ? { resolution: quality } : {}), extra: { openjutsu: { ...settings, ...seed } } }, step: { label, index: 0, of: 1 } },
+    after: ["part"],
+    chain: [{ slot: "video" }],
+  });
+  const c = input.character ?? {};
+  if (m.group) {
+    const refs = input.references.slice(0, OPENJUTSU_LIMITS.maxCharacters);
+    fit(sized(SHORT_EDGE[quality] ?? 736));
+    steps.push(
+      job("swap", "group-swap", refs.length > 1 ? "Swap the characters" : "Swap the character", refs, {
+        pictures: refs.length,
+        roles: refs.map((_, i) => c.people?.[i]?.role ?? ""),
+        quality,
+        motion: c.motionDetail ?? 512,
+        hats: !!c.hats,
+        mouthsFollowSound: c.mouthsFollowSound !== false,
+        edge: c.edge ?? "normal",
+        ...(c.onePerPerson && refs.length === 2 ? { onePerPerson: true } : {}),
+      }),
+    );
+    return { steps, final: "swap", pieces: 1, sound: false, tracked: false };
+  }
+  if (m.actions) {
+    const o = input.object ?? { action: "change" as const };
+    const words = sceneWords(o, input.subject);
+    const picture = o.action !== "remove" && input.references.length > 0;
+    fit(sized(SHORT_EDGE[quality] ?? 736));
+    steps.push(
+      job("edit", "scene-edit", o.action === "remove" ? "Remove it" : o.action === "background" ? "Put them somewhere new" : "Change it", picture ? input.references.slice(0, 1) : [], {
+        action: o.action,
+        target: words.target,
+        becomes: words.becomes,
+        picture,
+        biggestOnly: !!o.biggestOnly,
+        keepShape: o.action === "change" && !!o.keepShape,
+        edge: o.edge ?? "normal",
+        motion: o.motionDetail ?? 512,
+        quality,
+        ...(o.action === "change" && input.paint?.length ? { paint: input.paint } : {}),
+      }),
+    );
+    return { steps, final: "edit", pieces: 1, sound: false, tracked: false };
+  }
+  if (m.id === MOTION_H3) {
+    // The character photo is H3's look reference (not a first frame), so there is nothing to approve first.
+    const refs = input.references.slice(0, 1);
+    if (!refs.length) throw new Error(REFS_MISSING.motion);
+    fit(sized(quality === "720p" ? 736 : 480));
+    steps.push(
+      job("motion", "motion-transfer", "Transfer the motion", refs, {
+        seconds: r3(end - start),
+        quality,
+        motion: 0,
+        scene: (input.prompt ?? "").trim().slice(0, OPENJUTSU_LIMITS.sceneChars),
+      }),
+    );
+    return { steps, final: "motion", pieces: 1, sound: false, tracked: false };
+  }
+  if (m.review) {
+    const p = input.picture ?? { stage: "frame" as const };
+    if (p.stage === "frame") {
+      steps.push({
+        key: "frame",
+        request: {
+          ...base,
+          feature: GENJUTSU.stepFeature,
+          modelId: "oss-from-picture-frame",
+          op: "picture-frame",
+          inputs: { video: input.source.url, ...(p.ownPerson ? {} : { images: input.references.slice(0, 1) }) },
+          params: { startTime: start, ...seed, extra: { openjutsu: { light: lightWords(p.light), ownPerson: !!p.ownPerson, keepCrop: !!p.keepCrop, adjust: p.adjust ?? "", ...seed } } },
+          step: { label: "The first frame", index: 0, of: 1 },
+        },
+      });
+      return { steps, final: "frame", pieces: 1, sound: false, tracked: false };
+    }
+    if (!p.frame) throw new Error("Make and pick the first frame first");
+    const preset = quality === "720p" ? 736 : 480;
+    fit(w && h ? fitSize(w, h, preset) : null);
+    steps.push(
+      job("video", "picture-video", "Make the video", [p.frame], {
+        seconds: r3(end - start),
+        quality,
+        motion: p.motionDetail ?? 0,
+        scene: (p.scene ?? "").slice(0, OPENJUTSU_LIMITS.sceneChars),
+        ...(p.renderer === "h3" ? { renderer: "h3" } : {}),
+      }),
+    );
+    return { steps, final: "video", pieces: 1, sound: false, tracked: false };
+  }
+  // Finish: the part, fitted only when it isn't the whole clip or is over 1080p.
+  const f = input.finish ?? { tool: m.tool ?? "colours" };
+  const whole = wholeClip(input.range, input.source.duration);
+  const big = !!w && !!h && Math.min(w, h) > 1080;
+  if (!whole || big || m.tool === "faces") fit(sized(1080));
+  const settings =
+    m.tool === "faces"
+      ? { faceStyle: f.faceStyle ?? "mouth", chunkSeconds: f.chunkSeconds ?? 6.5 }
+      : { finish: f.finish ?? "soft", strength: f.strength ?? 0.4, soften: f.soften ?? 0.33 };
+  const step = job("fix", m.tool === "faces" ? "face-fix-video" : "tone-video", m.tool === "faces" ? "Fix the faces" : "Fix the colours", m.tool === "faces" ? input.references.slice(0, 1) : [], settings);
+  if (!steps.length) {
+    delete step.after;
+    delete step.chain;
+    step.request = { ...step.request, inputs: { ...step.request.inputs, video: input.source.url } };
+  }
+  steps.push(step);
+  return { steps, final: "fix", pieces: 1, sound: false, tracked: false };
+}
+
+/** How many sections Fix faces renders (for the estimate's note). */
+export { faceChunkCount } from "../openjutsu-graphs";
+
+// ---------------------------------------------------------------------------
 // Restyle
 
 /**
@@ -1492,7 +1949,6 @@ function planFuobeRestyle(input: GenjutsuPlanInput): GenjutsuPlan {
     maxRefs: m.readsLookImages ?? 0,
     ...(qualityFor(m, input.quality) ? { resolution: qualityFor(m, input.quality) } : {}),
     ...(input.seed !== undefined ? { seed: input.seed } : {}),
-    ...(input.sound && { sound: input.sound }),
   });
   // Only the finished video is a result; the segments are steps (Shorts keeps each take as a result of its own).
   const final = plan.final ?? plan.takes[0].look;
@@ -1571,6 +2027,10 @@ export interface GenjutsuSetup {
   references?: string[];
   /** Character swap's settings (not the part's words: they belong to the clip). */
   character?: Omit<CharacterOptions, "dialogue">;
+  object?: ObjectEdit;
+  /** From picture's settings (not the frame or the words: they belong to a run). */
+  picture?: Omit<PictureOptions, "frame" | "scene" | "stage">;
+  finish?: FinishOptions;
 }
 
 const MODES = new Set<string>(GENJUTSU_MODES.map((m) => m.id));
@@ -1622,7 +2082,80 @@ export function cleanCharacter(v: unknown): Omit<CharacterOptions, "dialogue"> |
   if (wf !== undefined) out.windowFrames = wf;
   const hf = num(o.historyFrames, 0, 341);
   if (hf !== undefined) out.historyFrames = hf;
+  if (Array.isArray(o.people)) {
+    const people = o.people.slice(0, OPENJUTSU_LIMITS.maxCharacters).map((p) => {
+      const x = p && typeof p === "object" ? (p as Record<string, unknown>) : {};
+      const pin = x.pin && typeof x.pin === "object" ? (x.pin as Record<string, unknown>) : undefined;
+      const at = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(1, Math.round(v * 1000) / 1000)) : undefined);
+      const px = at(pin?.x);
+      const py = at(pin?.y);
+      return { role: typeof x.role === "string" ? x.role.slice(0, OPENJUTSU_LIMITS.roleChars) : "", ...(px !== undefined && py !== undefined ? { pin: { x: px, y: py } } : {}) };
+    });
+    if (people.some((p) => p.role || p.pin)) out.people = people;
+  }
+  if (o.onePerPerson === true) out.onePerPerson = true;
+  if (o.hats === true) out.hats = true;
+  if (o.mouthsFollowSound === false) out.mouthsFollowSound = false;
+  const edge = oneOf(o.edge, ["tight", "normal", "loose"] as const);
+  if (edge) out.edge = edge;
+  if (o.motionDetail === 512 || o.motionDetail === 768) out.motionDetail = o.motionDetail;
   return Object.keys(out).length ? out : undefined;
+}
+
+/** Scene edit's settings as they travel in a code. */
+export function cleanObject(v: unknown): ObjectEdit | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>;
+  const action = oneOf(o.action, ["change", "remove", "background"] as const);
+  if (!action) return undefined;
+  const out: ObjectEdit = { action };
+  const target = str(o.target, 120);
+  if (target) out.target = target;
+  const becomes = str(o.becomes, 300);
+  if (becomes) out.becomes = becomes;
+  if (o.biggestOnly === true) out.biggestOnly = true;
+  if (o.keepShape === true) out.keepShape = true;
+  const edge = oneOf(o.edge, ["tight", "normal", "loose"] as const);
+  if (edge) out.edge = edge;
+  if (o.motionDetail === 512 || o.motionDetail === 768) out.motionDetail = o.motionDetail;
+  return out;
+}
+
+/** From picture's settings as they travel in a code (the frame and the words stay with the run). */
+export function cleanPicture(v: unknown): Omit<PictureOptions, "frame" | "scene" | "stage"> | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>;
+  const out: Omit<PictureOptions, "frame" | "scene" | "stage"> = {};
+  const l = o.light as Record<string, unknown> | undefined;
+  if (l && typeof l === "object") {
+    if (typeof l.look === "string" && (LOOK_IDS as string[]).includes(l.look)) out.light = { look: l.look as LookId };
+    else if (str(l.words, OPENJUTSU_LIMITS.lightChars)) out.light = { words: str(l.words, OPENJUTSU_LIMITS.lightChars)! };
+  }
+  if (o.ownPerson === true) out.ownPerson = true;
+  if (o.keepCrop === true) out.keepCrop = true;
+  const adjust = str(o.adjust, 300);
+  if (adjust) out.adjust = adjust;
+  if (o.renderer === "h3") out.renderer = "h3";
+  if (o.motionDetail === 512 || o.motionDetail === 768) out.motionDetail = o.motionDetail;
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Finish's settings as they travel in a code. */
+export function cleanFinish(v: unknown): FinishOptions | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>;
+  const tool = oneOf(o.tool, ["faces", "colours"] as const);
+  if (!tool) return undefined;
+  const out: FinishOptions = { tool };
+  const style = oneOf(o.faceStyle, ["photo", "mouth"] as const);
+  if (style) out.faceStyle = style;
+  if (o.chunkSeconds === 4 || o.chunkSeconds === 6.5 || o.chunkSeconds === 10) out.chunkSeconds = o.chunkSeconds;
+  const finish = oneOf(o.finish, ["soft", "filmic", "rich", "off"] as const);
+  if (finish) out.finish = finish;
+  const unit = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? Math.max(0, Math.min(1, Math.round(x * 100) / 100)) : undefined);
+  if (unit(o.strength) !== undefined) out.strength = unit(o.strength);
+  if (unit(o.soften) !== undefined) out.soften = unit(o.soften);
+  return out;
 }
 
 const ANCHOR_IDS = new Set(["gpt-image-2-5-sunburst", "nano-banana-pro", "oss-qwen-image-21", "oss-krea2-identity-edit", "oss-qwen-edit"]);
@@ -1642,12 +2175,18 @@ export function encodeSetup(s: GenjutsuSetup): string {
     l: look,
     r: s.references?.length ? s.references : undefined,
     c: s.character && cleanCharacter(s.character),
+    o: s.object && cleanObject(s.object),
+    i: s.picture && cleanPicture(s.picture),
+    f: s.finish && cleanFinish(s.finish),
   };
   return `gj1.${toBase64Url(JSON.stringify(o))}`;
 }
 
-/** A setup read back from a code (or a link with ?setup=…), checked field by field; null when it isn't one. */
-export function decodeSetup(input: string): GenjutsuSetup | null {
+/**
+ * A setup read back from a code (or a link with ?setup=…), checked field by field; null when it isn't one. A code naming
+ * a mode or a setting not open to this viewer opens without it (a mode that isn't open: Motion transfer).
+ */
+export function decodeSetup(input: string, open: FeatureCheck = ALL_FEATURES): GenjutsuSetup | null {
   let o: Record<string, unknown>;
   try {
     let code = input.trim();
@@ -1660,13 +2199,14 @@ export function decodeSetup(input: string): GenjutsuSetup | null {
     return null;
   }
   if (!o || typeof o !== "object" || typeof o.m !== "string" || !MODES.has(o.m)) return null;
-  const mode = o.m as GenjutsuMode;
+  const mode = modeOpen(o.m as GenjutsuMode, open) ? (o.m as GenjutsuMode) : "motion";
   const out: GenjutsuSetup = { mode };
   if (o.e === "cloud" || o.e === "open") out.engine = o.e;
   const model = str(o.x, 80);
   // Codes from before the Originals name a retired Genjutsu model or the round-4 open models: the Original that replaced it.
   const current = model && (LEGACY_MAKERS[model] ?? model);
-  if (current && getMaker(current)) out.model = current;
+  const known = current ? getMaker(current) : undefined;
+  if (current && known && (!known.features || known.features.some(open))) out.model = current;
   if (o.t === "standard" || o.t === "high") out.tier = o.t;
   if (typeof o.q === "string" && QUALITIES.has(o.q)) out.quality = o.q as GenjutsuQuality;
   if (typeof o.g === "string" && MODE_TARGETS[mode].includes(o.g as GenjutsuTarget)) out.target = o.g as GenjutsuTarget;
@@ -1687,7 +2227,21 @@ export function decodeSetup(input: string): GenjutsuSetup | null {
   const refs = files(o.r, GENJUTSU.maxReferences);
   if (refs.length) out.references = refs;
   const character = mode === "character" ? cleanCharacter(o.c) : undefined;
-  if (character) out.character = character;
+  if (character) {
+    if (character.onePerPerson && !open("group-swap-one-by-one")) delete character.onePerPerson;
+    out.character = character;
+  }
+  const object = mode === "swap" ? cleanObject(o.o) : undefined;
+  if (object && open(SCENE_ACTIONS.find((a) => a.id === object.action)!.feature)) out.object = object;
+  const picture = mode === "picture" ? cleanPicture(o.i) : undefined;
+  if (picture) {
+    if (picture.light && !open("picture-light")) delete picture.light;
+    if (picture.ownPerson && !open("picture-own-person")) delete picture.ownPerson;
+    if (picture.renderer && !open("picture-h3-renderer")) delete picture.renderer;
+    if (Object.keys(picture).length) out.picture = picture;
+  }
+  const finish = mode === "finish" ? cleanFinish(o.f) : undefined;
+  if (finish && open(finish.tool === "faces" ? "finish-faces" : "finish-colours")) out.finish = finish;
   return out;
 }
 

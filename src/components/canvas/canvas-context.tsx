@@ -1,45 +1,5 @@
 "use client";
 
-import {
-  AtSign,
-  Orbit,
-  Rotate3d,
-  AudioLines,
-  AudioWaveform,
-  Split,
-  Building2,
-  Castle,
-  Clapperboard,
-  Columns3,
-  Combine,
-  Dog,
-  Eraser,
-  Feather,
-  Film,
-  Fish,
-  Frame,
-  GalleryHorizontal,
-  Gem,
-  ImageIcon,
-  Languages,
-  LayoutDashboard,
-  MessageSquareText,
-  Mic2,
-  MonitorPlay,
-  Package,
-  Palette,
-  Sparkles,
-  Star,
-  StickyNote,
-  Swords,
-  Table,
-  Type,
-  UserRound,
-  Waves,
-  ZoomIn,
-  type LucideIcon,
-  Box,
-} from "lucide-react";
 import { createContext, useContext, useMemo, useSyncExternalStore } from "react";
 import {
   describeNode,
@@ -57,57 +17,9 @@ import {
   type RunReason,
 } from "@/lib/catalog/canvas";
 import type { Engine, Generation, GenerationStatus, ModelDef, Operation, OutputFile } from "@/lib/catalog/types";
-import type { StemId } from "@/lib/av/split";
 import type { EngineMode } from "@/lib/api";
 
-export const ICONS: Record<string, LucideIcon> = {
-  Type,
-  LayoutDashboard,
-  ImageIcon,
-  Film,
-  AudioLines,
-  AtSign,
-  Sparkles,
-  Combine,
-  Frame,
-  ZoomIn,
-  Eraser,
-  Mic2,
-  MonitorPlay,
-  StickyNote,
-  Clapperboard,
-  MessageSquareText,
-  Package,
-  GalleryHorizontal,
-  Columns3,
-  AudioWaveform,
-  Split,
-  UserRound,
-  Languages,
-  Table,
-  // Camera path and Fly around (N7-7)
-  Orbit,
-  Rotate3d,
-  // Blockout to film
-  Box,
-  // Effects 2.0 chains (src/lib/catalog/canvas.ts EFFECT_CHAINS)
-  Swords,
-  Feather,
-  Gem,
-  Palette,
-  Castle,
-  Waves,
-  Star,
-  Building2,
-  Fish,
-  Dog,
-};
-
-/** A node type's or template's icon, by lucide name. */
-export function NodeIcon({ name, className }: { name: string; className?: string }) {
-  const Icon: LucideIcon = ICONS[name] ?? Sparkles;
-  return <Icon className={className} />;
-}
+export { ICONS, NodeIcon } from "./node-icon";
 
 /** Edge and handle colours per port type (the app's chart tokens, so both themes work). */
 export const PORT_COLOR: Record<PortType, string> = {
@@ -298,6 +210,13 @@ export function buildViews(
   const reused = new Set(plan.reused.map((r) => r.nodeId));
   const out = new Map<string, NodeView>();
   for (const n of graph.nodes) {
+    // A Kinetic node renders in the browser: its view is what feeds it and what it made (no op, no estimate).
+    if (n.type === "kinetic") {
+      const next: NodeView = { ...EMPTY_VIEW, counts: counts.get(n.id) ?? EMPTY_VIEW.counts, results: results.get(n.id) ?? EMPTY_RESULTS };
+      const old = prev?.get(n.id);
+      out.set(n.id, old && sameView(old, next) ? old : next);
+      continue;
+    }
     if (!isGenerator(n)) continue;
     const d = describe(n.id);
     const next: NodeView = {
@@ -356,8 +275,8 @@ export interface EditorActions {
   patchClip: (nodeId: string, clipId: string, patch: Partial<ClipSettings>) => void;
   cancel: (id: string) => void;
   open: (id: string, index?: number) => void;
-  /** Add an input node holding this node's first output (or, on Split soundtrack, one stem), wired nowhere yet. */
-  toInput: (id: string, stem?: StemId) => void;
+  /** Add an input node holding this node's first output, wired nowhere yet. */
+  toInput: (id: string) => void;
   /**
    * Add an input node holding a file made for this node elsewhere (an open-engine dub), below it; `takeOver` moves
    * the node's outgoing connections onto it.

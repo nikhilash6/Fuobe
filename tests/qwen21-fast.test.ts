@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
-// Package nm10-qwen21-fast (docs/research/new-models-10.md §6.7): Qwen-Image 2.1 in 2-6 steps (Options → Speed), on 16 GB
+// docs/research/new-models-10.md §6.7: Qwen-Image 2.1 in 2-6 steps (Options → Speed), on 16 GB
 // cards (Options → GPU, Zen Image Edit's small encoder), with the Texture-Fix VAE (Options → Decoder) and the 2.1
 // Next-Scene LoRA for Storyboard's next frames. All on the open engine: Qwen-Image 2.1 isn't hosted on fal or Replicate.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-qwen21-fast-"));
+const tmp = tempDir("fuobe-qwen21-fast-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -29,7 +29,6 @@ const { qwen21Gpu } = await import("@/server/qwen21-gpu");
 const { writeSnapshot, dropSnapshots } = await import("@/server/gpu/snapshots");
 const { gateGeneration } = await import("@/server/gpu/gate");
 const { EDIT_STUDIO, INPAINT_STUDIO } = await import("@/lib/studios");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const LIBRARY = path.join(process.cwd(), "workflows/comfyui");
 const read = (f: string) => JSON.parse(fs.readFileSync(path.join(LIBRARY, f), "utf8"));
@@ -136,7 +135,7 @@ describe("Qwen-Image 2.1's speed graphs", () => {
       expect(ofClass(wf, "KSampler"), t.id).toHaveLength(0);
       expect(ofClass(wf, "CFGGuider")[0][1].inputs.cfg).toBe(1);
       expect(ofClass(wf, "KSamplerSelect")[0][1].inputs.sampler_name).toBe("euler");
-      // The rest of the owner's graph is as it was (models, encoder, decoder, the pictures' handling).
+      // The rest of the base graph is as it was (models, encoder, decoder, the pictures' handling).
       for (const [id, n] of Object.entries(base)) {
         if (n.class_type === "KSampler" || n.class_type === "SaveImage" || n.class_type === "QwenImage21Cache") continue;
         expect(wf[id], `${t.id} ${id}`).toEqual(n);
@@ -159,7 +158,7 @@ describe("Qwen-Image 2.1's speed graphs", () => {
       expect(e.bindings.seed).toEqual([{ node: "70", input: "noise_seed" }]);
       expect(e.bindings.steps).toBeUndefined();
       expect(e.license).toMatch(/Qwen Research License/);
-      // Unvalidated like the owner's Qwen-Image 2.1 graphs until it runs on a GPU (the CPU server's graph check isn't that bar).
+      // Unvalidated like the base Qwen-Image 2.1 graphs until it runs on a GPU (the CPU server's graph check isn't that bar).
       expect(e.validated, t.id).toBe(false);
       if (/-(inpaint|outpaint)-/.test(t.id)) expect(e.customNodes.map((c) => c.name)).toEqual(["ausboss-nodes"]);
       // The licence names the optional clean decoder's own.
@@ -186,7 +185,7 @@ describe("Qwen-Image 2.1's speed graphs", () => {
 });
 
 describe("Options → Speed, GPU and Decoder", () => {
-  it("picks the speed's graph per operation, and Full (the default) keeps the owner's", () => {
+  it("picks the speed's graph per operation, and Full (the default) keeps the base graph", () => {
     expect(variant("qwen-image-21-t2i", "t2i", {})).toBe("qwen-image-21-t2i");
     expect(variant("qwen-image-21-t2i", "t2i", { speed: "full" })).toBe("qwen-image-21-t2i");
     expect(variant("qwen-image-21-t2i", "t2i", { speed: "draft" })).toBe("qwen-image-21-t2i-draft");
@@ -312,7 +311,7 @@ describe("Options → Speed, GPU and Decoder", () => {
     expect(Q.qwen21Note(controls, { gpu: "small" }, "inpaint")).toBeUndefined();
     expect(Q.qwen21Note(controls, {}, "t2i")).toBeUndefined();
     expect(Q.qwen21Note(getModel("oss-qwen-image-21-turbo")!.options.controls, { gpu: "small" }, "edit")).toBeUndefined();
-    expect(Q.QWEN21_GPU.labels?.small).toMatch(/Full speed, English prompts only/);
+    expect(Q.QWEN21_GPU.labels?.small).toMatch(/^16 GB · English prompts only$/);
     expect(getModel("oss-qwen-image-21")!.tagline).toMatch(/English prompts only on a 16 GB GPU/);
   });
 

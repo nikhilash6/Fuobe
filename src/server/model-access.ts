@@ -1,12 +1,12 @@
 import "server-only";
-import { getPreset, MODELS } from "@/lib/catalog";
-import { CHARACTER_LORAS, characterLora, MINIMAX_H3_LICENCE } from "@/lib/catalog/character-swap";
+import { MODELS } from "@/lib/catalog";
+import { characterLora } from "@/lib/catalog/character-swap";
 import { PIKA_FLEX_LORAS } from "@/lib/catalog/pika-flex";
-import { H3_TURBO_4STEP_INFO, H3_TURBO_4STEP_LORA, REGEN_FILES, REGEN_LORA } from "@/lib/catalog/regenerate";
+import { H3_TURBO_4STEP_LORA, REGEN_LORA } from "@/lib/catalog/regenerate";
 import { onEngine, providerEngine } from "@/lib/catalog/engines";
-import { LORA_LIBRARY, MOTION_EFFECT_LORAS } from "@/lib/catalog/lora-library.generated";
+import { LORA_LIBRARY } from "@/lib/catalog/lora-library.generated";
 import { libraryEntry, loraName } from "@/lib/catalog/loras";
-import { OSS_LORAS, type OssLora } from "@/lib/catalog/oss-loras.generated";
+import { OSS_LORAS } from "@/lib/catalog/oss-loras.generated";
 import type { Engine, LoraRef, ModelDef, ModelLicence, ModelRoute } from "@/lib/catalog/types";
 import type { ManifestWorkflow } from "@/lib/comfy";
 import {
@@ -19,7 +19,6 @@ import {
   UNKNOWN_LICENCE,
   loraLicenceInfo,
   mergeLicences,
-  modelCardOf,
   NODE_PACKS,
   paidApiLicence,
   PROVIDER_NAME,
@@ -40,7 +39,6 @@ import {
   type AccessChange,
   type AccessList,
   type AccessSummary,
-  type LoraInfo,
   type ModelEntry,
   type FactsOf,
   type ModelAccess,
@@ -48,6 +46,7 @@ import {
 import { db } from "./db";
 import { localModelInUse } from "./llm";
 import { loadManifest } from "./providers/comfyui";
+import { characterLoraLicence, loraLicenceRows, regenLoraLicence, turbo4StepLicence } from "@/lib/lora-licences";
 
 /**
  * Settings → Models & licences on the server: the switches (one settings row, JSON), each route's licence and
@@ -259,23 +258,6 @@ export function loraLicence(l: Pick<LoraRef, "file" | "url" | "licence">): Licen
   return loraLicenceInfo(l.licence ?? e?.licence, e?.page);
 }
 
-/** Open-H3 Regenerate's merged LoRA: MiniMax H3's terms (restricted regions), with what its merged parts carry. */
-function regenLoraLicence(): LicenceInfo {
-  const { name, class: cls, url, excludes, notices } = MINIMAX_H3_LICENCE;
-  return { name, class: cls, url: modelCardOf(REGEN_LORA.url) ?? url, note: REGEN_FILES[0].note, ...(excludes && { excludes }), ...(notices?.length && { notices }) };
-}
-
-/** lightx2v's Turbo 4-step v1.2 (MiniMax H3's 2K draft): Apache-2.0 in its card at the pinned revision. */
-function turbo4StepLicence(): LicenceInfo {
-  return { ...licenceInfo("Apache-2.0"), url: H3_TURBO_4STEP_INFO.url, note: H3_TURBO_4STEP_INFO.note };
-}
-
-/** A Character swap LoRA's licence as the list shows it (its own recorded terms, its pinned model card). */
-function characterLoraLicence(l: Pick<(typeof CHARACTER_LORAS)[number], "licence" | "url">): LicenceInfo {
-  const { name, class: cls, url, excludes, notices, note } = l.licence;
-  return { name, class: cls, url: modelCardOf(l.url) ?? url, note, ...(excludes && { excludes }), ...(notices?.length && { notices }) };
-}
-
 /**
  * The LoRAs a run may load: one switched off, or whose licence class is, is left out (the plan's notes say
  * which switch). With "keep GPU-only LoRAs on your GPU" on, each LoRA is marked so a cloud route leaves the ones
@@ -329,51 +311,6 @@ export function modelLicence(m: ModelDef): { licence: LicenceInfo; cloud?: Licen
   return { licence: cloudLicence, ...(m.licence && cloudLicence.class === "paid-api" && { weights: weightsLicence(m.licence) }), packs };
 }
 
-/** The presets a map key names: a map v2 preset id, or a round-1 slug (the motion, effect or app it matches). */
-const presetsOf = (key: string) => (getPreset(key) ? [getPreset(key)!] : ["motion", "effect", "app"].flatMap((k) => getPreset(`${k}-${key}`) ?? []));
-
-/** A map LoRA's name as its download names it: the Hugging Face repo ("Remade-AI/Crane_up" → "Crane up"), else its file. */
-function mapLoraName(l: OssLora): string {
-  const repo = l.url && /^https:\/\/huggingface\.co\/[^/]+\/([^/]+)\//.exec(l.url)?.[1];
-  return (repo || l.file.replace(/\.safetensors$/i, "")).replace(/[_-]+/g, " ").trim();
-}
-
-/**
- * Every LoRA a run can load, with its licence: the library's, then the preset LoRA map's files that aren't
- * library files (the round-1 Wan LoRAs camera motions and effects load), their licence as the map records it.
- */
-function loraRows(access: ModelAccess): LoraInfo[] {
-  const rows: LoraInfo[] = LORA_LIBRARY.map((e) => {
-    const row = MOTION_EFFECT_LORAS.find((r) => r.loras.includes(e.key));
-    const hold = row?.status === "licence-hold" ? "The research holds this licence: its Hugging Face and civitai pages disagree" : undefined;
-    return { file: e.file, name: e.name, group: e.group, base: e.base, licence: loraLicenceInfo(e.licence, e.page, hold), on: !access.loras.includes(e.file) };
-  });
-  const map = new Map<string, { ref: OssLora; keys: string[] }>();
-  for (const [key, refs] of Object.entries(OSS_LORAS)) {
-    for (const ref of refs) {
-      if (libraryEntry(ref)) continue;
-      const hit = map.get(ref.file);
-      if (hit) hit.keys.push(key);
-      else map.set(ref.file, { ref, keys: [key] });
-    }
-  }
-  for (const [file, { ref, keys }] of map) {
-    const presets = [...new Map(keys.flatMap(presetsOf).map((p) => [p.id, p])).values()];
-    const motion = presets.length ? presets.every((p) => p.id.startsWith("motion-")) : keys.every((k) => k.startsWith("motion-"));
-    const used = presets.length ? `In the preset LoRA map: ${presets.map((p) => p.name).join(", ")}` : "In the preset LoRA map";
-    rows.push({ file, name: mapLoraName(ref), group: motion ? "motion" : "effect", base: ref.base, licence: loraLicenceInfo(ref.licence, modelCardOf(ref.url), used), on: !access.loras.includes(file) });
-  }
-  // The LoRAs the Character swap's graphs load (and fal's route takes): Akatz Labs' swap LoRA and lightx2v's Turbo.
-  for (const l of CHARACTER_LORAS) rows.push({ file: l.file, name: l.name, group: "adapter", base: "MiniMax H3", licence: characterLoraLicence(l), on: !access.loras.includes(l.file) });
-  // Pika H3 Flex's two adapters (MiniMax H3 on your GPU: Fast · Pika Flex, References, Talk from a voice clip).
-  for (const l of PIKA_FLEX_LORAS) rows.push({ file: l.file, name: l.name, group: "adapter", base: "MiniMax H3", licence: characterLoraLicence(l), on: !access.loras.includes(l.file) });
-  // The refiner LoRA Open-H3 Regenerate's graph loads (and a run downloads).
-  rows.push({ file: REGEN_LORA.file, name: REGEN_FILES[0].item, group: "adapter", base: "MiniMax H3", licence: regenLoraLicence(), on: !access.loras.includes(REGEN_LORA.file) });
-  // The Turbo 4-step LoRA MiniMax H3's 2K draft loads (off: the draft runs on H3's own graph and the finish redraws its clip).
-  rows.push({ file: H3_TURBO_4STEP_LORA.file, name: H3_TURBO_4STEP_INFO.name, group: "adapter", base: "MiniMax H3", licence: turbo4StepLicence(), on: !access.loras.includes(H3_TURBO_4STEP_LORA.file) });
-  return rows;
-}
-
 /**
  * Whether a switch names something this install has (a model, a provider in use, a node pack, a LoRA the
  * library or the preset map loads): the settings API refuses a typo rather than storing a switch that does nothing.
@@ -423,7 +360,7 @@ export function accessList(): AccessList {
     return new Set(m.routes.map((r) => factsOf(r, m).class));
   };
   const classesOf = new Map(models.map((e) => [e.id, routeClasses(e.id)]));
-  const loras = loraRows(access);
+  const loras = loraLicenceRows(access.loras);
   return {
     access,
     classes: LICENCE_CLASSES.map((id) => ({

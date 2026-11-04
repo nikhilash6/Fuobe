@@ -1,0 +1,267 @@
+/*
+ * Tab and chip rows (src/components/ui/tab-row.tsx): one look for every row of tabs or chips on the site. A row is
+ * `.tab-row`; each item is `.tab-pill`, marked `data-on` while it is the selected one.
+ *
+ * - Every item is a fully rounded pill, 36 px tall (44 px to tap on touch), its icon and words centred.
+ * - Selected: a soft fill. Hover: a lighter fill of the same shape (only for a mouse, and never while the page scrolls
+ *   under a resting mouse). Pressed: a stronger fill. Keyboard focus: a 2 px ring of the same shape.
+ * - Once the row's script runs, one fill (`.tab-ind`) slides between the items instead of each item painting its own.
+ * Timings are the site's motion tokens (motion.css). In @layer components, so a row's own utilities (margins,
+ * wrapping) still apply.
+ */
+:root {
+  /* Hover and pressed are the nav's own fills (nav-states.css); selected is a step stronger than hover. */
+  --tab-hi: var(--nav-hi);
+  --tab-on: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --tab-press: var(--nav-press);
+  /* Where a sticky row of tabs sits: under the phone's bar (and the notch), or under the top bar from md. */
+  --tab-band-top: calc(3.5rem + env(safe-area-inset-top));
+}
+.dark {
+  --tab-on: oklch(1 0 0 / 14%);
+}
+@media (min-width: 768px) {
+  :root {
+    --tab-band-top: var(--chrome-top);
+  }
+}
+
+@layer components {
+  .tab-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    /* Room for the focus ring and the 44 px hit area, without moving the pills off the page's grid. */
+    margin: -4px;
+    padding: 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 16px;
+    scrollbar-width: none;
+    isolation: isolate;
+  }
+  .tab-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-pill {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 36px;
+    min-width: 44px;
+    padding-inline: 14px;
+    border: 0;
+    border-radius: 9999px;
+    background-color: transparent;
+    color: var(--muted-foreground);
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background-color var(--motion-fast) var(--ease-standard),
+      color var(--motion-fast) var(--ease-standard);
+  }
+  /* An icon leads: a little less room on its side, so icon and words look centred. */
+  .tab-pill:has(> svg:first-child) {
+    padding-inline: 12px 14px;
+  }
+  /* A round picture leads (Home's apps to compare): set in the pill's round end, as far from its edge as from the top. */
+  .tab-pill:has(> .tab-thumb:first-child) {
+    padding-inline: 8px 14px;
+  }
+  .tab-pill > .tab-thumb {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 9999px;
+    background-color: var(--muted);
+  }
+  .tab-pill > .tab-thumb > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .tab-pill > svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--muted-foreground);
+    transition: color var(--motion-fast) var(--ease-standard);
+  }
+  /* A count after the words (Library). */
+  .tab-pill .tab-count {
+    margin-left: -2px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+  }
+  /* 44 px to tap on touch: the hit area reaches past the pill into the row's padding. */
+  @media (pointer: coarse) {
+    .tab-pill::after {
+      content: "";
+      position: absolute;
+      inset: -4px 0;
+    }
+  }
+
+  .tab-pill:is([data-on], [data-state="active"]) {
+    background-color: var(--tab-on);
+    color: var(--foreground);
+  }
+  .tab-pill:is([data-on], [data-state="active"]) > svg {
+    color: var(--brand-text);
+  }
+  /* Hover only while the mouse leads (html[data-input], nav/input-modality.ts), as in the nav: never a second fill
+     beside the keyboard's ring. */
+  @media (hover: hover) {
+    html:not([data-input="keyboard"]) .tab-pill:not([data-on], [data-state="active"]):hover {
+      background-color: var(--tab-hi);
+      color: var(--foreground);
+    }
+    /* The page scrolling under a resting mouse leaves no fill behind. */
+    html:not([data-input="keyboard"]) .tab-row[data-still] .tab-pill:not([data-on], [data-state="active"]):hover {
+      background-color: transparent;
+      color: var(--muted-foreground);
+    }
+  }
+  html .tab-pill:not([data-on], [data-state="active"]):active:active {
+    background-color: var(--tab-press);
+    transition-duration: 0ms;
+  }
+  /* The keyboard's ring, the pill's own shape (the mouse's clicks never show it). */
+  html:not([data-input="pointer"]) .tab-pill:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .tab-pill:disabled,
+  .tab-pill[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background-color: transparent;
+  }
+
+  /*
+   * The sliding fill: three parts (two round ends and a middle), moved and stretched with transforms only, so a move
+   * never lays the page out again. The row's script sets --ti-x, --ti-y (the selected pill's place), --ti-h (its
+   * height), --ti-r (where its right end starts) and --ti-s (the middle's width / 100).
+   */
+  .tab-ind {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity var(--motion-base) var(--ease-enter);
+  }
+  .tab-row[data-ind] > .tab-ind {
+    opacity: 1;
+  }
+  .tab-ind > span {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: var(--ti-h, 36px);
+    background-color: var(--tab-on);
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+  .tab-ind > span:nth-child(1) {
+    width: calc(var(--ti-h, 36px) / 2);
+    border-radius: 9999px 0 0 9999px;
+    transform: translate(var(--ti-x, 0px), var(--ti-y, 0px));
+  }
+  .tab-ind > span:nth-child(2) {
+    width: 100px;
+    transform: translate(calc(var(--ti-x, 0px) + var(--ti-h, 36px) / 2), var(--ti-y, 0px)) scaleX(var(--ti-s, 0));
+  }
+  .tab-ind > span:nth-child(3) {
+    width: calc(var(--ti-h, 36px) / 2);
+    border-radius: 0 9999px 9999px 0;
+    transform: translate(var(--ti-r, 0px), var(--ti-y, 0px));
+  }
+  .tab-row[data-ind-moving] > .tab-ind > span {
+    transition: transform var(--motion-slow) var(--ease-standard);
+  }
+  /* While the fill is there, the selected pill paints none of its own. */
+  .tab-row[data-ind] > .tab-pill:is([data-on], [data-state="active"]),
+  .tab-row[data-ind] > * > .tab-pill:is([data-on], [data-state="active"]) {
+    background-color: transparent;
+  }
+
+  /*
+   * A row of section tabs that stays under the bar while its sections scroll by: a band of the page's own background
+   * that reaches the screen's edges, the pills centred in it, and a hairline under it once it is stuck.
+   */
+  .tab-band {
+    position: sticky;
+    top: var(--tab-band-top);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    height: 52px;
+    background-color: var(--background);
+    box-shadow: 0 0 0 100vmax var(--background);
+    clip-path: inset(0 -100vmax -1px);
+  }
+  /*
+   * The hairline: its own layer over the band's reach to the screen's edges, shown once the band is stuck. The line is
+   * the band's own width; a shadow clipped to its 1 px carries it to the edges, as a shadow never widens the page.
+   */
+  .tab-band::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background-color: var(--border);
+    box-shadow: 0 0 0 100vmax var(--border);
+    clip-path: inset(0 -100vmax);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-base) var(--ease-enter);
+  }
+  .tab-band[data-stuck]::after {
+    opacity: 1;
+  }
+  .tab-band > .tab-row {
+    flex: 1;
+  }
+  @media (max-width: 639.98px) {
+    .tab-band {
+      margin-inline: -16px;
+    }
+    .tab-band > .tab-row {
+      margin-inline: 0;
+      padding-inline: 16px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-pill,
+  .tab-pill > svg,
+  .tab-ind,
+  .tab-band::after,
+  .tab-row[data-ind-moving] > .tab-ind > span {
+    transition: none;
+  }
+}

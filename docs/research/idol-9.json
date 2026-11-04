@@ -697,7 +697,7 @@
  ],
  "hostedSummary": {
   "idolHosted": true,
-  "cloudRoute": "fal speridlabs/idol ($0.10) since 2026-10-30, built as idol-3d in idol-1 (corrected 2026-11-02; the 2026-10-30 check predates fal's listing)",
+  "cloudRoute": "fal speridlabs/idol ($0.10) since 2026-10-30, built as idol-3d (corrected 2026-11-02; the 2026-10-30 check predates fal's listing)",
   "existingCloudSplat": "triposplat (fal tripo3d/triposplat, <= 262,144 Gaussians, $0.05; cloud-models.generated.ts L15265-15307) stays as it is and is never labelled Idol"
  },
  "fuobeToday": {

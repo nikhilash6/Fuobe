@@ -40,7 +40,7 @@ import { getProject } from "./projects";
  * Claude's reply, where neither mode can hold them back.
  * A run the server missed (it was off) happens once when it's back, not once per missed time.
  *
- * A task can run a saved skill instead (Skills W4, `skill`): each run is still a chat, with the same approval and cap,
+ * A task can run a saved skill instead (`skill`): each run is still a chat, with the same approval and cap,
  * but no model plans it — a fixed reply (skillCall) makes one run_skill call with the task's values, and a file input
  * set to "newest upload" reads the newest upload of its kind when the run starts.
  */

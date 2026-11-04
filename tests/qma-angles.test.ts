@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
-// Package qma-angles: the QMA camera-angles LoRA on Qwen-Image 2.1 (96 views) in the Angles app, Cinema's location views and
+// The QMA camera-angles LoRA on Qwen-Image 2.1 (96 views) in the Angles app, Cinema's location views and
 // 3D re-shoots, the turnaround's missing sides and its 8-view still set, and the Canvas product angles. Open engine only:
 // fal's Qwen-Image 2.1 takes no LoRAs and Replicate has none.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-qma-"));
+const tmp = tempDir("fuobe-qma-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -23,7 +23,6 @@ const { QMA_MODEL, QMA_WORKFLOW, parseQmaPrompt } = await import("@/lib/qma");
 const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
 const { modelLicence } = await import("@/server/model-access");
 const { TurnaroundSchema } = await import("@/server/turnaround");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const LIBRARY = path.join(process.cwd(), "workflows/comfyui");
 const read = (f: string) => JSON.parse(fs.readFileSync(path.join(LIBRARY, f), "utf8"));
@@ -211,21 +210,27 @@ describe("the turnaround", () => {
 });
 
 describe("the Canvas product angles and the GPU board", () => {
-  it("runs the three angles on QMA on your GPU, with the camera in each node's settings", () => {
+  it("runs the front and side angles on QMA on your GPU, with the camera in each node's settings", () => {
     const t = CANVAS_TEMPLATES.find((x) => x.id === "product-angles")!;
     const open = t.build("open");
     const cloud = t.build("cloud");
     for (const id of ["front", "side", "top"]) {
-      const o = open.nodes.find((n) => n.id === id)!;
-      expect(o.data.modelId).toBe(QMA_MODEL);
-      expect(o.data.params?.extra).toHaveProperty("horizontal_angle");
       const c = cloud.nodes.find((n) => n.id === id)!;
       expect(c.data.modelId).toBe("nano-banana-pro");
       expect(c.data.params).toBeUndefined();
     }
+    for (const id of ["front", "side"]) {
+      const o = open.nodes.find((n) => n.id === id)!;
+      expect(o.data.modelId).toBe(QMA_MODEL);
+      expect(o.data.params?.extra).toHaveProperty("horizontal_angle");
+    }
+    // QMA has no straight-down camera: the flat lay stays a plain edit.
     const top = open.nodes.find((n) => n.id === "top")!;
-    expect(planGeneration({ feature: "canvas", modelId: QMA_MODEL, prompt: top.data.prompt ?? "", inputs: { images: ["/api/files/p.png"] }, params: top.data.params }, getModel, getPreset).prompt).toBe(
-      "<qma> front view high-angle shot medium shot The same product shot top-down as a flat lay on a seamless studio background, even light",
+    expect(top.data.modelId).toBe("oss-qwen-image-21");
+    expect(top.data.params?.extra).toBeUndefined();
+    const side = open.nodes.find((n) => n.id === "side")!;
+    expect(planGeneration({ feature: "canvas", modelId: QMA_MODEL, prompt: side.data.prompt ?? "", inputs: { images: ["/api/files/p.png"] }, params: side.data.params }, getModel, getPreset).prompt).toMatch(
+      /^<qma> .*The same product in a clean side profile/,
     );
   });
 

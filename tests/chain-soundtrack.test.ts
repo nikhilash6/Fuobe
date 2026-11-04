@@ -1,14 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { OutputFile } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-soundtrack-"));
+const dir = tempDir("fuobe-soundtrack-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 const { pickOutput } = await import("@/server/generations");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const clip: OutputFile = { url: "/api/files/cut.mp4", kind: "video", contentType: "video/mp4" };
 const still: OutputFile = { url: "/api/files/frame.png", kind: "image", contentType: "image/png" };

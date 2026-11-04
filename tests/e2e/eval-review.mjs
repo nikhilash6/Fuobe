@@ -11,13 +11,14 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { DESKTOP, launch, PHONE, root } from "./_browser.mjs";
+import { tempDir } from "./_temp.mjs";
 
 const { writeReport, loadRun } = await import(path.join(root, "scripts/eval/lib/report.mjs"));
 const { serveReview, writeReview } = await import(path.join(root, "scripts/eval/lib/review.mjs"));
 const { latestJobs } = await import(path.join(root, "scripts/eval/lib/store.mjs"));
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-eval-review-"));
-const shots = process.env.SHOTS ?? tmp;
+const tmp = tempDir("fuobe-eval-review-");
+const shots = process.env.SHOTS ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-eval-review-shots-"));
 let runDir = process.argv[2] ? path.resolve(process.argv[2]) : null;
 
 /** A run like the runner writes: two looks × two variants × two seeds, on the fixture images. */

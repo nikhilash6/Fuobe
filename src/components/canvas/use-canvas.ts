@@ -5,6 +5,7 @@ import { useGenerationStream } from "@/lib/api";
 import type { Canvas, CanvasGraph, CanvasPlan, CanvasSummary } from "@/lib/catalog/canvas";
 import type { CanvasPage } from "@/lib/catalog/canvas-board";
 import type { Engine, Generation } from "@/lib/catalog/types";
+import type { TemplateModels } from "@/lib/canvas-sections";
 import { responseError } from "@/lib/refusals";
 
 /** Client hooks for /api/canvases (kept next to the canvas UI; the shapes live in src/lib/catalog/canvas.ts). */
@@ -25,9 +26,23 @@ export interface CanvasView {
 
 const active = (g: Generation) => g.status === "queued" || g.status === "running";
 
-export function useCanvases() {
+/**
+ * The model names of every Canvas template, per engine: the owner's only (the route answers no one else), asked for
+ * once by the owner's model lines (ModelLine) and kept for the visit.
+ */
+export function useTemplateModels() {
+  return useQuery({
+    queryKey: ["canvas-template-models"],
+    staleTime: Infinity,
+    queryFn: async () => json<Record<string, TemplateModels>>(await fetch("/api/canvases/template-models")),
+  });
+}
+
+/** The owner's canvases; `enabled: false` (a visitor, who has none) asks for nothing. */
+export function useCanvases({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ["canvases"],
+    enabled,
     queryFn: async () => (await json<{ items: CanvasSummary[] }>(await fetch("/api/canvases"))).items,
   });
 }
@@ -52,7 +67,7 @@ export function useCanvasActions() {
   const qc = useQueryClient();
   const refresh = () => void qc.invalidateQueries({ queryKey: ["canvases"], exact: true });
   return {
-    create: async (body: { name?: string; templateId?: string; engine?: Engine; graph?: CanvasGraph; skill?: string }) => {
+    create: async (body: { name?: string; templateId?: string; engine?: Engine; graph?: CanvasGraph }) => {
       const c = await json<Canvas>(await send("/api/canvases", "POST", body));
       refresh();
       return c;

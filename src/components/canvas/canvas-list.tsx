@@ -1,85 +1,32 @@
 "use client";
 
-import { BookOpen, Cloud, Copy, Cpu, Loader2, MoreHorizontal, Pencil, Plus, Search, Trash2, Workflow } from "lucide-react";
+import { ArrowRight, Play, Copy, Loader2, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { PageShell } from "@/components/page-shell";
-import { SelfHostNote } from "@/components/self-host-note";
 import { CoverArt, CoverImg, useCoverPlayback } from "@/components/template-cover";
-import { useEngine, useIsVisitor } from "@/lib/api";
+import { useEngine, useHydrated, useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 // Types only: the catalog (models, templates) stays on the server; the page passes slim template cards.
-import type { CanvasNodeType, CanvasSummary, Outline } from "@/lib/catalog/canvas";
-import type { Engine } from "@/lib/catalog/types";
+import type { CanvasSummary } from "@/lib/catalog/canvas";
+import { firstTemplates, moreTemplates, templateSections, type CanvasIntro, type TemplateCardData, type Viewing } from "@/lib/canvas-sections";
 import { timeAgo } from "@/lib/format";
 import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
-import { NodeIcon } from "./canvas-context";
+import { SkillCanvases } from "./skill-canvases";
+import { Schematic, TemplateCard } from "./template-card";
 import { useCanvasActions, useCanvases } from "./use-canvas";
-import { useRecipe, useSkills } from "@/components/assist/hooks";
-import type { SkillSummary } from "@/lib/assist";
 
-const BOX = { w: 280, h: 150 };
-
-const BOX_COLOR: Partial<Record<CanvasNodeType, string>> = {
-  prompt: "var(--chart-2)",
-  table: "var(--chart-2)",
-  "image-input": "var(--chart-5)",
-  "video-input": "var(--chart-4)",
-  "audio-input": "var(--chart-3)",
-  element: "var(--chart-1)",
-  output: "var(--muted-foreground)",
-};
-
-/** The board in miniature, for cards without a result to show. */
-function Schematic({ outline: o, className }: { outline: Outline; className?: string }) {
-  if (!o.boxes.length) {
-    return (
-      <div className={cn("grid size-full place-items-center text-subtle-foreground", className)}>
-        <Workflow className="size-8" />
-      </div>
-    );
-  }
-  const xs = o.boxes.map((b) => b.x);
-  const ys = o.boxes.map((b) => b.y);
-  const pad = 80;
-  const minX = Math.min(...xs) - pad;
-  const minY = Math.min(...ys) - pad;
-  const w = Math.max(...xs) + BOX.w + pad - minX;
-  const h = Math.max(...ys) + BOX.h + pad - minY;
-  return (
-    <svg viewBox={`${minX} ${minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" className={cn("size-full", className)} aria-hidden>
-      {o.links.map(([a, b], i) => {
-        const s = o.boxes[a];
-        const t = o.boxes[b];
-        const x1 = s.x + BOX.w;
-        const y1 = s.y + BOX.h / 2;
-        const x2 = t.x;
-        const y2 = t.y + BOX.h / 2;
-        const mx = (x1 + x2) / 2;
-        return <path key={i} d={`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`} fill="none" stroke="var(--border-strong)" strokeWidth={8} />;
-      })}
-      {o.boxes.map((b, i) => (
-        <g key={i}>
-          <rect x={b.x} y={b.y} width={BOX.w} height={BOX.h} rx={22} fill="var(--card)" stroke="var(--border-strong)" strokeWidth={4} />
-          <rect x={b.x + 24} y={b.y + 28} width={44} height={44} rx={10} fill={BOX_COLOR[b.type] ?? "var(--primary)"} opacity={0.85} />
-          <rect x={b.x + 84} y={b.y + 36} width={150} height={14} rx={7} fill="var(--muted-foreground)" opacity={0.35} />
-          <rect x={b.x + 24} y={b.y + 94} width={220} height={12} rx={6} fill="var(--muted-foreground)" opacity={0.18} />
-        </g>
-      ))}
-    </svg>
-  );
-}
+export type { TemplateCardData } from "@/lib/canvas-sections";
 
 function CanvasCard({ c, onRename, onDelete }: { c: CanvasSummary; onRename: () => void; onDelete: () => void }) {
   const router = useRouter();
@@ -90,7 +37,7 @@ function CanvasCard({ c, onRename, onDelete }: { c: CanvasSummary; onRename: () 
         <div className="aspect-[16/10] overflow-hidden rounded-xl border bg-muted/50 transition-shadow group-hover/card:shadow-normal">
           {c.preview ? (
             c.preview.kind === "video" ? (
-              <video src={`${c.preview.url}#t=0.1`} muted playsInline preload="metadata" className="size-full object-cover" />
+              <video src={`${c.preview.url}#t=0.1`} poster={c.preview.poster} muted playsInline preload="metadata" className="size-full object-cover" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={c.preview.url} alt="" loading="lazy" className="size-full object-cover" />
@@ -138,83 +85,92 @@ function CanvasCard({ c, onRename, onDelete }: { c: CanvasSummary; onRename: () 
   );
 }
 
-/** A template as the list shows it, built on the server (app/(studio)/canvas/page.tsx): its board outline and model names per engine. */
-export interface TemplateCardData {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  hue: number;
-  /** The picker's section (Effects 2.0 chains); none: the workflows. */
-  group?: string;
-  byEngine: Record<Engine, { outline: Outline; models: string[] }>;
-}
-
-/** What each template section is, under its heading (a guest or an account runs a canvas on a self-hosted Fuobe only). */
-const GROUP_NOTES: Record<string, (visitor: boolean) => string> = {
-  "Effects 2.0 chains": (visitor) =>
-    `A photo, an image edit that sets the scene, then Fuobe DoP animates it with the effect${visitor ? "." : ", free on your GPU."}`,
-};
-
-/** onUse: none for a guest or an account (a canvas is saved to the owner's library: the page says so once). */
-export function TemplateCard({ t, engine, onUse, busy }: { t: TemplateCardData; engine: Engine; onUse?: () => void; busy: boolean }) {
-  const { outline, models } = t.byEngine[engine];
-  // Its real cover when it has one (what it makes: a still, a clip, or its frames side by side), with the board in
-  // miniature over a corner; else the board alone.
-  const cover = templateCover("canvas", t.id);
-  const { ref, playing, asked, handlers } = useCoverPlayback<HTMLElement>(`canvas/${t.id}`, cover);
+/** "What's a canvas?": two plain sentences, then one real effect film as three tiles, the photo, the scene, the shot. */
+function WhatsACanvas({ intro }: { intro?: CanvasIntro }) {
+  const { ref, playing, asked, handlers } = useCoverPlayback<HTMLLIElement>("canvas-intro", intro?.film);
+  const tile = "relative aspect-[4/3] overflow-hidden rounded-lg border bg-muted";
+  const caption = "mt-1 text-center text-[12px] font-medium text-muted-foreground sm:text-[13px]";
+  const arrow = <ArrowRight className="mt-[calc(12%-8px)] size-4 shrink-0 self-start text-subtle-foreground" aria-hidden />;
+  const sizes = "(max-width: 1024px) 30vw, 240px";
   return (
-    <article ref={ref} {...handlers} className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card">
-      {cover ? (
-        <div className="relative aspect-[16/9] overflow-hidden bg-muted">
-          {cover.frames.length > 1 ? (
-            <div className="absolute inset-0 grid auto-cols-fr grid-flow-col gap-0.5">
-              {cover.frames.map((f) => (
-                <CoverImg key={f.src} frame={f} sizes="(max-width: 640px) 34vw, 125px" />
-              ))}
-            </div>
-          ) : (
-            <CoverArt cover={cover} sizes="(max-width: 640px) 100vw, 370px" playing={playing} asked={asked} />
-          )}
-          <span className="pointer-events-none absolute right-2.5 bottom-2.5 h-[36%] w-[32%] overflow-hidden rounded-lg bg-background/80 shadow-soft backdrop-blur">
-            <Schematic outline={outline} className="p-1.5" />
-          </span>
-          <span className="absolute top-3 left-3 grid size-8 place-items-center rounded-lg bg-background/90 text-foreground shadow-soft">
-            <NodeIcon name={t.icon} className="size-4" />
-          </span>
-        </div>
-      ) : (
-        <div className="relative aspect-[16/9] bg-muted/50" style={{ background: `linear-gradient(135deg, oklch(0.62 0.12 ${t.hue} / 0.14), transparent 70%)` }}>
-          <Schematic outline={outline} className="p-4" />
-          <span className="absolute top-3 left-3 grid size-8 place-items-center rounded-lg bg-background/90 text-foreground shadow-soft">
-            <NodeIcon name={t.icon} className="size-4" />
-          </span>
-        </div>
-      )}
-      <div className="flex flex-1 flex-col gap-2 p-3.5">
-        <div>
-          <h3 className="text-[14px] font-medium">{t.name}</h3>
-          <p className="text-[13px] text-muted-foreground">{t.description}</p>
-        </div>
-        <p className="flex items-start gap-1.5 text-[12px] text-muted-foreground">
-          {engine === "open" ? <Cpu className="mt-px size-3.5 shrink-0" /> : <Cloud className="mt-px size-3.5 shrink-0" />}
-          <span className="line-clamp-2">{models.join(" · ")}</span>
+    <section aria-labelledby="whats-a-canvas" className="mt-4 grid gap-3 rounded-2xl border bg-card p-4 sm:p-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-center lg:gap-8">
+      <div>
+        <h2 id="whats-a-canvas" className="font-heading text-[22px] leading-tight">
+          What&apos;s a canvas?
+        </h2>
+        <p className="mt-1 text-[15px] text-pretty text-muted-foreground">
+          A board of connected steps: a photo goes in, an edit sets the scene, and the last step turns it into a moving shot. Change any step and run it again.
         </p>
-        {onUse && (
-          <Button size="sm" className="mt-auto w-fit rounded-full" onClick={onUse} disabled={busy}>
-            {busy ? <Loader2 className="animate-spin" /> : <Plus />} Use template
-          </Button>
-        )}
       </div>
-    </article>
+      {intro && (
+        <ol className="flex items-start gap-1.5 sm:gap-3" aria-label="One canvas, step by step">
+          <li className="min-w-0 flex-1">
+            <div className={tile}>
+              <CoverImg frame={intro.photo} sizes={sizes} />
+            </div>
+            <p className={caption}>Your photo</p>
+          </li>
+          {arrow}
+          <li className="min-w-0 flex-1">
+            <div className={tile}>
+              <CoverImg frame={intro.film.frames[0]} sizes={sizes} />
+            </div>
+            <p className={caption}>A new scene</p>
+          </li>
+          {arrow}
+          <li ref={ref} {...handlers} className="min-w-0 flex-1">
+            <div className={tile}>
+              <CoverArt cover={intro.film} sizes={sizes} playing={playing} asked={asked} />
+              <Play className="pointer-events-none absolute right-1.5 bottom-1.5 size-5 rounded-full bg-background/85 p-1 text-foreground shadow-soft" aria-hidden />
+            </div>
+            <p className={caption}>A moving shot</p>
+          </li>
+        </ol>
+      )}
+    </section>
   );
 }
 
-function ListInner({ templates }: { templates: TemplateCardData[] }) {
+/** The owner's boards while they load. */
+function MineSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn("mt-6 grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4", className)}>
+      {Array.from({ length: 4 }, (_, i) => (
+        <div key={i}>
+          <Skeleton className="aspect-[16/10] rounded-xl" />
+          <Skeleton className="mt-2 h-4 w-2/3" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A grid of template cards; `row`: one short row, a snap scroller on a phone. */
+function CardGrid({ items, row, card }: { items: TemplateCardData[]; row?: boolean; card: (t: TemplateCardData) => React.ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3",
+        row && "-mx-4 flex snap-x snap-mandatory overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 [&>*]:w-[78%] [&>*]:shrink-0 [&>*]:snap-start sm:[&>*]:w-auto",
+      )}
+    >
+      {items.map(card)}
+    </div>
+  );
+}
+
+function ListInner({ templates, intro }: { templates: TemplateCardData[]; intro?: CanvasIntro }) {
   const router = useRouter();
   const params = useSearchParams();
-  const tab = params.get("tab") === "templates" ? "templates" : params.get("tab") === "skills" ? "skills" : "mine";
-  const canvases = useCanvases();
+  const askedTemplates = params.get("tab") === "templates";
+  const askedSkills = params.get("tab") === "skills";
+  // A canvas is saved to the studio's library, which is its owner's: a guest or an account can look, not start one.
+  // Until the viewer is known to be the owner, the page is a visitor's: only ready boards with their real cover show.
+  const owner = useIsOwner();
+  // In a browser the owner used last, their boards are on the way: a skeleton until they come, not the visitor's page.
+  const likelyOwner = !useLikelyVisitor();
+  const hydrated = useHydrated();
+  const canvases = useCanvases({ enabled: owner });
   const { create, rename, remove } = useCanvasActions();
   const [engine, setEngine] = useEngine();
   const [q, setQ] = useState("");
@@ -222,11 +178,28 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
   const [renaming, setRenaming] = useState<CanvasSummary | null>(null);
   const [draft, setDraft] = useState("");
   const [deleting, setDeleting] = useState<CanvasSummary | null>(null);
-  // A canvas is saved to the studio's library, which is its owner's: a guest or an account can look, not start one.
-  const visitor = useIsVisitor();
+  const [seeAll, setSeeAll] = useState(false);
+  const allTemplates = seeAll || askedTemplates;
+  const gallery = useRef<HTMLElement>(null);
+  const skillsRef = useRef<HTMLElement>(null);
+  const access = useModelAccess();
+  const viewing: Viewing = { visitor: !owner, hasCover: (id) => !!templateCover("canvas", id) };
 
-  const items = (canvases.data ?? []).filter((c) => !q || c.name.toLowerCase().includes(q.toLowerCase()));
-  const setTab = (t: "mine" | "templates" | "skills") => router.replace(t === "mine" ? "/canvas" : `/canvas?tab=${t}`, { scroll: false });
+  const mine = owner ? (canvases.data ?? []) : [];
+  const loadingMine = likelyOwner && (!owner || canvases.isPending);
+  const hasBoards = mine.length > 0;
+  const items = mine.filter((c) => !q || c.name.toLowerCase().includes(q.toLowerCase()));
+
+  // ?tab=templates (a board's "Browse templates"): the full gallery, scrolled to.
+  useEffect(() => {
+    if (!askedTemplates) return;
+    gallery.current?.scrollIntoView({ block: "start" });
+  }, [askedTemplates, hasBoards]);
+
+  // ?tab=skills: the skills that run by themselves, scrolled to.
+  useEffect(() => {
+    if (askedSkills && owner && !loadingMine) skillsRef.current?.scrollIntoView({ block: "start" });
+  }, [askedSkills, owner, loadingMine]);
 
   const start = async (key: string, body: Parameters<typeof create>[0]) => {
     setCreating(key);
@@ -239,127 +212,146 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
     }
   };
 
+  const card = (t: TemplateCardData) => (
+    <TemplateCard key={t.id} t={t} engine={engine} access={access} owner={owner} busy={creating === t.id} onUse={owner ? () => void start(t.id, { templateId: t.id, engine }) : undefined} />
+  );
+  const sections = templateSections(templates, viewing);
+  const more = moreTemplates(templates, viewing);
+
+  const fullGallery = (
+    <div className="space-y-10">
+      {sections.map((s) => (
+        <section key={s.key || "films"} aria-labelledby={`tpl-${s.key || "films"}`}>
+          <div className="mb-3">
+            <h3 id={`tpl-${s.key || "films"}`} className="font-heading text-[20px] leading-tight">
+              {s.title}
+            </h3>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">{s.note}</p>
+          </div>
+          <CardGrid items={s.items} card={card} />
+        </section>
+      ))}
+      {owner && (
+        <section aria-labelledby="tpl-more">
+          <div className="mb-3">
+            <h3 id="tpl-more" className="font-heading text-[20px] leading-tight">
+              More templates
+            </h3>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">Boards to build on, and a blank one.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {more.map(card)}
+            <button
+              onClick={() => void start("new", {})}
+              disabled={!!creating}
+              className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-[14px] font-medium text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+            >
+              {creating === "new" ? <Loader2 className="size-5 animate-spin" /> : <Plus className="size-5" />} Start blank
+            </button>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+
+  const galleryHeading = (title: string, note?: string) => (
+    <div className="mb-4 flex flex-wrap items-end gap-3">
+      <div className="min-w-0 flex-1">
+        <h2 id="templates-title" className="font-heading text-[26px] leading-tight">
+          {title}
+        </h2>
+        {note && <p className="mt-0.5 text-[14px] text-muted-foreground">{note}</p>}
+      </div>
+      {owner && <EngineSwitch value={engine} onChange={setEngine} size="sm" />}
+    </div>
+  );
+
   return (
     <PageShell wide>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1">
           <h1 className="font-heading text-[34px] leading-tight">Canvas</h1>
-          <p className="mt-1 max-w-xl text-[15px] text-muted-foreground">Make images, videos and ideas in one place: wire prompts, files and models together, then run them in order or side by side.</p>
+          {hasBoards && <p className="mt-1 max-w-xl text-[15px] text-muted-foreground">Make images, videos and ideas in one place: wire prompts, files and models together, then run them in order or side by side.</p>}
         </div>
-        {visitor ? (
-          <SelfHostNote className="max-w-xs sm:text-right">Canvas editing isn&apos;t available here.</SelfHostNote>
-        ) : (
+        {owner ? (
           <Button className="w-fit rounded-full" onClick={() => void start("new", {})} disabled={!!creating}>
             {creating === "new" ? <Loader2 className="animate-spin" /> : <Plus />} New canvas
           </Button>
-        )}
+        ) : null}
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <div className="inline-grid h-9 grid-cols-3 rounded-full bg-muted p-0.5 text-[13px] font-medium" role="tablist" aria-label="Canvases, templates or skills">
-          {(
-            [
-              ["mine", "Your canvases"],
-              ["templates", "Templates"],
-              ["skills", "Skills"],
-            ] as const
-          ).map(([k, label]) => (
-            <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={cn("rounded-full px-3.5 whitespace-nowrap transition-colors", tab === k ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground")}>
-              {k === "mine" ? (
-                <>
-                  <span className="sm:hidden">Mine</span>
-                  <span className="max-sm:hidden">{label}</span>
-                </>
-              ) : (
-                label
-              )}
-            </button>
-          ))}
-        </div>
-        {tab === "mine" ? (
-          <div className="relative ml-auto w-full sm:w-64">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search canvases" aria-label="Search canvases" className="h-9 rounded-full pl-9" />
-          </div>
-        ) : tab === "skills" ? null : (
-          <div className="ml-auto flex items-center gap-2 text-[13px] text-muted-foreground">
-            <span className="hidden sm:inline">Variant</span>
-            <EngineSwitch value={engine} onChange={setEngine} size="sm" />
-          </div>
-        )}
-      </div>
-
-      {tab === "mine" ? (
-        canvases.isLoading ? (
-          <div className="mt-6 grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 4 }, (_, i) => (
-              <div key={i}>
-                <Skeleton className="aspect-[16/10] rounded-xl" />
-                <Skeleton className="mt-2 h-4 w-2/3" />
+      {loadingMine ? (
+        <MineSkeleton />
+      ) : hasBoards ? (
+        <>
+          <section aria-labelledby="mine-title" className="mt-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 id="mine-title" className="font-heading text-[22px] leading-tight">
+                Your canvases
+              </h2>
+              <div className="relative ml-auto w-full sm:w-64">
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search canvases" aria-label="Search canvases" className="h-9 rounded-full pl-9" />
               </div>
-            ))}
-          </div>
-        ) : items.length ? (
-          <div className="mt-6 grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {items.map((c) => (
-              <CanvasCard
-                key={c.id}
-                c={c}
-                onRename={() => {
-                  setDraft(c.name);
-                  setRenaming(c);
-                }}
-                onDelete={() => setDeleting(c)}
-              />
-            ))}
-          </div>
-        ) : q ? (
-          <p className="py-16 text-center text-[15px] text-muted-foreground">No canvas called “{q}”.</p>
-        ) : (
-          <Empty className="mt-6 border">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Workflow />
-              </EmptyMedia>
-              <EmptyTitle className="text-[22px]">No canvases yet</EmptyTitle>
-              <EmptyDescription>Build a workflow once — prompt → image → video, three models side by side — and run it again whenever you like.</EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent className="flex-row justify-center">
-              {!visitor && (
-                <Button className="rounded-full" onClick={() => void start("new", {})} disabled={!!creating}>
-                  <Plus /> New canvas
+            </div>
+            {items.length ? (
+              <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {items.map((c) => (
+                  <CanvasCard
+                    key={c.id}
+                    c={c}
+                    onRename={() => {
+                      setDraft(c.name);
+                      setRenaming(c);
+                    }}
+                    onDelete={() => setDeleting(c)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="py-16 text-center text-[15px] text-muted-foreground">No canvas called “{q}”.</p>
+            )}
+          </section>
+          <section id="templates" ref={gallery} aria-labelledby="templates-title" className="mt-12 scroll-mt-20">
+            {galleryHeading("Start from a template")}
+            {allTemplates ? (
+              fullGallery
+            ) : (
+              <>
+                <CardGrid items={firstTemplates(templates, viewing)} row card={card} />
+                <Button variant="secondary" className="mt-4 rounded-full" onClick={() => setSeeAll(true)}>
+                  See all templates
                 </Button>
-              )}
-              <Button variant="secondary" className="rounded-full" onClick={() => setTab("templates")}>
-                Browse templates
-              </Button>
-            </EmptyContent>
-          </Empty>
-        )
-      ) : tab === "skills" ? (
-        <SkillsTab visitor={visitor} busy={creating} onOpen={(name) => void start(`skill:${name}`, { skill: name })} />
+              </>
+            )}
+          </section>
+        </>
       ) : (
-        <div className="mt-6 space-y-10">
-          {[...new Set(templates.map((t) => t.group ?? ""))].map((group) => (
-            <section key={group || "workflows"} aria-labelledby={group ? `tpl-${group.replace(/\W+/g, "-")}` : undefined}>
-              {group && (
-                <div className="mb-3">
-                  <h2 id={`tpl-${group.replace(/\W+/g, "-")}`} className="font-heading text-[22px] leading-tight">
-                    {group}
-                  </h2>
-                  {GROUP_NOTES[group] && <p className="mt-0.5 text-[13px] text-muted-foreground">{GROUP_NOTES[group](visitor)}</p>}
-                </div>
+        <>
+          {/* Before hydration, a browser the owner used last shows the skeleton (html[data-viewer]), not the visitor's page. */}
+          {!hydrated && <MineSkeleton className="hidden [html[data-viewer='owner']_&]:grid" />}
+          <div className={cn(!hydrated && "[html[data-viewer='owner']_&]:hidden")}>
+            <WhatsACanvas intro={intro} />
+            <section id="templates" ref={gallery} aria-labelledby="templates-title" className="mt-8 scroll-mt-20">
+              {galleryHeading(
+                "Start from a ready board",
+                owner ? "Every step, word and file is already in place. Press Run all, or change anything first." : "See how each one is built, then make it in Video with your own photo.",
               )}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {templates
-                  .filter((t) => (t.group ?? "") === group)
-                  .map((t) => (
-                    <TemplateCard key={t.id} t={t} engine={engine} busy={creating === t.id} onUse={visitor ? undefined : () => void start(t.id, { templateId: t.id, engine })} />
-                  ))}
-              </div>
+              {fullGallery}
             </section>
-          ))}
-        </div>
+          </div>
+        </>
+      )}
+
+      {/* The studio's skills are its owner's: each one that runs by itself opens as a canvas to change visually. */}
+      {owner && !loadingMine && (
+        <section id="skills" ref={skillsRef} aria-labelledby="skills-title" className="mt-12 scroll-mt-20">
+          <h2 id="skills-title" className="font-heading text-[22px] leading-tight">
+            Skills as canvases
+          </h2>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">Open a skill that runs by itself as a canvas, change a model or a link, then save it back as a skill.</p>
+          <SkillCanvases visitor={false} />
+        </section>
       )}
 
       <Dialog open={!!renaming} onOpenChange={(o) => !o && setRenaming(null)}>
@@ -415,83 +407,10 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
   );
 }
 
-/** Recipe skills (W5): each that can be drawn opens as a new canvas; one that runs a studio step shows as a note. */
-function SkillsTab({ visitor, busy, onOpen }: { visitor: boolean; busy: string | null; onOpen: (name: string) => void }) {
-  const skills = useSkills();
-  const list = (skills.data ?? []).filter((s) => s.recipe);
-  if (skills.isLoading)
-    return (
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 3 }, (_, i) => (
-          <Skeleton key={i} className="h-40 rounded-xl" />
-        ))}
-      </div>
-    );
-  if (!list.length)
-    return (
-      <Empty className="mt-6 border">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <BookOpen />
-          </EmptyMedia>
-          <EmptyTitle className="text-[22px]">No skills that run by themselves yet</EmptyTitle>
-          <EmptyDescription>Make one from results you like in the Library, or save a canvas as a skill from its run menu: it then opens here as a canvas.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  return (
-    <div className="mt-6 space-y-3">
-      <p className="text-[13px] text-muted-foreground">Open a skill as a new canvas to see its steps and swap a model, then use Save as skill to put it back.</p>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {list.map((s) => (
-          <SkillCard key={s.name} s={s} visitor={visitor} busy={busy === `skill:${s.name}`} onOpen={() => onOpen(s.name)} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SkillCard({ s, visitor, busy, onOpen }: { s: SkillSummary; visitor: boolean; busy: boolean; onOpen: () => void }) {
-  const view = useRecipe(s.name);
-  const drawn = view.data?.canvas;
-  const steps = view.data?.recipe.steps.length;
-  return (
-    <article className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3.5">
-      <div className="min-w-0">
-        <h3 className="truncate text-[14px] font-medium">{s.title || s.name}</h3>
-        <p className="font-mono text-[12px] text-muted-foreground">/{s.name}</p>
-      </div>
-      {s.description && <p className="line-clamp-2 text-[13px] text-muted-foreground">{s.description}</p>}
-      {!view.data ? (
-        view.isError ? null : <Skeleton className="h-8 w-32 rounded-full" />
-      ) : drawn && !drawn.ok ? (
-        drawn.studio ? (
-          <p className="rounded-lg bg-muted/60 px-3 py-2 text-[12px] text-muted-foreground">
-            <span className="font-medium text-foreground">Studio step</span> · runs {drawn.studio} as one step, so it isn&apos;t drawn as nodes. Run it from Skills.
-          </p>
-        ) : (
-          <p className="rounded-lg bg-muted/60 px-3 py-2 text-[12px] text-muted-foreground">
-            <span className="font-medium text-foreground">This skill can&apos;t be drawn yet</span> · {drawn.detail}.
-          </p>
-        )
-      ) : (
-        <div className="mt-auto flex flex-wrap items-center gap-2">
-          {!visitor && (
-            <Button size="sm" className="w-fit rounded-full" onClick={onOpen} disabled={busy}>
-              {busy ? <Loader2 className="animate-spin" /> : <Workflow />} Open as canvas
-            </Button>
-          )}
-          {steps !== undefined && <span className="text-[12px] text-muted-foreground">{steps === 1 ? "1 step" : `${steps} steps`}</span>}
-        </div>
-      )}
-    </article>
-  );
-}
-
-export function CanvasList({ templates }: { templates: TemplateCardData[] }) {
+export function CanvasList({ templates, intro }: { templates: TemplateCardData[]; intro?: CanvasIntro }) {
   return (
     <Suspense fallback={null}>
-      <ListInner templates={templates} />
+      <ListInner templates={templates} intro={intro} />
     </Suspense>
   );
 }

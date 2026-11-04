@@ -1,5 +1,5 @@
 /**
- * A headless point-cloud renderer (build plan N7-7, option B): the frames of a camera path drawn through a still's point
+ * A headless point-cloud renderer (option B): the frames of a camera path drawn through a still's point
  * cloud (scene3d buildPointCloud) with no browser and no GPU, for the server's path render (src/server/path-render.ts).
  * It draws what the browser's recordPath draws for Uni3C: the points seen from each camera, nearest in front, black where
  * nothing was seen.

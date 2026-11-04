@@ -211,7 +211,7 @@ await step("save a chat as a skill, then /skill plus an attachment runs it on on
   await dialog.getByRole("radiogroup", { name: /^Image: fixed or varies/ }).getByRole("radio", { name: "Varies" }).click();
   await page.locator("#sb-name").fill(savedSkill);
   await shot(page, "flow-save-skill");
-  await dialog.getByRole("button", { name: "Check it" }).click();
+  await dialog.getByRole("button", { name: "Test run (free)" }).click();
   await dialog.getByText(/^It runs on /).waitFor({ timeout: 60_000 });
   await dialog.getByRole("button", { name: "Save skill" }).click();
   await page.getByRole("dialog").getByText(/Try it with new inputs/).waitFor({ timeout: 30_000 });

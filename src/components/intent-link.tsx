@@ -4,30 +4,37 @@ import { Loader2 } from "lucide-react";
 import Link, { useLinkStatus } from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useIdlePrefetch } from "@/lib/idle-prefetch";
 import { cn } from "@/lib/utils";
 
 /**
  * A Link that prefetches on intent: nothing while it merely sits on screen, then the usual prefetch
  * once the pointer is over it, a finger touches it or it gets keyboard focus (the "hover-triggered
  * prefetch" of Next's prefetching guide). `eager` rows prefetch as soon as they're on screen, like a
- * plain Link: the few routes most visits go to next. A page full of these no longer fetches every
- * route behind it on a cold visit.
+ * plain Link: the few routes most visits go to next. `settled` rows prefetch once the page has
+ * loaded and the browser is idle, also when scrolled out of view, after the page's own tabs
+ * (useIdlePrefetch's "nav" lane).
+ * A page full of these fetches only those routes on a cold visit, not every route behind it.
  */
 export function IntentLink({
   eager,
+  settled,
   onMouseEnter,
   onTouchStart,
   onFocus,
   ...props
-}: React.ComponentProps<typeof Link> & { eager?: boolean }) {
+}: React.ComponentProps<typeof Link> & { eager?: boolean; settled?: boolean }) {
   const [intent, setIntent] = useState(false);
   const router = useRouter();
+  const href = typeof props.href === "string" ? props.href : null;
+  // Not the Link's own viewport prefetch: a row coming on screen later would jump the queue ahead of the page's tabs.
+  useIdlePrefetch(settled && href ? [href] : null, "nav");
   const start = () => {
     if (eager || intent) return;
     setIntent(true);
     // Start the fetch from the event itself: the Link only picks it up after it renders again and
     // sees itself on screen, a frame or more later (several on a slow phone), which a quick click beats.
-    if (typeof props.href === "string") router.prefetch(props.href);
+    if (href) router.prefetch(href);
   };
   return (
     <Link

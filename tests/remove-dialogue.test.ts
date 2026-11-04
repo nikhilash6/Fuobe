@@ -1,7 +1,4 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   CLOUD_ONLY_REMOVE_PROBLEM,
   CLOUD_REMOVE_PROBLEM,
@@ -23,10 +20,11 @@ import { splitTime } from "@/lib/av/split";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { HUB_MODES, modeHref } from "@/lib/hubs";
 import type { Generation, GenInput, Operation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // Video tools → Remove dialogue (DBS D2): the planner, the two-step chain on the open engine (graph A, then the
 // stream-copy mux), the graph the mux runs, the provider's bindings and the API in demo mode.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-remove-dialogue-"));
+const dir = tempDir("fuobe-remove-dialogue-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: the open models run on the demo provider.
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -41,7 +39,6 @@ const { nextSteps, outputActions } = await import("@/lib/output-actions");
 const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const VIDEO = "/api/files/uploads/2026-11-01/interview.mp4";
 
@@ -147,7 +144,7 @@ describe("the plan per outcome (open engine)", () => {
     expect(mux.chain).toEqual([{ slot: "audio", stem: "background" }]);
     expect(mux.request.params).toBeUndefined();
     expect(p.summary).toBe(
-      "Takes the talking out and keeps the music and sound effects. The picture is not re-encoded.",
+      "Takes the talking out and keeps the music and sound effects. The picture stays exactly as it was.",
     );
     expect(p.notes[0]).toMatch(
       /^Speech the model misses .* stays in the music and effects/,
@@ -187,7 +184,7 @@ describe("the plan per outcome (open engine)", () => {
     expect(mux.request.params).toEqual({ extra: { backgroundVolumeDb: -18 } });
     expect(p.musicDb).toBe(-18);
     expect(p.summary).toBe(
-      "Keeps the talking and lowers the music and sound effects by 18 dB under it. The picture is not re-encoded.",
+      "Keeps the talking and lowers the music and sound effects by 18 dB under it. The picture stays exactly as it was.",
     );
     // The default and the slider's ends.
     expect(
@@ -590,7 +587,7 @@ describe("POST /api/audio-tools remove-dialogue (demo mode)", () => {
       hostPick: "fast",
     });
     expect(preview.summary).toBe(
-      "Takes the talking out and keeps the music and sound effects. The picture is not re-encoded.",
+      "Takes the talking out and keeps the music and sound effects. The picture stays exactly as it was.",
     );
     expect(preview.estimate).toEqual(
       removeDialogueTime({

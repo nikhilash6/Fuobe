@@ -6,7 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { licenceNote, trainingSettingsHref, type TrainingTarget } from "@/lib/catalog/training";
+import { trainingSettingsHref, type TrainingTarget } from "@/lib/catalog/training";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useMoodboardActions } from "./hooks";
@@ -56,7 +56,6 @@ export function TrainBoardDialog({ board, open, onOpenChange }: { board: Moodboa
                     <span className="text-[12px] font-normal text-muted-foreground">{t.eta}</span>
                   </p>
                   <p className="text-[12px] text-muted-foreground">{t.description}</p>
-                  <p className="mt-0.5 text-[11.5px] text-muted-foreground">Licence: {licenceNote(t)}</p>
                 </div>
                 <Button
                   size="sm"

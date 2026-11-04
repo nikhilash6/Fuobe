@@ -1,5 +1,5 @@
 /*
- * Layouts from the places that already know where things go (docs/research/new-models-7.md §4.10, N7-8): Ads Studio's
+ * Layouts from the places that already know where things go (docs/research/new-models-7.md §4.10): Ads Studio's
  * planned rectangles (planAd), Marketing Studio's formats (the same planner, in the layout the browser sets the words
  * in), and a Canvas Layout node fed by a Table. Pure: the browser, the server and the tests share it.
  *

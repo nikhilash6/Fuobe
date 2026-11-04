@@ -1,16 +1,16 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { CanvasGraph, CanvasNode } from "@/lib/catalog/canvas";
 import type { LoraRef } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // Fuobe Soul after review (o/soul): the open engine's batch, a look beside a moved moodboard, the dual-engine
 // model in the lists, the canvas, the CLI and Assist, fal's megapixel, the civitai rule, Soul HD with a picture,
 // Soul Cinema's 21:9 crop and the hand-off over the composer's engine swap.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-soul-fixes-"));
+const dir = tempDir("fuobe-soul-fixes-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here: open runs fall back to the demo
 
@@ -33,7 +33,6 @@ const { withoutUnreachableCivitai } = await import("@/server/loras");
 const { formatCost } = await import("@/lib/format");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const plan = (engine: "open" | "cloud", req: Partial<Parameters<typeof planGeneration>[0]> = {}, id = "fuobe-soul") => {
   const m = onEngine(getModel(id)!, engine);

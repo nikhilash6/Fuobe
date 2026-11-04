@@ -433,7 +433,7 @@ export const TRAINING_TARGETS: TrainingTarget[] = [
     family: "flux3-klein",
     kinds: ["subject", "style"],
     steps: 2000,
-    description: `AI-Toolkit on your own GPU (24 GB; Klein Base in 8-bit), its flux3 trainer. Needs a Hugging Face token with the FLUX Kommunity licence accepted, which is not blanket permission for commercial fine-tuning. ${LOCAL}`,
+    description: `AI-Toolkit on your own GPU (24 GB; Klein Base in 8-bit), its flux3 trainer. Needs a Hugging Face token with the FLUX Kommunity licence accepted. ${LOCAL}`,
     eta: "~1–2 h on a 24 GB GPU",
   }),
   target({
@@ -446,7 +446,7 @@ export const TRAINING_TARGETS: TrainingTarget[] = [
     trainer: "blackforestlabs/flux-3/klein/base/trainer",
     steps: 1000,
     extra: { resolution: 1024 },
-    description: `BFL's FLUX 3 Klein trainer on fal, on Klein Base at 1024 px. The FLUX Kommunity licence is not blanket permission for commercial fine-tuning. ${TO_FAL}`,
+    description: `BFL's FLUX 3 Klein trainer on fal, on Klein Base at 1024 px. ${TO_FAL}`,
     eta: "~15–30 min",
   }),
 ];

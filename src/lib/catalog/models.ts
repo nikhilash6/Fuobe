@@ -8,10 +8,12 @@ import { QWEN21_DECODER, QWEN21_GPU, QWEN21_SPEED } from "@/lib/qwen21-speed";
 import { QMA_AZIMUTHS, QMA_AZIMUTH_LABELS, QMA_DISTANCES, QMA_DISTANCE_LABELS, QMA_DISTANCE_ZOOM, QMA_ELEVATIONS, QMA_ELEVATION_DEGREES, QMA_ELEVATION_LABELS, QMA_MODEL, QMA_PARAMS } from "@/lib/qma";
 import { H3_DECODER, H3_FAST_DECODE_OFFERED, H3_GPU_TIER } from "@/lib/gpu/h3-tier";
 import { loraEntry, loraRef } from "./loras";
-import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
+import { ANGLES_LORA, ANY_ANGLE_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
+import { ANY_ANGLE } from "./any-angle";
+import { RECOLOR_TAP_FIRST } from "./recolor";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
-import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
+import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_OFFERED, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
 import { RTX_FRAMEGEN_MODEL, RTX_FRAMEGEN_WORKFLOW, RTX_HDR_MODEL, RTX_HDR_WORKFLOW, RTX_UPSCALE_MODEL, RTX_UPSCALE_WORKFLOW } from "./rtx-video";
 import { COMPOSITE_MODEL, COMPOSITE_WORKFLOW } from "./sharpen";
 import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
@@ -134,7 +136,7 @@ const open: ModelDef[] = [
     vendor: "Ideogram",
     family: "ideogram",
     kind: "image",
-    tagline: "Typography, posters and photographic stills from structured captions · 24 GB GPU · non-commercial weights",
+    tagline: "Typography, posters and photographic stills from structured captions · 24 GB GPU",
     badges: ["new", "top"],
     routes: [comfy("t2i", "ideogram4-t2i", "lean JSON caption; Quality preset")],
     options: {
@@ -162,7 +164,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-image",
     kind: "image",
-    tagline: "Native 2K images with clean lettering; edits with up to 4 references, inpaint and expand; Draft to Full speed · English prompts only on a 16 GB GPU, any language on a 20 GB GPU · non-commercial weights",
+    tagline: "Native 2K images with clean lettering; edits with up to 4 references, inpaint and expand; Draft to Full speed · English prompts only on a 16 GB GPU, any language on a 20 GB GPU",
     badges: ["new", "top"],
     // Aspect ratio and size are for text to image: an edit or inpaint follows image 1, an expand the canvas its pads grow.
     // The inpaint and expand graphs read the picture alone.
@@ -182,12 +184,12 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-image",
     kind: "image",
-    tagline: "8-step edits with up to 4 references, close to the full model except on big camera turns · 20 GB GPU · non-commercial weights",
+    tagline: "8-step edits with up to 4 references, close to the full model except on big camera turns · 20 GB GPU",
     badges: ["new", "top", "fast"],
     routes: [comfy("edit", "qwen-image-21-turbo-edit", "8 steps, up to 4 references")],
     options: { maxImages: 4, seed: true, controls: [QWEN21_DECODER] },
   }),
-  // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): Zen Image Edit's 0.8B encoder, which Qwen-Image 2.1's GPU option picks
+  // Qwen-Image 2.1 on a 16 GB card: Zen Image Edit's 0.8B encoder, which Qwen-Image 2.1's GPU option picks
   // (Small, or Auto under 20 GB when the route is ready: src/server/qwen21-gpu.ts). Listed for its licence, its node pack and its switch, and for the pre-flight board's row; never in a picker.
   o({
     id: "oss-qwen-image-21-small",
@@ -195,7 +197,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-image",
     kind: "image",
-    tagline: "Qwen-Image 2.1 on a 16 GB GPU with a compact text reader: English prompts only, and numbers on signs can come out wrong · non-commercial weights",
+    tagline: "Qwen-Image 2.1 on a 16 GB GPU with a compact text reader: English prompts only, and numbers on signs can come out wrong",
     routes: [
       { ...comfy("t2i", "qwen-image-21-t2i-small", "Zen Image Edit's 0.8B encoder, 30 steps") },
       { ...comfy("edit", "qwen-image-21-edit-small", "Zen Image Edit's 0.8B encoder, up to 4 references"), unsized: true },
@@ -212,24 +214,37 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-image",
     kind: "image",
-    tagline: "Live edits as you type with the 2-step DMD2 LoRA · 20 GB GPU · non-commercial weights",
+    tagline: "Live edits as you type with the 2-step DMD2 LoRA · 20 GB GPU",
     routes: [{ ...comfy("edit", "qwen-image-21-live-edit", "2 steps, live"), unsized: true }],
     options: { maxImages: 4, seed: true },
+    hidden: true,
+  }),
+  // Tap to Recolor's model (the app's own page runs it): SAM 3.1 makes the mask from the taps (params.points), and
+  // Qwen-Image 2.1 repaints only that piece in the new colour. Listed for its licence and switch, never in a picker.
+  o({
+    id: "oss-recolor",
+    name: "Tap to Recolor",
+    vendor: "Alibaba Qwen + Meta SAM 3.1",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Only the tapped piece takes the new colour; its fabric, folds and shine stay · 20 GB GPU · non-commercial weights",
+    routes: [{ ...comfy("edit", "qwen-image-21-recolor", "SAM 3.1 mask from the taps, 25 steps, pasted back"), unsized: true, maxImages: 1 }],
+    options: { maxImages: 1, seed: true, requires: { images: 1, points: true, msg: RECOLOR_TAP_FIRST } },
     hidden: true,
   }),
 
   // FLUX 3 Image Klein (BFL, 2026-10-13; research #10 §6.3): text to image and edits with up to 10 references, a layout of
   // boxes in its own table (compileFlux3), BFL's prompt helper first unless it is off. Klein Base takes your FLUX 3 Klein
-  // LoRAs. The cloud halves are flux-3-klein and flux-3-klein-base on fal. Not a default anywhere (the owner's picks stay).
+  // LoRAs. The cloud halves are flux-3-klein and flux-3-klein-base on fal. Not a default anywhere (the current picks stay).
   o({
     id: "oss-flux3-klein",
     name: "FLUX 3 Klein",
     vendor: "Black Forest Labs",
     family: "flux",
     kind: "image",
-    tagline: "BFL's open 5.6B model: images up to 4K, edits with up to 10 references, layout boxes · 16-24 GB GPU · FLUX Kommunity licence",
+    tagline: "BFL's open 5.6B model: images up to 4K, edits with up to 10 references, layout boxes · 16-24 GB GPU",
     badges: ["new", "top"],
-    // The Image studio's Best list, as its brief asks; the Edit studio offers it, and its Best list stays the owner's.
+    // The Image studio's Best list, as its brief asks; the Edit studio offers it, and its Best list stays as it is.
     bestOps: ["t2i"],
     // The edit follows reference 1's shape (about 1 MP); text to image takes the aspect ratio and size.
     routes: [
@@ -245,7 +260,7 @@ const open: ModelDef[] = [
     vendor: "Black Forest Labs",
     family: "flux",
     kind: "image",
-    tagline: "The undistilled Klein your FLUX 3 Klein LoRAs are trained on: 50 steps with them · 16-24 GB GPU · FLUX Kommunity licence",
+    tagline: "The undistilled Klein your FLUX 3 Klein LoRAs are trained on: 50 steps with them · 16-24 GB GPU",
     badges: ["new"],
     routes: [comfy("t2i", "flux3-klein-base-t2i-lora", "50 steps, CFG 3.5; your LoRAs load after it")],
     options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K", "4K"], seed: true, layout: "flux3", controls: [KLEIN_PROMPT_HELPER] },
@@ -259,7 +274,7 @@ const open: ModelDef[] = [
     vendor: "Krea",
     family: "krea",
     kind: "image",
-    tagline: "Natural skin, light and faces from detailed prose · 20 GB GPU · Krea 2 Community License",
+    tagline: "Natural skin, light and faces from detailed prose · 20 GB GPU",
     badges: ["new", "top"],
     routes: [comfy("t2i", "krea2-realism-t2i", "Krea 2 Turbo + the Realism V2 LoRA, 6 steps")],
     options: {
@@ -277,7 +292,7 @@ const open: ModelDef[] = [
     vendor: "Krea",
     family: "krea",
     kind: "image",
-    tagline: "Krea 2 in 8 steps: photos and illustrations from prose · 20 GB GPU · Krea 2 Community License",
+    tagline: "Krea 2 in 8 steps: photos and illustrations from prose · 20 GB GPU",
     badges: ["new", "fast"],
     routes: [comfy("t2i", "krea2-turbo-t2i", "8 steps")],
     options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K"], seed: true },
@@ -314,7 +329,7 @@ const open: ModelDef[] = [
     vendor: "Bria",
     family: "bria",
     kind: "image",
-    tagline: "Structured JSON prompts for exact control; edits with up to 4 references · 24 GB GPU · non-commercial weights",
+    tagline: "Structured JSON prompts for exact control; edits with up to 4 references · 24 GB GPU",
     badges: ["new", "top"],
     routes: [
       comfy("t2i", "fibo2-dev-t2i", "Qwen3.5 writes Bria's structured JSON prompt; 30 steps"),
@@ -330,7 +345,7 @@ const open: ModelDef[] = [
     vendor: "Bria",
     family: "bria",
     kind: "image",
-    tagline: "4-step edits with up to 4 references · 16 GB GPU · non-commercial weights",
+    tagline: "4-step edits with up to 4 references · 16 GB GPU",
     badges: ["new", "top", "fast"],
     routes: [comfy("edit", "fibo2-edit-turbo-edit", "4 steps, up to 4 references")],
     options: { maxImages: 4, seed: true },
@@ -343,7 +358,7 @@ const open: ModelDef[] = [
     vendor: "Krea",
     family: "krea",
     kind: "image",
-    tagline: "Instruction edits that keep the picture: relight, recolour, add, remove, restyle; a second photo puts a person in the scene · 20 GB GPU · non-commercial LoRA",
+    tagline: "Instruction edits that keep the picture: relight, recolour, add, remove, restyle; a second photo puts a person in the scene · 20 GB GPU",
     badges: ["new", "top"],
     routes: [comfy("edit", "krea2-edit-general", "General Edit V2 LoRA, 8 steps; image 2 = a person to put in the scene")],
     options: {
@@ -361,7 +376,7 @@ const open: ModelDef[] = [
     vendor: "Krea",
     family: "krea",
     kind: "image",
-    tagline: "Restages a person from one photo: new place, pose or outfit, same face · 20 GB GPU · non-commercial LoRA",
+    tagline: "Restages a person from one photo: new place, pose or outfit, same face · 20 GB GPU",
     badges: ["new"],
     routes: [comfy("edit", "krea2-edit-identity", "Identity Edit V2 LoRA, 8 steps; image 2 = a second person")],
     options: {
@@ -379,7 +394,7 @@ const open: ModelDef[] = [
     vendor: "Krea",
     family: "krea",
     kind: "image",
-    tagline: "Your picture redrawn in Krea 2's look at the strength you pick · 20 GB GPU · Krea 2 Community License",
+    tagline: "Your picture redrawn in Krea 2's look at the strength you pick · 20 GB GPU",
     badges: ["new"],
     routes: [comfy("edit", "krea2-turbo-i2i", "about 2 MP, keeps the picture's shape")],
     options: { maxImages: 1, seed: true, sliders: [{ param: "strength", label: "Change", min: 0.1, max: 1, step: 0.05, default: 0.6 }] },
@@ -441,7 +456,7 @@ const open: ModelDef[] = [
     vendor: "Black Forest Labs",
     family: "flux",
     kind: "image",
-    tagline: "FLUX.2 with multi-reference editing (non-commercial license)",
+    tagline: "FLUX.2 with multi-reference editing",
     routes: [comfy("t2i", "flux2-dev-t2i"), comfy("edit", "flux2-dev-multiref")],
     options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K"], maxImages: 3, seed: true },
     defaults: { aspectRatio: "1:1", resolution: "1K" },
@@ -574,7 +589,7 @@ const open: ModelDef[] = [
     vendor: "visioncortex",
     family: "vtracer",
     kind: "image",
-    tagline: "Traces logos, icons and flat art into a clean, editable SVG · CPU, no model · MIT",
+    tagline: "Traces logos, icons and flat art into a clean, editable SVG · CPU, no model",
     routes: [comfy("vectorize", "image-vectorize-vtracer", "colour tracing, stacked shapes")],
     options: {
       promptless: true,
@@ -593,7 +608,7 @@ const open: ModelDef[] = [
     vendor: "ATH-MaaS",
     family: "qwen-llm",
     kind: "text",
-    tagline: "Every line of text in an image, with its box · 3 GB GPU · Apache-2.0",
+    tagline: "Every line of text in an image, with its box · 3 GB GPU",
     routes: [comfy("ocr", "ocr-lines-qwen35", "OvisOCR3 0.8B (a Qwen3.5 OCR fine-tune) on core TextGenerate; boxes come back 0–1000")],
     options: { promptless: true, maxImages: 1 },
   }),
@@ -722,7 +737,7 @@ const open: ModelDef[] = [
     options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [3, 5, 7], resolutions: ["480p", "720p"], seed: true, negativePrompt: true, endFrame: true },
     defaults: { aspectRatio: "16:9", duration: 5, resolution: "480p" },
   }),
-  // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu): FastVideo's FastH3 V2 and FastH3 Trim, which MiniMax H3's GPU tier picks
+  // MiniMax H3 on 8-31 GB cards: FastVideo's FastH3 V2 and FastH3 Trim, which MiniMax H3's GPU tier picks
   // (Auto on a smaller card, or asked for: src/server/h3-gpu.ts). Listed for their licence, their switch in Models & licences
   // and the pre-flight's readiness; never in a picker. The speeds and the 8 GB figure are FastVideo's measurements.
   o({
@@ -933,6 +948,7 @@ const open: ModelDef[] = [
     kind: "video",
     tagline: "Redraws a soft clip at 1080p, 2K or 4K. Details may change; motion and layout stay.",
     badges: ["new", "4k", "audio"],
+    hidden: !REGEN_OFFERED,
     routes: [comfy("upscale-video", REGEN_WORKFLOW, "Built on MiniMax H3: redraws the clip at 24 fps, up to 15 s a pass, keeping its sound")],
     options: {
       seed: true,
@@ -1101,7 +1117,7 @@ const open: ModelDef[] = [
     vendor: "hkchengrex",
     family: "mmaudio",
     kind: "video",
-    tagline: "Sound effects for silent clips (non-commercial weights)",
+    tagline: "Sound effects for silent clips",
     routes: [comfy("v2a", "v2a-mmaudio")],
     options: { seed: true, negativePrompt: true },
   }),
@@ -1272,7 +1288,7 @@ const open: ModelDef[] = [
     vendor: "ByteDance",
     family: "depth-anything",
     kind: "video",
-    tagline: "Steady, detailed depth for video · non-commercial weights (CC-BY-NC-4.0) · 8 GB",
+    tagline: "Steady, detailed depth for video · 8 GB",
     routes: [comfy("depth-video", "video-depth-vda-large", "Video Depth Anything Large (about 1.5 GB, downloaded on first run)")],
     options: { colormaps: ["grayscale", "inferno"], sideBySide: true },
   }),
@@ -1286,7 +1302,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Wan",
     family: "wan",
     kind: "video",
-    tagline: "Name what to remove and it's gone, every other pixel untouched · 81 frames a run (Video tools → Remove object does whole clips) · 24 GB GPU · Apache-2.0",
+    tagline: "Name what to remove and it's gone, every other pixel untouched · 81 frames a run (Video tools → Remove object does whole clips) · 24 GB GPU",
     badges: ["new"],
     routes: [comfy("remove-object", "video-inpaint-wan-vace", "SAM 3.1 text track + Wan 2.1 VACE 14B with the lightx2v 4-step LoRA; up to 81 frames per window")],
     options: { seed: true, negativePrompt: true },
@@ -1297,7 +1313,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Wan",
     family: "wan",
     kind: "video",
-    tagline: "Paint what to remove on the first frame, and it's gone from the shot · 81 frames a run (Video tools → Remove object does whole clips) · 24 GB GPU · Apache-2.0",
+    tagline: "Paint what to remove on the first frame, and it's gone from the shot · 81 frames a run (Video tools → Remove object does whole clips) · 24 GB GPU",
     badges: ["new"],
     routes: [comfy("remove-object", "video-inpaint-wan-vace-painted", "first-frame mask (white = remove) tracked by SAM 3.1; the last frame's mask starts the next window")],
     options: { seed: true, negativePrompt: true, requires: { mask: true, msg: "Paint what to remove on the first frame" } },
@@ -1308,7 +1324,7 @@ const open: ModelDef[] = [
     vendor: "Netflix",
     family: "void",
     kind: "video",
-    tagline: "Removes the object and what it causes — shadows, reflections, things it moves · 197 frames a run (Video tools → Remove object does whole clips) · 24–40 GB GPU · CogVideoX License: commercial use needs registration",
+    tagline: "Removes the object and what it causes — shadows, reflections, things it moves · 197 frames a run (Video tools → Remove object does whole clips) · 24–40 GB GPU",
     badges: ["new"],
     routes: [comfy("remove-object", "video-erase-void", "SAM 3.1 text track + VOID (CogVideoX-5B fine-tune), two passes; up to 197 frames per window")],
     options: { seed: true, negativePrompt: true },
@@ -1323,7 +1339,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Wan",
     family: "wan",
     kind: "video",
-    tagline: "Name what to swap and your reference takes its place, every other pixel untouched · 81 frames a run (Genjutsu does whole clips) · 24 GB GPU · Apache-2.0",
+    tagline: "Name what to swap and your reference takes its place, every other pixel untouched · 81 frames a run (Genjutsu does whole clips) · 24 GB GPU",
     badges: ["new"],
     routes: [comfy("video-swap", "video-swap-wan-vace", "SAM 3.1 text track + Wan 2.1 VACE 14B with the first reference image; up to 81 frames per window")],
     options: { seed: true, negativePrompt: true, maxImages: 1 },
@@ -1334,7 +1350,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Wan",
     family: "wan",
     kind: "video",
-    tagline: "Paint where it goes on the first frame, and your reference stays there for the whole shot (a still or slow camera) · 81 frames a run (Genjutsu does whole clips) · 24 GB GPU · Apache-2.0",
+    tagline: "Paint where it goes on the first frame, and your reference stays there for the whole shot (a still or slow camera) · 81 frames a run (Genjutsu does whole clips) · 24 GB GPU",
     badges: ["new"],
     routes: [comfy("video-insert", "video-insert-wan-vace", "painted region (white = where it goes) held for every frame + Wan 2.1 VACE 14B with the first reference image")],
     options: { seed: true, negativePrompt: true, maxImages: 1, requires: { mask: true, msg: "Paint where it goes on the first frame" } },
@@ -1352,6 +1368,98 @@ const open: ModelDef[] = [
     routes: [comfy("video-swap", "video-character-swap-h3-relay", "H3 Relay toolkit: SAM 3.1 subject, 124-frame windows with 18 frames of history, the clip's sound kept")],
     options: { seed: true, resolutions: ["480p", "768p"], maxImages: 1 },
   }),
+  // Genjutsu's Openjutsu modes (D3voz/openjutsu, MIT; src/lib/openjutsu-graphs.ts): Group swap (2–4 characters by role),
+  // Scene edit (change / remove / new background), From picture (the first frame, what happens, the video), Fix faces and
+  // Fix colours. Your GPU only. Genjutsu offers them (each opens to everyone after its GPU test), so they stay out of the
+  // composer's lists.
+  o({
+    id: "oss-h3-group-swap",
+    name: "Group swap",
+    vendor: "MiniMax × Openjutsu",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Up to four characters, each taking over the person you name · the clip's sound kept · 24 GB GPU",
+    hidden: true,
+    routes: [comfy("group-swap", "video-group-swap-h3", "Openjutsu advanced: SAM 3.1 tracks, Qwen3-VL labels each by role, MiniMax H3 + DMAD redraw them clip by clip; one by one (2 characters) runs a pass per person")],
+    options: { seed: true, resolutions: ["480p", "720p", "1080p"], maxImages: 4 },
+  }),
+  o({
+    id: "oss-h3-scene-edit",
+    name: "Scene edit",
+    vendor: "MiniMax × Openjutsu",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Change a thing, remove it or put the people somewhere new · the clip's sound kept · 24 GB GPU",
+    hidden: true,
+    routes: [comfy("scene-edit", "video-scene-edit-h3", "Openjutsu object: SAM 3.1 tracks what you name, MiniMax H3 + DMAD redraw only that, clip by clip")],
+    options: { seed: true, resolutions: ["480p", "720p", "1080p"], maxImages: 1 },
+  }),
+  o({
+    id: "oss-from-picture-frame",
+    name: "From picture · first frame",
+    vendor: "Black Forest Labs × Openjutsu",
+    family: "flux",
+    kind: "image",
+    tagline: "Your character in the pose of the clip's first frame, in your picture's setting and light",
+    hidden: true,
+    routes: [comfy("picture-frame", "image-from-picture-prepare", "FLUX 3 Image Klein with its prompt upsampler; one pass for pose and light")],
+    options: { seed: true, maxImages: 1 },
+  }),
+  o({
+    id: "oss-scene-describe",
+    name: "From picture · what happens",
+    vendor: "Qwen × Openjutsu",
+    family: "utility",
+    kind: "text",
+    tagline: "What happens in a part of a clip, written for the first frame you picked",
+    hidden: true,
+    routes: [comfy("describe-video", "video-scene-describe", "Qwen3-VL 8B at 2 frames a second, then rewritten for the picture")],
+    options: { maxImages: 1 },
+  }),
+  o({
+    id: "oss-from-picture",
+    name: "From picture",
+    vendor: "MiniMax × Openjutsu",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "The first frame you approved, moving exactly like the person in the clip · the clip's sound kept · 24 GB GPU",
+    hidden: true,
+    routes: [comfy("picture-video", "video-from-picture-solar", "SolarRenderer: MiniMax H3 with its 4-step and control LoRAs, Metric3D normals as the motion (or native H3 + DMAD)")],
+    options: { seed: true, resolutions: ["480p", "720p"], maxImages: 1 },
+  }),
+  o({
+    id: "oss-h3-motion",
+    name: "MiniMax H3",
+    vendor: "MiniMax × Openjutsu",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Your character from one photo performs the clip's movement in the photo's own setting · the clip's sound kept · 24 GB GPU",
+    hidden: true,
+    routes: [comfy("motion-transfer", "video-motion-transfer-h3", "Native MiniMax H3 + DMAD: the character photo as the look, the part's Metric3D normals as the motion")],
+    options: { seed: true, resolutions: ["480p", "720p"], maxImages: 1 },
+  }),
+  o({
+    id: "oss-h3-fix-faces",
+    name: "Fix faces",
+    vendor: "MiniMax × Openjutsu",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Redraws small or soft faces in a finished video so they match your character's photo · 24 GB GPU",
+    hidden: true,
+    routes: [comfy("face-fix-video", "video-fix-faces-h3", "H3-FaceRefine tracking and paste-back, MiniMax H3 + DMAD in overlapping sections")],
+    options: { seed: true, maxImages: 1 },
+  }),
+  o({
+    id: "oss-fix-colours",
+    name: "Fix colours",
+    vendor: "Openjutsu",
+    family: "utility",
+    kind: "video",
+    tagline: "A soft film finish for a finished video: gentler contrast, smoother detail, rich blacks · no model, seconds",
+    hidden: true,
+    routes: [comfy("tone-video", "video-fix-colours", "Image Detail Contrast + Orion4D's DCTL tone mapper")],
+    options: {},
+  }),
   // Remove object's "Remove a person (H3)" (docs/research/openjutsu-6.md §11.1): H3 Relay's Person Removal with Akatz
   // Labs' Person Remover LoRA, from a clean first frame (Remove object makes it, fits the clip to 24 fps, puts the sound back).
   o({
@@ -1365,7 +1473,7 @@ const open: ModelDef[] = [
     routes: [comfy("remove-object", "video-person-remove-h3-relay", "H3 Relay Person Removal: the person painted green, 22-frame windows with 18 of history from the clean first frame (image), 12 steps, silent")],
     options: { seed: true, maxImages: 1 },
   }),
-  // Its mask first (o/person-remover-plus): the removal graph's own SAM 3.1 chain on the part's first seconds, the person
+  // Its mask first: the removal graph's own SAM 3.1 chain on the part's first seconds, the person
   // filled green exactly as H3 will see them. Run by Remove object's "Preview the mask", not the composer.
   o({
     id: "oss-h3-removal-mask",
@@ -1403,7 +1511,7 @@ const open: ModelDef[] = [
     options: { keepsNamed: true, matteOutputs: ["matte"] },
     hidden: true,
   }),
-  // Character swap in 2K (n7-4): only the swapped character goes back over the footage, from the 768p swap and its
+  // Character swap in 2K: only the swapped character goes back over the footage, from the 768p swap and its
   // regenerate, through the person's mask (src/lib/catalog/sharpen.ts). Run by Character Swap Studio and Genjutsu.
   o({
     id: COMPOSITE_MODEL,
@@ -1438,7 +1546,7 @@ const open: ModelDef[] = [
     options: { seed: true, negativePrompt: true, maxImages: 2 },
     hidden: true,
   }),
-  // Storyboard's next frame on your GPU since nm10-qwen21-fast: Qwen-Image 2.1 with akhaliq's 2.1 Next-Scene LoRA (the graph loads
+  // Storyboard's next frame on your GPU: Qwen-Image 2.1 with akhaliq's 2.1 Next-Scene LoRA (the graph loads
   // it; options.loras holds the model to its switch). The 2509 graph below stays the classic choice and the cloud's recipe.
   o({
     id: "oss-qwen-image-21-next-scene",
@@ -1446,12 +1554,39 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-image",
     kind: "image",
-    tagline: "The next storyboard panel from the previous one, on Qwen-Image 2.1 with its Next-Scene LoRA · 20 GB GPU · non-commercial weights",
+    tagline: "The next storyboard panel from the previous one, on Qwen-Image 2.1 with its Next-Scene LoRA · 20 GB GPU",
     routes: [{ ...comfy("edit", "qwen-image-21-next-scene", "2.1 Next-Scene LoRA at 0.7, 28 steps"), unsized: true }],
     options: { seed: true, maxImages: 2, controls: [QWEN21_DECODER], ...(NEXT_SCENE_21_LORA && { loras: [loraRef(NEXT_SCENE_21_LORA)] }) },
     hidden: true,
   }),
-  // QMA camera angles (qma-angles): Qwen-Image 2.1 with gribbliest's QMA LoRA re-shoots a picture from one of 96 cameras. The
+  // The Relight tool's Generate lighting (src/components/relight): the photo plus the words written from the placed
+  // lights, a picture lit only by those lights that the page blends in. Image 2 is the light-guide picture, when sent.
+  o({
+    id: "oss-qwen-image-21-relight",
+    // Its runs show this name in the Library: plain, as the tool says it (the engine is in the tagline and the licence).
+    name: "Relight",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Relight with placed lights: Qwen-Image 2.1 with Viggle's 6-step speed LoRA · 24 GB GPU",
+    routes: [{ ...comfy("edit", "qwen-image-21-relight", "6 steps, about 1 MP"), unsized: true }],
+    options: { seed: true, maxImages: 2 },
+    hidden: true,
+  }),
+  // Its scene read, once per photo: a depth map (Depth Anything 3) and the subject's matte (BiRefNet) for the page's
+  // depth-true preview. A helper step: the Library leaves its runs out.
+  o({
+    id: "oss-relight-scene",
+    name: "Relight scene read",
+    vendor: "Open source",
+    family: "birefnet",
+    kind: "image",
+    tagline: "Depth and subject cut-out for the Relight preview",
+    routes: [comfy("bg-remove", "relight-scene-read")],
+    options: { maxImages: 1 },
+    hidden: true,
+  }),
+  // QMA camera angles: Qwen-Image 2.1 with gribbliest's QMA LoRA re-shoots a picture from one of 96 cameras. The
   // pose is the Angles app's own three settings (horizontal_angle, vertical_angle, zoom); the plan writes the LoRA's words
   // from it (promptFormat "qma", src/lib/qma.ts). Open engine only: fal's Qwen-Image 2.1 takes no LoRAs.
   o({
@@ -1460,7 +1595,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-image",
     kind: "image",
-    tagline: "Re-shoot a picture from any of 96 camera angles: 8 sides, 4 heights, 3 distances · on your GPU, 20 GB · non-commercial weights",
+    tagline: "Re-shoot a picture from any of 96 camera angles: 8 sides, 4 heights, 3 distances · on your GPU, 20 GB",
     badges: ["new"],
     routes: [{ ...comfy("edit", "qwen-image-21-qma", "QMA LoRA at 1.0, 30 steps, CFG 3"), unsized: true, maxImages: 1 }],
     options: {
@@ -1479,6 +1614,18 @@ const open: ModelDef[] = [
       ...(QMA_LORA && { loras: [loraRef(QMA_LORA)] }),
     },
   }),
+  // The Head Swap app's open route: image 1 = the shot to keep, image 2 = the head (hair included).
+  o({
+    id: "oss-qwen-head-swap",
+    name: "Qwen-Image 2.1 Head Swap",
+    vendor: "Alibaba Qwen × Alissonerdx",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Puts the whole head from image 2, hair included, on the person in image 1; everything else stays the shot's own pixels · 20 GB GPU · non-commercial",
+    routes: [comfy("edit", "head-swap-qwen-image-21", "BFS head LoRA V1.1; the new head pasted back onto the shot")],
+    options: { seed: true, maxImages: 2, requires: { images: 2, msg: "Add the photo to keep, then a photo of the head" } },
+    hidden: true,
+  }),
   o({
     id: "oss-qwen-next-scene",
     name: "Qwen-Image-Edit Next Scene",
@@ -1488,6 +1635,20 @@ const open: ModelDef[] = [
     tagline: "The next storyboard panel from the previous one (next-scene LoRA)",
     routes: [comfy("edit", "storyboard-qwen-edit-2509-next-scene", "next-scene LoRA v2")],
     options: { seed: true, negativePrompt: true, maxImages: 2 },
+    hidden: true,
+  }),
+  // The Restore Photo app's engine: AusBoss's Restore LoRA keeps the picture on its own frame (0.2 px off, the same
+  // faces) where a plain edit redraws it, then SeedVR2 enlarges it 2x. Its strength (params.extra.loraStrength) comes
+  // from the app's choice: 0.5 for a blurry photo, 1.0 otherwise.
+  o({
+    id: "oss-qwen-image-21-restore",
+    name: "Qwen-Image 2.1 Restore",
+    vendor: "Alibaba Qwen × AusBoss",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Old, worn or small photos back sharp on the same frame, then enlarged 2x (Restore LoRA + SeedVR2) · 20 GB GPU · non-commercial weights",
+    routes: [{ ...comfy("edit", "restore-qwen-image-21", "Restore LoRA, 25 steps at about 2 MP, then SeedVR2 2x"), unsized: true, maxImages: 1 }],
+    options: { seed: true, maxImages: 1 },
     hidden: true,
   }),
 
@@ -1509,11 +1670,11 @@ const open: ModelDef[] = [
     vendor: "Bilibili",
     family: "index-tts",
     kind: "audio",
-    tagline: "Expressive zero-shot cloning (commercial use under 100M users)",
+    tagline: "Expressive zero-shot cloning",
     routes: [comfy("tts", "tts-indextts2")],
     options: { voiceClone: true },
   }),
-  // Design a voice (nm10-voice-design): a new voice from words, then reused by cloning the take picked (src/server/voices.ts).
+  // Design a voice: a new voice from words, then reused by cloning the take picked (src/server/voices.ts).
   // Qwen3-TTS 1.7B runs the same weights on fal (qwen-3-tts); VoxCPM2 is hosted nowhere, so it runs on your GPU only.
   o({
     id: "oss-qwen3-tts",
@@ -1589,7 +1750,7 @@ const open: ModelDef[] = [
     options: { durations: [30, 60, 120, 180], seed: true, lyrics: {} },
     defaults: { duration: 60 },
   }),
-  // Full songs on core nodes (nm10-music3, research #10 §6.6). MiniMax Music 3 is the same model the cloud runs as
+  // Full songs on core nodes (new-models-10 §6.6). MiniMax Music 3 is the same model the cloud runs as
   // minimax-music-3 (fal hosts it); YuE2 is open-engine only (neither fal nor Replicate hosts it), and covers a song you add.
   o({
     id: "oss-minimax-music-3",
@@ -1669,7 +1830,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-image",
     kind: "image",
-    tagline: "Splits a picture into editable transparent layers, back to front · 24 GB GPU · Apache-2.0",
+    tagline: "Splits a picture into editable transparent layers, back to front · 24 GB GPU",
     badges: ["new", "top"],
     routes: [comfy("layers", "layers-qwen-image-layered", "full-canvas RGBA layers with name, z and bounding box")],
     options: { seed: true, sliders: [{ param: "numLayers", label: "Layers", min: 2, max: 10, step: 1, default: 4 }] },
@@ -1680,7 +1841,7 @@ const open: ModelDef[] = [
     vendor: "DiffSynth-Studio",
     family: "qwen-image",
     kind: "image",
-    tagline: "Pulls the element you name (“the guitar”) onto its own layer · 24 GB GPU, 41 GB download · Apache-2.0",
+    tagline: "Pulls the element you name (“the guitar”) onto its own layer · 24 GB GPU, 41 GB download",
     badges: ["new"],
     routes: [comfy("layers", "layers-qwen-image-layered-control", "prompt = the element to separate")],
     options: { seed: true, requires: { prompt: true, msg: "Name the element to pull out, e.g. “the guitar”" } },
@@ -1692,7 +1853,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "style-reference",
     kind: "image",
-    tagline: "A new image in the look of your moodboard (1–2 collages): palette, light, grain, mood · 24 GB GPU · Apache-2.0",
+    tagline: "A new image in the look of your moodboard (1–2 collages): palette, light, grain, mood · 24 GB GPU",
     badges: ["new", "top", "fast"],
     routes: [comfy("t2i", "style-ref-qwen-edit-2511", "Qwen-Image-Edit-2511 + Lightning, 4 steps")],
     options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K"], maxImages: 2, seed: true, requires: { images: 1, msg: "Add 1–2 moodboard images to take the style from" } },
@@ -1704,7 +1865,7 @@ const open: ModelDef[] = [
     vendor: "Black Forest Labs",
     family: "style-reference",
     kind: "image",
-    tagline: "Fast style transfer from up to 4 references, 4 steps · 10 GB GPU · Apache-2.0",
+    tagline: "Fast style transfer from up to 4 references, 4 steps · 10 GB GPU",
     badges: ["new", "fast"],
     routes: [comfy("t2i", "style-ref-flux2-klein-4b")],
     options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K"], maxImages: 4, seed: true, requires: { images: 1, msg: "Add 1–4 style reference images" } },
@@ -1716,7 +1877,7 @@ const open: ModelDef[] = [
     vendor: "Krea",
     family: "style-reference",
     kind: "image",
-    tagline: "Trained for style reference (1–2 images) · 20 GB GPU · Krea 2 Community License: enterprise terms above its size limits",
+    tagline: "Trained for style reference (1–2 images) · 20 GB GPU",
     badges: ["new"],
     routes: [comfy("t2i", "style-ref-krea2", "Krea 2 Turbo + style_reference LoRA")],
     options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K"], maxImages: 2, seed: true, requires: { images: 1, msg: "Add 1–2 moodboard images to take the style from" } },
@@ -1728,7 +1889,7 @@ const open: ModelDef[] = [
     vendor: "ByteDance",
     family: "style-reference",
     kind: "image",
-    tagline: "Style-only reference on FLUX.1 [dev] · 20 GB GPU · non-commercial base model",
+    tagline: "Style-only reference on FLUX.1 [dev] · 20 GB GPU",
     routes: [comfy("t2i", "style-ref-uso-flux1")],
     options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K"], maxImages: 2, seed: true, requires: { images: 1, msg: "Add 1–2 moodboard images to take the style from" } },
     defaults: { aspectRatio: "1:1", resolution: "1K" },
@@ -1740,7 +1901,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Tongyi",
     family: "z-image",
     kind: "image",
-    tagline: "Generates in your hex colors and keeps them with a color transfer · 12 GB GPU · Apache-2.0",
+    tagline: "Generates in your hex colors and keeps them with a color transfer · 12 GB GPU",
     badges: ["new", "fast"],
     routes: [comfy("t2i", "palette-zimage-hex", "hex list in the prompt + ColorTransfer to a swatch")],
     options: {
@@ -1795,7 +1956,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Wan",
     family: "wan",
     kind: "video",
-    tagline: "Re-renders a ≤5 s clip in the look of its restyled first frame, keeping the motion (depth) · 24 GB GPU · Apache-2.0",
+    tagline: "Re-renders a ≤5 s clip in the look of its restyled first frame, keeping the motion (depth) · 24 GB GPU",
     badges: ["new"],
     routes: [comfy("v2v", "video-restyle-wan22-fun-vace", "image = restyled first frame; Depth Anything 3 control; Lightx2v 4-step")],
     options: { aspectRatios: VID_AR, resolutions: ["480p", "720p"], durations: [3, 4, 5], seed: true, negativePrompt: true },
@@ -1811,7 +1972,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Wan",
     family: "wan",
     kind: "video",
-    tagline: "Renders a grey-box blockout from its depth and a first frame: camera, blocking and timing kept · 24 GB GPU · Apache-2.0",
+    tagline: "Renders a grey-box blockout from its depth and a first frame: camera, blocking and timing kept · 24 GB GPU",
     badges: ["new"],
     routes: [
       comfy("v2v", "video-blockout-wan22-fun-vace", "video = the blockout's depth (near = bright); image = the first frame; Lightx2v 4-step"),
@@ -1827,7 +1988,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Tongyi",
     family: "z-image",
     kind: "video",
-    tagline: "Stylises every frame (sketch, comic, paper…) at 4–24 fps, outlines kept · 16 GB GPU · Apache-2.0",
+    tagline: "Stylises every frame (sketch, comic, paper…) at 4–24 fps, outlines kept · 16 GB GPU",
     badges: ["new"],
     routes: [comfy("v2v", "mixed-media-zimage-frames", "Z-Image Turbo img2img + Fun Union ControlNet (canny), per frame")],
     options: {
@@ -1847,7 +2008,7 @@ const open: ModelDef[] = [
     vendor: "Stability AI",
     family: "stable-audio",
     kind: "audio",
-    tagline: "Sound effects from a description in 8 steps · 6 GB GPU · free under US$1M revenue (Stability Community License)",
+    tagline: "Sound effects from a description in 8 steps · 6 GB GPU",
     badges: ["new", "top", "fast"],
     routes: [comfy("sfx", "sfx-stable-audio-3-small")],
     options: { durations: [3, 5, 10, 20], seed: true, negativePrompt: true },
@@ -1859,7 +2020,7 @@ const open: ModelDef[] = [
     vendor: "Stability AI",
     family: "stable-audio",
     kind: "audio",
-    tagline: "Effects and loops up to 47 s · 6 GB GPU · free under US$1M revenue (Stability Community License)",
+    tagline: "Effects and loops up to 47 s · 6 GB GPU",
     routes: [comfy("sfx", "sfx-stable-audio-open")],
     options: { durations: [5, 10, 20, 30, 45], seed: true, negativePrompt: true },
     defaults: { duration: 10 },
@@ -1870,7 +2031,7 @@ const open: ModelDef[] = [
     vendor: "Tencent",
     family: "hunyuan",
     kind: "audio",
-    tagline: "48 kHz foley from a description · 12 GB GPU · licence excludes the EU, UK and South Korea",
+    tagline: "48 kHz foley from a description · 12 GB GPU",
     routes: [comfy("sfx", "sfx-hunyuan-foley")],
     options: { durations: [3, 5, 8, 10], seed: true, negativePrompt: true },
     defaults: { duration: 5 },
@@ -1882,7 +2043,7 @@ const open: ModelDef[] = [
     vendor: "Tencent",
     family: "hunyuan",
     kind: "video",
-    tagline: "48 kHz foley in sync with your whole clip (up to 30 s), laid under the untouched picture · 12 GB GPU · licence excludes the EU, UK and South Korea",
+    tagline: "48 kHz foley in sync with your whole clip (up to 30 s), laid under the untouched picture · 12 GB GPU",
     badges: ["new"],
     // No length to pick: the sound is as long as the clip (the provider reads it from the MP4 header).
     routes: [comfy("v2a", "v2a-hunyuan-foley", "frames at 8 fps → HunyuanFoleySampler; picture stream-copied; sound as long as the clip")],
@@ -1894,7 +2055,7 @@ const open: ModelDef[] = [
     vendor: "hkchengrex",
     family: "mmaudio",
     kind: "audio",
-    tagline: "Sound effects from text, best at about 8 s · 8 GB GPU · non-commercial weights",
+    tagline: "Sound effects from text, best at about 8 s · 8 GB GPU",
     routes: [comfy("sfx", "sfx-mmaudio-t2a")],
     options: { durations: [3, 5, 8], seed: true, negativePrompt: true },
     defaults: { duration: 8 },
@@ -1905,7 +2066,7 @@ const open: ModelDef[] = [
     vendor: "FunAudioLLM",
     family: "thinksound",
     kind: "audio",
-    tagline: "Apache-2.0 sound effects from a description, up to 30 s · 12 GB GPU",
+    tagline: "Sound effects from a description, up to 30 s · 12 GB GPU",
     routes: [comfy("sfx", "sfx-thinksound", "isolated worker (scripts/comfy/README.md)")],
     options: { durations: [3, 5, 8, 10, 20, 30], seed: true },
     defaults: { duration: 8 },
@@ -1918,7 +2079,7 @@ const open: ModelDef[] = [
     vendor: "Open source",
     family: "melband",
     kind: "audio",
-    tagline: "Splits the voice from the music and effects, and transcribes the voice with timings · 8 GB GPU · MIT / Apache-2.0",
+    tagline: "Splits the voice from the music and effects, and transcribes the voice with timings · 8 GB GPU",
     badges: ["new"],
     routes: [comfy("separate-audio", "dub-prepare-separate-transcribe", "voice stem, background stem, timed cues, transcript")],
     options: {},
@@ -1931,7 +2092,7 @@ const open: ModelDef[] = [
     vendor: "Open source",
     family: "dbs",
     kind: "audio",
-    tagline: "Splits the dialogue from the music and effects (the split runs on a CPU) and transcribes it with timings · 8 GB GPU for the transcript · Apache-2.0",
+    tagline: "Splits the dialogue from the music and effects (the split runs on a CPU) and transcribes it with timings · 8 GB GPU for the transcript",
     badges: ["new"],
     routes: [comfy("separate-audio", "dub-prepare-dbs-transcribe", "voice stem, background stem (FLAC), timed cues, transcript; ComfyUI-DBS + ComfyUI-QwenASR")],
     options: {},
@@ -1945,7 +2106,7 @@ const open: ModelDef[] = [
     vendor: "Open source",
     family: "dbs",
     kind: "audio",
-    tagline: "Splits a soundtrack into dialogue, music and effects · 23 MB · CPU or GPU · Apache-2.0",
+    tagline: "Splits a soundtrack into dialogue, music and effects · 23 MB · CPU or GPU",
     badges: ["new"],
     routes: [comfy("separate-audio", "separate-soundtrack-dbs", "voice, music, effects and music & effects (FLAC) + a speed report; ComfyUI-DBS")],
     options: {
@@ -2020,7 +2181,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-asr",
     kind: "text",
-    tagline: "Timed captions from speech in 30 languages (auto-detect) · 4 GB GPU · Apache-2.0",
+    tagline: "Timed captions from speech in 30 languages (auto-detect) · 4 GB GPU",
     badges: ["new", "top"],
     routes: [comfy("transcribe", "captions-qwen3-asr", "Qwen3-ASR 0.6B + ForcedAligner; one cue per line")],
     // "tl" is the node's second code for Filipino.
@@ -2052,7 +2213,7 @@ const open: ModelDef[] = [
     vendor: "OpenAI × yuvraj108c",
     family: "whisper",
     kind: "video",
-    tagline: "Transcribes and burns word-by-word captions in one job, short clips (whole clip in RAM) · 6 GB GPU · non-commercial node pack (CC BY-NC-SA)",
+    tagline: "Transcribes and burns word-by-word captions in one job, short clips (whole clip in RAM) · 6 GB GPU",
     routes: [comfy("captions", "captions-whisper-burnin", "Whisper large-v3-turbo + ComfyUI-Whisper (CC-BY-NC-SA code)")],
     options: { sliders: [{ param: "fontSize", label: "Text size (px)", min: 30, max: 160, step: 5, default: 90 }], sourceLanguages: Object.keys(WHISPER_LANGUAGES) },
   }),
@@ -2062,7 +2223,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-llm",
     kind: "text",
-    tagline: "Translates text or timed caption lines, timings kept · 10 GB GPU · Apache-2.0",
+    tagline: "Translates text or timed caption lines, timings kept · 10 GB GPU",
     routes: [comfy("translate", "translate-qwen35-textgen")],
     options: { seed: true },
     hidden: true,
@@ -2073,7 +2234,7 @@ const open: ModelDef[] = [
     vendor: "Google",
     family: "gemma",
     kind: "text",
-    tagline: "Speech straight to translated text, no timings (voice-over dubs) · 12 GB GPU · Apache-2.0",
+    tagline: "Speech straight to translated text, no timings (voice-over dubs) · 12 GB GPU",
     routes: [comfy("translate", "speech-translate-gemma4")],
     options: { seed: true },
     hidden: true,
@@ -2085,7 +2246,7 @@ const open: ModelDef[] = [
     vendor: "Google",
     family: "gemma",
     kind: "text",
-    tagline: "Watches a reference clip and writes up its style · 12 GB GPU · Apache-2.0",
+    tagline: "Watches a reference clip and writes up its style · 12 GB GPU",
     routes: [comfy("write", "reference-brief-gemma4", "first 30 s at 24 fps (every 24th frame read, 384 px wide) with the soundtrack; startTime skips ahead")],
     options: { seed: true, promptless: true },
     hidden: true,
@@ -2096,7 +2257,7 @@ const open: ModelDef[] = [
     vendor: "MeiGen",
     family: "infinitetalk",
     kind: "video",
-    tagline: "Re-syncs the lips (and head) of real footage to a new voice, up to 40 s per job; camera and background stay · 24 GB GPU · Apache-2.0",
+    tagline: "Re-syncs the lips (and head) of real footage to a new voice, up to 40 s per job; camera and background stay · 24 GB GPU",
     badges: ["new"],
     routes: [comfy("lipsync", "lipsync-v2v-infinitetalk", "video-to-video, 4 steps from step 2; keeps the source's shape")],
     options: { aspectRatios: ["auto", ...VID_AR], resolutions: ["480p", "720p"], seed: true, negativePrompt: true },
@@ -2108,7 +2269,7 @@ const open: ModelDef[] = [
     vendor: "ByteDance",
     family: "latentsync",
     kind: "video",
-    tagline: "Re-syncs only the mouth of real footage to a new voice; face, camera and background untouched · 20 GB GPU · OpenRAIL++",
+    tagline: "Re-syncs only the mouth of real footage to a new voice; face, camera and background untouched · 20 GB GPU",
     routes: [comfy("lipsync", "lipsync-latentsync16", "isolated worker (scripts/comfy/README.md)")],
     options: {
       seed: true,
@@ -2206,7 +2367,7 @@ const open: ModelDef[] = [
     vendor: "Microsoft",
     family: "trellis",
     kind: "model3d",
-    tagline: "A textured 3D model (.glb) from one product photo, plus a turntable video; the fallback to Pixal3D · 16 GB GPU · MIT",
+    tagline: "A textured 3D model (.glb) from one product photo, plus a turntable video; the fallback to Pixal3D · 16 GB GPU",
     badges: ["new"],
     routes: [comfy("image-to-3d", "image-to-3d-trellis2", "~250k triangles; web GLB + turntable made after the job")],
     options: { seed: true, controls: [HI3D_REFINE_CONTROL] },
@@ -2217,7 +2378,7 @@ const open: ModelDef[] = [
     vendor: "Tencent",
     family: "hunyuan",
     kind: "model3d",
-    tagline: "Untextured 3D shape from a photo · 10 GB GPU · licence excludes the EU, UK and South Korea",
+    tagline: "Untextured 3D shape from a photo · 10 GB GPU",
     routes: [comfy("image-to-3d", "image-to-3d-hunyuan3d-21")],
     options: { seed: true, controls: [HI3D_REFINE_CONTROL] },
   }),
@@ -2243,7 +2404,7 @@ const open: ModelDef[] = [
     vendor: "Tencent ARC × Microsoft",
     family: "trellis",
     kind: "model3d",
-    tagline: "One textured 3D model (.glb) from photos of 2–4 sides of an object, plus a turntable video · 16 GB GPU · MIT",
+    tagline: "One textured 3D model (.glb) from photos of 2–4 sides of an object, plus a turntable video · 16 GB GPU",
     badges: ["new"],
     // params.extra.views names each photo's side ("front", "left", "back", "right"); the front is needed.
     routes: [comfy("image-to-3d", "image-to-3d-trellis2-multiview", "Pixal3D multi-view on TRELLIS.2; the front, then any of left, back and right")],
@@ -2255,7 +2416,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen × Microsoft",
     family: "trellis",
     kind: "model3d",
-    tagline: "Describe one object and get a textured 3D model with a turntable · 20 GB GPU · non-commercial weights + MIT",
+    tagline: "Describe one object and get a textured 3D model with a turntable · 20 GB GPU",
     badges: ["new"],
     // Built on the server as two steps: a Qwen-Image 2.1 still, then image-to-3d-trellis2 on it (src/server/chains.ts).
     routes: [{ op: "text-to-3d", provider: "comfyui", endpoint: "image-to-3d-trellis2", chained: true, note: "a Qwen-Image 2.1 still → TRELLIS.2" }],
@@ -2267,7 +2428,7 @@ const open: ModelDef[] = [
     vendor: "Tripo (VAST)",
     family: "tripo",
     kind: "model3d",
-    tagline: "A soft, photoreal 3D capture of the subject in one photo, plus an orbit video · 8 GB GPU · MIT · Built with DINOv3",
+    tagline: "A soft, photoreal 3D capture of the subject in one photo, plus an orbit video · 8 GB GPU",
     badges: ["new"],
     routes: [comfy("splat", "image-to-splat-triposplat", "BiRefNet cut-out → TripoSplat → .spz + a 3 s orbit")],
     options: {
@@ -2276,7 +2437,33 @@ const open: ModelDef[] = [
       sliders: [{ param: "numGaussians", label: "Gaussians", min: 32768, max: 1048576, step: 32768, default: 262144 }],
     },
   }),
-  // idol-1 (docs/research/idol-9.md): Speridlabs' Idol, TripoSplat's architecture retrained, on the same core nodes. Its cloud twin
+  // Any Angle (app-any-angle, src/lib/catalog/any-angle.ts): two helpers its page runs, hidden from the pickers. The 3D view of
+  // a photo, built once (TripoSplat with the cut-out, fixed seeds, a turntable the front view is measured on, a GLB)…
+  o({
+    id: ANY_ANGLE.buildModel,
+    name: "Any Angle 3D view",
+    vendor: "Tripo (VAST)",
+    family: "tripo",
+    kind: "model3d",
+    tagline: "A 3D view of the photo's subject for picking camera angles · 8 GB GPU",
+    routes: [comfy("splat", ANY_ANGLE.buildGraph, "BiRefNet cut-out → TripoSplat (seed 46) → .spz, a 48-frame turntable, its sweep and a GLB")],
+    options: { maxImages: 1, promptless: true },
+    hidden: true,
+  }),
+  // …and one angle from it: the view rendered at the camera, repainted by Qwen-Image 2.1 with the AnyAngle LoRA (its own
+  // prompt, so no words of the visitor's). No hosted Qwen-Image 2.1 takes the LoRA, so it runs on a GPU only.
+  o({
+    id: ANY_ANGLE.shotModel,
+    name: "Any Angle",
+    vendor: "Qwen (Alibaba) · lilylilith",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "The same photo from a camera you pick: a 3D view rendered there and repainted · Qwen-Image 2.1 + AnyAngle LoRA · 32 GB GPU",
+    routes: [comfy("edit", ANY_ANGLE.shotGraph, "the saved 3D view rendered at the camera → Qwen-Image 2.1 int8 + AnyAngle LoRA, 25 steps, cfg 1")],
+    options: { maxImages: 1, seed: true, promptless: true, ...(ANY_ANGLE_LORA && { loras: [ANY_ANGLE_LORA] }) },
+    hidden: true,
+  }),
+  // Idol 3D (docs/research/idol-9.md): Speridlabs' Idol, TripoSplat's architecture retrained, on the same core nodes. Its cloud twin
   // is "idol-3d" (fal speridlabs/idol, cloud-models.generated.ts).
   o({
     id: "oss-idol",
@@ -2296,7 +2483,7 @@ const open: ModelDef[] = [
       ],
     },
   }),
-  // idol-7 (docs/research/idol-9.md §9): Idol's splat turned into a rough vertex-coloured mesh by core SplatToMesh, in From an
+  // Idol 3D quick mesh (docs/research/idol-9.md §9): Idol's splat turned into a rough vertex-coloured mesh by core SplatToMesh, in From an
   // image. Nobody hosts it (fal's speridlabs/idol gives a splat only), so it is open-engine only.
   o({
     id: "oss-idol-mesh",
@@ -2315,6 +2502,19 @@ const open: ModelDef[] = [
     },
     engineNote: "Runs on your GPU only: no cloud service makes this mesh.",
   }),
+  // Photo to 3D: Idol (TripoSplat's architecture, Speridlabs' weights) on core nodes; its splat becomes the GLB (SplatToMesh), with the
+  // .spz and an orbit clip of the splat beside it (docs/research/idol-9.md). Not hosted anywhere: open engine only.
+  o({
+    id: "oss-idol-3d",
+    name: "Idol 3D Mesh",
+    vendor: "Speridlabs",
+    family: "tripo",
+    kind: "model3d",
+    tagline: "A quick 3D model (.glb) of a person or product from one photo, plus an orbit clip · 8 GB GPU · Apache-2.0 · Built with DINOv3",
+    badges: ["new"],
+    routes: [comfy("image-to-3d", "image-to-3d-idol", "BiRefNet cut-out → Idol → mesh from the splat + .spz + a 4 s orbit")],
+    options: { seed: true, maxImages: 1 },
+  }),
   // Round 4 (r4/cinema-3d): Cinema Studio's "Create 3D scene". The mesh is in the photo's own camera space
   // (glTF axes, metres), so the viewer starts where the photo was taken.
   o({
@@ -2323,7 +2523,7 @@ const open: ModelDef[] = [
     vendor: "Microsoft",
     family: "moge",
     kind: "model3d",
-    tagline: "The whole photo as a textured 3D mesh to fly a camera through, plus its depth map · runs on a CPU too (a minute or two) · MIT",
+    tagline: "The whole photo as a textured 3D mesh to fly a camera through, plus its depth map · runs on a CPU too (a minute or two)",
     badges: ["new"],
     routes: [comfy("scene-3d", "scene-mesh-moge", "MoGe 2 point map → textured GLB of the whole frame + a depth PNG")],
     options: {
@@ -2341,7 +2541,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba (Wan, DAMO Uni3C)",
     family: "wan",
     kind: "video",
-    tagline: "A still filmed along the camera path you fly in the 3D scene · 5 s · ~48 GB GPU · Apache-2.0",
+    tagline: "A still filmed along the camera path you fly in the 3D scene · 5 s · ~48 GB GPU",
     badges: ["new"],
     hidden: true,
     routes: [comfy("camera-path", "wan21-i2v-uni3c-path", "your browser's render of the path guides Wan 2.1 I2V 720P through core Uni3C")],
@@ -2450,11 +2650,31 @@ const open: ModelDef[] = [
     vendor: "Black Forest Labs × xocialize",
     family: "flux",
     kind: "image",
-    tagline: "Dresses the person in image 1 in the garment in image 2 (a top, dress or outfit) and an optional bottom in image 3 · 10 GB GPU · Apache-2.0",
+    tagline: "Dresses the person in image 1 in the garment in image 2 (a top, dress or outfit) and an optional bottom in image 3 · 10 GB GPU",
     badges: ["new", "fast"],
     routes: [comfy("edit", "tryon-flux2-klein-4b", "try-on LoRA; old outfit masked out first")],
     // The graph loads the try-on LoRA itself; carrying it here lets Settings → Models & licences switch it off (as Fuobe Try-On's).
     options: { maxImages: 3, seed: true, requires: { images: 2, msg: "Add a photo of the person, then the garment" }, ...(TRYON_LORA && { loras: [loraRef(TRYON_LORA)] }) },
+  }),
+  // Outfit Swap (the open route of the Outfit Swap app): AusBoss's Outfit Swap LoRA on Qwen-Image 2.1 keeps the person
+  // picture in place, so only the clothes change. With an outfit photo Qwen3-VL describes it first; without one the words
+  // are the outfit (src/lib/comfy-variants.ts picks the graph by the pictures given).
+  o({
+    id: "oss-outfit-swap",
+    name: "Qwen-Image 2.1 Outfit Swap",
+    vendor: "Alibaba Qwen × AusBoss",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Only the clothes change: from a photo of the outfit, or from words · 20 GB GPU · non-commercial weights",
+    badges: ["new"],
+    routes: [{ ...comfy("edit", "outfit-swap-qwen-image-21", "Outfit Swap LoRA, 25 steps; the outfit photo described first"), unsized: true }],
+    options: {
+      maxImages: 2,
+      seed: true,
+      promptOptional: true,
+      requires: { images: 2, promptInstead: true, msg: "Add your photo and the outfit's, or describe the outfit" },
+    },
+    hidden: true,
   }),
   // Product shot (the open route of the Product shot app): cut out, on white, relit into the scene you describe.
   o({
@@ -2463,10 +2683,22 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen × dx8152",
     family: "qwen-image",
     kind: "image",
-    tagline: "Cuts your product out and relights it into the scene you describe (White_to_Scene LoRA, 4 steps) · 24 GB GPU · Apache-2.0",
+    tagline: "Cuts your product out and relights it into the scene you describe (White_to_Scene LoRA, 4 steps) · 24 GB GPU",
     badges: ["new"],
     routes: [comfy("edit", "product-shot-qwen-edit-2509", "BiRefNet cut-out on white → Qwen-Image-Edit 2509 + White_to_Scene LoRA")],
     options: { seed: true, negativePrompt: true, maxImages: 1, requires: { prompt: true, msg: "Describe the scene to put the product in, e.g. “on a marble counter, morning light”" } },
+  }),
+  // Steam It (the open route of the Steam It app): the clothes found and pressed, every other pixel kept.
+  o({
+    id: "oss-steam-it",
+    name: "Qwen-Image 2.1 Steam It",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Finds the clothes and presses them smooth; the person, pose and background stay exactly as they were · 20 GB GPU · non-commercial weights",
+    routes: [{ ...comfy("edit", "steam-it-qwen-image-21", "SAM 3.1 finds the clothes; Qwen-Image 2.1 repaints only them, 25 steps, pasted back"), unsized: true, maxImages: 1 }],
+    options: { seed: true, maxImages: 1, requires: { images: 1, msg: "Add a photo of the outfit" } },
+    hidden: true,
   }),
   // Cinema Studio grid and Soul Cast (used by those studios)
   o({
@@ -2475,7 +2707,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Tongyi",
     family: "z-image",
     kind: "image",
-    tagline: "One prompt, a whole contact sheet (2×2 to 4×4) that shares one look, cut into tiles · 14 GB GPU · Apache-2.0",
+    tagline: "One prompt, a whole contact sheet (2×2 to 4×4) that shares one look, cut into tiles · 14 GB GPU",
     routes: [comfy("t2i", "grid-zimage-contact-sheet", "outputs: the sheet, then the tiles")],
     options: {
       aspectRatios: ["16:9", "1:1", "9:16"],
@@ -2495,7 +2727,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Tongyi",
     family: "z-image",
     kind: "image",
-    tagline: "A cast member as a turnaround sheet (front, three-quarter, profile, back) plus the four views · 14 GB GPU · Apache-2.0",
+    tagline: "A cast member as a turnaround sheet (front, three-quarter, profile, back) plus the four views · 14 GB GPU",
     routes: [comfy("t2i", "soul-cast-sheet-zimage", "outputs: the sheet, then the four views")],
     options: { seed: true },
     defaults: {},
@@ -2708,7 +2940,7 @@ const originals: ModelDef[] = [
     // Sound in the cloud only (fal's generate_audio): the open LTX-2.3 graphs decode no audio, so no toggle there.
     engineOptions: { open: { audio: false } },
   },
-  // Fuobe Animation (package inbetweening): keyframe in-betweening. On your GPU one graph makes every gap between 2-10
+  // Fuobe Animation: keyframe in-betweening. On your GPU one graph makes every gap between 2-10
   // keyframes on one set of Wan 2.2 loaders (AniSora 3.2 high, lightx2v 4-step low), keeps every Nth frame per gap and plays
   // the film at 24 or 16 fps (src/lib/av/inbetween-graph.ts); in the cloud one hosted Wan 2.2 clip per gap with AniSora on
   // the high-noise expert, every frame at 16 fps, joined (createKeyframeFilm). Timing: src/lib/inbetween.ts.
@@ -2799,7 +3031,7 @@ const originals: ModelDef[] = [
   }),
   // Fuobe Evolution (O13): Higgsfield Evolution's Original (src/lib/catalog/evolution.ts plans the segments, the direction
   // frame and the sound; Video tools → Evolution is its studio). Wan 2.2 Fun VACE on both engines: the graph on your GPU,
-  // fal's hosted depth route in the cloud (since the owner's call of 2026-10-30; LTX-2.3 before). The change intensity is
+  // fal's hosted depth route in the cloud (since 2026-10-30; LTX-2.3 before). The change intensity is
   // the denoise the GPU graph starts from; fal's route has no such field, so in the cloud the change shapes only the
   // direction frame Evolution makes, and the composer has no Change control there.
   {
@@ -2999,6 +3231,35 @@ const faceMosaic: ModelDef = o({
   hidden: true,
 });
 
+/**
+ * The Watermark Remover app's two steps on the GPU (ComfyUI-Qwen-Watermark): Qwen3-VL finds the marks printed over a photo,
+ * then Qwen-Image 2.1 repairs only under the ones kept (or a brushed area). Hidden: the app's own page runs them.
+ */
+const watermark: ModelDef[] = [
+  o({
+    id: "oss-watermark-scan",
+    name: "Find watermarks",
+    vendor: "Qwen3-VL + ComfyUI",
+    family: "qwen",
+    kind: "text",
+    tagline: "Finds text, logos, stickers, mosaics and blocks printed over a photo, with their boxes",
+    routes: [{ ...comfy("watermark-scan", "image-watermark-scan-qwen3vl", "Qwen3-VL 8B int8, one pass, boxes in pixels"), unsized: true, maxImages: 1 }],
+    options: { maxImages: 1, promptOptional: true },
+    hidden: true,
+  }),
+  o({
+    id: "oss-watermark-remover",
+    name: "Watermark Remover",
+    vendor: "Qwen-Image 2.1 + ComfyUI",
+    family: "qwen",
+    kind: "image",
+    tagline: "Repairs only under the marks kept for removal; every other pixel stays as it was",
+    routes: [{ ...comfy("watermark-remove", "image-watermark-remove-qwen21", "Qwen-Image 2.1 int8 repair, a leftover check, a second pass when needed"), unsized: true, maxImages: 1 }],
+    options: { maxImages: 1, promptOptional: true, seed: true },
+    hidden: true,
+  }),
+];
+
 /** Tools that run entirely in the browser; recorded in the library like any other result. */
 const local: ModelDef[] = [
   {
@@ -3013,6 +3274,19 @@ const local: ModelDef[] = [
     options: {},
     hidden: true,
   },
+  // Relight: a photo blended with its relit picture at the chosen Intensity, kept from the browser.
+  {
+    id: "local-relight",
+    name: "Relight blend",
+    vendor: "Fuobe",
+    family: "local",
+    engine: "open",
+    kind: "image",
+    tagline: "The relit picture blended into the original in your browser",
+    routes: [{ op: "relight", provider: "local", endpoint: "webgl" }],
+    options: {},
+    hidden: true,
+  },
   // Ads Studio: a creative composited over its visual (headline, copy, CTA, logo in the brand fonts), saved from the browser.
   {
     id: "local-ad-compose",
@@ -3023,6 +3297,20 @@ const local: ModelDef[] = [
     kind: "image",
     tagline: "Headline, copy, CTA and logo set over the visual in your brand fonts, in your browser",
     routes: [{ op: "edit", provider: "local", endpoint: "canvas" }],
+    options: {},
+    hidden: true,
+  },
+  // Kinetic Motion: motion graphics (an animated end card, text templates) drawn by code in the brand's fonts and
+  // colours, rendered and encoded in the browser, then saved like any result.
+  {
+    id: "local-motion",
+    name: "Kinetic Motion",
+    vendor: "Fuobe",
+    family: "local",
+    engine: "open",
+    kind: "video",
+    tagline: "Motion graphics drawn in your browser in your brand fonts",
+    routes: [{ op: "motion", provider: "local", endpoint: "canvas" }],
     options: {},
     hidden: true,
   },
@@ -3080,4 +3368,4 @@ const local: ModelDef[] = [
   }),
 ];
 
-export const MODELS: ModelDef[] = [...originals, ...cloud, ...open, faceMosaic, ...local];
+export const MODELS: ModelDef[] = [...originals, ...cloud, ...open, faceMosaic, ...watermark, ...local];

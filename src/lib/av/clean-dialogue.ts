@@ -1,6 +1,6 @@
 import type { Engine, GenerationRequest } from "@/lib/catalog/types";
 import type { ToolPlan, ToolStep } from "./audio-tools";
-import { DBS_MODELS, dbsChannelsFor, separationPasses, splitTime, surroundSource, type DbsChannels, type SplitQuality } from "./split";
+import { CLOUD_SPLIT_PROBLEM, DBS_MODELS, dbLabel, dbsChannelsFor, planSplit, separationPasses, splitTime, stemLabel, surroundSource, type DbsChannels, type SplitInput, type SplitQuality } from "./split";
 
 /**
  * Audio → Split soundtrack → Clean up dialogue (DBS D5, docs/research/dbs-separation-7.md §9 D5): the speech in a noisy or
@@ -12,8 +12,8 @@ import { DBS_MODELS, dbsChannelsFor, separationPasses, splitTime, surroundSource
  *   result back with the stream-copy mux (oss-mux), the picture untouched. DBS takes out music and effects; measured on
  *   the CPU ComfyUI (15 s clips), steady hum mostly went too (50 Hz about 50 dB lower) but hiss only about 10 dB, so the
  *   page points to Clean up voice (RE-USE, src/lib/av/clean-voice.ts) and the cloud cleaners for that.
- * - Cloud: hosted speech cleaners under their own names (DBS isn't hosted, and SAM Audio in its place is the owner's call,
- *   not taken: docs/handoff/owner-decisions.json samAudioCloud false), so the cloud gives the clean voice with nothing
+ * - Cloud: hosted speech cleaners under their own names (DBS isn't hosted, and SAM Audio
+ *   isn't used in its place), so the cloud gives the clean voice with nothing
  *   under it: VEED Clean Audio (takes a video's file itself), DeepFilterNet 3 (audio only: a video's soundtrack is
  *   extracted first) and ElevenLabs isolation. A video gets the voice back with fal's merge-audio-video.
  */
@@ -227,4 +227,63 @@ export function planCleanDialogue(i: CleanDialogueInput): CleanDialoguePlan {
 /** About how long the open engine takes (DBS's split; the remix and mux add a second or two). */
 export function cleanDialogueTime(o: { seconds: number; quality: SplitQuality; mode: DbsChannels; channels?: number | null; device?: string | null }): { low: number; high: number } {
   return splitTime(o);
+}
+
+// ---------------------------------------------------------------------------
+// Any remix at set levels on the same graph (Assist and MCP's split_soundtrack with parts or levels)
+
+/** The feature a remix is saved under (one mixed file, not Split soundtrack's four stems). */
+export const REMIX_FEATURE = "audio-remix";
+/** The three stems graph C sets the level of. */
+export type RemixStem = "voice" | "music" | "effects";
+export const REMIX_STEMS: RemixStem[] = ["voice", "music", "effects"];
+export const REMIX_MIN_DB = -60;
+export const REMIX_MAX_DB = 12;
+const REMIX_PARAM: Record<RemixStem, "voiceDb" | "musicDb" | "effectsDb"> = { voice: "voiceDb", music: "musicDb", effects: "effectsDb" };
+
+export interface RemixInput extends SplitInput {
+  /** The stems in the remix (default: all three). */
+  keep?: RemixStem[];
+  /** Each kept stem's level in dB (default 0, whole dB, REMIX_MIN_DB…REMIX_MAX_DB). */
+  levels?: Partial<Record<RemixStem, number>>;
+}
+
+export interface RemixPlan extends ToolPlan {
+  /** The level each stem goes in at (OFF_DB: left out). */
+  levels: Record<RemixStem, number>;
+  mode: DbsChannels;
+}
+
+/** "Dialogue, Music −12 dB": what a remix keeps, in words. */
+export function remixWords(levels: Record<RemixStem, number>): string {
+  const kept = REMIX_STEMS.filter((s) => levels[s] > OFF_DB).map((s) => `${stemLabel(s)}${levels[s] !== 0 ? ` ${dbLabel(levels[s])}` : ""}`);
+  return kept.length ? kept.join(", ") : "Silence";
+}
+
+/** One job on graph C (oss-dbs-remix) that returns one mixed file; throws what's in the way. Open engine only. */
+export function planRemix(i: RemixInput): RemixPlan {
+  if (i.engine === "cloud") throw new Error(CLOUD_SPLIT_PROBLEM);
+  if (!i.media) throw new Error(`Add the ${i.kind === "video" ? "video" : "audio"} to remix`);
+  const keep = new Set(i.keep?.length ? i.keep : REMIX_STEMS);
+  const levels = Object.fromEntries(
+    REMIX_STEMS.map((s) => {
+      const db = i.levels?.[s];
+      return [s, keep.has(s) ? (typeof db === "number" && Number.isFinite(db) ? Math.max(REMIX_MIN_DB, Math.min(REMIX_MAX_DB, Math.round(db))) : 0) : OFF_DB];
+    }),
+  ) as Record<RemixStem, number>;
+  if (REMIX_STEMS.every((s) => levels[s] === OFF_DB)) throw new Error("Keep at least one of dialogue, music or effects");
+  // Graph C is graph A's split with the three stems mixed back: the same models, channels and notes.
+  const split = planSplit(i);
+  const req = split.steps[0].request;
+  const words = remixWords(levels);
+  const title = `Remix · ${words} · ${i.name?.trim() || (i.kind === "video" ? "video soundtrack" : "soundtrack")}`;
+  const extra = { ...req.params?.extra, ...Object.fromEntries(REMIX_STEMS.map((s) => [REMIX_PARAM[s], levels[s]])) };
+  return {
+    steps: [{ key: "remix", request: { ...req, modelId: OPEN_MODEL, feature: REMIX_FEATURE, title, batchTitle: title, params: { ...req.params, extra }, step: { label: `Remix · ${words}`, index: 0, of: 1 } } }],
+    length: split.length,
+    levels,
+    mode: split.mode,
+    summary: `Splits ${i.kind === "video" ? "the video's soundtrack" : "it"} into dialogue, music and effects and mixes them back as one file: ${words}.`,
+    notes: [...split.notes.filter((n) => !n.startsWith("Dialogue comes out clean")), "A mix that would go over full scale comes out a little quieter as a whole."],
+  };
 }

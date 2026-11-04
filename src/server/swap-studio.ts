@@ -1,8 +1,8 @@
 import "server-only";
-import { originalSoundProblem, sameSound, soundOf, type SoundChoice } from "@/lib/av/original-sound";
+import { originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
-import { ANCHOR_MODELS, anchorModel, CHARACTER_SWAP, characterLicenceLine, h3Canvas, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
+import { ANCHOR_MODELS, anchorModel, CHARACTER_SWAP, h3Canvas, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
 import { scalePoints } from "@/lib/catalog/remove-object";
 import type { PlanStep } from "@/lib/catalog/shorts";
 import {
@@ -729,7 +729,7 @@ function prepareClipQuietly(projectId: string, clipId: string): void {
 // ---------------------------------------------------------------------------
 // Transcript
 
-export function transcribe(projectId: string, clipId: string, voiceFirst = false): SwapProject {
+export function transcribe(projectId: string, clipId: string, opts: { cleanVoiceFirst?: boolean } = {}): SwapProject {
   const p = advanceProject(projectId);
   mustMatchMode(p.engine);
   const clip = mustClip(p, clipId);
@@ -738,7 +738,7 @@ export function transcribe(projectId: string, clipId: string, voiceFirst = false
   mustOffer(modelId, p.engine, "type each shot's words instead");
   const busy = look1(clip.transcript?.genId);
   if (busy && ACTIVE.has(busy.status)) throw new ShortsError("The clip is being transcribed", 409);
-  const pipe = run(planTranscribe(clip, p.engine, voiceFirst));
+  const pipe = run(planTranscribe(clip, p.engine, opts));
   const genId = pipe.byKey.transcribe.id;
   return mutate(projectId, (cur) => mapClip(cur, clipId, (c) => ({ ...c, transcript: { genId, modelId, cues: null, voices: c.transcript?.voices ?? {} } })));
 }
@@ -997,20 +997,18 @@ export async function stopTake(projectId: string, body: z.infer<typeof TakeRefSc
 // Assembly
 
 /** The clip with its chosen takes over the original timeline and its own sound (the result goes to the Library). */
-export function assemble(projectId: string, clipId: string, sound?: SoundChoice): SwapProject {
+export function assemble(projectId: string, clipId: string, opts: { originalSound?: OriginalSound } = {}): SwapProject {
   const p = advanceProject(projectId);
   mustMatchMode(p.engine);
   const clip = mustClip(p, clipId);
-  const soundProblem = originalSoundProblem(p.engine, sound);
-  if (soundProblem) throw new ShortsError(soundProblem, 422);
-  // Original sound: Everything is stored as nothing (as before); another choice is kept with the assembly.
-  const choice = clip.source.hasAudio && soundOf(sound) !== "everything" ? sound : undefined;
   const look = lookup();
   const found = assemblyPieces(p, clip);
   if ("problem" in found) throw new ShortsError(found.problem, 422);
   const takes = assemblyTakes(found.pieces);
+  // What of the clip's sound goes back: the cloud puts it all back (DBS runs on your GPU).
+  const sound = originalSoundOn(opts.originalSound, p.engine);
   const last = look(clip.assembly?.genId);
-  if (clip.assembly && last && last.status !== "failed" && last.status !== "canceled" && JSON.stringify(clip.assembly.takes) === JSON.stringify(takes) && sameSound(clip.assembly.sound, choice)) {
+  if (clip.assembly && last && last.status !== "failed" && last.status !== "canceled" && JSON.stringify(clip.assembly.takes) === JSON.stringify(takes) && (clip.assembly.originalSound ?? "everything") === sound) {
     throw new ShortsError(ACTIVE.has(last.status) ? "This clip is being assembled" : "Already assembled with these takes — download it below", 409);
   }
   if (p.engine === "open" && !clip.normalized?.url) throw new ShortsError("The clip is still being prepared at 24 fps — wait for it", 409);
@@ -1024,7 +1022,7 @@ export function assemble(projectId: string, clipId: string, sound?: SoundChoice)
     existing[`take-${piece.take.id}`] = g!.id;
     return url;
   };
-  const plan = planAssembly({ engine: p.engine, clip, pieces: found.pieces, videoOf, ...(choice && { sound: choice }) });
+  const plan = planAssembly({ engine: p.engine, clip, pieces: found.pieces, videoOf, originalSound: sound });
   // A silent clip's cloud assembly ends on its silence: the WAV is written now (silenceRef, as Genjutsu and Canvas do).
   const withSilence = silenceWriter();
   // The takes count as steps already made: a demo join of real takes is refused.
@@ -1032,7 +1030,7 @@ export function assemble(projectId: string, clipId: string, sound?: SoundChoice)
     plan.steps.map((s) => ({ ...s, request: withSilence(s.request) })),
     existing,
   );
-  const assembly = { genId: pipe.byKey[plan.final].id, stepIds: pipe.items.map((g) => g.id), takes, createdAt: Date.now(), ...(choice && { sound: choice }) };
+  const assembly = { genId: pipe.byKey[plan.final].id, stepIds: pipe.items.map((g) => g.id), takes, ...(sound !== "everything" && { originalSound: sound }), createdAt: Date.now() };
   return mutate(projectId, (cur) => mapClip(cur, clipId, (c) => ({ ...c, assembly })));
 }
 
@@ -1224,7 +1222,7 @@ export function estimateProject(projectId: string): StudioEstimate {
   const p = advanceProject(projectId);
   const look = lookup();
   const engine = p.engine;
-  const out: StudioEstimate = { engine, demo: false, free: engine === "open", segments: {}, problems: {}, shots: {}, project: { costUsd: 0, segments: 0 }, assembly: {}, transcribe: {}, cleanVoice: {}, mask: {}, sharpen: {}, anchors: [], notes: [] };
+  const out: StudioEstimate = { engine, demo: false, free: engine === "open", segments: {}, problems: {}, shots: {}, project: { costUsd: 0, segments: 0 }, assembly: {}, transcribe: {}, mask: {}, sharpen: {}, anchors: [], notes: [] };
   const track = (r: { demo: boolean }) => {
     if (r.demo) out.demo = true;
   };
@@ -1236,9 +1234,6 @@ export function estimateProject(projectId: string): StudioEstimate {
       const t = price(planTranscribe(working, engine));
       track(t);
       out.transcribe[clip.id] = t.costUsd;
-      // "Clean the voice first": what it adds (ElevenLabs Voice Isolation in the cloud; free on your GPU).
-      const c = price(planTranscribe(working, engine, true));
-      out.cleanVoice[clip.id] = c.costUsd === null || t.costUsd === null ? null : Math.round((c.costUsd - t.costUsd) * 10000) / 10000;
     }
     for (const [si, shot] of clip.shots.entries()) {
       if (shot.mode !== "generate") continue;
@@ -1331,14 +1326,13 @@ function assemblyPiecesForPrice(p: SwapProject, clip: SwapClip) {
   return out;
 }
 
-/** What the page says about each engine (licences as information). */
+/** What the page says about each engine. */
 export function studioNotes(engine: Engine): string[] {
   if (engine === "open") {
     return [
       WORKERS_NOTE,
       "Needs H3 Relay 2.0's nodes on your ComfyUI (scripts/comfy/install-comfyui.sh with H3_RELAY=1) and a 24 GB GPU with offloading; the masks need SAM 3.1",
       "Each segment is one H3 Relay pass with the approved mask, its anchor and the previous take's last frames as continuation history (a lossless 16-bit FFV1 master, about 3 MB a frame at 1 MP: ComfyUI takes uploads up to 100 MB unless started with a higher --max-upload-size, so keep history to about 30 frames or raise it)",
-      characterLicenceLine("open", STUDIO_MODELS.open.swap),
     ];
   }
   return [
@@ -1346,7 +1340,6 @@ export function studioNotes(engine: Engine): string[] {
     "fal's H3 reads 2–15 s of the clip a call and bills whole seconds (5–15 s): a segment runs 2–15 s",
     "A continuing segment starts from the previous take's last frame — fal's H3 takes no continuation history. H3 makes whole seconds (at least 5), so each take is trimmed back to its segment",
     "SAM 3.1 on fal marks the person from your clicks or words, for review; the swap itself doesn't read the mask",
-    characterLicenceLine("cloud", STUDIO_MODELS.cloud.swap),
   ];
 }
 

@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useSoulFinish } from "@/components/studio/soul-finish";
 import { TurnaroundButton } from "@/components/turnaround/turnaround-dialog";
-import { useSaveElement, useStatus } from "@/lib/api";
+import { useLikelyVisitor, useModelAccess, useSaveElement, useStatus } from "@/lib/api";
 import { getModel } from "@/lib/catalog";
 import {
   CAST_LOOK,
@@ -36,10 +36,12 @@ import {
 import { soulLook } from "@/lib/catalog/soul";
 import { sheetPictures } from "@/lib/catalog/turnaround";
 import { finishedUrl } from "@/lib/soul-post";
+import { offered } from "@/lib/model-access";
 import { QMA_MODEL } from "@/lib/qma";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { useCinemaGenerate, useCinemaItems } from "./hooks";
 import { placeholdersOn } from "@/lib/demo-mode";
@@ -198,10 +200,11 @@ function useBuilderRun(projectId: string) {
   return { generate, results, setIds, current };
 }
 
-function CostLabel({ plan }: { plan: { costUsd: number | null } }) {
+/** A builder's price: "Free · your GPU" on the GPU, like every other price on it. */
+function CostLabel({ plan }: { plan: { costUsd: number | null; model: { engine: Engine } } }) {
   const status = useStatus().data;
   const demo = placeholdersOn(status?.demoMode);
-  return <span className="font-mono text-[12px] whitespace-nowrap text-muted-foreground">{demo ? "Placeholder · free" : plan.costUsd === 0 ? "Free" : plan.costUsd != null ? `≈ ${formatCost(plan.costUsd)}` : ""}</span>;
+  return <span className="font-mono text-[12px] whitespace-nowrap text-muted-foreground">{demo ? "Placeholder · free" : plan.costUsd === 0 ? (plan.model.engine === "open" ? "Free · your GPU" : "Free") : plan.costUsd != null ? `≈ ${formatCost(plan.costUsd)}` : ""}</span>;
 }
 
 function SaveElement({ kind, defaultName, picked, description, onSaved }: { kind: "character" | "location"; defaultName: string; picked: string[]; description: string; onSaved: () => void }) {
@@ -273,7 +276,7 @@ function SoulCast({ projectId, folderId, engine, context, brief, onOpenChange }:
         <DialogTitle className="font-heading text-[26px] font-normal">Build your cast</DialogTitle>
         <DialogDescription>Build your film&apos;s cast from scratch - genre, budget, appearance, and every detail in between.</DialogDescription>
       </DialogHeader>
-      <div className="scrollbar-none -mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist">
+      <TabRow role="tablist" aria-label="Cast details" follow>
         {SOUL_CAST_TABS.map((t) => {
           const filled = SOUL_CAST_FIELDS.some((f) => f.tab === t && visible[f.key] !== undefined && !(f.default !== undefined && visible[f.key] === f.default));
           return (
@@ -283,14 +286,15 @@ function SoulCast({ projectId, folderId, engine, context, brief, onOpenChange }:
               role="tab"
               aria-selected={tab === t}
               onClick={() => setTab(t)}
-              className={cn("inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 text-[12.5px] font-medium", tab === t ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-accent")}
+              className={TAB_PILL}
+              {...onAttr(tab === t)}
             >
               {t}
               {filled && tab !== t && <span className="size-1.5 rounded-full bg-primary" />}
             </button>
           );
         })}
-      </div>
+      </TabRow>
       <div className="min-h-[200px] space-y-4">
         {fields.map((f) => (
           <Field key={f.key} f={f} values={values} set={set} />
@@ -394,9 +398,12 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
   const [prompt, setPrompt] = useState("");
   const [batch, setBatch] = useState(2);
   const [picked, setPicked] = useState<string[]>([]);
-  // Other views on your GPU: the Multiple-Angles default, or QMA · 96 views (qma-angles), when this install offers it.
+  // Other views on your GPU: the Multiple-Angles default, or QMA · 96 views, when this install offers it.
   const [qma, setQma] = useState(false);
-  const qmaOffered = engine === "open" && !!getModel(QMA_MODEL);
+  const access = useModelAccess();
+  const qmaOffered = engine === "open" && !!getModel(QMA_MODEL) && offered(access, QMA_MODEL, "open");
+  // The hint about your GPU is for the studio's own install: guests and accounts run in the cloud.
+  const visitor = useLikelyVisitor();
   const { generate, results, setIds, current } = useBuilderRun(projectId);
   const chosen = picked.map(current);
   const input = { engine, mode: "image" as const, action: "location" as const, prompt, settings, batch };
@@ -470,7 +477,7 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
                   QMA · 96 views
                 </label>
               )}
-              {engine === "cloud" && <span className="mr-1 text-[11.5px] text-muted-foreground">(QMA · 96 views runs on your GPU)</span>}
+              {engine === "cloud" && !visitor && <span className="mr-1 text-[11.5px] text-muted-foreground">(QMA · 96 views runs on your GPU)</span>}
               {LOCATION_VIEWS.map((v) => (
                 <button key={v.id} type="button" onClick={() => run({ view: v.id, url: chosen[0] })} className="h-7 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent">
                   {v.name}

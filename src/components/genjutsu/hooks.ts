@@ -1,12 +1,12 @@
 "use client";
 
+import type { OriginalSound } from "@/lib/av/original-sound";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CharacterOptions } from "@/lib/catalog/character-swap";
-import type { GenjutsuLook, GenjutsuMode, GenjutsuTarget, GenjutsuTier, MakerSource } from "@/lib/catalog/genjutsu";
+import type { FinishOptions, GenjutsuLook, GenjutsuMode, GenjutsuTarget, GenjutsuTier, MakerSource, ObjectEdit, PictureOptions } from "@/lib/catalog/genjutsu";
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
 import { useDebounced } from "@/components/faceless/hooks";
 import { send } from "@/components/shorts/hooks";
-import type { SoundChoice } from "@/lib/av/original-sound";
 
 /** React Query hooks for /api/genjutsu/**. */
 
@@ -31,8 +31,12 @@ export interface GenjutsuBody {
   character?: CharacterOptions;
   /** Hard cuts the browser found in the clip (seconds): the server warns when the part has one. */
   cuts?: number[];
-  /** Original sound (unset = Everything). */
-  sound?: SoundChoice;
+  /** Object swap on Scene edit, From picture, Finish. */
+  object?: ObjectEdit;
+  picture?: PictureOptions;
+  finish?: FinishOptions;
+  /** What of the clip's sound goes back where it is put back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }
@@ -85,9 +89,17 @@ export function useDescribeCharacter() {
   return useMutation({ mutationFn: (b: { engine: Engine; image: string }) => send<{ description: string }>("/api/genjutsu/describe", "POST", b) });
 }
 
+/** From picture's "What happens": the describer starts on the part (the page waits for its text). */
+export function useDescribeScene() {
+  return useMutation({
+    mutationFn: (b: { engine: "open"; source: { url: string; duration?: number }; range: { start: number; end: number }; frame?: string; ownPerson?: boolean }) =>
+      send<{ id: string; modelId: string }>("/api/genjutsu/scene", "POST", b),
+  });
+}
+
 /** The clip's words (one transcription; the page takes the part's lines from its cues). */
 export function useTranscribeClip() {
-  return useMutation({ mutationFn: (b: { engine: Engine; source: { url: string; duration?: number }; voiceFirst?: boolean }) => send<{ id: string; modelId: string }>("/api/genjutsu/transcribe", "POST", b) });
+  return useMutation({ mutationFn: (b: { engine: Engine; source: { url: string; duration?: number }; cleanVoiceFirst?: boolean }) => send<{ id: string; modelId: string }>("/api/genjutsu/transcribe", "POST", b) });
 }
 
 /** Waits for one generation to finish (polling; the page's helpers that fill a field from it). */

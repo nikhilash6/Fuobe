@@ -46,8 +46,6 @@ export interface RunFacts {
   inputs: { image: number; video: number; audio: number };
   lane: string | null;
   providerUsd: number | null;
-  /** The other steps the run makes beside `model` (Clean the voice first's clean voice and music put back), when it makes any. */
-  steps?: { model: string; op: string }[];
 }
 
 export interface QueueFacts {

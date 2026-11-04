@@ -167,6 +167,12 @@
     "error": null,
     "at": "2026-10-17T21:02:06.175Z"
   },
+  "head-swap-qwen-image-21": {
+    "sha256": "1bc874f1ec9af58e44784bbcf2c49c4f5616f746dd909baa76419c04fadd78ac",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T09:40:16.333Z"
+  },
   "hidream-i1-dev-t2i": {
     "sha256": "19c70e814c0c92a3a503bad43fe5cd2db46bc25551651cb181952d033a801d11",
     "validated": true,
@@ -209,6 +215,12 @@
     "error": null,
     "at": "2026-10-17T21:02:04.747Z"
   },
+  "image-to-3d-idol": {
+    "sha256": "6acf330600f067bd2a218ff1fc7013328afb66c3eaf653e813cdb66a8e64ef3d",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T12:30:52.275Z"
+  },
   "image-to-3d-pixal3d": {
     "sha256": "581d29c7322dbb089db04cef398428c1ec3ba13208f020a39eaadb8d23ce5a6f",
     "validated": true,
@@ -250,6 +262,24 @@
     "validated": true,
     "error": null,
     "at": "2026-10-22T18:38:56.968Z"
+  },
+  "image-watermark-remove-qwen21": {
+    "sha256": "8a3903e075ff7fa3904d357fa7cf39c9c95b1497fe65e5ff18948713a4d8d15b",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T17:49:58.936Z"
+  },
+  "image-watermark-remove-qwen21-brush": {
+    "sha256": "24dfd9abc40c254d49d89325074855757c7ec0c55b5a8757f57e0ab92196e689",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T17:50:00.189Z"
+  },
+  "image-watermark-scan-qwen3vl": {
+    "sha256": "ae2e680d64db0ee820bad7280a7556d5b419307eab37c70cffef4f644c924815",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T17:49:58.301Z"
   },
   "infinitetalk-native": {
     "sha256": "816327852679ebc006a3842668c35a0c9127f724690abc4d58d7e820d2cf0de5",
@@ -443,6 +473,18 @@
     "error": null,
     "at": "2026-10-23T00:12:19.538Z"
   },
+  "outfit-swap-qwen-image-21": {
+    "sha256": "a26aa4ce786c3eadf9df1f43143fcfaeeda26dafd76f466b316bab1b4d43c8ee",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T09:52:23.581Z"
+  },
+  "outfit-swap-qwen-image-21-text": {
+    "sha256": "2bd851cceee37da404539dac44da7a0bc5f220777e8bafc12e97de01235bd9ad",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T09:52:24.551Z"
+  },
   "palette-transfer-image": {
     "sha256": "3287bd729386b870c9797679512d46526e17e66b09736029ca55867c6670e43f",
     "validated": true,
@@ -472,6 +514,12 @@
     "validated": true,
     "error": null,
     "at": "2026-11-02T01:11:11.304Z"
+  },
+  "qwen-image-21-recolor": {
+    "sha256": "c774489d3215d047d47e065b375c506c98ef9593f1c57953b67b86a8e3afdccd",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T08:03:14.171Z"
   },
   "qwen-image-2512-t2i": {
     "sha256": "c18da4a3488120bdcee722e4ae7d187385544ec4805753e7dae6946ddb6f6ba5",
@@ -526,6 +574,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T23:33:15.071Z"
+  },
+  "restore-qwen-image-21": {
+    "sha256": "70a711896b815722bee4e62dfda71b7eec7cbb7203dd411f4e169ff407a13705",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T09:09:43.531Z"
   },
   "scene-mesh-moge": {
     "sha256": "5557989f94b8b498adbfc576b7b85a54be71892de14180a8aa7e607e90137c8e",
@@ -616,6 +670,12 @@
     "validated": false,
     "error": "HTTP 400: missing_node_type: Node 'AuK Model Loader (AuK-Flash)' not found. The custom node may not be installed. (Node ID '#2')",
     "at": "2026-11-02T15:31:23.452Z"
+  },
+  "steam-it-qwen-image-21": {
+    "sha256": "e2b94b6cf0105022ee0b93d25e9072eaef8892cf0581d6b296ff14d2aa8ec3e2",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-03T08:52:10.530Z"
   },
   "still-to-clip": {
     "sha256": "cd21914faa22195c7cf3fd4346c20ba1306d434bf565456ac6bfaa24743d08e3",

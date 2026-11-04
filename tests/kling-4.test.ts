@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Kling 4.0 in the cloud (build package nm10-kling-4): fal's four kling/v4 endpoints (API open since round 4 held them
@@ -9,10 +8,9 @@ import { afterAll, describe, expect, it } from "vitest";
  * (docs/research/paid-model-apis-4.json, re-read 2026-11-01). No paid call is made: demo mode and pure functions only.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-kling-4-"));
+const dir = tempDir("fuobe-kling-4-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const { getModel, getPreset, MODELS, modelsFor } =
   await import("@/lib/catalog");

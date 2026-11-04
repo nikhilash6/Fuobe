@@ -1,4 +1,4 @@
-// Skills W4 in a real browser (demo mode: no keys, ComfyUI unreachable). A skill with a recipe is seeded over the API.
+// A scheduled task that runs a saved skill, in a real browser (demo mode: no keys, ComfyUI unreachable). A skill with a recipe is seeded over the API.
 // On Scheduled, "Schedule a task" → What to run: A skill → pick it: its inputs come from its Run form, a file input
 // starts on "Newest upload (when it runs)" and can take a file instead, and the price shows before saving. Saved, the
 // task reads "/<skill> Product photo: your newest image upload · …"; Run now makes a chat whose plan waits for approval

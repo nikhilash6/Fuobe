@@ -13,16 +13,15 @@
 </p>
 
 <p align="center">
-  <a href="https://fuobe.com"><b>Website</b></a> &nbsp;·&nbsp;
-  <a href="docs/media/fuobe-demo.mp4"><b>Demo video</b></a> &nbsp;·&nbsp;
-  <a href="#documentation"><b>Docs</b></a> &nbsp;·&nbsp;
-  <a href="#quick-start"><b>Quick start</b></a>
+  <a href="https://fuobe.com"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-website-on-dark.svg"><img src="docs/media/buttons/nav-website.svg" alt="fuobe.com" width="111"></picture></a>
+  <a href="#documentation"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-docs-on-dark.svg"><img src="docs/media/buttons/nav-docs.svg" alt="Docs" width="75"></picture></a>
+  <a href="#quick-start"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/nav-quick-start-on-dark.svg"><img src="docs/media/buttons/nav-quick-start.svg" alt="Quick start" width="111"></picture></a>
 </p>
 
 <br>
 
 <p align="center">
-  <img src="docs/media/gifs/hero-clips.gif" alt="Clips made in Fuobe and rendered locally on ComfyUI" width="100%">
+  <img src="docs/media/gifs/hero-clips.gif" alt="The Fuobe home page: every kind of media, each tile opening the studio that makes it" width="100%">
 </p>
 
 <p align="center">
@@ -31,6 +30,73 @@
   Every preview clip and still was rendered locally on ComfyUI, on one RTX 5090.
 </p>
 
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="docs/media/fuobe-short.mp4"><img src="docs/media/short-poster.jpg" alt="Watch the 46-second Fuobe launch film" width="100%"></a><br>
+      <a href="docs/media/fuobe-short.mp4"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/watch-launch-film-on-dark.svg"><img src="docs/media/buttons/watch-launch-film.svg" alt="Watch the launch film, 46 s" width="204"></picture></a>
+    </td>
+    <td align="center" width="50%">
+      <a href="docs/media/fuobe-demo.mp4"><img src="docs/media/demo-poster.jpg" alt="Watch the full Fuobe film" width="100%"></a><br>
+      <a href="docs/media/fuobe-demo.mp4"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/watch-full-film-on-dark.svg"><img src="docs/media/buttons/watch-full-film.svg" alt="Watch the full film, 3 min" width="204"></picture></a>
+    </td>
+  </tr>
+</table>
+
+## Showcase
+
+Real covers from the galleries. Every clip and still below was rendered locally on ComfyUI.
+
+<p align="center">
+  <a href="https://fuobe.com/motions"><img src="docs/media/gifs/showcase-motions.gif" alt="Twelve Fuobe camera motions playing side by side: Dolly In, Catwalk, Glam, Crane Up, Slow Motion, Super Dolly In, Arc Left, Lazy Susan, Crane Over the Head, Snorricam, Aerial Pullback and Crash Zoom In" width="100%"></a>
+</p>
+
+<p align="center">
+  <b>108 camera motions.</b> Dollies, cranes, arcs, orbits, drones and crash zooms; mix any two in one clip.<br>
+  <a href="https://fuobe.com/motions"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/browse-motions-on-dark.svg"><img src="docs/media/buttons/browse-motions.svg" alt="Browse all 108 motions" width="223"></picture></a>
+</p>
+
+<br>
+
+<p align="center">
+  <a href="https://fuobe.com/effects"><img src="docs/media/gifs/showcase-effects.gif" alt="Twelve Fuobe effects playing side by side: Sand Storm, Outfit Switch, Wind to Face, Levitation, Nature Bloom, Lens Flare, Dirty Lens, Train Rush, Display Transition, Pearl Earring, Blue Depth and Film Colors" width="100%"></a>
+</p>
+
+<p align="center">
+  <b>255 effects.</b> Weather, transitions, lens looks, film grades and transformations, on any photo or clip.<br>
+  <a href="https://fuobe.com/effects"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/browse-effects-on-dark.svg"><img src="docs/media/buttons/browse-effects.svg" alt="Browse all 255 effects" width="218"></picture></a>
+</p>
+
+<br>
+
+<p align="center">
+  <a href="https://fuobe.com/apps"><img src="docs/media/gifs/showcase-apps.gif" alt="Twelve Fuobe apps showing their results: Outfit Swap, Head Swap, Restore Photo, Photo to 3D, Relight, Colorize, Tap to Recolor, Steam It, Upscale, Product Shot, Makeup Studio and Hairstyle Try-On" width="100%"></a>
+</p>
+
+<p align="center">
+  <b>132 apps.</b> One-click tools for fashion, portraits, products and ads: swap, restore, relight, recolor, upscale and more.<br>
+  <a href="https://fuobe.com/apps"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/browse-apps-on-dark.svg"><img src="docs/media/buttons/browse-apps.svg" alt="Browse all 132 apps" width="200"></picture></a>
+</p>
+
+<br>
+
+<p align="center">
+  <a href="https://fuobe.com/live-edit"><img src="docs/media/gifs/showcase-live-edit.gif" alt="Live edit: a portrait changes step by step as a prompt is typed, from evening makeup to a candlelit ballroom" width="80%"></a>
+</p>
+
+<p align="center">
+  <b>Live edit.</b> The picture changes as you type, on your own GPU. Here, ten changes to one photo in one growing prompt.<br>
+  <a href="https://fuobe.com/live-edit"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/buttons/try-live-edit-on-dark.svg"><img src="docs/media/buttons/try-live-edit.svg" alt="Try Live edit" width="147"></picture></a>
+</p>
+
+### New this week
+
+- **A new Home.** One first screen shows every kind of media (film, stills, sound, 3D, live edit and whole pipelines), and each tile opens the studio that makes it.
+- **Grouped menus.** Create, Studios, Apps, Motions & effects and Canvas show everything inside them, grouped by what you want to make, with a cover on each.
+- **Kinetic Motion.** Motion graphics in your brand, set in your exact words and drawn live in the browser, with presets, timing and versions.
+- **Marketing templates.** Ten text templates drawn live in your brand, next to product shots, UGC, TikTok, ads and posters.
+- **New apps on your GPU:** Outfit Swap, Head Swap, Restore Photo, Steam It, Tap to Recolor, Photo to 3D and Any Angle, plus MiniMax H3 motion transfer.
+
 <br>
 
 ## Features
@@ -38,14 +104,26 @@
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/media/gifs/galleries.gif" alt="Browsing camera motions, effects and apps" width="100%">
-      <h3>Motions, effects and apps</h3>
-      108 camera motions (mix any two), 255 effects and 125 apps, ready for a photo or a prompt.
+      <img src="docs/media/gifs/galleries.gif" alt="The grouped Create, Studios, Apps and Motions &amp; effects menus" width="100%">
+      <h3>29 studios, 132 apps, 363 effects and moves</h3>
+      108 camera motions (mix any two), 255 effects and 132 apps, grouped in the menus by what you want to make.
     </td>
     <td width="50%" valign="top">
       <img src="docs/media/gifs/before-after.gif" alt="A photo before and after a Fuobe edit" width="100%">
       <h3>Before and after</h3>
       Turn one photo into a new scene, look or shot with an app, an effect or an edit in plain words.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/media/gifs/kinetic.gif" alt="Kinetic Motion templates playing in the browser" width="100%">
+      <h3>Kinetic Motion</h3>
+      Headlines, big numbers, logo end cards and five-star quotes, animated in your brand and your exact words.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/media/gifs/marketing.gif" alt="Browsing the Marketing templates" width="100%">
+      <h3>Marketing templates</h3>
+      Product shots, UGC, TikTok, ads, posters and marketplace listings, each ready for your product and brand kit.
     </td>
   </tr>
   <tr>

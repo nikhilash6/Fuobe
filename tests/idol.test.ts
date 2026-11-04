@@ -7,7 +7,7 @@ import type { Manifest } from "@/lib/comfy";
 import { licenceTerms, workflowLicence } from "@/lib/licences";
 
 /**
- * Idol 3D (idol-1, docs/research/idol-9.md §5.5): the library entry, the graph (a copy of TripoSplat's with Idol's
+ * Idol 3D (docs/research/idol-9.md §5.5): the library entry, the graph (a copy of TripoSplat's with Idol's
  * files, its reference sampler, the core-node photo crop and the haze threshold), its licence notice and its name.
  */
 

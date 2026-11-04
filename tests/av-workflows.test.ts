@@ -1,12 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // The av-tools ComfyUI workflows (Extract frame, video-synced Foley, Product shot), bound for real.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-av-workflows-"));
+const dir = tempDir("fuobe-av-workflows-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 
@@ -15,7 +13,6 @@ const { getModel } = await import("@/lib/catalog");
 const { computeFrames } = await import("@/lib/comfy");
 const { frameParams } = await import("@/lib/av/frames");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const clip: MediaInfo = { container: "mp4", hasVideo: true, hasAudio: true, duration: 6, videoDuration: 6, width: 640, height: 360, fps: 30, frames: 180 };
 

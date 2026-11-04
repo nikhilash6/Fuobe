@@ -474,14 +474,14 @@ export const NODE_PACKS: NodePack[] = [
   pack("ComfyUI-ThinkSound_Wrapper", "https://github.com/ShmuelRonen/ComfyUI-ThinkSound_Wrapper", NO_FILE("; the ThinkSound weights are Apache-2.0"), "isolated"),
   pack("fuobe-live", "https://github.com/workingprototype/Fuobe", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "Fuobe's own live edit nodes (fuobe_live.py, shipped with Fuobe): a loader, a cached reference encode, a crop, a paste-back and a socket save. The Qwen-Image 2.1 weights and the DMD2 LoRA they run are non-commercial" }),
   pack("ausboss-nodes", "https://github.com/ausboss/ComfyUI-AusBoss", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "Crop For Inpaint, Stitch Inpaint and Crop + Rotate + Pad for Qwen-Image 2.1's inpaint and expand; MIT code. The Qwen-Image 2.1 weights they run are non-commercial" }),
-  // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): recoilme's Zen Image Edit nodes, LICENSE Apache-2.0 at the pinned commit.
+  // Qwen-Image 2.1 on a 16 GB card: recoilme's Zen Image Edit nodes, LICENSE Apache-2.0 at the pinned commit.
   pack("zen-image-edit-comfyui", "https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d", {
     name: "Apache-2.0",
     class: "commercial",
     url: SPDX("Apache-2.0"),
     note: "Zen Image Edit's adapter loader and text encode: Qwen-Image 2.1 on the Qwen3.5-0.8B encoder (Apache-2.0) and a fusion adapter. The adapter and the Qwen-Image 2.1 weights are non-commercial (Qwen Research License)",
   }),
-  // Design a voice (nm10-voice-design), pinned in workflows/comfyui/packs.json: LICENSE files read at the pinned commits.
+  // Design a voice, pinned in workflows/comfyui/packs.json: LICENSE files read at the pinned commits.
   pack("ComfyUI-QwenTTS", "https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293", {
     ...GPL,
     note: "Qwen3-TTS voice design and voice clone nodes; GPL-3.0 code. The Qwen3-TTS 1.7B weights it downloads are Apache-2.0",
@@ -492,20 +492,20 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "VoxCPM2 text to speech (voice design) and voice clone nodes; Apache-2.0 code. The VoxCPM2 weights it downloads are Apache-2.0",
   }),
-  // Green screen (nm10-keying), pinned in workflows/comfyui/packs.json: its LICENSE is Corridor's own, word for word.
+  // Green screen, pinned in workflows/comfyui/packs.json: its LICENSE is Corridor's own, word for word.
   pack("ComfyUI-CorridorKey2", "https://github.com/hashu786/ComfyUI-CorridorKey2/tree/d1228b68796786acee92b6497f72a60d70d1a844", {
     name: "Corridor Key Licence 2.0",
     class: "conditions",
     note: "CorridorKey 2.0 nodes, with Corridor's CorridorKey 2.0 code inside unmodified; the code and the weights it downloads are under the Corridor Key Licence 2.0: free for any project, commercial ones included, but never resold or offered as a paid API or inference service. The frozen models it downloads keep their own licences (NVIDIA Open Model License, MIT, CC-BY 4.0)",
   }),
-  // Edit speech (nm10-speech-edit), pinned in workflows/comfyui/packs.json: the LICENSE file read at the pinned commit.
+  // Edit speech, pinned in workflows/comfyui/packs.json: the LICENSE file read at the pinned commit.
   pack("ComfyUI-AuK", "https://github.com/Tencent-Hunyuan/AuK/tree/0d40366b1039e37c6cad008ab4713f6ad6d954b7/comfyui/ComfyUI-AuK", {
     name: "MIT",
     class: "commercial",
     url: SPDX("MIT"),
     note: "Tencent AuK's own nodes (speech editing and text to speech); MIT code and weights. The Qwen2.5-Omni-3B encoder AuK loads is under the Qwen Research License (non-commercial)",
   }),
-  // Kandinsky 6.0 (nm10-kandinsky6), pinned in workflows/comfyui/packs.json: Kandinsky Lab's packs, the comfyui/ folder of each
+  // Kandinsky 6.0, pinned in workflows/comfyui/packs.json: Kandinsky Lab's packs, the comfyui/ folder of each
   // repository, LICENSE files read at the pinned commits.
   pack("kandinsky6", "https://github.com/kandinskylab/kandinsky-6/tree/7ceeefad7fb625011f7db602c43893a989f19c15/comfyui", {
     name: "MIT",
@@ -519,6 +519,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "Kandinsky VSR video upscaling (2x, 2.25x, 4x); Apache-2.0 code. The Kandinsky VSR weights are MIT",
   }),
+  // Watermark Remover (image-watermark-*): overflowofedge's Qwen watermark nodes, pinned in install-comfyui.sh.
+  pack("ComfyUI-Qwen-Watermark", "https://github.com/overflowofedge/ComfyUI-Qwen-Watermark/tree/eef829d34d6e9d0d2ae0c1386fab7371a864cf34", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "The Watermark Remover's nodes: find the marks (Qwen3-VL 8B, Apache-2.0), outline stickers (SAM ViT-B, Apache-2.0), repair and check the result; MIT code. The Qwen-Image 2.1 weights the repair runs are non-commercial",
+  }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
     ...GPL,
@@ -527,6 +534,54 @@ export const NODE_PACKS: NodePack[] = [
   pack("h3-relay", "https://github.com/akatz-ai/h3-relay/tree/e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220", {
     ...GPL,
     note: "H3 Relay 2.0 (Sendy Software LLC and contributors); GPL-3.0 code, vendored Context Loop and Spectrum GPL-3.0. Opt-in (H3_RELAY=1): it registers HTTP routes when it loads",
+  }),
+  // Genjutsu's Openjutsu modes (Group swap, Scene edit, From picture, Fix faces, Fix colours): pinned in packs.json and
+  // install-comfyui.sh (OPENJUTSU_MODES=1). LICENSE files read at the pinned commits.
+  pack("ComfyUI-MiniMaxH3-Context-Loop", "https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop/tree/43afeffcc570beb5f7382593e79e4b211c7e02f6", {
+    ...GPL,
+    note: "MiniMax H3 Context Loop (NikoDemon80, Ethanfel): long H3 edits clip by clip, each continuing from the last; GPL-3.0 code. It registers local HTTP routes when it loads",
+  }),
+  pack("ComfyUI-Fantastic-MiniMaxH3-PromptBuilder", "https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder/tree/22e719fe89336c628383363182a4da3cb58d4f9b", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "The masked edit latent the H3 edits start from (source, mask and sound); MIT code",
+  }),
+  pack("comfyui-h3-oneclick-swap", "https://github.com/D3voz/comfyui-h3-oneclick-swap/tree/e44a56e92920000e675d14be484aea0d7498d63e", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "D3voz's swap, scene edit and face section nodes (plans, role masks, grey mannequins); MIT code. Fuobe applies a patch that words its H3 prompts positively",
+  }),
+  pack("comfyui-image-detail-contrast", "https://github.com/D3voz/comfyui-image-detail-contrast/tree/485a5e246424ce012b998862b45f06d21e8d63b2", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Softens fine detail contrast for Fix colours; MIT code, no model",
+  }),
+  pack("Orion4D_FXMax", "https://github.com/orion4d/Orion4D_FXMax/tree/7048e8423ad7d1a6a52119d0d4870c2b7fc2885f", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Philippe Joye's DCTL tone mapper (Fix colours' film finish); MIT code, no model",
+  }),
+  pack("SolarRenderer", "https://github.com/Enderfga/SolarRenderer/tree/0ca4f5e45b062cc9e9aee506de46aabdc22e4c3d", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "From picture's renderer; Apache-2.0 code (cloned only, never pip-installed), with Openjutsu's long-clip patch. Its LoRAs are under the MiniMax H3 Community License",
+  }),
+  pack("ComfyUI-H3-FaceRefine", "https://github.com/Carasibana/ComfyUI-H3-FaceRefine", {
+    name: "See its repository",
+    class: "unknown",
+    note: "Face tracking, masks and paste-back for Fix faces (registry 1.1.1). The InsightFace buffalo_l models it uses are for non-commercial research only; the YOLO face and person weights are AGPL-3.0",
+  }),
+  pack("ComfyUI-Impact-Pack", "https://github.com/ltdrdata/ComfyUI-Impact-Pack", { ...GPL, note: "Its SAM loader (Fix faces' face masks; SAM ViT-B is Apache-2.0); GPL-3.0 code" }),
+  pack("comfyui_controlnet_aux", "https://github.com/Fannovel16/comfyui_controlnet_aux/tree/a587a4c1594524c1d2de5cd1a86cd868ff448e1c", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Metric3D normals that carry the clip's motion into From picture; Apache-2.0 code, the Metric3D model is BSD-2-Clause",
   }),
   // Restore & colourise (package archive-restore): Lightricks' LTX nodes (IC-LoRA loader and guide, tiled fusion sampler).
   pack("ComfyUI-LTXVideo", "https://github.com/Lightricks/ComfyUI-LTXVideo/tree/220e1d45aa0469f518e982102fca4dca92a61862", {
@@ -615,6 +670,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "Comfy-Org's NVIDIA VFX nodes 0.2.1; Apache-2.0 code. The nvidia-vfx runtime they load (the RTX Video SDK and its models) is NVIDIA's own, under the NVIDIA Software License Agreement: free, runs only on NVIDIA GPUs, no redistributing it",
   }),
+  // Relight: Viggle's node file (speed-LoRA loader and step schedule), in the model repo at the pinned revision.
+  pack("viggle_turbo", "https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/tree/009a44a895ef85f7e643c80fdca9543795248867/comfyui", {
+    name: "Qwen Research License",
+    class: "non-commercial",
+    url: "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE",
+    note: "Viggle's ComfyUI nodes for its Qwen-Image 2.1 turbo LoRA (the loader that reads the LoRA's strength from its metadata, and the 6-step schedule); they ship in the model repo, a Qwen-Image 2.1 derivative under the same research licence",
+  }),
 ];
 
 export const nodePack = (name: string): NodePack | undefined => NODE_PACKS.find((p) => p.name === name);
@@ -651,6 +713,12 @@ export const ATTRIBUTIONS: Attribution[] = [
     licence: "OpenMDW-1.1",
     url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE",
     note: "Trained in part on WSJ (LDC) and an internal NVIDIA set (model card). The older nvidia/RE-USE repository is non-commercial (NSCLv1); Fuobe uses only the NemotronLabs repositories.",
+  },
+  {
+    for: "Genjutsu: Group swap, Scene edit, From picture, Fix faces and Fix colours",
+    text: "Openjutsu, copyright (c) 2026 D3voz: the graphs Fuobe sends to your GPU, the settings code Fuobe ported from it, the SolarRenderer long-clip patch and the 17 light looks' wording",
+    licence: "MIT",
+    url: "https://github.com/D3voz/openjutsu",
   },
   {
     for: "The Layout Poster skill and Plan layout",

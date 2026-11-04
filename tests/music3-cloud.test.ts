@@ -1,5 +1,5 @@
 /**
- * nm10-music3 in the cloud: MiniMax Music 3 (the open model, hosted on fal), Mureka 9 / 9.5 songs and instrumentals,
+ * Full songs in the cloud: MiniMax Music 3 (the open model, hosted on fal), Mureka 9 / 9.5 songs and instrumentals,
  * ElevenLabs Music v2.5 and Lyria 3.5, and Mureka's song tools (extend, remix, stems): payloads built from the research
  * records, prices as fal's pages state them (2026-11-01), lyrics in each model's own form.
  */

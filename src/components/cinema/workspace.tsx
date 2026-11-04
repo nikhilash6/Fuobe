@@ -11,7 +11,7 @@ import { ErrorState, NotFoundState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EngineSwitch } from "@/components/studio/engine-switch";
@@ -29,7 +29,7 @@ import { ElementsPanel } from "./elements-panel";
 import { FolderSidebar, subtree, viewKey, type CinemaView } from "./folder-sidebar";
 import { mediaDuration } from "./media";
 import { formatUsd } from "./money";
-import { foreign, useAutosave, useCinemaGenerate, useCinemaItems, useCinemaProject, useItemActions, useStudioGenerations, useUpdateProject, type CinemaGeneration, type ProjectView } from "./hooks";
+import { foreign, useAutosave, useCinemaGenerate, useCinemaItems, useCinemaProject, useDirectorChat, useItemActions, useStudioGenerations, useUpdateProject, type CinemaGeneration, type ProjectView } from "./hooks";
 import { cutGrid } from "./media";
 import { ProjectDialog } from "./project-settings";
 import { useShare } from "@/components/share/share-provider";
@@ -153,7 +153,7 @@ export function CinemaWorkspace({ id }: { id: string }) {
   const items = useCinemaItems(id);
   if (project.isLoading)
     return (
-      <div className="flex h-svh flex-col">
+      <div className="flex h-content flex-col">
         <div className="flex h-14 items-center gap-3 border-b px-4">
           <Skeleton className="h-6 w-48" />
         </div>
@@ -177,6 +177,35 @@ export function CinemaWorkspace({ id }: { id: string }) {
     return <NotFoundState title="This project doesn’t exist">It may have been deleted. Its takes are still in your library.</NotFoundState>;
   }
   return <Workspace data={project.data} items={items.data ?? []} loading={items.isLoading} />;
+}
+
+/**
+ * /cinema/<id>?shot=<n> (a project made from a starter): the AI Director's proposed shot n goes into the prompt bar once
+ * the chat is in (`onLoad` gets it and how many shots there are), and the address drops that parameter (keeping any
+ * other), so a reload keeps what the person changed since.
+ */
+function LoadProposedShot({ projectId, n, onLoad }: { projectId: string; n: number; onLoad: (s: DirectorShot, of: number) => void }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { messages, loading } = useDirectorChat(projectId);
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current || loading) return;
+    done.current = true;
+    const shots = messages.findLast((m) => m.role === "assistant" && m.shots?.length)?.shots ?? [];
+    if (shots[n - 1]) onLoad(shots[n - 1], shots.length);
+    const rest = new URLSearchParams(params.toString());
+    rest.delete("shot");
+    const q = rest.toString();
+    router.replace(`/cinema/${projectId}${q ? `?${q}` : ""}`, { scroll: false });
+  }, [loading, messages, n, onLoad, params, projectId, router]);
+  return null;
+}
+
+/** The empty project's line once a starter's shot 1 is in the prompt bar: where the other shots are. */
+function proposedLine(of: number) {
+  const rest = of === 2 ? "Shot 2 is" : of === 3 ? "Shots 2 and 3 are" : `Shots 2 to ${of} are`;
+  return `Shot 1 of ${of} is ready below. ${rest} in the AI Director.`;
 }
 
 function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaGeneration[]; loading: boolean }) {
@@ -222,6 +251,8 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
   // Blockout to film: the composer's panel (its draft kept while the project is open) and the builder.
   // /cinema/<id>?blockout=1 (a link to Blockout to film) opens it.
   const search = useSearchParams();
+  // A starter's film: how many shots the AI Director proposed, once shot 1 is in the prompt bar.
+  const [starterShots, setStarterShots] = useState(0);
   const [blockoutOpen, setBlockoutOpen] = useState(() => search.get("blockout") === "1");
   // World mode: /cinema/<id>?world=1 (the GPU board's World mode row) opens it. Hidden when the engine mode is "Paid APIs
   // only": Hy-Nomas runs on your GPU alone.
@@ -406,6 +437,8 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
       <Empty icon={Library} title="No generations yet" text="Everything you make in Cinema Studio, in any project, shows up here." />
     ) : currentView.kind === "folder" ? (
       <Empty icon={FolderOpen} title="An empty scene" text="Describe a scene below and hit Generate — new takes land in this folder." />
+    ) : starterShots > 1 ? (
+      <Empty icon={Clapperboard} title="Your first shot" text={proposedLine(starterShots)} />
     ) : (
       <Empty icon={Clapperboard} title="Your first shot" text="Start by describing a scene and pressing “Generate”. Set the genre, camera, palette and light in the Director's Panel." />
     );
@@ -428,11 +461,23 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
     <SidePanel project={project} tab={panel} setTab={setPanel} onClose={() => setPanel(null)} onLoadShot={onLoadShot} promptText={draft.prompt} />
   );
   const builderProps = { projectId: id, folderId, engine, settings, context, brief: project.brief.body };
+  const proposedShot = Number(search.get("shot")) || 0;
 
   return (
-    <div className="flex h-svh min-w-0 flex-col md:h-[calc(100svh-0.5rem)]">
+    <div className="flex h-content min-w-0 flex-col">
+      {proposedShot > 0 && (
+        <LoadProposedShot
+          projectId={id}
+          n={proposedShot}
+          onLoad={(s, of) => {
+            onLoadShot(s);
+            setStarterShots(of);
+            // On a wide screen the AI Director shows the other shots beside the work.
+            if (xl) setPanel("director");
+          }}
+        />
+      )}
       <header className="flex h-14 shrink-0 items-center gap-1.5 border-b px-2 sm:gap-2 sm:px-4">
-        <SidebarTrigger className="md:hidden" />
         <Tooltip>
           <TooltipTrigger asChild>
             <Link href="/cinema" className="hidden size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground sm:grid" aria-label="All projects">
@@ -533,6 +578,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <PhoneNavButton />
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -554,7 +600,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
             addRefs(e.dataTransfer.files);
           }}
         >
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-4 pb-6 sm:px-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-6 sm:px-6">
             {currentView.kind === "elements" ? (
               <ElementsPanel onMention={mention} onCast={() => setCastOpen(true)} onLocation={() => setLocationOpen(true)} />
             ) : loading ? (

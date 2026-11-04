@@ -1,8 +1,6 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import type { OutputFile } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // How the runner hands an image-to-3D result from ComfyUI to the server's 3D finish (src/server/model3d-finish.ts):
 // the outputs are stored, the job stays running until the web GLB is made (a restart resumes it, a cancel stops
@@ -10,7 +8,7 @@ import type { OutputFile } from "@/lib/catalog/types";
 // The finish itself is stubbed here (tests/model3d-finish.test.ts runs the real scripts).
 
 vi.setConfig({ testTimeout: 30_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-3d-runner-"));
+const dir = tempDir("fuobe-3d-runner-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -35,12 +33,6 @@ vi.mock("@/server/model3d-finish", async (importOriginal) => {
 const gens = await import("@/server/generations");
 const { db } = await import("@/server/db");
 const { provider } = await import("@/server/providers");
-
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function until<T>(f: () => T | undefined | null | false, ms = 15_000): Promise<T> {

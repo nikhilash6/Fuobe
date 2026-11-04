@@ -1,10 +1,11 @@
 "use client";
 
-import { Play, Search } from "lucide-react";
+import { Play, Search, Zap } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
+import { useIsOwner } from "@/lib/api";
 import { useCoverPlayback } from "@/components/template-cover";
-import { CATEGORIES, FORMATS, interleaved, templatesFor, type MarketingCategory, type MarketingTemplate } from "@/lib/catalog/marketing";
+import { CATEGORIES, FORMATS, interleaved, isCodeTemplate, templatesFor, type MarketingCategory, type MarketingTemplate } from "@/lib/catalog/marketing";
 import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 import { TemplatePreview } from "./template-preview";
@@ -14,6 +15,8 @@ export type MediaFilter = "all" | "image" | "video";
 export function TemplateCard({ t, selected, onPick }: { t: MarketingTemplate; selected: boolean; onPick: (t: MarketingTemplate) => void }) {
   const f = FORMATS[t.format];
   const video = f.kind === "video";
+  // Drawn by Kinetic Motion in the browser: no model, so it plays at once.
+  const instant = isCodeTemplate(t);
   // Its real cover when it has one (a clip plays as the gallery cards' do), else its drawn preview.
   const cover = templateCover("marketing", t.id);
   const { ref, playing, asked, handlers } = useCoverPlayback<HTMLButtonElement>(`marketing/${t.id}`, cover);
@@ -29,6 +32,11 @@ export function TemplateCard({ t, selected, onPick }: { t: MarketingTemplate; se
       <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-muted transition-transform duration-300 ease-move group-hover/tpl:scale-[1.015]">
         <TemplatePreview id={t.id} look={t.look} video={video} cover={cover} playing={playing} asked={asked} sizes="(max-width: 640px) 50vw, 220px" />
         <span className="absolute top-2 left-2 rounded-full bg-black/45 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">{f.cardLabel}</span>
+        {instant && (
+          <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">
+            <Zap className="size-3" /> Instant
+          </span>
+        )}
         {video && (
           <span className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-black/45 text-white backdrop-blur" aria-hidden>
             <Play className="size-3 fill-current" />
@@ -37,7 +45,7 @@ export function TemplateCard({ t, selected, onPick }: { t: MarketingTemplate; se
       </div>
       <p className="mt-2 truncate px-0.5 text-[13px] font-medium">{t.name}</p>
       {/* Named by what it shows (the format chip, then the name), so speech users can say it. */}
-      <span className="sr-only">{video ? ", video template" : ", template"}</span>
+      <span className="sr-only">{video ? ", video template" : ", template"}{instant ? ", instant" : ""}</span>
     </button>
   );
 }
@@ -47,11 +55,14 @@ export function TemplateGallery({ category, onCategory, media, onMedia, selected
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim().toLowerCase());
   const [show, setShow] = useState(30);
+  const owner = useIsOwner();
   const list = useMemo(() => {
-    const base = templatesFor(category, media);
+    const base = templatesFor(category, media, owner);
     const found = query ? base.filter((t) => `${t.name} ${FORMATS[t.format].cardLabel} ${FORMATS[t.format].name} ${t.prompt}`.toLowerCase().includes(query)) : base;
-    return category === "all" && !query ? interleaved(found) : found;
-  }, [category, media, query]);
+    const ordered = category === "all" && !query ? interleaved(found) : found;
+    // Templates with a real cover lead; the rest keep their order after them.
+    return [...ordered].sort((a, b) => Number(!templateCover("marketing", a.id)) - Number(!templateCover("marketing", b.id)));
+  }, [category, media, query, owner]);
   const [fadeRef, fadeStyle] = useEdgeFade<HTMLDivElement>();
   return (
     <section aria-labelledby="explore-templates">

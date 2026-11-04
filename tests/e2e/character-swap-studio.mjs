@@ -2,15 +2,15 @@
 // character, a clip, Detect edits, a cut at the playhead and Keep original, the transcript and Build shot prompts, a
 // click on a frame and Track shot, a mask and a scene anchor approved, two segments (the second continuing from the
 // first, waiting for it), takes made, compared and reviewed, Export decisions, and the assembly with a download. Then every stage at 1440 and 390 px, light and dark, without sideways scroll;
-// a project on your GPU shows its 24 fps copy; an AVI on the cloud gets a copy the browser can play; the sidebar links
+// a project on your GPU shows its 24 fps copy; an AVI on the cloud gets a copy the browser can play; the Studios launcher links
 // here and Genjutsu's Character swap opens its clip and character in a new project; an unknown project is a 404.
 // Usage: node tests/e2e/character-swap-studio.mjs [appUrl] [--shots <dir>]   (app in demo mode, ComfyUI unreachable).
 // Exits 1 on a failed check.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { tempDir } from "./_temp.mjs";
 
 const argv = process.argv.slice(2);
 const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
@@ -25,7 +25,7 @@ const check = (label, ok, extra = "") => {
 // The walk clip with a hard cut at 4 s (the last 2 s mirrored and inverted), as VP9 WebM: the browser reads its frames
 // for Detect edits and the frame to click (Playwright's Chromium decodes no H.264).
 const walk = path.join(root, "scripts/eval/fixtures/walk-6s.mp4");
-const clipFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "swap-studio-e2e-")), "walk.webm");
+const clipFile = path.join(tempDir("swap-studio-e2e-"), "walk.webm");
 execFileSync("ffmpeg", [
   "-v", "error", "-y", "-i", walk,
   "-filter_complex", "[0:v]split[a][b];[a]trim=0:4,setpts=PTS-STARTPTS[v1];[b]trim=4:6,setpts=PTS-STARTPTS,negate,hflip[v2];[v1][v2]concat=n=2:v=1:a=0[v]",
@@ -59,7 +59,10 @@ try {
     await page.goto(`${app}/character-swap`, { waitUntil: "load", timeout: 180_000 });
     await page.getByRole("heading", { name: "Swap a character through whole clips" }).waitFor({ timeout: 120_000 });
     check("projects page: hero and steps", (await text()).includes("Who and the scene"));
-    check("sidebar links the studio", (await page.locator('a[href="/character-swap"]').count()) > 0);
+    await page.getByRole("button", { name: /^Studios/ }).click();
+    const launcher = page.getByRole("region", { name: "All studios" });
+    check("the Studios launcher links the studio", (await launcher.locator('a[href="/character-swap"]').count()) > 0);
+    await page.keyboard.press("Escape");
     await page.getByPlaceholder("Project name, e.g. Rain scene").fill("Rain scene");
     await page.getByRole("button", { name: /New project · cloud/ }).click();
     await page.waitForURL(/\/character-swap\/swap-/, { timeout: 60_000 });

@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { BrandKit, Product } from "@/lib/catalog/marketing";
-import { formatCost } from "@/lib/format";
+import { useRunPlace } from "@/components/studio/run-place-chip";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useBrandChat, useEstimate, type ChatMessage } from "@/components/marketing/hooks";
@@ -49,7 +49,10 @@ function Proposal({ msg, brand, products, engine, onConfirmed }: { msg: ChatMess
   const { confirm } = useBrandChat(brand.id);
   const p = msg.proposal!;
   const total = p.items.reduce((n, i) => n + i.count, 0);
-  const est = useEstimate<{ costUsd: number | null; demo: boolean }>("/api/ads/estimate", msg.batchId ? null : { brandId: brand.id, engine, items: p.items, direction: p.direction });
+  const est = useEstimate<{ costUsd: number | null; demo: boolean; modelName?: string; blocker?: string }>("/api/ads/estimate", msg.batchId ? null : { brandId: brand.id, engine, items: p.items, direction: p.direction });
+  // The button says where the ads are made and their price, as the studios' send buttons do.
+  const priced = est.data && !est.data.blocker ? est.data : undefined;
+  const place = useRunPlace({ engine, models: priced?.modelName ? [priced.modelName] : undefined, costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Ads Studio" });
   const names = p.items.map((i) => products.find((x) => x.id === i.productId)?.name).filter(Boolean);
   return (
     <div className="mt-2 rounded-xl border bg-background p-3">
@@ -75,7 +78,7 @@ function Proposal({ msg, brand, products, engine, onConfirmed }: { msg: ChatMess
             className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary/90"
           >
             {confirm.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            Create {total} ads{est.data ? ` · ${est.data.demo ? "demo" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`}` : ""}
+            Create {total} ads{place?.send ? ` · ${place.send}` : ""}
           </button>
         </>
       )}

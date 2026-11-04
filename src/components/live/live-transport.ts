@@ -34,8 +34,6 @@ export interface RenderReq {
   slot: Slot;
   urgent?: boolean;
   text: string;
-  /** compose (lab): the kept texts and the live text as one instruction. */
-  compose?: string;
   seed: number;
   size: number;
   keepRes: number;
@@ -108,14 +106,33 @@ export interface LiveTransport {
 }
 
 /** The key a render is cached by (the server computes the same). */
-export function keyOf(r: Pick<RenderReq, "base" | "refs" | "mask" | "text" | "compose" | "seed" | "size" | "keepRes" | "aspect" | "method" | "slot">): string {
+export function keyOf(r: Pick<RenderReq, "base" | "refs" | "mask" | "text" | "seed" | "size" | "keepRes" | "aspect" | "method" | "slot">): string {
   const keep = r.slot === "keep" || r.slot === "settle";
-  const prompt = r.method === "compose" && r.compose !== undefined ? r.compose : normalize(r.text);
+  const prompt = normalize(r.text);
   return renderKey({ base: r.base ?? "", refs: r.refs, mask: r.mask, text: prompt, seed: r.seed, size: keep ? r.keepRes : r.size, aspect: r.aspect, method: r.method, quality: keep ? "keep" : "live" });
 }
 
 // ---------------------------------------------------------------------------
 // Through Fuobe's server
+
+/** How many times a render asks again after "too many renders" (about half a minute at the server's pace). */
+const RETRY_429 = 30;
+
+/** Wait, unless the request is let go first (then it throws, like the aborted fetch would). */
+function abortableWait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new Error("aborted"));
+    const t = setTimeout(() => {
+      signal.removeEventListener("abort", stop);
+      resolve();
+    }, ms);
+    const stop = () => {
+      clearTimeout(t);
+      reject(new Error("aborted"));
+    };
+    signal.addEventListener("abort", stop, { once: true });
+  });
+}
 
 export class ServerTransport implements LiveTransport {
   kind: "server" | "link" = "server";
@@ -187,7 +204,14 @@ export class ServerTransport implements LiveTransport {
     this.inflight.set(req.seq, { ctl, slot: req.slot });
     const key = keyOf(req);
     try {
-      const res = await fetch("/api/live/render", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId: this.sessionId, ...req }), signal: ctl.signal });
+      const body = JSON.stringify({ sessionId: this.sessionId, ...req });
+      let res = await fetch("/api/live/render", { method: "POST", headers: { "content-type": "application/json" }, body, signal: ctl.signal });
+      // Too many at once (a cold GPU's first frames are slow and the next ones queue up): ask again when the server
+      // says, until the render is answered or no longer wanted.
+      for (let tries = 0; res.status === 429 && tries < RETRY_429; tries++) {
+        await abortableWait(Math.min(5, Number(res.headers.get("Retry-After")) || 1) * 1000, ctl.signal);
+        res = await fetch("/api/live/render", { method: "POST", headers: { "content-type": "application/json" }, body, signal: ctl.signal });
+      }
       if (!res.ok || !res.body) {
         const j = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
         return { ok: false, error: j.error ?? `The render failed (${res.status})`, code: j.code ?? (res.status === 410 ? "session" : undefined) };
@@ -465,7 +489,7 @@ export class ChannelTransport implements LiveTransport {
     const base = req.base ? this.names.get(req.base) : undefined;
     const liveLong = base?.w ? Math.max(...editSize(req.size, base.w, base.h)) : req.size;
     const bind = slotBindings(req.slot, { liveSize: req.size, keepRes: req.keepRes, hasMask: !!req.mask, to: "socket", liveLongSide: liveLong });
-    const prompt = req.method === "compose" && req.compose !== undefined ? req.compose : normalize(req.text);
+    const prompt = normalize(req.text);
     const params: LiveGraphParams = {
       prompt: req.slot === "warm" ? "warm-up" : prompt,
       seed: req.slot === "warm" ? 0 : req.seed,

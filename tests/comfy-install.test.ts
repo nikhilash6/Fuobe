@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Manifest } from "@/lib/comfy";
 import { installScript, nodeInstall, workflowSource } from "@/lib/comfy-install";
+import { tempDir } from "./helpers/temp-dir";
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../workflows/comfyui/manifest.json"), "utf8")) as Manifest;
 const workflow = (id: string) => manifest.workflows.find((w) => w.id === id)!;
@@ -70,7 +70,7 @@ describe("Workflows → Copy install commands", () => {
   });
 
   it("the commands run, and run again, as install-comfyui.sh does: a pinned clone moves to its pin, a copied pack isn't copied twice", () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-install-"));
+    const tmp = tempDir("fuobe-comfy-install-");
     const git = (cwd: string, ...args: string[]) =>
       execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", ...args], { cwd, encoding: "utf8" }).trim();
     /** A stand-in remote with two commits; the first is the pin. */

@@ -454,7 +454,7 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
                 <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-[13px] text-muted-foreground">$</span>
                 <Input id={ids.cap} type="number" inputMode="decimal" min={0} max={MAX_SCHEDULE_CAP_USD} step={0.5} value={cap} onChange={(e) => setCap(e.target.value)} aria-invalid={capBad} className="pl-6" />
               </div>
-              <span className="text-[13px] text-muted-foreground">per run on its own. Demo runs and open-source models are free.</span>
+              <span className="text-[13px] text-muted-foreground">per run on its own. Runs on your GPU and placeholder runs are free.</span>
             </div>
           )}
         </fieldset>

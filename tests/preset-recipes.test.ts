@@ -67,7 +67,7 @@ describe("which presets get a recipe", () => {
     // Graded presets whose clip was graded afterwards and that have no recipe in the book.
     const gradesWithoutRecipe = [...MOTIONS, ...EFFECTS].filter((x) => x.grade && !recipeKind(x));
     expect(new Set(none.map((x) => x.id))).toEqual(new Set([...gradesWithoutRecipe.map((x) => x.id), ...OWN_ROUTE_APPS]));
-    expect(none).toHaveLength(27);
+    expect(none).toHaveLength(35);
     for (const x of none) for (const engine of ["open", "cloud"] as const) expect(presetRecipe(x, engine, inCatalog), x.id).toBeUndefined();
   });
 
@@ -134,10 +134,16 @@ describe("spot checks", () => {
     const x = p("motion-360-orbit");
     const open = presetRecipe(x, "open", inCatalog)!;
     expect(open.route).toEqual({ modelId: "oss-minimax-h3", op: "i2v", params: { duration: 3, extra: { orbit: true } }, promptTemplate: ORBIT_WORDS });
-    expect(open.made).toBe(true);
+    // The label says so while its cover is the clip the recipe made (a still cover isn't).
+    expect(open.made).toBe(PRESET_PREVIEWS[x.id]?.model === "minimax-h3");
     const cloud = presetRecipe(x, "cloud", inCatalog)!;
     expect(cloud.route).toEqual({ modelId: "minimax-h3", op: "i2v", params: { duration: 5 }, promptTemplate: ORBIT_WORDS });
     expect(cloud.made).toBe(false);
+    // 3D Rotation's cover is a clip made with the Orbit LoRA: labelled on the GPU, not hosted.
+    const spin = p("motion-3d-rotation");
+    expect(PRESET_PREVIEWS[spin.id]?.model).toBe("minimax-h3");
+    expect(presetRecipe(spin, "open", inCatalog)!.made).toBe(true);
+    expect(presetRecipe(spin, "cloud", inCatalog)!.made).toBe(false);
   });
 
   it("a colour-grade effect without a recipe stays on Fuobe DoP", () => {

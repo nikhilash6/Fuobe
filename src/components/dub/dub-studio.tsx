@@ -46,6 +46,7 @@ import {
 import { languageByCode, supportsTarget, type DubRoute } from "@/lib/av/languages";
 import type { Cue } from "@/lib/cues";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { useDubActions, useDubPrice, useDubSessions, useVoicePrice } from "./hooks";
 
@@ -56,7 +57,7 @@ const ONE_SHOT: Record<OneShotModel, { name: string; note: string }> = {
 };
 
 // The Voice split menu (open engine): what each one does to the soundtrack.
-const SPLIT_LABEL: Record<VoiceSplit, string> = { dbs: "DBS: keeps music and effects, CPU-friendly", melband: "MelBand RoFormer" };
+const SPLIT_LABEL: Record<VoiceSplit, string> = { dbs: "Keep music and effects", melband: "Standard" };
 
 const ROUTE_LINE = {
   open: (split: VoiceSplit) =>
@@ -79,7 +80,7 @@ function StageBadge({ stage }: { stage: DubStage }) {
 }
 
 /** Translate & dub (Audio → Translate): a new dub, the dubs in progress and, opened, one dub's review. */
-export function DubStudio({ tabs }: { tabs?: React.ReactNode }) {
+export function DubStudio() {
   const sessions = useDubSessions();
   const [openId, setOpenId] = useState<string | null>(null);
   // Hand-off: /audio/translate?dub=<id> opens that dub (Assist and MCP link the dubs they start).
@@ -99,7 +100,7 @@ export function DubStudio({ tabs }: { tabs?: React.ReactNode }) {
   // A dub removed elsewhere (another tab) just closes.
   const open = sessions.data?.find((s) => s.id === openId);
   return (
-    <ToolShell title="Audio" tabs={tabs} selfHostedOnly>
+    <ToolShell title="Audio" selfHostedOnly>
       {open ? (
         <SessionView key={open.id} s={open} onBack={() => show(null)} />
       ) : openId && sessions.isLoading ? (
@@ -244,18 +245,19 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
                   </Select>
                 ) : (
                   <p className="pt-1.5 text-[13px] font-medium">
-                    {VOICE_SPLITS[split].name}
+                    {SPLIT_LABEL[split]}
                   </p>
                 )}
                 <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground">{VOICE_SPLITS[split].note}.</p>
               </div>
             </div>
           )}
-          {/* The cloud splits the music and effects with Demucs (no SAM Audio on the cloud: the owner's call). */}
+          {/* The cloud splits the music and effects with Demucs. */}
           {!oneShot && engine === "cloud" && (
             <div className="mt-3 space-y-1 text-[12px] leading-snug text-muted-foreground">
               <p>Music and effects: Demucs. {MUSIC_MODEL_NOTE}.</p>
-              <p>{DBS_OPEN_ONLY_NOTE}.</p>
+              {/* The note about your GPU is for the studio's own install with both engines, not a guest or an account. */}
+              {!visitor && engineMode === "both" && <p>{DBS_OPEN_ONLY_NOTE}.</p>}
             </div>
           )}
         </Panel>
@@ -463,23 +465,24 @@ function SessionView({ s, onBack }: { s: DubSessionView; onBack: () => void }) {
         </AlertDialog>
       </div>
 
-      <div role="tablist" aria-label="Languages" className="scrollbar-none mb-4 flex gap-1.5 overflow-x-auto">
+      <TabRow role="tablist" aria-label="Languages" follow className="mb-3">
         {s.targets.map((c) => (
           <button
             key={c}
             role="tab"
             aria-selected={c === lang}
             onClick={() => setLang(c)}
-            className={cn("inline-flex h-8 shrink-0 items-center gap-2 rounded-full px-3 text-[13px] font-medium transition-colors", c === lang ? "bg-foreground text-background" : "bg-secondary hover:bg-accent")}
+            className={TAB_PILL}
+            {...onAttr(c === lang)}
           >
             {languageByCode(c)?.name ?? c}
             <span className={cn("size-1.5 rounded-full", { preparing: "bg-subtle-foreground", review: "bg-highlight", voicing: "bg-primary", done: "bg-success", failed: "bg-destructive" }[languageStage(s, c)])} />
           </button>
         ))}
-      </div>
+      </TabRow>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-        <div className="space-y-3 lg:sticky lg:top-20 lg:self-start">
+        <div className="space-y-3 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:self-start">
           <div className="overflow-hidden rounded-2xl border bg-media">
             <video ref={video} src={s.video} controls playsInline preload="metadata" onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)} className="max-h-[42vh] w-full object-contain" />
           </div>

@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-tenant-"));
+const dir = tempDir("fuobe-account-tenant-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -44,9 +42,6 @@ afterAll(async () => {
   globalThis.fetch = realFetch;
   globalThis.__fuobeTestGpuPort = undefined;
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const asA = <T,>(fn: () => T) => runAsTenant({ kind: "account", id: a }, fn);

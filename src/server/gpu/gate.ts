@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { getModel } from "@/lib/catalog";
 import { controlSets } from "@/lib/catalog/plan";
-import { resolveWorkflowId } from "@/lib/comfy-variants";
+import { COMPANION_GRAPHS, resolveWorkflowId } from "@/lib/comfy-variants";
 import { PROMPT_HELPER_FILES, PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { fixPlan } from "@/lib/gpu/plan";
 import { CLEAN_VAE, DECODER_PARAM, GPU_PARAM } from "@/lib/qwen21-speed";
@@ -71,6 +71,7 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
     format: req.params?.format,
     audio2: !!req.inputs?.audio2 || !!req.params?.extra?.audio2,
     audio: !!req.inputs?.audio,
+    mask: !!req.inputs?.mask,
     extra,
     has,
   });
@@ -96,6 +97,8 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
   if (PROMPT_HELPER_FILES[id] && extra[PROMPT_HELPER_PARAM] === "on") runFiles.add(PROMPT_HELPER_FILES[id] as FileKey);
   const add = [...runFiles].filter((k) => idx.files[k] && !idx.workflows[id].files.includes(k));
   if (add.length) idx = { ...idx, workflows: { ...idx.workflows, [id]: { ...idx.workflows[id], files: [...idx.workflows[id].files, ...add] } } };
+  // The graph that runs, and the ones its next step is sure to run (the Watermark Remover's scan checks its removal too).
+  const ids = [id, ...(COMPANION_GRAPHS[id] ?? []).filter(has)];
   // The preset's route on the run's model (the one its preview was made with, or its own): its LoRAs are checked too.
   const preset = req.presetId ? presetTool(req.presetId, { modelId: g.modelId }) : null;
   const tool = modelTool(g.modelId, g.op);
@@ -105,7 +108,7 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
   const ctx = { ...contextFor(t), kind: tool?.kind };
   let snap = readSnapshot(t);
   if (!snap?.inventory.reachable) return { ok: true };
-  let r = toolReadiness(ref, name, [id], loras, snap.inventory, idx, ctx, tool?.cloud);
+  let r = toolReadiness(ref, name, ids, loras, snap.inventory, idx, ctx, tool?.cloud);
   if (!blocks(r)) return { ok: true };
   // A ComfyUI on the person's computer is read by their tab, which checks the tool right before the run: only a check
   // from the last 10 s counts as confirmed (an older one never blocks; ComfyUI's own answer has the last word).
@@ -117,7 +120,7 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
     if (!fresh?.reachable) return { ok: true };
     snap = readSnapshot(t);
     if (!snap?.inventory.reachable) return { ok: true };
-    r = toolReadiness(ref, name, [id], loras, snap.inventory, idx, ctx, tool?.cloud);
+    r = toolReadiness(ref, name, ids, loras, snap.inventory, idx, ctx, tool?.cloud);
     if (!blocks(r)) return { ok: true };
   }
   const dev = snap.inventory.devices[0];

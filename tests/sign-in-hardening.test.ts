@@ -1,15 +1,13 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // Route handlers set the session cookie through cookies() (no request scope in a test): a jar that only records.
 const jar = { set: vi.fn(), delete: vi.fn(), get: vi.fn() };
 vi.mock("next/headers", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/headers")>()), cookies: async () => jar }));
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-sign-in-"));
+const dir = tempDir("fuobe-sign-in-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 process.env.FUOBE_TRUST_PROXY = "1";
@@ -51,9 +49,6 @@ afterEach(() => {
 afterAll(() => {
   delete process.env.FUOBE_PUBLIC_SIGNUP;
   delete process.env.FUOBE_TRUST_PROXY;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 describe("M-1: after sign-in, only pages on this site", () => {
@@ -102,12 +97,11 @@ describe("M-2: password checks are counted and never hold up the server", () => 
     await expect(auth.verifyPassword("nope nope")).resolves.toBe(false);
   });
 
-  it("records a log-in at most once an hour, so log-ins don't rewrite the accounts file", async () => {
-    const file = path.join(dir, "auth.json");
+  it("records a log-in at most once an hour, so log-ins don't write the sign-in data each time", async () => {
     expect((await login.POST(post("/api/auth/login", { email: "member@example.com", password: "member password" }))).status).toBe(200);
-    const before = fs.readFileSync(file, "utf8");
+    const before = auth.authVersion();
     for (let i = 0; i < 3; i++) expect((await login.POST(post("/api/auth/login", { email: "member@example.com", password: "member password" }))).status).toBe(200);
-    expect(fs.readFileSync(file, "utf8")).toBe(before);
+    expect(auth.authVersion()).toBe(before);
   });
 
   it("an account deleting itself gets 5 password checks a minute", async () => {

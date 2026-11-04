@@ -4,6 +4,8 @@ import type { GenerationRequest } from "@/lib/catalog/types";
 import { fileAccount } from "./account-library";
 import { accountInputLimit } from "./account-files";
 import { absolutePath, contentTypeFor, filesRel, GONE_MESSAGE, NOT_YOURS_MESSAGE } from "./storage";
+import { isExampleRef } from "./example-files";
+import { EXAMPLE_MEDIA } from "@/lib/examples/media.generated";
 
 /**
  * The files an account's run names (public sign-up, "Your GPU"): only files it uploaded here, or its own results. No
@@ -18,11 +20,20 @@ export const INPUT_NOT_ALLOWED = "Upload the file here first. Runs on your GPU u
 
 const notAllowed: InputProblem = { status: 400, code: "input-not-allowed", error: INPUT_NOT_ALLOWED };
 
-/** A string in params.extra that names a file (the slots there take a stored file, a link or a data: URI). */
-const looksLikeFile = (v: string) => /^(data:|https?:\/\/|\/api\/files\/)/i.test(v.trim());
+/** A string in params.extra that names a file (the slots there take a stored file, a link, a data: URI or an example input). */
+const looksLikeFile = (v: string) => /^(data:|https?:\/\/|\/api\/files\/)/i.test(v.trim()) || isExampleRef(v);
 
-/** One stored file named by an account's run: fine (null), not a stored file's path, gone, someone else's, or too big. */
+/**
+ * One file named by an account's run: fine (null), not a stored file's path, gone, someone else's, or too big. One of
+ * Fuobe's published example inputs (a page's example, loaded into the composer) is fine for everyone, within the same
+ * size an upload of its kind may be.
+ */
 function checkFile(ref: string, accountId: string): InputProblem | null {
+  const example = isExampleRef(ref) ? EXAMPLE_MEDIA[ref] : undefined;
+  if (example) {
+    const limit = accountInputLimit(example.type);
+    return example.bytes > limit.bytes ? { status: 413, code: "input-too-big", error: limit.message } : null;
+  }
   if (!ref.startsWith("/api/files/")) return notAllowed;
   // The path a step reads, parsed as the step parses it (storage.ts filesRel): one that steps out of its folder is refused.
   const rel = filesRel(ref);

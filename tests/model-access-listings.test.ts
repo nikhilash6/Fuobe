@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { indexEntries } from "@/lib/command-search";
 import { paletteIndex } from "@/lib/palette-index";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Settings → Models & licences in the places that list or pick models: GET /api/models (the CLI's list and the
@@ -13,7 +11,7 @@ import { paletteIndex } from "@/lib/palette-index";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-access-listings-"));
+const dir = tempDir("fuobe-access-listings-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -25,7 +23,6 @@ const { changeAccess } = await import("@/server/model-access");
 const tools = await import("@/server/assist/tools");
 const { offlinePlan } = await import("@/server/assist/agent");
 const { setSetting } = await import("@/server/settings");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 type Body = { defaults: Record<string, { cloud?: string; open?: string }>; items: { id: string; engines: string[] }[] };
 const models = async (query = "") => (await (await listModels(new Request(`http://localhost/api/models${query}`))).json()) as Body;
@@ -97,11 +94,11 @@ describe("Models & licences in listings and picks", () => {
     // The library's 118 LoRAs (Fuobe Try-On's try-on LoRA, the Storyboard's next-scene LoRA, and since O11 Fuobe Angles'
     // Multiple-angles and Fuobe Speak's FusioniX among them), the preset LoRA map's files that aren't library files, and
     // MiniMax H3's four (Akatz Labs' swap LoRA V1.5 and V1 and Person Remover V1, lightx2v's H3 Turbo), and Fuobe Restore's
-    // two gated IC-LoRAs (Lightricks' Restore and Detail Refine), and Open-H3 Regenerate's merged refiner LoRA, each once. Qwen-Image 2.1's three speed LoRAs and its Next-Scene LoRA
-    // (nm10-qwen21-fast) are four more, the QMA camera-angles LoRA (qma-angles) one more, Fuobe Animation's AniSora 3.2
-    // and lightx2v 4-step low-noise LoRAs (inbetweening) two more, Pika H3 Flex's two adapters (nm10-pika-flex) two more,
-    // and lightx2v's H3 Turbo 4-step v1.2 (MiniMax H3's 2K draft) one more.
-    expect(list.loras.length).toBe(187);
+    // two gated IC-LoRAs (Lightricks' Restore and Detail Refine), Open-H3 Regenerate's merged refiner LoRA, and Any Angle's
+    // AnyAngle LoRA for Qwen-Image 2.1, each once. Qwen-Image 2.1's three speed LoRAs and its Next-Scene LoRA are four more,
+    // the QMA camera-angles LoRA one more, Fuobe Animation's AniSora 3.2 and lightx2v 4-step low-noise LoRAs two more, Pika H3
+    // Flex's two adapters two more, and lightx2v's H3 Turbo 4-step v1.2 (MiniMax H3's 2K draft) one more.
+    expect(list.loras.length).toBe(188);
     expect(list.loras.find((l) => l.file === "minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors")).toMatchObject({ group: "adapter", base: "MiniMax H3", on: true, licence: { name: "Apache-2.0", class: "commercial" } });
     expect(list.loras.find((l) => l.file === "open_h3_regenerate_2k_lora.safetensors")).toMatchObject({ group: "adapter", base: "MiniMax H3", on: true, licence: { name: "MiniMax H3 Community License", class: "regions" } });
     expect(list.packs.find((p) => p.name === "ComfyUI-Open-H3-Regenerate")).toMatchObject({ licence: { name: "Apache-2.0" }, on: true, models: 1 });

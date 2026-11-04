@@ -12,16 +12,21 @@ import { PRESETS as GRADE_PRESETS } from "./grade";
 import { storedPath } from "./share";
 import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout-prompt";
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
-import { canEnhance, canRerender, ENHANCE_LABEL, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
+import { canEnhance, canRerender, ENHANCE_LABEL, REGEN_OFFERED, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
 import { exportsCleanly } from "./av/keying";
+import { anyAngleHref } from "./catalog/any-angle";
 import { isInstrumental, lyricsOf, songFormat, STEMS_FORMATS } from "./lyrics";
 import { CLEAN_DIALOGUE_FEATURE, cleanDialogueHref } from "./av/clean-dialogue";
+import { MAX_SIDE as MAX_WATERMARK_SIDE, WATERMARK_APP_ID, WATERMARK_FEATURE } from "./watermark";
 
 export type OutputActionId =
   | "animate"
+  | "new-angle"
   | "edit"
   | "live-edit"
+  | "relight"
+  | "recolor"
   | "upscale"
   | "reference"
   | "grade"
@@ -44,15 +49,18 @@ export type OutputActionId =
   | "clean-voice"
   | "clean-dialogue"
   | "edit-speech"
+  | "remove-watermark"
   | "copy-text"
   | "view-3d"
-  | "make-3d"
+  | "remix-kinetic"
   | "download"
   | "download-txt"
   | "download-srt"
   | "download-vtt"
   | "download-all"
   | "download-exr"
+  | "download-splat"
+  | "make-3d"
   | "favorite"
   | "finalize"
   | "regenerate"
@@ -67,6 +75,7 @@ export type OutputActionId =
   | "review"
   | "delete"
   | "delete-upload"
+  | "delete-own"
   | "restore"
   | "restore-video"
   | "export-pro"
@@ -95,19 +104,29 @@ export interface ActionContext {
    * (a server render, a share page): as "both".
    */
   engineMode?: "both" | "open" | "cloud";
-  /**
-   * The open engine can run here: Engine mode is open or both and ComfyUI is connected (or placeholder results are on),
-   * for the owner (openEngineReady in src/lib/connections.ts). Make it 3D (quick) needs it: Idol 3D runs on your GPU.
-   */
-  openEngine?: boolean;
+  /** A guest or an account: hand-offs to the tools that run on a self-hosted Fuobe only are left out. */
+  visitor?: boolean;
+  /** A signed-in account (public sign-up): it has no Trash, so a delete is for good ("Delete for good…", asked first). */
+  account?: boolean;
+  /** Placeholder results are on (Settings): a new render is a free stand-in, so "paid" is left out. */
+  placeholders?: boolean;
 }
+
+/** A draft's one-tap 1080p render: a new paid run, said before the tap (left out while placeholders are on). */
+export const draftRenderPaid = (placeholders: boolean | undefined): string => (placeholders ? "" : " · paid");
+
+/** Hand-offs to tools a guest or an account can't open (they run on a self-hosted Fuobe only). */
+const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(["restore-video", "remove-dialogue", "remove-person", "clean-dialogue"]);
 
 const q = (url: string) => encodeURIComponent(url);
 
-/** Make it 3D (quick) on a picture: Image to 3D → Splat on Idol 3D's Quick look, the picture in the slot (idol-5). */
+/** Image to 3D → Splat on Idol 3D's Quick look with a picture in the slot (the link Image to 3D reads: readModel3dLink). */
 export function make3dHref(url: string, photo = false): string {
   return `/image-to-3d?mode=splat&model=oss-idol&quality=quick&image=${q(url)}${photo ? "&photo=1" : ""}`;
 }
+
+/** The model a Kinetic Motion result records (components/motion/save.ts MOTION_MODEL). */
+const KINETIC_MODEL = "local-motion";
 
 /** Every action for output `index` of `g`, in display order. */
 export function outputActions(g: Generation, index: number, ctx: ActionContext = {}): OutputAction[] {
@@ -124,7 +143,12 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
     ];
   }
   const out: OutputAction[] = [];
-  const link = (id: OutputActionId, label: string, href: string, placement: OutputAction["placement"] = "menu") => out.push({ id, label, href, placement });
+  const link = (id: OutputActionId, label: string, href: string, placement: OutputAction["placement"] = "menu") => {
+    if (!(ctx.visitor && OWNER_ONLY_ACTIONS.has(id))) out.push({ id, label, href, placement });
+  };
+  // A Kinetic Motion result (a clip, a frame, a contact sheet or a version) opens its recipe in the Kinetic editor.
+  // A visitor opens only their own (an owner's result shown on a public page would not open for them).
+  if (g.modelId === KINETIC_MODEL && g.status === "succeeded" && (!ctx.visitor || !!g.request.account)) link("remix-kinetic", "Remix in Kinetic", `/kinetic?from=${q(g.id)}`, "primary");
   switch (o.kind) {
     case "image":
       if (isVector(g, o)) {
@@ -135,17 +159,21 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("animate", "Animate", `/video?image=${q(o.url)}`, "primary");
       out.push(file, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });
       link("edit", "Edit", `/edit?image=${q(o.url)}`);
+      link("relight", "Relight", `/apps/app-relight?image=${q(o.url)}&gen=${q(g.id)}`);
       link("live-edit", "Change it as you type", `/live-edit?image=${q(o.url)}&gen=${q(g.id)}&from=library`);
+      link("recolor", "Recolor", `/apps/app-tap-to-recolor?image=${q(o.url)}`);
       link("upscale", "Upscale", `/upscale?image=${q(o.url)}`);
+      // Any Angle: the same photo from another camera (its 3D view is built once per photo).
+      link("new-angle", "New angle", anyAngleHref(o.url));
+      // The Watermark Remover's own results go back through its brush instead; a picture known to be past its size limit isn't offered.
+      if (g.feature !== WATERMARK_FEATURE && !(Math.max(o.width ?? 0, o.height ?? 0, Number(o.meta?.width) || 0, Number(o.meta?.height) || 0) > MAX_WATERMARK_SIDE)) link("remove-watermark", "Remove watermark", `/apps/${WATERMARK_APP_ID}?image=${q(o.url)}`);
       link("reference", "Use as reference", `/image?ref=${q(o.url)}`);
       link("grade", "Color grade", `/color-grade?image=${q(o.url)}`);
       link("layers", "Open in Layers", layersHref(g, o.url));
       // A picture drawn from a layout (or one fal's MOSS-Image planned itself) reopens as boxes in the Image studio.
       if (editableLayout(g, index)) link("edit-layout", "Edit layout", editLayoutHref(g, index));
       link("genjutsu", "Animate with Genjutsu", `/genjutsu?mode=motion&image=${q(o.url)}`);
-      // Idol 3D runs on your GPU only (fal's Idol is a choice of its own in Image to 3D): hidden where the open engine
-      // can't run. An upload is likely a photo, so it opens with the looser photo crop on.
-      if (ctx.openEngine && ctx.engineMode !== "cloud") link("make-3d", "Make it 3D (quick)", make3dHref(o.url, g.feature === "upload"));
+      link("make-3d", "Make it 3D", `/apps/app-photo-to-3d?image=${q(o.url)}`);
       out.push({ id: "save-character", label: "Save as character", placement: "menu" });
       break;
     case "video": {
@@ -171,7 +199,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("add-sound", "Add sound", `/audio/video?video=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?video=${q(o.url)}`);
       link("remove-dialogue", "Remove dialogue", `/video-tools/remove-dialogue?video=${q(o.url)}`);
-      // H3 Person Removal (o/person-remover-plus): Video tools → Remove a person with the clip in.
+      // H3 Person Removal: Video tools → Remove a person with the clip in.
       link("remove-person", "Remove a person", `/video-tools/remove-person?video=${q(o.url)}`);
       // Clean up voice on a video's soundtrack: results that carry sound, and uploads (a clip from a phone or a call).
       if (g.feature === "upload" || (g.op && SOUNDED_VIDEO_OPS.has(g.op))) link("clean-voice", "Clean up voice", `/audio/clean?video=${q(o.url)}`);
@@ -220,26 +248,34 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
         if (ext !== "vtt") out.push({ id: "download-vtt", label: "Download .vtt", placement: "menu" });
       }
       break;
-    case "model3d":
+    case "model3d": {
       if (!ctx.inViewer) out.push({ id: "view-3d", label: "View in 3D", placement: "primary" });
       out.push({ ...file, label: `Download .${ext}` }, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });
+      // A GLB made from a splat (Photo to 3D): the splat too.
+      const splat = o.meta?.role ? undefined : g.outputs.findIndex((x) => x !== o && x.kind === "model3d" && x.meta?.role === "splat");
+      if (splat !== undefined && splat >= 0) {
+        const s = g.outputs[splat];
+        const splatName = downloadName(g, s, splat);
+        out.push({ id: "download-splat", label: `Download 3D splat (.${extensionOf(s)})`, placement: "menu", href: downloadHref(s.url, splatName), download: splatName });
+      }
       break;
+    }
   }
   // Uploads (the Library's Uploads tab) are files, not generations: hand-offs, download, and a
   // delete that first checks nothing uses the file.
   if (g.feature === "upload") {
     // An upload's Regenerate (it has no words of its own) sits with its other hand-offs.
-    if (o.kind === "video" && ctx.engineMode !== "cloud") link("regenerate", "Regenerate in 2K", regenerateHref(o.url));
-    return [...out.filter((a) => a.id !== "favorite"), { id: "delete-upload", label: "Delete", placement: "menu", destructive: true }];
+    if (REGEN_OFFERED && o.kind === "video" && ctx.engineMode !== "cloud") link("regenerate", "Regenerate in 2K", regenerateHref(o.url));
+    return [...out.filter((a) => a.id !== "favorite"), { id: "delete-upload", label: "Delete for good…", placement: "menu", destructive: true }];
   }
   if (g.outputs.length > 1) out.push({ id: "download-all", label: `Download all ${g.outputs.length} (.zip)`, placement: "menu", href: `/api/generations/zip?ids=${g.id}`, download: "" });
-  if (o.draftId) out.push({ id: "finalize", label: "Render this draft in 1080p", placement: "menu" });
+  if (o.draftId) out.push({ id: "finalize", label: `Render this draft in 1080p${ctx.placeholders ? "" : " · a new paid render"}`, placement: "menu" });
   // Finishing in 2K beside it: a fal H3 result renders again at 2K on the same hosted model (a new render, priced); a clip
   // made on your GPU (or uploaded) opens Upscale → Video on Open-H3 Regenerate, which runs on your GPU only. Other cloud
   // results keep their upscalers in Upscale.
   if (o.kind === "video" && g.status === "succeeded") {
     if (canRerender(g, ctx.engineMode)) out.push({ id: "rerender-2k", label: rerenderLabel(g.modelId), placement: "menu" });
-    else if ((g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
+    else if (REGEN_OFFERED && (g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
     // An Edit video result (up to 15 s): redrawn at 1080p on your GPU, from the edit's own words.
     if (canEnhance(g, o, ctx.engineMode)) out.push({ id: "enhance-h3", label: ENHANCE_LABEL, placement: "menu" });
   }
@@ -247,12 +283,16 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   if (ctx.reuse) out.push({ id: "reuse", label: "Reuse settings", placement: "menu" });
   // The steps behind a finished result, as a skill that runs again with new inputs (src/components/skills).
   if (g.status === "succeeded") out.push({ id: "make-skill", label: "Make a skill from this…", placement: "menu" });
-  if (g.prompt) out.push({ id: "copy-prompt", label: "Copy prompt", placement: "menu" });
+  // The Watermark Remover's prompt is its own fixed instruction, not the visitor's words: nothing to copy.
+  if (g.prompt && g.feature !== WATERMARK_FEATURE) out.push({ id: "copy-prompt", label: "Copy prompt", placement: "menu" });
   // A read-only link (src/lib/share.ts): finished results whose files Fuobe keeps.
   if (g.status === "succeeded" && g.outputs.some((x) => storedPath(x.url))) out.push({ id: "share", label: "Share link…", placement: "menu" });
   // Library: pinned results stay at the top of their view; the review status is a sub-menu of its own.
   out.push({ id: "pin", label: g.pinnedAt ? "Unpin" : "Pin to top", placement: "menu" }, { id: "review", label: "Review status", placement: "menu" });
-  out.push({ id: "delete", label: "Delete", placement: "menu", destructive: true });
+  // The owner's goes to the Trash (restorable for 30 days), so it says so; a run still going is canceled first. An
+  // account has no Trash: its delete is for good, so it says that and asks first.
+  if (ctx.account) out.push({ id: "delete-own", label: "Delete for good…", placement: "menu", destructive: true });
+  else out.push({ id: "delete", label: "Move to Trash", placement: "menu", destructive: true });
   return out;
 }
 
@@ -296,7 +336,7 @@ function likelySpeech(g: Generation): boolean {
  * Up to `max` next steps for output `index` (Animate, Upscale, Edit for a picture), taken from
  * outputActions so they go where the tile's own actions go. Only hand-offs to another studio.
  */
-export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<ActionContext, "engineMode"> = {}): OutputAction[] {
+export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<ActionContext, "engineMode" | "visitor"> = {}): OutputAction[] {
   const o = g.outputs[index];
   if (!o || g.status !== "succeeded") return [];
   const all = outputActions(g, index, ctx);
@@ -306,12 +346,14 @@ export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<Actio
     ? ["extend", "upscale", ...(likelySpeech(g) ? (["remove-dialogue"] as const) : []), "split-soundtrack"]
     : NEXT_STEPS.video;
   // H3, LTX, Wan and SANA clips (the drafts Open-H3 Regenerate was shown on) offer Regenerate in 2K right after Upscale.
-  const regen = o.kind === "video" && regenerateFamily(g.modelId) ? (["regenerate"] as const) : [];
+  const regen = REGEN_OFFERED && o.kind === "video" && regenerateFamily(g.modelId) ? (["regenerate"] as const) : [];
   const withRegen = (ids: OutputActionId[] | undefined) => {
     if (!ids || !regen.length) return ids;
     const at = ids.indexOf("upscale");
     return at < 0 ? [...regen, ...ids] : [...ids.slice(0, at + 1), ...regen, ...ids.slice(at + 1)];
   };
+  // A picture made in Edit: Relight in place of Edit (its composer is right there).
+  const image: OutputActionId[] | undefined = o.kind === "image" && g.feature === "edit" ? ["animate", "relight", "upscale"] : NEXT_STEPS[o.kind];
   // A song: its song tools first (where they're offered), then Split soundtrack.
   const song: OutputActionId[] = ["extend-song", "remix-song", "song-stems", "split-soundtrack"];
   const order: OutputActionId[] =
@@ -319,7 +361,7 @@ export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<Actio
       ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(withRegen(video) ?? [])]
       : o.kind === "audio" && g.op && SONG_OPS.has(g.op) && all.some((a) => a.id === "extend-song")
         ? song
-        : (NEXT_STEPS[o.kind] ?? []);
+        : (image ?? []);
   return order
     .map((id) => all.find((a) => a.id === id && a.href))
     .filter((a): a is OutputAction => !!a)
@@ -427,12 +469,14 @@ export function textOf(o: Pick<OutputFile, "text" | "meta">): string {
 
 /**
  * The outputs a result shows as tiles (and the viewer browses): a 3D model's turntable video is
- * its preview, not a result of its own.
+ * its preview, not a result of its own, and so is a splat beside the GLB made from it.
  */
 export function shownOutputs(g: Pick<Generation, "kind" | "outputs">): number[] {
   const all = g.outputs.map((_, i) => i);
   if (g.kind !== "model3d") return all;
-  const own = all.filter((i) => g.outputs[i].kind === "model3d");
+  // A splat that came beside the GLB made from it (Photo to 3D) is one of the GLB's downloads, not a tile of its own.
+  const mesh = g.outputs.some((o) => o.kind === "model3d" && !o.meta?.role);
+  const own = all.filter((i) => g.outputs[i].kind === "model3d" && !(mesh && g.outputs[i].meta?.role === "splat"));
   return own.length ? own : all;
 }
 

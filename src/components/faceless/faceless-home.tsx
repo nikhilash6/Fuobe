@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { useEngine, useLikelyVisitor } from "@/lib/api";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
+import { useEngine, useIsOwner, useLikelyVisitor } from "@/lib/api";
 import { GENRE_IDEAS, GENRES, MAX_IDEA, MAX_SCRIPT, wordCount, youtubeKind, YOUTUBE_ERROR, type FacelessGenre } from "@/lib/catalog/faceless";
+import { starterShown, type StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { ChannelCard, EmptyChannels } from "./cards";
@@ -27,7 +29,9 @@ const STEPS = [
   { icon: Wand2, title: "Review and render", text: "Edit the script scene by scene, render, then fix any scene in the timeline." },
 ];
 
-export function FacelessHome() {
+/** starters: the ready channels (src/lib/starters/catalog.ts): first while you have no channels, one row under yours after. */
+export function FacelessHome({ starters: given = [] }: { starters?: StarterCardData[] }) {
+  const { starters } = useStarters("faceless", given);
   const router = useRouter();
   const [engine, setEngine] = useEngine();
   const [genre, setGenre] = useState<FacelessGenre>("education");
@@ -45,6 +49,10 @@ export function FacelessHome() {
   const [ideaRow, ideaFade] = useEdgeFade<HTMLDivElement>();
   // A channel doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Next.
   const visitor = useLikelyVisitor();
+  const owner = useIsOwner();
+  const hasChannels = !!channels.data?.length;
+  // Until the viewer is known to be the owner, only starters with their real cover show (StarterSection).
+  const readyShown = starters.some((s) => starterShown(s, !owner));
 
   const checkRef = (v: string) => {
     const bad = v.trim() && !youtubeKind(v);
@@ -73,15 +81,15 @@ export function FacelessHome() {
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="truncate font-heading text-[22px] leading-none">Faceless Studio</h1>
         <div className="ml-auto">
           <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
+        <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-12 px-3 pb-16 sm:px-6">
+      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-12 px-4 pb-16 sm:px-6">
         <div className="mx-auto max-w-[760px] pt-[6vh] text-center sm:pt-[9vh]">
           <h2 className="font-heading text-display text-balance">Create your Faceless channel</h2>
           <p className="mx-auto mt-2 max-w-[560px] text-body text-muted-foreground">A narrated, illustrated show — scripts, voice-over, animation, music and subtitles — with the same look in every episode.</p>
@@ -195,29 +203,35 @@ export function FacelessHome() {
           </div>
         </div>
 
-        <section aria-labelledby="channels-title" className="space-y-4">
-          <h2 id="channels-title" className="font-heading text-[24px]">
-            My channels
-          </h2>
-          {channels.isLoading ? (
-            <div className="grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
-              {Array.from({ length: 4 }, (_, i) => (
-                <div key={i}>
-                  <Skeleton className="aspect-video rounded-xl" />
-                  <Skeleton className="mt-3 h-4 w-2/3" />
-                </div>
-              ))}
-            </div>
-          ) : channels.data?.length ? (
-            <div className="grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
-              {channels.data.map((c) => (
-                <ChannelCard key={c.id} channel={c} />
-              ))}
-            </div>
-          ) : (
-            <EmptyChannels />
-          )}
-        </section>
+        {!channels.isLoading && !hasChannels && <StarterSection surface="faceless" starters={given} />}
+
+        {(channels.isLoading || hasChannels || !readyShown) && (
+          <section aria-labelledby="channels-title" className="space-y-4">
+            <h2 id="channels-title" className="font-heading text-[24px]">
+              My channels
+            </h2>
+            {channels.isLoading ? (
+              <div className="grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i}>
+                    <Skeleton className="aspect-video rounded-xl" />
+                    <Skeleton className="mt-3 h-4 w-2/3" />
+                  </div>
+                ))}
+              </div>
+            ) : channels.data?.length ? (
+              <div className="grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
+                {channels.data.map((c) => (
+                  <ChannelCard key={c.id} channel={c} />
+                ))}
+              </div>
+            ) : (
+              <EmptyChannels />
+            )}
+          </section>
+        )}
+
+        {hasChannels && <StarterSection surface="faceless" starters={given} row />}
 
         <section aria-label="How it works" className="grid gap-3 sm:grid-cols-3">
           {STEPS.map((s, i) => (

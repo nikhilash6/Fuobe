@@ -1,11 +1,11 @@
 "use client";
 
+import type { OriginalSound } from "@/lib/av/original-sound";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 import { useCallback, useDeferredValue, useRef } from "react";
 import type { ShortsCustomPreset, ShortsRange, ShortsRatio, ShortsSession } from "@/lib/catalog/shorts";
 import type { Engine, Generation } from "@/lib/catalog/types";
-import type { SoundChoice } from "@/lib/av/original-sound";
 import { useGenerationEvents } from "@/lib/api";
 import { responseError } from "@/lib/refusals";
 
@@ -30,8 +30,8 @@ export interface ShortsBody {
   aspectRatio: ShortsRatio;
   language: string;
   modelId?: string;
-  /** Original sound (unset = Everything). */
-  sound?: SoundChoice;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }

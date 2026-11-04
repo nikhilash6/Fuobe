@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Placeholder results are opt-in: off by default on every install, hosted or local, so a run with nothing connected is
@@ -9,7 +7,8 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
  * becomes off, a saved "on" stays. While on, every run makes a labelled placeholder.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-placeholders-"));
+const dir = tempDir("fuobe-placeholders-");
+
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here
 delete process.env.FUOBE_DEMO_MODE;
@@ -42,7 +41,6 @@ afterEach(() => {
 afterAll(() => {
   globalThis.__fuobeDb?.close();
   globalThis.__fuobeDb = undefined;
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 describe("the setting", () => {

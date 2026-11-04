@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getModel, getPreset, MODELS } from "@/lib/catalog";
 import { loraEndpointFor } from "@/lib/catalog/loras";
 import { buildPayload } from "@/lib/catalog/payload";
@@ -14,11 +13,12 @@ import { filterModels, settingsShape, studioBest } from "@/lib/composer";
 import { compileFlux3, flux3Boxes, flux3Caption, validateLayout, type LayoutDraft } from "@/lib/layout-prompt";
 import { licenceInfo } from "@/lib/licences";
 import { EDIT_STUDIO, IMAGE_STUDIO } from "@/lib/studios";
+import { tempDir } from "./helpers/temp-dir";
 
 // Package nm10-flux3-klein (docs/research/new-models-10.md §6.3): FLUX 3 Image Klein on both engines. Three ComfyUI graphs from
 // Comfy-Org's Klein templates on BFL's pinned repack, fal's routes and LoRA twins from research #10's endpoint records, a layout
 // as fal's bounding_boxes, and a Soul ID training target on fal's Klein Base trainer and on AI-Toolkit's flux3 model.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-klein-"));
+const tmp = tempDir("fuobe-klein-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -26,7 +26,6 @@ const { setSetting } = await import("@/server/settings");
 const { createGenerations, getGeneration } = await import("@/server/generations");
 const { saveFile } = await import("@/server/storage");
 const { db } = await import("@/server/db");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const dir = path.join(process.cwd(), "workflows/comfyui");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as Manifest;
@@ -370,7 +369,7 @@ describe("FLUX 3 Klein as a Soul ID training target", () => {
     expect(fal.price).toBe("≈ $4.30 (1,000 steps)");
     expect(fal.licence).toMatch(/^FLUX Kommunity License v1\.0/);
     expect(fal.commercial).toBeNull();
-    expect(fal.description).toMatch(/not blanket permission for commercial fine-tuning/);
+    expect(fal.description).not.toMatch(/licen[cs]e/i);
     const tr = getTrainer(fal.trainer)!;
     expect(tr).toMatchObject({ usdPerStep: 0.0043, minBilledSteps: 100, dataField: "images_data_url", loraOutput: ["lora_file"], status: "active" });
     expect(falTrainingInput(fal, "https://x/data.zip", "photo of mayafz", "mayafz")).toEqual({

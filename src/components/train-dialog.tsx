@@ -16,7 +16,6 @@ import type { ElementLora, StudioElement } from "@/lib/catalog/elements";
 import {
   AITK_FAMILIES,
   identityKey,
-  licenceNote,
   loraFamily,
   needsConsent,
   photosBlocker,
@@ -149,10 +148,9 @@ export function TrainDialog({ element, open, onOpenChange }: { element: StudioEl
   const replaced = hasFamily("z-image-turbo");
 
   const anyTrained = families.some((g) => hasFamily(g));
-  /** One family: its models, its licence (information), and where it trains with each one's price first. */
+  /** One family: its models, and where it trains with each one's price first. */
   const familySection = (f: TrainingFamily) => {
     const fam = TRAINING_FAMILIES[f];
-    const lic = targets.find((t) => t.family === f);
     return (
       <section key={f} aria-label={fam.name} className="space-y-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-2">
@@ -162,10 +160,6 @@ export function TrainDialog({ element, open, onOpenChange }: { element: StudioEl
             {anyTrained && !hasFamily(f) ? " · upgrade: the same photos, another model" : ""}
           </p>
         </div>
-        {lic && (
-          // Information, never a gate: the admin decides what to turn on in Settings.
-          <p className="text-[11.5px] text-muted-foreground">Licence: {licenceNote(lic)}</p>
-        )}
         {targets
           .filter((t) => t.family === f)
           .map((t) => {

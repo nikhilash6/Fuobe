@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { ErrorState } from "@/components/empty-state";
 
-/** Catches render errors in any studio page; the sidebar (layout) stays usable. */
+/** Catches render errors in any studio page; the top bar (layout) stays usable. */
 export default function Error({ error, retry }: { error: unknown; retry: () => void }) {
   useEffect(() => {
     console.error(error);

@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
 import { detectCuts, finalKey, KEYFRAME_OFFSET, katanaStage, katanaSteps, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, stepsToRedo } from "@/lib/av/katana";
 import { frameParams, frameRequest } from "@/lib/av/frames";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 150_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-av-katana-"));
+const dir = tempDir("fuobe-av-katana-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -20,7 +20,6 @@ const { getTool } = await import("@/server/assist/tools");
 const { saveFile } = await import("@/server/storage");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 140_000): Promise<Generation> {
   const end = Date.now() + ms;

@@ -16,13 +16,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MediaThumb } from "@/components/studio/result-media";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Viewer } from "@/components/studio/viewer";
-import { soundSummary } from "@/lib/av/original-sound";
 import { chainState, ENHANCE_COPY, formatSeconds, segmentSeconds, stitchCurrent, stitchSteps, takeSteps, type ChainState, type ShortsSessionSegment } from "@/lib/catalog/shorts";
 import { finishLengthProblem } from "@/lib/catalog/regenerate";
 import { useEngineMode } from "@/lib/api";
@@ -81,16 +80,16 @@ export function ShortsSessionView({ id }: { id: string }) {
 
 function Frame({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <Link href="/shorts?tab=history" aria-label="Back to your shorts" className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
           <ArrowLeft className="size-4" />
         </Link>
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">{title}</h1>
         <div className="ml-auto flex items-center gap-1">{actions}</div>
+        <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1180px] min-w-0 flex-1 px-3 pb-16 sm:px-6">{children}</div>
+      <div className="mx-auto w-full max-w-[1180px] min-w-0 flex-1 px-4 pb-16 sm:px-6">{children}</div>
     </div>
   );
 }
@@ -157,7 +156,7 @@ function Session({ s }: { s: View }) {
     >
       <Steps steps={STEPS} current={finalVideo && !outdated ? 3 : 2} className="pt-6" />
       <div className="mt-6 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start">
-        <section aria-label="Full video" className="min-w-0 space-y-3 lg:sticky lg:top-16">
+        <section aria-label="Full video" className="min-w-0 space-y-3 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
           <div className="relative mx-auto max-h-[72svh] w-full overflow-hidden rounded-2xl bg-muted" style={{ aspectRatio: ratio, maxWidth: ratio < 1 ? 360 : undefined }}>
             {finalVideo ? (
               <video src={finalVideo.url} controls playsInline preload="metadata" className="size-full bg-black object-contain" aria-label="Your short" />
@@ -175,7 +174,7 @@ function Session({ s }: { s: View }) {
                   {Math.round(overall * 100)}%
                 </p>
                 <div className="relative h-1 w-40 overflow-hidden rounded-full bg-background/70">
-                  <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${Math.round(overall * 100)}%` }} />
+                  <div className="h-full bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(Math.round(overall * 100)) / 100})` }} />
                 </div>
               </div>
             )}
@@ -215,12 +214,6 @@ function Session({ s }: { s: View }) {
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-xl bg-muted/50 p-3 text-[12px]">
             <dt className="text-muted-foreground">Preset</dt>
             <dd className="truncate">{s.look.name}</dd>
-            {s.source.hasAudio && (
-              <>
-                <dt className="text-muted-foreground">Sound</dt>
-                <dd className="truncate">{soundSummary(s.settings.sound)}</dd>
-              </>
-            )}
             <dt className="text-muted-foreground">Engine</dt>
             <dd className="flex items-center gap-1">
               {s.engine === "open" ? <Cpu className="size-3" /> : <Cloud className="size-3" />}

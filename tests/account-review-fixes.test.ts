@@ -1,16 +1,17 @@
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
+import { authDb, authSecret, setAccountCreatedAt, withoutAccounts } from "./helpers/auth-db";
 
 /**
  * The review of "Your GPU" tools (public sign-up): each test here shows one problem the review found, and stays as the
  * guard against it coming back.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-review-"));
+const dir = tempDir("fuobe-account-review-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -53,12 +54,7 @@ beforeAll(async () => {
   auth.setAccountGpu(a, { url: fake.url });
   cookie = `${auth.SESSION_COOKIE}=${auth.createSession(a).value}`;
   // Accounts past their first week, so their files may reach 3 GB (a new account keeps 1 GB).
-  const authFile = path.join(dir, "auth.json");
-  const data = JSON.parse(fs.readFileSync(authFile, "utf8")) as { accounts: { createdAt: number }[] };
-  for (const x of data.accounts) x.createdAt -= 8 * 24 * 60 * 60_000;
-  fs.writeFileSync(authFile, JSON.stringify(data));
-  // A new modified time, so the auth module reads the file again (it caches by that time).
-  fs.utimesSync(authFile, new Date(), new Date(Date.now() + 5000));
+  for (const id of [a, b]) setAccountCreatedAt(id, auth.accountById(id)!.createdAt - 8 * 24 * 60 * 60_000);
 });
 afterAll(async () => {
   globalThis.fetch = realFetch;
@@ -66,9 +62,6 @@ afterAll(async () => {
   globalThis.__fuobeTestDiskFree = undefined;
   globalThis.__fuobeTestDiskSize = undefined;
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();
@@ -279,25 +272,31 @@ describe("an answer that won't be read lets its connection go", () => {
   });
 });
 
-describe("the account sweep never wipes accounts on a bad read of the auth file", () => {
-  it("keeps every account's files when the auth file can't be read, or lists no accounts", async () => {
+describe("the account sweep never wipes accounts on a bad read of the sign-in data", () => {
+  it("keeps every account's files when the sign-in data can't be read, has no secret, or lists no accounts", async () => {
     const own = mine(b);
-    const file = path.join(dir, "auth.json");
-    const good = fs.readFileSync(file);
+    // The sign-in tables can't be used.
+    globalThis.__fuobeAuthTablesError = "a test";
     try {
-      fs.writeFileSync(file, "{ not json");
-      expect((await sweepAccountFiles()).accounts).toBe(0);
-      expect(fs.existsSync(absolutePath(own.relPath))).toBe(true);
-      fs.rmSync(file);
-      expect((await sweepAccountFiles()).accounts).toBe(0);
-      expect(fs.existsSync(absolutePath(own.relPath))).toBe(true);
-      // A file put back from before the sign-ups (no accounts in it) while accounts own files here.
-      fs.writeFileSync(file, JSON.stringify({ secret: "s", tokens: [] }));
       expect((await sweepAccountFiles()).accounts).toBe(0);
       expect(fs.existsSync(absolutePath(own.relPath))).toBe(true);
     } finally {
-      fs.writeFileSync(file, good);
+      globalThis.__fuobeAuthTablesError = null;
     }
+    // No secret: never an install that held an account.
+    const secret = authSecret();
+    authDb().prepare("UPDATE auth_install SET secret = ''").run();
+    try {
+      expect((await sweepAccountFiles()).accounts).toBe(0);
+      expect(fs.existsSync(absolutePath(own.relPath))).toBe(true);
+    } finally {
+      authDb().prepare("UPDATE auth_install SET secret = ?").run(secret);
+    }
+    // Data put back from before the sign-ups (no accounts in it) while accounts own files here.
+    await withoutAccounts(async () => {
+      expect((await sweepAccountFiles()).accounts).toBe(0);
+      expect(fs.existsSync(absolutePath(own.relPath))).toBe(true);
+    });
     // Read whole, a deleted account's files still go.
     const gone = auth.createAccount("review-gone@example.com", "long enough").id;
     const theirs = mine(gone);

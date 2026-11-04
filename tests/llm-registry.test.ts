@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ASSIST_EFFORTS } from "@/lib/assist";
 import { getLlmModel, LLM_PROVIDERS, LLM_REGISTRY_CHECKED, offersFree, priceOn } from "@/lib/catalog/llm-providers";
+import { tempDir } from "./helpers/temp-dir";
 
 /*
  * The provider registry is data: these checks keep it honest (official https hosts only, a price or a
@@ -11,7 +9,7 @@ import { getLlmModel, LLM_PROVIDERS, LLM_REGISTRY_CHECKED, offersFree, priceOn }
  * tied to Settings (every key is a secret setting, every region pick a validated one).
  */
 
-process.env.FUOBE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-llm-registry-"));
+process.env.FUOBE_DATA_DIR = tempDir("fuobe-llm-registry-");
 const { SETTINGS } = await import("@/server/settings");
 
 /** The hosts each provider's docs give. A base URL anywhere else is a mistake (or worse). */

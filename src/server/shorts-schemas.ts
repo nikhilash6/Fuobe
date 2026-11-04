@@ -1,8 +1,8 @@
 import "server-only";
+import { ORIGINAL_SOUND_IDS } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { MIXED } from "@/lib/catalog/mixed-media";
 import { SHORTS } from "@/lib/catalog/shorts";
-import { ORIGINAL_SOUNDS, SOUND_LOWER_MAX_DB, SOUND_LOWER_MIN_DB, type OriginalSound } from "@/lib/av/original-sound";
 import { connectRefusal } from "./connect-refusal";
 import { ShortsError } from "./shorts";
 
@@ -12,12 +12,6 @@ const fileUrl = z.string().startsWith("/api/files/").max(500);
 const seconds = z.number().finite().min(0).max(3600);
 /** A client nonce for one submit: a repeated id gets the first answer instead of a second paid run (see once()). */
 const requestId = z.string().trim().min(8).max(64).optional();
-
-/** Original sound: what of the clip's sound a studio puts back (src/lib/av/original-sound.ts). */
-export const SoundChoiceSchema = z.object({
-  sound: z.enum(ORIGINAL_SOUNDS.map((o) => o.id) as [OriginalSound, ...OriginalSound[]]),
-  musicDb: z.number().finite().min(SOUND_LOWER_MIN_DB).max(SOUND_LOWER_MAX_DB).optional(),
-});
 
 const source = z.object({
   url: fileUrl,
@@ -36,7 +30,8 @@ export const ShortsBodySchema = z.object({
   aspectRatio: z.enum(["9:16", "16:9"]).default("9:16"),
   language: z.string().max(40).default("auto"),
   modelId: z.string().max(80).optional(),
-  sound: SoundChoiceSchema.optional(),
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound: z.enum(ORIGINAL_SOUND_IDS).optional(),
   requestId,
 });
 
@@ -65,15 +60,13 @@ export const MixedBodySchema = z.object({
   anchor: fileUrl.optional(),
   frameUrl: fileUrl.optional(),
   seed: z.number().int().min(0).max(2 ** 48).optional(),
-  sound: SoundChoiceSchema.optional(),
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound: z.enum(ORIGINAL_SOUND_IDS).optional(),
   requestId,
 });
 
 /** Bodies of the session actions that only carry a nonce (stitch again, regenerate a segment). */
 export const NonceSchema = z.object({ requestId }).default({});
-
-/** Stitch again: a nonce, and optionally a new Original sound choice (kept for the stitches after it). */
-export const StitchSchema = z.object({ requestId, sound: SoundChoiceSchema.optional() }).default({});
 
 export const MixedEstimateSchema = MixedBodySchema.extend({ source: source.extend({ url: z.string().max(500).default("/api/files/placeholder.mp4") }) });
 

@@ -89,17 +89,17 @@ export async function sweepAccountFiles(now = Date.now()): Promise<{ uploads: nu
     )
     .all(now - RETENTION_MS.run) as { id: string }[];
   for (const o of orphans) deleteAsset(o.id);
-  // Accounts that are gone (deleting one purges it at once: this only catches what that missed). Only when the auth
-  // file was read whole, and not when it lists no account at all while accounts own files: a file that failed to read,
-  // or one put back from before the sign-ups, must never wipe everyone's work.
+  // Accounts that are gone (deleting one purges it at once: this only catches what that missed). Only when the sign-in
+  // data was read whole, and not when it lists no account at all while accounts own files: data that failed to read,
+  // or a database put back from before the sign-ups, must never wipe everyone's work.
   let gone: string[] = [];
   const owning = owners();
-  // No account owns anything here (a new install has no auth file yet): nothing to check.
+  // No account owns anything here (a new install has no accounts yet): nothing to check.
   if (owning.length) {
     try {
       const live = readAccountIds();
       if (live.size) gone = owning.filter((id) => !live.has(id));
-      else console.warn(`[fuobe] account sweep: the auth file lists no accounts, but ${owning.length} own files here; nothing removed`);
+      else console.warn(`[fuobe] account sweep: the sign-in data lists no accounts, but ${owning.length} own files here; nothing removed`);
     } catch (e) {
       console.warn(`[fuobe] account sweep: skipped removing deleted accounts' files (${(e as Error).message})`);
     }

@@ -2,10 +2,10 @@ import "server-only";
 import type { AssistMemory, ContextFact, Skill } from "@/lib/assist";
 import { describeRule, zoneLabel, type ScheduleRule } from "@/lib/assist-schedule";
 import type { Engine } from "@/lib/catalog/types";
-import { rankSkills, recipeMarkdown } from "@/lib/recipe";
+import { recipeMarkdown } from "@/lib/recipe";
 import { db } from "../db";
-import { skillUses } from "../skill-uses";
 import { engineMode } from "../settings";
+import { rankSkills } from "../skill-usage";
 import { enabledSkills, getSkill, skillRecipe } from "../skills";
 import { memoriesFor } from "./memory";
 import { getProject } from "./projects";
@@ -36,8 +36,6 @@ export interface ChatInfo {
   scheduleId?: string | null;
   /** The custom MCP connectors Claude has in this chat (their names). */
   connectors?: string[];
-  /** The chat's first words: skills that match them come first in the skills index (with the most used ones). */
-  words?: string;
 }
 
 export function engineLine(engine: Engine): string {
@@ -154,8 +152,8 @@ export function chatFacts(c: ChatInfo, now = new Date()): ContextFact[] {
     if (chars > MEMORY_CHARS) break;
     facts.push({ section: "memory", key: m.id, text: line });
   }
-  // Past SKILL_INDEX skills, the ones that match the chat's words, then the most used and most recently used, are kept.
-  const available = rankSkills(skillsFor(project?.id ?? null), { query: c.words, uses: skillUses() });
+  // The skills people run most, and most lately, first: past SKILL_INDEX the rest are left to list_skills.
+  const available = rankSkills(skillsFor(project?.id ?? null));
   for (const s of available.slice(0, SKILL_INDEX)) {
     // A skill with a recipe runs by itself: said first, so a long description can't cut it off.
     const runs = s.recipe ? runsByItself(s.name) : "";

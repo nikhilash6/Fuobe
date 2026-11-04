@@ -12,12 +12,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { DESKTOP, PHONE, chromiumPath, loadPlaywright } from "./_browser.mjs";
+import { tempDir, removeDir } from "./_temp.mjs";
 
 const args = process.argv.slice(2);
-const app = (args.find((a) => !a.startsWith("--")) ?? "http://localhost:3000").replace(/\/$/, "");
+const app = (args.find((a) => !a.startsWith("--")) ?? "http://localhost:3440").replace(/\/$/, "");
 const shots = args.find((a) => a.startsWith("--shots="))?.slice(8);
 if (shots) fs.mkdirSync(shots, { recursive: true });
 const { chromium } = loadPlaywright();
@@ -48,7 +48,7 @@ const hideDevBadge = (ctx) =>
     }),
   );
 const noSideScroll = async (page, what) => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), 0, `${what}: nothing scrolls sideways`);
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-blockout-e2e-"));
+const tmp = tempDir("fuobe-blockout-e2e-");
 /** Frames and codec of a stored file, read with ffprobe. */
 async function probe(url) {
   const res = await (await api).fetch(app + url);
@@ -69,10 +69,7 @@ async function open(ctx, engine, query = "") {
   await ctx.addInitScript((e) => localStorage.setItem("fuobe.engine", e), engine);
   await hideDevBadge(ctx);
   const page = await ctx.newPage();
-  // The app sidebar's hydration mismatch at desktop width (its Suspense fallback, ViewerRowPlaceholder) is the base
-  // branch's: it shows on /image and on /cinema with no blockout at all (2026-11-01). Any other mismatch counts.
-  const known = (m) => /^Hydration failed/.test(m) && /ViewerRowPlaceholder/.test(m) && !/Blockout/.test(m);
-  page.on("pageerror", (e) => !known(e.message) && errors.push(e.message));
+  page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`${app}/cinema/${project.id}${query}`, { waitUntil: "load", timeout: 120_000 });
   return page;
 }
@@ -240,6 +237,6 @@ try {
   console.error(e);
 } finally {
   await browser.close();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
   process.exit(failed ? 1 : 0);
 }

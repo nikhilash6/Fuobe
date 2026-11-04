@@ -1,12 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 60_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-assist-sched-"));
+const dir = tempDir("fuobe-assist-sched-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -57,7 +55,6 @@ afterEach(() => {
   setSetting("falKey", "");
   db().prepare("DELETE FROM assist_schedules").run();
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 describe("scheduled tasks", () => {
   it("show a task saved with the old Ollama agent as a local-model task", () => {
@@ -368,7 +365,7 @@ describe("connectors in scheduled runs", () => {
   });
 });
 
-describe("a skill on a schedule (Skills W4)", () => {
+describe("a skill on a schedule", () => {
   const skills = () => import("@/server/skills");
   const recipes = () => import("@/server/recipes");
   /** A model that must never be called: a skill task's runs have no model planning them. */

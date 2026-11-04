@@ -1,10 +1,8 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-train-rt-"));
+const dir = tempDir("fuobe-train-rt-");
 process.env.FUOBE_DATA_DIR = dir;
 
 const { db } = await import("@/server/db");
@@ -31,7 +29,6 @@ beforeAll(async () => {
 afterAll(() => {
   globalThis.__fuobeTestFalUrl = undefined;
   server.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 function training(o: { target: string; provider: string; status: string; externalId?: string | null; meta?: unknown; age?: number }) {

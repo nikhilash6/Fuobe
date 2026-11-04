@@ -1,4 +1,4 @@
-// Exact orbits and Fly around (build plan N7-7) in a real browser (the app must be running in demo mode).
+// Exact orbits and Fly around in a real browser (the app must be running in demo mode).
 // Usage: node tests/e2e/exact-orbits.mjs [appUrl] [--shots=dir]. Exits 1 on any failure.
 //
 // At 1440 px and 390 px, in light and dark: the Exact switch and its controls on a Fuobe DoP orbit move (/video?preset=…)

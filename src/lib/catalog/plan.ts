@@ -28,6 +28,7 @@ import { pricingOn, type PriceClock } from "./promo";
 import { isInstrumental, lyricsOf, lyricsProblem, LYRICS_PARAM, promptLyricsProblem } from "@/lib/lyrics";
 import { presetRoutes } from "./preset-recipe-routes";
 import { readWorld, worldProblem } from "@/lib/world";
+import { checkWatermarkBoxes } from "@/lib/watermark";
 
 export { pricingAt } from "./promo";
 
@@ -142,14 +143,18 @@ export function imageLimit(model: Pick<ModelDef, "options" | "routes">, op: Oper
 const clamp01 = (n: number) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 1));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Fill a preset prompt template: {prompt} and {option:key}. Collapses leftover whitespace. */
+/**
+ * Fill a preset prompt template: {prompt}, {prompt|words for when there are none} and {option:key}. Collapses leftover
+ * whitespace.
+ */
 export function composePrompt(
   template: string,
   userPrompt: string | undefined,
   preset: Pick<Preset, "options"> | null,
   selected: Record<string, string> | undefined,
 ): string {
-  let out = template.replace(/\{prompt\}/g, (userPrompt ?? "").trim());
+  const own = (userPrompt ?? "").trim();
+  let out = template.replace(/\{prompt\}/g, own).replace(/\{prompt\|([^}]*)\}/g, (_, fallback: string) => own || fallback.trim());
   out = out.replace(/\{option:([a-zA-Z0-9_-]+)\}/g, (_, key: string) => {
     const opt = preset?.options?.find((o) => o.key === key);
     const value = selected?.[key] ?? opt?.default ?? opt?.choices[0]?.value;
@@ -274,12 +279,14 @@ const PROMPTLESS = new Set<Operation>([
   "face-mosaic",
   // archive-restore: the scene's words help (period, place, light) but a run without them gets a neutral one
   "restore-video",
-  // nm10-music3: extending a song takes its lyrics, its stems nothing
+  // Extending a song takes its lyrics, its stems nothing
   "song-extend", "song-stems",
-  // nm10-hosted-catchup: an inserted moment can be left to the model; a retexture takes words or a style picture
+  // An inserted moment can be left to the model; a retexture takes words or a style picture
   "insert-moment", "retexture-3d",
-  // nm10-hy-nomas-world: a world turn's words are in its script (params.extra.world)
+  // World mode: a world turn's words are in its script (params.extra.world)
   "world-turn",
+  // Watermark Remover: the marks are found, kept or brushed; no words
+  "watermark-scan", "watermark-remove",
 ]);
 
 /**
@@ -340,7 +347,14 @@ export function planGeneration(
     // Preset params/LoRAs are tuned for the route's own model; other compatible models only get the prompt (without
     // a LoRA's trigger word, which means nothing to them).
     const sameModel = !!matched;
-    prompt = composePrompt((sameModel ? route.promptTemplate : undefined) ?? preset.promptTemplate, req.prompt, preset, req.presetOptions);
+    const template = (sameModel ? route.promptTemplate : undefined) ?? preset.promptTemplate;
+    prompt = composePrompt(template, req.prompt, preset, req.presetOptions);
+    // "{prompt|…}" words stand for the preset's pictures (Outfit Swap: "the outfit from the second image"), so a run
+    // without words of its own needs every picture the preset asks for.
+    if (template.includes("{prompt|") && !req.prompt?.trim()) {
+      const missing = preset.inputs.filter((s) => s.accept === "image")[req.inputs?.images?.length ?? 0];
+      if (missing) throw new Error(`Add the ${missing.label.toLowerCase()}, or describe it`);
+    }
     // The route's extra settings (H3's orbit, a camera pose) stay under what the request sets itself. A setting the composer
     // shows as a control (H3's Quality) is the request's own: the composer starts it at the route's value, and its Auto
     // sends none, which is the model's default.
@@ -351,8 +365,10 @@ export function planGeneration(
     const hasExtra = Object.keys(routeExtra).length > 0 || !!req.params?.extra;
     const extra = sameModel && hasExtra ? { extra: { ...routeExtra, ...req.params?.extra } } : {};
     params = { ...model.defaults, ...(sameModel ? routePlain : {}), ...req.params, ...extra };
-    // Option choices that set model settings (Angles: rotate / tilt / zoom); a value the user set wins.
-    const chosen = Object.assign({}, ...(preset.options ?? []).map((o) => o.choices.find((c) => c.value === (req.presetOptions?.[o.key] ?? o.default ?? o.choices[0]?.value))?.extra ?? {}));
+    // Option choices that set model settings (Angles: rotate / tilt / zoom; Restore: its LoRA's strength, on the open
+    // engine only); a value the user set wins.
+    const picks = (preset.options ?? []).map((o) => o.choices.find((c) => c.value === (req.presetOptions?.[o.key] ?? o.default ?? o.choices[0]?.value)));
+    const chosen = Object.assign({}, ...picks.map((c) => ({ ...c?.extra, ...(model.engine === "open" && c?.openExtra) })));
     if (sameModel && Object.keys(chosen).length) params = { ...params, extra: { ...chosen, ...params.extra } };
     loras = sameModel ? (route.loras ?? []) : [];
     if (sameModel) op = op ?? route.op;
@@ -603,7 +619,8 @@ export function planGeneration(
   const maxAudios = model.options.maxAudios;
   if (op === "audio-join" && maxAudios && (req.inputs?.audios?.length ?? 0) > maxAudios) throw new Error(`${model.name} joins up to ${maxAudios} clips at a time — join the rest in a second step`);
   const requires = model.options.requires;
-  if (requires?.images && (req.inputs?.images?.length ?? 0) < requires.images) throw new Error(requires.msg);
+  const images = req.inputs?.images?.length ?? 0;
+  if (requires?.images && images < requires.images && !(requires.promptInstead && prompt && images === requires.images - 1)) throw new Error(requires.msg);
   if (requires?.prompt && !prompt) throw new Error(requires.msg);
   if (requires?.mask && !req.inputs?.mask) throw new Error(requires.msg);
   if (requires?.video && !req.inputs?.video) throw new Error(requires.msg);
@@ -625,6 +642,13 @@ export function planGeneration(
 
   const missing = missingInputs(op, req) ?? unreadInputs(model, op, req) ?? missingImages(model, req);
   if (missing) throw new Error(missing);
+  // Watermark Remover: the kept marks are checked and rebuilt here (never passed on as sent); a brushed run takes none.
+  if (op === "watermark-remove" && params.extra && "boxes" in params.extra) {
+    const extra = { ...params.extra };
+    if (req.inputs?.mask) delete extra.boxes;
+    else extra.boxes = checkWatermarkBoxes(extra.boxes).json;
+    params = { ...params, extra };
+  }
   const tooMany = extraImages(model, op, req);
   if (tooMany) throw new Error(tooMany);
   const tooLong = sourceLengthProblem(model, params.sourceDuration);
@@ -894,6 +918,8 @@ const NEEDS: Partial<
   keyframes: { images: 1, msg: "Add the keyframes, in order" },
   "sdr-to-hdr": { video: true, msg: "Add the video to convert" },
   "face-mosaic": { images: 1, msg: "Add the picture whose faces to pixelate" },
+  "watermark-scan": { images: 1, msg: "Add the picture to check" },
+  "watermark-remove": { images: 1, msg: "Add the picture to clean" },
   "restore-video": { video: true, msg: "Add the archive clip to restore" },
   "song-extend": { audio: true, msg: "Add the song to extend" },
   "song-remix": { audio: true, msg: "Add the song to remix" },
@@ -916,6 +942,14 @@ const NEEDS: Partial<
   composite: { videos: 3, mask: true, msg: "Add the footage, the redrawn clip, the swap and the person's mask to put the character back over it" },
   // N7-5 (the open engine also needs the browser's render along the path: its model's options.requires.video)
   "camera-path": { images: 1, msg: "Add the still to film along the path" },
+  // Genjutsu's Openjutsu modes
+  "group-swap": { video: true, images: 1, msg: "Add the clip and your characters" },
+  "scene-edit": { video: true, msg: "Add the clip to edit" },
+  "picture-frame": { video: true, msg: "Add the clip whose first frame sets the pose" },
+  "picture-video": { video: true, images: 1, msg: "Add the clip and the first frame" },
+  "face-fix-video": { video: true, images: 1, msg: "Add the video and the character photo" },
+  "tone-video": { video: true, msg: "Add the video to finish" },
+  "describe-video": { video: true, msg: "Add the clip to describe" },
 };
 
 const given = (v: unknown) => (Array.isArray(v) ? v.length > 0 : !!v);

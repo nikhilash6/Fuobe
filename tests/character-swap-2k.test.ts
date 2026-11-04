@@ -1,17 +1,19 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { PlanStep } from "@/lib/catalog/shorts";
 import type { GenerationRequest, GenInput } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
-// Character swap in 2K (package n7-4-character-swap-2k): Genjutsu's 1080p / 2K / 4K and Character Swap Studio's Sharpen,
+// Character swap in 2K: Genjutsu's 1080p / 2K / 4K and Character Swap Studio's Sharpen,
 // on both engines. Your GPU: the 768p swap regenerated (sigma 0.8, never above the footage's size), then only the
 // character composited over the footage (video-composite-mask); the cloud: fal's H3 at 2K / 4K, a new version.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-swap-2k-"));
+// Your GPU's sizes regenerate with Open-H3 Regenerate, which is switched off for now (REGEN_OFFERED); these tests check
+// them as they run once it is on. tests/regenerate-offered.test.ts checks that nothing offers them while it is off.
+vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
+const dir = tempDir("fuobe-swap-2k-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const S = await import("@/lib/catalog/sharpen");
 const C = await import("@/lib/catalog/character-swap");

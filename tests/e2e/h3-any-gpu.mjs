@@ -1,4 +1,4 @@
-// nm10-h3-any-gpu in the browser (no run reaches a GPU): MiniMax H3's Options in the Video studio on your GPU (GPU tier with
+// MiniMax H3 on smaller cards in the browser (no run reaches a GPU): MiniMax H3's Options in the Video studio on your GPU (GPU tier with
 // Auto, 32 GB, FastH3 V2 and Trim; no Decoder until Fast decode validates), the composer's note for a picked tier and for Auto on the card the
 // last GPU check read, and the Connect board's Video row naming the build that card gets. Each at 1440 and 390 px, light and
 // dark, without sideways scroll, failing on console errors.

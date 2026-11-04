@@ -19,10 +19,13 @@ import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { ExampleRow } from "@/components/studio/example-row";
+import { useEngine, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { againPrice, againWhere, placeholdersOn } from "@/lib/demo-mode";
 import { formatCueTime } from "@/lib/av/cue-edit";
-import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
+import { againKeys, detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
 import { keepOffered, offered } from "@/lib/model-access";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useKatanaActions, useKatanaJobs, useKatanaPreview, type KatanaBody } from "./hooks";
@@ -59,8 +62,11 @@ async function findCuts(src: string, duration: number, onProgress: (p: number) =
 const money = (usd: number | null | undefined, demo?: boolean, open?: boolean, visitor?: boolean) =>
   visitor && (demo || open) ? "Not available here" : demo ? "Placeholder · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
 
-/** Katana: rebuild a reference edit with your subject, shot for shot. */
-export function KatanaStudio() {
+/**
+ * Katana: rebuild a reference edit with your subject, shot for shot.
+ * examples: "More to try" (exampleRow(), from the page), where the runs go until there is one.
+ */
+export function KatanaStudio({ examples }: { examples?: ExampleRowData | null }) {
   const [engine] = useEngine();
   // An edit doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // uploads and Recreate are off, instead of a run the server refuses.
@@ -303,6 +309,7 @@ export function KatanaStudio() {
           </div>
         </div>
       </div>
+      {examples && (visitor || (jobs.isSuccess && !jobs.data.length)) && <ExampleRow row={examples} className="mt-12" />}
       <Runs jobs={jobs.data} loading={jobs.isLoading} />
     </ToolShell>
   );
@@ -347,6 +354,13 @@ function stepRows(j: KatanaJobView): { segment: number; rows: StepRow[] }[] {
 
 function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
   const { remove, retry } = useKatanaActions();
+  // A run again is a new run: where it runs (or that it's paid) is said on the button before the tap.
+  const placeholders = placeholdersOn(useStatus().data?.demoMode);
+  // On the cloud it says the price: the estimates of the steps it makes again (all of them, or the failed ones and after).
+  const where = (j: KatanaJobView, all: boolean) => {
+    const keys = j.engine === "open" || placeholders ? null : againKeys(j, all);
+    return againWhere(j, { placeholders }, keys && againPrice(keys.map((k) => j.generations[j.steps[k]])));
+  };
   const again = (id: string, all: boolean) =>
     retry.mutate(
       { id, all },
@@ -379,8 +393,9 @@ function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
                   {out ? <video src={out.url} controls playsInline preload="metadata" className="size-full object-contain" /> : <div className="grid size-full place-items-center text-muted-foreground">{stage === "failed" ? <Film className="size-6" /> : <Loader2 className="size-6 animate-spin" />}</div>}
                 </div>
                 <div className="min-w-0">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <p className="min-w-0 flex-1 truncate text-[15px] font-medium">{j.title}</p>
+                  {/* On a phone the title has its own line, so the buttons (Run again says its price) never squeeze it away. */}
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap">
+                    <p className="min-w-0 flex-1 truncate text-[15px] font-medium max-sm:basis-full">{j.title}</p>
                     {out && (
                       <Button asChild variant="outline" size="sm" className="rounded-full">
                         <a href={out.url} download={`${j.title}.mp4`}>
@@ -391,6 +406,7 @@ function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
                     {stage !== "running" && (
                       <Button variant="ghost" size="sm" className="rounded-full" disabled={retry.isPending} onClick={() => again(j.id, stage === "done")}>
                         <RotateCcw className="size-3.5" /> {stage === "failed" ? "Retry failed steps" : "Run again"}
+                        {where(j, stage === "done")}
                       </Button>
                     )}
                     <AlertDialog>
@@ -420,7 +436,7 @@ function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
                   {stage !== "done" && (
                     <div className="mt-3">
                       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div className={cn("h-full rounded-full transition-[width] duration-500", stage === "failed" ? "bg-destructive" : "bg-primary")} style={{ width: `${Math.max(3, pct)}%` }} />
+                        <div className={cn("h-full rounded-full origin-left transition-transform duration-(--motion-slow) ease-standard", stage === "failed" ? "bg-destructive" : "bg-primary")} style={{ transform: `scaleX(${(Math.max(3, pct)) / 100})` }} />
                       </div>
                       <p className="mt-1 text-[12px] text-muted-foreground">
                         {stage === "failed" ? "A step failed — open the steps for the reason, then retry: the finished steps are kept" : `${pct}% · steps run as soon as the ones before them finish`}

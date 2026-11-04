@@ -16,7 +16,7 @@ export const EXACT_ENGINE_LINE: Record<Engine, string> = {
 };
 
 /**
- * The "Exact" switch on an orbit move (build plan N7-7): off, the move follows its LoRA's or the prompt's idea of an
+ * The "Exact" switch on an orbit move: off, the move follows its LoRA's or the prompt's idea of an
  * orbit ("Loose"); on, the camera follows the numbers: degrees, direction seen from above, a height tilt and a radius pulse.
  */
 export function ExactOrbitControls({

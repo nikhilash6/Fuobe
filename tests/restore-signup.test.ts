@@ -1,17 +1,15 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
- * Restore & colourise (o/archive-restore) under the owner's public sign-up rules (docs/public-signup.md): its price
+ * Restore & colourise under the owner's public sign-up rules (docs/public-signup.md): its price
  * check is open to guests and accounts and priced for their own GPU, never a demo; its run and its prompt writer plan
  * with the studio's own AI helpers and chain on the server, so a guest or an account gets own-gpu-tool (with or
  * without a GPU); the owner's are unchanged. The GPU pre-flight board has its row, on graphs the requirement index knows.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-restore-signup-"));
+const dir = tempDir("fuobe-restore-signup-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -28,11 +26,6 @@ const { PromptSchema } = await import("@/server/restore");
 const { planRestore } = await import("@/lib/catalog/restore");
 const { STUDIO_ROWS, studioTool, toolFor } = await import("@/server/gpu/tools");
 const { loadIndex } = await import("@/server/gpu/index-file");
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const passed = (r: Response) => r.headers.get("x-middleware-next") === "1";
 

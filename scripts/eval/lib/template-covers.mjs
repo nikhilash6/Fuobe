@@ -1,5 +1,6 @@
 // Real covers for the studios' template and style tiles (Marketing Studio's templates, Fashion Factory, Photodump packs,
-// the Shorts and Mixed Media looks, Canvas templates, Content Factory's trending styles, the Explainer styles), from
+// the Shorts and Mixed Media looks, Canvas templates, Content Factory's trending styles, the Explainer styles, Fuobe
+// Soul's looks, AI Influencer's character types, the Character Sheet, Storyboard and Elements examples), from
 // rendered masters: pnpm eval:covers --templates <dir>. They are encoded the way the preset covers are (covers.mjs:
 // a 768 px still, a 512 px clip, a 320 px copy of each still in thumbs/) into public/previews/templates/<group>/, and
 // listed in src/lib/template-covers.generated.ts, which the tiles read (src/lib/template-covers.ts). A tile that isn't
@@ -13,12 +14,14 @@ import { bareUrl, COVERS_DIR, encode, newer, previewFile, readManifest, thumbOf,
 import { REPO_DIR, safeName } from "./paths.mjs";
 
 export const TEMPLATE_MANIFEST = path.join(REPO_DIR, "src", "lib", "template-covers.generated.ts");
+/** The preset clips' peak frames (scripts/gen-preset-peaks.mjs): where a tile that shows a preset's cover rests. */
+export const PEAKS_FILE = path.join(REPO_DIR, "src", "lib", "preset-peaks.generated.ts");
 
 /** The tile groups, as the manifest's keys start (`<group>/<tile id>`) and the folders under previews/templates/ are named. */
-export const TEMPLATE_GROUPS = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer"];
+export const TEMPLATE_GROUPS = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer", "soul", "influencer", "examples", "starters"];
 
-/** At most this many frames per tile: the cover and up to three more (a contact sheet's 2x2, a carousel's slides). */
-const MAX_FRAMES = 4;
+/** At most this many frames per tile: the cover and up to five more (a contact sheet's 2x2, a carousel's slides, an example storyboard). */
+const MAX_FRAMES = 6;
 const STILLS = ["still.png", "still.jpg", "still.webp", "start.png", "start.jpg"];
 const CLIP = "clip.mp4";
 const FRAME = /^frame-([2-9])\.(png|jpe?g|webp)$/;
@@ -75,6 +78,30 @@ export function readTemplateManifest(file = TEMPLATE_MANIFEST) {
   } catch (e) {
     throw new Error(`${file} isn't a template covers manifest pnpm eval:covers can read (${e.message}): fix or restore it before making covers`);
   }
+}
+
+/** The presets' peak frames ({ "<preset id>": { at, from, v } }); none when there is no file yet. */
+export function readPresetPeaks(file = PEAKS_FILE) {
+  let text;
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch (e) {
+    if (e?.code === "ENOENT") return {};
+    throw e;
+  }
+  const at = text.indexOf("export const PRESET_PEAKS");
+  if (at < 0) throw new Error(`${file} has no PRESET_PEAKS`);
+  return JSON.parse(text.slice(text.indexOf("=", at) + 1).trim().replace(/;\s*$/, ""));
+}
+
+/**
+ * A tile that shows a preset's cover: its poster and clip, or, for a clip with a peak frame, that frame and where it
+ * is in the clip, so the tile rests on the change (a look already drawn) as Home's cards do (onPeak), not on the photo
+ * the clip starts from.
+ */
+export function presetCoverEntry(id, cover, peak) {
+  if (cover.video !== undefined && peak) return { poster: `/previews/presets/peak/${id}.jpg?v=${peak.v}`, video: cover.video, at: peak.at };
+  return { poster: cover.poster, ...(cover.video !== undefined && { video: cover.video }) };
 }
 
 /** Write the manifest (slim), a line per tile. */
@@ -169,13 +196,15 @@ function readMaster(folder) {
  * <dir>/<group>/<tile id>/, holding
  *   clip.mp4         a clip cover (its first 4 s, its first frame the poster), or
  *   still.png        a still cover (also still.jpg / still.webp, or start.png);
- *   frame-2.png …    the tile's other frames, in order, up to frame-4 (a carousel's slides, a contact sheet's cells);
- *   meta.json        { "rest": "end" } for a reveal: the clip is kept to its end and its last frame is the poster,
- *                    or { "same": "<preset id>" }: the tile shows that preset's cover (no files of its own).
+ *   frame-2.png …    the tile's other frames, in order, up to frame-6 (a carousel's slides, a contact sheet's cells);
+ *   meta.json        { "rest": "end" } for a reveal: the clip is kept to its end and its last frame is the poster
+ *                    ({ "rest": 2.4 }: the frame at 2.4 s is, for a clip whose telling moment comes before its end),
+ *                    or { "same": "<preset id>" }: the tile shows that preset's cover (no files of its own),
+ *                    resting on its clip's peak frame when it has one (presetCoverEntry).
  * The manifest is merged: other tiles' entries stay. A tile whose cover is newer than its masters is kept (force makes
  * it again). Files a tile no longer uses (a clip that's now a still, a dropped frame) are removed.
  * @param {string} dir the masters folder
- * @param {{ only?: string[], force?: boolean, dryRun?: boolean, publicDir?: string, manifest?: string, presetManifest?: string }} [opts]
+ * @param {{ only?: string[], force?: boolean, dryRun?: boolean, publicDir?: string, manifest?: string, presetManifest?: string, peaks?: string }} [opts]
  */
 export function templateCoversFromMasters(dir, opts = {}) {
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error(`No masters folder at ${dir}`);
@@ -183,6 +212,7 @@ export function templateCoversFromMasters(dir, opts = {}) {
   const web = (f) => `/${path.relative(publicDir, f).split(path.sep).join("/")}`;
   const only = opts.only?.length ? new Set(opts.only) : null;
   const presets = readManifest(opts.presetManifest);
+  const peaks = readPresetPeaks(opts.peaks);
   const manifest = readTemplateManifest(opts.manifest);
   const result = { covers: [], skipped: [], manifest: opts.manifest ?? TEMPLATE_MANIFEST, folder: path.join(publicDir, "previews", "templates") };
   for (const group of fs.readdirSync(dir).sort()) {
@@ -207,7 +237,7 @@ export function templateCoversFromMasters(dir, opts = {}) {
           result.skipped.push({ key, why: `${m.meta.same} has no cover` });
           continue;
         }
-        const entry = { poster: p.poster, ...(p.video !== undefined && { video: p.video }) };
+        const entry = presetCoverEntry(m.meta.same, p, peaks[m.meta.same]);
         if (!opts.dryRun) {
           dropUnused(manifest[key], entry, publicDir);
           manifest[key] = entry;
@@ -221,17 +251,21 @@ export function templateCoversFromMasters(dir, opts = {}) {
         continue;
       }
       const src = m.clip ?? m.still;
-      const rest = kind === "video" && m.meta.rest === "end" ? "end" : undefined;
+      const rest = kind !== "video" ? undefined : m.meta.rest === "end" ? "end" : typeof m.meta.rest === "number" && Number.isFinite(m.meta.rest) && m.meta.rest >= 0 ? m.meta.rest : undefined;
       const outDir = path.join(publicDir, "previews", "templates", group);
       const base = path.join(outDir, safeName(id));
       const frameFiles = m.frames.map((_, i) => `${base}-${i + 2}.jpg`);
-      const sources = [src, ...m.frames, ...(fs.existsSync(path.join(folder, "meta.json")) ? [path.join(folder, "meta.json")] : [])];
+      // A clip that rests on its end and comes with that last frame full size (poster.png, Kinetic's covers): the tile's
+      // still is made from it at the still size, sharper than a frame of the small clip.
+      const full = kind === "video" && rest === "end" && fs.existsSync(path.join(folder, "poster.png")) ? path.join(folder, "poster.png") : null;
+      const sources = [src, ...m.frames, ...(full ? [full] : []), ...(fs.existsSync(path.join(folder, "meta.json")) ? [path.join(folder, "meta.json")] : [])];
       const outputs = [`${base}.jpg`, ...(kind === "video" ? [`${base}.mp4`] : []), ...frameFiles];
       const kept = !opts.force && outputs.every((o) => sources.every((s) => newer(o, s))) && manifest[key] && (kind === "video") === (manifest[key].video !== undefined);
       let at = kept ? manifest[key].at : undefined;
       if (!opts.dryRun && !kept) {
         fs.mkdirSync(outDir, { recursive: true });
         at = encode(src, kind, base, { rest }).at;
+        if (full) encode(full, "image", base);
         m.frames.forEach((f, i) => encode(f, "image", `${base}-${i + 2}`));
       }
       const entry = {

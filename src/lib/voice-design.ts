@@ -1,5 +1,5 @@
 /**
- * Audio → Design a voice (nm10-voice-design): a voice made from words, heard in three takes, and the take you like saved
+ * Audio → Design a voice: a voice made from words, heard in three takes, and the take you like saved
  * as an Element voice. Pure data and logic (client and server): the starter chips, the description they write, which
  * model runs on which engine, and how a saved voice reads in a voice picker.
  *
@@ -62,14 +62,14 @@ export type DesignModelKey = "qwen" | "voxcpm";
 export const DESIGN_MODELS: { key: DesignModelKey; label: string; open: string; cloud: string | null; blurb: string }[] = [
   {
     key: "qwen",
-    label: "Qwen3-TTS · both engines",
+    label: "Qwen3-TTS",
     open: "oss-qwen3-tts",
     cloud: "qwen-3-tts",
     blurb: "Free on your GPU, or in the cloud. 10 languages.",
   },
   {
     key: "voxcpm",
-    label: "VoxCPM2 · your GPU",
+    label: "VoxCPM2",
     open: "oss-voxcpm2",
     cloud: null,
     blurb: "Studio-quality 48 kHz in 30 languages. Runs on your GPU (open source).",
@@ -93,8 +93,8 @@ export function designKeyOf(modelId: string): DesignModelKey | null {
 }
 
 /**
- * How a saved voice reads in a voice picker: what it was designed with and where that runs ("Designed with Qwen3-TTS ·
- * both engines"), or null for a recorded voice. Every saved voice can be cloned by any model that clones voices.
+ * How a saved voice reads in a voice picker: what it was designed with ("Designed with Qwen3-TTS"), or null for a
+ * recorded voice. Every saved voice can be cloned by any model that clones voices.
  */
 export function voiceOrigin(voice: ElementVoice | undefined): string | null {
   if (!voice) return null;

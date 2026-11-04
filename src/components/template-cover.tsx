@@ -2,17 +2,19 @@
 
 import { memo, useMemo } from "react";
 import { PresetPreview, usePreviewPlayback } from "@/components/preset-preview";
+import type { AutoPlay } from "@/lib/preview-playback";
 import { NO_COVER, templatePreview, type CoverFrame, type TemplateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 
 /**
  * A template tile's playback, as the gallery cards': spread `handlers` on the card and give it `ref`. A clip plays by
  * itself while in view (a few at once, never with reduced motion or Save-Data), and on hover, focus or tap. A tile
- * without a clip (a still, or its drawn art) never plays: the hooks run all the same.
+ * without a clip (a still, or its drawn art) never plays: the hooks run all the same. With `auto: "touch"`, a clip plays
+ * by itself only where nothing can hover (elsewhere on hover or focus).
  */
-export function useCoverPlayback<T extends HTMLElement>(key: string, cover: TemplateCover | undefined) {
+export function useCoverPlayback<T extends HTMLElement>(key: string, cover: TemplateCover | undefined, o: { auto?: AutoPlay } = {}) {
   const preview = useMemo(() => (cover ? templatePreview(cover) : NO_COVER), [cover]);
-  return usePreviewPlayback<T>(`tpl:${key}`, preview);
+  return usePreviewPlayback<T>(`tpl:${key}`, preview, { auto: o.auto });
 }
 
 /**
@@ -40,4 +42,9 @@ export function CoverImg({ frame, sizes, className }: { frame: CoverFrame; sizes
       aria-hidden
     />
   );
+}
+
+/** The chip on an example picture in an empty list (Character Sheet, Storyboard, Elements): what the tool makes. */
+export function ExampleChip({ className }: { className?: string }) {
+  return <span className={cn("pointer-events-none absolute top-2 left-2 rounded-full bg-background/90 px-2 py-0.5 text-[11px] font-medium text-foreground shadow-soft", className)}>Example</span>;
 }

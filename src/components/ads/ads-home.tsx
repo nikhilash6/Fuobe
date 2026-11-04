@@ -10,10 +10,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from "@/components/ui/skeleton";
 import { BrandStart } from "@/components/brand/brand-dialog";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useIsVisitor } from "@/lib/api";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
+import { ExampleRow } from "@/components/studio/example-row";
+import { useIsOwner, useIsVisitor } from "@/lib/api";
 import { ResearchLabel } from "@/components/brand/research-progress";
 import type { BrandKit } from "@/lib/catalog/marketing";
 import { timeAgo } from "@/lib/format";
+import type { ExampleRowData } from "@/lib/examples/types";
+import { starterShown, type StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useBrandActions, useBrands } from "@/components/marketing/hooks";
@@ -95,18 +99,29 @@ function DeleteBrand({ brand, onClose }: { brand: BrandKit | null; onClose: () =
   );
 }
 
-/** Ads Studio home: start from a website (or by hand), and the brand shelf. */
-export function AdsHome() {
+/**
+ * Ads Studio home: start from a website (or by hand), and the brand shelf.
+ * examples: "More to try" (exampleRow(), from the page), while there are no brands of one's own.
+ * starters: the ready brand kits (src/lib/starters/catalog.ts), first while there are no brands, one row under them after.
+ */
+export function AdsHome({ examples, starters: given = [] }: { examples?: ExampleRowData | null; starters?: StarterCardData[] }) {
+  const { starters } = useStarters("ads", given);
   const router = useRouter();
   const { engine, setEngine } = useMarketingEngine();
   const brands = useBrands();
   const [deleting, setDeleting] = useState<BrandKit | null>(null);
   // A brand is saved to the studio's library, which is its owner's: a guest or an account is told so, not given the form.
   const visitor = useIsVisitor();
+  const owner = useIsOwner();
+  const hasBrands = !!brands.data?.length;
+  const readyShown = starters.some((s) => starterShown(s, !owner));
+  // A "More to try" tile that is a shown starter's own example (the same photo) isn't shown twice.
+  const ownExamples = new Set(starters.flatMap((s) => (starterShown(s, !owner) && s.tryIn ? [s.tryIn.example] : [])));
+  const moreToTry = examples && { ...examples, cards: examples.cards.filter((c) => !ownExamples.has(c.id)) };
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title="Ads Studio" active="ads" engine={engine} onEngine={setEngine} />
-      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-3 pb-20 sm:px-6">
+      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-4 pb-20 sm:px-6">
         <section className="mx-auto max-w-[720px] pt-8 text-center sm:pt-14">
           <h2 className="font-heading text-display text-balance">Static ads that perform</h2>
           <p className="mx-auto mt-2 max-w-lg text-[15px] text-muted-foreground">Enter your website. Your logo, colours, brand voice and selling points load on their own — then on-brand ads for every product, in 1:1, 4:5 and 9:16, with headlines and CTAs.</p>
@@ -119,33 +134,42 @@ export function AdsHome() {
           </div>
         </section>
 
-        <section className="mt-14">
-          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-            <h2 className="font-heading text-[24px] whitespace-nowrap">Your brands</h2>
-            <span className="text-[12px] text-muted-foreground">Every brand gets its own research, products and ads</span>
-          </div>
-          {brands.isLoading ? (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {Array.from({ length: 3 }, (_, i) => (
-                <Skeleton key={i} className="aspect-[4/3] rounded-2xl" />
-              ))}
+        {!brands.isLoading && !hasBrands && <StarterSection surface="ads" starters={given} className="mt-12" />}
+
+        {/* On the page's column, like the ready brands above it and Your brands below it. */}
+        {!!moreToTry?.cards.length && (visitor || (brands.isSuccess && !brands.data.length)) && <ExampleRow row={moreToTry} layout="column" className="mt-12" />}
+
+        {(brands.isLoading || hasBrands || !readyShown) && (
+          <section className="mt-14">
+            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+              <h2 className="font-heading text-[24px] whitespace-nowrap">Your brands</h2>
+              <span className="text-[12px] text-muted-foreground">Every brand gets its own research, products and ads</span>
             </div>
-          ) : brands.data?.length ? (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {brands.data.map((b) => (
-                <BrandCard key={b.id} brand={b} onDelete={() => setDeleting(b)} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed px-6 py-12 text-center">
-              <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-brand-faint text-brand-text">
-                <Target className="size-5" />
+            {brands.isLoading ? (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <Skeleton key={i} className="aspect-[4/3] rounded-2xl" />
+                ))}
               </div>
-              <p className="mt-4 text-[15px] font-medium">No brands yet</p>
-              {!visitor && <p className="mt-1 text-[13px] text-muted-foreground">Paste a link or create one manually to get started.</p>}
-            </div>
-          )}
-        </section>
+            ) : brands.data?.length ? (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {brands.data.map((b) => (
+                  <BrandCard key={b.id} brand={b} onDelete={() => setDeleting(b)} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed px-6 py-12 text-center">
+                <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-brand-faint text-brand-text">
+                  <Target className="size-5" />
+                </div>
+                <p className="mt-4 text-[15px] font-medium">No brands yet</p>
+                {!visitor && <p className="mt-1 text-[13px] text-muted-foreground">Paste a link or create one manually to get started.</p>}
+              </div>
+            )}
+          </section>
+        )}
+
+        {hasBrands && <StarterSection surface="ads" starters={given} row className="mt-12" />}
 
         <section className="mt-12 grid gap-4 md:grid-cols-2">
           <Link href="/ads/multiplier" className={cn("group flex items-center gap-4 rounded-2xl border bg-background p-4 transition-shadow hover:shadow-soft")}>

@@ -1,231 +1,155 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   cleanGraph,
   connectionError,
-  convertEngine,
   defaultModelForNode,
   describeNode,
   edgeStem,
   modelChoices,
-  NODE_SPECS,
   OUT,
-  outputPorts,
+  outputHandles,
+  outputLabel,
   paletteItems,
-  planCanvas,
-  SPLIT_HANDLES,
-  splitHandle,
-  stemOutput,
-  type CanvasEdge,
+  SPLIT_OUTPUTS,
+  type Canvas,
   type CanvasGraph,
   type CanvasNode,
 } from "@/lib/catalog/canvas";
-import { CLOUD_ONLY_PROBLEM, CLOUD_SPLIT_PROBLEM, SPLIT_MODEL } from "@/lib/av/split";
-import { pickOutput } from "@/server/generations";
-import { parseGraph } from "@/server/canvas";
-import type { OutputFile } from "@/lib/catalog/types";
+import { CLOUD_SPLIT_PROBLEM, SPLIT_MODEL } from "@/lib/av/split";
+import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
-// Canvas Split soundtrack node (DBS D8, docs/research/dbs-separation-7.md §9): four stem handles, each carrying its stem
-// into the next node's chain; open engine only (samAudioCloud is false), disabled on the cloud with a reason.
+// Canvas → Split soundtrack (DBS D8): a utility node with four outputs (Dialogue, Music, Effects, Music & effects), each
+// edge carrying its stem on to the next node's chain; OUT stays as Dialogue for boards saved before; DBS on the open
+// engine only, so the node is disabled on the cloud with the reason.
+vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const node = (id: string, type: CanvasNode["type"], x: number, y: number, data: CanvasNode["data"] = {}): CanvasNode => ({ id, type, position: { x, y }, data });
-const edge = (source: string, target: string, targetHandle: string, sourceHandle: string | null = OUT): CanvasEdge => ({ id: `${source}:${sourceHandle}>${target}:${targetHandle}`, source, sourceHandle, target, targetHandle });
+const dir = tempDir("fuobe-canvas-split-");
+process.env.FUOBE_DATA_DIR = dir;
+process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
-/** A video → Split soundtrack; Dialogue → Transcribe (Qwen3-ASR); Music & effects + the video → Add soundtrack (mux). */
-function board(): CanvasGraph {
-  return {
-    nodes: [
-      node("clip", "video-input", 0, 0, { url: "/api/files/u/scene.mp4" }),
-      node("split", "split-soundtrack", 400, 0, { modelId: SPLIT_MODEL }),
-      node("asr", "model", 800, 0, { modelId: "oss-qwen3-asr", mediaKind: "text" }),
-      node("mux", "model", 800, 400, { modelId: "oss-mux", mediaKind: "video", op: "mux" }),
-      node("out", "output", 1200, 0),
-    ],
-    edges: [
-      edge("clip", "split", "video"),
-      edge("split", "asr", "audio", OUT),
-      edge("split", "mux", "audio", "background"),
-      edge("clip", "mux", "video"),
-      edge("split", "out", "in", "music"),
-    ],
-  };
-}
+const { setSetting } = await import("@/server/settings");
+const gens = await import("@/server/generations");
+const { db } = await import("@/server/db");
+const list = await import("@/app/api/canvases/route");
+const one = await import("@/app/api/canvases/[id]/route");
+const run = await import("@/app/api/canvases/[id]/run/route");
 
-const at = (g: CanvasGraph, id: string) => g.nodes.find((n) => n.id === id)!;
+beforeAll(() => setSetting("demoMode", "auto"));
 
-describe("Split soundtrack node", () => {
-  it("is a utility running separate-audio on DBS, the only model it offers", () => {
-    expect(NODE_SPECS["split-soundtrack"]).toMatchObject({ label: "Split soundtrack", group: "Utilities", ops: ["separate-audio"] });
-    expect(defaultModelForNode({ type: "split-soundtrack", data: {} }, "open")?.id).toBe(SPLIT_MODEL);
-    // Nothing on the cloud: never Demucs or another separator in DBS's place.
-    expect(defaultModelForNode({ type: "split-soundtrack", data: {} }, "cloud")).toBeUndefined();
-    expect(modelChoices({ type: "split-soundtrack", data: {} }).map((m) => m.id)).toEqual([SPLIT_MODEL]);
-  });
+const at = (x: number) => ({ x, y: 0 });
+const clip: CanvasNode = { id: "clip", type: "video-input", position: at(0), data: { url: "/api/files/uploads/2026-11-01/interview.mp4" } };
+const split: CanvasNode = { id: "split", type: "split-soundtrack", position: at(320), data: { modelId: SPLIT_MODEL } };
+const words: CanvasNode = { id: "words", type: "model", position: at(640), data: { modelId: "oss-qwen3-asr", op: "transcribe" } };
+const mux: CanvasNode = { id: "mux", type: "model", position: at(640), data: { modelId: "oss-mux", op: "mux" } };
+const board = (edges: CanvasGraph["edges"]): CanvasGraph => ({ nodes: [clip, split, words, mux], edges: [{ id: "in", source: "clip", sourceHandle: OUT, target: "split", targetHandle: "video" }, ...edges] });
 
-  it("has four labelled stem handles, Dialogue on OUT", () => {
-    const g = board();
-    const ports = outputPorts(g, at(g, "split"));
-    expect(ports.map((p) => [p.id, p.label, p.stem, p.type])).toEqual([
-      [OUT, "Dialogue", "voice", "audio"],
-      ["music", "Music", "music", "audio"],
-      ["effects", "Effects", "effects", "audio"],
-      ["background", "Music & effects", "background", "audio"],
+describe("the node and its outputs", () => {
+  it("has four labelled outputs mapped to the stems, with OUT kept as Dialogue", () => {
+    expect(SPLIT_OUTPUTS.map((o) => [o.id, o.label])).toEqual([
+      ["voice", "Dialogue"],
+      ["music", "Music"],
+      ["effects", "Effects"],
+      ["background", "Music & effects"],
     ]);
-    expect(ports.every((p) => !p.disabled)).toBe(true);
-    expect(SPLIT_HANDLES).toHaveLength(4);
-    // Every other node keeps one OUT.
-    expect(outputPorts(g, at(g, "clip"))).toEqual([{ id: OUT, label: "Video", type: "video" }]);
-    expect(outputPorts(g, at(g, "out"))).toEqual([]);
+    expect(outputHandles(split)).toEqual([OUT, "voice", "music", "effects", "background"]);
+    expect(outputHandles(words)).toEqual([OUT]);
+    expect(edgeStem(split, "background")).toBe("background");
+    expect(edgeStem(split, OUT)).toBe("voice");
+    expect(edgeStem(split, null)).toBe("voice");
+    expect(edgeStem(words, OUT)).toBeUndefined();
+    expect(outputLabel(split, "music")).toBe("Music");
+    expect(outputLabel(words, OUT)).toBe("");
   });
 
-  it("reads OUT, no handle and 'voice' as Dialogue", () => {
-    expect([splitHandle(null), splitHandle(undefined), splitHandle(OUT), splitHandle("voice"), splitHandle("music"), splitHandle("drums")]).toEqual([OUT, OUT, OUT, OUT, "music", undefined]);
-    const split = { type: "split-soundtrack" as const };
-    expect([edgeStem(split, null), edgeStem(split, "voice"), edgeStem(split, "effects"), edgeStem(split, "background")]).toEqual(["voice", "voice", "effects", "background"]);
-    expect(edgeStem({ type: "model" }, "music")).toBeUndefined();
+  it("runs DBS on the open engine and is disabled on the cloud with the reason (never another model in its place)", () => {
+    expect(defaultModelForNode({ type: "split-soundtrack", data: {} }, "open")?.id).toBe(SPLIT_MODEL);
+    expect(defaultModelForNode({ type: "split-soundtrack", data: {} }, "cloud")).toBeUndefined();
+    expect(modelChoices(split).map((m) => m.id)).toEqual([SPLIT_MODEL]);
+    expect(paletteItems("both").find((p) => p.id === "split-soundtrack")?.disabled).toBeUndefined();
+    expect(paletteItems("both", "cloud").find((p) => p.id === "split-soundtrack")?.disabled).toBe(CLOUD_SPLIT_PROBLEM);
+    expect(paletteItems("cloud").find((p) => p.id === "split-soundtrack")?.disabled).toBe(CLOUD_SPLIT_PROBLEM);
   });
 
-  it("checks edges by handle", () => {
-    const g = board();
-    expect(connectionError(g, { source: "split", sourceHandle: "effects", target: "out", targetHandle: "in" })).toBeNull();
-    expect(connectionError(g, { source: "split", sourceHandle: "drums", target: "out", targetHandle: "in" })).toBe("Split soundtrack has no drums output");
-    // A stem is audio: it can't be a video input.
-    expect(connectionError(g, { source: "split", sourceHandle: "music", target: "mux", targetHandle: "video" })).toBe("Audio can't go into Video");
-    // Other nodes have only OUT.
-    expect(connectionError(g, { source: "clip", sourceHandle: "music", target: "out", targetHandle: "in" })).toBe("Video has no output");
-  });
-
-  it("carries each handle's stem into the next node's chain", () => {
-    const g = board();
-    const asr = describeNode(g, at(g, "asr"));
-    expect(asr.error).toBeUndefined();
-    expect(asr.plan?.op).toBe("transcribe");
-    expect(asr.request).toMatchObject({ modelId: "oss-qwen3-asr", chain: [{ slot: "audio", stem: "voice" }] });
-    expect(asr.deps).toEqual(["split"]);
-    const mux = describeNode(g, at(g, "mux"));
-    expect(mux.error).toBeUndefined();
-    expect(mux.request).toMatchObject({ modelId: "oss-mux", op: "mux", inputs: { video: "/api/files/u/scene.mp4" }, chain: [{ slot: "audio", stem: "background" }] });
-    const split = describeNode(g, at(g, "split"));
-    expect(split.request).toMatchObject({ modelId: SPLIT_MODEL, op: "separate-audio", inputs: { video: "/api/files/u/scene.mp4" } });
-    expect(split.request?.chain).toBeUndefined();
-  });
-
-  it("a stem takes that output of the split's result on the server, and on the board", () => {
-    const outputs: OutputFile[] = (["voice", "music", "effects", "background"] as const).map((stem) => ({ kind: "audio", url: `/api/files/${stem}.flac`, meta: { stem } }));
-    for (const h of SPLIT_HANDLES) {
-      expect(pickOutput(outputs, { slot: "audio", stem: h.stem })?.url).toBe(`/api/files/${h.stem}.flac`);
-      expect(stemOutput(outputs, h.stem)?.url).toBe(`/api/files/${h.stem}.flac`);
-    }
-    expect(stemOutput([{ kind: "audio", url: "/x", meta: { stem: "sfx" } }], "effects")?.url).toBe("/x");
-  });
-
-  it("a different handle into the same input changes the node's request (it runs again)", () => {
-    const g = board();
-    const before = describeNode(g, at(g, "asr")).request;
-    const moved: CanvasGraph = { ...g, edges: g.edges.map((e) => (e.target === "asr" ? { ...e, sourceHandle: "music" } : e)) };
-    expect(describeNode(moved, at(moved, "asr")).request?.chain).toEqual([{ slot: "audio", stem: "music" }]);
-    expect(describeNode(moved, at(moved, "asr")).request).not.toEqual(before);
-  });
-
-  it("plans on the open engine: one DBS job, then the steps that take its stems", () => {
-    const plan = planCanvas(board(), { engineMode: "open" });
-    expect(plan.errors).toEqual([]);
-    expect(plan.steps.map((s) => s.nodeId)).toEqual(["split", "asr", "mux"]);
-    expect(plan.steps[0].request.modelId).toBe(SPLIT_MODEL);
-    expect(plan.costUsd).toBe(0);
-    expect(planCanvas(board()).errors).toEqual([]);
-  });
-
-  it("is refused on a cloud-only install, with its handles disabled", () => {
-    const g = board();
-    const plan = planCanvas(g, { engineMode: "cloud" });
-    expect(plan.errors.find((e) => e.nodeId === "split")?.message).toBe(CLOUD_ONLY_PROBLEM);
-    expect(outputPorts(g, at(g, "split"), "cloud").every((p) => p.disabled === CLOUD_ONLY_PROBLEM)).toBe(true);
-    expect(connectionError(g, { source: "split", sourceHandle: "music", target: "out", targetHandle: "in" }, "cloud")).toBe(CLOUD_ONLY_PROBLEM);
-  });
-
-  it("with no model, asks for one and keeps its stem edges", () => {
-    const g = board();
-    const bare = { ...at(g, "split"), data: {} };
-    expect(describeNode(g, bare).error).toBe("Pick a model");
-    expect(outputPorts(g, bare).every((p) => !p.disabled)).toBe(true);
-    // Saved without a model (a template, the API, or a model gone from the catalog): no edge out of it is lost.
-    const saved = { ...g, nodes: g.nodes.map((n) => (n.id === "split" ? bare : n)) };
-    expect(cleanGraph(saved).edges).toHaveLength(g.edges.length);
-    expect(parseGraph(saved)?.edges).toHaveLength(g.edges.length);
-    const gone = { ...at(g, "split"), data: { modelId: "no-such-model" } };
-    expect(describeNode(g, gone).error).toBe("That model is no longer in the catalog — pick another");
-  });
-
-  it("on another separator, is told to pick DBS (never run in its place) and keeps its edges", () => {
-    const g = board();
-    // A cloud one (Demucs) and an open one with two stems: both told to pick DBS, on an open board too.
-    for (const modelId of ["demucs", "oss-voice-separate"]) {
-      const other = { ...at(g, "split"), data: { modelId } };
-      expect(describeNode(g, other).error).toMatch(/can't split a soundtrack into its stems — pick DBS/);
-      expect(describeNode(g, other, { engineMode: "open" }).error).toMatch(/pick DBS/);
-      expect(describeNode(g, other).error).not.toBe(CLOUD_SPLIT_PROBLEM);
-      const saved = { ...g, nodes: g.nodes.map((n) => (n.id === "split" ? other : n)) };
-      expect(cleanGraph(saved).edges).toHaveLength(g.edges.length);
-    }
-    // The install alone shuts the handles.
-    expect(outputPorts(g, at(g, "split"), "cloud").every((p) => p.disabled === CLOUD_ONLY_PROBLEM)).toBe(true);
-  });
-
-  it("stays on the open engine when the board switches to the cloud", () => {
-    const { graph, missing } = convertEngine(board(), "cloud");
-    expect(missing).toContain("split");
-    expect(at(graph, "split").data.modelId).toBe(SPLIT_MODEL);
-  });
-
-  it("is in the palette, disabled with a reason on a cloud board or install", () => {
-    const item = (mode: "both" | "open" | "cloud", engine?: "open" | "cloud") => paletteItems(mode, engine).find((p) => p.id === "split-soundtrack");
-    expect(item("both", "open")?.disabled).toBeUndefined();
-    expect(item("open")?.disabled).toBeUndefined();
-    expect(item("both", "cloud")?.disabled).toBe(CLOUD_SPLIT_PROBLEM);
-    expect(item("cloud")?.disabled).toBe(CLOUD_ONLY_PROBLEM);
+  it("connects from each output, and refuses an output it doesn't have", () => {
+    const g = board([]);
+    for (const h of [OUT, "voice", "music", "effects", "background"]) expect(connectionError(g, { source: "split", sourceHandle: h, target: "words", targetHandle: "audio" }), h).toBeNull();
+    expect(connectionError(g, { source: "split", sourceHandle: "drums", target: "words", targetHandle: "audio" })).toBe("Split soundtrack has no output");
+    expect(connectionError(g, { source: "words", sourceHandle: "music", target: "mux", targetHandle: "audio" })).toMatch(/has no output/);
   });
 });
 
-describe("Split soundtrack on a saved board", () => {
-  it("keeps every stem edge through cleanGraph and the server's parse", () => {
-    const g = board();
-    const parsed = parseGraph(JSON.parse(JSON.stringify(g)))!;
-    expect(parsed).not.toBeNull();
-    expect(parsed.nodes.map((n) => n.type)).toContain("split-soundtrack");
-    expect(parsed.edges.map((e) => e.sourceHandle).sort()).toEqual(["background", "music", OUT, OUT, OUT].sort());
-    expect(cleanGraph(parsed)).toEqual(parsed);
+describe("edges carry their stem into the next node's chain", () => {
+  it("Dialogue into Transcribe and Music & effects into a mux", () => {
+    const g = board([
+      { id: "a", source: "split", sourceHandle: "voice", target: "words", targetHandle: "audio" },
+      { id: "b", source: "split", sourceHandle: "background", target: "mux", targetHandle: "audio" },
+      { id: "c", source: "clip", sourceHandle: OUT, target: "mux", targetHandle: "video" },
+    ]);
+    const s = describeNode(g, split);
+    expect(s.error).toBeUndefined();
+    expect(s.request).toMatchObject({ modelId: SPLIT_MODEL, op: "separate-audio", inputs: { video: clip.data.url } });
+    expect(s.costUsd).toBe(0);
+    expect(describeNode(g, words).request?.chain).toEqual([{ slot: "audio", stem: "voice" }]);
+    const m = describeNode(g, mux);
+    expect(m.request?.chain).toEqual([{ slot: "audio", stem: "background" }]);
+    expect(m.request?.inputs).toEqual({ video: clip.data.url });
+    expect(m.deps).toEqual(["split"]);
   });
 
-  it("reads an edge saved without a handle, or as 'voice', as Dialogue", () => {
-    const g = board();
-    const old: CanvasGraph = { ...g, edges: g.edges.map((e) => (e.target === "asr" ? { ...e, sourceHandle: null } : e)) };
-    const kept = cleanGraph(old);
-    expect(kept.edges.find((e) => e.target === "asr")?.sourceHandle).toBeNull();
-    expect(describeNode(kept, at(kept, "asr")).request?.chain).toEqual([{ slot: "audio", stem: "voice" }]);
-    const voice: CanvasGraph = { ...g, edges: [...g.edges.map((e) => (e.target === "asr" ? { ...e, sourceHandle: "voice" } : e)), edge("split", "asr", "audio", OUT)] };
-    const clean = cleanGraph(voice);
-    // "voice" becomes OUT, and the same edge twice is kept once.
-    expect(clean.edges.filter((e) => e.target === "asr").map((e) => e.sourceHandle)).toEqual([OUT]);
+  it("an old single-OUT edge carries the dialogue", () => {
+    const g = board([{ id: "a", source: "split", sourceHandle: OUT, target: "words", targetHandle: "audio" }]);
+    expect(describeNode(g, words).request?.chain).toEqual([{ slot: "audio", stem: "voice" }]);
+    // Other nodes' edges carry no stem, as before.
+    const tts: CanvasNode = { id: "t", type: "model", position: at(0), data: { modelId: "oss-ace-step", op: "music", prompt: "calm piano" } };
+    const g2: CanvasGraph = { nodes: [clip, tts, mux], edges: [{ id: "x", source: "t", sourceHandle: OUT, target: "mux", targetHandle: "audio" }, { id: "y", source: "clip", sourceHandle: OUT, target: "mux", targetHandle: "video" }] };
+    expect(describeNode(g2, mux).request?.chain).toEqual([{ slot: "audio" }]);
   });
 
-  it("drops an edge from a handle the node doesn't have", () => {
-    const g = board();
-    const bad: CanvasGraph = { ...g, edges: [...g.edges, edge("split", "out", "in", "drums")] };
-    expect(cleanGraph(bad).edges).toHaveLength(g.edges.length);
+  it("keeps every output's edge through the storage round trip, and drops an unknown one", () => {
+    const g = board([
+      { id: "a", source: "split", sourceHandle: "music", target: "words", targetHandle: "audio" },
+      { id: "b", source: "split", sourceHandle: "effects", target: "mux", targetHandle: "audio" },
+      { id: "c", source: "split", sourceHandle: "drums", target: "mux", targetHandle: "audio" },
+      { id: "d", source: "split", sourceHandle: OUT, target: "mux", targetHandle: "audio" },
+    ]);
+    expect(cleanGraph(g).edges.map((e) => [e.id, e.sourceHandle])).toEqual([
+      ["in", OUT],
+      ["a", "music"],
+      ["b", "effects"],
+      ["d", OUT],
+    ]);
   });
+});
 
-  it("old boards with one OUT per node load as before", () => {
-    const old: CanvasGraph = {
-      nodes: [node("a", "audio-input", 0, 0, { url: "/api/files/u/a.wav" }), node("v", "voice-change", 400, 0, { modelId: "elevenlabs-voice-changer" }), node("o", "output", 800, 0)],
-      edges: [edge("a", "v", "audio"), { id: "x", source: "v", target: "o", sourceHandle: null, targetHandle: "in" }],
-    };
-    expect(parseGraph(old)!.edges).toHaveLength(2);
-    expect(cleanGraph(old).edges).toEqual(old.edges);
-  });
+describe("a board whose DBS step runs (demo mode)", () => {
+  const req = (method: string, body?: unknown) => new Request("http://localhost/api/canvases", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ctx = (id: string) => ({ params: Promise.resolve({ id }) }) as any;
 
-  it("every node type can be saved", () => {
-    for (const type of Object.keys(NODE_SPECS) as CanvasNode["type"][]) {
-      expect(parseGraph({ nodes: [node("n", type, 0, 0)], edges: [] }), type).not.toBeNull();
-    }
+  it("saves the four outputs' edges and runs the mux on the Music & effects stem of the split", async () => {
+    const g = board([
+      { id: "b", source: "split", sourceHandle: "background", target: "mux", targetHandle: "audio" },
+      { id: "c", source: "clip", sourceHandle: OUT, target: "mux", targetHandle: "video" },
+    ]);
+    const { saveFile } = await import("@/server/storage");
+    const url = saveFile({ data: fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4")), contentType: "video/mp4", source: "upload", name: "interview.mp4" }).url;
+    g.nodes = g.nodes.filter((n) => n.id !== "words").map((n) => (n.id === "clip" ? { ...n, data: { url } } : n));
+    const created = (await (await list.POST(req("POST", {}))).json()) as Canvas;
+    const patched = await one.PATCH(req("PATCH", { graph: g }), ctx(created.id));
+    const saved = (await patched.json()) as Canvas;
+    expect(patched.status, JSON.stringify(saved)).toBe(200);
+    expect(saved.pages[0].graph.edges.find((e) => e.id === "b")?.sourceHandle).toBe("background");
+    const res = await run.POST(req("POST", { targets: ["mux"] }), ctx(created.id));
+    const body = (await res.json()) as { ran: string[]; items: Generation[]; errors: unknown[] };
+    expect(body.errors).toEqual([]);
+    expect(body.ran).toEqual(["split", "mux"]);
+    const [s, m] = body.items;
+    expect(s).toMatchObject({ modelId: SPLIT_MODEL, op: "separate-audio" });
+    expect(m.request.chain).toEqual([{ slot: "audio", stem: "background" }]);
+    expect((db().prepare("SELECT depends_on FROM generations WHERE id = ?").get(m.id) as { depends_on: string }).depends_on).toBe(s.id);
+    expect(gens.getGeneration(m.id)).toBeTruthy();
   });
 });

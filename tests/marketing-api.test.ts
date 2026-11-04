@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-marketing-"));
+const dir = tempDir("fuobe-marketing-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -97,7 +97,6 @@ beforeAll(async () => {
 });
 afterAll(() => {
   server.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const upload = (name = "product.png") => saveFile({ data: PNG, contentType: "image/png", name, source: "upload" }).url;
@@ -295,7 +294,7 @@ describe("brand kits", () => {
 
     // A Standalone product shot: on the user's GPU the Original cuts one product photo out and relights it
     // (product-shot-qwen-edit-2509); that recipe has no hosted copy, so the cloud starts on Bria Product Shot and the
-    // Original is listed there as running on your GPU only (the owner's 10-30 rule).
+    // Original is listed there as running on your GPU only.
     const shot = mk.planMarketing({ engine: "cloud", format: "product-standalone", templateId: "ps-ice-bath" }, ctx);
     expect(shot.steps[0].request).toMatchObject({ modelId: "bria-product-shot", op: "edit" });
     expect(shot.steps[0].request.params?.extra).toBeUndefined();
@@ -635,7 +634,7 @@ describe("Ads Studio", () => {
     expect((await (await adsEstimate.POST(json("POST", { brandId, engine: "cloud", items }))).json()).modelId).toBe("fuobe-marketing-image");
     expect((await (await adsEstimate.POST(json("POST", { brandId, engine: "cloud", items, modelId: "nano-banana-pro" }))).json()).modelId).toBe("nano-banana-pro");
     expect((await (await adsEstimate.POST(json("POST", { brandId, engine: "cloud", items, modelId: "recraft-4-1" }))).json()).modelId).toBe("fuobe-marketing-image");
-    // FLUX.3 is a choice too (N7-8): it reads a "keep clear" layout that keeps the product out of the words' space.
+    // FLUX.3 is a choice too: it reads a "keep clear" layout that keeps the product out of the words' space.
     expect((await (await adsEstimate.POST(json("POST", { brandId, engine: "cloud", items, modelId: "flux-3" }))).json()).modelId).toBe("flux-3");
     const { batchId, creatives, run } = ads.createBatch({ brandId, engine: "open", items });
     expect(creatives).toHaveLength(5);

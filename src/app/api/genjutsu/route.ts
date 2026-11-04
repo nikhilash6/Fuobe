@@ -1,3 +1,4 @@
+import { requestViewer } from "@/server/auth";
 import { createGenjutsu, GenjutsuBodySchema } from "@/server/genjutsu";
 import { body, handle, once } from "@/server/shorts-schemas";
 
@@ -6,7 +7,7 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, GenjutsuBodySchema, "Add a clip, pick a mode and add your references");
     // A repeated requestId (a second click on Generate) gets the run the first one started.
-    const { final, items } = await once("genjutsu", input.requestId, () => createGenjutsu(input));
+    const { final, items } = await once("genjutsu", input.requestId, () => createGenjutsu(input, { owner: requestViewer(request).kind === "owner" }));
     return Response.json({ final, items }, { status: 201 });
   }, request);
 }

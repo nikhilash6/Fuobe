@@ -51,7 +51,7 @@ export interface ElementLora {
 }
 
 /**
- * A voice made with Design a voice (nm10-voice-design), on the element that keeps it: its clip (references[0], the take
+ * A voice made with Design a voice, on the element that keeps it: its clip (references[0], the take
  * picked) is what later lines clone, on either engine. The cloud's Qwen3-TTS reuses a voice by cloning that clip into an
  * embedding file, which Fuobe keeps after its first cloud line (src/server/voices.ts), so it isn't cloned again.
  */

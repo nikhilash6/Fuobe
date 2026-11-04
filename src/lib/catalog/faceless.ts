@@ -1,10 +1,10 @@
 import { describeMove, KEN_BURNS_FPS, sceneMoves } from "@/lib/av/ken-burns";
+import { SPLIT_MODEL } from "@/lib/av/split";
 import { COPY_JOIN_VIDEOS, lengthRange, plannedDurations } from "./clip-lengths";
 import { estimateCost } from "./plan";
 import { REGEN_FINISH_TIER, REGEN_MODEL, regenFinishSteps, sixteenFpsModel, type FinishStep } from "./regenerate";
 import { pricingAt } from "./promo";
 import type { ChainSlot, Engine, Generation, GenerationRequest, ModelDef } from "./types";
-import { SPLIT_MODEL } from "../av/split";
 
 /*
  * Faceless Studio and the Explainer: the data and the pure planning shared by the browser (wizard,
@@ -418,25 +418,18 @@ export interface EpisodeSettings {
   /** Content Factory: a reference clip's style brief, applied to the script and the look. */
   brief?: BriefLook;
   /**
-   * "Use a clip's soundtrack as the bed" (your GPU): the clip's music and effects, its dialogue taken out (DBS), looped
-   * under the voice instead of a generated bed. duration: the clip's seconds (the loop reads it).
+   * A clip whose soundtrack becomes the music bed (open engine, with music on): its music and effects, the talking
+   * taken out, looped to the film's length (clipBedFor). The cloud makes the music instead.
    */
-  musicClip?: MusicClip;
+  bedClip?: BedClip;
 }
 
-export interface MusicClip {
+/** A video or audio file whose soundtrack is the music bed, and how long it is. */
+export interface BedClip {
   url: string;
+  seconds: number;
   name?: string;
-  duration: number;
 }
-
-/** The shortest clip whose soundtrack can be a bed (the loop crossfades 3 s at each seam). */
-export const MUSIC_CLIP_MIN_SECONDS = 8;
-/** What a clip's soundtrack as the bed does, and that it runs on your GPU. */
-export const MUSIC_CLIP_HINT: Record<Engine, string> = {
-  open: "Its music and sound effects, with the talking taken out, looped under the voice",
-  cloud: "Runs on your GPU (open source) — the cloud makes a new instrumental bed",
-};
 
 /**
  * How a style brief (src/lib/catalog/content-factory.ts) shapes an episode: lines for the script writer, words
@@ -628,7 +621,7 @@ export interface EngineModels {
   longNarration: string;
   narrationMaxChars: number;
   music: string;
-  /** Other music models the settings offer for the bed (nm10-music3), each with the longest bed it makes (MUSIC_MAX). */
+  /** Other music models the settings offer for the bed, each with the longest bed it makes (MUSIC_MAX). */
   musicChoices: string[];
   /** Extends a bed the music model can't make long enough (crossfaded on the open engine, whole plays on the cloud). */
   loop: string;
@@ -758,8 +751,6 @@ export const MUSIC_MAX: Record<string, number> = { "sonilo-music": 600, "oss-ace
 
 /** Longest bed a loop model makes (the open loop graph's limit; the cloud's whole plays go past any film). */
 export const LOOP_MAX: Record<string, number> = { "oss-audio-loop": 600 };
-/** Cuts a bed clip longer than the film before its split (your GPU; a CPU step). */
-export const BED_CUT_MODEL = "oss-trim";
 
 /** Seconds of crossfade at each seam of a looped bed (open engine): long enough to hide the restart. */
 export const BED_CROSSFADE = 3;
@@ -869,8 +860,6 @@ export interface ResolvedModels {
   resolution: string;
   narration: string;
   music: string | null;
-  /** The bed is a clip's soundtrack split by DBS (its background stem), not a generated one (your GPU). */
-  bedClip?: MusicClip;
   /** Extends the bed past what the music model makes. */
   loop: string | null;
   /** Brings the bed down under the voice before the mix (cloud). */
@@ -907,15 +896,7 @@ export function resolveModels(settings: EpisodeSettings, narrationChars: number,
     video,
     resolution: wanted,
     narration,
-    // A clip's soundtrack as the bed: DBS on your GPU (no hosted DBS; the cloud makes its own bed). Otherwise the chosen music model.
-    music: settings.music
-      ? settings.engine === "open" && settings.musicClip
-        ? SPLIT_MODEL
-        : settings.musicModel && m.musicChoices.includes(settings.musicModel)
-          ? settings.musicModel
-          : m.music
-      : null,
-    ...(settings.music && settings.engine === "open" && settings.musicClip && { bedClip: settings.musicClip }),
+    music: settings.music ? (settings.musicModel && m.musicChoices.includes(settings.musicModel) ? settings.musicModel : m.music) : null,
     loop: settings.music ? m.loop : null,
     level: settings.music ? (m.levelMusic ?? null) : null,
     mux: settings.music ? m.mixMusic : m.mux,
@@ -990,8 +971,9 @@ export interface MusicPlan {
  * The music for a film of `seconds`: the bed the music model makes (musicLength) and, when that is shorter
  * than the film, the loop that extends it. 0 seconds of music short means the whole film has music.
  */
-export function musicPlan(music: ModelDef | undefined, loop: ModelDef | undefined, seconds: number): MusicPlan {
-  const bed = musicLength(music, seconds);
+export function musicPlan(music: ModelDef | undefined, loop: ModelDef | undefined, seconds: number, bedSeconds?: number): MusicPlan {
+  // A clip's soundtrack is as long as the clip (it can't be made longer, only looped).
+  const bed = bedSeconds && bedSeconds > 0 ? Math.round(bedSeconds * 100) / 100 : musicLength(music, seconds);
   // The bed runs a second past the film when it can; one that only misses that second needs no loop (a whole
   // second play of Sonilo's 600 s for a 600 s film would be a call for nothing).
   if (bed >= seconds || !loop) return { bed, loop: null, short: Math.max(0, Math.ceil(seconds - bed)) };
@@ -1188,78 +1170,64 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
   });
 
   let bedKey = "music";
-  // The clip's split: its music and effects (the "background" stem) are the bed.
+  // The bed's stem when it comes from a clip's soundtrack (its music and effects, split from the talking).
   let bedStem: string | undefined;
-  if (models.music && models.bedClip) {
-    const clip = models.bedClip;
-    // A clip much longer than the film is cut to the film (and a second) first: only what plays is split.
-    const need = Math.ceil(length) + 1;
-    const cut = clip.duration > need + 1;
-    const clipSeconds = cut ? need : Math.max(1, clip.duration);
-    bedStem = "background";
-    if (cut)
+  if (models.music) {
+    const musicDef = pick(lookup, models.music);
+    const clip = clipBedFor(settings);
+    // A clip longer than the film is cut to the film's length and a second first, so DBS separates only what's played.
+    const cutTo = clip && clip.seconds > Math.ceil(length) + 1 ? Math.ceil(length) + 1 : undefined;
+    const plan = musicPlan(musicDef, models.loop ? lookup(models.loop) : undefined, length, cutTo ?? clip?.seconds);
+    const bed = plan.bed;
+    if (clip) {
+      // A clip's soundtrack as the bed (DBS on your GPU): the talking taken out, its music and effects kept.
+      bedStem = "background";
+      if (cutTo)
+        steps.push({
+          key: "music-cut",
+          part: "music",
+          label: "Music bed · your clip cut to the film",
+          seconds: cutTo,
+          request: {
+            ...base,
+            modelId: CLIP_BED_CUT_MODEL,
+            op: "timeline",
+            inputs: { audio: clip.url },
+            params: { duration: cutTo, extra: { timeline: { length: cutTo, clips: [{ start: 0, duration: cutTo }] } } },
+            step: { label: "Your clip cut to the film", index: n, of: n },
+          },
+        });
       steps.push({
-        key: "music-cut",
+        key: "music",
         part: "music",
-        label: "Music bed · cut to the film",
-        request: { ...base, modelId: BED_CUT_MODEL, op: "trim", inputs: { video: clip.url }, params: { startTime: 0, endTime: need }, step: { label: "Music bed cut", index: n, of: n } },
-      });
-    steps.push({
-      key: "music",
-      part: "music",
-      label: "Music bed · from your clip",
-      seconds: clipSeconds,
-      ...(cut && { after: ["music-cut"], chain: [{ slot: "video" as const }] }),
-      request: {
-        ...base,
-        modelId: models.music,
-        op: "separate-audio",
-        title: `Stems · ${clip.name?.trim() || "music bed"}`,
-        ...(!cut && { inputs: { video: clip.url } }),
-        params: { sourceDuration: Math.round(clipSeconds * 1000) / 1000, extra: { channels: "mono" } },
-        step: { label: "Music bed", index: n, of: n },
-      },
-    });
-    const loopDef = models.loop ? lookup(models.loop) : undefined;
-    if (clipSeconds < length && loopDef) {
-      const duration = Math.min(LOOP_MAX[loopDef.id] ?? Infinity, Math.ceil(length) + 1);
-      steps.push({
-        key: "music-loop",
-        part: "music",
-        label: "Music bed · looped",
-        after: ["music"],
-        chain: [{ slot: "audio", stem: bedStem }],
-        seconds: duration,
+        label: "Music bed · from your clip",
+        seconds: bed,
+        ...(cutTo && { after: ["music-cut"], chain: [{ slot: "audio" as const }] }),
         request: {
           ...base,
-          modelId: models.loop!,
-          op: "audio-loop",
-          params: { duration, sourceDuration: Math.round(clipSeconds * 1000) / 1000, crossfade: BED_CROSSFADE },
-          step: { label: "Music loop", index: n, of: n },
+          modelId: SPLIT_MODEL,
+          op: "separate-audio",
+          inputs: cutTo ? {} : CLIP_BED_AUDIO.test(clip.url) ? { audio: clip.url } : { video: clip.url },
+          params: { sourceDuration: bed, extra: { channels: "mono" } },
+          step: { label: "Music from your clip", index: n, of: n },
         },
       });
-      bedKey = "music-loop";
-      bedStem = undefined;
-    }
-  } else if (models.music) {
-    const musicDef = pick(lookup, models.music);
-    const plan = musicPlan(musicDef, models.loop ? lookup(models.loop) : undefined, length);
-    const bed = plan.bed;
-    steps.push({
-      key: "music",
-      part: "music",
-      label: "Music bed",
-      seconds: bed,
-      request: {
-        ...base,
-        modelId: models.music,
-        op: "music",
-        prompt: musicPrompt(input.genre, style, settings.brief?.music),
-        // A model that sings is asked for an instrumental (ACE-Step, MiniMax Music 3).
-        params: { duration: bed, numOutputs: 1, ...(musicDef.options.lyrics && { extra: { lyrics: "[Instrumental]" } }) },
-        step: { label: "Music", index: n, of: n },
-      },
-    });
+    } else
+      steps.push({
+        key: "music",
+        part: "music",
+        label: "Music bed",
+        seconds: bed,
+        request: {
+          ...base,
+          modelId: models.music,
+          op: "music",
+          prompt: musicPrompt(input.genre, style, settings.brief?.music),
+          // A model that sings is asked for an instrumental (ACE-Step, MiniMax Music 3).
+          params: { duration: bed, numOutputs: 1, ...(musicDef.options.lyrics && { extra: { lyrics: "[Instrumental]" } }) },
+          step: { label: "Music", index: n, of: n },
+        },
+      });
     // A film longer than the bed: the bed looped (crossfaded seams, or whole plays the mix cuts to the film).
     if (plan.loop && models.loop) {
       const { duration, crossfade } = plan.loop;
@@ -1268,7 +1236,7 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
         part: "music",
         label: "Music bed · looped",
         after: ["music"],
-        chain: [{ slot: "audio" }],
+        chain: [{ slot: "audio", ...(bedStem && { stem: bedStem }) }],
         seconds: duration,
         request: {
           ...base,
@@ -1279,6 +1247,7 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
         },
       });
       bedKey = "music-loop";
+      bedStem = undefined;
     }
     if (models.level) {
       steps.push({
@@ -2173,6 +2142,29 @@ export function pickerData(lookup: ModelLookup): PickerData {
 }
 
 /** What the music switch does on each engine (settings, the Explainer's popover). */
+/**
+ * "Use a clip's soundtrack as the bed" (open engine): DBS splits the clip's sound, its music and effects (the talking
+ * taken out) loop under the voice with crossfaded seams, at the same level as a made bed (BED_DB). The cloud has no
+ * hosted DBS, so it makes the music instead.
+ */
+export const CLIP_BED_LABEL = "Use a clip's soundtrack as the bed";
+export const CLIP_BED_HINT: Record<Engine, string> = {
+  open: "Its music and effects, with the talking taken out, under the voice. A short clip loops with a soft crossfade.",
+  cloud: "Runs on your GPU (open source). In the cloud the music is made for the film.",
+};
+/** Clip lengths a bed can come from: long enough for a crossfaded loop, at most as long as the longest film. */
+export const CLIP_BED_MIN = 5;
+/** Cuts a clip longer than the film to its length (and a second) before the split: the open audio timeline (core nodes, CPU). */
+export const CLIP_BED_CUT_MODEL = "oss-audio-timeline";
+export const CLIP_BED_MAX = 600;
+const CLIP_BED_AUDIO = /[.](wav|mp3|flac|m4a|aac|ogg|opus)([?]|$)/i;
+
+/** The clip whose soundtrack is the bed, when this episode uses one (open engine, music on), else null. */
+export function clipBedFor(settings: Pick<EpisodeSettings, "engine" | "music" | "bedClip">): BedClip | null {
+  const c = settings.bedClip;
+  return settings.engine === "open" && settings.music && c?.url && c.seconds >= CLIP_BED_MIN ? c : null;
+}
+
 export const MUSIC_HINT: Record<Engine, string> = {
   cloud: "An instrumental bed under the voice, as long as the film (Sonilo makes up to 10 minutes; past that it plays again)",
   open: "An instrumental bed under the voice (ACE-Step); past 4 minutes it loops with a soft crossfade",

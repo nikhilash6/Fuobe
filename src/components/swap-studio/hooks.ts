@@ -1,12 +1,12 @@
 "use client";
 
+import type { OriginalSound } from "@/lib/av/original-sound";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { studioHandOff, type HandOffInput, type QueueMode, type StudioEstimate, type SwapProject, type SwapProjectCard, type SwapProjectView } from "@/lib/catalog/swap-studio";
 import type { SwapEdit } from "@/lib/catalog/swap-studio-edit";
 import type { SharpenTier } from "@/lib/catalog/sharpen";
 import type { Engine, PixelPoint } from "@/lib/catalog/types";
 import { responseError } from "@/lib/refusals";
-import type { SoundChoice } from "@/lib/av/original-sound";
 
 /** React Query hooks for /api/swap-studio/** (Character Swap Studio). */
 
@@ -119,7 +119,7 @@ function useAction<B, R extends SwapProject | QueueAnswer = SwapProject>(id: str
 
 export const useAddClip = (id: string) => useAction<ClipInput>(id, "clips");
 export const usePrepareClip = (id: string) => useAction<{ clipId: string }>(id, "prepare");
-export const useTranscribe = (id: string) => useAction<{ clipId: string; voiceFirst?: boolean }>(id, "transcribe");
+export const useTranscribe = (id: string) => useAction<{ clipId: string; cleanVoiceFirst?: boolean }>(id, "transcribe");
 export const useMakeMask = (id: string) =>
   useAction<{ clipId: string; shotId: string; kind: "track" | "frame"; frame: number; points: PixelPoint[]; size?: { width: number; height: number }; base?: string }>(id, "masks");
 export const useMakeAnchor = (id: string) => useAction<{ clipId: string; shotId: string; segmentId?: string; modelId?: string; seed?: number }>(id, "anchors");
@@ -127,7 +127,7 @@ export const useQueue = (id: string) => useAction<{ clipId: string; shotId: stri
 export const useStopTake = (id: string) => useAction<{ clipId: string; shotId: string; segmentId: string; takeId: string }>(id, "takes/stop");
 export const useStopJob = (id: string) =>
   useAction<{ kind: "mask" | "anchor" | "assembly" | "normalize" | "transcribe" | "finish"; clipId: string; shotId?: string; segmentId?: string; jobId?: string }>(id, "stop");
-export const useAssemble = (id: string) => useAction<{ clipId: string; sound?: SoundChoice }>(id, "assemble");
+export const useAssemble = (id: string) => useAction<{ clipId: string; originalSound?: OriginalSound }>(id, "assemble");
 export const useSharpen = (id: string) => useAction<{ clipId: string; tier: SharpenTier }>(id, "sharpen");
 
 /**

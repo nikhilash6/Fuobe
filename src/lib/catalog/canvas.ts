@@ -10,22 +10,23 @@
 import type { CanvasComment, CanvasGroup, CanvasPage, CanvasShape } from "./canvas-board";
 import { EXAMPLE_SCENE, EXAMPLE_WORDS, beatsFrom, blockoutFramePrompt, compileBlockoutPrompt, type BlockoutRef } from "@/lib/blockout";
 import { QMA_MODEL } from "@/lib/qma";
+import type { TemplateSectionKey } from "@/lib/canvas-sections";
+import { CLOUD_SPLIT_PROBLEM, SPLIT_MODEL } from "@/lib/av/split";
 import { getModel, getPreset, MODELS, supportsOp } from "./index";
 import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
 import { isSpeed, keyTimes, timingFor, timingProblem, type GapTiming, type InbetweenTiming } from "@/lib/inbetween";
 import { estimateCost, inferOperation, planGeneration, routesFor, type Plan } from "./plan";
 import { replacedBy, replacementOf } from "./replaced";
-import { REGEN_COPY, REGEN_MODEL } from "./regenerate";
-import { CLOUD_ONLY_PROBLEM, CLOUD_SPLIT_PROBLEM, SPLIT_MODEL, STEMS, type StemId } from "@/lib/av/split";
+import { REGEN_COPY, REGEN_MODEL, REGEN_OFFERED } from "./regenerate";
 import { RTX_UPSCALE_MODEL } from "./rtx-video";
 import { compileWords, LAYOUT_PARAM, readLayout, type LayoutDraft } from "@/lib/layout-prompt";
 import { fillLayout, layoutPlaceholders } from "@/lib/layout-surfaces";
 import { FLY_MODELS, flyKeys, planFlyAround } from "./fly-around";
 import type { CameraKey } from "@/lib/camera-path";
 import type { ExactOrbit } from "@/lib/exact-orbit";
-import { paramIdFrom } from "@/lib/recipe-builder";
-import type { GenerateStep, Recipe, RecipeCheck, RecipeParam, RecipeStep, RecipeValues } from "@/lib/recipe";
+import type { Recipe } from "@/lib/motion/recipe";
+import { CLIP_SCENES as KINETIC_CLIP_SCENES } from "@/lib/motion/kinetic-groups";
 import {
   OPERATION_LABELS,
   OPERATION_OUTPUT,
@@ -81,6 +82,7 @@ export type CanvasNodeType =
   | "layout"
   | "camera-path"
   | "fly-around"
+  | "kinetic"
   | "output"
   | "note";
 
@@ -132,16 +134,14 @@ export interface CanvasNodeData {
   dubId?: string;
   /** Layout: its boxes, one row per box (src/lib/layout-prompt.ts), drawn in the Layout editor. */
   layout?: LayoutDraft;
-  /** Camera path (N7-7): a preset (camera-path PATH_PRESETS), an exact orbit's numbers, or keys; the first set wins. */
+  /** Camera path: a preset (camera-path PATH_PRESETS), an exact orbit's numbers, or keys; the first set wins. */
   pathPreset?: string;
   orbit?: ExactOrbit;
   keys?: CameraKey[];
   /** Fly around: the clip's length in seconds (the cloud; your GPU always films about 5 s). */
   duration?: number;
-  /** A node drawn from a skill's step (recipeToCanvas): what the board has no field for, kept for the way back. */
-  skill?: SkillStepMark;
-  /** An input node drawn from a skill's input (or a fixed file of a step): the input as it was. */
-  input?: SkillInputMark;
+  /** Kinetic: the scene and its settings, as a Kinetic Motion recipe (its words come from the Text input per row). */
+  kinetic?: Recipe;
 }
 
 export interface CanvasNode {
@@ -208,6 +208,8 @@ export interface OutlineBox {
   x: number;
   y: number;
   type: CanvasNodeType;
+  /** The node's own label, short (a template page's diagram names its steps). */
+  label?: string;
 }
 
 /** The board in miniature: node boxes and the edges between them (as indexes into `boxes`). */
@@ -223,7 +225,7 @@ export interface CanvasSummary {
   pageCount: number;
   templateId: string | null;
   /** The newest finished image or video made on this canvas. */
-  preview: { url: string; kind: MediaKind } | null;
+  preview: { url: string; kind: MediaKind; poster?: string } | null;
   outline: Outline;
   createdAt: number;
   updatedAt: number;
@@ -268,8 +270,8 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   "voice-change": { type: "voice-change", label: "Change voice", group: "Utilities", icon: "AudioWaveform", ops: ["voice-change"], description: "Say a recording again in another voice, keeping its timing" },
   // NVIDIA RE-USE on the open engine only (nothing like it is hosted on fal or Replicate): hidden on a cloud-only install.
   "clean-voice": { type: "clean-voice", label: "Clean up voice", group: "Utilities", icon: "AudioLines", ops: ["enhance-voice"], description: "Remove noise, echo and room sound from speech" },
-  // DBS on the open engine only (nothing like it is hosted; src/lib/av/split.ts): four output handles, one per stem.
-  "split-soundtrack": { type: "split-soundtrack", label: "Split soundtrack", group: "Utilities", icon: "Split", ops: ["separate-audio"], description: "Dialogue, music and effects from any soundtrack, each on its own output" },
+  // DBS on the open engine only (hosted nowhere): its four outputs wire each part of a soundtrack on (SPLIT_OUTPUTS).
+  "split-soundtrack": { type: "split-soundtrack", label: "Split soundtrack", group: "Utilities", icon: "AudioWaveform", ops: ["separate-audio"], description: "Dialogue, music and effects of a soundtrack, each its own output" },
   "clone-voice": { type: "clone-voice", label: "Clone voice", group: "Inputs", icon: "UserRound", description: "A voice sample (or one of your saved voices) to speak with" },
   translate: { type: "translate", label: "Translate", group: "Utilities", icon: "Languages", ops: ["translate", "dub"], variants: ["text", "video"], description: "Translate a text, or dub a video into another language" },
   concat: { type: "concat", label: "Assemble film", group: "Utilities", icon: "Film", ops: ["concat"], description: "Up to 50 clips in one film: trim and mute each, pick the frame" },
@@ -278,6 +280,7 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   layout: { type: "layout", label: "Layout", group: "Inputs", icon: "LayoutDashboard", description: "Boxes for a headline, a product, a price: the image model draws each in its place" },
   "camera-path": { type: "camera-path", label: "Camera path", group: "Inputs", icon: "Orbit", description: "A move round the subject: a preset or an exact orbit" },
   "fly-around": { type: "fly-around", label: "Fly around", group: "Generate", icon: "Rotate3d", ops: ["camera-path"], description: "A still filmed along a camera path, with other views if you have them" },
+  kinetic: { type: "kinetic", label: "Kinetic", group: "Generate", icon: "LetterText", description: "Your words as motion graphics in your brand, drawn in your browser" },
   output: { type: "output", label: "Output", group: "Output", icon: "MonitorPlay", description: "Preview what's connected, side by side" },
   note: { type: "note", label: "Sticky note", group: "Output", icon: "StickyNote", description: "A note on the board (not run)" },
 };
@@ -335,7 +338,7 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("tts"), id: "tts", keywords: "voice speech narration clone" },
   { ...pick("voice-change"), id: "voice-change", keywords: "voice changer speech to speech revoice convert" },
   { ...pick("clean-voice"), id: "clean-voice", keywords: "denoise enhance speech noise clean up voice echo reverb podcast" },
-  { ...pick("split-soundtrack"), id: "split-soundtrack", keywords: "separate stems dialogue music effects soundtrack remove vocals speech isolate dbs" },
+  { ...pick("split-soundtrack"), id: "split-soundtrack", keywords: "stems separate dialogue music effects remove voice isolate soundtrack dbs" },
   { ...pick("clone-voice"), id: "clone-voice", keywords: "voice sample clone my voice speaker" },
   { ...pick("translate"), id: "translate", data: { mediaKind: "text" }, keywords: "language translate dub localize subtitles" },
   { ...pick("concat"), id: "concat", keywords: "concatenate join merge stitch edit trim mute film assemble" },
@@ -344,6 +347,7 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("layout"), id: "layout", data: { layout: { summary: { caption: "", meta: [], canvas: "single" }, items: [], aspect: "1:1" } }, keywords: "layout boxes poster text placement composition headline price moss" },
   { ...pick("camera-path"), id: "camera-path", data: { pathPreset: "orbit_360" }, keywords: "orbit arc camera move path keyframes exact turnaround" },
   { ...pick("fly-around"), id: "fly-around", keywords: "orbit fly around turnaround camera path 360 spin product" },
+  { ...pick("kinetic"), id: "kinetic", keywords: "motion text title animation brand kinetic" },
   { ...pick("output"), id: "output", keywords: "preview compare result" },
   { ...pick("note"), id: "note", keywords: "comment annotation" },
 ];
@@ -369,11 +373,11 @@ export function paletteItems(mode: "both" | "open" | "cloud" = "both", engine?: 
   const hit = paletteCache.get(key);
   if (hit) return hit;
   // Clean up voice has no cloud route: a cloud-only install doesn't offer it at all.
-  const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice")).map((p): PaletteItem => {
-    // Split soundtrack runs on your GPU only (DBS is hosted nowhere): a cloud board or a cloud-only install says so.
-    if (p.type === "split-soundtrack" && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? CLOUD_ONLY_PROBLEM : CLOUD_SPLIT_PROBLEM };
+  const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice") && (p.id !== "upscale-regenerate" || REGEN_OFFERED)).map((p): PaletteItem => {
     const fixed = p.data?.modelId ? getModel(p.data.modelId) : undefined;
     if (fixed && !runsOn(fixed, "cloud") && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? GPU_ONLY_INSTALL : GPU_ONLY_ENTRY };
+    // Split soundtrack: DBS runs on the open engine only, and no other model stands in for it.
+    if (p.type === "split-soundtrack" && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: CLOUD_SPLIT_PROBLEM };
     if (mode === "both" || !isGenerator(p) || defaultModelForNode({ type: p.type, data: p.data ?? {} }, mode)) return p;
     return { ...p, disabled: `No ${mode === "open" ? "open-source" : "cloud"} model for ${p.label.toLowerCase()} yet` };
   });
@@ -491,8 +495,6 @@ const KIND_OP: Record<MediaKind, Operation> = { image: "t2i", video: "t2v", audi
 /** The model a new generator node starts with. */
 export function defaultModelForNode(n: Pick<CanvasNode, "type" | "data">, engine: Engine): ModelDef | undefined {
   if (n.type === "concat") return getModel(CONCAT_MODELS[engine]);
-  // Split soundtrack: only a model that makes its stems, never another separator in its place (none on the cloud).
-  if (n.type === "split-soundtrack") return splitModels().find((m) => runsOn(m, engine));
   if (n.type === "fly-around") return getModel(FLY_MODELS[engine]);
   if (n.type === "model") {
     const kind = n.data.mediaKind ?? "image";
@@ -501,6 +503,8 @@ export function defaultModelForNode(n: Pick<CanvasNode, "type" | "data">, engine
   // Clean up voice is RE-USE, on your GPU only: the hosted cleaners (VEED, DeepFilterNet 3: Clean up dialogue's cloud
   // engine) share its op but are other tools, so the node doesn't take one of them on the cloud.
   if (n.type === "clean-voice" && engine === "cloud") return undefined;
+  // Split soundtrack runs DBS, on the open engine only (never Demucs or a cloud isolation in its place).
+  if (n.type === "split-soundtrack") return engine === "open" ? getModel(SPLIT_MODEL) : undefined;
   const op = nodeOps(n)[0];
   // The Upscale node's Regenerate choice starts on Open-H3 Regenerate (on the cloud the entry is disabled: paletteItems).
   const fixed = n.data.modelId && GPU_ONLY_FIXED.has(n.data.modelId) ? getModel(n.data.modelId) : undefined;
@@ -531,8 +535,8 @@ export function modelChoices(n: Pick<CanvasNode, "type" | "data">): ModelDef[] {
     return MODELS.filter((m) => !m.hidden && (!kind || m.kind === kind) && !needsMarks(m) && m.routes.some((r) => !UNSUPPORTED_OPS.has(r.op)));
   }
   if (n.type === "concat") return Object.values(CONCAT_MODELS).flatMap((id) => getModel(id) ?? []);
-  if (n.type === "split-soundtrack") return splitModels();
   if (n.type === "fly-around") return [FLY_MODELS.cloud, FLY_MODELS.open].flatMap((id) => getModel(id) ?? []);
+  if (n.type === "split-soundtrack") return [getModel(SPLIT_MODEL)!];
   const ops = nodeOps(n);
   // Clean up voice offers only what runs on your GPU (RE-USE): the hosted cleaners share its op but are Clean up
   // dialogue's cloud engine (defaultModelForNode).
@@ -555,6 +559,34 @@ export interface PortDef {
 /** Output handle id of every node that has one; the Output node's input handle id. */
 export const OUT = "out";
 export const PREVIEW_IN = "in";
+
+/**
+ * Split soundtrack's four output handles, each the stem it carries on (ChainSlot.stem). OUT, every other node's one output,
+ * stands for Dialogue, so an edge saved before the node had four outputs keeps working.
+ */
+export const SPLIT_OUTPUTS: { id: "voice" | "music" | "effects" | "background"; label: string }[] = [
+  { id: "voice", label: "Dialogue" },
+  { id: "music", label: "Music" },
+  { id: "effects", label: "Effects" },
+  { id: "background", label: "Music & effects" },
+];
+
+/** The output handles a node has: Split soundtrack's four (and OUT, as Dialogue), else OUT. */
+export function outputHandles(n: Pick<CanvasNode, "type">): string[] {
+  return n.type === "split-soundtrack" ? [OUT, ...SPLIT_OUTPUTS.map((o) => o.id)] : [OUT];
+}
+
+/** The stem an edge out of a node carries (Split soundtrack: its handle's; OUT is Dialogue), or undefined. */
+export function edgeStem(source: Pick<CanvasNode, "type"> | undefined, sourceHandle: string | null | undefined): string | undefined {
+  if (source?.type !== "split-soundtrack") return undefined;
+  return SPLIT_OUTPUTS.find((o) => o.id === sourceHandle)?.id ?? "voice";
+}
+
+/** "Music & effects": what an output handle is called ("" for a plain OUT). */
+export function outputLabel(source: Pick<CanvasNode, "type"> | undefined, sourceHandle: string | null | undefined): string {
+  const stem = edgeStem(source, sourceHandle);
+  return stem ? SPLIT_OUTPUTS.find((o) => o.id === stem)!.label : "";
+}
 
 const INPUT_ORDER: InputPortId[] = ["prompt", "elements", "images", "endImage", "video", "videos", "audio", "voice", "path"];
 
@@ -632,6 +664,13 @@ export function inputPorts(n: Pick<CanvasNode, "type" | "data">): PortDef[] {
   // Clone voice: the sample can come from another node (a recording, a generated voice) instead of a file.
   if (n.type === "clone-voice") return [{ id: "audio", label: "Sample", type: "audio", multiple: false }];
   if (n.type === "output") return [];
+  // Kinetic: words (a Table feeds one render per row), a picture (the product, else the logo) and a clip under the words.
+  if (n.type === "kinetic")
+    return [
+      { id: "prompt", label: "Text", type: "text", multiple: true },
+      { id: "images", label: "Picture", type: "image", multiple: false },
+      { id: "video", label: "Clip", type: "video", multiple: false },
+    ];
   // Fly around: the still (then any other views of the subject), the path, and motion words.
   if (n.type === "fly-around")
     return [
@@ -688,7 +727,7 @@ export function outputType(_graph: CanvasGraph, n: CanvasNode): PortType | null 
   if (n.type === "clone-voice") return "voice";
   if (n.type === "element") return "element";
   if (n.type === "camera-path") return "path";
-  if (n.type === "fly-around") return "video";
+  if (n.type === "fly-around" || n.type === "kinetic") return "video";
   if (MEDIA_INPUT_TYPE[n.type]) return MEDIA_INPUT_TYPE[n.type]!;
   if (!isGenerator(n)) return null;
   // Never inferred from the inputs (that would walk the whole upstream graph): a chosen or fixed op, else the model's kind.
@@ -702,93 +741,6 @@ export function outputType(_graph: CanvasGraph, n: CanvasNode): PortType | null 
   if (n.type === "frame") return "image";
   if (n.type === "tts") return "audio";
   return toPortType(n.data.mediaKind ?? "image");
-}
-
-// ---------------------------------------------------------------------------
-// Output handles: one OUT per node, except Split soundtrack (DBS D8), whose four handles each carry one stem
-// into the next node's chain (ChainSlot.stem, read by pickOutput on the server).
-
-export interface OutputPortDef {
-  /** The handle id an edge saves as its sourceHandle. */
-  id: string;
-  label: string;
-  type: PortType;
-  /** Split soundtrack: the stem this handle carries. */
-  stem?: StemId;
-  /** Why nothing can be taken from this handle here (the node's model can't make that stem, or can't run here). */
-  disabled?: string;
-}
-
-/**
- * Split soundtrack's handles, in the order the node shows them. Dialogue is OUT itself, so an edge drawn or saved without
- * a handle (OUT, null) takes the dialogue, the stem a chain without one takes anyway; "voice" is read as OUT too.
- */
-export const SPLIT_HANDLES: { id: string; stem: StemId; label: string }[] = STEMS.map((s) => ({ id: s.id === "voice" ? OUT : s.id, stem: s.id, label: s.label }));
-
-/**
- * The stems each separator the node may run makes (the open engine's DBS: all four). Only these models are offered: the
- * cloud has none while DBS is hosted nowhere, and Demucs (a music separator) is never put in its place.
- */
-export const SPLIT_STEMS: Record<string, readonly StemId[]> = {
-  [SPLIT_MODEL]: ["voice", "music", "effects", "background"],
-};
-
-const splitModels = (): ModelDef[] => Object.keys(SPLIT_STEMS).flatMap((id) => getModel(id) ?? []);
-
-/** A Split soundtrack handle's id as stored (OUT for Dialogue, also for "voice" and no handle), or undefined when it has none such. */
-export function splitHandle(handle: string | null | undefined): string | undefined {
-  if (!handle || handle === "voice") return OUT;
-  return SPLIT_HANDLES.some((h) => h.id === handle) ? handle : undefined;
-}
-
-/** The stem an edge out of a Split soundtrack node carries (undefined for any other node, or a handle it doesn't have). */
-export function edgeStem(source: Pick<CanvasNode, "type"> | undefined, handle: string | null | undefined): StemId | undefined {
-  if (source?.type !== "split-soundtrack") return undefined;
-  const id = splitHandle(handle);
-  return SPLIT_HANDLES.find((h) => h.id === id)?.stem;
-}
-
-/** The names a separator may give each stem (as the server's pickOutput reads them). */
-const STEM_NAMES: Record<StemId, string[]> = {
-  voice: ["voice", "vocals", "speech", "target"],
-  music: ["music"],
-  effects: ["effects", "sfx"],
-  background: ["background", "accompaniment", "instrumental", "residual", "no_vocals"],
-};
-
-/** A result's output for one stem (meta.stem), as the next step takes it; without a stem, the first audio. */
-export function stemOutput<T extends { kind: string; meta?: Record<string, unknown> }>(outputs: readonly T[], stem: StemId | undefined): T | undefined {
-  const audio = outputs.filter((o) => o.kind === "audio");
-  if (!stem) return audio[0];
-  return audio.find((o) => typeof o.meta?.stem === "string" && STEM_NAMES[stem].includes(o.meta.stem.toLowerCase()));
-}
-
-/**
- * Why a Split soundtrack node can't run on this install (it runs on your GPU only), or null. A node with no model yet,
- * or one the catalog no longer has, isn't an engine problem: describeNode asks for a model and its edges stay.
- */
-export function splitProblem(n: Pick<CanvasNode, "data">, mode: "both" | Engine = "both"): string | null {
-  if (mode === "cloud") return CLOUD_ONLY_PROBLEM;
-  const model = nodeModel(n, mode);
-  // A separator that isn't one of the node's (a cloud one such as Demucs, or a two-stem open one) is told to pick DBS.
-  return model && !SPLIT_STEMS[model.id] ? `${model.name} can't split a soundtrack into its stems — pick ${splitModels()[0]?.name ?? "another model"}` : null;
-}
-
-/** A node's output handles: OUT with its type, Split soundtrack's four stems, or none. */
-export function outputPorts(graph: CanvasGraph, n: CanvasNode, mode: "both" | Engine = "both"): OutputPortDef[] {
-  if (n.type === "split-soundtrack") {
-    // Only the install shuts the handles (a cloud-only one): a node still missing its model keeps its edges, and a
-    // separator that makes fewer stems shuts the ones it doesn't make.
-    const why = mode === "cloud" ? CLOUD_ONLY_PROBLEM : undefined;
-    const model = nodeModel(n, mode);
-    const stems = model && SPLIT_STEMS[model.id];
-    return SPLIT_HANDLES.map((h) => {
-      const disabled = why ?? (model && stems && !stems.includes(h.stem) ? `${model.name} doesn't make a ${h.label.toLowerCase()} stem` : undefined);
-      return { id: h.id, label: h.label, type: "audio" as const, stem: h.stem, ...(disabled && { disabled }) };
-    });
-  }
-  const type = outputType(graph, n);
-  return type ? [{ id: OUT, label: PORT_TYPE_LABEL[type], type }] : [];
 }
 
 /** Which ports accept which types: a voice input also takes plain audio (a sample straight from a file or a model). */
@@ -886,18 +838,17 @@ export interface Connection {
 }
 
 /** Why this edge can't be drawn, or null when it can. */
-export function connectionError(graph: CanvasGraph, c: Connection, mode: "both" | Engine = "both"): string | null {
+export function connectionError(graph: CanvasGraph, c: Connection): string | null {
   const nodes = nodeMap(graph);
   const s = nodes.get(c.source);
   const t = nodes.get(c.target);
   if (!s || !t) return "That node no longer exists";
   if (s.id === t.id) return "A node can't feed itself";
-  // Split soundtrack: one of its four stems (Dialogue for OUT or no handle); every other node: OUT.
-  const handle = s.type === "split-soundtrack" ? splitHandle(c.sourceHandle) : !c.sourceHandle || c.sourceHandle === OUT ? OUT : undefined;
-  const out = handle ? outputPorts(graph, s, mode).find((p) => p.id === handle) : undefined;
-  if (!out) return `${nodeLabel(s)} has no ${s.type === "split-soundtrack" && c.sourceHandle ? `${c.sourceHandle} ` : ""}output`;
-  if (out.disabled) return out.disabled;
-  const type = out.type;
+  const type = outputType(graph, s);
+  if (!type || (c.sourceHandle && !outputHandles(s).includes(c.sourceHandle))) return `${nodeLabel(s)} has no output`;
+  // Kinetic renders in the browser: its clips go to Output nodes only (for now).
+  if (s.type === "kinetic" && t.type !== "output") return "Connect Kinetic to an Output node";
+  if (t.type === "kinetic" && c.targetHandle === "video" && !KINETIC_CLIP_SCENES.includes(t.data.kinetic?.scene ?? "")) return "This scene doesn't take a clip";
   if (t.type === "output") {
     if (c.targetHandle && c.targetHandle !== PREVIEW_IN) return "Unknown input";
     if (!acceptsType("preview", type)) return "Elements go into a model's Elements input";
@@ -909,7 +860,7 @@ export function connectionError(graph: CanvasGraph, c: Connection, mode: "both" 
     if (t.type === "concat" && graph.edges.filter((e) => e.target === t.id && e.source !== s.id).length >= CONCAT_LIMITS.clips) return `Assemble film takes up to ${CONCAT_LIMITS.clips} clips`;
     // Rows from a table: one table per node, and Join clips can't take a clip per row (the concatenator can).
     if (graph.nodes.some((n) => n.type === "table")) {
-      const withEdge: CanvasGraph = { ...graph, edges: [...graph.edges, { id: "", source: s.id, target: t.id, sourceHandle: handle, targetHandle: c.targetHandle ?? null }] };
+      const withEdge: CanvasGraph = { ...graph, edges: [...graph.edges, { id: "", source: s.id, target: t.id, sourceHandle: OUT, targetHandle: c.targetHandle ?? null }] };
       const rows = rowsFeeding(withEdge, t);
       if (rows && "error" in rows) return rows.error;
       if (rows && t.type === "join") return "Join clips takes one clip per input. Assemble film joins a clip per row";
@@ -935,7 +886,7 @@ type Source =
   | { kind: "layout"; draft: LayoutDraft }
   | { kind: "media"; url: string }
   | { kind: "element"; handle: string }
-  | { kind: "node"; nodeId: string; stem?: StemId };
+  | { kind: "node"; nodeId: string };
 
 const SLOT: Record<InputPortId, ChainSlot["slot"] | null> = {
   prompt: "prompt",
@@ -1022,8 +973,7 @@ export interface NodeDescription extends Partial<NodeRequest> {
   error?: string;
 }
 
-/** What a node hands on along an edge (`handle`: the edge's sourceHandle, which picks a Split soundtrack stem). */
-function sourceOf(graph: CanvasGraph, s: CanvasNode, handle?: string | null): Source | { error: string } {
+function sourceOf(graph: CanvasGraph, s: CanvasNode): Source | { error: string } {
   if (s.type === "prompt") return { kind: "text", text: (s.data.text ?? "").trim() };
   // A table is read row by row (rowRequest); read whole, it is its first row.
   if (s.type === "table") {
@@ -1039,7 +989,7 @@ function sourceOf(graph: CanvasGraph, s: CanvasNode, handle?: string | null): So
     // A sample wired in wins over the node's own file (a recording, a generated voice).
     const e = graph.edges.find((x) => x.target === s.id && x.targetHandle === "audio");
     const from = e && graph.nodes.find((n) => n.id === e.source);
-    if (from && from.type !== "clone-voice") return sourceOf(graph, from, e.sourceHandle);
+    if (from && from.type !== "clone-voice") return sourceOf(graph, from);
     return s.data.url ? { kind: "media", url: s.data.url } : { error: `Add a voice sample to “${nodeLabel(s)}”: record, upload or pick a saved voice` };
   }
   if (MEDIA_INPUT_TYPE[s.type]) {
@@ -1047,10 +997,7 @@ function sourceOf(graph: CanvasGraph, s: CanvasNode, handle?: string | null): So
     return s.data.url ? { kind: "media", url: s.data.url } : { error: `Add ${what} to “${nodeLabel(s)}”` };
   }
   if (s.type === "element") return s.data.handle ? { kind: "element", handle: s.data.handle } : { error: `Pick an element in “${nodeLabel(s)}”` };
-  if (isGenerator(s)) {
-    const stem = edgeStem(s, handle);
-    return { kind: "node", nodeId: s.id, ...(stem && { stem }) };
-  }
+  if (isGenerator(s)) return { kind: "node", nodeId: s.id };
   return { error: `${nodeLabel(s)} has no output` };
 }
 
@@ -1147,13 +1094,16 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
       .sort((a, b) => byPosition(nodes.get(a.source)!, nodes.get(b.source)!));
     if (!port.multiple && edges.length > 1) return { error: `${port.label} takes one input — remove a connection` };
     const list: Source[] = [];
+    // The stem each edge carries (Split soundtrack's outputs), in the order of `list`.
+    const stems: (string | undefined)[] = [];
     for (const e of edges) {
       const s = nodes.get(e.source)!;
       const type = outputType(graph, s);
       if (!type || !acceptsType(port, type)) return { error: `${nodeLabel(s)} can't go into ${port.label}` };
-      const src = sourceOf(graph, s, e.sourceHandle);
+      const src = sourceOf(graph, s);
       if ("error" in src) return src;
       list.push(src);
+      stems.push(edgeStem(s, e.sourceHandle));
     }
     if (port.id === "prompt") {
       for (const src of list) {
@@ -1192,8 +1142,7 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
     if (!field || !src) continue;
     if (src.kind === "media") inputs[field] = src.url;
     else if (src.kind === "node") {
-      // A stem from Split soundtrack: the step takes that one of its outputs (pickOutput's meta.stem).
-      chain.push({ slot: SLOT[port.id]!, ...(src.stem && { stem: src.stem }) });
+      chain.push({ slot: SLOT[port.id]!, ...(stems[0] && { stem: stems[0] }) });
       deps.push(src.nodeId);
     }
   }
@@ -1577,7 +1526,7 @@ function pathInputOf(n: Pick<CanvasNode, "data">) {
 }
 
 /**
- * Fly around (N7-7): the still (the first image, top to bottom; any more are other views of the subject) filmed along the
+ * Fly around: the still (the first image, top to bottom; any more are other views of the subject) filmed along the
  * connected Camera path, as src/lib/catalog/fly-around.ts plans it. Cloud: H3 Max camera-controls, or with views H3 Max
  * reference-to-video. Your GPU: MoGe 2's depth of the still, then Wan 2.1 + Uni3C along the server's render of the path.
  */
@@ -1668,12 +1617,6 @@ export function describeNode(graph: CanvasGraph, n: CanvasNode, ctx: DescribeCon
   const mode = ctx.engineMode ?? "both";
   // A Fuobe Original as it runs on the node's engine (its routes, its price).
   const model = nodeModel(n, mode);
-  // Split soundtrack runs on your GPU only: a cloud-only install says so, and a node on another separator is told to
-  // pick DBS (a node with no model asks for one below).
-  if (n.type === "split-soundtrack") {
-    const why = splitProblem(n, mode);
-    if (why) return { ...(model && { model }), costUsd: null, error: why };
-  }
   // Dubbing has no open model: an open-only install says where it dubs instead. The concatenator's tools are
   // picked by engine, not by model.
   if (!model) {
@@ -1951,7 +1894,7 @@ export function counterpart(graph: CanvasGraph, n: CanvasNode, engine: Engine): 
   const current = n.data.modelId ? getModel(n.data.modelId) : undefined;
   // A Fuobe Original runs on both: it stays, on the other engine.
   if (current && runsOn(current, engine)) return current;
-  // Open-H3 Regenerate and NVIDIA RTX Video are GPU-only: nobody hosts them, so they have no cloud stand-in (the owner's rule).
+  // Open-H3 Regenerate and NVIDIA RTX Video are GPU-only: nobody hosts them, so they have no cloud stand-in.
   if (current && GPU_ONLY_FIXED.has(current.id)) return undefined;
   if (n.type !== "model") return defaultModelForNode(n, engine);
   const op = n.data.op ?? effectiveOp(graph, n) ?? (current ? current.routes[0].op : KIND_OP[n.data.mediaKind ?? "image"]);
@@ -2088,12 +2031,9 @@ export function cleanGraph(graph: CanvasGraph): CanvasGraph {
   const g: CanvasGraph = { ...graph, nodes, edges: [] };
   const ids = new Set(nodes.map((n) => n.id));
   const seen = new Set<string>();
-  const types = new Map(nodes.map((n) => [n.id, n.type]));
-  for (const edge of graph.edges) {
-    if (!ids.has(edge.source) || !ids.has(edge.target)) continue;
-    // A Split soundtrack edge saved as "voice" (or with no handle) is its Dialogue handle, OUT.
-    const e = types.get(edge.source) === "split-soundtrack" && edge.sourceHandle && edge.sourceHandle !== OUT && splitHandle(edge.sourceHandle) === OUT ? { ...edge, sourceHandle: OUT } : edge;
-    const key = `${e.source}|${e.sourceHandle && e.sourceHandle !== OUT ? e.sourceHandle : ""}|${e.target}|${e.targetHandle ?? ""}`;
+  for (const e of graph.edges) {
+    if (!ids.has(e.source) || !ids.has(e.target)) continue;
+    const key = `${e.source}|${e.sourceHandle ?? ""}|${e.target}|${e.targetHandle ?? ""}`;
     if (seen.has(key)) continue;
     const without = { ...g, edges: g.edges };
     if (connectionError(without, e)) continue;
@@ -2107,7 +2047,7 @@ export function outline(graph: CanvasGraph): Outline {
   const nodes = graph.nodes.filter((n) => n.type !== "note").slice(0, 40);
   const index = new Map(nodes.map((n, i) => [n.id, i]));
   return {
-    boxes: nodes.map((n) => ({ x: Math.round(n.position.x), y: Math.round(n.position.y), type: n.type })),
+    boxes: nodes.map((n) => ({ x: Math.round(n.position.x), y: Math.round(n.position.y), type: n.type, ...(n.data.label && { label: n.data.label.slice(0, 24) }) })),
     links: graph.edges.flatMap((e) => (index.has(e.source) && index.has(e.target) ? [[index.get(e.source)!, index.get(e.target)!] as [number, number]] : [])),
   };
 }
@@ -2129,8 +2069,27 @@ export interface CanvasTemplate {
   /** lucide icon name. */
   icon: string;
   hue: number;
-  /** The picker's section ("Effects 2.0 chains"); none: the workflows. */
-  group?: string;
+  /** The section's key (TEMPLATE_SECTIONS: "effect-films"); none: the films and campaigns. */
+  group?: TemplateSectionKey;
+  /** Its place in its section, ascending: the most premium first. */
+  rank: number;
+  /** false: no ready board of its own (Blockout → film): only the owner sees it, under "More templates". */
+  starter?: false;
+  /** What the board makes, in plain words (its page's "What comes out"): no model names. */
+  makes: string;
+  /** The steps in order, in plain words (its page's "The steps"): no model names. */
+  steps: string[];
+  /** Plain words for an input node, by node id (its page's "What goes in"), where its label alone doesn't say it. */
+  inputs?: Record<string, string>;
+  /** The studio that makes the same in one step: an effect film's Video effect. */
+  oneStep?: { href: string; label: string };
+  /** The steps as a word or two each, for the small flow over a card's cover ("Photo", "Scene", "Film"). */
+  flow: string[];
+  /**
+   * Files the board starts with, by input node id: a public file Fuobe ships (a published example input, a sample),
+   * copied into the owner's storage when the board is made (src/server/canvas-samples.ts), so the board runs as it is.
+   */
+  samples?: Record<string, { src: string; name: string }>;
   /** `offered`: whether the install offers a model (Settings → Models & licences); a node falls back when it doesn't. */
   build: (engine: Engine, offered?: (id: string) => boolean) => CanvasGraph;
 }
@@ -2280,6 +2239,14 @@ const keyframesAnimation = tpl(
       ],
     );
 
+/** The outfit lookbook's four looks: one outfit and one place each, the model's face, hair and pose kept. */
+const LOOKBOOK_LOOKS = [
+  { label: "Paris balcony", prompt: "Dress the woman from the photo in an ivory tailored trouser suit on a Paris balcony in morning light, a wrought-iron rail and zinc rooftops behind her. Keep her face, hair and pose, full length." },
+  { label: "Opera staircase", prompt: "Dress the woman from the photo in a black velvet column gown on a grand opera staircase lit by crystal chandeliers, red carpet and gilded balustrades around her. Keep her face, hair and pose, full length." },
+  { label: "Alpine terrace", prompt: "Dress the woman from the photo in a long camel cashmere coat over a cream knit on a snowy Alpine hotel terrace at golden hour, the peaks glowing behind her. Keep her face, hair and pose, full length." },
+  { label: "Yacht deck", prompt: "Dress the woman from the photo in a white linen shirt and wide white trousers on the teak deck of a yacht off Capri in bright sun, the turquoise sea behind her. Keep her face, hair and pose, full length." },
+];
+
 export const CANVAS_TEMPLATES: CanvasTemplate[] = [
   {
     id: "keyframes-animation",
@@ -2287,6 +2254,11 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "Your keyframes in, the in-betweens drawn, one animation: a table times each gap",
     icon: "Sparkles",
     hue: 320,
+    rank: 98,
+    starter: false,
+    makes: "One animation through your keyframes, each gap timed as the table says.",
+    flow: ["Keyframes", "Timing", "Animation"],
+    steps: ["Your keyframes go in, in order.", "A table gives each gap its length, speed and what happens in it.", "An animation model draws the in-betweens and joins them into one animation."],
     // Fuobe Animation runs on both engines: the node takes the template's.
     build: (engine) => {
       const g = keyframesAnimation(engine);
@@ -2300,11 +2272,15 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "Write a prompt, make a still, bring it to life",
     icon: "Clapperboard",
     hue: 282,
+    rank: 5,
+    makes: "A 5-second film of the still, in 16:9.",
+    flow: ["Words", "Still", "Film"],
+    steps: ["Your prompt says what the picture shows.", "An image model makes a still from it.", "A video model brings the still to life as a 5-second shot."],
     build: tpl(
       [
-        { id: "prompt", type: "prompt", x: 0, y: 80, data: { label: "Prompt", text: "A lighthouse on a sea cliff at golden hour, waves crashing below, cinematic wide shot" } },
+        { id: "prompt", type: "prompt", x: 0, y: 80, data: { label: "Prompt", text: "A fashion model in a long crimson silk gown on an Icelandic black-sand beach, the silk train lifting in the sea wind, basalt sea stacks behind her, soft overcast light, cinematic wide shot" } },
         { id: "still", type: "model", x: COL, y: 40, data: { mediaKind: "image", label: "Still", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
-        { id: "animate", type: "model", x: COL * 2, y: 40, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in as the waves roll and the beam sweeps across the sea", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
+        { id: "animate", type: "model", x: COL * 2, y: 40, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in as the silk train lifts in the sea wind and she turns her face towards the light", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
         { id: "out", type: "output", x: COL * 3, y: 60, data: { label: "Film" } },
       ],
       [
@@ -2320,14 +2296,21 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "One product photo, three studio angles, one ad clip",
     icon: "Package",
     hue: 30,
+    rank: 1,
+    makes: "Three studio angles of the product and a 5-second ad clip.",
+    steps: ["Your product photo goes in.", "Three edits show it from the front, from the side and from above, on a clean studio background.", "A video model turns the three angles into a 5-second ad clip with a slow orbit."],
+    inputs: { product: "A photo of your product on its own." },
+    flow: ["Product", "3 angles", "Ad"],
+    samples: { product: { src: "/examples/app-product-360/1/in-image.jpg", name: "Red patent heel.jpg" } },
     build: tpl(
       [
         { id: "product", type: "image-input", x: 0, y: ROW, data: { label: "Product photo" } },
-        // On your GPU the three angles are QMA · 96 views (qma-angles): the camera itself turns (its pose in params.extra) and
+        // On your GPU the front and side angles are QMA · 96 views: the camera itself turns (its pose in params.extra) and
         // the words follow its camera words, so a board switched to the cloud keeps each angle. Without QMA offered: Qwen-Image 2.1.
+        // The top-down flat lay stays on Qwen-Image 2.1: QMA's highest camera is a high angle, not straight down.
         { id: "front", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "Front ¾ angle", op: "edit", prompt: "The same product from a three-quarter front angle on a seamless studio background, soft key light, sharp details" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL, fallback: { open: "oss-qwen-image-21" } }, on: { open: { params: { extra: { horizontal_angle: 45, vertical_angle: 30, zoom: 5 } } } } },
         { id: "side", type: "model", x: COL, y: ROW, data: { mediaKind: "image", label: "Side profile", op: "edit", prompt: "The same product in a clean side profile on a seamless studio background, rim light, sharp details" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL, fallback: { open: "oss-qwen-image-21" } }, on: { open: { params: { extra: { horizontal_angle: 90, vertical_angle: 0, zoom: 5 } } } } },
-        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL, fallback: { open: "oss-qwen-image-21" } }, on: { open: { params: { extra: { horizontal_angle: 0, vertical_angle: 60, zoom: 5 } } } } },
+        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
         { id: "video", type: "model", x: COL * 2, y: ROW - 40, data: { mediaKind: "video", label: "Ad clip", op: "ref2v", prompt: "A premium product commercial: the camera orbits the product from the reference angles, studio lighting, slow and smooth", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "seedance-2-5", open: "oss-wan-vace" } },
         { id: "out", type: "output", x: COL * 3, y: ROW, data: { label: "Ad" } },
       ],
@@ -2343,14 +2326,116 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     ),
   },
   {
-    id: "script-film",
-    name: "Script → storyboard → film",
-    description: "A text model breaks a short script into three shots: three frames, three clips, one film",
-    icon: "GalleryHorizontal",
-    hue: 200,
+    id: "lookbook",
+    name: "Outfit lookbook",
+    description: "One model photo, four looks in four places, then one moving shot",
+    icon: "Shirt",
+    hue: 20,
+    rank: 2,
+    makes: "Four lookbook pictures of the model and a 5-second moving shot of the first look.",
+    flow: ["Model", "4 looks", "Film"],
+    steps: [
+      "A full-length photo of the model goes in.",
+      "Four edits dress her in four outfits, each in its own place: a Paris balcony, an opera staircase, an Alpine terrace and a yacht deck.",
+      "The four looks sit side by side as a lookbook.",
+      "The first look comes to life as a 5-second moving shot.",
+    ],
+    inputs: { model: "A full-length photo of a person, head to toe." },
+    samples: { model: { src: "/examples/app-3d-rotation/1/in-image.jpg", name: "Model photo.jpg" } },
     build: tpl(
       [
-        { id: "script", type: "prompt", x: 0, y: FILM_ROW, data: { label: "Script", text: "A paper boat sails down a rain-soaked city gutter, rides a little waterfall into a storm drain and comes out on a sunny canal." } },
+        { id: "model", type: "image-input", x: 0, y: ROW + 160, data: { label: "Model photo" } },
+        ...LOOKBOOK_LOOKS.map((l, i) => ({
+          id: `look${i + 1}`,
+          type: "model" as const,
+          x: COL,
+          y: i * (ROW + 40),
+          data: { mediaKind: "image" as const, label: l.label, op: "edit" as const, prompt: l.prompt, params: { aspectRatio: "3:4" } },
+          models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
+        })),
+        { id: "book", type: "output", x: COL * 2, y: 0, data: { label: "Lookbook" }, width: 560 },
+        { id: "animate", type: "model", x: COL * 2, y: ROW * 2 + 200, data: { mediaKind: "video", label: "Moving shot", op: "i2v", prompt: "She turns slowly towards the camera and smiles, the ivory suit moving softly, morning light on her face, the Paris rooftops behind her", params: { aspectRatio: "3:4", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
+        { id: "out", type: "output", x: COL * 3, y: ROW * 2 + 240, data: { label: "Film" } },
+      ],
+      [
+        ...LOOKBOOK_LOOKS.map((_, i): [string, string, string] => ["model", `look${i + 1}`, "images"]),
+        ...LOOKBOOK_LOOKS.map((_, i): [string, string] => [`look${i + 1}`, "book"]),
+        ["look1", "animate", "images"],
+        ["animate", "out"],
+      ],
+    ),
+  },
+  {
+    id: "music-video",
+    name: "Music video",
+    description: "One singer photo, three song scenes as moving shots, and a song laid under the film",
+    icon: "Music",
+    hue: 315,
+    rank: 4,
+    makes: "A 15-second music video of the three scenes, with its song.",
+    flow: ["Singer", "Scenes", "Film"],
+    steps: [
+      "A photo of the singer goes in, so she looks the same in every scene.",
+      "Each row of the table is one scene: a line of the song and what the picture shows.",
+      "Every scene becomes a still of her, then a 5-second moving shot.",
+      "The shots are joined into one film, and a song is made in the same mood.",
+      "The song is laid under the film and cut to its 15 seconds.",
+    ],
+    inputs: { singer: "A clear photo of the singer's face and hair." },
+    samples: { singer: { src: "/examples/app-hairstyle-try-on/1/in-image.jpg", name: "Singer photo.jpg" } },
+    build: tpl(
+      [
+        { id: "singer", type: "image-input", x: 0, y: FILM_ROW - 80, data: { label: "Singer photo" } },
+        {
+          id: "scenes",
+          type: "table",
+          x: 0,
+          y: 40,
+          width: 420,
+          data: {
+            label: "Scenes",
+            columns: ["Lyric", "Scene"],
+            rows: [
+              ["Midnight, the city is ours", "she dances in a silver sequin gown on a Tokyo rooftop at night, neon signs glowing behind her"],
+              ["I keep the lights on for you", "she drives a red vintage convertible on a coast road at night in the silver sequin gown, city lights below"],
+              ["Till the sun comes up", "she laughs on a Malibu beach at sunrise, the silver sequin gown catching the pink light"],
+            ],
+          },
+        },
+        { id: "still", type: "model", x: COL + 180, y: 0, data: { mediaKind: "image", label: "Still", op: "edit", prompt: "The same woman from the photo, her face and long dark hair unchanged: {Scene}. A music video still, glossy cinematic light, fashion film look", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        { id: "animate", type: "model", x: COL * 2 + 180, y: 0, data: { mediaKind: "video", label: "Moving shot", op: "i2v", prompt: "She moves to the music, her sequin gown shimmering, the camera gliding slowly around her, lights glowing", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
+        { id: "film", type: "concat", x: COL * 3 + 180, y: 0, data: { label: "Film", params: { aspectRatio: "16:9" } }, models: { cloud: CONCAT_MODELS.cloud, open: CONCAT_MODELS.open } },
+        { id: "song", type: "model", x: COL * 3 + 180, y: FILM_ROW, data: { mediaKind: "audio", label: "Song", op: "music", prompt: "Dreamy synth-pop, 104 bpm, a female vocal, glossy and cinematic, a warm night-drive mood", params: { duration: 30 } }, models: { cloud: "elevenlabs-music", open: "oss-ace-step" } },
+        // The song under the film, then the whole cut to the film's 15 seconds (three 5-second shots).
+        { id: "score", type: "model", x: COL * 4 + 220, y: FILM_ROW / 2, data: { mediaKind: "video", label: "Song under the film", op: "mux" }, models: { cloud: CONCAT_TOOLS.cloud.mux, open: "oss-mux" } },
+        { id: "cut", type: "model", x: COL * 5 + 220, y: FILM_ROW / 2, data: { mediaKind: "video", label: "Cut to the film", op: "trim", params: { startTime: 0, endTime: 15 } }, models: { cloud: CONCAT_TOOLS.cloud.trim, open: "oss-trim" } },
+        { id: "out", type: "output", x: COL * 6 + 220, y: FILM_ROW / 2, data: { label: "Music video" } },
+      ],
+      [
+        ["singer", "still", "images"],
+        ["scenes", "still", "prompt"],
+        ["still", "animate", "images"],
+        ["animate", "film", "videos"],
+        ["film", "score", "video"],
+        ["song", "score", "audio"],
+        ["score", "cut", "video"],
+        ["cut", "out"],
+      ],
+    ),
+  },
+  {
+    id: "script-film",
+    name: "Script → storyboard → film",
+    description: "A short script becomes three frames, three clips and one film",
+    icon: "GalleryHorizontal",
+    hue: 200,
+    rank: 6,
+    makes: "Three frames, three clips and one film.",
+    flow: ["Script", "Frames", "Film"],
+    steps: ["Your script goes in.", "A writing model splits it into three shots: the opening, the turning point and the ending.", "Each shot becomes a still frame, all in one look.", "Each frame becomes a 5-second clip.", "The three clips are joined into one film."],
+    build: tpl(
+      [
+        { id: "script", type: "prompt", x: 0, y: FILM_ROW, data: { label: "Script", text: "On a candlelit night, a woman in an emerald silk ball gown walks down the grand marble staircase of a palace. At the bottom she turns, and her face catches the candlelight. Then she pushes open tall gilded doors onto a moonlit garden." } },
         // The script reaches every shot through a text model: edit the script and all three shots follow.
         ...[0, 1, 2].map((i) => ({
           id: `beat${i + 1}`,
@@ -2410,11 +2495,15 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "One prompt, three models, side by side",
     icon: "Columns3",
     hue: 150,
+    rank: 7,
+    makes: "Three pictures of the same prompt, side by side.",
+    flow: ["Prompt", "3 pictures"],
+    steps: ["Your prompt goes in.", "Three image models each make a picture from it.", "The three pictures sit side by side, so you can keep the best."],
     build: (engine) => {
       const models = engine === "open" ? ["oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism"] : ["nano-banana-pro", "seedream-5-pro", "flux-3"];
       return tpl(
         [
-          { id: "prompt", type: "prompt", x: 0, y: ROW - 60, data: { label: "Prompt", text: "Portrait of an elderly fisherman mending a net at dawn, soft window light, film grain" } },
+          { id: "prompt", type: "prompt", x: 0, y: ROW - 60, data: { label: "Prompt", text: "Editorial beauty portrait of a Senegalese fashion model in a gold silk headwrap and gold earrings, warm studio light, film grain" } },
           ...models.map((m, i) => ({ id: `m${i + 1}`, type: "model" as const, x: COL, y: i * (ROW - 60), data: { mediaKind: "image" as const, modelId: m, params: { aspectRatio: "3:4" } } })),
           { id: "out", type: "output", x: COL * 2, y: ROW - 120, data: { label: "Compare" }, width: 560 },
         ],
@@ -2428,13 +2517,19 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "A photo, a short voice sample and a script make a talking clip",
     icon: "Mic2",
     hue: 340,
+    rank: 8,
+    makes: "A talking clip of the portrait in the cloned voice.",
+    steps: ["A portrait, a short voice sample and a script go in.", "The script is read in the cloned voice.", "The portrait speaks the lines, with natural head movement."],
+    inputs: { portrait: "A photo of a face, looking at the camera.", sample: "10 to 30 seconds of the voice to copy." },
+    flow: ["Portrait", "Voice", "Talk"],
+    samples: { portrait: { src: "/examples/effect-pearl-earring/1/in-image.jpg", name: "Portrait.jpg" }, sample: { src: "/samples/clean-voice/clean.m4a", name: "Voice sample.m4a" } },
     build: tpl(
       [
         { id: "portrait", type: "image-input", x: 0, y: 0, data: { label: "Portrait" } },
         { id: "sample", type: "clone-voice", x: 0, y: 340, data: { label: "Your voice (10–30 s sample)" } },
-        { id: "script", type: "prompt", x: 0, y: 540, data: { label: "Script", text: "Hi! This whole clip was made on a Fuobe canvas from one photo and a few seconds of my voice." } },
+        { id: "script", type: "prompt", x: 0, y: 540, data: { label: "Script", text: "Welcome to the new collection. Every piece is cut by hand in our Milan atelier, and made to last a lifetime." } },
         { id: "voice", type: "tts", x: COL, y: 400, data: { label: "Cloned voice" }, models: { cloud: "chatterbox-cloud", open: "oss-chatterbox" } },
-        { id: "avatar", type: "model", x: COL * 2, y: 80, data: { mediaKind: "video", label: "Talking avatar", op: "avatar", prompt: "A friendly presenter talking to the camera, natural head movement" }, models: { cloud: "kling-avatar-2", open: "oss-infinitetalk" } },
+        { id: "avatar", type: "model", x: COL * 2, y: 80, data: { mediaKind: "video", label: "Talking avatar", op: "avatar", prompt: "A model talking warmly to the camera, natural head movement" }, models: { cloud: "kling-avatar-2", open: "oss-infinitetalk" } },
         { id: "out", type: "output", x: COL * 3, y: 100, data: { label: "Clip" } },
       ],
       [
@@ -2449,14 +2544,18 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
   {
     id: "table-film",
     name: "Table → shots → film",
-    description: "One row per shot: each row makes a still and animates it, then every row is joined into one film",
+    description: "Each row is a shot: a still, then a clip, all joined into one film",
     icon: "Table",
     hue: 160,
+    rank: 3,
+    makes: "One film with a shot for every row.",
+    flow: ["Table", "Stills", "Film"],
+    steps: ["Each row of the table is one shot.", "Every row becomes a still.", "Every still becomes a 5-second clip.", "The clips are joined into one film."],
     build: tpl(
       [
-        { id: "cast", type: "table", x: 0, y: 40, data: { label: "Shots", columns: ["Animal", "Place"], rows: [["red fox", "a snowy pine forest"], ["barn owl", "an old wooden barn at dusk"], ["sea otter", "a kelp forest at sunrise"]] } },
-        { id: "still", type: "model", x: COL + 140, y: 0, data: { mediaKind: "image", label: "Still", prompt: "A {Animal} in {Place}, wildlife photography, soft natural light", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
-        { id: "animate", type: "model", x: COL * 2 + 140, y: 0, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in, the animal turns its head", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
+        { id: "cast", type: "table", x: 0, y: 40, data: { label: "Shots", columns: ["Shot", "Scene"], rows: [["Opening", "a fashion model in a white linen dress at the bow of a classic wooden yacht off Capri, morning sun"], ["Middle", "the model on the teak deck in a navy silk scarf, the cliffs of the Amalfi coast behind her"], ["Ending", "the model at the stern at golden hour, the sea glittering behind her"]] } },
+        { id: "still", type: "model", x: COL + 140, y: 0, data: { mediaKind: "image", label: "Still", prompt: "{Scene}, a luxury yacht campaign, cinematic light", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        { id: "animate", type: "model", x: COL * 2 + 140, y: 0, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow cinematic camera move, the sea glittering, fabric moving in the wind", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
         { id: "film", type: "concat", x: COL * 3 + 140, y: 0, data: { label: "Film", params: { aspectRatio: "16:9" } }, models: { cloud: CONCAT_MODELS.cloud, open: CONCAT_MODELS.open } },
       ],
       [
@@ -2472,6 +2571,11 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "A grey-box blockout sets the camera and timing; reference stills and timed beats say what it becomes",
     icon: "Box",
     hue: 210,
+    rank: 99,
+    starter: false,
+    makes: "A film that follows the blockout's camera and timing.",
+    flow: ["Blockout", "Film"],
+    steps: ["A grey-box blockout sets the camera and timing.", "Reference stills and timed beats say what it becomes.", "A video model renders the film."],
     build: (engine) => (engine === "cloud" ? BLOCKOUT_CLOUD(engine) : BLOCKOUT_OPEN(engine)),
   },
   {
@@ -2480,6 +2584,11 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "Trim, mute and join clips into one film, at 30 fps",
     icon: "Film",
     hue: 250,
+    rank: 9,
+    makes: "One film made of the three clips.",
+    flow: ["Clips", "Film"],
+    samples: Object.fromEntries(["pearl-earring", "superstar", "blue-depth"].map((e, i) => [`clip${i + 1}`, { src: `/previews/presets/effect-${e}.mp4`, name: `Clip ${i + 1}.mp4` }])),
+    steps: ["Three clips go in.", "Each one is trimmed, muted and set to 30 frames a second.", "They are joined into one film."],
     build: tpl(
       [
         ...[0, 1, 2].map((i) => ({ id: `clip${i + 1}`, type: "video-input" as const, x: 0, y: i * 320, data: { label: `Clip ${i + 1}` } })),
@@ -2503,23 +2612,25 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
 // Qwen-Image 2.1 Turbo on your GPU (Qwen-Image-Edit 2511 hosted on fal) and Fuobe DoP (Wan 2.2 14B on your GPU, or hosted on fal).
 // The edit prompts are Fuobe's own words; the motion is the effect's own prompt from the effects catalog.
 
-export const EFFECT_CHAIN_GROUP = "Effects 2.0 chains";
+/** The effect films' section (TEMPLATE_SECTIONS). */
+export const EFFECT_CHAIN_GROUP = "effect-films" satisfies TemplateSectionKey;
 
 /** Image edit, then image to video: the models per engine (Fuobe DoP is an Original, run on the template's engine). */
 export const EFFECT_CHAIN_MODELS = { edit: { cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-image-21-turbo" }, video: "fuobe-dop" } as const;
 
 /** The researched Effects 2.0 chains with a scene to set first: the effect (its name in the effects catalog) and the edit. */
-export const EFFECT_CHAINS: { effect: string; edit: string; icon: string; hue: number }[] = [
-  { effect: "Agamemnon", icon: "Swords", hue: 35, edit: "Dress the person as an ancient Greek warrior king in polished bronze armour and a red cape, a sword in hand, a vast army on a dusty battlefield behind them at golden hour. Keep their face and pose." },
-  { effect: "Fallen Angel", icon: "Feather", hue: 270, edit: "Give the person large dark ragged wings and put them on a storm-lit rooftop at night, black feathers drifting in the air. Keep their face, clothes and pose." },
-  { effect: "Pearl Earring", icon: "Gem", hue: 220, edit: "Repaint the picture as a Dutch Golden Age oil portrait: a blue and gold head wrap, a pearl earring, a dark background and soft window light. Keep the person's face." },
-  { effect: "Monet Muse", icon: "Palette", hue: 150, edit: "Repaint the scene as an impressionist oil painting of a garden pond with water lilies, soft dabs of light and colour. Keep the person and their pose." },
-  { effect: "Fairytale Castle", icon: "Castle", hue: 300, edit: "Put a magical fairytale castle on a hill far behind the person under a twilight sky with the first fireworks. Keep the person exactly as they are." },
-  { effect: "Blue Depth", icon: "Waves", hue: 210, edit: "Place the person underwater in deep blue ocean light, rays shimmering down from the surface, hair and clothes floating. Keep their face." },
-  { effect: "Superstar", icon: "Star", hue: 50, edit: "Put the person on a glittering concert stage under bright spotlights, a cheering crowd in silhouette and confetti in the air. Keep their face and outfit." },
-  { effect: "Street Colossus", icon: "Building2", hue: 15, edit: "Make the person a giant standing in the middle of a city street, as tall as the buildings, with tiny cars and people around their feet. Keep their face and clothes." },
-  { effect: "Dolphin Ride", icon: "Fish", hue: 190, edit: "Put the person on the back of a dolphin leaping over sparkling ocean waves in bright sunshine. Keep their face." },
-  { effect: "Skatedog", icon: "Dog", hue: 95, edit: "Add a happy dog riding a skateboard next to the person on a sunny street. Keep the person exactly as they are." },
+/** `line`: what it does for you, in one short line (cards and pages). `photo`: another effect's example photo, where its own has none yet. */
+export const EFFECT_CHAINS: { effect: string; line: string; edit: string; icon: string; hue: number; rank: number; photo?: string }[] = [
+  { effect: "Agamemnon", line: "You become a bronze-armoured king before a vast army at golden hour.", rank: 6, icon: "Swords", hue: 35, edit: "Dress the person as an ancient Greek warrior king in polished bronze armour and a red cape, a sword in hand, a vast army on a dusty battlefield behind them at golden hour. Keep their face and pose." },
+  { effect: "Fallen Angel", photo: "superstar", line: "You get dark wings on a storm-lit rooftop, feathers in the air.", rank: 10, icon: "Feather", hue: 270, edit: "Give the person large dark ragged wings and put them on a storm-lit rooftop at night, black feathers drifting in the air. Keep their face, clothes and pose." },
+  { effect: "Pearl Earring", line: "You become a Dutch Golden Age portrait with a pearl earring.", rank: 1, icon: "Gem", hue: 220, edit: "Repaint the picture as a Dutch Golden Age oil portrait: a blue and gold head wrap, a pearl earring, a dark background and soft window light. Keep the person's face." },
+  { effect: "Monet Muse", line: "You step into an impressionist painting of a water-lily pond.", rank: 2, icon: "Palette", hue: 150, edit: "Repaint the scene as an impressionist oil painting of a garden pond with water lilies, soft dabs of light and colour. Keep the person and their pose." },
+  { effect: "Fairytale Castle", line: "A fairytale castle rises behind you under a twilight sky.", rank: 4, icon: "Castle", hue: 300, edit: "Put a magical fairytale castle on a hill far behind the person under a twilight sky with the first fireworks. Keep the person exactly as they are." },
+  { effect: "Blue Depth", line: "You drift in deep blue water, light rays falling from above.", rank: 5, icon: "Waves", hue: 210, edit: "Place the person underwater in deep blue ocean light, rays shimmering down from the surface, hair and clothes floating. Keep their face." },
+  { effect: "Superstar", line: "You take the stage under bright spotlights as confetti falls.", rank: 3, icon: "Star", hue: 50, edit: "Put the person on a glittering concert stage under bright spotlights, a cheering crowd in silhouette and confetti in the air. Keep their face and outfit." },
+  { effect: "Street Colossus", photo: "blue-depth", line: "You stand as tall as the buildings in a busy city street.", rank: 9, icon: "Building2", hue: 15, edit: "Make the person a giant standing in the middle of a city street, as tall as the buildings, with tiny cars and people around their feet. Keep their face and clothes." },
+  { effect: "Dolphin Ride", line: "You ride a dolphin over sparkling waves in bright sunshine.", rank: 7, icon: "Fish", hue: 190, edit: "Put the person on the back of a dolphin leaping over sparkling ocean waves in bright sunshine. Keep their face." },
+  { effect: "Skatedog", line: "A dog on a skateboard rolls along right beside you.", rank: 8, icon: "Dog", hue: 95, edit: "Add a happy dog riding a skateboard next to the person on a sunny street. Keep the person exactly as they are." },
 ];
 
 const slugOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -2535,11 +2646,19 @@ function effectChainTemplate(c: (typeof EFFECT_CHAINS)[number]): CanvasTemplate 
   return {
     id: `effect-chain-${slugOf(c.effect)}`,
     name: c.effect,
-    // What the effect does, in the catalog's words (the section's note says how the chain works).
-    description: getPreset(`effect-${slugOf(c.effect)}`)?.description ?? "A photo, its scene set by an image edit, then animated with the effect",
+    description: c.line,
     icon: c.icon,
     hue: c.hue,
     group: EFFECT_CHAIN_GROUP,
+    rank: c.rank,
+    makes: `A 5-second moving shot of you in the ${c.effect} scene.`,
+    flow: ["Photo", "Scene", "Film"],
+    // The photo its Video effect's own example starts from (a published example input: example-files.ts).
+    samples: { photo: { src: `/examples/effect-${c.photo ?? slugOf(c.effect)}/1/in-image.jpg`, name: "Your photo.jpg" } },
+    steps: ["Your photo goes in.", `An edit sets the scene: ${c.edit}`, `The ${c.effect} effect brings it to life as a 5-second moving shot.`],
+    inputs: { photo: "A photo of a person, facing the camera." },
+    // canvas-template-cards.ts adds the effect's own example, when it has one.
+    oneStep: { href: `/video?preset=effect-${slugOf(c.effect)}`, label: "Try this effect in Video" },
     build: (engine) => {
       const graph = tpl(
         [
@@ -2552,7 +2671,7 @@ function effectChainTemplate(c: (typeof EFFECT_CHAINS)[number]): CanvasTemplate 
             y: 0,
             data: { mediaKind: "video", label: c.effect, op: "i2v", modelId: EFFECT_CHAIN_MODELS.video, engine, prompt: words, params: { aspectRatio: "auto", duration: 5 } },
           },
-          { id: "out", type: "output", x: COL * 3, y: 40, data: { label: c.effect } },
+          { id: "out", type: "output", x: COL * 3, y: 40, data: { label: "Your film" } },
         ],
         [
           ["photo", "scene", "images"],
@@ -2569,586 +2688,4 @@ CANVAS_TEMPLATES.push(...EFFECT_CHAINS.map(effectChainTemplate));
 
 export function getTemplate(id: string): CanvasTemplate | undefined {
   return CANVAS_TEMPLATES.find((t) => t.id === id);
-}
-
-// ---------------------------------------------------------------------------
-// Skills as canvases (W5, docs/research/work2skill-7.md §10): a recipe skill drawn as a board, and a board saved as a
-// skill. Inputs are input nodes (text, image, video, audio, element), steps are model nodes, chain slots are edges.
-// What a board has no field for (a step's key and label, its feature, LoRAs, a preset, its check, an input's limits)
-// rides on the nodes (`data.skill`, `data.input`), so a skill opened as a canvas and saved back is the same skill.
-
-/** Why a skill isn't drawn (it still runs from its form). */
-export const CANT_DRAW = "This skill can't be drawn yet";
-/** How a skill that runs one studio tool shows on the Skills tab: one read-only note. */
-export const STUDIO_STEP = "Studio step";
-
-/** What a step drawn from a skill keeps that the board has no field for (dropped by the way back if the model changes). */
-export interface SkillStepMark {
-  key: string;
-  label?: string;
-  feature?: string;
-  /** The model the step was drawn with: `extra` applies only while the node keeps it. */
-  modelId: string;
-  /** Request fields the board doesn't hold (LoRAs, a preset, a negative prompt), and settings it has no field for. */
-  extra?: Record<string, unknown>;
-  check?: RecipeCheck;
-  /**
-   * Settings inputs (a number or a choice) by the setting they fill: the node shows the value, and the way back puts the
-   * input there again while the node keeps its model and a value the input takes. `at`: its place in the form.
-   */
-  settings?: Record<string, { param: RecipeParam; at: number }>;
-  /** The skill it was drawn from (Save as skill offers to save it back). */
-  from?: string;
-}
-
-/** An input node drawn from a skill: its input as it was (the node's label is the input's), its place in the form; or a fixed file. */
-export interface SkillInputMark {
-  param?: Omit<RecipeParam, "label">;
-  at?: number;
-  /** A file a step always uses (not an input): it stays fixed on the way back. */
-  fixed?: boolean;
-}
-
-export type RecipeDrawing = { ok: true; graph: CanvasGraph } | { ok: false; reason: string; detail: string; studio?: string };
-
-/** The settings a board's node keeps (the canvases route's Params); anything else rides on `data.skill.extra`. */
-const BOARD_PARAMS = new Set(["aspectRatio", "resolution", "duration", "numOutputs", "seed", "generateAudio", "voice", "targetLanguage", "sourceLanguage"]);
-/** Request fields a board's node makes itself (buildRequest). */
-const BOARD_FIELDS = new Set(["feature", "modelId", "op", "prompt", "inputs", "params", "chain", "engine"]);
-/** A request's file fields and the port each is drawn into. */
-const FILE_PORT: Record<string, InputPortId> = { images: "images", endImage: "endImage", video: "video", videos: "videos", audio: "audio", voiceAudio: "voice" };
-/** Chain slots a board draws, and the port each fills (voiceAudio ↔ Voice). */
-const CHAIN_PORT: Partial<Record<ChainSlot["slot"], InputPortId>> = { prompt: "prompt", ...(FILE_PORT as Partial<Record<ChainSlot["slot"], InputPortId>>) };
-const EXACT_PH = /^\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}$/;
-const ANY_PH = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
-/** A step reference ({{steps.<key>.output}}, recipe version 2). */
-const STEP_REF_PH = /\{\{\s*steps\./;
-const INPUT_NODE = { image: "image-input", video: "video-input", audio: "audio-input", text: "prompt", element: "element" } as const satisfies Record<string, CanvasNodeType>;
-const SENTINEL_EXT = { image: "png", video: "mp4", audio: "wav" } as const;
-const SENTINEL = /^\/api\/files\/recipe-input\/([A-Za-z][A-Za-z0-9_]*)\.(png|mp4|wav)$/;
-const asList = (a: string | string[] | undefined): string[] => (a === undefined ? [] : Array.isArray(a) ? a : [a]);
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-/** An @handle as a whole word (as recipe-builder matches it). */
-const handleRe = (handle: string) => new RegExp(`(?<![\\p{L}\\p{N}_@.-])${escapeRe(handle)}(?![\\p{L}\\p{N}_-])`, "giu");
-const words = (list: string[]) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : (list[0] ?? ""));
-
-/** Placeholders in a value, with whether each is the whole string. */
-function placeholdersIn(v: unknown, out: { id: string; exact: boolean }[] = []): { id: string; exact: boolean }[] {
-  if (typeof v === "string") {
-    const exact = EXACT_PH.exec(v);
-    if (exact) out.push({ id: exact[1], exact: true });
-    else for (const m of v.matchAll(ANY_PH)) out.push({ id: m[1], exact: false });
-  } else if (Array.isArray(v)) for (const x of v) placeholdersIn(x, out);
-  else if (v && typeof v === "object") for (const x of Object.values(v)) placeholdersIn(x, out);
-  return out;
-}
-
-/**
- * The board's own words for a prompt whose text inputs are drawn as text nodes: the inputs must sit together, one
- * after the other with a blank line between (the way a node joins its connected texts), so they become "{text}" in
- * the node's words. Null when they can't (two texts apart in one prompt).
- */
-function ownWords(prompt: string, texts: Set<string>): { own: string; order: string[] } | null {
-  const hits = [...prompt.matchAll(ANY_PH)].filter((m) => texts.has(m[1]));
-  if (!hits.length) return { own: prompt, order: [] };
-  const start = hits[0].index!;
-  const last = hits[hits.length - 1];
-  const end = last.index! + last[0].length;
-  const order = hits.map((m) => m[1]);
-  if (new Set(order).size !== order.length || prompt.slice(start, end) !== order.map((id) => `{{${id}}}`).join("\n\n")) return null;
-  const before = prompt.slice(0, start);
-  const after = prompt.slice(end);
-  if (prompt.includes("{text}")) return null;
-  return { own: before.trim() || after.trim() ? `${before}{text}${after}` : "", order };
-}
-
-/**
- * A recipe skill drawn as a board: each input an input node, each generate step a model node (on its model, op,
- * words and settings), each chain slot an edge into the port it fills. Only when every slot maps to a port (prompt,
- * images, endImage, video, videos, audio, voice ↔ voiceAudio): a recipe with a studio step, `audio2`, `audios`,
- * `model3d` or `mask`, a chain slot with a stem, an index or a position, or a settings input (a number or a choice)
- * that isn't a whole setting with a value isn't drawn. A settings input rides on the nodes it fills (data.skill.settings). The drawing is read back (canvasToRecipe) before it's offered: what wouldn't come back the same isn't drawn.
- */
-export function recipeToCanvas(recipe: Recipe, opts: { elements?: readonly ElementInfo[]; from?: string } = {}): RecipeDrawing {
-  const refuse = (detail: string, studio?: string): RecipeDrawing => ({ ok: false, reason: CANT_DRAW, detail, ...(studio && { studio }) });
-  const tool = recipe.steps.find((s): s is Extract<RecipeStep, { kind: "tool" }> => s.kind === "tool");
-  if (tool) return refuse("It runs one studio step, which shows as a note: open it from Skills", tool.tool);
-  const params = new Map(recipe.params.map((p) => [p.id, p]));
-  const steps = recipe.steps as GenerateStep[];
-  // A step that takes an earlier step's output by reference (recipe version 2) runs in parts: a canvas has no wire for it.
-  const byRef = steps.find((s) => STEP_REF_PH.test(JSON.stringify(s.request)));
-  if (byRef) return refuse(`“${byRef.label ?? byRef.key}” takes an earlier step's result by reference, which a canvas can't wire yet`);
-  // A settings input (a number or a choice) rides on the nodes whose settings it fills: each node shows its value and
-  // keeps the input for the way back. It must be a whole setting (params.<name>) with a value to show.
-  const isSetting = (p: RecipeParam | undefined) => p?.type === "number" || p?.type === "choice";
-  const settingAt = (r: GenerationRequest): Map<string, RecipeParam> => {
-    const out = new Map<string, RecipeParam>();
-    for (const [k, v] of Object.entries((r.params ?? {}) as Record<string, unknown>)) {
-      const ph = typeof v === "string" ? EXACT_PH.exec(v) : null;
-      if (ph && isSetting(params.get(ph[1]))) out.set(k, params.get(ph[1])!);
-    }
-    return out;
-  };
-  const placedSettings = new Set(steps.flatMap((s) => [...settingAt(s.request).values()].map((p) => p.id)));
-  const loose = recipe.params.filter((p) => isSetting(p) && !placedSettings.has(p.id));
-  if (loose.length) return refuse(`A canvas has no node for ${words(loose.map((p) => p.label))} yet`);
-  const blank = recipe.params.filter((p) => isSetting(p) && (p.example ?? p.default) == null);
-  if (blank.length) return refuse(`Give ${words(blank.map((p) => p.label))} a default first: a canvas draws a setting with its value`);
-  const keys = new Set(steps.map((s) => s.key));
-  for (const s of steps) {
-    const r = s.request;
-    const name = s.label ?? s.key;
-    if (!getModel(r.modelId)) return refuse(`“${name}” uses a model that's no longer in the catalog`);
-    const after = asList(s.after);
-    if (after.some((a) => !keys.has(a))) return refuse(`“${name}” waits for a step that isn't there`);
-    for (const c of s.chain ?? []) {
-      if (!CHAIN_PORT[c.slot] || c.stem !== undefined || c.index !== undefined || c.position !== undefined || c.of !== undefined || c.optional) return refuse(`“${name}” takes an earlier step's result in a way a canvas can't wire yet`);
-    }
-    if ((s.chain?.length ?? after.length) !== after.length) return refuse(`“${name}” has a chain slot for each step it waits for only on a canvas`);
-    const inputs = (r.inputs ?? {}) as Record<string, unknown>;
-    if (Object.keys(inputs).some((k) => !FILE_PORT[k])) return refuse(`“${name}” uses an input a canvas has no port for yet`);
-    for (const [k, v] of Object.entries(r as Record<string, unknown>)) {
-      const found = placeholdersIn(v);
-      if (!found.length) continue;
-      if (k === "inputs") {
-        if (found.some((f) => !f.exact || !params.has(f.id) || !["image", "video", "audio"].includes(params.get(f.id)!.type))) return refuse(`“${name}” takes a file input a canvas can't wire yet`);
-      } else if (k === "prompt") {
-        if (found.some((f) => !params.has(f.id) || !["text", "element"].includes(params.get(f.id)!.type))) return refuse(`“${name}” puts an input into its words that a canvas can't draw yet`);
-      } else if (k === "params") {
-        const whole = settingAt(r);
-        const rest = Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([pk]) => !whole.has(pk)));
-        if (placeholdersIn(rest).length) return refuse(`An input changes “${name}”'s settings, which a canvas can't draw yet`);
-      } else return refuse(`An input changes “${name}”'s settings, which a canvas can't draw yet`);
-    }
-  }
-  for (const p of recipe.params) if (p.type === "element" && !String(p.example ?? p.default ?? "").replace(/^@/, "")) return refuse(`Pick an element for ${p.label} first: a canvas draws it with one`);
-
-  // Layout: inputs on the left, each step one column right of the last step it waits for.
-  const depth = new Map<string, number>();
-  for (const s of steps) depth.set(s.key, 1 + Math.max(0, ...asList(s.after).map((a) => depth.get(a) ?? 0)));
-  const rowsAt = new Map<number, number>();
-  const COL = 400;
-  const nodes: CanvasNode[] = [];
-  const edges: CanvasEdge[] = [];
-  const stepNode = new Map<string, string>();
-  for (const s of steps) {
-    const d = depth.get(s.key)!;
-    const row = rowsAt.get(d) ?? 0;
-    rowsAt.set(d, row + 1);
-    const r = s.request as GenerationRequest & Record<string, unknown>;
-    const model = getModel(r.modelId)!;
-    const texts = new Set([...((typeof r.prompt === "string" ? r.prompt : "").matchAll(ANY_PH))].map((m) => m[1]).filter((id) => params.get(id)?.type === "text"));
-    let prompt = typeof r.prompt === "string" ? r.prompt : "";
-    const own = ownWords(prompt, texts);
-    if (!own) return refuse(`“${s.label ?? s.key}” puts two inputs apart in its words, which a canvas can't draw yet`);
-    prompt = own.own;
-    // An element input is the element's @handle in the words, its node wired into Elements.
-    for (const id of new Set([...prompt.matchAll(ANY_PH)].map((m) => m[1]))) {
-      const p = params.get(id);
-      if (p?.type === "element") prompt = prompt.replace(new RegExp(`\\{\\{\\s*${id}\\s*\\}\\}`, "g"), `@${String(p.example ?? p.default).replace(/^@/, "")}`);
-    }
-    const boardParams: GenParams = {};
-    const extraParams: Record<string, unknown> = {};
-    const stepSettings = settingAt(r);
-    const settingMarks: NonNullable<SkillStepMark["settings"]> = {};
-    for (const [k, raw] of Object.entries((r.params ?? {}) as Record<string, unknown>)) {
-      const setting = stepSettings.get(k);
-      const v = setting ? (setting.example ?? setting.default) : raw;
-      if (setting) settingMarks[k] = { param: setting, at: recipe.params.indexOf(setting) };
-      const scalar = k === "extra" && v && typeof v === "object" && Object.values(v).every((x) => ["string", "number", "boolean"].includes(typeof x));
-      if (BOARD_PARAMS.has(k) || scalar) (boardParams as Record<string, unknown>)[k] = v;
-      else extraParams[k] = v;
-    }
-    const extra: Record<string, unknown> = Object.fromEntries(Object.entries(r).filter(([k]) => !BOARD_FIELDS.has(k)));
-    if (r.engine && !dualEngine(model)) extra.engine = r.engine;
-    if (Object.keys(extraParams).length) extra.params = extraParams;
-    const mark: SkillStepMark = {
-      key: s.key,
-      ...(s.label && { label: s.label }),
-      ...(r.feature !== "skill" && { feature: r.feature }),
-      modelId: model.id,
-      ...(Object.keys(extra).length && { extra }),
-      ...(recipe.checks?.[s.key] && { check: { ...recipe.checks[s.key] } }),
-      ...(Object.keys(settingMarks).length && { settings: settingMarks }),
-      ...(opts.from && { from: opts.from }),
-    };
-    const id = `step-${s.key}`.slice(0, 80);
-    stepNode.set(s.key, id);
-    const kind = model.kind === "image" || model.kind === "video" || model.kind === "audio" || model.kind === "text" ? model.kind : undefined;
-    nodes.push({
-      id,
-      type: "model",
-      position: { x: d * COL, y: row * 300 },
-      data: {
-        ...(s.label && { label: s.label }),
-        modelId: model.id,
-        ...(kind && { mediaKind: kind }),
-        ...(r.op && { op: r.op }),
-        ...(dualEngine(model) && r.engine && { engine: r.engine }),
-        ...(prompt && { prompt }),
-        ...(Object.keys(boardParams).length && { params: boardParams }),
-        skill: mark,
-      },
-    });
-  }
-  // Inputs, in the order the steps first use them (connected texts join a prompt top to bottom).
-  const inputNode = new Map<string, string>();
-  let inputRow = 0;
-  let fixedFiles = 0;
-  const addEdge = (source: string, target: string, port: InputPortId) => {
-    const e = { id: `e-${source}-${target}-${port}`.slice(0, 200), source, target, sourceHandle: OUT, targetHandle: port };
-    if (!edges.some((x) => x.id === e.id)) edges.push(e);
-  };
-  const paramNode = (p: RecipeParam): string => {
-    const known = inputNode.get(p.id);
-    if (known) return known;
-    const id = `input-${p.id}`;
-    inputNode.set(p.id, id);
-    const value = p.example ?? p.default;
-    const rest: Omit<RecipeParam, "label"> & { label?: string } = { ...p };
-    delete rest.label;
-    const mark: SkillInputMark = { param: rest, at: recipe.params.indexOf(p) };
-    const data: CanvasNodeData = { label: p.label, input: mark };
-    if (p.type === "text") data.text = typeof value === "string" ? value : value === undefined ? "" : String(value);
-    else if (p.type === "element") {
-      const handle = String(value).replace(/^@/, "");
-      const el = opts.elements?.find((e) => e.handle.toLowerCase() === handle.toLowerCase());
-      Object.assign(data, { handle: el?.handle ?? handle, ...(el && { elementId: el.id, name: el.name, ...(el.references[0] && { preview: el.references[0] }) }) });
-    } else if (typeof value === "string" && value.startsWith("/api/files/")) data.url = value;
-    nodes.push({ id, type: INPUT_NODE[p.type as keyof typeof INPUT_NODE], position: { x: 0, y: inputRow++ * 220 }, data });
-    return id;
-  };
-  for (const s of steps) {
-    const r = s.request;
-    const target = stepNode.get(s.key)!;
-    const prompt = typeof r.prompt === "string" ? r.prompt : "";
-    for (const m of prompt.matchAll(ANY_PH)) {
-      const p = params.get(m[1])!;
-      addEdge(paramNode(p), target, p.type === "element" ? "elements" : "prompt");
-    }
-    for (const [k, v] of Object.entries((r.inputs ?? {}) as Record<string, unknown>)) {
-      for (const item of Array.isArray(v) ? v : [v]) {
-        if (typeof item !== "string") return refuse(`“${s.label ?? s.key}” has a file a canvas can't hold`);
-        const ph = EXACT_PH.exec(item);
-        if (ph) {
-          addEdge(paramNode(params.get(ph[1])!), target, FILE_PORT[k]);
-          continue;
-        }
-        if (!item.startsWith("/api/files/")) return refuse(`“${s.label ?? s.key}” uses a linked file a canvas can't hold: add it to Fuobe first`);
-        const kind = k === "images" || k === "endImage" ? "image" : k === "video" || k === "videos" ? "video" : "audio";
-        const id = `file-${++fixedFiles}`;
-        nodes.push({ id, type: INPUT_NODE[kind], position: { x: 0, y: inputRow++ * 220 }, data: { url: item, input: { fixed: true } } });
-        addEdge(id, target, FILE_PORT[k]);
-      }
-    }
-    const after = asList(s.after);
-    after.forEach((a, i) => addEdge(stepNode.get(a)!, target, CHAIN_PORT[(s.chain?.[i] ?? { slot: "images" }).slot]!));
-  }
-  const graph: CanvasGraph = { nodes, edges };
-  // Read back: what wouldn't come back as the same skill isn't offered as a canvas.
-  const back = canvasToRecipe(graph);
-  if (!back.recipe) return refuse(back.problems[0]?.message ?? "It doesn't come back the same from a canvas");
-  if (recipeShape(back.recipe) !== recipeShape(recipe)) return refuse("It doesn't come back the same from a canvas");
-  return { ok: true, graph };
-}
-
-/** A recipe's params, steps and checks as one string, `after` as a list and each step's chain spelled out. */
-export function recipeShape(recipe: Pick<Recipe, "params" | "steps" | "checks">): string {
-  const stable = (v: unknown): unknown =>
-    Array.isArray(v)
-      ? v.map(stable)
-      : v && typeof v === "object"
-        ? Object.fromEntries(
-            Object.entries(v)
-              .filter(([, x]) => x !== undefined)
-              .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-              .map(([k, x]) => [k, stable(x)]),
-          )
-        : v;
-  const steps = recipe.steps.map((s) => {
-    if (s.kind === "tool") return s;
-    const after = asList(s.after);
-    const request = { ...s.request, ...(typeof s.request.prompt === "string" && { prompt: s.request.prompt.trim() }) };
-    return { ...s, request, after, chain: s.chain ?? after.map(() => ({ slot: "images" })) };
-  });
-  return JSON.stringify(stable({ params: recipe.params, steps, checks: recipe.checks ?? {} }));
-}
-
-export interface CanvasRecipe {
-  /** Null when the board can't be a skill (`problems` say why). */
-  recipe: Recipe | null;
-  problems: { nodeId?: string; message: string }[];
-  /** A table's filled rows as the Many tab's rows (its columns are text inputs). */
-  rows?: RecipeValues[];
-  /** Inputs that varied in the skill the board was drawn from, and a table's columns: they start as Varies. */
-  varies: string[];
-  /** The skill the board was drawn from, when every step says the same. */
-  from?: string;
-  /** Each step's node (the review screen's thumbnails). */
-  nodes: Record<string, string>;
-}
-
-/** A value a settings input takes: one of a choice's options, a number in its range. */
-function settingFits(p: RecipeParam, v: unknown): boolean {
-  if (p.type === "choice") return typeof v === "string" && (!p.options || p.options.includes(v));
-  return typeof v === "number" && Number.isFinite(v) && (p.min === undefined || v >= p.min) && (p.max === undefined || v <= p.max);
-}
-
-const nodeValue = (n: CanvasNode): string =>
-  n.type === "prompt" ? (n.data.text ?? "") : n.type === "element" ? (n.data.handle ? `@${n.data.handle}` : "") : (n.data.url ?? "");
-const INPUT_TYPE: Partial<Record<CanvasNodeType, "text" | "image" | "video" | "audio" | "element">> = { prompt: "text", "image-input": "image", "video-input": "video", "audio-input": "audio", "clone-voice": "audio", element: "element" };
-const stepKeyOf = (label: string) =>
-  label
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 32) || "step";
-
-/**
- * A board as a recipe (the board is the "demo", W5): each input node that feeds a step becomes an input (a file a step
- * drawn from a skill always uses stays fixed), each generator node a generate step with its request as describeNode
- * builds it, and a Video concatenator its cuts and join, as runCanvas runs them. A Table's columns become text inputs and
- * its filled rows the Many tab's rows (at most TABLE_LIMITS: 50 rows of 8). A node that can't run says why.
- */
-export function canvasToRecipe(graph: CanvasGraph, page: { canvas?: string } = {}): CanvasRecipe {
-  const nodes = nodeMap(graph);
-  const problems: CanvasRecipe["problems"] = [];
-  const fail = (): CanvasRecipe => ({ recipe: null, problems, varies: [], nodes: {} });
-  const generators = graph.nodes.filter(isGenerator);
-  if (!generators.length) {
-    problems.push({ message: "Add a model to the board first: a skill runs its steps" });
-    return fail();
-  }
-  const feedsAStep = (n: CanvasNode) => [...descendants(graph, [n.id])].some((id) => isGenerator(nodes.get(id)!));
-  const tables = graph.nodes.filter((n) => n.type === "table" && feedsAStep(n));
-  if (tables.length > 1) problems.push({ nodeId: tables[1].id, message: "One table per skill: its rows become the runs" });
-  const feeds = tablesFeeding(graph);
-  for (const n of generators.filter((g) => g.type === "concat")) {
-    if (concatClips(graph, n).some((c) => {
-      const r = feeds(nodes.get(c.nodeId)!);
-      return !!r && !("error" in r);
-    }))
-      problems.push({ nodeId: n.id, message: `“${nodeLabel(n)}” joins a clip per row of a table: a skill makes one film per run, so join the clips without the table` });
-  }
-  if (problems.length) return fail();
-
-  // Inputs: their ids (as drawn from a skill, else from their labels) in the form's order.
-  const inputs = graph.nodes
-    .filter((n) => INPUT_TYPE[n.type] && feedsAStep(n) && !n.data.input?.fixed && !(n.type === "clone-voice" && graph.edges.some((e) => e.target === n.id && e.targetHandle === "audio")))
-    .sort((a, b) => (a.data.input?.at ?? Infinity) - (b.data.input?.at ?? Infinity) || byPosition(a, b));
-  const taken = new Set<string>();
-  const idOf = new Map<string, string>();
-  for (const n of inputs) {
-    const want = n.data.input?.param?.id;
-    const id = want && !taken.has(want) ? want : paramIdFrom(nodeLabel(n), taken);
-    taken.add(id);
-    idOf.set(n.id, id);
-  }
-  const handles = new Map<string, string>();
-  const subNodes = graph.nodes.map((n): CanvasNode => {
-    const id = idOf.get(n.id);
-    if (!id) return n;
-    const type = INPUT_TYPE[n.type]!;
-    if (type === "text") return { ...n, data: { ...n.data, text: `{{${id}}}` } };
-    if (type === "element") {
-      if (n.data.handle) handles.set(n.data.handle.toLowerCase(), id);
-      return n;
-    }
-    return { ...n, data: { ...n.data, url: `/api/files/recipe-input/${id}.${SENTINEL_EXT[type]}` } };
-  });
-  // A table: its columns are inputs, read the way rowRequest reads a row ("{Column}" in a node's words, else the row as text).
-  const table = tables[0];
-  const columns: { id: string; label: string; j: number }[] = [];
-  let rows: RecipeValues[] | undefined;
-  let edges = graph.edges;
-  if (table) {
-    const filled = tableRows(table);
-    if (filled.length > TABLE_LIMITS.rows) problems.push({ nodeId: table.id, message: `“${nodeLabel(table)}” has ${filled.length} rows: a skill runs up to ${TABLE_LIMITS.rows} at once` });
-    (table.data.columns ?? ["Prompt"]).slice(0, TABLE_LIMITS.columns).forEach((c, j) => {
-      const label = c.trim() || `Column ${j + 1}`;
-      const id = paramIdFrom(label, taken);
-      taken.add(id);
-      columns.push({ id, label: label.slice(0, 60), j });
-    });
-    rows = filled.map((cells) => Object.fromEntries(columns.map((c) => [c.id, cells[c.j] ?? ""])));
-    const named = new Set<string>();
-    for (const [i, n] of subNodes.entries()) {
-      if (!graph.edges.some((e) => e.source === table.id && e.target === n.id)) continue;
-      const own = n.data.prompt ?? "";
-      const raw = table.data.columns ?? [];
-      if (!raw.some((c) => c.trim() && own.includes(`{${c.trim()}}`))) continue;
-      named.add(n.id);
-      subNodes[i] = { ...n, data: { ...n.data, prompt: columns.reduce((p, c) => (raw[c.j]?.trim() ? p.replaceAll(`{${raw[c.j].trim()}}`, `{{${c.id}}}`) : p), own) } };
-    }
-    edges = graph.edges.filter((e) => !(e.source === table.id && named.has(e.target)));
-    const at = subNodes.findIndex((n) => n.id === table.id);
-    subNodes[at] = { ...table, type: "prompt", data: { text: columns.map((c) => `{{${c.id}}}`).join(", ") } };
-  }
-  if (problems.length) return fail();
-  const sub: CanvasGraph = { ...graph, nodes: subNodes, edges };
-  const subMap = nodeMap(sub);
-  const { order, cyclic } = topoOrder(sub);
-  for (const id of cyclic) if (isGenerator(subMap.get(id)!)) problems.push({ nodeId: id, message: `“${nodeLabel(subMap.get(id)!)}” is part of a loop: remove one of its connections` });
-
-  const usedKeys = new Set<string>();
-  const keyOf = new Map<string, string>();
-  const freeKey = (want: string) => {
-    let k = want.slice(0, 40);
-    for (let i = 2; usedKeys.has(k); i++) k = `${want.slice(0, 36)}-${i}`;
-    usedKeys.add(k);
-    return k;
-  };
-  const steps: GenerateStep[] = [];
-  const checks: Record<string, RecipeCheck> = {};
-  const settingParams = new Map<string, { p: RecipeParam; at: number }>();
-  const stepNodes: Record<string, string> = {};
-  const fromSkills = new Set<string>();
-  /** A chain slot's position only where it matters: before the step's own files in that list ("last" is the default). */
-  const chainOf = (req: GenerationRequest): ChainSlot[] | undefined =>
-    req.chain?.map((c) => {
-      const own = (req.inputs as Record<string, unknown> | undefined)?.[c.slot];
-      if (c.position === "first" && Array.isArray(own) && own.length) return c;
-      const rest = { ...c };
-      delete rest.position;
-      return rest;
-    });
-  const cleanRequest = (req: GenerationRequest, n: CanvasNode, main: boolean): GenerationRequest => {
-    const out: GenerationRequest & Record<string, unknown> = { ...req };
-    delete out.chain;
-    delete out.step;
-    const mark = n.data.skill;
-    if (main) out.feature = mark?.feature ?? "skill";
-    if (out.inputs) {
-      const inputs: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(out.inputs)) {
-        const swap = (x: unknown) => (typeof x === "string" && SENTINEL.test(x) ? `{{${SENTINEL.exec(x)![1]}}}` : x);
-        inputs[k] = Array.isArray(v) ? v.map(swap) : swap(v);
-      }
-      out.inputs = inputs as GenerationRequest["inputs"];
-    }
-    if (typeof out.prompt === "string") for (const [h, id] of handles) out.prompt = out.prompt.replace(handleRe(`@${h}`), `{{${id}}}`);
-    if (main && mark && mark.modelId === req.modelId && mark.extra) {
-      const { params, ...rest } = mark.extra as { params?: Record<string, unknown> };
-      Object.assign(out, rest);
-      if (params) out.params = { ...out.params, ...params } as GenParams;
-    }
-    // Settings inputs come back where the node still has the model and a value the input takes (else the value stays).
-    if (main && mark?.settings && mark.modelId === req.modelId) {
-      for (const [k, { param, at }] of Object.entries(mark.settings)) {
-        const v = (out.params as Record<string, unknown> | undefined)?.[k];
-        if (!settingFits(param, v) || taken.has(param.id)) continue;
-        const was = param.example ?? param.default;
-        const now = v as string | number;
-        const p: RecipeParam = now === was ? param : param.default !== undefined ? { ...param, default: now } : { ...param, example: now };
-        if (!settingParams.has(p.id)) settingParams.set(p.id, { p, at });
-        out.params = { ...out.params, [k]: `{{${p.id}}}` } as GenParams;
-      }
-    }
-    return out;
-  };
-  for (const id of order) {
-    const n = subMap.get(id)!;
-    if (!isGenerator(n)) continue;
-    const d = describeNode(sub, n);
-    if (d.error || !d.request || !d.deps) {
-      problems.push({ nodeId: n.id, message: `“${nodeLabel(n)}”: ${d.error ?? "it can't run"}` });
-      continue;
-    }
-    const mark = n.data.skill;
-    if (mark?.from) fromSkills.add(mark.from);
-    const key = freeKey(mark?.key && !usedKeys.has(mark.key) ? mark.key : stepKeyOf(nodeLabel(n)));
-    keyOf.set(n.id, key);
-    stepNodes[key] = n.id;
-    const label = n.data.label?.trim() || mark?.label;
-    if (!d.steps) {
-      const after = d.deps.map((dep) => keyOf.get(dep)!);
-      steps.push({
-        key,
-        kind: "generate",
-        ...(label && { label: label.slice(0, 80) }),
-        ...(after.length && { after }),
-        ...(d.request.chain?.length && { chain: chainOf(d.request) }),
-        request: cleanRequest(d.request, n, true) as GenerateStep["request"],
-      });
-    } else {
-      const sub2 = new Map(d.steps.map((st) => [st.key, st.request === d.request ? key : freeKey(`${key}-${st.key.replace(/[^A-Za-z0-9_-]+/g, "-")}`)]));
-      for (const st of d.steps) {
-        const after = st.from.map((f) => ("node" in f ? keyOf.get(f.node)! : sub2.get(f.step)!));
-        const main = st.request === d.request;
-        const own = main ? label : st.request.step?.label;
-        steps.push({
-          key: sub2.get(st.key)!,
-          kind: "generate",
-          ...(own && { label: own.slice(0, 80) }),
-          ...(after.length && { after }),
-          ...(st.request.chain?.length && { chain: chainOf(st.request) }),
-          request: cleanRequest(st.request, n, main) as GenerateStep["request"],
-        });
-      }
-    }
-    const kind = d.plan ? OPERATION_OUTPUT[d.plan.op] : undefined;
-    // A step's own check holds while its model does (like its extra fields): a model swapped on the board gets the
-    // kind-only check a board made from scratch gets, so an image check never stays on a step that now makes a video.
-    const same = !!mark && mark.modelId === d.request.modelId;
-    if (mark && same && mark.check && (!mark.check.kind || mark.check.kind === kind)) checks[key] = { ...mark.check };
-    else if (!same || mark?.check) {
-      if (kind && kind !== "text" && !graph.edges.some((e) => e.source === n.id && isGenerator(nodes.get(e.target) ?? n) && e.target !== n.id)) checks[key] = { kind: kind as RecipeCheck["kind"] };
-    }
-  }
-  if (problems.length) return fail();
-  if (steps.length > 24) {
-    problems.push({ message: `The board makes ${steps.length} steps: a skill has at most 24` });
-    return fail();
-  }
-  // Inputs no step uses (a text joined nowhere, an element whose node isn't wired) are left out.
-  const used = new Set(steps.flatMap((s) => placeholdersIn(s.request).map((p) => p.id)));
-  const placed: { p: RecipeParam; at: number }[] = [];
-  const varies: string[] = [];
-  for (const n of inputs) {
-    const id = idOf.get(n.id)!;
-    if (!used.has(id)) continue;
-    const mark = n.data.input?.param;
-    const value = nodeValue(n);
-    const type = INPUT_TYPE[n.type]!;
-    const label = nodeLabel(n).slice(0, 60);
-    const at = n.data.input?.at ?? Infinity;
-    if (mark) {
-      const was = mark.example ?? mark.default;
-      const p: RecipeParam = { ...mark, id, label, type };
-      if (value && value !== was) p.example = value.length > 2000 ? undefined : value;
-      placed.push({ p, at });
-      varies.push(id);
-    } else placed.push({ p: { id, label, type, required: true, ...(value && value.length <= 2000 && { example: value }) }, at });
-  }
-  for (const s of settingParams.values()) {
-    placed.push(s);
-    varies.push(s.p.id);
-  }
-  // The form's order as the skill had it (a stable sort: inputs made on the board stay after, as they were).
-  placed.sort((a, b) => (a.at === b.at ? 0 : a.at - b.at));
-  const params: RecipeParam[] = placed.map((x) => x.p);
-  // A check that follows a settings input that didn't come back (its value no longer fits) drops that part.
-  const known = new Set(params.map((p) => p.id));
-  for (const c of Object.values(checks)) {
-    for (const [k, v] of Object.entries(c)) {
-      const ph = typeof v === "string" ? EXACT_PH.exec(v) : null;
-      if (ph && !known.has(ph[1])) delete (c as Record<string, unknown>)[k];
-    }
-  }
-  for (const c of columns) {
-    if (!used.has(c.id)) continue;
-    const first = rows?.[0]?.[c.id];
-    params.push({ id: c.id, label: c.label, type: "text", required: true, ...(typeof first === "string" && first && { example: first }) });
-    varies.push(c.id);
-  }
-  if (rows) rows = rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => used.has(k))));
-  const recipe: Recipe = {
-    fuobeRecipe: 1,
-    params,
-    steps: steps as RecipeStep[],
-    ...(Object.keys(checks).length && { checks }),
-    source: { from: "canvas", ...(page.canvas && { canvas: page.canvas }) },
-  };
-  return { recipe, problems, ...(rows && rows.length && { rows }), varies, ...(fromSkills.size === 1 && { from: [...fromSkills][0] }), nodes: stepNodes };
 }

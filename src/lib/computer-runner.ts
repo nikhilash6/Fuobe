@@ -8,6 +8,7 @@
  * a socket and a clock, and the tests drive it from Node against a stand-in ComfyUI.
  */
 import { isGuard } from "./comfy-guard";
+import { fetchWithin } from "./fetch-within";
 import { parseComfyBinary, parseComfyText } from "./comfy-ws";
 import { graphProblem, localBase, mayDownload, readPath, statsFacts, viewPath, writePath, type SystemStats } from "./local-comfy";
 import { DONE_SHOWN_MS, META_BATCH_HISTORY, RELAY_LIMITS, RELAY_TIMES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type HistoryEntryLike, type RelayState, type ReportEvent, type TabFailure, type WantedFile } from "./relay";
@@ -99,6 +100,13 @@ const POLL_MS = 1000;
 const FIND_EVERY_MS = 20_000;
 /** Ended jobs the view keeps (a tile shows the last preview until its run moves on). */
 const KEEP_ENDED = 6;
+/**
+ * How long a look at ComfyUI here (its facts, a job's state) and a beat to the studio wait for an answer. A ComfyUI busy
+ * at full load, or a studio that is restarting, can take a request and not answer: the beat then counts it as not
+ * answering and the next one tries again, instead of waiting for good and never beating again.
+ */
+const LOOK_MS = 15_000;
+const BEAT_MS = 20_000;
 /** How long a result may wait for a busy studio before the run gives up. */
 const SAVE_WAIT_MS = 60 * 60_000;
 
@@ -179,7 +187,7 @@ export class ComputerRunner {
   // The ComfyUI here
 
   private async read<T>(path: string): Promise<T> {
-    const res = await this.deps.local(`${this.base}${readPath(path)}`, { credentials: "omit", cache: "no-store" });
+    const res = await fetchWithin(`${this.base}${readPath(path)}`, LOOK_MS, { credentials: "omit", cache: "no-store" }, this.deps.local);
     if (!res.ok) throw Object.assign(new Error(`ComfyUI ${path.split("?")[0]} answered HTTP ${res.status}`), { status: res.status });
     return (await res.json()) as T;
   }
@@ -198,7 +206,7 @@ export class ComputerRunner {
     try {
       l = { comfy: "ok", stats: await this.read<SystemStats>("/system_stats") };
     } catch (e) {
-      const answers = (e as { status?: number }).status === 403 || (await this.deps.local(`${this.base}/system_stats`, { mode: "no-cors", credentials: "omit", cache: "no-store" }).then(() => true, () => false));
+      const answers = (e as { status?: number }).status === 403 || (await fetchWithin(`${this.base}/system_stats`, LOOK_MS, { mode: "no-cors", credentials: "omit", cache: "no-store" }, this.deps.local).then(() => true, () => false));
       l = { comfy: answers ? "no-setting" : "down" };
       if (!answers && (await this.findElsewhere())) return this.look();
     }
@@ -284,7 +292,7 @@ export class ComputerRunner {
     if (this.jobsApi === undefined) this.jobsApi = await this.read("/api/jobs").then(() => true, () => false);
     const history = async () => (await this.read<Record<string, HistoryEntryLike>>(`/history/${promptId}`))[promptId];
     if (this.jobsApi) {
-      const res = await this.deps.local(`${this.base}${readPath(`/api/jobs/${promptId}`)}`, { credentials: "omit", cache: "no-store" });
+      const res = await fetchWithin(`${this.base}${readPath(`/api/jobs/${promptId}`)}`, LOOK_MS, { credentials: "omit", cache: "no-store" }, this.deps.local);
       if (res.status === 404) return prefix ? this.whereByQueue(promptId) : { s: "absent" };
       if (!res.ok) throw Object.assign(new Error(`ComfyUI answered HTTP ${res.status}`), { status: res.status });
       const j = (await res.json()) as { status?: string };
@@ -374,7 +382,7 @@ export class ComputerRunner {
   }
 
   private async beatWith(body: Record<string, unknown>, stopped: string[] = []): Promise<BeatAnswer | null> {
-    const res = await this.deps.api("/api/gpu/computer/beat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetchWithin("/api/gpu/computer/beat", BEAT_MS, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, this.deps.api);
     if (res.ok) for (const s of stopped) this.stoppedDone.delete(s);
     if (res.status === 401) {
       this.stop("signed-out");

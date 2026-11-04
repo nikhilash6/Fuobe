@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-price-reads-"));
+const dir = tempDir("fuobe-price-reads-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -43,11 +43,6 @@ beforeAll(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   resetRates();
-});
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 /** A mono 16-bit WAV, `seconds` long. */

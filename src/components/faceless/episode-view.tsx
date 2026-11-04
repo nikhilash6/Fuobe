@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotFoundState } from "@/components/empty-state";
 import { MediaThumb } from "@/components/studio/feed";
@@ -106,7 +106,7 @@ function Player({ view, onRetry, retrying }: { view: View; onRetry: () => void; 
                 <p className="shimmer-text animate-shimmer-text font-heading text-[24px]">Generating your episode</p>
                 <p className="mt-1 text-[13px] text-muted-foreground">This can take a while for longer videos. You can close this page — it will keep running.</p>
                 <div className="mx-auto mt-4 h-1.5 w-56 overflow-hidden rounded-full bg-background/70" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(view.progress * 100)} aria-label="Episode progress">
-                  <div className="h-full rounded-full bg-primary transition-[width] duration-700" style={{ width: `${Math.max(3, Math.round(view.progress * 100))}%` }} />
+                  <div className="h-full rounded-full bg-primary origin-left transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${(Math.max(3, Math.round(view.progress * 100))) / 100})` }} />
                 </div>
                 <p className="mt-2 font-mono text-[12px] text-muted-foreground tabular-nums">
                   {stepsDone} of {view.steps.length} steps · {Math.round(view.progress * 100)}%
@@ -184,7 +184,9 @@ function TailSteps({ steps, onOpen }: { steps: StepView[]; onOpen: (g: Generatio
         const last = list[list.length - 1];
         const g = last.generation;
         const all = list.filter((s) => done(s.generation)).length;
-        const audio = part === "narration" || part === "music" ? g?.outputs.find((o) => o.kind === "audio") : undefined;
+        // A bed split from a clip's soundtrack plays its music and effects (the background stem), not the talking.
+        const sounds = part === "narration" || part === "music" ? (g?.outputs ?? []).filter((o) => o.kind === "audio") : [];
+        const audio = sounds.find((o) => o.meta?.stem === "background") ?? sounds[0];
         return (
           <button
             key={part}
@@ -359,7 +361,7 @@ function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: Sc
             {apply.isPending ? <Loader2 className="animate-spin" /> : <Wand2 />} Apply
           </Button>
         </div>
-        <p className="text-[11px] text-muted-foreground">Applying re-renders this change and publishes it when it&apos;s done; Undo brings the version before back. Spent credits aren&apos;t refunded.</p>
+        <p className="text-[11px] text-muted-foreground">Applying re-renders this change and publishes it when it&apos;s done; Undo brings the version before back. What it already spent isn&apos;t refunded.</p>
       </div>
     </section>
   );
@@ -424,7 +426,7 @@ function Timeline({ view, onOpen }: { view: View; onOpen: (g: Generation) => voi
           </Button>
         </div>
       </div>
-      <div className="scrollbar-none -mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:-mx-0 sm:px-0" role="group" aria-label="Scenes">
+      <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-0 sm:px-0" role="group" aria-label="Scenes">
         {scenes.map((s) => (
           <SceneTile key={s.id} scene={s} selected={selected.includes(s.id)} onSelect={(e) => pick(s.index, e)} aspect={ep.settings.aspect} />
         ))}
@@ -491,9 +493,8 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
   const run = (a: "retry" | "rewrite" | "undo" | "upscale" | "regenerate", ok?: string) => action.mutate(a, { onSuccess: () => ok && toast.success(ok), onError: (e) => toastError(e) });
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <Link href={backHref} className="inline-flex min-w-0 shrink items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4 shrink-0" />
           <span className="truncate">{view?.channel?.name ?? backLabel}</span>
@@ -571,8 +572,9 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
             </DropdownMenu>
           </div>
         )}
+        <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1100px] min-w-0 flex-1 space-y-6 px-3 pb-16 sm:px-6">
+      <div className="mx-auto w-full max-w-[1100px] min-w-0 flex-1 space-y-6 px-4 pb-16 sm:px-6">
         {isLoading || !view || !ep ? (
           <div className="space-y-4 pt-6">
             <Skeleton className="h-8 w-96 max-w-full" />

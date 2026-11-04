@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { StoryboardView } from "@/components/storyboard-view";
 import { getModel } from "@/lib/catalog";
 import { STORYBOARD_LOOK_MODEL, STORYBOARD_MODELS, STORYBOARD_NEXT_SCENE, STORYBOARD_PARTNERS } from "@/lib/catalog/storyboard";
+import { starterCards, starterFills } from "@/lib/starters/catalog";
 
 export const metadata: Metadata = { title: "Storyboard" };
 
@@ -14,5 +15,6 @@ const MODEL_NAMES = Object.fromEntries(
 );
 
 export default function Page() {
-  return <StoryboardView modelNames={MODEL_NAMES} />;
+  // The ready stories with their real cover, and what each puts into the composer; the owner's view loads the rest.
+  return <StoryboardView modelNames={MODEL_NAMES} starters={starterCards("storyboard")} fills={starterFills("storyboard")} />;
 }

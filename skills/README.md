@@ -56,18 +56,17 @@ AI. The format is in `src/lib/recipe.ts` (and `docs/research/work2skill-7.md`):
   takes an earlier step's first result of the kind the field takes, so a studio step can feed later
   steps and the other way round ("dub, then captions, then a 9:16 cut"), with tool steps anywhere in
   the order. Each step starts by itself when the steps it takes from are done; the skill's dialog shows
-  the run's progress. A dub that feeds a later step dubs in one go (`"review": false`). A Faceless
-  episode (`faceless_episode`) finishes in Faceless Studio's own steps, so no later step takes its output.
+  the run's progress. A dub that feeds a later step dubs in one go (`"review": false`).
 - Optional `checks` per step (what it makes, how many, the shape, the length, sound, a sentence about
   the look) and `source` (where the recipe came from).
 
 The easiest way to write one is not to: **Make a skill from this…** on a result, or **Make a skill**
 in the Library, builds the recipe from the steps behind your results, and you pick which inputs change.
 
-A recipe runs on an engine only after a free check has passed there: Fuobe plans and prices every
-step. The check also does a dry run on demo mode's mock provider (a studio step runs as a demo too, and
-what it opened is deleted after), but a
-run doesn't wait for it. A retired, switched-off or repriced model asks for a new check. Fuobe
+A recipe runs on an engine only after a free **Test run** has passed there: Fuobe plans and prices
+every step. The test run also runs it once with placeholder results (a studio step runs as a demo too,
+and what it opened is deleted after), so nothing runs for real and nothing is spent; a run doesn't wait
+for that part. A retired, switched-off or repriced model asks for a new test run (**Test again**). Fuobe
 writes the `verified` dates itself: an uploaded `recipe.json` loses them and starts unchecked, and a
 downloaded `.zip` leaves out this install's checks (and, unless you ask, the examples and where the
 recipe came from). The built-in skills here carry no recipe and can't be checked: duplicate one

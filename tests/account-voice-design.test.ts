@@ -1,13 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 // Design a voice under public sign-up: an account designs and clones voices on its own GPU with its own samples. The
 // owner's saved voices (their take, its line, the kept fal embedding) never reach an account's run, and nothing is
 // fetched or stored on the owner's elements for it.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-voice-"));
+const dir = tempDir("fuobe-account-voice-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -52,9 +50,6 @@ afterAll(async () => {
   globalThis.__fuobeTestGpuPort = undefined;
   globalThis.__fuobeTestDiskFree = undefined;
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();

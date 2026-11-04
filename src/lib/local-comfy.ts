@@ -140,6 +140,12 @@ export function graphProblem(graph: Record<string, { class_type?: unknown; input
     for (const k of keys) {
       const v = node?.inputs?.[k];
       if (v === undefined || Array.isArray(v)) continue;
+      // Load3D's picture entries (Any Angle's saved view): each a file this run sent, or empty.
+      if (cls === "Load3D" && k === "image" && v && typeof v === "object") {
+        const bad = Object.entries(v as Record<string, unknown>).find(([f, x]) => f !== "camera_info" && x !== "" && x !== null && (typeof x !== "string" || !staged.includes(x)));
+        if (bad) return `Node ${id} (${cls}) reads ${typeof bad[1] === "string" ? `“${bad[1].slice(0, 80)}”` : "a value"}, which this run didn't send`;
+        continue;
+      }
       if (typeof v !== "string" || !staged.includes(v.replace(/ \[input\]$/, ""))) return `Node ${id} (${cls}) reads ${typeof v === "string" ? `“${v.slice(0, 80)}”` : "a value"}, which this run didn't send`;
     }
   }
@@ -161,16 +167,22 @@ export function mayDownload(f: Pick<WantedFile, "filename" | "subfolder" | "type
   return filesIn(entries).some((x) => x.filename === f.filename && (x.subfolder ?? "") === f.subfolder && x.type === f.type);
 }
 
-/** What a look on one port found. */
+/** What a look on one port found. "other": an answer this page can read that isn't ComfyUI's (another app). */
 export type PortLook =
   | { port: number; host?: string; state: "found"; stats: SystemStats; guard?: boolean }
   | { port: number; host?: string; state: "unreadable" }
+  | { port: number; host?: string; state: "other" }
   | { port: number; host?: string; state: "none" };
 
 export interface SystemStats {
   system?: { os?: string; comfyui_version?: string; ram_total?: number; embedded_python?: boolean; argv?: string[]; python_version?: string };
   devices?: { name?: string; type?: string; vram_total?: number }[];
 }
+
+/** ComfyUI's usual port. */
+export const COMFY_PORT = 8188;
+/** ComfyUI Desktop's usual port. */
+export const DESKTOP_PORT = 8000;
 
 /** A port's place among ComfyUI's usual ones (8188 first); one the person typed comes after them, lowest first. */
 const portRank = (port: number) => {
@@ -179,17 +191,33 @@ const portRank = (port: number) => {
 };
 
 /**
- * The ComfyUI to use from several looks: one Fuobe can read before one it can't, the remembered port first, then the
- * usual order (8188 before Desktop's 8000: another app on 8000 doesn't win). "none" when nothing answered.
+ * How sure Fuobe is that a look is the person's ComfyUI. 3: it read ComfyUI's own answer. 2: something answers but
+ * won't let this page read it, on ComfyUI's usual port (or Desktop's, which ranks after it), where ComfyUI was found
+ * before, or on the port the person chose or typed. 1: the same on any other port (another app answers there just as
+ * well). 0: nothing, or another app's answer Fuobe can read (it isn't ComfyUI, so it is never offered).
  */
-export function pickLook(looks: PortLook[], remembered?: number): PortLook | { state: "none" } {
-  const rank = (l: PortLook) => (l.state === "found" ? 0 : l.state === "unreadable" ? 1 : 2);
-  const sorted = looks.filter((l) => l.state !== "none").sort((a, b) => rank(a) - rank(b) || Number(b.port === remembered) - Number(a.port === remembered) || portRank(a.port) - portRank(b.port));
+export function lookStrength(l: PortLook, remembered?: number, chosen?: number): number {
+  if (l.state === "found") return 3;
+  if (l.state === "unreadable") return l.port === COMFY_PORT || l.port === DESKTOP_PORT || l.port === remembered || l.port === chosen ? 2 : 1;
+  return 0;
+}
+
+/**
+ * The ComfyUI to use from several looks: one Fuobe can read first; then something on ComfyUI's usual port or where it
+ * was found before; another app's port last. Among equals: the remembered port, then the usual order (8188 before
+ * Desktop's 8000). "none" when nothing answered.
+ */
+export function pickLook(looks: PortLook[], remembered?: number, chosen?: number): PortLook | { state: "none" } {
+  const s = (l: PortLook) => lookStrength(l, remembered, chosen);
+  const sorted = looks.filter((l) => s(l) > 0).sort((a, b) => s(b) - s(a) || Number(b.port === remembered) - Number(a.port === remembered) || portRank(a.port) - portRank(b.port));
   return sorted[0] ?? { state: "none" };
 }
 
 /** The ports to look at, the remembered one first. */
 export const portsToLook = (remembered?: number): number[] => [...new Set([...(remembered ? [remembered] : []), ...COMFY_PORTS])];
+
+/** The first ports of a look (the remembered one, then ComfyUI's usual one): a readable ComfyUI there ends the look. */
+export const firstPorts = (remembered?: number): number[] => [...new Set([...(remembered ? [remembered] : []), COMFY_PORT])];
 
 /** What the "Use the ComfyUI on this computer" card shows (components/gpu/use-local-comfy.ts finds it). */
 export type Finder =
@@ -199,37 +227,99 @@ export type Finder =
   /** Found and readable: the caller connects. */
   | { s: "found"; port: number; host: string; stats: SystemStats }
   /**
-   * ComfyUI answers but can't be read: it needs the setting (`back`: it restarted, still without it). `others`: other
-   * ports where something answers too (the person picks where their ComfyUI is).
+   * Something answers but won't let this page read it: ComfyUI has to let Fuobe in (`back`: it restarted, still
+   * without it). `weak`: a port ComfyUI doesn't usually use, and nothing better answers (it may be another app).
+   * `chosen`: the person said their ComfyUI is on this port. `others`: the other ports where something answers, best
+   * first. `missed`: the person chose a port where nothing answers any more.
    */
-  | { s: "needs-setting"; port: number; back: boolean; others?: number[] }
+  | { s: "needs-setting"; port: number; back: boolean; weak?: true; chosen?: true; others?: number[]; missed?: number; notComfy?: number }
   /** The port went quiet after it needed the setting: ComfyUI is restarting. */
-  | { s: "waiting"; port: number; since: number }
-  | { s: "none"; missed?: number }
+  | { s: "waiting"; port: number; since: number; chosen?: true }
+  /** `missed`: the port the person typed or picked, where nothing answers. `notComfy`: another app answers there. */
+  | { s: "none"; missed?: number; notComfy?: number }
   /** The browser keeps Fuobe from reaching apps on this computer. */
   | { s: "blocked" }
   /** This browser or page can't: Safari, a phone, or a studio on plain http at a network address. */
   | { s: "unsupported"; why: "safari" | "phone" | "http" };
 
+export interface SettleOptions {
+  /** The one port the person typed: counted as chosen, and a miss is said. */
+  typed?: number;
+  /** The port the person picked from the other ports ("Use port 8189"): followed from now on. */
+  chosen?: number;
+  /** Only some ports were looked at (a quiet look): the other ports found before are kept. */
+  partial?: boolean;
+}
+
 /**
- * The card's next screen after a look (`typed`: the one port the person asked about). A readable ComfyUI on any port
- * connects. While it waits for one ComfyUI to come back with the setting, that port decides: quiet there is ComfyUI
- * restarting, and another app answering on another port changes nothing.
+ * The card's next screen after a look. A readable ComfyUI on any port connects. While it waits for one ComfyUI to let
+ * Fuobe in, that port decides: quiet there is ComfyUI restarting, and another app answering elsewhere changes nothing.
+ * A weak port the person didn't choose gives way as soon as something better answers (ComfyUI's own port).
  */
-export function settled(was: Finder, looks: PortLook[], remembered: number | undefined, typed: number | undefined, now: number): Finder {
-  const best = pickLook(looks, remembered);
+export function settled(was: Finder, looks: PortLook[], remembered: number | undefined, now: number, o: SettleOptions = {}): Finder {
+  const following = was.s === "needs-setting" || was.s === "waiting" ? was : null;
+  const picked = o.chosen ?? o.typed;
+  const chosen = picked ?? (following?.chosen ? following.port : undefined);
+  const best = pickLook(looks, remembered, chosen);
   if (best.state === "found") return { s: "found", port: best.port, host: best.host ?? "127.0.0.1", stats: best.stats };
-  const answering = looks.filter((l) => l.state === "unreadable").map((l) => l.port);
+  const strength = (l: PortLook) => lookStrength(l, remembered, chosen);
+  const answering = looks
+    .filter((l) => strength(l) > 0)
+    .sort((a, b) => strength(b) - strength(a) || portRank(a.port) - portRank(b.port))
+    .map((l) => l.port);
+  const looked = new Set(looks.map((l) => l.port));
+  /** The other answering ports: these looks', and, after a partial look, the ones found before that weren't looked at. */
   const others = (port: number) => {
-    const rest = answering.filter((p) => p !== port);
+    const before = o.partial && was.s === "needs-setting" ? [was.port, ...(was.others ?? [])].filter((p) => !looked.has(p)) : [];
+    const rest = [...new Set([...answering, ...before])].filter((p) => p !== port);
     return rest.length ? { others: rest } : {};
   };
-  if ((was.s === "needs-setting" || was.s === "waiting") && looks.some((l) => l.port === was.port)) {
-    if (answering.includes(was.port)) return { s: "needs-setting", port: was.port, back: was.s === "waiting" || (was.s === "needs-setting" && was.back), ...others(was.port) };
-    return { s: "waiting", port: was.port, since: was.s === "waiting" ? was.since : now };
+  const at = (port: number) => looks.find((l) => l.port === port);
+  const screen = (l: PortLook, back: boolean): Finder => ({
+    s: "needs-setting",
+    port: l.port,
+    back,
+    ...(strength(l) < 2 && { weak: true as const }),
+    ...(l.port === chosen && { chosen: true as const }),
+    ...others(l.port),
+  });
+
+  // The person picked or typed a port: its own screen, or, when it isn't ComfyUI's now, the screen before saying so.
+  if (picked !== undefined) {
+    const l = at(picked);
+    if (l && strength(l) > 0) return screen(l, false);
+    const why = l?.state === "other" ? { notComfy: picked } : { missed: picked };
+    if (was.s === "needs-setting" && was.port !== picked) {
+      const rest = (was.others ?? []).filter((p) => p !== picked);
+      return { s: "needs-setting", port: was.port, back: was.back, ...(was.weak && { weak: true as const }), ...(was.chosen && { chosen: true as const }), ...(rest.length && { others: rest }), ...why };
+    }
+    // The port shown (a weak one the person said is theirs) is gone: the next port that answers, or none.
+    if (was.s === "needs-setting" && was.others?.length) {
+      const [next, ...rest] = was.others;
+      return { s: "needs-setting", port: next, back: false, weak: true, ...(rest.length && { others: rest }), ...why };
+    }
+    return { s: "none", ...why };
   }
-  if (best.state === "unreadable") return { s: "needs-setting", port: best.port, back: false, ...others(best.port) };
-  return { s: "none", ...(typed && { missed: typed }) };
+
+  if (following) {
+    const l = at(following.port);
+    // A weak port nobody chose is shown only until something better answers, and isn't waited for.
+    const weakShown = following.s === "needs-setting" && !!following.weak && !following.chosen;
+    const better = weakShown && !!l && best.state !== "none" && strength(best) > strength(l);
+    if (l && !better) {
+      if (strength(l) > 0) {
+        const next = screen(l, following.s === "waiting" || (following.s === "needs-setting" && following.back));
+        // A note about a port the person picked stays through quiet looks (the card clears it after a while).
+        const note = following.s === "needs-setting" && o.partial ? { ...(following.missed && { missed: following.missed }), ...(following.notComfy && { notComfy: following.notComfy }) } : {};
+        return next.s === "needs-setting" ? { ...next, ...note } : next;
+      }
+      if (!weakShown) return { s: "waiting", port: following.port, since: following.s === "waiting" ? following.since : now, ...(following.chosen && { chosen: true as const }) };
+    }
+    // A quiet look that didn't reach the port shown, and found nothing better, changes nothing.
+    if (!l && o.partial && best.state === "none") return was;
+  }
+  if (best.state !== "none") return screen(best, false);
+  return { s: "none" };
 }
 
 /** The same screen (a quiet look that found nothing new changes nothing). */

@@ -1,4 +1,4 @@
-// N7-8 in the browser (nothing is run: no GPU, no fal key): the Canvas Layout node and its editor (boxes drawn by touch
+// Layouts everywhere in the browser (nothing is run: no GPU, no fal key): the Canvas Layout node and its editor (boxes drawn by touch
 // at 390 px, Plan layout from a sentence, Done back on the card), Marketing Studio's "Words drawn by the model" switch with
 // its hint and the drawing model in Settings, and Ads Studio's switch with its hint. Each at 1440 and 390 px, light and
 // dark: the controls render, nothing scrolls sideways, keyboard focus reaches every new control, no console errors.

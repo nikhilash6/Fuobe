@@ -252,9 +252,6 @@ export function fitLoras(loras: LoraRef[], route: Pick<ModelRoute, "provider" | 
     return { loras: [], notes };
   }
   const { kept, over } = fitSlots(field, cloud);
-  // Said only of the LoRAs this run really sends (not of one the route or its capacity leaves out).
-  const gpuOnly = [...new Set(kept.filter(gpuOnlyLicence).map(loraName))];
-  if (gpuOnly.length) notes.push(`${list(gpuOnly)}: ${gpuOnly.length > 1 ? "their licences allow your GPU only (civitai lists no “Rent”); they run" : "its licence allows your GPU only (civitai lists no “Rent”); it runs"} in the cloud because Settings → Models & licences lets such LoRAs go there`);
   if (over.length) {
     const why = field.shape === "experts" ? "one LoRA per expert" : `up to ${loraCapacity(field)} LoRA${loraCapacity(field) > 1 ? "s" : ""}`;
     notes.push(`This API takes ${why}, so ${list(over.map(loraName))} ${over.length > 1 ? "are" : "is"} left out`);

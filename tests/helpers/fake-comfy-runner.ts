@@ -11,7 +11,7 @@
  * history lists that many Qwen-Image-Layered layers, node 60), `frames` (an EXR export: a preview clip, node 5, and
  * that many frames, node 3), `historyError` (/history answers HTTP 500 and then sends nothing), `uploadStatus` (the HTTP
  * status /upload/image answers, e.g. 500 to fail every upload), `refuseClass` (/prompt answers "not in list" for a graph with
- * a node of that class).
+ * a node of that class), `echo` (an image output is the last picture uploaded, so a result lines up with its photo).
  * This file runs under plain Node too: only erasable TypeScript.
  */
 import http from "node:http";
@@ -32,6 +32,7 @@ export interface FakeComfyOptions {
   uploadStatus?: number;
   /** /prompt answers "not in list" for a graph with a node of this class (a file that node loads isn't there). */
   refuseClass?: string;
+  echo?: boolean;
 }
 
 export interface FakeLogEntry {
@@ -83,6 +84,7 @@ function uploadedBytes(body: Buffer, contentType: string): Buffer | undefined {
 export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<FakeComfy> {
   const log: FakeLogEntry[] = [];
   const jobs = new Map<string, number>();
+  let lastUpload: Buffer | undefined;
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on("data", (c: Buffer) => chunks.push(c));
@@ -101,6 +103,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
       if (p === "/object_info") return json(200, {});
       if (p === "/upload/image" && req.method === "POST") {
         entry.upload = uploadedBytes(body, req.headers["content-type"] ?? "");
+        if (entry.upload?.length) lastUpload = entry.upload;
         if (opts.uploadStatus && opts.uploadStatus !== 200) return json(opts.uploadStatus, { error: "upload refused" });
         return json(200, { name: `fake_${log.length}.bin`, subfolder: "", type: "input" });
       }
@@ -174,6 +177,11 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
           return res.end(Buffer.from("762f3101", "hex"));
         }
         const png = name.endsWith(".png");
+        if (png && opts.echo && lastUpload) {
+          const jpeg = lastUpload[0] === 0xff && lastUpload[1] === 0xd8;
+          res.writeHead(200, { "content-type": jpeg ? "image/jpeg" : "image/png" });
+          return res.end(lastUpload);
+        }
         res.writeHead(200, { "content-type": png ? "image/png" : "video/mp4" });
         return res.end(png ? TINY_PNG : TINY_MP4);
       }
@@ -199,7 +207,7 @@ export function startFakeComfy(opts: FakeComfyOptions = {}, port = 0): Promise<F
   });
 }
 
-// Run on its own: node tests/helpers/fake-comfy-runner.ts --port 3341 [--loras none|a,b]
+// Run on its own: node tests/helpers/fake-comfy-runner.ts --port 3341 [--loras none|a,b] [--output image] [--echo]
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const arg = (name: string) => {
     const i = process.argv.indexOf(`--${name}`);
@@ -207,7 +215,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   const port = Number(arg("port") ?? 3341);
   const loras = arg("loras");
-  const fake = await startFakeComfy({ loras: !loras || loras === "none" ? [] : loras.split(","), delayMs: Number(arg("delay") ?? 1500), output: arg("output") === "image" ? "image" : "video" }, port);
+  const fake = await startFakeComfy({ loras: !loras || loras === "none" ? [] : loras.split(","), delayMs: Number(arg("delay") ?? 1500), output: arg("output") === "image" ? "image" : "video", echo: process.argv.includes("--echo") }, port);
   console.log(`fake ComfyUI on ${fake.url}`);
   setInterval(() => {
     const last = fake.log.splice(0);

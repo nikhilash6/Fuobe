@@ -1,7 +1,5 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { clock, planJoin, planLoop } from "@/lib/av/audio-tools";
 import { cloudLoopPasses } from "@/lib/av/crossfade";
 import { getModel } from "@/lib/catalog";
@@ -9,8 +7,9 @@ import { buildPayload } from "@/lib/catalog/payload";
 import type { Generation } from "@/lib/catalog/types";
 import { HUB_MODES, modeHref } from "@/lib/hubs";
 import { outputActions } from "@/lib/output-actions";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-audio-tools-"));
+const dir = tempDir("fuobe-audio-tools-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: the open models run on the demo provider.
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -21,7 +20,6 @@ const gens = await import("@/server/generations");
 const route = await import("@/app/api/audio-tools/route");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** A mono 16-bit WAV of a tone, saved as an upload. */
 function upload(seconds: number, name = "clip.wav"): string {

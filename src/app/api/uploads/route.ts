@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
-import { CONNECT_GPU_HEADER, CONNECT_GPU_UPLOAD_MESSAGE, CONNECT_GPU_UPLOAD_OPEN_MESSAGE } from "@/lib/guest-access";
+import { CONNECT_GPU_HEADER, CONNECT_GPU_UPLOAD_MESSAGE, CONNECT_GPU_UPLOAD_OPEN_MESSAGE, KINETIC_UPLOAD_HEADER } from "@/lib/guest-access";
 import { accountProviders, paidAllowed } from "@/server/account-keys";
 import { policy as billingPolicy } from "@/server/billing";
 import { poolReady } from "@/server/hosted";
@@ -20,8 +20,10 @@ import { adoptFile, contentTypeFor, saveFile, scratchDir } from "@/server/storag
  * proxy's checks here.
  *
  * - The owner: up to 200 MB, the types below.
- * - An account (public sign-up): only with its own ComfyUI connected or its own fal.ai or Replicate key (something to
- *   run its files on); a picture up to 25 MB and 40 megapixels, a
+ * - An account (public sign-up): with its own ComfyUI connected or its own fal.ai or Replicate key (something to run
+ *   its files on), any of the types below; without either, only a Kinetic Motion result rendered in its browser (sent
+ *   with KINETIC_UPLOAD_HEADER: an MP4 or WebM clip, or its PNG poster), which no model makes. A picture up to 25 MB
+ *   and 40 megapixels, a
  *   sound up to 50 MB, a clip up to 95 MB; its uploads up to 1 GB and all its files up to 3 GB; 60 uploads an hour,
  *   300 a day, 2 at once. The stored type is read from the file's first bytes, never taken from the client.
  */
@@ -32,11 +34,19 @@ const UNSUPPORTED = "Fuobe can't open that file. Use a JPG, PNG, WebP, GIF, MP4,
 /** Names browsers give AVI and Matroska files, to the one Fuobe stores them under. */
 const VIDEO_ALIASES: Record<string, string> = { "video/avi": "video/x-msvideo", "video/msvideo": "video/x-msvideo", "video/vnd.avi": "video/x-msvideo", "video/mkv": "video/x-matroska" };
 
+/** A Kinetic Motion result rendered in the browser: its clip or its poster (the stored type, read from its bytes). */
+const KINETIC_TYPES = /^(video\/(mp4|webm)|image\/png)$/;
+
 const KIND_CAP: Record<SniffKind, number> = { image: ACCOUNT_LIMITS.imageBytes, audio: ACCOUNT_LIMITS.audioBytes, video: ACCOUNT_LIMITS.videoBytes };
 const KIND_MESSAGE: Record<SniffKind, string> = { image: ACCOUNT_MESSAGES.imageTooBig, audio: ACCOUNT_MESSAGES.audioTooBig, video: ACCOUNT_MESSAGES.videoTooBig };
 
 const json = (status: number, body: Record<string, unknown>, headers: Record<string, string> = {}) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
+
+/** An account with nothing that would let it add this file: "Connect your GPU" (with a key too, where paid models are on). */
+const connectFirst = () => json(403, { error: paidAllowed() ? CONNECT_GPU_UPLOAD_MESSAGE : CONNECT_GPU_UPLOAD_OPEN_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
+
+const isMultipart = (request: Request) => (request.headers.get("content-type") ?? "").toLowerCase().startsWith("multipart/form-data");
 
 class TooBig extends Error {}
 class Stalled extends Error {}
@@ -160,8 +170,16 @@ async function ownerUpload(request: Request): Promise<Response> {
 // ---------------------------------------------------------------------------
 // An account
 
+type Kinds = { image: boolean; video: boolean; audio: boolean };
+
+/**
+ * What an account with no GPU or key of its own may add: the kinds its runs on this install's GPUs may use (hosted runs
+ * on), and a Kinetic Motion result it rendered in its browser (no model makes one).
+ */
+type Without = { hosted: Kinds | null; kinetic: boolean };
+
 /** The kinds of file an account with no GPU or key of its own may add for runs on this install's GPUs (hosted runs). */
-async function hostedUploads(accountId: string): Promise<{ image: boolean; video: boolean; audio: boolean } | null> {
+async function hostedUploads(accountId: string): Promise<Kinds | null> {
   if (!poolReady()) return null;
   const p = await billingPolicy(accountId);
   if (!p?.hosted || !(p.uploads.image || p.uploads.video || p.uploads.audio)) return null;
@@ -170,10 +188,12 @@ async function hostedUploads(accountId: string): Promise<{ image: boolean; video
 
 async function accountUpload(request: Request, account: Account): Promise<Response> {
   // No GPU and no key of its own: with hosted runs on, the files a run on this install's GPUs may use (the policy says
-  // which kinds; checked again once the file's kind is known), else nothing.
+  // which kinds), and a Kinetic Motion clip or poster; checked again once the file's type is known. Else nothing.
   const own = !!accountGpu(account.id) || accountProviders(account.id).length > 0;
-  const hosted = own ? null : await hostedUploads(account.id);
-  if (!own && !hosted) return json(403, { error: paidAllowed() ? CONNECT_GPU_UPLOAD_MESSAGE : CONNECT_GPU_UPLOAD_OPEN_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
+  const without: Without | null = own ? null : { hosted: await hostedUploads(account.id), kinetic: request.headers.get(KINETIC_UPLOAD_HEADER) === "1" };
+  if (without && !without.hosted && !without.kinetic) return connectFirst();
+  // Only a clip or a poster then: refused before a byte is read when it says it is anything else.
+  if (without?.kinetic && !without.hosted && !isMultipart(request) && !KINETIC_TYPES.test(declaredType(request.headers.get("content-type"), displayName(request.headers.get("x-file-name"))))) return connectFirst();
   if (!diskHasRoom()) return json(503, { error: ACCOUNT_MESSAGES.diskLow });
   // A fair share: 60 an hour, 300 a day, 2 at once.
   const hour = hit(`up:h:${account.id}`, ACCOUNT_LIMITS.uploadsPerHour, 60 * 60_000);
@@ -190,14 +210,14 @@ async function accountUpload(request: Request, account: Account): Promise<Respon
     return json(429, { error: ACCOUNT_MESSAGES.uploadsBusy }, { "Retry-After": "10" });
   }
   try {
-    return await accountUploadBody(request, account, hosted);
+    return await accountUploadBody(request, account, without);
   } finally {
     releaseAll();
     release();
   }
 }
 
-async function accountUploadBody(request: Request, account: Account, hosted: { image: boolean; video: boolean; audio: boolean } | null): Promise<Response> {
+async function accountUploadBody(request: Request, account: Account, without: Without | null): Promise<Response> {
   const lengthHeader = request.headers.get("content-length");
   const length = lengthHeader === null ? NaN : Number(lengthHeader);
   if (!Number.isFinite(length) || length < 0) return json(411, { error: ACCOUNT_MESSAGES.lengthNeeded });
@@ -247,9 +267,10 @@ async function accountUploadBody(request: Request, account: Account, hosted: { i
   const sniffed = sniffMedia(head, declaredType(declaredFull, name));
   if (!sniffed) return drop(415, ACCOUNT_MESSAGES.wrongType);
   if (bytes > KIND_CAP[sniffed.kind]) return drop(413, KIND_MESSAGE[sniffed.kind]);
-  if (hosted && !hosted[sniffed.kind as "image" | "video" | "audio"]) {
+  // Without a GPU or key of its own: a kind its hosted runs take, or a Kinetic Motion clip or poster.
+  if (without && !without.hosted?.[sniffed.kind] && !(without.kinetic && KINETIC_TYPES.test(sniffed.contentType))) {
     fs.rmSync(dest, { force: true });
-    return json(403, { error: CONNECT_GPU_UPLOAD_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
+    return connectFirst();
   }
   if (sniffed.kind === "image") {
     const size = imageSize(head);

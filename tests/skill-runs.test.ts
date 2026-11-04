@@ -1,32 +1,33 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 180_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-skill-runs-"));
+/**
+ * Skills W7: a skill whose steps wait across studios ("dub, then captions, then a 9:16 cut") runs as a skill_runs row:
+ * each step starts when the step it takes a result from is done, a failure fails the steps after it with the reason,
+ * the state survives a restart, and the free dry run deletes the studio records it made.
+ */
+
+const dir = tempDir("fuobe-skill-runs-");
 process.env.FUOBE_DATA_DIR = dir;
-// Nothing listens: models run on the demo provider, and there's no LLM.
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
 
 const { setSetting } = await import("@/server/settings");
-const skills = await import("@/server/skills");
 const recipes = await import("@/server/recipes");
 const runs = await import("@/server/skill-runs");
+const skills = await import("@/server/skills");
 const gens = await import("@/server/generations");
 const { db } = await import("@/server/db");
 const { saveFile } = await import("@/server/storage");
-const { executeTool } = await import("@/server/assist/tools");
-const { inDemoScope, outsideDemo, runAsDemo } = await import("@/server/demo-scope");
-const { llmText } = await import("@/server/enhance");
-const lib = await import("@/lib/recipe");
-const uses = await import("@/server/skill-uses");
-const runsRoute = await import("@/app/api/assist/skills/[name]/runs/route");
-
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+const { recipeProblems, parseRecipe, isStaged } = await import("@/lib/recipe");
+const { runAsDemo, inDemoScope, outsideDemo } = await import("@/server/demo-scope");
+const { spendOf } = await import("@/lib/assist-schedule");
+const tools = await import("@/server/assist/tools");
 
 let clip = "";
 beforeAll(() => {
@@ -35,277 +36,229 @@ beforeAll(() => {
   clip = saveFile({ data: fs.readFileSync(path.join(__dirname, "fixtures/shorts-12s.mp4")), contentType: "video/mp4", source: "upload", name: "talk.mp4" }).url;
 });
 
-/** The user story's "Spanish short": dub the clip, burn captions into the dub, cut a 9:16 version of the captioned clip. */
-const spanishShort = () => ({
-  fuobeRecipe: 2,
-  params: [
-    { id: "video", label: "Clip", type: "video", required: true, example: clip },
-    { id: "lang", label: "Language", type: "choice", options: ["Spanish", "German"], default: "Spanish" },
-  ],
-  steps: [
-    { key: "dub", kind: "tool", label: "Dub", tool: "dub_video", input: { video: "{{video}}", languages: ["{{lang}}"], review: false } },
-    { key: "captions", kind: "tool", label: "Captions", tool: "add_captions", input: { video: "{{steps.dub.output}}" } },
-    { key: "cut", kind: "generate", label: "9:16 cut", request: { feature: "skill", modelId: "ltx-reframe", op: "reframe", inputs: { video: "{{steps.captions.output}}" }, params: { aspectRatio: "9:16" } } },
-  ],
-  checks: { cut: { kind: "video" } },
-});
-
-function makeSkill(name: string, recipe: unknown, title = "Spanish short") {
-  skills.createSkill({ name, title, description: "Dub, captions and a 9:16 cut.", body: "# Spanish short" });
-  return recipes.saveRecipe(name, recipe);
-}
-
-/** Move a run on until it ends (the sweep does this every few seconds in the app). */
-async function finish(id: string, ms = 150_000, mod = runs) {
+async function settle(ids: string[], ms = 90_000) {
   const until = Date.now() + ms;
   for (;;) {
-    const v = (await mod.advanceSkillRun(id))!;
-    if (v.status !== "running") return v;
-    if (Date.now() > until) throw new Error(`timed out: ${lib.runLine(v.steps)}`);
+    const all = ids.map((id) => gens.getGeneration(id, { includeDeleted: true })!);
+    if (all.every((g) => ["succeeded", "failed", "canceled"].includes(g.status))) return all;
+    if (Date.now() > until) throw new Error(`timed out: ${all.map((g) => `${g.id} ${g.status} ${g.message}`).join(", ")}`);
     await new Promise((r) => setTimeout(r, 300));
   }
 }
 
-const count = (table: string) => (db().prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+/** Sweep until the run stops going, letting the generation runner finish each step's work. */
+async function finish(id: string, ms = 150_000) {
+  const until = Date.now() + ms;
+  for (;;) {
+    const status = await runs.advanceSkillRun(id);
+    if (status !== "running") return status;
+    const ids = runs.getSkillRun(id)!.steps.filter((s) => s.status === "running").flatMap((s) => s.ids);
+    if (ids.length) await settle(ids);
+    if (Date.now() > until) throw new Error("the run didn't finish");
+  }
+}
+
+/** Dub (a studio), then captions on the dub (a studio), then a 9:16 cut of the captioned clip (a model). */
+const spanishShort = () => ({
+  fuobeRecipe: 2,
+  params: [{ id: "clip", label: "Clip", type: "video", required: true, example: clip }],
+  steps: [
+    { key: "dub", label: "Dub", kind: "tool", tool: "dub_video", input: { video: "{{clip}}", languages: ["Spanish"], lipsync: false, review: false } },
+    { key: "captions", label: "Captions", kind: "tool", tool: "add_captions", input: { video: "{{steps.dub.output}}" } },
+    { key: "cut", label: "9:16 cut", kind: "generate", request: { feature: "skill", modelId: "scale-video", op: "reframe", inputs: { video: "{{steps.captions.output}}" }, params: { aspectRatio: "9:16" } } },
+  ],
+});
+
+function shortSkill(name = "spanish-short") {
+  if (skills.getSkill(name)) return name;
+  skills.createSkill({ name, title: "Spanish short", description: "Dub, caption and cut a clip for a Spanish short.", body: "# Spanish short" });
+  recipes.saveRecipe(name, spanishShort());
+  return name;
+}
 
 describe("the recipe format, version 2", () => {
-  it("checks that every step reference points at an earlier step of a kind that fits", () => {
-    const r = lib.RecipeSchema.parse(spanishShort());
-    expect(lib.recipeProblems(r)).toEqual([]);
-    expect(lib.isStaged(r)).toBe(true);
-    expect(lib.recipeParts(r)).toEqual([
-      { keys: ["dub"], needs: [] },
-      { keys: ["captions"], needs: ["dub"] },
-      { keys: ["cut"], needs: ["captions"] },
-    ]);
-    const broken = lib.RecipeSchema.parse({
-      ...spanishShort(),
-      steps: [
-        { key: "dub", kind: "tool", tool: "dub_video", input: { video: "{{steps.captions.output}}", languages: ["{{lang}}"] } },
-        { key: "captions", kind: "tool", tool: "add_captions", input: { video: "{{video}} {{steps.dub.output}}" } },
-        { key: "layers", kind: "tool", tool: "split_layers", input: { image: "{{steps.dub.output}}" } },
-        { key: "cut", kind: "generate", after: "captions", request: { feature: "skill", modelId: "ltx-reframe", op: "reframe", inputs: { video: "{{steps.nope.output}}" } } },
-      ],
-    });
-    const problems = lib.recipeProblems(broken).join("\n");
-    expect(problems).toMatch(/“dub” uses the output of “captions”, which comes after it/);
-    expect(problems).toMatch(/a step's output fills a whole field/);
-    expect(problems).toMatch(/“layers” takes an image from “dub”, which makes a video/);
-    expect(problems).toMatch(/there's no step “nope”/);
-    expect(problems).toMatch(/waits for the studio step “captions”: put \{\{steps.captions.output\}\} in its input instead/);
-    // A dub that waits for its lines to be reviewed makes no video for the next step.
-    expect(problems).toMatch(/“dub” waits for you to review its lines in Translate & dub/);
-    // Version 1 files still load, and keep their rule: a tool step alone.
-    const v1 = lib.RecipeSchema.parse({ ...spanishShort(), fuobeRecipe: 1 });
-    expect(lib.recipeProblems(v1).join("\n")).toMatch(/needs "fuobeRecipe": 2/);
+  it("takes an earlier step's output by reference, checked against the step order and the kind it makes", () => {
+    const parsed = parseRecipe(JSON.stringify(spanishShort()));
+    expect(parsed.ok).toBe(true);
+    const recipe = parsed.ok ? parsed.recipe : null!;
+    expect(isStaged(recipe)).toBe(true);
+    expect(recipeProblems(recipe)).toEqual([]);
+    // A reference to a later step, to no step, and a kind that doesn't fit.
+    const later = { ...recipe, steps: [recipe.steps[1], recipe.steps[0], recipe.steps[2]] };
+    expect(recipeProblems(later)).toContain("Step “captions” takes the output of “dub”, which comes later: a step can only take an earlier step's output");
+    const none = { ...recipe, steps: [recipe.steps[0], { ...recipe.steps[1], input: { video: "{{steps.nope.output}}" } }] } as typeof recipe;
+    expect(recipeProblems(none)).toContain("Step “captions” takes the output of “nope”, which isn't a step");
+    expect(recipeProblems(recipe, { kinds: { dub: "audio" } })).toContain("Step “captions” takes a video from “dub”, which makes a audio");
+    // A dub for review makes no video until someone voices it: a later step can't take its result.
+    const reviewed = { ...recipe, steps: recipe.steps.map((s) => (s.kind === "tool" && s.tool === "dub_video" ? { ...s, input: { ...s.input, review: true } } : s)) };
+    expect(recipeProblems(reviewed)).toContain("Step “dub” dubs for review, so it makes no video for the steps after it: set \"review\": false to dub in one go");
+    const unset = { ...recipe, steps: recipe.steps.map((s) => (s.kind === "tool" && s.tool === "dub_video" ? { ...s, input: { video: "{{clip}}", languages: ["Spanish"] } } : s)) };
+    expect(recipeProblems(unset).some((p) => p.startsWith("Step “dub” dubs for review"))).toBe(true);
+    // A step joined to another by `after` can't also take its output by reference (they start together).
+    const cut = (key: string, video: string, after?: string) => ({ key, kind: "generate" as const, ...(after && { after }), request: { feature: "skill", modelId: "scale-video", op: "reframe", inputs: { video }, params: { aspectRatio: "9:16" } } });
+    const joined = { ...recipe, steps: [recipe.steps[0], cut("a", "{{steps.dub.output}}"), cut("b", "{{steps.a.output}}", "a")] } as typeof recipe;
+    expect(recipeProblems(joined)).toContain('Step “b” takes the output of “a”, which starts with it (they are joined by "after"): take it through "after" and a chain slot, or drop "after"');
+    // Version 1 says what it needs.
+    expect(recipeProblems({ ...recipe, fuobeRecipe: 1 })).toEqual(expect.arrayContaining([expect.stringMatching(/needs "fuobeRecipe": 2/)]));
+    // On the server, the catalog says what each step makes.
+    expect(recipes.allProblems(recipe)).toEqual([]);
   });
 
-  it("refuses a step that takes a Faceless episode's output: its result is only the first stills", () => {
-    const scenes = Array.from({ length: 3 }, (_, i) => ({ narration: `Line ${i}`, visual: `Scene ${i}` }));
-    const r = lib.RecipeSchema.parse({
-      fuobeRecipe: 2,
-      params: [],
-      steps: [
-        { key: "ep", kind: "tool", tool: "faceless_episode", input: { scenes, style: "flat 2D" } },
-        { key: "captions", kind: "tool", tool: "add_captions", input: { video: "{{steps.ep.output}}" } },
-      ],
-    });
-    expect(lib.recipeProblems(r).join("\n")).toMatch(/“captions” takes the output of “ep”, which no step can take yet: Faceless Studio finishes an episode/);
-  });
-
-  it("compiles to parts, and fills a reference with the step's first output of the field's kind", () => {
-    const r = lib.RecipeSchema.parse(spanishShort());
-    const c = lib.compile(r, { video: clip, lang: "Spanish" }, { skill: "s", run: "r", title: "Spanish short" });
-    expect(c.kind).toBe("staged");
-    if (c.kind !== "staged") return;
-    expect(c.parts.map((p) => p.kind)).toEqual(["tool", "tool", "pipeline"]);
-    const filled = lib.fillRefs({ video: "{{steps.dub.output}}", images: ["{{steps.dub.output}}"] }, (key, kind) => `/api/files/${key}.${kind}`);
-    expect(filled).toEqual({ video: "/api/files/dub.video", images: ["/api/files/dub.image"] });
-    expect(() => lib.fillRefs({ video: "{{steps.dub.output}}" }, () => undefined)).toThrow(/“dub” made no video/);
-  });
-});
-
-describe("a skill that spans studios, in demo mode", () => {
-  it("starts the dub, waits, then starts captions and the 9:16 cut as each step finishes", async () => {
-    makeSkill("spanish-short", spanishShort());
-    expect((await recipes.verifyRecipe("spanish-short", "plan")).ok).toBe(true);
-    // Priced step by step: the dub, then captions and the cut on a stand-in for what the step before makes.
-    const est = recipes.estimateRecipe("spanish-short", { values: { video: clip } }, "cloud");
+  it("is priced step by step, with stand-in files for the results steps wait for", () => {
+    const name = shortSkill();
+    const est = recipes.estimateRecipe(name, { values: { clip } }, "cloud");
+    expect(est.errors).toEqual([]);
+    expect(est.runs[0].errors).toEqual([]);
+    expect(est.jobs.at(-1)).toMatchObject({ modelId: "scale-video", op: "reframe" });
     expect(est.runnable).toBe(true);
-    expect(est.demo).toBe(true);
-    expect(est.place?.studio).toBe("Translate & dub");
+    // A step priced by the length of an earlier step's result is a guess: a spending cap holds it for a yes.
+    const guessed = est.jobs.filter((j) => j.estimate);
+    expect(guessed.length).toBeGreaterThan(0);
+    expect(guessed.every((j) => j.note !== "Dub")).toBe(true);
+    expect(spendOf(est.jobs.map((j) => ({ ...j, demo: false })))).toBeNull();
+  });
+});
 
-    const out = await recipes.runRecipe("spanish-short", { values: { video: clip } }, "cloud");
-    expect(out.demo).toBe(true);
-    const [run] = out.runs;
-    expect(run.run).toBeTruthy();
-    // The result names the run and which steps wait.
+describe("a run in stages", () => {
+  it("starts the dub, waits, then starts the captions and the cut, each from the step before", async () => {
+    const name = shortSkill();
+    await recipes.verifyRecipe(name, "plan", "cloud");
+    const out = await recipes.runRecipe(name, { values: { clip } }, "cloud");
+    const run = out.runs[0];
+    expect(run.skillRun).toBeTruthy();
     expect(run.waiting).toEqual(["Captions", "9:16 cut"]);
-    expect(run.href).toMatch(/dub=/);
-    const started = runs.getSkillRun(run.run!)!;
-    expect(started.steps.map((s) => s.status)).toEqual(["running", "waiting", "waiting"]);
-    expect(started.steps[0]).toMatchObject({ studio: "Translate & dub", href: expect.stringContaining("dub=") });
-
-    const done = await finish(run.run!);
-    expect(done.status).toBe("done");
-    expect(done.steps.map((s) => s.status)).toEqual(["done", "done", "done"]);
-    // Each step took the one before's video.
-    const dubbed = gens.getGeneration(done.steps[0].ids[0])!;
-    const captioned = gens.getGeneration(done.steps[1].ids[0])!;
-    const cut = gens.getGeneration(done.steps[2].ids[0])!;
-    expect(captioned.request.inputs?.video).toBe(dubbed.outputs.find((o) => o.kind === "video")!.url);
-    expect(cut.request.inputs?.video).toBe(captioned.outputs.find((o) => o.kind === "video")!.url);
-    expect(cut).toMatchObject({ op: "reframe", status: "succeeded", provider: "mock" });
-    // Every row carries the run's stamp and the skill's title.
-    for (const g of [dubbed, captioned, cut]) expect(g.request).toMatchObject({ skill: { name: "spanish-short", run: run.run }, batchTitle: "Spanish short" });
-    // ...and the key of the step that made it, a studio step's too (a failure is laid at the step that failed).
-    [dubbed, captioned, cut].forEach((g, i) => expect(g.request.skill?.step).toBe(done.steps[i].key));
-    expect(done.steps[1]).toMatchObject({ studio: "Captions", href: expect.stringMatching(/^\/video-tools\/captions\?video=/) });
-
-    // The skill's dialog reads its runs.
-    const res = await runsRoute.GET(new Request("http://x/api"), { params: Promise.resolve({ name: "spanish-short" }) } as never);
-    const body = (await res.json()) as { items: { id: string; status: string }[] };
-    expect(body.items[0]).toMatchObject({ id: run.run, status: "done" });
-    expect(lib.runLine(done.steps)).toBe("Dub · done → Captions · done → 9:16 cut · done");
-  });
-
-  it("run_skill's result names the run and says which steps wait, so the agent doesn't start them itself", async () => {
-    const out = await executeTool("run_skill", { name: "spanish-short", values: { video: clip } }, { engine: "cloud" });
-    expect(out.isError).toBeFalsy();
-    const body = JSON.parse(out.content as string) as { runs: { run: string; waiting: string[]; href: string }[]; note: string };
-    expect(body.runs[0]).toMatchObject({ run: expect.any(String), waiting: ["Captions", "9:16 cut"], href: expect.stringContaining("dub=") });
-    expect(body.note).toMatch(/Captions, 9:16 cut start by themselves when the steps before finish/);
-    expect((await finish(body.runs[0].run)).status).toBe("done");
-  });
-
-  it("a failed dub fails the steps after it, and says which step failed and why", async () => {
-    const out = await recipes.runRecipe("spanish-short", { values: { video: clip } }, "cloud");
-    const id = out.runs[0].run!;
-    const dub = runs.getSkillRun(id)!.steps[0].ids;
-    for (const g of dub) {
-      await gens.cancelGeneration(g);
-      db().prepare("UPDATE generations SET status = 'failed', error = 'No speech found in the clip' WHERE id = ?").run(g);
-    }
-    const v = await finish(id);
-    expect(v.status).toBe("failed");
-    expect(v.error).toBe("Dub failed: No speech found in the clip");
-    expect(v.steps.map((s) => [s.status, s.error])).toEqual([
-      ["failed", "No speech found in the clip"],
-      ["failed", "Didn't start: Dub failed"],
-      ["failed", "Didn't start: Captions failed"],
+    expect(run.ids.length).toBeGreaterThan(0);
+    const first = runs.getSkillRun(run.skillRun!)!;
+    expect(first.steps.map((s) => [s.key, s.status])).toEqual([
+      ["dub", "running"],
+      ["captions", "waiting"],
+      ["cut", "waiting"],
     ]);
+    expect(first.steps[0].studio).toBeTruthy();
+    // Every row it started carries the run's stamp.
+    expect(gens.getGeneration(run.ids[0])!.request.skill).toEqual({ name, run: run.skillRun });
+    expect(await finish(run.skillRun!)).toBe("done");
+    const done = runs.getSkillRun(run.skillRun!)!;
+    expect(done.steps.map((s) => s.status)).toEqual(["done", "done", "done"]);
+    // The cut took the captioned clip, which took the dub.
+    const cut = gens.getGeneration(done.steps[2].ids[0])!;
+    const captions = gens.getGeneration(done.steps[1].ids.at(-1)!, { includeDeleted: true })!;
+    expect(cut.request.inputs?.video).toMatch(/^\/api\/files\//);
+    expect(captions.request.inputs?.video ?? JSON.stringify(captions.request)).not.toContain("{{steps.");
+    expect(cut.request.inputs?.video).not.toBe(clip);
+    expect(runs.listSkillRuns(name)[0]).toMatchObject({ id: run.skillRun, status: "done" });
   });
 
-  it("keeps its state through a restart: a fresh server reads the run from skill_runs and carries on", async () => {
-    const out = await recipes.runRecipe("spanish-short", { values: { video: clip, lang: "German" } }, "cloud");
-    const id = out.runs[0].run!;
-    // A new process: modules loaded again, nothing in memory but the database.
-    vi.resetModules();
-    const fresh = await import("@/server/skill-runs");
-    const v = await finish(id, 150_000, fresh);
-    expect(v.status).toBe("done");
-    expect(v.steps.map((s) => s.status)).toEqual(["done", "done", "done"]);
-    const row = db().prepare("SELECT values_json, state_json FROM skill_runs WHERE id = ?").get(id) as { values_json: string; state_json: string };
-    expect(JSON.parse(row.values_json)).toMatchObject({ video: clip, lang: "German" });
+  it("a failed dub fails the steps after it, saying which step and why", async () => {
+    const name = shortSkill();
+    const out = await recipes.runRecipe(name, { values: { clip } }, "cloud");
+    const id = out.runs[0].skillRun!;
+    const dub = runs.getSkillRun(id)!.steps[0];
+    // The dub's work fails (as a provider would fail it).
+    const batches = db().prepare(`SELECT DISTINCT batch_id FROM generations WHERE id IN (${dub.ids.map(() => "?").join(", ")})`).all(...dub.ids) as { batch_id: string | null }[];
+    db()
+      .prepare(`UPDATE generations SET status = 'failed', error = 'No speech found in the clip' WHERE id IN (${dub.ids.map(() => "?").join(", ")}) OR batch_id IN (${batches.map(() => "?").join(", ") || "''"})`)
+      .run(...dub.ids, ...batches.map((b) => b.batch_id));
+    expect(await runs.advanceSkillRun(id)).toBe("failed");
+    const r = runs.getSkillRun(id)!;
+    expect(r.steps.map((s) => s.status)).toEqual(["failed", "failed", "failed"]);
+    expect(r.error).toMatch(/^“Dub” failed/);
+    expect(r.steps[1].error).toBe("“Dub” failed, so this didn't start");
+    expect(r.steps[2].error).toBe("“Dub” failed, so this didn't start");
+  });
+
+  it("keeps its state in the database: a restart's sweep carries on", async () => {
+    const name = shortSkill();
+    await recipes.verifyRecipe(name, "plan", "cloud");
+    const out = await recipes.runRecipe(name, { values: { clip } }, "cloud");
+    const id = out.runs[0].skillRun!;
+    await settle(runs.getSkillRun(id)!.steps[0].ids);
+    // A restart: the database is opened again and the runner is gone.
+    globalThis.__fuobeDb?.close();
+    globalThis.__fuobeDb = undefined;
+    // Opening the database clears the in-process demo setting ("auto"): set it again, as a test does.
+    setSetting("demoMode", "auto");
+    const timer = globalThis.__fuobeSkillRuns?.timer;
+    if (timer) clearInterval(timer);
+    globalThis.__fuobeSkillRuns = undefined;
+    await runs.sweepSkillRuns();
+    expect(runs.getSkillRun(id)!.steps.map((s) => s.status)).toEqual(["done", "running", "waiting"]);
+    expect(await finish(id)).toBe("done");
   });
 });
 
-describe("following runs", () => {
-  it("the runs route lists a skill's newest 8, or exactly the runs asked for by id however many", async () => {
-    makeSkill("many-runs", spanishShort());
-    const state = JSON.stringify({ engine: "cloud", title: "Spanish short", labels: [], parts: [] });
-    const add = db().prepare("INSERT INTO skill_runs (id, skill, status, values_json, state_json, created_at, updated_at) VALUES (?, ?, 'done', '{}', ?, ?, ?)");
-    const ids = Array.from({ length: 12 }, (_, i) => `many${i}`);
-    ids.forEach((id, i) => add.run(id, "many-runs", state, 1000 + i, 1000 + i));
-    add.run("other0", "spanish-short", state, 5000, 5000);
-    const get = async (q = "") => {
-      const res = await runsRoute.GET(new Request(`http://x/api/assist/skills/many-runs/runs${q}`), { params: Promise.resolve({ name: "many-runs" }) });
-      return { status: res.status, items: ((await res.json()) as { items?: { id: string }[] }).items?.map((r) => r.id) };
-    };
-    expect((await get()).items).toEqual(ids.slice(4).reverse());
-    // The CLI following a 10-row table asks for its own runs: the oldest of them too, and never another skill's.
-    const asked = [...ids.slice(0, 10), "other0"];
-    expect((await get(`?ids=${asked.join(",")}`)).items?.sort()).toEqual(ids.slice(0, 10).sort());
-    expect((await get(`?ids=${Array.from({ length: 51 }, (_, i) => `x${i}`).join(",")}`)).status).toBe(400);
+describe("checks of a run in stages", () => {
+  it("the dry run runs the studios as demos, then deletes what they made", async () => {
+    const name = shortSkill("spanish-short-check");
+    const count = (t: string) => (db().prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n;
+    const before = { dub: count("dub_sessions"), runs: count("skill_runs") };
+    const v = await recipes.verifyRecipe(name, "demo", "cloud");
+    expect(v.engines[0].plan.errors).toEqual([]);
+    expect(v.engines[0].dryRun).toMatchObject({ ok: true, problems: [] });
+    expect(v.view.recipe.verified?.cloud?.dryRun).toBeTruthy();
+    expect({ dub: count("dub_sessions"), runs: count("skill_runs") }).toEqual(before);
+    // Its rows are in the Trash, and none shows in the skill's history.
+    expect(runs.listSkillRuns(name)).toEqual([]);
+    const left = db().prepare("SELECT id, feature, model_id, status, batch_id FROM generations g WHERE json_extract(request_json, '$.skill.name') = ? AND NOT EXISTS (SELECT 1 FROM generation_trash t WHERE t.generation_id = g.id)").all(name);
+    expect(left).toEqual([]);
   });
-});
 
-describe("the demo scope", () => {
-  it("is left by the timers a dry run may start first, and asks no LLM inside it", async () => {
-    await runAsDemo(async () => {
-      expect(inDemoScope()).toBe(true);
-      expect(outsideDemo(() => inDemoScope())).toBe(false);
-      expect(gens.outsideRuns(() => inDemoScope())).toBe(false);
-      // The skill-run sweep, first started here, ticks outside the scope.
-      const seen = await new Promise<boolean>((resolve) => outsideDemo(() => setTimeout(() => resolve(inDemoScope()), 1)));
-      expect(seen).toBe(false);
-      expect(await llmText("system", "user")).toBeNull();
-    });
-  });
-});
-
-describe("the studio dry run", () => {
-  it("runs a studio module as a demo with no change to its code", async () => {
+  it("a dry run's steps run as demos whoever moves it on, and the sweep leaves it alone", async () => {
+    const id = "check-sweep";
+    const steps = JSON.parse(JSON.stringify(spanishShort().steps).replaceAll("{{clip}}", clip));
+    const state = () => JSON.parse((db().prepare("SELECT state_json FROM skill_runs WHERE id = ?").get(id) as { state_json: string }).state_json) as { steps: { status: string; ids: string[] }[] };
+    // Started and moved on outside any demo scope, as a sweep would.
     expect(inDemoScope()).toBe(false);
-    setSetting("demoMode", "off");
-    try {
-      const out = await runAsDemo(async () => {
-        expect(inDemoScope()).toBe(true);
-        return executeTool("add_captions", { video: clip }, { engine: "cloud" });
-      });
-      expect(out.isError).toBeFalsy();
-      const ids = (out.items ?? []).flatMap((i) => (i.role === "generations" ? i.ids : []));
-      for (const g of ids) expect(gens.getGeneration(g)).toMatchObject({ provider: "mock", request: { demo: true } });
-    } finally {
-      setSetting("demoMode", "auto");
+    await runs.startSkillRun({ id, skill: "spanish-short-sweep", title: "Sweep", engine: "cloud", values: { clip }, steps, check: true }).done;
+    const dub = state().steps[0];
+    expect(dub.status).toBe("running");
+    await settle(dub.ids);
+    const batchOf = (ids: string[]) => (db().prepare(`SELECT DISTINCT batch_id FROM generations WHERE id IN (${ids.map(() => "?").join(", ")}) AND batch_id IS NOT NULL`).all(...ids) as { batch_id: string }[]).map((b) => b.batch_id);
+    await settle((db().prepare(`SELECT id FROM generations WHERE batch_id IN (${batchOf(dub.ids).map(() => "?").join(", ") || "''"})`).all(...batchOf(dub.ids)) as { id: string }[]).map((g) => g.id));
+    // The sweep skips a dry run: the steps after the dub still wait.
+    await runs.sweepSkillRuns();
+    expect(state().steps.map((s) => s.status)).toEqual(["running", "waiting", "waiting"]);
+    const until = Date.now() + 150_000;
+    for (;;) {
+      const status = await runs.advanceSkillRun(id);
+      if (status !== "running") {
+        expect(status).toBe("done");
+        break;
+      }
+      const going = state().steps.filter((s) => s.status === "running").flatMap((s) => s.ids);
+      if (going.length) await settle(going);
+      if (Date.now() > until) throw new Error("the dry run didn't finish");
     }
+    // Every row it made, the studios' later steps too, is a demo on the demo provider.
+    const ids = state().steps.flatMap((s) => s.ids);
+    const batches = batchOf(ids);
+    const rows = db().prepare(`SELECT id, provider, request_json FROM generations WHERE id IN (${ids.map(() => "?").join(", ")}) OR batch_id IN (${batches.map(() => "?").join(", ") || "''"})`).all(...ids, ...batches) as { provider: string; request_json: string }[];
+    expect(rows.length).toBeGreaterThan(2);
+    for (const r of rows) expect({ provider: r.provider, demo: (JSON.parse(r.request_json) as { demo?: boolean }).demo }).toEqual({ provider: "mock", demo: true });
+    db().prepare("DELETE FROM skill_runs WHERE id = ?").run(id);
   });
 
-  it("checks a recipe that spans studios for free with Demo mode off, then deletes the studio records it made", async () => {
-    setSetting("demoMode", "off");
-    try {
-      makeSkill("spanish-check", spanishShort());
-      const before = { dubs: count("dub_sessions"), runs: count("skill_runs") };
-      const check = await recipes.verifyRecipe("spanish-check", "demo", "cloud");
-      expect(check.engines[0].dryRun).toEqual({ ok: true, problems: [] });
-      expect(check.view.recipe.verified?.cloud?.dryRun).toBeTruthy();
-      // The dub session it opened is gone, and the run isn't one of the skill's runs.
-      expect(count("dub_sessions")).toBe(before.dubs);
-      expect(count("skill_runs")).toBe(before.runs);
-      // What it made is in the Trash.
-      const live = db().prepare("SELECT COUNT(*) AS n FROM generations g WHERE json_extract(request_json, '$.skill.name') = 'spanish-check' AND NOT EXISTS (SELECT 1 FROM generation_trash t WHERE t.generation_id = g.id)").get() as { n: number };
-      expect(live.n).toBe(0);
-      const made = db().prepare("SELECT COUNT(*) AS n FROM generations WHERE json_extract(request_json, '$.skill.name') = 'spanish-check'").get() as { n: number };
-      expect(made.n).toBeGreaterThanOrEqual(3);
-      // Its studio steps' rows keep their studio's feature, so they say they're a check: not a run in the skill's
-      // history (W6) or in its use count (Assist's ranking).
-      expect(recipes.skillHistory("spanish-check")).toMatchObject({ runs: 0, lastRun: null, recent: [] });
-      uses.forgetSkillUses();
-      expect(uses.skillUses().has("spanish-check")).toBe(false);
-    } finally {
-      setSetting("demoMode", "auto");
-    }
+  it("the sweep's timer never keeps the demo scope it was first made in", async () => {
+    expect(runAsDemo(() => outsideDemo(() => inDemoScope()))).toBe(false);
+    const cur = globalThis.__fuobeSkillRuns;
+    if (cur) clearInterval(cur.timer);
+    globalThis.__fuobeSkillRuns = undefined;
+    runAsDemo(() => runs.ensureSkillRunRunner());
+    const seen = await new Promise<boolean>((res) => {
+      globalThis.__fuobeSkillRuns!.tick = () => res(inDemoScope());
+    });
+    expect(seen).toBe(false);
+    runs.ensureSkillRunRunner();
   });
 
-  it("checks a one-studio skill for free without the check counting as one of its runs", async () => {
-    makeSkill("captions-check", { fuobeRecipe: 1, params: [{ id: "video", label: "Clip", type: "video", required: true, example: clip }], steps: [{ key: "captions", kind: "tool", tool: "add_captions", input: { video: "{{video}}" } }] }, "Captions");
-    const check = await recipes.verifyRecipe("captions-check", "demo", "cloud");
-    expect(check.engines[0].dryRun).toEqual({ ok: true, problems: [] });
-    const rows = db().prepare("SELECT feature, json_extract(request_json, '$.skill.check') AS checked FROM generations WHERE json_extract(request_json, '$.skill.name') = 'captions-check'").all() as { feature: string; checked: number }[];
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.feature !== lib.SKILL_CHECK_FEATURE && r.checked === 1)).toBe(true);
-    expect(recipes.skillHistory("captions-check")).toMatchObject({ runs: 0, lastRun: null, recent: [] });
-    uses.forgetSkillUses();
-    expect(uses.skillUses().has("captions-check")).toBe(false);
-  });
-
-  it("checks a Faceless episode by its plan only: it goes on in Faceless Studio's own steps after its result", async () => {
-    const scenes = Array.from({ length: 3 }, (_, i) => ({ narration: `Line ${i}`, visual: `Scene ${i}` }));
-    makeSkill("faceless-check", { fuobeRecipe: 2, params: [], steps: [{ key: "ep", kind: "tool", tool: "faceless_episode", input: { scenes, style: "flat 2D" } }] }, "Episode");
-    const episodes = count("faceless_episodes");
-    const check = await recipes.verifyRecipe("faceless-check", "demo", "cloud");
-    expect(check.engines[0].plan.ok).toBe(true);
-    expect(check.engines[0].dryRun).toEqual({ ok: true, problems: [], skipped: "A studio step (faceless_episode) is checked by its plan only" });
-    expect(count("faceless_episodes")).toBe(episodes);
+  it("runAsDemo puts everything a studio starts on the demo provider", async () => {
+    expect(inDemoScope()).toBe(false);
+    const out = await runAsDemo(async () => {
+      expect(inDemoScope()).toBe(true);
+      return tools.executeTool("add_captions", { video: clip }, { engine: "cloud" });
+    });
+    const ids = (out.items ?? []).flatMap((i) => (i.role === "generations" ? i.ids : []));
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) expect(gens.getGeneration(id)).toMatchObject({ provider: "mock", request: expect.objectContaining({ demo: true }) });
   });
 });

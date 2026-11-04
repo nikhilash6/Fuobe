@@ -1,4 +1,4 @@
-// The hosted catch-up (build package nm10-hosted-catchup), browser check at 1440 and 390 px, light and dark, in demo mode:
+// The hosted catch-up, browser check at 1440 and 390 px, light and dark, in demo mode:
 // Lipsync prices H3 Max Lip Sync on the voice's length (1.2x over 15 s) and refuses a voice under 5 s before Generate; Relight
 // on H3 Max asks for a light, draws its sphere and prices the clip's seconds; Edit video's "Insert a moment" has a two-handle
 // range over the clip and prices the new moment; Image to 3D offers Tripo P2 and a Retexture action on a result. No console
@@ -7,9 +7,9 @@
 // Exits 1 on a failed check.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { tempDir, removeDir } from "./_temp.mjs";
 
 const argv = process.argv.slice(2);
 const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
@@ -22,7 +22,7 @@ const check = (label, ok, extra = "") => {
   if (!ok) failures.push(label);
 };
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-catchup-e2e-"));
+const tmp = tempDir("fuobe-catchup-e2e-");
 const ff = (args) => {
   const r = spawnSync("ffmpeg", ["-v", "error", "-y", ...args]);
   if (r.status !== 0) throw new Error(`ffmpeg failed: ${r.stderr}`);
@@ -219,7 +219,7 @@ try {
   }
 } finally {
   await browser.close();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 }
 if (failures.length) {
   console.log(`\n${failures.length} failed`);

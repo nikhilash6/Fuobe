@@ -1,0 +1,28 @@
+{
+  "subset": "U+0020-007E,U+00A0-00FF,U+0100-017F,U+0192,U+0218-021B,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20A0-20C0,U+2100-2122,U+2190-2199,U+2212,U+2215,U+2605-2606,U+2713,U+FEFF,U+FFFD",
+  "faces": [
+    { "id": "anton", "family": "Kinetic Anton", "style": "normal", "weight": [400, 400], "src": "anton/Anton-Regular.ttf" },
+    { "id": "instrument-serif", "family": "Kinetic Instrument Serif", "style": "normal", "weight": [400, 400], "src": "instrumentserif/InstrumentSerif-Regular.ttf" },
+    { "id": "instrument-serif-italic", "family": "Kinetic Instrument Serif", "style": "italic", "weight": [400, 400], "src": "instrumentserif/InstrumentSerif-Italic.ttf" },
+    { "id": "geist-mono", "family": "Kinetic Geist Mono", "style": "normal", "weight": [400, 600], "src": "geistmono/GeistMono[wght].ttf", "axes": { "wght": [400, 600] } },
+    { "id": "big-shoulders", "family": "Kinetic Big Shoulders Display", "style": "normal", "weight": [600, 900], "src": "bigshouldersdisplay/BigShouldersDisplay[wght].ttf", "axes": { "wght": [600, 900] } },
+    { "id": "archivo-expanded", "family": "Kinetic Archivo Expanded", "style": "normal", "weight": [600, 900], "src": "archivo/Archivo[wdth,wght].ttf", "axes": { "wdth": 125, "wght": [600, 900] } },
+    { "id": "archivo-condensed", "family": "Kinetic Archivo Condensed", "style": "normal", "weight": [700, 900], "src": "archivo/Archivo[wdth,wght].ttf", "axes": { "wdth": 62, "wght": [700, 900] } },
+    { "id": "instrument-sans", "family": "Kinetic Instrument Sans", "style": "normal", "weight": [400, 700], "src": "instrumentsans/InstrumentSans[wdth,wght].ttf", "axes": { "wdth": 100, "wght": [400, 700] } },
+    { "id": "inter-tight", "family": "Kinetic Inter Tight", "style": "normal", "weight": [300, 600], "src": "intertight/InterTight[wght].ttf", "axes": { "wght": [300, 600] } },
+    { "id": "bodoni-moda", "family": "Kinetic Bodoni Moda Display", "style": "normal", "weight": [400, 700], "src": "bodonimoda/BodoniModa[opsz,wght].ttf", "axes": { "opsz": 22, "wght": [400, 700] } },
+    { "id": "bodoni-moda-italic", "family": "Kinetic Bodoni Moda Display", "style": "italic", "weight": [400, 700], "src": "bodonimoda/BodoniModa-Italic[opsz,wght].ttf", "axes": { "opsz": 22, "wght": [400, 700] } },
+    { "id": "fraunces-soft", "family": "Kinetic Fraunces Soft", "style": "normal", "weight": [300, 600], "src": "fraunces/Fraunces[SOFT,WONK,opsz,wght].ttf", "axes": { "opsz": 144, "SOFT": 100, "WONK": 0, "wght": [300, 600] } },
+    { "id": "fraunces-soft-italic", "family": "Kinetic Fraunces Soft", "style": "italic", "weight": [300, 600], "src": "fraunces/Fraunces-Italic[SOFT,WONK,opsz,wght].ttf", "axes": { "opsz": 144, "SOFT": 100, "WONK": 0, "wght": [300, 600] } },
+    { "id": "fraunces-display", "family": "Kinetic Fraunces Display", "style": "normal", "weight": [700, 900], "src": "fraunces/Fraunces[SOFT,WONK,opsz,wght].ttf", "axes": { "opsz": 144, "SOFT": 0, "WONK": 0, "wght": [700, 900] } },
+    { "id": "manrope", "family": "Kinetic Manrope", "style": "normal", "weight": [400, 700], "src": "manrope/Manrope[wght].ttf", "axes": { "wght": [400, 700] } },
+    { "id": "bricolage", "family": "Kinetic Bricolage Display", "style": "normal", "weight": [600, 800], "src": "bricolagegrotesque/BricolageGrotesque[opsz,wdth,wght].ttf", "axes": { "opsz": 96, "wdth": 100, "wght": [600, 800] } },
+    { "id": "outfit", "family": "Kinetic Outfit", "style": "normal", "weight": [400, 600], "src": "outfit/Outfit[wght].ttf", "axes": { "wght": [400, 600] } },
+    { "id": "geist", "family": "Kinetic Geist", "style": "normal", "weight": [400, 600], "src": "geist/Geist[wght].ttf", "axes": { "wght": [400, 600] } },
+    { "id": "dela-gothic", "family": "Kinetic Dela Gothic One", "style": "normal", "weight": [400, 400], "src": "delagothicone/DelaGothicOne-Regular.ttf" },
+    { "id": "caveat", "family": "Kinetic Caveat", "style": "normal", "weight": [500, 700], "src": "caveat/Caveat[wght].ttf", "axes": { "wght": [500, 700] } },
+    { "id": "space-mono", "family": "Kinetic Space Mono", "style": "normal", "weight": [400, 400], "src": "spacemono/SpaceMono-Regular.ttf" },
+    { "id": "space-mono-bold", "family": "Kinetic Space Mono", "style": "normal", "weight": [700, 700], "src": "spacemono/SpaceMono-Bold.ttf" },
+    { "id": "gloock", "family": "Kinetic Gloock", "style": "normal", "weight": [400, 400], "src": "gloock/Gloock-Regular.ttf" }
+  ]
+}

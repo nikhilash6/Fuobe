@@ -1,6 +1,6 @@
 /**
  * The ⌘K palette's search (pure, so it's testable): a forgiving word match, and the matches grouped
- * by kind, best first. The palette (src/components/command-palette.tsx) renders what this returns.
+ * by kind, best first. The search palette (src/components/nav/search-palette.tsx) shows what this returns.
  */
 import { offered, type AccessSummary } from "./model-access";
 
@@ -16,6 +16,8 @@ export interface PaletteEntry {
   href: string;
   /** More words that find it, worth less than the label. */
   keywords?: string;
+  /** A preset's small cover (its thumb URL), when it has one. */
+  cover?: string;
 }
 
 /** Group headings, in the order groups take when their best matches tie. */
@@ -158,6 +160,7 @@ export function rankPalette(entries: PaletteEntry[], query: string, limits: Reco
 
 /** Words people type for an app that its name doesn't say. */
 export const APP_KEYWORDS: Record<string, string> = {
+  "app-watermark-remover": "watermark remove watermark logo text caption overlay stamp sticker mosaic blur block clean photo erase logo remove text",
   "app-clean-up-voice": "clean up voice denoise noise removal remove echo reverb enhance speech podcast audio fix mic phone audio restore audio",
 };
 
@@ -176,6 +179,18 @@ export interface PalettePreset {
   /** Has a cloud / an open-source route. */
   cloud: boolean;
   open: boolean;
+  /** Its real cover: the still's version when it is at the usual place, else the still's URL (presetThumb). */
+  cover?: string;
+}
+
+/**
+ * A preset's small cover from what the index carries: the still at /previews/presets/<id>.jpg named by its version,
+ * or any other still by its URL. The small copy sits in thumbs/ next to the still, at the same version (thumbOf).
+ */
+export function presetThumb(id: string, cover: string | undefined): string | undefined {
+  if (!cover) return undefined;
+  const poster = cover.startsWith("/") ? cover : `/previews/presets/${id}.jpg?v=${cover}`;
+  return poster.replace(/\/([^/]+)$/, "/thumbs/$1");
 }
 
 export interface PaletteModel {
@@ -195,10 +210,24 @@ export interface PaletteModel {
  * The palette's entries from the index, for one engine mode: with one engine locked in Settings, a
  * preset needs a route on that engine and a model must be on it, as in the galleries and pickers.
  */
-export function indexEntries(index: PaletteIndex, mode: "both" | "cloud" | "open", access?: AccessSummary): PaletteEntry[] {
+/**
+ * `opts.owner`: the owner is looking. Anyone else never sees "ComfyUI" as a model's maker (it is how this install runs
+ * open models, not a maker a visitor picks): the hint says "Open source" alone.
+ */
+export function indexEntries(index: PaletteIndex, mode: "both" | "cloud" | "open", access?: AccessSummary, opts: { owner?: boolean } = {}): PaletteEntry[] {
   const runs = (p: PalettePreset) => mode === "both" || p[mode];
   const presets = (list: PalettePreset[], kind: "app" | "motion" | "effect", href: (id: string) => string) =>
-    list.filter(runs).map((p): PaletteEntry => ({ key: `${kind}:${p.id}`, kind, label: p.name, hint: p.category, href: href(p.id), ...(APP_KEYWORDS[p.id] && { keywords: APP_KEYWORDS[p.id] }) }));
+    list.filter(runs).map(
+      (p): PaletteEntry => ({
+        key: `${kind}:${p.id}`,
+        kind,
+        label: p.name,
+        hint: p.category,
+        href: href(p.id),
+        ...(APP_KEYWORDS[p.id] && { keywords: APP_KEYWORDS[p.id] }),
+        ...(p.cover && { cover: presetThumb(p.id, p.cover) }),
+      }),
+    );
   return [
     ...presets(index.apps, "app", (id) => `/apps/${id}`),
     ...presets(index.motions, "motion", (id) => `/video?preset=${id}`),
@@ -209,12 +238,14 @@ export function indexEntries(index: PaletteIndex, mode: "both" | "cloud" | "open
       .filter((m) => (mode === "both" || (m.engines ?? [m.engine]).includes(mode)) && offered(access, m.id, mode === "both" ? undefined : mode))
       .map((m): PaletteEntry => {
         const both = (m.engines?.length ?? 0) > 1;
+        const vendor = !opts.owner && /comfy/i.test(m.vendor) ? "" : m.vendor;
+        const hint = (rest: string) => (!vendor || vendor === rest ? rest : `${vendor} · ${rest}`);
         return {
           key: `model:${m.id}`,
           kind: "model",
           label: m.name,
           // With both engines on, a model on each (TRELLIS.2, Join clips) would show twice under one name; a Fuobe Original is one model on both.
-          hint: mode === "both" && both ? `${m.vendor} · Open source + cloud` : mode === "both" && m.engine === "open" ? `${m.vendor} · Open source` : m.vendor,
+          hint: mode === "both" && both ? hint("Open source + cloud") : mode === "both" && m.engine === "open" ? hint("Open source") : vendor || (m.engine === "open" ? "Open source" : "Cloud"),
           href: m.href,
           keywords: `${m.ops} ${both ? "open source free cloud" : m.engine === "open" ? "open source free" : "cloud"}`,
         };

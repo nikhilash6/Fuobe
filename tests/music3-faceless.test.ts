@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getModel } from "@/lib/catalog";
 import { buildEpisodeGraph, defaultSettings, genreInfo, MUSIC_MAX, pickerData, resolveModels, secondsFor, type EpisodeSettings, type ScriptBlock } from "@/lib/catalog/faceless";
 
-// nm10-music3: Faceless and Explainer's music bed can be MiniMax Music 3 (either engine) or ElevenLabs Music
+// Faceless and Explainer's music bed can be MiniMax Music 3 (either engine) or ElevenLabs Music
 // v2.5 in the cloud, beside Sonilo and ACE-Step; each says the longest bed it makes.
 const block = (i: number, words = 20): ScriptBlock => {
   const narration = Array.from({ length: words }, (_, w) => `w${i}x${w}`).join(" ");

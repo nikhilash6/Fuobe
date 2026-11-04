@@ -69,8 +69,6 @@ describe("the recipe format", () => {
   it("refuses what isn't a recipe: a version, caps, an empty graph, bad JSON", () => {
     expect(parseRecipe("{")).toEqual({ ok: false, error: "recipe.json isn't valid JSON" });
     expect(parseRecipe(JSON.stringify({ ...lamp(), fuobeRecipe: 3 }))).toMatchObject({ ok: false, error: expect.stringContaining("fuobeRecipe") });
-    // Version 2 (W7: step references) loads; version 1 files still do.
-    expect(parseRecipe(JSON.stringify({ ...lamp(), fuobeRecipe: 2 }))).toMatchObject({ ok: true });
     expect(parseRecipe(JSON.stringify({ ...lamp(), steps: [] }))).toMatchObject({ ok: false, error: expect.stringContaining("a recipe needs a step") });
     const many = Array.from({ length: RECIPE_LIMITS.params + 1 }, (_, i) => ({ id: `p${i}`, label: `P ${i}`, type: "text" }));
     expect(parseRecipe(JSON.stringify({ ...lamp(), params: many }))).toMatchObject({ ok: false, error: expect.stringContaining("at most 12 inputs") });
@@ -224,7 +222,7 @@ describe("fill and compile", () => {
     expect(c.steps[1]).toMatchObject({ after: ["cutout"], chain: [{ slot: "images", position: "first" }] });
     for (const s of c.steps) {
       expect(s.request.batchTitle).toBe("Lamp turntable");
-      expect(s.request.skill).toEqual({ name: "lamp-turntable", run: "run123", step: s.key });
+      expect(s.request.skill).toEqual({ name: "lamp-turntable", run: "run123" });
       expect(s.request.demo).toBeUndefined();
       expect(s.request.feature).toBe("skill");
     }
@@ -393,7 +391,12 @@ describe("sharing and reading", () => {
   });
 
   it("says when and where it was checked", () => {
-    expect(verifiedLine(lamp(), ["cloud", "open"])).toBe("Checked 29 Oct · Cloud ✓ · GPU not checked");
-    expect(verifiedLine({}, ["cloud"])).toMatch(/Not checked yet/);
+    expect(verifiedLine(lamp(), ["cloud", "open"])).toBe("Tested 29 Oct · Cloud ✓ · Your GPU not tested yet");
+    expect(verifiedLine({}, ["cloud"])).toMatch(/Not tested yet · a test run is free and runs nothing for real/);
+  });
+
+  it("says Priced, not Tested, when only the plan was checked", () => {
+    const planOnly = { verified: { cloud: { plan: "2026-10-29", dryRun: null, real: null, catalog: "sha256:abc" }, open: null } } as Pick<Recipe, "verified">;
+    expect(verifiedLine(planOnly, ["cloud", "open"])).toBe("Priced 29 Oct · Cloud priced · Your GPU not tested yet");
   });
 });

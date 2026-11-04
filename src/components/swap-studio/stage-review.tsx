@@ -1,5 +1,8 @@
 "use client";
 
+import { useSoundLive } from "@/lib/api";
+import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
+import { ORIGINAL_SOUND_FEATURE, originalSoundDefault, originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { Download, Film, Library, Loader2, Play, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -9,8 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Panel } from "@/components/av/tool-shell";
 import { Segmented } from "@/components/faceless/controls";
 import { Segmented as SizePicker } from "@/components/shorts/ui";
-import { characterLicenceLine, h3Canvas } from "@/lib/catalog/character-swap";
-import { defaultSharpenTier, filmSize, gpuMinutes, joinNote, SHARPEN_COPY, sharpenOptions, type SharpenTier } from "@/lib/catalog/sharpen";
+import { h3Canvas } from "@/lib/catalog/character-swap";
+import { defaultSharpenTier, filmSize, gpuMinutes, joinNote, SHARPEN_COPY, sharpenOffered, sharpenOptions, type SharpenTier } from "@/lib/catalog/sharpen";
 import {
   assemblyPieces,
   assemblyTakes,
@@ -26,13 +29,9 @@ import {
   type GenSummary,
   type SwapTake,
 } from "@/lib/catalog/swap-studio";
-import { STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
 import { downloadHref } from "@/lib/library";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
-
-import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
-import { defaultSound, sameSound, type SoundChoice } from "@/lib/av/original-sound";
 import { decisionsHref, useAssemble, useSharpen, useStopJob } from "./hooks";
 import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
 import type { StageProps } from "./workbench";
@@ -324,12 +323,11 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
   const a = clip.assembly;
   const state = jobState(a?.genId, a?.stepIds, gens);
   const result = state.status === "succeeded" && a?.genId ? gens[a.genId]?.url : undefined;
-  // Original sound: the person is replaced, so their speech usually goes too (Music & effects only on your GPU).
-  const suggested = defaultSound(project.engine, { personReplaced: true });
-  const [soundPick, setSoundPick] = useState<SoundChoice | null>(null);
-  const sound: SoundChoice = soundPick ?? a?.sound ?? { sound: a ? "everything" : suggested };
-  const asked = soundBody(project.engine, sound).sound;
-  const current = "pieces" in found && !!a && JSON.stringify(a.takes) === JSON.stringify(assemblyTakes(found.pieces)) && sameSound(a.sound, asked);
+  // What of the clip's sound goes back: Everything until the split has passed a real run, then Music & effects only on your GPU (the new speech).
+  const [soundAsked, setOriginalSound] = useState<OriginalSound | null>(null);
+  const soundLiveNow = useSoundLive(ORIGINAL_SOUND_FEATURE);
+  const originalSound = originalSoundOn(soundAsked ?? a?.originalSound ?? originalSoundDefault({ replacesPerson: true, engine: project.engine, live: soundLiveNow }), project.engine);
+  const current = "pieces" in found && !!a && JSON.stringify(a.takes) === JSON.stringify(assemblyTakes(found.pieces)) && (a.originalSound ?? "everything") === originalSound;
   return (
     <div className="space-y-3">
       <Panel title="Assemble the clip" aside={<span className="font-mono text-[11px] text-muted-foreground">{priceText(estimate?.assembly[clip.id], { demo: estimate?.demo, engine: project.engine })}</span>}>
@@ -352,17 +350,17 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
             </ol>
             </>
           )}
-          {clip.source.hasAudio && <OriginalSoundField engine={project.engine} value={sound} onChange={setSoundPick} suggested={suggested} />}
           <p className="text-[12px] text-muted-foreground">
             {project.engine === "open"
               ? "Each piece is fitted to the clip's size at 24 fps, joined packet by packet, and the clip's own sound goes back on."
               : "The clip's pieces are cut to their frames, every piece is scaled to one frame size, they're joined at 24 fps (H3's rate), and the clip's own sound — or its silence — goes back on."}
           </p>
+          {clip.source.hasAudio && <OriginalSoundPicker engine={project.engine} value={originalSound} onChange={setOriginalSound} />}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               className="h-9 rounded-full"
               disabled={"problem" in found || assemble.isPending || state.status === "queued" || state.status === "running" || (current && state.status === "succeeded")}
-              onClick={() => assemble.mutate({ clipId: clip.id, ...(asked && { sound: asked }) }, { onSuccess: () => toast("Assembling the clip"), onError: (e) => toastError(e) })}
+              onClick={() => assemble.mutate({ clipId: clip.id, ...(originalSound !== "everything" && { originalSound }) }, { onSuccess: () => toast("Assembling the clip"), onError: (e) => toastError(e) })}
             >
               {assemble.isPending ? <Loader2 className="size-4 animate-spin" /> : <Film className="size-4" />} {a ? "Assemble again" : "Assemble clip"}
             </Button>
@@ -372,7 +370,7 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
                 Stop
               </Button>
             )}
-            {a && !current && state.status === "succeeded" && <span className="text-[12px] text-muted-foreground">{sameSound(a.sound, asked) ? "The chosen takes changed since — assemble again for the new ones." : "The sound choice changed — assemble again to hear it."}</span>}
+            {a && !current && state.status === "succeeded" && <span className="text-[12px] text-muted-foreground">The chosen takes or the sound changed since — assemble again for the new ones.</span>}
           </div>
           <JobError genId={a?.genId} stepIds={a?.stepIds} gens={gens} />
           {result && (
@@ -395,7 +393,7 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
         </div>
       </Panel>
 
-      <FinishPanel id={id} project={project} clip={clip} gens={gens} estimate={estimate} />
+      {sharpenOffered(project.engine) && <FinishPanel id={id} project={project} clip={clip} gens={gens} estimate={estimate} />}
 
       <Panel title="Where it runs">
         <ul className="space-y-1.5 text-[12px] leading-snug text-pretty text-muted-foreground">
@@ -403,7 +401,6 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
           {(estimate?.notes ?? []).filter((n) => n !== WORKERS_NOTE).map((n) => (
             <li key={n}>{n}</li>
           ))}
-          {!estimate && <li>{characterLicenceLine(project.engine, STUDIO_MODELS[project.engine].swap)}</li>}
         </ul>
       </Panel>
     </div>

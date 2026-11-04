@@ -17,8 +17,6 @@ export interface FeedFilter {
   limit?: number;
   models?: string[];
   statuses?: GenerationStatus[];
-  /** One run's rows (a batch): a skill's History links to its run here. Shows its helper steps too, as the server does. */
-  batchId?: string;
   /** createdAt range: since ≤ t < until. */
   since?: number;
   until?: number;
@@ -36,6 +34,8 @@ export interface FeedFilter {
    * out unless this is set, so a list that must see every job (a count of running jobs) sets it.
    */
   steps?: boolean;
+  /** Only clips saved from this Marketing template (code-drawn: its Kinetic Motion recipe names it). */
+  template?: string;
 }
 
 /** Which timestamp a list is ordered (and paged) by: deletedAt in the Trash, pinnedAt in a pinned list, else createdAt. */
@@ -61,7 +61,6 @@ export function filterToSearch(f: FeedFilter, before?: string | number): URLSear
   if (f.q?.trim()) qs.set("q", f.q.trim());
   if (f.models?.length) qs.set("models", f.models.join(","));
   if (f.statuses?.length) qs.set("statuses", f.statuses.join(","));
-  if (f.batchId) qs.set("batch", f.batchId);
   if (f.since) qs.set("since", String(f.since));
   if (f.until) qs.set("until", String(f.until));
   if (f.folderId) qs.set("folder", f.folderId);
@@ -70,6 +69,7 @@ export function filterToSearch(f: FeedFilter, before?: string | number): URLSear
   if (f.pinned !== undefined) qs.set("pinned", f.pinned ? "1" : "0");
   if (f.reviews?.length) qs.set("reviews", f.reviews.join(","));
   if (f.steps) qs.set("steps", "1");
+  if (f.template) qs.set("template", f.template);
   if (before) qs.set("before", String(before));
   qs.set("limit", String(f.limit ?? 80));
   return qs;
@@ -86,17 +86,24 @@ export function matchesFilter(g: Generation, f: FeedFilter): boolean {
   if (f.favorites && !g.favorite) return false;
   if (f.models?.length && !f.models.includes(g.modelId)) return false;
   if (f.statuses?.length && !f.statuses.includes(g.status)) return false;
-  if (f.batchId && g.batchId !== f.batchId) return false;
   if (f.since && g.createdAt < f.since) return false;
   if (f.until && g.createdAt >= f.until) return false;
   if (f.folderId && g.folderId !== f.folderId) return false;
   if (f.folderIds?.length && !f.folderIds.includes(g.folderId ?? "")) return false;
   if (f.pinned !== undefined && !!g.pinnedAt !== f.pinned) return false;
   if (f.reviews?.length && !f.reviews.includes(g.review ?? "none")) return false;
-  if (!f.steps && !f.features?.length && !f.batchId && isHelperFeature(g.feature)) return false;
+  if (!f.steps && !f.features?.length && isHelperFeature(g.feature)) return false;
+  if (f.template && motionTemplateOf(g) !== f.template) return false;
   const q = f.q?.trim().toLowerCase();
   if (q && !`${g.prompt ?? ""}\n${g.request.prompt ?? ""}`.toLowerCase().includes(q)) return false;
   return true;
+}
+
+/** The Marketing template a saved Kinetic clip was made from (its recipe's controls.template). */
+export function motionTemplateOf(g: Pick<Generation, "request">): string | undefined {
+  const extra = (g.request.params as { extra?: { motion?: { controls?: { template?: unknown } } } } | undefined)?.extra;
+  const t = extra?.motion?.controls?.template;
+  return typeof t === "string" ? t : undefined;
 }
 
 const byIdDesc = (a: Generation, b: Generation) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
@@ -128,13 +135,13 @@ export function listOrder(f: Pick<FeedFilter, "trashed" | "pinned">): (a: Genera
  * Jobs nobody asked to see on their own: the steps a chain runs before its result (a Shorts cut, a
  * Click to Ad voiceover, an Ad Multiplier hook: every "<studio>-step" feature), and helper jobs a
  * studio starts by itself (a Mixed Media preview frame, a Faceless channel avatar or narrator sample,
- * a moodboard's cover), the evaluation harness's runs (scripts/eval: hundreds of test renders) and a skill
+ * a moodboard's cover, the Watermark Remover's scans), the evaluation harness's runs (scripts/eval: hundreds of test renders) and a skill
  * recipe's free dry runs (skill-check, moved to the Trash when the check ends). The
  * Library and the home feed leave them out unless "Show steps" is on; a list that names its features
  * (a studio reading its own steps) gets what it asks for.
  */
 export const HELPER_SUFFIX = "-step";
-export const HELPER_FEATURES = ["mixed-media-preview", "faceless-avatar", "faceless-voice", "moodboard", "eval", "skill-check"] as const;
+export const HELPER_FEATURES = ["mixed-media-preview", "faceless-avatar", "faceless-voice", "moodboard", "eval", "skill-check", "watermark-scan"] as const;
 
 export function isHelperFeature(feature: string): boolean {
   return feature.endsWith(HELPER_SUFFIX) || (HELPER_FEATURES as readonly string[]).includes(feature);

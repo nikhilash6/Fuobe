@@ -50,7 +50,7 @@ declare -A NODES=(
   # dependencies) and PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel imports triton, installed below).
   [ComfyUI-MiniMax-H3-Turbo]="https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo 77bfa67575b14e3be6214f1747732e540c68b5dd"
   [plaguekind-nodes]="https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes d58d006a4ea32c25c06499f2ff104f0852a045a6"
-  # Green screen (nm10-keying): hashu786's CorridorKey 2.0 nodes (Corridor Key Licence 2.0, like CorridorKey itself; they
+  # Green screen: hashu786's CorridorKey 2.0 nodes (Corridor Key Licence 2.0, like CorridorKey itself; they
   # vendor Corridor's CorridorKey 2.0 code unmodified at 485f5e9). Read at this commit: nothing is installed at run time; the
   # node downloads the 2.0 weights and the three frozen models it builds on (about 5.1 GB, into models/corridorkey2/) the
   # first time it runs, never at import (CORRIDORKEY2_NO_DOWNLOAD=1 turns that off). Its requirements are in the union below.
@@ -65,6 +65,11 @@ declare -A NODES=(
   # Read at this commit (2026-10-24, three commits, not in the Comfy Registry). Weights: about 25 GB from nynxz/Hy-Nomas
   # (model-pins.json), the PixelUMM decoder under the NVIDIA One-Way Noncommercial License.
   [ComfyUI-HyNomas]="https://github.com/Nynxz/ComfyUI-HyNomas a89e0515619924da71093aa3fe52dbb7104cb06e"
+  # Watermark Remover (image-watermark-*): overflowofedge's Qwen watermark nodes (MIT), read at this commit (no network,
+  # subprocess, eval or file writes). Its requirements.txt is NOT installed: it asks for opencv-contrib-python-headless,
+  # which next to opencv-python can leave cv2 broken; core cv2 has every function it uses, and segment-anything is in the
+  # union below. Its SAM ViT-B file goes in models/sams (the SAM ViT-B block near the end).
+  [ComfyUI-Qwen-Watermark]="https://github.com/overflowofedge/ComfyUI-Qwen-Watermark eef829d34d6e9d0d2ae0c1386fab7371a864cf34"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.
@@ -269,6 +274,46 @@ if [ "${AUK:-0}" = "1" ]; then
   fi
 fi
 
+# Genjutsu's Openjutsu modes (D3voz/openjutsu @ 7fe118bb, MIT): Group swap, Scene edit, From picture, Fix faces and Fix
+# colours. Opt-in, since the H3 graphs need about 52 GB of weights touched one stage after another: OPENJUTSU_MODES=1.
+# Six packs, each pinned and cloned only (no pip: every Python dependency is already in ComfyUI's own requirements).
+# SolarRenderer is NEVER pip-installed (its pyproject pins torch 2.8); the long-clip patch lets it render past 170 frames.
+# The swap pack's H3 prompts get Fuobe's positive wording. Context Loop needs long paths on Windows. Its HTTP routes are
+# local-only: keep ComfyUI on 127.0.0.1. H3-FaceRefine, Impact Pack and controlnet_aux come from the registry.
+OJ_CONTEXT_LOOP_REF="${OJ_CONTEXT_LOOP_REF:-43afeffcc570beb5f7382593e79e4b211c7e02f6}"   # 0.7.3
+OJ_PROMPT_BUILDER_REF="${OJ_PROMPT_BUILDER_REF:-22e719fe89336c628383363182a4da3cb58d4f9b}"   # 1.8.3
+OJ_ONECLICK_SWAP_REF="${OJ_ONECLICK_SWAP_REF:-e44a56e92920000e675d14be484aea0d7498d63e}"
+OJ_DETAIL_CONTRAST_REF="${OJ_DETAIL_CONTRAST_REF:-485a5e246424ce012b998862b45f06d21e8d63b2}"
+OJ_ORION_FXMAX_REF="${OJ_ORION_FXMAX_REF:-7048e8423ad7d1a6a52119d0d4870c2b7fc2885f}"   # 1.0.0
+OJ_SOLAR_REF="${OJ_SOLAR_REF:-0ca4f5e45b062cc9e9aee506de46aabdc22e4c3d}"   # 1.0.0
+if [ "${OPENJUTSU_MODES:-0}" = "1" ]; then
+  for pack in "ComfyUI-MiniMaxH3-Context-Loop https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop $OJ_CONTEXT_LOOP_REF" \
+              "ComfyUI-Fantastic-MiniMaxH3-PromptBuilder https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder $OJ_PROMPT_BUILDER_REF" \
+              "comfyui-h3-oneclick-swap https://github.com/D3voz/comfyui-h3-oneclick-swap $OJ_ONECLICK_SWAP_REF" \
+              "comfyui-image-detail-contrast https://github.com/D3voz/comfyui-image-detail-contrast $OJ_DETAIL_CONTRAST_REF" \
+              "Orion4D_FXMax https://github.com/orion4d/Orion4D_FXMax $OJ_ORION_FXMAX_REF" \
+              "SolarRenderer https://github.com/Enderfga/SolarRenderer $OJ_SOLAR_REF"; do
+    read -r name url ref <<<"$pack"
+    dest="$COMFYUI_DIR/custom_nodes/$name"
+    if [ -d "$dest/.git" ] || git -c core.longpaths=true clone -q "$url" "$dest"; then
+      git -C "$dest" fetch -q --depth 1 origin "$ref" 2>/dev/null || true
+      git -C "$dest" -c core.longpaths=true checkout -q "$ref" 2>/dev/null || echo "warn: could not pin $name to $ref"
+      patch=""
+      [ "$name" = "SolarRenderer" ] && patch="$SCRIPT_DIR/patches/solarrenderer-long-clips.patch"
+      [ "$name" = "comfyui-h3-oneclick-swap" ] && patch="$SCRIPT_DIR/patches/h3-oneclick-swap-wording.patch"
+      # Fresh or already installed: applied once (a patch that reverses cleanly is already there).
+      if [ -n "$patch" ] && ! git -C "$dest" apply --reverse --check "$patch" 2>/dev/null; then
+        git -C "$dest" apply "$patch" || echo "warn: could not apply $(basename "$patch") to $name"
+      fi
+    else
+      echo "warn: could not fetch $name"
+    fi
+  done
+  if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+    echo "warn: Genjutsu's Openjutsu modes need ffmpeg and ffprobe on PATH (the Context Loop pack assembles the clips with them)"
+  fi
+fi
+
 # Fuobe's live edit nodes (fuobe_live.py, one file Fuobe ships, MIT): Live edit's loader, cached reference encode,
 # crop, paste-back and socket save. Written from the copy in this checkout (src/lib/comfy-live-nodes.ts).
 if command -v node >/dev/null 2>&1; then
@@ -387,5 +432,22 @@ SHA
   ) || echo "warn: a RE-USE weight file is missing or failed its SHA-256 check (delete it from models/reuse and re-run)"
 fi
 # --- end ComfyUI-RE-USE
+
+# --- SAM ViT-B (image-watermark-remove-qwen21: sticker outlines), 375 MB (Meta's file, from a pinned Hugging Face mirror), into models/sams, checked with
+# sha256sum -c before it is kept (a .pth can run code when it loads). Only with REAL_MODELS=1 (validation needs no weights).
+if [ "${REAL_MODELS:-0}" = "1" ]; then
+  SAM_DIR="$COMFYUI_DIR/models/sams"
+  mkdir -p "$SAM_DIR"
+  if [ ! -s "$SAM_DIR/sam_vit_b_01ec64.pth" ]; then
+    if curl -fsSL --retry 3 -o "$SAM_DIR/sam_vit_b_01ec64.pth.part" "https://huggingface.co/ybelkada/segment-anything/resolve/7790786db131bcdc639f24a915d9f2c331d843ee/checkpoints/sam_vit_b_01ec64.pth" \
+      && (cd "$SAM_DIR" && echo "ec2df62732614e57411cdcf32a23ffdf28910380d03139ee0f4fcbe91eb8c912  sam_vit_b_01ec64.pth.part" | sha256sum -c --quiet); then
+      mv "$SAM_DIR/sam_vit_b_01ec64.pth.part" "$SAM_DIR/sam_vit_b_01ec64.pth"
+    else
+      rm -f "$SAM_DIR/sam_vit_b_01ec64.pth.part"
+      echo "warn: could not fetch SAM ViT-B (or it failed its SHA-256 check)"
+    fi
+  fi
+fi
+# --- end SAM ViT-B
 
 echo "ComfyUI installed in $COMFYUI_DIR. Start it with: $SCRIPT_DIR/start-comfyui.sh"

@@ -1,7 +1,7 @@
 // Fuobe Genjutsu on the Originals, browser check (build plan O5 + Openjutsu): /genjutsu runs Fuobe's Originals by
 // default on both engines, with open weights and partners as labelled alternatives, and a Character swap mode
 // (MiniMax H3). At 1440 and 390 px, light and dark: the Character swap mode shows who to swap, the quality, the first
-// frame switch, the limits and the licence line; Describe my character and the clip's words; the swap LoRA's choices
+// frame switch, the limits; Describe my character and the clip's words; the swap LoRA's choices
 // per engine; partners' resolutions; the model list badges each model's source; a run is made in demo mode and
 // finishes; the open engine allows clicking the person, shows the GPU line, SAM's detection numbers, the History list
 // under the window and the mask switch on the Original's graph only; Motion and Restyle list the
@@ -77,8 +77,7 @@ try {
       check(`${tag}: the Original is first, badged`, /^Fuobe Character swap Fuobe Original/.test(first), JSON.stringify(first.slice(0, 60)));
       const listed = (await models.innerText()).replace(/\s+/g, " ");
       check(`${tag}: open weights and partners are labelled alternatives`, /Open weights/.test(listed) && /Partner/.test(listed));
-      check(`${tag}: the licence line is in the picker`, /MiniMax H3 Community License — not licensed in the US, the EU, the UK and South Korea/.test(listed));
-      check(`${tag}: each model's own licence (MIT for SCAIL-2, closed for partners)`, /SCAIL-2 weights: MIT/.test(listed) && /Closed model: pay per use/.test(listed));
+      check(`${tag}: no licence lines in the picker (Thanks & licences lists them)`, !/licen[cs]e|weights: (MIT|Apache)/i.test(listed));
       // The price (demo: no keys), the limits.
       await page.getByText(/Placeholder · free|≈ \$|Price unknown/).first().waitFor({ timeout: 60_000 });
       const body = await text();

@@ -3,11 +3,11 @@
 import { BookmarkPlus, Bot, CalendarClock, Cpu, Loader2, MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EngineSwitch } from "@/components/studio/engine-switch";
@@ -21,10 +21,13 @@ import { ProjectDot, RailButton } from "@/components/assist/shell";
 import { SkillIcon } from "@/components/assist/skill-icon";
 import { Transcript } from "@/components/assist/transcript";
 import { AssistVisitorNote } from "@/components/assist/visitor-note";
+import { StarterParam } from "@/components/starters/starter-param";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
 import { useAssistActions, useAssistThread, useEngine } from "@/lib/api";
 import { ASSIST_SUGGESTIONS, assistDraft, modeLabel, threadModeChoice, type AssistAvailability, type AssistModeChoice, type AssistProject, type AssistThread, type SkillSummary } from "@/lib/assist";
 import type { Generation } from "@/lib/catalog/types";
+import { starterShown, type StarterCardData, type StarterFill } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 
@@ -86,7 +89,12 @@ export function NewChatControls({
   );
 }
 
-export function AssistView() {
+/**
+ * starters: the ready jobs under the composer (the covered ones, from the page; the owner's view loads the rest);
+ * fills: what each one types into the composer ("/skill words"), by id, also for /assist?starter=<id>.
+ */
+export function AssistView({ starters: given = [], fills: givenFills = {} }: { starters?: StarterCardData[]; fills?: Record<string, StarterFill> } = {}) {
+  const { owner, starters, fills } = useStarters("assist", given, givenFills);
   const router = useRouter();
   const params = useSearchParams();
   const id = params.get("c");
@@ -97,6 +105,15 @@ export function AssistView() {
   // /assist?prompt=<text>: the composer starts with the text. Neither sends anything.
   const skillParam = params.get("skill");
   const [draft, setDraft] = useState(() => ({ key: 0, text: assistDraft(skillParam, params.get("prompt")) }));
+  // A ready job (its card here, or /assist?starter=<id>) types its skill and words in: one this viewer may see only.
+  const fillStarter = (sid: string) => {
+    const f = Object.hasOwn(fills, sid) ? fills[sid] : undefined;
+    if (f?.kind !== "assist") return false;
+    // The composer comes back with the job typed in (and the focus, so a phone scrolls up to it).
+    setDraft((d) => ({ key: d.key + 1, text: f.text }));
+    return true;
+  };
+  const readyShown = starters.some((s) => starterShown(s, !owner));
   const chats = useChats({ project: "none" });
   const can = chats.data?.availability;
   const [choice, setChoice] = useModeChoice(can?.defaultMode);
@@ -150,9 +167,8 @@ export function AssistView() {
   );
 
   return (
-    <div className="flex h-svh min-w-0 flex-col md:h-[calc(100svh-0.5rem)]">
-      <header className="flex h-14 shrink-0 items-center gap-1.5 px-3 sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex h-content min-w-0 flex-col">
+      <header className="flex h-14 shrink-0 items-center gap-1.5 px-4 sm:px-6">
         <RailButton />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {project && (
@@ -193,10 +209,11 @@ export function AssistView() {
           )}
           {thread && <ChatMenu chat={thread} onDeleted={() => go(null)} />}
         </div>
+        <PhoneNavButton />
       </header>
 
       {!id ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-3 pt-[10vh] pb-16 sm:px-6 sm:pt-[14vh]">
+        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pt-[10vh] pb-16 sm:px-6 sm:pt-[14vh]">
           <div className="w-full max-w-[760px]">
             <div className="mb-6 text-center">
               <h2 className="font-heading text-display text-balance">What are we creating today?</h2>
@@ -212,7 +229,23 @@ export function AssistView() {
               onSend={start}
               footer={<NewChatControls choice={choice} setChoice={setChoice} can={can} engine={engine} setEngine={setEngine} askFirst={askFirst} setAskFirst={setAskFirst} />}
             />
-            <SkillStarters skills={available} loading={skills.data === undefined && !skills.isError} onPick={(s) => setDraft((d) => ({ key: d.key + 1, text: `/${s.name} ` }))} />
+            <SkillStarters
+              skills={available}
+              loading={skills.data === undefined && !skills.isError}
+              onPick={(s) => setDraft((d) => ({ key: d.key + 1, text: `/${s.name} ` }))}
+              // On a phone the ready jobs sit below the skills: one tap away.
+              extra={
+                readyShown && (
+                  <a href="#starters" className="text-[12px] text-brand-text hover:underline sm:hidden">
+                    Ready jobs
+                  </a>
+                )
+              }
+            />
+            <Suspense fallback={null}>
+              <StarterParam onStarter={fillStarter} />
+            </Suspense>
+            <StarterSection surface="assist" starters={given} row onFill={fillStarter} className="mt-8 text-left" />
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               {ASSIST_SUGGESTIONS.map((s) => (
                 <button
@@ -228,7 +261,7 @@ export function AssistView() {
         </div>
       ) : (
         <>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 sm:px-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6">
             <div className="mx-auto w-full max-w-[760px] py-4">
               {view.isError ? (
                 <div className="py-20 text-center">
@@ -245,7 +278,7 @@ export function AssistView() {
               <div ref={end} className="h-4" />
             </div>
           </div>
-          <div className="shrink-0 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+          <div className="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
             <div className="mx-auto w-full max-w-[760px]">
               <AssistComposer
                 skills={available}
@@ -307,7 +340,20 @@ export function AssistView() {
  * The starter cards under the composer. While the skills load (`loading`) the six cards are drawn
  * as same-sized placeholders, so the suggestions below don't jump down when they arrive.
  */
-export function SkillStarters({ skills, loading, onPick, className }: { skills: SkillSummary[]; loading?: boolean; onPick: (s: SkillSummary) => void; className?: string }) {
+export function SkillStarters({
+  skills,
+  loading,
+  onPick,
+  extra,
+  className,
+}: {
+  skills: SkillSummary[];
+  loading?: boolean;
+  onPick: (s: SkillSummary) => void;
+  /** Another link beside "All skills". */
+  extra?: ReactNode;
+  className?: string;
+}) {
   const shown = [...STARTER_SKILLS.map((n) => skills.find((s) => s.name === n)).filter((s): s is SkillSummary => !!s), ...skills.filter((s) => !STARTER_SKILLS.includes(s.name))].slice(0, 6);
   if (loading && !shown.length) {
     return (
@@ -338,9 +384,12 @@ export function SkillStarters({ skills, loading, onPick, className }: { skills: 
     <div className={cn("mt-4", className)}>
       <div className="flex items-center justify-between px-1 pb-2">
         <p className="text-[12px] font-medium text-muted-foreground">Start with a skill</p>
-        <Link href="/assist/skills" className="text-[12px] text-brand-text hover:underline">
-          All skills
-        </Link>
+        <span className="flex items-center gap-3">
+          {extra}
+          <Link href="/assist/skills" className="text-[12px] text-brand-text hover:underline">
+            All skills
+          </Link>
+        </span>
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {shown.map((s) => (

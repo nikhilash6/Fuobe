@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, Manifest, ManifestOutput, ManifestWorkflow } from "@/lib/comfy";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // The round-4 ComfyUI library (docs/research/comfyui-oss-4.json): the 17 graphs with the bindings and outputs the
 // feature packages drive, and the CausVid licence fix of wan21-vace-14b-ref2v.
@@ -62,6 +62,14 @@ const ROLES: NonNullable<ManifestOutput["role"]>[] = [
   "master",
   // DBS soundtrack separation: the pack's own report of the run (model, device, windows, seconds).
   "report",
+  // Any Angle: the turntable a photo's front view is measured on (colour, coverage), and a GLB made from a splat.
+  "sweep", "sweep-mask", "mesh",
+  // Photo to 3D: the orbit clip of the splat that came with its GLB.
+  "orbit",
+  // Watermark Remover: the repair's verdict, folded into the picture's meta.
+  "quality",
+  // Watermark Remover: the four tiles' scan reports, merged into the whole photo's report.
+  "scan-tile",
 ];
 
 describe("round-4 ComfyUI workflows", () => {
@@ -103,12 +111,12 @@ describe("round-4 ComfyUI workflows", () => {
       "minimax-h3-i2v-hq",
       "minimax-h3-flf2v-hq",
       "minimax-h3-orbit",
-      // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu): FastH3 V2 and Trim, unvalidated like the H3 graphs until a GPU run.
+      // MiniMax H3 on 8-31 GB cards: FastH3 V2 and Trim, unvalidated like the H3 graphs until a GPU run.
       "minimax-h3-fast-t2v",
       "minimax-h3-fast-i2v",
       "minimax-h3-fast-flf2v",
       "minimax-h3-trim-t2v",
-      // Design a voice (nm10-voice-design): ComfyUI-QwenTTS and ComfyUI-VoxCPM2 aren't on the validation server (tests/voice-design-server.test.ts).
+      // Design a voice: ComfyUI-QwenTTS and ComfyUI-VoxCPM2 aren't on the validation server (tests/voice-design-server.test.ts).
       "tts-qwen3-design",
       "tts-qwen3-clone",
       "tts-voxcpm2",
@@ -121,10 +129,13 @@ describe("round-4 ComfyUI workflows", () => {
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",
+      // Relight's graphs wait for their first GPU run (Viggle's node file isn't on this server).
+      "qwen-image-21-relight",
+      "relight-scene-read",
       "qwen-image-21-live-edit",
       "qwen-image-21-inpaint",
       "qwen-image-21-outpaint",
-      // Qwen-Image 2.1's speeds, its next scene and its 16 GB route (nm10-qwen21-fast): unvalidated like their base graphs until
+      // Qwen-Image 2.1's speeds, its next scene and its 16 GB route: unvalidated like their base graphs until
       // they run on a GPU (tests/qwen21-fast.test.ts).
       "qwen-image-21-t2i-draft",
       "qwen-image-21-t2i-fast",
@@ -160,9 +171,13 @@ describe("round-4 ComfyUI workflows", () => {
       "video-character-swap-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
-      // Idol 3D's clean splats (idol-2): ComfyUI-Idol isn't on the validation server (tests/idol-clean.test.ts).
+      // Idol 3D's clean splats and four views: ComfyUI-Idol isn't on the validation server (tests/idol-clean.test.ts).
       "image-to-splat-idol-clean",
       "image-to-views-idol",
+      // Any Angle's two graphs: run end to end on the GPU, they wait for their /prompt check while that ComfyUI is busy
+      // rendering (the app stays the owner's until then: src/server/any-angle-live.ts).
+      "any-angle-3d",
+      "any-angle-shot",
       "video-regenerate-h3",
       "video-h3-t2v-2k",
       "video-regenerate-h3-latent",
@@ -170,12 +185,24 @@ describe("round-4 ComfyUI workflows", () => {
       "upscale-video-rtx",
       "fps-rtx-framegen",
       "sdr-to-hdr-rtx",
-      // Kandinsky 6.0 (nm10-kandinsky6): Kandinsky Lab's kandinsky6 / kandinsky6-sr packs aren't on the validation server (tests/kandinsky6.test.ts).
+      // Kandinsky 6.0: Kandinsky Lab's kandinsky6 / kandinsky6-sr packs aren't on the validation server (tests/kandinsky6.test.ts).
       "kandinsky6-t2av",
       "kandinsky6-i2av",
       "video-upscale-kandinsky6-vsr",
-      // World mode (nm10-hy-nomas-world): Nynxz's ComfyUI-HyNomas isn't on the validation server (tests/world-mode.test.ts).
+      // World mode: Nynxz's ComfyUI-HyNomas isn't on the validation server (tests/world-mode.test.ts).
       "world-hy-nomas-turn",
+      // Genjutsu's Openjutsu modes: their packs aren't on the validation server yet; each opens only after its /prompt
+      // check and a real render (workflows/comfyui/gpu-tested.json, src/server/genjutsu-live.ts).
+      "video-group-swap-h3",
+      "video-group-swap-h3-one-by-one",
+      "video-scene-edit-h3",
+      "image-from-picture-prepare",
+      "video-scene-describe",
+      "video-from-picture-solar",
+      "video-from-picture-h3",
+      "video-motion-transfer-h3",
+      "video-fix-faces-h3",
+      "video-fix-colours",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);
   });
@@ -442,11 +469,10 @@ describe("round-4 window graphs: VACE remove / swap / insert and VOID", () => {
 // ---------------------------------------------------------------------------
 // Every round-4 workflow bound for real through the provider (prepareWorkflow → applyBindings on the library graph).
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-library-4-"));
+const tmp = tempDir("fuobe-comfy-library-4-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const GIVEN = new Set(["img1.png", "mask.png", "clip.mp4", "voice.wav", "voice2.wav", "curve.wav"]);
 const portrait: MediaInfo = { container: "mp4", hasVideo: true, hasAudio: true, duration: 8, videoDuration: 8, width: 360, height: 640, fps: 30, frames: 240 };

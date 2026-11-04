@@ -1,15 +1,15 @@
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // Route handlers call connection() (no request scope in a test).
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 120_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-recipes-"));
+const dir = tempDir("fuobe-recipes-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: open models run on the demo provider, and there's no LLM.
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -31,7 +31,6 @@ const verifyRoute = await import("@/app/api/assist/skills/[name]/verify/route");
 const generationsRoute = await import("@/app/api/generations/route");
 const { handleMcp } = await import("@/server/mcp");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 let photo = "";
 let clip = "";
@@ -149,8 +148,8 @@ describe("saving a recipe", () => {
 describe("running a recipe", () => {
   it("runs only on an engine where it was checked", async () => {
     makeSkill("lamp-unchecked", lamp());
-    await expect(recipes.runRecipe("lamp-unchecked", { values: { product: photo, name: "Lamp" } })).rejects.toThrow(/Check this skill on the cloud first/);
-    expect(recipes.recipeView("lamp-unchecked")).toMatchObject({ engines: ["cloud"], ready: [], line: expect.stringMatching(/Not checked yet/) });
+    await expect(recipes.runRecipe("lamp-unchecked", { values: { product: photo, name: "Lamp" } })).rejects.toThrow(/Give this skill a free test run on the cloud first/);
+    expect(recipes.recipeView("lamp-unchecked")).toMatchObject({ engines: ["cloud"], ready: [], line: expect.stringMatching(/Not tested yet/) });
   });
 
   it("a 3-step recipe makes one batch of 3 rows with the skill stamp", async () => {
@@ -164,9 +163,9 @@ describe("running a recipe", () => {
     expect(run.ids).toHaveLength(3);
     const rows = run.ids.map(rowOf);
     expect(new Set(rows.map((r) => r.batch_id))).toEqual(new Set([run.batchId]));
-    for (const [i, r] of rows.entries()) {
+    for (const r of rows) {
       const req = JSON.parse(r.request_json);
-      expect(req.skill).toEqual({ name: "lamp", run: run.batchId, step: ["cutout", "scene", "spin"][i] });
+      expect(req.skill).toEqual({ name: "lamp", run: run.batchId });
       expect(req.batchTitle).toBe("Lamp turntable");
       expect(req.demo).toBeUndefined();
     }
@@ -217,8 +216,8 @@ describe("running a recipe", () => {
     makeSkill("caption-it", captions(), "Caption it");
     const check = await recipes.verifyRecipe("caption-it", "demo");
     expect(check.ok).toBe(true);
-    // A studio step's dry run runs the studio as a demo (W7), then deletes what it made.
-    expect(check.engines.map((e) => e.dryRun)).toEqual([{ ok: true, problems: [] }, { ok: true, problems: [] }]);
+    // A studio step gets the plan check only in W1 (its dry run would make a record the user sees).
+    expect(check.engines.map((e) => e.dryRun?.skipped)).toEqual([expect.stringContaining("priced only, not test-run"), expect.stringContaining("priced only, not test-run")]);
     const out = await recipes.runRecipe("caption-it", { values: { video: clip, lang: "German" } }, "open");
     expect(out.runs).toHaveLength(1);
     expect(out.runs[0].href).toMatch(/^\/video-tools\/captions\?video=/);
@@ -250,7 +249,7 @@ describe("running a recipe", () => {
     expect(out.engine).toBe("open");
     expect(gens.getGeneration(out.runs[0].ids[0])).toMatchObject({ engine: "open" });
     // Asked for the cloud, it still says to check it there first.
-    await expect(recipes.runRecipe("gpu-only", { values: { subject: "a potter" } }, "cloud")).rejects.toThrow(/Check this skill on the cloud first/);
+    await expect(recipes.runRecipe("gpu-only", { values: { subject: "a potter" } }, "cloud")).rejects.toThrow(/Give this skill a free test run on the cloud first/);
   });
 
   it("a skill switched off doesn't run until it's switched on", async () => {
@@ -341,7 +340,7 @@ describe("checking a recipe", () => {
     const file = JSON.parse(skills.skillFile("lamp", "recipe.json")!);
     file.steps[1].request.modelId = "seedream-5-pro";
     skills.setSkillFile("lamp", "recipe.json", JSON.stringify(file));
-    expect(recipes.recipeView("lamp").recheck.cloud).toEqual(["The models, routes or prices it uses changed since it was checked"]);
+    expect(recipes.recipeView("lamp").recheck.cloud).toEqual(["The models, routes or prices it uses changed since its last test run"]);
   });
 
   it("never writes a check over a recipe saved while it ran, and keeps checks that finished meanwhile", async () => {
@@ -350,7 +349,7 @@ describe("checking a recipe", () => {
     const checking = recipes.verifyRecipe("race", "demo", "open");
     const edited = { ...soul(), params: [{ ...soul().params[0], example: "a baker at dawn" }] };
     recipes.saveRecipe("race", edited);
-    await expect(checking).rejects.toThrow(/changed while it was being checked/);
+    await expect(checking).rejects.toThrow(/changed during its test run/);
     const stored = JSON.parse(skills.skillFile("race", "recipe.json")!);
     expect(stored.params[0].example).toBe("a baker at dawn");
     expect(stored.verified).toBeUndefined();
@@ -417,7 +416,7 @@ describe("checking a recipe", () => {
     const r = await recipes.verifyRecipe("lamp-unchecked", "real", undefined, { confirm: true });
     const [cloud] = r.engines;
     // No key: it ran as a demo, so it isn't recorded as a real test, and says so.
-    expect(cloud.real).toMatchObject({ ok: true, demo: true, notes: [expect.stringContaining("ran as a demo")] });
+    expect(cloud.real).toMatchObject({ ok: true, demo: true, notes: [expect.stringContaining("ran with placeholder results")] });
     expect(r.view.recipe.verified?.cloud?.real).toBeNull();
   });
 });
@@ -467,157 +466,94 @@ describe("the recipe routes", () => {
   });
 });
 
-describe("run history, fixes and use (W6)", () => {
-  const historyRoute = () => import("@/app/api/assist/skills/[name]/history/route");
-  const fixesRoute = () => import("@/app/api/assist/skills/[name]/fixes/route");
+describe("a skill in use (W6)", () => {
+  const insights = () => import("@/server/skill-insights");
+  const usage = () => import("@/server/skill-usage");
+  const mark = (ids: string[], status: string, error: string | null = null) =>
+    db()
+      .prepare(`UPDATE generations SET status = ?, error = ?, cost_usd = 0.5 WHERE id IN (${ids.map(() => "?").join(", ")})`)
+      .run(status, error, ...ids);
 
-  it("reads a skill's history from the skill stamp: runs, success, spend, last run and favourites; its checks don't count", async () => {
-    makeSkill("hist", lamp(), "History lamp");
-    // The free dry run makes rows with the stamp (feature skill-check): they aren't runs.
-    expect((await recipes.verifyRecipe("hist", "demo")).ok).toBe(true);
-    expect(recipes.skillHistory("hist")).toMatchObject({ runs: 0, successRate: null, spentUsd: 0, lastRun: null, favorites: 0, recent: [] });
-    const a = await recipes.runRecipe("hist", { values: { product: photo, name: "Desk lamp" } });
-    const b = await recipes.runRecipe("hist", { values: { product: photo, name: "Floor lamp" } });
-    await settle([...a.runs[0].ids, ...b.runs[0].ids]);
-    db().prepare("UPDATE generations SET favorite = 1 WHERE id = ?").run(a.runs[0].ids[2]);
-    const h = recipes.skillHistory("hist");
-    expect(h).toMatchObject({ runs: 2, successRate: 1, favorites: 1 });
-    expect(h.recent.map((r) => r.batchId)).toEqual([b.runs[0].batchId, a.runs[0].batchId]);
-    expect(h.recent[0]).toMatchObject({ status: "succeeded", steps: 3, demo: true, costUsd: 0 });
-    expect(h.lastRun).toBe(h.recent[0].createdAt);
-    // Over HTTP, and 404 for a skill that doesn't exist.
-    const res = await (await historyRoute()).GET(new Request("http://x"), ctx("hist"));
-    expect(await res.json()).toMatchObject({ runs: 2 });
-    expect((await (await historyRoute()).GET(new Request("http://x"), ctx("nope"))).status).toBe(404);
+  it("keeps a history of its runs from the stamp each run carries", async () => {
+    makeSkill("history-lamp", lamp());
+    await recipes.verifyRecipe("history-lamp", "plan", "cloud");
+    const a = await recipes.runRecipe("history-lamp", { values: { product: photo, name: "Halo" } }, "cloud");
+    const b = await recipes.runRecipe("history-lamp", { values: { product: photo, name: "Arc" } }, "cloud");
+    mark(a.runs[0].ids, "succeeded");
+    mark(b.runs[0].ids.slice(0, 1), "succeeded");
+    mark(b.runs[0].ids.slice(1), "failed", "The provider said no");
+    const h = (await insights()).skillHistory("history-lamp");
+    expect(h).toMatchObject({ runs: 2, successRate: 0.5, spendUsd: 3, favorites: 0 });
+    expect(h.recent.map((r) => [r.run, r.status, r.steps])).toEqual([
+      [b.runs[0].batchId, "failed", 3],
+      [a.runs[0].batchId, "succeeded", 3],
+    ]);
+    expect(h.recent[0].failed.map((f) => f.model)).toEqual(["nano-banana-pro", "kling-3"]);
+    // Through its route.
+    const route = await import("@/app/api/assist/skills/[name]/history/route");
+    const res = await route.GET(new Request("http://x"), { params: Promise.resolve({ name: "history-lamp" }) } as never);
+    expect(await res.json()).toMatchObject({ runs: 2, waiting: [] });
   });
 
-  it("offers fixes for a step switched off: models with the same operation and kind that are on, priced; saved only after its checks pass", async () => {
+  it("suggests a fix for a step that failed in 2 of its last 5 runs: models with the same operation and kind, switched on", async () => {
+    makeSkill("fix-lamp", lamp());
+    await recipes.verifyRecipe("fix-lamp", "plan", "cloud");
+    for (const name of ["One", "Two"]) {
+      const r = await recipes.runRecipe("fix-lamp", { values: { product: photo, name } }, "cloud");
+      mark(r.runs[0].ids.slice(0, 1), "succeeded");
+      mark(r.runs[0].ids.slice(1, 2), "failed", "Timed out");
+      mark(r.runs[0].ids.slice(2), "canceled");
+    }
+    const fixes = (await insights()).fixCandidates("fix-lamp");
+    expect(fixes.steps.map((s) => s.key)).toEqual(["scene"]);
+    const scene = fixes.steps[0];
+    expect(scene.reasons).toEqual(["It failed in 2 of the last 2 runs"]);
+    expect(scene.candidates.length).toBeGreaterThan(1);
     const { getModel } = await import("@/lib/catalog");
     const { isOffered } = await import("@/server/model-access");
-    expect(recipes.stepFixes("hist")).toEqual([]);
-    changeAccess([{ kind: "model", id: "nano-banana-pro", on: false }]);
-    try {
-      const fixes = recipes.stepFixes("hist");
-      expect(fixes.map((f) => f.key)).toEqual(["scene"]);
-      const [fix] = fixes;
-      expect(fix.why).toMatch(/switched off/);
-      expect(fix.candidates.length).toBeGreaterThan(0);
-      for (const c of fix.candidates) {
-        const m = getModel(c.modelId)!;
-        expect(c.modelId).not.toBe("nano-banana-pro");
-        expect(m.kind).toBe("image");
-        expect(m.routes.some((r) => r.op === "edit")).toBe(true);
-        expect(isOffered(c.modelId)).toBe(true);
-        expect(c.engine).toBe("cloud");
-      }
-      // Only an offered model is taken.
-      await expect(recipes.applyFix("hist", "scene", "kling-3")).rejects.toThrow(/Pick one of the models offered/);
-      const pick = fix.candidates[0];
-      const res = await (await fixesRoute()).POST(new Request("http://x", { method: "POST", body: JSON.stringify({ step: "scene", modelId: pick.modelId }) }), ctx("hist"));
-      expect(res.status).toBe(200);
-      const done = (await res.json()) as { ok: boolean; view: { recipe: { steps: { request: { modelId: string } }[] }; ready: string[]; recheck: object } };
-      expect(done.ok).toBe(true);
-      expect(done.view.recipe.steps[1].request.modelId).toBe(pick.modelId);
-      expect(done.view.ready).toEqual(["cloud"]);
-      expect(done.view.recheck).toEqual({});
-      expect(recipes.stepFixes("hist")).toEqual([]);
-    } finally {
-      changeAccess([{ kind: "model", id: "nano-banana-pro", on: true }]);
+    for (const c of scene.candidates) {
+      const m = getModel(c.modelId)!;
+      expect(m.kind, c.modelId).toBe("image");
+      expect(m.routes.map((x) => x.op), c.modelId).toContain("edit");
+      expect(isOffered(c.modelId), c.modelId).toBe(true);
+      expect(c.modelId).not.toBe("nano-banana-pro");
     }
+    // A model switched off isn't offered.
+    const off = scene.candidates[0].modelId;
+    changeAccess([{ kind: "model", id: off, on: false }]);
+    try {
+      expect((await insights()).fixCandidates("fix-lamp").steps[0].candidates.map((c) => c.modelId)).not.toContain(off);
+    } finally {
+      changeAccess([{ kind: "model", id: off, on: true }]);
+    }
+    // Picking one swaps the step and checks the skill again; anything not offered is refused.
+    const pick = scene.candidates.find((c) => !c.problem)!;
+    await expect((await insights()).applyFix("fix-lamp", "scene", "kling-3")).rejects.toThrow(/Pick one of the models offered/);
+    const done = await (await insights()).applyFix("fix-lamp", "scene", pick.modelId);
+    expect(done).toEqual({ ok: true, problems: [] });
+    const now = recipes.recipeView("fix-lamp");
+    expect(now.recipe.steps[1]).toMatchObject({ request: { modelId: pick.modelId } });
+    expect(now.recipe.verified?.cloud?.dryRun).toBe(today());
   });
 
-  it("offers a fix for a step that failed in 2 of the last 5 runs", async () => {
-    const at = Date.now() + 60_000;
-    const insert = (run: string, i: number, status: string) =>
-      db()
-        .prepare(
-          `INSERT INTO generations (id, batch_id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at, error)
-           VALUES (?, ?, 'skill', 'kling-3', 'cloud', 'fal', 'i2v', 'video', ?, ?, '[]', ?, ?, ?)`,
-        )
-        .run(`fail${run}${i}`.padEnd(12, "x"), run, status, JSON.stringify({ feature: "skill", modelId: "kling-3", op: "i2v", skill: { name: "hist", run } }), at + i, at + i, status === "failed" ? "The provider refused it" : null);
-    insert("runfail1", 1, "failed");
-    expect(recipes.stepFixes("hist")).toEqual([]);
-    insert("runfail2", 2, "failed");
-    const [fix] = recipes.stepFixes("hist");
-    expect(fix).toMatchObject({ key: "spin", why: "Kling 3.0 failed in 2 of the last 4 runs" });
-    expect(fix.candidates.every((c) => c.modelId !== "kling-3")).toBe(true);
-    expect(recipes.skillHistory("hist")).toMatchObject({ runs: 4, successRate: 0.5 });
-    const res = await (await fixesRoute()).GET(new Request("http://x"), ctx("hist"));
-    expect((await res.json()).items[0]).toMatchObject({ key: "spin" });
-  });
-
-  it("ranks a used skill first, after the skills that match the words", async () => {
-    const { rankSkills } = await import("@/lib/recipe");
-    const { forgetSkillUses, skillUses } = await import("@/server/skill-uses");
-    forgetSkillUses();
-    const uses = skillUses();
-    expect(uses.get("hist")?.runs).toBe(4);
+  it("ranks the skills Assist offers by the words, then by how often and how lately they ran", async () => {
+    const { rankSkills } = await usage();
     const list = [
-      { name: "alpha", title: "Alpha", description: "posters" },
-      { name: "hist", title: "History lamp", description: "turntables" },
-      { name: "gamma", title: "Gamma", description: "posters and banners" },
+      { name: "a", title: "Alpha", description: "posters" },
+      { name: "b", title: "Beta", description: "product posters" },
+      { name: "c", title: "Gamma", description: "videos" },
     ];
-    expect(rankSkills(list, { uses }).map((s) => s.name)).toEqual(["hist", "alpha", "gamma"]);
-    expect(rankSkills(list, { query: "banners", uses }).map((s) => s.name)).toEqual(["gamma", "hist", "alpha"]);
-    // A run long ago weighs less than runs this week.
     const now = Date.now();
-    const old = new Map([["alpha", { runs: 3, last: now - 200 * 86_400_000 }], ["gamma", { runs: 3, last: now }]]);
-    expect(rankSkills(list, { uses: old, now }).map((s) => s.name)).toEqual(["gamma", "alpha", "hist"]);
-    // list_skills and Assist's skills index use it.
-    const { executeTool } = await import("@/server/assist/tools");
-    const listed = JSON.parse(String((await executeTool("list_skills", {}, { engine: "cloud" })).content)) as { name: string }[];
-    expect(listed[0].name).toBe("hist");
-    const { chatFacts } = await import("@/server/assist/context");
-    const index = chatFacts({ engine: "cloud", autoApprove: false, projectId: null, skills: [] }).filter((f) => f.section === "skills");
-    expect(index[0].key).toBe("hist");
-  });
-
-  it("puts a skill that matches the chat's words first in Assist's skills index, ahead of the most used", async () => {
-    skills.createSkill({ name: "gig-poster", title: "Gig poster", description: "A bold gig poster for a band night.", body: "# Poster" });
-    const { chatFacts } = await import("@/server/assist/context");
-    const index = (words?: string) => chatFacts({ engine: "cloud", autoApprove: false, projectId: null, skills: [], words }).filter((f) => f.section === "skills").map((f) => f.key);
-    expect(index()[0]).toBe("hist");
-    expect(index("Make us a gig poster for our band night, please")[0]).toBe("gig-poster");
-    // Common words alone match nothing.
-    expect(index("make it for me with the")[0]).toBe("hist");
-  });
-
-  it("blames only the step that failed, not the steps after it that never ran", async () => {
-    makeSkill("hist-up", lamp(), "Upstream lamp");
-    const { waitedOnFailure } = await import("@/server/generations");
-    const at = Date.now() + 120_000;
-    let n = 0;
-    const insert = (run: string, step: string, model: string, status: string, error: string | null) =>
-      db()
-        .prepare(
-          `INSERT INTO generations (id, batch_id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at, error)
-           VALUES (?, ?, 'skill', ?, 'cloud', 'fal', 'edit', 'image', ?, ?, '[]', ?, ?, ?)`,
-        )
-        .run(`up${++n}`.padEnd(12, "x"), run, model, status, JSON.stringify({ feature: "skill", modelId: model, skill: { name: "hist-up", run, step } }), at + n, at + n, error);
-    for (const run of ["uprun1", "uprun2"]) {
-      insert(run, "cutout", "birefnet-cloud", "succeeded", null);
-      insert(run, "scene", "nano-banana-pro", "failed", "The provider refused it");
-      insert(run, "spin", "kling-3", "failed", waitedOnFailure());
-    }
-    const fixes = recipes.stepFixes("hist-up");
-    expect(fixes.map((f) => [f.key, f.why, f.failing])).toEqual([["scene", "Nano Banana Pro failed in 2 of the last 2 runs", true]]);
-  });
-
-  it("keeps a step on the engine it was kept on when the fix runs on both", async () => {
-    const pinned = soul();
-    (pinned.steps[0].request as Record<string, unknown>).engine = "open";
-    makeSkill("soul-pinned", pinned, "Pinned portrait");
-    expect((await recipes.verifyRecipe("soul-pinned", "plan")).view.ready).toEqual(["open"]);
-    changeAccess([{ kind: "model", id: "fuobe-soul", on: false }]);
-    try {
-      const [fix] = recipes.stepFixes("soul-pinned");
-      const pick = fix.candidates.find((c) => c.modelId === "fuobe-soul-hd");
-      expect(pick).toMatchObject({ engine: "open" });
-      const done = await recipes.applyFix("soul-pinned", "portrait", "fuobe-soul-hd");
-      expect(done.view.recipe.steps[0]).toMatchObject({ request: { modelId: "fuobe-soul-hd", engine: "open" } });
-      expect(done.view.engines).toEqual(["open"]);
-    } finally {
-      changeAccess([{ kind: "model", id: "fuobe-soul", on: true }]);
-    }
+    const used = new Map([
+      ["c", { runs: 5, last: now - 86_400_000 }],
+      ["a", { runs: 1, last: now - 40 * 86_400_000 }],
+    ]);
+    expect(rankSkills(list, { usage: used, now }).map((s) => s.name)).toEqual(["c", "a", "b"]);
+    expect(rankSkills(list, { words: "product posters", usage: used, now }).map((s) => s.name)).toEqual(["b", "a"]);
+    // From the stamps: the skill that ran comes first.
+    const real = (await usage()).skillUsage();
+    expect(real.get("history-lamp")?.runs).toBe(2);
+    const ranked = rankSkills(skills.enabledSkills()).map((s) => s.name);
+    expect(ranked.indexOf("history-lamp")).toBeLessThan(ranked.indexOf("product-photoshoot"));
   });
 });

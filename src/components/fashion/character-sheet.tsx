@@ -2,7 +2,8 @@
 
 import { AtSign, Check, Dices, ImagePlus, Loader2, RotateCcw, Shuffle, Sparkles, UserRoundPlus, X } from "lucide-react";
 import Link from "next/link";
-import { Suspense, useMemo, useRef, useState, type ComponentProps } from "react";
+import { nanoid } from "nanoid";
+import { Suspense, useCallback, useMemo, useRef, useState, type ComponentProps } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
@@ -18,12 +19,16 @@ import { ResultsGrid } from "@/components/photodump/results";
 import { RunLine } from "@/components/photodump/steps";
 import { AnimatePosesButton } from "@/components/turnaround/animate-poses";
 import { TurnaroundButton } from "@/components/turnaround/turnaround-dialog";
+import { HandoffImage } from "@/components/nav/next-steps";
 import { useElements, useEngine, useGenerations, useLikelyVisitor, useSaveElement } from "@/lib/api";
 import { castFieldVisible, castNameFor, randomCast, SHEET_MAX_REFS, type CastAnswers, type CastFieldData } from "@/lib/catalog/packs";
 import { sheetPictures } from "@/lib/catalog/turnaround";
 import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
+import { SheetExample } from "@/components/empty-examples";
+import { linkTab, TabFromLink } from "@/components/nav/tab-from-link";
 
 type Mode = "reference" | "cast" | "describe";
 const MODES: [Mode, string][] = [
@@ -31,6 +36,8 @@ const MODES: [Mode, string][] = [
   ["cast", "Build from scratch"],
   ["describe", "From a description"],
 ];
+/** The tabs a link can open (?mode=reference|cast|describe: the bar's menus, search). */
+const MODE_IDS: readonly Mode[] = MODES.map(([id]) => id);
 
 const fmt = (f: CastFieldData, v: string | number) => (f.format ? f.format.replace("{v}", String(v)) : String(v));
 
@@ -39,13 +46,13 @@ function CastForm({ fields, values, set }: { fields: CastFieldData[]; values: Ca
   const [tab, setTab] = useState(tabs[0]);
   return (
     <div className="space-y-4">
-      <div role="tablist" aria-label="Soul Cast" className="scrollbar-none flex gap-1 overflow-x-auto">
+      <TabRow role="tablist" aria-label="Soul Cast" follow>
         {tabs.map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("h-8 shrink-0 rounded-full px-3 text-[12.5px] font-medium transition-colors", tab === t ? "bg-brand-faint text-brand-text" : "bg-secondary text-secondary-foreground hover:bg-accent")}>
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={TAB_PILL} {...onAttr(tab === t)}>
             {t}
           </button>
         ))}
-      </div>
+      </TabRow>
       {fields
         .filter((f) => f.tab === tab && castFieldVisible(f.key, values))
         .map((f) => {
@@ -207,6 +214,11 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
     if (photos.length + list.length > SHEET_MAX_REFS) toast(`Maximum ${SHEET_MAX_REFS} images`);
     list.slice(0, SHEET_MAX_REFS - photos.length).forEach((f) => fileToList(f, setPhotos, "image"));
   };
+  // A result sent here ("Make a character sheet" under a picture): the first reference photo, From Reference.
+  const takeHandoff = useCallback((url: string) => {
+    setMode("reference");
+    setPhotos((xs) => (xs.some((x) => x.ref === url) ? xs : [{ ref: url, preview: url, kind: "image" as const, id: nanoid(8) }, ...xs].slice(0, SHEET_MAX_REFS)));
+  }, []);
   const create = () => {
     if (visitor) return;
     if (mode === "reference" && !photos.length) return toast("Upload at least 1 image");
@@ -220,19 +232,33 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
 
   return (
     <PageShell wide>
+      <Suspense fallback={null}>
+        <HandoffImage onImage={takeHandoff} />
+      </Suspense>
+      <TabFromLink param="mode" ids={MODE_IDS} onTab={setMode} />
       <PageHeader title="Character Sheet" description="Build your AI avatar: a consistent character for your videos, from a reference or defined from scratch.">
         <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
       {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Character Sheet isn&apos;t available here.</SelfHostNote>}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section className="min-w-0 space-y-4">
-          <div role="tablist" aria-label="How to build it" className="scrollbar-none inline-flex max-w-full overflow-x-auto rounded-full bg-muted p-0.5">
+          <TabRow role="tablist" aria-label="How to build it" follow>
             {MODES.map(([id, label]) => (
-              <button key={id} role="tab" aria-selected={mode === id} onClick={() => setMode(id)} className={cn("h-8 shrink-0 rounded-full px-3.5 text-[13px] font-medium text-muted-foreground transition", mode === id && "bg-background text-foreground shadow-soft")}>
+              <button
+                key={id}
+                role="tab"
+                aria-selected={mode === id}
+                onClick={() => {
+                  setMode(id);
+                  linkTab("mode", id);
+                }}
+                className={TAB_PILL}
+                {...onAttr(mode === id)}
+              >
                 {label}
               </button>
             ))}
-          </div>
+          </TabRow>
 
           {mode === "reference" && (
             <div className="space-y-3">
@@ -355,7 +381,8 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
               )}
             </>
           ) : (
-            <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed p-6 text-center">
+            <div className="grid min-h-64 place-items-center gap-5 rounded-2xl border border-dashed p-6 text-center">
+              <SheetExample />
               <div className="max-w-sm space-y-1">
                 <p className="font-heading text-[22px]">Your character sheet appears here</p>
                 <p className="text-[13px] text-muted-foreground">Front, three-quarter, profile and back views of the same person — then save it as a character to use in any prompt with @.</p>

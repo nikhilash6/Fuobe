@@ -4,7 +4,7 @@ import { DUB_STEP_MODELS } from "@/lib/av/dub";
 import { HI3D_MODEL } from "@/lib/av/hi3d";
 import { IDOL_VIEWS_WORKFLOW } from "@/lib/av/idol-views";
 import { SPLIT_MODEL } from "@/lib/av/split";
-import { BED_MUX_MODEL, VOICE_FIRST_MODELS } from "@/lib/av/voice-first";
+import { VOICE_FIRST_MODELS, VOICE_FIRST_MUX } from "@/lib/av/voice-first";
 import { BURN_MODELS } from "@/lib/av/captions";
 import { CLEAN_DIALOGUE_PRESET, OPEN_MODEL as CLEAN_DIALOGUE_MODEL, OPEN_MUX_MODEL as CLEAN_DIALOGUE_MUX } from "@/lib/av/clean-dialogue";
 import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
@@ -17,7 +17,7 @@ import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { PERSON_REMOVAL_TOOLS, REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
-import { H3_LATENT_DRAFT_WORKFLOW, H3_OPEN_MODEL, REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_LATENT_WORKFLOW, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { H3_LATENT_DRAFT_WORKFLOW, H3_OPEN_MODEL, REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_LATENT_WORKFLOW, REGEN_MODEL, REGEN_OFFERED, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
 import { RTX_FRAMEGEN_MODEL, RTX_HDR_MODEL, RTX_UPSCALE_MODEL } from "@/lib/catalog/rtx-video";
 import { COMPOSITE_MODEL } from "@/lib/catalog/sharpen";
@@ -182,7 +182,7 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/image", label: "Image", group: "Images", config: S.IMAGE_STUDIO },
   { href: "/edit", label: "Edit", group: "Images", config: S.EDIT_STUDIO },
   { href: "/inpaint", label: "Inpaint", group: "Images", config: S.INPAINT_STUDIO },
-  // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): text to image and edits on Zen Image Edit's small encoder, which the
+  // Qwen-Image 2.1 on a 16 GB card: text to image and edits on Zen Image Edit's small encoder, which the
   // Image and Edit studios pick by themselves under 20 GB once it is ready (Options → GPU on Auto). The row's page opens the Image
   // studio on Qwen-Image 2.1.
   {
@@ -231,8 +231,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: "oss-kandinsky6", op: "i2v" },
     ],
   },
-  // Clean the voice first (DBS D6) on a lip re-sync of a clip: the voice cleaned, the re-sync on it, and the clip's music
-  // and effects put back by the stream-copy mux (its own DBS pass, the same graph).
+  // Clean the voice first on a lip re-sync of a clip: the voice cleaned, the re-sync on it, and the clip's music and
+  // effects put back by the stream-copy mux.
   {
     href: "/lipsync?model=oss-infinitetalk-v2v",
     label: "Lip re-sync, voice cleaned",
@@ -240,13 +240,13 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     steps: [
       { modelId: VOICE_FIRST_MODELS.open, op: "separate-audio" },
       { modelId: "oss-infinitetalk-v2v", op: "lipsync" },
-      { modelId: BED_MUX_MODEL, op: "mux" },
+      { modelId: VOICE_FIRST_MUX, op: "mux" },
     ],
   },
   { href: "/character-swap", label: "Character swap", group: "Video", workflows: [STUDIO_WORKFLOWS.mask, STUDIO_WORKFLOWS.segment] },
   // Cinema's 3D scene films a still along a keyframed camera path (N7-5).
   { href: "/cinema", label: "Fly path", group: "Video", steps: [{ modelId: PATH_MODELS.open, op: "camera-path" }] },
-  // Exact orbits (N7-7): Fuobe DoP's and Cinema's orbit moves by their numbers, Canvas's Fly around and Assist's fly_around:
+  // Exact orbits: Fuobe DoP's and Cinema's orbit moves by their numbers, Canvas's Fly around and Assist's fly_around:
   // MoGe 2 measures the still's depth, the server renders the path, Uni3C films along it.
   {
     href: "/motions",
@@ -297,13 +297,13 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: FILL_MODELS.open, op: "edit", loras: [ANGLES_2511_LORA] },
     ],
   },
-  // Turnaround stills · 8 views (qma-angles): the character from all 8 sides at eye level, drawn by QMA · 96 views (the
+  // Turnaround stills · 8 views: the character from all 8 sides at eye level, drawn by QMA · 96 views (the
   // turnaround dialog's Stills route; its graph loads the QMA LoRA itself). It also draws a film's missing sides when picked.
   { href: "/character-sheet?stills=1", label: "Turnaround stills · 8 views", group: "Images", steps: [{ modelId: QMA_MODEL, op: "edit" }] },
   { href: "/audio", label: "Voice", group: "Audio", config: S.AUDIO_STUDIO },
   { href: "/audio/dialogue", label: "Dialogue", group: "Audio", config: S.DIALOGUE_STUDIO },
   { href: "/audio/voice-change", label: "Voice change", group: "Audio", config: S.VOICE_CHANGE_STUDIO },
-  // Design a voice (nm10-voice-design): Qwen3-TTS designs the takes and clones the one saved (VoxCPM2 is the other choice).
+  // Design a voice: Qwen3-TTS designs the takes and clones the one saved (VoxCPM2 is the other choice).
   { href: "/audio/design", label: "Design a voice", group: "Audio", steps: [{ modelId: "oss-qwen3-tts", op: "voice-design" }, { modelId: "oss-qwen3-tts", op: "tts" }] },
   { href: "/audio/transcribe", label: "Transcribe", group: "Audio", config: S.TRANSCRIBE_STUDIO },
   // Edit speech (nm10-speech-edit): Qwen3-ASR times the words, AuK re-speaks the changed parts (a video's sound goes back on
@@ -342,41 +342,51 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/audio/music", label: "Music", group: "Audio", config: S.MUSIC_STUDIO },
   { href: "/audio/video", label: "Sound for video", group: "Audio", config: S.FOLEY_STUDIO },
   { href: "/upscale/video", label: "Upscale video", group: "Video tools", config: S.VIDEO_UPSCALE_STUDIO },
-  // n7-3: Upscale → Video's Regenerate · creative (Open-H3 Regenerate with its refiner LoRA); a clip over 15 s is redrawn in
-  // parts joined packet by packet.
-  {
-    href: `/upscale/video?model=${REGEN_MODEL}&resolution=${REGEN_DEFAULT_TIER}`,
-    label: "Regenerate in 2K",
-    group: "Video tools",
-    steps: [
-      { modelId: REGEN_MODEL, op: "upscale-video" },
-      { modelId: REGEN_JOIN, op: "concat" },
-    ],
-  },
-  // nm10-rtx-video: NVIDIA RTX Video in Upscale → Video ("Quick · RTX"), FPS boost and SDR to HDR. An NVIDIA RTX card only
-  // (frame generation: RTX 40 or later): elsewhere the row reads "Needs an NVIDIA RTX card".
+  // Upscale → Video's Regenerate · creative (Open-H3 Regenerate with its refiner LoRA); a clip over 15 s is redrawn in
+  // parts joined packet by packet. Listed only while it is offered (REGEN_OFFERED).
+  ...(REGEN_OFFERED
+    ? [
+        {
+          href: `/upscale/video?model=${REGEN_MODEL}&resolution=${REGEN_DEFAULT_TIER}`,
+          label: "Regenerate in 2K",
+          group: "Video tools",
+          steps: [
+            { modelId: REGEN_MODEL, op: "upscale-video" as const },
+            { modelId: REGEN_JOIN, op: "concat" as const },
+          ],
+        } satisfies StudioRowDef,
+      ]
+    : []),
+  // NVIDIA RTX Video in Upscale → Video ("Quick · RTX"), FPS boost and SDR to HDR. An NVIDIA RTX card only (frame
+  // generation: RTX 40 or later): elsewhere the row reads "Needs an NVIDIA RTX card".
   { href: `/upscale/video?model=${RTX_UPSCALE_MODEL}`, label: "Quick upscale · RTX", group: "Video tools", steps: [{ modelId: RTX_UPSCALE_MODEL, op: "upscale-video" }] },
-  // n7-10: MiniMax H3 at 2K on your GPU (Cinema and the Video studio's 2K tier, and Finish in 2K on a take): the 768p draft
-  // that keeps its latent, and the 2K finish from it.
-  { href: `/video?model=${H3_OPEN_MODEL}&resolution=2K`, label: "MiniMax H3 in 2K", group: "Video", workflows: [H3_LATENT_DRAFT_WORKFLOW, REGEN_LATENT_WORKFLOW] },
-  // n7-4: the Character swap at 1080p / 2K / 4K (Genjutsu, and Sharpen in Character Swap Studio's Finish): the 768p swap,
-  // the person's mask (SAM 3.1 on H3 Relay's graph), the part at 24 fps, the swap regenerated, only the character
-  // composited over the footage, the windows joined and the part's sound put back.
-  {
-    href: "/genjutsu?mode=character",
-    label: "Character swap in 2K",
-    group: "Video tools",
-    steps: [
-      { modelId: ORIGINALS.character, op: "video-swap" },
-      { modelId: SHARPEN_TOOLS.mask, op: "bg-remove-video" },
-      { modelId: SHARPEN_TOOLS.fit, op: "trim" },
-      { modelId: REGEN_MODEL, op: "upscale-video" },
-      { modelId: COMPOSITE_MODEL, op: "composite" },
-      { modelId: REGEN_JOIN, op: "concat" },
-      { modelId: SHARPEN_TOOLS.mux, op: "mux" },
-    ],
-  },
-  // nm10-kandinsky6: Upscale → Video's Kandinsky VSR (2x, 2.25x, 4x; clips up to 5 s).
+  // MiniMax H3 at 2K on your GPU (Cinema and the Video studio's 2K tier, and Finish in 2K on a take): the 768p draft that
+  // keeps its latent, and the 2K finish from it. It finishes with Open-H3 Regenerate, so it is listed only while that is
+  // offered (REGEN_OFFERED).
+  ...(REGEN_OFFERED ? [{ href: `/video?model=${H3_OPEN_MODEL}&resolution=2K`, label: "MiniMax H3 in 2K", group: "Video", workflows: [H3_LATENT_DRAFT_WORKFLOW, REGEN_LATENT_WORKFLOW] } satisfies StudioRowDef] : []),
+  // The Character swap at 1080p / 2K / 4K (Genjutsu, and Sharpen in Character Swap Studio's Finish): the 768p swap, the
+  // person's mask (SAM 3.1 on H3 Relay's graph), the part at 24 fps, the swap regenerated, only the character composited
+  // over the footage, the windows joined and the part's sound put back. It regenerates with Open-H3 Regenerate, so it is
+  // listed only while that is offered (REGEN_OFFERED).
+  ...(REGEN_OFFERED
+    ? [
+        {
+          href: "/genjutsu?mode=character",
+          label: "Character swap in 2K",
+          group: "Video tools",
+          steps: [
+            { modelId: ORIGINALS.character, op: "video-swap" as const },
+            { modelId: SHARPEN_TOOLS.mask, op: "bg-remove-video" as const },
+            { modelId: SHARPEN_TOOLS.fit, op: "trim" as const },
+            { modelId: REGEN_MODEL, op: "upscale-video" as const },
+            { modelId: COMPOSITE_MODEL, op: "composite" as const },
+            { modelId: REGEN_JOIN, op: "concat" as const },
+            { modelId: SHARPEN_TOOLS.mux, op: "mux" as const },
+          ],
+        } satisfies StudioRowDef,
+      ]
+    : []),
+  // Upscale → Video's Kandinsky VSR (2x, 2.25x, 4x; clips up to 5 s).
   { href: "/upscale/video?model=oss-kandinsky6-vsr", label: "Kandinsky VSR", group: "Video tools", steps: [{ modelId: "oss-kandinsky6-vsr", op: "upscale-video" }] },
   { href: "/upscale/fps", label: "FPS boost", group: "Video tools", config: S.FPS_BOOST_STUDIO },
   { href: `/upscale/fps?model=${RTX_FRAMEGEN_MODEL}`, label: "FPS boost · RTX", group: "Video tools", steps: [{ modelId: RTX_FRAMEGEN_MODEL, op: "interpolate" }] },
@@ -396,7 +406,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: REMOVE_DIALOGUE_MODELS.mux, op: "mux" },
     ],
   },
-  // Captions on your GPU: the voice cleaned first (on by default for the clip, DBS D6), its words, and the burn-in.
+  // Captions on your GPU: the voice cleaned first (Clean the voice first, on for a clip once it has passed a real run), its
+  // words, and the burn-in.
   {
     href: "/video-tools/captions",
     label: "Captions",
@@ -407,7 +418,7 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: BURN_MODELS.open, op: "captions" },
     ],
   },
-  // Remove a person (o/person-remover-plus): the part fitted to 24 fps, its first frame cleaned by Qwen-Image 2.1, the green
+  // Remove a person: the part fitted to 24 fps, its first frame cleaned by Qwen-Image 2.1, the green
   // mask preview, H3 Relay's Person Removal with Akatz Labs' Person Remover LoRA, and the sound put back.
   {
     href: "/video-tools/remove-person",

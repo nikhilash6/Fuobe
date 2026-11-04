@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotFoundState } from "@/components/empty-state";
 import { FACELESS_STYLE_IDS, genreInfo, getStyle, type ChannelSettings, type FacelessChannel, type PickerData } from "@/lib/catalog/faceless";
@@ -137,14 +137,14 @@ export function ChannelView({ id, picker }: { id: string; picker: PickerData }) 
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <Link href="/faceless" className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4 shrink-0" /> <span className="truncate">Faceless Studio</span>
         </Link>
+        <PhoneNavButton className="ml-auto" />
       </header>
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-8 px-3 pb-16 sm:px-6">
+      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-8 px-4 pb-16 sm:px-6">
         {isLoading || !channel ? (
           <div className="space-y-4 pt-6">
             <div className="flex items-center gap-4">

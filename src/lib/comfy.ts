@@ -68,6 +68,7 @@ export interface ManifestOutput {
    * window), and a matte graph's "cutout" (transparent video) and "matte" (black and white) videos. A "preview" is the clip shown
    * for an EXR export (the frames ride along zipped). A "master" is a lossless copy a later job continues from (Character Swap
    * Studio's segment, 16-bit FFV1). A "report" is a node's own account of the run (DBS: model, device, windows, seconds).
+   * An "orbit" is a clip of a splat turning that came with a 3D model (Photo to 3D): the server's mesh turntable never replaces it.
    */
   role?:
     | "cues"
@@ -78,6 +79,7 @@ export interface ManifestOutput {
     | "tiles"
     | "first-frame"
     | "turntable"
+    | "orbit"
     | "lines"
     | "frame"
     | "frames"
@@ -90,7 +92,15 @@ export interface ManifestOutput {
     | "matte"
     | "preview"
     | "master"
-    | "report";
+    | "report"
+    // Any Angle: the turntable at 192 px (colour, and its coverage) the front view is measured on, and a GLB made from a splat.
+    | "sweep"
+    | "sweep-mask"
+    | "mesh"
+    // Watermark Remover: the repair's verdict (QWMFinal), folded into the picture outputs' meta.
+    | "quality"
+    // Watermark Remover: a tile's scan report (QWMDetect on a quarter of the photo), merged into the "report" output.
+    | "scan-tile";
 }
 
 export interface ManifestWorkflow {
@@ -161,6 +171,22 @@ export function applyBindings(
     }
   }
   return { workflow: out, missing };
+}
+
+/**
+ * Load3D reads a saved 3D file without the browser (Any Angle's saved view): its picture entries, which the viewer's
+ * capture fills in the editor, point at the run's own photo (any file it sent works; nothing else is read from the folder).
+ */
+export function withLoad3dImages(wf: ComfyWorkflow, image: string | undefined): ComfyWorkflow {
+  if (!image) return wf;
+  let out = wf;
+  for (const [id, n] of Object.entries(wf)) {
+    const entry = n.inputs.image;
+    if (n.class_type !== "Load3D" || !entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    if (out === wf) out = cloneWorkflow(wf);
+    out[id].inputs.image = { ...(entry as Record<string, unknown>), image, mask: image, normal: image, recording: "" };
+  }
+  return out;
 }
 
 const MODEL_LOADERS = new Set(["UNETLoader", "CheckpointLoaderSimple", "UnetLoaderGGUF", "ImageOnlyCheckpointLoader"]);

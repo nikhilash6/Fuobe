@@ -4,24 +4,24 @@ import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import {
   AUTO_SECONDS,
-  MUSIC_CLIP_MIN_SECONDS,
   blockCount,
   buildEpisodeGraph,
   CAMERA_WORDS,
   changedKeys,
   channelName,
   defaultSettings,
-  BED_CROSSFADE,
   ENGINE_MODELS,
   estimateGraph,
   EXPLAINER_MAX,
   EXPLAINER_MIN,
   genreInfo,
   getStyle,
-  LOOP_MAX,
   MAX_SCRIPT,
   MAX_SOURCES,
   musicPlan,
+  clipBedFor,
+  CLIP_BED_MAX,
+  CLIP_BED_MIN,
   narrationText,
   normalizeBlocks,
   OFFLINE_NOTE,
@@ -98,7 +98,6 @@ import type { JsonSpec } from "./llm";
 import { llmBackends, probeLocal } from "./providers/llm";
 import { fetchRemote } from "./remote-fetch";
 import { engineMode, getSetting } from "./settings";
-import { inDemoScope } from "./demo-scope";
 import { fileUrl, saveFile } from "./storage";
 import { firstOn, offeredModel } from "./model-access";
 
@@ -229,7 +228,7 @@ const TOPICS_TIMEOUT_MS = 25_000;
 
 /** One answer from the engine's text model, or null (no LLM, AI helper off, demo mode on, or it failed: `onError` hears why). */
 export async function askLlm(engine: Engine, system: string, user: string, o: AskOptions = {}): Promise<string | null> {
-  if (getSetting("demoMode") === "on" || inDemoScope()) return null;
+  if (getSetting("demoMode") === "on") return null;
   // A text model switched off in Settings → Models & licences gives way to the offline wording, like no LLM at all.
   const found = getModel(ENGINE_MODELS[engine].write);
   const model = found && offeredModel(found);
@@ -1437,17 +1436,13 @@ function notesFor(settings: EpisodeSettings, seconds: number): { notes?: string[
   const limit = styleRefLimit(settings.engine, getModel);
   if (settings.styleRefs.length > limit) notes.push(`The open-source picture model follows the first ${limit} style references.`);
   if (settings.engine === "open" && settings.styleRefs.length && settings.sourceImages?.length) notes.push("Your style references set the look; the attached images aren't used for the open-source pictures.");
-  const minutes = (s: number) => `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}`;
-  if (m.music && m.bedClip) {
-    // Your clip's music and effects: cut to the film when it's longer, looped (as buildEpisodeGraph plans) when shorter.
-    const clip = Math.round(m.bedClip.duration);
-    const loop = m.loop && m.bedClip.duration < seconds ? Math.min(LOOP_MAX[m.loop] ?? Infinity, Math.ceil(seconds) + 1) : null;
-    if (loop) notes.push(`Your clip's music and effects (${clip} s) loop with a ${BED_CROSSFADE}-second crossfade to cover the film.`);
-    else if (m.bedClip.duration > Math.ceil(seconds) + 2) notes.push(`Only the first ${minutes(Math.ceil(seconds) + 1)} of your clip's sound is used.`);
-    if (loop && loop < seconds) notes.push(`The music bed goes up to ${minutes(loop)}, so the last ${Math.ceil(seconds - loop)} s play without music.`);
-  } else if (m.music) {
-    const plan = musicPlan(getModel(m.music), m.loop ? getModel(m.loop) : undefined, seconds);
-    if (plan.loop?.crossfade) notes.push(`The music is made ${minutes(plan.bed)} long, then looped with a ${plan.loop.crossfade}-second crossfade to cover the film.`);
+  if (m.music) {
+    const clip = clipBedFor(settings);
+    const plan = musicPlan(getModel(m.music), m.loop ? getModel(m.loop) : undefined, seconds, clip?.seconds);
+    const minutes = (s: number) => (s < 60 ? `${Math.round(s)} s` : `${Math.floor(s / 60)} min${Math.round(s % 60) ? ` ${Math.round(s % 60)} s` : ""}`);
+    if (clip) notes.push("The music bed is your clip's soundtrack with the talking taken out.");
+    if (clip && plan.loop?.crossfade) notes.push(`Your clip is ${minutes(plan.bed)} long, so its soundtrack loops with a ${plan.loop.crossfade}-second crossfade to cover the film.`);
+    else if (plan.loop?.crossfade) notes.push(`The music is made ${minutes(plan.bed)} long, then looped with a ${plan.loop.crossfade}-second crossfade to cover the film.`);
     else if (plan.loop) notes.push(`The music is made ${minutes(plan.bed)} long and plays again to cover the film.`);
     if (plan.short) notes.push(`The music bed goes up to ${minutes(plan.loop?.duration ?? plan.bed)}, so the last ${plan.short} s play without music.`);
   }
@@ -1605,12 +1600,12 @@ export const SettingsSchema = z.object({
   resolution: z.string().max(10).optional(),
   auto: z.boolean().optional(),
   brief: BriefLookSchema.optional(),
-  /** "Use a clip's soundtrack as the bed" (your GPU): the clip, and its seconds as the browser read them. */
-  musicClip: z
+  /** A clip whose soundtrack is the music bed (open engine; the cloud makes the music). */
+  bedClip: z
     .object({
       url: FileUrl,
+      seconds: z.number().min(CLIP_BED_MIN, `Pick a clip of at least ${CLIP_BED_MIN} seconds for the music bed`).max(CLIP_BED_MAX, "Pick a clip of up to 10 minutes for the music bed"),
       name: z.string().max(200).optional(),
-      duration: z.number().finite().min(MUSIC_CLIP_MIN_SECONDS, `Pick a clip of ${MUSIC_CLIP_MIN_SECONDS} s or more for the bed`).max(3600),
     })
     .optional(),
 });

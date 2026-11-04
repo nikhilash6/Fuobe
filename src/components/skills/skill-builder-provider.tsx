@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
-import { sourceKey, type DraftSource } from "@/components/assist/hooks";
+import type { DraftSource } from "@/components/assist/hooks";
 
 /**
  * "Make a skill" from anywhere under the studio layout (the result ⋯ menu in the Library, the feeds and the viewer; the
@@ -13,7 +13,7 @@ interface SkillBuilderApi {
   open: (ids: string[]) => void;
   /** Draft a skill from an Assist chat: the plans that ran in it (W3, "Save as skill"). */
   openChat: (thread: string) => void;
-  /** Draft a skill from a canvas page, saved first (W5, the canvas's "Save as skill"). */
+  /** Draft a skill from a canvas (one of its pages): its model nodes as steps (W5, "Save as skill"). */
   openCanvas: (canvas: string, page?: string) => void;
 }
 
@@ -34,7 +34,7 @@ export function SkillBuilderProvider({ children }: { children: React.ReactNode }
   return (
     <Ctx.Provider value={api}>
       {children}
-      {source && <SkillBuilder key={sourceKey(source)} source={source} onClose={() => setSource(null)} />}
+      {source && <SkillBuilder key={"thread" in source ? `chat:${source.thread}` : "canvas" in source ? `canvas:${source.canvas}:${source.page ?? ""}` : source.generations.join(",")} source={source} onClose={() => setSource(null)} />}
     </Ctx.Provider>
   );
 }

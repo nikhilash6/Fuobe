@@ -31,9 +31,8 @@ import { defineTool, type JobPlace, type ResultContent, type ToolContext, type T
 // Fills STUDIO_ROUTES with the studio modules (Layers, Shorts, dub, Faceless, Ads, Captions).
 import "./studio-routes";
 import { SKILL_TOOLS } from "./skill-tools";
+import { SOUND_TOOLS } from "./sound-tools";
 import { STUDIO_TOOLS } from "./studio-tools";
-// originals (o/dbs-d9): split_soundtrack and remove_dialogue
-import { SOUNDTRACK_TOOLS } from "./studio-tools";
 
 export type { ToolContext, ToolOutcome };
 
@@ -104,7 +103,7 @@ const searchModels = defineTool({
       .string()
       .optional()
       .describe(
-        "Operation id to filter by, e.g. t2i, edit, t2v, i2v, flf2v, ref2v, extend, lipsync, avatar, tts, upscale-image, layers, text-layers, trim, transcribe, captions, mux, separate-audio, translate, write, image-to-3d, refine-3d, splat. separate-audio models return audio stems (meta.stem): voice (the dialogue) and background (everything else); DBS also returns music and effects (background = music & effects). For a whole split or a remix in one call use split_soundtrack, for a video without its dialogue remove_dialogue.",
+        "Operation id to filter by, e.g. t2i, edit, t2v, i2v, flf2v, ref2v, extend, lipsync, avatar, tts, upscale-image, layers, text-layers, trim, transcribe, captions, mux, separate-audio, translate, write, image-to-3d, refine-3d, splat. separate-audio splits a soundtrack into stems named in each output's stem: voice (the dialogue) and background (everything else); DBS (oss-dbs-separate) also makes music and effects, so background is music & effects together. split_soundtrack and remove_dialogue do this in one call.",
       ),
     query: z.string().optional().describe("Words to match in the model name, vendor or description, e.g. 'kling', 'cheap', 'photoreal'."),
   }),
@@ -271,7 +270,9 @@ const Job = z.object({
   end_image: ref.optional().describe("End frame (first-and-last-frame video)."),
   video: ref.optional().describe("Input video (extend, edit, lipsync, upscale, trim, captions, transcribe…)."),
   audio: ref.optional().describe("Input audio (lipsync, avatar, transcribe, separate-audio, mux; for voice-change the recording to re-voice)."),
-  background_audio: ref.optional().describe("Mux: a second track mixed under the audio — the background stem (music & effects) from separate-audio, DBS's music or effects stem alone, or a music bed."),
+  background_audio: ref
+    .optional()
+    .describe("Mux: a second track mixed under the audio — the background stem from separate-audio (music & effects, everything but the talking; DBS also makes music and effects stems on their own), or a music bed."),
   voice_audio: ref.optional().describe("A recording of the voice to speak with (voice-cloning text to speech) or to change into (voice-change)."),
   model3d: ref
     .optional()
@@ -609,9 +610,7 @@ export const getTool = (name: string) => TOOLS.find((t) => t.name === name);
 
 // Skills, memory and project sources; then whole studios (layers, restyle, dub, faceless, ads, captions); then saved
 // skills that run by themselves (run_skill).
-TOOLS.push(...CONTEXT_TOOLS, ...STUDIO_TOOLS, ...SKILL_TOOLS);
-// originals (o/dbs-d9): Split soundtrack and Remove dialogue in one call.
-TOOLS.push(...SOUNDTRACK_TOOLS);
+TOOLS.push(...CONTEXT_TOOLS, ...STUDIO_TOOLS, ...SOUND_TOOLS, ...SKILL_TOOLS);
 
 /** The approval card's heading for one gated call. */
 export function cardTitle(name: string, input: unknown): string {

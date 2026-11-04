@@ -1,0 +1,1128 @@
+/*
+ * Home's first screen (home-bento.tsx): a headline over a grid of tiles, one per kind of media. The sheet is global,
+ * as every stylesheet here is, so each class starts with hb- (home-bento-classes.ts).
+ *
+ * Layout: grid areas per width, so every tile's box comes from the grid (aspect ratios on a phone, fixed rows on a
+ * tablet, a height that fills the screen from lg), never from its media: nothing moves when a picture or clip loads.
+ *
+ * Motion: nothing moves until BentoMotion (bento-islands.tsx) sets data-play on the section: "1" while it is on
+ * screen, the page has loaded and previews aren't paused; "0" once paused or scrolled away (the animations freeze where
+ * they are). Without it (before load, reduced motion, Save-Data) every tile rests on its still frame.
+ *
+ * Accent: every glow, line, caret, dot and edge in the grid is the theme's --primary; the headline's accent is its own.
+ */
+
+.hb-bento {
+  --bento-gap: 12px;
+  --bento-accent: var(--primary);
+  --bento-glow: color-mix(in oklch, var(--primary) 30%, transparent);
+  /*
+   * The headline's two sizes (--l1 "Make anything:", --l2 the line under it): 68 / 28 px at 390, 112 / 42 at 768,
+   * 150 / 54 at 1024 and 190 / 68 from 1280, in a straight line between those widths, so nothing jumps.
+   */
+  --l1: 17.44vw;
+  --l2: 7.18vw;
+  /* From the bar to "Make anything:", and from the headline to the grid. */
+  --head-top: 28px;
+  --head-gap: 20px;
+  scroll-margin-top: 1rem;
+  /*
+   * PageShell's top padding (16 px; 48 px from md) is taken back, so the tops of the headline's letters sit --head-top
+   * under the bar (they start 0.026 of the size into the line).
+   */
+  margin-top: calc(var(--head-top) - 1rem - var(--l1) * 0.026);
+}
+@media (min-width: 390px) {
+  .hb-bento {
+    --l1: calc(68px + (100vw - 390px) * 0.1164);
+    --l2: calc(28px + (100vw - 390px) * 0.037);
+  }
+}
+@media (min-width: 768px) {
+  .hb-bento {
+    --l1: calc(112px + (100vw - 768px) * 0.1484);
+    --l2: calc(42px + (100vw - 768px) * 0.0469);
+    --head-top: 40px;
+    --head-gap: 28px;
+    margin-top: calc(var(--head-top) - 3rem - var(--l1) * 0.026);
+  }
+}
+@media (min-width: 1024px) {
+  .hb-bento {
+    --bento-gap: 14px;
+    /*
+     * All eight tiles stay on the first screen, the grid at least --grid-min tall: on a short screen (under about 860
+     * px of page) the headline gives way first, at the same proportions. --l1-room: the most "Make anything:" can be
+     * for that, 1.33 being the headline's height in --l1 (both lines: see --bento-head, with --l2 at 0.358 of it).
+     */
+    --grid-min: 450px;
+    --l1-room: calc((var(--content-h) - var(--grid-min) - 16px - var(--head-top) - var(--head-gap)) / 1.33);
+    /* Never below 96px: in a short window the grid runs on below the fold instead of the headline shrinking away. */
+    --l1: max(96px, min(calc(150px + (100vw - 1024px) * 0.1563), var(--l1-room)));
+    --l2: calc(var(--l1) * 0.358);
+    /* The headline's height (line 1's box, the gap under its descenders, line 2's box), which the grid takes off the screen's. */
+    --bento-head: calc(var(--l1) * 0.986 + var(--l2) * 0.96 + var(--head-gap));
+  }
+}
+@media (min-width: 1280px) {
+  .hb-bento {
+    --l1: max(96px, min(190px, var(--l1-room)));
+  }
+}
+
+/* ---------------------------------------------------------------- headline */
+
+/*
+ * "Make anything:" at display size, set tight and a touch heavier than the face's one weight (a hairline stroke in its
+ * own colour); the second line in italic under it, right-aligned to the grid's edge from 768, with only "finished
+ * film," in the accent. Each line rises into place once as the page opens (transform and opacity only, from 40 %, so
+ * the words are on the first paint), and the accent's glow fades in after; none of it under reduced motion.
+ */
+.hb-head {
+  position: relative;
+  margin-bottom: var(--head-gap);
+  --ink-1: #0b0b0f;
+  --ink-2: #0b0b0f;
+  --ink-accent: #5b45e0;
+  --ink-note: #6b6875;
+}
+.dark .hb-head {
+  --ink-1: #fff;
+  --ink-2: #f4f1ff;
+  --ink-accent: #c9bfff;
+  --ink-note: #8a8794;
+}
+.hb-h1 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: var(--l1);
+  line-height: 0.86;
+  letter-spacing: -0.035em;
+  color: var(--ink-1);
+}
+.hb-line1,
+.hb-line2 {
+  display: block;
+}
+.hb-line1 {
+  /* The M's stem on the grid's left edge (the face's side bearing, taken back). */
+  margin-left: -0.04em;
+  white-space: nowrap;
+  -webkit-text-stroke: 0.008em currentColor;
+}
+/* Line 2 tucks in just under the descenders of "anything" (0.126 of line 1's size under its line), clear of them. */
+.hb-line2 {
+  margin-top: calc(var(--l1) * 0.126 + var(--l2) * 0.06);
+  font-size: var(--l2);
+  font-style: italic;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+  color: var(--ink-2);
+}
+/*
+ * The page's HTML can arrive in parts, and the browser draws what it has: a second line cut after "From an idea to a"
+ * would sit at the right edge alone, then slide left as the rest comes. It stays unseen until its end mark is in (a
+ * browser without :has() drops the rule and shows it as before).
+ */
+.hb-line2:not(:has(> .hb-end)) {
+  visibility: hidden;
+}
+/* A phone: two lines, the second starting at "finished". */
+.hb-l2b {
+  display: block;
+}
+.hb-accent {
+  position: relative;
+  color: var(--ink-accent);
+}
+@media (min-width: 768px) {
+  .hb-line2 {
+    text-align: right;
+    white-space: nowrap;
+    line-height: 0.9;
+  }
+  .hb-l2b {
+    display: inline;
+  }
+}
+
+/* The glow, on a layer of its own (the same words, see-through) so it can fade in on opacity alone. */
+.dark .hb-accent::after {
+  content: attr(data-glow) / "";
+  position: absolute;
+  inset: 0;
+  white-space: nowrap;
+  color: transparent;
+  text-shadow: 0 0 40px rgb(185 173 255 / 0.22);
+  pointer-events: none;
+}
+
+.hb-line1 {
+  animation: hb-rise 700ms var(--ease-enter, cubic-bezier(0.08, 0.82, 0.17, 1)) both;
+}
+.hb-line2 {
+  animation: hb-rise 900ms var(--ease-enter, cubic-bezier(0.08, 0.82, 0.17, 1)) 120ms both;
+}
+.dark .hb-accent::after {
+  animation: hb-glow 1.2s ease 500ms both;
+}
+@keyframes hb-rise {
+  from {
+    opacity: 0.4;
+    transform: translateY(0.12em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes hb-glow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hb-line1,
+  .hb-line2,
+  .dark .hb-accent::after {
+    animation: none;
+  }
+}
+
+/*
+ * The note under the headline: in the flow under the second line up to lg; from lg in the room right of
+ * "Make anything:", its last line on that line's baseline, so it takes no height from the grid.
+ */
+.hb-aside {
+  max-width: 300px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-note);
+  text-wrap: pretty;
+}
+@media (min-width: 1024px) {
+  .hb-aside {
+    position: absolute;
+    top: 0;
+    right: 0;
+    /* Down to line 1's baseline (0.768 of its size under the top of its line), and the note's own descent. */
+    height: calc(var(--l1) * 0.768 + 5px);
+    width: min(300px, calc(100% - var(--l1) * 4.86 - 32px));
+    max-width: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    font-size: 14px;
+  }
+}
+
+/* ---------------------------------------------------------------- grid */
+
+.hb-grid {
+  display: grid;
+  gap: var(--bento-gap);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    "video video"
+    "image three"
+    "restore restore"
+    "live audio"
+    "canvas canvas"
+    "numbers numbers";
+}
+@media (max-width: 767.98px) {
+  .hb-video {
+    aspect-ratio: 3 / 2;
+  }
+  .hb-image,
+  .hb-three,
+  .hb-live,
+  .hb-audio {
+    aspect-ratio: 1;
+  }
+  .hb-restore {
+    aspect-ratio: 2 / 1;
+  }
+  .hb-canvas {
+    aspect-ratio: 16 / 9;
+  }
+}
+@media (min-width: 768px) {
+  .hb-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(4, 210px) auto;
+    grid-template-areas:
+      "video video image"
+      "video video three"
+      "restore restore audio"
+      "live canvas canvas"
+      "numbers numbers numbers";
+  }
+}
+@media (min-width: 1024px) {
+  .hb-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    height: clamp(var(--grid-min), calc(var(--content-h) - var(--bento-head) - var(--head-top) - 3.25rem), 760px);
+    grid-template-areas:
+      "video video image audio"
+      "video video three restore"
+      "numbers live canvas restore";
+  }
+}
+.hb-video {
+  grid-area: video;
+}
+.hb-image {
+  grid-area: image;
+}
+.hb-audio {
+  grid-area: audio;
+}
+.hb-three {
+  grid-area: three;
+}
+.hb-restore {
+  grid-area: restore;
+}
+.hb-numbers {
+  grid-area: numbers;
+}
+.hb-live {
+  grid-area: live;
+}
+.hb-canvas {
+  grid-area: canvas;
+}
+
+/* ---------------------------------------------------------------- a tile */
+
+.hb-tile {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  background: var(--media);
+  color: #fff;
+  text-decoration: none;
+  /* Transparent, so the box-shadow ring shows; forced colours (Windows High Contrast) paint it instead. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  container-type: inline-size;
+  transition:
+    border-color var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard),
+    box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .hb-tile:hover {
+    border-color: rgb(255 255 255 / 26%);
+    transform: translateY(-2px);
+  }
+}
+.hb-tile:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px var(--ring);
+}
+@media (forced-colors: active) {
+  .hb-tile:focus-visible {
+    outline-color: CanvasText;
+  }
+}
+.hb-fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.hb-pic {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+/* White words read at 4.5:1 over any frame: the lower part of each tile is shaded. */
+.hb-shade {
+  position: absolute;
+  inset: auto 0 0;
+  height: 62%;
+  background: linear-gradient(to top, rgb(0 0 0 / 90%), rgb(0 0 0 / 55%) 45%, transparent);
+  pointer-events: none;
+}
+.hb-copy {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+}
+.hb-meta {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 80%);
+}
+.hb-title {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.hb-cta {
+  display: none;
+  margin-top: 8px;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgb(255 255 255 / 85%);
+  transition: color 0.2s ease;
+}
+.hb-cta svg {
+  transition: transform 0.2s ease;
+}
+.hb-tile:hover .hb-cta,
+.hb-tile:focus-visible .hb-cta {
+  color: #fff;
+}
+.hb-tile:hover .hb-cta svg,
+.hb-tile:focus-visible .hb-cta svg {
+  transform: translateX(2px);
+}
+/* A small tile (a phone's square) has no room for the link's words: an arrow in its corner says it opens. */
+.hb-corner {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 45%);
+  color: #fff;
+  pointer-events: none;
+}
+/* A narrow tile (a phone's square) keeps to its title: the small line would wrap over the picture. */
+@container (max-width: 199.98px) {
+  .hb-meta {
+    display: none;
+  }
+}
+@container (min-width: 250px) {
+  .hb-title {
+    font-size: 24px;
+  }
+}
+@container (min-width: 220px) {
+  .hb-copy {
+    left: 18px;
+    right: 18px;
+    bottom: 16px;
+  }
+  .hb-meta {
+    font-size: 11px;
+  }
+  .hb-cta {
+    display: inline-flex;
+  }
+  .hb-corner {
+    display: none;
+  }
+}
+@container (min-width: 360px) {
+  .hb-title {
+    font-size: 28px;
+  }
+}
+@container (min-width: 460px) {
+  .hb-copy {
+    left: 26px;
+    right: 26px;
+    bottom: 26px;
+  }
+  .hb-video .hb-title {
+    font-size: 40px;
+  }
+  .hb-meta.hb-big {
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+}
+@container (min-width: 540px) {
+  .hb-video .hb-title {
+    font-size: 44px;
+  }
+}
+
+/*
+ * From lg every tile's box is fixed by the grid, so a tile can be measured both ways: a short one (1024 x 768) drops
+ * its small line over the title, and the canvas tile draws its board smaller, so nothing overlaps.
+ */
+@media (min-width: 1024px) {
+  .hb-tile {
+    container-type: size;
+  }
+}
+@container (max-height: 200px) {
+  .hb-meta {
+    display: none;
+  }
+  .hb-board {
+    width: min(200px, 100% - 28px);
+  }
+  .hb-node-label {
+    font-size: 10px;
+  }
+}
+
+/* ---------------------------------------------------------------- video */
+
+.hb-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: rgb(13 13 15 / 72%);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.hb-progress {
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: rgb(255 255 255 / 16%);
+  pointer-events: none;
+}
+.hb-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--bento-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  box-shadow: 0 0 10px var(--bento-glow);
+}
+.hb-clip {
+  position: absolute;
+  inset: 0;
+}
+.hb-clip video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.2s ease;
+}
+.hb-clip video:not([data-ready]) {
+  opacity: 0;
+}
+/* The video tile's reel: the next clip fades in over the one ending (REEL_FADE_MS, src/lib/home-reel.ts). */
+.hb-clip video[data-in] {
+  transition-duration: 0.5s;
+}
+
+/* ---------------------------------------------------------------- image: a slow push in */
+
+.hb-kenburns {
+  transform-origin: 50% 40%;
+}
+.hb-bento[data-play] .hb-kenburns {
+  animation: bento-ken 16s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+.hb-bento[data-play="1"] .hb-kenburns {
+  animation-play-state: running;
+}
+@keyframes bento-ken {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.06);
+  }
+}
+
+/* ---------------------------------------------------------------- audio: the sample's own loudness */
+
+.hb-audio {
+  background:
+    radial-gradient(ellipse 85% 60% at 50% 32%, var(--bento-glow), transparent 72%),
+    var(--media);
+}
+.hb-wave {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 14%;
+  height: 40%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+@container (min-width: 220px) {
+  .hb-wave {
+    left: 18px;
+    right: 18px;
+    top: 12%;
+  }
+}
+.hb-wave > i {
+  flex: 1 1 0;
+  min-width: 1px;
+  height: calc(var(--h) * 100%);
+  border-radius: 2px;
+  background: var(--bento-accent);
+  opacity: 0.7;
+}
+.dark .hb-wave > i {
+  background: color-mix(in oklch, var(--bento-accent) 70%, white);
+}
+.hb-bento[data-play] .hb-wave > i {
+  opacity: 0.45;
+  animation: bento-bar var(--wave-s, 8s) linear infinite;
+  animation-delay: var(--d);
+  animation-play-state: paused;
+}
+.hb-bento[data-play="1"] .hb-wave > i {
+  animation-play-state: running;
+}
+@keyframes bento-bar {
+  0% {
+    opacity: 1;
+    transform: scaleY(1.06);
+  }
+  3% {
+    opacity: 1;
+    transform: scaleY(0.94);
+  }
+  7% {
+    opacity: 1;
+    transform: scaleY(1.04);
+  }
+  14%,
+  100% {
+    opacity: 0.45;
+    transform: scaleY(1);
+  }
+}
+.hb-playhead {
+  position: absolute;
+  inset: -8% 0;
+  pointer-events: none;
+  transform: translateX(-100%);
+  opacity: 0;
+}
+.hb-playhead::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 10px var(--bento-glow);
+}
+.hb-bento[data-play] .hb-playhead {
+  opacity: 1;
+  animation: bento-sweep var(--wave-s, 8s) linear infinite;
+  animation-play-state: paused;
+}
+.hb-bento[data-play="1"] .hb-playhead {
+  animation-play-state: running;
+}
+@keyframes bento-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* ---------------------------------------------------------------- 3D: the clip turns the model on its own disc */
+
+.hb-three .hb-shade {
+  height: 45%;
+}
+
+/* ---------------------------------------------------------------- restore: a split that sweeps */
+
+.hb-before {
+  clip-path: inset(0 50% 0 0);
+}
+/* The line moves by transform, across the tile's own width (cqw: the tile is a container), so it never lays out again. */
+.hb-split {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(50cqw);
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  box-shadow: 0 0 10px rgb(0 0 0 / 50%);
+  pointer-events: none;
+}
+.hb-split > span {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 999px;
+  background: #fff;
+  color: #0d0d0f;
+}
+.hb-bento[data-play] .hb-before {
+  animation: bento-wipe 9s ease-in-out infinite;
+  animation-play-state: paused;
+}
+.hb-bento[data-play] .hb-split {
+  animation: bento-split 9s ease-in-out infinite;
+  animation-play-state: paused;
+}
+.hb-bento[data-play="1"] .hb-before,
+.hb-bento[data-play="1"] .hb-split {
+  animation-play-state: running;
+}
+@keyframes bento-wipe {
+  0%,
+  100% {
+    clip-path: inset(0 50% 0 0);
+  }
+  25% {
+    clip-path: inset(0 28% 0 0);
+  }
+  75% {
+    clip-path: inset(0 72% 0 0);
+  }
+}
+@keyframes bento-split {
+  0%,
+  100% {
+    transform: translateX(50cqw);
+  }
+  25% {
+    transform: translateX(72cqw);
+  }
+  75% {
+    transform: translateX(28cqw);
+  }
+}
+.hb-side {
+  position: absolute;
+  top: 12px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: rgb(13 13 15 / 78%);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.hb-side.hb-left {
+  left: 12px;
+}
+.hb-side.hb-right {
+  right: 12px;
+}
+/* The reel's clips and its still: a wide, short tile crops from the bottom, so the head always shows (a clip framed
+   otherwise sets its own object-position: HOME_BENTO_REEL). */
+.hb-video .hb-fill,
+.hb-video .hb-clip video {
+  object-position: 50% 0%;
+}
+/* The pair's framing: a phone's and a tablet's wide tile keeps her face in its upper half; from lg the tall crop is centred on her. */
+.hb-restore .hb-fill {
+  object-position: 50% 12%;
+}
+@media (min-width: 1024px) {
+  .hb-restore .hb-fill {
+    object-position: 50% 30%;
+  }
+}
+
+/* ---------------------------------------------------------------- numbers */
+
+.hb-numbers {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 18px 16px;
+  background:
+    linear-gradient(150deg, var(--bento-glow) 0%, transparent 62%),
+    var(--media);
+}
+.hb-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.hb-figures > div {
+  min-width: 0;
+}
+.hb-figures dd {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(30px, 17cqw, 54px);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.hb-figures dt {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: rgb(255 255 255 / 78%);
+}
+.hb-figures > div {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+}
+.hb-numbers-line {
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgb(255 255 255 / 72%);
+  text-wrap: pretty;
+}
+.hb-numbers .hb-cta {
+  display: flex;
+  width: fit-content;
+  margin-top: 6px;
+}
+.hb-numbers-line {
+  display: block;
+}
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .hb-numbers {
+    flex-direction: row;
+    align-items: flex-end;
+    padding: 20px 24px;
+  }
+  .hb-figures {
+    flex: 1 1 auto;
+    max-width: 420px;
+  }
+  .hb-numbers-foot {
+    max-width: 260px;
+    text-align: right;
+  }
+  .hb-numbers-foot .hb-cta {
+    margin-left: auto;
+  }
+}
+/*
+ * From lg the tile is a small square: each figure is a row, its number then its word on one line, the numbers as large
+ * as the tile's height lets them be. The extra line shows only on a tile tall enough for it (1920 x 1080).
+ */
+@media (min-width: 1024px) {
+  .hb-numbers {
+    gap: 8px;
+  }
+  .hb-figures {
+    grid-template-columns: auto minmax(0, 1fr);
+    /* Each word comes before its number in the markup: dense puts the number back in its own row. */
+    grid-auto-flow: row dense;
+    align-items: baseline;
+    column-gap: 10px;
+    row-gap: clamp(2px, 2.5cqh, 8px);
+  }
+  .hb-figures > div {
+    display: contents;
+  }
+  .hb-figures dd {
+    grid-column: 1;
+    font-size: clamp(26px, 19cqh, 48px);
+    text-align: right;
+  }
+  .hb-figures dt {
+    grid-column: 2;
+    margin: 0;
+    font-size: 13.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hb-numbers-line {
+    display: none;
+  }
+}
+@container (min-height: 236px) {
+  .hb-numbers-line {
+    display: block;
+  }
+}
+
+/* ---------------------------------------------------------------- live edit */
+
+.hb-pill {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  /* A field, never an empty capsule: it keeps its width between phrases. */
+  min-width: min(calc(100% - 24px), 150px);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: rgb(13 13 15 / 82%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  font-size: 12.5px;
+  pointer-events: none;
+}
+.hb-pill > svg {
+  flex: none;
+  color: var(--bento-accent);
+}
+.dark .hb-pill > svg {
+  color: color-mix(in oklch, var(--bento-accent) 60%, white);
+}
+/* The words: their end (where the caret is) always shows; a phrase longer than the pill slides left, as a field does. */
+.hb-typed {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-left: -8px;
+  padding-left: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  mask-image: linear-gradient(to right, transparent, #000 8px);
+}
+.hb-caret {
+  flex: none;
+  width: 2px;
+  height: 15px;
+  margin-left: 1px;
+  background: var(--bento-accent);
+}
+.dark .hb-caret {
+  background: color-mix(in oklch, var(--bento-accent) 55%, white);
+}
+/* The caret always shows; it blinks only while the tile plays. */
+.hb-bento[data-play] .hb-caret {
+  animation: bento-blink 1s step-end infinite;
+  animation-play-state: paused;
+}
+.hb-bento[data-play="1"] .hb-caret {
+  animation-play-state: running;
+}
+@keyframes bento-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.hb-frame {
+  transition: opacity 0.32s ease;
+}
+.hb-frame:not([data-on]) {
+  opacity: 0;
+}
+.hb-frame[data-back] {
+  transition-duration: 0.25s;
+}
+
+/* ---------------------------------------------------------------- canvas: the board, drawn */
+
+.hb-canvas {
+  background-color: var(--media);
+  background-image: radial-gradient(rgb(255 255 255 / 9%) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+/*
+ * The board keeps its plan's shape (home-bento.tsx, BOARD: 260 x 88) and sits centred in the space above the tile's
+ * words (the words take about 78 px at the foot of the tile).
+ */
+.hb-board {
+  position: absolute;
+  left: 50%;
+  top: calc((100% - 78px) / 2);
+  translate: -50% -50%;
+  width: min(250px, 100% - 24px);
+  aspect-ratio: 260 / 88;
+  pointer-events: none;
+}
+@container (min-width: 440px) {
+  .hb-board {
+    width: 300px;
+  }
+}
+.hb-node {
+  position: absolute;
+  display: block;
+}
+.hb-box {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #222228;
+  border: 1px solid rgb(255 255 255 / 18%);
+}
+.hb-box img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hb-box.hb-out {
+  border-color: var(--bento-accent);
+  box-shadow: 0 0 16px var(--bento-glow);
+}
+.hb-film-mark {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+}
+.hb-node-label {
+  display: block;
+  margin: 4px -10px 0;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: rgb(255 255 255 / 82%);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hb-step {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  border-radius: 7px;
+  background: #222228;
+  border: 1px solid rgb(255 255 255 / 18%);
+  font-size: 10.5px;
+  line-height: 1;
+  color: rgb(255 255 255 / 88%);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.hb-step > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hb-step svg {
+  flex: none;
+  color: color-mix(in oklch, var(--bento-accent) 55%, white);
+}
+/* A narrow tile keeps the steps words whole: the icons step aside. */
+@container (max-width: 259.98px) {
+  .hb-step svg {
+    display: none;
+  }
+}
+.hb-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.hb-edges path {
+  fill: none;
+  stroke: var(--bento-accent);
+  stroke-width: 1.6;
+  opacity: 0.6;
+}
+.dark .hb-edges path {
+  stroke: color-mix(in oklch, var(--bento-accent) 70%, white);
+}
+.hb-bento[data-play] .hb-edges path {
+  opacity: 1;
+  stroke-dasharray: 4 5;
+  animation: bento-flow 1.2s linear infinite;
+  animation-play-state: paused;
+}
+.hb-bento[data-play="1"] .hb-edges path {
+  animation-play-state: running;
+}
+@keyframes bento-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+/* ---------------------------------------------------------------- the line under the grid */
+
+.hb-foot {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+/* Reduced motion: whatever data-play says, nothing moves by itself, and a hover doesn't lift a tile. */
+@media (prefers-reduced-motion: reduce) {
+  .hb-tile,
+  .hb-frame {
+    transition: none;
+  }
+  .hb-tile:hover {
+    transform: none;
+  }
+  .hb-bento .hb-kenburns,
+  .hb-bento .hb-wave > i,
+  .hb-bento .hb-playhead,
+  .hb-bento .hb-before,
+  .hb-bento .hb-split,
+  .hb-bento .hb-caret,
+  .hb-bento .hb-edges path {
+    animation: none !important;
+  }
+}

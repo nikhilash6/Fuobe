@@ -1,0 +1,152 @@
+/* ---------------------------------------------------------------------------------------------
+ * Navigation states: one system for every row, item, tab and tile of the app frame (the top bar,
+ * its menus and launcher, search, the Home goal row, the phone's tabs and sheets).
+ *
+ *   highlight   the one row the pointer is on, or the one keyboard focus is on: --nav-hi fill.
+ *               Never both: moving the mouse hands the highlight to the pointer, a key hands it
+ *               back (html[data-input], set by nav/input-modality.ts; before any input both may show). In menus and search
+ *               the mouse moves the keyboard's own highlight (Radix data-highlighted, cmdk data-selected), so CSS :hover
+ *               never paints their items: the list's one highlight stays where the mouse or the keys left it.
+ *               Controls outside .nav-row hover with the nav-hover: variant (globals.css), which follows the same lead.
+ *   focus ring  keyboard only: 2 px --ring outline drawn inside the item (never bleeds into a gutter).
+ *               Filled buttons (.nav-focus-out) draw it 2 px outside instead.
+ *   pressed     --nav-press fill while the mouse button or finger is down (no grey tap flash).
+ *   current     the open page: never a fill. A 3 px --nav-mark pip (.nav-mark-start on rows,
+ *               .nav-mark-under on bar items and tiles), the icon in --nav-mark, the label semibold.
+ *   open        a bar trigger whose menu is open: foreground words and the turned chevron, never a fill (the menu's
+ *               highlighted row is the one fill on screen).
+ *   disabled    aria-disabled=true / data-disabled (Radix "", cmdk "true") / :disabled: 45 % opacity, no
+ *               highlight, no press.
+ *
+ * Unlayered on purpose: it wins over the utilities a primitive brings (focus:bg-accent), so every
+ * surface shows the same states whatever its markup.
+ * ------------------------------------------------------------------------------------------- */
+:root {
+  --nav-hi: oklch(0.235 0.002 286 / 6%);
+  --nav-press: oklch(0.235 0.002 286 / 11%);
+  --nav-mark: var(--brand-text);
+}
+.dark {
+  --nav-hi: oklch(1 0 0 / 8%);
+  --nav-press: oklch(1 0 0 / 13%);
+}
+
+.nav-row,
+.nav-focus,
+.nav-focus-out {
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-row {
+  position: relative;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nav-row {
+    transition: background-color 120ms ease, color 120ms ease;
+  }
+}
+
+/* Highlight: the pointer's row (devices that hover, while the mouse leads) ... */
+@media (hover: hover) {
+  html:not([data-input="keyboard"]) .nav-row:not([cmdk-item], [role^="menuitem"], :disabled, [aria-disabled="true"], [data-disabled=""], [data-disabled="true"]):hover {
+    background-color: var(--nav-hi);
+  }
+}
+/* ... or the keyboard's (and a menu's own highlighted row, which the mouse moves too). */
+html:not([data-input="pointer"]) .nav-row:focus-visible,
+.nav-row[data-highlighted],
+.nav-row[data-selected="true"] {
+  background-color: var(--nav-hi);
+}
+
+/* Pressed (as specific as the hover rule, and after it: it wins while the button or finger is down). */
+html .nav-row:not(:disabled, [aria-disabled="true"], [data-disabled=""], [data-disabled="true"]):active:active {
+  background-color: var(--nav-press);
+}
+
+/* Focus ring: keyboard only, inside the item. */
+html:not([data-input="pointer"]) :is(.nav-row, .nav-focus):focus-visible,
+html:not([data-input="pointer"]) .nav-row:is([data-highlighted], [data-selected="true"]) {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+html:not([data-input="pointer"]) .nav-focus-out:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Disabled. */
+.nav-row:is(:disabled, [aria-disabled="true"], [data-disabled=""], [data-disabled="true"]) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Current page (aria-current, data-current; data-active on a bar menu that holds the page): a pip, never a fill. The pip holder is the row itself or a part of it (a card's text). */
+.nav-mark-start,
+.nav-mark-under {
+  position: relative;
+}
+:is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active]) :is(.nav-mark-start, .nav-mark-under)::before,
+:is(.nav-mark-start, .nav-mark-under):is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active])::before {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  background-color: var(--nav-mark);
+  pointer-events: none;
+}
+:is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active]) .nav-mark-start::before,
+.nav-mark-start:is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active])::before {
+  inset-inline-start: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+}
+:is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active]) .nav-mark-under::before,
+.nav-mark-under:is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active])::before {
+  bottom: 3px;
+  left: 50%;
+  width: 16px;
+  height: 3px;
+  margin-left: -8px;
+}
+:is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active]) .nav-icon,
+.nav-mark-start:is(.nav-row[aria-current="page"], .nav-row[data-current]) > svg:first-child {
+  color: var(--nav-mark);
+}
+/* A split bar item (a name and a chevron: Create, Studios, Motions & effects): the pip sits under the whole pill, as under
+   a plain item with a chevron, inside the area or on its own page. */
+[data-bar-split].nav-mark-under:is([data-active], :has(> [aria-current="page"]))::before {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  width: 16px;
+  height: 3px;
+  margin-left: -8px;
+  border-radius: 9999px;
+  background-color: var(--nav-mark);
+  pointer-events: none;
+}
+/* More, below 1280 px, holds Apps and Motions & effects: their page marks it there. */
+@media (max-width: 1279.98px) {
+  .nav-row.nav-mark-under[data-narrow]::before {
+    content: "";
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    width: 16px;
+    height: 3px;
+    margin-left: -8px;
+    border-radius: 9999px;
+    background-color: var(--nav-mark);
+    pointer-events: none;
+  }
+}
+@media (forced-colors: active) {
+  [data-bar-split].nav-mark-under:is([data-active], :has(> [aria-current="page"]))::before,
+  :is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active]) :is(.nav-mark-start, .nav-mark-under)::before,
+  :is(.nav-mark-start, .nav-mark-under):is(.nav-row[aria-current="page"], .nav-row[data-current], .nav-row[data-active])::before {
+    background-color: Highlight;
+  }
+}

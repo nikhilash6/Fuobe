@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Edit video (the generic v2v studio) prices a clip edit that keeps the clip's length (Happy Horse, Runway Aleph,
@@ -9,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * window before anything is paid for (Happy Horse reads up to 60 s but returns at most 15 s, billed for all of it).
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-edit-video-"));
+const dir = tempDir("fuobe-edit-video-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -56,9 +54,6 @@ const HH = "happy-horse-video-edit";
 beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
-});
-afterAll(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 describe("Edit video: clip edits priced on the clip, inside the model's window", () => {

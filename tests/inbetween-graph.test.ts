@@ -1,12 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput } from "@/lib/catalog/types";
 import { gapSelection, keyTimes, timingFor, totalFrames, WORKFLOW_TIMING, type InbetweenTiming } from "@/lib/inbetween";
+import { tempDir } from "./helpers/temp-dir";
 
 // Fuobe Animation on your GPU: N keyframes → N − 1 Wan 2.2 first/last-frame passes in one prompt on one set of loaders.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-inbetween-graph-"));
+const tmp = tempDir("fuobe-inbetween-graph-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { getWorkflow, prepareWorkflow } = await import("@/server/providers/comfyui");
@@ -15,7 +13,6 @@ const { planGeneration } = await import("@/lib/catalog/plan");
 const { onEngine } = await import("@/lib/catalog/engines");
 const { getPreset } = await import("@/lib/catalog");
 const planOn = (engine: "open" | "cloud", req: Parameters<typeof planGeneration>[0]) => planGeneration(req, (id) => onEngine(getModel(id)!, engine), getPreset);
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 type Wf = Record<string, { class_type: string; inputs: Record<string, unknown> }>;
 const keys = (n: number) => Array.from({ length: n }, (_, i) => `key${i + 1}.png`);

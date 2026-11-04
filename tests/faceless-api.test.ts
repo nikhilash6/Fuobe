@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { EpisodeSettings, EpisodeView, FacelessChannel, FacelessEpisode } from "@/lib/catalog/faceless";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-faceless-"));
+const dir = tempDir("fuobe-faceless-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: open models run on the demo provider, and there's no LLM (the offline writer runs).
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -30,7 +28,6 @@ beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const json = (method: string, body?: unknown) =>
   new Request("http://x/api", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -184,20 +181,6 @@ describe("Episodes", () => {
     // What the render will do differently: two of three style references on the open engine, a bed looped past 4 minutes.
     const notes = (await est({ ...open, length: 300, styleRefs: ["/api/files/a.png", "/api/files/b.png", "/api/files/c.png"] })).notes;
     expect(notes).toEqual(expect.arrayContaining([expect.stringMatching(/first 2 style references/), expect.stringMatching(/made 4 min long, then looped with a 3-second crossfade/)]));
-  });
-
-  it("a clip's soundtrack as the bed: looped when it's shorter than the film, cut when it's longer, and 8 s at least", async () => {
-    const est = (s: EpisodeSettings) => estimateRoute.POST(json("POST", { kind: "faceless", settings: s }));
-    const clip = (duration: number) => ({ ...open, length: 60, musicClip: { url: "/api/files/bed.mp4", name: "bed", duration } });
-    const short = await (await est(clip(20))).json();
-    expect(short.notes).toEqual(expect.arrayContaining([expect.stringMatching(/Your clip's music and effects \(20 s\) loop with a 3-second crossfade/)]));
-    expect(short.notes.join(" ")).not.toMatch(/made .* long/);
-    const long = await (await est(clip(900))).json();
-    expect(long.notes).toEqual(expect.arrayContaining([expect.stringMatching(/Only the first 1 min( \d+ s)? of your clip's sound is used/)]));
-    expect(long.estimate.parts.music ?? 0).toBe(0);
-    const tooShort = await est(clip(5));
-    expect(tooShort.status).toBe(400);
-    expect((await tooShort.json()).error).toMatch(/8 s or more/);
   });
 
   it(

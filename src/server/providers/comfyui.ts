@@ -34,6 +34,7 @@ import {
   swatchPixels,
   tagMetaBatch,
   whisperLanguage,
+  withLoad3dImages,
   type BindingKey,
   type CaptionCue,
   type ComfyWorkflow,
@@ -46,7 +47,9 @@ import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { IDOL_PACK, IDOL_PACK_CLASS, IDOL_WORKFLOWS, idolGraphValues, idolKept } from "@/lib/av/model3d";
 import { IDOL_VIEWS_NEEDS_PACK, IDOL_VIEWS_PARAM, IDOL_VIEWS_WORKFLOW, idolViewMeta } from "@/lib/av/idol-views";
+import { MOTION_GRAPHS, motionTransferPrompt, neutralPrompt, WORDS_NEEDED } from "@/lib/comfy-prompts";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
+import { checkWatermarkBoxes, COPY as WATERMARK_COPY, MAX_SIDE as MAX_WATERMARK_SIDE, maxSideFor, mergeScanReports, qualityOf, SCAN_EXPAND as WATERMARK_SCAN_EXPAND, KEPT_EXPAND as WATERMARK_KEPT_EXPAND } from "@/lib/watermark";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { expandH3References, h3ReferenceProblem } from "@/lib/h3-references";
 import {
@@ -85,10 +88,12 @@ import { CHARACTER_SWAP, packResolution, samCoords, swapPrompt, SWAP_LORAS, wind
 import { maskMemoryProblem } from "@/lib/catalog/swap-studio";
 import { STUDIO_WORKFLOWS } from "@/lib/catalog/swap-studio-plan";
 import { maskGraph, segmentGraph, type MaskGraphOptions, type SegmentGraphOptions } from "@/lib/swap-studio-graphs";
+import { CONTEXT_LOOP_IDS, OPENJUTSU_IDS, openjutsuGraph, openjutsuLeftOut, runName, type OpenjutsuSettings } from "@/lib/openjutsu-graphs";
 import { RESTORE_EXTRA_KEYS, restoreGraph, restoreJob, type RestoreJob } from "@/lib/restore-graph";
 import { getMaker, makerPrompt, OPEN_TARGET_PROBLEM, ORIGINALS, swapTarget } from "@/lib/catalog/genjutsu";
 import { CLICK_OPEN_PROBLEM, HAND_OFF, REMOVE_SCENE, REVIEW_EXTRA, reuseOf, reviewOfRun, targetPhrase, type RemovalReview } from "@/lib/catalog/remove-object";
 import { H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
+import { RECOLOR_TAP_FIRST, recolorItem, recolorTouches, tapFrame } from "@/lib/catalog/recolor";
 import type { GenInput, MediaKind, ModelRoute, Operation } from "@/lib/catalog/types";
 import { imageSize } from "@/lib/image-size";
 import { probeMedia, type MediaInfo } from "@/lib/media-probe";
@@ -552,11 +557,19 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
     .filter((o) => o.role === "frame")
     .map((o) => parseOcrFrame(textsOf(outputs[o.node]).join("\n")))
     .find(Boolean);
+  // The Watermark Remover's verdict (QWMFinal's report, a PreviewAny): kept on the picture's meta, never a result of its own.
+  const quality = declared
+    .filter((o) => o.role === "quality")
+    .map((o) => qualityOf(textsOf(outputs[o.node]).join("\n")))
+    .find(Boolean);
+  // The Watermark Remover's tile scans (the photo's four quarters): merged into the whole photo's report, never results.
+  const tileSpecs = declared.filter((o) => o.role === "scan-tile");
+  const tileReports = tileSpecs.map((o) => textsOf(outputs[o.node]).join("\n") || null);
   const files: ComfyOutput[] = [];
   const pick = (type: string) => {
     for (const nodeId of order) {
       const spec: ManifestOutput | undefined = declared.find((o) => o.node === nodeId);
-      if (spec?.role === "language" || spec?.role === "frame" || (idolClean && spec?.role === "report")) continue;
+      if (spec?.role === "language" || spec?.role === "frame" || spec?.role === "quality" || spec?.role === "scan-tile" || (idolClean && spec?.role === "report")) continue;
       const ui = outputs[nodeId] ?? {};
       const texts = textsOf(ui);
       const found: { key: string; f: HistoryFile }[] = [];
@@ -571,7 +584,8 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
       }
       // A text output with no file (PreviewAny): keep the words.
       if (!found.length && type === "output" && spec?.kind === "text" && texts.length) {
-        const text = texts.join("\n");
+        const joined = texts.join("\n");
+        const text = spec.role === "report" && tileSpecs.length ? (mergeScanReports(joined, tileReports) ?? joined) : joined;
         files.push(textOutput({ url: dataUrl(Buffer.from(text), "text/plain"), kind: "text", contentType: "text/plain" }, text, spec, language));
         continue;
       }
@@ -594,6 +608,7 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
         if (spec?.role === "layers") Object.assign(meta, { z: i, name: i === 0 ? "Background" : `Layer ${i}` });
         // Idol 3D's four views: one batch, front first, then the object's left, back and right (src/lib/av/idol-views.ts).
         if (spec?.role === "tiles" && manifest?.id === IDOL_VIEWS_WORKFLOW) Object.assign(meta, idolViewMeta(i));
+        if (quality && kind === "image") meta.quality = quality;
         if (Object.keys(meta).length) o.meta = meta;
         files.push(o);
       });
@@ -765,15 +780,6 @@ function oneAsk<T>(key: string, ask: () => Promise<T>): Promise<T> {
 declare global {
   /** The torch device each ComfyUI address reported last (GET /system_stats devices[0].type), and when. */
   var __fuobeComfyDevice: Map<string, { type?: string; at: number }> | undefined;
-}
-
-/**
- * originals (o/dbs-d9): the device comfyDevice last read for the main ComfyUI, without asking it (an Assist card is planned
- * synchronously); undefined when it hasn't been asked yet.
- */
-export function comfyDeviceSeen(): string | undefined {
-  const url = baseUrl("main");
-  return url ? globalThis.__fuobeComfyDevice?.get(url)?.type : undefined;
 }
 
 /**
@@ -962,7 +968,17 @@ export function probeComfySync(timeoutMs = 1500): boolean {
 // Building the prompt
 
 /** Loader classes whose input is an uploaded file, and which input holds it (AusBoss's Crop + Rotate + Pad loads the upload itself). */
-const MEDIA_LOADERS: Record<string, string> = { LoadImage: "image", LoadImageMask: "image", LoadVideo: "file", VHS_LoadVideo: "video", LoadAudio: "audio", VHS_LoadAudioUpload: "audio", AUSBOSS_NODES_ImageCropRotatePad: "image" };
+const MEDIA_LOADERS: Record<string, string> = {
+  LoadImage: "image",
+  LoadImageMask: "image",
+  LoadVideo: "file",
+  VHS_LoadVideo: "video",
+  LoadAudio: "audio",
+  VHS_LoadAudioUpload: "audio",
+  AUSBOSS_NODES_ImageCropRotatePad: "image",
+  // Any Angle's saved 3D view (a .spz sent like any input).
+  Load3D: "model_file",
+};
 
 // What we learned about each uploaded clip / track from its header (duration, size, fps, audio), by ComfyUI file name.
 declare global {
@@ -1024,10 +1040,14 @@ const SLOT_RULES: Record<string, { reuse?: boolean; required?: string[]; hints?:
   "qwen-image-edit-2511-multi": { reuse: true },
   "storyboard-qwen-edit-2509-next-scene": { reuse: true },
   "tryon-flux2-klein-4b": { required: ["image2"], hints: { image: "Add a photo of the person", image2: "Add the garment to try on" } },
+  // Its describer reads the outfit photo; the words graph (outfit-swap-qwen-image-21-text) runs when there is none.
+  "outfit-swap-qwen-image-21": { required: ["image2"], hints: { image: "Add your photo", image2: "Add the outfit photo, or describe the outfit" } },
   "palette-transfer-image": { hints: { image2: "Pick a palette or add a reference image" } },
   "palette-transfer-video": { hints: { image: "Pick a palette or add a reference image" } },
   "relight-qwen-edit-2509-reference": { hints: { image2: "Add the photo whose light to copy" } },
   "face-swap-reactor": { hints: { image2: "Add the face to put in" } },
+  // Qwen-Image 2.1's encoder takes its references as optional inputs: without the head it would run as a plain edit.
+  "head-swap-qwen-image-21": { required: ["image2"], hints: { image: "Add the photo to keep", image2: "Add a photo of the head to put in" } },
   "video-swap-wan-vace": { hints: { image: "Add a picture of what goes in" } },
   "video-insert-wan-vace": { hints: { image: "Add a picture of what to add", mask: "Paint where it goes on the first frame" } },
   // Pixal3D multi-view: the front, then any of the other sides.
@@ -1090,6 +1110,7 @@ const MEDIA_HINT: Record<string, string> = {
   image9: "Add a ninth image",
   image10: "Add a tenth image",
   endImage: "Add an end frame",
+  splatFile: "Build the 3D view first",
   mask: "Paint the area to change",
   video: "Add a video",
   video2: "Add a second clip",
@@ -1122,6 +1143,8 @@ export interface PrepareContext {
   device?: () => Promise<string | undefined>;
   /** Where a model file is on the server's disk (comfyModelPath), undefined when it can't say: Zen Image Edit's loader reads paths. */
   modelPath?: (folder: string, name: string) => Promise<string | undefined>;
+  /** The first device's memory in bytes (GET /system_stats devices[0].vram_total): the Watermark Remover's repair size. */
+  vram?: () => Promise<number | undefined>;
   /** The DBS models on the server's disk (GET /models/dbs), undefined when it can't say: a run never gets one that isn't there. */
   dbsModels?: () => Promise<DbsModel[] | undefined>;
   /** The RE-USE files on the server's disk (GET /models/reuse): null without ComfyUI-RE-USE, undefined when it can't say. */
@@ -1206,6 +1229,7 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
   // Graphs that decode the whole clip (src/lib/av/video-finish.ts wholeClipTool says how many copies they hold).
   if (manifest.capability === "sdr-to-hdr") out.wholeClip = wholeClipTool("sdr-to-hdr", input.format);
   if (manifest.id === "video-export-exr") out.wholeClip = wholeClipTool("export-video", "exr");
+  if (manifest.capability === "video-fix-faces") out.wholeClip = wholeClipTool("face-fix-video", undefined);
   // FPS Boost: interpolate by m, keep every n-th frame (the graph computes the output frame rate itself).
   if (b.every && b.multiplier) {
     const target = input.targetFps;
@@ -1250,6 +1274,9 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
     }
   } else if (b.framesPerBatch && manifest.capability === "export-video" && extra.framesPerBatch === undefined) {
     values.framesPerBatch = framesPerPass(facts, { min: 8, max: 256, fallback: Number(d.framesPerBatch ?? 64) });
+  } else if (b.framesPerBatch && manifest.capability === "video-tone" && extra.framesPerBatch === undefined) {
+    // Fix colours: a pass holds three frame-sized copies (the decoded frames, the softened ones, the toned ones).
+    values.framesPerBatch = framesPerPass(facts, { modelScale: 1, min: 8, max: 128, fallback: Number(d.framesPerBatch ?? 48) });
   }
   return out;
 }
@@ -1303,6 +1330,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     format: input.format,
     audio2: !!audio2 || !!extra.audio2,
     audio: !!input.audio,
+    mask: !!input.mask,
     extra,
     has: (id) => loadManifest().workflows.some((w) => w.id === id),
   });
@@ -1419,17 +1447,22 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // MiniMax H3 stretches the start frame to the canvas with no crop: a clip from a still (or the orbit of one) always takes the
   // still's shape, so an aspect ratio left over from a text draft can't distort it.
   const h3 = isH3Graph(manifest.id);
+  // The clip's own size: its upload's header, else what the server read from the file before sending it (sourceSize).
+  const clipSize = clip?.width && clip.height ? clip : input.sourceSize?.width && input.sourceSize.height ? input.sourceSize : undefined;
+  // Motion transfer crops the driving clip to the canvas, so the canvas always takes the clip's shape: a run that names
+  // none (the Motion control studio) fell back to the graph's portrait 482 × 854 and cut a landscape clip's sides off.
+  const followDriver = ctx.op === "motion-transfer" && !!b.video && !!clipSize;
   // References (Pika H3 Flex Ref2VA) are not frames: the aspect ratio asked for holds ("auto" takes Image 1's shape).
   const asFrames = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || (!!b.image && manifest.expand !== "references"));
-  const aspectRatio = asFrames || (h3 && ctx.op === "avatar") ? "auto" : followClip && !input.aspectRatio ? "auto" : input.aspectRatio;
+  const aspectRatio = asFrames || (h3 && ctx.op === "avatar") ? "auto" : (followClip && !input.aspectRatio) || followDriver ? "auto" : input.aspectRatio;
   if (b.width || b.height) {
     const multiple = Number(manifest.limits?.dimensionMultiple ?? 16);
     // With motion paths the frame keeps the start image's shape, so the paths need no cropping;
     // "auto" keeps the source clip's shape when its header told us.
     const srcAspect = (extra.motionPaths as MotionPaths | undefined)?.aspect;
     // "auto" keeps the source clip's shape when its header told us, else the start frame's (image-to-video).
-    const still = aspectRatio === "auto" && !clip?.width ? ctx.media?.(String(values.image ?? "")) : undefined;
-    const src = clip?.width && clip.height ? clip : still?.width && still.height ? still : undefined;
+    const still = aspectRatio === "auto" && !clipSize ? ctx.media?.(String(values.image ?? "")) : undefined;
+    const src = clipSize ?? (still?.width && still.height ? still : undefined);
     const shape = srcAspect ? `${srcAspect[0]}:${srcAspect[1]}` : aspectRatio === "auto" ? (src ? `${src.width}:${src.height}` : undefined) : aspectRatio;
     if (h3) {
       // H3's own canvas (ComfyUI's adapt_canvas): 768 px on the short side, at most 768 × 1344, multiples of 32.
@@ -1614,6 +1647,10 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     }
     if (b.prompt) values.prompt = REMOVE_SCENE;
   }
+  // Genjutsu's Openjutsu modes (src/lib/openjutsu-graphs.ts): the settings travel as params.extra.openjutsu and are written
+  // into the graph by node title after the media are bound; the pictures a request leaves out go with their branches.
+  const openjutsu = OPENJUTSU_IDS.has(manifest.id) ? ((extra.openjutsu && typeof extra.openjutsu === "object" ? extra.openjutsu : {}) as OpenjutsuSettings) : null;
+  delete extra.openjutsu;
   // Genjutsu's Character swap (MiniMax H3 on the h3_character_swap / H3 Relay packs): the part, the quality as the
   // unpatched pack's string, who to swap (SAM words, largest / leftmost / rightmost / index, or clicks moved into H3's
   // canvas), the swap LoRA's release, the window plan; the anchor first frame is images[1] (absent: its nodes go).
@@ -1737,6 +1774,16 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     if (!restore.prefix) studioLeft.push("video2");
     if (!restore.reference) studioLeft.push("image");
   }
+  // Tap to Recolor: the taps (params.points, in the pixels of the picture they were placed on, params.extra.frameWidth /
+  // frameHeight) and the piece they are on (params.extra.recolorItem) become the mask node's touches in the photo's own
+  // pixels: SAM 3.1 takes the thing of that name under each tap. Only the taps say what changes.
+  if (manifest.capability === "recolor") {
+    const photo = ctx.media?.(String(values.image ?? ""));
+    const touches = recolorTouches(input.points, recolorItem(extra), photo?.width && photo.height ? { width: photo.width, height: photo.height } : undefined, tapFrame(extra));
+    if (!touches) throw new ProviderError(RECOLOR_TAP_FIRST);
+    values.touches = touches;
+    for (const k of ["frameWidth", "frameHeight", "recolorItem", "touches"]) delete extra[k];
+  }
   // Genjutsu's Object swap: SAM 3.1 follows what goes (params.extra.maskPrompt, or the "replace … with" part of the prompt,
   // as Genjutsu sends it), the reference comes in, the prompt describes the result. Insert: the painted spot and the
   // reference, the prompt says what appears there. Neither graph takes clicked points.
@@ -1753,6 +1800,15 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       if (!named) values.prompt = makerPrompt({ mode: "swap", maker: vace, subject: words, refs: 1 });
     }
     if (!words && b.prompt) values.prompt = makerPrompt({ mode: ctx.op === "video-swap" ? "swap" : "insert", maker: vace, subject: String(values.maskPrompt ?? ""), refs: 1 });
+  }
+  // A graph's own prompt text is its template's sample (Wan Animate 2's "Cartoon character lost" in an empty white room),
+  // so it never stays in a run: motion transfer always describes the character from the photo with the user's words,
+  // other graphs that run without words take Fuobe's neutral line, and one that can't do without words refuses.
+  if (b.prompt) {
+    const asked = typeof values.prompt === "string" && values.prompt.trim() ? values.prompt : undefined;
+    if (MOTION_GRAPHS.has(manifest.id)) values.prompt = motionTransferPrompt(manifest.id, asked);
+    else if (!asked && WORDS_NEEDED[manifest.id]) throw new ProviderError(WORDS_NEEDED[manifest.id], 400);
+    else if (!asked) values.prompt = neutralPrompt(manifest.id) ?? values.prompt;
   }
   // Depth maps: Video Depth Anything draws gray or inferno (the other graphs grayscale only), and can put the
   // original clip next to the map.
@@ -1866,6 +1922,36 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   const sourceChannels = b.channels || b.separationModel ? (ctx.media?.(String(values.audio ?? ""))?.channels ?? (Number(extra.sourceChannels) || undefined)) : undefined;
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
+  // Watermark Remover: the marks kept (checked and rebuilt again, clamped to this picture), how QWMDetect finds what to repair
+  // and how far past each mark, and the size the repair works at (the picture's size and the GPU's memory). Never what the
+  // request says for these, nor for the picture, the brush, the seeds or the file names already bound.
+  if (manifest.capability === "watermark-remove") {
+    const still = ctx.media?.(String(values.image ?? ""));
+    if (still?.width && still.height && Math.max(still.width, still.height) > MAX_WATERMARK_SIDE) throw new ProviderError(WATERMARK_COPY.tooBig, 400);
+    const brushed = !!b.mask;
+    // A brush painted on another size of the picture can't line up with it (QWMDetect refuses it): said in words up front.
+    const painted = brushed ? ctx.media?.(String(values.mask ?? "")) : undefined;
+    if (painted?.width && painted.height && still?.width && still.height && (painted.width !== still.width || painted.height !== still.height)) {
+      throw new ProviderError(WATERMARK_COPY.brushAgain, 400);
+    }
+    if (!brushed && extra.boxes !== undefined) {
+      try {
+        values.boxes = checkWatermarkBoxes(extra.boxes, { width: still?.width, height: still?.height }).json;
+      } catch (e) {
+        throw new ProviderError((e as Error).message, 400);
+      }
+      values.detectMode = "manual_boxes";
+    } else if (b.detectMode) values.detectMode = brushed ? "manual_mask" : "auto_qwen";
+    // The kept marks get a repair margin past the scan's box; marks the pack finds itself (an API caller's run) get the scan's.
+    if (b.detectExpand) values.detectExpand = values.detectMode === "manual_boxes" ? WATERMARK_KEPT_EXPAND : WATERMARK_SCAN_EXPAND;
+    if (b.maxSize) values.maxSize = maxSideFor(still?.width, still?.height, await ctx.vram?.().catch(() => undefined));
+    for (const k of ["boxes", "detectMode", "detectExpand", "maxSize", "image", "mask", "seed", "filenamePrefix"]) delete extra[k];
+  }
+  if (manifest.capability === "watermark-scan") {
+    const still = ctx.media?.(String(values.image ?? ""));
+    if (still?.width && still.height && Math.max(still.width, still.height) > MAX_WATERMARK_SIDE) throw new ProviderError(WATERMARK_COPY.tooBig, 400);
+    for (const k of ["image", "filenamePrefix"]) delete extra[k];
+  }
   // Options → Prompt helper (FLUX 3 Image Klein) and a layout's draft (kept for Reuse): read here, never bound.
   const helper = extra[PROMPT_HELPER_PARAM];
   const laidOut = carriesBoxes(extra);
@@ -1943,7 +2029,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // optional inputs, else the previous image again where that's harmless (style boards, multi-reference edits), else a
   // clear "add …" message.
   let graph = workflow;
-  const left: string[] = [...studioLeft];
+  const left: string[] = [...studioLeft, ...(openjutsu ? openjutsuLeftOut(manifest.id, openjutsu) : [])];
   // A side nobody photographed is left out (its cut-out and crop with it); the front is needed.
   if (rules.views) {
     for (const k of IMAGE_SLOTS.slice(1)) {
@@ -2007,7 +2093,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // maxDimension targets for removed reference branches are expected: their scale nodes go with the loader.
   const realMissing = bound.missing.filter((m) => !/^maxDimension\b/.test(m));
   if (realMissing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${realMissing.join(", ")}`);
-  let wf = bound.workflow;
+  // A saved 3D view read without the browser (Any Angle): Load3D's picture entries point at the run's photo.
+  let wf = withLoad3dImages(bound.workflow, typeof values.image === "string" ? values.image : undefined);
   // Qwen3-TTS's clone needs the sample's words unless it clones from the voice's timbre alone (x_vector_only):
   // a sample with no transcript clones that way instead of failing.
   for (const t of b.voiceTranscript ?? []) {
@@ -2022,6 +2109,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   const helperOff = helper === "off" || (helper !== "on" && PROMPT_HELPER_OPT_IN.has(manifest.id));
   if (PROMPT_HELPER_GRAPHS.has(manifest.id) && (helperOff || laidOut)) wf = skipPromptHelper(wf, outputIds);
   if (dropAnchor) wf = withoutAnchor(wf, b.image2![0].node);
+  if (openjutsu) {
+    try {
+      const seed = typeof openjutsu.seed === "number" ? openjutsu.seed : typeof values.seed === "number" ? values.seed : randomSeed();
+      wf = openjutsuGraph(manifest.id, wf, { ...openjutsu, seed }, { generationId: ctx.generationId, clip: clip ? { width: clip.width, height: clip.height } : undefined });
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
+    }
+  }
   // LoRA "none": the swap LoRA's loader is linked out (H3 runs with the Turbo LoRA alone).
   if (dropSwapLora && b.lora?.length === 1) wf = bypassNode(wf, b.lora[0].node, "model", outputIds);
   if (studioSegment) wf = segmentGraph(wf, { ...studioSegment, outputs: outputIds });
@@ -2370,6 +2465,29 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   return uploaded;
 }
 
+/**
+ * Deletes a finished Context Loop job's run folder (output/h3_chains/<run>) through the pack's own routes: a preview gives
+ * the folder's snapshot, the delete names it and the run again. A failure is logged and the run goes on.
+ */
+export async function deleteRunFolder(run: string, worker: ComfyWorker = "main"): Promise<boolean> {
+  try {
+    const preview = await comfyFetch("/minimax_h3_context_loop/run-folder/delete-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_name: run }) }, worker);
+    const p = (await preview.json().catch(() => ({}))) as { snapshot?: string };
+    if (!preview.ok || !p.snapshot) return false;
+    const done = await comfyFetch(
+      "/minimax_h3_context_loop/run-folder/delete",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_name: run, snapshot: p.snapshot, confirmation: run }) },
+      worker,
+    );
+    discardBody(done);
+    if (!done.ok) console.warn(`Couldn't delete the H3 run folder ${run} (HTTP ${done.status})`);
+    return done.ok;
+  } catch (e) {
+    console.warn(`Couldn't delete the H3 run folder ${run}: ${(e as Error).message}`);
+    return false;
+  }
+}
+
 type QueueEntry = unknown[];
 const postJson = (p: string, body: unknown, worker: ComfyWorker = "main") =>
   comfyFetch(p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, worker).catch(() => undefined);
@@ -2578,6 +2696,13 @@ export const comfyProvider: ProviderAdapter = {
       },
       device: () => comfyDevice(worker),
       modelPath: (folder, name) => comfyModelPath(folder, name, worker),
+      vram: async () => {
+        const computer = computerScope();
+        if (computer) return runnerFacts(computer)?.vramBytes;
+        const s = await comfyJson<{ devices?: { vram_total?: unknown }[] }>("/system_stats", worker).catch(() => undefined);
+        const v = s?.devices?.[0]?.vram_total;
+        return typeof v === "number" && v > 0 ? v : undefined;
+      },
       // Fresh: a model installed a moment ago runs. (On someone's computer, nothing to ask: its ComfyUI has the last word.)
       dbsModels: () => comfyDbsModels(worker, 0),
       reuseModels: () => comfyReuseModels(worker, 0),
@@ -2654,6 +2779,9 @@ export const comfyProvider: ProviderAdapter = {
       return serverScope.run(true, () => comfyProvider.poll({ externalId, meta, model, ...rest }));
     }
     const finished = async (entry: HistoryEntry) => {
+      // A Context Loop job (Group swap, Scene edit): its clips and checkpoints under output/h3_chains go once it ends (the
+      // final video is copied out of that folder first).
+      if (manifest && CONTEXT_LOOP_IDS.has(manifest.id) && typeof meta.generationId === "string") void deleteRunFolder(runName(meta.generationId), worker);
       if (entry.status?.status_str === "error") {
         forget(externalId);
         return { state: "failed" as const, error: explainExecutionError(executionError(entry), manifest) };

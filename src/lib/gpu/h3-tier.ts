@@ -3,7 +3,7 @@ import { gpuVramGb } from "./readiness";
 import type { FileKey, GpuInventory, RequirementIndex } from "./types";
 
 /**
- * MiniMax H3 on 8-31 GB graphics cards (research #10 §6.4, package nm10-h3-any-gpu). Pure: which H3 build a GPU runs, from
+ * MiniMax H3 on 8-31 GB graphics cards (new-models-10 §6.4). Pure: which H3 build a GPU runs, from
  * what the GPU check read (its memory, its name, the PyTorch build), and the graphs and files each build takes.
  *
  * - Standard (32 GB or more, and any reading that can't tell: a CPU, no check yet, a card it doesn't know): today's graphs,

@@ -73,6 +73,7 @@ export function listOptionsFrom(sp: URLSearchParams): ListOptions {
     favorites: sp.get("favorites") === "1",
     status: sp.get("status") ?? undefined,
     statuses: list("statuses")?.filter((s) => STATUSES.has(s)),
+    template: sp.get("template")?.slice(0, 80) || undefined,
     folderId: sp.get("folder") ?? undefined,
     folderIds: list("folders")?.filter((id) => id.length <= 40).slice(0, MAX_IDS),
     trashed: sp.get("trash") === "1",

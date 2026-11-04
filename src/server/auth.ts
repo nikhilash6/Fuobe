@@ -10,19 +10,15 @@
  * and install-wide settings, keys and tokens stay the owner's (the install password's session, or an
  * API token): src/proxy.ts, src/lib/guest-access.ts.
  *
- * Kept in a small JSON file next to the database, not in SQLite, so the proxy's sign-in check
- * needs nothing but `fs` and `crypto`. (The proxy does open SQLite, for one primary-key lookup on
- * record pages only, so an unknown id gets a real 404: src/server/records.ts.)
+ * Kept in the studio's SQLite database (AUTH_TABLES in src/server/db.ts; an older install's data/auth.json moves in on
+ * the first start: src/server/auth-store.ts). Every check is a lookup by primary key or by the unique email, so the
+ * proxy's sign-in check stays quick with any number of accounts.
  */
 import crypto from "node:crypto";
-import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
-import path from "node:path";
 import { LOCAL_SUFFIXES } from "@/lib/page-place";
-
-const DATA_DIR = path.resolve(/*turbopackIgnore: true*/ process.env.FUOBE_DATA_DIR ?? path.join(process.cwd(), "data"));
-const FILE = path.join(DATA_DIR, "auth.json");
+import { accountFrom, authStoreClosed, authStoreVersion, authWrite, sql, type AccountRow, type GpuRow, type KeyRow } from "./auth-store";
 
 export const SESSION_COOKIE = "fuobe_session";
 const SESSION_DAYS = 30;
@@ -73,12 +69,15 @@ export interface Account {
   lastLoginAt?: number;
   /** Switched off by the owner (Settings → Accounts): signed out, and can't log in. */
   disabled?: boolean;
+  /** Signed out everywhere by the owner at this time (the admin API): its sign-ins from before then were ended. */
+  sessionsAfter?: number;
   gpu?: AccountGpu;
   /** Its own keys ("Your keys"), sealed: src/server/account-keys.ts opens them. */
   keys?: Partial<Record<CloudProvider, StoredKey>>;
 }
 
-interface AuthFile {
+/** The install's own row: the cookie secret, the Settings password and the public sign-up switch. */
+interface Install {
   /** scrypt hash of the UI-set password ("salt:hash", hex). */
   password?: string;
   /**
@@ -86,71 +85,54 @@ interface AuthFile {
    * changes and by Settings → Security → Sign everyone out, which both sign every browser out.
    */
   secret: string;
-  tokens: ApiToken[];
-  accounts?: Account[];
   /** Settings → Security: guests may browse and anyone may sign up (FUOBE_PUBLIC_SIGNUP overrides it). */
-  publicSignup?: boolean;
-  /** Session cookies signed out (endSession), by their SHA-256, until they would have expired anyway. */
-  signedOut?: { hash: string; exp: number }[];
-  /** In memory only: the file is there but can't be read or parsed. Sign-in stays on, nobody is signed in, nothing is written. */
+  publicSignup: boolean;
+  /** The sign-in data can't be read (src/server/auth-store.ts). Sign-in stays on, nobody is signed in, nothing is written. */
   unreadable?: true;
 }
 
-let cache: { mtime: number; data: AuthFile } | null = null;
-let warnedUnreadable = 0;
-
-/**
- * The auth file. No file yet: no Settings password, no accounts (a new install). A file that is there but can't be read
- * or parsed fails closed: sign-in stays on with nobody signed in, never an open studio, and nothing writes over it.
- */
-function read(): AuthFile {
-  try {
-    const mtime = fs.statSync(FILE).mtimeMs;
-    if (cache?.mtime === mtime) return cache.data;
-    const data = JSON.parse(fs.readFileSync(FILE, "utf8")) as AuthFile | null;
-    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("not an object");
-    data.tokens ??= [];
-    cache = { mtime, data };
-    return data;
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return { secret: "", tokens: [] };
-    if (Date.now() - warnedUnreadable > 60 * 60_000) {
-      warnedUnreadable = Date.now();
-      console.warn(`[fuobe] ${FILE} can't be read (${(e as Error).message}): sign-in stays on and nobody can sign in until it is fixed or restored.`);
-    }
-    return { secret: "", tokens: [], unreadable: true };
-  }
+/** The install's row. Sign-in data that can't be read fails closed: sign-in stays on with nobody signed in. */
+function install(): Install {
+  if (authStoreClosed()) return { secret: "", publicSignup: false, unreadable: true };
+  const r = sql("SELECT secret, password_hash, public_signup FROM auth_install WHERE id = 1").get() as
+    | { secret: string; password_hash: string | null; public_signup: number }
+    | undefined;
+  return { secret: r?.secret ?? "", ...(r?.password_hash != null && { password: r.password_hash }), publicSignup: !!r?.public_signup };
 }
 
-declare global {
-  var __fuobeAuthWrites: number | undefined;
-}
-
-function write(data: AuthFile): void {
-  if (data.unreadable) throw new Error("The sign-in file (auth.json) can't be read. Fix or restore it: Fuobe won't write over it.");
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const tmp = `${FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, FILE);
-  cache = null;
-  globalThis.__fuobeAuthWrites = (globalThis.__fuobeAuthWrites ?? 0) + 1;
+/** Inside authWrite: give the install a cookie secret when it has none yet. */
+function ensureSecret(): void {
+  sql("UPDATE auth_install SET secret = ? WHERE id = 1 AND secret = ''").run(crypto.randomBytes(32).toString("hex"));
 }
 
 /**
- * Changes when this server writes the sign-in file (a sign-out of everyone, a new password, a token revoked…): a request
- * that stays open, like the live feed, checks who is asking again when it changes.
+ * Changes when sign-in data changes (a sign-out of everyone, a new password, a token revoked…), here or on another
+ * server using the same database: a request that stays open, like the live feed, checks who is asking again then.
  */
-export const authVersion = () => globalThis.__fuobeAuthWrites ?? 0;
-
-function withSecret(data: AuthFile): AuthFile {
-  return data.secret ? data : { ...data, secret: crypto.randomBytes(32).toString("hex") };
-}
+export const authVersion = () => authStoreVersion();
 
 const envPassword = () => process.env.FUOBE_PASSWORD || "";
 
 export function authStatus(): { enabled: boolean; fromEnv: boolean; tokens: Omit<ApiToken, "hash">[] } {
-  const d = read();
-  return { enabled: !!(envPassword() || d.password || d.unreadable), fromEnv: !!envPassword(), tokens: d.tokens.map(publicToken) };
+  const d = install();
+  const tokens = d.unreadable
+    ? []
+    : (sql("SELECT id, name, prefix, created_at, last_used_at FROM auth_tokens ORDER BY rowid").all() as TokenListRow[]).map((t) => ({
+        id: t.id,
+        name: t.name,
+        prefix: t.prefix,
+        createdAt: t.created_at,
+        lastUsedAt: t.last_used_at ?? undefined,
+      }));
+  return { enabled: !!(envPassword() || d.password || d.unreadable), fromEnv: !!envPassword(), tokens };
+}
+
+interface TokenListRow {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: number;
+  last_used_at: number | null;
 }
 
 const publicToken = (t: ApiToken): Omit<ApiToken, "hash"> => ({ id: t.id, name: t.name, prefix: t.prefix, createdAt: t.createdAt, lastUsedAt: t.lastUsedAt });
@@ -158,7 +140,7 @@ const publicToken = (t: ApiToken): Omit<ApiToken, "hash"> => ({ id: t.id, name: 
 /** Sign-in is on: a password is set (FUOBE_PASSWORD or Settings), or the auth file can't be read (fail closed). */
 export const authEnabled = () => {
   if (envPassword()) return true;
-  const d = read();
+  const d = install();
   return !!(d.password || d.unreadable);
 };
 
@@ -190,7 +172,7 @@ async function verifyHashAsync(pw: string, stored: string): Promise<boolean> {
 export function checkPassword(pw: string): boolean {
   const env = envPassword();
   if (env) return same(crypto.createHash("sha256").update(pw).digest(), crypto.createHash("sha256").update(env).digest());
-  const stored = read().password;
+  const stored = install().password;
   if (!stored) return false;
   return verifyHash(pw, stored);
 }
@@ -198,7 +180,7 @@ export function checkPassword(pw: string): boolean {
 /** {@link checkPassword} for a request: the Settings password's scrypt runs off the main thread. */
 export async function verifyPassword(pw: string): Promise<boolean> {
   if (envPassword()) return checkPassword(pw);
-  const stored = read().password;
+  const stored = install().password;
   return !!stored && (await verifyHashAsync(pw, stored));
 }
 
@@ -206,8 +188,8 @@ export async function verifyPassword(pw: string): Promise<boolean> {
 export function setPassword(pw: string | null): void {
   if (envPassword()) throw new Error("The password is set by FUOBE_PASSWORD on the server");
   if (pw !== null && pw.length < 8) throw new Error("Use at least 8 characters");
-  const d = read();
-  write({ ...d, password: pw === null ? undefined : hashPassword(pw), secret: crypto.randomBytes(32).toString("hex") });
+  const hash = pw === null ? null : hashPassword(pw);
+  authWrite(() => sql("UPDATE auth_install SET password_hash = ?, secret = ? WHERE id = 1").run(hash, crypto.randomBytes(32).toString("hex")));
 }
 
 // ---------------------------------------------------------------------------
@@ -220,10 +202,10 @@ const fingerprint = (s: string) => crypto.createHash("sha256").update(s).digest(
 /**
  * The key a session is signed with: the secret and a password's fingerprint. The owner's password (FUOBE_PASSWORD, or
  * the Settings one): a new one (after a restart, or in Settings) ends every owner sign-in at once, and the secret alone
- * (auth.json) can't make an owner cookie. An account's own password hash: its new password ends its other sign-ins.
+ * (in the database) can't make an owner cookie. An account's own password hash: its new password ends its other sign-ins.
  * A new FUOBE_PASSWORD signs no account out; a password set in Settings makes a new secret, which signs out everyone.
  */
-function keyFor(d: AuthFile, who: "owner" | Pick<Account, "hash">): string {
+function keyFor(d: Install, who: "owner" | Pick<Account, "hash">): string {
   return `${d.secret}.${fingerprint(who === "owner" ? envPassword() || d.password || "" : who.hash)}`;
 }
 
@@ -232,15 +214,15 @@ function keyFor(d: AuthFile, who: "owner" | Pick<Account, "hash">): string {
  * The two sign different text with different keys, so neither can be turned into the other.
  */
 export function createSession(accountId?: string): { value: string; maxAge: number } {
-  let d = read();
+  let d = install();
   if (!d.secret) {
-    d = withSecret(d);
-    write(d);
+    authWrite(ensureSecret);
+    d = install();
   }
   const exp = Date.now() + SESSION_MS;
   const payload = accountId ? `${exp}.${accountId}` : String(exp);
   // An account that isn't there gets a cookie nothing takes (sessionViewer finds no account for it).
-  const who = accountId ? { hash: d.accounts?.find((a) => a.id === accountId)?.hash ?? "" } : "owner";
+  const who = accountId ? { hash: (sql("SELECT password_hash FROM auth_accounts WHERE id = ?").get(accountId) as { password_hash: string } | undefined)?.password_hash ?? "" } : "owner";
   return { value: `${payload}.${sign(keyFor(d, who), payload)}`, maxAge: SESSION_DAYS * 86_400 };
 }
 
@@ -248,7 +230,7 @@ export function createSession(accountId?: string): { value: string; maxAge: numb
  * An account cookie made before account keys held the password's fingerprint was signed with the secret alone. It is
  * still taken (it ends with its 30 days, so a deploy signs nobody out) until the account first changes its password.
  */
-const legacyAccountMac = (d: AuthFile, account: Account, payload: string, mac: string) =>
+const legacyAccountMac = (d: Install, account: Account, payload: string, mac: string) =>
   !account.passwordChangedAt && same(Buffer.from(mac), Buffer.from(sign(d.secret, payload)));
 
 /** Who a session cookie belongs to: the owner, an account that still exists, or nobody. */
@@ -270,17 +252,19 @@ export function sessionViewer(value: string | undefined): Viewer | null {
   if (parts.length !== 2 && parts.length !== 3) return null;
   const exp = parts[0];
   const mac = parts[parts.length - 1];
-  const d = read();
+  const d = install();
   if (!d.secret || !mac || !liveExpiry(exp)) return null;
   const payload = parts.slice(0, -1).join(".");
   // An account's key holds its password's fingerprint: the account comes first.
-  const account = parts.length === 3 ? d.accounts?.find((a) => a.id === parts[1]) : undefined;
+  const account = parts.length === 3 ? accountById(parts[1]) : undefined;
   if (parts.length === 3 && !account) return null;
   const signed = same(Buffer.from(mac), Buffer.from(sign(keyFor(d, account ?? "owner"), payload)));
   if (!signed && !(account && legacyAccountMac(d, account, payload, mac))) return null;
   // Signed out with Sign out: a copy of the cookie (another tab's, a stolen one) is refused too.
-  if (d.signedOut?.length && d.signedOut.some((s) => s.hash === cookieHash(value))) return null;
+  if (sql("SELECT 1 FROM auth_signed_out WHERE hash = ?").get(cookieHash(value))) return null;
   if (!account) return { kind: "owner" };
+  // Signed out everywhere (signOutAccount): a cookie issued at or before then is refused.
+  if (account.sessionsAfter && Number(exp) - SESSION_MS <= account.sessionsAfter) return null;
   return account.disabled ? null : { kind: "account", account };
 }
 
@@ -292,11 +276,10 @@ const cookieHash = (value: string) => crypto.createHash("sha256").update(value).
  */
 export function endSession(value: string | undefined): void {
   if (!value || !sessionViewer(value)) return;
-  const d = read();
-  const now = Date.now();
-  const signedOut = (d.signedOut ?? []).filter((s) => s.exp > now);
-  signedOut.push({ hash: cookieHash(value), exp: Number(value.split(".")[0]) });
-  write({ ...d, signedOut });
+  authWrite(() => {
+    sql("DELETE FROM auth_signed_out WHERE exp <= ?").run(Date.now());
+    sql("INSERT OR REPLACE INTO auth_signed_out (hash, exp) VALUES (?, ?)").run(cookieHash(value), Number(value.split(".")[0]));
+  });
 }
 
 /**
@@ -305,8 +288,10 @@ export function endSession(value: string | undefined): void {
  * can't. With `tokens`, every API token is revoked as well. The password stays as it is.
  */
 export function signOutEveryone(opts: { tokens?: boolean } = {}): void {
-  const d = read();
-  write({ ...d, secret: crypto.randomBytes(32).toString("hex"), ...(opts.tokens && { tokens: [] }) });
+  authWrite(() => {
+    sql("UPDATE auth_install SET secret = ? WHERE id = 1").run(crypto.randomBytes(32).toString("hex"));
+    if (opts.tokens) sql("DELETE FROM auth_tokens").run();
+  });
 }
 
 /** The owner's session (the install password's): what Settings → Security and the tokens need. */
@@ -336,11 +321,40 @@ export function createAccount(email: string, password: string): Account {
   const e = normalizeEmail(email);
   if (!e) throw new AccountError("Enter a valid email address", 400);
   if (password.length < 8) throw new AccountError("Use at least 8 characters", 400);
-  const d = withSecret(read());
-  if (d.accounts?.some((a) => a.email === e)) throw new AccountError("An account with this email already exists. Log in instead.", 409);
+  const taken = () => new AccountError("An account with this email already exists. Log in instead.", 409);
+  if (sql("SELECT 1 FROM auth_accounts WHERE email = ?").get(e)) throw taken();
   const account: Account = { id: crypto.randomBytes(9).toString("hex"), email: e, hash: hashPassword(password), createdAt: Date.now(), lastLoginAt: Date.now() };
-  write({ ...d, accounts: [...(d.accounts ?? []), account] });
+  try {
+    authWrite(() => {
+      ensureSecret();
+      sql("INSERT INTO auth_accounts (id, email, password_hash, created_at, last_login_at) VALUES (?, ?, ?, ?, ?)").run(
+        account.id,
+        account.email,
+        account.hash,
+        account.createdAt,
+        account.lastLoginAt,
+      );
+    });
+  } catch (err) {
+    // Two sign-ups with one email at the same moment: the unique email lets one in.
+    if ((err as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE" && /auth_accounts\.email/.test((err as Error).message)) throw taken();
+    throw err;
+  }
   return account;
+}
+
+/** The account with this (normalised) email, or undefined: one lookup on the unique email. */
+function accountByEmail(e: string): Account | undefined {
+  if (authStoreClosed()) return undefined;
+  const r = sql("SELECT * FROM auth_accounts WHERE email = ?").get(e) as AccountRow | undefined;
+  return r && withRows(r);
+}
+
+/** An account's row with its GPU and keys rows. */
+function withRows(r: AccountRow): Account {
+  const gpu = sql("SELECT * FROM auth_account_gpu WHERE account_id = ?").get(r.id) as GpuRow | undefined;
+  const keys = sql("SELECT * FROM auth_account_keys WHERE account_id = ? ORDER BY rowid").all(r.id) as KeyRow[];
+  return accountFrom(r, gpu, keys);
 }
 
 let dummy: string | undefined;
@@ -348,7 +362,7 @@ let dummy: string | undefined;
 /** The account for this email and password, or null. An unknown email costs the same scrypt as a known one. */
 export function checkAccount(email: string, password: string): Account | null {
   const e = normalizeEmail(email);
-  const account = e ? read().accounts?.find((a) => a.email === e) : undefined;
+  const account = e ? accountByEmail(e) : undefined;
   const ok = verifyHash(password, account?.hash ?? (dummy ??= hashPassword(crypto.randomBytes(12).toString("hex"))));
   return account && ok ? account : null;
 }
@@ -358,7 +372,7 @@ let dummyAsync: Promise<string> | undefined;
 /** {@link checkAccount} for a request: scrypt runs off the main thread, and an unknown email costs the same as a known one. */
 export async function verifyAccount(email: string, password: string): Promise<Account | null> {
   const e = normalizeEmail(email);
-  const account = e ? read().accounts?.find((a) => a.email === e) : undefined;
+  const account = e ? accountByEmail(e) : undefined;
   const stored =
     account?.hash ??
     (await (dummyAsync ??= (async () => {
@@ -380,23 +394,25 @@ export async function setAccountPassword(id: string, current: string, next: stri
   if (!(await verifyAccount(account.email, current))) throw new AccountError("The current password is wrong", 403);
   const salt = crypto.randomBytes(16);
   const hash = `${salt.toString("hex")}:${(await scrypt(next, salt)).toString("hex")}`;
-  // Read again: the file may have changed while the passwords were hashed.
-  const d = read();
-  if (!d.accounts?.some((a) => a.id === id)) throw new AccountError("No such account", 404);
+  // The account may have gone while the passwords were hashed.
   const changed = { hash, passwordChangedAt: Date.now() };
-  write({ ...d, accounts: d.accounts.map((a) => (a.id === id ? { ...a, ...changed } : a)) });
+  authWrite(() => {
+    const r = sql("UPDATE auth_accounts SET password_hash = ?, password_changed_at = ? WHERE id = ?").run(changed.hash, changed.passwordChangedAt, id);
+    if (!r.changes) throw new AccountError("No such account", 404);
+  });
   return { ...account, ...changed };
 }
 
-/** How often a log-in is written down: each write rewrites the whole accounts file. */
+/** How often a log-in is written down. */
 const LOGIN_RECORD_MS = 60 * 60_000;
 
 /** Remember a log-in (Settings → Accounts shows it), at most once an hour per account. */
 export function recordLogin(id: string): void {
-  const d = read();
-  const account = d.accounts?.find((a) => a.id === id);
-  if (!account || Date.now() - (account.lastLoginAt ?? 0) < LOGIN_RECORD_MS) return;
-  write({ ...d, accounts: d.accounts?.map((a) => (a.id === id ? { ...a, lastLoginAt: Date.now() } : a)) });
+  if (authStoreClosed()) return;
+  const r = sql("SELECT last_login_at FROM auth_accounts WHERE id = ?").get(id) as { last_login_at: number | null } | undefined;
+  if (!r || Date.now() - (r.last_login_at ?? 0) < LOGIN_RECORD_MS) return;
+  const t = Date.now();
+  authWrite(() => sql("UPDATE auth_accounts SET last_login_at = ? WHERE id = ? AND COALESCE(last_login_at, 0) < ?").run(t, id, t - LOGIN_RECORD_MS));
 }
 
 /** What the owner sees of an account (Settings → Accounts): never the password hash. */
@@ -412,39 +428,81 @@ export interface AccountInfo {
   keys: CloudProvider[];
 }
 
-const keysOf = (a: Pick<Account, "keys">): CloudProvider[] => (["fal", "replicate"] as const).filter((p) => !!a.keys?.[p]);
+/** The accounts as the owner sees them, newest first: one indexed read, with each account's GPU and key providers. */
+const INFO_SQL = `SELECT a.id, a.email, a.created_at, a.last_login_at, a.disabled,
+    EXISTS (SELECT 1 FROM auth_account_gpu g WHERE g.account_id = a.id) AS gpu,
+    (SELECT group_concat(k.provider) FROM auth_account_keys k WHERE k.account_id = a.id) AS keys
+  FROM auth_accounts a`;
+
+interface InfoRow {
+  id: string;
+  email: string;
+  created_at: number;
+  last_login_at: number | null;
+  disabled: number;
+  gpu: number;
+  keys: string | null;
+}
+
+const infoFrom = (r: InfoRow): AccountInfo => {
+  const has = new Set(r.keys?.split(",") ?? []);
+  return {
+    id: r.id,
+    email: r.email,
+    createdAt: r.created_at,
+    lastLoginAt: r.last_login_at ?? null,
+    disabled: !!r.disabled,
+    gpu: !!r.gpu,
+    keys: (["fal", "replicate"] as const).filter((p) => has.has(p)),
+  };
+};
 
 export function listAccounts(): AccountInfo[] {
-  return (read().accounts ?? [])
-    .map((a) => ({ id: a.id, email: a.email, createdAt: a.createdAt, lastLoginAt: a.lastLoginAt ?? null, disabled: !!a.disabled, gpu: !!a.gpu, keys: keysOf(a) }))
-    .sort((a, b) => b.createdAt - a.createdAt);
+  if (authStoreClosed()) return [];
+  return (sql(`${INFO_SQL} ORDER BY a.created_at DESC, a.rowid`).all() as InfoRow[]).map(infoFrom);
+}
+
+/** One account as the owner sees it (Settings → Accounts, the admin API), or undefined. */
+export function accountInfo(id: string): AccountInfo | undefined {
+  if (authStoreClosed()) return undefined;
+  const r = sql(`${INFO_SQL} WHERE a.id = ?`).get(id) as InfoRow | undefined;
+  return r && infoFrom(r);
 }
 
 /**
- * The ids of the accounts, read from the auth file itself: throws when it can't be read or parsed, or has no secret
- * (every auth file that ever held an account has one). The account sweep removes the files of accounts missing from
- * it, so a read that failed for a moment must never look like "no accounts".
+ * The ids of the accounts: throws when the sign-in data can't be read, or the install has no secret yet (every install
+ * that ever held an account has one). The account sweep removes the files of accounts missing from it, so a read
+ * that failed for a moment must never look like "no accounts".
  */
 export function readAccountIds(): Set<string> {
-  const data = JSON.parse(fs.readFileSync(FILE, "utf8")) as Partial<AuthFile> | null;
-  if (!data || typeof data !== "object" || typeof data.secret !== "string" || !data.secret || (data.accounts !== undefined && !Array.isArray(data.accounts))) {
-    throw new Error("The auth file can't be read");
-  }
-  return new Set((data.accounts ?? []).map((a) => a?.id).filter((id): id is string => typeof id === "string" && !!id));
+  if (authStoreClosed() || !install().secret) throw new Error("The sign-in data can't be read");
+  return new Set((sql("SELECT id FROM auth_accounts").all() as { id: string }[]).map((r) => r.id));
+}
+
+/** Change one account's row: 404 when there is no such account. */
+function updateAccount(id: string, set: string, ...values: unknown[]): void {
+  authWrite(() => {
+    if (!sql(`UPDATE auth_accounts SET ${set} WHERE id = ?`).run(...values, id).changes) throw new AccountError("No such account", 404);
+  });
 }
 
 /** Switch an account off (it is signed out at once) or on again. */
 export function setAccountDisabled(id: string, disabled: boolean): void {
-  const d = read();
-  if (!d.accounts?.some((a) => a.id === id)) throw new AccountError("No such account", 404);
-  write({ ...d, accounts: d.accounts.map((a) => (a.id === id ? { ...a, disabled } : a)) });
+  updateAccount(id, "disabled = ?", disabled ? 1 : 0);
 }
 
-/** Delete an account (its sessions stop working at once). */
+/** End every sign-in of an account at once, without switching it off: it can log in again. */
+export function signOutAccount(id: string): void {
+  updateAccount(id, "sessions_after = ?", Date.now());
+}
+
+/** Delete an account with its GPU link and keys (its sessions stop working at once). */
 export function deleteAccount(id: string): void {
-  const d = read();
-  if (!d.accounts?.some((a) => a.id === id)) throw new AccountError("No such account", 404);
-  write({ ...d, accounts: d.accounts.filter((a) => a.id !== id) });
+  authWrite(() => {
+    sql("DELETE FROM auth_account_keys WHERE account_id = ?").run(id);
+    sql("DELETE FROM auth_account_gpu WHERE account_id = ?").run(id);
+    if (!sql("DELETE FROM auth_accounts WHERE id = ?").run(id).changes) throw new AccountError("No such account", 404);
+  });
 }
 
 /** The owner: the install password's session or an API token (everyone while no password is set). */
@@ -468,7 +526,11 @@ export function accountsCsv(items = listAccounts()): string {
   return rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
 
-export const accountById = (id: string): Account | undefined => read().accounts?.find((a) => a.id === id);
+export const accountById = (id: string): Account | undefined => {
+  if (authStoreClosed()) return undefined;
+  const r = sql("SELECT * FROM auth_accounts WHERE id = ?").get(id) as AccountRow | undefined;
+  return r && withRows(r);
+};
 
 /** The account's own ComfyUI, or null when it hasn't connected one or the owner switched the account off. */
 export const accountGpu = (id: string): AccountGpu | null => {
@@ -476,18 +538,19 @@ export const accountGpu = (id: string): AccountGpu | null => {
   return a && !a.disabled ? (a.gpu ?? null) : null;
 };
 
-function withoutGpu(a: Account): Account {
-  const copy = { ...a };
-  delete copy.gpu;
-  return copy;
+/** Inside authWrite: 404 when there is no such account. */
+function mustExist(id: string): void {
+  if (!sql("SELECT 1 FROM auth_accounts WHERE id = ?").get(id)) throw new AccountError("No such account", 404);
 }
 
 /** Save (or with null, forget) the account's own ComfyUI. The caller checks the address first (src/server/account-gpu.ts). */
 export function setAccountGpu(id: string, gpu: AccountGpu | null): void {
-  const d = read();
-  if (!d.accounts?.some((a) => a.id === id)) throw new AccountError("No such account", 404);
-  const kept = (g: AccountGpu): AccountGpu => (g.mode === "computer" ? { mode: "computer" } : { url: g.url, ...(g.token && { token: g.token }) });
-  write({ ...d, accounts: d.accounts.map((a) => (a.id !== id ? a : gpu ? { ...a, gpu: kept(gpu) } : withoutGpu(a))) });
+  authWrite(() => {
+    mustExist(id);
+    if (!gpu) sql("DELETE FROM auth_account_gpu WHERE account_id = ?").run(id);
+    else if (gpu.mode === "computer") sql("INSERT OR REPLACE INTO auth_account_gpu (account_id, mode, url, token) VALUES (?, 'computer', NULL, NULL)").run(id);
+    else sql("INSERT OR REPLACE INTO auth_account_gpu (account_id, mode, url, token) VALUES (?, NULL, ?, ?)").run(id, gpu.url, gpu.token || null);
+  });
 }
 
 /** It saved a key of its own for fal.ai or Replicate (whether this server can still open it is account-keys.ts's to say). */
@@ -498,19 +561,15 @@ export const accountKeyRecord = (id: string, p: CloudProvider): StoredKey | null
 
 /** Save (or with null, forget) the account's own key for a provider, sealed by the caller (src/server/account-keys.ts). */
 export function setAccountKey(id: string, p: CloudProvider, key: StoredKey | null): void {
-  const d = read();
-  if (!d.accounts?.some((a) => a.id === id)) throw new AccountError("No such account", 404);
-  write({
-    ...d,
-    accounts: d.accounts.map((a) => {
-      if (a.id !== id) return a;
-      const keys = { ...a.keys };
-      if (key) keys[p] = { sealed: key.sealed, last4: key.last4, addedAt: key.addedAt, ...(key.rejectedAt && { rejectedAt: key.rejectedAt }) };
-      else delete keys[p];
-      const copy: Account = { ...a, keys };
-      if (!keys.fal && !keys.replicate) delete copy.keys;
-      return copy;
-    }),
+  authWrite(() => {
+    mustExist(id);
+    if (!key) sql("DELETE FROM auth_account_keys WHERE account_id = ? AND provider = ?").run(id, p);
+    else {
+      sql(
+        `INSERT INTO auth_account_keys (account_id, provider, sealed, last4, added_at, rejected_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (account_id, provider) DO UPDATE SET sealed = excluded.sealed, last4 = excluded.last4, added_at = excluded.added_at, rejected_at = excluded.rejected_at`,
+      ).run(id, p, key.sealed, key.last4, key.addedAt, key.rejectedAt || null);
+    }
   });
 }
 
@@ -539,7 +598,12 @@ export function sessionCookieOf(request: Request): string | undefined {
   return sessionCookieFrom(request.headers.get("cookie"));
 }
 
+/** An admin token (src/server/admin-tokens.ts): only the admin API takes it, and it is never the owner or an account. */
+export const ADMIN_BEARER = /^Bearer\s+fuobe_adm_/i;
+export const hasAdminBearer = (request: Request) => ADMIN_BEARER.test(request.headers.get("authorization") ?? "");
+
 export function requestViewer(request: Request, cookie = sessionCookieOf(request)): RequestViewer {
+  if (hasAdminBearer(request)) return { kind: "guest" };
   if (!authEnabled() || validToken(request.headers.get("authorization"))) return { kind: "owner" };
   const v = sessionViewer(cookie);
   if (v?.kind === "owner") return v;
@@ -549,7 +613,7 @@ export function requestViewer(request: Request, cookie = sessionCookieOf(request
 
 /** The account behind this request's session, while public sign-up is on for its address (null: the owner, a guest, or off). */
 export function requestAccount(request: Request, cookie = sessionCookieOf(request)): Account | null {
-  if (validToken(request.headers.get("authorization"))) return null;
+  if (hasAdminBearer(request) || validToken(request.headers.get("authorization"))) return null;
   const v = sessionViewer(cookie);
   return v?.kind === "account" && publicSignup(request.headers.get("host")) ? v.account : null;
 }
@@ -566,11 +630,14 @@ export function publicSignupFromEnv(): boolean | null {
 }
 
 /** The Settings → Security switch (ignored while FUOBE_PUBLIC_SIGNUP is set). */
-export const publicSignupSetting = () => !!read().publicSignup;
+export const publicSignupSetting = () => install().publicSignup;
 
 export function setPublicSignup(on: boolean): void {
   if (publicSignupFromEnv() !== null) throw new Error("Public sign-up is set by FUOBE_PUBLIC_SIGNUP on the server");
-  write({ ...withSecret(read()), publicSignup: on });
+  authWrite(() => {
+    ensureSecret();
+    sql("UPDATE auth_install SET public_signup = ? WHERE id = 1").run(on ? 1 : 0);
+  });
 }
 
 /**
@@ -764,16 +831,20 @@ export class LoginGuard {
 const tokenHash = (t: string) => crypto.createHash("sha256").update(t).digest("hex");
 
 export function createToken(name: string): { token: string; info: Omit<ApiToken, "hash"> } {
-  const token = `fuobe_${crypto.randomBytes(24).toString("base64url")}`;
+  // A random part that starts like a worker's or an admin token's would never work as the owner's (validToken): roll again.
+  let token: string;
+  do token = `fuobe_${crypto.randomBytes(24).toString("base64url")}`;
+  while (/^fuobe_(wkr|adm)_/i.test(token));
   const t: ApiToken = { id: crypto.randomBytes(6).toString("hex"), name: name.trim() || "API token", hash: tokenHash(token), prefix: token.slice(0, 12), createdAt: Date.now() };
-  const d = withSecret(read());
-  write({ ...d, tokens: [...d.tokens, t] });
+  authWrite(() => {
+    ensureSecret();
+    sql("INSERT INTO auth_tokens (id, name, hash, prefix, created_at) VALUES (?, ?, ?, ?, ?)").run(t.id, t.name, t.hash, t.prefix, t.createdAt);
+  });
   return { token, info: publicToken(t) };
 }
 
 export function revokeToken(id: string): void {
-  const d = read();
-  write({ ...d, tokens: d.tokens.filter((t) => t.id !== id) });
+  authWrite(() => sql("DELETE FROM auth_tokens WHERE id = ?").run(id));
 }
 
 const touched = new Map<string, number>();
@@ -782,14 +853,18 @@ export function validToken(header: string | null): boolean {
   const m = /^Bearer\s+(fuobe_[\w-]+)$/i.exec(header ?? "");
   // A worker's token (src/server/computer/workers.ts) or a scoped admin token is never the owner.
   if (!m || /^fuobe_(wkr|adm)_/i.test(m[1])) return false;
-  const h = Buffer.from(tokenHash(m[1]));
-  const d = read();
-  const hit = d.tokens.find((t) => same(Buffer.from(t.hash), h));
+  if (authStoreClosed()) return false;
+  // Found by its SHA-256 (unique): what is looked up is a hash, never the token.
+  const hit = sql("SELECT id FROM auth_tokens WHERE hash = ?").get(tokenHash(m[1])) as { id: string } | undefined;
   if (!hit) return false;
   // Record use at most once an hour per token (avoids a write per request).
   if (Date.now() - (touched.get(hit.id) ?? 0) > 3_600_000) {
     touched.set(hit.id, Date.now());
-    write({ ...d, tokens: d.tokens.map((t) => (t.id === hit.id ? { ...t, lastUsedAt: Date.now() } : t)) });
+    try {
+      authWrite(() => sql("UPDATE auth_tokens SET last_used_at = ? WHERE id = ?").run(Date.now(), hit.id));
+    } catch (e) {
+      console.warn(`[fuobe] Couldn't note an API token's use: ${(e as Error).message}`);
+    }
   }
   return true;
 }

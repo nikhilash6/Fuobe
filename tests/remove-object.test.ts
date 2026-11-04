@@ -78,10 +78,10 @@ describe("Remove object: erasers", () => {
     expect(getModel("oss-void-remove")!.routes[0].endpoint).toBe("video-erase-void");
     expect(getModel("oss-vace-remove-painted")!.options.requires).toMatchObject({ mask: true });
     expect(promptOptional(getModel("oss-vace-remove")!, "remove-object")).toBe(false);
-    // VRAM and licences are said where the model is picked.
-    expect(getEraser("oss-void-remove")!.note).toMatch(/CogVideoX License/);
-    expect(getEraser("oss-void-remove")!.note).toContain("· 24–40 GB GPU ·");
-    expect(getModel("oss-void-remove")!.tagline).toContain("· 24–40 GB GPU ·");
+    // VRAM is said where the model is picked (licences are on Thanks & licences).
+    expect(getEraser("oss-void-remove")!.note).not.toMatch(/licen[cs]e/i);
+    expect(getEraser("oss-void-remove")!.note).toMatch(/· 24–40 GB GPU$/);
+    expect(getModel("oss-void-remove")!.tagline).toMatch(/· 24–40 GB GPU$/);
     expect(getEraser("oss-vace-remove")!.note).toMatch(/24 GB/);
   });
 

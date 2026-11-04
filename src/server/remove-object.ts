@@ -1,9 +1,8 @@
 import "server-only";
-import { originalSoundProblem, separates, soundLine, type SoundChoice } from "@/lib/av/original-sound";
-import { SoundChoiceSchema } from "./shorts-schemas";
+import { ORIGINAL_SOUND_IDS, originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
-import { characterLicenceLine, PERSON_REMOVER_LORA } from "@/lib/catalog/character-swap";
+import { PERSON_REMOVER_LORA } from "@/lib/catalog/character-swap";
 import {
   chooseEraser,
   getEraser as chooseEraserById,
@@ -70,10 +69,10 @@ export interface RemovalBody {
   source: { url: string; name?: string; duration?: number; fps?: number; width?: number; height?: number; hasAudio?: boolean };
   range?: RemoveRange;
   seed?: number;
-  /** Original sound (unset = Everything). */
-  sound?: SoundChoice;
   /** H3 Person Removal: how far the person's mask is grown, in pixels. */
   maskGrow?: number;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
 }
 
 const fileUrl = z.string().startsWith("/api/files/").max(500);
@@ -102,8 +101,9 @@ export const RemovalBodySchema = z.object({
   }),
   range: z.object({ start: seconds, end: seconds }).optional(),
   seed: z.number().int().min(0).max(2 ** 48).optional(),
-  sound: SoundChoiceSchema.optional(),
   maskGrow: z.number().int().min(REMOVE.maskGrow.min).max(REMOVE.maskGrow.max).optional(),
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound: z.enum(ORIGINAL_SOUND_IDS).optional(),
   /** A client nonce for one submit: a repeat gets the first answer (see once()). */
   requestId: z.string().trim().min(8).max(64).optional(),
 });
@@ -233,9 +233,8 @@ function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boole
         "Preview the mask first: the person filled green, as H3 will see them — keep every part of them covered (hands, hair, a shadow); grow the mask if an edge shows",
         "When it's done, each 22-frame window has its own preview: redo a weak one with a new seed, and every window before it is kept exactly",
         "Needs the H3 Relay nodes on your ComfyUI (scripts/comfy/install-comfyui.sh with H3_RELAY=1) and 24 GB of VRAM with offloading (64–128 GB of RAM); the part runs at 24 fps",
-        characterLicenceLine("open", "fuobe-character-swap").replace("nodes GPL-3.0", "H3 Relay nodes GPL-3.0"),
       );
-    } else notes.push(eraser.effects ? "VOID needs a 24–40 GB GPU. Its CogVideoX base is licensed for commercial use only after registering, up to 1 million visits a month" : "Wan 2.1 VACE 14B needs a 24 GB GPU · Apache-2.0 (SAM 3.1: Meta's SAM License)");
+    } else notes.push(eraser.effects ? "VOID needs a 24–40 GB GPU" : "Wan 2.1 VACE 14B needs a 24 GB GPU");
   } else {
     const max = pieceSeconds(eraser, source.fps);
     const limit = eraser.window ? `up to ${eraser.window.cap} frames (${max.toFixed(1)} s of this clip)` : max < 5 ? "clips under 5 s" : `up to ${Math.floor(max)} s`;
@@ -244,10 +243,6 @@ function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boole
     if (eraser.everyone) notes.push("LTX Clean Plate removes every person in the shot — it doesn't take a target");
   }
   if (!wholeClip(range, source.duration)) notes.push("Only the selected part comes out (the rest of the clip isn't kept)");
-  const soundProblem = originalSoundProblem(eraser.engine, body.sound);
-  if (soundProblem) throw new ShortsError(soundProblem, 422);
-  const split = separates(eraser.engine, body.sound) && !!source.hasAudio;
-  if (split) notes.push(`Original sound: ${soundLine(body.sound)} — your GPU splits the clip's sound first (free)`);
 
   const name = (body.source.name ?? "").replace(/\.[a-z0-9]{2,4}$/i, "").trim().slice(0, 40);
   const title = removalTitle({ mode: body.mode, prompt: body.prompt, everyone: eraser.everyone });
@@ -265,8 +260,9 @@ function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boole
       points,
       mask: body.mode === "paint" && eraser.engine === "open" ? body.mask : undefined,
       ...(body.seed !== undefined ? { seed: body.seed } : {}),
-      ...(split && body.sound && { sound: body.sound }),
       ...(eraser.cleanFrame && body.maskGrow !== undefined ? { maskGrow: body.maskGrow } : {}),
+      // What of the clip's sound goes back: the cloud puts it all back (DBS runs on your GPU).
+      ...(body.originalSound && { originalSound: originalSoundOn(body.originalSound, body.engine) }),
     },
   };
 }

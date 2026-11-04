@@ -12,20 +12,18 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToday } from "@/hooks/use-today";
-import { estimateCost, imageLimit, inferOperation, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
-import type { Engine, GenerationRequest, GenParams, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
+import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
+import type { Engine, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
 import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } from "@/lib/lyrics";
 import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
-import { putsBedBack, voiceFirstApplies, voiceFirstCost, voiceFirstDefault, voiceSource } from "@/lib/av/voice-first";
-import { VoiceFirstSwitch } from "@/components/studio/voice-first-switch";
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
-import { CONNECT_GPU_EVENT, enhance, ownGpuOf, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useStatus } from "@/lib/api";
+import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
@@ -42,7 +40,6 @@ import {
   keyframeChain,
   moveFrameAt,
   OPEN_MIN_GAP,
-  type FrameSupport,
 } from "@/lib/catalog/keyframes";
 import { timingFor, timingFromTimes, timingProblem, type InbetweenTiming } from "@/lib/inbetween";
 import { appModels, presetGpuKey, presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipe-routes";
@@ -59,13 +56,11 @@ import {
   filterModels,
   firstMissingSlot,
   followEngineParams,
-  framesRequest,
   framesShape,
   framesSlots,
   framesUploading,
   layoutBoxModel,
   layoutNotes,
-  layoutRequest,
   layoutShape,
   leaveFrames,
   leaveLayout,
@@ -81,6 +76,7 @@ import {
   prestepCost,
   pushRecent,
   routeParams,
+  saysYourGpu,
   untouchedParams,
   settingsShape,
   showsPrompt,
@@ -99,6 +95,7 @@ import { h3ReferenceProblem, openReferenceMode } from "@/lib/h3-references";
 import { badgeFor, badgeText, dropGpuRetry, openGpuSetup, setGpuRetry, useGpuBadges } from "@/hooks/use-gpu";
 import { AttachMenu } from "./attach-menu";
 import { useAttach, useComposerBridge, useUploadReaper } from "./attachments";
+import { buildRequest, type FramesContext } from "./build-request";
 import { DialogueEditor, LanguageChip, VoicePicker } from "./audio-controls";
 import { FramesStrip, type FramesNotice } from "./frames-strip";
 import { LayoutStrip } from "./layout-strip";
@@ -122,7 +119,9 @@ import { SketchTools } from "./sketch-tools";
 import { RECENT_MODELS, useStoredList } from "./stored-list";
 import { usePresetUrl, useStartRequest, useStudio, type Draft } from "./studio-context";
 import { useEdgeFade } from "./use-edge-fade";
-import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning, type CleanedSlot } from "@/components/audio-tools/clean-voice-switch";
+import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning } from "@/components/audio-tools/clean-voice-switch";
+import { useVoiceFirstLive, useVoiceFirstShown, VoiceFirstSwitch } from "@/components/audio-tools/voice-first-switch";
+import { VOICE_FIRST_PARAM, voiceFirstDefault } from "@/lib/av/voice-first";
 import { useSignature } from "../palettes/use-signature";
 import { placeholdersOn } from "@/lib/demo-mode";
 
@@ -159,85 +158,6 @@ const defaultLines = (m: ModelDef) => {
 };
 
 // ---------------------------------------------------------------------------
-
-/** Frames mode, as the request needs it: what the model does with frames, the clip's length, and whether it's the open chain. */
-interface FramesContext {
-  support: FrameSupport;
-  duration: number;
-  chained: boolean;
-  /** Keyframe animation (Fuobe Animation): each gap's timing, fitted to the frames and the engine. */
-  animation?: { timing: InbetweenTiming };
-}
-
-/**
- * The draft's keyframe-animation settings (params.extra.inbetween, stillMouth) go only with an animation: after Animation
- * is turned off or another model is picked they stay in the draft (to come back to) but are not sent to that model.
- */
-function withoutAnimation(params: GenParams, animating: boolean): GenParams {
-  const extra = params.extra;
-  if (animating || !extra || !("inbetween" in extra || "stillMouth" in extra)) return params;
-  const { inbetween: _i, stillMouth: _s, ...rest } = extra;
-  return { ...params, extra: Object.keys(rest).length ? rest : undefined };
-}
-
-function buildRequest(
-  feature: string,
-  draft: Pick<Draft, "slots" | "refs" | "presetId" | "modelId" | "prompt" | "negativePrompt" | "params" | "presetOptions" | "presetStrength" | "mix" | "frames" | "layout" | "refClips" | "refAudios">,
-  op: Operation | undefined,
-  promptSuffix?: string,
-  refKind: MediaKind = "image",
-  frames?: FramesContext,
-  /**
-   * The model's needs: a Fuobe Original (runs on both engines) names the engine switched to; a model that takes
-   * looks (Fuobe Soul) takes the look's strength with its default look too (no presetId); a model with a References mode on
-   * your GPU (MiniMax H3: Pika H3 Flex) takes the reference clips and voice or music clips.
-   */
-  target: { engine?: Engine; looks?: boolean; refs?: boolean } = {},
-): GenerationRequest {
-  const s = draft.slots;
-  const refs = draft.refs.filter((x) => !!x?.ref).map((x) => x.ref);
-  let images = [s.image, s.image2, s.image3].filter((x): x is SlotValue => !!x?.ref).map((x) => x.ref).concat(refKind === "image" ? refs : []);
-  const videos = refKind === "video" ? refs : target.refs && !draft.frames ? (draft.refClips ?? []).filter((x) => !!x?.ref).map((x) => x.ref) : [];
-  const audios = target.refs && !draft.frames ? (draft.refAudios ?? []).filter((x) => !!x?.ref).map((x) => x.ref) : [];
-  let endImage = s.endImage?.ref || undefined;
-  let params = withoutAnimation(draft.params, !!(draft.frames && frames?.animation));
-  let pinned = op;
-  // Frames mode: the stills in order at their times (or the first and last as start and end frame), at the strip's length.
-  if (draft.frames && frames) {
-    const sent = framesRequest(draft.frames, frames);
-    images = sent.images;
-    endImage = sent.endImage;
-    params = { ...params, ...sent.params, ...(frames.animation && { extra: { ...params.extra, inbetween: frames.animation.timing } }) };
-    pinned = op ?? sent.op;
-  }
-  // Layout mode: the boxes ride as params.extra.layout, captioned with the prompt; the plan compiles them for the model.
-  if (draft.layout) params = layoutRequest(draft.layout, draft.prompt, params).params;
-  return {
-    feature,
-    presetId: draft.presetId,
-    modelId: draft.modelId,
-    op: pinned,
-    prompt: promptSuffix && draft.prompt.trim() ? `${draft.prompt.trim().replace(/[.\s]+$/, "")}. ${promptSuffix}` : draft.prompt,
-    negativePrompt: draft.negativePrompt || undefined,
-    inputs: {
-      images: images.length ? images : undefined,
-      endImage,
-      mask: s.mask?.ref || undefined,
-      sketch: s.sketch?.ref || undefined,
-      voiceAudio: s.voiceAudio?.ref || undefined,
-      voiceAudio2: s.voiceAudio2?.ref || undefined,
-      video: s.video?.ref || undefined,
-      audio: s.audio?.ref || undefined,
-      videos: videos.length && !draft.frames ? videos : undefined,
-      audios: audios.length ? audios : undefined,
-    },
-    params,
-    presetOptions: draft.presetOptions,
-    ...((draft.presetId || target.looks) && draft.presetStrength !== undefined && draft.presetStrength < 1 && { presetStrength: draft.presetStrength }),
-    ...(draft.presetId && draft.mix && { mix: draft.mix }),
-    ...(target.engine && { engine: target.engine }),
-  };
-}
 
 /**
  * Whether the preset's preview was made with its recipe on this engine ("Used for this preview" on that model). The covers
@@ -315,6 +235,7 @@ export function Composer({ docked }: { docked: boolean }) {
   const catalog = useCatalog();
   const presetUrl = usePresetUrl();
   const [engine, setEngine, engineMode] = useEngine();
+  const visitor = useLikelyVisitor();
   const create = useCreateGeneration();
   const [enhancing, setEnhancing] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -361,6 +282,12 @@ export function Composer({ docked }: { docked: boolean }) {
   // video is attached (lip re-sync keeps the clip's length).
   const voiceRef = config.voiceFacts && !typed.slots.video?.ref && !typed.slots.audio?.uploading ? typed.slots.audio?.ref : undefined;
   const voice = useClipFacts(voiceRef).data;
+  // "Clean the voice first" (Transcribe, Lipsync): the recording or the video's speech apart from its music and effects
+  // before the model hears it. On for a video's speech on your GPU, off for a recording (src/lib/av/voice-first.ts).
+  const voiceFirstShown = useVoiceFirstShown();
+  const voiceFirstLive = useVoiceFirstLive();
+  const [voiceFirstAsked, setVoiceFirstAsked] = useState<boolean | null>(null);
+  const voiceFirstKind: "audio" | "video" | null = !config.voiceFirst ? null : typed.slots.audio?.ref ? "audio" : typed.slots.video?.ref && config.ops.includes("transcribe") ? "video" : null;
   const draft = useMemo(
     () =>
       config.clipFacts
@@ -409,7 +336,7 @@ export function Composer({ docked }: { docked: boolean }) {
   const takesLook = !!model?.options.looks;
   const preset: Preset | undefined = draft.presetId && !takesLook ? catalog.getPreset(draft.presetId) : config.preset;
   const lockedModel = preset?.type === "app";
-  // Fuobe DoP's orbit moves (N7-7): the Exact switch films the orbit by its numbers through /api/fly-around.
+  // Fuobe DoP's orbit moves: the Exact switch films the orbit by its numbers through /api/fly-around.
   // It starts with a 3D depth step and runs on the studio's own GPU: the owner's for now.
   const owner = useIsOwner();
   const exactId = owner && preset?.type === "motion" && takesExact(preset.id) ? preset.id : undefined;
@@ -681,19 +608,6 @@ export function Composer({ docked }: { docked: boolean }) {
     return { mentions, sketched, signed, request: m ? stripMotionPaths(sketched.request, m) : sketched.request };
   };
   const { mentions, sketched, signed } = prepare(draft);
-  // "Clean the voice first" (Transcribe, Lipsync): on by default for a video's soundtrack, off for an audio upload; a pick holds
-  // while the same speech file stays attached. The speech's header times or prices the step.
-  const vfOp = studioOp ?? (model ? inferOperation(model, signed.request) : undefined);
-  const vfSource = config.voiceFirst ? voiceSource(signed.request, vfOp) : null;
-  const vfApplies = !!config.voiceFirst && voiceFirstApplies(signed.request, vfOp) && !draft.slots.audio?.uploading && !draft.slots.video?.uploading;
-  const [vfPick, setVfPick] = useState<{ ref: string; on: boolean } | null>(null);
-  // A voice "Clean up voice" already cleaned as it was added starts off and says so: it isn't cleaned twice unless asked.
-  const vfCleaned = !!vfSource && !!(draft.slots[vfSource.slot] as CleanedSlot | undefined)?.original;
-  const voiceFirstOn = vfApplies && (vfPick && vfPick.ref === vfSource?.url ? vfPick.on : !vfCleaned && voiceFirstDefault(signed.request, vfOp));
-  const vfFacts = useClipFacts(vfApplies ? vfSource?.url : undefined).data;
-  const vfClip = useClipFacts(vfApplies && vfOp === "lipsync" ? signed.request.inputs?.video : undefined).data;
-  const vfEngine = model?.engine ?? engine;
-  const vfBed = vfApplies && !!vfOp && putsBedBack(signed.request, vfOp, vfEngine, vfClip?.hasAudio);
   // Hosted runs: an open model may run on this studio's GPUs. Its price there is the server's (the words of the
   // studio's billing service, or free), asked again 300 ms after a change. With the account's own GPU online, that
   // GPU is the default; the person can pick either.
@@ -763,8 +677,6 @@ export function Composer({ docked }: { docked: boolean }) {
       if (cost !== null) cost += prestepCost(preset, plan.model.id, engine);
       // PixeletedFace pixelates each picture's faces afterwards ($0.01 a picture in the cloud, free on the GPU).
       if (cost !== null) cost += postStepCost(plan.model.id, planned.presetId, engine, planned.params?.numOutputs ?? 1, catalog.getModel, today);
-      // "Clean the voice first": ElevenLabs Voice Isolation in the cloud (per minute of speech), free on your GPU.
-      if (cost !== null && voiceFirstOn) cost += voiceFirstCost(plan.model.engine, vfFacts?.duration, catalog.getModel);
     } catch (e) {
       planError = (e as Error).message;
     }
@@ -887,7 +799,8 @@ export function Composer({ docked }: { docked: boolean }) {
     );
     // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
     const hosted = viewerInfo?.hosted ? { place: runOn, ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
-    const body = { ...sent.request, ...hosted, ...(skipGpu && { gpuCheck: "skip" }), ...(voiceFirstOn && { voiceFirst: true }) } as typeof sent.request;
+    const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
+    const body = { ...withVoiceFirst, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
     create.mutate(body, {
       // Accepted: nothing to try again (a card opened later never starts this run a second time).
       onSuccess: () => dropGpuRetry(),
@@ -957,6 +870,8 @@ export function Composer({ docked }: { docked: boolean }) {
   }, [lightLeft, setSlot]);
   const setInsertRange = useCallback((startTime: number, endTime: number) => setDraft((d) => ({ params: { ...d.params, startTime, endTime } })), [setDraft]);
   const opNote = op && model ? routesFor(model, op)[0]?.note : undefined;
+  const voiceFirstEngine: Engine = model?.engine ?? engine;
+  const cleanFirst = voiceFirstShown && !!voiceFirstKind && (voiceFirstAsked ?? (voiceFirstEngine === "open" && voiceFirstDefault(voiceFirstKind, voiceFirstLive)));
   // Booleans in, not the model's options object: the React Compiler keeps the memos above.
   const showPrompt = showsPrompt(
     { hidePrompt: config.hidePrompt, modelPrompt: config.modelPrompt },
@@ -997,13 +912,15 @@ export function Composer({ docked }: { docked: boolean }) {
   const alternativeHref = alternative && `${alternative.href}${video?.startsWith("/api/files/") ? `&video=${encodeURIComponent(video)}` : ""}`;
   const demo = !!(model && placeholdersOn(status?.demoMode));
   // On the open engine every run is free on the GPU: said even before the run can be planned (no voice sample, no clip yet).
-  const ownCostText = costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), unknown: loraPriceUnknown }, formatCost);
+  // Said with "your GPU" only off a hosted studio: there the run may use the studio's GPUs, and the chip or hint says where.
+  const gpuRun = saysYourGpu(engine, hostedHere);
+  const ownCostText = costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), unknown: loraPriceUnknown, gpu: gpuRun }, formatCost);
   // An account's paid run is billed to its own provider account (Your keys), or still needs that key.
   const payer = paidThrough(model, status);
   const missingKey = needsKey(model, status)?.[0];
   const ownPayerText = payer && cost ? ` · ${billedTo(payer)}` : missingKey ? ` · ${addKeyLabel(missingKey).toLowerCase()}` : "";
   // On this studio's GPUs: the quote's words (none from the server: free, as the open engine always is).
-  // An exact orbit runs as a fly-around: its own price (N7-7).
+  // An exact orbit runs as a fly-around: its own price.
   const exactPrice = exact ? fly.price : "";
   const costText = exactPrice || (poolPrice ? (priceUnavailable ? "Price unavailable" : hostedQuote?.text || ownCostText) : ownCostText);
   const payerText = poolPrice ? "" : ownPayerText;
@@ -1172,7 +1089,10 @@ export function Composer({ docked }: { docked: boolean }) {
     else if (framesGap) framesNotice = { text: `${framesGap}.`, tone: "warn" };
     else if (note) framesNotice = { text: note, tone: "info", action };
     else if (animationTiming && model.engine === "cloud")
-      framesNotice = { text: "In the cloud each gap is one clip with every frame kept, played at 16 fps. Faster speeds and 24 fps playback are on your GPU, free.", tone: "info" };
+      framesNotice = {
+        text: `In the cloud each gap is one clip with every frame kept, played at 16 fps.${!visitor && engineMode === "both" ? " Faster speeds and 24 fps playback are on your GPU, free." : ""}`,
+        tone: "info",
+      };
   }
   // Style: Animation, in Frames mode: Fuobe Animation (when it's on in this install), and back to the engine's frames model.
   const animationModel = config.frames && catalog.offered("fuobe-animation", engine) ? catalog.getModel("fuobe-animation") : undefined;
@@ -1455,19 +1375,8 @@ export function Composer({ docked }: { docked: boolean }) {
       )}
       {/* On a phone the slot row scrolls sideways, so the switch gets its own line under it. */}
       {showAttachments && !collapsed && !framesOn && hasCleanVoice && <CleanVoiceSwitch status className="px-3 pb-2 sm:hidden" hint="first, free on your GPU" />}
-      {showAttachments && !collapsed && vfApplies && vfSource && (
-        <VoiceFirstSwitch
-          className="px-3 pb-2"
-          engine={vfEngine}
-          on={voiceFirstOn}
-          onChange={(on) => setVfPick({ ref: vfSource.url, on })}
-          seconds={vfFacts?.duration}
-          device={ownGpuOf(status)?.device}
-          bed={vfBed}
-          clip={vfOp === "lipsync" && !!signed.request.inputs?.video && vfClip?.hasAudio !== false}
-          cleaned={vfCleaned}
-          getModel={catalog.getModel}
-        />
+      {showAttachments && !collapsed && !framesOn && voiceFirstShown && voiceFirstKind && (
+        <VoiceFirstSwitch className="px-3 pb-2" engine={voiceFirstEngine} on={cleanFirst} onChange={setVoiceFirstAsked} seconds={voice?.duration} lip={!config.ops.includes("transcribe")} />
       )}
 
       {showPrompt && (
@@ -1487,7 +1396,7 @@ export function Composer({ docked }: { docked: boolean }) {
         />
       )}
 
-      {/* Fuobe DoP's orbit moves: the Exact switch and its numbers (N7-7). */}
+      {/* Fuobe DoP's orbit moves: the Exact switch and its numbers. */}
       {exactId && !collapsed && (
         <ExactOrbitControls
           className="mx-2 mb-2"
@@ -1728,7 +1637,7 @@ export function Composer({ docked }: { docked: boolean }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums">
-                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
+                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), compact: true, unknown: loraPriceUnknown, gpu: gpuRun }, formatCost)}</span>
                 <span className="hidden sm:inline">
                   {costText}
                   {payerText}
@@ -1761,10 +1670,19 @@ export function Composer({ docked }: { docked: boolean }) {
               onClick={submit}
               disabled={create.isPending || signature.lock.isPending || priceUnavailable}
               aria-label={blocker ? `Generate — ${blocker.message}` : "Generate"}
+              aria-busy={create.isPending || signature.lock.isPending || undefined}
               // Blocked, it stays the brand colour (paler, the arrow still 3:1 or more): pressing it still says what's missing and points at it.
               className={cn("size-10 shrink-0 rounded-full", blocker && "bg-primary/70 hover:bg-primary/80")}
             >
-              {create.isPending || signature.lock.isPending ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+              {create.isPending || signature.lock.isPending ? (
+                // A quick send keeps its arrow; a wait of more than a moment hands over to the spinner.
+                <span className="grid place-items-center">
+                  <ArrowUp className="motion-hand-off col-start-1 row-start-1 size-4" />
+                  <Loader2 className="motion-spinner col-start-1 row-start-1 size-4" />
+                </span>
+              ) : (
+                <ArrowUp className="size-4" />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -1859,4 +1777,4 @@ export function Composer({ docked }: { docked: boolean }) {
   );
 }
 
-export { buildRequest };
+export { buildRequest } from "./build-request";

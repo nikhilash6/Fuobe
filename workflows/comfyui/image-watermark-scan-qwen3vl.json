@@ -1,0 +1,379 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example.png"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "QWMDetect",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
+      "mode": "auto_qwen",
+      "boxes_json": "{\"coordinate_space\":\"pixels\",\"boxes\":[]}",
+      "detection_side": 1536,
+      "expand": 20,
+      "max_tokens": 2048,
+      "hint": "",
+      "edit_prompt": "",
+      "padding_ratio": 0.35,
+      "manual_mask": [
+        "1",
+        1
+      ],
+      "min_confidence": 0.65
+    }
+  },
+  "23": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "3",
+        1
+      ]
+    }
+  },
+  "40": {
+    "class_type": "GetImageSize",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "The photo's size"
+    }
+  },
+  "41": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "a * 4 // 7",
+      "values.a": [
+        "40",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Tile width (4/7 of the photo)"
+    }
+  },
+  "42": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "a * 4 // 7",
+      "values.a": [
+        "40",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Tile height (4/7 of the photo)"
+    }
+  },
+  "43": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "a - a * 4 // 7",
+      "values.a": [
+        "40",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Right tiles' left edge"
+    }
+  },
+  "44": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "a - a * 4 // 7",
+      "values.a": [
+        "40",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Bottom tiles' top edge"
+    }
+  },
+  "50": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "width": [
+        "41",
+        1
+      ],
+      "height": [
+        "42",
+        1
+      ],
+      "x": 0,
+      "y": 0
+    },
+    "_meta": {
+      "title": "Top left tile"
+    }
+  },
+  "51": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "width": [
+        "41",
+        1
+      ],
+      "height": [
+        "42",
+        1
+      ],
+      "x": [
+        "43",
+        1
+      ],
+      "y": 0
+    },
+    "_meta": {
+      "title": "Top right tile"
+    }
+  },
+  "52": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "width": [
+        "41",
+        1
+      ],
+      "height": [
+        "42",
+        1
+      ],
+      "x": 0,
+      "y": [
+        "44",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Bottom left tile"
+    }
+  },
+  "53": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "width": [
+        "41",
+        1
+      ],
+      "height": [
+        "42",
+        1
+      ],
+      "x": [
+        "43",
+        1
+      ],
+      "y": [
+        "44",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Bottom right tile"
+    }
+  },
+  "60": {
+    "class_type": "QWMDetect",
+    "inputs": {
+      "image": [
+        "50",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
+      "mode": "auto_qwen",
+      "boxes_json": "{\"coordinate_space\":\"pixels\",\"boxes\":[]}",
+      "detection_side": 1536,
+      "expand": 20,
+      "max_tokens": 2048,
+      "hint": "",
+      "edit_prompt": "",
+      "padding_ratio": 0.35,
+      "manual_mask": [
+        "1",
+        1
+      ],
+      "min_confidence": 0.65
+    },
+    "_meta": {
+      "title": "Find the marks: top left tile"
+    }
+  },
+  "61": {
+    "class_type": "QWMDetect",
+    "inputs": {
+      "image": [
+        "51",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
+      "mode": "auto_qwen",
+      "boxes_json": "{\"coordinate_space\":\"pixels\",\"boxes\":[]}",
+      "detection_side": 1536,
+      "expand": 20,
+      "max_tokens": 2048,
+      "hint": "",
+      "edit_prompt": "",
+      "padding_ratio": 0.35,
+      "manual_mask": [
+        "1",
+        1
+      ],
+      "min_confidence": 0.65
+    },
+    "_meta": {
+      "title": "Find the marks: top right tile"
+    }
+  },
+  "62": {
+    "class_type": "QWMDetect",
+    "inputs": {
+      "image": [
+        "52",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
+      "mode": "auto_qwen",
+      "boxes_json": "{\"coordinate_space\":\"pixels\",\"boxes\":[]}",
+      "detection_side": 1536,
+      "expand": 20,
+      "max_tokens": 2048,
+      "hint": "",
+      "edit_prompt": "",
+      "padding_ratio": 0.35,
+      "manual_mask": [
+        "1",
+        1
+      ],
+      "min_confidence": 0.65
+    },
+    "_meta": {
+      "title": "Find the marks: bottom left tile"
+    }
+  },
+  "63": {
+    "class_type": "QWMDetect",
+    "inputs": {
+      "image": [
+        "53",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
+      "mode": "auto_qwen",
+      "boxes_json": "{\"coordinate_space\":\"pixels\",\"boxes\":[]}",
+      "detection_side": 1536,
+      "expand": 20,
+      "max_tokens": 2048,
+      "hint": "",
+      "edit_prompt": "",
+      "padding_ratio": 0.35,
+      "manual_mask": [
+        "1",
+        1
+      ],
+      "min_confidence": 0.65
+    },
+    "_meta": {
+      "title": "Find the marks: bottom right tile"
+    }
+  },
+  "70": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "60",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Top left tile's report"
+    }
+  },
+  "71": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "61",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Top right tile's report"
+    }
+  },
+  "72": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "62",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Bottom left tile's report"
+    }
+  },
+  "73": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "63",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Bottom right tile's report"
+    }
+  }
+}

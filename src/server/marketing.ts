@@ -31,6 +31,7 @@ import {
   snapDuration,
   styleById,
   TEMPLATE_INDEX,
+  isCodeTemplate,
   UGC_MODELS,
   wordBudget,
   wordsOnTop,
@@ -51,6 +52,7 @@ import { routesFor } from "@/lib/catalog/plan";
 import { themeFrom, type AdLayout } from "@/components/ads/layout";
 import { adDraft } from "@/lib/layout-surfaces";
 import { LAYOUT_PARAM } from "@/lib/layout-prompt";
+import { END_CARD_VARIANTS } from "@/lib/motion/scenes/end-card/shared";
 import type { ChainSlot, Engine, GenerationRequest, ModelDef, Operation } from "@/lib/catalog/types";
 import { getBrand, getProduct } from "./brand";
 import { createPipeline, type PipelineStep } from "./chains";
@@ -124,8 +126,16 @@ export const ClickToAdBody = z.object({
   /**
    * End on the brand: a logo card after the ad, held 2–3 s. `image` is the card the page drew (brand colour,
    * logo, product name, CTA); without it the cloud puts the kit's logo on its main colour (the open engine needs it).
+   * `clip`: the card animated in the page (Kinetic Motion), joined as it is; `variant` names its style (a note only).
    */
-  endCard: z.object({ image: FILE.optional(), seconds: z.number().min(END_CARD.minSeconds).max(END_CARD.maxSeconds).optional() }).optional(),
+  endCard: z
+    .object({
+      image: FILE.optional(),
+      clip: FILE.optional(),
+      seconds: z.number().min(END_CARD.minSeconds).max(END_CARD.maxSeconds).optional(),
+      variant: z.enum(END_CARD_VARIANTS).optional(),
+    })
+    .optional(),
 });
 export type ClickToAdInput = z.infer<typeof ClickToAdBody>;
 
@@ -287,11 +297,15 @@ export interface PlanContext {
   script?: string;
 }
 
+/** Templates drawn in the browser (exact words in the brand's fonts) never go to a model. */
+export const CODE_TEMPLATE_REFUSAL = "This template is made in your browser: open it in Marketing Studio";
+
 /** Marketing Studio: one run of a template (images) or a pipeline (motion over several shots, UGC). */
 export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan {
   const f = FORMATS[input.format as FormatId];
   const tpl: MarketingTemplate | undefined = input.templateId ? TEMPLATE_INDEX.get(input.templateId) : undefined;
   if (input.templateId && !tpl) throw new PlanError("This preset is no longer available.");
+  if (tpl && isCodeTemplate(tpl)) throw new PlanError(CODE_TEMPLATE_REFUSAL);
   if (tpl && tpl.format !== f.id) throw new PlanError("That template belongs to another format");
   const open = input.engine === "open";
   const product = ctx.product ?? null;
@@ -816,6 +830,7 @@ function withEndCard(plan: RunPlan, input: ClickToAdInput, ctx: { brand?: BrandK
     ad,
     adEncodedBy: plan.engine === "open" ? adEncoder(plan.steps.find((s) => s.key === ad)) : undefined,
     card: input.endCard.image,
+    clip: input.endCard.clip,
     background: ctx.background,
     logo: rasterLogo(ctx.brand),
     silence: ctx.silence,
@@ -832,8 +847,10 @@ function withEndCard(plan: RunPlan, input: ClickToAdInput, ctx: { brand?: BrandK
     return { ...s, request };
   });
   const seconds = Math.max(END_CARD.minSeconds, Math.min(END_CARD.maxSeconds, input.endCard.seconds ?? END_CARD.seconds));
-  const notes = [...plan.notes, `Ends on your logo card for ${seconds} s${input.endCard.image ? "" : " (the kit's logo on its main colour)"}`];
-  return { ...plan, steps: [...steps, ...card.steps], finals: [card.final], meta: { ...plan.meta, endCard: input.endCard.image ?? null }, notes };
+  const animated = !!input.endCard.clip;
+  const notes = [...plan.notes, `Ends on your ${animated ? "animated " : ""}logo card for ${seconds} s${input.endCard.image || animated ? "" : " (the kit's logo on its main colour)"}`];
+  const meta = { ...plan.meta, endCard: input.endCard.image ?? null, ...(animated && { endCardClip: input.endCard.clip, endCardVariant: input.endCard.variant ?? null }) };
+  return { ...plan, steps: [...steps, ...card.steps], finals: [card.final], meta, notes };
 }
 
 export function planClickToAd(input: ClickToAdInput, ctx: { product: Product; brand?: BrandKit | null; script: string; background?: string; silence?: string }): RunPlan {
@@ -1249,6 +1266,7 @@ export async function runMarketing(input: MarketingInput): Promise<{ runs: Marke
   const ctx = context(input);
   const f = FORMATS[input.format];
   const tpl = input.templateId ? TEMPLATE_INDEX.get(input.templateId) : undefined;
+  if (tpl && isCodeTemplate(tpl)) throw new PlanError(CODE_TEMPLATE_REFUSAL);
   let script: string | undefined;
   if (f.pipeline === "ugc") {
     const hook = hookById(input.hookId === undefined ? tpl?.hook : input.hookId);
@@ -1326,7 +1344,7 @@ export async function runClickToAd(input: ClickToAdInput): Promise<{ run: Market
   const script = input.script?.trim() ? fitScript(input.script, seconds) : (await clickToAdScript(input)).script;
   // Checked first with stand-ins, so a plan that can't run writes no file.
   const cloudCard = !!input.endCard && input.engine === "cloud";
-  const fallback = cloudCard && !input.endCard?.image;
+  const fallback = cloudCard && !input.endCard?.image && !input.endCard?.clip;
   if (cloudCard) planClickToAd(input, { product: ctx.product, brand: ctx.brand, script, background: "/api/files/placeholder.png", silence: "/api/files/placeholder.wav" });
   const plan = planClickToAd(input, {
     product: ctx.product,

@@ -20,9 +20,10 @@ import {
   type Policy,
   type Quote,
   type RefuseCode,
+  type RunFacts,
 } from "./billing";
 import { outputKind, previewGeneration } from "./generations";
-import { HOSTED_WORDS, inputCounts, poolAllowsRun, poolReady, queueFacts, runFacts, runOnPool } from "./hosted";
+import { HOSTED_WORDS, inputCounts, poolAllows, poolReady, queueFacts, runFacts, runOnPool } from "./hosted";
 import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
 import type { RunStamp } from "./run-stamp";
@@ -114,7 +115,7 @@ export async function decidePlace(account: Account, req: GenerationRequest, wish
   // From here on the run would be this install's: what it can't take there goes to the account's own GPU when it has one.
   const notHere = (error: string): PlaceDecision => (hasGpu && wish !== "pool" ? { kind: "own" } : { kind: "refuse", refusal: { status: 403, body: { error, code: "not-offered" }, headers: { [BILLING_HEADER]: "not-offered" } } });
   if (outputKind(planned.op, planned.model) === "model3d") return hasGpu && wish !== "pool" ? { kind: "own" } : { kind: "refuse", refusal: { status: 403, body: { error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, headers: {} } };
-  if (!poolAllowsRun(p, planned, req.presetId)) return notHere(HOSTED_WORDS.notOffered);
+  if (!poolAllows(p, planned.model.id, req.presetId)) return notHere(HOSTED_WORDS.notOffered);
   if (poolCardRefuses(planned.model.id)) return notHere(HOSTED_WORDS.rtxCard);
   if (req.loras?.length) return notHere(HOSTED_WORDS.loras);
   const inputs = inputCounts(req);
@@ -155,16 +156,23 @@ async function inputFacts(accountId: string, req: GenerationRequest): Promise<{ 
  * The moderation service's check of an account's run (no service: allowed, nothing to stamp). A refusal costs nothing:
  * it comes before any hold.
  */
-export async function moderateRun(account: Account, req: GenerationRequest, planned: Planned | null, place: "pool" | "own"): Promise<{ ok: true; checkOutputs: boolean } | { ok: false; refusal: Refusal }> {
+export async function moderateRun(
+  account: Account,
+  req: GenerationRequest,
+  planned: Planned | null,
+  place: "pool" | "own",
+  /** A result made in the browser (no plan): what it is and where the account works. */
+  browser?: { kind: RunFacts["kind"]; place: RunFacts["place"] },
+): Promise<{ ok: true; checkOutputs: boolean } | { ok: false; refusal: Refusal }> {
   if (!moderationConfigured()) return { ok: true, checkOutputs: false };
-  const kind = planned ? outputKind(planned.op, planned.model) : "image";
+  const kind = planned ? outputKind(planned.op, planned.model) : (browser?.kind ?? "image");
   const run = planned
     ? { ...runFacts(req, planned, kind), place: place === "pool" ? ("pool" as const) : planned.route.provider === "comfyui" ? ("own-gpu" as const) : ("own-key" as const) }
     : null;
   const a = await checkRun({
     requestId: nanoid(16),
     account: { id: account.id },
-    run: run ?? { ...runFacts(req, { model: { id: req.modelId, kind: "image", engine: "open" }, op: req.op ?? "", jobs: 1, outputs: 1, providerId: "", costUsd: null, loras: { applied: [] } }, "image"), place: "own-gpu" },
+    run: run ?? { ...runFacts(req, { model: { id: req.modelId, kind, engine: "open" }, op: req.op ?? "", jobs: 1, outputs: 1, providerId: browser ? "local" : "", costUsd: null, loras: { applied: [] } }, kind), place: browser?.place ?? "own-gpu" },
     prompt: req.prompt ?? "",
     negative: req.negativePrompt ?? null,
     inputs: await inputFacts(account.id, req),
@@ -216,7 +224,7 @@ export async function poolQuote(account: Account | null, asked: GenerationReques
   }
   if (planned.route.provider !== "comfyui") return null;
   if (account && wish !== "pool" && accountGpu(account.id) && (await ownGpuOnline(account.id))) return null;
-  if (p && (!p.hosted || !poolAllowsRun(p, planned, req.presetId))) return null;
+  if (p && (!p.hosted || !poolAllows(p, planned.model.id, req.presetId))) return null;
   if (poolCardRefuses(planned.model.id)) return null;
   const kind = outputKind(planned.op, planned.model);
   const q = await billingQuote(account ? accountFacts(account) : null, runFacts(req, planned, kind), queueFacts(account?.id ?? null));

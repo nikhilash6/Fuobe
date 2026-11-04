@@ -1,10 +1,8 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { listenInRange, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 // A run whose rows can't be made after its price was set aside: the hold is released once (docs/billing-hook.md).
 vi.mock("@/server/generations", async (importOriginal) => {
@@ -17,7 +15,7 @@ vi.mock("@/server/generations", async (importOriginal) => {
   };
 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-billing-release-"));
+const dir = tempDir("fuobe-billing-release-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 process.env.FUOBE_HOSTED_RUNS = "1";
@@ -48,9 +46,6 @@ afterAll(async () => {
   for (const k of ["FUOBE_HOSTED_RUNS", "FUOBE_BILLING_URL", "FUOBE_BILLING_TOKEN"]) delete process.env[k];
   await fake.close();
   await comfy.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 describe("a run that can't be made after its reserve", () => {

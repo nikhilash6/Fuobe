@@ -1,6 +1,7 @@
 "use client";
 
 import { Box, Loader2, PersonStanding } from "lucide-react";
+import { nanoid } from "nanoid";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -16,6 +17,8 @@ import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
+import { HandoffImage } from "@/components/nav/next-steps";
+import { ExampleRow } from "@/components/studio/example-row";
 import { useCreateGeneration, useEngine, useGenerations, useHydrated, useIsOwner, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
   FINAL_3D,
@@ -47,6 +50,7 @@ import {
 } from "@/lib/av/model3d";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { keepOffered, offered } from "@/lib/model-access";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useRunPreview } from "./hooks";
@@ -56,14 +60,9 @@ import { OtherSides, useOtherSidesOffered } from "./other-sides";
 import { IDOL_VIEWS_NOTE, canMakeOtherSides, fillOtherSides } from "@/lib/av/idol-views";
 import { HI3D_MODEL, withRefine, type Hi3dResolution } from "@/lib/av/hi3d";
 
-/**
- * A model's name, the notices its results carry ("Built with DINOv3") and, for open models, the licence the
- * picker shows (the page reads them from the catalog and the manifest).
- */
+/** A model's name, as the picker shows it (the page reads it from the catalog). */
 export interface Model3dInfo {
   name: string;
-  notices: string[];
-  licence?: { name: string; flags: string[]; notices: string[] };
 }
 
 /** What a mode's input looks like before anything is uploaded (the price is asked for with these). */
@@ -237,15 +236,18 @@ function ModePicker({ mode, onChange }: { mode: Model3dMode; onChange: (m: Model
   );
 }
 
-/** Image to 3D: a photo, several photos, words, an object in a photo or a splat → a model to spin, download, rig and animate. */
-export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
+/**
+ * Image to 3D: a photo, several photos, words, an object in a photo or a splat → a model to spin, download, rig and animate.
+ * examples: "See what it makes" (studioExamples("image-to-3d"), from the page), where the models go until there is one.
+ */
+export function Model3dStudio({ info, examples }: { info: Record<string, Model3dInfo>; examples?: ExampleRowData | null }) {
   const [engine, setEngine, engineMode] = useEngine();
   // A 3D model is finished on this server, so accounts don't get Image to 3D yet, even on their own GPU or key: said up
   // front, and the uploads and Make it 3D are off, instead of a run the server refuses.
   const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const create = useCreateGeneration();
-  const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d", MODEL3D_FILM_FEATURE], limit: 24 });
+  const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d", "app:app-photo-to-3d", MODEL3D_FILM_FEATURE], limit: 24 });
   const [mode, setMode] = useState<Model3dMode>("image");
   const router = useRouter();
   // A mode picked here goes in the URL (?mode=), so a reload or a shared link opens it again (UrlModel reads it).
@@ -313,6 +315,13 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
     },
     [fromUrl, fromImage],
   );
+  // A picture sent here ("Turn it into 3D" under a result): the photo of From an image, and the front of Several sides.
+  const takeHandoff = useCallback((url: string) => {
+    const slot: SlotValue = { ref: url, preview: url, kind: "image", id: nanoid(8) };
+    setMode((m) => (m === "multi" || m === "text" ? "image" : m));
+    setPhoto((p) => (p?.ref === url ? p : slot));
+    setViews((v) => (v.front ? v : { ...v, front: slot }));
+  }, []);
   // Models switched off in Settings → Models & licences leave the menu, and the pick falls back to one that is on.
   const choices = keepOffered(MODELS_3D[mode][engine], (m) => offered(access, m.id, engine));
   const wanted = picked[`${mode}:${engine}`];
@@ -360,7 +369,6 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
       onError: (e) => toastError(e),
     });
   };
-  const licence = modelId ? info[modelId]?.licence : undefined;
   const items = (results.data ?? []).filter((g) => g.feature !== "image-to-3d-step");
   const setSide = (s: ViewSide) => (v: SlotValue | null) => setViews((cur) => ({ ...cur, [s]: v }));
   // From several images on your GPU, with only the front in: Idol 3D makes the other three sides from it (idol-8).
@@ -379,6 +387,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
     <ToolShell title="Image to 3D" selfHostedOnly>
       <Suspense fallback={null}>
         <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} onImage={fromImage} />
+        <HandoffImage onImage={takeHandoff} />
       </Suspense>
       <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]}>
         {visitor && <SelfHostNote className="mt-3 max-w-xl">Image to 3D isn&apos;t available here.</SelfHostNote>}
@@ -509,8 +518,6 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                   </SelectContent>
                 </Select>
                 <p className="text-[12px] text-muted-foreground">{choices.find((m) => m.id === modelId)?.note}</p>
-                {!licence && info[modelId]?.notices.length > 0 && <p className="text-[12px] font-medium">{info[modelId].notices.join(" · ")}</p>}
-                {licence && licence.notices.length > 0 && <p className="text-[12px] text-muted-foreground">{licence.notices.join(" · ")}</p>}
               </div>
               {!idolSplat && (mode === "image" || mode === "multi") && <RefineOption engine={engine} value={refine} onChange={setRefine} openAllowed={refineAllowed} onUseGpu={() => setEngine("open")} />}
               {idol && (
@@ -550,6 +557,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
           )}
         </Panel>
       </div>
+      {examples && (visitor || (results.isSuccess && !items.length)) && <ExampleRow row={examples} layout="column" maxWidth={880} className="mt-12" />}
       <section id="your-3d-models" className="mx-auto mt-12 max-w-[880px] scroll-mt-6" aria-labelledby="models3d">
         {(results.isLoading || items.length > 0) && (
           <h3 id="models3d" className="mb-3 font-heading text-[22px]">
@@ -564,7 +572,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((g) => (
-              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={toFinal} />
+              <ResultCard key={g.id} g={g} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={toFinal} />
             ))}
           </div>
         )}
@@ -584,14 +592,12 @@ function retryOf(g: Generation): GenerationRequest {
 
 function ResultCard({
   g,
-  info,
   cloudAllowed,
   refineAllowed,
   finalAllowed,
   onFinal,
 }: {
   g: Generation;
-  info: Record<string, Model3dInfo>;
   cloudAllowed: boolean;
   refineAllowed: boolean;
   finalAllowed: boolean;
@@ -601,7 +607,7 @@ function ResultCard({
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
   if (g.kind === "video") return <FilmCard g={g} />;
-  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={onFinal} />;
+  return <ModelCard g={g} cloudAllowed={cloudAllowed} refineAllowed={refineAllowed} finalAllowed={finalAllowed} onFinal={onFinal} />;
 }
 
 /** A photoreal orbit filmed from a model ("Film it photoreal"): the clip, to watch and download. */

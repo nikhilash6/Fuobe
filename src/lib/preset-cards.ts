@@ -184,8 +184,10 @@ export interface PresetPreview {
    * Shown at rest instead of the poster: the clip's peak frame (preset-peaks.generated.ts, onPeak), where the clip
    * starts (`at`, in seconds) when it plays by itself, so nothing jumps. Its loop comes back to `from`, just before
    * the change starts, and a hover starts there. Home's cards and the preset header; the galleries keep their posters.
+   * `until`: the loop goes back to `from` from here instead of the clip's end (a template cover plays only the finished
+   * scene, never the photo it started from); the clip's last stretch, where it fades back, is never shown either.
    */
-  rest?: { src: string; at: number; from: number };
+  rest?: { src: string; at: number; from: number; until?: number };
   scene: PreviewScene;
   move?: CameraMove;
   fx?: PreviewFx;
@@ -283,7 +285,8 @@ export function motionMove(p: Pick<Preset, "id" | "name" | "category">): CameraM
 function keywordFx(n: string): PreviewFx | null {
   if (has(n, "firework", "confetti", "glitter", "fairies", "northern lights", "spark") || word(n, "rain", "money")) return "sparkle";
   if (has(n, "fire", "flame", "lava", "burn", "inferno", "volcano")) return "fire";
-  if (has(n, "water", "flood", "splash", "ocean", "aquarium", "bubble", "jelly", "dolphin") || word(n, "pool", "fish")) return "water";
+  // "Watermark" names a mark on a photo, not water.
+  if ((has(n, "water", "flood", "splash", "ocean", "aquarium", "bubble", "jelly", "dolphin") || word(n, "pool", "fish")) && !has(n, "watermark")) return "water";
   if (has(n, "freez", "frozen", "snow") || word(n, "ice")) return "ice";
   if (has(n, "air bending", "storm", "tornado", "smoke") || word(n, "wind", "air", "sand", "gas")) return "wind";
   if (has(n, "thunder", "lightning", "plasma", "atomic")) return "lightning";
@@ -382,7 +385,7 @@ export function previewScene(p: Pick<Preset, "type" | "name" | "category"> & { i
   }
   if (c === "commercial") return "product";
   if (has(n, "car", "building", "street", "city", "train", "helicopter", "road", "giant", "colossus", "concert", "tiny planet")) return "city";
-  if (has(n, "fish", "ocean", "flood", "water", "sand", "earth", "nature", "garden", "northern", "timelapse", "planet")) return "landscape";
+  if (has(n, "fish", "ocean", "flood", "water", "sand", "earth", "nature", "garden", "northern", "timelapse", "planet") && !has(n, "watermark")) return "landscape";
   if (has(n, "head", "face", "eyes", "body", "hair", "skin", "tears", "mask")) return "portrait";
   if (["destruction", "scale"].includes(c)) return pick(p.id, ["city", "landscape", "portrait"] as const);
   if (["elements", "nature", "color grade", "transitions"].includes(c)) return pick(p.id, ["landscape", "city", "portrait"] as const);
@@ -410,6 +413,11 @@ export const isCover = (p: Pick<PresetPreview, "move" | "fx">) => !p.move && !p.
  * with the poster's version (?v=), which the generators hash from both files.
  */
 export const thumbOf = (poster: string) => poster.replace(/\/([^/]+)$/, "/thumbs/$1");
+
+/** A preset poster's 96 px copy (mini/ next to it, the same version): the menus' rows and the phone's tiles (pnpm eval:covers). */
+export const miniOf = (poster: string) => poster.replace(/\/([^/]+)$/, "/mini/$1");
+/** Whether a poster has a mini copy: a preset's own poster (/previews/presets/<id>.jpg), not a peak frame or a template's. */
+export const hasMini = (poster: string) => /^\/previews\/presets\/[^/]+\.jpg(\?|$)/.test(poster);
 
 /** The card resting on its clip's peak frame (preset-peaks.generated.ts) when it has one, else as it is. */
 export function onPeak(card: PresetCardData): PresetCardData {

@@ -2,10 +2,10 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * The evaluation harness (scripts/eval) end to end against Fuobe's real route handlers, served over
@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-eval-harness-"));
+const dir = tempDir("fuobe-eval-harness-");
 const results = path.join(dir, "results");
 process.env.FUOBE_DATA_DIR = path.join(dir, "data");
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -123,7 +123,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise((r) => server.close(r));
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const sink = () => {
@@ -349,10 +348,26 @@ describe("the runner on the demo provider", () => {
     type Plan = { jobs: { case: string; variant: string; model: string; skip?: string; costUsd?: number | null }[] };
     const dry = async (args: string[]) => JSON.parse((await cli(["run", ...args, "--dry-run", "--json"])).stdout) as Plan;
     setSetting("falKey", "fal-test-key");
+    // Group swap, Scene edit, From picture and Finish run on your GPU only: on the cloud their jobs say so and skip.
+    const cloud = (p: Plan) => {
+      const gpu = p.jobs.filter((j) => j.skip === "runs on open only");
+      expect(gpu.map((j) => j.case)).toEqual([
+        "genjutsu/group",
+        "genjutsu/group-one-by-one",
+        "genjutsu/scene-change",
+        "genjutsu/scene-remove",
+        "genjutsu/scene-background",
+        "genjutsu/picture",
+        "genjutsu/picture-golden-halo",
+        "genjutsu/fix-faces",
+        "genjutsu/fix-colours",
+      ]);
+      return p.jobs.filter((j) => !gpu.includes(j));
+    };
     try {
       // With fal connected, each mode runs its own partner on fal.
       const g = await dry(["--suite", "genjutsu", "--engine", "cloud", "--variants", "partner", "--allow-fixtures"]);
-      expect(g.jobs.map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
+      expect(cloud(g).map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
         ["genjutsu/move", "kling-motion-control", null],
         // A case with no partner of its own runs its own models (the -lite tiers, the Original without its first frame).
         ["genjutsu/move-lite", "fuobe-genjutsu-motion-lite", null],
@@ -366,7 +381,7 @@ describe("the runner on the demo provider", () => {
       ]);
       // The Originals on the cloud: their hosted open halves on fal.
       const o = await dry(["--suite", "genjutsu", "--engine", "cloud", "--variants", "original", "--allow-fixtures"]);
-      expect(o.jobs.map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
+      expect(cloud(o).map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
         ["genjutsu/move", "fuobe-genjutsu-motion", null],
         ["genjutsu/move-lite", "fuobe-genjutsu-motion-lite", null],
         ["genjutsu/character", "fuobe-character-swap", null],
@@ -414,8 +429,8 @@ describe("the runner on the demo provider", () => {
         ["shorts/segment", "gemini-omni-flash", null],
         ["shorts/session", "gemini-omni-flash", null],
       ]);
-      // DoP's Mixed Media effects, blind: the shipped preset on Fuobe DoP against its words on Kling 2.5 Turbo (the
-      // owner's call of 2026-10-30), the first suite to run once paid keys exist, with the rule it decides by.
+      // DoP's Mixed Media effects, blind: the shipped preset on Fuobe DoP against its words on Kling 2.5 Turbo (decided
+      // 2026-10-30), the first suite to run once paid keys exist, with the rule it decides by.
       const dmm = await dry(["--suite", "dop-mixed-media", "--engine", "cloud", "--variants", "original,partner", "--seeds", "1001", "--allow-fixtures"]);
       expect(dmm.jobs).toHaveLength(16);
       expect(new Set(dmm.jobs.map((j) => `${j.variant}:${j.model}:${j.skip ?? ""}`))).toEqual(new Set(["original:fuobe-dop:", "partner:kling-2-5-turbo:"]));
@@ -676,7 +691,7 @@ describe("report, blind review, compare and promote", () => {
 
   it("serves both sounds of a blind pair in one format, so the file type doesn't give the model away", () => {
     if (spawnSync("ffmpeg", ["-version"]).status !== 0) return; // re-encoding needs ffmpeg
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-review-audio-"));
+    const runDir = tempDir("fuobe-review-audio-");
     const tone = (file: string) => spawnSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5", path.join(runDir, file)]);
     const rows = [
       ["dbs-dub", ".flac"],

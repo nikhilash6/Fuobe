@@ -1,19 +1,16 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput, Operation, OutputFile } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
 import { CLICK_OPEN_PROBLEM, HAND_OFF, REMOVE_SCENE } from "@/lib/catalog/remove-object";
+import { tempDir } from "./helpers/temp-dir";
 
 // The comfyui provider driving the remove-object graphs (SAM 3.1 + VACE / VOID), the matte graphs' two outputs and
 // the depth graphs' colour map and side-by-side switch, bound for real on the library graphs.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-remove-object-comfy-"));
+const tmp = tempDir("fuobe-remove-object-comfy-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { collectOutputs, getWorkflow, prepareWorkflow } = await import("@/server/providers/comfyui");
 const { pickOutput } = await import("@/server/generations");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const clip: MediaInfo = { container: "mp4", hasVideo: true, hasAudio: true, duration: 8, videoDuration: 8, width: 1280, height: 720, fps: 30, frames: 240 };
 const prepare = (id: string, input: Partial<GenInput>, op: Operation = "remove-object") =>

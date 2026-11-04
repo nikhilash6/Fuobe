@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ChevronDown, Copy, Download, FileUp, Loader2, MessageSquarePlus, Pencil, Play, Plus, Search, ShieldCheck, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Copy, Download, FileUp, Loader2, MessageSquarePlus, Pencil, Play, Plus, Search, ShieldCheck, Trash2, Upload, Wrench, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useDeferredValue, useId, useRef, useState } from "react";
@@ -23,22 +23,22 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useIsOwner, useIsVisitor } from "@/lib/api";
 import { SKILL_LIMITS, SKILL_NAME_RE, skillSlug, type Skill, type SkillSummary } from "@/lib/assist";
+import { TEST_RUN_DONE } from "@/lib/recipe";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
 import { radioKeys } from "@/components/studio/radio-keys";
-import { useRecipe, useRecipeActions, useSkill, useSkillActions, useSkills, useStepFixes, type RecipeFailure, type SkillForm } from "./hooks";
+import { useRecipe, useRecipeActions, useSkill, useSkillActions, useSkills, type RecipeFailure, type SkillForm } from "./hooks";
 import { RunSkillDialog } from "./run-skill-dialog";
-import { SkillRuns } from "./skill-runs";
+import { FailingLine, FixPanel, SkillHistorySection, useSkillFixes } from "./skill-insights";
 import { RailButton } from "./shell";
 import { SKILL_ICONS, SkillIcon } from "./skill-icon";
-import { SkillHistorySection, SuggestFix } from "./skill-upkeep";
 import { AssistVisitorNote } from "./visitor-note";
 
 /**
@@ -106,9 +106,8 @@ function Skills() {
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-4 backdrop-blur sm:px-6">
         <RailButton />
         <h1 className="font-heading text-[22px] leading-none">Skills</h1>
         {owner && (
@@ -133,8 +132,9 @@ function Skills() {
             </Button>
           </div>
         )}
+        <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1100px] min-w-0 flex-1 px-3 pt-4 pb-16 sm:px-6 md:pt-8">
+      <div className="mx-auto w-full max-w-[1100px] min-w-0 flex-1 px-4 pt-4 pb-16 sm:px-6 md:pt-8">
         <p className="max-w-2xl text-[15px] text-pretty text-muted-foreground">
           Playbooks Assist loads for whole kinds of jobs. Type <span className="rounded bg-muted px-1 font-mono text-[13px]">/name</span> at the start of a message to use one, or let Assist pick it. Skills also reach other agents through Fuobe&apos;s MCP server.
         </p>
@@ -282,28 +282,26 @@ function SkillGrid({ list, loading, onOpen, onToggle, empty }: { list: SkillSumm
 }
 
 /**
- * Under a recipe skill's description: where it was checked ("Checked 29 Oct · Cloud ✓ · GPU not checked"), or in amber
- * why it needs a re-check, with Re-check (the plan and the free dry run).
+ * Under a recipe skill's description: where it was tested ("Tested 29 Oct · Cloud ✓ · Your GPU not tested yet"), or in
+ * amber why it needs a new test run, with Test again (the plan and the free placeholder run).
  */
-function RecipeStatus({ skill }: { skill: Skill }) {
+function RecipeStatus({ skill, owner }: { skill: Skill; owner: boolean }) {
   const recipe = useRecipe(skill.name, !!skill.recipe);
   const actions = useRecipeActions();
   const [busy, setBusy] = useState(false);
-  const canCheck = skill.source === "user";
-  // W6: a step that keeps failing, was replaced or is switched off gets Suggest a fix.
-  const fixes = useStepFixes(skill.name, !!skill.recipe && canCheck).data ?? [];
+  // Suggest a fix (W6): the owner's own skills, when a step keeps failing, was replaced or was switched off.
+  const fixable = owner && skill.source === "user" && !!skill.recipe;
+  const fixes = useSkillFixes(skill.name, fixable);
+  const [fixing, setFixing] = useState(false);
   const v = recipe.data;
   if (!skill.recipe || !v) return null;
-  const recheck = [...Object.values(v.recheck).flat(), ...fixes.filter((f) => !f.failing).map((f) => f.why)];
-  // A step that keeps failing in its runs: a re-check doesn't change its history, so it's said apart, with Suggest a fix.
-  const failing = fixes.filter((f) => f.failing).map((f) => f.why);
-  const warn = recheck.length > 0 || failing.length > 0 || !!v.why;
+  const recheck = Object.values(v.recheck).flat();
   const recheckNow = async () => {
     setBusy(true);
     try {
       const r = await actions.verify(skill.name);
-      if (r.ok) toast.success("Checked — it still runs", { description: "Priced, and run once on the demo provider for free." });
-      else toast.error("The check didn't pass", { description: r.engines.flatMap((e) => [...e.plan.errors, ...(e.dryRun?.problems ?? [])])[0] });
+      if (r.ok) toast.success("Test run passed — it still runs", { description: TEST_RUN_DONE });
+      else toast.error("The test run didn't pass", { description: r.engines.flatMap((e) => [...e.plan.errors, ...(e.dryRun?.problems ?? [])])[0] });
     } catch (e) {
       const f = e as RecipeFailure;
       if (!refusalShown(f)) toast.error(f.message, { description: f.problems?.slice(1).join("; ") || undefined });
@@ -311,17 +309,27 @@ function RecipeStatus({ skill }: { skill: Skill }) {
       setBusy(false);
     }
   };
+  const canCheck = skill.source === "user";
+  const canFix = fixable && !!fixes.data?.steps.length;
   return (
-    <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", warn ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
-      {warn ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
-      <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a re-check: ${recheck[0]}` : failing.length ? `Keeps failing: ${failing[0]}` : v.line)}</span>
-      {canCheck && !v.why && (recheck.length > 0 || !v.ready.length) && (
-        <Button variant="outline" size="xs" className="h-6 rounded-full px-2 text-[12px]" onClick={() => void recheckNow()} disabled={busy}>
-          {busy && <Loader2 className="animate-spin" />} {v.ready.length ? "Re-check" : "Check it (free)"}
-        </Button>
-      )}
-      {canCheck && <SuggestFix name={skill.name} fixes={fixes} />}
-    </div>
+    <>
+      <div className={cn("mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]", recheck.length || v.why ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
+        {recheck.length || v.why ? <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> : <ShieldCheck className="size-3.5 shrink-0" aria-hidden />}
+        <span className="min-w-0 break-words">{v.why ?? (recheck.length ? `Needs a new test run: ${recheck[0]}` : v.line)}</span>
+        {canCheck && !v.why && (recheck.length > 0 || !v.ready.length) && (
+          <Button variant="outline" size="xs" className="h-6 rounded-full px-2 text-[12px]" onClick={() => void recheckNow()} disabled={busy}>
+            {busy && <Loader2 className="animate-spin" />} {v.ready.length ? "Test again (free)" : "Test run (free)"}
+          </Button>
+        )}
+        {canFix && recheck.length > 0 && !fixing && (
+          <Button variant="outline" size="xs" className="h-6 rounded-full px-2 text-[12px]" onClick={() => setFixing(true)}>
+            <Wrench /> Suggest a fix
+          </Button>
+        )}
+      </div>
+      {canFix && !recheck.length && !fixing && <FailingLine fixes={fixes.data} onFix={() => setFixing(true)} />}
+      {fixing && <FixPanel name={skill.name} onClose={() => setFixing(false)} />}
+    </>
   );
 }
 
@@ -351,7 +359,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
               <div className="min-w-0 flex-1">
                 <DialogTitle className="font-heading text-[24px] leading-tight font-normal">{s.title}</DialogTitle>
                 <DialogDescription className="mt-1">{s.description}</DialogDescription>
-                <RecipeStatus skill={s} />
+                <RecipeStatus skill={s} owner={owner} />
                 <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
                   /{s.name} · {s.source === "builtin" ? "Built-in" : "Yours"}
                   {s.studio && (
@@ -366,7 +374,6 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
               </div>
             </DialogHeader>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              {owner && s.recipe && <SkillRuns name={s.name} />}
               {s.whenToUse && (
                 <div className="mb-4 rounded-xl bg-muted/60 px-4 py-3 text-[13px]">
                   <p className="font-medium">When Assist uses it</p>
@@ -388,7 +395,7 @@ function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | n
                   </ul>
                 </div>
               )}
-              {owner && s.source === "user" && s.recipe && <SkillHistorySection name={s.name} />}
+              {owner && s.recipe && <SkillHistorySection name={s.name} />}
             </div>
             <DialogFooter className="mx-0 mb-0 flex-row flex-wrap items-center gap-2 border-t px-5 py-3 sm:justify-between">
               <div className="flex flex-wrap gap-1.5">

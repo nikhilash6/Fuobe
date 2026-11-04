@@ -3173,6 +3173,28 @@ export const LORA_LIBRARY: LoraEntry[] = [
     "notes": "The camera-move LoRA behind Higgsfield Angles (higgsfield-originals-5.md §3.22). Its file is named 镜头转换.safetensors upstream; Fuobe keeps it under an ASCII name. It takes camera instructions in Chinese with English (rotate left / right by degrees, move forward or a close-up, bird's-eye or worm's-eye view, a wide-angle lens), which Fuobe Angles writes from its controls on the GPU. fal hosts the same LoRA (its LoRA gallery's multiple-angles route, lora_scale 1.25 and 6 steps by default) and builds the words itself. Strength 1.25, as fal and the public HF Space (linoyts/Qwen-Image-Edit-Angles) fuse it."
   },
   {
+    "key": "qwen-image-21-any-angle",
+    "name": "AnyAngle for Qwen-Image 2.1 (lilylilith)",
+    "file": "QI2.1_AnyAngle.safetensors",
+    "url": "https://huggingface.co/lilylilith/QI_2.1_AnyAngle/resolve/5c8b4c8e05ba6328d54bf8d34ec724fef5a414ae/QI2.1_AnyAngle.safetensors",
+    "page": "https://huggingface.co/lilylilith/QI_2.1_AnyAngle",
+    "strength": 1.0,
+    "base": "qwen-image-2.1",
+    "download": "direct",
+    "group": "adapter",
+    "version": "5c8b4c8e05ba6328d54bf8d34ec724fef5a414ae",
+    "sha256": "e4d7a0d44a45ed62daabd0f2484a1a59046618a4c47e76b1eab5e386a7a35d8a",
+    "sizeBytes": 119590312,
+    "licence": {
+      "commercial": true,
+      "hostedOk": true,
+      "snapshotDate": "2026-11-02",
+      "name": "Apache-2.0"
+    },
+    "released": "2026-09-28",
+    "notes": "Any Angle's repaint: a rough render of a 3D view of the photo (image 2) becomes a finished photo at that camera, with the face, outfit, light and room of the original (image 1). Rank 24, bf16, ComfyUI keys (core LoraLoaderModelOnly, no conversion). Its own prompt, at strength 1: \"Change the camera angle from <image2> to <image1>.\" The any-angle-shot graph loads it itself; as a recipe LoRA it is downloaded and hash-checked before a run. Not hosted with Qwen-Image 2.1 anywhere Fuobe calls, so Any Angle runs on a GPU only."
+  },
+  {
     "key": "fusionix-i2v-14b",
     "name": "FusioniX for Wan 2.1 I2V 14B (vrgamedevgirl84)",
     "file": "Wan2.1_I2V_14B_FusionX_LoRA.safetensors",
@@ -3374,7 +3396,7 @@ export const LORA_LIBRARY: LoraEntry[] = [
     },
     "released": "2025-09-27",
     "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high, end_image_url, num_frames 17-161)",
-    "notes": "The difference between bilibili's AniSora V3.2 (anime motion trained on Wan 2.2 I2V A14B) and the base high-noise expert, extracted at rank 64 by Kijai (file last changed in commit f32501d0, 2025-09-27). The source of the file the owner's 'Keyframes to Full Character Animation' graph loads at strength 1.0 on the high-noise expert, with the lightx2v 4-step LoRA on the low-noise expert, 4 steps at CFG 1 (high 0-2, low 2-end), shift 5. Only a high-noise file exists."
+    "notes": "The difference between bilibili's AniSora V3.2 (anime motion trained on Wan 2.2 I2V A14B) and the base high-noise expert, extracted at rank 64 by Kijai (file last changed in commit f32501d0, 2025-09-27). The source of the file the 'Keyframes to Full Character Animation' graph loads at strength 1.0 on the high-noise expert, with the lightx2v 4-step LoRA on the low-noise expert, 4 steps at CFG 1 (high 0-2, low 2-end), shift 5. Only a high-noise file exists."
   },
   {
     "key": "wan22-i2v-lightx2v-4step-low",

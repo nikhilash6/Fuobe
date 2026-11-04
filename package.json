@@ -15,8 +15,14 @@
     "test": "vitest run",
     "test:e2e:comfyui": "node tests/e2e/comfyui-selftest.mjs",
     "test:e2e:library": "node tests/e2e/library-flows.mjs",
+    "test:e2e:home": "node tests/e2e/home-bento.mjs",
+    "test:e2e:first-paint": "node tests/e2e/home-first-paint.mjs",
     "test:e2e:mobile": "node tests/e2e/no-horizontal-scroll.mjs",
     "test:e2e:shell": "node tests/e2e/shell.mjs",
+    "test:e2e:mega-menus": "node tests/e2e/mega-menus.mjs",
+    "test:e2e:tabs": "node tests/e2e/instant-tabs.mjs",
+    "test:e2e:motion": "node tests/e2e/motion.mjs",
+    "test:e2e:tab-rows": "node tests/e2e/tab-rows.mjs",
     "gen:catalog": "python3 scripts/gen-cloud-models.py && python3 scripts/gen-studio-packs.py && python3 scripts/gen-oss-loras.py && python3 scripts/gen-lora-library.py && python3 scripts/gen-influencer-options.py && python3 scripts/gen-soul-originals.py && python3 scripts/gen-trainers.py && node scripts/gen-icon-map.mjs",
     "typecheck": "tsc --noEmit",
     "eval:run": "node scripts/eval/eval.mjs run",
@@ -29,7 +35,7 @@
     "eval:setup": "node scripts/eval/eval.mjs setup",
     "eval:trash": "node scripts/eval/eval.mjs trash",
     "eval:covers": "node scripts/eval/eval.mjs covers",
-    "eval:from-skill": "node scripts/eval/eval.mjs from-skill"
+    "eval:from-skill": "node scripts/eval/from-skill.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

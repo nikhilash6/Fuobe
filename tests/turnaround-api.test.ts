@@ -1,11 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /** Turnaround video (build plan N7-6) through /api/turnaround and Cinema's "turnaround" action, on the demo provider. */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-turnaround-"));
+const dir = tempDir("fuobe-turnaround-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -27,7 +25,6 @@ beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const upload = (name: string, width = 18, height = 32) => saveFile({ data: encodePng({ width, height, data: Buffer.alloc(width * height * 4, 128) }), contentType: "image/png", name, source: "upload" }).url;
 const post = (body: unknown, preview = false) =>

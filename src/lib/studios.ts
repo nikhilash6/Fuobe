@@ -2,7 +2,7 @@ import { getModel } from "@/lib/catalog";
 import { SIGNATURE_MODELS } from "@/lib/catalog/palettes";
 import { FACE_MOSAIC_MODELS } from "@/lib/catalog/open-tools";
 import { UPSCALE_FIRST_STEPS } from "@/lib/catalog/upscale-first";
-import { FINISH_CHOICES } from "@/lib/catalog/regenerate";
+import { FINISH_CHOICES, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import type { Preset } from "@/lib/catalog/types";
 import type { StudioConfig } from "@/components/studio/studio-context";
 
@@ -56,6 +56,7 @@ export const EDIT_STUDIO: StudioConfig = {
   multiRef: { label: "Add ref", max: 9 },
   sketch: ["mask", "draw"],
   live: true,
+  related: { href: "/apps/app-watermark-remover", label: "Remove watermarks, captions and logos automatically" },
   defaultModels: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
   suggestions: [
     "Make it golden hour",
@@ -157,7 +158,7 @@ export const VIDEO_UPSCALE_STUDIO: StudioConfig = {
   // Archive footage (scans, tape, black and white) is restored and colourised first: Fuobe Restore rebuilds it, then upscales.
   firstSteps: UPSCALE_FIRST_STEPS,
   // On your GPU: SeedVR2 "Restore · faithful" and Open-H3 "Regenerate · creative" side by side (GPU-only: nobody hosts it).
-  finishChoices: FINISH_CHOICES,
+  ...(REGEN_OFFERED && { finishChoices: FINISH_CHOICES }),
   slots: [{ key: "video", label: "Video", accept: "video", required: true }],
   defaultModels: { cloud: "topaz-video", open: "oss-seedvr2" },
   clipFacts: true,
@@ -331,7 +332,7 @@ export const MUSIC_STUDIO: StudioConfig = {
 };
 
 /**
- * Audio → Extend & remix (nm10-music3): a song's cloud tools on Mureka. Extend it with new lyrics, remix it in another style
+ * Audio → Extend & remix: a song's cloud tools on Mureka. Extend it with new lyrics, remix it in another style
  * with its lyrics, or split it into its stems. Any song works: Mureka's own by its id, any other sent to it first. The
  * song's length is read so an extension starts at its end (voiceFacts).
  */

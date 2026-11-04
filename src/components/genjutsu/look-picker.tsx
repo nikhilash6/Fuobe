@@ -10,9 +10,10 @@ import { fileToList, MediaSlot, type SlotValue } from "@/components/studio/media
 import { LookCard } from "@/components/shorts/preset-card";
 import { tabKeys } from "@/components/shorts/ui";
 import { GENJUTSU, type GenjutsuLook } from "@/lib/catalog/genjutsu";
-import { SHORTS_PRESETS, shortsPreview } from "@/lib/catalog/shorts";
+import { coveredFirst, SHORTS_PRESETS, shortsPreview } from "@/lib/catalog/shorts";
 import { SOUL_LOOK_CARDS } from "@/lib/catalog/soul-cards";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 
 export type LookSource = "fuobe" | "soul" | "custom";
 
@@ -46,11 +47,11 @@ export function LookPicker({
     { id: "custom", label: "Your own" },
   ];
   const words_ = q.trim().toLowerCase();
-  const presets = useMemo(() => (words_ ? SHORTS_PRESETS.filter((p) => `${p.name} ${p.category} ${p.description}`.toLowerCase().includes(words_)) : SHORTS_PRESETS), [words_]);
+  const presets = useMemo(() => coveredFirst(words_ ? SHORTS_PRESETS.filter((p) => `${p.name} ${p.category} ${p.description}`.toLowerCase().includes(words_)) : SHORTS_PRESETS), [words_]);
   const souls = useMemo(() => (words_ ? SOUL_LOOK_CARDS.filter((l) => `${l.name} ${l.description} ${l.categories.join(" ")}`.toLowerCase().includes(words_)) : SOUL_LOOK_CARDS), [words_]);
   return (
     <div className="space-y-3">
-      <div role="tablist" aria-label="Where the look comes from" onKeyDown={tabKeys} className="flex w-full rounded-full bg-muted p-0.5">
+      <TabRow role="tablist" aria-label="Where the look comes from" onKeyDown={tabKeys} fade={false}>
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -61,15 +62,13 @@ export function LookPicker({
             aria-controls={`look-panel-${t.id}`}
             tabIndex={source === t.id ? 0 : -1}
             onClick={() => onSource(t.id)}
-            className={cn(
-              "flex h-8 min-w-0 flex-1 items-center justify-center rounded-full px-2 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-              source === t.id && "bg-background text-foreground shadow-soft",
-            )}
+            className={cn(TAB_PILL, "min-w-0 flex-1 px-2")}
+            {...onAttr(source === t.id)}
           >
             {t.label}
           </button>
         ))}
-      </div>
+      </TabRow>
 
       {source !== "custom" && (
         <div className="relative">

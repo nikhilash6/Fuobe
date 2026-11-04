@@ -48,7 +48,14 @@ export interface IndexPack {
   isolated: boolean;
   /** A pack that lives in a subfolder of its repo (h3_character_swap). */
   subdir?: string;
+  /**
+   * A pack that is one node file in a Hugging Face model repo (Viggle's viggle_turbo.py, next to the LoRAs): downloaded
+   * at the commit into custom_nodes/<name>/__init__.py, never cloned (the repo holds gigabytes of weights).
+   */
+  file?: string;
   requirementsTxt: boolean;
+  /** Python packages installed by name, pinned (`segment-anything==1.0`), when its requirements.txt isn't safe to install. */
+  pip?: string[];
   install: "registry" | "manual";
 }
 

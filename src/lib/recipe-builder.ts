@@ -65,20 +65,6 @@ export interface DraftCandidate {
   setting?: SettingId;
   /** Why it can't vary. */
   locked?: string;
-  /**
-   * Words inside the text at each spot (a canvas's text node joined into a step's words, W5): it varies as those words,
-   * not as the whole text.
-   */
-  part?: boolean;
-  /** It starts as Varies (an input of the skill a canvas was drawn from, a Table's column). */
-  varies?: boolean;
-  /**
-   * Its `{{id}}` is still at each spot (W5: words a skill asks for that have no example yet). Varies keeps it there
-   * under its input id; Fixed puts in the empty words.
-   */
-  kept?: boolean;
-  /** A kept candidate's input as the skill had it (its id and label are the review's). */
-  param?: RecipeParam;
 }
 
 export type SettingId = "numOutputs" | "aspectRatio" | "duration" | "resolution";
@@ -93,16 +79,12 @@ export interface SkillDraft {
   title: string;
   description: string;
   whenToUse: string;
-  /** Made from results the demo provider made: check it on a real engine before trusting it. */
+  /** Made from results the demo provider made: nothing shows it works on a real engine yet. */
   demo: boolean;
   /** What the review screen says once (a model that moved, a step left as a fixed input). */
   notes: string[];
   /** The LLM the optional naming pass would ask (null: none, so there is none). */
   llm: "claude" | "ollama" | null;
-  /** A canvas's Table rows (W5), by candidate id: the Run form's Many tab starts with them. */
-  rows?: Record<string, string>[];
-  /** The user skill a canvas was drawn from (W5): saving can put the steps back into it. */
-  replaces?: { name: string; title: string };
 }
 
 /** A picked result the builder couldn't use, and why. */
@@ -112,7 +94,7 @@ export interface DraftRefusal {
   reason: string;
 }
 
-export const DEMO_NOTE = "Made from demo results: check it on your engine before trusting it";
+export const DEMO_NOTE = "Made from placeholder results: it hasn't made a real result yet";
 export const STEPS_REFUSAL = "This was made in steps from one request: open it, press Reuse settings, run it again, then make the skill";
 
 // ---------------------------------------------------------------------------
@@ -153,7 +135,7 @@ const STUDIOS: [RegExp, StudioInfo][] = [
   [/^audio-(loop|join)$/, { name: "Audio tools" }],
   [/^moodboard$/, { name: "Moodboards" }],
   [/^eval$/, { name: "the evaluation harness" }],
-  [/^skill-check$/, { name: "a skill's check" }],
+  [/^skill-check$/, { name: "a skill's test run" }],
 ];
 
 /**
@@ -351,8 +333,6 @@ export function buildRecipe(draft: Pick<SkillDraft, "recipe" | "candidates">, ch
   const byKey = new Map(recipe.steps.map((s) => [s.key, s]));
   const checks = recipe.checks ?? {};
   const varying = draft.candidates.filter((c) => choices.varies[c.id] && !c.locked);
-  // Inputs kept as `{{id}}` (W5) that end up Fixed: the value they had, in the steps and the checks.
-  for (const c of draft.candidates) if (c.kept && !varying.includes(c)) putKept(recipe, c, null);
   // Elements last: a prompt that varies as a whole has replaced its words by then, so an element named only there
   // finds no @handle and adds no input (the whole prompt's input carries it).
   const order = [...varying.filter((c) => c.kind !== "element"), ...varying.filter((c) => c.kind === "element")];
@@ -360,22 +340,15 @@ export function buildRecipe(draft: Pick<SkillDraft, "recipe" | "candidates">, ch
   for (const c of order) {
     const id = idOf(c, choices);
     const label = (choices.labels?.[c.id]?.trim() || c.label).slice(0, 60);
-    if (c.kept && c.param) {
-      // As the skill had it, under the id and label the review gives it.
-      if (!putKept(recipe, c, id)) continue;
-      const required = choices.required?.[c.id];
-      placed.push({ ...c.param, id, label, ...(required !== undefined && { required }) });
-      continue;
-    }
     let used = 0;
     for (const spot of c.at) {
       const step = byKey.get(spot.step);
       if (!step) continue;
       const body = bodyOf(step);
-      if (c.kind === "element" || c.part) {
+      if (c.kind === "element") {
         const words = getAt(body, spot.path);
         if (typeof words !== "string") continue;
-        const next = c.kind === "element" ? words.replace(handleRe(String(c.example)), `{{${id}}}`) : words.split(String(c.example)).join(`{{${id}}}`);
+        const next = words.replace(handleRe(String(c.example)), `{{${id}}}`);
         if (next !== words) {
           setAt(body, spot.path, next);
           used++;
@@ -428,118 +401,10 @@ export function buildRecipe(draft: Pick<SkillDraft, "recipe" | "candidates">, ch
   // The form's order: files first, then elements, words, settings.
   const rank = (p: RecipeParam) => (isMediaType(p.type) ? 0 : p.type === "element" ? 1 : p.type === "text" ? 2 : 3);
   params.push(...[...placed, ...slotParams].sort((a, b) => rank(a) - rank(b)));
-  recipe.params = params;
+  // Inputs the draft already has (a skill drawn as a canvas and saved back) come first.
+  recipe.params = [...draft.recipe.params, ...params];
   if (Object.keys(checks).length) recipe.checks = checks;
   return recipe;
-}
-
-// ---------------------------------------------------------------------------
-// A recipe made elsewhere (a canvas, W5) as a draft
-
-/**
- * A kept candidate's `{{id}}` at each of its spots and in the checks: under `to` (it varies), or its value (Fixed; a
- * number stays a number where it's the whole value). How many spots it changed.
- */
-function putKept(recipe: Recipe, c: DraftCandidate, to: string | null): number {
-  const re = new RegExp(`\\{\\{\\s*${c.id}\\s*\\}\\}`, "g");
-  const swap = (v: string): unknown => (to !== null ? v.replace(re, `{{${to}}}`) : v.replace(re, "").trim() === "" && typeof c.example === "number" ? c.example : v.replace(re, String(c.example)));
-  let n = 0;
-  const byKey = new Map(recipe.steps.map((s) => [s.key, s]));
-  for (const spot of c.at) {
-    const step = byKey.get(spot.step);
-    if (!step) continue;
-    const body = bodyOf(step);
-    const cur = getAt(body, spot.path);
-    if (typeof cur !== "string" || !cur.match(re)) continue;
-    setAt(body, spot.path, swap(cur));
-    n++;
-  }
-  for (const check of Object.values(recipe.checks ?? {})) {
-    for (const [k, v] of Object.entries(check)) if (typeof v === "string" && v.match(re)) (check as Record<string, unknown>)[k] = swap(v);
-  }
-  return n;
-}
-
-/** Every spot of each placeholder in a value: its path, and whether the placeholder is the whole string there. */
-function spotsIn(v: unknown, path: (string | number)[], out: Map<string, { path: (string | number)[]; whole: boolean }[]>): void {
-  if (typeof v === "string") {
-    for (const m of v.matchAll(/\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g)) {
-      const list = out.get(m[1]) ?? [];
-      if (!list.some((x) => x.path.join("/") === path.join("/"))) list.push({ path, whole: m[0] === v });
-      out.set(m[1], list);
-    }
-  } else if (Array.isArray(v)) v.forEach((x, i) => spotsIn(x, [...path, i], out));
-  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) spotsIn(x, [...path, k], out);
-}
-
-/**
- * A recipe with inputs (a canvas read as a recipe, W5) as the review screen's draft: each input put back to the value it
- * has (Fixed), and a candidate that puts it back as an input when it varies. `varies`: the inputs that start as Varies.
- * The words of a text input joined into longer words vary as those words (`part`).
- */
-export function fixedDraft(recipe: Recipe, varies: string[] = []): Pick<SkillDraft, "recipe" | "candidates"> {
-  const fixed = clone(recipe);
-  const candidates: DraftCandidate[] = [];
-  const spots = new Map<string, { step: string; path: (string | number)[]; whole: boolean }[]>();
-  for (const s of fixed.steps) {
-    const found = new Map<string, { path: (string | number)[]; whole: boolean }[]>();
-    spotsIn(bodyOf(s), [], found);
-    for (const [id, list] of found) spots.set(id, [...(spots.get(id) ?? []), ...list.map((x) => ({ ...x, step: s.key }))]);
-  }
-  const byKey = new Map(fixed.steps.map((s) => [s.key, s]));
-  for (const p of recipe.params) {
-    const at = spots.get(p.id) ?? [];
-    if (!at.length) continue;
-    const value = p.example ?? p.default ?? "";
-    // An input of the skill the board was drawn from that a canvas holds no value for (words with no example yet, a
-    // setting): its `{{id}}` stays where it is, in the steps and the checks, and it starts as Varies as the skill had
-    // it, so saving back keeps the input instead of fixing it.
-    const kept = varies.includes(p.id) && ((p.type === "text" && !String(value).trim()) || p.type === "number" || p.type === "choice");
-    for (const spot of kept ? [] : at) {
-      const body = bodyOf(byKey.get(spot.step)!);
-      const cur = getAt(body, spot.path);
-      if (typeof cur !== "string") continue;
-      setAt(body, spot.path, spot.whole && typeof value === "number" ? value : cur.replace(new RegExp(`\\{\\{\\s*${p.id}\\s*\\}\\}`, "g"), String(value)));
-    }
-    const kind: CandidateKind = isMediaType(p.type) ? "media" : p.type === "element" ? "element" : p.type === "text" ? "text" : "setting";
-    const part = kind === "text" && at.some((x) => !x.whole);
-    const text = String(value);
-    const locked = kept ? undefined : kind === "text" && !text.trim() ? "Write its words on the canvas first" : kind === "text" && text.length > 2000 ? "Too long to change in a form (over 2000 characters)" : undefined;
-    candidates.push({
-      id: p.id,
-      label: p.label,
-      type: p.type,
-      kind,
-      example: value,
-      at: at.map(({ step, path }) => ({ step, path })),
-      ...(part && !kept && { part: true }),
-      ...(kept && { kept: true, param: p }),
-      ...(kind === "setting" && p.default !== undefined && { optional: true }),
-      ...(p.max !== undefined && { max: p.max }),
-      ...(p.min !== undefined && { min: p.min }),
-      ...(p.step !== undefined && { step: p.step }),
-      ...(p.options && { options: p.options }),
-      ...(locked && { locked }),
-      ...(!locked && varies.includes(p.id) && { varies: true }),
-    });
-  }
-  fixed.params = [];
-  return { recipe: fixed, candidates };
-}
-
-/**
- * A canvas's Table rows (by candidate id) as the Run form's Many tab CSV: a header of the input ids the recipe asks for
- * (a column switched back to Fixed is left out), one quoted line per row.
- */
-export function rowsCsv(rows: Record<string, string>[], params: Pick<RecipeParam, "id">[], choices: Pick<BuilderChoices, "ids"> = {}): string {
-  const asked = new Set(params.map((p) => p.id));
-  const cols = Object.keys(rows[0] ?? {}).flatMap((cand) => {
-    const id = choices.ids?.[cand]?.trim() || cand;
-    return asked.has(id) ? [{ cand, id }] : [];
-  });
-  if (!cols.length) return "";
-  const cell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  return [cols.map((c) => c.id).join(","), ...rows.map((r) => cols.map((c) => cell(r[c.cand] ?? "")).join(","))].join("\n");
 }
 
 // ---------------------------------------------------------------------------

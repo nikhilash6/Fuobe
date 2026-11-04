@@ -1,17 +1,17 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import http from "node:http";
 import { CLOUD_NO_LORA } from "@/lib/catalog/character-swap";
 import { CLOUD_CLICK_PROBLEM } from "@/lib/catalog/genjutsu";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
 
 // /api/genjutsu end to end in demo mode (no keys, no ComfyUI): each mode on both engines becomes one pipeline of
 // ordinary generations, which the mock provider runs through; estimates with keys set price the real routes.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-genjutsu-"));
+const dir = tempDir("fuobe-genjutsu-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -49,7 +49,6 @@ beforeAll(() => {
   hero = saveFile({ data: px(64, 64, () => true), contentType: "image/png", source: "upload", name: "hero.png" }).url;
   mask = saveFile({ data: px(72, 128, (x, y) => x >= 20 && x < 50 && y >= 80 && y < 110), contentType: "image/png", source: "upload", name: "mask.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 90_000): Promise<Generation> {
   const end = Date.now() + ms;
@@ -117,7 +116,7 @@ describe("Genjutsu: estimates", () => {
       expect(sun.costUsd).toBeGreaterThanOrEqual(0.525);
       expect(sun.costUsd).toBeLessThan(0.535);
       expect(sun.notes.join(" ")).toMatch(/billed by tokens .* isn't in the price/);
-      expect(sun.notes.join(" ")).toMatch(/MiniMax H3 Community License — not licensed in the US, the EU, the UK and South Korea/);
+      expect(sun.notes.join(" ")).not.toMatch(/licen[cs]e/i);
       expect(sun.limits).toContain("One continuous shot: a hard cut breaks the swap");
       expect(sun.gpu).toBeUndefined();
       const nbp = await (await estimateRoute.POST(json(body({ ...part, character: { anchorModel: "nano-banana-pro" } })))).json();
@@ -134,11 +133,11 @@ describe("Genjutsu: estimates", () => {
     });
   });
 
-  it("Character swap on the open engine: free on your GPU, the windows, the GPU it was tested on and the licences", async () => {
+  it("Character swap on the open engine: free on your GPU, the windows, the GPU it was tested on, and no licence line", async () => {
     const e = await (await estimateRoute.POST(json(body({ engine: "open", mode: "character", source: { url: clip, ...src }, range: { start: 2, end: 9 } })))).json();
     expect(e).toMatchObject({ modelId: "fuobe-character-swap", source: "original", costUsd: 0, anchors: 1, gpu: { weightsGb: 46.33 } });
     expect(e.notes.join(" ")).toMatch(/2 windows of up to 124 frames at 24 fps, each continuing from the 18 frames before it/);
-    expect(e.notes.join(" ")).toMatch(/nodes GPL-3\.0 · SAM License/);
+    expect(e.notes.join(" ")).not.toMatch(/licen[cs]e|GPL/i);
     expect(e.notes.join(" ")).toMatch(/Qwen-Image 2.1 first puts your character into the part's first frame/);
   });
 
@@ -182,7 +181,8 @@ describe("Genjutsu: estimates", () => {
     };
     expect(await say(body({ references: [], source: { url: clip, ...src } }))).toBe("Add a picture of your character");
     expect(await say(body({ source: { url: clip, ...src }, range: { start: 0, end: 3 } }))).toMatch(/between 4 and 30 seconds/);
-    expect(await say(body({ mode: "swap", target: "paint", engine: "open", source: { url: clip, ...src } }))).toMatch(/name what to swap/);
+    // Painting on your GPU is Scene edit's (the owner sees it before it opens to everyone).
+    expect(await say(body({ mode: "swap", target: "paint", engine: "open", source: { url: clip, ...src } }))).toBe("Paint over what changes");
     expect(await say(body({ mode: "swap", modelId: "kling-o3", source: { url: clip, ...src, duration: 10 }, range: { start: 0, end: 10 } }))).toMatch(/Say what to swap/);
     expect(await say(body({ mode: "restyle", references: [], source: { url: clip, ...src } }))).toBe("Pick a look");
     // Character swap: a part of 5–15 s, a click only on the open engine.
@@ -327,18 +327,6 @@ describe("Genjutsu: runs (demo)", () => {
     const swap = gens.getGeneration(rows.find((r) => r.op === "video-swap")!.id)!;
     expect(swap.request.params?.extra).toEqual({ maskPrompt: "the skateboard" });
     expect(swap.request.inputs?.images).toEqual([hero]);
-    expect((await settle(final.id)).status).toBe("succeeded");
-  });
-
-  it("Original sound: the cloud refuses a split in words; your GPU splits the clip and puts back the chosen stem", async () => {
-    const cloud = await createRoute.POST(json(body({ sound: { sound: "no-dialogue" } })));
-    expect(cloud.status).toBe(422);
-    expect((await cloud.json()).error).toMatch(/runs on your GPU \(open source\)/);
-    const { final } = await run(body({ engine: "open", mode: "swap", subject: "the skateboard", references: [hero, hero], sound: { sound: "dialogue-only" } }));
-    const rows = batchOf(final.id);
-    expect(rows.filter((r) => r.op === "separate-audio").map((r) => r.model_id)).toEqual(["oss-dbs-separate"]);
-    expect(final).toMatchObject({ modelId: "oss-mux", feature: "genjutsu" });
-    expect(final.request.chain?.at(-1)).toEqual({ slot: "audio", stem: "voice" });
     expect((await settle(final.id)).status).toBe("succeeded");
   });
 

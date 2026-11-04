@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { startFakeComfy, readyFor, type FakeComfy } from "./helpers/fake-comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 30_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-gpu-api-"));
+const dir = tempDir("fuobe-gpu-api-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -38,9 +38,6 @@ const fakes: FakeComfy[] = [];
 afterAll(async () => {
   globalThis.__fuobeGpuTestTransport = undefined;
   await Promise.all(fakes.map((f) => f.close()));
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 /** Account GPUs live at "<name>.gpu.test:<port>"; the tests resolve those names to the fake server (no env switch). */

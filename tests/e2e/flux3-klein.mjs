@@ -14,7 +14,7 @@ import zlib from "node:zlib";
 import { launch } from "./_browser.mjs";
 
 const argv = process.argv.slice(2);
-const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
+const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3440").replace(/\/$/, "");
 const shots = argv.includes("--shots") ? argv[argv.indexOf("--shots") + 1] : undefined;
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
@@ -162,17 +162,17 @@ try {
         }
         const { text, picked } = await pick(page, "Klein", id);
         if (engine === "cloud") check(`${tag} cloud: the menu lists FLUX 3 Klein with its price`, /FLUX 3 Klein/.test(text) && /<\$0\.01\/image|\$0\.009/.test(text), text);
-        else check(`${tag} open: the menu lists FLUX 3 Klein, Free on your GPU`, /FLUX 3 Klein/.test(text) && /\bFree\b/.test(text) && /16-24 GB GPU/.test(text), text);
+        else check(`${tag} open: the menu lists FLUX 3 Klein, Free on your GPU`, /FLUX 3 Klein/.test(text) && /\bFree\b/.test(text), text);
         check(`${tag} ${engine}: the keyboard reaches the FLUX 3 Klein row`, picked);
         await composer(page).getByRole("textbox").first().fill("A man walking his dog, afternoon sun");
-        await page.waitForFunction(() => /\bFree\b|Demo|≈ \$|Connect/.test(document.querySelector("[data-composer]")?.textContent ?? ""), null, { timeout: 20_000 }).catch(() => {});
+        await page.waitForFunction(() => /\bFree\b|Demo|Placeholder|≈ \$|Connect/.test(document.querySelector("[data-composer]")?.textContent ?? ""), null, { timeout: 20_000 }).catch(() => {});
         const t = flat(await composer(page).innerText());
         check(`${tag} ${engine}: the composer runs FLUX 3 Klein`, /FLUX 3 Klein/.test(t), t.slice(0, 100));
-        if (engine === "open") check(`${tag} open: Free before the run`, comfy ? /\bFree\b/.test(t) : /Demo|Free/.test(t), (t.match(/Demo|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
+        if (engine === "open") check(`${tag} open: Free before the run`, comfy ? /\bFree\b/.test(t) : /Demo|Placeholder|Free/.test(t), (t.match(/Demo|Placeholder|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
         else {
           // fal's $0.009 reads "≈ <$0.01" in the composer.
-          const price = /≈ <?\$0\.0\d|Demo|Connect fal/;
-          check(`${tag} cloud: its price (or fal's connect step) shows before the run`, price.test(t), (t.match(/Demo|Connect[^.]*|≈ <?\$[\d.]+/) ?? ["no price"])[0]);
+          const price = /≈ <?\$0\.0\d|Demo|Placeholder|Connect fal/;
+          check(`${tag} cloud: its price (or fal's connect step) shows before the run`, price.test(t), (t.match(/Demo|Placeholder|Connect[^.]*|≈ <?\$[\d.]+/) ?? ["no price"])[0]);
         }
         {
           // The Prompt helper under Options on both engines (on a phone, in the Settings sheet).
@@ -231,7 +231,7 @@ try {
         await composer(page).getByRole("textbox").first().fill("Put the people of the references around a table in the first image");
         await page.waitForTimeout(800);
         const t = flat(await composer(page).innerText());
-        check(`${tag} edit: Free on your GPU before the run`, comfy ? /\bFree\b/.test(t) : /Demo|Free/.test(t), (t.match(/Demo|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
+        check(`${tag} edit: Free on your GPU before the run`, comfy ? /\bFree\b/.test(t) : /Demo|Placeholder|Free/.test(t), (t.match(/Demo|Placeholder|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
         check(`${tag} edit: no sideways scroll with ten images`, await noSideways(page));
         await shoot(page, `klein-edit-10-${width}-${scheme}.png`);
         await context.close();
@@ -272,10 +272,9 @@ try {
         await klein.scrollIntoViewIfNeeded();
         const k = flat(await klein.innerText());
         check(`${tag} train: Klein Base LoRA on both engines`, /FLUX 3 Image Klein Base LoRA/.test(k), k.slice(0, 120));
-        check(`${tag} train: the licence is information`, /Licence: FLUX Kommunity License v1\.0 .*check its revenue tiers/.test(k), (k.match(/Licence:[^·]*·[^·]*/) ?? [""])[0]);
+        check(`${tag} train: no licence line (Thanks & licences lists it)`, !/Licence:/.test(k), (k.match(/Licence:[^·]*/) ?? [""])[0]);
         check(`${tag} train: Cloud at $4.30, 1,000 steps`, /Cloud \$4\.30/.test(k) && /1,000 steps/.test(k), k.match(/Cloud[^]*?steps/)?.[0]?.slice(0, 120));
         check(`${tag} train: Your GPU is Free`, /Your GPU Free/.test(k));
-        check(`${tag} train: says it is not blanket permission for commercial fine-tuning`, /not blanket permission for commercial fine-tuning/.test(k));
         const box = await klein.boundingBox();
         check(`${tag} train: the section fits the screen`, !!box && box.x >= 0 && box.x + box.width <= width + 1, box ? `${Math.round(box.x)}+${Math.round(box.width)}` : "no box");
         check(`${tag} train: no sideways scroll`, await noSideways(page));

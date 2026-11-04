@@ -175,7 +175,10 @@ export function LinkResult({ created, onDone }: { created: ShareCreated; onDone:
             })
           }
         >
-          {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy"}
+          {copied ? <Check className="motion-confirm" /> : <Copy />}{" "}
+          <span key={copied ? "done" : "copy"} className="motion-swap">
+            {copied ? "Copied" : "Copy"}
+          </span>
         </Button>
       </div>
       {(local || signIn === false) && (

@@ -5,8 +5,8 @@ import { fixPlan } from "@/lib/gpu/plan";
 import { badgeOf, cardLabel, needTargets, rankOf, shortGpu, summaryOf, toolReadiness, type ReadinessContext } from "@/lib/gpu/readiness";
 import type { BadgeMap, FixPlan, GpuInventory, GpuProblem, ReadinessReport, RequirementIndex, StudioRow, ToolReadiness, ToolRef } from "@/lib/gpu/types";
 import { vramGb } from "@/lib/gpu/requirements";
-import { chooseH3Tier, deviceOf, tierOnCard, tierRowNote, H3_TIER_MODEL } from "@/lib/gpu/h3-tier";
-import { isOffered } from "../model-access";
+import { chooseH3Tier, deviceOf, tierOnCard, tierRowNote } from "@/lib/gpu/h3-tier";
+import { tierOpen } from "../h3-gpu";
 import { getSetting } from "../settings";
 import { loadIndex } from "./index-file";
 import { probe, readSnapshot, saveViews, checkWait, type Snapshot } from "./snapshots";
@@ -28,7 +28,7 @@ export function contextFor(t: ReadTarget): ReadinessContext {
  * under 32 GB and that build is switched on in Models & licences. A studio row keeps only the modes the build has.
  */
 export function onCard(tool: Tool, inv: GpuInventory, idx: RequirementIndex) {
-  return tierOnCard(tool.workflows, inv, idx, { studio: tool.ref.startsWith("studio:"), allowed: (tier) => isOffered(H3_TIER_MODEL[tier], "open") });
+  return tierOnCard(tool.workflows, inv, idx, { studio: tool.ref.startsWith("studio:"), allowed: tierOpen });
 }
 
 export function readinessOf(tool: Tool, inv: GpuInventory, idx: RequirementIndex, ctx: ReadinessContext): ToolReadiness {
@@ -63,7 +63,7 @@ export function buildViews(inv: GpuInventory, idx: RequirementIndex, ctx: Readin
   if (summary.gpu) badges.gpu = shortGpu(summary.gpu);
   if (summary.vramGb) badges.vramGb = summary.vramGb;
   const h3 = chooseH3Tier(deviceOf(inv)).tier;
-  if (h3 !== "standard" && isOffered(H3_TIER_MODEL[h3], "open")) badges.h3Tier = h3;
+  if (h3 !== "standard" && tierOpen(h3)) badges.h3Tier = h3;
   for (const tool of openModelTools()) {
     const b = badgeOf(readinessOf(tool, inv, idx, ctx));
     if (b) badges.models[tool.ref.slice("model:".length)] = b;

@@ -44,7 +44,7 @@ interface Run {
  * to 4K, deinterlacing and a reference picture; priced before it runs ("Free" on your GPU); the result with a before /
  * after wipe. A clip handed over from the Library or a result arrives as ?video=.
  */
-export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
+export function RestoreTool() {
   const [engine] = useEngine();
   // Guests and free accounts: it plans with the studio's own AI helpers and joins on the server (own-gpu-tool).
   const visitor = useLikelyVisitor();
@@ -146,7 +146,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
   };
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
+    <ToolShell title="Video tools" wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title="Restore & colourise"
@@ -189,9 +189,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
                   />
                   {est && (
                     <p className="text-[12px] text-muted-foreground tabular-nums">
-                      {open
-                        ? `Canvas ${est.canvas.width}×${est.canvas.height} · ${est.tiles} tiles of 960×544 · ${est.pieces} window${est.pieces > 1 ? "s" : ""} of up to 97 frames${est.refined ? ` · then ${est.refined.width}×${est.refined.height}` : ""}`
-                        : `${est.canvas.width}×${est.canvas.height} in one pass a piece · ${est.pieces} piece${est.pieces > 1 ? "s" : ""} of up to 97 frames`}
+                      {`${est.canvas.width}×${est.canvas.height} · restored in ${est.pieces} part${est.pieces > 1 ? "s" : ""}${open && est.refined ? `, then finished at ${est.refined.width}×${est.refined.height}` : ""}`}
                       {est.dropped > 0 ? ` · the last ${est.dropped} frame${est.dropped > 1 ? "s" : ""} left out` : ""}
                     </p>
                   )}
@@ -204,7 +202,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
                     <div className="min-w-0 space-y-1.5 text-[13px]">
                       <p className="font-medium">One-time setup: the Restore IC-LoRA is gated</p>
                       <p className="text-muted-foreground">
-                        Accept its licence on Hugging Face with your account (it&apos;s free under the LTX-2.x Community License below US$10M a year), then add a Hugging Face token. Fuobe
+                        Accept its licence on Hugging Face with your account, then add a Hugging Face token. Fuobe
                         downloads the 1.7 GB file once{open ? " into ComfyUI's LoRA folder" : " and gives fal its own copy, never your token"}.
                       </p>
                       <div className="flex flex-wrap gap-2 pt-0.5">
@@ -223,7 +221,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
               )}
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[112px]">
+            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               <p className="flex gap-2 rounded-lg bg-muted/60 px-3 py-2 text-[12px] leading-snug text-muted-foreground">
                 <Cpu className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                 <span>{open ? GPU_NOTE : CLOUD_NOTE}</span>
@@ -396,7 +394,7 @@ function RunPanel({ run, onAgain }: { run: Run; onAgain: () => void }) {
         ) : (
           <div className="space-y-3">
             <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress * 100)} aria-label="Progress">
-              <div className={cn("h-full transition-[width]", state.status === "failed" ? "bg-destructive" : "bg-primary")} style={{ width: `${Math.max(4, state.progress * 100)}%` }} />
+              <div className={cn("h-full origin-left transition-transform duration-(--motion-slow) ease-standard", state.status === "failed" ? "bg-destructive" : "bg-primary")} style={{ transform: `scaleX(${(Math.max(4, state.progress * 100)) / 100})` }} />
             </div>
             <p className={cn("text-[13px]", state.status === "failed" ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
               {state.status === "failed" ? `${state.label}: ${state.error}` : state.label}

@@ -1,13 +1,13 @@
 /**
- * Fly around (build plan N7-7; research new-models-7.md §3.10 rows 3-5): a still filmed along an exact camera path, with no
+ * Fly around (research new-models-7.md §3.10 rows 3-5): a still filmed along an exact camera path, with no
  * browser view of its scene. Fuobe DoP's and Cinema's exact orbits, Image to 3D's "Film it photoreal", Canvas's "Fly
- * around" node and Assist's fly_around tool all plan through here, on N7-5's models:
+ * around" node and Assist's fly_around tool all plan through here, on Fly path's models:
  *
  * - Open engine: MoGe 2 (oss-scene-moge) makes the still's depth, the server renders the path through that depth as a point
  *   cloud (src/server/path-render.ts, ChainSlot.render "path"), and Wan 2.1 + Uni3C (oss-uni3c-path) films the still along
  *   it. With a render already made (Image to 3D records its model along the path in the browser), the depth step is skipped.
  * - Cloud: H3 Max camera-controls with the path as its keyframes. With reference views (Canvas "Fly around" with views),
- *   MiniMax H3 Max reference-to-video takes the still and the views, and the path goes in words (N7-6's References route).
+ *   MiniMax H3 Max reference-to-video takes the still and the views, and the path goes in words (the References route).
  *
  * Pure: the browser prices it, the server runs the same steps (src/server/fly-around.ts).
  */
@@ -21,7 +21,7 @@ import type { TurnSide } from "./turnaround";
 import type { Engine, GenerationRequest, GenParams, ModelDef } from "./types";
 import { WORLDCAST_AFTER, WORLDCAST_MODELS, WORLDCAST_SECONDS, worldcastFallback, worldcastNote, worldcastSteps, type WorldcastDepth } from "./worldcast-plan";
 
-/** What films a path on each engine (N7-5's), what makes the depth on the open engine, and the cloud's route with views. */
+/** What films a path on each engine , what makes the depth on the open engine, and the cloud's route with views. */
 export const FLY_MODELS = { open: "oss-uni3c-path", cloud: "minimax-h3-max-camera", depth: "oss-scene-moge", views: "minimax-h3-max" } as const;
 /** The cloud's lengths; the open engine always makes 81 frames at 16 fps (about 5 s). */
 export const FLY_DURATIONS = [3, 5, 8, 10, 15];

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { insertTag, isInstrumental, lyricsOf, lyricsProblem, normalizeLyrics, parseLyrics, promptWithLyrics, songFromRun, songLength, structureOf, tagName, withSongId } from "@/lib/lyrics";
 import { durationLabel } from "@/lib/composer";
 
-// nm10-music3: the lyrics editor's words and section tags, as every music model reads them.
+// The lyrics editor's words and section tags, as every music model reads them.
 describe("lyrics with section tags", () => {
   it("reads each tag with the lines under it, in title case, words after a tag moved below it", () => {
     const text = "Intro hum\n[verse 1] Morning light\nacross the window\n\n[PRE CHORUS]\nhold on\n[chorus][Instrumental]";

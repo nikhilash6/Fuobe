@@ -1,13 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // GET /api/comfyui: the owner gets each graph's `validated` as it is; anyone else gets it on the graphs that passed.
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-workflow-marks-"));
+const dir = tempDir("fuobe-workflow-marks-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -30,9 +28,6 @@ beforeAll(() => {
 });
 afterAll(() => {
   globalThis.fetch = realFetch;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 type Listed = { id: string; validated?: unknown };

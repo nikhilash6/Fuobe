@@ -1,15 +1,15 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import { HUB_MODES } from "@/lib/hubs";
 // Plain .mjs helper shared with the Playwright scripts.
 import { dynamicSamples, hubModePaths, querySamples, studioRoutes } from "./e2e/_routes.mjs";
+import { tempDir } from "./helpers/temp-dir";
 
 const root = process.cwd();
 // The proxy reads the sign-in settings from the data folder: use an empty one (no password).
-process.env.FUOBE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-polish-"));
+process.env.FUOBE_DATA_DIR = tempDir("fuobe-polish-");
 
 describe("/apps/<unknown> is a real 404", () => {
   it("the proxy rewrites unknown app ids to the not-found page with status 404", async () => {
@@ -37,13 +37,16 @@ describe("the 390 px sweep visits dynamic routes", () => {
     for (const p of patterns) expect(byPattern[p]?.length, p).toBeGreaterThan(0);
     expect(urls.filter((u) => /\[/.test(u))).toEqual([]);
     expect(urls).toEqual(expect.arrayContaining(["/cinema/c1", "/cinema/does-not-exist", "/canvas/v1", "/canvas/does-not-exist", "/assist/projects/p1", "/apps/does-not-exist"]));
-    // Dialogs a query opens: a skill's Run form.
-    expect(querySamples({ recipeSkill: "lamp" })).toEqual(["/assist/skills?run=lamp", "/assist/skills?run=does-not-exist"]);
-    expect(querySamples()).toEqual(["/assist/skills?run=does-not-exist"]);
+    // Dialogs and tabs a query opens: a skill's Run form, Genjutsu's From picture and Finish tabs, Marketing's
+    // code-drawn templates.
+    const genjutsu = ["/genjutsu?mode=picture", "/genjutsu?mode=finish"];
+    const kinetic = ["ms-kinetic-headline", "ms-feature-cards", "m2-line-reveal", "ms-end-card"].map((id) => `/marketing?template=${id}`);
+    expect(querySamples({ recipeSkill: "lamp" })).toEqual(["/assist/skills?run=lamp", "/assist/skills?run=does-not-exist", ...genjutsu, ...kinetic]);
+    expect(querySamples()).toEqual(["/assist/skills?run=does-not-exist", ...genjutsu, ...kinetic]);
   });
 
   it("gives a route added later (another branch's /faceless/[id]/[episode]) a not-found sample by itself", () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-routes-"));
+    const tmp = tempDir("fuobe-routes-");
     const page = (rel: string) => {
       fs.mkdirSync(path.join(tmp, "src/app/(studio)", rel), { recursive: true });
       fs.writeFileSync(path.join(tmp, "src/app/(studio)", rel, "page.tsx"), "export default function P() { return null; }\n");

@@ -1,15 +1,16 @@
 /**
  * The real covers of the studios' template and style tiles (Marketing Studio's templates, Fashion Factory, Photodump
- * packs, the Shorts and Mixed Media looks, Canvas templates, Content Factory's trending styles, the Explainer styles),
- * from template-covers.generated.ts (pnpm eval:covers --templates). A tile that isn't listed keeps its drawn art.
- * Every URL comes from the manifest with its version (?v=): never build one here without it.
+ * packs, the Shorts and Mixed Media looks, Canvas templates, Content Factory's trending styles, the Explainer styles,
+ * Fuobe Soul's looks, AI Influencer's character types, the example pictures of Character Sheet, Storyboard and
+ * Elements, and the studios' ready-made starters), from template-covers.generated.ts (pnpm eval:covers --templates). A
+ * tile that isn't listed keeps its drawn art. Every URL comes from the manifest with its version (?v=): never build one here without it.
  */
 import { thumbOf, type PresetPreview } from "./preset-cards";
 import { TEMPLATE_COVERS, type TemplateCoverEntry } from "./template-covers.generated";
 
-export type TemplateGroup = "marketing" | "fashion" | "photodump" | "shorts" | "mixed-media" | "canvas" | "content-factory" | "explainer";
+export type TemplateGroup = "marketing" | "fashion" | "photodump" | "shorts" | "mixed-media" | "canvas" | "content-factory" | "explainer" | "soul" | "influencer" | "examples" | "starters";
 
-export const TEMPLATE_GROUPS: readonly TemplateGroup[] = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer"];
+export const TEMPLATE_GROUPS: readonly TemplateGroup[] = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer", "soul", "influencer", "examples", "starters"];
 
 /** One still of a cover, and its 320 px copy (thumbs/ next to it, with the same version). */
 export interface CoverFrame {
@@ -66,14 +67,33 @@ function read(key: string, entry: TemplateCoverEntry): TemplateCover {
 }
 
 /**
+ * How much of a clip around its peak frame a template cover plays (s): the finished scene only. An effect clip opens on
+ * the photo that went in and fades back to it at the end, so a card that played it whole would show that photo most
+ * of the time.
+ */
+export const PEAK_WINDOW = { before: 0.6, after: 0.6 } as const;
+
+/** A still taken from the middle of an effect's clip (its peak: /previews/presets/peak/), not a reveal's last frame. */
+const PEAK_STILL = /^\/previews\/presets\/peak\//;
+
+/**
  * A cover as the preset previews take it (PresetPreview, usePreviewPlayback): its poster and clip, and for a clip
- * whose poster is a later frame, a rest on it, so the clip starts there and loops back to its start.
+ * whose poster is a later frame, a rest on it. A reveal (its poster is the last frame) starts there and loops from 0.
+ * An effect's clip shown by its peak (the finished scene) plays only the stretch around it: a hover starts a little
+ * before the peak, and the loop comes back there, never to the clip's start (the photo that went in).
  */
 export function templatePreview(c: TemplateCover): PresetPreview {
+  const at = c.at;
+  const peak = PEAK_STILL.test(c.poster);
   return {
     poster: c.poster,
     ...(c.video && { video: c.video }),
-    ...(c.video && c.at !== undefined && { rest: { src: c.poster, at: c.at, from: 0 } }),
+    ...(c.video &&
+      at !== undefined && {
+        rest: peak
+          ? { src: c.poster, at, from: Math.max(0, +(at - PEAK_WINDOW.before).toFixed(3)), until: +(at + PEAK_WINDOW.after).toFixed(3) }
+          : { src: c.poster, at, from: 0 },
+      }),
     scene: "product",
   };
 }

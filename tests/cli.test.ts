@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { keyValue, parseArgs, suggest, UsageError } from "../bin/lib/args.mjs";
 import { defaultModel, fileInputs, generationRequest, isRemoteRef, localFiles, voiceSampleProblem, withInputHint } from "../bin/lib/build.mjs";
 import { createClient, networkMessage, statusMessage } from "../bin/lib/client.mjs";
@@ -11,9 +10,9 @@ import { clip, countOutputs, formatCost, formatDuration, previewText, table } fr
 import { csvCells, estimateLines, exactCost, findSkillDirs, headerInputs, packSkill, parseSource, priceWords, skillHead, skillValues, toCsv } from "../bin/lib/skills.mjs";
 import { crc32, zipFiles } from "../bin/lib/zip.mjs";
 import { unzip } from "@/server/assist/unzip";
+import { tempDir } from "./helpers/temp-dir";
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-cli-"));
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+const tmp = tempDir("fuobe-cli-");
 
 const GEN = { ...GEN_OPTIONS, wait: { type: "boolean" as const, short: "w" }, out: { type: "string" as const, short: "o" } };
 const usage = (fn: () => unknown) => {

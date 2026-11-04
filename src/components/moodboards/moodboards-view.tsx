@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { BoardCover, CuratedCover, StatusBadge } from "./cards";
 import { CreateMoodboardDialog } from "./create-moodboard";
@@ -143,7 +144,13 @@ export function MoodboardsView() {
   const { data, isLoading } = useMoodboards();
   const { rename, remove } = useMoodboardActions();
   const [engine, setEngine] = useEngine();
-  const [tab, setTab] = useState<"mine" | "curated">("mine");
+  const looks = useCuratedSet("soul-v2");
+  // Curated first while the person has no boards of their own (a guest or an account always), once curated looks have
+  // their real covers (a wall of drawn tiles is no place to start): picking a tab keeps it. Known once the list is in,
+  // so the owner's own boards never wait behind a flash of Curated.
+  const [picked, setTab] = useState<"mine" | "curated" | null>(null);
+  const curatedFirst = !isLoading && !data?.items.length && looks.some((c) => c.preview);
+  const tab = picked ?? (curatedFirst ? "curated" : "mine");
   const [cat, setCat] = useState("All presets");
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
@@ -152,10 +159,13 @@ export function MoodboardsView() {
   const [deleting, setDeleting] = useState<Moodboard | null>(null);
   const needle = q.trim().toLowerCase();
   const mine = useMemo(() => (data?.items ?? []).filter((m) => !needle || m.name.toLowerCase().includes(needle)), [data, needle]);
-  const looks = useCuratedSet("soul-v2");
-  // Curated looks are Fuobe Soul's: they open on Fuobe Soul, which applies the whole look on either engine.
+  // Curated looks are Fuobe Soul's: they open on Fuobe Soul, which applies the whole look on either engine. Looks with
+  // their real cover come first.
   const curated = useMemo(
-    () => looks.filter((c) => (needle ? `${c.name} ${c.description}`.toLowerCase().includes(needle) : inCuratedTab(c, cat))),
+    () =>
+      looks
+        .filter((c) => (needle ? `${c.name} ${c.description}`.toLowerCase().includes(needle) : inCuratedTab(c, cat)))
+        .sort((a, b) => Number(!a.preview) - Number(!b.preview)),
     [looks, needle, cat],
   );
 
@@ -174,7 +184,7 @@ export function MoodboardsView() {
       </PageHeader>
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
-        <div role="tablist" aria-label="Moodboards" className="inline-flex rounded-full bg-muted p-0.5">
+        <TabRow role="tablist" aria-label="Moodboards" fade={false}>
           {(
             [
               ["mine", `My moodboards${data ? ` · ${data.items.length}` : ""}`],
@@ -186,12 +196,13 @@ export function MoodboardsView() {
               role="tab"
               aria-selected={tab === id}
               onClick={() => setTab(id)}
-              className={cn("h-8 rounded-full px-3.5 text-[13px] font-medium text-muted-foreground transition", tab === id && "bg-background text-foreground shadow-soft")}
+              className={TAB_PILL}
+              {...onAttr(tab === id)}
             >
               {label}
             </button>
           ))}
-        </div>
+        </TabRow>
         <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-full border bg-background px-3 focus-within:border-primary sm:w-auto sm:max-w-xs sm:flex-1">
           <Search className="size-4 text-muted-foreground" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search moodboards..." aria-label="Search moodboards" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" />
@@ -238,6 +249,9 @@ export function MoodboardsView() {
         )
       ) : (
         <>
+          {curatedFirst && !picked && !needle && (
+            <p className="mb-3 text-[14px] text-pretty text-muted-foreground">Start from a curated look: tap one to use it in the Image studio, or make your own from {MOODBOARD_LIMITS.min} or more pictures.</p>
+          )}
           {!needle && (
             <div className="scrollbar-none mb-4 flex gap-1.5 overflow-x-auto">
               {CURATED_TABS["soul-v2"].map((c) => (
@@ -261,7 +275,7 @@ export function MoodboardsView() {
                 aria-label={`Use ${c.name} in the Image studio${c.description ? ` — ${c.description}` : ""}`}
                 className="group/cur min-w-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               >
-                <CuratedCover m={c} className="aspect-[3/4] rounded-xl transition-transform duration-300 group-hover/cur:scale-[1.02]" />
+                <CuratedCover m={c} sizes="(min-width: 1024px) 240px, (min-width: 640px) 33vw, 50vw" className="aspect-[3/4] rounded-xl transition-transform duration-300 group-hover/cur:scale-[1.02]" />
                 <p className="mt-1.5 px-0.5 text-[12px] text-muted-foreground">{c.category}</p>
                 <p className="line-clamp-2 px-0.5 text-[12.5px]">{c.description}</p>
               </Link>

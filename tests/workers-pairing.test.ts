@@ -1,12 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { NextRequest } from "next/server";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-workers-pairing-"));
+const dir = tempDir("fuobe-workers-pairing-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -57,11 +55,6 @@ beforeAll(() => {
   cookies.a = `${auth.SESSION_COOKIE}=${auth.createSession(a).value}`;
   cookies.b = `${auth.SESSION_COOKIE}=${auth.createSession(b).value}`;
   cookies.owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
-});
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();

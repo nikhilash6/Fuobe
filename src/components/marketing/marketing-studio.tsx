@@ -9,27 +9,33 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { chipBase, chipIdle, chipOn } from "@/components/studio/chip";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { ResponsivePanel } from "@/components/studio/responsive-panel";
+import { RunPlaceChip, useRunPlace } from "@/components/studio/run-place-chip";
+import { mainModel } from "@/lib/run-place";
 import { BrandChip } from "@/components/brand/brand-dialog";
 import { inputCls } from "@/components/brand/fields";
 import { withoutOwnGpu } from "@/lib/catalog/engines";
 import { Switch } from "@/components/ui/switch";
-import { DRAWN_WORDS_HINT, DRAWN_WORDS_LABEL, FORMATS, formatModels, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
+import { DRAWN_WORDS_HINT, DRAWN_WORDS_LABEL, FORMATS, formatModels, isCodeTemplate, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, visibleTemplate, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
 import { SelfHostNote } from "@/components/self-host-note";
-import { formatCost } from "@/lib/format";
+import { StarterSection } from "@/components/starters/starter-section";
 import { useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
+import type { StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
-import { addRuns, send, useBrands, useEstimate } from "./hooks";
+import { addRuns, send, useBrands, useEstimate, useProducts } from "./hooks";
+import { KineticTemplate } from "./kinetic-template";
 import type { MarketingRun } from "@/lib/catalog/marketing";
 import { toastError } from "@/lib/refusals";
 import { templateCover } from "@/lib/template-covers";
 import type { ModelInfo } from "./model-info";
-import { AvatarSlot, HookPicker, ProductSlot, SettingPicker, VoiceControl, type ProductChoice } from "./pickers";
+import { AvatarSlot, HookPicker, ProductSlot, productChoice, SettingPicker, VoiceControl, type ProductChoice } from "./pickers";
+import { ProductParam } from "./product-param";
 import { RunsList } from "./runs";
 import { EmptyIcon, MarketingHeader, useMarketingEngine } from "./shell";
 import { TemplateGallery, type MediaFilter } from "./template-gallery";
 import { TemplatePreview } from "./template-preview";
 import { plainTagline } from "@/lib/plain-tagline";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 
 const IMAGE_FORMATS: FormatId[] = ["product-standalone", "product-with-model", "ads", "poster", "marketplace"];
 const VIDEO_FORMATS: FormatId[] = ["motion-hyper", "motion-2d", "motion-mixed", "motion-saas", "ugc-talking", "tiktok"];
@@ -289,24 +295,33 @@ function FormatChip({ draft, onFormat }: { draft: Draft; onFormat: (f: FormatId)
   );
 }
 
-function UrlParams({ onTemplate, onTab }: { onTemplate: (t: MarketingTemplate) => void; onTab: (t: "templates" | "generations") => void }) {
+function UrlParams({ onTemplate, onTab, owner }: { onTemplate: (t: MarketingTemplate) => void; onTab: (t: "templates" | "generations") => void; owner: boolean }) {
   const q = useSearchParams();
-  const done = useRef(false);
+  // The address read last: a ready shoot opened from this page (?template=…&product=…) is read too, once.
+  const done = useRef<string | null>(null);
   useEffect(() => {
-    if (done.current) return;
-    done.current = true;
+    // An owner-only template's address is read again once the owner is known.
+    const key = `${q.toString()}|${owner}`;
+    if (done.current === key) return;
+    done.current = key;
     const t = q.get("template");
-    if (t && TEMPLATE_INDEX.get(t)) onTemplate(TEMPLATE_INDEX.get(t)!);
+    const found = t ? TEMPLATE_INDEX.get(t) : undefined;
+    if (found && visibleTemplate(found, owner)) onTemplate(found);
     if (q.get("tab") === "generations") onTab("generations");
-  }, [q, onTemplate, onTab]);
+  }, [q, onTemplate, onTab, owner]);
   return null;
 }
 
-/** Marketing Studio: pick a template (or a format), add your product, avatar, hook and brand kit, and generate. */
-export function MarketingStudio({ models }: { models: Record<string, ModelInfo> }) {
+/**
+ * Marketing Studio: pick a template (or a format), add your product, avatar, hook and brand kit, and generate.
+ * starters: the ready shoots (a product with its photo and a template; src/lib/starters/catalog.ts), above the templates
+ * while there are no saved products.
+ */
+export function MarketingStudio({ models, starters = [] }: { models: Record<string, ModelInfo>; starters?: StarterCardData[] }) {
   const qc = useQueryClient();
   const { engine, setEngine } = useMarketingEngine();
   const [tab, setTab] = useState<"templates" | "generations">("templates");
+  const viewRef = useSwapFade<HTMLDivElement>(tab);
   const [category, setCategory] = useState<MarketingCategory | "all">("all");
   const [media, setMedia] = useState<MediaFilter>("all");
   const [draft, setDraft] = useState<Draft>(BLANK);
@@ -324,17 +339,25 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   const isOwner = useIsOwner();
   const set = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
   const f = FORMATS[draft.format];
-  const template = draft.templateId ? TEMPLATE_INDEX.get(draft.templateId) : undefined;
+  const found = draft.templateId ? TEMPLATE_INDEX.get(draft.templateId) : undefined;
+  const template = visibleTemplate(found, isOwner) ? found : undefined;
+  // A template drawn by Kinetic Motion opens its own panel (words, brand, sizes, live preview, Save) instead of the
+  // composer: nothing is generated, so it is open to everyone and asks only on Save.
+  const code = isCodeTemplate(template);
+  const panel = useRef<HTMLDivElement>(null);
   const kind = f.kind;
 
   // The brand kit is remembered between visits (and dropped once it's deleted).
   const [savedBrand, pickBrand] = useSavedBrand();
   const brands = useBrands();
   const brandId = savedBrand && brands.data?.some((b) => b.id === savedBrand) ? savedBrand : null;
+  const products = useProducts();
+  const noProducts = products.isSuccess && !products.data.length;
 
   const pickTemplate = (t: MarketingTemplate) => {
     setDraft((d) => withTemplate(d, t));
-    requestAnimationFrame(() => prompt.current?.focus({ preventScroll: true }));
+    if (isCodeTemplate(t)) requestAnimationFrame(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    else requestAnimationFrame(() => prompt.current?.focus({ preventScroll: true }));
   };
 
   const body = useMemo(
@@ -373,7 +396,25 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       : badSite
         ? "Enter a valid website URL"
         : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Not available here" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  // Where the run happens and its price, as the studios say it (the chip by the send button); a guest or an account is
+  // told the tool isn't available here, with no price.
+  const priced = est.data && !est.data.blocker ? est.data : undefined;
+  // Until the run is priced (no product yet), the chip names the model Settings has picked, as the studios' model chip does.
+  const access = useModelAccess();
+  const picked = useMemo(() => {
+    const choices = keepOffered(pickable(formatModels(f, engine, { product: !!draft.product, avatar: !!draft.avatar }, !!draft.drawnWords)), (c) => offered(access, c.id, engine));
+    const c = choices.find((x) => x.id === draft.modelId) ?? choices[0];
+    return c ? (models[c.id]?.name ?? undefined) : undefined;
+  }, [f, engine, draft.product, draft.avatar, draft.drawnWords, draft.modelId, access, models]);
+  const place = useRunPlace({
+    engine,
+    models: priced ? priced.steps.map((s) => s.modelName) : picked ? [picked] : undefined,
+    model: mainModel(priced?.steps) ?? picked,
+    costUsd: priced?.costUsd,
+    demo: priced?.demo,
+    ownerOnly: "Marketing Studio",
+  });
+  const sendTip = place?.send ? ` · ${place.send}` : "";
 
   // Until a template is picked or you start on the composer it stays slim (the attachment tiles fold
   // away), so the template gallery behind it stays in view.
@@ -414,39 +455,52 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title="Marketing Studio" active="studio" engine={engine} onEngine={setEngine} selfHostedOnly />
       <Suspense fallback={null}>
-        <UrlParams onTemplate={pickTemplate} onTab={setTab} />
+        <UrlParams onTemplate={pickTemplate} onTab={setTab} owner={isOwner} />
+        <ProductParam products={products.data} onProduct={(p) => set({ product: productChoice(p) })} />
       </Suspense>
-      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-3 pb-10 sm:px-6">
-        <div className="pt-6 pb-2 text-center sm:pt-10">
+      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-4 pb-10 sm:px-6">
+        {/* With no products yet, the ready shoots come first: a lower hero keeps them above the docked composer. */}
+        <div className={cn("pt-6 pb-2 text-center", noProducts ? "sm:pt-6" : "sm:pt-10")}>
           <h2 className="font-heading text-display text-balance">Turn a product into ready-to-post content</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">
             Product shots, motion, UGC presenters, ads, posters and listings — from Fuobe&apos;s templates, on {engine === "open" ? (visitor ? "open-source models" : "your own GPU, free") : "Fuobe Marketing Image or partner models in the cloud"}.
           </p>
-          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Marketing Studio isn&apos;t available here.</SelfHostNote>}
         </div>
-        <div role="tablist" aria-label="View" className="mx-auto mt-4 flex w-fit rounded-full bg-muted p-0.5">
+        {code && template && (
+          <div ref={panel} className="mt-4 scroll-mt-40">
+            <KineticTemplate key={template.id} template={template} onClose={() => setDraft((d) => withTemplate(d, null, d.format))} kitId={brandId} onKit={pickBrand} />
+          </div>
+        )}
+        {!code && noProducts && <StarterSection surface="marketing" starters={starters} center compact className="mt-6 mb-4" />}
+        {/* Under the ready shoots, so it doesn't read as an answer to them. */}
+        {visitor && !code && <SelfHostNote className="mx-auto mt-3 max-w-xl text-center">Marketing Studio isn&apos;t available here.</SelfHostNote>}
+        <TabRow role="tablist" aria-label="View" fade={false} className="mx-auto mt-4 w-fit">
           {(["templates", "generations"] as const).map((t) => (
-            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("h-8 rounded-full px-4 text-[13px] font-medium text-muted-foreground", tab === t && "bg-background text-foreground shadow-soft")}>
+            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={TAB_PILL} {...onAttr(tab === t)}>
               {t === "templates" ? "Templates" : "My generations"}
             </button>
           ))}
-        </div>
-        <div className="mt-6">
+        </TabRow>
+        <div ref={viewRef} className="mt-6">
           {tab === "templates" ? (
-            <TemplateGallery
-              category={category}
-              onCategory={setCategory}
-              media={media}
-              onMedia={(m) => {
-                setMedia(m);
-                if (m !== "all" && m !== kind) setDraft((d) => withTemplate(d, null, m === "image" ? "product-standalone" : "motion-hyper"));
-              }}
-              selected={draft.templateId ?? undefined}
-              onPick={pickTemplate}
-            />
+            <>
+              {/* Once there are products of your own, the ready shoots are one row above the templates. */}
+              {!!products.data?.length && <StarterSection surface="marketing" starters={starters} row center className="mb-12" />}
+              <TemplateGallery
+                category={category}
+                onCategory={setCategory}
+                media={media}
+                onMedia={(m) => {
+                  setMedia(m);
+                  if (m !== "all" && m !== kind) setDraft((d) => withTemplate(d, null, m === "image" ? "product-standalone" : "motion-hyper"));
+                }}
+                selected={draft.templateId ?? undefined}
+                onPick={pickTemplate}
+              />
+            </>
           ) : (
             <RunsList
               feature="marketing"
@@ -465,8 +519,8 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
         </div>
       </div>
 
-      {/* Docked composer */}
-      <div className="sticky bottom-0 z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+      {/* Docked composer (a Kinetic template has its own panel) */}
+      <div hidden={code} className="sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-4 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
         <div
           ref={composer}
           data-slim={slim || undefined}
@@ -531,7 +585,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
               {f.brandKit && <BrandChip value={brandId} onChange={pickBrand} />}
               <SettingsPanel draft={draft} set={set} models={models} engine={engine} />
             </div>
-            <span className="hidden shrink-0 font-mono text-[12px] text-muted-foreground tabular-nums sm:inline">{est.isFetching && !est.data ? "…" : cost}</span>
+            <RunPlaceChip place={place} steps={priced?.steps} engine={engine} onEngine={setEngine} pending={est.isFetching && !est.data} compact className="max-sm:shrink-0 sm:max-w-[16rem]" />
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -545,15 +599,14 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
                   {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                 </button>
               </TooltipTrigger>
-              <TooltipContent>{blocker ?? (template ? `Recreate template${cost ? ` · ${cost}` : ""}` : `Generate${cost ? ` · ${cost}` : ""}`)}</TooltipContent>
+              <TooltipContent>{blocker ?? (template ? `Recreate template${sendTip}` : `Generate${sendTip}`)}</TooltipContent>
             </Tooltip>
           </div>
           {est.data?.notes.length && !blocker ? <p className="hidden truncate px-2 pt-1 text-[11px] text-muted-foreground sm:block">{est.data.notes[0]}</p> : null}
-          {/* Phones have no hover: the price (and what blocks Generate) sit under the composer. */}
-          {(blocker || cost || est.data?.notes.length) && (
-            <p className="flex min-w-0 items-baseline justify-between gap-2 px-2 pt-1 text-[11px] text-muted-foreground sm:hidden" aria-live="polite">
-              <span className="min-w-0 truncate">{blocker ?? est.data?.notes[0] ?? ""}</span>
-              {!blocker && cost && <span className="shrink-0 font-mono tabular-nums">{cost}</span>}
+          {/* Phones have no hover: what blocks Generate sits under the composer (the chip says where it runs and its price). */}
+          {(blocker || est.data?.notes.length) && (
+            <p className="min-w-0 truncate px-2 pt-1 text-[11px] text-muted-foreground sm:hidden" aria-live="polite">
+              {blocker ?? est.data?.notes[0] ?? ""}
             </p>
           )}
         </div>

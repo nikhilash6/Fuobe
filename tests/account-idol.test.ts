@@ -1,17 +1,15 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startFakeComfy, TINY_PNG, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
- * Idol 3D (idol-1) under public sign-up: 3D models are closed to accounts, so an account's Idol run answers 403
- * own-gpu-tool on both engines — on its own linked ComfyUI (oss-idol, and idol-7's quick mesh oss-idol-mesh) and with its
- * own fal.ai key (idol-3d) — and nothing reaches its GPU or fal. So does its "Make the other sides" run (idol-8: Idol 3D's
+ * Idol 3D under public sign-up: 3D models are closed to accounts, so an account's Idol run answers 403
+ * own-gpu-tool on both engines — on its own linked ComfyUI (oss-idol, and the quick mesh oss-idol-mesh) and with its
+ * own fal.ai key (idol-3d) — and nothing reaches its GPU or fal. So does its "Make the other sides" run (Idol 3D's
  * four views).
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-idol-"));
+const dir = tempDir("fuobe-account-idol-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -51,7 +49,6 @@ afterAll(async () => {
   globalThis.__fuobeTestGpuPort = undefined;
   globalThis.__fuobeTestDiskFree = undefined;
   await fake.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const post = (body: unknown) => {

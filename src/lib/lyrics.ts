@@ -1,5 +1,5 @@
 /**
- * Song lyrics with section tags (nm10-music3): what Audio → Music's lyrics editor writes into params.extra.lyrics and what
+ * Song lyrics with section tags: what Audio → Music's lyrics editor writes into params.extra.lyrics and what
  * every model that sings reads. Pure (browser and server).
  *
  * The models read the structure from tags on lines of their own: MiniMax Music 3 ("[intro] [verse] [pre-chorus] [chorus]

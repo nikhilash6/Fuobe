@@ -3,7 +3,7 @@
 import { ArrowRight, Check, Copy, Pause, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CardPending, IntentLink } from "@/components/intent-link";
-import { useFadeEdges } from "@/components/preset-gallery";
+import { useFadeEdges } from "@/components/use-fade-edges";
 import { PresetPreview, setPreviewsPaused, usePreviewPlayback, usePreviewsPaused } from "@/components/preset-preview";
 import { CONNECT_GPU_EVENT, signInHref, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
@@ -26,7 +26,7 @@ export function HomeRail({ className, children }: { className?: string; children
 }
 
 /** Stops every preview playing by itself, on every page, for this visit; a hover still plays one. */
-export function PausePreviews() {
+export function PausePreviews({ className }: { className?: string }) {
   const paused = usePreviewsPaused();
   const Icon = paused ? Play : Pause;
   const label = paused ? "Play previews" : "Pause previews";
@@ -36,7 +36,11 @@ export function PausePreviews() {
       onClick={() => setPreviewsPaused(!paused)}
       aria-label={label}
       title={label}
-      className="inline-flex size-7 shrink-0 items-center justify-center gap-1.5 rounded-full border text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:w-[8.5rem]"
+      // 44 px to tap: its hit area reaches past its 28 px circle.
+      className={cn(
+        "relative inline-flex size-7 shrink-0 items-center justify-center gap-1.5 rounded-full border text-[12px] text-muted-foreground transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-accent hover:text-foreground sm:w-[8.5rem]",
+        className,
+      )}
     >
       <Icon className="size-3" />
       <span className="max-sm:hidden">{label}</span>
@@ -60,8 +64,10 @@ export function CopyCommand({ text }: { text: string }) {
       }}
       className="inline-flex h-6 items-center gap-1.5 rounded-full bg-white/10 px-2.5 text-[12px] text-white/80 transition-colors hover:bg-white/15 hover:text-white"
     >
-      {done ? <Check className="size-3" /> : <Copy className="size-3" />}
-      {done ? "Copied" : "Copy"}
+      {done ? <Check className="motion-confirm size-3" /> : <Copy className="size-3" />}
+      <span key={done ? "done" : "copy"} className="motion-swap">
+        {done ? "Copied" : "Copy"}
+      </span>
     </button>
   );
 }

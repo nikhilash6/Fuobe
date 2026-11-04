@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { TINY_PNG } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-account-retention-"));
+const dir = tempDir("fuobe-account-retention-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -15,11 +15,6 @@ const { saveFile, getAsset, absolutePath, scratchDir } = await import("@/server/
 const { sweepAccountFiles, purgeAccount } = await import("@/server/account-sweep");
 const { onAccountDeleted } = await import("@/server/account-files");
 const { DELETE } = await import("@/app/api/generations/[id]/route");
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const DAY = 24 * 60 * 60_000;
 let a = "";

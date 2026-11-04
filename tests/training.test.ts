@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
@@ -37,6 +36,7 @@ import {
 import { buildPayload } from "@/lib/catalog/payload";
 import { OWN_LOOK, soulPostSteps, soulRecipe } from "@/lib/catalog/soul";
 import { zip } from "@/server/zip";
+import { tempDir } from "./helpers/temp-dir";
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -236,7 +236,7 @@ describe("Fuobe Soul ID targets (build plan O3)", () => {
   });
 
   it("writes zips other tools can read", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-zip-"));
+    const dir = tempDir("fuobe-zip-");
     const file = path.join(dir, "kit.zip");
     fs.writeFileSync(file, zip([{ name: "dataset/001.txt", data: Buffer.from("photo of nvrysfz") }, { name: "a.yaml", data: Buffer.from("{}") }]));
     const out = execFileSync("python3", ["-I", "-c", "import sys,zipfile;z=zipfile.ZipFile(sys.argv[1]);print(z.testzip(), z.read('dataset/001.txt').decode())", file]).toString();

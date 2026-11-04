@@ -1,14 +1,17 @@
 "use client";
 
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
+import { useSwapFade } from "@/components/ui/tab-row";
 import { EngineSwitch } from "@/components/studio/engine-switch";
+import { HubHeaderExtras, useInHub } from "@/components/studio/hub-chrome";
 import { useEngine } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
  * The frame of a stand-alone audio/video tool (Translate & dub, Captions, Trim, Katana, Image to 3D,
  * Virality): the sticky header with the title, extra controls and the engine switch, an optional row
- * of hub tabs under it, then the page.
+ * of tabs under it, then the page. Inside a hub (Audio, Video tools) the hub's layout draws the title bar, the tabs and the
+ * engine switch; the tool adds only its own header controls to it.
  */
 export function ToolShell({
   title,
@@ -18,6 +21,7 @@ export function ToolShell({
   selfHostedOnly,
   children,
   wide,
+  fadeKey,
 }: {
   title: string;
   tabs?: React.ReactNode;
@@ -28,22 +32,34 @@ export function ToolShell({
   selfHostedOnly?: boolean;
   children: React.ReactNode;
   wide?: boolean;
+  /** What the body shows (a mode tab): when it changes, the body fades in. */
+  fadeKey?: unknown;
 }) {
   const [engine, setEngine] = useEngine();
+  const inHub = useInHub();
+  const fade = useSwapFade<HTMLDivElement>(fadeKey);
+  const body = <div ref={fade} className={cn("mx-auto w-full min-w-0 flex-1 px-4 pb-16 sm:px-6", wide ? "max-w-[1240px]" : "max-w-[1040px]")}>{children}</div>;
+  if (inHub)
+    return (
+      <>
+        {header && <HubHeaderExtras>{header}</HubHeaderExtras>}
+        {body}
+      </>
+    );
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <div className="sticky top-0 z-20 bg-background/85 backdrop-blur">
-        <header className="flex h-14 items-center gap-2 px-3 sm:px-6">
-          <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <div className="max-md:sticky top-chrome z-20 bg-background/85 backdrop-blur">
+        <header className="flex h-14 items-center gap-2 px-4 sm:px-6">
           <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{title}</h1>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {header}
             {engineSwitch && <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly={selfHostedOnly} />}
           </div>
+          <PhoneNavButton />
         </header>
         {tabs}
       </div>
-      <div className={cn("mx-auto w-full min-w-0 flex-1 px-3 pb-16 sm:px-6", wide ? "max-w-[1240px]" : "max-w-[1040px]")}>{children}</div>
+      {body}
     </div>
   );
 }

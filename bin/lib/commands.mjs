@@ -274,45 +274,6 @@ export async function waitFor(ctx, ids) {
   }
 }
 
-/**
- * Wait for runs of a skill that spans studios to end (each later step starts on the server when the steps before it
- * finish): every step's generations, or why waiting stopped.
- * @returns {Promise<{ ids: string[], stopped?: "timeout" | "interrupted" }>}
- */
-async function waitRuns(ctx, name, runIds) {
-  const v = ctx.values;
-  const timeout = (v.timeout ?? 1800) * 1000;
-  const interval = Math.max(0.2, v.interval ?? 2) * 1000;
-  const started = ctx.io.now();
-  const pause = new AbortController();
-  const stopped = new Promise((resolve) => pause.signal.addEventListener("abort", resolve, { once: true }));
-  const off = ctx.io.onInterrupt(() => pause.abort());
-  const seen = new Map();
-  try {
-    for (;;) {
-      const { items = [] } = await ctx.client.request("GET", `/api/assist/skills/${enc(name)}/runs?ids=${runIds.map(enc).join(",")}`);
-      const mine = items.filter((r) => runIds.includes(r.id));
-      if (!v.json) {
-        for (const r of mine) {
-          const line = r.steps.map((s) => `${s.label} · ${s.status}`).join(" → ");
-          if (seen.get(r.id) !== line) ctx.note(line);
-          seen.set(r.id, line);
-        }
-      }
-      const ids = mine.flatMap((r) => r.steps.flatMap((s) => s.ids));
-      if (mine.length === runIds.length && mine.every((r) => r.status !== "running")) {
-        for (const r of mine) if (r.error && !v.json) ctx.note(r.error);
-        return { ids };
-      }
-      if (timeout > 0 && ctx.io.now() - started >= timeout) return { ids, stopped: "timeout" };
-      await Promise.race([ctx.io.sleep(interval, pause.signal), stopped]);
-      if (pause.signal.aborted) return { ids, stopped: "interrupted" };
-    }
-  } finally {
-    off();
-  }
-}
-
 /** Save every output of the finished generations into `dir`. */
 async function saveOutputs(ctx, gens, dir) {
   const files = [];
@@ -772,11 +733,11 @@ async function skillRequest(ctx, view) {
 
 /** A skill not checked on this engine gets its free plan check first (it prices every step; nothing runs). */
 async function checkSkill(ctx, view, engine) {
-  if (!ctx.values.json) ctx.note(`Checking /${view.name} on ${engineWords(engine)} first (free: it prices each step, nothing runs)…`);
+  if (!ctx.values.json) ctx.note(`Pricing /${view.name} on ${engineWords(engine)} first (free: nothing runs)…`);
   const r = await ctx.client.request("POST", `/api/assist/skills/${enc(view.name)}/verify`, { json: { level: "plan", engine } });
   if (r.ok) return;
   const why = r.engines.flatMap((e) => e.plan.errors)[0];
-  throw new ApiError(`/${view.name} doesn't run on ${engineWords(engine)} as it is${why ? `: ${why}` : ""}. Check it in Assist → Skills.`);
+  throw new ApiError(`/${view.name} doesn't run on ${engineWords(engine)} as it is${why ? `: ${why}` : ""}. Give it a free test run in Assist → Skills (nothing runs for real).`);
 }
 
 const priceSkill = (ctx, view, engine, body) => ctx.client.request("POST", `/api/assist/skills/${enc(view.name)}/estimate`, { json: { ...body, engine } });
@@ -804,7 +765,7 @@ async function skillsEstimate(ctx, name) {
     return est.runnable ? EXIT.ok : EXIT.failed;
   }
   for (const line of estimateLines(est, view.title, { rows: req.rows, lineOf: req.lineOf })) ctx.print(line);
-  if (est.runnable && !view.ready.includes(engine)) ctx.note(`Not checked on ${engineWords(engine)} yet: fuobe skills run checks it first, for free.`);
+  if (est.runnable && !view.ready.includes(engine)) ctx.note(`Not priced on ${engineWords(engine)} yet: fuobe skills run prices every step first, for free (nothing runs).`);
   return est.runnable ? EXIT.ok : EXIT.failed;
 }
 
@@ -831,10 +792,11 @@ async function skillsRun(ctx, name) {
   const est = await priceSkill(ctx, view, engine, req.body(fileStandIn));
   if (!est.runnable) throw new ApiError(estimateProblems(est, req).join("\n") || `/${view.name} can't run with these values`);
   const runs = est.runs.length;
-  const asks = !v.yes && !v.json;
+  // Only --yes starts a run that costs money without a yes at the prompt; --json alone never spends.
+  const asks = !v.yes;
   const costs = !est.demo && est.total !== 0;
   if (costs && asks) {
-    if (!ctx.io.stdinIsTTY) throw new UsageError(`Running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(est)}: add --yes to run without asking`);
+    if (v.json || !ctx.io.stdinIsTTY) throw new UsageError(`Running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(est)}: add --yes to run without asking`);
     const answer = await ctx.io.ask(runQuestion(est, runs));
     if (!/^y(es)?$/i.test(answer.trim())) {
       ctx.note("Nothing was started.");
@@ -851,7 +813,7 @@ async function skillsRun(ctx, name) {
     if (!real.runnable) throw new ApiError(estimateProblems(real, req).join("\n") || `/${view.name} can't run with these files`);
     if (priceRose(est, real)) {
       const was = costs ? `, not ${costWords(est)}` : "";
-      if (!ctx.io.stdinIsTTY) throw new UsageError(`With your files uploaded, running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(real)}${was}: add --yes to run without asking. Nothing was started.`);
+      if (v.json || !ctx.io.stdinIsTTY) throw new UsageError(`With your files uploaded, running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(real)}${was}: add --yes to run without asking. Nothing was started.`);
       const answer = await ctx.io.ask(`With your files it costs ${costWords(real)}${was}. ${runQuestion(real, runs)}`);
       if (!/^y(es)?$/i.test(answer.trim())) {
         ctx.note("Nothing was started.");
@@ -874,16 +836,10 @@ async function skillsRun(ctx, name) {
   const runsOut = out.runs.map((r, i) => (req.rows ? { ...r, line: req.runLine(i) } : r));
   const demo = out.demo ? " (a demo: nothing connected, free)" : "";
   for (const [i, r] of out.runs.entries()) if (r.error && !v.json) ctx.note(`${req.rows ? `Row ${req.runLine(i)}` : `Run ${i + 1}`} didn't start: ${r.error}`);
-  const studio = out.runs.find((r) => r.href && !r.href.startsWith("/library") && !r.href.startsWith("/assist/skills"))?.href;
-  // A skill that spans studios: its later steps start by themselves on the server as the steps before them finish.
-  const waiting = [...new Set(out.runs.flatMap((r) => r.waiting ?? []))];
-  const progress = absolute(ctx, `/assist/skills?skill=${enc(view.name)}`);
+  const studio = out.runs.find((r) => r.href && !r.href.startsWith("/library"))?.href;
   if (v.wait || v.out) {
     if (!v.json) ctx.note(`Started ${started === 1 ? view.title : `${started} runs of ${view.title}`}${all ? "" : ` (${out.runs.length - started} didn't start)`}${demo}.${studio ? ` It opens in ${absolute(ctx, studio)}` : ""}`);
-    const staged = out.runs.filter((r) => r.run && !r.error);
-    const later = staged.length ? await waitRuns(ctx, view.name, staged.map((r) => r.run)) : null;
-    if (later?.stopped) return later.stopped === "interrupted" ? EXIT.interrupted : EXIT.timeout;
-    const code = await finish(ctx, later ? [...new Set([...ids, ...later.ids])] : ids, { download: !!v.out, also: { runs: runsOut } });
+    const code = await finish(ctx, ids, { download: !!v.out, also: { runs: runsOut } });
     return code === EXIT.ok && !all ? EXIT.failed : code;
   }
   if (v.json) {
@@ -892,8 +848,7 @@ async function skillsRun(ctx, name) {
   }
   ctx.print(`Started ${started === 1 ? view.title : `${started} runs of ${view.title}`} on ${engineWords(out.engine)}${demo}: ${ids.join(" ")}`);
   if (studio) ctx.print(`It opens in ${absolute(ctx, studio)}`);
-  if (waiting.length) ctx.print(`Then ${waiting.join(", ")} start${waiting.length === 1 ? "s" : ""} by ${waiting.length === 1 ? "itself" : "themselves"} as the steps before finish. Follow it: ${progress} (or run it with --wait)`);
-  else if (ids.length) ctx.print(`Wait for ${ids.length === 1 ? "it" : "them"}: fuobe wait ${ids.join(" ")}   Save ${ids.length === 1 ? "it" : "them"}: fuobe download ${ids.join(" ")} --out .`);
+  if (ids.length) ctx.print(`Wait for ${ids.length === 1 ? "it" : "them"}: fuobe wait ${ids.join(" ")}   Save ${ids.length === 1 ? "it" : "them"}: fuobe download ${ids.join(" ")} --out .`);
   return all ? EXIT.ok : EXIT.failed;
 }
 
@@ -1209,7 +1164,7 @@ export const COMMANDS = {
   },
   eval: {
     summary: "Measure Fuobe Originals: run a suite, score, review blind, compare runs",
-    usage: "fuobe eval <run|report|review|compare|promote|covers|history|validate|setup|trash|from-skill> [options]   (from a Fuobe checkout)",
+    usage: "fuobe eval <run|report|review|compare|promote|covers|history|validate|setup|trash> [options]   (from a Fuobe checkout)",
     examples: ["fuobe eval run --suite selftest --engine demo", "fuobe eval run --suite soul --engine open --looks v1-general --variants recipe,prompt-only", "fuobe eval compare latest~1 latest --fail-on clip --threshold 1"],
     passthrough: true,
     run: evalHarness,

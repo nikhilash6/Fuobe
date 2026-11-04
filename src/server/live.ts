@@ -1,5 +1,6 @@
 import "server-only";
 import type Database from "better-sqlite3";
+import { onShutdown } from "@/server/shutdown";
 
 /**
  * Live updates for the feed (GET /api/generations/stream). Every write to the generations
@@ -103,7 +104,8 @@ const PING_MS = 15_000;
 /**
  * A server-sent events stream of generation changes: `event: generation` (the Generation JSON,
  * exactly as GET /api/generations returns it), `event: deleted` ({"id"}), `: ping` every 15 s.
- * The listener and the ping are removed as soon as the client goes away.
+ * The listener and the ping are removed as soon as the client goes away. The stream also ends when the server starts
+ * stopping (shutdown.ts); the browser then reconnects, to whichever instance serves the site by then.
  *
  * `allowed`: whether whoever opened the stream may still read it, asked before every event and on every ping (`ping`
  * true: look again even when nothing changed, so a sign-in that expires is caught too). The stream ends at the first
@@ -136,9 +138,11 @@ export function generationEventStream(signal: AbortSignal, opts: { pingMs?: numb
       const ping = setInterval(() => {
         if (still(true)) send(": ping\n\n");
       }, opts.pingMs ?? PING_MS);
+      let unhook = () => {};
       stop = () => {
         if (!open) return;
         open = false;
+        unhook();
         off();
         clearInterval(ping);
         signal.removeEventListener("abort", stop);
@@ -150,6 +154,9 @@ export function generationEventStream(signal: AbortSignal, opts: { pingMs?: numb
       };
       signal.addEventListener("abort", stop);
       if (signal.aborted) return stop();
+      // Ends when the server starts stopping, so an update's old instance stops at once (shutdown.ts).
+      unhook = onShutdown(stop);
+      if (!open) return;
       // Reconnect quickly after a restart; the first comment flushes the headers through proxies.
       send("retry: 2000\n: connected\n\n");
     },

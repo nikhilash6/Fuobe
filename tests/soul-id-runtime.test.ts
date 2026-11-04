@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onEngine } from "@/lib/catalog/engines";
 import { getModel } from "@/lib/catalog";
 import { identityFor, identityKey, SOUL_ID_COPY } from "@/lib/catalog/training";
+import { tempDir } from "./helpers/temp-dir";
 
 // fal's storage upload goes through its client: the dataset zip and a LoRA sent to fal land here instead.
 const uploads = vi.hoisted(() => [] as { data: Buffer; type: string; name?: string }[]);
@@ -23,14 +23,13 @@ vi.mock("@/server/providers/fal", async (importOriginal) => {
   };
 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-soul-id-"));
+const dir = tempDir("fuobe-soul-id-");
 process.env.FUOBE_DATA_DIR = dir;
 const { db } = await import("@/server/db");
 const { createElement, getElement, updateElement } = await import("@/server/elements");
 const { startTraining, pollTrainings, listTrainings, trainingKit, attachLora, trainedCopiesSettled, retiredTraining } = await import("@/server/training");
 const { ensureLorasOnComfy, prepareCloudLoras, listLoraCopies, TRAINED_DIR } = await import("@/server/loras");
 const { setSetting } = await import("@/server/settings");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** A fake network: answers by URL prefix, records every call and its body, never touches the internet. */
 interface Call {

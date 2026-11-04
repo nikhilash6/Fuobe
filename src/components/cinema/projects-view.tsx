@@ -8,6 +8,8 @@ import { PageShell } from "@/components/page-shell";
 import { PageHeader } from "@/components/page-shell";
 import { HadItemsScript, useHadItems } from "@/components/use-had-items";
 import { SelfHostNote } from "@/components/self-host-note";
+import { ExampleRow } from "@/components/studio/example-row";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
 import { useIsVisitor } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -15,6 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { CinemaProject } from "@/lib/catalog/cinema";
 import { formatUsd } from "./money";
 import { timeAgo } from "@/lib/format";
+import type { ExampleRowData } from "@/lib/examples/types";
+import { starterShown, type StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { useCinemaProjects, useUpdateProject } from "./hooks";
@@ -47,9 +51,9 @@ function ProjectCard({ project, onSettings, query = "" }: { project: CinemaProje
   const href = `/cinema/${project.id}${query}`;
   return (
     <div className="group/card relative animate-fade-up">
-      <Link href={href} className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Link href={href} className="card-motion block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <div className="relative aspect-video overflow-hidden rounded-xl bg-muted">
-          <Cover project={project} className="transition-transform duration-300 ease-move group-hover/card:scale-[1.02]" />
+          <Cover project={project} className="card-zoom" />
           {project.pinned && (
             <span className="absolute top-2 left-2 grid size-7 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
               <Pin className="size-3.5" />
@@ -165,7 +169,11 @@ function EmptyProjects({ loading, onCreate, className }: { loading?: boolean; on
   );
 }
 
-export function CinemaProjects() {
+/**
+ * examples: "More to try" (exampleRow(), from the page), under a guest's or an account's empty list. starters: the ready
+ * films (catalog cards), first while there are no projects, then in one row under them.
+ */
+export function CinemaProjects({ examples, starters: given = [] }: { examples?: ExampleRowData | null; starters?: StarterCardData[] }) {
   const { data, isLoading } = useCinemaProjects();
   const router = useRouter();
   const [creating, setCreating] = useState(false);
@@ -173,6 +181,10 @@ export function CinemaProjects() {
   // A project is saved to the studio's library, which is its owner's: a guest or an account can't start one.
   const visitor = useIsVisitor();
   const onCreate = visitor ? undefined : () => setCreating(true);
+  // The ready films this viewer sees: a visitor only those with their real cover (the page carries only those), the
+  // owner every one.
+  const { owner, starters } = useStarters("cinema", given);
+  const hasStarters = starters.some((s) => starterShown(s, !owner));
   useHadItems("cinema-projects", data?.length);
   const [opener, setOpener] = useState<"blockout" | "world" | null>(null);
   const markOpener = useCallback((o: "blockout" | "world") => setOpener(o), []);
@@ -216,7 +228,18 @@ export function CinemaProjects() {
           <EmptyProjects loading className="[html[data-had-cinema-projects='1']_&]:hidden" onCreate={onCreate} />
         </div>
       ) : !data?.length ? (
-        <EmptyProjects key="empty" onCreate={onCreate} />
+        <div key="empty">
+          {hasStarters ? (
+            <>
+              {!owner && <SelfHostNote className="mb-5">Projects aren&apos;t available here.</SelfHostNote>}
+              <StarterSection surface="cinema" starters={given} />
+            </>
+          ) : (
+            <EmptyProjects onCreate={onCreate} />
+          )}
+          {/* On the page's own width: its heading sits under the page's title. */}
+          {examples && <ExampleRow row={examples} layout="column" className="mt-12" />}
+        </div>
       ) : (
         <div key="cards" className={GRID}>
           {data.map((p) => (
@@ -228,6 +251,7 @@ export function CinemaProjects() {
           >
             <Plus className="size-5" /> New project
           </button>
+          <StarterSection surface="cinema" starters={given} row className="col-span-full mt-6" />
         </div>
       )}
       <ProjectDialog

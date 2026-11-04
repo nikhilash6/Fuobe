@@ -1,17 +1,15 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { planStoryboard, STORYBOARD_LOOK_MODEL } from "@/lib/catalog/storyboard";
 import { buildPayload } from "@/lib/catalog/payload";
 import { filmReady } from "@/lib/storyboard-board";
 import { soulLook } from "@/lib/catalog/soul";
 import type { OutputFile } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 90_000 });
 
 // Popcorn with Fuobe Soul's looks (build plan O13): the planner, then boards end to end in demo mode.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-popcorn-"));
+const dir = tempDir("fuobe-popcorn-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -23,7 +21,6 @@ const estimateRoute = await import("@/app/api/storyboards/estimate/route");
 const { db } = await import("@/server/db");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const look = soulLook("v1-digitalcam")!;
 const scenes = ["a girl at a bus stop at night", "the bus arrives", "she looks back"];

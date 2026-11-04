@@ -16,7 +16,7 @@ import { loopbackPermission, useComputerSupport } from "./use-local-comfy";
 /**
  * "Use the ComfyUI on this computer": while the page is open, one Fuobe tab of this browser runs the person's jobs on
  * their ComfyUI (computer-runtime.ts). Mounted once, in the app's providers; it starts only for someone whose runs go
- * to their own computer. The sidebar shows its note (ComputerNote) while their GPU works, or when ComfyUI needs them.
+ * to their own computer. The top bar's pill and the phone's You sheet show its note (ComputerNote) while their GPU works, or when ComfyUI needs them.
  */
 
 export { awayFix, openConnect, openFinder, type FindReason } from "./open-connect";
@@ -181,43 +181,67 @@ function noteOf(s: ComputerState): Note | null {
   return working ? { text: "Your GPU is working. Keep this tab open.", problem: false } : null;
 }
 
+/** The note's icon: a warning when the person has something to do, else the GPU with a beat while it works. */
+function NoteIcon({ problem }: { problem: boolean }) {
+  return problem ? (
+    <TriangleAlert aria-hidden className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+  ) : (
+    <span aria-hidden className="relative grid size-4 shrink-0 place-items-center">
+      <Cpu className="size-4 text-brand-text" />
+      <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary motion-safe:animate-pulse" />
+    </span>
+  );
+}
+
 /**
- * The note in the sidebar, above "Your GPU": the GPU working ("keep this tab open"), or the one thing to do. It sits in
- * the sidebar's own space, so it never covers the page; with the sidebar folded, an icon says it.
+ * The note: the GPU working ("keep this tab open"), or the one thing to do. It sits in the top bar pill's popover and at
+ * the top of the phone's You sheet, so it never covers the page; the pill itself says it in short (ComputerPillFace).
  */
 export function ComputerNote() {
   const note = noteOf(useComputerState());
   if (!note) return null;
-  const icon = note.problem ? (
-    <TriangleAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-  ) : (
-    <span className="relative grid size-4 shrink-0 place-items-center">
-      <Cpu className="size-4 text-brand-text" />
-      <span className="absolute -top-0.5 -right-0.5 size-1.5 animate-pulse rounded-full bg-primary" />
-    </span>
+  return (
+    <div role="status" className={cn("flex gap-2 rounded-md border px-2 py-1.5 text-[12px]", note.problem ? "border-amber-500/50" : "border-transparent bg-brand-faint")}>
+      <NoteIcon problem={note.problem} />
+      <div className="min-w-0 flex-1">
+        <p className="leading-snug">{note.text}</p>
+        {note.action && (
+          <button type="button" onClick={note.go} className="mt-0.5 font-medium text-brand-text underline-offset-4 hover:underline">
+            {note.action}
+          </button>
+        )}
+      </div>
+    </div>
   );
+}
+
+/**
+ * What the bar's computer pill shows, so the note is seen without opening it: a warning and "Needs you" when there is
+ * something to do, the GPU with a beat while it works, else the GPU. Its name starts with the words it shows (from xl;
+ * the same words, unseen, below), then says the note. The live region that says a new note is ComputerNoteLive, beside
+ * the button, so the note isn't in the button's name twice.
+ */
+export function ComputerPillFace() {
+  const note = noteOf(useComputerState());
+  const words = note?.problem ? "Needs you" : "Your computer";
   return (
     <>
-      <div role="status" className={cn("flex gap-2 rounded-md border px-2 py-1.5 text-[12px] group-data-[collapsible=icon]:hidden", note.problem ? "border-amber-500/50" : "border-transparent bg-brand-faint")}>
-        {icon}
-        <div className="min-w-0 flex-1">
-          <p className="leading-snug">{note.text}</p>
-          {note.action && (
-            <button type="button" onClick={note.go} className="mt-0.5 font-medium text-brand-text underline-offset-4 hover:underline">
-              {note.action}
-            </button>
-          )}
-        </div>
-      </div>
-      <button
-        type="button"
-        title={note.action ? `${note.text} ${note.action}` : note.text}
-        aria-label={note.text}
-        onClick={note.go}
-        className="hidden size-8 place-items-center self-center rounded-md hover:bg-accent group-data-[collapsible=icon]:grid"
-      >
-        {icon}
-      </button>
+      {note ? <NoteIcon problem={note.problem} /> : <Cpu aria-hidden className="size-4 text-brand-text" />}
+      <span className={cn("hidden xl:inline", note?.problem && "text-amber-700 dark:text-amber-300")}>{words}</span>
+      <span className="sr-only xl:hidden">{words}</span>
+      <span className="sr-only">
+        , your computer&apos;s GPU{note ? `. ${note.text}` : ""}
+      </span>
     </>
+  );
+}
+
+/** Says the computer note politely when it changes (beside the pill, outside its button). */
+export function ComputerNoteLive() {
+  const note = noteOf(useComputerState());
+  return (
+    <span role="status" data-computer-note className="sr-only">
+      {note?.text ?? ""}
+    </span>
   );
 }

@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { GuestPrompt } from "@/components/guest-prompt";
+import { DeleteForGoodHost } from "@/components/studio/delete-for-good";
 import { AddKeyPrompt } from "@/components/keys/your-keys";
 import { toast } from "sonner";
 import { AUTH_CHANNEL, takeNotice, type ViewerInfo } from "@/lib/api";
@@ -29,7 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         defaultOptions: { queries: { staleTime: 5_000, refetchOnWindowFocus: true, retry: (n, e) => n < 1 && !NO_RETRY.has((e as { status?: number }).status ?? 0) } },
       }),
   );
-  // Signed in or out in another tab: this one asks who is looking again (its sidebar, its studios' refusals).
+  // Signed in or out in another tab: this one asks who is looking again (its menus, its studios' refusals).
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
     const c = new BroadcastChannel(AUTH_CHANNEL);
@@ -54,8 +55,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={client}>
         <TooltipProvider delayDuration={300}>
           {children}
-          <Toaster position="top-center" gap={8} offset={29} />
+          {/* Below the top bar on a desktop (56 px and a gap), near the top on a phone (its tabs are at the bottom). */}
+          <Toaster position="top-center" gap={8} offset={{ top: 68 }} mobileOffset={{ top: 12 }} />
           <GuestPrompt />
+          <DeleteForGoodHost />
           <AddKeyPrompt />
           <BillingCard />
           <GuidedFixHost />

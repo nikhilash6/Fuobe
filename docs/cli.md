@@ -195,8 +195,9 @@ else `skills/`, `.agents/skills/`, `.claude/skills/` and the folders right under
 levels), else any `SKILL.md` a few levels down; skills marked `metadata.internal: true` are left out
 unless named with `--skill`. Each skill is uploaded as a zip with its text files (binaries and
 dot-files are left out, and listed). Git sources need `git`. A skill's `recipe.json` (a skill that runs
-by itself; see `skills/README.md`) goes up with it but starts unchecked: `skills run` checks it for free
-before its first run, or check it in **Assist → Skills**.
+by itself; see `skills/README.md`) goes up with it but starts untested: `skills run` prices every step
+for free before its first run (nothing runs), or give it a free **Test run** in **Assist → Skills**
+(every step priced and run once with placeholder results; nothing runs for real).
 
 #### Running a skill that runs by itself
 
@@ -219,21 +220,16 @@ fuobe skills export weekly-promo --out weekly-promo.zip   # SKILL.md and its fil
   works too. A file path in a cell is read from the table's folder, and each file goes up once. `-p` fills
   what the rows leave empty. A row that doesn't fit is named by its line, and then nothing starts.
 - `run` prices the whole batch first and asks `Run 20 for $12.40? [y/N]` when it costs money. `--yes`
-  starts it without asking; so does `--json` (for scripts). Without a terminal to ask on, it stops and
-  says to add `--yes`. Free runs (your GPU, or a demo) start without asking. Once your files are uploaded
-  it prices them again (a clip is priced by its length): when that's more, it asks again with the new
-  price, or stops without a terminal.
+  starts it without asking; `--json` alone doesn't (a script adds `--yes`). Without a terminal to ask
+  on, it stops and says to add `--yes`. Free runs (your GPU, or a demo) start without asking. Once
+  your files are uploaded it prices them again (a clip is priced by its length): when that's more, it
+  asks again with the new price, or stops without a terminal.
 - `--engine open|cloud` picks where it runs, among the engines its steps run on (by default: where it
-  was checked). A skill not yet checked on that engine gets its free plan check first.
+  was tested). A skill not yet priced on that engine has every step priced first, for free (nothing runs).
 - `--wait` and `--out <dir>` wait for the results and save them, as `fuobe generate` does; without them,
   `run` prints the ids to pass to `fuobe wait` or `fuobe download`. When a row didn't start (a studio
   tool's run can refuse one row and start the rest), it says which by its line in your file and exits 1;
   `--json` lists every run under `runs`, each with its `error` and, for `--rows`, its `line`.
-- A skill that spans studios (a dub, then captions, then a 9:16 cut) starts its first steps at once, and the
-  server starts each later step when the steps it takes from finish: `run` names the steps that wait and
-  where to follow the run (the skill's **Runs** in **Assist → Skills**). `--wait` and `--out` follow the
-  run until its last step is done, printing each change (`Dub · done → Captions · running → 9:16 cut ·
-  waiting`), then wait for and save every step's results; `--json` lists each run's `run` id and `waiting`.
 - `export` saves the skill as a zip (`SKILL.md`, `recipe.json` and its other files); `--examples` keeps
   the values it was made with, which are left out by default.
 
@@ -279,7 +275,6 @@ fuobe eval run --suite selftest --engine demo        # a free self-test of the h
 fuobe eval run --suite soul --engine open --looks v1-general --variants recipe,prompt-only
 fuobe eval compare latest~1 latest --fail-on clip --threshold 1   # exit 1 on a regression
 fuobe eval trash latest                              # the run's generations to that Fuobe's Trash
-fuobe eval from-skill lamp-turntable                 # a saved skill as a suite: then run --suite skill-lamp-turntable
 ```
 
 See [`scripts/eval/README.md`](../scripts/eval/README.md) for the suites, metrics, blind review and

@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   backgroundLowered,
   CLOUD_ONLY_PROBLEM,
@@ -52,11 +51,12 @@ import {
 } from "@/lib/av/split";
 import { getModel } from "@/lib/catalog";
 import { HUB_MODES, modeHref } from "@/lib/hubs";
+import { tempDir } from "./helpers/temp-dir";
 
 // Audio → Split soundtrack (DBS D1): the planner, the mixer maths and the API in demo mode.
 const SURROUND_NOTE =
   "This file has 6 channels. ComfyUI saves audio in mono or stereo only, so the stems come out in mono (all channels mixed), and Music & effects is the music and effects stems added up.";
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-split-"));
+const dir = tempDir("fuobe-split-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: the open model runs on the demo provider.
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -74,7 +74,6 @@ const { uploadSource } = await import("@/components/audio-tools/split-tool");
 const { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, GUEST_HEADER, GUEST_RUN_MESSAGE } = await import("@/lib/guest-access");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** A 16-bit WAV of a tone with `channels` channels, saved as an upload. */
 function upload(seconds: number, channels = 2, name = "film.wav"): string {
@@ -237,7 +236,7 @@ describe("planSplit", () => {
 
   it("has no cloud route: DBS isn't hosted, and no other model stands in for it", () => {
     expect(() => planSplit({ engine: "cloud", media: "/api/files/a.wav", kind: "audio" })).toThrow(CLOUD_SPLIT_PROBLEM);
-    expect(CLOUD_SPLIT_PROBLEM).toMatch(/runs on your GPU \(open source\)/);
+    expect(CLOUD_SPLIT_PROBLEM).toMatch(/works with open-source models/);
     expect(() => planSplit({ engine: "open", media: "", kind: "video" })).toThrow("Add the video to split");
   });
 

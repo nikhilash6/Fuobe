@@ -1,4 +1,4 @@
-// Keyframe animation (package inbetweening) in the browser, in demo mode (no run reaches a GPU or a key): the Video
+// Keyframe animation in the browser, in demo mode (no run reaches a GPU or a key): the Video
 // studio's Frames mode in Animation style (a timing chip per gap, the live length, the playback rate, Keep mouth still,
 // what the cloud keeps), Storyboard's "Animate these panels" opening it with the panels as keyframes, a character's
 // "Animate between poses", and the Character Sheet page. Each at 1440 and 390 px, light and dark, without sideways

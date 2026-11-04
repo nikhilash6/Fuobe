@@ -3,9 +3,10 @@
 import { Loader2, Mic, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useVoiceFirstLive, useVoiceFirstShown, VoiceFirstSwitch } from "@/components/audio-tools/voice-first-switch";
+import { voiceFirstDefault } from "@/lib/av/voice-first";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Panel } from "@/components/av/tool-shell";
-import { VoiceFirstSwitch } from "@/components/studio/voice-first-switch";
 import { buildShotPrompt, ROLE_LABELS, secondsLabel, shotDialogue, shotSpeaker, SWAP_STUDIO, voiceLabel, voicesOf, type SwapRole } from "@/lib/catalog/swap-studio";
 import { toastError } from "@/lib/refusals";
 import { useTranscribe } from "./hooks";
@@ -36,11 +37,11 @@ function RoleSelect({ value, onChange, label, auto }: { value: SwapRole | null; 
 /** Words: the clip's transcript (both engines' speech to text), who each voice is, and each shot's speaker, words and prompt. */
 export function WordsStage({ id, project, clip, gens, estimate, edit }: StageProps) {
   const transcribe = useTranscribe(id);
-  // "Clean the voice first": on (a clip's music and effects blur the words); its price is the estimate's.
-  const [cleanFirst, setCleanFirst] = useState(true);
-  const added = estimate?.cleanVoice?.[clip.id];
-  const plain = estimate?.transcribe[clip.id];
-  const total = cleanFirst && typeof plain === "number" && typeof added === "number" ? Math.round((plain + added) * 10000) / 10000 : cleanFirst && added === null ? null : plain;
+  // "Clean the voice first": on for the clip's speech on your GPU, off in the cloud (a paid step there).
+  const voiceFirstShown = useVoiceFirstShown();
+  const voiceFirstLive = useVoiceFirstLive();
+  const [voiceFirst, setVoiceFirst] = useState<boolean | null>(null);
+  const cleanFirst = voiceFirstShown && (voiceFirst ?? (project.engine === "open" && voiceFirstDefault("video", voiceFirstLive)));
   const t = clip.transcript;
   const voices = voicesOf(t?.cues);
   const busy = !!t?.genId && (gens[t.genId]?.status === "queued" || gens[t.genId]?.status === "running");
@@ -56,31 +57,24 @@ export function WordsStage({ id, project, clip, gens, estimate, edit }: StagePro
               variant={t?.cues ? "outline" : "default"}
               className="h-8 rounded-full"
               disabled={busy || transcribe.isPending || !clip.source.hasAudio}
-              onClick={() => transcribe.mutate({ clipId: clip.id, ...(cleanFirst && { voiceFirst: true }) }, { onError: (e) => toastError(e) })}
+              onClick={() => transcribe.mutate({ clipId: clip.id, ...(cleanFirst && { cleanVoiceFirst: true }) }, { onError: (e) => toastError(e) })}
             >
               {busy || transcribe.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Mic className="size-3.5" />}
               {t?.cues ? "Transcribe again" : "Transcribe"}
-              <span className="font-mono text-[11px] opacity-80">{priceText(total, { demo: estimate?.demo, engine: project.engine })}</span>
+              <span className="font-mono text-[11px] opacity-80">{priceText(estimate?.transcribe[clip.id], { demo: estimate?.demo, engine: project.engine })}</span>
             </Button>
           </span>
         }
       >
-        {clip.source.hasAudio && (
-          <VoiceFirstSwitch
-            className="mb-2"
-            engine={project.engine}
-            on={cleanFirst}
-            onChange={setCleanFirst}
-            seconds={clip.source.duration}
-            {...(project.engine === "cloud" && typeof added === "number" && { price: `+$${added.toFixed(2)}` })}
-          />
-        )}
         {!clip.source.hasAudio ? (
           <Note>This clip has no sound: every shot is “No dialogue”.</Note>
         ) : !t?.cues ? (
-          <Note>
-            {project.engine === "open" ? "Qwen3-ASR on your ComfyUI" : "ElevenLabs Scribe v2 (fal)"} writes the clip&apos;s words with their times{project.engine === "cloud" ? " and who says them" : ""}; each shot and segment then takes the words spoken in it.
-          </Note>
+          <div className="space-y-3">
+            <Note>
+              {project.engine === "open" ? "Qwen3-ASR on your ComfyUI" : "ElevenLabs Scribe v2 (fal)"} writes the clip&apos;s words with their times{project.engine === "cloud" ? " and who says them" : ""}; each shot and segment then takes the words spoken in it.
+            </Note>
+            {voiceFirstShown && <VoiceFirstSwitch engine={project.engine} on={cleanFirst} onChange={setVoiceFirst} seconds={clip.source.duration} />}
+          </div>
         ) : (
           <div className="space-y-3">
             {voices.length > 0 && (

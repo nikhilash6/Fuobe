@@ -1,5 +1,5 @@
 /**
- * Placeholder results' words and ways out, for the sidebar's "Placeholders on" chip and the "Placeholder" chip on a
+ * Placeholder results' words and ways out, for the top bar's "Placeholders on" chip and the "Placeholder" chip on a
  * result (src/components/demo-mode.tsx). Pure, so the rules are tested without a browser.
  *
  * Placeholder results are off by default on every install: a run with nothing connected opens the connect card. The
@@ -8,13 +8,15 @@
  * demoMode "off"), so only the owner is offered a way out.
  */
 
+import { formatCost } from "@/lib/format";
+
 /** Settings' switch. */
 export const PLACEHOLDER_SETTING = "Show placeholder results (for a tour)";
 
 /** The chip on every result the demo provider made. */
 export const PLACEHOLDER_CHIP = "Placeholder";
 
-/** The sidebar's chip while the switch is on: a click turns it off. */
+/** The top bar's chip while the switch is on: a click turns it off. */
 export const PLACEHOLDERS_ON = "Placeholders on";
 
 export type PlaceholderAction = "computer" | "key" | "off";
@@ -27,6 +29,46 @@ export const PLACEHOLDER_ACTION_LABELS: Record<PlaceholderAction, string> = {
 
 /** A result the demo provider made (a placeholder, not the real thing). */
 export const isPlaceholder = (g: { provider?: string | null } | null | undefined): boolean => g?.provider === "mock";
+
+/**
+ * What a one-tap "Run again" adds to its label, so a new run never starts unannounced: " on your GPU", " on the
+ * studio's GPUs" (a hosted run) or, for a cloud run (billed), its price (" · ≈ $0.42") when `price` says it, else
+ * " · paid"; nothing before the run is known. The new run follows the placeholder switch as it is now
+ * (`now.placeholders`, from the status), not the old result: nothing while placeholders are on, even after a real
+ * result, and a real run's words after an old placeholder once they're off.
+ *
+ * `price`: what the new run costs in US dollars, from the estimate the original run was priced at (againPrice or the
+ * studio's own estimate), or null when that isn't known.
+ */
+export function againWhere(g: { engine: string; place?: "pool" } | null | undefined, now: { placeholders: boolean }, price?: number | null): string {
+  if (!g || now.placeholders) return "";
+  if (g.place === "pool") return " on the studio's GPUs";
+  if (g.engine === "open") return " on your GPU";
+  return paidSuffix(price);
+}
+
+/**
+ * What a one-tap paid (cloud) run adds to its button: its price (" · ≈ $0.42", " · under $0.01") when it is known,
+ * else " · paid".
+ */
+export function paidSuffix(price?: number | null): string {
+  if (price == null || !(price > 0)) return " · paid";
+  return price < 0.01 ? " · under $0.01" : ` · ≈ ${formatCost(price)}`;
+}
+
+/**
+ * A new run's price from the runs it makes again (each keeps the estimate it was priced at, `costUsd`): their sum, or
+ * null when one is missing, unpriced or a placeholder (a stand-in's estimate says nothing about the real run).
+ */
+export function againPrice(gs: readonly ({ costUsd: number | null; provider?: string | null } | null | undefined)[]): number | null {
+  if (!gs.length) return null;
+  let sum = 0;
+  for (const g of gs) {
+    if (!g || isPlaceholder(g) || g.costUsd == null) return null;
+    sum += g.costUsd;
+  }
+  return Math.round(sum * 1000) / 1000;
+}
 
 /** Whether the owner's runs make placeholders now: only with the switch on ("on"; anything else is off). */
 export const placeholdersOn = (demoMode: string | undefined): boolean => demoMode === "on";

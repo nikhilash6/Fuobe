@@ -248,7 +248,7 @@ function validated(input: SkillInput & { name: string }) {
 }
 
 /** Names the API routes use (static routes beside /api/assist/skills/[name]). */
-const RESERVED = new Set(["upload", "new", "draft", "suggestions"]);
+const RESERVED = new Set(["upload", "new", "draft"]);
 
 function taken(name: string): string | null {
   if (RESERVED.has(name)) return `“${name}” is reserved — pick another name`;

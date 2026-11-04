@@ -7,7 +7,7 @@ import { dubLanguageFor } from "@/lib/assist-studios";
 import { isHelperFeature } from "@/lib/library";
 import { probeMedia } from "@/lib/media-probe";
 import { videoPoster } from "@/lib/output-actions";
-import { isMediaRef, leafKeys, OUTPUT_NOT_HANDED_ON, RECIPE_LIMITS, stepRef, stepRefs, today, type ParamType, type Recipe, type RecipeCheck, type RecipeStep } from "@/lib/recipe";
+import { isMediaRef, isStaged, leafKeys, RECIPE_LIMITS, stepRef, today, waitsFor, type ParamType, type Recipe, type RecipeCheck, type RecipeStep } from "@/lib/recipe";
 import {
   DEMO_NOTE,
   isExpansionLabel,
@@ -34,6 +34,8 @@ import { declinedByUser, type AssistItem } from "@/lib/assist";
 import { cardTitle, getTool, planFor } from "./assist/tools";
 import { getSkill, SkillError } from "./skills";
 import { absolutePath, readRef } from "./storage";
+import { getCanvas } from "./canvas";
+import { canvasToRecipe } from "@/lib/catalog/canvas-recipe";
 
 /**
  * Make a skill from results already made (package W2): walk the picked results back through `depends_on` to the
@@ -88,7 +90,7 @@ function mosaicShape(req: GenerationRequest): string {
 }
 
 /** Request fields a step keeps (GenerationRequestSchema's, less the server's own): everything else is dropped. */
-const KEEP: (keyof GenerationRequest)[] = ["feature", "presetId", "modelId", "op", "prompt", "negativePrompt", "inputs", "params", "presetOptions", "presetStrength", "mix", "loras", "engine", "signature", "voiceFirst"];
+const KEEP: (keyof GenerationRequest)[] = ["feature", "presetId", "modelId", "op", "prompt", "negativePrompt", "inputs", "params", "presetOptions", "presetStrength", "mix", "loras", "engine", "signature"];
 
 function stepRequest(req: GenerationRequest): Record<string, unknown> {
   const out = Object.fromEntries(KEEP.flatMap((k) => (req[k] === undefined ? [] : [[k, JSON.parse(JSON.stringify(req[k]))]]))) as Record<string, unknown> & GenerationRequest;
@@ -118,7 +120,7 @@ interface Node {
   modelName: string;
   notes: string[];
   /** A tool step: its studio, the record it was rebuilt from, and where its media inputs are. */
-  tool?: { studio: string; record: string; inputs: { path: (string | number)[]; type: ParamType; label: string }[]; texts: { path: (string | number)[]; label: string }[]; outputs?: string[] };
+  tool?: { studio: string; record: string; inputs: { path: (string | number)[]; type: ParamType; label: string }[]; texts: { path: (string | number)[]; label: string }[] };
 }
 
 /** The single image a step without `chain` takes from each earlier step (createGenerations' slotsFor). */
@@ -365,11 +367,39 @@ function linkByFile(walk: Walk): void {
   }
 }
 
+/**
+ * A chat's studio step whose input is another step's result, or a step whose input is a studio step's result (W7): the
+ * file becomes a step reference, `{{steps.<key>.output}}`, so a new run feeds the new result on once that step is done.
+ * Only to a step made before it. Generate steps joined by their files already wait for each other (linkByFile).
+ */
+function linkStudios(nodes: Node[], outputsOf: (n: Node) => Set<string>): number {
+  let linked = 0;
+  for (const n of nodes) {
+    const sources = nodes.filter((src) => src !== n && (src.tool || n.tool) && src.gen.createdAt <= n.gen.createdAt);
+    if (!sources.length) continue;
+    const swap = (v: unknown): unknown => {
+      if (typeof v === "string" && isMediaRef(v)) {
+        const src = sources.find((s) => outputsOf(s).has(v));
+        if (src) {
+          linked++;
+          return stepRef(src.key);
+        }
+        return v;
+      }
+      if (Array.isArray(v)) return v.map(swap);
+      if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, swap(x)]));
+      return v;
+    };
+    if (n.step.kind === "tool") n.step = { ...n.step, input: swap(n.step.input) as Record<string, unknown> };
+    else n.step = { ...n.step, request: { ...n.step.request, inputs: swap(n.step.request.inputs) as typeof n.step.request.inputs } };
+  }
+  return linked;
+}
+
 /** Steps in an order where each comes after the ones it waits for (Kahn's algorithm, stable). */
 function ordered(nodes: Node[]): Node[] {
   const keys = new Set(nodes.map((n) => n.key));
-  const refs = (n: Node) => stepRefs(n.step.kind === "tool" ? n.step.input : n.step.request).map((r) => r.key);
-  const waits = (n: Node) => [...(n.step.kind === "generate" ? (Array.isArray(n.step.after) ? n.step.after : n.step.after ? [n.step.after] : []) : []), ...refs(n)].filter((a) => keys.has(a));
+  const waits = (n: Node) => waitsFor(n.step).filter((a) => keys.has(a));
   const out: Node[] = [];
   const done = new Set<string>();
   while (out.length < nodes.length) {
@@ -379,37 +409,6 @@ function ordered(nodes: Node[]): Node[] {
     done.add(next.key);
   }
   return out;
-}
-
-/**
- * A studio step's result handed on by hand in a chat (a clip dubbed, then captioned), or a result handed to a studio
- * step: the file becomes a step reference ({{steps.<key>.output}}, recipe version 2), so a new run waits for the step
- * and takes its new result (W7). Generate steps that feed each other are chained by linkByFile instead.
- */
-function linkStudios(walk: Walk): boolean {
-  const nodes = [...walk.nodes.values()];
-  const outputs = (n: Node) => n.tool?.outputs ?? n.gen.outputs.map((o) => o.url);
-  const made = new Map<string, Node>();
-  for (const n of [...nodes].sort((a, b) => a.gen.createdAt - b.gen.createdAt)) for (const u of outputs(n)) if (u && !made.has(u)) made.set(u, n);
-  let linked = false;
-  const swap = (n: Node, v: unknown): unknown => {
-    if (typeof v === "string") {
-      const src = made.get(v);
-      if (!src || src === n || src.gen.createdAt > n.gen.createdAt || (!src.tool && !n.tool)) return v;
-      // A studio whose result is only its first stage (Faceless's stills) is kept as the file it handed on.
-      if (src.step.kind === "tool" && OUTPUT_NOT_HANDED_ON[src.step.tool]) return v;
-      linked = true;
-      return stepRef(src.key);
-    }
-    if (Array.isArray(v)) return v.map((x) => swap(n, x));
-    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, swap(n, x)]));
-    return v;
-  };
-  for (const n of nodes) {
-    if (n.step.kind === "tool") n.step = { ...n.step, input: swap(n, n.step.input) as Record<string, unknown> };
-    else if (n.step.request.inputs) n.step = { ...n.step, request: { ...n.step.request, inputs: swap(n, n.step.request.inputs) as typeof n.step.request.inputs } };
-  }
-  return linked;
 }
 
 // ---------------------------------------------------------------------------
@@ -728,7 +727,7 @@ function titleFor(g: Generation, label: string): string {
 function freeName(title: string): string {
   const base = slugify(title).slice(0, 56).replace(/-+$/, "") || "my-skill";
   let name = base;
-  for (let i = 2; getSkill(name) || ["upload", "new", "draft", "suggestions"].includes(name); i++) name = `${base}-${i}`;
+  for (let i = 2; getSkill(name) || ["upload", "new", "draft"].includes(name); i++) name = `${base}-${i}`;
   return name;
 }
 
@@ -750,7 +749,7 @@ export const draftFromGenerations = (ids: string[]): DraftResult => buildDraft(i
 /** Where a draft comes from besides picked results: an Assist chat, its studio calls as they ran, and what it left out. */
 interface Origin {
   thread?: string;
-  /** Studio calls of the chat: each the tool's exact input, and the result that stands for it. */
+  /** Studio calls of the chat: each the tool's exact input, the result that stands for it, and every file it made. */
   calls?: { lifted: Lifted; pick: Generation; outputs?: string[] }[];
   refusals?: DraftRefusal[];
   notes?: string[];
@@ -759,7 +758,7 @@ interface Origin {
 }
 
 /** A studio's work as one tool step (W2's lifts and W3's chat calls). */
-function toolNode(walk: Walk, lifted: Lifted, g: Generation, outputs?: string[]): Node {
+function toolNode(walk: Walk, lifted: Lifted, g: Generation): Node {
   const key = walk.key(lifted.tool.replace(/_/g, "-"));
   return {
     key,
@@ -769,14 +768,14 @@ function toolNode(walk: Walk, lifted: Lifted, g: Generation, outputs?: string[])
     label: lifted.studio,
     modelName: lifted.studio,
     notes: [`Runs ${lifted.studio} again with the same settings`],
-    tool: { studio: lifted.studio, record: lifted.record, inputs: lifted.inputs, texts: lifted.texts, ...(outputs && { outputs }) },
+    tool: { studio: lifted.studio, record: lifted.record, inputs: lifted.inputs, texts: lifted.texts },
   };
 }
 
 function buildDraft(ids: string[], o: Origin = {}): DraftResult {
   const refusals: DraftRefusal[] = [...(o.refusals ?? [])];
   const walk = new Walk();
-  const tools: { node: Node; pick: Generation }[] = (o.calls ?? []).map((c) => ({ node: toolNode(walk, c.lifted, c.pick, c.outputs), pick: c.pick }));
+  const tools: { node: Node; pick: Generation; outputs?: string[] }[] = (o.calls ?? []).map((c) => ({ node: toolNode(walk, c.lifted, c.pick), pick: c.pick, outputs: c.outputs }));
   const generated: Generation[] = [];
   const unique = [...new Set(ids)].slice(0, 200);
   for (const id of unique) {
@@ -822,26 +821,27 @@ function buildDraft(ids: string[], o: Origin = {}): DraftResult {
       refusals.push({ id, title, reason: e.message });
     }
   }
-  // From the Library, a graph of generate steps or one studio tool, not both. A chat's steps may span studios (W7):
-  // a recipe of version 2, its studio steps beside the others and results handed on as step references.
-  const spans = !!o.thread;
-  if (!spans && tools.length && (walk.nodes.size || tools.length > 1)) {
+  // From results in the Library, a skill runs a graph of generate steps or one studio tool, not both. From a chat (W7),
+  // its studio calls are steps too, and a result one passes to another becomes a step reference (linkStudios).
+  if (!o.thread && tools.length && (walk.nodes.size || tools.length > 1)) {
     const keep = walk.nodes.size ? [] : tools.slice(0, 1);
     for (const t of tools.filter((x) => !keep.includes(x))) {
       refusals.push({ id: t.pick.id, title: cut(t.pick.request.title || t.pick.request.prompt || t.node.label, 80), reason: walk.nodes.size ? "A studio step can't be in a skill with other steps yet: make a skill from it on its own" : "One studio step per skill for now: make a skill from each" });
     }
     tools.splice(0, tools.length, ...keep);
   }
-  for (const t of spans ? tools : tools.slice(0, 1)) walk.nodes.set(t.node.key, t.node);
+  for (const t of tools) walk.nodes.set(t.node.key, t.node);
   linkByFile(walk);
-  const linked = spans && linkStudios(walk);
+  const outputs = new Map(tools.map((t) => [t.node.key, new Set(t.outputs ?? t.pick.outputs.map((x) => x.url))]));
+  const linked = o.thread ? linkStudios([...walk.nodes.values()], (n) => outputs.get(n.key) ?? new Set(n.rows.flatMap((id) => getGeneration(id, { includeDeleted: true })?.outputs.map((x) => x.url) ?? []))) : 0;
   const nodes = ordered([...walk.nodes.values()]);
   if (!nodes.length) return { draft: null, refusals };
   if (nodes.length > RECIPE_LIMITS.steps) return { draft: null, refusals: [...refusals, { id: ids[0], title: "These results", reason: `They take ${nodes.length} steps; a skill has at most ${RECIPE_LIMITS.steps}` }] };
 
   // Steps in an order where every step comes after the ones it waits for (the walk added dependencies first).
   const steps = nodes.map((n) => n.step);
-  const recipe: Recipe = { fuobeRecipe: linked || (tools.length > 0 && steps.length > 1) ? 2 : 1, params: [], steps };
+  // Studio steps among other steps, or a step that takes a studio step's result: recipe version 2 (it runs in stages).
+  const recipe: Recipe = { fuobeRecipe: linked || isStaged({ steps }) ? 2 : 1, params: [], steps };
   const leaves = leafKeys(recipe);
   const checks: Record<string, RecipeCheck> = {};
   for (const n of nodes) if (leaves.has(n.key) && n.step.kind === "generate") checks[n.key] = proposeCheck(n);
@@ -893,6 +893,7 @@ function buildDraft(ids: string[], o: Origin = {}): DraftResult {
 
 // ---------------------------------------------------------------------------
 // A skill from an Assist chat (W3)
+
 
 /** Tools whose started generations are drafted as plain results (a run_skill pipeline is one too). */
 const GENERATE_TOOLS = new Set(["generate", "run_skill"]);
@@ -1090,8 +1091,8 @@ export function draftFromThread(threadId: string): ThreadDraft {
   const kept = calls.filter((c) => keptSet.has(c));
   const replaced = calls.length - kept.length;
   // A studio step's result feeding a later step, or a step's result feeding a studio step, becomes a step reference
-  // (recipe version 2, W7: buildDraft's linkStudios).
-  const joined = kept;
+  // in the recipe (W7): the run starts each step when the one it takes a result from is done.
+  const joined: typeof kept = kept;
   const notes: string[] = [];
   if (replaced) notes.push(replaced === 1 ? "An earlier try of a step was left out: the skill keeps the last one" : `${replaced} earlier tries of steps were left out: the skill keeps the last of each`);
   if (declined || failed) notes.push(`Left out: ${[declined && `${declined} plan${declined === 1 ? "" : "s"} you declined`, failed && `${failed} that didn't run`].filter(Boolean).join(" and ")}`);
@@ -1178,4 +1179,55 @@ export async function nameDraft(draft: SkillDraft, asked: string[] = []): Promis
   const images = await leafStills(draft);
   const text = await llmText(NAMING_SYSTEM, `${images.length ? "The pictures are the results the person kept.\n" : ""}The record:\n${JSON.stringify(record, null, 2)}`, images);
   return parseNaming(text, draft);
+}
+
+// ---------------------------------------------------------------------------
+// A skill from a canvas (W5)
+
+/**
+ * The draft of a skill from a canvas (the canvas is the demonstration): each model node a generate step as describeNode
+ * builds its request (canvasToRecipe), the files and words of its input nodes Fixed until the review screen says they
+ * vary, and a Table's columns as inputs with its rows for the Many tab. A node that can't be a step is a refusal.
+ */
+export function draftFromCanvas(id: string, pageId?: string): DraftResult & { rows: Record<string, string>[] } {
+  const c = getCanvas(id);
+  if (!c) throw new SkillError("No such canvas", 404);
+  // One page of the canvas: the one asked for, else the first.
+  const page = c.pages.find((p) => p.id === pageId) ?? c.pages[0];
+  if (!page) return { draft: null, refusals: [{ id, title: c.name, reason: "This canvas is empty" }], rows: [] };
+  const out = canvasToRecipe(page.graph, { id });
+  if ("error" in out) return { draft: null, refusals: [{ id, title: c.name, reason: out.error }], rows: [] };
+  const recipe: Recipe = { ...out.recipe, source: { from: "canvas", canvas: id, at: today() } };
+  const nodes: Node[] = recipe.steps.map((s) => {
+    const m = s.kind === "generate" ? getModel(s.request.modelId) : undefined;
+    return { key: s.key, gen: { kind: m?.kind ?? "image", outputs: [], createdAt: c.updatedAt } as unknown as Generation, rows: [], step: s, label: s.label ?? m?.name ?? s.key, modelName: m?.name ?? s.key, notes: [] };
+  });
+  const leaves = leafKeys(recipe);
+  // Words that already hold an input (a skill drawn as a canvas) stay as they are: the input varies, not the words.
+  const found = candidates(nodes, leaves).filter((x) => !(x.kind === "text" && String(x.example).includes("{{")));
+  const flow = nodes.map((n) => n.label).join(" → ");
+  const models = [...new Set(nodes.map((n) => n.modelName))];
+  const title = cut(c.name || "Canvas", 80);
+  const draft: SkillDraft = {
+    recipe,
+    steps: nodes.map((n) => ({
+      key: n.key,
+      kind: "generate",
+      label: n.label,
+      modelName: n.modelName,
+      generation: "",
+      waits: (n.step.kind === "generate" ? (Array.isArray(n.step.after) ? n.step.after : n.step.after ? [n.step.after] : []) : []).map((a) => nodes.find((x) => x.key === a)?.label ?? a),
+      leaf: leaves.has(n.key),
+      notes: [],
+    })),
+    candidates: found,
+    name: freeName(title),
+    title,
+    description: cut(`${nodes.length === 1 ? flow : `${nodes.length} steps: ${flow}`}, with ${models.join(", ")}. Made from the canvas “${title}” and run again with new inputs.`, 1000),
+    whenToUse: cut(`When you want what the canvas “${title}” makes, with new inputs.`, 1000),
+    demo: false,
+    notes: out.rows.length ? [`Its table's ${out.rows.length} row${out.rows.length === 1 ? "" : "s"} wait in the Many tab of the Run form once it's saved`] : [],
+    llm: llmTextBackend(),
+  };
+  return { draft, refusals: out.refusals.map((r) => ({ id: r.node, title: r.label, reason: r.reason })), rows: out.rows };
 }

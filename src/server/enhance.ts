@@ -5,7 +5,6 @@ import { writeCaption } from "@/lib/ideogram-caption";
 import { normalizeLyrics } from "@/lib/lyrics";
 import { activeLocal, aiHelper, chatLocal, type JsonSpec } from "./llm";
 import { engineMode, getSetting } from "./settings";
-import { inDemoScope } from "./demo-scope";
 import { tenant } from "./tenant";
 
 /**
@@ -116,8 +115,6 @@ export async function llmText(system: string, user: string, images?: LlmImage[],
 export async function llmText(system: string, user: string, a: LlmImage[] | LlmTextOptions = [], b: LlmTextOptions = {}): Promise<string | null> {
   const images: LlmImage[] = Array.isArray(a) ? a : [];
   const opts: LlmTextOptions = Array.isArray(a) ? b : a;
-  // A skill's free dry run (runAsDemo) never asks a paid or local model: the offline wording stands in.
-  if (inDemoScope()) return null;
   // The open engine never calls a paid API: a local model, unless the AI helper is off.
   const backend = opts.ollamaOnly && llmTextBackend() === "claude" ? "ollama" : llmTextBackend();
   if (backend === "claude") return viaClaude(system, user, images).catch(() => null);
@@ -186,7 +183,7 @@ export async function enhanceSoulWords(words: string): Promise<string> {
   return out && out.length > w.length ? out : words;
 }
 
-/** Audio → Music's "Write the lyrics" (nm10-music3): words to sing, tagged by section as every Fuobe music model reads them. */
+/** Audio → Music's "Write the lyrics": words to sing, tagged by section as every Fuobe music model reads them. */
 const LYRICS_SYSTEM = `You write lyrics for a song generation model. Answer with the lyrics only: no title, no notes, no quotes, no code fence.
 Rules:
 - Put each section tag on a line of its own, in square brackets: [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Outro]; [Instrumental] or [Solo] for a part with no singing. The words of a section go on the lines under its tag.

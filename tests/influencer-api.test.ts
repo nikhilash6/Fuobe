@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-influencer-"));
+const dir = tempDir("fuobe-influencer-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -24,7 +22,6 @@ beforeAll(() => {
 afterEach(() => {
   setSetting("engineMode", "both");
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
 const upload = () => saveFile({ data: PNG, contentType: "image/png", source: "upload" }).url;

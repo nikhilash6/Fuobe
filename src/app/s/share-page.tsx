@@ -9,7 +9,7 @@ import { Carousel, RecreateButton } from "@/components/share/share-client";
  * owner shares prompts — each prompt with "Recreate in your Fuobe". Server-rendered from
  * PublicShare (src/server/shares.ts); every file URL is share-scoped. No app chrome, no links into
  * the studio: a visitor has nothing else to open. It lives with the /s routes, outside the studio
- * frame, so its <main> is the page's only one (the studio's is SidebarInset).
+ * frame, so its <main> is the page's only one (the studio's is in StudioChrome).
  */
 export function SharePage({ share }: { share: PublicShare }) {
   const items = orderForLayout(share.items, share.layout, share.coverKey);

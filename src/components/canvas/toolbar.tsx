@@ -5,6 +5,7 @@ import { memo, useState } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { BOARD_LIMITS, SHAPE_LABEL, type BoardColor } from "@/lib/catalog/canvas-board";
 import { useModKey } from "@/lib/keys";
@@ -172,7 +173,7 @@ export const PageTabs = memo(function PageTabs({ pages, active, ops, readOnly }:
   };
   return (
     <div className="flex max-w-full items-center gap-0.5 rounded-full border bg-popover p-1 shadow-normal" data-board-ui>
-      <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]" role="tablist" aria-label="Pages" onKeyDown={onKeyDown}>
+      <TabRow fade={false} role="tablist" aria-label="Pages" onKeyDown={onKeyDown}>
         {pages.map((p) =>
           editing === p.id ? (
             <input
@@ -192,7 +193,7 @@ export const PageTabs = memo(function PageTabs({ pages, active, ops, readOnly }:
                 e.stopPropagation();
               }}
               aria-label="Page name"
-              className="h-7 w-32 rounded-full border bg-background px-3 text-[13px] outline-none focus:border-primary"
+              className="h-9 w-32 shrink-0 rounded-full border bg-background px-3.5 text-[13.5px] outline-none focus:border-primary"
             />
           ) : (
             <button
@@ -205,18 +206,19 @@ export const PageTabs = memo(function PageTabs({ pages, active, ops, readOnly }:
               onClick={() => ops.switchTo(p.id)}
               onDoubleClick={() => !readOnly && setEditing(p.id)}
               title={readOnly ? p.name : `${p.name} · double-click to rename`}
-              className={cn("h-7 max-w-36 shrink-0 truncate rounded-full px-3 text-[13px] font-medium transition-colors", p.id === active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground")}
+              className={cn(TAB_PILL, "max-w-36")}
+              {...onAttr(p.id === active)}
             >
-              {p.name}
+              <span className="truncate">{p.name}</span>
             </button>
           ),
         )}
-      </div>
+      </TabRow>
       {!readOnly && (
         <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Page actions">
+              <button className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Page actions">
                 <MoreHorizontal className="size-4" />
               </button>
             </DropdownMenuTrigger>
@@ -235,7 +237,7 @@ export const PageTabs = memo(function PageTabs({ pages, active, ops, readOnly }:
           </DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button onClick={ops.add} disabled={full} className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40" aria-label="Add a page">
+              <button onClick={ops.add} disabled={full} className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40" aria-label="Add a page">
                 <Plus className="size-4" />
               </button>
             </TooltipTrigger>

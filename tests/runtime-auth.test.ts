@@ -1,16 +1,14 @@
-import fs from "node:fs";
 import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-auth-rt-"));
+const dir = tempDir("fuobe-auth-rt-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 const auth = await import("@/server/auth");
 const { proxy, config } = await import("@/proxy");
 const { safeNext } = await import("@/lib/safe-redirect");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const post = (url: string, headers: Record<string, string> = {}) => new NextRequest(url, { method: "POST", headers, body: "{}" });
 
@@ -156,6 +154,7 @@ describe("proxy matcher (C13)", () => {
     expect(matches("/next.svg")).toBe(false);
     expect(matches("/samples/demo-model.glb")).toBe(false);
     expect(matches("/vendor/meshopt_decoder.js")).toBe(false);
+    expect(matches("/fonts/kinetic/anton.woff2")).toBe(false);
     expect(matches("/previews/presets/effect-set-on-fire.jpg")).toBe(false);
     expect(matches("/previews/presets/motion-fpv-drone.mp4")).toBe(false);
     expect(matches("/favicon.ico")).toBe(false);

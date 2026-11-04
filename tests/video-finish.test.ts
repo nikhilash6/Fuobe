@@ -1,8 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { FORMAT_INFO, formatList, formatsOf } from "@/lib/av/formats";
 import { DEFAULT_FPS_TARGET, FPS_TARGETS, fpsFrames, fpsPlan, fpsSummary } from "@/lib/av/fps";
 import { targetShortEdge, upscaledSize, upscaleFactorFor, upscaleTier } from "@/lib/av/upscale";
@@ -18,6 +17,7 @@ import type { MediaInfo } from "@/lib/media-probe";
 import { editOnlyFormat, outputActions } from "@/lib/output-actions";
 import { slimModel } from "@/lib/studio-catalog";
 import { FPS_BOOST_STUDIO, SDR_TO_HDR_STUDIO, UPSCALE_STUDIO, VIDEO_EXPORT_STUDIO, VIDEO_UPSCALE_STUDIO } from "@/lib/studios";
+import { tempDir } from "./helpers/temp-dir";
 
 // The Upscale hub's video tools (r4/video-finish): FPS Boost and slow motion, SDR to HDR, pro export formats,
 // the upscalers' options, and chunked open upscaling.
@@ -358,7 +358,7 @@ describe("results", () => {
 // ---------------------------------------------------------------------------
 // The open engine: values and graph edits prepareWorkflow makes for each tool.
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-video-finish-"));
+const tmp = tempDir("fuobe-video-finish-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 const { prepareWorkflow, comfyProvider, CANCEL_SWEEPS } = await import("@/server/providers/comfyui");
@@ -368,7 +368,6 @@ const { mediaFacts } = await import("@/server/media-facts");
 const { setSetting } = await import("@/server/settings");
 const gens = await import("@/server/generations");
 const { saveFile } = await import("@/server/storage");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const clip = (o: Partial<MediaInfo>): MediaInfo => ({ container: "mp4", hasVideo: true, hasAudio: true, duration: 4, videoDuration: 4, width: 1280, height: 720, fps: 24, frames: 96, ...o });
 async function prep(endpoint: string, op: Operation, input: GenInput, info: MediaInfo = clip({}), ram = 64 * 2 ** 30) {

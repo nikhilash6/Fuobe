@@ -14,6 +14,7 @@ import { postFile } from "@/lib/upload";
 import type { MediaKind } from "@/lib/catalog/types";
 import { slotCaption } from "@/lib/composer";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import type { SketchMode, Stroke } from "./sketch-editor";
 
 export interface SlotValue {
@@ -151,19 +152,20 @@ export function LibraryGrid({ kinds, onPick }: { kinds: MediaKind[]; onPick: (v:
   return (
     <div className="space-y-2">
       {kinds.length > 1 && (
-        <div role="tablist" aria-label="Kind" className="inline-flex rounded-full bg-muted p-0.5">
+        <TabRow role="tablist" aria-label="Kind" fade={false} className="w-fit">
           {kinds.map((k) => (
             <button
               key={k}
               role="tab"
               aria-selected={k === kind}
               onClick={() => setKind(k)}
-              className={cn("h-7 rounded-full px-3 text-[12px] font-medium text-muted-foreground capitalize transition", k === kind && "bg-background text-foreground shadow-soft")}
+              className={cn(TAB_PILL, "capitalize")}
+              {...onAttr(k === kind)}
             >
               {k === "image" ? "Images" : k === "video" ? "Videos" : k === "audio" ? "Audio" : k}
             </button>
           ))}
-        </div>
+        </TabRow>
       )}
       {assets.isLoading ? (
         <div className="grid h-40 place-items-center">

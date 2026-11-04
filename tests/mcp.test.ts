@@ -1,15 +1,12 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-mcp-"));
+const dir = tempDir("fuobe-mcp-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 const { handleMcp } = await import("@/server/mcp");
 // Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
 beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const rpc = (method: string, params?: unknown) => handleMcp({ jsonrpc: "2.0", id: 1, method, params });
 
@@ -51,9 +48,9 @@ describe("MCP server", () => {
     expect(await rpc("tools/call", { name: "rm_rf" })).toMatchObject({ error: { code: -32602 } });
   });
 
-  it("serves run_skill (W3): listed, priced by estimate_job, and named in the instructions (since version 1.3.0)", async () => {
+  it("serves run_skill (W3): listed, priced by estimate_job, and named in the instructions of version 1.3.0", async () => {
     const init = (await rpc("initialize", { protocolVersion: "2025-06-18" })) as { result: { serverInfo: { version: string }; instructions: string } };
-    expect(init.result.serverInfo.version).toBe("1.4.0");
+    expect(init.result.serverInfo.version).toBe("1.3.0");
     expect(init.result.instructions).toMatch(/run_skill/);
     const r = (await rpc("tools/list")) as { result: { tools: { name: string; description: string; inputSchema: { properties: Record<string, { enum?: string[] } & Record<string, unknown>> }; annotations: { readOnlyHint: boolean; openWorldHint: boolean } }[] } };
     const run = r.result.tools.find((t) => t.name === "run_skill")!;

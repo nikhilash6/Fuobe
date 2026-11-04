@@ -1,20 +1,21 @@
 "use client";
 
+import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
+import type { OriginalSound } from "@/lib/av/original-sound";
 import { ArrowDown, ArrowRight, Cloud, Cpu, Info, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { OldFootageOffer } from "@/components/restore/old-footage";
 import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
-import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
-import type { SoundChoice } from "@/lib/av/original-sound";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
 import { useEngine, useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import {
   clipShapeProblem,
+  coveredFirst,
   rangeProblem,
   SHORTS,
   SHORTS_CATEGORIES,
@@ -31,6 +32,7 @@ import type { Engine } from "@/lib/catalog/types";
 import type { TrimRange } from "@/lib/trim-range";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow, useSwapFade } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { CustomPresetDialog } from "./custom-preset-dialog";
 import { useShortsActions, useShortsEstimate, useShortsPresets, useSubmitGuard, type ShortsBody } from "./hooks";
@@ -48,6 +50,7 @@ const CUSTOM = "Created by you";
 /** Shorts Studio: choose a preset → upload and trim a clip → generate a session (then /shorts/[id]). */
 export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]> }) {
   const [tab, setTab] = useState<"presets" | "history">("presets");
+  const body = useSwapFade<HTMLDivElement>(tab);
   const [engine, setEngine] = useEngine();
   // Restyle models switched off in Settings → Models & licences leave the menu (the default is the first one on).
   const access = useModelAccess();
@@ -83,11 +86,10 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">Shorts Studio</h1>
-        <div role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} className="ml-2 flex h-8 shrink-0 items-center rounded-full bg-muted p-0.5 sm:ml-4">
+        <TabRow role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} fade={false} className="ml-1 shrink-0 sm:ml-3">
           {(["presets", "history"] as const).map((t) => (
             <button
               key={t}
@@ -96,18 +98,20 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
               aria-selected={tab === t}
               tabIndex={tab === t ? 0 : -1}
               onClick={() => pickTab(t)}
-              className={cn("h-7 rounded-full px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground", tab === t && "bg-background text-foreground shadow-soft")}
+              className={TAB_PILL}
+              {...onAttr(tab === t)}
             >
               {t === "presets" ? "Presets" : "History"}
             </button>
           ))}
-        </div>
+        </TabRow>
         <div className="ml-auto shrink-0">
           {/* A phone's header has room for the title and the tabs, not "Add key" too. */}
           <EngineSwitch value={engine} onChange={setEngine} wordless selfHostedOnly />
         </div>
+        <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">
+      <div ref={body} className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-4 pb-28 sm:px-6 lg:pb-16">
         {tab === "history" ? (
           <ShortsHistory onStart={() => pickTab("presets")} />
         ) : (
@@ -188,7 +192,7 @@ function Workspace({
           onEdit={(id) => setDialog({ open: true, preset: custom.data?.find((p) => p.id === id) })}
         />
       </section>
-      <aside ref={setup} id="shorts-setup" aria-labelledby="shorts-step-2" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-16 lg:max-h-[calc(100svh-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
+      <aside ref={setup} id="shorts-setup" aria-labelledby="shorts-step-2" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:max-h-[calc(var(--content-h)-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
         <SetupPanel
           visitor={visitor}
           engine={engine}
@@ -203,7 +207,7 @@ function Workspace({
         />
       </aside>
       {selectedName && !setupVisible && (
-        <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 lg:hidden">
+        <div className="fixed inset-x-3 bottom-[max(calc(var(--chrome-bottom)+0.75rem),env(safe-area-inset-bottom))] z-30 lg:hidden">
           <button
             type="button"
             onClick={() => setup.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
@@ -238,10 +242,11 @@ function PresetGrid({
 }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>("All");
+  const grid = useSwapFade<HTMLDivElement>(cat);
   const query = useDeferredValue(q.trim().toLowerCase());
   const cats = ["All", ...(custom.length ? [CUSTOM] : []), ...SHORTS_CATEGORIES];
   const list = useMemo(
-    () => SHORTS_PRESETS.filter((p) => (cat === "All" || p.category === cat) && (!query || `${p.name} ${p.description} ${p.category}`.toLowerCase().includes(query))),
+    () => coveredFirst(SHORTS_PRESETS.filter((p) => (cat === "All" || p.category === cat) && (!query || `${p.name} ${p.description} ${p.category}`.toLowerCase().includes(query)))),
     [cat, query],
   );
   const mine = custom.filter((p) => (cat === "All" || cat === CUSTOM) && (!query || `${p.name} ${p.description}`.toLowerCase().includes(query)));
@@ -270,20 +275,14 @@ function PresetGrid({
           )}
         </div>
       </div>
-      <div role="group" aria-label="Categories" className="fade-x scrollbar-none -mx-1 flex gap-1 overflow-x-auto px-1">
+      <TabRow role="group" aria-label="Categories" follow>
         {cats.map((c) => (
-          <button
-            key={c}
-            type="button"
-            aria-pressed={cat === c}
-            onClick={() => setCat(c)}
-            className={cn("h-8 shrink-0 rounded-full px-3 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-accent hover:text-foreground", cat === c && "bg-secondary text-foreground")}
-          >
+          <button key={c} type="button" aria-pressed={cat === c} onClick={() => setCat(c)} className={TAB_PILL} {...onAttr(cat === c)}>
             {c}
           </button>
         ))}
-      </div>
-      <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-4">
+      </TabRow>
+      <div ref={grid} className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-4">
         {onCreate && !query && (cat === "All" || cat === CUSTOM) && <CreateCard onClick={onCreate} />}
         {mine.map((p) => (
           <CustomCard key={p.id} {...p} selected={presetId === p.id} onSelect={onSelect} onEdit={onEdit} />
@@ -336,7 +335,8 @@ function SetupPanel({
   const { clip } = source;
   const [ratio, setRatio] = useState<ShortsRatio>("9:16");
   const [language, setLanguage] = useState("auto");
-  const [sound, setSound] = useState<SoundChoice>({ sound: "everything" });
+  // What of the clip's sound goes back (the cloud: all of it).
+  const [originalSound, setOriginalSound] = useState<OriginalSound>("everything");
   const [pickedModel, setModel] = useState<Record<Engine, string>>({ cloud: "", open: "" });
   // A custom preset is its reference images: on cloud, start on the first model that reads them
   // (Kling O3 4K Edit, then Happy Horse) unless a model was picked.
@@ -370,7 +370,7 @@ function SetupPanel({
           aspectRatio: ratio,
           language,
           modelId,
-          ...soundBody(engine, sound),
+          ...(engine === "open" && originalSound !== "everything" && { originalSound }),
         }
       : null;
   const estimate = useShortsEstimate(estimateBody);
@@ -478,6 +478,8 @@ function SetupPanel({
         />
       </Field>
 
+      {clip && clip.info?.hasAudio !== false && <OriginalSoundPicker engine={engine} value={originalSound} onChange={setOriginalSound} />}
+
       <Field label="Language" hint={presetType ? "for the on-screen words" : "used by type presets"}>
         <Select value={language} onValueChange={setLanguage}>
           <SelectTrigger className="w-full" aria-label="Language">
@@ -493,8 +495,6 @@ function SetupPanel({
           </SelectContent>
         </Select>
       </Field>
-
-      <OriginalSoundField engine={engine} value={sound} onChange={setSound} hasAudio={clip?.info?.hasAudio} />
 
       <Field label="Model" hint={engine === "open" ? <span className="inline-flex items-center gap-1"><Cpu className="size-3" /> Open source</span> : <span className="inline-flex items-center gap-1"><Cloud className="size-3" /> Cloud</span>}>
         {models.length > 1 ? (

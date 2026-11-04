@@ -9,14 +9,14 @@ import { interleaveByCategory } from "@/lib/preset-cards";
 const ORDER: Record<"app" | "motion" | "effect", string[]> = {
   app: [
     `
-      app-behind-the-scenes app-relight app-macroshot-product app-sketch-to-real app-age-shift app-makeup-studio
+      app-behind-the-scenes app-relight app-macroshot-product app-color-grading app-age-shift app-makeup-studio
       app-angles app-shots app-match-lighting app-match-colors app-product-shot app-bullet-time-scene
-      app-bullet-time-splash app-chameleon app-outfit-swap app-steal-the-look app-outfit-shot app-color-grading
-      app-video-face-swap app-video-background-remover app-clean-up-voice app-breakdown
+      app-bullet-time-splash app-chameleon app-outfit-swap app-tap-to-recolor app-steal-the-look app-outfit-shot app-sketch-to-real
+      app-video-face-swap app-video-background-remover app-watermark-remover app-clean-up-voice app-breakdown
     `,
     `
-      app-hairstyle-try-on app-fuobe-angles app-product-placement app-link-to-video-ad app-style-snap app-urban-cuts
-      app-signboard app-j-poster app-giallo-horror app-face-swap app-character-swap app-headshot-generator
+      app-hairstyle-try-on app-fuobe-angles app-any-angle app-product-placement app-link-to-video-ad app-style-snap app-steam-it app-urban-cuts
+      app-signboard app-j-poster app-giallo-horror app-face-swap app-head-swap app-character-swap app-headshot-generator
       app-skin-enhancer app-zooms app-what-s-next app-packshot app-billboard-ad app-macro-scene app-asmr-promo
       app-ai-stylist app-colorize app-bring-to-life app-dance app-clipcut app-sticker-match-cut app-latex app-sand-worm
       app-storm-creature app-renaissance app-3d-rotation app-ghoulgao app-object-remover
@@ -26,7 +26,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       app-nano-strike app-burning-sunset app-upscale app-expression-edit app-commercial-faces app-expand-image
       app-ad-creative app-bullet-time-white app-giant-product app-restore-photo app-talking-photo app-nano-theft
       app-gtai app-melting-doodle app-remove-background app-change-background app-text-edit app-asmr-add-on
-      app-this-is-fine app-yes-kiss app-click-to-ad app-unboxing-video app-image-to-3d app-truck-ad app-fridge-ad
+      app-this-is-fine app-yes-kiss app-click-to-ad app-unboxing-video app-image-to-3d app-photo-to-3d app-truck-ad app-fridge-ad
       app-asmr-classic app-asmr-host app-outfit-vending app-style-transfer app-figurine app-recast app-hug app-3d-render
       app-j-magazine app-mascot app-rap-god app-mugshot app-vectorize app-similarity-score
     `,
@@ -34,14 +34,14 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       app-3d-figure app-idol app-60s-cafe app-hook-frame app-kick-ad app-graffiti-ad app-volcano-ad app-simlife
       app-pixel-game app-brick-cube app-micro-beasts app-paint-app app-social-media-icon app-victory-card app-comic-book
       app-glitter-sticker app-mukbang app-roller-coaster app-banana-eating app-sticker-pack app-plushies
-      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi app-clean-up-voice
+      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi
     `,
   ],
   motion: [
     `
       motion-dolly-in motion-crane-up motion-catwalk motion-classic-static motion-glam motion-slow-motion motion-zoom-in
-      motion-super-dolly-in motion-super-dolly-out motion-crash-zoom-in motion-crash-zoom-out motion-360-orbit
-      motion-arc-left motion-lazy-susan motion-crane-down motion-crane-over-the-head motion-dolly-left motion-tracking
+      motion-super-dolly-in motion-super-dolly-out motion-crash-zoom-in motion-arc-left motion-lazy-susan
+      motion-crane-down motion-crane-over-the-head motion-tracking
       motion-double-dolly motion-snorricam motion-fpv-drone motion-aerial-pullback motion-helicopter-shot
       motion-car-grip motion-car-chasing motion-static motion-documentary-snap motion-dreamy-flow motion-epic-scale
       motion-intimate-observer motion-one-take motion-silent-machine
@@ -51,7 +51,8 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       motion-action-run motion-drone-reveal motion-robo-arm motion-kiss motion-raw-chaos motion-zoom-out
       motion-dolly-zoom-in motion-through-object-out motion-jib-up motion-overhead motion-buckle-up motion-truck-left
       motion-bts motion-robot-arm motion-timelapse-glam motion-low-shutter motion-focus-change motion-roll-transition
-      motion-flying-cam-transition motion-boxing motion-ski-carving motion-snowboard-carving
+      motion-flying-cam-transition motion-boxing motion-ski-carving motion-snowboard-carving motion-crash-zoom-out
+      motion-360-orbit motion-dolly-left
     `,
     `
       motion-zoom motion-dolly-out motion-rapid-zoom-in motion-through-object-in motion-earth-zoom-out motion-pan-left
@@ -70,7 +71,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
   effect: [
     `
       effect-sand-storm effect-outfit-switch effect-wind-to-face effect-levitation effect-nature-bloom effect-lens-flare
-      effect-dirty-lens effect-train-rush effect-exploded-view effect-display-transition effect-splash-transition
+      effect-dirty-lens effect-train-rush effect-exploded-view effect-display-transition
       effect-pearl-earring effect-blue-depth effect-magazine effect-film-colors effect-black-gloss effect-crimson-vigil
       effect-bleached-warm effect-cold-steel
     `,
@@ -82,7 +83,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       effect-pool-jump effect-raven-transition effect-ballet effect-hair-style effect-column-wipe effect-studio-slide
       effect-cutout effect-boarding-pass effect-floating-fall effect-stop-world effect-agamemnon effect-acid
       effect-bubbles effect-canvas effect-comic effect-fragments effect-multiverse effect-ocean effect-origami
-      effect-particles effect-bleach-bypass effect-teal-orange-epic
+      effect-particles effect-bleach-bypass effect-teal-orange-epic effect-splash-transition
     `,
     `
       effect-ice-rose effect-medusa-gorgona effect-bloom-mouth effect-floral-eyes effect-sakura-petals

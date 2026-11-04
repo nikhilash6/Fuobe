@@ -1,9 +1,9 @@
 /**
- * Exact orbits (build plan N7-7; research new-models-7.md §3.10 rows 3-5): an orbit move picked in Fuobe DoP, Cinema's
+ * Exact orbits (research new-models-7.md §3.10 rows 3-5): an orbit move picked in Fuobe DoP, Cinema's
  * Director or Image to 3D, set by numbers instead of a LoRA's or a prompt's idea of an orbit: how far round (30-360°),
  * which way (seen from above), a height tilt (0-20°, a ring tilted like the camera path library's Tilted ring) and a
  * radius pulse (none or 25% in, twice). The numbers become the camera path library's keys (src/lib/camera-path.ts), so
- * both engines film them the way N7-5's Fly path does: H3 Max camera-controls on the cloud, Uni3C on your GPU.
+ * both engines film them the way Fly path does: H3 Max camera-controls on the cloud, Uni3C on your GPU.
  *
  * Pure: no DOM, no server.
  */

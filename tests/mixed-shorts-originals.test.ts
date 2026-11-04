@@ -1,15 +1,15 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { GenInput, ModelDef, ModelRoute } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // Fuobe Mixed Media and Fuobe Shorts (build plan O9): Higgsfield's Mixed Media and Shorts as Originals on both engines.
 // Frames are floor(seconds × fps) and priced per frame; the cloud fans the Original's frame route out over every frame
 // (no lanes: one seed, the look's LoRA) and splits clips above 200 frames; Smooth and Shorts run the Wan 2.2 Fun VACE
 // pass from a restyled first frame; the fal payloads come from the research's FieldMaps; DoP's 32 Mixed Media effects
 // draw their still on the Original first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-o9-"));
+const dir = tempDir("fuobe-o9-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here: open runs fall back to the demo
 
@@ -32,7 +32,6 @@ const { maxRefsFor, modelInfos, reframes, resolutionFor } = await import("@/lib/
 const { MIXED_MEDIA_LOOK_LORAS, LORA_LIBRARY } = await import("@/lib/catalog/lora-library.generated");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const view = (id: string, engine: "open" | "cloud") => onEngine(getModel(id)!, engine);
 const noir = mm.getMixedPreset("mixed-noir")!;

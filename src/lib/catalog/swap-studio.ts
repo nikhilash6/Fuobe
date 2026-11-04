@@ -18,7 +18,7 @@ import { STUDIO_FPS } from "@/lib/av/scene-cuts";
 import { filmSize, type SharpenTier } from "./sharpen";
 import { wholeClipBudget } from "@/lib/av/video-finish";
 import type { Engine, PixelPoint } from "./types";
-import type { SoundChoice } from "../av/original-sound";
+import type { OriginalSound } from "../av/original-sound";
 
 export const SWAP_STUDIO = {
   feature: "swap-studio",
@@ -321,8 +321,8 @@ export interface SwapClip {
   transcript: { genId?: string; modelId?: string; cues: TranscriptCue[] | null; voices: Record<string, SwapRole> } | null;
   review: Decision;
   reviewNotes: string;
-  /** sound: the Original sound it was assembled with (unset = Everything). */
-  assembly: { genId?: string; stepIds?: string[]; takes: string[]; createdAt: number; sound?: SoundChoice } | null;
+  /** originalSound: what of the clip's sound went back (absent: Everything). */
+  assembly: { genId?: string; stepIds?: string[]; takes: string[]; originalSound?: OriginalSound; createdAt: number } | null;
 }
 
 export interface SwapProject {
@@ -1139,8 +1139,6 @@ export interface StudioEstimate {
   project: { costUsd: number | null; segments: number };
   assembly: Record<string, number | null>;
   transcribe: Record<string, number | null>;
-  /** What "Clean the voice first" adds to a clip's transcript (null: unknown). */
-  cleanVoice: Record<string, number | null>;
   /** Tracking a whole shot's mask. */
   mask: Record<string, number | null>;
   /**

@@ -12,9 +12,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { DESKTOP, PHONE, chromiumPath, loadPlaywright } from "./_browser.mjs";
+import { tempDir } from "./_temp.mjs";
 
 const args = process.argv.slice(2);
 const app = (args.find((a) => !a.startsWith("--")) ?? "http://localhost:3000").replace(/\/$/, "");
@@ -181,7 +181,7 @@ try {
   const openTake = await until(async () => (await items()).find((g) => g.feature === "cinema-path" && g.request.modelId === "oss-uni3c-path"), "the open path take");
   const render = openTake.request.inputs.video;
   assert.match(render, /^\/api\/files\/uploads\/.+\.(webm|mp4)$/);
-  const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-path-")), path.basename(render));
+  const tmp = path.join(tempDir("fuobe-path-"), path.basename(render));
   fs.writeFileSync(tmp, Buffer.from(await (await (await api).fetch(app + render)).body()));
   const probe = JSON.parse(execFileSync("ffprobe", ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=width,height,nb_read_frames", "-of", "json", tmp]).toString()).streams[0];
   console.log(`  render: ${path.extname(tmp)} ${probe.width}x${probe.height}, ${probe.nb_read_frames} frames`);

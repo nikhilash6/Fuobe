@@ -5,11 +5,11 @@ import { ArrowUp, Clapperboard, Film, ImagePlus, LayoutGrid, Loader2, Minus, Plu
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { Suspense, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDebounced } from "@/components/faceless/hooks";
@@ -19,7 +19,10 @@ import { finishGaveUp, useSoulFinish } from "@/components/studio/soul-finish";
 import { FailedTile, MediaThumb, PendingTile, tileRatio } from "@/components/studio/feed";
 import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { Viewer } from "@/components/studio/viewer";
-import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsVisitor, useStatus, useViewer, uploadFile } from "@/lib/api";
+import { StarterParam } from "@/components/starters/starter-param";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
+import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsAccount, useIsVisitor, useStatus, uploadFile } from "@/lib/api";
+import { askDeleteForGood } from "@/components/studio/delete-for-good";
 import {
   MAX_FRAMES,
   ONE_SHEET_GPU_TEST,
@@ -38,9 +41,11 @@ import type { Engine, Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
 import { BOARD_TITLES_KEY, boardTitle, filmReady, rememberTitle } from "@/lib/storyboard-board";
 import { animateHref, MAX_KEYS } from "@/lib/inbetween";
+import { starterShown, type StarterCardData, type StarterFill } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { ratioValue } from "@/lib/format";
 import { responseError, toastError } from "@/lib/refusals";
+import { BoardExample, hasBoardExample } from "@/components/empty-examples";
 
 const ASPECTS: readonly string[] = STORYBOARD_ASPECTS;
 
@@ -132,11 +137,11 @@ function PartnerPill({ value, onChange, names }: { value?: StoryboardPartner; on
   );
 }
 
-/** What a GPU board's next frames are made on: Qwen-Image 2.1 (the default), or the classic recipe boards used before. */
+/** What a GPU board's next frames are made on: Qwen-Image 2.1 (Latest, the default), or the classic recipe boards used before. */
 function NextScenePill({ value, onChange }: { value?: StoryboardNextScene; onChange: (v?: StoryboardNextScene) => void }) {
   const options: { v?: StoryboardNextScene; label: string; title: string }[] = [
-    { label: "Qwen-Image 2.1", title: "Each next frame continues the last one on Qwen-Image 2.1" },
-    { v: "classic", label: "Classic", title: "Each next frame on Qwen-Image-Edit 2509, the recipe boards used before" },
+    { label: "Latest", title: "Each next frame continues the last one on the newest model" },
+    { v: "classic", label: "Classic", title: "Each next frame on the model boards used before" },
   ];
   return (
     <div role="radiogroup" aria-label="Next frames made on" className="flex flex-wrap gap-1 rounded-full bg-muted p-0.5">
@@ -346,6 +351,8 @@ function Board({
   names: Record<string, string>;
 }) {
   const { trash } = useGenerationActions();
+  // An account has no Trash: its board goes for good, so it says so and asks first.
+  const account = useIsAccount();
   const qc = useQueryClient();
   const first = frames[0];
   const done = frames.filter((f) => f.status === "succeeded").length;
@@ -423,11 +430,11 @@ function Board({
             variant="ghost"
             size="sm"
             className="text-muted-foreground hover:text-destructive"
-            aria-label="Delete storyboard"
+            aria-label={account ? "Delete storyboard for good" : "Move storyboard to Trash"}
             // One bulk call, and the shared toast with Undo (the frames go to the Trash).
-            onClick={() => void trash([...frames, ...film], "Storyboard moved to Trash")}
+            onClick={() => (account ? askDeleteForGood([...frames, ...film]) : void trash([...frames, ...film], "Storyboard moved to Trash"))}
           >
-            <Trash2 /> <span className="hidden sm:inline">Delete</span>
+            <Trash2 /> <span className="hidden sm:inline">{account ? "Delete for good…" : "Move to Trash"}</span>
           </Button>
         </div>
       </header>
@@ -445,7 +452,18 @@ function Board({
   );
 }
 
-export function StoryboardView({ modelNames = {} }: { /** Display names of the storyboard models, from the server. */ modelNames?: Record<string, string> }) {
+export function StoryboardView({
+  modelNames = {},
+  starters: given = [],
+  fills: givenFills = {},
+}: {
+  /** Display names of the storyboard models, from the server. */
+  modelNames?: Record<string, string>;
+  /** The ready stories with their real cover (catalog cards), and what each one puts into the composer, by id. */
+  starters?: StarterCardData[];
+  fills?: Record<string, StarterFill>;
+}) {
+  const { owner, starters, fills } = useStarters("storyboard", given, givenFills);
   const qc = useQueryClient();
   const [engine, setEngine] = useEngine();
   // The engine is known once the install's engine mode is and the page has hydrated (until then useEngine answers the
@@ -469,13 +487,30 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
   // Your GPU only: the next frames' model (Qwen-Image 2.1 unless the classic recipe is picked).
   const [nextScene, setNextScene] = useState<StoryboardNextScene | undefined>();
   // One sheet: every panel on one MOSS-Image page, offered up to the panels a GPU render showed (the owner's until then).
-  // Known once the page has hydrated: the server renders it without the viewer.
-  const viewer = useViewer().data;
-  const owner = hydrated && !!viewer?.owner;
+  // Known once the page has hydrated (useStarters' owner): the server renders it without the viewer.
   const sheetLimit = sheetPanelLimit(owner);
   const [sheetPicked, setSheet] = useState(false);
   const sheet = sheetPicked && sheetLimit > 0;
   const [open, setOpen] = useState<Generation | null>(null);
+  // A ready story fills the composer (for everyone: the price shows at once, and Generate is the owner's), from its
+  // page's link (?starter=<id>) or its card here, then the composer comes into view.
+  const storyRef = useRef<HTMLTextAreaElement>(null);
+  const applyStarter = (id: string) => {
+    const s = Object.hasOwn(fills, id) ? fills[id] : undefined;
+    if (s?.kind !== "storyboard") return false;
+    setMode("auto");
+    setStory(s.story);
+    setCount(Math.min(MAX_FRAMES, Math.max(2, s.frames)));
+    setAspect(s.aspectRatio);
+    setLook(s.look);
+    setLookStrength(1);
+    requestAnimationFrame(() => {
+      storyRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      storyRef.current?.focus({ preventScroll: true });
+    });
+    return true;
+  };
+  const hasStarters = starters.some((s) => starterShown(s, !owner));
   const feed = useGenerations({ features: ["storyboard", "storyboard-film"], limit: 240 });
   const titles = useBoardTitles();
   // A board with a look: each frame gets the look's grade and overlay here, once it's made.
@@ -568,15 +603,18 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <Suspense fallback={null}>
+        <StarterParam onStarter={applyStarter} />
+      </Suspense>
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">Storyboard</h1>
         <div className="ml-auto">
           <EngineSwitch value={engine} onChange={setEngine} />
         </div>
+        <PhoneNavButton />
       </header>
-      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 space-y-10 px-3 pb-16 sm:px-6">
+      <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 space-y-10 px-4 pb-16 sm:px-6">
         <div className="mx-auto max-w-[820px] pt-6 text-center">
           <h2 className="font-heading text-display text-balance">Tell it frame by frame</h2>
           <p className="mt-2 text-[13px] text-muted-foreground">
@@ -602,11 +640,12 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
             </div>
             {mode === "auto" ? (
               <textarea
+                ref={storyRef}
                 value={story}
                 onChange={(e) => setStory(e.target.value)}
                 rows={2}
                 aria-label="Your story"
-                placeholder="The whole story in a sentence or two — e.g. “a lighthouse keeper finds a glowing bottle and follows its map into the sea”"
+                placeholder="The whole story in a sentence or two — e.g. “a model in an emerald gown slips out of a palace ball at midnight and drives a vintage car to the sea”"
                 className="field-sizing-content max-h-52 min-h-16 w-full resize-none bg-transparent px-2 py-1.5 text-base leading-relaxed outline-none placeholder:text-subtle-foreground"
               />
             ) : (
@@ -730,11 +769,15 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
                 names={modelNames}
               />
             ))}
+            <StarterSection surface="storyboard" starters={given} onFill={applyStarter} row className="col-span-full pt-6" />
           </div>
+        ) : hasStarters ? (
+          <StarterSection surface="storyboard" starters={given} onFill={applyStarter} />
         ) : (
-          <div className="grid place-items-center rounded-xl border border-dashed py-14 text-center text-muted-foreground">
-            <ImagePlus className="size-6" />
-            <p className="mt-2 text-[14px]">Your storyboards appear here.</p>
+          <div className="grid place-items-center rounded-xl border border-dashed px-4 py-14 text-center text-muted-foreground">
+            {/* An example board (six frames) in place of the icon, once it is published. */}
+            {hasBoardExample() ? <BoardExample /> : <ImagePlus className="size-6" />}
+            <p className={cn("text-[14px]", hasBoardExample() ? "mt-4" : "mt-2")}>Your storyboards appear here.</p>
           </div>
         )}
       </div>

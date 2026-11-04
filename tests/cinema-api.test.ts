@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-cinema-"));
+const dir = tempDir("fuobe-cinema-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 // No LLM in tests: the AI Director answers offline.
@@ -26,7 +24,6 @@ beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const json = (method: string, body?: unknown) =>
   new Request("http://x/api", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });

@@ -9,9 +9,9 @@
 // Exits 1 on a failed check.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { tempDir } from "./_temp.mjs";
 
 const argv = process.argv.slice(2);
 const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
@@ -38,7 +38,7 @@ const putSettings = (body) => fetch(`${app}/api/settings`, { method: "PUT", head
 const clip = await upload("scripts/eval/fixtures/walk-6s.mp4", "video/mp4", "walk.mp4");
 // The cloud preview grabs its frame in the browser, and Playwright's Chromium can't decode H.264: Mixed Media gets the
 // same clip as VP9 when ffmpeg is here (else the cloud preview isn't checked).
-const webm = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-e2e-o9-")), "walk.webm");
+const webm = path.join(tempDir("fuobe-e2e-o9-"), "walk.webm");
 const vp9 = spawnSync("ffmpeg", ["-v", "error", "-y", "-i", path.join(root, "scripts/eval/fixtures/walk-6s.mp4"), "-c:v", "libvpx-vp9", "-b:v", "300k", "-c:a", "libopus", webm]).status === 0;
 const mmClip = vp9 ? await upload(webm, "video/webm", "walk.webm") : clip;
 

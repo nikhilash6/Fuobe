@@ -1,0 +1,76 @@
+/*
+ * A studio's features under it in the Studios menu (mega-panel SubLinks). With a mouse: 24 px names in a column, two to
+ * a row's 48 px (an odd number gets a 24 px pad), so the columns' rows stay in line. On a touch screen: pills that wrap,
+ * 32 px to see and 44 px to tap. Below the height its column has room for, a studio with data-subs-line (Genjutsu)
+ * lists them as one wrapped line of names instead. In a layer (unlike nav-states.css), so a utility that hides the
+ * list still wins.
+ */
+@layer components {
+  .nav-subs {
+    display: flex;
+    flex-direction: column;
+  }
+  .nav-subs > li > a {
+    min-height: 24px;
+    padding-inline: 8px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    line-height: 16px;
+  }
+  .nav-subs[data-odd] {
+    padding-bottom: 24px;
+  }
+  @media (pointer: coarse) {
+    .nav-subs {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 12px 6px;
+      padding-block: 8px 12px;
+    }
+    .nav-subs[data-odd] {
+      padding-bottom: 12px;
+    }
+    .nav-subs > li > a {
+      min-height: 32px;
+      padding-inline: 12px;
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      font-size: 13px;
+    }
+    .nav-subs > li > a::after {
+      content: "";
+      position: absolute;
+      inset: -6px 0;
+    }
+  }
+  @media (not (pointer: coarse)) and (max-height: 799.98px) {
+    .nav-subs[data-subs-line] {
+      flex-direction: row;
+      flex-wrap: wrap;
+      /* Two lines of names make a 50 px list: with the row it hangs from (its own line left out), two whole rows. */
+      padding-block: 4px 6px;
+    }
+    .nav-subs[data-subs-line] > li {
+      display: flex;
+      align-items: center;
+    }
+    /* A dot after each name but the last: a line that wraps starts on a name. */
+    .nav-subs[data-subs-line] > li:not(:last-child)::after {
+      content: "\00B7";
+      color: var(--muted-foreground);
+    }
+    /* The last one shown: the links after it (data-from) need a taller window. */
+    .nav-subs[data-subs-line] > li:not([data-from]):not(:has(~ li:not([data-from])))::after {
+      content: none;
+    }
+    .nav-subs[data-subs-line] > li > a {
+      min-height: 20px;
+      padding-inline: 2px;
+      font-size: 12px;
+    }
+    /* The open feature reads by its weight here: no pip beside a name in a line. */
+    .nav-subs[data-subs-line] > li > a.nav-mark-start::before {
+      display: none;
+    }
+  }
+}

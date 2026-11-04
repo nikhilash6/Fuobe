@@ -1,9 +1,9 @@
 import "server-only";
 import { z } from "zod";
 import { guessCategory, MEMORY_CATEGORIES, MEMORY_MAX_CHARS, toCategory, type MemoryCategory } from "@/lib/assist";
-import { rankSkills, recipeMarkdown } from "@/lib/recipe";
-import { skillUses } from "../skill-uses";
+import { recipeMarkdown } from "@/lib/recipe";
 import { getSkill, skillFile, skillRecipe } from "../skills";
+import { rankSkills } from "../skill-usage";
 import { canUseSkill, skillsFor } from "./context";
 import { defineTool } from "./define";
 import { addMemory, deleteMemory } from "./memory";
@@ -20,14 +20,8 @@ const listSkills = defineTool({
   }),
   async run({ query }, ctx) {
     const projectId = ctx.thread?.projectId ?? null;
-    let list = skillsFor(projectId);
-    if (query?.trim()) {
-      const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-      const hits = list.filter((s) => words.some((w) => `${s.name} ${s.title} ${s.description} ${s.whenToUse}`.toLowerCase().includes(w)));
-      if (hits.length) list = hits;
-    }
-    // Word matches first, then the most used and most recently used skills (their run history).
-    list = rankSkills(list, { query, uses: skillUses() });
+    // By the words, then the skills used most and most lately.
+    const list = rankSkills(skillsFor(projectId), { words: query });
     return {
       content: JSON.stringify(
         list.map((s) => {

@@ -1,4 +1,5 @@
 import "server-only";
+import { originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { nanoid } from "nanoid";
 import { getModel } from "@/lib/catalog";
 import { maxRefsFor, reframes, resolutionFor, sourceSeconds } from "@/lib/catalog/shorts-models";
@@ -37,7 +38,6 @@ import {
   type TakeKeys,
 } from "@/lib/catalog/shorts";
 import type { Engine, Generation } from "@/lib/catalog/types";
-import { originalSoundProblem, separates, soundLine, type SoundChoice } from "@/lib/av/original-sound";
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { getGeneration, previewChained } from "./generations";
@@ -136,8 +136,8 @@ function readSession(id: string): ShortsSession {
 function saveSession(s: ShortsSession): ShortsSession {
   const now = Date.now();
   db()
-    .prepare("UPDATE shorts_sessions SET segments_json = ?, stitches_json = ?, settings_json = ?, title = ?, updated_at = ? WHERE id = ?")
-    .run(JSON.stringify(s.segments), JSON.stringify(s.stitches), JSON.stringify(s.settings), s.title, now, s.id);
+    .prepare("UPDATE shorts_sessions SET segments_json = ?, stitches_json = ?, title = ?, updated_at = ? WHERE id = ?")
+    .run(JSON.stringify(s.segments), JSON.stringify(s.stitches), s.title, now, s.id);
   return { ...s, updatedAt: now };
 }
 
@@ -212,10 +212,10 @@ export interface ShortsBody {
   aspectRatio: ShortsRatio;
   language: string;
   modelId?: string;
-  /** Original sound: what of the clip's sound goes back (unset = Everything). */
-  sound?: SoundChoice;
   /** A look of its own instead of a preset (Assist's words), kept on the session like a preset's. Server-side only. */
   look?: ShortsLook;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
 }
 
 function lookFor(presetId: string): ShortsLook {
@@ -268,8 +268,6 @@ function planWith(body: ShortsBody, info: SourceInfo): { input: ShortsPlanInput;
     const readers = SHORTS_MODELS.cloud.filter((id) => maxRefsFor(id, "cloud") > 0).map((id) => getModel(id)?.name ?? id);
     throw new ShortsError(`${getModel(modelId)?.name ?? "This model"} restyles from words only — describe the look in your preset, or pick ${readers.join(" or ")}`, 422);
   }
-  const soundProblem = originalSoundProblem(body.engine, body.sound);
-  if (soundProblem) throw new ShortsError(soundProblem, 422);
   const name = fileTitle(body.source.name);
   return {
     info,
@@ -294,7 +292,8 @@ function planWith(body: ShortsBody, info: SourceInfo): { input: ShortsPlanInput;
       maxRefs: maxRefsFor(modelId, body.engine),
       resolution: resolutionFor(modelId, body.engine),
       reframes: body.engine === "open" || reframes(modelId, body.engine),
-      ...(body.sound && body.sound.sound !== "everything" ? { sound: body.sound } : {}),
+      // What of the clip's sound goes back: the cloud puts it all back (DBS runs on your GPU).
+      ...(body.originalSound && { originalSound: originalSoundOn(body.originalSound, body.engine) }),
     },
   };
 }
@@ -324,8 +323,7 @@ export interface ShortsEstimate {
   notes: string[];
 }
 
-/** `read`: whether the clip's header was read (else its sound is unknown, and a split is planned once it's read). */
-function notesFor(input: ShortsPlanInput, segments: number, read: boolean): string[] {
+function notesFor(input: ShortsPlanInput, segments: number): string[] {
   const notes: string[] = [];
   const refs = input.look.references?.length ?? 0;
   const original = input.modelId === SHORTS_ORIGINAL;
@@ -339,8 +337,6 @@ function notesFor(input: ShortsPlanInput, segments: number, read: boolean): stri
       if (vaceDownsample(fps)) notes.push(`Wan 2.2 Fun VACE works this ${Math.round(fps!)} fps clip at ${Math.round(fps! / (vaceDownsample(fps) + 1))} fps and brings it back to its own rate`);
     } else notes.push("Fuobe Shorts on your GPU renders 480p at 16 fps, 5 s a segment");
   }
-  // planStitch splits only a clip that has sound to split.
-  if ((!read || input.source.hasAudio) && separates(input.engine, input.sound)) notes.push(`Original sound: ${soundLine(input.sound)} — your GPU splits the clip's sound first (free)`);
   if (input.engine === "cloud") {
     const { width: w, height: h } = input.source;
     if (!input.reframes && w && h && needsFit(input.source, input.aspectRatio)) notes.push(`Your ${w}×${h} clip is centre-cropped to ${input.aspectRatio} before the restyle`);
@@ -350,11 +346,11 @@ function notesFor(input: ShortsPlanInput, segments: number, read: boolean): stri
 
 /** What a session would cost and how it would run, without creating anything. */
 export async function estimateShorts(body: ShortsBody): Promise<ShortsEstimate> {
-  return estimateWith(body, {}, false);
+  return estimateWith(body, {});
 }
 
 /** estimateShorts for a clip whose header was read already (Assist prices with its sound and length). */
-export function estimateWith(body: ShortsBody, info: SourceInfo, read = true): ShortsEstimate {
+export function estimateWith(body: ShortsBody, info: SourceInfo): ShortsEstimate {
   const { input } = planWith(body, info);
   const plan = planShorts(input);
   const all = priceSteps(plan.steps);
@@ -365,7 +361,7 @@ export function estimateWith(body: ShortsBody, info: SourceInfo, read = true): S
     segments: plan.segments.length,
     seconds: Math.round((input.range.end - input.range.start) * 10) / 10,
     refsSent: input.engine === "open" ? Math.min(SHORTS.openReferences, input.look.references?.length ?? 0) : Math.min(input.maxRefs, input.look.references?.length ?? 0),
-    notes: notesFor(input, plan.segments.length, read),
+    notes: notesFor(input, plan.segments.length),
   };
 }
 
@@ -412,7 +408,7 @@ export async function createSession(body: ShortsBody, known?: SourceInfo): Promi
       ...(input.source.fps ? { fps: input.source.fps } : {}),
     },
     range: input.range,
-    settings: { aspectRatio: input.aspectRatio, language: input.language, modelId: input.modelId, resolution: input.resolution, maxRefs: input.maxRefs, reframes: input.reframes, ...(input.sound && { sound: input.sound }) },
+    settings: { aspectRatio: input.aspectRatio, language: input.language, modelId: input.modelId, resolution: input.resolution, maxRefs: input.maxRefs, reframes: input.reframes, ...(input.originalSound && input.originalSound !== "everything" && { originalSound: input.originalSound }) },
     segments,
     stitches: [stitch],
     createdAt: now,
@@ -600,12 +596,8 @@ export function makePrimary(id: string, index: number, lookId: string): ShortsSe
 }
 
 /** Join the chosen takes again (after a regenerate or a new choice) and put the sound back. */
-export function stitchSession(id: string, sound?: SoundChoice): ShortsSessionView {
-  const read = readSession(id);
-  // A new Original sound choice is kept for this stitch and the ones after it.
-  const s: ShortsSession = sound ? { ...read, settings: { ...read.settings, sound } } : read;
-  const soundProblem = originalSoundProblem(s.engine, s.settings.sound);
-  if (soundProblem) throw new ShortsError(soundProblem, 422);
+export function stitchSession(id: string): ShortsSessionView {
+  const s = readSession(id);
   checkEngine(s.engine);
   const clips = s.segments.map((seg, i) => {
     const g = getGeneration(seg.primary);

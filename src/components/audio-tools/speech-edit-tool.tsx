@@ -251,7 +251,7 @@ function EffectOptions({ effect, onChange }: { effect: SpeechEffect; onChange: (
   }
 }
 
-export function SpeechEditTool({ tabs }: { tabs?: React.ReactNode }) {
+export function SpeechEditTool() {
   const [engine, setEngine, mode] = useEngine();
   const create = useCreateGeneration();
   const run = useAudioToolRun();
@@ -372,7 +372,7 @@ export function SpeechEditTool({ tabs }: { tabs?: React.ReactNode }) {
   const warning = p && source?.kind === "video" ? p.notes.find((n) => /Lipsync/.test(n)) : undefined;
 
   return (
-    <ToolShell title="Audio" tabs={tabs}>
+    <ToolShell title="Audio" selfHostedOnly>
       {!source && <ToolHero title="Edit speech" subtitle={SUBTITLE} />}
       <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-6")}>
         {!source ? (

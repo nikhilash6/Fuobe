@@ -76,7 +76,7 @@ try {
     const models = (await panel.innerText()).split("\n");
     const first = models.findIndex((l) => /Fuobe Marketing Image|GPT Image|Nano Banana|Bria|Ideogram|Recraft|Product Photography/.test(l));
     // The page opens on Standalone: in the cloud its recipe runs on your GPU only, so the Original is listed last, greyed,
-    // with that line, and a partner is the first pick (the owner's 10-30 rule).
+    // with that line, and a partner is the first pick (the 2026-10-30 rule).
     if (engine === "open") check("open: Marketing Studio's first model is Fuobe Marketing Image", models[first] === "Fuobe Marketing Image", models[first]);
     else {
       check("cloud: Standalone's first model is a partner, not the Original", models[first] !== "Fuobe Marketing Image", models[first]);

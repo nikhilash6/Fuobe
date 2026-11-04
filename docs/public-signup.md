@@ -24,18 +24,27 @@ Turning it off signs out every account at once, and guests are sent to sign in a
 A guest can open every page: galleries, presets, the studios, Layers, Cinema, Image to 3D and
 Settings, read-only. The pages get the catalog and status reads they need (`/api/status`,
 `/api/models`, `/api/search-index`, `/api/comfyui`, `/api/settings/models`, curated moodboards,
-built-in skills). The owner's library stays private: the lists come back empty, and other reads of
+built-in skills), and the bar's menus read `/nav-menus/apps`, `/nav-menus/motions` and
+`/nav-menus/canvas`: static files made at build time that hold what a visitor may see only (no model
+names, no template without a real cover). The owner's library stays private: the lists come back empty, and other reads of
 it (files, uploads, projects, settings values, tokens) answer 401 "Sign up to see your library".
 
 Every change a guest sends (generate, upload, save a setting, create a project…) answers 401. The
 studio shows a "Create a free account to run this" card with **Sign up** and **Log in**. Where
 signing up wouldn't help, a guest gets an account's answer instead: 403 `assist-owner` for Assist,
 and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Shorts, Katana,
-Marketing…). The pages of those tools say so up front and turn off their upload and Generate. Price
+Marketing…). The pages of those tools say so up front and turn off their upload and Generate.
+What is drawn in the browser itself is open to try: Click to Ad's animated end card and Marketing
+Studio's code-drawn templates (Kinetic Motion) take a guest's words and play live (a code-drawn
+template shows no "isn't available" note, as nothing is generated); their Save opens the sign-up card before anything renders.
+The Kinetic page (`/kinetic`) is open the same way: a guest plays and edits every scene (Easy and Pro, presets,
+timing, undo), and Save, Save frame, Save contact sheet, Save version, "Pick a clip" and an upload open the sign-up
+card before anything renders or uploads. A guest's versions list is empty and `/kinetic?from=<id>` opens the scene
+picker. Price
 checks (the estimate routes, and `?preview=1` on the run routes that support it) stay open, so the
 studios can show prices. A guest may send 120 price checks a minute (per visitor behind a trusted
 reverse proxy; see below), and so may each account. A price check reads only the header of a file
-it names, and only of the asker's own files: a guest owns none. Nor does a price check reveal the
+it names, and only of the asker's own files (a guest owns none) or of Fuobe's published example files. Nor does a price check reveal the
 owner's library: the turnaround video's price check (`/api/turnaround/estimate`, or
 `/api/turnaround?preview=1`) answers 404 "Character not found" for any character a visitor names,
 whether it exists or not. A price check never calls a GPU either: Split soundtrack's price check
@@ -49,8 +58,10 @@ takes an account's GPU type from the status strip's last check and asks the GPU 
   still works as before: `POST /api/auth/login` with `{ "password" }`, or the owner's sign-in at
   `/login?owner=1`. The login page links to it only in development, so a public site doesn't
   advertise it.
-- Accounts are stored in `auth.json` in the data folder: the email in lower case, a salted scrypt
-  hash of the password (the same scheme as the install password), and the creation time.
+- Accounts are stored in the database (`fuobe.db` in the data folder, table `auth_accounts`): the
+  email in lower case (one account per email), a salted scrypt hash of the password (the same scheme
+  as the install password), and the creation time. An install from before this kept them in
+  `auth.json`, which moves into the database on the first start ([Sign-in data](SELF-HOSTING.md#sign-in-data)).
 - Sign-up and log-in attempts are rate limited per visitor (set `FUOBE_TRUST_PROXY=1` behind a
   reverse proxy, so that each visitor gets their own limit; an IPv6 address counts by its /64).
   A visitor gets 30 account log-ins a minute, right or wrong, and 10 a minute for one email. After
@@ -69,6 +80,17 @@ An account is signed in, but it sees the owner's studio as a guest does:
   So does Split soundtrack's **Export mix** (`POST /api/audio-tools/export`), which saves into the
   owner's Library, with or without a GPU. Accounts have their own uploads and runs (below), but no
   projects yet.
+  A Canvas Kinetic node renders in the owner's browser; keeping its run on the board
+  (`PUT /api/canvases/<id>/runs/<node>`) is a canvas change like any other (403 `library` for an account, 401
+  for a guest), and it takes only the owner's own finished Kinetic Motion results.
+  Canvas shows its ready boards to guests and accounts as read-only pages (`/canvas/start/<id>`):
+  what goes in, the steps and what comes out. Only the owner makes boards. Assist, Cinema Studio,
+  Storyboard, Elements, Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and
+  Marketing Studio show their ready-made starters the same way (`<studio>/start/<id>`); making one
+  (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`. A starter without its
+  cover yet is the owner's only: its card, its words and its page (404 for anyone else). Storyboard's
+  ready stories with a cover also fill its composer for anyone (`/storyboard?starter=<id>`), and the
+  Library's "Make your first" row links to pages everyone can open.
 - **Settings, keys and tokens are the owner's.** Changing settings or model switches, the password,
   API tokens, Public sign-up, LoRA downloads, Assist connectors and the MCP endpoint answer 403 for
   an account.
@@ -80,10 +102,29 @@ An account is signed in, but it sees the owner's studio as a guest does:
   (`GET /api/generations`), and it can open, cancel and delete them and download their files. They
   stay out of the owner's Library and live feed, and no other account can open them. The studio's
   owner can see them, open their files and delete them ([Managing accounts](#managing-accounts));
-  the sign-up form says so. An account's delete is for good (it has no Trash), so its space comes
+  the sign-up form says so. An account's delete is for good (it has no Trash): a result's ⋯ menu and the
+  Library's selection bar say **Delete for good…** and ask first, and its space comes
   back at once. The live-updates stream isn't sent to accounts: their studios poll instead.
 - **Its own uploads are its own.** Only the account that uploaded a file can use it in a run, and
   no other account can open it. See [Uploads](#uploads).
+- **Results made in the browser (Kinetic Motion) are its own runs too.** A motion clip rendered in
+  the page (an animated end card, a text template, anything made on the Kinetic page) is saved with an upload and
+  `POST /api/generations/local` (`op: "motion"`, model `local-motion`). No model makes it, so any
+  account may save one, with or without its own GPU or key (the upload is sent with
+  `x-fuobe-kinetic: 1`; see [Uploads](#uploads)). It counts as the account's own runs and files: the clip and every file it
+  names (its pictures, and the recipe's logo, product, pictures and clip) must be the account's own (403
+  otherwise). Frames, contact sheets and versions are Kinetic results too (`feature` `kinetic-frame`,
+  `kinetic-sheet` or `kinetic-version`, a PNG picture of the size its recipe makes: the export size for a frame or a
+  sheet, the rest frame 540 px on its long side for a version; 400 otherwise); a clip under the words must be the account's own stored video,
+  and a video input is taken only when it is the recipe's own clip (`layers.video.src`; 400 otherwise). The stored
+  file must be the MP4, WebM or (for those three) PNG it claims to be (400), and it shares the account's hourly run budget (60 an hour with its other runs,
+  429). The words drawn on the clip (the recipe's fields and brand name) and its title go through the
+  studio's checks when they are on, whatever the page sends as the prompt, and are what the run keeps
+  (a refusal answers 422; a result the checks want to see waits for them). It shows in the account's
+  own runs, never the owner's Library. Nothing
+  is downloaded straight from the page: the clip is downloaded from the saved result. A guest's
+  call answers 401 with the sign-up card. Colour grades and Relight blends stay the owner's
+  (403, `code: "library"`).
 
 ## Managing accounts
 
@@ -181,8 +222,8 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
 
 - **Saving.** `PUT /api/account/gpu` with `{ "url", "token"? }` checks the address and asks that
   ComfyUI for `/system_stats` (`?test=1` checks without saving). `DELETE` disconnects. The address
-  and the optional token (sent as `Authorization: Bearer`) are stored with the account in
-  `auth.json`, never as the studio's ComfyUI setting.
+  and the optional token (sent as `Authorization: Bearer`) are stored with the account in the
+  database (`auth_account_gpu`), never as the studio's ComfyUI setting.
 - **Server-side requests.** Addresses on the server itself, on private networks or link-local
   addresses are refused. The check runs again on the address each connection actually uses, so a
   name that is later pointed at the server can't reach the studio's own ComfyUI. The studio's own
@@ -202,13 +243,27 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   answer the same for now: a 3D model is finished on the server. So do the Audio hub's Split
   soundtrack and Video tools → Remove dialogue (both `POST /api/audio-tools`) and the turnaround
   video (`POST /api/turnaround`), though their price checks work, priced for the account's own
-  GPU. Split soundtrack's and Remove dialogue's pages say so up front ("runs on a self-hosted
-  Fuobe for now", "Self-hosted only"), with their upload and run off.
+  GPU. Split soundtrack's and Remove dialogue's pages say so up front ("Split soundtrack isn't
+  available here", "Remove dialogue isn't available here"), with their upload and run off. Result
+  menus don't offer Remove dialogue or Clean up dialogue to a guest or an account. Restore & colourise
+  and Remove a person (its mask preview and "Redo from here", `POST /api/remove-object/preview` and
+  `/reroll`, answer `own-gpu-tool` too) are left out of the Video tools tabs and the result menus for them.
+  A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
+  MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
+  song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2 and
+  Fuobe Animation's cloud half) answers `own-gpu-tool` for a guest or an account, even on its own key, and is left out
+  of its pickers; Audio → Extend & remix is left out of the Audio tabs. Each opens once a live call passes.
+  "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
+  A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
+  have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.
   Upload it again."). A file bigger than an upload of its kind may be (one of your own results,
-  too) answers 413 (`input-too-big`). The server never fetches a link for an account.
+  too) answers 413 (`input-too-big`). The server never fetches a link for an account. The one
+  exception is Fuobe's published example files ("Start from an example" on a page): a run may read
+  them by their exact path, the same for everyone, from the server's own disk, with no upload and no
+  space used. Nothing else outside your own files. A published example file is never removed or renamed.
 - **LoRAs and model files.** The server never downloads anything onto your machine. A LoRA a run
   adds (a camera motion's, an effect's, a look's) must already be in your ComfyUI's `models/loras`
   folder. When one is missing, the run answers 409 with `code: "comfy_missing_model"` and a `fix`
@@ -227,10 +282,11 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   refused for space.
 - **What a visitor sees.** For a guest or an account, `GET /api/status` describes its own GPU
   (`viewer`), with the open engine and no Demo mode. It says nothing about the studio's own
-  ComfyUI, providers, keys or local AI servers. The sidebar shows **Your GPU · Connect** (a guest
-  signs up first), or the account's ComfyUI as online or offline with its GPU and VRAM. At the foot
-  of the sidebar an account sees its email, which opens a menu with Settings, Your GPU (`/connect`)
-  and Sign out.
+  ComfyUI, providers, keys or local AI servers. The account menu (the top bar's right end; the You
+  tab on a phone) shows **Your GPU · Connect** (a guest signs up first), or the account's ComfyUI as
+  online or offline with its GPU and VRAM, then Settings and the light or dark switch. An
+  account's menu also shows its email, Your GPU (`/connect`) and Sign out. Thanks & licences and
+  the source on GitHub are in Settings → About, for guests and accounts too.
   `GET /api/models` lists the open-source models for a visitor, and the studios price a visitor's
   run as it would go on its own GPU. The studio's own settings page isn't shown to visitors.
 
@@ -251,8 +307,8 @@ account with that provider. The studio's own keys are never used for an account'
   reaches the provider counts: 10 a minute per account, 20 per address (behind a trusted proxy),
   120 for all accounts together.
 - **Stored encrypted.** The key is sealed with AES-256-GCM under a server key in
-  `data/secrets.key`, made the first time a key is saved, and kept on the account's record in
-  `auth.json`. The server key isn't derived from the sign-in secret, so a new password or "Sign
+  `data/secrets.key`, made the first time a key is saved, and kept with the account in the
+  database (`auth_account_keys`). The server key isn't derived from the sign-in secret, so a new password or "Sign
   everyone out" leaves saved keys working. Without `secrets.key` (lost, or restored from another
   server), saved keys can't be opened: accounts are asked to add them again, and the studio's keys
   are never used instead.
@@ -266,7 +322,9 @@ account with that provider. The studio's own keys are never used for an account'
   keys included. Removing or replacing a key that runs are going on answers 409 `runs-going` first;
   with `{ stopRuns: true }` those runs are stopped with the old key before it changes. A run still
   being handed to the provider is stopped there when its submit lands: the key (or the deleted
-  account's record) waits for that, up to a minute.
+  account's record) waits for that, up to a minute. On an install upgraded from `auth.json`, the
+  backup `auth.json.migrated-<time>` still holds the accounts as they were at the upgrade, sealed
+  keys included: delete it once the upgrade is confirmed ([Sign-in data](SELF-HOSTING.md#sign-in-data)).
 - **What it changes in the studios.** `GET /api/status` lists the account's keys
   (`viewer.keys`) and its engine mode: `both` while it has a key and the studio isn't open-source
   only, else `open`. The model pickers dim the paid models it has no key for ("Add your Replicate
@@ -294,7 +352,7 @@ With it on:
   Image to 3D, extra LoRAs added to a request, and clips and sound as inputs stay on the account's own GPU.
 - An account can upload pictures for these runs. Clips and sound still need its own GPU or key.
 - A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in
-  Settings → Your GPU and at `/connect`; the sidebar says "Your GPU · Optional".
+  Settings → Your GPU and at `/connect`; the account menu says "Your GPU · Optional".
 - A run waiting for the studio's GPUs shows its place in line ("In line · 3rd · about 40 s"). A run may wait
   `FUOBE_POOL_WAIT_MIN` minutes (30 by default); past that it fails.
 - The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.
@@ -316,7 +374,10 @@ The code is `src/server/hosted.ts` (the switch, the place, the line), `src/serve
 An account with its own ComfyUI connected, or its own key, can upload files (`POST /api/uploads`,
 the file as the request body with its type in `Content-Type` and its name in `X-File-Name`; an
 older page's multipart form works up to 26 MB). With neither it answers 403 with
-`code: "connect-gpu"`, and a guest gets 401 with the sign-up card.
+`code: "connect-gpu"`, and a guest gets 401 with the sign-up card. The one exception is a Kinetic
+Motion result rendered in the page (sent with `x-fuobe-kinetic: 1`): any account may upload its MP4
+or WebM clip and its PNG poster, within the same space, size and upload limits below. Any other type
+sent that way answers 403 `connect-gpu`, and a model run still needs the account's own GPU or key.
 
 | What | Types | Largest |
 |---|---|---|

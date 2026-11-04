@@ -107,7 +107,7 @@ export default function SignatureChips({
             <Chip icon={mb ? undefined : Images} active={!!mb} aria-label={mb ? `Moodboard: ${mb.name}` : "Moodboard"}>
               {mb &&
                 (mb.kind === "curated" ? (
-                  <CuratedCover m={{ name: "", ...curatedLook(mb.id) }} className="size-4 rounded-full" />
+                  <CuratedCover m={{ name: "", ...curatedLook(mb.id) }} className="size-4 rounded-full" sizes="16px" />
                 ) : mb.cover ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={mb.cover} alt="" className="size-4 rounded-full object-cover" />

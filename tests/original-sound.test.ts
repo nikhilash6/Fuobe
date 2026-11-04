@@ -1,362 +1,161 @@
-import { describe, expect, it } from "vitest";
-import { getModel } from "@/lib/catalog";
-import {
-  CLOUD_SOUND_NOTE,
-  defaultSound,
-  originalSoundProblem,
-  sameSound,
-  separates,
-  soundBack,
-  soundSummary,
-  type SoundChoice,
-} from "@/lib/av/original-sound";
-import { SPLIT_MODEL } from "@/lib/av/split";
-import { buildEpisodeGraph, defaultSettings, estimateGraph, genreInfo, secondsFor, type EpisodeSettings, type ScriptBlock } from "@/lib/catalog/faceless";
-import { getMaker, ORIGINALS, planGenjutsu, type GenjutsuPlanInput, type Maker } from "@/lib/catalog/genjutsu";
-import { planMixed, MIXED_PRESETS, defaultValues, type MixedPlanInput } from "@/lib/catalog/mixed-media";
+import { beforeAll, describe, expect, it } from "vitest";
+import { CLOUD_ORIGINAL_SOUND, ORIGINAL_SOUNDS, originalSoundDefault, originalSoundOn, withOriginalSound } from "@/lib/av/original-sound";
+import { getMaker, ORIGINALS, planGenjutsu, type GenjutsuPlanInput } from "@/lib/catalog/genjutsu";
+import { defaultValues, getMixedPreset, planMixed, type MixedPlanInput } from "@/lib/catalog/mixed-media";
 import { getEraser, planRemoval, type RemovalPlanInput } from "@/lib/catalog/remove-object";
-import { lookFromPreset, planShorts, planStitch, SHORTS_ORIGINAL, SHORTS_PRESETS, type PlanStep, type ShortsPlanInput } from "@/lib/catalog/shorts";
-import { planAssembly } from "@/lib/catalog/swap-studio-plan";
-import type { SwapClip } from "@/lib/catalog/swap-studio";
-import type { Engine } from "@/lib/catalog/types";
+import { lookFromPreset, planShorts, SHORTS_MODELS, SHORTS_PRESETS, type PlanStep, type ShortsPlanInput } from "@/lib/catalog/shorts";
+import type { GenerationRequest } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
-/** DBS D7: the "Original sound" choice in the studios that put a clip's sound back, and Faceless's clip bed. */
+// "Original sound" (DBS D7): what of a clip's sound goes back under its new picture in Shorts, Mixed Media, Genjutsu,
+// Remove object and Character Swap Studio. Everything stays as before; on your GPU the other choices split the sound with
+// DBS and put the chosen stem(s) back with the studio's own mux; the cloud has Everything only.
+const dir = tempDir("fuobe-original-sound-");
+process.env.FUOBE_DATA_DIR = dir;
+process.env.COMFYUI_URL = "http://127.0.0.1:9";
+const { setSetting } = await import("@/server/settings");
+const { createPipeline } = await import("@/server/chains");
+beforeAll(() => setSetting("demoMode", "auto"));
 
-const NO_DIALOGUE: SoundChoice = { sound: "no-dialogue" };
-const DIALOGUE: SoundChoice = { sound: "dialogue-only" };
-const LOWER: SoundChoice = { sound: "lower-music", musicDb: -18 };
+const mux = (over: Partial<PlanStep> = {}): PlanStep => ({ key: "final", request: { feature: "x", batchTitle: "T", title: "T", modelId: "oss-mux", op: "mux", step: { label: "Final", index: 1200, of: 1000 } }, ...over });
+const muxOf = (steps: PlanStep[], key: string) => steps.find((s) => s.key === key)!;
 
-const step = (steps: PlanStep[], key: string) => {
-  const s = steps.find((x) => x.key === key);
-  if (!s) throw new Error(`no step ${key} in ${steps.map((x) => x.key).join(", ")}`);
-  return s;
-};
-const splits = (steps: PlanStep[]) => steps.filter((s) => s.request.op === "separate-audio");
-/** Strip what this package adds, to compare an Everything plan with one made without a choice. */
-const shape = (steps: PlanStep[]) => JSON.stringify(steps);
-
-describe("the choice itself", () => {
-  it("splits only on the open engine and only for a choice other than Everything", () => {
-    expect(separates("open", undefined)).toBe(false);
-    expect(separates("open", { sound: "everything" })).toBe(false);
-    expect(separates("open", NO_DIALOGUE)).toBe(true);
-    expect(separates("cloud", NO_DIALOGUE)).toBe(false);
-    expect(separates("open", { sound: "bogus" as never })).toBe(false);
+describe("withOriginalSound", () => {
+  it("Everything, the cloud, a silent bed or no mux: the plan as it was", () => {
+    const steps = [mux({ after: ["join"], chain: [{ slot: "video" }], request: { ...mux().request, inputs: { audio: "/api/files/a.mp4" } } })];
+    expect(withOriginalSound(steps, "final", "everything", "open")).toBe(steps);
+    expect(withOriginalSound(steps, "final", undefined, "open")).toBe(steps);
+    expect(withOriginalSound(steps, "final", "music-effects", "cloud")).toBe(steps);
+    expect(withOriginalSound(steps, "nope", "music-effects", "open")).toBe(steps);
+    const silent = [mux({ request: { ...mux().request, inputs: { audio: "/api/files/silence-12.wav" } } })];
+    expect(withOriginalSound(silent, "final", "dialogue", "open")).toBe(silent);
   });
 
-  it("says the cloud puts back everything (no hosted DBS, SAM Audio not the owner's choice)", () => {
-    expect(originalSoundProblem("cloud", { sound: "everything" })).toBeNull();
-    expect(originalSoundProblem("cloud", undefined)).toBeNull();
-    expect(originalSoundProblem("cloud", DIALOGUE)).toMatch(/Dialogue only runs on your GPU \(open source\)/);
-    expect(originalSoundProblem("open", LOWER)).toBeNull();
-    expect(CLOUD_SOUND_NOTE).toMatch(/run on your GPU/);
-    expect(CLOUD_SOUND_NOTE).not.toMatch(/DBS|SAM|graph/);
+  it("a file going in: DBS on it, then the mux on its music & effects", () => {
+    const steps = [mux({ after: ["join"], chain: [{ slot: "video" }], request: { ...mux().request, inputs: { audio: "/api/files/clip.mp4" } } })];
+    const out = withOriginalSound(steps, "final", "music-effects", "open", { seconds: 9 });
+    expect(out.map((s) => s.key)).toEqual(["final-split", "final"]);
+    expect(out[0].request).toMatchObject({ modelId: "oss-dbs-separate", op: "separate-audio", inputs: { video: "/api/files/clip.mp4" }, params: { extra: { channels: "mono" }, sourceDuration: 9 }, step: { index: 1199 } });
+    expect(out[1]).toMatchObject({ after: ["join", "final-split"], chain: [{ slot: "video" }, { slot: "audio", stem: "background" }] });
+    expect(out[1].request.inputs).toBeUndefined();
   });
 
-  it("suggests Music & effects only where a person is replaced, on your GPU", () => {
-    expect(defaultSound("open")).toBe("everything");
-    expect(defaultSound("open", { personReplaced: true })).toBe("no-dialogue");
-    expect(defaultSound("cloud", { personReplaced: true })).toBe("everything");
+  it("an earlier step's clip going in: DBS waits for it; Lower the music takes two stems of the one split", () => {
+    const steps: PlanStep[] = [
+      { key: "sound", request: { feature: "x", modelId: "oss-segment", op: "trim" } },
+      mux({ after: ["join", "sound"], chain: [{ slot: "video" }, { slot: "audio" }] }),
+    ];
+    const out = withOriginalSound(steps, "final", "lower-music", "open", { lowerDb: -18 });
+    expect(out.map((s) => s.key)).toEqual(["sound", "final-split", "final"]);
+    expect(out[1]).toMatchObject({ after: ["sound"], chain: [{ slot: "audio" }] });
+    expect(out[2]).toMatchObject({
+      after: ["join", "final-split", "final-split"],
+      chain: [{ slot: "video" }, { slot: "audio", stem: "voice" }, { slot: "audio2", stem: "background" }],
+      request: { params: { extra: { backgroundVolumeDb: -18 } } },
+    });
+    expect(withOriginalSound(steps, "final", "dialogue", "open")[2].chain).toEqual([{ slot: "video" }, { slot: "audio", stem: "voice" }]);
   });
 
-  it("summarises and compares choices", () => {
-    expect(soundSummary(undefined)).toBe("Everything");
-    expect(soundSummary(NO_DIALOGUE)).toBe("Music & effects only");
-    expect(soundSummary({ sound: "lower-music", musicDb: -45 })).toBe("Dialogue, with the music and effects 30 dB lower");
-    expect(sameSound(undefined, { sound: "everything" })).toBe(true);
-    expect(sameSound(LOWER, { sound: "lower-music", musicDb: -12 })).toBe(false);
-    expect(sameSound(NO_DIALOGUE, DIALOGUE)).toBe(false);
-  });
-
-  it("makes the mux's sound: the clip as it is, or the chosen stems of a split", () => {
-    const steps: PlanStep[] = [];
-    const helper = { feature: "x-step", batchTitle: "x" };
-    expect(soundBack(steps, { engine: "open", from: { url: "/api/files/a.mp4" }, helper })).toEqual({ after: [], chain: [], inputs: { audio: "/api/files/a.mp4" } });
-    expect(soundBack(steps, { engine: "cloud", from: { key: "cut" }, helper })).toEqual({ after: ["cut"], chain: [{ slot: "audio" }] });
-    expect(steps).toEqual([]);
-    expect(() => soundBack(steps, { engine: "cloud", choice: NO_DIALOGUE, from: { key: "cut" }, helper })).toThrow(/runs on your GPU/);
-
-    const b = soundBack(steps, { engine: "open", choice: NO_DIALOGUE, from: { key: "cut" }, helper, channels: 6 });
-    expect(b).toEqual({ after: ["split"], chain: [{ slot: "audio", stem: "background" }] });
-    expect(steps[0]).toMatchObject({ key: "split", after: ["cut"], chain: [{ slot: "video" }], request: { modelId: SPLIT_MODEL, op: "separate-audio", feature: "x-step", params: { extra: { channels: "mono", sourceChannels: 6 } } } });
-
-    const d = soundBack([], { engine: "open", choice: DIALOGUE, from: { url: "/api/files/a.mp4" }, helper });
-    expect(d.chain).toEqual([{ slot: "audio", stem: "voice" }]);
-    const l = soundBack([], { engine: "open", choice: LOWER, from: { url: "/api/files/a.mp4" }, helper, key: "split-x" });
-    expect(l).toEqual({ after: ["split-x", "split-x"], chain: [{ slot: "audio", stem: "voice" }, { slot: "audio2", stem: "background" }], extra: { backgroundVolumeDb: -18 } });
+  it("knows its choices, defaults and the cloud's words", () => {
+    expect(ORIGINAL_SOUNDS.map((o) => o.label)).toEqual(["Everything", "Music & effects only", "Dialogue only", "Lower the music"]);
+    expect(originalSoundDefault({ engine: "open" })).toBe("everything");
+    // Everything until the split and stem mux have passed a real run; then Music & effects only where a person is replaced.
+    expect(originalSoundDefault({ engine: "open", replacesPerson: true })).toBe("everything");
+    expect(originalSoundDefault({ engine: "open", replacesPerson: true, live: true })).toBe("music-effects");
+    expect(originalSoundDefault({ engine: "open", live: true })).toBe("everything");
+    expect(originalSoundDefault({ engine: "cloud", replacesPerson: true })).toBe("everything");
+    expect(originalSoundOn("dialogue", "cloud")).toBe("everything");
+    expect(CLOUD_ORIGINAL_SOUND).toMatch(/run on your GPU \(open source\)/);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Shorts
+describe("each studio's plan", () => {
+  const shorts = (over: Partial<ShortsPlanInput> = {}): ShortsPlanInput => ({
+    engine: "open",
+    title: "Claymation · beach",
+    source: { url: "/api/files/uploads/beach.mp4", duration: 30, hasAudio: true },
+    range: { start: 4, end: 14 },
+    look: lookFromPreset(SHORTS_PRESETS[0]),
+    aspectRatio: "9:16",
+    language: "auto",
+    modelId: SHORTS_MODELS.open[0],
+    maxRefs: 0,
+    ...over,
+  });
+  const final = (steps: PlanStep[]) => steps.find((s) => s.request.op === "mux" && !s.key.endsWith("-split"))!;
 
-const claymation = SHORTS_PRESETS.find((p) => p.id === "claymation") ?? SHORTS_PRESETS[0];
-const shorts = (over: Partial<ShortsPlanInput> = {}): ShortsPlanInput => ({
-  engine: "open",
-  title: "Claymation · beach",
-  source: { url: "/api/files/uploads/beach.mp4", duration: 30, hasAudio: true },
-  range: { start: 0, end: 12 },
-  look: lookFromPreset(claymation),
-  aspectRatio: "9:16",
-  language: "auto",
-  modelId: SHORTS_ORIGINAL,
-  maxRefs: 0,
-  ...over,
-});
-
-describe("Shorts", () => {
-  const clips = [{ url: "/api/files/a.mp4" }, { url: "/api/files/b.mp4" }];
-
-  it("Everything is today's plan on both engines", () => {
-    for (const engine of ["open", "cloud"] as Engine[]) {
-      const modelId = engine === "open" ? SHORTS_ORIGINAL : "gemini-omni-flash";
-      const before = planStitch(shorts({ engine, modelId }), clips);
-      expect(shape(planStitch(shorts({ engine, modelId, sound: { sound: "everything" } }), clips).steps)).toBe(shape(before.steps));
-      expect(splits(before.steps)).toEqual([]);
-      expect(step(before.steps, "final").chain).toEqual([{ slot: "video" }, { slot: "audio" }]);
-      expect(step(before.steps, "final").request.step?.label).toBe("Final video");
-    }
+  it("Shorts: Everything is unchanged; Music & effects only puts the background stem of the selection's sound back", () => {
+    const before = planShorts(shorts());
+    expect(planShorts(shorts({ originalSound: "everything" })).steps).toEqual(before.steps);
+    const p = planShorts(shorts({ originalSound: "music-effects" }));
+    const m = final(p.steps);
+    const split = p.steps.find((s) => s.key === `${m.key}-split`)!;
+    expect(split.request.modelId).toBe("oss-dbs-separate");
+    expect(m.chain?.at(-1)).toEqual({ slot: "audio", stem: "background" });
+    // The cloud puts everything back.
+    const cloud = planShorts(shorts({ engine: "cloud", modelId: "gemini-omni-flash", originalSound: "music-effects" }));
+    expect(cloud.steps.some((s) => s.request.modelId === "oss-dbs-separate")).toBe(false);
   });
 
-  it("splits the cut selection (not the result) and muxes the chosen stem on your GPU", () => {
-    const p = planStitch(shorts({ sound: NO_DIALOGUE }), clips);
+  it("Shorts' Lower the music runs as one pipeline (two stems of one split)", () => {
+    const p = planShorts(shorts({ originalSound: "lower-music" }));
+    const run = createPipeline(p.steps.map((s) => ({ key: s.key, request: s.request, ...(s.after && { after: s.after }), ...(s.chain && { chain: s.chain }) })));
+    const m = final(p.steps);
+    expect(run.byKey[m.key].request.chain?.filter((c) => c.stem)).toEqual([
+      { slot: "audio", stem: "voice" },
+      { slot: "audio2", stem: "background" },
+    ]);
+  });
+
+  it("Mixed Media on your GPU: the render, the selection's sound cut, split and put back as chosen", () => {
+    const sketch = getMixedPreset("mixed-sketch")!;
+    const input = (over: Partial<MixedPlanInput> = {}): MixedPlanInput => ({ engine: "open", title: "Sketch · skate", preset: sketch, values: defaultValues(sketch), source: { url: "/api/files/uploads/skate.mp4", duration: 12, hasAudio: true }, range: { start: 2, end: 7 }, fps: 8, resolution: "1K", modelId: "oss-mixed-media", ...over });
+    expect(planMixed(input()).steps.map((s) => s.key)).toEqual(["render"]);
+    const p = planMixed(input({ originalSound: "dialogue" }));
     expect(p.final).toBe("final");
-    expect(step(p.steps, "split")).toMatchObject({ after: ["sound"], chain: [{ slot: "video" }], request: { modelId: SPLIT_MODEL, op: "separate-audio", feature: "shorts-step" } });
-    expect(step(p.steps, "sound").request).toMatchObject({ op: "trim", inputs: { video: "/api/files/uploads/beach.mp4" }, params: { startTime: 0, endTime: 12 } });
-    const mux = step(p.steps, "final");
-    expect(mux.after).toEqual(["join", "split"]);
-    expect(mux.chain).toEqual([{ slot: "video" }, { slot: "audio", stem: "background" }]);
-    expect(mux.request).toMatchObject({ modelId: "oss-mux", op: "mux", feature: "shorts" });
+    expect(p.steps.map((s) => s.key)).toEqual(["render", "cut", "final-split", "final"]);
+    expect(muxOf(p.steps, "final").chain).toEqual([{ slot: "video" }, { slot: "audio", stem: "voice" }]);
+    expect(muxOf(p.steps, "cut").request).toMatchObject({ modelId: "oss-trim", op: "trim", params: { startTime: 2, endTime: 7 } });
+    // A silent clip has nothing to put back.
+    expect(planMixed(input({ originalSound: "dialogue", source: { url: "/api/files/x.mp4", hasAudio: false } })).steps.map((s) => s.key)).toEqual(["render"]);
   });
 
-  it("the whole clip is split from the upload itself; Lower the music takes both stems at the asked level", () => {
-    const p = planStitch(shorts({ range: { start: 0, end: 30 }, sound: LOWER }), clips, "-s1");
-    expect(step(p.steps, "split-s1").request.inputs).toEqual({ video: "/api/files/uploads/beach.mp4" });
-    const mux = step(p.steps, "final-s1");
-    expect(mux.after).toEqual(["join-s1", "split-s1", "split-s1"]);
-    expect(mux.chain).toEqual([{ slot: "video" }, { slot: "audio", stem: "voice" }, { slot: "audio2", stem: "background" }]);
-    expect(mux.request.params?.extra).toEqual({ backgroundVolumeDb: -18 });
-    expect(mux.request.inputs).toBeUndefined();
+  it("Remove object: a person removed on your GPU gets their speech out with Music & effects only", () => {
+    const eraser = getEraser("oss-h3-person-remove")!;
+    const input = (over: Partial<RemovalPlanInput> = {}): RemovalPlanInput => ({ engine: "open", mode: "type", eraser, title: "Remove · the man", source: { url: "/api/files/uploads/clip.mp4", duration: 12, fps: 30, width: 1280, height: 720, hasAudio: true }, range: { start: 2, end: 9 }, prompt: "Remove the man", ...over });
+    const before = planRemoval(input());
+    expect(planRemoval(input({ originalSound: "everything" })).steps).toEqual(before.steps);
+    const p = planRemoval(input({ originalSound: "music-effects" }));
+    expect(muxOf(p.steps, p.final).chain?.at(-1)).toEqual({ slot: "audio", stem: "background" });
+    expect(p.steps.some((s) => s.request.modelId === "oss-dbs-separate")).toBe(true);
   });
 
-  it("a silent clip has nothing to split; the cloud refuses another choice in words", () => {
-    expect(splits(planStitch(shorts({ source: { url: "/api/files/x.mp4", duration: 30, hasAudio: false }, sound: DIALOGUE }), clips).steps)).toEqual([]);
-    expect(() => planShorts(shorts({ engine: "cloud", modelId: "gemini-omni-flash", sound: DIALOGUE }))).toThrow(/runs on your GPU/);
-  });
-
-  it("the split is free on your GPU", () => {
-    const def = getModel(SPLIT_MODEL)!;
-    expect(def.engine).toBe("open");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Mixed Media
-
-const sketch = MIXED_PRESETS.find((p) => p.id === "sketch") ?? MIXED_PRESETS[0];
-const mixed = (over: Partial<MixedPlanInput> = {}): MixedPlanInput => ({
-  engine: "open",
-  title: "Sketch · skate",
-  preset: sketch,
-  values: defaultValues(sketch),
-  source: { url: "/api/files/uploads/skate.mp4", duration: 12, hasAudio: true },
-  range: { start: 2, end: 7 },
-  fps: 8,
-  resolution: "1K",
-  modelId: "oss-mixed-media",
-  ...over,
-});
-
-describe("Mixed Media", () => {
-  it("Everything: one per-frame job that keeps the clip's sound (unchanged)", () => {
-    const p = planMixed(mixed({ sound: { sound: "everything" } }));
-    expect(p.final).toBe("render");
-    expect(p.steps.map((s) => s.key)).toEqual(["render"]);
-    expect(shape(p.steps)).toBe(shape(planMixed(mixed()).steps));
-  });
-
-  it("your GPU, per frame: the render becomes a step, the selection is cut, split, and the stem laid over it", () => {
-    const p = planMixed(mixed({ sound: DIALOGUE }));
-    expect(p.final).toBe("final");
-    expect(p.steps.map((s) => s.key)).toEqual(["render", "cut", "split", "final"]);
-    expect(step(p.steps, "render").request).toMatchObject({ feature: "mixed-media-step" });
-    expect(step(p.steps, "render").request.title).toBeUndefined();
-    expect(step(p.steps, "cut").request).toMatchObject({ modelId: "oss-trim", op: "trim", params: { startTime: 2, endTime: 7 } });
-    expect(step(p.steps, "final")).toMatchObject({ after: ["render", "split"], chain: [{ slot: "video" }, { slot: "audio", stem: "voice" }], request: { modelId: "oss-mux", feature: "mixed-media", title: "Sketch · skate" } });
-  });
-
-  it("Smooth goes through the Shorts chain with the choice; the cloud refuses it in words", () => {
-    const smooth = planMixed(mixed({ mode: "smooth", modelId: "fuobe-mixed-media", sourceSize: { width: 1280, height: 720 }, sourceFps: 24, sound: NO_DIALOGUE }));
-    expect(splits(smooth.steps)).toHaveLength(1);
-    expect(step(smooth.steps, smooth.final).chain).toContainEqual({ slot: "audio", stem: "background" });
-    expect(() => planMixed(mixed({ engine: "cloud", mode: "fast", modelId: "lucy-edit-pro", sound: NO_DIALOGUE }))).toThrow(/runs on your GPU/);
-    expect(splits(planMixed(mixed({ engine: "cloud", mode: "fast", modelId: "lucy-edit-pro" })).steps)).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Genjutsu
-
-const clip = { url: "/api/files/clip.mp4", duration: 20, fps: 30, width: 1280, height: 720, hasAudio: true };
-const maker = (id: string, engine: Engine) => getMaker(id, engine)!;
-const genjutsu = (o: Partial<GenjutsuPlanInput> & { maker: Maker }) =>
-  planGenjutsu({ engine: o.maker.engine, mode: "motion", title: "Genjutsu", source: clip, range: { start: 0, end: 20 }, quality: "720p", references: ["/api/files/hero.png"], ...o });
-
-describe("Genjutsu", () => {
-  it("a maker that keeps the sound: Everything adds nothing; another choice puts the stems back over its result", () => {
-    const m = maker(ORIGINALS.motionLite, "open");
-    const everything = genjutsu({ maker: m });
-    expect(shape(genjutsu({ maker: m, sound: { sound: "everything" } }).steps)).toBe(shape(everything.steps));
-    const p = genjutsu({ maker: m, sound: NO_DIALOGUE });
+  it("Remove object: an eraser that keeps the clip's sound gets a sound step when only part of it goes back", () => {
+    const vace = getEraser("oss-vace-remove")!;
+    const input: RemovalPlanInput = { engine: "open", mode: "type", eraser: vace, title: "Remove · the cup", source: { url: "/api/files/uploads/clip.mp4", duration: 4, fps: 16, width: 832, height: 480, hasAudio: true }, range: { start: 0, end: 4 }, prompt: "the cup" };
+    const plain = planRemoval(input);
+    const p = planRemoval({ ...input, originalSound: "dialogue" });
     expect(p.sound).toBe(true);
-    expect(splits(p.steps)).toHaveLength(1);
-    expect(step(p.steps, p.final).request).toMatchObject({ op: "mux", modelId: "oss-mux" });
-    expect(step(p.steps, p.final).chain).toContainEqual({ slot: "audio", stem: "background" });
+    if (!plain.sound) expect(plain.steps.some((s) => s.request.op === "mux")).toBe(false);
+    expect(muxOf(p.steps, p.final).chain?.at(-1)).toEqual({ slot: "audio", stem: "voice" });
   });
 
-  it("Character swap on your GPU: the swap becomes a step and Music & effects only goes back under it", () => {
-    const m = maker(ORIGINALS.character, "open");
-    const p = genjutsu({ maker: m, mode: "character", range: { start: 2, end: 12 }, character: { anchor: false }, sound: NO_DIALOGUE });
-    expect(step(p.steps, "swap").request.feature).toBe("genjutsu-step");
-    expect(step(p.steps, "split")).toMatchObject({ after: ["sound"] });
-    expect(step(p.steps, "sound").request.params).toMatchObject({ startTime: 2, endTime: 12 });
-    expect(step(p.steps, p.final)).toMatchObject({ after: ["swap", "split"], request: { feature: "genjutsu", op: "mux" } });
-    const kept = genjutsu({ maker: m, mode: "character", range: { start: 2, end: 12 }, character: { anchor: false } });
-    expect(kept.final).toBe("swap");
+  it("Genjutsu: where the clip's sound is put back on your GPU, the part chosen", () => {
+    const maker = getMaker(ORIGINALS.motion, "open")!;
+    const base: GenjutsuPlanInput = { engine: "open", mode: "motion", maker, title: "Genjutsu", source: { url: "/api/files/clip.mp4", duration: 20, fps: 30, width: 1280, height: 720, hasAudio: true }, range: { start: 4, end: 14 }, quality: "720p", references: ["/api/files/hero.png"] };
+    const before = planGenjutsu(base);
+    expect(planGenjutsu({ ...base, originalSound: "everything" }).steps).toEqual(before.steps);
+    const p = planGenjutsu({ ...base, originalSound: "lower-music" });
+    if (before.sound) {
+      expect(p.steps.some((s) => s.request.modelId === "oss-dbs-separate")).toBe(true);
+      expect(muxOf(p.steps, p.final).request.params?.extra?.backgroundVolumeDb).toBe(-12);
+    } else expect(p.steps).toEqual(before.steps);
   });
 
-  it("the cloud refuses another choice in words", () => {
-    expect(() => genjutsu({ maker: maker(ORIGINALS.motionLite, "cloud"), sound: DIALOGUE })).toThrow(/runs on your GPU/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Remove object
-
-const src = { url: "/api/files/uploads/clip.mp4", duration: 12, fps: 30, width: 1280, height: 720, hasAudio: true };
-const removal = (over: Partial<RemovalPlanInput> & { eraserId: string }): RemovalPlanInput => {
-  const { eraserId, ...rest } = over;
-  return { engine: getEraser(eraserId)!.engine, mode: "type", eraser: getEraser(eraserId)!, title: "Remove · the cup", source: src, range: { start: 0, end: 12 }, prompt: "the coffee cup", ...rest };
-};
-
-describe("Remove object", () => {
-  it("Everything is today's plan; a choice splits the clip and muxes over the joined result", () => {
-    const base = planRemoval(removal({ eraserId: "oss-vace-remove" }));
-    expect(shape(planRemoval(removal({ eraserId: "oss-vace-remove", sound: { sound: "everything" } })).steps)).toBe(shape(base.steps));
-    const p = planRemoval(removal({ eraserId: "oss-vace-remove", sound: LOWER }));
-    expect(splits(p.steps)).toHaveLength(1);
-    expect(step(p.steps, "split").request.inputs).toEqual({ video: src.url });
-    expect(step(p.steps, "final").chain).toEqual([{ slot: "video" }, { slot: "audio", stem: "voice" }, { slot: "audio2", stem: "background" }]);
-    expect(step(p.steps, "final").request.params?.extra).toEqual({ backgroundVolumeDb: -18 });
-  });
-
-  it("person removal on your GPU takes Music & effects only from the selection's cut", () => {
-    const p = planRemoval(removal({ eraserId: "oss-h3-person-remove", range: { start: 1, end: 9 }, prompt: "the man", sound: NO_DIALOGUE }));
-    expect(step(p.steps, "split").after).toEqual(["sound"]);
-    expect(step(p.steps, "final").chain).toEqual([{ slot: "video" }, { slot: "audio", stem: "background" }]);
-    expect(step(p.steps, "final").request.step?.label).toBe("Music and effects back");
-  });
-
-  it("the cloud refuses another choice in words", () => {
-    expect(() => planRemoval(removal({ eraserId: "kling-o3", sound: NO_DIALOGUE }))).toThrow(/runs on your GPU/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Character Swap Studio
-
-const swapClip = (hasAudio = true): SwapClip =>
-  ({
-    id: "clip-1",
-    name: "walk",
-    source: { url: "/api/files/uploads/x/walk.mp4", name: "walk.mp4", duration: 20, fps: 30, width: 1920, height: 1080, hasAudio },
-    normalized: { url: "/api/files/outputs/x/walk24.mp4", genId: "g-norm" },
-    frames: 480,
-    cuts: [],
-    detected: null,
-    cutsReviewed: true,
-    shots: [],
-    transcript: null,
-    review: "pending",
-    reviewNotes: "",
-    assembly: null,
-  }) as SwapClip;
-
-describe("Character Swap Studio", () => {
-  const pieces = [{ kind: "source" as const, start: 0, end: 10 }];
-  it("Everything puts the 24 fps copy's sound back as before", () => {
-    const a = planAssembly({ engine: "open", clip: swapClip(), pieces, videoOf: () => "" });
-    expect(step(a.steps, "final")).toMatchObject({ after: ["piece0"], chain: [{ slot: "video" }], request: { inputs: { audio: "/api/files/outputs/x/walk24.mp4" } } });
-    expect(shape(planAssembly({ engine: "open", clip: swapClip(), pieces, videoOf: () => "", sound: { sound: "everything" } }).steps)).toBe(shape(a.steps));
-  });
-
-  it("Music & effects only splits the working clip (the 24 fps copy) on your GPU", () => {
-    const a = planAssembly({ engine: "open", clip: swapClip(), pieces, videoOf: () => "", sound: NO_DIALOGUE });
-    expect(step(a.steps, "split").request.inputs).toEqual({ video: "/api/files/outputs/x/walk24.mp4" });
-    expect(step(a.steps, "final")).toMatchObject({ after: ["piece0", "split"], chain: [{ slot: "video" }, { slot: "audio", stem: "background" }] });
-    expect(step(a.steps, "final").request.inputs).toBeUndefined();
-  });
-
-  it("the cloud keeps the clip's sound or its silence, and refuses another choice in words", () => {
-    const silent = planAssembly({ engine: "cloud", clip: swapClip(false), pieces, videoOf: () => "" });
-    expect(step(silent.steps, "final").request.inputs?.audio).toMatch(/silence/);
-    expect(() => planAssembly({ engine: "cloud", clip: swapClip(), pieces, videoOf: () => "", sound: DIALOGUE })).toThrow(/runs on your GPU/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Faceless: a clip's soundtrack as the bed
-
-const block = (i: number, words = 20): ScriptBlock => {
-  const narration = Array.from({ length: words }, (_, w) => `w${i}x${w}`).join(" ");
-  return { id: `b${i}`, narration, visual: `Scene ${i}`, motion: "slow push-in", seconds: secondsFor(narration) };
-};
-const graphFor = (s: Partial<EpisodeSettings>, blocks: ScriptBlock[]) => {
-  const settings = { ...defaultSettings(s.engine ?? "open", genreInfo("education")), ...s };
-  return buildEpisodeGraph({ feature: "faceless", title: "How tides work", genre: genreInfo("education"), settings, blocks, fallbackVoice: "/api/files/uploads/demo-voice.wav" }, getModel);
-};
-
-describe("Faceless clip bed", () => {
-  const blocks = [block(1), block(2), block(3)];
-  const musicClip = { url: "/api/files/uploads/beach.mp4", name: "beach", duration: 10 };
-
-  it("your GPU: DBS's background stem, looped with crossfades, mixed at the usual level", () => {
-    const g = graphFor({ engine: "open", music: true, musicClip }, blocks);
-    const music = g.find((s) => s.key === "music")!;
-    expect(music.request).toMatchObject({ modelId: SPLIT_MODEL, op: "separate-audio", inputs: { video: musicClip.url }, params: { sourceDuration: 10 } });
-    const loop = g.find((s) => s.key === "music-loop")!;
-    expect(loop).toMatchObject({ after: ["music"], chain: [{ slot: "audio", stem: "background" }], request: { modelId: "oss-audio-loop", op: "audio-loop", params: { sourceDuration: 10, crossfade: 3 } } });
-    const mix = g.find((s) => s.key === "mix")!;
-    expect(mix.after?.[2]).toBe("music-loop");
-    expect(mix.chain?.[2]).toEqual({ slot: "audio2" });
-    expect(mix.request.params?.extra).toEqual({ backgroundVolumeDb: -14 });
-    expect(g.some((s) => s.request.op === "music")).toBe(false);
-    expect(g.some((s) => s.key === "music-cut")).toBe(false);
-    expect(estimateGraph(g, getModel, ["music", "music-loop"]).parts.music ?? 0).toBe(0);
-  });
-
-  it("a clip longer than the film needs no loop and is cut to the film before its split: the mix takes the stem itself", () => {
-    const g = graphFor({ engine: "open", music: true, musicClip: { ...musicClip, duration: 900 } }, blocks);
-    expect(g.some((s) => s.key === "music-loop")).toBe(false);
-    const film = Math.ceil(blocks.reduce((n, b) => n + b.seconds, 0));
-    const cut = g.find((s) => s.key === "music-cut")!;
-    expect(cut.request).toMatchObject({ modelId: "oss-trim", op: "trim", inputs: { video: musicClip.url }, params: { startTime: 0 } });
-    const end = cut.request.params!.endTime!;
-    expect(end).toBeGreaterThanOrEqual(film);
-    expect(end).toBeLessThan(film + 3);
-    const music = g.find((s) => s.key === "music")!;
-    expect(music).toMatchObject({ after: ["music-cut"], chain: [{ slot: "video" }], seconds: end, request: { modelId: SPLIT_MODEL, params: { sourceDuration: end } } });
-    expect(music.request.inputs).toBeUndefined();
-    expect(estimateGraph(g, getModel, ["music-cut", "music"]).parts.music ?? 0).toBe(0);
-    const mix = g.find((s) => s.key === "mix")!;
-    expect(mix.after?.[2]).toBe("music");
-    expect(mix.chain?.[2]).toEqual({ slot: "audio2", stem: "background" });
-  });
-
-  it("the cloud and music off ignore the clip (the cloud makes its own bed)", () => {
-    const cloud = graphFor({ engine: "cloud", music: true, musicClip }, blocks);
-    expect(cloud.find((s) => s.key === "music")!.request.op).toBe("music");
-    expect(graphFor({ engine: "cloud", music: true }, blocks).map((s) => s.key)).toEqual(cloud.map((s) => s.key));
-    expect(graphFor({ engine: "open", music: false, musicClip }, blocks).some((s) => s.part === "music")).toBe(false);
+  it("Character Swap Studio's assembly shape: the clip's file going back is split, its music & effects kept", () => {
+    const req: GenerationRequest = { feature: "swap", modelId: "oss-mux", op: "mux", inputs: { audio: "/api/files/clip-24fps.mp4" } };
+    const out = withOriginalSound([{ key: "final", request: req, after: ["join"], chain: [{ slot: "video" }] }], "final", "music-effects", "open");
+    expect(out[0].request.inputs).toEqual({ video: "/api/files/clip-24fps.mp4" });
+    expect(out[1].chain).toEqual([{ slot: "video" }, { slot: "audio", stem: "background" }]);
   });
 });

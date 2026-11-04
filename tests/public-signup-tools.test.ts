@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * PR #15's tools under the owner's public sign-up rules (docs/public-signup.md): Split soundtrack (and its Export mix),
@@ -11,7 +11,7 @@ import { NextRequest } from "next/server";
  * owner's library closed, and the GPU pre-flight board lists the tools like main's studios.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-signup-tools-"));
+const dir = tempDir("fuobe-signup-tools-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -32,12 +32,6 @@ const flyAround = await import("@/app/api/fly-around/route");
 const audioTools = await import("@/app/api/audio-tools/route");
 const { STUDIO_ROWS, studioOthers, studioTool, toolFor } = await import("@/server/gpu/tools");
 const { loadIndex } = await import("@/server/gpu/index-file");
-afterAll(() => {
-  // The database stays open until the worker exits (Windows won't delete it before).
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const passed = (r: Response) => r.headers.get("x-middleware-next") === "1";
 
@@ -170,7 +164,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
   });
 });
 
-describe("Fly around (N7-7) under the sign-up rules", () => {
+describe("Fly around under the sign-up rules", () => {
   it("opens its price check to guests and accounts, and answers its run with own-gpu-tool", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     expect(access.isPriceCheck("POST", "/api/fly-around", "?preview=1")).toBe(true);
@@ -259,11 +253,6 @@ describe("the routes: a visitor's price is its own GPU's, and the owner's charac
     expect(await account.json()).toMatchObject({ steps: 1, costUsd: 0, demo: false, channels: 2 });
     const owner = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), auth.createSession().value));
     expect(await owner.json()).toMatchObject({ steps: 1, demo: true, channels: 2 });
-    // A remix (the levels Assist's split_soundtrack sends) is priced the same way: the asker's own file on its own GPU.
-    const remix = (media: string) => ({ ...body(media), remix: { voiceDb: -100, musicDb: -6, effectsDb: 0 } });
-    expect((await audioTools.POST(call("/api/audio-tools?preview=1", remix(owners), cookie))).status).toBe(422);
-    const mixed = await audioTools.POST(call("/api/audio-tools?preview=1", remix(wav("mine2.wav", who.id)), cookie));
-    expect(await mixed.json()).toMatchObject({ steps: 1, costUsd: 0, demo: false });
   });
 
   it("prices a visitor's Clean up voice on its own GPU without asking any GPU, never a demo, and only of its own file", async () => {
@@ -356,7 +345,7 @@ describe("Split soundtrack's and Remove dialogue's pages tell a visitor up front
       expect(page).toContain(`const SELF_HOSTED = "${tool} isn't available here";`);
       expect(page).toMatch(/blocker = visitor \? SELF_HOSTED/);
       expect(page).toMatch(/\{visitor && (\( ?)?<SelfHostNote className="mt-3 max-w-xl">\{SELF_HOSTED\}\.<\/SelfHostNote> ?\)?\}/);
-      expect(page).toMatch(/<ToolShell title="[^"]+" tabs=\{tabs\} selfHostedOnly>/);
+      expect(page).toMatch(/<ToolShell title="[^"]+" selfHostedOnly>/);
       expect(page).toMatch(/onUpdate=\{setSource\} disabled=\{visitor\}/);
       // The upload button, From library, the hidden file input and the drop all honour it.
       expect(page.match(/disabled=\{disabled\}/g)?.length).toBe(3);

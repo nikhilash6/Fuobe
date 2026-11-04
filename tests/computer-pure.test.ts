@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { corsFlag, fixFor, guessInstall, installFromStats, platformOf, startFile, START_FILE_NAME } from "@/lib/comfy-install";
@@ -9,8 +8,9 @@ import { explainComfyError } from "@/lib/comfy";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { parseComfyBinary, parseComfyText } from "@/lib/comfy-ws";
 import { tileJob, type LocalJob } from "@/lib/computer-runner";
-import { browserSupport, COMFY_PORTS, graphProblem, localBase, mayDownload, pageCanReach, pickLook, portsToLook, preflightPath, readPath, sameFinder, settled, statsFacts, typedPort, viewPath, writePath, type Finder } from "@/lib/local-comfy";
+import { browserSupport, COMFY_PORTS, firstPorts, graphProblem, lookStrength, localBase, mayDownload, pageCanReach, pickLook, portsToLook, preflightPath, readPath, sameFinder, settled, statsFacts, typedPort, viewPath, writePath, type Finder } from "@/lib/local-comfy";
 import { DONE_SHOWN_MS, duration, jobFraction, jobWords, madeNoun, makingWords, queueWords, RELAY_WORDS, reportAllowed, savingWords, sendingWords, tabFailureWords, type RelayState } from "@/lib/relay";
+import { tempDir } from "./helpers/temp-dir";
 
 const ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
 const OTHER = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
@@ -113,23 +113,118 @@ describe("the local ComfyUI's addresses", () => {
     const stats = { system: {} };
     const start: Finder = { s: "start" };
     // Two answer without the setting: ComfyUI's own port first, the other offered.
-    const two = settled(start, [{ port: 8000, state: "unreadable" }, { port: 8188, state: "unreadable" }, { port: 8189, state: "none" }], undefined, undefined, 1);
+    const two = settled(start, [{ port: 8000, state: "unreadable" }, { port: 8188, state: "unreadable" }, { port: 8189, state: "none" }], undefined, 1);
     expect(two).toEqual({ s: "needs-setting", port: 8188, back: false, others: [8000] });
     // ComfyUI on 8188 restarts: waiting for it, though another app still answers on 8000.
-    const waiting = settled(two, [{ port: 8000, state: "unreadable" }, { port: 8188, state: "none" }], undefined, undefined, 5);
+    const waiting = settled(two, [{ port: 8000, state: "unreadable" }, { port: 8188, state: "none" }], undefined, 5);
     expect(waiting).toEqual({ s: "waiting", port: 8188, since: 5 });
     // Each quiet look while it waits keeps the same screen (the same "since", so the 2-minute help comes).
-    const again = settled(waiting, [{ port: 8000, state: "unreadable" }, { port: 8188, state: "none" }], undefined, undefined, 9);
+    const again = settled(waiting, [{ port: 8000, state: "unreadable" }, { port: 8188, state: "none" }], undefined, 9);
     expect(again).toEqual(waiting);
     expect(sameFinder(waiting, again)).toBe(true);
     // Back without the setting yet.
-    expect(settled(waiting, [{ port: 8188, state: "unreadable" }], undefined, undefined, 11)).toEqual({ s: "needs-setting", port: 8188, back: true });
+    expect(settled(waiting, [{ port: 8188, state: "unreadable" }], undefined, 11)).toEqual({ s: "needs-setting", port: 8188, back: true });
     // Back with it on another port (ComfyUI moved): connects.
-    expect(settled(waiting, [{ port: 8188, state: "none" }, { port: 8189, state: "found", stats }], undefined, undefined, 12)).toMatchObject({ s: "found", port: 8189 });
+    expect(settled(waiting, [{ port: 8188, state: "none" }, { port: 8189, state: "found", stats }], undefined, 12)).toMatchObject({ s: "found", port: 8189 });
     // Nothing anywhere; a typed port that missed.
-    expect(settled(start, [{ port: 8188, state: "none" }], undefined, undefined, 1)).toEqual({ s: "none" });
-    expect(settled({ s: "none" }, [{ port: 3391, state: "none" }], undefined, 3391, 1)).toEqual({ s: "none", missed: 3391 });
+    expect(settled(start, [{ port: 8188, state: "none" }], undefined, 1)).toEqual({ s: "none" });
+    expect(settled({ s: "none" }, [{ port: 3391, state: "none" }], undefined, 1, { typed: 3391 })).toEqual({ s: "none", missed: 3391 });
     expect(sameFinder({ s: "none" }, { s: "none", missed: 3391 })).toBe(false);
+  });
+
+  describe("ranking what answers on this computer", () => {
+    const stats = { system: { comfyui_version: "0.42.0" } };
+    const start: Finder = { s: "start" };
+
+    it("ComfyUI on 8188 (even unreadable) and a 401 on 8189: 8188 is the one shown, 8189 only among the other ports", () => {
+      // The browser sees the same for both (an answer it may not read): ComfyUI's usual port ranks first.
+      const s = settled(start, [{ port: 8188, state: "unreadable" }, { port: 8189, state: "unreadable" }, { port: 8000, state: "none" }], undefined, 1);
+      expect(s).toEqual({ s: "needs-setting", port: 8188, back: false, others: [8189] });
+      // Readable on 8188: it connects, whatever answers elsewhere.
+      expect(settled(start, [{ port: 8189, state: "unreadable" }, { port: 8188, state: "found", stats }], undefined, 1)).toMatchObject({ s: "found", port: 8188 });
+      expect(lookStrength({ port: 8188, state: "unreadable" })).toBeGreaterThan(lookStrength({ port: 8189, state: "unreadable" }));
+    });
+
+    it("only a 401 on 8189: a weak candidate (it may not be ComfyUI), not a ComfyUI found", () => {
+      const s = settled(start, [{ port: 8188, state: "none" }, { port: 8189, state: "unreadable" }], undefined, 1);
+      expect(s).toEqual({ s: "needs-setting", port: 8189, back: false, weak: true });
+      // Another app's readable answer isn't ComfyUI: never shown, never under Other ports.
+      expect(settled(start, [{ port: 8000, state: "other" }, { port: 8189, state: "unreadable" }], undefined, 1)).toEqual({ s: "needs-setting", port: 8189, back: false, weak: true });
+      expect(settled(start, [{ port: 8000, state: "other" }], undefined, 1)).toEqual({ s: "none" });
+      expect(lookStrength({ port: 8188, state: "other" })).toBe(0);
+    });
+
+    it("something on 8000, ComfyUI Desktop's port, is a candidate (after 8188)", () => {
+      expect(settled(start, [{ port: 8188, state: "none" }, { port: 8000, state: "unreadable" }], undefined, 1)).toEqual({ s: "needs-setting", port: 8000, back: false });
+      expect(settled(start, [{ port: 8000, state: "unreadable" }, { port: 8188, state: "unreadable" }], undefined, 1)).toEqual({ s: "needs-setting", port: 8188, back: false, others: [8000] });
+      // And it beats an app on a port ComfyUI doesn't usually use.
+      expect(settled(start, [{ port: 8189, state: "unreadable" }, { port: 8000, state: "unreadable" }], undefined, 1)).toEqual({ s: "needs-setting", port: 8000, back: false, others: [8189] });
+    });
+
+    it("a port the person types counts as theirs: its screen, a miss, or another app there", () => {
+      const none: Finder = { s: "none" };
+      expect(settled(none, [{ port: 9188, state: "unreadable" }], undefined, 1, { typed: 9188 })).toEqual({ s: "needs-setting", port: 9188, back: false, chosen: true });
+      expect(settled(none, [{ port: 9188, state: "found", stats }], undefined, 1, { typed: 9188 })).toMatchObject({ s: "found", port: 9188 });
+      expect(settled(none, [{ port: 8000, state: "other" }], undefined, 1, { typed: 8000 })).toEqual({ s: "none", notComfy: 8000 });
+      expect(settled(none, [{ port: 9188, state: "none" }], undefined, 1, { typed: 9188 })).toEqual({ s: "none", missed: 9188 });
+    });
+
+    it("a weak port shown gives way once ComfyUI's own port answers (it never sticks)", () => {
+      const weak = settled(start, [{ port: 8188, state: "none" }, { port: 8189, state: "unreadable" }], undefined, 1);
+      // A quiet look at 8189 and 8188: ComfyUI started on 8188.
+      expect(settled(weak, [{ port: 8189, state: "unreadable" }, { port: 8188, state: "unreadable" }], undefined, 2, { partial: true })).toEqual({ s: "needs-setting", port: 8188, back: false, others: [8189] });
+      // The weak port goes quiet: no "waiting for ComfyUI to start" for an app that may not be ComfyUI.
+      expect(settled(weak, [{ port: 8189, state: "none" }, { port: 8188, state: "none" }], undefined, 3, { partial: true })).toEqual({ s: "none" });
+    });
+
+    it("a ComfyUI read on a port it doesn't usually use wins over an unreadable 8188", () => {
+      expect(settled(start, [{ port: 8188, state: "unreadable" }, { port: 8190, state: "found", stats }], undefined, 1)).toMatchObject({ s: "found", port: 8190 });
+      expect(pickLook([{ port: 8188, state: "unreadable" }, { port: 7821, state: "found", stats }])).toMatchObject({ port: 7821, state: "found" });
+      // Where ComfyUI was found before counts as much as 8188.
+      expect(settled(start, [{ port: 8188, state: "none" }, { port: 8190, state: "unreadable" }], 8190, 1)).toEqual({ s: "needs-setting", port: 8190, back: false });
+    });
+
+    it("nothing answers: not found", () => {
+      expect(settled(start, COMFY_PORTS.map((port) => ({ port, state: "none" as const })), undefined, 1)).toEqual({ s: "none" });
+      expect(pickLook([])).toEqual({ state: "none" });
+    });
+
+    it("the person picks another port: it is shown and followed, or the same screen says nothing answers there now", () => {
+      const two = settled(start, [{ port: 8188, state: "unreadable" }, { port: 8189, state: "unreadable" }], undefined, 1);
+      const picked = settled(two, [{ port: 8189, state: "unreadable" }], undefined, 2, { chosen: 8189, partial: true });
+      expect(picked).toEqual({ s: "needs-setting", port: 8189, back: false, chosen: true, others: [8188] });
+      // Followed: quiet looks at 8189 keep it (8188 is still offered).
+      expect(settled(picked, [{ port: 8189, state: "unreadable" }], undefined, 3, { partial: true })).toEqual(picked);
+      // And back to 8188.
+      expect(settled(picked, [{ port: 8188, state: "unreadable" }], undefined, 4, { chosen: 8188, partial: true })).toEqual({ s: "needs-setting", port: 8188, back: false, chosen: true, others: [8189] });
+      // Picked, and readable there: connects.
+      expect(settled(two, [{ port: 8189, state: "found", stats }], undefined, 5, { chosen: 8189, partial: true })).toMatchObject({ s: "found", port: 8189 });
+      // Picked, and gone: the screen stays, and says so.
+      expect(settled(two, [{ port: 8189, state: "none" }], undefined, 6, { chosen: 8189, partial: true })).toEqual({ s: "needs-setting", port: 8188, back: false, missed: 8189 });
+      // Picked, and another app answers there now: the screen stays, and says so.
+      expect(settled(two, [{ port: 8189, state: "other" }], undefined, 7, { chosen: 8189, partial: true })).toEqual({ s: "needs-setting", port: 8188, back: false, notComfy: 8189 });
+      // A port that only answered weakly, picked by the person, is no longer weak.
+      const weak = settled(start, [{ port: 8189, state: "unreadable" }], undefined, 1);
+      expect(settled(weak, [{ port: 8189, state: "unreadable" }], undefined, 2, { chosen: 8189, partial: true })).toEqual({ s: "needs-setting", port: 8189, back: false, chosen: true });
+      // The weak port shown, picked and gone: not still shown as answering; the next one that answers, or none.
+      expect(settled(weak, [{ port: 8189, state: "none" }], undefined, 3, { chosen: 8189, partial: true })).toEqual({ s: "none", missed: 8189 });
+      const weak2 = settled(start, [{ port: 8189, state: "unreadable" }, { port: 8190, state: "unreadable" }], undefined, 1);
+      expect(settled(weak2, [{ port: 8189, state: "none" }], undefined, 3, { chosen: 8189, partial: true })).toEqual({ s: "needs-setting", port: 8190, back: false, weak: true, missed: 8189 });
+    });
+
+    it("a quiet look at the port shown keeps the other ports found before", () => {
+      const two = settled(start, [{ port: 8188, state: "unreadable" }, { port: 8189, state: "unreadable" }, { port: 8000, state: "unreadable" }], undefined, 1);
+      expect(two).toMatchObject({ port: 8188, others: [8000, 8189] });
+      const quiet = settled(two, [{ port: 8188, state: "unreadable" }], undefined, 2, { partial: true });
+      expect(quiet).toEqual(two);
+      expect(sameFinder(quiet, two)).toBe(true);
+    });
+
+    it("looks first where ComfyUI was found before and on 8188", () => {
+      expect(firstPorts()).toEqual([8188]);
+      expect(firstPorts(8190)).toEqual([8190, 8188]);
+      expect(firstPorts(8188)).toEqual([8188]);
+    });
   });
 
   it("can tell Fuobe's guard is there", () => {
@@ -342,7 +437,7 @@ describe("ComfyUI's one setting", () => {
   it.runIf(process.platform === "win32")("is PowerShell that parses", () => {
     const bat = startFile(8189, "http://127.0.0.1:3370");
     const script = bat.slice(bat.indexOf("#FUOBE-PS"));
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-start-")), "s.ps1");
+    const file = path.join(tempDir("fuobe-start-"), "s.ps1");
     fs.writeFileSync(file, script);
     const out = execFileSync(
       "powershell",

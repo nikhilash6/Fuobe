@@ -62,7 +62,7 @@ export default function LookChip({
         className="w-[min(92vw,480px)] p-2"
         trigger={
           <Chip icon={picked ? undefined : Sparkles} active={!!value} aria-label={`Look: ${picked?.name ?? none ?? "General"}`}>
-            {picked && <CuratedCover m={{ name: "", ...curatedLook(picked.id) }} className="size-4 rounded-full" />}
+            {picked && <CuratedCover m={{ name: "", ...curatedLook(picked.id) }} className="size-4 rounded-full" sizes="16px" />}
             <span className="max-w-32 truncate">{picked?.name ?? none ?? "Look"}</span>
             {strength < 1 && <span className="text-muted-foreground tabular-nums">{pct(strength)}</span>}
           </Chip>

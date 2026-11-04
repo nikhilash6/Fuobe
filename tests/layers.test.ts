@@ -1,12 +1,12 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { getModel, supportsOp } from "@/lib/catalog";
 import { imageLimit } from "@/lib/catalog/plan";
 import type { Operation } from "@/lib/catalog/types";
 import { layersHref } from "@/lib/output-actions";
+import { tempDir } from "./helpers/temp-dir";
 import {
   addNodes,
   addRevision,
@@ -125,7 +125,7 @@ describe("zip naming", () => {
       { name: "composite.png", data: new Uint8Array([137, 80, 78, 71, 1, 2, 3]) },
       { name: "layer-z0-background.png", data },
     ]);
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-layers-zip-"));
+    const dir = tempDir("fuobe-layers-zip-");
     try {
       const file = path.join(dir, "cropped-layers.zip");
       fs.writeFileSync(file, zip);

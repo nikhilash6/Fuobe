@@ -10,7 +10,7 @@ import { canUseSkill, skillsFor } from "./context";
 import { defineTool, type ToolContext, type ToolOutcome } from "./define";
 
 /**
- * run_skill (package W3): a saved skill whose files hold a recipe runs by itself with values for its inputs — the
+ * run_skill: a saved skill whose files hold a recipe runs by itself with values for its inputs — the
  * same steps, priced first, no planning. Gated like generate, so Assist shows one priced card (an atomic pipeline,
  * or a studio's tool call that opens in its studio), MCP lists it and estimate_job prices it.
  */
@@ -145,27 +145,25 @@ async function runFound(input: RunSkill, ctx: ToolContext, found: { recipe: Reci
   const engine = asked ?? recipeEngines(recipe)[0];
   if (engine && !recipe.verified?.[engine]?.plan && skill.source === "user") {
     const check = await verifyRecipe(found.name, "plan", engine).catch((e: Error) => ({ ok: false, why: e.message }));
-    if (!check.ok) return { content: JSON.stringify({ error: `/${found.name} doesn't run on ${ENGINE_WORDS[engine]} as it is: check it on the Skills page` }), isError: true };
+    if (!check.ok) return { content: JSON.stringify({ error: `/${found.name} doesn't run on ${ENGINE_WORDS[engine]} as it is: give it a free test run in Assist → Skills (nothing runs for real)` }), isError: true };
   }
   const out = await runRecipe(found.name, body, asked);
   const ids = out.runs.flatMap((r) => r.ids);
   const href = out.runs.find((r) => r.href && r.href !== "/library")?.href;
-  const waiting = [...new Set(out.runs.flatMap((r) => r.waiting ?? []))];
   return {
     content: JSON.stringify({
       skill: found.name,
       engine: out.engine,
       runs: out.runs.map((r) => ({
         started: r.ids,
-        ...(r.run && { run: r.run }),
-        ...(r.waiting?.length && { waiting: r.waiting }),
         ...(r.batchId && { batch: r.batchId }),
         ...(r.href && { href: r.href }),
         ...(r.error && { error: r.error }),
+        ...(r.waiting?.length && { waiting: r.waiting }),
       })),
       ...(out.demo && { demo: true }),
-      note: waiting.length
-        ? `It spans studios: the first step has started, and ${waiting.join(", ")} start${waiting.length === 1 ? "s" : ""} by ${waiting.length === 1 ? "itself" : "themselves"} when the steps before finish (minutes, not seconds). Tell the user it's running and that its progress is under the skill in Skills; don't start the waiting steps yourself.`
+      note: out.runs.some((r) => r.waiting?.length)
+        ? `Some steps wait for a studio step before them (${[...new Set(out.runs.flatMap((r) => r.waiting ?? []))].join(", ")}): each starts by itself when the step it takes a result from is done. The skill's dialog in Skills shows each step.`
         : href
           ? "The skill's studio job opens at href; its results appear there and in the Library."
           : "Each run's steps start by themselves as the ones they wait for finish; results appear in the Library.",

@@ -29,8 +29,10 @@ export const PT_EXTENSIONS = ['.ckpt', '.pt', '.pt2', '.bin', '.pth', '.safetens
  * Model folders a pack reads straight from disk without registering them with ComfyUI, so GET /models never lists them
  * and a folder listing can't tell whether their files are there: their files are 'unobservable' rather than missing.
  * Hi3D: Comfyui-Hi3d-T8 reads folder_paths.models_dir/Hi3D (a 'hi3d' folder only exists when extra_model_paths.yaml adds one).
+ * sams: ComfyUI-Qwen-Watermark reads models/sams by its path without registering it, so a listing can't tell whether its
+ * SAM file is there.
  */
-export const UNLISTED_FOLDERS = new Set(['Hi3D']);
+export const UNLISTED_FOLDERS = new Set(['Hi3D', 'sams']);
 
 /** Core classes of the newest families, read one by one when /object_info can't be: an older ComfyUI lacks them first. */
 const NEWEST_CORE = /^(SeedVR2|Trellis2|SAM3|LTXV|LTXAV|ComfyMathExpression|TextEncodeQwenImage21|QwenImage21Cache|Ideogram4|TextEncodeFibo2|DualModelGuider|CFGOverride)/;
@@ -220,7 +222,11 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       folders: uniq(p.folders ?? []),
       isolated: !!p.isolated,
       ...(p.subdir && { subdir: p.subdir }),
+      // One node file in a model repo (viggle_turbo): downloaded, not cloned.
+      ...(p.file && { file: p.file }),
       requirementsTxt: !!p.requirementsTxt,
+      // Python packages to install by name instead of the pack's requirements.txt (pinned versions only).
+      ...(Array.isArray(p.pip) && p.pip.length && { pip: [...p.pip] }),
       install: p.registry?.version ? 'registry' : 'manual',
     };
   }

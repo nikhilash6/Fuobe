@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { CONNECT_GPU_HEADER, CONNECT_NEEDS_HEADER, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
+import { ACTIVE_RUNS_CODE, CONNECT_GPU_HEADER, CONNECT_NEEDS_HEADER, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { missingFilesMessage } from "@/lib/missing-files";
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
 import { requestViewer, validToken } from "@/server/auth";
@@ -8,10 +8,17 @@ import { computerScope, ISOLATED_ON_COMPUTER, workerFor } from "@/server/provide
 import { getSetting } from "@/server/settings";
 import { RUNS_ON_COMPUTER_NOTE } from "@/lib/relay";
 import { OPERATION_LABELS } from "@/lib/catalog/types";
+import { ANY_ANGLE } from "@/lib/catalog/any-angle";
+import { directRunFeatures } from "@/lib/catalog/genjutsu";
+import { genjutsuLive } from "@/server/genjutsu-live";
+import { soundLive } from "@/server/sound-live";
+import { wantsVoiceFirst } from "@/lib/av/voice-first";
+import { relightRunTitle } from "@/lib/relight/engine";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
 import { db } from "@/server/db";
-import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, createGenerations, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
+import { findView, requestViewKey } from "@/server/any-angle";
+import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, createGenerations, getGeneration, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
 import { ensureTrashPurge, listOptionsFrom } from "@/server/library";
 import { hit, unhit } from "@/server/rate";
 import { GenerationRequestSchema } from "@/server/request-schema";
@@ -83,9 +90,24 @@ export async function POST(request: Request) {
   }
   // A retired model id (an older script, a saved CLI or MCP call) runs on the model that replaced it, and the notes say
   // so: previewGeneration and createGenerations move it (generations.ts currentRequest, replaced.ts).
-  const asked = parsed.data as Parameters<typeof createGenerations>[0];
+  const sent = parsed.data as Parameters<typeof createGenerations>[0];
+  // Generate lighting is named by its look or its lights (src/lib/relight/engine.ts), not by its long prompt.
+  const relightTitle = relightRunTitle(sent);
+  const asked = relightTitle ? { ...sent, title: relightTitle } : sent;
   // Public sign-up: an account runs on its own ComfyUI or its own fal.ai or Replicate key, never the install's providers.
   // Without a key of its own it stays on the open engine; with one, the engine it asked for.
+  // Genjutsu's new makers open one by one (src/server/genjutsu-live.ts): sent here directly, a maker that hasn't opened
+  // runs for the owner only, as on the Genjutsu page.
+  if (viewer.kind !== "owner") {
+    // "Clean the voice first" opens to visitors once it has passed a real run (src/server/sound-live.ts).
+    if (wantsVoiceFirst(asked) && !soundLive()["clean-voice-first"]) return refuse(403, OWN_GPU_TOOL_MESSAGE, { code: "own-gpu-tool" });
+    const extra = asked.params?.extra?.openjutsu;
+    const needs = directRunFeatures(asked.modelId, extra && typeof extra === "object" ? (extra as Record<string, unknown>) : {});
+    if (needs) {
+      const live = genjutsuLive();
+      if (needs.some((f) => !live[f])) return refuse(403, OWN_GPU_TOOL_MESSAGE, { code: "own-gpu-tool" });
+    }
+  }
   let req = account ? { ...asked, account: account.id, engine: accountEngineMode(account.id) === "open" ? ("open" as const) : asked.engine } : { ...asked, account: undefined };
   const onOwn = <T,>(fn: () => T): T => (account ? asAccount(account.id, fn) : fn());
   // A visitor's price check: priced as it would run, as that visitor (an account: its own GPU and keys; a guest: the open
@@ -108,7 +130,7 @@ export async function POST(request: Request) {
     // Room on the server, room in the account's files, and a fair share of runs.
     if (!diskHasRoom()) return refuse(503, ACCOUNT_MESSAGES.diskLow);
     if (accountUsage(account.id).total >= accountTotalBytes(account.id)) return refuse(413, filesFullMessage(account.id));
-    if (activeRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, {}, { "Retry-After": "30" });
+    if (activeRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
     const rate = hit(`run:${account.id}`, ACCOUNT_LIMITS.runsPerHour, 60 * 60_000);
     if (!rate.ok) return refuse(429, ACCOUNT_MESSAGES.runRate, {}, { "Retry-After": String(rate.retryAfterS) });
     if ((req.params?.numOutputs ?? 1) > ACCOUNT_LIMITS.outputsPerRun) {
@@ -120,6 +142,22 @@ export async function POST(request: Request) {
     if (problem) {
       unhit(`run:${account.id}`);
       return refuse(problem.status, problem.error, { code: problem.code });
+    }
+  }
+  // Any Angle builds a photo's 3D view once for the owner or an account (src/server/any-angle.ts): a second build of the
+  // same photo, under any file name, gets the first one (running or done) and costs nothing.
+  if (!preview && req.modelId === ANY_ANGLE.buildModel) {
+    const key = await onOwn(() => requestViewKey(req));
+    if (key) {
+      const built = findView(key, account?.id);
+      const g = built ? getGeneration(built) : null;
+      if (g) {
+        if (account) unhit(`run:${account.id}`);
+        return Response.json({ items: [g] }, { status: 201 });
+      }
+      // The build takes nothing but the photo (fixed seeds, src/lib/catalog/any-angle.ts): other params are dropped, so
+      // the view a key finds is always the one this request would build.
+      req = { ...req, params: { extra: { viewKey: key } } };
     }
   }
   try {
@@ -146,7 +184,7 @@ export async function POST(request: Request) {
       const lim = onPool.policy.limits;
       if (lim.activeRuns > 0 && activeRuns(account.id) >= lim.activeRuns) {
         unhit(`run:${account.id}`);
-        return refuse(429, ACCOUNT_MESSAGES.activeRuns, {}, { "Retry-After": "30" });
+        return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
       }
       if (lim.outputsPerRun > 0 && (req.params?.numOutputs ?? 1) > lim.outputsPerRun) {
         req = { ...req, params: { ...req.params, numOutputs: lim.outputsPerRun } };
@@ -183,7 +221,8 @@ export async function POST(request: Request) {
         }
         // A 3D model from someone else's ComfyUI is finished on this server (decimate, web GLB, turntable): accounts
         // don't get Image to 3D until that finish runs under an account's own limits.
-        if (account && outputKind(planned.op, planned.model) === "model3d") {
+        // (Any Angle's 3D view is a splat and its turntable: nothing to finish, so an account builds it on its own GPU.)
+        if (account && outputKind(planned.op, planned.model) === "model3d" && planned.model.id !== ANY_ANGLE.buildModel) {
           unhit(`run:${account.id}`);
           return Response.json({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, { status: 403 });
         }
@@ -222,7 +261,7 @@ export async function POST(request: Request) {
     if (account && activeRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) {
       unhit(`run:${account.id}`);
       if (stamp?.hold) queueRelease(stamp.hold);
-      return refuse(429, ACCOUNT_MESSAGES.activeRuns, {}, { "Retry-After": "30" });
+      return refuse(429, ACCOUNT_MESSAGES.activeRuns, { code: ACTIVE_RUNS_CODE }, { "Retry-After": "30" });
     }
     const make = () => createGenerations(req);
     let items: ReturnType<typeof createGenerations>;

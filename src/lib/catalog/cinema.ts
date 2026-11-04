@@ -231,7 +231,7 @@ export interface CinemaGenerateInput {
   /** # camera moves, in order. */
   moves?: string[];
   /**
-   * The first move as an exact orbit (build plan N7-7): an orbit move (drone-orbit, arc-left, arc-right, bullet-time) with
+   * The first move as an exact orbit: an orbit move (drone-orbit, arc-left, arc-right, bullet-time) with
    * the Exact switch on follows these numbers instead of a LoRA's or the prompt's idea of an orbit.
    */
   exact?: Partial<ExactOrbit>;
@@ -1533,7 +1533,7 @@ function clipModel(model: ModelDef, input: CinemaGenerateInput, notes: string[])
 }
 
 /**
- * An exact orbit (build plan N7-7): the first move, an orbit with the Exact switch on, filmed from the start frame along
+ * An exact orbit: the first move, an orbit with the Exact switch on, filmed from the start frame along
  * the orbit's numbers as Fly around plans it (src/lib/catalog/fly-around.ts): H3 Max camera-controls on the cloud; on your
  * GPU, MoGe 2's depth, the server's render of the path and Uni3C. The other moves and the Director's words stay words.
  */
@@ -1842,7 +1842,7 @@ function planLocationView(input: CinemaGenerateInput): CinemaPlan {
       params: { numOutputs: 1, extra: { horizontal_angle: view.pose.horizontal, vertical_angle: view.pose.vertical, zoom: view.pose.zoom } },
     };
   } else if (input.modelId === QMA_MODEL && getModel(QMA_MODEL)) {
-    // QMA · 96 views (qma-angles): Qwen-Image 2.1 with the QMA LoRA moves the camera to the view's pose (its nearest of 96).
+    // QMA · 96 views: Qwen-Image 2.1 with the QMA LoRA moves the camera to the view's pose (its nearest of 96).
     model = getModel(QMA_MODEL)!;
     request = {
       feature: "cinema-location",

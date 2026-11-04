@@ -6,7 +6,7 @@ import { browserSupport, pageCanReach } from "@/lib/local-comfy";
 
 /**
  * Opening "Connect your GPU" (GuestPrompt) from anywhere, and whether this browser can use the ComfyUI on its computer.
- * Kept small: the sidebar and the header pill use it without loading the finder or the runner.
+ * Kept small: the account menu and the header pill use it without loading the finder or the runner.
  */
 
 /** Why the "Connect your GPU" card opens from the runner: ComfyUI needs the setting again, find ComfyUI, or allow this browser. */

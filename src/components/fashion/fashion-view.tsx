@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Library, Loader2, RefreshCw, RotateCcw, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Library, Loader2, RefreshCw, RotateCcw, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
@@ -25,7 +25,6 @@ import { useStoredReducer } from "./stored";
 import { TemplatePreview } from "./template-preview";
 
 const LABELS = ["Select a template", "Character", "Generation", "Clothing", "Photoset"];
-const BANNER_KEY = "fuobe.fashion.banner";
 /**
  * The outfit and photoset models' names (FASHION_MODELS has each step's per engine): Fuobe Try-On (the Original, FLUX.2
  * [klein] 4B + a try-on LoRA), the Qwen-Image and Krea 2 edit models, partners after.
@@ -39,36 +38,6 @@ const MODEL_LABELS: Record<string, string> = {
   "oss-qwen-image-21-turbo": "Qwen-Image 2.1 Turbo",
   "oss-krea2-identity-edit": "Krea 2 Identity Edit",
 };
-
-const bannerListeners = new Set<() => void>();
-function readBanner(): boolean {
-  try {
-    return localStorage.getItem(BANNER_KEY) === "1";
-  } catch {
-    return true;
-  }
-}
-
-/** The first-visit banner: hidden on the server and until the browser says it hasn't been seen. */
-function useBannerSeen(): [boolean, () => void] {
-  const seen = useSyncExternalStore(
-    (cb) => {
-      bannerListeners.add(cb);
-      return () => bannerListeners.delete(cb);
-    },
-    readBanner,
-    () => true,
-  );
-  return [
-    seen,
-    () => {
-      try {
-        localStorage.setItem(BANNER_KEY, "1");
-      } catch {}
-      bannerListeners.forEach((l) => l());
-    },
-  ];
-}
 
 /** /fashion-factory: template → character → pick 1 of 4 base shots → outfit → photoset. */
 export function FashionView() {
@@ -88,7 +57,6 @@ export function FashionView() {
   const outfitModel = pickedOutfit && outfitModels.includes(pickedOutfit) ? pickedOutfit : outfitModels[0];
   const setModels = choices(FASHION_MODELS.photoset[engine]);
   const setModel = pickedSet && setModels.includes(pickedSet) ? pickedSet : setModels[0];
-  const [bannerSeen, hideBanner] = useBannerSeen();
   const { data } = useGenerations({ features: ["fashion"], limit: 200 });
   const base = useRun<Record<string, unknown>>("/api/photodump/fashion");
   const outfit = useRun<Record<string, unknown>>("/api/photodump/fashion");
@@ -154,17 +122,6 @@ export function FashionView() {
       </PageHeader>
       {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Fashion Factory isn&apos;t available here.</SelfHostNote>}
 
-      {!bannerSeen && at === 0 && (
-        <div className="relative mb-6 overflow-hidden rounded-2xl border bg-gradient-to-br from-brand-faint to-background p-5">
-          <button type="button" onClick={hideBanner} aria-label="Hide" className="absolute top-3 right-3 grid size-7 place-items-center rounded-full hover:bg-accent">
-            <X className="size-4" />
-          </button>
-          <Button className="mt-3" size="sm" onClick={hideBanner}>
-            Select template
-          </Button>
-        </div>
-      )}
-
       <div className="mb-6">
         <Steps steps={LABELS} current={at} reached={reached} onGo={(i) => dispatch({ type: "goto", step: FASHION_STEPS[i] })} />
       </div>
@@ -202,7 +159,7 @@ export function FashionView() {
               );
             })}
           </div>
-          <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
+          <div className="sticky bottom-[calc(var(--chrome-bottom)+0.75rem)] z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
             <p className="min-w-0 truncate text-[13px]">{t ? <span className="font-medium">{t.name}</span> : <span className="text-muted-foreground">Pick a template</span>}</p>
             <Button aria-disabled={!t} className={cn(!t && "opacity-50")} onClick={() => !block(fashionBlocker(s)) && dispatch({ type: "next" })}>
               Continue <ArrowRight />
@@ -335,7 +292,7 @@ function ModelChips({ label, ids, value, onChange }: { label: string; ids: reado
 
 function Footer({ onBack, line, children }: { onBack: () => void; line?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
+    <div className="sticky bottom-[calc(var(--chrome-bottom)+0.75rem)] z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
       <Button variant="outline" onClick={onBack}>
         <ArrowLeft /> Back
       </Button>

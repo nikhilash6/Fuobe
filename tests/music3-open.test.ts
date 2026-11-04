@@ -1,16 +1,15 @@
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import zlib from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { GenInput, ModelDef } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
-// nm10-music3 on the open engine: MiniMax Music 3 and YuE2 (songs and covers) on core ComfyUI nodes, bound for real; and the
+// Full songs on the open engine: MiniMax Music 3 and YuE2 (songs and covers) on core ComfyUI nodes, bound for real; and the
 // fal provider's song tools (a song sent first through Mureka's files/upload, stems unpacked from Mureka's zip) against a
 // stand-in fal.ai on this machine.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-music3-"));
+const dir = tempDir("fuobe-music3-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 
@@ -21,7 +20,8 @@ const { buildLicenceList, licenceInfo, workflowLicence } = await import("@/lib/l
 const { setSetting } = await import("@/server/settings");
 const { falProvider, stemsFromZip } = await import("@/server/providers/fal");
 const { zip } = await import("@/server/zip");
-const { saveFile } = await import("@/server/storage");
+const { saveFile, scratchOutputFile } = await import("@/server/storage");
+const { runAsTenant } = await import("@/server/tenant");
 const { createGenerations, getGeneration } = await import("@/server/generations");
 const { unzip } = await import("@/server/unzip");
 
@@ -150,7 +150,6 @@ describe("the fal provider's song tools", () => {
   afterAll(async () => {
     globalThis.__fuobeTestFalUrl = undefined;
     await new Promise<void>((r) => server.close(() => r()));
-    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   const model = (id: string) => getModel(id)!;
@@ -215,7 +214,21 @@ describe("the fal provider's song tools", () => {
       ["vocals", "audio/mpeg", "audio"],
       ["drums", "audio/wav", "audio"],
     ]);
-    expect(Buffer.from(r.outputs[0].url.split(",")[1], "base64").toString()).toBe("ID3vocals");
+    // Each stem is a file in the scratch folder, not a data: URL held in memory.
+    expect(r.outputs.every((o) => /^scratch:out-[\w-]{21}\.(mp3|wav)$/.test(o.url))).toBe(true);
+    expect(fs.readFileSync(scratchOutputFile(r.outputs[0].url)!, "utf8")).toBe("ID3vocals");
+    expect(scratchOutputFile("scratch:../db.sqlite")).toBeNull();
+  });
+
+  it("unpacks an account's stems within its limits, and refuses an account's zip from this machine", async () => {
+    const asAccount = <T,>(fn: () => Promise<T>) => runAsTenant({ kind: "account", id: "acct-stems-test" }, fn);
+    // The stand-in fal.ai: read, and unpacked to scratch files as for the owner.
+    const outs = await asAccount(() => stemsFromZip(`${base}/stems.zip`));
+    expect(outs.map((o) => o.meta.stem)).toEqual(["vocals", "drums"]);
+    expect(outs.every((o) => scratchOutputFile(o.url))).toBe(true);
+    await expect(asAccount(() => stemsFromZip(`${base}/stems.zip`, { maxBytes: 16 }))).rejects.toThrow(/larger than Fuobe keeps/);
+    // Any other address on this machine: refused before anything is read.
+    await expect(asAccount(() => stemsFromZip("http://127.0.0.1:9/stems.zip"))).rejects.toThrow(/won't fetch/);
   });
 
   it("reads an archive's files, and refuses a damaged or oversized one", async () => {

@@ -85,8 +85,8 @@ export interface StudioConfig {
    */
   voiceFacts?: boolean;
   /**
-   * "Clean the voice first" (src/lib/av/voice-first.ts): a switch under the files when the speech is attached, so the
-   * transcript or lip sync runs on the speech alone (Transcribe, Lipsync & avatars).
+   * "Clean the voice first" beside the voice or recording (src/lib/av/voice-first.ts): the speech apart from the music and
+   * effects before the model hears it (params.extra.cleanVoiceFirst); after a lip re-sync on your GPU, they go back.
    */
   voiceFirst?: boolean;
   /**

@@ -47,6 +47,14 @@ export type RecipeKind = "h3" | "orbit" | "qwen";
  * - Remove Background, Upscale, Vectorize, Video Background Remover, Image to 3D: tools whose result (a cut-out, more
  *   pixels, an SVG, a matte, a mesh) only their own model makes; their previews show the idea.
  * - Clean up voice: a tool of its own (RE-USE), with nothing to recast.
+ * - Any Angle: a tool of its own (a 3D view of the photo, then each angle from it on the GPU).
+ * - Tap to Recolor: a tool of its own, whose taps make the mask its graph repaints.
+ * - Steam It: its own graph finds the clothes and repaints only them, so every other pixel stays the upload's.
+ * - Restore Photo: its Restore LoRA keeps every face and the framing, where a plain edit redraws them.
+ * - Head Swap: the whole head, hair included, comes from its own head LoRA; a plain edit keeps the first hair.
+ * - Outfit Swap: its Outfit Swap LoRA keeps everything but the clothes in place, where a plain edit moves the picture.
+ * - Photo to 3D: only its own graph makes the GLB, the splat and the orbit clip together.
+ * - Watermark Remover: a tool of its own (scan, keep, remove) that changes nothing outside the marks.
  */
 export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-fuobe-angles",
@@ -63,6 +71,14 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-video-background-remover",
   "app-image-to-3d",
   "app-clean-up-voice",
+  "app-any-angle",
+  "app-tap-to-recolor",
+  "app-steam-it",
+  "app-restore-photo",
+  "app-head-swap",
+  "app-outfit-swap",
+  "app-photo-to-3d",
+  "app-watermark-remover",
 ]);
 
 /**

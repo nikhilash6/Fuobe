@@ -35,17 +35,15 @@ import { ErrorState, NotFoundState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { fileToSlot } from "@/components/studio/media-slot";
 import { Viewer } from "@/components/studio/viewer";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
-import { useElements, useEngine, useIsVisitor, useStatus, type EngineMode } from "@/lib/api";
+import { useElements, useEngine, useStatus, type EngineMode } from "@/lib/api";
 import { getModel } from "@/lib/catalog";
-import { stemLabel, type StemId } from "@/lib/av/split";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import {
   BOARD_LIMITS,
@@ -79,8 +77,6 @@ import {
   nodeLabel,
   OPEN_DUB_HINT,
   OUT,
-  outputPorts,
-  stemOutput,
   outputType,
   paletteItems,
   planCanvas,
@@ -99,6 +95,7 @@ import type { Engine, MediaKind, ModelDef } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { useModKey } from "@/lib/keys";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import {
   buildViews,
@@ -119,6 +116,8 @@ import { NODE_TYPES, type FlowNode } from "./nodes";
 import { AddMenu, DRAG_TYPE, Palette, PaletteToggle } from "./palette";
 import { BoardToolbar, PAGE_PANEL_ID, PageTabs, pageTabId, TOOL_KEYS, type DragShape, type PageOps, type Tool } from "./toolbar";
 import { saveCanvas, useCanvasView, useRunCanvas, type CanvasView } from "./use-canvas";
+import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
+import { KINETIC_RUN_EVENT } from "./kinetic-node";
 
 const GRID: [number, number] = [16, 16];
 const snap = (p: { x: number; y: number }) => ({ x: Math.round(p.x / GRID[0]) * GRID[0], y: Math.round(p.y / GRID[1]) * GRID[1] });
@@ -212,7 +211,7 @@ export function CanvasEditor({ id }: { id: string }) {
 
 function EditorSkeleton() {
   return (
-    <div className="flex h-svh flex-col md:h-[calc(100svh-0.5rem)]">
+    <div className="flex h-content flex-col">
       <div className="flex h-14 items-center gap-3 border-b px-3 sm:px-4">
         <Skeleton className="h-6 w-48" />
         <Skeleton className="ml-auto h-8 w-24 rounded-full" />
@@ -410,6 +409,12 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     },
     [id, qc, docOf],
   );
+  // ---- Save as skill (W5): the board saved first, so the skill is made from what's on screen.
+  const skillBuilder = useSkillBuilder();
+  const saveAsSkill = useCallback(async () => {
+    await save();
+    skillBuilder?.openCanvas(id, latest.current.pageId);
+  }, [id, save, skillBuilder]);
   useEffect(() => {
     if (rev === 0) return;
     const t = setTimeout(() => void save(), 700);
@@ -602,9 +607,9 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
         const g = toGraph([...latest.current.nodes, node], latest.current.edges);
         const c: Connection =
           connect.from === "source"
-            ? { source: connect.nodeId, sourceHandle: connect.handleId ?? OUT, target: node.id, targetHandle: item.type === "output" ? PREVIEW_IN : (inputPorts(toGraph([node], []).nodes[0]).find((p) => acceptsType(p, connect.type))?.id ?? null) }
+            ? { source: connect.nodeId, sourceHandle: OUT, target: node.id, targetHandle: item.type === "output" ? PREVIEW_IN : (inputPorts(toGraph([node], []).nodes[0]).find((p) => acceptsType(p, connect.type))?.id ?? null) }
             : { source: node.id, sourceHandle: OUT, target: connect.nodeId, targetHandle: connect.handleId };
-        if (c.targetHandle && !connectionError(g, c, mode)) {
+        if (c.targetHandle && !connectionError(g, c)) {
           setEdges((es) => [...(singleInput(g, c.target, c.targetHandle) ? es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle)) : es), { id: newId("e"), ...c }]);
         }
       }
@@ -656,17 +661,17 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     },
     [touch],
   );
-  const isValidConnection = useCallback((c: Connection | Edge) => !connectionError(toGraph(latest.current.nodes, latest.current.edges), c, mode), [mode]);
+  const isValidConnection = useCallback((c: Connection | Edge) => !connectionError(toGraph(latest.current.nodes, latest.current.edges), c), []);
   const onConnect = useCallback(
     (c: Connection) => {
       const g = toGraph(latest.current.nodes, latest.current.edges);
-      const err = connectionError(g, c, mode);
+      const err = connectionError(g, c);
       if (err) return void toast.error(err);
       // A single input (start frame, video, audio…) takes the new edge instead of the old one.
       setEdges((es) => [...(singleInput(g, c.target, c.targetHandle) ? es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle)) : es), { id: newId("e"), ...c }]);
       touch();
     },
-    [touch, mode],
+    [touch],
   );
   const disconnect = useCallback(
     (edgeId: string) => {
@@ -696,12 +701,11 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
       const from = g.nodes.find((n) => n.id === state.fromNode!.id);
       if (!from) return;
       const fromSource = state.fromHandle?.type === "source";
-      // A Split soundtrack stem (or any node's OUT): the type of the handle the drag started from.
-      const type = fromSource ? outputPorts(g, from, mode).find((p) => p.id === (state.fromHandle?.id ?? OUT) && !p.disabled)?.type : inputPorts(from).find((p) => p.id === state.fromHandle?.id)?.type;
+      const type = fromSource ? outputType(g, from) : inputPorts(from).find((p) => p.id === state.fromHandle?.id)?.type;
       if (!type) return;
       openMenuAt(pt.clientX, pt.clientY, { nodeId: from.id, handleId: state.fromHandle?.id ?? null, from: fromSource ? "source" : "target", type });
     },
-    [openMenuAt, mode],
+    [openMenuAt],
   );
 
   const palette = useMemo(() => paletteItems(mode, engine), [mode, engine]);
@@ -729,6 +733,8 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
           { page: latest.current.pageId, targets: t, group, force: f, pages: docOf() },
           {
             onSuccess: (r) => {
+              // Kinetic nodes render in this tab: they start now, each waiting for what feeds it.
+              if (!group) window.dispatchEvent(new CustomEvent(KINETIC_RUN_EVENT, { detail: { canvasId: id, targets: t, ran: r.ran ?? [], errors: r.errors ?? [] } }));
               // The run saved the whole canvas as it was at `at`.
               savedRev.current = Math.max(savedRev.current, at);
               if (latest.current.rev === savedRev.current) setSaveState("saved");
@@ -746,7 +752,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
       };
       go(targets, force);
     },
-    [runMutate, docOf],
+    [runMutate, docOf, id],
   );
 
   /**
@@ -798,12 +804,9 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     touch();
     toast(moved ? `Added as an input, connected where “${nodeLabel(toGraph([src], []).nodes[0])}” was` : "Added as an input — connect it anywhere");
   };
-  /** `stem`: one of a Split soundtrack's stems, named on the new input ("Music from Split soundtrack"). */
-  const toInput = (nodeId: string, stem?: StemId) => {
-    const outputs = results.get(nodeId)?.outputs ?? [];
-    const o = stem ? stemOutput(outputs.map((x) => x.o), stem) : outputs.find((x) => KIND_INPUT[x.o.kind])?.o;
-    const src = latest.current.nodes.find((n) => n.id === nodeId);
-    if (o && src) addInput(nodeId, { url: o.url, kind: o.kind, ...(stem && { label: `${stemLabel(stem)} from ${nodeLabel(toGraph([src], []).nodes[0])}` }) });
+  const toInput = (nodeId: string) => {
+    const out = results.get(nodeId)?.outputs.find((x) => KIND_INPUT[x.o.kind]);
+    if (out) addInput(nodeId, { url: out.o.url, kind: out.o.kind });
   };
 
   /** One clip of a Video concatenator: merged into what the node holds now (several clips report their lengths at once). */
@@ -1239,14 +1242,6 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     .filter(Boolean)
     .join(" · ");
 
-  // ---- Save as skill (W5): the board as it stands is saved first, then drafted on the server
-  const skillBuilder = useSkillBuilder();
-  const visitor = useIsVisitor();
-  const saveAsSkill = async () => {
-    await save();
-    skillBuilder?.openCanvas(id, latest.current.pageId);
-  };
-
   // ---- what the header and the palette call: stable, so they skip the re-render a keystroke causes
   const uiHandlers = useRef<{
     run: typeof run;
@@ -1261,12 +1256,12 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
   });
   const ui = useMemo<HeaderUi>(
     () => ({
+      saveAsSkill: () => void uiHandlers.current!.saveAsSkill(),
       run: (targets, force) => uiHandlers.current!.run(targets, force),
       runSelected: (force) => uiHandlers.current!.runSelection(force),
       switchEngine: (e) => uiHandlers.current!.switchEngine(e),
       rename: (v) => void uiHandlers.current!.rename(v),
       addAtCenter: (p) => uiHandlers.current!.addAtCenter(p),
-      saveAsSkill: () => void uiHandlers.current!.saveAsSkill(),
     }),
     [],
   );
@@ -1278,7 +1273,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
   return (
     <EditorStoreContext.Provider value={store}>
       <EditorActionsContext.Provider value={actions}>
-        <div className="fuobe-canvas flex h-svh min-w-0 flex-col md:h-[calc(100svh-0.5rem)]">
+        <div className="fuobe-canvas flex h-content min-w-0 flex-col">
           <EditorHeader
             name={name}
             setName={setName}
@@ -1289,22 +1284,21 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
             boardEngine={boardEngine}
             selectedCount={isMobile ? 0 : selected.length}
             running={runM.isPending}
-            canRun={generators.length > 0}
-            canSaveSkill={!!skillBuilder && !visitor}
+            canRun={generators.length > 0 || graph.nodes.some((n) => n.type === "kinetic")}
             mode={mode}
             ui={ui}
           />
 
           {isMobile && (
             <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
-              <div className="inline-grid h-9 grid-cols-2 rounded-full bg-muted p-0.5 text-[13px] font-medium" role="tablist" aria-label="View">
+              <TabRow role="tablist" aria-label="View" fade={false}>
                 {(["board", "list"] as const).map((t) => (
-                  <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("inline-flex items-center gap-1.5 rounded-full px-3.5", tab === t ? "bg-background shadow-soft" : "text-muted-foreground")}>
-                    {t === "board" ? <LayoutGrid className="size-3.5" /> : <List className="size-3.5" />}
+                  <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={TAB_PILL} {...onAttr(tab === t)}>
+                    {t === "board" ? <LayoutGrid aria-hidden /> : <List aria-hidden />}
                     {t === "board" ? "Board" : "Nodes"}
                   </button>
                 ))}
-              </div>
+              </TabRow>
               {pages.length > 1 && (
                 <select value={pageId} onChange={(e) => pageOps.switchTo(e.target.value)} aria-label="Page" className="h-9 max-w-32 shrink-0 truncate rounded-full bg-muted px-3 text-[13px] font-medium outline-none">
                   {pages.map((p) => (
@@ -1500,12 +1494,13 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
 // the board doesn't re-render its menus and tooltips.
 
 interface HeaderUi {
+  /** The review screen for a skill made from this page of the canvas (W5), once the board is saved. */
+  saveAsSkill: () => void;
   run: (targets?: string[], force?: boolean) => void;
   runSelected: (force?: boolean) => void;
   switchEngine: (e: Engine) => void;
   rename: (name: string) => void;
   addAtCenter: (p: PaletteItem) => void;
-  saveAsSkill: () => void;
 }
 
 const EditorHeader = memo(function EditorHeader({
@@ -1519,7 +1514,6 @@ const EditorHeader = memo(function EditorHeader({
   selectedCount,
   running,
   canRun,
-  canSaveSkill,
   mode,
   ui,
 }: {
@@ -1533,14 +1527,12 @@ const EditorHeader = memo(function EditorHeader({
   selectedCount: number;
   running: boolean;
   canRun: boolean;
-  canSaveSkill: boolean;
   mode: EngineMode;
   ui: HeaderUi;
 }) {
   const mod = useModKey();
   return (
     <header className="z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-2 sm:px-4">
-      <SidebarTrigger className="md:hidden" />
       <Tooltip>
         <TooltipTrigger asChild>
           <Link href="/canvas" className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="All canvases">
@@ -1620,18 +1612,15 @@ const EditorHeader = memo(function EditorHeader({
               <DropdownMenuItem disabled={mode === "open"} onSelect={() => ui.switchEngine("cloud")}>
                 <Cloud /> Switch all to cloud
               </DropdownMenuItem>
-              {canSaveSkill && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => ui.saveAsSkill()}>
-                    <BookmarkPlus /> Save as skill…
-                  </DropdownMenuItem>
-                </>
-              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => ui.saveAsSkill()}>
+                <BookmarkPlus /> Save as skill…
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
+      <PhoneNavButton />
     </header>
   );
 });

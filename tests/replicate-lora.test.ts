@@ -1,21 +1,18 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getModel, getPreset, PRESETS } from "@/lib/catalog";
 import { fitLoras, loraEntry, loraRef } from "@/lib/catalog/loras";
 import { planGeneration } from "@/lib/catalog/plan";
 import type { Generation, GenInput, LoraRef, ModelRoute } from "@/lib/catalog/types";
 import { onEngine } from "@/lib/catalog/engines";
+import { tempDir } from "./helpers/temp-dir";
 
 // Providers and route choice read keys and preferences from the settings table: a throwaway database.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-replicate-lora-"));
+const dir = tempDir("fuobe-replicate-lora-");
 process.env.FUOBE_DATA_DIR = dir;
 const { replicateProvider } = await import("@/server/providers/replicate");
 const { setSetting } = await import("@/server/settings");
 const { chooseRoute, createGenerations, getGeneration, previewGeneration } = await import("@/server/generations");
 const { changeAccess } = await import("@/server/model-access");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function submit(route: ModelRoute, input: GenInput): Promise<{ url: string; body: Record<string, unknown> }> {
   const real = globalThis.fetch;
@@ -157,9 +154,9 @@ describe("Replicate LoRA payloads", () => {
   it("returns what a run leaves out with the generations it creates", async () => {
     setSetting("demoMode", "on");
     const wiggle = loraRef(loraEntry("civitai-2490836-wiggle-redmond")!);
-    // Sent (the licence is information, said in the notes)...
+    // Sent (its licence is information, on Thanks & licences, not a note)...
     const [sent] = createGenerations({ feature: "image", modelId: "z-image-turbo-cloud", prompt: "a cat", loras: [wiggle] });
-    expect(sent.notes).toEqual(["Wiggle Redmond: its licence allows your GPU only (civitai lists no “Rent”); it runs in the cloud because Settings → Models & licences lets such LoRAs go there"]);
+    expect(sent.notes ?? []).toEqual([]);
     // ...or left out while the admin keeps LoRAs licensed for the GPU only there.
     changeAccess([{ kind: "keepGpuOnlyLoras", on: true }]);
     const [g] = createGenerations({ feature: "image", modelId: "z-image-turbo-cloud", prompt: "a cat", loras: [wiggle] });

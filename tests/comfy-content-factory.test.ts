@@ -1,21 +1,18 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 import type { MediaInfo } from "@/lib/media-probe";
 import { parseBrief } from "@/lib/catalog/content-factory";
+import { tempDir } from "./helpers/temp-dir";
 
 // Content Factory's open route (r4/content-factory): the reference clip → reference-brief-gemma4's bindings
 // (the clip, how much of it at 24 fps, where to start), and its SaveText answer → a text output the brief parser reads.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-content-factory-"));
+const tmp = tempDir("fuobe-comfy-content-factory-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow, getWorkflow, collectOutputs } = await import("@/server/providers/comfyui");
 const { getModel, getPreset } = await import("@/lib/catalog");
 const { planGeneration } = await import("@/lib/catalog/plan");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const ID = "reference-brief-gemma4";
 const clip = (duration: number): MediaInfo => ({ container: "mp4", hasVideo: true, hasAudio: true, duration, videoDuration: duration, width: 1080, height: 1920, fps: 30 });

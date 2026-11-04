@@ -1,9 +1,7 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { fakeLlm, type FakeLlm } from "./helpers/fake-llm";
+import { tempDir } from "./helpers/temp-dir";
 
 /*
  * The hosted providers' keys are the owner's secrets: they never appear in a response (settings, Assist's
@@ -14,7 +12,7 @@ import { fakeLlm, type FakeLlm } from "./helpers/fake-llm";
 
 vi.setConfig({ testTimeout: 60_000 });
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-llm-security-"));
+const dir = tempDir("fuobe-llm-security-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -59,9 +57,6 @@ afterAll(async () => {
   await ds.close();
   delete process.env.FUOBE_LLM_TEST_BASE;
   delete process.env.FUOBE_PUBLIC_SIGNUP;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 /** No key, and no long piece of one, anywhere in a body. */

@@ -8,10 +8,10 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { GUARD_FILE_NAME, GUARD_SOURCE, guardBase64, isGuard } from "@/lib/comfy-guard";
+import { tempDir } from "./helpers/temp-dir";
 
 function pythonWithAiohttp(): string | null {
   for (const exe of [process.env.FUOBE_TEST_PYTHON, "python3", "python"].filter(Boolean) as string[]) {
@@ -143,7 +143,7 @@ describe("Fuobe's guard for ComfyUI", () => {
   });
 
   const run = async (allowed: string) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-guard-"));
+    const dir = tempDir("fuobe-guard-");
     const guard = path.join(dir, GUARD_FILE_NAME);
     const harness = path.join(dir, "harness.py");
     fs.writeFileSync(guard, GUARD_SOURCE);

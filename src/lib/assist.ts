@@ -30,6 +30,11 @@ export interface PlannedJob {
   note?: string;
   /** One step of a pipeline: it only starts when every step can, so one error blocks the run. */
   atomic?: boolean;
+  /**
+   * The price is a guess: the job is priced by its input's length or size, and that input is an earlier step's result,
+   * which doesn't exist yet. A spending cap can't count on it (spendOf).
+   */
+  estimate?: boolean;
 }
 
 /** Whether an approval card's plan can run: something to run, and no pipeline with a broken step. */
@@ -118,10 +123,10 @@ export function threadTitle(text: string): string {
  * (tests/assist-suggestions.test.ts runs them through the offline planner).
  */
 export const ASSIST_SUGGESTIONS = [
-  "A 3-shot product ad for a matte black perfume bottle — hero still, then animate it",
-  "Four moody portraits of a lighthouse keeper, 35mm film, then pick the best and animate it",
-  "Storyboard a 6-frame heist in Paris at night",
-  "A 10-second vertical video of a fox running through snow, with sound",
+  "A 3-shot ad for a gold watch on a model's wrist on a Lake Como terrace — hero still, then animate it",
+  "Four moody portraits of a model in a black velvet suit, 35mm film, then pick the best and animate it",
+  "Storyboard a 6-frame escape from a Venice masquerade ball at midnight",
+  "A 10-second vertical video of a model in a red silk gown running through falling snow at night, with sound",
 ] as const;
 
 /** The longest prompt a link can type into a new chat (/assist?prompt=). */
@@ -195,7 +200,7 @@ export interface AssistModelOption {
   /** "$2 in, $10 out per million tokens", "Free · 20 a minute, 50 a day". */
   price: string;
   note?: string;
-  /** "Open weights · MIT · runs on DeepSeek's servers". */
+  /** "Open weights · runs on DeepSeek's servers". */
   open?: string;
   caveat?: string;
   sees: boolean;

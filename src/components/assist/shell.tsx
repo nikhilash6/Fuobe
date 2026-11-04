@@ -25,7 +25,7 @@ import { ProjectDot } from "./project-dot";
 export function AssistShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-1">
-      <aside className="sticky top-0 hidden h-svh w-64 shrink-0 flex-col border-r bg-sidebar/40 xl:flex md:h-[calc(100svh-0.5rem)]" aria-label="Assist">
+      <aside className="sticky top-chrome hidden h-content w-64 shrink-0 flex-col border-r bg-sidebar/40 xl:flex" aria-label="Assist">
         <Suspense fallback={<RailSkeleton />}>
           <Rail />
         </Suspense>

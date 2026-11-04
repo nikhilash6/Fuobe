@@ -1,4 +1,4 @@
-// qma-angles in a real browser. The app must run in demo mode with ComfyUI unreachable
+// QMA camera angles in a real browser. The app must run in demo mode with ComfyUI unreachable
 // (FUOBE_DEMO_MODE=on COMFYUI_URL=http://127.0.0.1:9). Usage: node tests/e2e/qma-angles.mjs [appUrl] [--shots=dir].
 //
 // At 1440 px and 390 px, in light and in dark, on your GPU:
@@ -14,7 +14,7 @@ import path from "node:path";
 import { DESKTOP, PHONE, chromiumPath, loadPlaywright, root } from "./_browser.mjs";
 
 const args = process.argv.slice(2);
-const app = (args.find((a) => !a.startsWith("--")) ?? "http://localhost:3000").replace(/\/$/, "");
+const app = (args.find((a) => !a.startsWith("--")) ?? "http://localhost:3440").replace(/\/$/, "");
 const shots = args.find((a) => a.startsWith("--shots="))?.slice(8);
 if (shots) fs.mkdirSync(shots, { recursive: true });
 const { chromium } = loadPlaywright();

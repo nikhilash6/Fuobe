@@ -18763,7 +18763,7 @@
    "original": {
     "model": "fuobe-evolution",
     "added": "2026-10-29 (build plan O13)",
-    "source": "Fuobe's own recipe for Higgsfield Evolution's Original, from build plan O13 (denoise by intensity, an LLM-written direction). The cloud half moved on 2026-11-01 (package owner-calls-1, the owner's call of 2026-10-30) from LTX-2.3 22B video-to-video (a different model) to fal's hosted Wan 2.2 Fun VACE depth, the GPU recipe's model; its schema was read again that day (hostedBaseEndpoints[fal-ai/wan-22-vace-fun-a14b/depth]). Unmeasured until the evaluation harness (O8) runs the evolution suite on a GPU and on fal.",
+    "source": "Fuobe's own recipe for Higgsfield Evolution's Original, from build plan O13 (denoise by intensity, an LLM-written direction). The cloud half moved on 2026-11-01 (decided 2026-10-30) from LTX-2.3 22B video-to-video (a different model) to fal's hosted Wan 2.2 Fun VACE depth, the GPU recipe's model; its schema was read again that day (hostedBaseEndpoints[fal-ai/wan-22-vace-fun-a14b/depth]). Unmeasured until the evaluation harness (O8) runs the evolution suite on a GPU and on fal.",
     "intensity": {
      "low": 0.45,
      "medium": 0.65,
@@ -18790,7 +18790,7 @@
      "segments": "Fuobe Shorts' cloud pieces: equal pieces of at most 10 s and 241 frames as fal works them (a clip above 30 fps worked at a whole fraction of its rate with temporal_downsample_factor and brought back), each cut with fal's trim-video unless it is the whole clip",
      "directionFrame": "per piece, its first frame (fal's extract-frame) taken toward the direction by hosted Qwen-Image-Edit 2511 with the GPU's frame instruction for the intensity and the first 3 references as images 2–4, as the GPU recipe does with its own edit step",
      "video": "Wan 2.2 Fun VACE depth: video_url = the piece (preprocess on, so fal derives the depth itself), ref_image_urls = [the direction frame], the direction as the prompt; frames and rate match the piece; no first_frame_url",
-     "frameRole": "the direction frame goes as the VACE reference (ref_image_urls), as the GPU graph uses it (video-evolution-wan22-fun-vace node 15 WanVaceToVideo: reference_image = the direction frame, control_video = the depth); first_frame_url is not sent, so frame 0 isn't pinned to the frame, which the GPU doesn't do either (decided 2026-11-01 in package owner-calls-1's fix: the first build sent first_frame_url only, as Fuobe Shorts does; Shorts keeps it, its own recipe pins the restyled first frame). Unmeasured: the evolution eval suite can compare the two once paid keys exist",
+     "frameRole": "the direction frame goes as the VACE reference (ref_image_urls), as the GPU graph uses it (video-evolution-wan22-fun-vace node 15 WanVaceToVideo: reference_image = the direction frame, control_video = the depth); first_frame_url is not sent, so frame 0 isn't pinned to the frame, which the GPU doesn't do either (decided 2026-11-01; Fuobe Shorts sends first_frame_url and keeps it, its own recipe pins the restyled first frame). Unmeasured: the evolution eval suite can compare the two once paid keys exist",
      "intensity": "the endpoint has no strength or denoise field (31 inputs, read 2026-11-01): in the cloud the change level reaches the direction frame's instruction only (refine gently / change / reimagine boldly; low and medium keep the people), and the clip reaches the model only as its depth, so how much of the clip's own look stays (the GPU's denoise) is set on the GPU only",
      "references": "the first 3 go into each piece's direction frame (images 2–4); the rest, and up to 8 in all with the clip's frame, shape the written direction",
      "resolutions": [
@@ -19183,7 +19183,7 @@
       "checked": "2026-11-01",
       "fal": "fal's model search lists three InfiniteTalk endpoints (fal-ai/infinitalk, fal-ai/infinitalk/video-to-video, fal-ai/infinitalk/single-text); their OpenAPI inputs (prompt, image_url or video_url, audio_url or text_input and voice, num_frames, resolution, seed, acceleration, enable_safety_checker) have no LoRA field, and fal-ai/infinitalk/lora doesn't exist (404)",
       "replicate": "no InfiniteTalk model found at the likely slugs (zsxkib/infinite-talk, zsxkib/infinitetalk, meigen-ai/infinitetalk, lucataco/infinitetalk, fofr/infinitetalk, camenduru/infinitetalk, wan-video/infinitetalk: 404); Replicate's search needs an API token, which this machine doesn't have, so a model under another name isn't ruled out. zsxkib/multitalk exists (MultiTalk, a different model)",
-      "result": "no hosted InfiniteTalk takes a LoRA: the cloud runs fal's InfiniteTalk without FusioniX, the GPU keeps it, and the UI says so (the owner's call of 2026-10-30)"
+      "result": "no hosted InfiniteTalk takes a LoRA: the cloud runs fal's InfiniteTalk without FusioniX, the GPU keeps it, and the UI says so (decided 2026-10-30)"
      }
     },
     "motion": {
@@ -19253,7 +19253,7 @@
      "edit": "fal-ai/qwen-image-edit-2511 (fal-ai/qwen-image-edit-2511/lora with LoRAs; Replicate qwen/qwen-image-edit-2511)",
      "t2i": "fal-ai/qwen-image-2512 (fal-ai/qwen-image-2512/lora with LoRAs)",
      "price": "$0.03 per megapixel for an edit, $0.035 with LoRAs; text to image $0.02 per megapixel",
-     "productShot": "none: the Standalone shot runs on the GPU only (the owner's 10-30 rule, package owner-calls-1's fix, 2026-11-01). fal hosts BiRefNet (fal-ai/birefnet/v2) and Qwen-Image-Edit 2509 with LoRAs by URL (fal-ai/qwen-image-edit-plus-lora, so the White_to_Scene LoRA could load), but no hosted step puts the cut-out on white: fal-ai/birefnet/v2 (output_mask, mask_only, refine_foreground) and fal-ai/bria/background/remove take no background colour (schemas read 2026-11-01), and the LoRA turns a product on white into a scene. The cloud's Standalone format lists the Original as running on your GPU only and starts on a partner; until this fix it made the shot as a plain 2511 edit"
+     "productShot": "none: the Standalone shot runs on the GPU only (the 2026-10-30 rule). fal hosts BiRefNet (fal-ai/birefnet/v2) and Qwen-Image-Edit 2509 with LoRAs by URL (fal-ai/qwen-image-edit-plus-lora, so the White_to_Scene LoRA could load), but no hosted step puts the cut-out on white: fal-ai/birefnet/v2 (output_mask, mask_only, refine_foreground) and fal-ai/bria/background/remove take no background colour (schemas read 2026-11-01), and the LoRA turns a product on white into a scene. The cloud's Standalone format lists the Original as running on your GPU only and starts on a partner; until this fix it made the shot as a plain 2511 edit"
     },
     "open": {
      "edit": "qwen-image-edit-2511-multi (up to 3 references: product, person, setting)",
@@ -19317,7 +19317,7 @@
   {
    "id": "archive-restore",
    "name": "Restore & colourise (archive footage)",
-   "higgsfield": "none: an owner request (2026-10-29), not a Higgsfield product",
+   "higgsfield": "none: a Fuobe original (2026-10-29), not a Higgsfield product",
    "original": {
     "model": "fuobe-restore",
     "recipe": "Lightricks' LTX Restore IC-LoRA card (Hugging Face Lightricks/LTX-2.5-22b-IC-LoRA-Restore at 79245e197a6cd3251e77d178dc380b0e9f2d6563)",
@@ -24517,6 +24517,28 @@
    "notes": "The camera-move LoRA behind Higgsfield Angles (higgsfield-originals-5.md §3.22). Its file is named 镜头转换.safetensors upstream; Fuobe keeps it under an ASCII name. It takes camera instructions in Chinese with English (rotate left / right by degrees, move forward or a close-up, bird's-eye or worm's-eye view, a wide-angle lens), which Fuobe Angles writes from its controls on the GPU. fal hosts the same LoRA (its LoRA gallery's multiple-angles route, lora_scale 1.25 and 6 steps by default) and builds the words itself. Strength 1.25, as fal and the public HF Space (linoyts/Qwen-Image-Edit-Angles) fuse it."
   },
   {
+   "key": "qwen-image-21-any-angle",
+   "name": "AnyAngle for Qwen-Image 2.1 (lilylilith)",
+   "url": "https://huggingface.co/lilylilith/QI_2.1_AnyAngle/resolve/main/QI2.1_AnyAngle.safetensors",
+   "page": "https://huggingface.co/lilylilith/QI_2.1_AnyAngle",
+   "file": "QI2.1_AnyAngle.safetensors",
+   "strength": 1.0,
+   "base": "qwen-image-2.1",
+   "licence": "Apache-2.0",
+   "commercial": true,
+   "hostedOk": true,
+   "download": "direct",
+   "released": "2026-09-28",
+   "revision": "5c8b4c8e05ba6328d54bf8d34ec724fef5a414ae",
+   "sha256": "e4d7a0d44a45ed62daabd0f2484a1a59046618a4c47e76b1eab5e386a7a35d8a",
+   "sizeBytes": 119590312,
+   "checked": "2026-11-02",
+   "usedBy": [
+    "oss-any-angle"
+   ],
+   "notes": "Any Angle's repaint: a rough render of a 3D view of the photo (image 2) becomes a finished photo at that camera, with the face, outfit, light and room of the original (image 1). Rank 24, bf16, ComfyUI keys (core LoraLoaderModelOnly, no conversion). Its own prompt, at strength 1: \"Change the camera angle from <image2> to <image1>.\" The any-angle-shot graph loads it itself; as a recipe LoRA it is downloaded and hash-checked before a run. Not hosted with Qwen-Image 2.1 anywhere Fuobe calls, so Any Angle runs on a GPU only."
+  },
+  {
    "key": "fusionix-i2v-14b",
    "name": "FusioniX for Wan 2.1 I2V 14B (vrgamedevgirl84)",
    "url": "https://huggingface.co/vrgamedevgirl84/Wan14BT2VFusioniX/resolve/main/FusionX_LoRa/Wan2.1_I2V_14B_FusionX_LoRA.safetensors",
@@ -24720,7 +24742,7 @@
     "fuobe-animation (keyframe in-betweening, the high-noise expert)"
    ],
    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high, end_image_url, num_frames 17-161)",
-   "notes": "The difference between bilibili's AniSora V3.2 (anime motion trained on Wan 2.2 I2V A14B) and the base high-noise expert, extracted at rank 64 by Kijai (file last changed in commit f32501d0, 2025-09-27). The source of the file the owner's 'Keyframes to Full Character Animation' graph loads at strength 1.0 on the high-noise expert, with the lightx2v 4-step LoRA on the low-noise expert, 4 steps at CFG 1 (high 0-2, low 2-end), shift 5. Only a high-noise file exists."
+   "notes": "The difference between bilibili's AniSora V3.2 (anime motion trained on Wan 2.2 I2V A14B) and the base high-noise expert, extracted at rank 64 by Kijai (file last changed in commit f32501d0, 2025-09-27). The source of the file the 'Keyframes to Full Character Animation' graph loads at strength 1.0 on the high-noise expert, with the lightx2v 4-step LoRA on the low-noise expert, 4 steps at CFG 1 (high 0-2, low 2-end), shift 5. Only a high-noise file exists."
   },
   {
    "key": "wan22-i2v-lightx2v-4step-low",

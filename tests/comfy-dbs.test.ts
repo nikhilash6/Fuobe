@@ -1,21 +1,20 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, Manifest, ManifestWorkflow } from "@/lib/comfy";
 import { installScript, nodeInstall } from "@/lib/comfy-install";
 import { ATTRIBUTIONS, licenceInfo, nodePack, workflowLicence } from "@/lib/licences";
 import type { DbsModel } from "@/lib/av/split";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // DBS D1's ground on the open engine: the pinned pack and weights, graph A (separate-soundtrack-dbs) in the manifest,
 // the folder models, the licence rows, and how the provider fills the model and channel bindings.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-dbs-"));
+const tmp = tempDir("fuobe-comfy-dbs-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { collectOutputs, comfyDbsModels, comfyDevice, prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "workflows/comfyui/manifest.json"), "utf8")) as Manifest;
@@ -304,7 +303,7 @@ describe("licences, as information", () => {
     expect(entry.notes).toMatch(/NC variants included; whether that reaches the weights or their outputs is unresolved/);
     // Still information: the workflow's licence row reads Apache-2.0, nothing is flagged or hidden for it.
     expect(licenceInfo(workflowLicence(entry)).class).toBe("commercial");
-    expect(ATTRIBUTIONS.filter((a) => a.licence === "MIT").map((a) => a.text)).toEqual([
+    expect(ATTRIBUTIONS.filter((a) => a.licence === "MIT" && a.for === "Dialogue, music and effects separation").map((a) => a.text)).toEqual([
       "BS-RoFormer, copyright (c) 2023 Phil Wang",
       "Music-Source-Separation-Training, copyright (c) 2024 Roman Solovyev (ZFTurbo)",
       "TIGER / Look2Hear, copyright (c) 2026 Kai Li",

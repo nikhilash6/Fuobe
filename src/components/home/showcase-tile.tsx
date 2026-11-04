@@ -8,7 +8,7 @@ import { thumbOf, type PresetCardData } from "@/lib/preset-cards";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 
-/** How wide a tile shows: half a phone, a quarter from sm, half again beside the sidebar from md, a quarter from lg. */
+/** How wide a tile shows: half a phone, a quarter from sm, half again from md, a quarter from lg. */
 const SIZES = "(min-width: 1024px) 25vw, (min-width: 768px) 50vw, (min-width: 640px) 25vw, 50vw";
 /** Where tiles 5 to 8 show (the wall has four columns): a tablet held upright, and a desktop. */
 const FOUR_UP = "(min-width: 640px) and (max-width: 767px), (min-width: 1024px)";

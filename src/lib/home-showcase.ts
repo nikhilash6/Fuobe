@@ -1,5 +1,5 @@
 /**
- * What Home shows below the composer: which presets, studios, models and skills, and every number it quotes, read
+ * What Home shows: which presets, studios, models and skills, and every number it quotes, read
  * from the catalog, the ComfyUI manifest and the skills folder, never typed in. Server only: the page gets slim
  * cards and strings, and the catalog stays here (tests/home-showcase.test.ts checks every id and number).
  */
@@ -13,6 +13,8 @@ import { CAMERA_MOVES } from "@/lib/catalog/cinema";
 import { TEMPLATES } from "@/lib/catalog/marketing";
 import type { ModelDef } from "@/lib/catalog/types";
 import type { Manifest } from "@/lib/comfy";
+import { homeBento, openModelsOf } from "@/lib/home-bento";
+import { studioCount } from "@/lib/nav-model";
 import { HUB_MODES } from "@/lib/hubs";
 import { modelHref } from "@/lib/palette-index";
 import { cacheLife } from "next/cache";
@@ -21,8 +23,8 @@ import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { onPeak, thumbOf, type PresetCardData } from "@/lib/preset-cards";
 
 /**
- * The wall under the composer: the first pictures a visitor sees, each with what it does, in a line that fits a
- * phone's tile (HOME_CAPTION_MAX.wall).
+ * Captions and kinds for these presets' tiles elsewhere (a studio's row of examples reads them: studio-examples.ts), in
+ * a line that fits a phone's tile (HOME_CAPTION_MAX.wall). Home itself opens on its first screen's grid (home-bento.ts).
  */
 export const HOME_WALL = [
   { id: "motion-crane-up", kind: "Camera motion", caption: "Rises over a pink lake" },
@@ -45,13 +47,13 @@ export const HOME_EFFECTS = [
   { id: "effect-lens-flare", caption: "An anamorphic flare sweeps the frame" },
   { id: "effect-dirty-lens", caption: "Rain beads on the lens as it drifts" },
   { id: "effect-levitation", caption: "They float up off the dune" },
-  { id: "effect-splash-transition", caption: "A splash carries it to the open sea" },
-  { id: "effect-architecture-wave", caption: "The city folds up behind them" },
+  { id: "effect-pearl-earring", caption: "Dressed as the Girl with a Pearl Earring" },
+  { id: "effect-aquarium", caption: "The room floods into an aquarium" },
   { id: "effect-shadow-smoke", caption: "Ink-dark smoke rises around them" },
   { id: "effect-car-drive", caption: "A drive along the coast road" },
-  { id: "effect-water-splash", caption: "A huge wave crashes over them" },
+  { id: "effect-building-explosion", caption: "The building behind them explodes" },
   { id: "effect-flood", caption: "Water and candles rise around them" },
-  { id: "effect-pool-jump", caption: "A backward leap into the pool" },
+  { id: "effect-northern-lights", caption: "An aurora ripples across the sky" },
 ];
 
 /** A phone's rail shows all twelve; a wider screen shows the first six (four from lg to xl), one row (home-sections.tsx). */
@@ -63,7 +65,7 @@ export const HOME_MOTIONS = [
   { id: "motion-crash-zoom-in", caption: "A crash zoom into the face" },
   { id: "motion-helicopter-shot", caption: "Circles high over the castle" },
   { id: "motion-super-dolly-out", caption: "From a close-up out to the whole valley" },
-  { id: "motion-360-orbit", caption: "A full circle around them" },
+  { id: "motion-aerial-pullback", caption: "Pulls back to reveal the hedge maze" },
   { id: "motion-car-chasing", caption: "Chasing the car at speed" },
   { id: "motion-crane-over-the-head", caption: "Rises over their head to the view" },
   { id: "motion-lazy-susan", caption: "They turn as if on a turntable" },
@@ -92,18 +94,20 @@ export const HOME_REVEALS = [
 ];
 
 /**
- * Studio cards: a real cover (a clip, or a still: Mixed Media's looks, Marketing's product shot and Image to 3D's
- * turntable shot) and one line each; Audio shows its tools instead of a picture.
+ * Studio cards: a real cover (a clip, or a still: Marketing's product shot and Image to 3D's
+ * turntable shot) and one line each. Audio’s is the demo its Clean up voice tool opens on (a studio without a cover
+ * would show its tools by name: AudioCard).
  */
 export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => string }[] = [
   { href: "/cinema", id: "motion-arc-left", line: (f) => `Direct a film shot by shot: camera, lens, light and ${f.cinemaMoves} moves.` },
-  { href: "/genjutsu", id: "effect-seamless-transition", line: () => "Keep a clip’s motion. Change what’s in it." },
+  { href: "/genjutsu", id: "effect-turning-metal", line: () => "Keep a clip’s motion. Change what’s in it." },
   { href: "/character-swap", id: "app-character-swap", line: () => "Put your character into whole clips, shot by shot." },
   { href: "/marketing", id: "app-macroshot-product", line: (f) => `From a product link to a finished ad. ${f.adTemplates} ad templates.` },
-  { href: "/mixed-media", id: "effect-magazine", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },
+  { href: "/mixed-media", id: "effect-paper", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },
   { href: "/motion-control", id: "motion-static", line: () => "Give anyone the moves from any clip." },
-  { href: "/audio", line: () => "Voices, music and sound for any clip, made or split apart." },
-  { href: "/image-to-3d", id: "app-3d-rotation", line: () => "A photo or a sentence to a 3D model you can spin." },
+  { href: "/audio", id: "app-clean-up-voice", line: () => "Voices, music and sound for any clip, made or split apart." },
+  // The collectible figure: the first screen's 3D tile plays the turning gown (home-bento.ts), and a clip plays in one place.
+  { href: "/image-to-3d", id: "app-3d-figure", line: () => "A photo or a sentence to a 3D model you can spin." },
 ];
 
 /** Destinations with a section of their own on Home, so they aren't pills as well. */
@@ -113,7 +117,7 @@ export const HOME_OWN_SECTIONS = ["/assist", "/motions", "/effects", "/apps", "/
 export const HOME_LIVE = {
   href: "/live-edit?from=home",
   title: "Change it as you type",
-  line: "Type a change and watch the picture follow in under a second. Keep what you like; nothing blurs, however many changes you stack.",
+  line: "Type a change and watch the picture follow, then keep adding to the words. Nothing blurs, however many changes you make.",
 };
 
 /** Assist's starter skills, as its empty chat lists them first (assist-view.tsx). */
@@ -142,8 +146,8 @@ export const HOME_NEW_OPEN = [
 ];
 
 /**
- * The chips under the composer. Each fills it with a prompt that looks like a cover on this page (Glam, FPV Drone
- * and Crane Up on the wall, Relight under Apps); nothing runs until Start. Whoever runs the studio gets Assist's chip in
+ * The chips under the composer. Each fills it with a prompt that looks like a picture on this page (the gold sequins
+ * on the first screen, Relight under Apps); nothing runs until Start. Whoever runs the studio gets Assist's chip in
  * place of the last (home-view.tsx): only the owner can use Assist.
  */
 export const HOME_TRY = [
@@ -176,7 +180,7 @@ export interface HomeFacts {
   apps: number;
   motions: number;
   effects: number;
-  /** Every place to create from the sidebar: Create (but Home) and Studios. */
+  /** Every place to create from the navigation: Create (but Home) and Studios. */
   destinations: number;
   cinemaMoves: number;
   adTemplates: number;
@@ -201,12 +205,12 @@ export function homeCard(id: string): PresetCardData {
 export const presetHref = (id: string) => (id.startsWith("app-") ? `/apps/${id}` : `/video?preset=${id}`);
 
 const navItems = (label: string) => NAV.find((g) => g.label === label)?.items ?? [];
-const navLabel = (href: string) => [...navItems("Create"), ...navItems("Studios")].find((i) => i.href === href)?.label ?? href;
+export const navLabel = (href: string) => [...navItems("Create"), ...navItems("Studios")].find((i) => i.href === href)?.label ?? href;
 
-/** The sidebar's places to create, but Home. */
+/** The navigation's places to create, but Home. */
 export const homeDestinations = () => [...navItems("Create"), ...navItems("Studios")].filter((i) => i.href !== "/");
 
-/** The places to create that have no card or section of their own on Home, in the sidebar's order. */
+/** The places to create that have no card or section of their own on Home, in the navigation's order. */
 export const homePills = () =>
   homeDestinations()
     .filter((i) => !HOME_OWN_SECTIONS.includes(i.href) && !HOME_STUDIOS.some((s) => s.href === i.href))
@@ -259,7 +263,7 @@ async function readSkills() {
 const captioned = ({ id, caption }: { id: string; caption: string }) => ({ card: homeCard(id), caption });
 
 /**
- * Everything Home shows below the composer, computed once per build (the page stays prerendered): all of it changes
+ * Everything Home shows, from its first screen down, computed once per build (the page stays prerendered): all of it changes
  * only with a deploy, so it's kept for as long as Next keeps anything ("max").
  */
 export async function homeShowcase() {
@@ -283,14 +287,25 @@ export async function homeShowcase() {
     effects: EFFECTS.length,
     destinations: homeDestinations().length,
     cinemaMoves: CAMERA_MOVES.length,
-    adTemplates: TEMPLATES.length,
+    adTemplates: TEMPLATES.filter((t) => !t.ownerOnly).length,
     mixedLooks: EFFECTS.filter((e) => e.category === "Mixed Media").length,
     audioTools: HUB_MODES.audio.length,
     skills: skills.count,
   };
+  const bento = await homeBento({
+    studios: studioCount(),
+    apps: facts.apps,
+    effectsAndMotions: facts.effects + facts.motions,
+    motions: facts.motions,
+    openModels: facts.openModels,
+    imageModels: openModelsOf("image"),
+    videoModels: openModelsOf("video"),
+    models3d: openModelsOf("model3d"),
+    soundTools: facts.audioTools,
+  });
   return {
     facts,
-    wall: HOME_WALL.map((t) => ({ ...t, card: homeCard(t.id), href: presetHref(t.id) })),
+    bento,
     effects: HOME_EFFECTS.map(captioned),
     motions: HOME_MOTIONS.map(captioned),
     reveals: HOME_REVEALS.map(captioned),

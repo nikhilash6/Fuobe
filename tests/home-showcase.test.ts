@@ -24,10 +24,12 @@ import {
   presetHref,
   roundedDown,
 } from "@/lib/home-showcase";
+import { BENTO_CLIPS, BENTO_REEL } from "@/lib/home-bento";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { onPeak, thumbOf } from "@/lib/preset-cards";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
+import { mp4Seconds } from "./helpers/mp4-length";
 
 // homeShowcase() is kept with "use cache" and cacheLife, which only a Next render reads.
 vi.mock("next/cache", () => ({ cacheLife: () => {} }));
@@ -45,8 +47,8 @@ const exists = (url: string) => (fs.statSync(path.join(root, "public", url.split
 /** Covers the reviews turned down: no real cover yet, or white bars at the sides (and Text Edit's white edge). */
 const NO_COVER = ["app-fuobe-angles", "app-talking-photo", "motion-dolly-zoom-out", "motion-buckle-up"];
 const WHITE_BARS = ["app-dance", "app-simlife", "app-game-dump", "app-japanese-show", "app-comic-book", "app-banana-eating", "app-change-background", "effect-boiling-point", "effect-color-rain", "app-text-edit"];
-/** Studio cards that rest on a still: Mixed Media's look, Marketing's product shot and Image to 3D's turntable shot. */
-const STILLS = ["effect-magazine", "app-macroshot-product", "app-3d-rotation"];
+/** Studio cards that rest on a still: Marketing's product shot. */
+const STILLS = ["app-macroshot-product"];
 /**
  * Slots whose clip was taken down with the still it was made from (Flying's eagle had three wings): the card rests
  * on its new still until the new clip is published. Take an id out when its clip is back.
@@ -55,13 +57,22 @@ const CLIP_PENDING = ["motion-flying"];
 
 const studioIds = HOME_STUDIOS.flatMap((s) => (s.id ? [s.id] : []));
 const rows = [...HOME_EFFECTS, ...HOME_MOTIONS, ...HOME_REVEALS];
-const homeIds = [...HOME_WALL.map((t) => t.id), ...rows.map((r) => r.id), ...HOME_BEFORE_AFTER.map((p) => p.id), ...studioIds];
+/**
+ * Every preset whose clip plays on Home under its own id: the 3D tile's, the rows, the before/after and the studio
+ * cards. The video tile plays its reel (BENTO_REEL) under an id of its own, so a camera move in it may also have its card.
+ */
+const homeIds = [...Object.values(BENTO_CLIPS), ...rows.map((r) => r.id), ...HOME_BEFORE_AFTER.map((p) => p.id), ...studioIds];
 /** Effects whose first frame is the strong one, so their card rests on the poster as the camera motions' do (none now). */
 const ON_POSTER: string[] = [];
+/** The frames at a clip cover's end crossfaded into its first ones (LOOP_FADE at 24 fps, scripts/eval/lib/covers.mjs). */
+const LOOP_FADE_SECONDS = 6 / 24;
+
+/** A cover clip's length (s). */
+const clipSeconds = (url: string) => mp4Seconds(path.join(root, "public", url.split("?")[0]));
 
 describe("Home's showcase", () => {
   it("names real presets, each with its cover and, where the slot plays one, its clip", () => {
-    for (const id of homeIds) {
+    for (const id of [...homeIds, ...BENTO_REEL]) {
       expect(getPreset(id), id).toBeDefined();
       const cover = PRESET_PREVIEWS[id];
       expect(cover, `${id} has a real cover`).toBeDefined();
@@ -83,7 +94,7 @@ describe("Home's showcase", () => {
   it("rests effects and apps on their peak frame, cut and listed; camera motions on their poster", async () => {
     const home = await homeShowcase();
     const rowCards = [...home.effects, ...home.motions, ...home.reveals].map((r) => r.card);
-    const cards = [...home.wall.map((t) => t.card), ...rowCards, ...home.studios.flatMap((s) => (s.card ? [s.card] : []))];
+    const cards = [...rowCards, ...home.studios.flatMap((s) => (s.card ? [s.card] : []))];
     for (const c of cards) {
       const peaked = !!PRESET_PEAKS[c.id];
       expect(!!c.preview.rest, c.id).toBe(peaked);
@@ -115,7 +126,7 @@ describe("Home's showcase", () => {
       expect(exists(p.thumb), p.thumb).toBe(true);
       expect(p.tags).toHaveLength(2);
     }
-    // Every cover URL Home gives (the wall, the rows, the before/after, the studios' cards) carries its version (?v=),
+    // Every cover URL Home gives (the first screen, the rows, the before/after, the studios' cards) carries its version (?v=),
     // and so does each small copy a tile asks for (thumbOf): a cover made again shows at once.
     const urls = [...JSON.stringify(home).matchAll(/"(\/previews\/[^"]*)"/g)].map((m) => m[1]);
     const stills = cards.flatMap((c) => [c.preview.poster, ...(c.preview.rest ? [c.preview.rest.src] : [])]);
@@ -126,19 +137,21 @@ describe("Home's showcase", () => {
     const files = (dir: string) => fs.readdirSync(dir).filter((f) => f.endsWith(".jpg")).map((f) => f.replace(/\.jpg$/, "")).sort();
     expect(files(peakDir)).toEqual(Object.keys(PRESET_PEAKS).sort());
     expect(files(path.join(peakDir, "thumbs"))).toEqual(Object.keys(PRESET_PEAKS).sort());
-    // A peak sits in its clip's last second; its loop comes back to within the clip's first one and a half.
+    // A peak sits past the clip's still opening and before its closing crossfade, however long the clip is (4 s, or
+    // its whole length where its cover keeps it); its loop comes back to a point before the peak.
     for (const [id, { at, from }] of Object.entries(PRESET_PEAKS)) {
       expect(PRESET_PREVIEWS[id]?.video, id).toBeDefined();
-      expect(at, id).toBeGreaterThan(2.5);
-      expect(at, id).toBeLessThan(4);
+      const length = clipSeconds(PRESET_PREVIEWS[id].video!);
+      expect(at, id).toBeGreaterThan(1);
+      expect(at, id).toBeLessThan(length - LOOP_FADE_SECONDS);
       expect(from, id).toBeGreaterThan(0);
-      expect(from, id).toBeLessThan(1.5);
+      expect(from, id).toBeLessThanOrEqual(at);
     }
     // The preset header rests on the same frame (onPeak), and a preset without one keeps its poster.
-    const effect = home.wall.find((t) => t.id === "effect-outfit-switch")!.card;
+    const effect = home.effects.find((r) => r.card.id === "effect-nature-bloom")!.card;
     expect(onPeak({ ...effect, preview: { ...effect.preview, rest: undefined } }).preview.rest).toEqual(effect.preview.rest);
-    const glam = home.wall.find((t) => t.id === "motion-glam")!.card;
-    expect(onPeak(glam)).toBe(glam);
+    const dolly = home.motions.find((r) => r.card.id === "motion-dolly-in")!.card;
+    expect(onPeak(dolly)).toBe(dolly);
   });
 
   it("gives every card a short line that fits whole: a phone's wall tile, two lines of a row's card", async () => {
@@ -153,7 +166,6 @@ describe("Home's showcase", () => {
     expect(presetHref("motion-glam")).toBe("/video?preset=motion-glam");
     expect(presetHref("app-relight")).toBe("/apps/app-relight");
     const home = await homeShowcase();
-    for (const t of home.wall) expect(t.href).toBe(presetHref(t.id));
     for (const p of home.beforeAfter) expect(p.href).toBe(`/apps/${p.id}`);
     const routes = new Set(NAV.flatMap((g) => g.items.map((i) => i.href)));
     for (const s of home.studios) expect(routes.has(s.href), s.href).toBe(true);
@@ -172,7 +184,9 @@ describe("Home's showcase", () => {
     // The pills keep the sidebar's order and labels.
     const order = [...create, ...studios].map((i) => i.href);
     expect(home.pills.map((p) => order.indexOf(p.href))).toEqual(home.pills.map((p) => order.indexOf(p.href)).sort((a, b) => a - b));
-    expect(home.studios.find((s) => s.href === "/audio")?.card).toBeUndefined();
+    // Audio shows a real cover too: Clean up voice’s demo, as its page does.
+    expect(home.studios.find((s) => s.href === "/audio")?.card?.id).toBe("app-clean-up-voice");
+    expect(home.studios.every((s) => s.card)).toBe(true);
   });
 
   it("quotes the catalog's own numbers", async () => {
@@ -189,7 +203,7 @@ describe("Home's showcase", () => {
     expect(facts.partners).toBe(modelCounts().cloud);
     expect(facts.partners).toBe(visible.filter((m) => m.engine === "cloud" && !m.engines?.includes("open")).length);
     expect(facts.cinemaMoves).toBe(CAMERA_MOVES.length);
-    expect(facts.adTemplates).toBe(TEMPLATES.length);
+    expect(facts.adTemplates).toBe(TEMPLATES.filter((t) => !t.ownerOnly).length);
     expect(facts.mixedLooks).toBe(EFFECTS.filter((e) => e.category === "Mixed Media").length);
     expect(facts.audioTools).toBe(HUB_MODES.audio.length);
     expect(facts.skills).toBe(fs.readdirSync(path.join(root, "skills")).filter((d) => fs.existsSync(path.join(root, "skills", d, "SKILL.md"))).length);

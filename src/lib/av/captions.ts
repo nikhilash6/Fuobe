@@ -207,18 +207,20 @@ export function burnRequest(o: { route: BurnRoute; video: string; cues: Cue[]; l
   };
 }
 
-/** The transcription job: the engine's transcriber, the spoken language if known, the voice cleaned first if asked (src/lib/av/voice-first.ts). */
-export function transcribeRequest(o: { engine: Engine; video: string; modelId?: string; sourceLanguage?: string; voiceFirst?: boolean; seconds?: number }): GenerationRequest {
-  const language = o.sourceLanguage && o.sourceLanguage !== "auto" ? o.sourceLanguage : undefined;
-  // With "Clean the voice first" the clip's length goes along: it prices the cloud's clean voice.
-  const seconds = o.voiceFirst && o.seconds && o.seconds > 0 ? Math.round(o.seconds * 1000) / 1000 : undefined;
+/** The transcription job: the engine's transcriber, the spoken language if known. */
+export function transcribeRequest(o: { engine: Engine; video: string; modelId?: string; sourceLanguage?: string; cleanVoiceFirst?: boolean; seconds?: number }): GenerationRequest {
+  const params = {
+    ...(o.sourceLanguage && o.sourceLanguage !== "auto" && { sourceLanguage: o.sourceLanguage }),
+    ...(o.seconds && o.seconds > 0 && { sourceDuration: o.seconds }),
+    // "Clean the voice first" (src/lib/av/voice-first.ts): the speech apart from the music and effects before it's read.
+    ...(o.cleanVoiceFirst && { extra: { cleanVoiceFirst: true } }),
+  };
   return {
     feature: CAPTIONS_FEATURE,
     modelId: o.modelId ?? (o.engine === "open" ? "oss-qwen3-asr" : "scribe-v2"),
     op: "transcribe",
     inputs: { video: o.video },
-    ...((language || seconds) && { params: { ...(language && { sourceLanguage: language }), ...(seconds && { sourceDuration: seconds }) } }),
-    ...(o.voiceFirst && { voiceFirst: true }),
+    ...(Object.keys(params).length && { params }),
   };
 }
 

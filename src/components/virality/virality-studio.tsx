@@ -23,6 +23,13 @@ type Run =
 
 const HOOK_FRAME_APP = "/apps/app-hook-frame";
 
+/** "Start from an example": clips with a strong opening, checked in the browser like a clip of one's own. */
+const HOOK_EXAMPLES: { id: string; url: string; thumb: string; label: string }[] = [
+  { id: "virality.1", url: "/previews/presets/motion-catwalk.mp4", thumb: "/previews/presets/thumbs/motion-catwalk.jpg", label: "Runway walk" },
+  { id: "virality.2", url: "/previews/presets/app-dance.mp4", thumb: "/previews/presets/thumbs/app-dance.jpg", label: "Dance" },
+  { id: "virality.3", url: "/previews/presets/effect-levitation.mp4", thumb: "/previews/presets/thumbs/effect-levitation.jpg", label: "Levitation" },
+];
+
 /** Hook check: an in-browser look at a video's first 3 seconds — no invented score. */
 export function ViralityStudio() {
   const [clip, setClip] = useState<SlotValue | null>(null);
@@ -60,6 +67,24 @@ export function ViralityStudio() {
       <ToolHero title="Will your first 3 seconds hold?" subtitle="See how your opening lands: movement, cuts, faces, text and sound, checked right in your browser. Free, and nothing is uploaded." />
       <div className="mx-auto mt-8 grid max-w-[880px] gap-3">
         <MediaDrop kind="video" value={clip} onChange={change} title="Add your video" hint="MP4 (H.264) or WebM · the opening 3 seconds are what's checked" compact local />
+        {!clip && (
+          <div className="flex flex-wrap items-center gap-2" data-examples>
+            <span className="text-[12px] font-medium text-muted-foreground">Or start from an example:</span>
+            {HOOK_EXAMPLES.map((ex) => (
+              <button
+                key={ex.id}
+                type="button"
+                data-example={ex.id}
+                onClick={() => change({ ref: ex.url, preview: ex.url, kind: "video", id: ex.id, name: `${ex.label}.mp4` })}
+                className="inline-flex h-11 items-center gap-2 rounded-full border bg-background py-1 pr-4 pl-1 text-[13px] font-medium transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={ex.thumb} alt="" loading="lazy" decoding="async" className="h-9 w-12 rounded-full object-cover" />
+                {ex.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Button size="lg" className={cn("rounded-full", (!clip || clip.uploading) && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={current?.status === "running"}>
             {current?.status === "running" ? <Loader2 className="size-4 animate-spin" /> : current?.status === "done" ? <RefreshCw className="size-4" /> : <TrendingUp className="size-4" />}

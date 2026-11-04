@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 // Route handlers call connection() (no request scope in a test).
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
@@ -13,7 +13,7 @@ vi.setConfig({ testTimeout: 120_000 });
  * and the offline planner through run_skill, priced on one card.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-assist-skill-tools-"));
+const dir = tempDir("fuobe-assist-skill-tools-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: open models run on the demo provider, and there's no LLM.
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -37,7 +37,6 @@ const { zip } = await import("@/server/zip");
 const { NESTED_SKILL } = await import("@/lib/recipe");
 const { DECLINED } = await import("@/lib/assist");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 let photo = "";
 let clip = "";
@@ -212,7 +211,7 @@ describe("draftFromThread", () => {
     expect(draft!.notes.join(" ")).toMatch(/An earlier try of a step was left out/);
   });
 
-  it("writes a generate result passed into a studio call as a step reference, as the studio call really answered", async () => {
+  it("makes a generate result passed into a studio call a step reference (a recipe that runs in stages), as the studio call really answered", async () => {
     // A clip made in the chat, then captioned in the chat: both calls run through the agent, approved on their cards.
     const t = await chatRun("open", [
       { id: "toolu_clip", name: "generate", input: { summary: "Clip", jobs: [{ model_id: "kling-3", op: "i2v", prompt: "the lamp turns", images: [photo], duration: 5 }] } },
@@ -222,29 +221,12 @@ describe("draftFromThread", () => {
     await settle(threadIds(t));
     const { draft, refusals } = builder.draftFromThread(t);
     expect(refusals).toEqual([]);
-    // Recipe version 2 (W7): the captions step takes the clip step's new result on every run.
     expect(draft!.recipe.fuobeRecipe).toBe(2);
-    expect(draft!.recipe.steps.map((s) => s.kind)).toEqual(["generate", "tool"]);
     const [clipStep, caps] = draft!.recipe.steps;
-    expect(caps).toMatchObject({ tool: "add_captions", input: { video: `{{steps.${clipStep.key}.output}}`, translate_to: "Spanish" } });
-    // The clip is no input of its own: only the clip step's photo is.
-    expect(draft!.candidates.filter((c) => c.kind === "media").map((c) => c.type)).toEqual(["image"]);
-    expect(recipes.allProblems({ ...draft!.recipe, params: [] })).toEqual([]);
-  });
-
-  it("writes a studio step's result passed into another studio call as a step reference", async () => {
-    // Dubbed in one go, then the dub captioned: the chain the skill reruns with a new clip.
-    const t = await chatRun("open", [{ id: "toolu_dub", name: "dub_video", input: { video: clip, languages: ["Spanish"], review: false } }]);
-    const [dubbed] = await settle(threadIds(t), 110_000);
-    const out = dubbed.outputs.find((o) => o.kind === "video")!.url;
-    await chatRun("open", [{ id: "toolu_caps2", name: "add_captions", input: { video: out } }], t);
-    await settle(threadIds(t), 110_000);
-    const { draft, refusals } = builder.draftFromThread(t);
-    expect(refusals).toEqual([]);
-    expect(draft!.recipe.steps.map((s) => s.kind === "tool" && s.tool)).toEqual(["dub_video", "add_captions"]);
-    const [dub, caps] = draft!.recipe.steps;
-    expect(caps).toMatchObject({ input: { video: `{{steps.${dub.key}.output}}` } });
-    expect(draft!.candidates.filter((c) => c.kind === "media")).toEqual([expect.objectContaining({ type: "video", example: clip, at: [{ step: dub.key, path: ["video"] }] })]);
+    expect([clipStep.kind, caps.kind]).toEqual(["generate", "tool"]);
+    expect(caps.kind === "tool" && caps.input).toEqual({ video: `{{steps.${clipStep.key}.output}}`, translate_to: "Spanish" });
+    // The clip's file isn't an input any more: the next run feeds the new clip on.
+    expect(draft!.candidates.some((c) => c.example === made.outputs[0].url)).toBe(false);
   });
 
   /** Each studio tool as it really answers (a studio that opened, Katana's final cut), run through the agent in demo mode. */

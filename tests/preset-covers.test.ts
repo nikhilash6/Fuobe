@@ -8,10 +8,17 @@ import { SOUL_LOOK_CARDS } from "@/lib/catalog/soul-looks.generated";
 import { previewFor, toPresetCard } from "@/lib/preset-card-data";
 import { isCover, onPeak, presetCard } from "@/lib/preset-cards";
 import { coverPreview, presetCover, thumbOf } from "@/lib/preset-covers";
+import { HOME_BENTO_MEDIA } from "@/lib/home-bento.generated";
+import { hasMini, miniOf } from "@/lib/preset-cards";
+import { PRESET_MINIS } from "@/lib/preset-minis.generated";
+import { contentVersion } from "../scripts/eval/lib/covers.mjs";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
+import { PRESET_HD } from "@/lib/preset-hd.generated";
+import { presetHdFiles } from "@/lib/preset-hd";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
+import { mp4Seconds } from "./helpers/mp4-length";
 
 /*
  * The real covers manifest (src/lib/preset-previews.generated.ts, written by pnpm eval:covers) against the files
@@ -54,6 +61,17 @@ describe("the preset covers manifest", () => {
     }
   });
 
+  // The cards play a clip in a loop, from its start (or its peak) to its end, however long it is.
+  it("keeps every clip short enough for a card's loop: its first 4 s, or its whole length up to 8 s", () => {
+    const lengths = entries.flatMap(([id, e]) => (e.video ? [[id, mp4Seconds(fileOf(e.video))] as const] : []));
+    for (const [id, s] of lengths) {
+      expect(s, id).toBeGreaterThan(2.5);
+      expect(s, id).toBeLessThanOrEqual(8);
+    }
+    // Most are cut at 4 s; a few keep their whole length (a meta.json {"length": "full"} in their masters folder).
+    expect(lengths.filter(([, s]) => Math.abs(s - 4) < 0.01).length).toBeGreaterThan(lengths.length / 2);
+  });
+
   // A file made again under its old name gets a new URL only when its version is made again too (pnpm eval:covers and
   // gen-preset-peaks do it, and their --versions on its own): a manifest left behind by its files fails here.
   it("versions every URL from its files as they are now: a poster with its small copy, a clip, a peak frame with its small copy", () => {
@@ -69,13 +87,32 @@ describe("the preset covers manifest", () => {
     for (const [id, v] of Object.entries(PRESET_BEFORE_AFTER)) expect(v, id).toBe(versionOf(...beforeAfterFiles(id).map(fileOf)));
   });
 
+  it("has a mini copy (the menus' rows) of every preset's own poster, made from that poster as it is now", () => {
+    const own = entries.filter(([, e]) => hasMini(e.poster));
+    for (const [id, e] of own) {
+      const poster = path.join(root, "public", e.poster.split("?")[0]);
+      expect(fs.existsSync(path.join(root, "public", miniOf(e.poster).split("?")[0])), id).toBe(true);
+      // Made again when the poster changes (pnpm eval:covers): an old mini would show under the new version for a year.
+      expect(PRESET_MINIS[id], id).toBe(contentVersion([poster]));
+    }
+    expect(Object.keys(PRESET_MINIS).sort()).toEqual(own.map(([id]) => id).sort());
+  });
+
   it("leaves no cover file in public/previews that no entry names (with its poster's small copy for the pickers, and its clip's peak frame and its small copy and its HD before/after for Home)", () => {
-    const named = new Set(entries.flatMap(([, e]) => [e.poster, thumbOf(e.poster), e.video].filter((u): u is string => !!u).map((u) => u.split("?")[0])));
+    // A preset's own poster also has its 96 px copy for the menus' rows (mini/).
+    const named = new Set(
+      entries.flatMap(([, e]) => [e.poster, thumbOf(e.poster), hasMini(e.poster) ? miniOf(e.poster) : undefined, e.video].filter((u): u is string => !!u).map((u) => u.split("?")[0])),
+    );
     for (const id of Object.keys(PRESET_PEAKS)) for (const f of [`/previews/presets/peak/${id}.jpg`, thumbOf(`/previews/presets/peak/${id}.jpg`)]) named.add(f);
     for (const id of Object.keys(PRESET_BEFORE_AFTER)) for (const f of beforeAfterFiles(id)) named.add(f);
+    // The larger copies (scripts/gen-preset-hd.mjs, tests/preset-hd.test.ts).
+    for (const id of Object.keys(PRESET_HD)) for (const f of presetHdFiles(id, !!PRESET_PEAKS[id])) named.add(f);
+    // Home's first screen makes its own clips and stills (scripts/gen-home-bento.mjs, tests/home-bento.test.ts).
+    for (const f of Object.keys(HOME_BENTO_MEDIA)) named.add(f);
     const dir = path.join(root, "public", "previews");
     const files = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(jpg|mp4)$/.test(f)) : [];
-    const orphans = files.map((f) => `/previews/${f.replaceAll("\\", "/")}`).filter((u) => !named.has(u));
+    // public/previews/templates is the template covers' (tests/template-covers.test.ts checks it).
+    const orphans = files.map((f) => `/previews/${f.replaceAll("\\", "/")}`).filter((u) => !u.startsWith("/previews/templates/") && !named.has(u));
     expect(orphans).toEqual([]);
   });
 
@@ -160,12 +197,31 @@ describe("the preset covers manifest", () => {
     // Cinema Studio's moves (next/dynamic in camera-moves.tsx, loaded when the "#" picker or the Director panel's
     // Movement tab shows them), and the preset header (next/dynamic in studio-page.tsx, checked below).
     expect(importers(/from "[^"]*preset-covers\.generated"/)).toEqual(["lib/preset-covers.ts"]);
-    // (A type is no code: the cover tile takes a cover without importing the map.)
+    // (A type is no code: the cover tile takes a cover without importing the map.) Any Angle's page shows its own cover
+    // above the upload: a tool of its own, whose chunk loads on that app's page only.
+    // The navigation's covers and the search index's are resolved on the server: nav-covers.ts is server-only (the
+    // studios layout passes them down as props) and palette-index.ts is read by the prerendered GET /api/search-index.
+    // The app page (a server page) hands the Watermark Remover's demo its cover.
     expect(importers(/^import (?!type )[^;]*from "[^"]*preset-covers";/m)).toEqual([
+      "app/(studio)/apps/[id]/page.tsx",
+      "components/any-angle/any-angle-tool.tsx",
       "components/cinema/move-list.tsx",
       "components/preset-header.tsx",
       "components/studio/preset-chips.tsx",
+      "lib/canvas-template-cards.ts",
+      "lib/home-bento.ts",
+      "lib/mega-menus.server.ts",
+      "lib/nav-covers.ts",
+      "lib/palette-index.ts",
+      "lib/starters/catalog.ts",
     ]);
+    expect(fs.readFileSync(path.join(root, "src", "lib", "nav-covers.ts"), "utf8")).toMatch(/^import "server-only";$/m);
+    // The bar's fetched menus are built on the server and served as static files (/nav-menus/<id>).
+    expect(fs.readFileSync(path.join(root, "src", "lib", "mega-menus.server.ts"), "utf8")).toMatch(/^import "server-only";$/m);
+    // Client code takes the covers' type only (the covers come as props).
+    for (const f of importers(/^import (?!type )[^;]*from "[^"]*nav-covers";/m)) expect(sources.find((s) => s.file === f)!.text, f).not.toMatch(/^["']use client["'];?$/m);
+    // The index is server code: the prerendered route, and Home's showcase (server-only) for model links.
+    expect(importers(/from "[^"]*palette-index"/)).toEqual(["app/api/search-index/route.ts", "lib/home-showcase.ts"]);
     const composer = fs.readFileSync(path.join(root, "src", "components", "studio", "composer.tsx"), "utf8");
     expect(composer).toMatch(/dynamic\(\(\) => import\("\.\/preset-chips"\)/);
     expect(importers(/from "[^"]*\/move-list"/)).toEqual([]);

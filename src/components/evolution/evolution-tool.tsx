@@ -54,7 +54,7 @@ async function frameDataUrl(blob: Blob | null | undefined): Promise<string | und
  * and a creative direction you write or an LLM writes from the references; priced before it runs ("Free" on your
  * GPU); the result with a before / after wipe.
  */
-export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
+export function EvolutionTool() {
   const [engine] = useEngine();
   // Evolution doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and
   // the upload and Evolve are off, instead of a run the server refuses.
@@ -159,7 +159,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
   };
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
+    <ToolShell title="Video tools" wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title="Take a clip further"
@@ -244,7 +244,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
               </Panel>
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[112px]">
+            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)]">
               <Field label="How much should change?">
                 <Segmented label="How much should change?" value={intensity} onChange={setIntensity} options={INTENSITIES.map((i) => ({ value: i.id, label: i.label }))} />
                 <p className="text-[12px] text-muted-foreground" aria-live="polite">
@@ -368,7 +368,7 @@ function RunPanel({ run, onAgain }: { run: Run; onAgain: () => void }) {
         ) : (
           <div className="space-y-3">
             <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress * 100)} aria-label="Progress">
-              <div className={cn("h-full transition-[width]", state.status === "failed" ? "bg-destructive" : "bg-primary")} style={{ width: `${Math.max(4, state.progress * 100)}%` }} />
+              <div className={cn("h-full origin-left transition-transform duration-(--motion-slow) ease-standard", state.status === "failed" ? "bg-destructive" : "bg-primary")} style={{ transform: `scaleX(${(Math.max(4, state.progress * 100)) / 100})` }} />
             </div>
             <p className={cn("text-[13px]", state.status === "failed" ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
               {state.status === "failed" ? `${state.label}: ${state.error}` : state.label}

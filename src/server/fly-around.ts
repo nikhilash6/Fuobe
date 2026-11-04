@@ -11,7 +11,7 @@ import { worldcastDepths } from "./worldcast";
 import { worldcastContext } from "./worldcast-on";
 
 /**
- * Fly around (build plan N7-7): the plan from src/lib/catalog/fly-around.ts, checked step by step on this install (keys,
+ * Fly around: the plan from src/lib/catalog/fly-around.ts, checked step by step on this install (keys,
  * demo mode, Settings → Models & licences, the engine mode) and run as one batch. Fuobe DoP's exact orbits, Image to 3D's
  * "Film it photoreal", Canvas's Fly around node and Assist's fly_around tool call it (/api/fly-around).
  */

@@ -1,12 +1,11 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "./helpers/temp-dir";
+import { authSecret } from "./helpers/auth-db";
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-signout-"));
+const dir = tempDir("fuobe-signout-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 delete process.env.FUOBE_PUBLIC_SIGNUP;
@@ -15,17 +14,14 @@ const { proxy } = await import("@/proxy");
 const route = await import("@/app/api/auth/sessions/route");
 afterAll(() => {
   delete process.env.FUOBE_PASSWORD;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const DAY = 86_400_000;
-const secret = () => (JSON.parse(fs.readFileSync(path.join(dir, "auth.json"), "utf8")) as { secret: string }).secret;
+const secret = authSecret;
 const hmac = (key: string, payload: string) => crypto.createHmac("sha256", key).update(payload).digest("base64url");
 const passwordTag = () => crypto.createHash("sha256").update(process.env.FUOBE_PASSWORD ?? "").digest("hex");
 /**
- * A cookie signed as the server signs it, as someone who read auth.json and also knew the password could make one: an
+ * A cookie signed as the server signs it, as someone who read the database and also knew the password could make one: an
  * owner's ("<expiry>") with the secret and the password, an account's ("<expiry>.<id>") with the secret alone.
  */
 const forge = (payload: string) => `${payload}.${hmac(payload.includes(".") ? secret() : `${secret()}.${passwordTag()}`, payload)}`;
@@ -80,7 +76,7 @@ describe("H-1: owner sign-ins are tied to the password", () => {
     }
   });
 
-  it("the secret alone (someone who read auth.json, not the password) can't make an owner cookie", () => {
+  it("the secret alone (someone who read the database, not the password) can't make an owner cookie", () => {
     const exp = String(Date.now() + DAY);
     expect(auth.validSession(`${exp}.${hmac(secret(), exp)}`)).toBe(false);
     expect(auth.validSession(forge(exp))).toBe(true);

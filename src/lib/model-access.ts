@@ -26,7 +26,7 @@ export interface ModelAccess {
   loras: string[];
   /**
    * LoRAs whose licence allows your GPU only (civitai without "Rent") stay off fal and Replicate. Off by
-   * default: they are sent like any other LoRA, and the run's notes say what the licence says.
+   * default: they are sent like any other LoRA (Thanks & licences says what each licence allows).
    */
   keepGpuOnlyLoras: boolean;
 }

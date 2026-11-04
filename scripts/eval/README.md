@@ -79,7 +79,6 @@ harness measures what a user gets.
 | `pnpm eval:validate` | Checks every case file, and that the generated suites match the research |
 | `pnpm eval:setup` | Creates the metrics venv with uv (`--identity`, `--download`, `--dinov2`, `--torch-backend`) |
 | `pnpm eval:trash <runId>` | Moves the run's generations to the Trash of the Fuobe it ran on (`--dry-run` counts them). The run's folder here keeps its outputs and scores |
-| `pnpm eval:from-skill <name>` | Writes a suite that runs a saved skill with the examples it was made from, one case per engine it runs on, to `local/cases/skill-<name>.json` ([Skills](#saved-skills)) |
 
 Every command takes `--json`. Runs are named by id, by path, or as `latest`, `latest~1` (the run
 before) and so on. `pnpm eval:<command> --help` lists each command's options.
@@ -128,6 +127,8 @@ One JSON file per Original in `cases/`. Later Original packages add their own fi
 | `popcorn` | Storyboards in Fuobe Soul's looks (O13) | 4 four-frame boards (through `/api/storyboards`): 3 looks and the same board without one | `original` | clip, continuity, aesthetic |
 | `cinema` | Fuobe Cinema (O6) | 3 Director scenes (the prompt Cinema compiles), 4 camera moves as LTX-2.3's `camera_lora` (cloud), 2 films of 3 shots | `original`, `words` (no camera LoRA), `expansion` (fal's prompt expansion on), `wan` (Wan 2.2 A14B hosted), `partner` (Seedance 2.5); all but `original` cloud only | clip, temporal, continuity |
 | `marketing` | Fuobe Marketing Image, Fuobe Try-On, the AI Influencer sheet and Instadump (O10) | 7: a Standalone product shot (the product-shot graph on your GPU; hosted Qwen-Image-Edit in the cloud), an ad's picture, a poster without a product, a try-on, the builder's sheet (through `/api/influencer`), an Instadump photo from a selfie | `original`, `partner` (cloud: GPT Image 2.5, Nano Banana Pro, Ideogram 3.0, FASHN) | clip, aesthetic, style (the product), identity (try-on, Instadump) |
+| `relight` | Relight's looks | 12 portraits of your own (`local/relight/<id>.png`: 8 editorial portraits and 4 more) × the four named looks, and Golden hour and Studio rim with their softness said once | `viggle` (Generate lighting as the tool runs it), `turbo-today` (Qwen-Image 2.1 Turbo, the same words), `edit-2509-relight` (Qwen-Image-Edit 2509 with its Relight LoRA); run one variant at a time | identity, clip, aesthetic |
+| `relight-placement` | Where Relight's placed light lands | the same 12 portraits × one white and one teal light at each of the 9 side × height spots | `viggle` only | identity, clip, aesthetic |
 | `turnaround` | Turnaround video (N7-6) | 4 through `/api/turnaround`: four views, the front and the back (sides drawn by the Angles app), the front alone, a sheet alone (a front drawn from it) | `default` (Frames on your GPU, H3 Max references in the cloud), `keyframes` (cloud: FLUX 3 Max), `camera` (cloud: H3 Max camera controls) | identity of 8 sampled frames against the views, temporal, clip |
 | `idol-views` | Idol 3D's other sides (idol-8) | 6 pictures in `local/idol-views/`: a figurine, a generated character, a photo of a consenting person, a product, a mug with its handle on its own left (view 1 must show the handle: the side check) and a glass, 2 seeds | `best` (the candidate: what the buttons run), `quick` (Quick look's settings) | identity, clip, aesthetic; look at the four views of every case, the people above all, before offering the buttons on characters |
 | `separation` | Soundtrack separation (DBS D4): Split soundtrack, Remove dialogue, the dub's voice split | 7 synthetic 12 s mixes with known stems (dialogue centred and panned left, a mains hum, tape hiss, a master at −0.1 dBFS, a loud master whose music and effects reach full scale, the same mix inside a video) and your own clip for the blind review | `bsrnn-mono` (DBS-BSRNN, the fast stereo bed), `bsrnn-stereo`, `tiger-mono`, `tiger-stereo` (each channel), `dbs-dub` and `melband` (the dub's first step, Qwen3-ASR 0.6B), `demucs` (cloud), and Clean up dialogue: `clean-dialogue` (open, the bed at −18 dB), `clean-veed` and `clean-deepfilternet` (cloud) | separation, wer |
@@ -245,29 +246,6 @@ starts. A training the server would run as a demo (no fal.ai key or AI-Toolkit c
 mode On) is skipped with its case, so a "trained" result is always a trained LoRA. The look case runs
 the trained style as the board's own look (`"presetId": "own-style"`), as a trained moodboard does in
 the app.
-
-## Saved skills
-
-A skill saved with a recipe (Skills → Make a skill, or Save as skill in Assist) can be regression-tested like an
-Original. `pnpm eval:from-skill <name>` reads the skill's recipe from the Fuobe it talks to and writes
-`scripts/eval/local/cases/skill-<name>.json` (git-ignored, since it names your own files):
-
-- one case per engine the skill runs on. Each sends the skill's run route (`POST /api/assist/skills/<name>/run`)
-  that engine and the recipe's examples, and is priced first by the skill's estimate route, so `--max-usd` caps a
-  cloud run as it does any other;
-- a media input with no example, and every media input of a `--engine demo` run, takes a fixture instead;
-- the recipe's checks (kind, takes, shape, length, sound, look) go into the case's note, and the result is scored
-  by its kind (`aesthetic` for a picture, `temporal` for a clip).
-
-```bash
-pnpm eval:from-skill lamp-turntable
-pnpm eval:run --suite skill-lamp-turntable --engine demo     # free
-pnpm eval:run --suite skill-lamp-turntable --engine cloud --max-usd 2
-pnpm eval:compare latest~1 latest --fail-on aesthetic         # after a model change
-```
-
-A skill that runs a studio tool (Translate & dub, Katana, Captions) isn't measured yet: its steps run inside the
-studio. Write the suite again after you change the skill.
 
 ## The case format
 
@@ -494,8 +472,8 @@ still lands as a diff for a person to review. Defaults stay code changes that a 
 ### DoP's Mixed Media effects: the first run with paid keys
 
 Since build plan O9, DoP's 32 Mixed Media effects run on Fuobe DoP in the cloud (Fuobe Mixed Media draws your
-still in the look, then Fuobe DoP animates it); before, they ran on their words on Kling 2.5 Turbo. The owner
-kept Fuobe DoP as the default on 2026-10-30, on one condition: the first evaluation run with paid keys compares
+still in the look, then Fuobe DoP animates it); before, they ran on their words on Kling 2.5 Turbo. Fuobe DoP
+stayed the default on 2026-10-30, on one condition: the first evaluation run with paid keys compares
 the two blind. The suite says so (`"runFirst": "paid-keys"`; `pnpm eval:validate` marks it), and its `decides`
 field holds the rule:
 
@@ -611,6 +589,11 @@ pnpm eval:covers --from-masters <dir> --run comfyui-previews-2026-10 --engine co
 - The covers go to `public/previews/presets/` (`--suite` names another folder).
 - Each cover records the run, the engine, the model and the variant: `--model` for stills, `--video-model`
   for clips. A folder's `meta.json` can name its own `model` and `variant`.
+- A folder's `meta.json` with `"length": "full"` keeps the clip's whole length (at most 8 seconds) instead
+  of its first 4 seconds, for an effect whose end matters. Every frame of the clip shows clean: 6 frames
+  are added after its last one, dissolving back to its first, so the loop has no jump and the end is not
+  blended away. Its first frame is the poster. The cards play a clip of any length. A change to
+  `meta.json` makes the cover again on the next run, as a new master does.
 - The manifest is merged. Covers that other runs wrote stay, and only the ids found in `<dir>` are
   replaced. An id whose cover another run made in another folder (a measured `eval:covers` cover) is
   skipped and listed, so re-running the masters never undoes a measured cover; `--replace` takes it over

@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { EpisodeTile } from "@/components/faceless/cards";
@@ -53,11 +53,11 @@ export function SeriesView({ id, voices }: { id: string; voices: PickerData["voi
   );
 
   const header = (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-      <SidebarTrigger className="md:hidden" />
+    <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
       <Link href="/content-factory" className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4 shrink-0" /> <span className="truncate">Content Factory</span>
       </Link>
+      <PhoneNavButton className="ml-auto" />
     </header>
   );
 
@@ -74,9 +74,9 @@ export function SeriesView({ id, voices }: { id: string; voices: PickerData["voi
         onError: (e) => toastError(e),
       });
     return (
-      <div className="flex min-h-svh min-w-0 flex-col">
+      <div className="flex min-h-content min-w-0 flex-col">
         {header}
-        <div className="mx-auto w-full max-w-[640px] px-3 pt-16 text-center sm:px-6">
+        <div className="mx-auto w-full max-w-[640px] px-4 pt-16 text-center sm:px-6">
           <h1 className="font-heading text-[28px]">{error ? "Series not found" : orphan ? "This series' channel was deleted" : "This series hasn't been made yet"}</h1>
           <p className="mt-2 text-[14px] text-muted-foreground">
             {error
@@ -104,9 +104,9 @@ export function SeriesView({ id, voices }: { id: string; voices: PickerData["voi
   const engine = channel?.settings.engine ?? "cloud";
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       {header}
-      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-8 px-3 pb-16 sm:px-6">
+      <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-8 px-4 pb-16 sm:px-6">
         {isLoading || !s || !channel || !settings ? (
           <div className="space-y-4 pt-6">
             <Skeleton className="h-9 w-72 max-w-full" />

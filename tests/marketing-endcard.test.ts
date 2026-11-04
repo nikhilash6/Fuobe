@@ -1,11 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { BrandKit, Product } from "@/lib/catalog/marketing";
 import type { Generation, GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // Click to Ad's logo end card (r4/marketing-mixed): the plan per engine (cloud ken-burns + merge-videos,
 // open video-append-endcard or still-to-clip + the sound-keeping join), how it hangs off the ad, a demo run,
@@ -13,7 +11,7 @@ import type { MediaInfo } from "@/lib/media-probe";
 
 vi.setConfig({ testTimeout: 90_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-endcard-"));
+const dir = tempDir("fuobe-endcard-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -30,7 +28,6 @@ const { planEndCard, siteLabel } = await import("@/components/marketing/end-card
 const { themeFrom } = await import("@/components/ads/layout");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(400, 7)]);
 const upload = (name = "p.png") => saveFile({ data: PNG, contentType: "image/png", name, source: "upload" }).url;
@@ -254,10 +251,10 @@ describe("the end card the page draws", () => {
     for (const r of [logo!, cta!, { x: 0, y: body!.y, h: body!.lineHeight }]) inside(r);
   });
 
-  it("writes the brand's name when there is no logo, and leaves out a CTA nobody wrote", () => {
+  it("writes the brand's name as typed when there is no logo, and leaves out a CTA nobody wrote", () => {
     const plan = planEndCard({ theme, content: { brand: "Dermaco", product: "A very long product name that keeps going and going for a while" }, logo: null, measure });
     expect(plan.logo).toBeUndefined();
-    expect(plan.brand!.lines).toEqual(["DERMACO"]);
+    expect(plan.brand!.lines).toEqual(["Dermaco"]);
     expect(plan.cta).toBeUndefined();
     expect(plan.headline.lines.length).toBeLessThanOrEqual(2);
     for (const l of plan.headline.lines) expect(measure(l, plan.headline.font)).toBeLessThanOrEqual(720 - 144 + 1);

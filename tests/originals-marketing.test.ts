@@ -1,13 +1,13 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import { injectLoras, type ComfyWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
 // Build plan O10: Fuobe Marketing Image and Fuobe Try-On on both engines, the try-on LoRA as an adapter with its
 // licence and switch, the AI Influencer app on Fuobe Soul, and the product-shot graph inside Marketing Image.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-originals-marketing-"));
+const tmp = tempDir("fuobe-originals-marketing-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -27,7 +27,6 @@ const research = JSON.parse(fs.readFileSync(path.join(process.cwd(), "docs/resea
 
 setSetting("demoMode", "auto");
 afterEach(() => changeAccess([{ kind: "reset" }]));
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const TRYON_FILE = "tryon-klein-4b.safetensors";
 const plan = (r: Parameters<typeof planGeneration>[0], engine: "cloud" | "open") =>

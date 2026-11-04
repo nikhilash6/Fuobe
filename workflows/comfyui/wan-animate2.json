@@ -130,7 +130,7 @@
   },
   "672:582": {
     "inputs": {
-      "text": "Character Description: Cartoon character lost\nBackground description: The background is an empty white room",
+      "text": "Character Description: The person from the reference picture, with their own face, hair, body and complete outfit.\nBackground description: The setting, background and light of the reference picture.",
       "clip": [
         "672:580",
         0

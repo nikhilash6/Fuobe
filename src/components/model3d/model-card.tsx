@@ -6,23 +6,34 @@ import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { uploadFile, useEngine, useHydrated, useIsOwner } from "@/lib/api";
-import { FINAL_3D, animateSpinHref, animationName, finalBuildHref, model3dView, photorealAngle, photorealBody, stillOf, type Model3dView } from "@/lib/av/model3d";
+import { FINAL_3D, animateSpinHref, animationName, finalBuildHref, FRONT_YAW, model3dView, photorealAngle, photorealBody, stillOf, turnOrbit, type Model3dView } from "@/lib/av/model3d";
+import { anyAngleHref } from "@/lib/catalog/any-angle";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { useFlyAround } from "@/components/fly-around-run";
 import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { loadModelViewer, TURNTABLE_BACKDROP, useViewerSrc, viewerLook } from "./model-viewer";
-import type { Model3dInfo } from "./model3d-studio";
 import { RetextureDialog } from "./retexture-dialog";
 import { RigDialog } from "./rig-dialog";
 import { PrintDialog } from "./print-dialog";
 import { PoweredByHi3d, RefineDialog } from "./refine-option";
-import { HI3D_NOTICE, canRefine, isRefined } from "@/lib/av/hi3d";
+import { canRefine, isRefined } from "@/lib/av/hi3d";
 import { PlaceholderChip } from "@/components/demo-mode";
+import { NextSteps } from "@/components/nav/next-steps";
 import { recordableType, recordTurntable } from "./turntable";
 import { hasWebgl2, SplatViewer, useReducedMotion } from "./splat-viewer";
 import { FALLBACK_TEXT, hazeCutoffFor } from "@/lib/av/splat-view";
+import { TurnChips } from "./turn-chips";
+
+/**
+ * Left out of the card's next steps: its own Animate the spin button is that step (and knows a turntable recorded
+ * here), and a rigged character has none.
+ */
+const SPIN_STEPS = ["animate-spin"] as const;
+
+/** The model file among a result's outputs (its turntable and poster ride along as other outputs); -1 without one. */
+const modelAt = (g: Generation) => g.outputs.findIndex((o) => o.kind === "model3d");
 
 /** Downloads besides the main file, by the name the provider gave them. */
 const FORMAT_LABEL: Record<string, string> = { rigged: "Rigged .glb", walking: "Walk .glb", running: "Run .glb", fbx: ".fbx", splat: "Splat", points: "Points .glb" };
@@ -48,14 +59,12 @@ function rigClips(g: Generation, view: Model3dView): { key: string; label: strin
  */
 export function ModelCard({
   g,
-  info,
   cloudAllowed,
   refineAllowed = false,
   finalAllowed = false,
   onFinal,
 }: {
   g: Generation;
-  info: Record<string, Model3dInfo>;
   cloudAllowed: boolean;
   refineAllowed?: boolean;
   /** TRELLIS.2 runs here and is switched on: an Idol 3D draft offers "Build the final with TRELLIS.2". */
@@ -123,7 +132,7 @@ export function ModelCard({
   // From words on the open engine: the Z-Image still the model was built from (a helper step the page hides).
   const drawn = stillOf(g);
   const name = (g.modelName ?? "model").replace(/[^\w .-]+/g, "");
-  // "Film it photoreal" (N7-7): the photo filmed going round the model. Cloud: from the photo along the orbit. Your GPU:
+  // "Film it photoreal": the photo filmed going round the model. Cloud: from the photo along the orbit. Your GPU:
   // the model recorded here along the same orbit guides the camera (a splat hands its own orbit video).
   const [engine] = useEngine();
   const [filming, setFilming] = useState<number | null>(null);
@@ -153,6 +162,8 @@ export function ModelCard({
   const label = g.modelName ?? "3D";
   // Behind the viewer: the studio sweep the server's turntable and poster are on, so opening 3D doesn't jump.
   const backdrop = view.material ? TURNTABLE_BACKDROP : undefined;
+  // The model's own front (a GLB made from a splat faces where the model put the subject).
+  const frontYaw = FRONT_YAW[g.modelId] ?? 0;
   const startRecording = useCallback(
     async (el: HTMLElement) => {
       setRecording(0);
@@ -225,9 +236,8 @@ export function ModelCard({
   const spin = view.rigged ? null : animateSpinHref(view, recorded?.saved);
   // Draft then final (idol-6): an Idol 3D splat's picture, rebuilt as a textured mesh with TRELLIS.2.
   const final = finalBuildHref(g, view, finalAllowed);
-  // Hi3D's results: geometry only, and "Powered by Hi3D 1.0" (linked, as its licence asks) instead of the plain notice.
+  // Hi3D's results: geometry only, and "Powered by Hi3D 1.0" (linked, as its licence asks).
   const refined = isRefined(g);
-  const notices = (info[g.modelId]?.notices ?? []).filter((n) => !(refined && n === HI3D_NOTICE));
   // "Refine this mesh": a finished mesh (not a splat or a rig) with the photo, or the drawn still, it was made from.
   const refineFrom = view.photo ?? drawn;
   const refinable = canRefine({ glb: view.glb, photo: refineFrom, splat: view.splat, rigged: view.rigged, refined, openAllowed: refineAllowed }) && g.op !== "splat";
@@ -235,7 +245,8 @@ export function ModelCard({
   const rigSource = view.rigged ? (g.request.inputs?.model3d ?? view.glb) : view.glb;
   // The radio buttons in the corner: the preview and the 3D view, a rig's clips, or a splat's video and picture.
   // A rig's clip is picked by its key ("main", "walking", "running"); "3d" is the model itself.
-  const choices: { key: string; label: string; on: boolean }[] = view.splat
+  // A splat with a GLB made from it opens that in the viewer, as any model does.
+  const choices: { key: string; label: string; on: boolean }[] = view.splat && !view.glb
     ? [
         ...(clip
           ? [
@@ -305,9 +316,11 @@ export function ModelCard({
                 variant="secondary"
                 className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-soft"
                 onClick={() => {
-                  if (view.splat) setFocusLook(true);
+                  // A splat with a GLB made from it opens the GLB, as any model does; a splat alone, the splat viewer.
+                  const splatOnly = !!view.splat && !view.glb;
+                  if (splatOnly) setFocusLook(true);
                   else focusViewer.current = true;
-                  switchTo(view.splat ? "look" : "3d");
+                  switchTo(splatOnly ? "look" : "3d");
                 }}
               >
                 <Rotate3d className="size-3.5" /> View in 3D
@@ -338,9 +351,12 @@ export function ModelCard({
             "touch-action": "pan-y",
             "interaction-prompt": "none",
             ...viewerLook(view.material),
+            ...(frontYaw ? { "camera-orbit": turnOrbit("front", frontYaw) } : {}),
             style: { width: "100%", height: "100%", background: "transparent" },
           })
         )}
+        {/* Tap to turn a still model to a side (a rig plays its animation instead). */}
+        {open3d && ready && !failed && !!src && !view.rigged && recording === null && <TurnChips viewer={viewer} frontYaw={frontYaw} compact className="absolute inset-x-3 bottom-3" />}
         {recording !== null && (
           <div className="absolute inset-x-3 bottom-3 rounded-full bg-background/90 px-3 py-1.5 text-[12px] font-medium shadow-soft" role="status">
             Recording the turntable… {Math.round(recording * 100)}%
@@ -369,7 +385,7 @@ export function ModelCard({
           {g.modelName}
           {g.prompt && !view.rigged ? ` · ${g.prompt}` : ""}
         </p>
-        {view.splat && hydrated && !canLook && <p className="text-[12px] text-muted-foreground">{splatNote ?? FALLBACK_TEXT["no-webgl2"]}</p>}
+        {view.splat && !view.glb && hydrated && !canLook && <p className="text-[12px] text-muted-foreground">{splatNote ?? FALLBACK_TEXT["no-webgl2"]}</p>}
         {/* Idol 3D on your GPU: how clean the file is. Only the owner reads how to make it cleaner (it's their ComfyUI). */}
         {view.clean?.cleaned && <p className="text-[12px] font-medium">{view.clean.text}</p>}
         {view.clean && !view.clean.cleaned && owner && (
@@ -377,11 +393,20 @@ export function ModelCard({
         )}
         <div className="flex flex-wrap gap-1.5">
           {view.splat ? (
-            <Button asChild variant="outline" size="sm" className="rounded-full">
-              <a href={view.splat.url} download={`${name}.${view.splat.format}`}>
-                <Download className="size-3.5" /> .{view.splat.format}
-              </a>
-            </Button>
+            <>
+              {view.glb && (
+                <Button asChild variant="outline" size="sm" className="rounded-full">
+                  <a href={view.glb} download={`${name}.glb`}>
+                    <Download className="size-3.5" /> 3D model (.glb)
+                  </a>
+                </Button>
+              )}
+              <Button asChild variant="outline" size="sm" className="rounded-full">
+                <a href={view.splat.url} download={`${name}.${view.splat.format}`}>
+                  <Download className="size-3.5" /> {view.glb ? `3D splat (.${view.splat.format})` : `.${view.splat.format}`}
+                </a>
+              </Button>
+            </>
           ) : (
             view.glb && (
               <Button asChild variant="outline" size="sm" className="rounded-full">
@@ -442,6 +467,13 @@ export function ModelCard({
               <Printer className="size-3.5" /> Print-ready
             </Button>
           )}
+          {view.splat && view.photo && (
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link href={anyAngleHref(view.photo)} prefetch={false}>
+                <Rotate3d className="size-3.5" /> Shoot it from any angle
+              </Link>
+            </Button>
+          )}
           {view.glb && !view.rigged && !view.splat && g.op !== "splat" && (
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => setRetexturing(true)}>
               <Paintbrush className="size-3.5" /> Retexture
@@ -480,17 +512,13 @@ export function ModelCard({
           </div>
         )}
         {refined && <p className="text-[12px] text-muted-foreground">Geometry only: no colour or texture. Set its real size in Print-ready.</p>}
-        {(notices.length > 0 || refined) && (
+        {refined && (
           <p className="text-[11px] text-muted-foreground">
-            {notices.join(" · ")}
-            {refined && (
-              <>
-                {notices.length > 0 && " · "}
-                <PoweredByHi3d />
-              </>
-            )}
+            <PoweredByHi3d />
           </p>
         )}
+        {/* Where the model goes next: an ad, a sharper still (its own Animate the spin button is above). */}
+        {modelAt(g) >= 0 && <NextSteps g={g} index={modelAt(g)} variant="row" max={3} skip={SPIN_STEPS} className="pt-1" />}
       </div>
       {refinable && refining && view.glb && refineFrom && <RefineDialog glb={view.glb} photo={refineFrom} open={refining} onOpenChange={setRefining} feature={g.feature} />}
       {printing && view.glb && <PrintDialog glb={view.glb} name={name} open={printing} onOpenChange={setPrinting} refined={refined} />}

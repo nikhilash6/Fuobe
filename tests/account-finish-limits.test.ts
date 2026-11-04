@@ -1,10 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-finish-limits-"));
+const dir = tempDir("fuobe-finish-limits-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -37,9 +36,6 @@ afterEach(() => {
 });
 afterAll(() => {
   globalThis.__fuobeTestDiskFree = undefined;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const PNG = Buffer.concat([Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"), Buffer.alloc(64)]);

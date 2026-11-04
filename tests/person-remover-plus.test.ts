@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
 import { h3Canvas, H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
 import { planGeneration } from "@/lib/catalog/plan";
@@ -26,14 +25,14 @@ import {
 } from "@/lib/catalog/remove-object";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ManifestWorkflow } from "@/lib/comfy";
+import { tempDir } from "./helpers/temp-dir";
 
-// H3 Person Remover, everywhere (o/person-remover-plus): mask first, window review and "Redo from here".
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-person-remover-plus-"));
+// H3 Person Remover, everywhere: mask first, window review and "Redo from here".
+const tmp = tempDir("fuobe-person-remover-plus-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://127.0.0.1:8199";
 const { prepareWorkflow, withRemovalReview } = await import("@/server/providers/comfyui");
 const { runAsTenant } = await import("@/server/tenant");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../workflows/comfyui/manifest.json"), "utf8")) as { workflows: ManifestWorkflow[] };
 const src = { url: "/api/files/uploads/clip.mp4", duration: 12, fps: 30, width: 1280, height: 720, hasAudio: true };

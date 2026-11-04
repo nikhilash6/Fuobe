@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { Cloud, Cpu, Lock, Search, Sparkles, X } from "lucide-react";
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useDeferredValue, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CardPending, IntentLink } from "@/components/intent-link";
 import { PRESET_ICONS } from "@/components/preset-icons";
 import { PresetPreview, usePreviewPlayback } from "@/components/preset-preview";
 import { GALLERY_GRID } from "@/components/skeletons";
+import { onAttr, TAB_PILL, TabRow, useFadeOn } from "@/components/ui/tab-row";
 import { useProgressive } from "@/components/use-progressive";
 import { CardChip, badgeKey, parseBadgeKey } from "@/components/gpu/readiness-chip";
 import { useGpuBadges } from "@/hooks/use-gpu";
 import { useEngineMode, useViewer } from "@/lib/api";
+import { categoryFrom, skippedInAll } from "@/lib/gallery-category";
 import { matchesSearch, previewFlip, readMoreTap, searchText, TAP_TO_READ, type PresetCardData } from "@/lib/preset-cards";
 import { cn } from "@/lib/utils";
 
@@ -70,9 +72,9 @@ export const PresetCard = memo(function PresetCard({
       ref={ref}
       href={href}
       {...handlers}
-      className="group/card flex min-w-0 flex-col gap-2 rounded-xl p-1.5 transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+      className="group/card card-motion card-fill flex min-w-0 flex-col gap-2 rounded-xl p-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+      <div className="card-cover relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
         <PresetPreview preview={preset.preview} hue={preset.hue} playing={playing} asked={asked} place={place} sizes={sizes} flip={previewFlip(preset)} />
         {!bare && (
           <>
@@ -184,28 +186,6 @@ function RunsOnControl({ value, onChange, locked, owner }: { value: RunsOn; onCh
   );
 }
 
-/** Keeps data-fade-start / data-fade-end on a horizontal scroller in sync with its scroll position. */
-export function useFadeEdges<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const update = () => {
-      el.toggleAttribute("data-fade-start", el.scrollLeft > 2);
-      el.toggleAttribute("data-fade-end", el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
-    };
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => {
-      el.removeEventListener("scroll", update);
-      ro.disconnect();
-    };
-  }, []);
-  return ref;
-}
-
 /**
  * A card that opens a tool of its own (Live edit), shown before the presets: the same card chrome, its own link. Only
  * on the All tab with no search, or when the search matches its words; never when the gallery shows cloud tools only.
@@ -223,8 +203,8 @@ export interface LinkCard {
 
 function LeadingCard({ card }: { card: LinkCard }) {
   return (
-    <Link href={card.href} className="group/card flex min-w-0 flex-col gap-2 rounded-xl p-1.5 transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" data-leading-card>
-      <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+    <Link href={card.href} className="group/card card-motion card-fill flex min-w-0 flex-col gap-2 rounded-xl p-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring" data-leading-card>
+      <div className="card-cover relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
         {card.cover}
         {card.badge && <span className="pointer-events-none absolute top-1.5 right-1.5 rounded-full bg-highlight px-1.5 py-0.5 text-[10.5px] font-semibold text-highlight-foreground">{card.badge}</span>}
       </div>
@@ -247,6 +227,7 @@ export function PresetGallery({
   href,
   noun = "presets",
   leading,
+  skipInAll,
 }: {
   /** In the order the All view shows them (featuredGallery): a category or a search keeps it. */
   presets: PresetCardData[];
@@ -258,8 +239,17 @@ export function PresetGallery({
   noun?: string;
   /** Tools of their own shown first (LinkCard). */
   leading?: LinkCard[];
+  /** Presets the page already shows above (an area's Start here): left out of the All view until a search or a category. */
+  skipInAll?: string[];
 }) {
   const [cat, setCat] = useState("All");
+  // A link to a category (/motions?category=Orbit) opens on it: read once before the first paint, so the page stays
+  // prerendered (no search params at render).
+  useLayoutEffect(() => {
+    const asked = categoryFrom(location.search, categories);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read the address once mounted, before the first paint
+    if (asked !== "All") setCat(asked);
+  }, [categories]);
   const [q, setQ] = useState("");
   const [runsOnChoice, setRunsOn] = useState<RunsOn>("all");
   // "both" until hydrated, so the server HTML and the first client render agree.
@@ -272,16 +262,21 @@ export function PresetGallery({
   const cats = useMemo(() => ["All", ...categories], [categories]);
   const list = useMemo(
     () =>
-      index
-        .filter(([p, text]) => (cat === "All" || p.category === cat) && (!query || matchesSearch(text, query)) && (runsOn === "all" || p[runsOn]))
-        .map(([p]) => p),
-    [index, cat, query, runsOn],
+      skippedInAll(
+        index
+          .filter(([p, text]) => (cat === "All" || p.category === cat) && (!query || matchesSearch(text, query)) && (runsOn === "all" || p[runsOn]))
+          .map(([p]) => p),
+        skipInAll,
+        cat !== "All" || !!query,
+      ),
+    [index, cat, query, runsOn, skipInAll],
   );
   // Cards render a page at a time; a new filter starts from the first page again.
   const { shown, hasMore, moreFrom, sentinel, left } = useProgressive(list.length, `${cat}|${query}|${runsOn}`, FIRST_PAGE, PAGE);
   const grid = useRef<HTMLDivElement>(null);
+  // A category tapped: its cards fade in (they are there at once).
+  useFadeOn(grid, cat);
 
-  const strip = useFadeEdges<HTMLDivElement>();
   const stale = q.trim().toLowerCase() !== query;
   const lead = (leading ?? []).filter((c) => cat === "All" && runsOn !== "cloud" && (!query || matchesSearch(`${c.title} ${c.line} ${c.words ?? ""}`.toLowerCase(), query)));
   // One fetch of the viewer's chips (the GPU pre-flight); each card gets one string.
@@ -316,7 +311,7 @@ export function PresetGallery({
           </div>
           <div className="flex items-center justify-between gap-2 sm:ml-auto sm:justify-end">
             <span className="order-last text-[12px] whitespace-nowrap text-muted-foreground tabular-nums sm:order-first sm:mr-2" aria-live="polite">
-              {list.length === presets.length ? `${presets.length} ${noun}` : `${list.length} of ${presets.length}`}
+              {list.length === presets.length || (cat === "All" && !query && runsOn === "all") ? `${presets.length} ${noun}` : `${list.length} of ${presets.length}`}
             </span>
             <RunsOnControl value={runsOn} onChange={setRunsOn} locked={locked} owner={!!viewer?.owner} />
           </div>
@@ -330,12 +325,11 @@ export function PresetGallery({
             to see what runs on it.
           </p>
         )}
-        <div
-          ref={strip}
+        <TabRow
           role="group"
           aria-label="Categories"
           // From sm up every category shows (wrapped): a mouse can't scroll a row whose scrollbar is hidden.
-          className="fade-x scrollbar-none -mx-1 flex snap-x scroll-px-1 gap-1 overflow-x-auto px-1 sm:flex-wrap sm:overflow-visible"
+          className="sm:flex-wrap sm:overflow-visible"
         >
           {cats.map((c) => (
             <button
@@ -347,15 +341,13 @@ export function PresetGallery({
                 setCat(c);
                 e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
               }}
-              className={cn(
-                "h-8 shrink-0 snap-start rounded-full px-3 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                cat === c && "bg-secondary text-foreground",
-              )}
+              className={TAB_PILL}
+              {...onAttr(cat === c)}
             >
               {c}
             </button>
           ))}
-        </div>
+        </TabRow>
       </div>
       {list.length || lead.length ? (
         <>

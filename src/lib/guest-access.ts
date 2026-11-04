@@ -21,7 +21,7 @@ export const GUEST_LIBRARY_MESSAGE = "Sign up to see this.";
 export const GUEST_RUN_MESSAGE = "Create a free account to run this.";
 
 /** Catalog and status reads that hold nothing of the owner's library: a guest gets the real answer. */
-const GUEST_READS = new Set(["/api/status", "/api/models", "/api/search-index", "/api/comfyui", "/api/settings/models", "/api/gpu/requirements", "/api/live/nodes"]);
+const GUEST_READS = new Set(["/api/status", "/api/examples", "/api/models", "/api/search-index", "/api/comfyui", "/api/settings/models", "/api/gpu/requirements", "/api/live/nodes"]);
 
 /** Catalogs mixed with the owner's own items: the route leaves the owner's part out for a guest (GUEST_HEADER). */
 const GUEST_FILTERED = new Set(["/api/moodboards", "/api/palettes", "/api/assist", "/api/assist/skills"]);
@@ -55,6 +55,8 @@ const EMPTY_LISTS = [
   "/api/assist/projects",
   "/api/assist/schedules",
   "/api/assist/memory",
+  // Chains the owner made often enough to offer as skills (the owner's runs).
+  "/api/skill-suggestions",
 ];
 
 /** The Library's counts with nothing in it (a guest's). */
@@ -123,7 +125,6 @@ const LIBRARY_CHANGES: [methods: string, path: RegExp][] = [
   ["PATCH DELETE", /^\/api\/folders\/[^/]+$/],
   ["PATCH DELETE", /^\/api\/generations\/[^/]+$/],
   // (POST /api/generations/bulk goes to the route, which takes an account's likes, pins and reviews of its own runs only.)
-  ["POST", /^\/api\/generations\/local$/],
   ["POST", /^\/api\/generations\/[^/]+\/(cancel|finish)$/],
   ["DELETE", /^\/api\/generations\/trash$/],
   ["DELETE", /^\/api\/assets\/[^/]+$/],
@@ -136,6 +137,10 @@ const LIBRARY_CHANGES: [methods: string, path: RegExp][] = [
   ],
   ["DELETE", /^\/api\/(katana|marketing\/runs|photodump\/packs)\/[^/]+$/],
   ["POST", /^\/api\/canvases\/[^/]+\/duplicate$/],
+  // A Kinetic node's run (rendered in the owner's browser) kept on the canvas.
+  ["PUT", /^\/api\/canvases\/[^/]+\/runs\/[^/]+$/],
+  // A ready-made starter (a channel, a brand kit with its product) is saved to the owner's library.
+  ["POST", /^\/api\/starters\/[^/]+$/],
   ["POST", /^\/api\/assist\/skills\/[^/]+\/duplicate$/],
   ["POST", /^\/api\/ads\/creatives\/[^/]+\/save$/],
   ["POST", /^\/api\/cinema\/projects\/[^/]+\/folders$/],
@@ -190,7 +195,8 @@ const GPU_READS = new Set(["/api/gpu/readiness", "/api/gpu/badges", "/api/gpu/pl
 /**
  * A change an account may send: signing out, its own GPU and its check, its own fal.ai and Replicate keys, price checks
  * (reads go by guestRead, as a guest's), an upload (the route checks it: src/app/api/uploads, which the proxy's matcher
- * leaves out) and a look at its own clip's header (the route reads only its own files).
+ * leaves out), a look at its own clip's header (the route reads only its own files), and a result it made in its
+ * browser (POST /api/generations/local: the route takes its own Kinetic Motion clips only).
  */
 export function accountMayChange(method: string, pathname: string, search: string): boolean {
   if (method === "POST" && pathname === "/api/auth/logout") return true;
@@ -206,6 +212,10 @@ export function accountMayChange(method: string, pathname: string, search: strin
   if (method === "POST" && (pathname === "/api/reports" || pathname === "/api/billing/interest")) return true;
   // Like, pin or review many of its own runs at once (the route checks each is its own, and refuses the rest).
   if (method === "POST" && pathname === "/api/generations/bulk") return true;
+  // A Kinetic Motion clip it rendered in its browser and uploaded, recorded as its own run (the route checks the files
+  // are its own, its run rate and the studio's checks; a grade or a Relight blend stays the owner's there). No model
+  // runs, so it needs no GPU or key of its own.
+  if (method === "POST" && pathname === "/api/generations/local") return true;
   return isPriceCheck(method, pathname, search);
 }
 
@@ -262,6 +272,9 @@ export function ownGpuRun(method: string, pathname: string): boolean {
   return method === "POST" && pathname === "/api/generations";
 }
 
+/** The code on an account's run refused because its runs going are at the limit: the next one may wait for a place and send again. */
+export const ACTIVE_RUNS_CODE = "active-runs";
+
 export const OWN_GPU_TOOL_MESSAGE = "This tool isn't available here. Try the Image, Video or Audio studio, or an app, effect or camera motion.";
 
 /** Set on an account's refused run: the client shows "Connect your GPU to run this". */
@@ -273,11 +286,17 @@ export const CONNECT_GPU_MESSAGE = "Connect your GPU to run this. It's free.";
 export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU, or add a fal.ai or Replicate key, to add your own files.";
 /** The same, on a studio with paid models off (no keys). */
 export const CONNECT_GPU_UPLOAD_OPEN_MESSAGE = "Connect your GPU to add your own files.";
+/**
+ * Sent with the upload of a Kinetic Motion clip (or its poster) rendered in the browser, set to "1". Saving one needs no
+ * model, so an account with neither its own GPU nor its own key may upload it too: an MP4 or WebM clip, or a PNG
+ * poster, within the account's space and upload limits (src/app/api/uploads).
+ */
+export const KINETIC_UPLOAD_HEADER = "x-fuobe-kinetic";
 /** An account with neither its own GPU nor its own key (the proxy's answer to a run): the card it opens offers both. */
 export const CONNECT_GPU_OR_KEY_MESSAGE = CONNECT_GPU_MESSAGE;
 
 /** Install-wide settings, keys and tokens: changes are the owner's (403 for an account). */
-const OWNER_WRITES = new Set(["/api/settings", "/api/settings/models", "/api/loras", "/api/llm", "/api/providers/test", "/api/auth/public"]);
+const OWNER_WRITES = new Set(["/api/settings", "/api/settings/models", "/api/loras", "/api/llm", "/api/providers/test", "/api/auth/public", "/api/skill-suggestions"]);
 /**
  * Owner only, reads included: the password, the API tokens, signing everyone out, the assistant's connectors, the MCP
  * endpoint and the accounts admin.

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AreaBackLink } from "@/components/areas/area-page";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { PresetGallery } from "@/components/preset-gallery";
 import { EFFECTS } from "@/lib/catalog";
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <PageShell>
+      <AreaBackLink id="motions" />
       <PageHeader
         title="Effects"
         description="Storms, transformations and cinematic VFX from one photo. Colour looks apply instantly."

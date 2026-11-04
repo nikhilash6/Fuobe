@@ -78,7 +78,7 @@ export function PublishWizard({ items, onClose, onPublished }: { items: Generati
         <DialogHeader>
           <DialogTitle>Publish {pieces(order.length)}</DialogTitle>
           <DialogDescription>
-            A read-only page anyone with the link can open.
+            A read-only page anyone with the link can open. It isn&apos;t listed anywhere.
             {unfinished > 0 && ` ${unfinished} of your selection ${unfinished === 1 ? "isn't" : "aren't"} finished, so ${unfinished === 1 ? "it stays" : "they stay"} out.`}
             {over > 0 && ` A page holds up to ${MAX_PUBLISH_ITEMS}, so the last ${over === 1 ? "one stays" : `${over} stay`} out.`}
           </DialogDescription>

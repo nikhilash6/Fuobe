@@ -17,11 +17,12 @@ import { PLACEHOLDER_SETTING, placeholdersOn } from "@/lib/demo-mode";
 import { AccountsChip } from "@/components/accounts-admin";
 import { ConnectField, useSettings, type PublicSetting } from "@/components/connect-field";
 import { GetStarted } from "@/components/get-started";
+import { AboutLinks } from "@/components/owner-settings";
 import { LlmProviderSettings } from "@/components/llm-provider-settings";
 import { LoraSettings } from "@/components/lora-settings";
 import { useStatus, type StatusInfo } from "@/lib/api";
 import { WORKFLOWS_ON_GITHUB } from "@/lib/comfy-install";
-import { AI_TOOLKIT_REPO, connectionSummary, DEFAULT_AI_TOOLKIT_URL, ENGINE_MODE_LABEL, FAL_KEYS_URL, FUOBE_CREDITS, showFirstRun } from "@/lib/connections";
+import { AI_TOOLKIT_REPO, connectionSummary, DEFAULT_AI_TOOLKIT_URL, ENGINE_MODE_LABEL, FAL_KEYS_URL, showFirstRun } from "@/lib/connections";
 import { cn } from "@/lib/utils";
 import { ConnectorSettings } from "@/components/assist/connectors-settings";
 import { NotificationSettings } from "@/components/notification-settings";
@@ -164,7 +165,7 @@ function ChoiceField({
 function StatusStrip({ status, onGuide, guideOpen }: { status?: StatusInfo; onGuide: () => void; guideOpen: boolean }) {
   const place = usePagePlace();
   return (
-    <div className="sticky top-12 z-10 -mx-4 border-b bg-background/90 px-4 py-2.5 backdrop-blur sm:-mx-8 sm:px-8 md:top-0">
+    <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-10 -mx-4 border-b bg-background/90 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6 md:top-chrome">
       <nav aria-label="Connections" className="scrollbar-none -my-1 flex items-center gap-1.5 overflow-x-auto py-1">
         {status ? (
           <>
@@ -742,7 +743,7 @@ export function SettingsForm({ prices }: { prices?: string }) {
           <span className="min-w-0 space-y-1">
             <span className="block text-[14px] font-medium">{PLACEHOLDER_SETTING}</span>
             <span className="block text-[13px] leading-relaxed text-muted-foreground">
-              While it&rsquo;s on, every run makes a placeholder labelled &ldquo;Placeholder&rdquo;, even with keys or ComfyUI connected, and the sidebar says
+              While it&rsquo;s on, every run makes a placeholder labelled &ldquo;Placeholder&rdquo;, even with keys or ComfyUI connected, and the top bar says
               &ldquo;Placeholders on&rdquo;. While it&rsquo;s off, a run with nothing connected asks you to connect ComfyUI or add a key.
             </span>
           </span>
@@ -766,15 +767,8 @@ export function SettingsForm({ prices }: { prices?: string }) {
         </Link>
       </Section>
 
-      <Section id="about" title="Credits" description="The licence notices and credits of the open models and code Fuobe runs.">
-        <a
-          href={FUOBE_CREDITS}
-          target="_blank"
-          rel="noopener"
-          className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors hover:bg-accent"
-        >
-          <Info className="size-4 text-muted-foreground" /> Credits on GitHub
-        </a>
+      <Section id="about" title="About" description="The open models, LoRAs and code Fuobe is built on, who made them and their licences, and Fuobe's own source code.">
+        <AboutLinks owner />
       </Section>
     </div>
   );

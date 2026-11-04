@@ -57,7 +57,7 @@ import { getModel } from "@/lib/catalog";
 import type { CinemaFolder } from "@/lib/catalog/cinema";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { formatCost, timeAgo } from "@/lib/format";
-import { useEngineMode } from "@/lib/api";
+import { useEngineMode, useLikelyVisitor } from "@/lib/api";
 import { finishedTakes, finishIn2k } from "@/lib/catalog/regenerate";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { cn } from "@/lib/utils";
@@ -185,10 +185,10 @@ export interface FeedHandlers {
   scenePrice: string;
 }
 
-/** A grid contact sheet and its tiles are one take: deleting any of them deletes the lot. */
+/** A grid contact sheet and its tiles are one take: moving any of them to the Trash moves the lot. */
 export function deleteLabel(g: CinemaGeneration): string {
   const tiles = g.tiles?.length ?? (g.feature === "cinema-grid" && g.outputs.length > 1 ? g.outputs.length - 1 : 0);
-  return tiles ? `Delete grid (sheet + ${tiles} tiles)` : "Delete take";
+  return tiles ? `Move grid to Trash (sheet + ${tiles} tiles)` : "Move take to Trash";
 }
 
 /** The takes the feed's list already finishes in 2K (finishedTakes). */
@@ -200,6 +200,8 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
   const finished = useContext(FinishedIn2k);
   // One paid submit at a time, with a nonce the server answers a repeat with (a double click is one 2K render).
   const guard = useSubmitGuard();
+  // Remove a person runs on a self-hosted Fuobe only: a guest or an account isn't sent there.
+  const visitor = useLikelyVisitor();
   const o = u.output;
   const elsewhere = foreign(u.g, projectId);
   // Finish in 2K: a MiniMax H3 take below 2K (fal renders it again at 2K; your GPU redraws it with Open-H3 Regenerate),
@@ -257,11 +259,13 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
             <DropdownMenuItem onClick={() => handlers.onReference(o.url, "video")}>
               <ImagePlus /> Use as reference clip
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`/video-tools/remove-person?video=${encodeURIComponent(o.url)}`}>
-                <UserX /> Remove a person
-              </Link>
-            </DropdownMenuItem>
+            {!visitor && (
+              <DropdownMenuItem asChild>
+                <Link href={`/video-tools/remove-person?video=${encodeURIComponent(o.url)}`}>
+                  <UserX /> Remove a person
+                </Link>
+              </DropdownMenuItem>
+            )}
             {finish && (
               <DropdownMenuItem
                 onClick={() =>
@@ -791,7 +795,7 @@ export function CinemaFeed({
             </DropdownMenu>
           )}
           <button type="button" onClick={() => void del(live)} className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium text-destructive hover:bg-destructive/10">
-            <Trash2 className="size-3.5" /> Delete
+            <Trash2 className="size-3.5" /> Move to Trash
           </button>
         </div>
       )}

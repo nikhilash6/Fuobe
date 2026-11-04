@@ -206,7 +206,7 @@ NEW10 = {
     "blackforestlabs/flux-3/klein/base/text-to-image/lora": ("t2i", {**KLEIN_T2I, "loras": "loras"}, "FLUX 3 Klein Base LoRA", "FLUX 3 Klein Base Text to Image LoRA"),
     "blackforestlabs/flux-3/klein/base/edit-image/lora": ("edit", {**KLEIN_EDIT, "loras": "loras"}, "FLUX 3 Klein Base LoRA", "FLUX 3 Klein Base Edit LoRA"),
 }
-# Research #10 §5 (package idol-1): Speridlabs' Idol is hosted on fal since 2026-10-30 (speridlabs/idol; fal-ai/idol answers the same
+# new-models-10 §5: Speridlabs' Idol is hosted on fal since 2026-10-30 (speridlabs/idol; fal-ai/idol answers the same
 # schema but has no catalog entry). One picture of one object -> a .ply splat (model_mesh), a point-cloud GLB preview (model_glb) and the
 # cut-out it saw (preprocessed_image). image_type "real" is Idol's looser photo crop (1.7), "synthetic" its default (1.2).
 NEW10_SPLATS = {
@@ -241,7 +241,7 @@ KEYING = {
 }
 
 
-# Research #10 (build package nm10-music3): full songs in the cloud, read with --music into new-models-10.json endpointRecords.
+# Research #10: full songs in the cloud, read with --music into new-models-10.json endpointRecords.
 # MiniMax Music 3 is the same open model the open engine runs (its weights' own licence and the Comfy-Org repack's tag are
 # both recorded); Mureka, ElevenLabs and Lyria are proprietary APIs. Mureka's song tools take a song_id from one of its own
 # answers or an id from its files/upload (purpose "audio" / "remix"); its stems take a plain URL and answer with a zip.
@@ -305,7 +305,7 @@ def music10(ids):
     path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-# Hosted catch-up (build package nm10-hosted-catchup): fal's September-October MiniMax H3 Max tools (lip sync, relight, insert,
+# Hosted catch-up: fal's September-October MiniMax H3 Max tools (lip sync, relight, insert,
 # five looks), H3 Max Turbo, Vidu Q4, Meshy retexture and Tripo P2, and Replicate's H3 Lite and HighSpeed, read with --catchup
 # into docs/research/new-models-10.json endpointRecords (part 4's record shape; gen-cloud-models.py merges them last).
 # Values: (operation, keyFields, vendor, model, notes).

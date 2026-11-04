@@ -7,7 +7,7 @@ import type { ScenePose } from "@/lib/scene3d";
 import { cn } from "@/lib/utils";
 
 /**
- * The Angles app's orbit pad (qma-angles): drag round the ring to swing the camera, up and down to raise or lower it. It
+ * The Angles app's orbit pad: drag round the ring to swing the camera, up and down to raise or lower it. It
  * snaps to the nearest of the app's views (QMA's 96: 8 sides, 4 heights, 3 distances) and sets the same choices as the chips
  * beside it, so both always agree.
  */

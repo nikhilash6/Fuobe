@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fitLoras, lorasFit, loraEntry, loraRef } from "@/lib/catalog/loras";
 import type { LoraRef } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // The route's GET opts out of prerendering with connection(), which needs a request scope.
 vi.mock("next/server", () => ({ connection: async () => {} }));
@@ -19,12 +19,11 @@ vi.mock("@/lib/catalog/lora-library.generated", async (importOriginal) => {
 });
 
 // The downloader reads the civitai key and the LoRA folder from the settings table: a throwaway data folder.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-lora-fetch-"));
+const dir = tempDir("fuobe-lora-fetch-");
 process.env.FUOBE_DATA_DIR = dir;
 const { downloadLora, ensureLorasOnComfy, gatedFileReady, prepareCloudLoras, listLoraCopies, lorasPath, redact, LORA_CACHE_DIR } = await import("@/server/loras");
 const { setSetting } = await import("@/server/settings");
 const { db } = await import("@/server/db");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const KEY = "civitai-secret-0123456789abcdef";
 const bytes = (s: string) => Buffer.from(s.repeat(64));
@@ -285,7 +284,7 @@ describe("Before a cloud run", () => {
     const route = { provider: "fal" as const, loraEndpoint: "fal-ai/wan/v2.2-a14b/image-to-video/lora" };
     const sent = fitLoras([bare], route);
     expect(sent.loras).toEqual([bare]);
-    expect(sent.notes[0]).toMatch(/^Wiggle Redmond: its licence allows your GPU only \(civitai lists no “Rent”\); it runs in the cloud because Settings → Models & licences lets such LoRAs go there/);
+    expect(sent.notes).toEqual([]);
     const kept = fitLoras([{ ...bare, keepOnGpu: true }], route);
     expect(kept.loras).toEqual([]);
     expect(kept.notes[0]).toMatch(/^Wiggle Redmond is licensed for your GPU only and Settings → Models & licences keeps such LoRAs off the cloud, so this run leaves it out/);

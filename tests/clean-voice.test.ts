@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   CLEAN_MAX_SECONDS,
   CLOUD_CLEAN_PROBLEM,
@@ -26,10 +25,11 @@ import { APPS, getModel } from "@/lib/catalog";
 import { blockerFor } from "@/lib/composer";
 import type { Generation } from "@/lib/catalog/types";
 import { defaultModelForNode, NODE_SPECS, nodeOps, paletteItems } from "@/lib/catalog/canvas";
+import { tempDir } from "./helpers/temp-dir";
 
 // Audio → Clean up voice (NVIDIA RE-USE): the planner, the rate and time rules, the Library action, the app, and the API
 // in demo mode.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-clean-"));
+const dir = tempDir("fuobe-clean-");
 process.env.FUOBE_DATA_DIR = dir;
 // Nothing listens: the open model runs on the demo provider.
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -41,7 +41,6 @@ const gens = await import("@/server/generations");
 const route = await import("@/app/api/audio-tools/route");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 function upload(seconds: number, channels = 1, name = "voice.wav"): string {
   const rate = 8000;

@@ -15,19 +15,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { SKILL_LIMITS, SKILL_NAME_RE } from "@/lib/assist";
 import { formatCost } from "@/lib/format";
-import { isMediaType, recipeProblems, RECIPE_LIMITS, type ParamType } from "@/lib/recipe";
-import { buildRecipe, paramIdFrom, rowsCsv, skillBody, slugify, type DraftCandidate, type DraftRefusal, type DraftStep, type Naming, type SkillDraft, type Slot } from "@/lib/recipe-builder";
+import { isMediaType, recipeProblems, RECIPE_LIMITS, TEST_RUN_NOTE, type ParamType } from "@/lib/recipe";
+import { buildRecipe, paramIdFrom, skillBody, slugify, type DraftCandidate, type DraftRefusal, type DraftStep, type Naming, type SkillDraft, type Slot } from "@/lib/recipe-builder";
 import { refusalShown } from "@/lib/refusals";
 import { cn } from "@/lib/utils";
 
 /**
  * Make a skill from results already made (package W2): the steps behind them, rebuilt by the server from their exact
- * requests; what changes next time (every input starts Fixed); a free check (the plan on each engine, then a dry run on
- * the demo provider); then Save, which opens the Run form with the inputs it was made from ("Try it with new inputs").
+ * requests; what changes next time (every input starts Fixed); a free test run (the plan on each engine, then one run
+ * with placeholder results); then Save, which opens the Run form with the inputs it was made from ("Try it with new inputs").
  * A tall dialog on a desktop, the whole screen on a phone.
  */
 export function SkillBuilder({ source, onClose }: { source: DraftSource; onClose: () => void }) {
-  const [saved, setSaved] = useState<{ name: string; csv?: string } | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  // A canvas's Table rows wait in the Run form's Many tab (W5).
+  const rows = useSkillDraft(source).data?.rows;
+  const csv = rows?.length ? csvOf(rows) : undefined;
   return (
     <>
       <Dialog open={!saved} onOpenChange={(o) => !o && !saved && onClose()}>
@@ -37,10 +40,10 @@ export function SkillBuilder({ source, onClose }: { source: DraftSource; onClose
       </Dialog>
       {saved && (
         <RunSkillDialog
-          name={saved.name}
+          name={saved}
           examples
-          csv={saved.csv}
-          intro={saved.csv ? "Run it for the table's rows, or switch to One for a single run." : "Try it with new inputs: the form starts with the ones it was made from."}
+          csv={csv}
+          intro={csv ? "Its table's rows are in Many: run them all, or one with new inputs." : "Try it with new inputs: the form starts with the ones it was made from."}
           onClose={onClose}
         />
       )}
@@ -48,21 +51,26 @@ export function SkillBuilder({ source, onClose }: { source: DraftSource; onClose
   );
 }
 
-type Saved = { name: string; csv?: string };
+/** Rows of values as a CSV the Run form's Many tab reads (a header of input ids, then one row per run). */
+function csvOf(rows: Record<string, string>[]): string {
+  const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  return [cols.join(","), ...rows.map((r) => cols.map((c) => cell(r[c] ?? "")).join(","))].join("\n");
+}
 
-function Loader({ source, onClose, onSaved }: { source: DraftSource; onClose: () => void; onSaved: (saved: Saved) => void }) {
+function Loader({ source, onClose, onSaved }: { source: DraftSource; onClose: () => void; onSaved: (name: string) => void }) {
   const q = useSkillDraft(source);
   const chat = "thread" in source;
-  const board = "canvas" in source;
+  const canvas = "canvas" in source;
   const count = "generations" in source ? source.generations.length : 0;
   const header = (
     <DialogHeader className="border-b px-5 pt-5 pb-4 text-left">
-      <DialogTitle className="font-heading text-[24px] leading-tight font-normal">{chat || board ? "Save as skill" : "Make a skill"}</DialogTitle>
+      <DialogTitle className="font-heading text-[24px] leading-tight font-normal">{chat || canvas ? "Save as skill" : "Make a skill"}</DialogTitle>
       <DialogDescription>
         {chat
           ? "From this chat: Fuobe rebuilds the steps from the plans that ran, so next time it runs them again with new inputs."
-          : board
-            ? "From this canvas: its nodes become the steps and its inputs the form, so it runs from Skills, Assist, the CLI and schedules."
+          : canvas
+            ? "From this canvas: each model node is a step, so the skill runs the same steps from a form, Assist, the command line or a schedule."
             : `From ${count === 1 ? "this result" : `${count} results`}: Fuobe rebuilds the steps from what you made, so nothing has to be recorded.`}
       </DialogDescription>
     </DialogHeader>
@@ -78,7 +86,9 @@ function Loader({ source, onClose, onSaved }: { source: DraftSource; onClose: ()
           </p>
         ) : q.data ? (
           <>
-            <p className="text-[14px]">{chat ? "This chat can't become a skill yet:" : board ? "This canvas can't become a skill yet:" : q.data.refusals.length === 1 ? "This result can't become a skill yet:" : "None of these results can become a skill yet:"}</p>
+            <p className="text-[14px]">
+              {chat ? "This chat can't become a skill yet:" : canvas ? "This canvas can't become a skill yet:" : q.data.refusals.length === 1 ? "This result can't become a skill yet:" : "None of these results can become a skill yet:"}
+            </p>
             <Refusals list={q.data.refusals} open />
           </>
         ) : (
@@ -110,11 +120,9 @@ interface CheckState {
 
 const ENGINE_WORD = { cloud: "Cloud", open: "your GPU" } as const;
 
-function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: SkillDraft; refusals: DraftRefusal[]; source: DraftSource; onClose: () => void; onSaved: (saved: Saved) => void; header: React.ReactNode }) {
+function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: SkillDraft; refusals: DraftRefusal[]; source: DraftSource; onClose: () => void; onSaved: (name: string) => void; header: React.ReactNode }) {
   const actions = useDraftActions();
-  // Fixed unless it varied in the skill a canvas was drawn from, or is a Table's column (W5).
-  const [varies, setVaries] = useState<Record<string, boolean>>(() => Object.fromEntries(draft.candidates.filter((c) => c.varies).map((c) => [c.id, true])));
-  const [replace, setReplace] = useState(!!draft.replaces);
+  const [varies, setVaries] = useState<Record<string, boolean>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [pids, setPids] = useState<Record<string, string>>({});
   const [required, setRequired] = useState<Record<string, boolean>>({});
@@ -134,11 +142,11 @@ function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: 
   const own = useMemo(() => {
     const out = recipeProblems(recipe);
     if (recipe.params.length > RECIPE_LIMITS.params) out.unshift(`A skill takes at most ${RECIPE_LIMITS.params} inputs: switch some back to Fixed`);
-    if (!replace && !SKILL_NAME_RE.test(name)) out.unshift("The name is lowercase letters, digits and single hyphens (e.g. lamp-turntable)");
+    if (!SKILL_NAME_RE.test(name)) out.unshift("The name is lowercase letters, digits and single hyphens (e.g. lamp-turntable)");
     if (!title.trim()) out.unshift("Give the skill a title");
     if (!description.trim()) out.unshift("Give the skill a description");
     return out;
-  }, [recipe, name, title, description, replace]);
+  }, [recipe, name, title, description]);
   const body = customBody ?? skillBody(recipe, draft, { title: title.trim() || draft.title, description: description.trim() || draft.description, name });
   const current = check?.key === key ? check : null;
   const planOk = !!current?.plan?.ok || (current?.plan?.ready.length ?? 0) > 0;
@@ -174,10 +182,9 @@ function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: 
     if (!planOk || own.length) return;
     setBusy("save");
     try {
-      const into = replace && draft.replaces ? draft.replaces.name : name;
-      const view = await actions.save({ name: into, title: title.trim(), description: description.trim(), whenToUse: whenToUse.trim() || undefined, body, recipe, ...(replace && { replace: true }) });
-      toast.success(replace ? `Saved back into /${view.name}` : `Saved /${view.name}`, { description: replace ? "Its steps are the canvas's now; its SKILL.md is as it was." : "It's in Skills → My skills. Try it with new inputs now." });
-      onSaved({ name: view.name, ...(draft.rows?.length && { csv: rowsCsv(draft.rows, recipe.params, { ids: pids }) }) });
+      const view = await actions.save({ name, title: title.trim(), description: description.trim(), whenToUse: whenToUse.trim() || undefined, body, recipe });
+      toast.success(`Saved /${view.name}`, { description: "It's in Skills → My skills. Try it with new inputs now." });
+      onSaved(view.name);
     } catch (e) {
       const f = e as Error & { problems?: string[] };
       if (refusalShown(f)) return;
@@ -298,40 +305,30 @@ function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: 
               <h3 id="sb-about" className="text-sm font-medium">
                 About this skill
               </h3>
-              {draft.replaces && (
-                <label className="flex items-start gap-2 rounded-xl bg-muted/60 px-3 py-2.5 text-[13px]">
-                  <Checkbox checked={replace} onCheckedChange={(v) => setReplace(v === true)} className="mt-0.5" />
-                  <span className="min-w-0">
-                    <span className="font-medium">Save back into /{draft.replaces.name}</span>
-                    <span className="block text-[12px] text-muted-foreground">Its steps and inputs become the canvas&apos;s; its title and SKILL.md stay as they are. Untick to save a new skill.</span>
-                  </span>
-                </label>
-              )}
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                 <Field label="Title" id="sb-title">
-                  <Input id="sb-title" value={title} maxLength={SKILL_LIMITS.title} onChange={(e) => setTitle(e.target.value)} disabled={replace} />
+                  <Input id="sb-title" value={title} maxLength={SKILL_LIMITS.title} onChange={(e) => setTitle(e.target.value)} />
                 </Field>
                 <Field label="Name" id="sb-name" hint="Run it as /name in Assist">
                   <div className="flex items-center rounded-md border bg-background pl-2.5 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
                     <span className="text-[14px] text-muted-foreground">/</span>
                     <input
                       id="sb-name"
-                      value={replace && draft.replaces ? draft.replaces.name : name}
+                      value={name}
                       maxLength={SKILL_LIMITS.name}
                       onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
                       onBlur={() => setName((n) => slugify(n) || draft.name)}
                       className="h-9 min-w-0 flex-1 bg-transparent px-1 text-[14px] outline-none"
-                      aria-invalid={!replace && !SKILL_NAME_RE.test(name)}
-                      disabled={replace}
+                      aria-invalid={!SKILL_NAME_RE.test(name)}
                     />
                   </div>
                 </Field>
               </div>
               <Field label="Description" id="sb-desc">
-                <Textarea id="sb-desc" rows={2} value={description} maxLength={SKILL_LIMITS.description} onChange={(e) => setDescription(e.target.value)} disabled={replace} />
+                <Textarea id="sb-desc" rows={2} value={description} maxLength={SKILL_LIMITS.description} onChange={(e) => setDescription(e.target.value)} />
               </Field>
               <Field label="When to use it" id="sb-when">
-                <Textarea id="sb-when" rows={2} value={whenToUse} maxLength={SKILL_LIMITS.whenToUse} onChange={(e) => setWhenToUse(e.target.value)} disabled={replace} />
+                <Textarea id="sb-when" rows={2} value={whenToUse} maxLength={SKILL_LIMITS.whenToUse} onChange={(e) => setWhenToUse(e.target.value)} />
               </Field>
               <Collapsible className="overflow-hidden rounded-xl border">
                 <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] font-medium hover:bg-accent">
@@ -367,10 +364,10 @@ function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: 
               Cancel
             </Button>
             <Button variant={planOk ? "outline" : "default"} size="sm" onClick={() => void runCheck()} disabled={busy !== null || own.length > 0} className="max-sm:flex-1">
-              {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {current?.plan ? "Check again" : "Check it"}
+              {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {current?.plan ? "Test again (free)" : "Test run (free)"}
             </Button>
             <Button size="sm" onClick={() => void save()} disabled={busy !== null || !planOk || own.length > 0} className="max-sm:flex-[1.4]">
-              {busy === "save" ? <Loader2 className="animate-spin" /> : <Check />} {replace ? "Save back" : "Save skill"}
+              {busy === "save" ? <Loader2 className="animate-spin" /> : <Check />} Save skill
             </Button>
           </div>
         </div>
@@ -381,13 +378,13 @@ function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: 
 
 /** The line above the footer's buttons: what to do next, or what the check found. */
 function statusLine(c: CheckState | null, busy: "check" | "save" | null, own: string[]): string {
-  if (own.length) return "Fix what's marked to check it";
-  if (busy === "check") return "Checking: pricing every step on each engine…";
+  if (own.length) return "Fix what's marked to test it";
+  if (busy === "check") return "Test run: pricing every step on each engine…";
   if (busy === "save") return "Saving…";
-  if (!c?.plan) return "Check it first — it's free: Fuobe prices every step and runs it once on the demo provider.";
+  if (!c?.plan) return `Do a free test run first. ${TEST_RUN_NOTE}`;
   if (!c.plan.ready.length) return "It doesn't run as it is: see what's marked";
   const where = c.plan.ready.map((e) => ENGINE_WORD[e]).join(" and ");
-  return `It runs on ${where}. Save it now; the free dry run finishes on its own.`;
+  return `It runs on ${where}. Save it now; the placeholder run finishes on its own.`;
 }
 
 function priceOf(e: DraftCheckResult["engines"][number]): string {
@@ -413,21 +410,21 @@ function CheckBadges({ check }: { check: CheckState }) {
       ))}
       {demo === "running" && (
         <span className="inline-flex h-6 items-center gap-1 rounded-full bg-muted px-2 text-[12px] text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" /> Dry run…
+          <Loader2 className="size-3 animate-spin" /> Placeholder run…
         </span>
       )}
       {demo && demo !== "running" && skipped && (
         // A studio step's dry run would make a record you'd see (a demo dub): its plan is its check, and nothing ran.
         <span className="inline-flex h-6 items-center gap-1 rounded-full bg-muted px-2 text-[12px] text-muted-foreground" title={skipped}>
-          <Info className="size-3" /> No dry run: a studio step is checked by its plan
+          <Info className="size-3" /> Priced only: a studio step isn&apos;t test-run
         </span>
       )}
       {demo && demo !== "running" && !skipped && (
         <span className={cn("inline-flex h-6 items-center gap-1 rounded-full px-2 text-[12px] font-medium", demo.ok ? "bg-brand-faint text-brand-text" : "bg-destructive/10 text-destructive")} title={demo.ok ? undefined : demo.engines.flatMap((e) => e.dryRun?.problems ?? []).join("; ")}>
-          {demo.ok ? <Check className="size-3" /> : <X className="size-3" />} Dry run {demo.ok ? "passed" : "failed"}
+          {demo.ok ? <Check className="size-3" /> : <X className="size-3" />} Placeholder run {demo.ok ? "passed" : "failed"}
         </span>
       )}
-      {check.error && <span className="inline-flex h-6 items-center rounded-full bg-destructive/10 px-2 text-[12px] text-destructive">Dry run: {check.error}</span>}
+      {check.error && <span className="inline-flex h-6 items-center rounded-full bg-destructive/10 px-2 text-[12px] text-destructive">Placeholder run: {check.error}</span>}
     </div>
   );
 }
@@ -660,14 +657,8 @@ function Words({ c, varies, slots, setSlots, takenIds }: { c: DraftCandidate; va
     setSlotLabel("");
     setTyping(false);
   };
-  if (varies && c.kept) {
-    return <p className="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-[12px] text-muted-foreground">These words are an input, asked for in the Run form.</p>;
-  }
-  if (c.kept) {
-    return <p className="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-[12px] text-muted-foreground">Fixed leaves these words empty in the skill.</p>;
-  }
   if (varies) {
-    return <p className="mt-2 line-clamp-3 rounded-lg bg-muted/60 px-3 py-2 text-[12px] break-words text-muted-foreground">{c.part ? "These words are an input" : "The whole prompt is an input"}. Was: “{text}”</p>;
+    return <p className="mt-2 line-clamp-3 rounded-lg bg-muted/60 px-3 py-2 text-[12px] break-words text-muted-foreground">The whole prompt is an input. Was: “{text}”</p>;
   }
   return (
     <div className="mt-2 space-y-2">

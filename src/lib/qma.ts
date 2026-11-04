@@ -1,5 +1,5 @@
 /**
- * QMA camera angles (package qma-angles): gribbliest's Qwen-Image 2.1 edit LoRA "qwen-image-2.1-qma-camera-angles" @ 13007eec
+ * QMA camera angles: gribbliest's Qwen-Image 2.1 edit LoRA "qwen-image-2.1-qma-camera-angles" @ 13007eec
  * (Apache-2.0 on its card, rank 64, 319 MB), which re-shoots a picture from one of 96 cameras. Its prompt is always
  * "<qma> {azimuth} {elevation} {distance}", optionally followed by more edit words; directions are the ORIGINAL CAMERA's, not
  * the subject's ("right side view" = the camera swings 90° to its own right round the subject). Card settings: LoRA 1.0,

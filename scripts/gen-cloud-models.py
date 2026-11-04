@@ -234,14 +234,14 @@ KLEIN_LICENCE = {"licence": KLEIN_REC["license"].split(":")[0], "commercial": No
 KLEIN_HELPER = {"param": "promptHelper", "label": "Prompt helper", "values": ["on", "off"], "default": "on",
                 "labels": {"on": "On · full caption (not with boxes)", "off": "Off · your words as typed"}}
 model("flux-3-klein", "FLUX 3 Klein", "Black Forest Labs", "flux", "image",
-      "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper · FLUX Kommunity licence",
+      "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper",
       [("t2i", f"{KLEIN_FAL}/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/text-to-image/lora"}),
        ("edit", f"{KLEIN_FAL}/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/edit-image/lora", "followsImage": True})],
       badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
       pricing=("image", KLEIN_REC["pricing"]["usd"], "per image at 1K (fal's planned rates by size)", {"byResolution": KLEIN_REC["pricing"]["byResolution"]}),
       licence=KLEIN_LICENCE)
 model("flux-3-klein-base", "FLUX 3 Klein Base", "Black Forest Labs", "flux", "image",
-      "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them · FLUX Kommunity licence",
+      "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them",
       [("t2i", f"{KLEIN_FAL}/base/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/text-to-image/lora"}),
        ("edit", f"{KLEIN_FAL}/base/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/edit-image/lora", "followsImage": True})],
       badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
@@ -275,7 +275,7 @@ model("qwen-image-edit-2509-cloud", "Qwen-Image-Edit 2509 (hosted)", "Alibaba Qw
       "Open-weights Qwen-Image-Edit 2509 with its LoRAs (relight, next scene, angles)",
       [("edit", "fal-ai/qwen-image-edit-plus-lora", "fal")], hidden=True)
 model("flux-2-klein-4b-cloud", "FLUX.2 [klein] 4B (hosted)", "Black Forest Labs", "flux", "image",
-      "The Apache-2.0 FLUX.2: quick drafts and edits",
+      "The open FLUX.2: quick drafts and edits",
       [("t2i", "fal-ai/flux-2/klein/4b", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/lora"}),
        ("edit", "fal-ai/flux-2/klein/4b/edit", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/edit/lora"})],
       badges=["fast"], defaults={"aspectRatio": "1:1"})
@@ -283,23 +283,23 @@ model("wan-2-2-a14b-image-cloud", "Wan 2.2 A14B Image (hosted)", "Alibaba Wan", 
       "Open-weights Wan 2.2 stills that take Wan LoRAs",
       [("t2i", "fal-ai/wan/v2.2-a14b/text-to-image/lora", "fal")], defaults={"aspectRatio": "16:9"})
 # Soul ID on every base fal trains (O3, o/soul-id): a character or style LoRA trained on FLUX.1 [dev], FLUX.2 [dev],
-# Krea 2 or FLUX.2 [klein] 9B runs on these. The weights' licences are information shown with the model, never a gate
+# Krea 2 or FLUX.2 [klein] 9B runs on these. The weights' licences are information on Thanks & licences, never a gate
 # (the owner's decision of 2026-10-27): FLUX [dev] and klein 9B weights are non-commercial (fal clears its own hosted
 # outputs), Krea 2 has revenue tiers. The admin turns models on or off in Settings.
 model("flux-1-dev-lora-cloud", "FLUX.1 [dev] with LoRAs (hosted)", "Black Forest Labs", "flux", "image",
-      "FLUX.1 [dev] with your trained characters and styles · non-commercial weights",
+      "FLUX.1 [dev] with your trained characters and styles",
       [("t2i", "fal-ai/flux-lora", "fal")], defaults={"aspectRatio": "3:4"})
 model("flux-1-krea-lora-cloud", "FLUX.1 Krea [dev] with LoRAs (hosted)", "Black Forest Labs × Krea", "flux", "image",
-      "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs · non-commercial weights",
+      "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs",
       [("t2i", "fal-ai/flux-krea-lora", "fal")], defaults={"aspectRatio": "3:4"})
 model("flux-2-dev-lora-cloud", "FLUX.2 [dev] with LoRAs (hosted)", "Black Forest Labs", "flux", "image",
-      "FLUX.2 [dev] with your trained characters and styles · non-commercial weights",
+      "FLUX.2 [dev] with your trained characters and styles",
       [("t2i", "fal-ai/flux-2/lora", "fal")], defaults={"aspectRatio": "3:4"})
 model("flux-2-klein-9b-lora-cloud", "FLUX.2 [klein] 9B with LoRAs (hosted)", "Black Forest Labs", "flux", "image",
-      "The 9B FLUX.2 [klein] with your LoRAs · non-commercial weights",
+      "The 9B FLUX.2 [klein] with your LoRAs",
       [("t2i", "fal-ai/flux-2/klein/9b/lora", "fal")], badges=["fast"], defaults={"aspectRatio": "3:4"})
 model("krea-2-turbo-lora-cloud", "Krea 2 Turbo with LoRAs (hosted)", "Krea", "krea", "image",
-      "Krea 2's aesthetic with your trained characters and styles · Krea 2 Community licence (revenue tiers)",
+      "Krea 2's aesthetic with your trained characters and styles",
       [("t2i", "fal-ai/krea-2/turbo/lora", "fal")], badges=["fast"], defaults={"aspectRatio": "3:4"})
 # ----- Originals (O2): Fuobe Soul's cloud halves on hosted open weights (docs/research/fuobe-originals-recipes-5.md §4).
 # models.ts joins each to its ComfyUI routes as one model that runs on both engines (ModelDef.engines). Sizes are
@@ -597,7 +597,7 @@ model("minimax-h3-max-3d", "MiniMax H3 Max 3D to video", "MiniMax", "hailuo", "v
       [("v2v", "minimax/h3-max/3d-to-video")], hidden=True, defaults={"resolution": "768P"},
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request; + $0.10 for each reference it draws when given none (up to 2)",
                {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16}, "minSeconds": 5, "perRequest": 0.5, "generatedRefs": {"usd": 0.1, "count": 2}}))
-# ----- Hosted catch-up (package nm10-hosted-catchup; research new-models-10.json endpointRecords, read 2026-11-02 with
+# ----- Hosted catch-up (research new-models-10.json endpointRecords, read 2026-11-02 with
 # scripts/fetch-hosted-schemas.py --catchup). Closed models on fal and Replicate: cloud only; the open engine keeps its own tools.
 H3_RES = {"480P": 0.05, "768P": 0.08, "1080P": 0.16, "2K": 0.32}
 # H3 Max lip sync: a portrait (0.4-2.5 wide) and 5 s to 15 min of audio; the video is as long as the audio, billed per second by
@@ -730,7 +730,7 @@ model("fuobe-dop-ltx", "Fuobe DoP · LTX", "Fuobe Original", "fuobe-dop", "video
       original=True, api_defaults={"enable_prompt_expansion": False},
       pricing=("second", 0.036, "$0.001605 per megapixel of video: about $0.18 for 5 s at 720p ($0.20 with LoRAs)", {"withLoras": 0.04}),
       options={"durations": [3, 5]}, defaults={"aspectRatio": "auto", "duration": 5, "generateAudio": False}, frame_step=8)
-# ----- Fuobe Animation (package inbetweening): keyframe in-betweening's cloud half. fal's Wan 2.2 A14B image-to-video
+# ----- Fuobe Animation: keyframe in-betweening's cloud half. fal's Wan 2.2 A14B image-to-video
 # takes an end frame, 17–161 frames and LoRAs per expert (schema read 2026-11-02): one hosted clip per gap with AniSora
 # 3.2 on the high-noise expert (models.ts sends it, options.loras), joined. fal makes every frame and plays it as made
 # (16 fps, interpolation off): the every-Nth speeds and 24 fps playback are the GPU graph's (src/lib/inbetween.ts).
@@ -849,7 +849,7 @@ model("fuobe-shorts", "Fuobe Shorts", "Fuobe Original", "fuobe-shorts", "video",
                                                {"byResolution": {"720p": 0.1, "580p": 0.075, "480p": 0.05}}),
       api_defaults=SHORTS_O["cloud"]["defaults"], defaults={"resolution": "720p"}, licence=SHORTS_O["licence"])
 # ----- Originals (O13): Fuobe Evolution's cloud half (research §8 evolution → studios[evolution].original.cloud): fal's
-# hosted Wan 2.2 Fun VACE depth, the GPU recipe's own model (the owner's call of 2026-10-30; LTX-2.3 video-to-video until
+# hosted Wan 2.2 Fun VACE depth, the GPU recipe's own model (since 2026-10-30; LTX-2.3 video-to-video until
 # 2026-11-01). The piece as video_url (preprocess on, fal derives the depth), its direction frame (hosted
 # Qwen-Image-Edit 2511, planned by src/lib/catalog/evolution.ts) as the VACE reference, ref_image_urls, the way the GPU
 # graph feeds it to WanVaceToVideo's reference_image (`image`, fal's first_frame_url, is dropped: the GPU pins no first
@@ -932,7 +932,7 @@ model("pixverse-v6", "PixVerse V6", "PixVerse", "pixverse", "video", "Stylized s
 model("vidu-q3", "Vidu Q3", "Shengshu", "vidu", "video", "Anime-friendly video with references",
       [("t2v", "fal-ai/vidu/q3/text-to-video"), ("i2v", "fal-ai/vidu/q3/image-to-video"), ("ref2v", "fal-ai/vidu/q3/reference-to-video/mix")],
       defaults={"aspectRatio": "16:9"})
-# Vidu Q4 on fal (package nm10-hosted-catchup): a start frame, or up to 12 reference pictures and 3 voice clips (mp3, 3-12 s) with
+# Vidu Q4 on fal: a start frame, or up to 12 reference pictures and 3 voice clips (mp3, 3-12 s) with
 # sound on request, 3-16 s up to 4K. Vidu's own API takes more references than fal's schema exposes; Fuobe sends what fal takes.
 model("vidu-q4", "Vidu Q4", "Shengshu", "vidu", "video", "Vidu's newest: a start frame or up to 12 references and 3 voices, 3–16 s, up to 4K",
       [("i2v", "fal-ai/vidu/q4/image-to-video"), ("ref2v", "fal-ai/vidu/q4/reference-to-video")], badges=["new", "4k", "audio"], ranged_durations=True,
@@ -1108,7 +1108,7 @@ model("minimax-music-2-5", "MiniMax Music 2.5", "MiniMax", "minimax-music", "aud
       [("music", "fal-ai/minimax-music/v2.5")], fixed={"lyrics_optimizer": True})
 model("stable-audio-3-music", "Stable Audio 3 Music", "Stability AI", "stable-audio", "audio", "Quick loops and beds up to 2 minutes",
       [("music", "fal-ai/stable-audio-3/small/music/text-to-audio")], badges=["fast"], defaults={"duration": 30}, options={"durations": [10, 30, 60, 120]})
-# Full songs (nm10-music3, research #10 endpointRecords): lyrics go in params.extra.lyrics with Fuobe's section tags
+# Full songs (new-models-10 endpointRecords): lyrics go in params.extra.lyrics with Fuobe's section tags
 # (src/lib/lyrics.ts); FieldMap.lyrics sends them in the API's own field. Mureka 9.5 moved from the versioned route
 # (mureka/api/generate/song, whose fal catalog entry lost its metadata) to its own; a past run's Version (params.extra.model)
 # is no field there, so it's left out (a saved run on another version moves to the model that runs it: replaced.ts
@@ -1259,7 +1259,7 @@ model("extract-soundtrack", "Extract soundtrack", "fal", "utility", "audio", "A 
 model("elevenlabs-voice-isolation", "ElevenLabs Voice Isolation", "ElevenLabs", "elevenlabs", "audio", "Clean speech from a video or recording — music and noise removed",
       [("separate-audio", "fal-ai/elevenlabs/audio-isolation")], pricing=("minute", 0.1))
 # Clean up dialogue in the cloud (DBS D5, docs/research/dbs-separation-7.md §6): hosted speech cleaners under their own
-# names (DBS isn't hosted, and the owner hasn't allowed SAM Audio in its place). VEED Clean Audio takes a video's file too
+# names (DBS isn't hosted, and SAM Audio isn't used in its place). VEED Clean Audio takes a video's file too
 # (its audio_url reads the soundtrack) and bills whole minutes of input, at least one; FLAC keeps its 48 kHz output
 # lossless. DeepFilterNet 3 takes audio only (a video's soundtrack goes in through extract-soundtrack).
 model("veed-clean-audio", "VEED Clean Audio", "VEED", "veed", "audio", "Removes background noise from speech and levels it, keeping quiet and distant words",
@@ -1424,7 +1424,7 @@ model("florence-2-ocr", "Florence-2 OCR", "Microsoft", "florence", "text", "Ever
 # ----- 3D: splats, objects in place, text to 3D, multi-view and rigging
 model("triposplat", "TripoSplat", "Tripo", "tripo", "model3d", "A Gaussian splat of the subject in one photo (background removed)",
       [("splat", "tripo3d/triposplat")], badges=["new"], fixed={"output_format": "ply"}, sliders=[("num_gaussians", "Gaussians")])
-# Idol 3D (package idol-1; research #10 §5, idol-9.md): Speridlabs' Idol, hosted on fal since 2026-10-30. Its own label, never
+# Idol 3D (new-models-10 §5, idol-9.md): Speridlabs' Idol, hosted on fal since 2026-10-30. Its own label, never
 # TripoSplat's. The splat is a .ply (model_mesh); model_glb, a point-cloud preview of the splat's centres, rides along in meta.formats.
 # image_type "real" is Idol's looser photo crop; the page sends it with its Best / Quick look steps and Gaussians as params.extra.
 IDOL_FAL = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == "speridlabs/idol")
@@ -1446,7 +1446,7 @@ model("meshy-7-1-multi", "Meshy 7.1 Multi-view", "Meshy", "meshy", "model3d", "O
       controls=[("topology", "Topology")], options={"minImages": 2})
 model("meshy-rigging", "Meshy Rigging", "Meshy", "meshy", "model3d", "Rig a humanoid GLB with a skeleton, walk and run cycles, or an animation preset",
       [("rig-3d", "fal-ai/meshy/rigging")], badges=["new"], pricing=("request", 0.2, "+$0.12 with an animation preset", {"animationUsd": 0.12}))
-# Retexture a 3D model (package nm10-hosted-catchup): Meshy 7 or 6 paints new textures on a GLB from words or a style picture (the
+# Retexture a 3D model: Meshy 7 or 6 paints new textures on a GLB from words or a style picture (the
 # picture wins when both go). $0.30 a model at 2K or 4K textures, $0.45 at 8K.
 for _v in ("7", "6"):
     model(f"meshy-{_v}-retexture", f"Meshy {_v} Retexture", "Meshy", "meshy", "model3d", "New textures on a 3D model, from words or a style picture",
@@ -1601,7 +1601,7 @@ model("bria-expand", "Bria Expand", "Bria", "bria", "image", "Extend a picture t
 # ----- New speech models
 model("heygen-voice-turbo", "HeyGen Voice Turbo", "HeyGen", "heygen", "audio", "24 voices or an instant clone of yours, in 39 languages, for almost nothing",
       [("tts", "heygen/heygen-voice/turbo")], badges=["new", "fast"], pricing=("request", 0.004, "per 1k chars"))
-# Qwen3-TTS 1.7B on fal (nm10-voice-design; research new-models-10.json endpointRecords, read 2026-11-02): a voice made from
+# Qwen3-TTS 1.7B on fal (research new-models-10.json endpointRecords, read 2026-11-02): a voice made from
 # words, nine premade voices, and a clone in two steps (clone-voice turns the sample into an embedding file, text-to-speech
 # speaks with it; a saved voice keeps the file: src/server/voices.ts). The same model runs on your GPU (oss-qwen3-tts).
 # max_new_tokens is 200 codec tokens by default (12 Hz: about 16 s of speech): 4096 lets a long line finish.
@@ -2053,7 +2053,7 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         opts["voiceClone"] = True
     if "voice" in kf and "[]" not in kf["voice"]:
         fmap["voice"] = kf["voice"]
-    # Voice design and cloning (Qwen3-TTS, nm10-voice-design): the voice in words, what the sample says, a cloned voice's file.
+    # Voice design and cloning (Qwen3-TTS): the voice in words, what the sample says, a cloned voice's file.
     for k in ("voiceDescription", "voiceTranscript", "voiceEmbedding"):
         if k in kf and kf[k].split(".")[0] in inputs:
             fmap[k] = kf[k]
@@ -2371,7 +2371,7 @@ def build_route(op, ep, provider, m, opts, ropts=None):
                 opts["durations"] = union(opts.get("durations", []), picks)
         if key.endswith("_ms"):
             fmap["duration"]["multiplier"] = 1000
-    # Song lyrics (params.extra.lyrics, nm10-music3): the API's lyrics field and the most characters it takes, or after the
+    # Song lyrics (params.extra.lyrics): the API's lyrics field and the most characters it takes, or after the
     # prompt for an API that reads them there (Lyria 3.5); the composer's lyrics editor follows ModelOptions.lyrics.
     if op in ("music", "song-extend", "song-remix") and "lyrics" in kf and (inputs.get(kf["lyrics"]) or {}).get("type") == "string":
         spec = inputs.get(kf["lyrics"]) or {}

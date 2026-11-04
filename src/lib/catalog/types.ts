@@ -39,6 +39,8 @@ export type Operation =
   | "interpolate"
   | "extend" // video → the same clip, continued
   | "grade" // colour grade, rendered in the browser
+  | "relight" // the Relight tool's blend of a photo and its relit picture, rendered in the browser
+  | "motion" // motion graphics, rendered in the browser
   | "reframe" // video → same video at a new aspect ratio (AI-filled edges)
   | "finalize" // draft video → full-quality render of the same take
   | "dialogue" // several speakers → one audio track
@@ -88,20 +90,31 @@ export type Operation =
   // N7-5
   | "composite" // footage + its redrawn swap + the swap + the person's mask → only the person over the footage (Character swap in 2K)
   | "camera-path" // image + params.cameraPath (+ inputs.video: the open engine's render along the path) → the camera following the path
+  // Watermark Remover
+  | "watermark-scan" // image → a JSON report of the marks printed over it (text, logos, stickers, mosaics, blocks) with their boxes in pixels
+  | "watermark-remove" // image + params.extra.boxes (the marks kept for removal) or a mask (white = remove) → the same picture, only under them repaired
   // archive-restore
   | "restore-video" // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
-  // nm10-hosted-catchup
+  // Design a voice
+  | "voice-design" // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  // Genjutsu's Openjutsu modes
+  | "face-fix-video" // video + face photo → the same video with small or soft faces redrawn to match the photo
+  | "tone-video" // video → the same video with a film finish (detail softened, tone-mapped)
+  | "describe-video" // video part (+ a picture) → what happens in it, in words (text)
+  | "group-swap" // video part + 1–4 character pictures + roles → each named person replaced by their character
+  | "scene-edit" // video part (+ a picture) + params.extra (change / remove / new background) → the scene edited, the rest kept
+  | "picture-frame" // video part (+ a character picture) → its first frame with the character in that pose (or relit)
+  | "picture-video" // video part + an approved first frame (+ what happens) → the frame animated with the part's motion
+  // Hosted tools: insert a moment, retexture
   | "insert-moment" // video + params.startTime / params.endTime (+ prompt, reference images and clips, params.duration: the new scene's length) → the clip with a new scene between them
   | "retexture-3d" // 3D model (inputs.model3d) + prompt or a style image → the same model with new textures
-  // nm10-voice-design
-  | "voice-design" // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
-  // nm10-speech-edit
+  // Edit speech
   | "speech-edit" // audio or video (its soundtrack) + params.extra.speechWindows (src/lib/speech-edit.ts) → the recording with those parts changed (AuK)
-  // nm10-music3: a song's cloud tools (Mureka). The song is inputs.audio, or one of Mureka's own (params.extra.songId)
+  // A song's cloud tools (Mureka). The song is inputs.audio, or one of Mureka's own (params.extra.songId)
   | "song-extend" // song + lyrics for the new part (+ params.startTime: where it begins; params.extra.extend_type tail | head) → the song, longer
   | "song-remix" // song + a style (prompt) + the whole song's lyrics → a new arrangement of it
   | "song-stems" // song → its vocal and instrument tracks (meta.stem), one file each
-  // nm10-hy-nomas-world
+  // Worlds (Hy-Nomas)
   | "world-turn"; // params.extra.world (src/lib/world.ts: the opening and the turns) + params.extra.turn → that turn's clip of the world (Hy-Nomas)
 
 export const OPERATION_LABELS: Record<Operation, string> = {
@@ -128,6 +141,8 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   interpolate: "Frame interpolation",
   extend: "Extend video",
   grade: "Color grade",
+  relight: "Relight",
+  motion: "Motion graphics",
   reframe: "Reframe",
   finalize: "Final render",
   dialogue: "Dialogue",
@@ -176,7 +191,16 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   "face-mosaic": "Pixelate faces",
   "camera-path": "Fly path",
   composite: "Character over the footage",
+  "watermark-scan": "Find marks",
+  "watermark-remove": "Remove watermark",
   "restore-video": "Restore & colourise",
+  "face-fix-video": "Fix faces",
+  "tone-video": "Fix colours",
+  "describe-video": "Describe a video",
+  "group-swap": "Group swap",
+  "scene-edit": "Scene edit",
+  "picture-frame": "First frame from a picture",
+  "picture-video": "Video from a picture",
   "insert-moment": "Insert a moment",
   "retexture-3d": "Retexture",
   "song-extend": "Extend a song",
@@ -209,6 +233,8 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   interpolate: "video",
   extend: "video",
   grade: "image",
+  relight: "image",
+  motion: "video",
   reframe: "video",
   finalize: "video",
   dialogue: "audio",
@@ -258,7 +284,16 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   "face-mosaic": "image",
   "camera-path": "video",
   composite: "video",
+  "watermark-scan": "text",
+  "watermark-remove": "image",
   "restore-video": "video",
+  "face-fix-video": "video",
+  "tone-video": "video",
+  "describe-video": "text",
+  "group-swap": "video",
+  "scene-edit": "video",
+  "picture-frame": "image",
+  "picture-video": "video",
   "insert-moment": "video",
   "retexture-3d": "model3d",
   "song-extend": "audio",
@@ -774,9 +809,10 @@ export interface ModelOptions {
    * What this model needs beyond its operation's own inputs, checked before a job is created (the
    * composer shows `msg` inline): reference images for a style-reference t2i model, a prompt for a
    * model whose operation is otherwise promptless, a painted mask or clicked points (video erasers), a video to follow
-   * (the open Fly path's render).
+   * (the open Fly path's render). promptInstead: words stand in for the last of the images (Outfit Swap: a photo of the
+   * outfit, or the outfit described).
    */
-  requires?: { images?: number; prompt?: boolean; mask?: boolean; points?: boolean; video?: boolean; msg: string };
+  requires?: { images?: number; promptInstead?: boolean; prompt?: boolean; mask?: boolean; points?: boolean; video?: boolean; msg: string };
   /** Output formats it can write (params.format: SDR to HDR, export). */
   formats?: VideoFormat[];
   /** Depth maps: the colour maps it draws (params.colormap; see COLORMAPS). Unset = grayscale only. */
@@ -943,8 +979,8 @@ export interface ModelDef {
    */
   engineOptions?: Partial<Record<Engine, Partial<ModelOptions>>>;
   /**
-   * What each engine runs when they differ, in one plain line (the owner's rule of 2026-10-30: each engine does all it
-   * can, the cloud only on hosted models, and the UI says so). Settings → Models & licences shows it under the model.
+   * What each engine runs when they differ, in one plain line (each engine does all it can, the cloud only on
+   * hosted models, and the UI says so). Settings → Models & licences shows it under the model.
    */
   engineNote?: string;
   /** Hidden from pickers (used only internally by presets). */
@@ -1237,11 +1273,9 @@ export interface GenerationRequest {
   batchTitle?: string;
   /**
    * Server-set: made by a run of a skill's recipe (src/lib/recipe.ts): the skill's name and the run's id (its batch), so
-   * a run's history can be read back; `step` is the recipe step's key, so a failure is laid at the step that failed;
-   * `check` marks a free dry run's studio rows (they keep their studio's feature, not skill-check), which a skill's
-   * history and use leave out as they do skill-check rows. Stripped from API input, like chainFilled.
+   * a run's history can be read back. Stripped from API input, like chainFilled.
    */
-  skill?: { name: string; run: string; step?: string; check?: true };
+  skill?: { name: string; run: string };
   /**
    * Server-set: run on the demo provider whatever Settings → Demo mode says (a recipe's free dry run): chooseRoute
    * returns the demo route, and a waiting step runs as a demo after demo steps even with Demo mode off. Stripped from
@@ -1266,12 +1300,6 @@ export interface GenerationRequest {
    * steps, src/server/turnaround.ts; a character trained with it carries its training's time). Stripped from API input.
    */
   consentAt?: number;
-  /**
-   * "Clean the voice first" (src/lib/av/voice-first.ts): a transcript or a lip sync runs on the speech taken out from
-   * under the music and effects (DBS on your GPU, ElevenLabs Voice Isolation in the cloud), and a lip re-sync on your GPU
-   * gets the clip's music and effects back after it. The server expands it into steps (src/server/voice-first.ts).
-   */
-  voiceFirst?: boolean;
 }
 
 export interface ChainSlot {
@@ -1327,7 +1355,7 @@ export interface ChainSlot {
    */
   raw?: boolean;
   /**
-   * "path" (build plan N7-7, a video slot): the server renders the step's camera path (params.cameraPath) through the
+   * "path" (a video slot): the server renders the step's camera path (params.cameraPath) through the
    * scene the dependency made from the step's still (MoGe 2's depth picture), and that render is the input: Uni3C's guide
    * when no browser has drawn one (Canvas, Assist, Fuobe DoP, Cinema's exact orbits). src/server/path-render.ts.
    */
@@ -1473,6 +1501,8 @@ export interface PresetChoice {
   prompt: string;
   /** Model settings this choice sets (params.extra), e.g. the camera angle sliders of Qwen Multiple Angles; what the user set wins. */
   extra?: Record<string, number | string | boolean>;
+  /** Settings only the open engine's graph reads (the Restore LoRA's strength), left out of a cloud run. */
+  openExtra?: Record<string, number | string | boolean>;
 }
 
 export interface PresetOption {
@@ -1585,8 +1615,8 @@ export interface Preset {
   grade?: string;
   /** Fuobe DoP's relight effects: a step that makes the start frame first, on each engine (src/lib/catalog/dop.ts). */
   prestep?: PresetPrestep;
-  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice). */
-  tool?: "clean-voice";
+  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice, Relight, Any Angle, Tap to Recolor, Watermark Remover). */
+  tool?: "clean-voice" | "relight" | "any-angle" | "recolor" | "watermark";
   /** The recipe its preview was made with (src/lib/catalog/preset-recipe-book.json): the route it opens on follows it. */
   recipe?: PresetRecipeBook;
 }

@@ -6,6 +6,7 @@ import { HI3D_CHAIN_PARAM, HI3D_MODEL, HI3D_OP, HI3D_PARAM, chainedRefine } from
 import { chainTiming, chainedWaitMessage, frameTimes, framesWait, planKeyframeClips, spread, type KeyframeClip } from "@/lib/catalog/keyframes";
 import { gapPrompt, MAKE_FPS, requestTiming } from "@/lib/inbetween";
 import { faceMosaicStep } from "@/lib/catalog/open-tools";
+import { planVoiceFirst } from "@/lib/av/voice-first";
 import { dualEngine, onEngine } from "@/lib/catalog/engines";
 import { routesFor } from "@/lib/catalog/plan";
 import type { ChainSlot, Engine, GenParams, Generation, GenerationRequest, LoraRef, ModelDef, ModelRoute, Operation, PresetEndStep } from "@/lib/catalog/types";
@@ -61,7 +62,7 @@ export function assertOneMode(steps: ModeStep[]): void {
  * the result (src/server/recipe-builder.ts) rebuilds that one request, not the rows it expanded into, whose number
  * changes with the input (a film of 3 shots is 4 rows, of 5 shots 6).
  */
-export function withAsked(made: Generation[], asked: GenerationRequest, engine: Engine): Generation[] {
+function withAsked(made: Generation[], asked: GenerationRequest, engine: Engine): Generation[] {
   const [first, ...rest] = made;
   if (!first) return made;
   // A Fuobe Original keeps the engine it ran on, as a plain row's request does (createGenerations).
@@ -842,4 +843,18 @@ export function createPipeline(steps: PipelineStep[], opts: PipelineOptions = {}
     throw e;
   }
   return { batchId, items, byKey };
+}
+
+/**
+ * "Clean the voice first" (src/lib/av/voice-first.ts): the speech separated from the music and effects (DBS on your GPU,
+ * ElevenLabs voice isolation in the cloud) before the transcriber or the lip sync hears it; after a lip re-sync on your
+ * GPU, the music and effects of the same recording go back under it. One batch; the result comes first.
+ */
+export function createVoiceFirst(original: GenerationRequest, engine: Engine, opts: { batchId?: string } = {}): Generation[] {
+  const steps = planVoiceFirst(original, engine);
+  assertOneMode(steps.map((s) => ({ label: s.request.step?.label ?? s.key, modelId: s.request.modelId, op: s.request.op ?? "separate-audio", engine })));
+  // In the caller's batch when it has one (a studio pipeline's transcript step), else a batch of its own.
+  const run = createPipeline(steps.map((s) => ({ key: s.key, request: s.request, ...(s.after && { after: s.after }), ...(s.chain && { chain: s.chain }) })), { batchId: opts.batchId });
+  const last = run.byKey[steps[steps.length - 1].key];
+  return withAsked([last, ...run.items.filter((g) => g.id !== last.id)], original, engine);
 }

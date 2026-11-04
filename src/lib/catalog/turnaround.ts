@@ -154,7 +154,7 @@ export const TURN_ROUTES: Record<TurnRoute, TurnRouteInfo> = {
     duration: 5,
     resolution: "768P",
   },
-  // Turnaround stills · 8 views (qma-angles): QMA · 96 views draws the person from all 8 sides at eye level, one batch of
+  // Turnaround stills · 8 views: QMA · 96 views draws the person from all 8 sides at eye level, one batch of
   // pictures and no film. Your GPU only: fal's Qwen-Image 2.1 takes no LoRAs.
   stills: {
     engine: "open",
@@ -308,7 +308,7 @@ export interface TurnaroundInput {
   route?: TurnRoute;
   /** Draw the sides nobody has a picture of with the Angles app first (default on, except References with a sheet). */
   fill?: boolean;
-  /** What draws them on your GPU: the Angles app's route (default) or QMA · 96 views (qma-angles). */
+  /** What draws them on your GPU: the Angles app's route (default) or QMA · 96 views. */
   fillWith?: TurnFill;
   /** The camera route's path (TURN_PATHS; any N7-5 preset id is taken). */
   path?: string;

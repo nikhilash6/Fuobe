@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ArrowRight, History, Library, Loader2, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
@@ -18,6 +18,8 @@ import { customPack, DEFAULT_ASPECT, MAX_PACK_REFS, MAX_SELFIE_MB, PACKS, PHOTOD
 import type { Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
+import { linkTab, TabFromLink } from "@/components/nav/tab-from-link";
 import { toastError } from "@/lib/refusals";
 import { PackCover } from "./covers";
 import { useRun, useRunPreview, usePackActions, useUserPacks } from "./hooks";
@@ -43,6 +45,9 @@ const TABS = [
   ["instadump", "From a selfie"],
   ["mine", "My packs"],
 ] as const;
+type PackTab = (typeof TABS)[number][0];
+/** The tabs a link can open (?tab=instadump: the bar's menus, search). */
+const TAB_IDS: readonly PackTab[] = TABS.map(([id]) => id);
 const ratioOf = (a: string) => {
   const [w, h] = a.split(":").map(Number);
   return w && h ? w / h : 3 / 4;
@@ -158,7 +163,12 @@ export function PhotodumpView() {
   const isOwner = useIsOwner();
   const [step, setStep] = useState(0);
   const [reached, setReached] = useState(0);
-  const [tab, setTab] = useState<(typeof TABS)[number][0]>("all");
+  const [tab, setTab] = useState<PackTab>("all");
+  // A link to a tab (the bar's menus, search) shows that tab's packs: back to the first step.
+  const tabFromLink = useCallback((id: PackTab) => {
+    setTab(id);
+    setStep(0);
+  }, []);
   const [q, setQ] = useState("");
   const [packId, setPackId] = useState<string>();
   const [subjectMode, setSubjectMode] = useState<"selfie" | "character">("selfie");
@@ -225,6 +235,7 @@ export function PhotodumpView() {
 
   return (
     <PageShell wide>
+      <TabFromLink param="tab" ids={TAB_IDS} onTab={tabFromLink} />
       <PageHeader title="Photodump" description="A whole set of photos of you in one go, from one selfie or a saved character, in a pack of styles.">
         <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
@@ -236,13 +247,23 @@ export function PhotodumpView() {
       {step === 0 && (
         <section aria-label="Choose a pack" className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div role="tablist" aria-label="Packs" className="scrollbar-none inline-flex max-w-full overflow-x-auto rounded-full bg-muted p-0.5">
+            <TabRow role="tablist" aria-label="Packs" follow className="max-w-full">
               {TABS.map(([id, label]) => (
-                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn("h-8 shrink-0 rounded-full px-3 text-[13px] font-medium text-muted-foreground transition", tab === id && "bg-background text-foreground shadow-soft")}>
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={tab === id}
+                  onClick={() => {
+                    setTab(id);
+                    linkTab("tab", id);
+                  }}
+                  className={TAB_PILL}
+                  {...onAttr(tab === id)}
+                >
                   {label}
                 </button>
               ))}
-            </div>
+            </TabRow>
             <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-full border bg-background px-3 focus-within:border-primary sm:w-auto sm:max-w-xs sm:flex-1">
               <Search className="size-4 text-muted-foreground" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search packs" aria-label="Search packs" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" />
@@ -292,7 +313,7 @@ export function PhotodumpView() {
             })}
           </div>
           {!shown.length && <p className="py-10 text-center text-[14px] text-muted-foreground">{tab === "mine" && !needle ? (visitor ? "Saving packs of your own isn't available here." : "No packs of your own yet — create one from your reference photos.") : `No packs match “${q}”`}</p>}
-          <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
+          <div className="sticky bottom-[calc(var(--chrome-bottom)+0.75rem)] z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
             <p className="min-w-0 truncate text-[13px]">{pack ? <><span className="font-medium">{pack.name}</span> · {pack.count} photos</> : <span className="text-muted-foreground">Pick a pack to continue</span>}</p>
             <Button disabled={!pack} onClick={() => go(1)}>
               Use this pack <ArrowRight />
@@ -357,7 +378,7 @@ export function PhotodumpView() {
               </div>
             )}
           </div>
-          <aside className="space-y-5 rounded-2xl border p-4 lg:sticky lg:top-6 lg:self-start">
+          <aside className="space-y-5 rounded-2xl border p-4 lg:sticky lg:top-[calc(var(--chrome-top)+1.5rem)] lg:self-start">
             <div className="flex items-center gap-3">
               <PackCover id={pack.id} name={pack.name} count={pack.count} refs={pack.refs} hue={pack.hue} tone={pack.tone} bare className="size-14 shrink-0 rounded-lg" />
               <div className="min-w-0">

@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { loadSuite, readSuite, suiteFiles, validateAll } from "./lib/cases.mjs";
+import { loadSuite, suiteFiles, validateAll } from "./lib/cases.mjs";
 import { compareRuns, compareText, promote, promoteText, researchRecords } from "./lib/compare.mjs";
 import { coversFromMasters, makeCovers, versionCovers } from "./lib/covers.mjs";
 import { templateCoversFromMasters, versionTemplateCovers } from "./lib/template-covers.mjs";
@@ -16,7 +16,6 @@ import { METRICS_DIR, REPO_DIR, resultsDir } from "./lib/paths.mjs";
 import { RECIPES_FILE } from "./lib/recipes.mjs";
 import { writeReport } from "./lib/report.mjs";
 import { serveReview, writeReview } from "./lib/review.mjs";
-import { suiteFromSkill, suitePath } from "./lib/from-skill.mjs";
 import { DEFAULT_CLOUD_CAP, money, runEval } from "./lib/run.mjs";
 import { connect } from "./lib/server.mjs";
 import { listRuns, readJson, readJsonl, resolveRun } from "./lib/store.mjs";
@@ -86,7 +85,8 @@ pnpm eval:covers --templates <dir> [--only group/id,group/id] [--force] [--dry-r
 
   Covers for the studios' template and style tiles, from rendered masters: one folder per tile,
   <dir>/<group>/<tile id>/ (groups: marketing, fashion, photodump, shorts, mixed-media, canvas, content-factory,
-  explainer), holding clip.mp4 or still.png, then frame-2.png… for a tile with more frames (up to frame-4), and a
+  explainer, soul, influencer, examples), holding clip.mp4 or still.png, then frame-2.png… for a tile with more
+  frames (up to frame-6), and a
   meta.json that can say { "rest": "end" } (a reveal: its last frame is the poster) or { "same": "<preset id>" }
   (the tile shows that preset's cover). Encoded like the preset covers into public/previews/templates/<group>/ and
   merged into src/lib/template-covers.generated.ts. Run again, it encodes only new or changed masters (--force: all).
@@ -99,11 +99,6 @@ pnpm eval:covers --versions [--dry-run] [--public-dir public] [--manifest …]
   that presets' manifest). It encodes only a still's small copy that's missing or older than its still (one copied
   in by hand), first; --dry-run lists those and fails until they're made.`,
   history: "pnpm eval:history [--suite soul] [--case soul/v1-general] [--limit 20]",
-  "from-skill": `pnpm eval:from-skill <name> [--out <file>] [--url …] [--token …]
-
-  Writes a suite that runs the saved skill <name> with the examples it was made from (its recipe's inputs), one case
-  per engine it runs on, with its checks as the case's note. It goes to scripts/eval/local/cases/skill-<name>.json
-  (git-ignored: it names your own files). Then: pnpm eval:run --suite skill-<name> --engine demo|open|cloud`,
   validate: "pnpm eval:validate [suite files…]   checks every case file and that the generated suites match the research",
   trash: "pnpm eval:trash <runId> [--dry-run]   moves the run's generations to that Fuobe's Trash (its results here stay)",
   setup: "pnpm eval:setup [--identity] [--asr] [--download [--dinov2] [--scrfd]] [--torch-backend cpu|auto|cu128…]   the metrics venv (needs uv); --asr adds Whisper for the separation suite's word error rate",
@@ -135,7 +130,7 @@ export async function main(argv, io = {}) {
     print(rest[0] && HELP[rest[0]] ? HELP[rest[0]] : usage());
     return 0;
   }
-  const commands = { run, report, review, compare, promote: promoteCmd, history, validate, setup, trash, covers, "from-skill": fromSkill };
+  const commands = { run, report, review, compare, promote: promoteCmd, history, validate, setup, trash, covers };
   if (!commands[command]) {
     note(`Unknown command “${command}”.\n${usage()}`);
     return 2;
@@ -586,26 +581,4 @@ async function setup(args, ctx) {
 // Run directly (not imported by the tests). Compared as URLs, so a Windows script path matches too.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exitCode = await main(process.argv.slice(2));
-}
-
-/** pnpm eval:from-skill <name>: a saved skill's recipe as a suite (scripts/eval/lib/from-skill.mjs). */
-async function fromSkill(args, ctx) {
-  const { values: v, positionals } = parse(args, {}, { positionals: true });
-  if (v.help) return ctx.print(HELP["from-skill"]), 0;
-  const name = positionals[0]?.replace(/^\//, "");
-  if (!name) throw new Usage("Name the skill: pnpm eval:from-skill <name>");
-  const { client, target } = connect({ url: v.url, token: v.token }, { env: ctx.env, home: ctx.io.home, fetch: ctx.io.fetch });
-  const view = await client.request("GET", `/api/assist/skills/${encodeURIComponent(name)}/recipe`);
-  const suite = suiteFromSkill(view);
-  const file = path.resolve(v.out ?? suitePath(name));
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  // Written next to cases/case.schema.json's copy in the repo, so an editor completes it.
-  fs.writeFileSync(file, `${JSON.stringify({ $schema: path.relative(path.dirname(file), path.join(REPO_DIR, "scripts/eval/cases/case.schema.json")), ...suite }, null, 2)}\n`);
-  readSuite(file);
-  if (v.json) ctx.print(JSON.stringify({ file, suite: suite.suite, cases: suite.cases.map((c) => c.id), server: target.url }));
-  else {
-    ctx.print(`Wrote ${path.relative(process.cwd(), file) || file}: ${suite.cases.length} case${suite.cases.length === 1 ? "" : "s"} (${suite.cases.map((c) => c.id).join(", ")})`);
-    ctx.print(`Run it: pnpm eval:run --suite ${v.out ? file : suite.suite} --engine demo   (free; then --engine ${view.engines.join(" or ")})`);
-  }
-  return 0;
 }

@@ -14,7 +14,7 @@ const read = (f: string) => fs.readFileSync(path.join(LIBRARY, f), "utf8");
 const text = read("requirements.json");
 const index = JSON.parse(text) as RequirementIndex;
 const manifest = JSON.parse(read("manifest.json")) as Manifest;
-type PackPin = { repo: string; commit: string; registry: { id: string; version: string } | null; subdir: string | null; folders: string[]; isolated: boolean };
+type PackPin = { repo: string; commit: string; registry: { id: string; version: string } | null; subdir: string | null; file?: string; folders: string[]; isolated: boolean };
 const packs = JSON.parse(read("packs.json")) as Record<string, PackPin>;
 const pins = JSON.parse(read("model-pins.json")) as Record<string, { revision: string; sizeBytes: number; sha256?: string }>;
 const script = (f: string) => fs.readFileSync(path.join(process.cwd(), "scripts/comfy", f), "utf8");
@@ -121,20 +121,20 @@ describe("requirements.json", () => {
     expect(index.packs["ComfyUI-ThinkSound_Wrapper"].isolated).toBe(true);
   });
 
-  // Raised together with Restore & colourise's graph and pack (o/archive-restore), which took the index from 202.1 to
+  // Raised together with Restore & colourise's graph and pack, which took the index from 202.1 to
   // 204.4 KB (24.9 to 25.3 KB gzipped), leaving the old 200 KB / 25 KB no room. Each graph adds about 1-2.5 KB raw and
   // 0.2-0.5 KB gzipped, so 216 KB / 27 KB leaves room for the next few graphs (n7-3's among them) while still catching a
   // build that bloats it. The server parses it once per change, and /api/gpu/requirements serves it compressed.
   // FLUX 3 Image Klein's three graphs and seven files (nm10-flux3-klein) add about 6 KB. Clean up voice (its pack, two
   // weight files and two graphs) adds about 0.5 KB gzipped, and Live edit (its node file, LoRA and graph) about 1.6 KB.
   // Open-H3 Regenerate (its graph, two packs and three files) and Blockout to film's depth graph took it to 214 KB /
-  // 27.1 KB gzipped, so the budget moves to 256 KB / 32 KB: room for about fifteen more graphs before it is looked at again.
-  // Green screen (VRMBG 3.0 and CorridorKey 2.0), RTX Video's three graphs and Edit speech's two, on top of Pika-H3-Flex's
-  // four, took it to 260.3 KB / 32.6 KB gzipped, so the budget moves to 288 KB / 36 KB.
-  // Kandinsky 6.0's three graphs, two packs and sixteen files took it to 265 KB / 32.9 KB gzipped, so the budget moves to 288 KB / 36 KB.
-  it("stays within its size budget (288 KB, 36 KB gzipped)", () => {
-    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(288 * 1024);
-    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(36 * 1024);
+  // 27.1 KB gzipped, so the budget moved to 256 KB / 32 KB. Keyframe animation, Idol 3D, full songs, Remove a person, Clean up
+  // dialogue and MiniMax H3 on smaller cards (eleven graphs and their files) took it to 264 KB / 33.1 KB gzipped, so the budget
+  // moves to 320 KB / 40 KB. Green screen, RTX Video, Edit speech, Pika H3 Flex, Kandinsky 6.0, World mode, MiniMax H3's 2K
+  // draft and finish, Hi3D and Idol 3D's clean splats, quick mesh and four views beside them took it to 310 KB / 38.7 KB gzipped.
+  it("stays within its size budget (320 KB, 40 KB gzipped)", () => {
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(320 * 1024);
+    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(40 * 1024);
   });
 });
 
@@ -189,7 +189,11 @@ describe("packs.json: the single source of pack pins", () => {
     expect(Object.keys(repos).sort()).toEqual(Object.keys(packs).sort());
     for (const [name, url] of Object.entries(repos)) {
       const tree = /^(https:\/\/github\.com\/[^/]+\/[^/]+)\/tree\/([0-9a-f]{40})(?:\/(.+))?$/.exec(url);
-      if (tree) {
+      // One node file in a Hugging Face model repo (viggle_turbo): the repo, the commit and the file.
+      const hfFile = /^(https:\/\/huggingface\.co\/[^/]+\/[^/]+)\/resolve\/([0-9a-f]{40})\/(.+\.py)$/.exec(url);
+      if (hfFile) {
+        expect({ repo: packs[name].repo, commit: packs[name].commit, file: packs[name].file }, name).toEqual({ repo: hfFile[1], commit: hfFile[2], file: hfFile[3] });
+      } else if (tree) {
         expect({ repo: packs[name].repo, commit: packs[name].commit, subdir: packs[name].subdir }, name).toEqual({ repo: tree[1], commit: tree[2], subdir: tree[3] ?? null });
       } else {
         expect(packs[name].repo, name).toBe(url);

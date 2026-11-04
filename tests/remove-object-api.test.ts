@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
 
 // /api/remove-object end to end in demo mode (no keys, no ComfyUI): every way of pointing on both engines
 // becomes one pipeline of ordinary generations, which the mock provider runs through.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-remove-object-"));
+const dir = tempDir("fuobe-remove-object-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -41,7 +41,6 @@ beforeAll(() => {
     }
   mask = saveFile({ data: encodePng({ width: 72, height: 128, data }), contentType: "image/png", source: "upload", name: "mask.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function settle(id: string, ms = 90_000): Promise<Generation> {
   const end = Date.now() + ms;
@@ -140,7 +139,7 @@ describe("Remove object: estimates", () => {
     expect((await small.json()).error).toMatch(/720 px on each side/);
   });
 
-  it("open engine: free, in windows, with the GPU and licence said", async () => {
+  it("open engine: free, in windows, with the GPU said", async () => {
     const e = await (await estimateRoute.POST(json(body({ engine: "open", source: { url: clip, duration: 12, fps: 16, width: 72, height: 128, hasAudio: true } })))).json();
     expect(e).toMatchObject({ modelId: "oss-vace-remove", pieces: 3, costUsd: 0 });
     expect(e.notes.join(" ")).toMatch(/81 frames at a time/);
@@ -152,7 +151,8 @@ describe("Remove object: estimates", () => {
     expect(painted.notes.join(" ")).toMatch(/runs as 3 windows/);
     const effects = await (await estimateRoute.POST(json(body({ engine: "open", effects: true, source: { url: clip, duration: 12, fps: 16 } })))).json();
     expect(effects.modelId).toBe("oss-void-remove");
-    expect(effects.notes.join(" ")).toMatch(/CogVideoX/);
+    expect(effects.notes.join(" ")).toMatch(/VOID needs a 24–40 GB GPU/);
+    expect(effects.notes.join(" ")).not.toMatch(/licen[cs]e/i);
   });
 
   it("open engine, H3 person removal: the clean first frame, H3 Relay and the GPU said; the LoRA switched off refuses", async () => {
@@ -163,7 +163,7 @@ describe("Remove object: estimates", () => {
     expect(notes).toMatch(/clean copy of the part's first frame with the person gone/);
     expect(notes).toMatch(/H3_RELAY=1/);
     expect(notes).toMatch(/People only/);
-    expect(notes).toMatch(/MiniMax H3 Community License — not licensed in the US, the EU, the UK and South Korea/);
+    expect(notes).not.toMatch(/licen[cs]e/i);
     expect((await (await h3({ prompt: " " })).json()).error).toMatch(/Say who to remove/);
     const { changeAccess } = await import("@/server/model-access");
     changeAccess([{ kind: "lora", id: "H3-Person-Remover-V1.safetensors", on: false }]);
@@ -295,20 +295,6 @@ describe("Remove object: runs", () => {
     expect(removal.request.inputs?.video).toBe(fit.outputs[0].url);
     expect(removal.request.inputs?.images).toEqual([clean.outputs[0].url]);
     expect(removal.request.prompt).toBe("the skater");
-  });
-
-  it("Original sound: the cloud refuses a split in words; your GPU's paint removal splits the cut and lowers the music", async () => {
-    const cloud = await createRoute.POST(json(body({ modelId: "bria-video-erase", sound: { sound: "no-dialogue" } })));
-    expect(cloud.status).toBe(422);
-    expect((await cloud.json()).error).toMatch(/runs on your GPU \(open source\)/);
-    const res = await createRoute.POST(json(body({ engine: "open", mode: "paint", prompt: undefined, mask, sound: { sound: "lower-music", musicDb: -18 } })));
-    expect(res.status).toBe(201);
-    const { final } = (await res.json()) as { final: Generation };
-    const rows = batchOf(final.id);
-    expect(rows.filter((r) => r.op === "separate-audio").map((r) => r.model_id)).toEqual(["oss-dbs-separate"]);
-    expect(final).toMatchObject({ modelId: "oss-mux", feature: REMOVE.feature });
-    expect(final.request.params?.extra).toMatchObject({ backgroundVolumeDb: -18 });
-    expect((await settle(final.id)).status).toBe("succeeded");
   });
 
   it("mask preview: SAM 3.1 on the first 2 s (cloud), the SAM 3 matte (open)", async () => {

@@ -10,9 +10,9 @@
  * came out, so the grade is applied once).
  *
  * The board is Fuobe's open recipe on both engines: on your GPU each next frame is Qwen-Image 2.1 with akhaliq's 2.1
- * Next-Scene LoRA (nm10-qwen21-fast), or the classic Qwen-Image-Edit 2509 + next-scene LoRA when the board asks for it
- * (`nextScene`); in the cloud fal's hosted Qwen-Image-Edit 2509 with the 2509 LoRA (sent as a URL), as Qwen-Image 2.1 isn't
- * hosted. Nano Banana Pro stays a separate choice in the cloud (`partner`), every frame on it as boards ran before.
+ * Next-Scene LoRA, or the classic Qwen-Image-Edit 2509 + next-scene LoRA when the board asks for it
+ * (`nextScene`); in the cloud fal's hosted Qwen-Image-Edit 2509 with the 2509 LoRA (sent as a URL), as fal's hosted Qwen-Image
+ * 2.1 takes no LoRAs. Nano Banana Pro stays a separate choice in the cloud (`partner`), every frame on it as boards ran before.
  */
 import { LAYOUT_PARAM, type LayoutDraft } from "@/lib/layout-prompt";
 import { loraEntry, loraRef } from "./loras";

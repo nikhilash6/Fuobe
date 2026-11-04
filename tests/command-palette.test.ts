@@ -6,6 +6,8 @@ import { APPS, EFFECTS, getModel, MODELS, MOTIONS } from "@/lib/catalog";
 import { entryScore, indexEntries, normalize, rankPalette, skillEntries, wordScore, type PaletteEntry } from "@/lib/command-search";
 import { modelHref, paletteIndex } from "@/lib/palette-index";
 import { rowPriceOn, toModelRow } from "@/lib/model-rows";
+import { entriesFor, type ViewerKind } from "@/lib/nav-model";
+import { navSearchEntries } from "@/lib/nav-search";
 import { hubModePaths, studioRoutes } from "./e2e/_routes.mjs";
 
 const page = (label: string, href: string, keywords?: string): PaletteEntry => ({ key: `page:${href}`, kind: "page", label, href, keywords });
@@ -128,7 +130,9 @@ describe("palette index", () => {
     expect(index.models).toHaveLength(MODELS.filter((m) => !m.hidden).length);
     // No prompt templates, routes or LoRA URLs: the whole thing stays small.
     expect(JSON.stringify(index).length).toBeLessThan(160_000);
-    expect(Object.keys(index.apps[0]).sort()).toEqual(["category", "cloud", "id", "name", "open"]);
+    // A cover travels as a version (a still at the usual place) or a URL, so the palette shows the real cover.
+    for (const p of [...index.apps, ...index.motions, ...index.effects]) for (const k of Object.keys(p)) expect(["category", "cloud", "cover", "id", "name", "open"], k).toContain(k);
+    expect(index.apps.find((a) => a.id === "app-giant-product")?.cover).toMatch(/^[0-9a-f]{8}$/);
   });
 
   it("opens every model somewhere that exists, in a studio of its kind when there is one", () => {
@@ -171,9 +175,11 @@ describe("palette index", () => {
 
   it("opens every page and settings section the palette lists", () => {
     for (const p of PAGES) expect(routes.paths.has(pathOf(p.href)), p.href).toBe(true);
+    // The owner's settings sections (the navigation model's, src/lib/nav-model.ts) are in the settings form.
     const form = fs.readFileSync(path.resolve(__dirname, "../src/components/settings-form.tsx"), "utf8");
-    const palette = fs.readFileSync(path.resolve(__dirname, "../src/components/command-palette.tsx"), "utf8");
-    const ids = [...palette.matchAll(/\{ id: "([a-z-]+)", label:/g)].map((m) => m[1]);
+    const ids = entriesFor("owner")
+      .filter((e) => e.id.startsWith("setting-"))
+      .map((e) => e.href.split("#")[1]);
     expect(ids.length).toBeGreaterThan(4);
     for (const id of ids) expect(form, `settings section #${id}`).toContain(`id="${id}"`);
   });
@@ -205,18 +211,23 @@ describe("palette index", () => {
 });
 
 describe("palette settings by viewer", () => {
-  it("offers the install's settings to its owner only; an account gets its own GPU, its own keys, its account and the licences", async () => {
-    const { settingEntries } = await import("@/components/command-palette");
-    const hrefs = (v: Parameters<typeof settingEntries>[0]) => settingEntries(v).map((e) => e.href);
-    expect(hrefs({ owner: true })).toEqual(expect.arrayContaining(["/settings#engine", "/settings#cloud", "/settings#security", "/settings/models"]));
-    expect(hrefs({ owner: false, account: { email: "a@example.com" } })).toEqual(["/settings#your-gpu", "/settings#your-keys", "/settings#account", "/settings/models"]);
+  /** The settings a viewer's search offers (src/lib/nav-model.ts): sections, pages and Connect your GPU. */
+  const hrefs = (kind: ViewerKind | undefined) =>
+    navSearchEntries(entriesFor(kind))
+      .filter((e) => e.kind === "setting")
+      .map((e) => e.href)
+      .sort();
+
+  it("offers the install's settings to its owner only; an account gets its own GPU, its own keys, its account and Thanks & licences", () => {
+    expect(hrefs("owner")).toEqual(expect.arrayContaining(["/settings#engine", "/settings#cloud", "/settings#security", "/settings/models", "/settings/licences", "/settings"]));
+    expect(hrefs("account")).toEqual(["/connect", "/settings", "/settings#account", "/settings#your-gpu", "/settings#your-keys", "/settings/licences"]);
     // "api key", "fal", "nano banana": an account finds where its own key goes.
-    const keys = settingEntries({ owner: false, account: { email: "a@example.com" } }).find((e) => e.href === "/settings#your-keys");
+    const keys = navSearchEntries(entriesFor("account")).find((e) => e.href === "/settings#your-keys");
     expect(keys?.keywords).toMatch(/api key/);
     expect(keys?.keywords).toMatch(/nano banana/);
-    expect(hrefs({ owner: false })).toEqual(["/connect", "/settings/models"]);
+    expect(hrefs("guest")).toEqual(["/connect", "/settings", "/settings/licences"]);
     // Not known yet: nothing of the owner's.
-    expect(hrefs(undefined)).toEqual(["/connect", "/settings/models"]);
+    expect(hrefs(undefined)).toEqual(["/connect", "/settings", "/settings/licences"]);
   });
 });
 

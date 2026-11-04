@@ -1,15 +1,13 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ManifestWorkflow } from "@/lib/comfy";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import type { LayerJobInput } from "@/lib/layers";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // The Layers tools' open-engine requests, bound into the real library graphs: extras bind by name and
 // silently fall back to defaults when a name is wrong, so check the values land where they should.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-layers-comfy-"));
+const dir = tempDir("fuobe-layers-comfy-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -17,7 +15,6 @@ const { collectOutputs, getWorkflow, prepareWorkflow } = await import("@/server/
 const { jobSteps } = await import("@/server/layers");
 const { getModel } = await import("@/lib/catalog");
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** The request bound into its graph; `size` is what the server read of the picture it sent (its width and height). */
 async function bind(req: GenerationRequest, size?: { width: number; height: number }) {

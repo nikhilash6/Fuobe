@@ -72,23 +72,31 @@ export const LOADER_FOLDERS = {
   LTXICLoRALoaderModelOnly: { lora_name: 'loras' },
   // MiniMax H3 video: larryvrh's turbo LoRA loader (ComfyUI-MiniMax-H3-Turbo) reads models/loras.
   MiniMaxH3TurboLoRA: { lora_name: 'loras' },
+  // Relight: Viggle's speed-LoRA loader (viggle_turbo) reads models/loras.
+  ViggleTurboLora: { lora_name: 'loras' },
+  // Genjutsu's From picture: SolarRenderer's LoRA loader reads models/loras.
+  SolarRendererLoraLoader: { lora_name: 'loras' },
   // Open-H3 Regenerate (rdh9616's pack): the merged refiner LoRA, LBH's latent upscaler and NVIDIA's fast H3 VAE decoder.
   OpenH3RegenLora: { lora_name: 'loras' },
   OpenH3RegenUpscale: { model_name: 'latent_upscale_models' },
   OpenH3RegenFastVAEDecode: { vae_name: 'vae' },
   // Clean up voice: ComfyUI-RE-USE's loader reads models/reuse.
   REUSELoader: { model: 'reuse' },
-  // Kandinsky 6.0 (nm10-kandinsky6): the audio VAE in models/audio_vae (bigvgan_dir names a folder there: requiredModels), and
+  // Kandinsky 6.0: the audio VAE in models/audio_vae (bigvgan_dir names a folder there: requiredModels), and
   // the VSR's K-VAE and latent upscaler in its bundle under models/diffusion_models.
   Kandinsky6AudioVAELoader: { tod_vae: 'audio_vae' },
   Kandinsky6SRVAELoader: { kvae_checkpoint: 'diffusion_models' },
   Kandinsky6LatentUpscalerLoader: { latent_upscaler_checkpoint: 'diffusion_models' },
+  // Watermark Remover: ComfyUI-Qwen-Watermark's mask refiner reads SAM from models/sams.
+  QWMRefineMask: { sam_model: 'sams' },
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
-// Zen Image Edit's adapter loader reads paths (nm10-qwen21-fast): its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
-// AuKModelLoader (nm10-speech-edit) reads its checkpoints by path inside the AuK checkout (ckpts/…), not from a ComfyUI
+// Zen Image Edit's adapter loader reads paths: its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
+// AuKModelLoader (Edit speech) reads its checkpoints by path inside the AuK checkout (ckpts/…), not from a ComfyUI
 // models folder: install-comfyui.sh AUK_WEIGHTS=1 downloads them there (the entries' autoDownloads say what and where).
-const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader', 'AuKModelLoader']);
+const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader', 'AuKModelLoader',
+  // Fix faces: H3-FaceRefine's detectors and Impact's SAM loader read their packs' own folders (the entry lists them in autoDownloads).
+  'H3FaceTrackCrop', 'SAMLoader']);
 // Binding keys whose input is a user-supplied model file (not part of "models").
 const USER_MODEL_KEYS = new Set(['lora', 'loraHigh', 'loraLow', 'upscaleModel']);
 const MODEL_EXT = /\.(safetensors|sft|gguf|ckpt|pt|pth|bin|onnx)$/i;
@@ -115,6 +123,8 @@ const NUMERIC_DEFAULT_KEYS = [
   'motionFrame', 'audioCfg', 'threshold', 'mosaicScale',
   // archive-restore
   'windowStart', 'windowFrames', 'prefixFrames', 'canvasWidth', 'canvasHeight', 'tileWidth', 'tileHeight', 'tileFrames',
+  // Photo to 3D (Idol)
+  'meshDetail', 'frontYaw',
 ];
 export const BINDING_KEYS = new Set([
   'prompt', 'negativePrompt', 'image', 'image2', 'image3', 'image4', 'mask', 'endImage', 'video', 'audio',
@@ -135,15 +145,15 @@ export const BINDING_KEYS = new Set([
   'gridPrompt', 'sheetPrompt',
   // av-tools (Wave B, see library.spec.mjs header)
   'frameIndex',
-  // nm10-music3 (see library.spec.mjs header)
+  // Full songs (see library.spec.mjs header)
   'tiledDecode',
   // comfyui-oss-4 additions (see library.spec.mjs header)
   'maskPrompt', 'maskGrow', 'skipPass2', 'supersample', 'zoomStart', 'zoomEnd', 'panStartX', 'panStartY', 'panEndX', 'panEndY',
   'easeInOut', 'chunkFrames', 'crossfade', 'headroomDb', 'fadeCurve', 'format', 'profile', 'peakNits', 'resolutionLevel', 'fovX',
   'decimation', 'cutout', 'numGaussians', 'splatFormat', 'orbitFrames', 'frameWidth',
-  // hi3d-refine (see library.spec.mjs header)
+  // Hi3D refine (see library.spec.mjs header)
   'model3d', 'meshResolution', 'cpuOffload',
-  // idol-1 (docs/research/idol-9.md §5.5): Idol 3D's looser photo crop (the sampler key is MOSS-Image's)
+  // Idol 3D (docs/research/idol-9.md §5.5): Idol 3D's looser photo crop (the sampler key is MOSS-Image's)
   'photoCrop',
   // idol-2 (docs/research/idol-9.md §5.6): ComfyUI-Idol's crop mode and its splat pruning
   'cropMode', 'minOpacity', 'maxScale',
@@ -171,9 +181,9 @@ export const BINDING_KEYS = new Set([
   'preset',
   // Open-H3 Regenerate (n7-3): the pack's output size and draft size (its combo strings) and the refine's start noise
   'resolution', 'draftSize', 'startSigma',
-  // Regenerate in Cinema (n7-10): the 768p draft's saved latent (the prefix it's saved under, the file the 2K finish loads)
+  // Regenerate in Cinema: the 768p draft's saved latent (the prefix it's saved under, the file the 2K finish loads)
   'latentPrefix', 'latent',
-  // Character swap in 2K (n7-4): the mask composite's window starts, the two layers' places and the mask's soft edge
+  // Character swap in 2K: the mask composite's window starts, the two layers' places and the mask's soft edge
   'takeStart', 'maskStart', 'takeX', 'takeY', 'regionWidth', 'regionHeight', 'regenWidth', 'regenHeight', 'regenX', 'regenY', 'trimX', 'trimY', 'feather',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
@@ -181,18 +191,26 @@ export const BINDING_KEYS = new Set([
   'voiceDb', 'musicDb', 'effectsDb',
   // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
   'invertDepth',
-  // Design a voice (nm10-voice-design): the voice in words, and what a voice sample says (Qwen3-TTS / VoxCPM2 clones)
+  // Design a voice: the voice in words, and what a voice sample says (Qwen3-TTS / VoxCPM2 clones)
   'voiceDescription', 'voiceTranscript',
   // VoxCPM2's device combo (cuda | mps | cpu): the server's first torch device
   'device',
-  // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
+  // The VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
-  // nm10-keying: the green-screen key's despill strength
+  // Green screen: the key's despill strength
   'despill',
-  // nm10-rtx-video: the NVIDIA RTX Video nodes' quality (Super Resolution) or mode (Frame Generation)
+  // NVIDIA RTX Video: the nodes' quality (Super Resolution) or mode (Frame Generation)
   'rtxQuality',
-  // Kandinsky VSR (nm10-kandinsky6): the latent upscaler bank entry its factor needs
+  // Kandinsky VSR: the latent upscaler bank entry its factor needs
   'upscalerScale',
+  // Any Angle: the 3D view's file and each angle's camera
+  'splatFile', 'cameraYaw', 'cameraPitch', 'cameraDistance', 'cameraFov', 'targetX', 'targetY', 'targetZ',
+  // Head Swap: the paste-back edge's blur and the paste-back switch
+  'maskBlur', 'pasteBack',
+  // Photo to 3D (Idol): SplatToMesh's grid and the turn that faces the subject's front
+  'meshDetail', 'frontYaw',
+  // Watermark Remover (ComfyUI-Qwen-Watermark): the kept marks, how the pack finds what to repair and how far past each mark
+  'boxes', 'detectMode', 'detectExpand',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

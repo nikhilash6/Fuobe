@@ -34,10 +34,17 @@ export function chromiumPath() {
   return exe && fs.existsSync(exe) ? exe : undefined;
 }
 
-/** `opts`: more launch options (`args`: Chromium flags, such as a host name mapped to this machine). */
+/**
+ * The browser engine the checks run in: E2E_BROWSER=webkit (Safari's) or firefox, else Chromium. Checks that read
+ * Chromium-only data (its DevTools protocol, layout-shift entries) skip themselves elsewhere.
+ */
+export const ENGINE = ["webkit", "firefox"].includes(process.env.E2E_BROWSER ?? "") ? process.env.E2E_BROWSER : "chromium";
+
+/** `opts`: more launch options (`args`: Chromium flags, such as a host name mapped to this machine; Chromium only). */
 export async function launch(opts = {}) {
-  const { chromium } = loadPlaywright();
-  return chromium.launch({ executablePath: chromiumPath(), ...opts });
+  const pw = loadPlaywright();
+  if (ENGINE !== "chromium") return pw[ENGINE].launch({ ...opts, args: undefined });
+  return pw.chromium.launch({ executablePath: chromiumPath(), ...opts });
 }
 
 export const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };

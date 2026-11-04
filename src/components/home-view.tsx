@@ -11,7 +11,7 @@ import { PageShell } from "@/components/page-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HadItemsScript, useHadItems } from "@/components/use-had-items";
 import { IntentLink } from "@/components/intent-link";
-import { useFadeEdges } from "@/components/preset-gallery";
+import { useFadeEdges } from "@/components/use-fade-edges";
 import { MediaThumb } from "@/components/studio/result-media";
 import { CONNECT_GPU_EVENT, signInHref, useEngine, useGenerations, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { EngineSwitch } from "@/components/studio/engine-switch";
@@ -117,8 +117,8 @@ function FirstRunScript() {
 }
 
 /**
- * "New creation" (the sidebar, ⌘K) opens Home with ?new=1: the composer starts empty and takes the
- * focus, and the flag leaves the address. It reads the URL, so it sits under Suspense.
+ * "New creation" (the top bar, the Create sheet) opens Home with ?new=1: the composer starts empty, comes into view
+ * and takes the focus, and the flag leaves the address. It reads the URL, so it sits under Suspense.
  */
 function NewCreation({ onNew }: { onNew: () => void }) {
   const router = useRouter();
@@ -132,14 +132,16 @@ function NewCreation({ onNew }: { onNew: () => void }) {
 }
 
 /**
- * Home: what Fuobe is, the composer, a few prompts to try, then the wall of real covers (`wall`) right under them.
- * The sections below (`children`) are rendered on the server, so their words and pictures ship no script.
+ * Home: the first screen (`bento`: the headline over a tile for every kind of media), then what Fuobe is, the
+ * composer, a few prompts to try and the goals. The sections below (`children`) are rendered on the server, so their
+ * words and pictures ship no script.
  */
 export function HomeView({
   openModels,
   chips,
   assist,
-  wall,
+  goals,
+  bento,
   children,
   prices,
   quotes,
@@ -149,7 +151,10 @@ export function HomeView({
   chips: readonly TryChip[];
   /** The chip that opens Assist with a job typed in: the owner's, in place of the last Try chip. */
   assist: { label: string; href: string };
-  wall: React.ReactNode;
+  /** The goal row (each goal opens a band of its studios, one-tap presets and tools), right under the composer. */
+  goals?: React.ReactNode;
+  /** The first screen, above everything else: it holds the page's only h1 (home-bento.tsx). */
+  bento?: React.ReactNode;
   children: React.ReactNode;
   /** What a first paid image and clip cost, for the first-run guide. */
   prices?: string;
@@ -167,8 +172,8 @@ export function HomeView({
   const recent = useGenerations({ limit: 6 });
   // How many (up to 6): a phone's grid holds 3 a row, so 1 to 3 results are one row of skeletons, 4 to 6 two.
   useHadItems("home-recent", recent.data?.length, 6);
-  // The page hydrates inside the route's Suspense boundary, possibly after the sidebar already fetched
-  // the status: render the server's (status-less) view until hydrated, as useEngineMode does.
+  // The page may hydrate after the top bar already fetched the status: render the server's (status-less) view
+  // until hydrated, as useEngineMode does.
   const hydrated = useHydrated();
   const statusData = useStatus().data;
   const status = hydrated ? statusData : undefined;
@@ -184,7 +189,7 @@ export function HomeView({
   const visitor = status?.viewer;
   // Only the studio's owner can use Assist: its chip takes the last Try chip's place once the owner is known.
   const owner = useIsOwner();
-  // A Try chip's prompt fills two lines on a phone and scrolls past that, so the chips and the wall under the
+  // A Try chip's prompt fills two lines on a phone and scrolls past that, so the chips and the goals under the
   // composer stay where the thumb is; typing lets it grow again.
   const [chipFilled, setChipFilled] = useState(false);
   useEffect(() => {
@@ -221,9 +226,13 @@ export function HomeView({
   const runsFor = status && mode.id !== "live" ? startLine(status, quotes?.[mode.id as "image" | "video" | "edit"], engine, mode.id as "image" | "video" | "edit") : null;
   const openModel = mode.id === "live" ? undefined : quotes?.[mode.id as "image" | "video" | "edit"]?.open?.name;
   const focusComposer = () => requestAnimationFrame(() => box.current?.focus());
+  // The composer sits under the first screen: it comes into view, then takes the focus without the page jumping again.
   const startOver = useCallback(() => {
     setPrompt("");
-    requestAnimationFrame(() => box.current?.focus());
+    requestAnimationFrame(() => {
+      box.current?.scrollIntoView({ block: "center" });
+      box.current?.focus({ preventScroll: true });
+    });
   }, []);
   // A Try chip: its mode and prompt go in, the caret goes to the end, and nothing runs until Start.
   const tryChip = (c: TryChip) => {
@@ -246,7 +255,8 @@ export function HomeView({
       <Suspense fallback={null}>
         <NewCreation onNew={startOver} />
       </Suspense>
-      <div className="flex flex-col items-center pt-[3vh] text-center">
+      {bento}
+      <div className="mt-10 flex flex-col items-center text-center sm:mt-14">
         <a
           href={FUOBE_REPO}
           target="_blank"
@@ -263,9 +273,9 @@ export function HomeView({
             </span>
           </span>
         </a>
-        <h1 className="font-heading text-display text-balance sm:text-[44px]">
+        <h2 className="font-heading text-[26px] leading-tight text-balance sm:text-[32px]">
           <span className="inline-block">A complete AI studio.</span> <span className="inline-block">Open source.</span>
-        </h1>
+        </h2>
         <p className="mt-2 text-[15px] text-pretty text-muted-foreground">
           {/* Before the status: the words a public studio's visitors get (the owner's own install corrects them in a moment). */}
           {!status || visitor || engineMode === "open"
@@ -290,7 +300,6 @@ export function HomeView({
             }}
             ref={box}
             rows={2}
-            autoFocus
             aria-label="Describe what to create"
             placeholder={mode.placeholder}
             className={cn(
@@ -301,7 +310,7 @@ export function HomeView({
             )}
           />
           <div className="flex items-center gap-1.5">
-            <div role="radiogroup" aria-label="What to make" className="flex min-w-0 items-center gap-1">
+            <div role="radiogroup" aria-label="What to make" className="scrollbar-none flex min-w-0 items-center gap-0.5 overflow-x-auto sm:gap-1">
               {MODES.map((m) => (
                 <button
                   key={m.id}
@@ -310,7 +319,7 @@ export function HomeView({
                   aria-checked={mode.id === m.id}
                   onClick={() => setMode(m)}
                   className={cn(
-                    "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition-colors",
+                    "inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors sm:gap-1.5 sm:px-3",
                     mode.id === m.id ? "bg-brand-faint text-brand-text" : "text-muted-foreground hover:bg-accent",
                   )}
                 >
@@ -328,7 +337,7 @@ export function HomeView({
             </div>
           </div>
         </div>
-        {/* Its line's height is kept from the first paint, so the chips and the wall under it don't move when it fills in. */}
+        {/* Its line's height is kept from the first paint, so the chips and the goals under it don’t move when it fills in. */}
         {visitor && openModel && !visitor.gpu.connected ? (
           <p className="mt-2 min-h-[18px] text-[12px] text-muted-foreground">
             {visitor.kind === "guest" ? (
@@ -390,20 +399,7 @@ export function HomeView({
             </IntentLink>
           )}
         </div>
-        {guide ? (
-          <>
-            <FirstRunScript />
-            <GetStarted
-              className={cn("mt-6 max-w-[960px]", !status && "hidden [html[data-first-run='1']_&]:block")}
-              status={status}
-              prices={prices}
-              onMode={(id) => {
-                setMode(MODES.find((m) => m.id === id) ?? MODES[0]);
-                focusComposer();
-              }}
-            />
-          </>
-        ) : nothingConnected && !status?.viewer && (
+        {!guide && nothingConnected && !status?.viewer && (
           <p className="mt-4 text-[13px] text-muted-foreground">
             {/* Placeholders on (Settings, for a tour): say so; otherwise a run asks for a GPU or a key. */}
             {placeholdersOn(status?.demoMode) ? (
@@ -427,7 +423,25 @@ export function HomeView({
         )}
       </div>
 
-      {wall}
+      {/* The goals sit right under the hero for everyone; the owner's first-run guide follows them (without its own
+          "What do you want to do?" chips, which the goals already are). */}
+      {goals}
+
+      {guide && (
+        <div className="flex flex-col items-center">
+          <FirstRunScript />
+          <GetStarted
+            className={cn("mt-6 max-w-[960px]", !status && "hidden [html[data-first-run='1']_&]:block")}
+            status={status}
+            prices={prices}
+            intents={!goals}
+            onMode={(id) => {
+              setMode(MODES.find((m) => m.id === id) ?? MODES[0]);
+              focusComposer();
+            }}
+          />
+        </div>
+      )}
 
       {recent.data?.length ? (
         <Row title="Recent" href="/library" className="mt-12 sm:mt-16">
@@ -435,7 +449,8 @@ export function HomeView({
         </Row>
       ) : (
         // Loading, in a browser that saw results here last time: the row keeps its place from the first paint, so the rows below don't move down when it arrives.
-        !recent.data && (
+        // A read that failed or ran out of time (a busy or restarting server) takes the placeholder away: no row, rather than one that never fills.
+        !recent.data && recent.failureCount === 0 && (
           <>
             <HadItemsScript name="home-recent" />
             <Row title="Recent" href="/library" className="mt-12 hidden sm:mt-16 [html[data-had-home-recent]_&]:block">

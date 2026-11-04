@@ -25,6 +25,7 @@ import {
   type Pages,
   type StreamEvent,
 } from "./generation-stream";
+import { fetchWithin, READ_LIMIT_MS } from "./fetch-within";
 import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folder } from "./library";
 import { markRefusalShown, responseError } from "./refusals";
 import { postFile } from "./upload";
@@ -47,7 +48,10 @@ export interface Asset {
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
   // With its status, so a refusal or a missing thing isn't retried (src/app/providers.tsx).
-  if (!res.ok) throw responseError(res, Object.assign(new Error(body.error ?? "Something went wrong. Please try again."), { status: res.status }));
+  // Its code too, when the refusal has one (a run that waits for a place: ACTIVE_RUNS_CODE).
+  const given = (body as { code?: unknown }).code;
+  const code = typeof given === "string" ? given : undefined;
+  if (!res.ok) throw responseError(res, Object.assign(new Error(body.error ?? "Something went wrong. Please try again."), { status: res.status }, code && { code }));
   return body;
 }
 
@@ -444,7 +448,7 @@ export function useGenerations(filter: FeedFilter, opts: { keepPrevious?: boolea
   const connected = useGenerationStream();
   return useQuery({
     queryKey: feedKey(filter),
-    queryFn: async () => (await json<{ items: Generation[] }>(await fetch(`/api/generations?${filterToSearch(filter)}`))).items,
+    queryFn: async () => (await json<{ items: Generation[] }>(await fetchWithin(`/api/generations?${filterToSearch(filter)}`, READ_LIMIT_MS.list))).items,
     placeholderData: opts.keepPrevious ? keepPreviousData : undefined,
     structuralSharing: shareById,
     refetchInterval: (q) => pollEvery(q.state.data, connected),
@@ -461,7 +465,7 @@ export function useRunningGenerations() {
   const connected = useGenerationStream();
   return useQuery({
     queryKey: feedKey(RUNNING),
-    queryFn: async () => (await json<{ items: Generation[] }>(await fetch(`/api/generations?${filterToSearch(RUNNING)}`))).items,
+    queryFn: async () => (await json<{ items: Generation[] }>(await fetchWithin(`/api/generations?${filterToSearch(RUNNING)}`, READ_LIMIT_MS.list))).items,
     structuralSharing: shareById,
     refetchInterval: (q) => (q.state.data?.length ? (connected ? 30_000 : 5000) : false),
   });
@@ -617,6 +621,28 @@ export function useGenerationActions() {
       trash,
       restore,
       deleteForever: (gs: Generation[]) => run(gs, null, "delete"),
+      /**
+       * An account's own runs, deleted for good (an account has no Trash): DELETE /api/generations/<id> one by one, which
+       * the proxy lets through for the account's own runs only. Optimistic, then the server; on a refusal the caches are
+       * refetched and its words shown. How many went.
+       */
+      deleteOwn: async (gs: Generation[]) => {
+        if (!gs.length) return 0;
+        local(gs, null);
+        let n = 0;
+        try {
+          for (const g of gs) {
+            const res = await fetch(`/api/generations/${encodeURIComponent(g.id)}?forever=1`, { method: "DELETE" });
+            if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "It couldn't be deleted. Try again.");
+            n++;
+          }
+        } catch (e) {
+          toast.error((e as Error).message);
+        } finally {
+          refresh();
+        }
+        return n;
+      },
       emptyTrash: async () => {
         await fetch("/api/generations/trash", { method: "DELETE" });
         refresh();
@@ -727,9 +753,12 @@ export function useShareActions() {
 // ---------------------------------------------------------------------------
 // Uploads & assets
 
-/** Upload a file as it is (streamed by the server: src/lib/upload.ts). */
-export async function uploadFile(file: File): Promise<Asset> {
-  return postFile(file);
+/**
+ * Upload a file as it is (streamed by the server: src/lib/upload.ts). `kinetic`: a Kinetic Motion clip or poster
+ * rendered in the page, which any account may save (KINETIC_UPLOAD_HEADER).
+ */
+export async function uploadFile(file: File, opts: { kinetic?: boolean } = {}): Promise<Asset> {
+  return postFile(file, undefined, opts);
 }
 
 /** A stored file's uses: where it's used, in one line ("2 results and the element “Maya”"), empty when nothing uses it. */
@@ -903,7 +932,7 @@ export async function saveSettings(patch: Record<string, string>): Promise<void>
 export function useStatus() {
   return useQuery({
     queryKey: ["status"],
-    queryFn: async () => json<StatusInfo>(await fetch("/api/status")),
+    queryFn: async () => json<StatusInfo>(await fetchWithin("/api/status", READ_LIMIT_MS.status)),
     staleTime: 15_000,
     refetchInterval: 30_000,
   });
@@ -1144,12 +1173,14 @@ export interface ViewerInfo {
   computer?: boolean;
   /** The port their computer's tab last found ComfyUI on (a browser that remembers none starts there). */
   comfyPort?: number;
+  /** The sound features that have passed a real run (src/server/sound-live.ts), e.g. "clean-voice-first". */
+  soundLive?: string[];
 }
 
 export function useViewer() {
   return useQuery({
     queryKey: ["viewer"],
-    queryFn: async () => json<ViewerInfo>(await fetch("/api/auth/me")),
+    queryFn: async () => json<ViewerInfo>(await fetchWithin("/api/auth/me", READ_LIMIT_MS.viewer)),
     staleTime: 60_000,
   });
 }
@@ -1166,6 +1197,11 @@ export function useIsAccount(): boolean {
   return !!v?.account && !v.owner;
 }
 
+/** Whether a sound feature has passed a real run (src/server/sound-live.ts; the viewer's soundLive). */
+export function useSoundLive(feature: string): boolean {
+  return !!useViewer().data?.soundLive?.includes(feature);
+}
+
 /** This browser's tabs hear on it that who is signed in changed (src/app/providers.tsx asks again). */
 export const AUTH_CHANNEL = "fuobe-auth";
 
@@ -1178,11 +1214,11 @@ export function announceAuthChange(): void {
   } catch {}
 }
 
-/** Who used this browser last ("owner", "account" or "guest"): the sidebar's first-paint script reads it (app-sidebar.tsx). */
+/** Who used this browser last ("owner", "account" or "guest"): the app frame's first-paint script reads it (CHROME_STATE_SCRIPT in nav.ts). */
 export const VIEWER_KEY = "fuobe:viewer";
 
 /**
- * Who the next page is for, said before it loads (signing in or out): the sidebar keeps the right row from its first
+ * Who the next page is for, said before it loads (signing in or out): the top bar keeps the right room from its first
  * frame, so its menu doesn't move when the viewer is known.
  */
 export function rememberViewer(kind: "owner" | "account" | "guest"): void {
@@ -1287,6 +1323,8 @@ export interface ConnectGpuDetail extends RefusalDetail {
   reason?: "setting" | "find" | "browser";
   look?: boolean;
   needs?: ConnectNeeds;
+  /** A tool only a GPU runs (no fal.ai or Replicate key can): the card offers the GPU alone, to accounts too. */
+  gpuOnly?: boolean;
 }
 export type ConnectNeeds = "gpu" | "key" | "any";
 const asNeeds = (v: string | null): ConnectNeeds | undefined => (v === "gpu" || v === "key" || v === "any" ? v : undefined);
@@ -1330,18 +1368,20 @@ export function askToSignUp(action: RefusalAction = "upload"): void {
  * for nothing. A guest gets "Create a free account", an account with neither its own GPU nor its own key "Connect your
  * GPU or add a key". The function returns true when it asked (the chooser stays shut, the file stays out), and false
  * for anyone the upload takes, and while who is looking isn't known yet (the server's refusal opens the same card).
+ * `action` "run" asks the same way before a run of a picture already on the site (a GPU-only tool's hand-off).
  */
-export function useAskBeforeUpload(): () => boolean {
+export function useAskBeforeUpload({ gpuOnly = false }: { gpuOnly?: boolean } = {}): (action?: RefusalAction) => boolean {
   const guest = useIsGuest();
   const seen = useStatus().data?.viewer;
   // With hosted runs on, an account adds pictures for runs on this studio's GPUs: the upload says if a kind isn't taken.
-  const nowhere = seen?.kind === "account" && !seen.gpu.connected && !seen.keys?.length && !seen.hosted;
-  return useCallback(() => {
-    if (guest) askToSignUp("upload");
-    else if (nowhere) window.dispatchEvent(new CustomEvent<RefusalDetail>(CONNECT_GPU_EVENT, { detail: { action: "upload" } }));
+  // A GPU-only tool (gpuOnly) asks for the GPU even when the account has a key: no key runs it.
+  const nowhere = seen?.kind === "account" && !seen.gpu.connected && (gpuOnly || !seen.keys?.length) && !seen.hosted;
+  return useCallback((action: RefusalAction = "upload") => {
+    if (guest) askToSignUp(action);
+    else if (nowhere) window.dispatchEvent(new CustomEvent<ConnectGpuDetail>(CONNECT_GPU_EVENT, { detail: { action, ...(gpuOnly && { gpuOnly }) } }));
     else return false;
     return true;
-  }, [guest, nowhere]);
+  }, [guest, nowhere, gpuOnly]);
 }
 
 /**

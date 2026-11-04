@@ -1,3 +1,4 @@
+import { requestViewer } from "@/server/auth";
 import { estimateGenjutsu, GenjutsuEstimateSchema } from "@/server/genjutsu";
 import { body, handle } from "@/server/shorts-schemas";
 import { priceAs } from "@/server/visitor";
@@ -6,7 +7,8 @@ import { priceAs } from "@/server/visitor";
 async function post(request: Request) {
   return handle(async () => {
     const input = await body(request, GenjutsuEstimateSchema, "Add a clip and pick a mode");
-    return Response.json(await estimateGenjutsu(input));
+    // A feature that hasn't opened is refused to everyone but the owner (src/server/genjutsu-live.ts).
+    return Response.json(await estimateGenjutsu(input, { owner: requestViewer(request).kind === "owner" }));
   });
 }
 

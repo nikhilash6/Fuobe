@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MoodboardPick } from "@/lib/catalog/palettes";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { BoardCover, CuratedCover, StatusBadge } from "./cards";
 import { CreateMoodboardDialog } from "./create-moodboard";
 import { useCuratedSet, useMoodboards } from "./hooks";
@@ -42,7 +43,7 @@ export function MoodboardPanel({ value, onPick }: { value?: MoodboardPick; onPic
   return (
     <div className="min-w-0 space-y-2.5">
       <div className="flex items-center gap-2">
-        <div role="tablist" aria-label="Moodboards" className="inline-flex rounded-full bg-muted p-0.5">
+        <TabRow role="tablist" aria-label="Moodboards" fade={false}>
           {(
             [
               ["curated", "Curated"],
@@ -54,12 +55,13 @@ export function MoodboardPanel({ value, onPick }: { value?: MoodboardPick; onPic
               role="tab"
               aria-selected={tab === id}
               onClick={() => setTab(id)}
-              className={cn("h-7 rounded-full px-3 text-[12px] font-medium text-muted-foreground transition", tab === id && "bg-background text-foreground shadow-soft")}
+              className={TAB_PILL}
+              {...onAttr(tab === id)}
             >
               {label}
             </button>
           ))}
-        </div>
+        </TabRow>
         <button
           type="button"
           onClick={() => setCreating(true)}

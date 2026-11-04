@@ -1,0 +1,306 @@
+/* ---------------------------------------------------------------------------------------------
+ * Motion: one set of durations, easings and distances for every surface (src/lib/ui-motion.ts
+ * holds the same numbers for scripts). Motion is quick, small and calm: things settle, they don't
+ * fly or bounce. Only transform (translate / scale) and opacity move; nothing waits for an
+ * animation. Under prefers-reduced-motion every token is 0 and every change is instant.
+ * ------------------------------------------------------------------------------------------- */
+
+:root {
+  --motion-instant: 0ms;
+  --motion-fast: 120ms;   /* presses, exits of small overlays, label cross-fades */
+  --motion-base: 200ms;   /* menus, dialogs, popovers, card lift, image fade-in, toasts */
+  --motion-slow: 320ms;   /* phone sheets, section reveals, cover zoom, a new result */
+  --motion-page: 380ms;   /* a page arriving: the longest motion on the site */
+  --motion-count: 600ms;  /* number count-ups (text only) */
+
+  --motion-d1: 4px;       /* rise and slide distances */
+  --motion-d2: 8px;
+  --motion-d3: 16px;
+  --motion-lift: -2px;    /* a card under the pointer */
+  --motion-scale-in: 0.97;
+  --motion-scale-out: 0.98;
+  --motion-press: 0.97;
+  --motion-press-card: 0.985;
+  --motion-zoom: 1.03;    /* a cover under the pointer */
+  --motion-stagger: 40ms; /* per item, 6 steps at most */
+}
+
+@theme {
+  /* A thing moving between two on-screen states (lift, zoom, morph). */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  /* A large surface from an edge (phone sheets, a page arriving): a strong ease-out, no overshoot. */
+  --ease-emphasised: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-slow: 0ms;
+    --motion-page: 0ms;
+    --motion-count: 0ms;
+    --motion-stagger: 0ms;
+    --motion-d1: 0px;
+    --motion-d2: 0px;
+    --motion-d3: 0px;
+    --motion-lift: 0px;
+    --motion-scale-in: 1;
+    --motion-scale-out: 1;
+    --motion-press: 1;
+    --motion-press-card: 1;
+    --motion-zoom: 1;
+  }
+  /* The safety net for motion that doesn't use the tokens (tw-animate, older keyframes): it ends at once. Spinners
+     stop too; each one has words beside it. Media playback (clips, previews) keeps its own rules. */
+  *, ::before, ::after {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ----- Menus, popovers, selects, hover cards (Radix + tw-animate): open from the trigger, close quicker. ----- */
+:is(
+  [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"],
+  [data-slot="context-menu-content"], [data-slot="context-menu-sub-content"], [data-slot="select-content"],
+  [data-slot="hover-card-content"]
+) {
+  &[data-state="open"] {
+    --tw-duration: var(--motion-base);
+    --tw-ease: var(--ease-enter);
+    --tw-enter-scale: var(--motion-scale-in);
+  }
+  &[data-state="open"][data-side="bottom"] { --tw-enter-translate-y: calc(var(--motion-d1) * -1); }
+  &[data-state="open"][data-side="top"] { --tw-enter-translate-y: var(--motion-d1); }
+  &[data-state="open"][data-side="left"] { --tw-enter-translate-x: var(--motion-d1); }
+  &[data-state="open"][data-side="right"] { --tw-enter-translate-x: calc(var(--motion-d1) * -1); }
+  &[data-state="closed"] {
+    --tw-duration: var(--motion-fast);
+    --tw-ease: var(--ease-exit);
+    --tw-exit-scale: var(--motion-scale-out);
+  }
+}
+/* Tooltips are read in passing: quick both ways. */
+[data-slot="tooltip-content"] {
+  --tw-duration: var(--motion-fast);
+  --tw-ease: var(--ease-enter);
+  --tw-enter-scale: var(--motion-scale-in);
+  --tw-exit-scale: var(--motion-scale-out);
+  &[data-state="closed"] { --tw-ease: var(--ease-exit); }
+}
+
+/* ----- Dialogs and their backdrops: the box grows a touch from the centre; out is quicker. ----- */
+:is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"], [data-slot="search-palette-overlay"]) {
+  &[data-state="open"] { --tw-duration: var(--motion-base); --tw-ease: var(--ease-standard); }
+  &[data-state="closed"] { --tw-duration: var(--motion-fast); --tw-ease: var(--ease-exit); }
+}
+:is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) {
+  &[data-state="open"] {
+    --tw-duration: var(--motion-base);
+    --tw-ease: var(--ease-enter);
+    --tw-enter-scale: var(--motion-scale-in);
+  }
+  &[data-state="closed"] {
+    --tw-duration: var(--motion-fast);
+    --tw-ease: var(--ease-exit);
+    --tw-exit-scale: var(--motion-scale-out);
+  }
+}
+
+/* ----- Sheets: a solid surface slides from its edge (no fade); the backdrop fades with it. ----- */
+:is([data-slot="sheet-content"][data-side], #phone-sheet) {
+  &[data-state="open"] {
+    --tw-duration: var(--motion-slow);
+    --tw-ease: var(--ease-emphasised);
+    --tw-enter-opacity: 1;
+  }
+  &[data-state="closed"] {
+    --tw-duration: var(--motion-base);
+    --tw-ease: var(--ease-exit);
+    --tw-exit-opacity: 1;
+  }
+}
+:is([data-slot="sheet-content"][data-side="bottom"], #phone-sheet) {
+  --tw-enter-translate-y: 100%;
+  --tw-exit-translate-y: 100%;
+}
+[data-slot="sheet-content"][data-side="top"] { --tw-enter-translate-y: -100%; --tw-exit-translate-y: -100%; }
+[data-slot="sheet-content"][data-side="left"] { --tw-enter-translate-x: -100%; --tw-exit-translate-x: -100%; }
+[data-slot="sheet-content"][data-side="right"] { --tw-enter-translate-x: 100%; --tw-exit-translate-x: 100%; }
+/* The phone sheet's backdrop moves with the sheet, not ahead of it. */
+[data-slot="sheet-overlay"][data-state="open"]:has(+ #phone-sheet) { --tw-duration: var(--motion-slow); }
+[data-slot="sheet-overlay"][data-state="closed"]:has(+ #phone-sheet) { --tw-duration: var(--motion-base); }
+
+/* ----- Search palette: a phone's full screen rises a little; a desktop's panel grows a touch from under the bar. ----- */
+[data-slot="search-palette"] {
+  &[data-state="open"] {
+    --tw-duration: var(--motion-base);
+    --tw-ease: var(--ease-enter);
+    --tw-enter-translate-y: var(--motion-d2);
+  }
+  &[data-state="closed"] { --tw-duration: var(--motion-fast); --tw-ease: var(--ease-exit); }
+  @media (min-width: 768px) {
+    &[data-state="open"] { --tw-enter-translate-y: calc(var(--motion-d1) * -1); --tw-enter-scale: var(--motion-scale-out); }
+    &[data-state="closed"] { --tw-exit-scale: var(--motion-scale-out); }
+  }
+}
+
+/* ----- The bar's grouped menus (Studios, Apps, Motions & effects, Canvas): utility menus, so they are quick. The
+   panel drops in from the bar and its columns follow 20 ms apart (3 steps at most: every column reads by 260 ms). It
+   goes at once when it closes, so a menu that replaces it (data-switched, which just appears) never overlaps it. ----- */
+:is(#studios-launcher, [data-mega-panel]) {
+  --tw-duration: var(--motion-base);
+  --tw-ease: var(--ease-enter);
+  --tw-enter-translate-y: calc(var(--motion-d2) * -1);
+  --launcher-step: calc(var(--motion-stagger) * 0.5);
+  &[hidden] { display: none; }
+  &:not([hidden]) [data-col] { animation: motion-rise-near var(--motion-base) var(--ease-enter) backwards; }
+  &:not([hidden]) [data-col="1"] { animation-delay: var(--launcher-step); }
+  &:not([hidden]) [data-col="2"] { animation-delay: calc(var(--launcher-step) * 2); }
+  &:not([hidden]) :is([data-col="3"], [data-col="4"], [data-col="5"], [data-col="6"], [data-col="7"], [data-col="8"]) { animation-delay: calc(var(--launcher-step) * 3); }
+  &[data-switched] [data-col] { animation: none; }
+}
+
+/* ----- Toasts (sonner, top centre): in from just above, out quicker; the stack moves on the standard curve. ----- */
+[data-sonner-toaster] [data-sonner-toast] {
+  transition:
+    transform var(--motion-base) var(--ease-standard),
+    opacity var(--motion-base) var(--ease-enter),
+    height var(--motion-base) var(--ease-standard);
+}
+[data-sonner-toaster] [data-sonner-toast][data-y-position="top"][data-mounted="false"] { --y: translateY(calc(var(--motion-d2) * -1)); }
+[data-sonner-toaster] [data-sonner-toast][data-y-position="bottom"][data-mounted="false"] { --y: translateY(var(--motion-d2)); }
+[data-sonner-toaster] [data-sonner-toast][data-removed="true"] {
+  transition:
+    transform var(--motion-fast) var(--ease-exit),
+    opacity var(--motion-fast) var(--ease-exit),
+    height var(--motion-base) var(--ease-standard);
+}
+[data-sonner-toaster] [data-sonner-toast][data-y-position="top"][data-removed="true"][data-front="true"][data-swipe-out="false"] { --y: translateY(calc(var(--motion-d1) * -1)); }
+
+/* ----- A confirmation in place ("Copied", "Saved"): the mark grows in, the words cross-fade. ----- */
+.motion-confirm { animation: motion-confirm var(--motion-base) var(--ease-enter) both; }
+.motion-swap { animation: motion-fade var(--motion-fast) var(--ease-enter) both; }
+/* A spinner on a button: only when the wait is long enough to notice (150 ms); what it replaces hands over then. */
+.motion-spinner { animation: motion-fade var(--motion-fast) var(--ease-enter) 150ms backwards, spin 1s linear infinite; }
+.motion-hand-off { animation: motion-fade-out var(--motion-fast) var(--ease-exit) 150ms forwards; }
+
+/* ----- Cards (galleries, Home rows, studios, projects): lift with a soft shadow under the pointer, the cover leans in,
+   and a press gives a little. Touch screens get the press only. The shadow is a pseudo-element that fades, so nothing
+   but opacity and transform ever animates. ----- */
+.card-motion {
+  position: relative;
+  isolation: isolate;
+  transition:
+    translate var(--motion-base) var(--ease-standard),
+    scale var(--motion-base) var(--ease-standard),
+    background-color 100ms var(--ease-move);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    box-shadow: var(--elevation-normal);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-base) var(--ease-standard);
+  }
+  &:active { scale: var(--motion-press-card); transition-duration: var(--motion-fast); }
+  &:focus-visible { translate: 0 var(--motion-lift); }
+  &:focus-visible::after { opacity: 1; }
+}
+/* The cover: the frame's first child (a preset preview, a picture), or anything marked .card-zoom. The frame clips it. */
+:is(.card-cover > :first-child, .card-zoom) { transition: scale var(--motion-slow) var(--ease-standard); }
+@media (hover: hover) and (pointer: fine) {
+  .card-motion:hover { translate: 0 var(--motion-lift); }
+  .card-motion:hover::after { opacity: 1; }
+  .card-motion.card-fill:hover { background-color: var(--card); }
+  :is(.card-motion, .group\/card):hover :is(.card-cover > :first-child, .card-zoom) { scale: var(--motion-zoom); }
+}
+
+/* ----- Pictures fade in once they've loaded (the frame under them is already the muted fill). page-motion.tsx marks only
+   pictures that arrive after the first paint, never the first screen's. ----- */
+img[data-fade] { transition: opacity var(--motion-base) var(--ease-enter); }
+img[data-fade="wait"] { opacity: 0; }
+.pv { background-color: var(--muted); }
+
+/* ----- A page arriving (page-motion.tsx): the new page fades in and settles 8 px. The top bar, the phone tabs and
+   every bar the page pins (sticky or fixed headers, tab bands, a docked composer, anything marked data-page-still)
+   stay still: page-motion.tsx marks only the blocks around them with data-page-item, and never an ancestor of a
+   pinned bar, so a translate never re-anchors a fixed bar or carries a sticky one. Nothing waits: the page is there,
+   interactive, from its first frame. Back and Forward stay instant. ----- */
+#content[data-page-in] [data-page-item] {
+  animation:
+    motion-fade calc(var(--motion-page) * 0.63) var(--ease-enter) backwards,
+    motion-rise-page var(--motion-slow) var(--ease-emphasised) backwards;
+}
+/* Content that replaces its skeleton: a quick fade with a 4 px rise. */
+[data-motion-reveal] { animation: motion-rise var(--motion-base) var(--ease-enter) backwards; }
+
+/* ----- Sections reveal once as they come on screen (only those below the first screen at load, only with JS). ----- */
+[data-reveal="wait"] { opacity: 0; translate: 0 var(--motion-d2); }
+/* Jumped to (a #link, a section tab, find in page): shown at once, no transition, so the scroll lands on it ready. */
+[data-reveal="now"], [data-reveal="now"] [data-reveal-item] { transition: none; }
+[data-reveal="in"] {
+  transition:
+    opacity var(--motion-slow) var(--ease-enter),
+    translate var(--motion-slow) var(--ease-enter);
+}
+[data-reveal="wait"] [data-reveal-item] { opacity: 0; translate: 0 var(--motion-d1); }
+[data-reveal="in"] [data-reveal-item] {
+  transition:
+    opacity var(--motion-slow) var(--ease-enter),
+    translate var(--motion-slow) var(--ease-enter);
+  transition-delay: calc(min(var(--i, 0), 6) * var(--motion-stagger));
+}
+@media print {
+  [data-reveal], [data-reveal] [data-reveal-item] { opacity: 1 !important; translate: none !important; }
+}
+
+/* ----- A result that finishes while the studio is open: the picture settles in over its tile, one soft light passes
+   across it, and its next steps follow. Never on a page load or a scroll back. ----- */
+[data-arrive] {
+  /* The tile's frame stays; only the picture settles into it (its own load fade and the skeleton hand-over skip it). */
+  & > :first-child { animation: motion-settle var(--motion-slow) var(--ease-standard) backwards; animation-delay: calc(min(var(--i, 0), 6) * var(--motion-stagger)); }
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 40%, oklch(1 0 0 / 10%) 50%, transparent 60%);
+    translate: -100% 0;
+    animation: motion-sweep 500ms var(--ease-standard) both;
+    animation-delay: calc(240ms + min(var(--i, 0), 6) * var(--motion-stagger));
+  }
+}
+[data-follow] { animation: motion-rise var(--motion-base) var(--ease-enter) backwards; animation-delay: calc(120ms + min(var(--i, 0), 6) * var(--motion-stagger)); }
+
+/* A new request at the top of a feed (not the ones there when it loaded). */
+[data-enter] { animation: motion-rise var(--motion-base) var(--ease-enter) backwards; }
+
+@keyframes motion-fade { from { opacity: 0; } }
+@keyframes motion-fade-out { to { opacity: 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes motion-rise { from { opacity: 0; translate: 0 var(--motion-d1); } }
+@keyframes motion-rise-near { from { opacity: 0; translate: 0 calc(var(--motion-d1) * -1); } }
+@keyframes motion-rise-page { from { translate: 0 var(--motion-d2); } }
+@keyframes motion-settle { from { opacity: 0; scale: 1.02; } }
+@keyframes motion-sweep { to { translate: 100% 0; } }
+@keyframes motion-confirm { from { opacity: 0; scale: 0.8; } }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-arrive]::after { display: none; }
+  [data-reveal], [data-reveal] [data-reveal-item], img[data-fade] { opacity: 1 !important; translate: none !important; }
+}
+
+/* A before/after pair (home/before-after.tsx): its two pictures show together, once both have loaded. */
+[data-pair="wait"] { opacity: 0; }
+[data-pair="in"] { transition: opacity var(--motion-base) var(--ease-enter); }
+@media (prefers-reduced-motion: reduce) {
+  [data-pair] { opacity: 1 !important; }
+}

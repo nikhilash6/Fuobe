@@ -19,7 +19,7 @@ import {
   qmaWords,
 } from "@/lib/qma";
 
-// Package qma-angles: Fuobe's camera pose (the Angles app's horizontal_angle / vertical_angle / zoom, Cinema's ScenePose) to
+// Fuobe's camera pose (the Angles app's horizontal_angle / vertical_angle / zoom, Cinema's ScenePose) to
 // the QMA LoRA's 96 views and back.
 describe("QMA views", () => {
   it("has the card's 8 × 4 × 3 = 96 views, each once", () => {

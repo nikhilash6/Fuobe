@@ -11,6 +11,7 @@ vi.mock("@/lib/template-covers.generated", () => ({
   TEMPLATE_COVERS: {
     "marketing/ps-sunlit-plinth": "1a2b3c4d",
     "marketing/m2-sticker-pop": ["2b3c4d5e", "3c4d5e6f"],
+    "marketing/cta-luxury": ["0a1b2c3d", "1b2c3d4e"],
     "fashion/ultra-bold": { poster: "/previews/templates/fashion/ultra-bold.jpg?v=4d5e6f70", frames: ["/previews/templates/fashion/ultra-bold-2.jpg?v=5e6f7081", "/previews/templates/fashion/ultra-bold-3.jpg?v=6f708192"] },
     "photodump/zen": {
       poster: "/previews/templates/photodump/zen.jpg?v=708192a3",
@@ -25,23 +26,44 @@ vi.mock("@/lib/template-covers.generated", () => ({
     "canvas/effect-chain-fallen-angel": { poster: "/previews/presets/effect-fallen-angel.jpg?v=1a2b3c4e", video: "/previews/presets/effect-fallen-angel.mp4?v=2b3c4d5f" },
     "content-factory/what-if": ["3c4d5e60", "4d5e6f71"],
     "explainer/pixel-art": "5e6f7082",
+    "soul/v2-general": "70819304",
+    // Every human type has its cover; of the creatures only the cats.
+    "influencer/tier-normal": "81920a15",
+    "influencer/tier-freak": "920a1b26",
+    "influencer/tier-total": "0a1b2c37",
+    "influencer/tier-cats": "1b2c3d48",
+    "examples/character-sheet": "2c3d4e59",
+    "examples/storyboard-heist": {
+      poster: "/previews/templates/examples/storyboard-heist.jpg?v=3d4e5f6a",
+      frames: [2, 3, 4, 5, 6].map((k) => `/previews/templates/examples/storyboard-heist-${k}.jpg?v=4e5f6a7${k}`),
+    },
+    "examples/element-maya": "5f6a7b8c",
+    "examples/element-rooftop-bar": "6a7b8c9d",
+    "examples/element-aurora": "7b8c9dae",
+    "examples/element-together": "8c9daebf",
   },
 }));
 
 const { TemplateCard: MarketingCard } = await import("@/components/marketing/template-gallery");
+const { StyleTile } = await import("@/components/marketing/click-to-ad");
 const { TemplatePreview: FashionPreview } = await import("@/components/fashion/template-preview");
 const { PackCover } = await import("@/components/photodump/covers");
 const { LookCard } = await import("@/components/shorts/preset-card");
-const { TemplateCard: CanvasCard } = await import("@/components/canvas/canvas-list");
+const { TemplateCard: CanvasCard } = await import("@/components/canvas/template-card");
 const { PresetTile } = await import("@/components/content-factory/parts");
 const { StyleArt } = await import("@/components/faceless/style-art");
-const { TEMPLATES } = await import("@/lib/catalog/marketing");
+const { AD_STYLES, TEMPLATES } = await import("@/lib/catalog/marketing");
 const { FASHION, PACKS } = await import("@/lib/catalog/packs");
-const { SHORTS_PRESETS, shortsPreview } = await import("@/lib/catalog/shorts");
+const { coveredFirst, SHORTS_PRESETS, shortsPreview } = await import("@/lib/catalog/shorts");
 const { MIXED_PRESETS, mixedPreview } = await import("@/lib/catalog/mixed-media");
 const { CANVAS_TEMPLATES, outline } = await import("@/lib/catalog/canvas");
 const { PRESETS } = await import("@/lib/catalog/content-factory");
 const { templateCover } = await import("@/lib/template-covers");
+const { CuratedCover } = await import("@/components/moodboards/cards");
+const { CURATED_SETS, curatedLook } = await import("@/components/moodboards/logic");
+const { TierPanel } = await import("@/components/influencer/option-panel");
+const { INFLUENCER_START } = await import("@/lib/influencer");
+const { BoardExample, ElementsExample, SheetExample, hasBoardExample } = await import("@/components/empty-examples");
 
 /** A component's markup as the server renders it first (a memo component or a function). */
 const html = (type: unknown, props: Record<string, unknown>) => renderToStaticMarkup(createElement(type as FC<Record<string, unknown>>, props));
@@ -73,6 +95,22 @@ describe("Marketing Studio's template cards", () => {
     const h = card("ps-ice-bath");
     expect(h).toContain('<svg viewBox="0 0 240 320"');
     expect(h).not.toContain("<img");
+  });
+});
+
+describe("Click to Ad's styles", () => {
+  const tile = (id: string) => html(StyleTile, { style: by(AD_STYLES, id), selected: false, onPick: noop });
+
+  it("show the style's cover (its still until the clip plays), else the drawn preview", () => {
+    const h = tile("luxury");
+    expect(h).toContain('src="/previews/templates/marketing/cta-luxury.jpg?v=0a1b2c3d"');
+    expect(h).toContain("/previews/templates/marketing/thumbs/cta-luxury.jpg?v=0a1b2c3d 320w");
+    expect(h).not.toContain("<video");
+    expect(h).not.toContain("<svg viewBox=\"0 0 240 320\"");
+    expect(unversioned(h)).toEqual([]);
+    const drawn = tile("simple-ugc");
+    expect(drawn).toContain('<svg viewBox="0 0 240 320"');
+    expect(drawn).not.toContain("<img");
   });
 });
 
@@ -134,19 +172,26 @@ describe("Shorts and Mixed Media looks", () => {
     const mixed = by(MIXED_PRESETS, "mixed-noir");
     expect(mixedPreview(mixed)).toEqual({ poster: expect.stringMatching(/^\/samples\/previews\//), scene: mixed.scene, fx: mixed.fx });
   });
+
+  it("list the Shorts looks with a cover first, the rest in catalog order", () => {
+    const ids = coveredFirst(SHORTS_PRESETS).map((p) => p.id);
+    expect(ids[0]).toBe("shorts-warm-glow");
+    expect(ids.slice(1)).toEqual(SHORTS_PRESETS.map((p) => p.id).filter((id) => id !== "shorts-warm-glow"));
+  });
 });
 
 describe("Canvas templates", () => {
   const card = (id: string) => {
     const t = by(CANVAS_TEMPLATES, id);
     const engine = { outline: outline(t.build("cloud")), models: [] };
-    return html(CanvasCard, { t: { id: t.id, name: t.name, description: t.description, icon: t.icon, hue: t.hue, byEngine: { cloud: engine, open: engine } }, engine: "cloud", busy: false });
+    return html(CanvasCard, { t: { id: t.id, name: t.name, description: t.description, icon: t.icon, hue: t.hue, section: t.group ?? "", rank: t.rank, flow: t.flow, byEngine: { cloud: engine, open: engine } }, engine: "cloud", busy: false });
   };
 
-  it("show the cover's frames side by side with the board in a corner, or its still and clip, else the board", () => {
+  it("show the cover's frames side by side with its steps in a corner, or its still and clip, else the board", () => {
     const angles = card("product-angles");
     for (const f of ["product-angles.jpg?v=e7f8091a", "product-angles-2.jpg?v=f8091a2b", "product-angles-3.jpg?v=091a2b3c"]) expect(angles).toContain(`src="/previews/templates/canvas/${f}"`);
-    expect(angles).toContain("<svg viewBox=");
+    expect(angles).toContain("3 angles");
+    expect(angles).not.toContain("<svg viewBox=");
     const chain = card("effect-chain-fallen-angel");
     expect(chain).toContain('src="/previews/presets/effect-fallen-angel.jpg?v=1a2b3c4e"');
     expect(chain).not.toContain("<video");
@@ -169,6 +214,66 @@ describe("Content Factory's trending styles and the Explainer styles", () => {
     expect(h).toContain('src="/previews/templates/explainer/pixel-art.jpg?v=5e6f7082"');
     expect(h).toContain('sizes="96px"');
     expect(html(StyleArt, { styleId: "low-poly" })).toContain('<svg viewBox="0 0 160 100"');
+  });
+});
+
+describe("Fuobe Soul's looks", () => {
+  it("show the look's cover in the curated sets and the look pickers, its 320 px copy where small, else the drawn cover", () => {
+    const general = CURATED_SETS["soul-v2"].find((c) => c.id === "v2-general")!;
+    expect(general.preview).toEqual({ src: "/previews/templates/soul/v2-general.jpg?v=70819304", thumb: "/previews/templates/soul/thumbs/v2-general.jpg?v=70819304" });
+    expect(curatedLook("v2-general").preview).toEqual(general.preview);
+    const h = html(CuratedCover, { m: general, sizes: "200px" });
+    expect(h).toContain('src="/previews/templates/soul/v2-general.jpg?v=70819304"');
+    expect(h).toContain("/previews/templates/soul/thumbs/v2-general.jpg?v=70819304 320w");
+    expect(h).toMatch(/<img[^>]*loading="lazy"/);
+    expect(unversioned(h)).toEqual([]);
+    // A look without a cover keeps its drawn one.
+    const other = CURATED_SETS["soul-v1"][0];
+    expect(other.preview).toBeUndefined();
+    expect(curatedLook(other.id).preview).toBeUndefined();
+    expect(html(CuratedCover, { m: other })).not.toContain("<img");
+  });
+});
+
+describe("AI Influencer's character types", () => {
+  const panel = () => html(TierPanel, { state: INFLUENCER_START, onTier: noop, onSpecies: noop, onBodyColor: noop });
+
+  it("show photo cards for a row whose every type has its cover, and keep the icon tiles for a row that doesn't", () => {
+    const h = panel();
+    for (const id of ["normal", "freak", "total"]) expect(h).toContain(`src="/previews/templates/influencer/tier-${id}.jpg?v=`);
+    expect(h).toContain("/previews/templates/influencer/thumbs/tier-normal.jpg?v=81920a15 320w");
+    // Only the cats have a cover among the creatures: their row stays as icons, with no picture at all.
+    expect(h).not.toContain("tier-cats");
+    expect(h.match(/<img/g)).toHaveLength(3);
+    // Still a radio group: the picked type is checked.
+    expect(h).toMatch(/role="radio" aria-checked="true"[^>]*>(?:(?!<\/button>).)*tier-normal/);
+    expect(unversioned(h)).toEqual([]);
+  });
+});
+
+describe("The empty pages' examples", () => {
+  it("show Character Sheet's example sheet with its chip", () => {
+    const h = html(SheetExample, {});
+    expect(h).toContain('src="/previews/templates/examples/character-sheet.jpg?v=2c3d4e59"');
+    expect(h).toContain(">Example<");
+  });
+
+  it("show Storyboard's six frames in order, numbered", () => {
+    expect(hasBoardExample()).toBe(true);
+    const h = html(BoardExample, {});
+    const srcs = [...h.matchAll(/ src="([^"]+)"/g)].map((m) => m[1]);
+    expect(srcs).toEqual(["/previews/templates/examples/storyboard-heist.jpg?v=3d4e5f6a", ...[2, 3, 4, 5, 6].map((k) => `/previews/templates/examples/storyboard-heist-${k}.jpg?v=4e5f6a7${k}`)]);
+    expect(h).toContain(">6<");
+    expect(unversioned(h)).toEqual([]);
+  });
+
+  it("show Elements' three saved elements and the picture of two of them together", () => {
+    const h = html(ElementsExample, {});
+    expect([...h.matchAll(/ src="([^"]+)"/g)].map((m) => m[1].split("?")[0])).toEqual(
+      ["element-maya", "element-rooftop-bar", "element-aurora", "element-together"].map((id) => `/previews/templates/examples/${id}.jpg`),
+    );
+    expect(h).toContain("@Maya walking into @Rooftop_bar");
+    expect(h.match(/>Example</g)).toHaveLength(1);
   });
 });
 

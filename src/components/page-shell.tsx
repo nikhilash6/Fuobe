@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 /** Scrollable page body for non-studio pages (galleries, settings, library). */
 export function PageShell({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <PhoneBar />
-      <div className={cn("mx-auto w-full min-w-0 flex-1 px-4 pt-4 pb-16 sm:px-8 md:pt-12", wide ? "max-w-[1400px]" : "max-w-[1200px]")}>{children}</div>
+      <div className={cn("mx-auto w-full min-w-0 flex-1 px-4 pt-4 pb-16 sm:px-6 md:pt-12", wide ? "max-w-[1400px]" : "max-w-[1200px]")}>{children}</div>
     </div>
   );
 }

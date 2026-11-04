@@ -6,7 +6,7 @@ import { saveFile } from "./storage";
 import { tenant } from "./tenant";
 
 /**
- * Saved voices (Design a voice, nm10-voice-design): an Element voice whose clip (references[0]) is the take picked. A
+ * Saved voices (Design a voice): an Element voice whose clip (references[0]) is the take picked. A
  * later line that names that clip as its voice sample reuses the voice on either engine: ComfyUI clones the clip, and
  * VoxCPM2 / Qwen3-TTS read what it says (ElementVoice.transcript) for a closer clone; fal's Qwen3-TTS clones it once into
  * an embedding file, which is kept on the element after that first cloud line, so later lines go straight to speech.

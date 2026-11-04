@@ -396,7 +396,7 @@ node validate-workflows.mjs qwen-image-edit-2509-angles image-face-mosaic-sam3 v
   colour correction as `reinhard`, and not the Evolution intensities. `tests/open-tools.test.ts` and
   `tests/evolution-comfy.test.ts` check the provider's bindings on the library files.
 
-### Restore & colourise (o/archive-restore, 2026-10-30)
+### Restore & colourise (2026-10-30)
 
 One hand-built entry for Video tools → Restore & colourise and the Canvas Restore node: Lightricks' Restore IC-LoRA on
 LTX-2.5 22B distilled with tiled latent fusion (docs/research/fuobe-originals-recipes-5.json, studio `archive-restore`):
@@ -649,7 +649,7 @@ from an example and not rendered yet.
 - **GPU**: 20–24 GB estimates (`vramGb`), none measured here. ComfyUI 0.42.0 or newer: `TextEncodeQwenImage21`,
   `QwenImage21Cache`, `Ideogram4Scheduler`, `DualModelGuider`, `CFGOverride` and `TextEncodeFibo2` came with it.
 
-## NVIDIA RTX Video (nm10-rtx-video)
+## NVIDIA RTX Video (ComfyUI Nvidia VFX Nodes)
 
 Three hand-built graphs on Comfy-Org's ComfyUI Nvidia VFX Nodes 0.2.1 (`38d790d`, Apache-2.0, registry
 `comfyui_nvidia_rtx_nodes`) and NVIDIA's `nvidia-vfx` 0.2.0.0 runtime (the RTX Video SDK and its models in one wheel from
@@ -671,6 +671,32 @@ node validate-workflows.mjs --subset-only upscale-video-rtx fps-rtx-framegen sdr
 - `install-comfyui.sh` clones the pack and installs `nvidia-vfx` only when `nvidia-smi` names an RTX card (`RTX_VIDEO=1`
   forces it, `RTX_VIDEO=0` skips it), and warns when PyTorch isn't a CUDA 13 (cu130) build, which the pack's README asks for.
 - **Not run on a GPU.** Validate on a ComfyUI with an RTX card: `node validate-workflows.mjs upscale-video-rtx fps-rtx-framegen sdr-to-hdr-rtx`.
+
+## Watermark Remover (ComfyUI-Qwen-Watermark)
+
+Three hand-built graphs from overflowofedge's ComfyUI-Qwen-Watermark (MIT, pinned at `eef829d3`) for the Watermark Remover
+app (`app-watermark-remover`, its own page in `src/components/watermark`). The page runs a scan, shows the marks it found,
+and removes the ones the visitor didn't keep; a brush covers anything missed. Both steps are ordinary runs on the person's
+own GPU (`POST /api/generations`).
+
+| id | capability | what it does |
+|---|---|---|
+| `image-watermark-scan-qwen3vl` | watermark-scan | `QWMDetect` auto_qwen (Qwen3-VL 8B int8, one pass); the report (`PreviewAny`) is the only output: boxes in pixels with their type, a tight `source_bbox` and the less sure `rejected_boxes` |
+| `image-watermark-remove-qwen21` | watermark-remove | `QWMDetect` manual_boxes with the kept marks (`boxes`, `detectMode`), a rectangle or a SAM ViT-B outline per mark, Qwen-Image 2.1 int8 repair at `maxSize`, a leftover check and at most one more pass; `QWMFinal` refuses to change any pixel outside the mask. Its report (role `quality`) is folded into the picture's meta |
+| `image-watermark-remove-qwen21-brush` | watermark-remove | the same with a painted mask (`LoadImageMask`, red, white = remove) into `QWMDetect` manual_mask; `src/lib/comfy-variants.ts` runs it when a request carries a mask |
+
+The provider fills `boxes` (checked and rebuilt by `src/lib/watermark.ts`, clamped to the picture), `detectMode` and `maxSize`
+(1024; 1536 past 3000 px; 768 on a GPU under 16 GB) and draws both seeds at random. The GPU pre-flight checks the removal
+along with a scan (`COMPANION_GRAPHS`), so nobody is stopped after the first step.
+
+The pack's `requirements.txt` is not installed (its `opencv-contrib-python-headless` next to `opencv-python` can leave `cv2`
+broken): `packs.json` names `pip: ["segment-anything==1.0"]` instead, which the setup commands install by name. SAM ViT-B
+comes from a Hugging Face mirror (`ybelkada/segment-anything`) at a pinned revision whose SHA-256 is Meta's file's
+(`ec2df627…`). ComfyUI lists `models/sams` only when a pack registers the folder, so its presence is `unobservable`.
+
+They were built with a stand-in for `/object_info` (the committed subset) and are `validated: false` until
+`node validate-workflows.mjs image-watermark-scan-qwen3vl image-watermark-remove-qwen21 image-watermark-remove-qwen21-brush --shared`
+runs on a ComfyUI 0.42 with the pack installed.
 
 ## Adding a workflow
 

@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { Document, getBounds, NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
@@ -11,9 +10,10 @@ import { getModel, getPreset } from "@/lib/catalog";
 import { model3dRequest, model3dView, MODELS_3D, viewerGlb } from "@/lib/av/model3d";
 import { modelPreview } from "@/lib/output-actions";
 import type { OutputFile } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 120_000 });
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-3d-finish-"));
+const dir = tempDir("fuobe-3d-finish-");
 process.env.FUOBE_DATA_DIR = dir;
 const { saveFile } = await import("@/server/storage");
 const { finishModel, lastJsonLine, modelToFinish, pendingTurntable, startTurntable, withTurntable } = await import("@/server/model3d-finish");

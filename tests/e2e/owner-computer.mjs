@@ -17,6 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { launch, root } from "./_browser.mjs";
+import { tempDir, removeDir, stopProcess } from "./_temp.mjs";
 
 const MODE = process.env.E2E_MODE === "local" ? "local" : "hosted";
 const HOSTED = MODE === "hosted";
@@ -29,7 +30,7 @@ const SITE = HOSTED ? `http://studio.test:${APP_PORT}` : `http://127.0.0.1:${APP
 const LOCAL = `http://127.0.0.1:${APP_PORT}`;
 const shots = process.env.E2E_SHOTS ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-owner-computer-shots-"));
 fs.mkdirSync(shots, { recursive: true });
-const data = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-owner-computer-e2e-"));
+const data = tempDir("fuobe-owner-computer-e2e-");
 const PASSWORD = `e2e-${Math.random().toString(36).slice(2)}`;
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -37,6 +38,16 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * The install's status lives in the account menu (the avatar at the top bar's right end): opens it (again, after a page
+ * load or a dialog closed it) and returns it.
+ */
+async function statusMenu(page) {
+  const menu = page.getByRole("menu");
+  if (!(await menu.isVisible().catch(() => false))) await page.getByRole("button", { name: /^Account and settings/ }).click({ timeout: 5_000 }).catch(() => {});
+  return menu;
+}
+
 async function until(fn, ms = 30_000, every = 250) {
   const end = Date.now() + ms;
   for (;;) {
@@ -89,11 +100,8 @@ let browser;
 async function finish(code) {
   await browser?.close().catch(() => {});
   for (const port of [...fakes.keys()]) await stopFake(port).catch(() => {});
-  server.kill();
-  await sleep(800);
-  try {
-    fs.rmSync(data, { recursive: true, force: true });
-  } catch {}
+  await stopProcess(server);
+  removeDir(data);
   const failed = results.filter((r) => !r.ok);
   console.log(`\n[${MODE}] ${results.length - failed.length}/${results.length} passed. Screenshots: ${shots}`);
   if (failed.length) console.log(serverLog.split("\n").slice(-30).join("\n"));
@@ -254,10 +262,15 @@ async function hosted() {
   check("Settings now say ComfyUI runs on the owner's computer", settings?.settings?.find((s) => s.name === "comfyWhere")?.value === "computer");
   await page.keyboard.press("Escape");
 
-  // The sidebar and Settings' strip say where the GPU is.
-  const chip = await until(() => page.getByText(/^Your computer · NVIDIA GeForce RTX 5090/).first().isVisible(), 45_000, 500);
-  check("the sidebar: Your GPU · online · Your computer · RTX 5090", !!chip && (await page.locator('[data-sidebar="footer"]').getByText("online").isVisible()));
-  await shoot(page, "sidebar-online");
+  // The account menu and Settings' strip say where the GPU is.
+  // The line is in the account menu now (the sidebar footer showed it all the time): open it, then read it.
+  const chip = await until(async () => {
+    const menu = await statusMenu(page);
+    return (await menu.getByText(/^Your computer · NVIDIA GeForce RTX 5090/).first().isVisible()) && (await menu.getByText("online", { exact: true }).first().isVisible());
+  }, 45_000, 500);
+  check("the account menu: Your GPU · online · Your computer · RTX 5090", !!chip);
+  await shoot(page, "menu-online");
+  await page.keyboard.press("Escape");
   await page.goto(`${SITE}/settings`, { waitUntil: "load" });
   const strip = page.getByRole("navigation", { name: "Connections" });
   check("Settings' strip: Your GPU · Your computer · Online", !!(await until(() => strip.getByText("Your computer · Online").isVisible(), 30_000)));
@@ -286,22 +299,22 @@ async function hosted() {
   check("/connect: never the link's words", !(await page.getByText(/Your link didn't answer/).isVisible()));
   await shoot(page, "connect-computer");
 
-  // ComfyUI closes: the sidebar says so; it comes back and goes on.
+  // ComfyUI closes: the account menu says so; it comes back and goes on.
   await page.goto(`${SITE}/image?model=oss-z-image-turbo`, { waitUntil: "load" });
   await stopFake(PC_PORT);
-  const down = await until(() => page.locator('[data-sidebar="footer"]').getByText("ComfyUI not running").isVisible(), 70_000, 1000);
-  check("ComfyUI closed: the sidebar says ComfyUI not running", !!down);
-  await shoot(page, "sidebar-comfy-down");
+  const down = await until(async () => (await statusMenu(page)).getByText("ComfyUI not running").isVisible(), 70_000, 1000);
+  check("ComfyUI closed: the account menu says ComfyUI not running", !!down);
+  await shoot(page, "menu-comfy-down");
   await startFake(PC_PORT, SITE, { guard: true });
-  check("ComfyUI back: online again", !!(await until(() => page.locator('[data-sidebar="footer"]').getByText("online").isVisible(), 70_000, 1000)));
+  check("ComfyUI back: online again", !!(await until(async () => (await statusMenu(page)).getByText("online").isVisible(), 70_000, 1000)));
 
-  // ComfyUI started the usual way (without Fuobe's setting): the sidebar's line opens the fix; /connect says it once.
+  // ComfyUI started the usual way (without Fuobe's setting): the account menu's row opens the fix; /connect says it once.
   await stopFake(PC_PORT);
   await startFake(PC_PORT, "off");
-  const needs = page.locator('[data-sidebar="footer"]').getByRole("button", { name: /needs a setting/ });
-  check("no setting: the sidebar says needs a setting, as a button", !!(await until(() => needs.isVisible(), 70_000, 1000)));
+  const needs = page.getByRole("menu").getByRole("menuitem", { name: /needs a setting/ });
+  check("no setting: the account menu says needs a setting, as an item", !!(await until(async () => (await statusMenu(page), needs.isVisible()), 70_000, 1000)));
   await needs.click();
-  check("the sidebar's button opens the setting's fix", !!(await until(() => page.getByRole("dialog").getByRole("heading", { name: "Your ComfyUI needs Fuobe's setting again" }).isVisible(), 15_000)));
+  check("the account menu's item opens the setting's fix", !!(await until(() => page.getByRole("dialog").getByRole("heading", { name: "Your ComfyUI needs Fuobe's setting again" }).isVisible(), 15_000)));
   check("the fix: the start file", !!(await until(() => page.getByRole("dialog").getByRole("button", { name: /Download start file/ }).first().isVisible(), 15_000)));
   await shoot(page, "dialog-no-setting");
   await page.keyboard.press("Escape");
@@ -322,7 +335,8 @@ async function hosted() {
   await shoot(page, "connect-no-setting");
   await stopFake(PC_PORT);
   await startFake(PC_PORT, SITE, { guard: true });
-  check("ComfyUI back with the setting: online again", !!(await until(() => page.locator('[data-sidebar="footer"]').getByText("online").isVisible(), 70_000, 1000)));
+  check("ComfyUI back with the setting: online again", !!(await until(async () => (await statusMenu(page)).getByText("online").isVisible(), 70_000, 1000)));
+  await page.keyboard.press("Escape");
 
   // H2. A phone of the owner's: what the computer said, why not here, and the server way.
   {
@@ -366,7 +380,8 @@ async function hosted() {
   // Disconnect: back to the server's address, nothing connected.
   await sec.getByRole("button", { name: "Disconnect" }).click();
   check("Disconnect: the choice again, this computer first", !!(await until(() => sec.getByText("Use the ComfyUI on this computer", { exact: true }).first().isVisible(), 15_000)));
-  check("the sidebar: Your GPU · Connect", !!(await until(() => page.locator('[data-sidebar="footer"]').getByRole("button", { name: /Your GPU\s*Connect/ }).isVisible(), 40_000, 500)));
+  check("the account menu: Your GPU · Connect", !!(await until(async () => (await statusMenu(page)).getByRole("menuitem", { name: /Your GPU\s*Connect/ }).isVisible(), 40_000, 500)));
+  await page.keyboard.press("Escape");
   await shoot(page, "settings-choose", { scroll: "#comfyui" });
   await page.getByRole("navigation", { name: "Connections" }).getByText("Connect").waitFor({ timeout: 30_000 });
   check("Settings' strip: Your GPU · Connect", true);
@@ -422,10 +437,10 @@ async function hosted() {
   }, 60_000, 500);
   check("the demo run went through", demoDone?.status === "succeeded", demoDone?.error ?? demoDone?.status ?? "no run");
   const count = (await runs(page)).length;
-  await page.locator('[data-sidebar="footer"]').getByRole("button", { name: /Your GPU\s*Connect/ }).click();
+  await (await statusMenu(page)).getByRole("menuitem", { name: /Your GPU\s*Connect/ }).click();
   const d3 = page.getByRole("dialog");
-  check("the sidebar's Connect: Connect your GPU, with no run waiting", !!(await until(() => d3.getByRole("heading", { name: "Connect your GPU", exact: true }).isVisible(), 15_000)));
-  check("the sidebar's Connect looks at once", !!(await until(() => d3.getByText(/Your GPU is connected/).isVisible(), 30_000)));
+  check("the account menu's Connect: Connect your GPU, with no run waiting", !!(await until(() => d3.getByRole("heading", { name: "Connect your GPU", exact: true }).isVisible(), 15_000)));
+  check("the account menu's Connect looks at once", !!(await until(() => d3.getByText(/Your GPU is connected/).isVisible(), 30_000)));
   await sleep(6000);
   check("no run started again", (await runs(page)).length === count, `${(await runs(page)).length} vs ${count}`);
   await page.keyboard.press("Escape");
@@ -570,8 +585,8 @@ async function local() {
   await sleep(12_000);
   await studio(page, "/image?model=oss-z-image-turbo");
   await generate(page, "another one");
-  const card = await until(() => page.getByRole("dialog").filter({ hasText: "Connect your GPU to run this" }).isVisible(), 20_000);
-  check("local: ComfyUI gone, Generate opens the connect card, no error toast", !!card && !(await page.locator("[data-sonner-toast]").filter({ hasText: "Connect ComfyUI in Settings" }).first().isVisible().catch(() => false)));
+  const gate = await until(() => page.getByRole("dialog").filter({ hasText: "Connect your GPU to run this" }).isVisible(), 20_000);
+  check("local: ComfyUI gone, Generate opens the connect card, no error toast", !!gate && !(await page.locator("[data-sonner-toast]").filter({ hasText: "Connect ComfyUI in Settings" }).first().isVisible().catch(() => false)));
   check("the browser reached nothing on this computer but the studio", ctx.loopback.length === 0, ctx.loopback.join(", "));
   await ctx.close();
 }

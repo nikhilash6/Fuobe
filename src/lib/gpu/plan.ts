@@ -49,7 +49,7 @@ export function whyOf(n: Need, inv: GpuInventory | null, idx: RequirementIndex, 
     case "pack-install": {
       const p = n.pack ? idx.packs[n.pack] : undefined;
       if (noManager) return "no-manager";
-      if (p?.subdir) return "subfolder-pack";
+      if (p?.subdir || p?.file) return "subfolder-pack";
       if (!p?.registry?.version) return "no-validated-version";
       return "manual-only";
     }

@@ -1,14 +1,12 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { listenInRange, startFakeBilling, startFakeModeration, type FakeBilling, type FakeModeration } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
 // The moderation hook (docs/moderation-hook.md): the run check, the optional output check and reports, against
 // stand-in services. It ships off: with no address set nothing is checked.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-moderation-hook-"));
+const dir = tempDir("fuobe-moderation-hook-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -54,9 +52,6 @@ afterAll(async () => {
   await mod.close();
   await bill.close();
   await comfy.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();

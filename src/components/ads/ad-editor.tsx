@@ -10,6 +10,7 @@ import { areaCls, inputCls } from "@/components/brand/fields";
 import { uploadFile } from "@/lib/api";
 import type { BrandKit } from "@/lib/catalog/marketing";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { toastError } from "@/lib/refusals";
 import { AdCanvas } from "./ad-canvas";
 import { AD_LAYOUTS, exportName, themeFrom, type AdLayout } from "./layout";
@@ -115,13 +116,13 @@ export function AdEditor({
         <div className="grid min-w-0 gap-5 p-5 md:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0">
             {ratios.length > 1 && (
-              <div role="tablist" aria-label="Format" className="mb-3 inline-flex rounded-full bg-muted p-0.5">
+              <TabRow role="tablist" aria-label="Format" fade={false} className="mb-2 w-fit">
                 {ratios.map((r) => (
-                  <button key={r} role="tab" aria-selected={r === ratio} onClick={() => setRatio(r)} className={cn("h-7 rounded-full px-3 text-[12px] font-medium text-muted-foreground", r === ratio && "bg-background text-foreground shadow-soft")}>
+                  <button key={r} role="tab" aria-selected={r === ratio} onClick={() => setRatio(r)} className={TAB_PILL} {...onAttr(r === ratio)}>
                     {r}
                   </button>
                 ))}
-              </div>
+              </TabRow>
             )}
             <div className="mx-auto" style={{ maxWidth: ratio === "9:16" ? 300 : ratio === "4:5" ? 380 : 440 }}>
               <AdCanvas input={input(ratio)} className="rounded-xl shadow-normal" label={`${title}, ${ratio}`} />

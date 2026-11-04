@@ -1,5 +1,5 @@
 /*
- * "Plan layout" (N7-8): a sentence ("a sale poster for my candle shop, 30% off") becomes a starting layout to adjust.
+ * "Plan layout": a sentence ("a sale poster for my candle shop, 30% off") becomes a starting layout to adjust.
  * A text model writes a pixel draft (the instructions below, adapted with the Assist skill skills/layout-poster from
  * OpenMOSS's Apache-2.0 prompt-enhancer skill); parseLayout reads it, validateLayout checks it. With no text model, or
  * when its answer can't be used, planByRules lays out a poster from the sentence itself. Pure: the server's route and

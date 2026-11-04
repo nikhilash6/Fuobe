@@ -13,10 +13,11 @@ import { realDuration } from "@/components/av/frame-sampler";
 import { SourceLanguageSelect } from "@/components/av/language-picker";
 import { MediaDrop } from "@/components/av/media-drop";
 import { StepList } from "@/components/av/step-list";
-import { VoiceFirstSwitch } from "@/components/studio/voice-first-switch";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
 import { useCreateGeneration, useEngine, useGenerations } from "@/lib/api";
+import { useVoiceFirstLive, useVoiceFirstShown, VoiceFirstSwitch } from "@/components/audio-tools/voice-first-switch";
+import { voiceFirstDefault } from "@/lib/av/voice-first";
 import { cueProblems } from "@/lib/av/cue-edit";
 import {
   BURN_CAPS,
@@ -95,7 +96,7 @@ function download(name: string, text: string, type: string) {
 }
 
 /** Captions (Video tools → Captions): transcribe, fix every line, style, burn in — or export .srt / .vtt. */
-export function CaptionsStudio({ tabs }: { tabs?: React.ReactNode }) {
+export function CaptionsStudio() {
   // The last project comes back after a reload (this browser only); a hand-off link wins. Both are read
   // once mounted: on a link from Assist the address only changes as the new page commits, so reading
   // it while rendering would still see /assist.
@@ -108,7 +109,7 @@ export function CaptionsStudio({ tabs }: { tabs?: React.ReactNode }) {
   const video = picked === undefined ? (saved?.video ?? null) : picked;
   const results = useGenerations({ features: ["captions"], kinds: ["video"], limit: 24 });
   return (
-    <ToolShell title="Video tools" tabs={tabs}>
+    <ToolShell title="Video tools">
       {saved === undefined ? null : video && !video.uploading ? (
         <Editor
           key={video.ref}
@@ -150,9 +151,12 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
   const [look, setLook] = useState<CaptionLook>(restored?.look ?? DEFAULT_LOOK);
   const [transcriptId, setTranscriptId] = useState<string | undefined>(restored?.transcriptId);
   const [source, setSource] = useState("auto");
-  // "Clean the voice first": on for a video (music and effects under the speech blur the words), free on your GPU.
-  const [voiceFirst, setVoiceFirst] = useState(true);
   const [quick, setQuick] = useState(false);
+  // "Clean the voice first": on for a video's speech on your GPU, off in the cloud (it adds a paid step there).
+  const voiceFirstShown = useVoiceFirstShown();
+  const voiceFirstLive = useVoiceFirstLive();
+  const [voiceFirst, setVoiceFirst] = useState<boolean | null>(null);
+  const cleanFirst = voiceFirstShown && (voiceFirst ?? (engine === "open" && voiceFirstDefault("video", voiceFirstLive)));
   const transcript = useGeneration(transcriptId);
   const player = useRef<HTMLVideoElement>(null);
   const [time, setTime] = useState<number | undefined>(undefined);
@@ -185,7 +189,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
   }, [video, cues, look, transcriptId]);
 
   const transcribe = () =>
-    create.mutate(transcribeRequest({ engine, video: video.ref, sourceLanguage: source, voiceFirst, seconds: duration }), {
+    create.mutate(transcribeRequest({ engine, video: video.ref, sourceLanguage: source, cleanVoiceFirst: cleanFirst, seconds: duration }), {
       onSuccess: (items) => {
         loaded.current = null;
         setTranscriptId(items[0].id);
@@ -213,7 +217,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
 
   return (
     <div className="grid gap-4 pt-4 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
-      <div className="min-w-0 space-y-3 lg:sticky lg:top-20 lg:self-start">
+      <div className="min-w-0 space-y-3 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:self-start">
         <Preview video={video} cues={cues} look={lookFor(route, look)} route={route} player={player} onTime={setTime} onDuration={setDuration} />
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">{video.name}</p>
@@ -262,8 +266,8 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
                 {transcribing ? <Loader2 className="size-4 animate-spin" /> : <Captions className="size-4" />}
                 {transcribing ? "Transcribing…" : "Transcribe the speech"}
               </Button>
-              <VoiceFirstSwitch className="mt-3" engine={engine} on={voiceFirst} onChange={setVoiceFirst} seconds={duration} />
               <p className="mt-2 text-[12px] text-muted-foreground">{engine === "open" ? "Detects 30 languages." : "ElevenLabs Scribe v2 (word timings, ≈ $0.008 per minute)."}</p>
+              {voiceFirstShown && <VoiceFirstSwitch className="mt-3" engine={engine} on={cleanFirst} onChange={setVoiceFirst} seconds={duration} />}
               {t && <StepList className="mt-3" steps={[{ key: "t", label: "Transcript", g: t }]} />}
             </div>
           )}

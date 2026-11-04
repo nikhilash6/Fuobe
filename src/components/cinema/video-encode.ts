@@ -15,7 +15,60 @@ export function pathVideoType(): string | null {
   return ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) ?? null;
 }
 
-const VP8 = (width: number, height: number, fps: number): VideoEncoderConfig => ({ codec: "vp8", width, height, bitrate: 8_000_000, framerate: fps });
+const VP8 = (width: number, height: number, fps: number, bitrate = 8_000_000): VideoEncoderConfig => ({ codec: "vp8", width, height, bitrate, framerate: fps });
+
+/**
+ * A frame to encode: RGBA pixels, or a canvas (or any image source) handed to the encoder as it is, which spares a
+ * copy of every frame (about 8 MB at 1080 × 1920).
+ */
+export type FrameSource = ImageData | CanvasImageSource;
+
+/** Options for a render: the bit rate (8 Mbps by default) and a way to stop it. */
+export interface EncodeOptions {
+  bitrate?: number;
+  signal?: AbortSignal;
+}
+
+const isPixels = (f: FrameSource): f is ImageData => typeof ImageData !== "undefined" && f instanceof ImageData;
+
+function videoFrame(src: FrameSource, width: number, height: number, timestamp: number, duration: number): VideoFrame {
+  if (isPixels(src)) return new VideoFrame(src.data, { format: "RGBA", codedWidth: width, codedHeight: height, timestamp, duration });
+  return new VideoFrame(src as CanvasImageSource, { timestamp, duration, alpha: "discard" });
+}
+
+/** Lets the page breathe between frames without a timer (timers slow to a crawl in a hidden tab; messages don't). */
+export function breathe(): Promise<void> {
+  if (typeof MessageChannel === "undefined") return new Promise((r) => setTimeout(r, 0));
+  return new Promise((resolve) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => {
+      ch.port1.close();
+      resolve();
+    };
+    ch.port2.postMessage(null);
+  });
+}
+
+/** Waits until the encoder holds at most `max` frames (its dequeue event, else short polls). */
+async function drain(e: VideoEncoder, max: number): Promise<void> {
+  while (e.encodeQueueSize > max) {
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        e.removeEventListener?.("dequeue", finish);
+        resolve();
+      };
+      e.addEventListener?.("dequeue", finish);
+      setTimeout(finish, 20);
+    });
+  }
+}
+
+const stopIfAsked = (signal?: AbortSignal) => {
+  if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new DOMException("The render was stopped", "AbortError");
+};
 
 /** WebCodecs can encode VP8 at this size here. */
 export async function vp8Supported(width: number, height: number, fps: number): Promise<boolean> {
@@ -31,7 +84,7 @@ export async function vp8Supported(width: number, height: number, fps: number): 
  * `count` frames of two streams (`draw(i)` gives frame i of each, or a promise of them: a frame may wait for a splat's sort) encoded with WebCodecs and written as two WebM files:
  * every frame kept, frame i at i / fps, a keyframe each second.
  */
-export async function encodeVp8(count: number, width: number, height: number, fps: number, outputs: number, draw: (i: number) => ImageData[] | Promise<ImageData[]>): Promise<Uint8Array[]> {
+export async function encodeVp8(count: number, width: number, height: number, fps: number, outputs: number, draw: (i: number) => FrameSource[] | Promise<FrameSource[]>, opts: EncodeOptions = {}): Promise<Uint8Array[]> {
   const chunks: EncodedFrame[][] = Array.from({ length: outputs }, () => []);
   let failure: unknown;
   const encoders = chunks.map((_, k) => {
@@ -43,22 +96,23 @@ export async function encodeVp8(count: number, width: number, height: number, fp
       },
       error: (err) => (failure = err),
     });
-    e.configure(VP8(width, height, fps));
+    e.configure(VP8(width, height, fps, opts.bitrate));
     return e;
   });
   try {
     const step = 1e6 / fps;
     for (let i = 0; i < count; i++) {
+      stopIfAsked(opts.signal);
       const images = await draw(i);
       images.forEach((img, k) => {
-        const f = new VideoFrame(img.data, { format: "RGBA", codedWidth: width, codedHeight: height, timestamp: Math.round(i * step), duration: Math.round(step) });
+        const f = videoFrame(img, width, height, Math.round(i * step), Math.round(step));
         encoders[k].encode(f, { keyFrame: i % Math.max(1, Math.round(fps)) === 0 });
         f.close();
       });
       if (failure) throw failure;
       // Let the encoders and the page breathe (the progress label repaints).
-      while (encoders.some((e) => e.encodeQueueSize > 4)) await new Promise((r) => setTimeout(r, 5));
-      if (i % 4 === 3) await new Promise((r) => setTimeout(r, 0));
+      for (const e of encoders) await drain(e, 4);
+      if (i % 4 === 3) await breathe();
     }
     await Promise.all(encoders.map((e) => e.flush()));
     if (failure) throw failure;
@@ -105,21 +159,24 @@ export async function recordWithMediaRecorder(type: string, count: number, width
 
 /** The H.264 profiles tried in order (baseline 3.1 holds 1280 × 720 at 30 fps; main and high 4.0 more). */
 const AVC_CODECS = ["avc1.42001f", "avc1.4d0028", "avc1.640028"];
-const AVC = (codec: string, width: number, height: number, fps: number): VideoEncoderConfig => ({ codec, width, height, bitrate: 8_000_000, framerate: fps, avc: { format: "avc" } });
+const AVC = (codec: string, width: number, height: number, fps: number, bitrate = 8_000_000): VideoEncoderConfig => ({ codec, width, height, bitrate, framerate: fps, avc: { format: "avc" } });
 
 /** The H.264 profile WebCodecs encodes at this size here, or null (Chromium without proprietary codecs, Firefox). */
-export async function avcCodec(width: number, height: number, fps: number): Promise<string | null> {
+export async function avcCodec(width: number, height: number, fps: number, bitrate?: number): Promise<string | null> {
   if (typeof VideoEncoder === "undefined" || typeof VideoFrame === "undefined") return null;
   for (const c of AVC_CODECS) {
     try {
-      if ((await VideoEncoder.isConfigSupported(AVC(c, width, height, fps))).supported) return c;
+      if ((await VideoEncoder.isConfigSupported(AVC(c, width, height, fps, bitrate))).supported) return c;
     } catch {}
   }
   return null;
 }
 
-/** `count` frames (`draw(i)` gives frame i) encoded with WebCodecs H.264 and written as one MP4: every frame kept. */
-export async function encodeMp4(codec: string, count: number, width: number, height: number, fps: number, draw: (i: number) => ImageData | Promise<ImageData>): Promise<Uint8Array> {
+/**
+ * `count` frames (`draw(i)` gives frame i: pixels, or a canvas handed over as it is) encoded with WebCodecs H.264 and
+ * written as one MP4: every frame kept.
+ */
+export async function encodeMp4(codec: string, count: number, width: number, height: number, fps: number, draw: (i: number) => FrameSource | Promise<FrameSource>, opts: EncodeOptions = {}): Promise<Uint8Array> {
   const frames: EncodedFrame[] = [];
   let avcC: Uint8Array | null = null;
   let failure: unknown;
@@ -133,17 +190,18 @@ export async function encodeMp4(codec: string, count: number, width: number, hei
     },
     error: (err) => (failure = err),
   });
-  e.configure(AVC(codec, width, height, fps));
+  e.configure(AVC(codec, width, height, fps, opts.bitrate));
   try {
     const step = 1e6 / fps;
     for (let i = 0; i < count; i++) {
+      stopIfAsked(opts.signal);
       const img = await draw(i);
-      const f = new VideoFrame(img.data, { format: "RGBA", codedWidth: width, codedHeight: height, timestamp: Math.round(i * step), duration: Math.round(step) });
+      const f = videoFrame(img, width, height, Math.round(i * step), Math.round(step));
       e.encode(f, { keyFrame: i % Math.max(1, Math.round(fps)) === 0 });
       f.close();
       if (failure) throw failure;
-      while (e.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 5));
-      if (i % 4 === 3) await new Promise((r) => setTimeout(r, 0));
+      await drain(e, 4);
+      if (i % 4 === 3) await breathe();
     }
     await e.flush();
     if (failure) throw failure;

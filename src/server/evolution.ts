@@ -186,7 +186,7 @@ function planInput(body: z.infer<typeof EvolutionBodySchema>, info: Awaited<Retu
     const k = Math.min(n, EVOLUTION.openReferences);
     notes.push(`Each ≤5 s segment: Qwen-Image 2.1 Turbo takes its first frame toward the direction${n ? ` with your first ${k === 1 ? "reference" : `${k} references`}` : ""}, then Wan 2.2 Fun VACE re-renders it from itself at 16 fps`);
     if (n > EVOLUTION.openReferences) notes.push(`The other ${n - EVOLUTION.openReferences} reference${n - EVOLUTION.openReferences > 1 ? "s" : ""} shape the direction only`);
-    notes.push("Needs a 24 GB GPU · Wan 2.2 Fun VACE is Apache-2.0; Qwen-Image 2.1's weights are non-commercial");
+    notes.push("Needs a 24 GB GPU");
   } else {
     const k = Math.min(n, EVOLUTION.cloudReferences);
     notes.push(`${name} runs the GPU's model hosted on fal: each ≤10 s piece's first frame is taken toward the direction by Qwen-Image-Edit 2511${n ? ` with your first ${k === 1 ? "reference" : `${k} references`}` : ""}, then Wan 2.2 Fun VACE re-renders the piece by its depth with that frame as its reference, in your clip's shape`);
@@ -196,7 +196,6 @@ function planInput(body: z.infer<typeof EvolutionBodySchema>, info: Awaited<Retu
     const fps = source.fps;
     if (fps && fps > SHORTS.original.billFps + 0.5) notes.push(`fal bills this clip's ${Math.round(fps)} fps as ${(fps / SHORTS.original.billFps).toFixed(1)}× its length (video seconds at ${SHORTS.original.billFps} fps)`);
     if (vaceDownsample(fps)) notes.push(`Wan 2.2 Fun VACE works this ${Math.round(fps!)} fps clip at ${Math.round(fps! / (vaceDownsample(fps) + 1))} fps and brings it back to its own rate`);
-    notes.push("Wan 2.2 Fun VACE and Qwen-Image-Edit 2511 are Apache-2.0 (information, Settings → Models & licences)");
   }
   if (source.hasAudio) notes.push("Your clip's own sound is put back on the result");
   const title = evolutionTitle(direction, body.source.name);

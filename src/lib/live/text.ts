@@ -45,3 +45,26 @@ export interface KeyParts {
 export function renderKey(p: KeyParts): string {
   return JSON.stringify([p.base, p.refs ?? [], p.mask ?? "", normalize(p.text), p.seed >>> 0, p.size, p.base ? "" : (p.aspect ?? "1:1"), p.method ?? "hybrid", p.quality ?? "live"]);
 }
+
+/**
+ * One prompt that keeps growing: each change is a part of it, ended by a comma (or ; . or a line break). Enter ends
+ * the change being typed; Undo drops the newest one.
+ */
+const PART_END = /[,;.\n]/u;
+
+/** The text with the change being typed ended, ready for the next one (unchanged when there is nothing to end). */
+export function nextChange(s: string): string {
+  const t = s.replace(/\s+$/u, "");
+  if (!normalize(t)) return s;
+  return PART_END.test(t.slice(-1)) ? `${t} ` : `${t}, `;
+}
+
+/** The text without its newest change, ready for the next one ("" when it had only one). */
+export function dropLastChange(s: string): string {
+  const t = s.replace(/[\s,;.]+$/u, "");
+  const at = Math.max(...[",", ";", ".", "\n"].map((c) => t.lastIndexOf(c)));
+  return at < 0 ? "" : `${t.slice(0, at + 1)} `;
+}
+
+/** How many changes the text holds. */
+export const changeCount = (s: string) => normalize(s.replace(/\n/g, ",")).split(/[,;.]/u).filter((p) => p.trim()).length;

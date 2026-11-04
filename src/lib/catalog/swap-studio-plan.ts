@@ -37,9 +37,9 @@ import {
   type WhoToSwap,
 } from "./swap-studio";
 import { silenceRef } from "./canvas";
-import { soundBack, SOUND_STEP_LABEL, soundOf, withSoundExtra, type SoundBack, type SoundChoice } from "../av/original-sound";
 import { getModel } from "./index";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
+import { withOriginalSound, type OriginalSound } from "../av/original-sound";
 
 /** The models each job runs on. */
 export const STUDIO_MODELS = {
@@ -123,8 +123,7 @@ export function planPreview(clip: SwapClip): PlanStep[] | null {
 // ---------------------------------------------------------------------------
 // Transcript
 
-/** The clip's words; with `voiceFirst`, read from the speech alone ("Clean the voice first", src/lib/av/voice-first.ts). */
-export function planTranscribe(clip: SwapClip, engine: Engine, voiceFirst = false): PlanStep[] {
+export function planTranscribe(clip: SwapClip, engine: Engine, opts: { cleanVoiceFirst?: boolean } = {}): PlanStep[] {
   const s = clip.source.duration;
   return [
     {
@@ -135,8 +134,8 @@ export function planTranscribe(clip: SwapClip, engine: Engine, voiceFirst = fals
         modelId: STUDIO_MODELS[engine].transcribe,
         op: "transcribe",
         inputs: { video: workingClip(clip, engine) },
-        params: { duration: s, sourceDuration: s },
-        ...(voiceFirst && { voiceFirst: true }),
+        // "Clean the voice first" (src/lib/av/voice-first.ts): the speech apart from the music and effects before it's read.
+        params: { duration: s, sourceDuration: s, ...(opts.cleanVoiceFirst && { extra: { cleanVoiceFirst: true } }) },
         step: { label: "The clip's words", index: 0, of: 1 },
       },
     },
@@ -536,8 +535,8 @@ export interface AssemblyPlanInput {
   pieces: AssemblyPiece[];
   /** Each take's finished video. */
   videoOf: (piece: Extract<AssemblyPiece, { kind: "take" }>) => string;
-  /** Original sound: what of the clip's sound goes back (src/lib/av/original-sound.ts; unset = Everything). */
-  sound?: SoundChoice;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts; the cloud: Everything only). */
+  originalSound?: OriginalSound;
 }
 
 /** Fold `keys` into joins of at most `max` (the last join is "join"). */
@@ -606,23 +605,19 @@ export function planAssembly(a: AssemblyPlanInput): { steps: PlanStep[]; final: 
   const m = STUDIO_MODELS[a.engine];
   const rate = a.engine === "cloud" ? { params: { extra: { target_fps: SWAP_STUDIO.fps } } } : {};
   const picture = joins(steps, keys, m.joinMax, (_n, last) => ({ ...helper(title), modelId: m.join, op: "concat", prompt: title, ...rate, step: { label: last ? "Join the parts" : "Joining", index: 1000, of: 1000 } }));
-  if (!clip.source.hasAudio && a.engine === "open") {
+  const sound: GenerationRequest["inputs"] = clip.source.hasAudio ? { audio: workingClip(clip, a.engine) } : a.engine === "cloud" ? { audio: silenceRef(clip.source.duration) } : undefined;
+  if (!sound) {
     // Your GPU, a silent clip: the fit graph already gave every part silence; the join is the result.
     const last = steps.find((s) => s.key === picture)!;
     last.request = { ...last.request, ...base };
     return { steps, final: picture };
   }
-  // Original sound: the working clip's sound as it is, or (your GPU) the chosen stems of a split of it.
-  const back: SoundBack = clip.source.hasAudio
-    ? soundBack(steps, { engine: a.engine, choice: a.sound, from: { url: workingClip(clip, a.engine) }, helper: helper(title), seconds: clip.source.duration, name: clip.name })
-    : { after: [], chain: [], inputs: { audio: silenceRef(clip.source.duration) } };
-  const choice = soundOf(a.sound);
-  const label = !clip.source.hasAudio ? "Keep it silent, like the clip" : choice === "everything" ? "Put the clip's sound back" : SOUND_STEP_LABEL[choice];
   steps.push({
     key: "final",
-    request: withSoundExtra({ ...base, modelId: m.mux, op: "mux", ...(back.inputs && { inputs: back.inputs }), step: { label, index: 1200, of: 1000 } }, back),
-    after: [picture, ...back.after],
-    chain: [{ slot: "video" }, ...back.chain],
+    request: { ...base, modelId: m.mux, op: "mux", inputs: sound, step: { label: clip.source.hasAudio ? "Put the clip's sound back" : "Keep it silent, like the clip", index: 1200, of: 1000 } },
+    after: [picture],
+    chain: [{ slot: "video" }],
   });
-  return { steps, final: "final" };
+  // Original sound: the replaced person's speech is new, so Music & effects only is offered first (DBS on your GPU).
+  return { steps: withOriginalSound(steps, "final", a.originalSound, a.engine, { seconds: clip.source.duration }), final: "final" };
 }

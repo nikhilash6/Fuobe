@@ -6,12 +6,12 @@
 // Usage: node tests/e2e/restore-flows.mjs [appUrl] [--shots <dir>]   Exits 1 on a failed check.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { tempDir, removeDir } from "./_temp.mjs";
 
 const argv = process.argv.slice(2);
-const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
+const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3440").replace(/\/$/, "");
 const shots = argv.includes("--shots") ? argv[argv.indexOf("--shots") + 1] : undefined;
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
@@ -23,7 +23,7 @@ const check = (label, ok, extra = "") => {
 const fixture = path.join(root, "tests/fixtures/shorts-12s.mp4");
 // Playwright's Chromium has no H.264 decoder: the Explainer reads its still in the browser, so it gets the clip as a
 // black-and-white VP9 WebM (ffmpeg), which also shows the black-and-white wording.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-restore-e2e-"));
+const tmp = tempDir("fuobe-restore-e2e-");
 const greyWebm = path.join(tmp, "harbour-1930.webm");
 execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", fixture, "-t", "4", "-vf", "hue=s=0", "-c:v", "libvpx-vp9", "-b:v", "200k", "-an", greyWebm]);
 
@@ -56,9 +56,9 @@ try {
   {
     const { context, page } = await contextFor("open");
     await page.goto(`${app}/video-tools/restore?video=${encodeURIComponent(clip)}`, { waitUntil: "load" });
-    await page.getByText(/Canvas \d+×\d+ · \d+ tiles of 960×544/).first().waitFor({ timeout: 30_000 });
+    await page.getByText(/\d+×\d+ · restored in \d+ parts?/).first().waitFor({ timeout: 30_000 });
     const t = await text(page);
-    check("GPU: canvas, tiles and windows read from the clip", /Canvas 1088×1920 · \d+ tiles of 960×544 · 3 windows of up to 97 frames/.test(t));
+    check("GPU: the size and the parts read from the clip", /1088×1920 · restored in 3 parts/.test(t));
     check("GPU: the gated-download step with its link to Settings", /Restore IC-LoRA is gated/.test(t) && (await page.locator('a[href="/settings#huggingface"]').count()) > 0);
     check("GPU: the hardware note", /24 GB|GPU/.test(t));
     check("GPU: priced before it runs", /Free|Demo · free/.test(t));
@@ -71,7 +71,7 @@ try {
     const four = page.getByRole("switch", { name: /Restore to 4K/ });
     check("Restore to 4K is offered on the GPU", (await four.count()) > 0 && !(await four.isDisabled()));
     await four.click();
-    await page.getByText(/then 2176×3840/).first().waitFor({ timeout: 20_000 });
+    await page.getByText(/finished at 2176×3840/).first().waitFor({ timeout: 20_000 });
     check("Restore to 4K adds the detail pass at twice the canvas", true);
     if (shots) await page.screenshot({ path: path.join(shots, "restore-open-1440.png"), fullPage: true });
     await four.click();
@@ -167,7 +167,7 @@ try {
   }
 } finally {
   await browser.close();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  removeDir(tmp);
 }
 
 console.log(failures.length ? `\n${failures.length} failed` : "\nall checks passed");

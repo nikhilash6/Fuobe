@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Build plan O7: Fuobe calls no Higgsfield API. This file fails when a code path names that provider again (its id,
@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * research and are not scanned; this file is the one test that names the provider.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-no-hf-"));
+const dir = tempDir("fuobe-no-hf-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
@@ -36,7 +36,6 @@ const { saveFile } = await import("@/server/storage");
 
 // Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
 beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 let rows = 0;
 /** A generation row as one stored before the switch reads (the retired model and provider, as it was left). */

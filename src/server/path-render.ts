@@ -10,7 +10,7 @@ import { LENS, buildPointCloud, lensFov } from "@/lib/scene3d";
 import { adoptFile, readRef, scratchDir } from "./storage";
 
 /**
- * The server's path render (build plan N7-7, option B: a small headless point-cloud renderer, no node pack): a still and
+ * The server's path render (option B: a small headless point-cloud renderer, no node pack): a still and
  * its depth picture (MoGe 2's, from the depth step) become a point cloud the way Cinema's 3D scene builds one (scene3d
  * buildPointCloud, the photo taken with the scene's default lens), drawn along the camera path at 81 frames, 16 fps (the
  * Uni3C graph's length), black where nothing was seen, and encoded to an MP4 by ffmpeg. Canvas, Assist, Fuobe DoP and

@@ -5,7 +5,21 @@
  */
 export type HubKind = "audio" | "video-tools" | "upscale";
 
-export const HUB_MODES: Record<HubKind, { id: string; label: string }[]> = {
+export interface HubMode {
+  id: string;
+  label: string;
+  /**
+   * A mode a guest or an account doesn't see at all (its tab is left out for them). A tool that runs on a self-hosted
+   * Fuobe only keeps its tab, and its page says up front that it isn't available here.
+   */
+  ownerOnly?: true;
+  /** The mode's tool runs on a self-hosted Fuobe only: the hub's engine badge says so to anyone but the owner (EngineSwitch). */
+  selfHostedOnly?: true;
+}
+
+export const HUB_TITLE: Record<HubKind, string> = { upscale: "Upscale", audio: "Audio", "video-tools": "Video tools" };
+
+export const HUB_MODES: Record<HubKind, HubMode[]> = {
   upscale: [
     { id: "image", label: "Image" },
     { id: "video", label: "Video" },
@@ -18,14 +32,14 @@ export const HUB_MODES: Record<HubKind, { id: string; label: string }[]> = {
     { id: "dialogue", label: "Dialogue" },
     { id: "voice-change", label: "Voice change" },
     { id: "design", label: "Design a voice" },
-    { id: "edit-speech", label: "Edit speech" },
-    { id: "translate", label: "Translate" },
+    { id: "edit-speech", label: "Edit speech", selfHostedOnly: true },
+    { id: "translate", label: "Translate", selfHostedOnly: true },
     { id: "transcribe", label: "Transcribe" },
     { id: "clean", label: "Clean up voice" },
-    { id: "split", label: "Split soundtrack" },
+    { id: "split", label: "Split soundtrack", selfHostedOnly: true },
     { id: "sfx", label: "Sound effects" },
     { id: "music", label: "Music" },
-    { id: "song", label: "Extend & remix" },
+    { id: "song", label: "Extend & remix", ownerOnly: true },
     { id: "loop", label: "Loop / extend" },
     { id: "join", label: "Join" },
     { id: "video", label: "Sound for video" },
@@ -33,11 +47,11 @@ export const HUB_MODES: Record<HubKind, { id: string; label: string }[]> = {
   "video-tools": [
     { id: "matte", label: "Remove background" },
     { id: "green-screen", label: "Green screen" },
-    { id: "remove-object", label: "Remove object" },
-    { id: "remove-dialogue", label: "Remove dialogue" },
-    { id: "remove-person", label: "Remove a person" },
-    { id: "evolution", label: "Evolution" },
-    { id: "restore", label: "Restore & colourise" },
+    { id: "remove-object", label: "Remove object", selfHostedOnly: true },
+    { id: "remove-dialogue", label: "Remove dialogue", selfHostedOnly: true },
+    { id: "remove-person", label: "Remove a person", ownerOnly: true, selfHostedOnly: true },
+    { id: "evolution", label: "Evolution", selfHostedOnly: true },
+    { id: "restore", label: "Restore & colourise", ownerOnly: true, selfHostedOnly: true },
     { id: "relight", label: "Relight" },
     { id: "depth", label: "Depth map" },
     { id: "captions", label: "Captions" },
@@ -52,4 +66,18 @@ export function modeHref(kind: HubKind, mode: string, query?: Record<string, str
   const path = HUB_MODES[kind][0].id === mode ? `/${kind}` : `/${kind}/${mode}`;
   const q = query ? new URLSearchParams(query).toString() : "";
   return q ? `${path}?${q}` : path;
+}
+
+/** The hub a path belongs to (/audio, /audio/music…), if any. */
+export function hubOfPath(pathname: string): HubKind | undefined {
+  const first = pathname.split(/[?#]/)[0].split("/")[1];
+  return (Object.keys(HUB_MODES) as HubKind[]).find((k) => k === first);
+}
+
+/** The mode a hub path shows: /audio is the first mode, /audio/music is Music. Undefined outside the hub or for an unknown mode. */
+export function modeOfPath(kind: HubKind, pathname: string): string | undefined {
+  const parts = pathname.split(/[?#]/)[0].split("/").filter(Boolean);
+  if (parts[0] !== kind || parts.length > 2) return undefined;
+  const id = parts[1] ?? HUB_MODES[kind][0].id;
+  return HUB_MODES[kind].some((m) => m.id === id) ? id : undefined;
 }

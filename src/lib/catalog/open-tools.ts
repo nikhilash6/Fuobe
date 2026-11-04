@@ -25,6 +25,13 @@ const ANGLES_ENTRY = loraEntry("qwen-edit-2509-multiple-angles");
 export const ANGLES_LORA: LoraRef | undefined = ANGLES_ENTRY && loraRef(ANGLES_ENTRY);
 
 /**
+ * lilylilith's AnyAngle LoRA for Qwen-Image 2.1 at 1.0 (Any Angle, src/lib/catalog/any-angle.ts): its graph loads it
+ * itself; as the recipe's LoRA it is downloaded and checked before a run.
+ */
+const ANY_ANGLE_ENTRY = loraEntry("qwen-image-21-any-angle");
+export const ANY_ANGLE_LORA: LoraRef | undefined = ANY_ANGLE_ENTRY && loraRef(ANY_ANGLE_ENTRY);
+
+/**
  * fal's Multiple-Angles LoRA for Qwen-Image-Edit 2511 (its `<sks>` pose words): the Angles app's open route, Cinema's
  * recomposition and Soul Location's other views on the GPU, next to Fuobe Angles' 2509 recipe (its own app until the angles
  * eval suite promotes it).

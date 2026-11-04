@@ -1,11 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { GenerationRequest, ModelDef } from "@/lib/catalog/types";
 import type { StudioConfig } from "@/components/studio/studio-context";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Launch prices (Pricing.promo): H3 Max camera controls at $0.052/s (768P) through 2026-10-31, then $0.08/s; FLUX 3 Max
@@ -17,7 +15,7 @@ import type { StudioConfig } from "@/components/studio/studio-context";
 // The server starts on 2026-10-30, the day before H3 Max's launch price ends, and loads the catalog then.
 vi.useFakeTimers({ now: Date.parse("2026-10-30T10:00:00Z"), toFake: ["Date"] });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-launch-prices-"));
+const dir = tempDir("fuobe-launch-prices-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -62,7 +60,6 @@ beforeAll(() => {
 afterEach(() => at("2026-10-30T10:00:00Z"));
 afterAll(() => {
   vi.useRealTimers();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 describe("the catalog keeps both prices", () => {

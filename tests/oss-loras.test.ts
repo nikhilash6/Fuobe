@@ -150,12 +150,12 @@ describe("every motion and effect on Fuobe DoP", () => {
     expect(wiggle.cloud).toMatchObject({ modelId: "kling-2-5-turbo", partner: true });
     expect(wiggle.cloud!.loras).toBeUndefined();
     expect(wiggle.cloud!.promptTemplate).toBeUndefined();
-    expect(wiggle.parity).toBe("On your GPU, Fuobe DoP uses a style trained for this move. Its trained style is licensed for your GPU only.");
-    // Sent to fal (a Mix, a hand-made request), it goes and the run says what the licence says...
+    expect(wiggle.parity).toBe("On your GPU, Fuobe DoP uses a style trained for this move.");
+    // Sent to fal (a Mix, a hand-made request), it goes (its licence is on Thanks & licences)...
     const fal = getModel(DOP_MODEL)!.routes.find((r) => r.provider === "fal" && r.op === "i2v")!;
     const sent = fitLoras(wiggle.open!.loras ?? [], fal);
     expect(sent.loras).toHaveLength(2);
-    expect(sent.notes.join(" ")).toMatch(/licence allows your GPU only/);
+    expect(sent.notes).toEqual([]);
     // ...unless Settings → Models & licences keeps such LoRAs on the GPU.
     const kept = fitLoras((wiggle.open!.loras ?? []).map((l) => ({ ...l, keepOnGpu: true as const })), fal);
     expect(kept.loras).toEqual([]);

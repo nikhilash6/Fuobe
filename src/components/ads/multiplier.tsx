@@ -10,13 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { areaCls } from "@/components/brand/fields";
 import { uploadImages } from "@/components/brand/image-list";
+import { ExampleRow } from "@/components/studio/example-row";
 import { fileToSlot, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
 import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
-import { formatCost } from "@/lib/format";
+import { RunPlaceChip, useRunPlace } from "@/components/studio/run-place-chip";
+import { mainModel } from "@/lib/run-place";
 import { probeBlob, probeUrl } from "@/lib/media-probe";
 import { useAskBeforeUpload, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { addRuns, send, useEstimate } from "@/components/marketing/hooks";
@@ -176,8 +179,11 @@ function MentionImages({ value, onChange, onMention, max }: { value: string[]; o
   );
 }
 
-/** Ad Multiplier: a reference ad (4–30 s) → new versions: recreated from a prompt, or with a new hook / CTA. */
-export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) {
+/**
+ * Ad Multiplier: a reference ad (4–30 s) → new versions: recreated from a prompt, or with a new hook / CTA.
+ * examples: "More to try" (exampleRow(), from the page), under the empty list of versions.
+ */
+export function AdMultiplier({ models, examples }: { models: Record<string, ModelInfo>; examples?: ExampleRowData | null }) {
   const qc = useQueryClient();
   const { engine, setEngine } = useMarketingEngine();
   const access = useModelAccess();
@@ -269,7 +275,11 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
   const estBody = useMemo(() => (body && sections ? { ...body, firstFrame: hookOn ? body.video : undefined, lastFrame: ctaOn ? body.video : undefined } : body), [body, sections, hookOn, ctaOn]);
   const est = useEstimate<RunEstimate>("/api/ads/multiplier/estimate", estBody);
   const blocker = !video ? "Upload a reference video" : video.uploading ? "Uploading the video…" : duration == null ? "Reading the video…" : length < MULTIPLIER.minSeconds - 0.05 || length > MULTIPLIER.maxSeconds + 0.05 ? "Video duration: 4-30 seconds" : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  // Where the new versions are made and their price (the studios' words); a guest or an account is told it isn't
+  // available here (its run would be refused), with no price.
+  const priced = est.data && !est.data.blocker ? est.data : undefined;
+  const place = useRunPlace({ engine, models: priced?.steps.map((s) => s.modelName), model: mainModel(priced?.steps) ?? model?.name, costUsd: priced?.costUsd, demo: priced?.demo, ownerOnly: "Ad Multiplier" });
+  const runLabel = versions > 1 ? `Generate ${versions} versions` : "Generate";
 
   const mention = (n: number) => {
     const tag = `@image_${n}`;
@@ -290,6 +300,7 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
   const missing = mentionedImages(prompt).filter((n) => n > images.length);
 
   const generate = async () => {
+    if (place?.where === "unavailable") return void toast(place.tip, { id: "mult-blocker" });
     if (blocker || !body || !video || !cut) return void toast(blocker ?? "Upload a reference video", { id: "mult-blocker" });
     setBusy(sections ? "Reading the frames…" : "Starting…");
     try {
@@ -308,9 +319,9 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title="Ad Multiplier" active="multiplier" engine={engine} onEngine={setEngine} />
-      <div className="mx-auto w-full min-w-0 max-w-[1180px] flex-1 px-3 pt-6 pb-20 sm:px-6 sm:pt-10">
+      <div className="mx-auto w-full min-w-0 max-w-[1180px] flex-1 px-4 pt-6 pb-20 sm:px-6 sm:pt-10">
         <div className="pb-6 text-center">
           <h2 className="font-heading text-display text-balance">Turn one winning ad into many</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">Upload an ad that works. Recreate it with new people, products or places — or keep it and try a new hook or call to action.</p>
@@ -477,9 +488,15 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
 
             <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
               <p className="mr-auto text-[12px] text-muted-foreground">{est.data?.steps.length ? est.data.steps.map((s) => s.label).join(" → ") : "New versions keep the reference's length and framing"}</p>
-              {cost && <span className="font-mono text-[13px] text-muted-foreground">{cost}</span>}
-              <Button size="lg" onClick={() => void generate()} aria-disabled={!!blocker || !!busy} className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")} title={blocker}>
-                {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {busy ?? (versions > 1 ? `Generate ${versions} versions` : "Generate")}
+              <RunPlaceChip place={place} steps={priced?.steps} engine={engine} onEngine={setEngine} pending={!!estBody && est.isFetching && !est.data} />
+              <Button
+                size="lg"
+                onClick={() => void generate()}
+                aria-disabled={!!blocker || !!busy}
+                className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")}
+                title={blocker ?? (place?.where === "unavailable" ? place.tip : place?.send ? `${runLabel} · ${place.send}` : undefined)}
+              >
+                {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {busy ?? runLabel}
               </Button>
             </div>
             {blocker && video && <p className="-mt-3 text-right text-[12px] text-muted-foreground">{blocker}</p>}
@@ -491,10 +508,13 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
           <RunsList
             feature="ad-multiplier"
             empty={
-              <div className="rounded-2xl border border-dashed py-12 text-center">
-                <EmptyIcon icon={Copy} />
-                <p className="mt-4 text-[14px] text-muted-foreground">{video ? "Pick what to change and press Generate." : "Start with an ad that already works."}</p>
-              </div>
+              <>
+                <div className="rounded-2xl border border-dashed py-12 text-center">
+                  <EmptyIcon icon={Copy} />
+                  <p className="mt-4 text-[14px] text-muted-foreground">{video ? "Pick what to change and press Generate." : "Start with an ad that already works."}</p>
+                </div>
+                {examples && <ExampleRow row={examples} className="mt-10" />}
+              </>
             }
           />
         </div>

@@ -1,4 +1,4 @@
-// Browser check of Audio → Design a voice (nm10-voice-design) and the Dialogue voice picker.
+// Browser check of Audio → Design a voice and the Dialogue voice picker.
 // Usage: node tests/e2e/design-voice.mjs [appUrl] [outDir]
 //   appUrl: the app in demo mode (FUOBE_DEMO_MODE=on, no keys, COMFYUI_URL pointing at nothing), signed in as the owner.
 // Checks, at 1440 px and 390 px in light and dark: the tool's chips, the description the model hears, the price ("Free on
@@ -6,10 +6,12 @@
 // made (placeholders), one saved as a voice; the saved voice in the Dialogue picker and in Elements → Voices with what it
 // was designed with. Screenshots go to outDir. A page error or a console error fails the run.
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { DESKTOP, PHONE, launch, openRoute } from "./_browser.mjs";
 
-const app = process.argv[2] ?? "http://localhost:3000";
-const out = process.argv[3] ?? fs.mkdtempSync("/tmp/fuobe-design-voice-");
+const app = process.argv[2] ?? "http://localhost:3440";
+const out = process.argv[3] ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-design-voice-"));
 fs.mkdirSync(out, { recursive: true });
 
 const failures = [];
@@ -74,7 +76,7 @@ try {
 
     // Elements → Voices shows what it was designed with.
     await openRoute(page, `${app}/elements`);
-    const card = page.getByText("Designed with Qwen3-TTS · both engines").first();
+    const card = page.getByText("Designed with Qwen3-TTS").first();
     await card.waitFor({ timeout: 15_000 }).catch(() => {});
     check(await card.isVisible().catch(() => false), "Elements: the voice says what it was designed with");
     await page.screenshot({ path: `${out}/elements-1440-light.png`, fullPage: true });
@@ -86,7 +88,7 @@ try {
     const row = page.getByRole("button", { name: /Old Narrator/ }).first();
     await row.waitFor({ timeout: 10_000 }).catch(() => {});
     check(await row.isVisible().catch(() => false), "Dialogue: the saved voice is in the picker");
-    check(await page.getByText("Designed with Qwen3-TTS · both engines").first().isVisible().catch(() => false), "Dialogue: with what it was designed with");
+    check(await page.getByText("Designed with Qwen3-TTS").first().isVisible().catch(() => false), "Dialogue: with what it was designed with");
     await page.screenshot({ path: `${out}/dialogue-picker-1440-light.png` });
     await ctx.close();
   }

@@ -1,5 +1,6 @@
 import { QMA_MODEL } from "@/lib/qma";
 import { ANGLES_2511_LORA } from "./open-tools";
+import { CUSTOM_COLOUR, ITEMS, RECOLOR, RECOLOR_TEMPLATE, SWATCHES } from "./recolor";
 import { CAST_LOOK } from "./soul-cards";
 import type { InputSlot, Preset, PresetOption, PresetRoute } from "./types";
 
@@ -56,6 +57,10 @@ const third = (label: string, hint?: string): InputSlot => ({ key: "image3", lab
  */
 const TWO_STEP = "Animates the change from your photo in one pass.";
 const NO_AUDIO = "This makes a silent clip. Add sound with Video to audio.";
+
+/** The BFS head LoRA's training prompt, word for word (its "head_swap:" trigger, <image1> = the shot, <image2> = the head). */
+export const HEAD_SWAP_OPEN =
+  "head_swap: start with <image1> as the base image, keeping its lighting, environment, and background. remove the head from <image1> completely and replace it with the head from <image2>, strictly preserving the hair, eye color, nose structure from <image2>. copy the direction of the eye, head rotation, micro expressions from <image1>, high quality, sharp details, 4k";
 
 type AppSpec = {
   /** Kept when an app is renamed, so links, previews and saved runs still find it (default: from the name). */
@@ -128,6 +133,21 @@ const opt = (key: string, label: string, choices: [string, string][]): PresetOpt
 });
 
 /**
+ * Outfit Swap's shoes: the sentence after the swap, in the cloud's words and as the open graph's `request`. "New shoes
+ * too" is the LoRA card's default (it clears the old outfit); "Keep mine" keeps the shoes and legwear.
+ */
+const SHOES = "Replace everything they wear.";
+const KEEP_SHOES = "Keep their own shoes and legwear.";
+const outfitShoes: PresetOption = {
+  key: "shoes",
+  label: "Shoes",
+  choices: [
+    { value: "new-shoes-too", label: "New shoes too", prompt: SHOES, openExtra: { request: SHOES } },
+    { value: "keep-mine", label: "Keep mine", prompt: KEEP_SHOES, openExtra: { request: KEEP_SHOES } },
+  ],
+};
+
+/**
  * Old app ids still stored on generations (their Reuse / Retry look the preset up by id): the app they
  * became. The Virality Predictor app is the Hook Frame app since /virality took its name and URL.
  */
@@ -148,6 +168,23 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Replace the face of the person in the first image with the face of the person in the second image. Keep the first image's pose, hairstyle, clothing, lighting, color grading, camera angle and background exactly. Match skin tone, head angle, perspective and lighting so the result looks like an untouched photograph.",
+  }),
+  // Face Swap keeps the first person's hair, jaw and ears; this brings the whole head over. On the GPU it runs the BFS
+  // head LoRA with its training prompt, body first and head second (workflows/comfyui/head-swap-qwen-image-21.json).
+  app({
+    name: "Head Swap",
+    category: "Identity",
+    description: "Put your whole head on any photo, hair and all",
+    icon: "UserRound",
+    hue: 310,
+    inputs: [
+      { key: "image", label: "Photo", accept: "image", required: true, hint: "The shot to keep" },
+      second("Head", "A clear photo of your head and hair. Use your own photo, or one you have permission to use."),
+    ],
+    prompt:
+      "Replace the whole head of the person in the first image, hair included, with the head of the person in the second image: their face, hair, hairline and ears. Keep the first image's body, pose, head angle, eye direction, expression, clothing, lighting, color grading and background exactly. Light the new head like the rest of the shot and match the skin tone of the neck and hands, so the result looks like an untouched photograph.",
+    open: { modelId: "oss-qwen-head-swap", promptTemplate: HEAD_SWAP_OPEN },
+    parity: "Brings the whole head over: face, hair and ears, lit like the shot. Everything else stays exactly as it was.",
   }),
   app({
     name: "Character Swap",
@@ -323,7 +360,7 @@ export const APPS: Preset[] = [
       loras: [ANGLES_2511_LORA],
       promptTemplate: "<sks> {option:angle} {option:height} {option:distance}. {prompt}",
     },
-    // QMA · 96 views (qma-angles): Qwen-Image 2.1 with the QMA LoRA, on your GPU only (fal's Qwen-Image 2.1 takes no LoRAs).
+    // QMA · 96 views: Qwen-Image 2.1 with the QMA LoRA, on your GPU only (fal's Qwen-Image 2.1 takes no LoRAs).
     // The choices' angles (horizontal_angle, vertical_angle, zoom) become its words in the plan, the note after them.
     openAlso: [{ modelId: QMA_MODEL, op: "edit", promptTemplate: "{prompt}" }],
   }),
@@ -377,6 +414,24 @@ export const APPS: Preset[] = [
     // on the GPU. Not yet measured: the Angles app stays the default until the angles evaluation suite promotes it.
     parity:
       "Follows your camera settings. Your words add detail when it runs on your GPU.",
+  }),
+  // Any Angle: a tool of its own (src/components/any-angle/any-angle-tool.tsx, src/lib/catalog/any-angle.ts). The photo
+  // becomes a 3D view once (TripoSplat), each angle is that view rendered at the camera picked and repainted by
+  // Qwen-Image 2.1 with the AnyAngle LoRA. GPU only: no hosted Qwen-Image 2.1 takes the LoRA.
+  app({
+    id: "app-any-angle",
+    name: "Any Angle",
+    category: "Camera",
+    description: "Turn the camera around your photo. Same face, same outfit, same place",
+    icon: "Rotate3d",
+    hue: 170,
+    badges: ["new"],
+    tool: "any-angle",
+    inputs: [{ key: "image", label: "Photo", hint: "One person or one product, in any setting", accept: "image", required: true }],
+    prompt: "Change the camera angle",
+    cloud: null,
+    open: { modelId: "oss-any-angle", op: "edit" },
+    parity: "Runs on your GPU. It builds a 3D view of your photo first, then shoots it again from the camera you pick.",
   }),
   app({
     name: "Shots",
@@ -454,6 +509,9 @@ export const APPS: Preset[] = [
     description: "Change the lighting of any photo",
     icon: "Lamp",
     hue: 50,
+    // Its page is its own tool (tap to place lights, a live preview, Generate lighting, an Intensity blend:
+    // src/components/relight). The options and words below stay for the composer route the planner and Canvas use.
+    tool: "relight",
     options: [
       opt("light", "Lighting", [
         ["Golden hour", "warm golden hour sunlight"],
@@ -717,6 +775,21 @@ export const APPS: Preset[] = [
     open: { modelId: "oss-pixal3d", op: "image-to-3d" },
     parity: "Comes with a turntable video of your model.",
   }),
+  // Photo to 3D: one photo of a person or a product → a GLB to turn with taps (src/components/model3d/turn-chips.tsx),
+  // the splat it was made from and a clip of it turning. Idol isn't hosted anywhere, so there is no cloud route.
+  app({
+    name: "Photo to 3D",
+    category: "Product",
+    description: "Your photo as a 3D model to turn and download",
+    icon: "Rotate3d",
+    hue: 265,
+    badges: ["new"],
+    inputs: [{ key: "image", label: "Photo", hint: "One product or one outfit, whole and on its own", accept: "image", required: true }],
+    prompt: "",
+    cloud: null,
+    open: { modelId: "oss-idol-3d", op: "image-to-3d" },
+    parity: "Gives you a 3D model (.glb) to turn and download, and a clip of it turning.",
+  }),
   videoApp({
     name: "Billboard Ad",
     category: "Product",
@@ -933,18 +1006,26 @@ export const APPS: Preset[] = [
     // FASHN Try-On 1.6 was built for exactly this (Garment / Quality settings); it takes no prompt.
     cloud: { modelId: "fashn-tryon", op: "edit" },
   }),
+  // Only the clothes change. On your GPU it runs AusBoss's Outfit Swap LoRA (oss-outfit-swap), which holds the picture in
+  // place: from a photo of the outfit (described first by Qwen3-VL) or from words alone (src/lib/comfy-variants.ts). With
+  // a photo, words of the person's own are added after the swap; in the cloud they describe the outfit.
   app({
     name: "Outfit Swap",
     category: "Fashion",
-    description: "Copy the outfit someone else is wearing onto you",
+    description: "Wear any outfit. Only the clothes change",
     icon: "ArrowLeftRight",
     hue: 280,
     inputs: [
       { key: "image", label: "Your photo", accept: "image", required: true },
-      second("Outfit reference", "A photo of someone wearing the outfit you want"),
+      { key: "image2", label: "Outfit", hint: "A photo of the outfit: worn, laid flat or on a hanger. Or describe it", accept: "image", required: false },
     ],
+    options: [outfitShoes],
+    userPrompt: "optional",
+    placeholder: "No outfit photo? Describe one: a black velvet tuxedo",
     prompt:
-      "Take the complete outfit worn in the second image — every garment, shoes and accessories, with their exact colors, fabrics, prints and fit — and put it on the person in the first image. Keep the first person's face, hair, body shape, pose, lighting and background unchanged; only the clothing comes from the second image.",
+      "Dress the person in the first image in {prompt|the complete outfit from the second image, with its exact colours, fabrics, prints and fit}. Keep their face, hair, hands, body, pose, lighting and background exactly the same. {option:shoes}",
+    open: { modelId: "oss-outfit-swap", promptTemplate: "{prompt}" },
+    parity: "Only the clothes change: your face, hair, pose and background stay as they are. Add a photo of the outfit, or describe it.",
   }),
   app({
     name: "AI Stylist",
@@ -1029,6 +1110,56 @@ export const APPS: Preset[] = [
       "Create a professional fashion campaign photo of a stylish model wearing all the clothing items from the images together as one outfit, reproducing each item's exact color, fabric, print and logo. {prompt}. Full-body editorial pose, natural light, high-end lookbook photography.",
     parity: "Makes the photoshoot as a still. Animate it with Bring to Life.",
   }),
+  // Tap to Recolor: an app that is a tool of its own (src/components/recolor/recolor-tool.tsx): the taps (params.points)
+  // pick the piece, the swatch or a custom colour (the prompt) names its new colour; only that piece is repainted.
+  app({
+    id: RECOLOR.appId,
+    name: "Tap to Recolor",
+    category: "Fashion",
+    description: "Tap a piece, pick a colour; the fabric stays",
+    icon: "Palette",
+    hue: 330,
+    badges: ["new"],
+    tool: "recolor",
+    options: [
+      { key: "item", label: "What is it?", choices: ITEMS.map((i) => ({ value: i.value, label: i.label, prompt: i.words, extra: { recolorItem: i.value } })) },
+      {
+        key: "colour",
+        label: "Colour",
+        choices: [...SWATCHES.map((s) => ({ value: s.value, label: s.label, prompt: `${s.words} (${s.hex})` })), { value: CUSTOM_COLOUR, label: "Custom", prompt: "" }],
+      },
+    ],
+    userPrompt: "optional",
+    prompt: RECOLOR_TEMPLATE,
+    cloud: null,
+    open: { modelId: RECOLOR.modelId, op: "edit" },
+    parity: "Runs on your own GPU. Only the piece you tap changes.",
+  }),
+  app({
+    name: "Steam It",
+    category: "Fashion",
+    description: "A creased outfit, pressed and crisp",
+    icon: "Shirt",
+    hue: 200,
+    badges: ["new"],
+    inputs: [{ key: "image", label: "Outfit", hint: "A photo of the outfit, worn, laid flat or on a hanger", accept: "image", required: true }],
+    options: [
+      {
+        ...opt("finish", "Finish", [
+          ["Steamed", "smooth and freshly steamed, falling in soft, clean drapes"],
+          ["Pressed", "crisp and freshly pressed, smooth and flat with sharp, clean seams"],
+          ["Tailored", "crisp and tailor-pressed, with knife-sharp trouser creases, a crisp collar and cuffs, and smooth, taut panels"],
+        ]),
+        default: "pressed",
+      },
+    ],
+    // Only the finished state is named. On your GPU only the clothes are repainted (SAM 3.1 finds them) and every
+    // other pixel is the upload's own.
+    prompt:
+      "Steam and press the clothing so the fabric is {option:finish}. Keep the same garments with their exact colour, print, weave, seams, buttons and fit, and keep the person, pose, face, hair, background and light exactly as in the picture.",
+    open: { modelId: "oss-steam-it", op: "edit" },
+    parity: "Presses only the clothes. The person, the pose and the background stay as they were.",
+  }),
   // ---------------- Style & art
   app({
     name: "Sketch to Real",
@@ -1101,11 +1232,45 @@ export const APPS: Preset[] = [
   app({
     name: "Restore Photo",
     category: "Style",
-    description: "Fix scratches, blur and damage",
+    description: "An old print back sharp and clean, with the same faces",
     icon: "Sparkles",
     hue: 160,
-    prompt:
-      "Restore this old photograph: remove scratches, dust, stains and blur, recover sharp detail and natural skin texture. Keep the people and composition identical.",
+    options: [
+      {
+        key: "photo",
+        label: "Your photo",
+        // The two instructions AusBoss's Restore LoRA was trained on, word for word (the open route); its strength per
+        // kind of photo is the card's: 0.5 for a blurry one, 1.0 for a worn print or a small, grainy picture.
+        choices: [
+          {
+            value: "old-print",
+            label: "Old print",
+            prompt:
+              "Restore the old photo: remove scratches, dust, fading and grain and recover sharp, natural detail and color, keeping the same composition and people.",
+            openExtra: { loraStrength: 1 },
+          },
+          {
+            value: "soft-or-blurry",
+            label: "Soft or blurry",
+            prompt:
+              "Restore the photo: remove blur, noise and compression artifacts and recover sharp, natural detail, keeping the same composition, people and colors.",
+            openExtra: { loraStrength: 0.5 },
+          },
+          {
+            value: "small-or-grainy",
+            label: "Small or grainy",
+            prompt:
+              "Restore the photo: remove blur, noise and compression artifacts and recover sharp, natural detail, keeping the same composition, people and colors.",
+            openExtra: { loraStrength: 1 },
+          },
+        ],
+      },
+    ],
+    prompt: "{option:photo}",
+    // Your GPU: the Restore LoRA holds the picture on its own frame, so every face stays the person it was; SeedVR2 then
+    // enlarges it 2x. The cloud runs the same words on its edit model.
+    open: { modelId: "oss-qwen-image-21-restore", op: "edit" },
+    parity: "Takes away scratches, dust, fading and blur, and keeps every face and the framing as they were.",
   }),
   app({
     name: "Figurine",
@@ -1739,6 +1904,24 @@ export const APPS: Preset[] = [
     cloud: null,
     open: { modelId: "oss-reuse-voice", op: "enhance-voice" },
     parity: "Runs on open-source models only, on your GPU or CPU. RE-USE isn't hosted on fal or Replicate.",
+  }),
+  // Watermark Remover (ComfyUI-Qwen-Watermark): an app with a page of its own (src/components/watermark): scan, keep what you
+  // like, remove the rest; a brush for anything missed. Both steps run on your GPU through POST /api/generations.
+  app({
+    id: "app-watermark-remover",
+    name: "Watermark Remover",
+    category: "Utility",
+    description: "Clears text, logos, stickers and mosaics off a photo. The rest stays exactly as it was",
+    icon: "ScanLine",
+    hue: 205,
+    badges: ["new"],
+    tool: "watermark",
+    inputs: [{ key: "image", label: "Photo", hint: "A photo up to 4096 pixels on its longest side", accept: "image", required: true }],
+    userPrompt: "none",
+    prompt: "Remove the watermark",
+    cloud: null,
+    open: { modelId: "oss-watermark-remover", op: "watermark-remove" },
+    parity: "Runs on your own GPU. What was hidden under a mark is re-imagined from what's around it; everything outside the marks stays pixel for pixel the same.",
   }),
   app({
     name: "Object Remover",

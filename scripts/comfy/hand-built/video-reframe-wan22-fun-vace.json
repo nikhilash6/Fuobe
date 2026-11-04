@@ -50,7 +50,7 @@
   "9": {
     "class_type": "CLIPTextEncode",
     "inputs": {
-      "text": "A street musician plays guitar on a busy city sidewalk, wide cinematic shot.",
+      "text": "The same scene continues naturally beyond the frame edges, with the same light, perspective and motion.",
       "clip": [
         "8",
         0

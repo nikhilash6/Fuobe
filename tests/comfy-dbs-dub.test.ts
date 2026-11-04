@@ -1,20 +1,19 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, Manifest, ManifestWorkflow } from "@/lib/comfy";
 import { licenceInfo, workflowLicence } from "@/lib/licences";
 import type { DbsModel } from "@/lib/av/split";
 import type { MediaInfo } from "@/lib/media-probe";
+import { tempDir } from "./helpers/temp-dir";
 
 // DBS D3: graph B (dub-prepare-dbs-transcribe), the open dub's first step with DBS in place of MelBand RoFormer. Same
 // output contract and ASR bindings as dub-prepare-separate-transcribe, so the dub only changes its model id.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-dbs-dub-"));
+const tmp = tempDir("fuobe-comfy-dbs-dub-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { collectOutputs, prepareWorkflow } = await import("@/server/providers/comfyui");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const root = path.resolve(__dirname, "..");
 const lib = (f: string) => JSON.parse(fs.readFileSync(path.join(root, "workflows/comfyui", f), "utf8"));

@@ -1,15 +1,13 @@
 import { spawnSync } from "node:child_process";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
- * Exact orbits and Fly around (build plan N7-7): the orbit's numbers as camera-path keys, the plan on both engines, the
+ * Exact orbits and Fly around: the orbit's numbers as camera-path keys, the plan on both engines, the
  * server's headless path render (option B) and its chain slot, and /api/fly-around.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-fly-around-"));
+const dir = tempDir("fuobe-fly-around-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -30,7 +28,6 @@ beforeAll(() => {
   setSetting("demoMode", "auto");
   setSetting("enhanceProvider", "none");
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** A 64 × 48 still: a red square in the middle of a blue field, and its depth (the square near, bright). */
 function scene() {

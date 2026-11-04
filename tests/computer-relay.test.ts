@@ -1,14 +1,14 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FAKE_PNG, startLocalComfy, type LocalComfy } from "./helpers/fake-local-comfy";
 import { loadRoutes, tab, type ComputerRoutes } from "./helpers/computer-tab";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.setConfig({ testTimeout: 60_000 });
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-computer-relay-"));
+const dir = tempDir("fuobe-computer-relay-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -53,9 +53,6 @@ afterAll(async () => {
   globalThis.fetch = realFetch;
   globalThis.__fuobeTestDiskFree = undefined;
   await fake.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();

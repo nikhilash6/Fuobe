@@ -80,7 +80,7 @@ import {
  * Video tools → Remove dialogue (DBS D2). Drop or pick a video; choose No dialogue (music and effects), Dialogue only or
  * Lower the music (−30…0 dB); DBS splits the soundtrack on your ComfyUI and the stream-copy mux puts the new sound on
  * the picture without re-encoding it. Before / after players, and the stem taken out as a download. There's no hosted
- * DBS (and SAM Audio in its place isn't the owner's choice), so the cloud engine says the tool runs on your GPU.
+ * DBS (and no other model stands in for it), so the cloud engine says the tool runs on your GPU.
  */
 
 type Source = {
@@ -102,7 +102,7 @@ const RUN_LABEL: Record<DialogueOutcome, string> = {
 };
 
 const COPY =
-  "Takes the talking out and keeps the music and sound effects. The picture is not re-encoded.";
+  "Takes the talking out and keeps the music and sound effects. The picture stays exactly as it was.";
 
 /**
  * Why a guest or an account can't run it: POST /api/audio-tools answers them own-gpu-tool (docs/public-signup.md), so
@@ -375,7 +375,7 @@ function ResultPanel({
   );
 }
 
-export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
+export function RemoveDialogueTool() {
   const [engine, setEngine, mode] = useEngine();
   // A guest or an account: the run answers own-gpu-tool, so the page says so and the upload and run are off.
   const visitor = useLikelyVisitor();
@@ -467,7 +467,7 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
         : null;
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} selfHostedOnly>
+    <ToolShell title="Video tools" selfHostedOnly>
       {!source && (
         <ToolHero
           title="Remove dialogue"

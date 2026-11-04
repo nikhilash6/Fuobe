@@ -1,18 +1,19 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import type { SwapProject, SwapTake } from "@/lib/catalog/swap-studio";
 import type { SwapProjectView } from "@/server/swap-studio";
+import { tempDir } from "./helpers/temp-dir";
 
 vi.setConfig({ testTimeout: 240_000 });
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-// Character Swap Studio's Sharpen (package n7-4-character-swap-2k) through the API in demo mode (no keys, no ComfyUI):
+// Character Swap Studio's Sharpen through the API in demo mode (no keys, no ComfyUI):
 // the cloud makes each chosen take again at 2K as a version beside it, the assembly uses it once it is picked; and the
-// route under the owner's public sign-up (guests and accounts get own-gpu-tool, as for every studio job).
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-swap-sharpen-"));
+// route under public sign-up (guests and accounts get own-gpu-tool, as for every studio job).
+// Your GPU's sizes regenerate with Open-H3 Regenerate, which is switched off for now (REGEN_OFFERED); these tests check
+// them as they run once it is on. tests/regenerate-offered.test.ts checks that nothing offers them while it is off.
+vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
+const dir = tempDir("fuobe-swap-sharpen-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
@@ -73,7 +74,6 @@ beforeAll(() => {
   square = saveFile({ data: mp4(6, 2048, 2048), contentType: "video/mp4", source: "upload", name: "square.mp4" }).url;
   hero = saveFile({ data: encodePng({ width: 64, height: 64, data: Buffer.alloc(64 * 64 * 4, 200) }), contentType: "image/png", source: "upload", name: "hero.png" }).url;
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function view(id: string): Promise<SwapProjectView> {
   const res = await project.GET(req("GET"), ctx(id) as never);
@@ -256,7 +256,7 @@ describe("Genjutsu's notes for a finishing size", () => {
   });
 });
 
-describe("the route under the owner's public sign-up", () => {
+describe("the route under public sign-up", () => {
   it("gives guests and accounts own-gpu-tool (a studio job, like Assemble), and the owner the route", async () => {
     process.env.FUOBE_PASSWORD = "install password";
     process.env.FUOBE_PUBLIC_SIGNUP = "1";

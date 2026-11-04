@@ -163,6 +163,7 @@ function ComputerStatus({ gpu, onDisconnect, other, look = true }: { gpu: Comput
     setFixPort(null);
     const l = await lookOn(p);
     if (l.state === "none") return setNote(`Nothing answered on port ${p}.`);
+    if (l.state === "other") return setNote(`Another app answers on port ${p}, not ComfyUI.`);
     // The tab that runs the jobs goes there; it needs the setting first, the fix shows here.
     rememberComfy(p);
     restartComputerRunner();
@@ -420,7 +421,7 @@ export interface ConnectChoiceProps {
   /** The two options' box (and the link's form): 36rem at most from sm up, unless a wider page lifts that (sm:max-w-none). */
   className?: string;
   /**
-   * Opened by a button that already said "Use the ComfyUI on this computer" (the guide, the sidebar's Connect): look at
+   * Opened by a button that already said "Use the ComfyUI on this computer" (the guide, the account menu's Connect): look at
    * once. Without it (and without a run or a reason) the finder waits for "Find my ComfyUI": a card that only shows the
    * choice (Settings, /connect) never moves the runs to this computer by itself.
    */

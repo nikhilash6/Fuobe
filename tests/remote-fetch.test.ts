@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-ssrf-"));
+const dir = tempDir("fuobe-ssrf-");
 process.env.FUOBE_DATA_DIR = dir;
 const { fetchRemote, fetchRemoteToFile, isPrivateAddress } = await import("@/server/remote-fetch");
 const { readRef } = await import("@/server/storage");
@@ -50,7 +50,6 @@ beforeAll(async () => {
 });
 afterAll(() => {
   server.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 // The test server is on loopback: pretend "public.test" is a public host that resolves to it.

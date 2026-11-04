@@ -5,7 +5,6 @@ import { lineWords } from "@/lib/hosted";
 import { openGpuSetup } from "@/hooks/use-gpu";
 import { useLocalJob } from "@/components/gpu/computer-runner";
 import { jobFraction, jobWords } from "@/lib/relay";
-import Link from "next/link";
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -17,19 +16,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
-import { useCreateGeneration, useEngineMode, useGenerationActions } from "@/lib/api";
+import { useCreateGeneration, useGenerationActions, useStatus } from "@/lib/api";
+import { placeholdersOn } from "@/lib/demo-mode";
 import { useSoulFinish } from "./soul-finish";
 import { elapsed, formatCost, leftLabel, notePace, ratioValue, timeAgo, timeLeft } from "@/lib/format";
 import { downloadHref, downloadName, userTitle } from "@/lib/library";
-import { isLayered, nextSteps, shownOutputs } from "@/lib/output-actions";
+import { draftRenderPaid, isLayered, shownOutputs } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { toastError } from "@/lib/refusals";
-import { ACTION_ICONS, TileActions, useCanHover, type RunnerOptions } from "./result-actions";
+import { TileActions, useCanHover, type RunnerOptions } from "./result-actions";
 import { LayersStack, MediaThumb } from "./result-media";
 import { useNow } from "./use-now";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { Viewer } from "./viewer";
+import { NextSteps } from "@/components/nav/next-steps";
+import { reservedRowHeight, useArrival, useEnter, useFollowRow, useLiveRun } from "./feed-motion";
 
 export { MediaThumb } from "./result-media";
 export { downloadName } from "@/lib/library";
@@ -49,6 +51,7 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   // Running on the ComfyUI on this computer: its live preview (sharper with each step), where it runs, and its step now.
   // Its % and time left come from its own steps then, so they agree with "step 9 of 12".
   const local = useLocalJob(g.id, now);
+  useLiveRun(g.id);
   const label = (local && jobWords(local.job, g.kind, g.message ?? undefined, local.comfy)) ?? (g.status === "queued" ? (g.message ?? "Queued") : (g.message ?? "Generating…"));
   const steps = local ? jobFraction(local.job) : null;
   const saving = local && (local.job.phase === "saving" || local.job.phase === "done");
@@ -115,7 +118,7 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
       </div>
       {bar != null && (
         <div className="absolute inset-x-0 top-0 h-0.5 bg-transparent">
-          <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${bar}%` }} />
+          <div className="h-full origin-left bg-primary transition-transform duration-(--motion-slow) ease-standard" style={{ transform: `scaleX(${bar / 100})` }} />
         </div>
       )}
     </div>
@@ -186,6 +189,7 @@ function useFeed(): FeedApi {
 
 function DraftButton({ g, draftId }: { g: Generation; draftId: string }) {
   const finalize = useFinalizeDraft();
+  const placeholders = placeholdersOn(useStatus().data?.demoMode);
   return (
     <button
       onClick={(e) => {
@@ -194,7 +198,7 @@ function DraftButton({ g, draftId }: { g: Generation; draftId: string }) {
       }}
       className="absolute top-2 left-2 inline-flex h-7 items-center gap-1 rounded-full bg-black/55 pr-2.5 pl-2 text-[12px] font-medium text-white backdrop-blur transition-colors hover:bg-black/75"
     >
-      <Sparkles className="size-3.5" /> Draft · render 1080p
+      <Sparkles className="size-3.5" /> Draft · render 1080p{draftRenderPaid(placeholders)}
     </button>
   );
 }
@@ -209,14 +213,16 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
   const o = g.outputs[index];
   const audio = o.kind === "audio";
   const ctx = useMemo(() => ({ reuse: !!feed.reuse }), [feed.reuse]);
+  const arrive = useArrival<HTMLDivElement>(g.id, index);
   return (
     // The tile opens on click; keyboards and screen readers use the Open button over it (a sibling of
     // the action buttons, so no button sits inside another).
     <div
+      ref={arrive}
       onClick={() => feed.open(g, index)}
       onPointerEnter={(e) => e.pointerType === "mouse" && !hot && setHot("bar")}
       onFocus={() => canHover && !hot && setHot("bar")}
-      className="group/tile relative h-56 max-w-full animate-fade-up cursor-zoom-in overflow-hidden rounded-xl bg-muted sm:h-64"
+      className="group/tile relative h-56 max-w-full cursor-zoom-in overflow-hidden rounded-xl bg-muted sm:h-64"
       style={{ aspectRatio: audio ? 1.6 : layered ? Math.max(ratio, 0.8) : ratio }}
     >
       {layered ? <LayersStack g={g} /> : <MediaThumb output={o} g={g} inset={!canHover || g.favorite} />}
@@ -267,40 +273,16 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
   );
 });
 
-/**
- * Under the newest result: three next steps as chips (Animate, Upscale, Edit for a picture). A
- * group with several takes has none: which one to animate is picked on its tile.
- */
-function NextSteps({ g, index }: { g: Generation; index: number }) {
-  const engineMode = useEngineMode();
-  const steps = nextSteps(g, index, 3, { engineMode });
-  if (!steps.length) return null;
-  return (
-    <nav aria-label="Next steps" className="flex flex-wrap gap-1.5">
-      {steps.map((a) => {
-        const Icon = ACTION_ICONS[a.id];
-        return (
-          <Link
-            key={a.id}
-            href={a.href!}
-            prefetch={false}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-secondary px-3 text-[13px] font-medium text-secondary-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <Icon className="size-3.5" /> {a.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
-
 /** One request: the user's words in serif, a meta line, then its outputs (or progress / failure). */
-export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g: Generation; newest?: boolean }) {
+export const GenerationGroup = memo(function GenerationGroup({ g, newest, first }: { g: Generation; newest?: boolean; /** The feed's top request (newest first). */ first?: boolean }) {
   const feed = useFeed();
   const { favorite, trash } = useGenerationActions();
   const ratio = tileRatio(g);
   const active = g.status === "queued" || g.status === "running";
   const placeholders = Math.max(1, g.request.params?.numOutputs ?? 1);
+  const enter = useEnter<HTMLElement>(g.id, active, g.createdAt);
+  // The top run on its way, with one picture to come: its next-steps row will land under it, so its room is kept now.
+  const reserve = first && active && placeholders === 1 ? reservedRowHeight() : 0;
   const layered = g.status === "succeeded" && isLayered(g);
   const shown = shownOutputs(g);
   const single = g.status === "succeeded" && shown.length === 1 ? g.outputs[shown[0]] : null;
@@ -320,7 +302,7 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g:
   ].filter((x, i, all) => x && all.indexOf(x) === i);
 
   return (
-    <section data-gen-id={g.id} className="group/gen animate-fade-up space-y-2.5 [contain-intrinsic-size:auto_330px] [content-visibility:auto]">
+    <section ref={enter} data-gen-id={g.id} className="group/gen space-y-2.5 [contain-intrinsic-size:auto_330px] [content-visibility:auto]">
       <header className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="line-clamp-2 font-heading text-[19px] leading-snug" title={g.prompt ?? undefined}>
@@ -423,10 +405,23 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g:
             shown.map((i) => <OutputTile key={g.outputs[i].url} g={g} index={i} ratio={ratio} count={shown.length} />)
           ))}
       </div>
-      {newest && !layered && shown.length === 1 && <NextSteps g={g} index={shown[0]} />}
+      {/* Under the newest result: where it can go next, with it attached. A group with several takes has none: which one to take on is picked on its tile. */}
+      {newest && !layered && shown.length === 1 && <NextStepsRow g={g} index={shown[0]} />}
+      {reserve > 0 && <div aria-hidden style={{ height: reserve }} />}
     </section>
   );
 });
+
+/** The next-steps row under the newest result (it follows its result in when that just arrived). */
+function NextStepsRow({ g, index }: { g: Generation; index: number }) {
+  const row = useFollowRow<HTMLDivElement>(g.id);
+  return (
+    // Nothing to show (a text result): it takes no room, as before (its margin in the section's spacing cancels out).
+    <div ref={row} className="empty:-mt-2.5">
+      <NextSteps g={g} index={index} variant="row" max={5} className="pt-1" />
+    </div>
+  );
+}
 
 export function Feed({
   items,
@@ -467,8 +462,8 @@ export function Feed({
   return (
     <FeedCtx.Provider value={api}>
       <div className="space-y-9">
-        {items.map((g) => (
-          <GenerationGroup key={g.id} g={g} newest={g.id === newest} />
+        {items.map((g, i) => (
+          <GenerationGroup key={g.id} g={g} newest={g.id === newest} first={i === 0} />
         ))}
       </div>
       {open && pos >= 0 && (

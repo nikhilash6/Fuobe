@@ -15,19 +15,27 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
+import { tempDir, removeDir, stopProcess } from "./_temp.mjs";
 
 const APP_PORT = Number(process.env.E2E_APP_PORT ?? 3370);
 const FAKE_PORT = Number(process.env.E2E_FAKE_PORT ?? 3371);
 const SITE = `http://127.0.0.1:${APP_PORT}`;
 const FAKE = `http://127.0.0.1:${FAKE_PORT}`;
 const shots = process.env.E2E_SHOTS ?? fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-computer-shots-"));
-const data = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-computer-e2e-"));
+const data = tempDir("fuobe-computer-e2e-");
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ name, ok: !!ok, detail });
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The computer note: the top bar's pill says it (a live region inside it), and its popover holds the note's one action.
+const pillNote = (page) => page.locator("[data-computer-note]");
+async function openPill(page) {
+  const pop = page.locator('[data-slot="popover-content"]');
+  if (!(await pop.isVisible().catch(() => false))) await page.getByRole("button", { name: /your computer's GPU/i }).click({ timeout: 5_000 }).catch(() => {});
+  return pop;
+}
 
 async function until(fn, ms = 30_000, every = 250) {
   const end = Date.now() + ms;
@@ -78,11 +86,8 @@ server.stderr.on("data", (d) => (serverLog += d));
 
 async function finish(code) {
   await stopFake().catch(() => {});
-  server.kill();
-  await sleep(500);
-  try {
-    fs.rmSync(data, { recursive: true, force: true });
-  } catch {}
+  await stopProcess(server);
+  removeDir(data);
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed. Screenshots: ${shots}`);
   if (failed.length) console.log(serverLog.split("\n").slice(-40).join("\n"));
@@ -150,7 +155,7 @@ try {
     check("no error toast on top of the dialog", (await page.locator("[data-sonner-toast]").filter({ hasText: "Free accounts run" }).count()) === 0);
     await page.screenshot({ path: path.join(shots, "1-choose.png") });
     // The link, the second choice, fits inside the dialog.
-    const linkToggle = dialog.getByRole("button", { name: /Run from anywhere with a link/ });
+    const linkToggle = dialog.getByRole("button", { name: /Keep it running with this tab closed/ });
     await linkToggle.click();
     const field = await until(() => dialog.locator("input").first().boundingBox(), 10_000);
     const box = await dialog.boundingBox();
@@ -158,7 +163,7 @@ try {
     await page.screenshot({ path: path.join(shots, "1b-link.png") });
     await linkToggle.click();
     await dialog.getByRole("button", { name: "Find my ComfyUI" }).click();
-    await dialog.getByText("Found ComfyUI. One step to use it here:").waitFor({ timeout: 20_000 });
+    await dialog.getByText(`Something is running on port ${FAKE_PORT}, where your ComfyUI was before.`).waitFor({ timeout: 20_000 });
     check("ComfyUI that this page can't use yet: one step, Fuobe Connect from ComfyUI-Manager", await dialog.getByText("Install Fuobe Connect in ComfyUI-Manager").isVisible());
     check("the step names the Manager's search term and a git address to copy", (await dialog.getByLabel("the search term").first().textContent()) === "Fuobe Connect" && /git clone https:\/\//.test((await dialog.getByLabel("the git command", { exact: true }).textContent()) ?? ""));
     check("the start setting and the guard are not shown until Advanced is opened", !(await dialog.getByRole("button", { name: "Download start file" }).isVisible()) && !(await dialog.getByText("--enable-cors-header").first().isVisible()));
@@ -224,9 +229,9 @@ try {
     })();
     const tile = await until(() => page.getByText("Keep this tab open", { exact: true }).first().isVisible(), 30_000);
     check("the run's tile says to keep this tab open", !!tile);
-    const note = page.locator('[data-sidebar="footer"] [role="status"]').filter({ hasText: "Your GPU is working. Keep this tab open." });
-    const noted = await until(() => note.isVisible(), 20_000);
-    check("the note says the GPU is working, in the sidebar's own space", !!noted);
+    const note = pillNote(page).filter({ hasText: "Your GPU is working. Keep this tab open." });
+    const noted = await until(async () => (await note.count()) > 0, 20_000);
+    check("the bar's computer pill says the GPU is working", !!noted);
     // Nothing of Fuobe's own sits over the page's buttons (the newest run's Reuse and More among them).
     const covered = await page.evaluate(() =>
       [...document.querySelectorAll("#content button")]
@@ -311,10 +316,12 @@ try {
       await page.screenshot({ path: path.join(shots, "7-setting-again.png") });
       const seen = new Set();
       for (let end = Date.now() + 12_000; Date.now() < end; await sleep(250)) {
-        const t = await page.locator('[data-sidebar="footer"] [role="status"]').first().textContent().catch(() => null);
+        const t = await pillNote(page).first().textContent().catch(() => null);
         if (t) seen.add(t);
       }
-      check("the note says the setting is missing, steadily, with its fix", seen.size > 0 && [...seen].every((t) => t.includes("without Fuobe's setting") && t.includes("Show me how")), [...seen].join(" | "));
+      check("the note says the setting is missing, steadily", seen.size > 0 && [...seen].every((t) => t.includes("without Fuobe's setting")), [...seen].join(" | "));
+      check("…with its fix in the pill's popover", await (await openPill(page)).getByRole("button", { name: "Show me how" }).isVisible());
+      await page.keyboard.press("Escape");
       const waiting = (await runs(page)).find((g) => g.id === rid);
       check("the run says the same", waiting?.message === "ComfyUI is running, but Fuobe can't use it yet. Install Fuobe Connect in ComfyUI, and Fuobe goes on by itself.", waiting?.message);
       check("the status strip doesn't say all is well", !!(await until(() => page.getByText("needs a setting").first().isVisible(), 15_000)));
@@ -332,8 +339,9 @@ try {
       await stopFake();
       const r = await api(page, "/api/generations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a quiet harbour" }) });
       const rid = r.body?.items?.[0]?.id;
-      const down = await until(() => page.locator('[data-sidebar="footer"] [role="status"]').filter({ hasText: "ComfyUI isn't answering" }).isVisible(), 30_000);
-      check("ComfyUI closed: the note says so, with a way to find it", !!down && (await page.getByRole("button", { name: "Find my ComfyUI" }).isVisible()));
+      const down = await until(async () => (await pillNote(page).filter({ hasText: "ComfyUI isn't answering" }).count()) > 0, 30_000);
+      check("ComfyUI closed: the note says so, with a way to find it", !!down && (await (await openPill(page)).getByRole("button", { name: "Find my ComfyUI" }).isVisible()));
+      await page.keyboard.press("Escape");
       const waiting = await until(async () => (await runs(page)).find((g) => g.id === rid && g.message === "ComfyUI isn't answering. Start it again, and Fuobe goes on by itself."), 20_000);
       check("the run says ComfyUI isn't answering", !!waiting);
       check("the status strip says ComfyUI isn't running", !!(await until(() => page.getByText("ComfyUI not running").first().isVisible(), 20_000)));
@@ -394,11 +402,11 @@ try {
     await page.goto(`${SITE}/library`, { waitUntil: "load" });
     const r = await api(page, "/api/generations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a paper boat" }) });
     const rid = r.body?.items?.[0]?.id;
-    const ask = page.locator('[data-sidebar="footer"] [role="status"]').filter({ hasText: "Run them from this browser?" });
-    check("a browser not allowed yet: its note asks first", !!(await until(() => ask.isVisible(), 30_000)));
+    const ask = pillNote(page).filter({ hasText: "Run them from this browser?" });
+    check("a browser not allowed yet: its note asks first", !!(await until(async () => (await ask.count()) > 0, 30_000)));
     check("…and it never reached an app on this computer by itself", ctx.loopback.length === 0, ctx.loopback.slice(0, 3).join(" "));
     await page.evaluate((port) => localStorage.setItem("fuobe.comfy.port", String(port)), FAKE_PORT);
-    await ask.getByRole("button", { name: "Connect" }).click();
+    await (await openPill(page)).getByRole("button", { name: "Connect" }).click();
     const card = page.getByRole("dialog");
     await card.getByText("Run your GPU jobs from this browser").waitFor({ timeout: 15_000 });
     check("the card explains the browser's question before it comes", await card.getByText("Press Allow. Fuobe only talks to ComfyUI.").isVisible());

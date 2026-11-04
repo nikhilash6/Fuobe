@@ -2,13 +2,13 @@
 
 import { Download, FileText, Image as ImageIcon, Link2, Loader2, Paperclip, Search, Settings2, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState } from "react";
+import { Suspense, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { EngineSwitch } from "@/components/studio/engine-switch";
@@ -16,7 +16,9 @@ import { grabFrames } from "@/components/restore/hooks";
 import { OldFootageOffer } from "@/components/restore/old-footage";
 import { fileToSlot } from "@/components/studio/media-slot";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useEngine, useLikelyVisitor } from "@/lib/api";
+import { StarterParam } from "@/components/starters/starter-param";
+import { StarterSection, useStarters } from "@/components/starters/starter-section";
+import { useEngine, useIsOwner, useLikelyVisitor } from "@/lib/api";
 import {
   ANIMATION_MODES,
   AUTO_SECONDS,
@@ -33,8 +35,10 @@ import {
   MUSIC_HINT,
   type EpisodeSettings,
   type ExplainerSource,
+  type NarratorVoice,
   type PickerData,
 } from "@/lib/catalog/faceless";
+import { starterShown, type StarterCardData, type StarterFill } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { EpisodeTile } from "../faceless/cards";
@@ -145,8 +149,13 @@ function LinkPopover({ engine, disabled, onAdd }: { engine: EpisodeSettings["eng
   );
 }
 
-/** Higgsfield Explainer's form: a style, what to explain, up to 3 sources, the format; plus your history. */
-export function ExplainerStudio({ picker }: { picker: PickerData }) {
+/**
+ * Higgsfield Explainer's form: a style, what to explain, up to 3 sources, the format; plus your history.
+ * starters: the ready explainers (src/lib/starters/catalog.ts), where the history is while it's empty, one row under it
+ * after; fills: what each one puts in the form.
+ */
+export function ExplainerStudio({ picker, starters: given = [], fills: givenFills = {} }: { picker: PickerData; starters?: StarterCardData[]; fills?: Record<string, StarterFill> }) {
+  const { starters, fills } = useStarters("explainer", given, givenFills);
   const router = useRouter();
   const [engine, setEngine] = useEngine();
   // An explainer doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
@@ -170,6 +179,30 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
   const history = useExplainers({ q, liked: tab === "liked" });
   const like = useLikeEpisode();
   const promptId = useId();
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const owner = useIsOwner();
+  const readyShown = starters.some((s) => starterShown(s, !owner));
+  const noHistory = !history.isLoading && !history.data?.length && tab === "all" && !q;
+
+  /** A ready explainer in the form: its topic, style, length, shape and narrator. */
+  const fill = (id: string) => {
+    const f = fills[id];
+    if (f?.kind !== "explainer") return false;
+    setPrompt(f.prompt);
+    // Open source narration clones a voice: the starter's own narrator sample, while it has one; else its preset voice.
+    const voice: NarratorVoice | undefined = engine === "open" && f.voiceSample ? { kind: "sample", url: f.voiceSample, name: "Narrator" } : f.voice ? { kind: "preset", id: f.voice } : undefined;
+    set({ styleId: f.styleId, aspect: f.aspect, ...(voice && { voice }) });
+    if (f.duration === "auto" || EXPLAINER_DURATIONS.some((d) => d.value === f.duration)) setDuration(String(f.duration));
+    else {
+      setDuration("manual");
+      setManual(String(f.duration));
+    }
+    requestAnimationFrame(() => {
+      promptRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      promptRef.current?.focus({ preventScroll: true });
+    });
+    return true;
+  };
 
   const manualSecs = Math.round(Number(manual));
   const manualBad = duration === "manual" && (!Number.isInteger(Number(manual)) || manualSecs < EXPLAINER_MIN || manualSecs > EXPLAINER_MAX);
@@ -277,16 +310,16 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="max-md:sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-4 backdrop-blur sm:px-6">
         <h1 className="truncate font-heading text-[22px] leading-none">Explainer</h1>
         <div className="ml-auto">
           <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
+        <PhoneNavButton />
       </header>
-      <div className="mx-auto grid w-full max-w-[1240px] min-w-0 flex-1 gap-8 px-3 pt-6 pb-16 sm:px-6 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
-        <section aria-label="New explainer" className="min-w-0 lg:sticky lg:top-20 lg:self-start">
+      <div className="mx-auto grid w-full max-w-[1240px] min-w-0 flex-1 gap-8 px-4 pt-6 pb-16 sm:px-6 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
+        <section aria-label="New explainer" className="min-w-0 lg:sticky lg:top-[calc(var(--chrome-top)+1rem)] lg:self-start">
           <div className="rounded-[20px] border bg-background p-3 shadow-soft transition-[border-color,box-shadow] focus-within:border-primary focus-within:ring-4 focus-within:ring-brand-faint sm:rounded-composer sm:p-4">
             <p className="px-1 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Fuobe Explainer</p>
             <div className="mt-2 flex items-center gap-3 rounded-2xl bg-muted/60 p-2">
@@ -309,6 +342,7 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
             </label>
             <textarea
               id={promptId}
+              ref={promptRef}
               value={prompt}
               maxLength={MAX_TOPIC}
               onChange={(e) => setPrompt(e.target.value)}
@@ -442,24 +476,29 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
           </ol>
         </section>
 
-        <section aria-labelledby="history-title" className="min-w-0 space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+        {/* While there is no history yet, the ready explainers stand in its place; its tabs and search wait for a first one. */}
+        <section aria-labelledby={noHistory && readyShown ? "starters-title" : "history-title"} className="min-w-0 space-y-4">
+          <div className={cn("flex flex-wrap items-center gap-2", noHistory && readyShown && "hidden")}>
             <h2 id="history-title" className="mr-auto font-heading text-[24px]">
               History
             </h2>
-            <Segmented
-              label="Show"
-              value={tab}
-              options={[
-                { value: "all", label: "Show all" },
-                { value: "liked", label: "Liked" },
-              ]}
-              onChange={setTab}
-            />
-            <div className="flex h-8 w-full items-center gap-1.5 rounded-full bg-secondary px-3 sm:w-52">
-              <Search className="size-3.5 shrink-0 text-muted-foreground" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search your explainers" className="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-subtle-foreground" />
-            </div>
+            {!noHistory && (
+              <>
+                <Segmented
+                  label="Show"
+                  value={tab}
+                  options={[
+                    { value: "all", label: "Show all" },
+                    { value: "liked", label: "Liked" },
+                  ]}
+                  onChange={setTab}
+                />
+                <div className="flex h-8 w-full items-center gap-1.5 rounded-full bg-secondary px-3 sm:w-52">
+                  <Search className="size-3.5 shrink-0 text-muted-foreground" />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search your explainers" className="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-subtle-foreground" />
+                </div>
+              </>
+            )}
           </div>
           {history.isLoading ? (
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
@@ -473,6 +512,8 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
                 <EpisodeTile key={ep.id} ep={ep} href={`/explainer/${ep.id}`} onLike={() => like.mutate({ id: ep.id, favorite: !ep.favorite })} />
               ))}
             </div>
+          ) : noHistory && readyShown ? (
+            <StarterSection surface="explainer" starters={given} onFill={fill} narrow />
           ) : (
             <div className="flex flex-col items-center rounded-2xl border border-dashed px-6 py-12 text-center">
               <div className="grid size-12 place-items-center rounded-2xl bg-brand-faint text-brand-text">{tab === "liked" ? <ImageIcon className="size-5" /> : <Sparkles className="size-5" />}</div>
@@ -480,9 +521,13 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
               <p className="mt-1 max-w-sm text-[13px] text-muted-foreground">{tab === "liked" ? "Like an explainer to keep it here." : "Pick a style, say what to explain, and press Generate."}</p>
             </div>
           )}
+          {!!history.data?.length && tab === "all" && !q && <StarterSection surface="explainer" starters={given} onFill={fill} headingLevel="h3" narrow row className="pt-6" />}
         </section>
       </div>
 
+      <Suspense fallback={null}>
+        <StarterParam onStarter={fill} />
+      </Suspense>
       <Sheet open={stylesOpen} onOpenChange={setStylesOpen}>
         {/* The Sheet's own width is set for its side (data-[side=right]:…): only the same variant overrides it. */}
         <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-[640px]">

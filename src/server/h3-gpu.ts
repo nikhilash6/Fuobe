@@ -1,11 +1,12 @@
 import "server-only";
-import { deviceOf, H3_TIER_GRAPH, H3_TIER_MODEL, h3TierFor, H3_TIER_PARAM, TIER_BEST_NOTE, TIER_DECODER_NOTE, TIER_FLEX_REFUSAL, TIER_NOTES, tierChoice, tierGraphFor, tierOfGraph, SOL_VAE, type H3TierChoice } from "@/lib/gpu/h3-tier";
+import { deviceOf, H3_TIER_GRAPH, H3_TIER_MODEL, h3TierFor, H3_TIER_PARAM, TIER_BEST_NOTE, TIER_DECODER_NOTE, TIER_FLEX_REFUSAL, TIER_NOTES, tierChoice, tierGraphFor, tierOfGraph, SOL_VAE, type H3Tier, type H3TierChoice } from "@/lib/gpu/h3-tier";
 import { getModel } from "@/lib/catalog";
 import { H3_FLEX_GRAPH } from "@/lib/comfy-variants";
 import { preflightOn } from "./gpu/index-file";
 import { readSnapshot } from "./gpu/snapshots";
 import { runTarget } from "./gpu/target";
 import { isOffered, offReason } from "./model-access";
+import { loadManifest } from "./providers/comfyui";
 import { tenantAccount } from "./tenant";
 
 /**
@@ -15,7 +16,7 @@ import { tenantAccount } from "./tenant";
  * - A tier asked for: that tier, with the file the card's last check calls for (refused, naming the switch, when Settings →
  *   Models & licences has it off). Trim asked for on a start-frame mode keeps the full model (Trim has text to video only).
  * - Auto: the tier the last GPU check's card gets (FastH3 V2 on 16-31 GB, Trim on 12-15 GB or 8-15 GB on Blackwell), when its
- *   switch is on; a CPU, no reading, an unknown card, 32 GB or more, or a card no build fits keep the full model, which the
+ *   switch is on and ComfyUI has accepted its graph (the manifest's `validated`); a CPU, no reading, an unknown card, 32 GB or more, or a card no build fits keep the full model, which the
  *   pre-flight then judges as it does today. Auto routes to a smaller build before its files are there: they are pinned and
  *   the pre-flight offers them, where the full model could never run on that card.
  * - An orbit keeps the Orbit LoRA graph (full model only).
@@ -32,6 +33,22 @@ export interface H3GpuChoice {
   note?: string;
 }
 
+declare global {
+  /** Tests only: every smaller H3 build's graph counts as accepted. */
+  var __fuobeTestH3Accepted: boolean | undefined;
+}
+
+/** Whether ComfyUI has accepted a graph of the library (the manifest's `validated`). */
+export function acceptedGraph(id: string): boolean {
+  if (process.env.VITEST === "true" && globalThis.__fuobeTestH3Accepted) return true;
+  return loadManifest().workflows.some((w) => w.id === id && w.validated === true);
+}
+
+/** A smaller H3 build Auto may pick: switched on in Models & licences, and every graph of it accepted by ComfyUI. */
+export function tierOpen(tier: Exclude<H3Tier, "standard">): boolean {
+  return isOffered(H3_TIER_MODEL[tier], "open") && Object.values(H3_TIER_GRAPH).every((t) => !t[tier] || acceptedGraph(t[tier]));
+}
+
 /** The last GPU check's card for a run in the current scope, when the pre-flight has one. */
 function lastCard() {
   if (!preflightOn()) return undefined;
@@ -44,7 +61,7 @@ function lastCard() {
  * Options → GPU tier for a MiniMax H3 run on `endpoint` (the route's graph before variants), or undefined when the run takes no
  * tier either way (another model, an orbit, a graph with no smaller build). A FastH3 graph itself keeps its own tier. `has`: is a graph in the library.
  */
-export function h3Gpu(endpoint: string, extra: Record<string, unknown>, has: (id: string) => boolean): H3GpuChoice | undefined {
+export function h3Gpu(endpoint: string, extra: Record<string, unknown>, has: (id: string) => boolean, validated: (id: string) => boolean = acceptedGraph): H3GpuChoice | undefined {
   // A FastH3 graph run directly (its hidden model named in the request): its build is fixed, and the file is still the card's,
   // chosen here, never one the request names.
   const own = tierOfGraph(endpoint);
@@ -60,6 +77,8 @@ export function h3Gpu(endpoint: string, extra: Record<string, unknown>, has: (id
   const graph = tierGraphFor(endpoint, choice.tier, has);
   // Trim on a start-frame mode: the tier has no graph for it, so the full model runs.
   if (!graph) return { gpuTier: "standard" };
+  // Auto routes to a smaller build only once ComfyUI has accepted its graph; until then only Options → GPU tier runs it.
+  if (asked !== choice.tier && !validated(graph)) return { gpuTier: "standard" };
   // Fast · Pika Flex with a smaller tier picked: refused, rather than running one choice without the other.
   if (flex) throw new Error(TIER_FLEX_REFUSAL);
   const model = H3_TIER_MODEL[choice.tier];

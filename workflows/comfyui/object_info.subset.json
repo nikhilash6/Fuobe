@@ -1400,6 +1400,192 @@
       "ausboss"
     ]
   },
+  "AUSBOSS_NODES_MaskByTouch": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE",
+          {
+            "tooltip": "The picture to pick from."
+          }
+        ],
+        "model": [
+          "MODEL",
+          {
+            "tooltip": "SAM 3: MODEL from a Load Checkpoint that loads the SAM 3 file."
+          }
+        ],
+        "clip": [
+          "CLIP",
+          {
+            "tooltip": "SAM 3's text reader: CLIP from the same Load Checkpoint."
+          }
+        ],
+        "touches": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": false,
+            "tooltip": "What you picked on the node's picture. The node writes this itself when you click or paint; Clear on the node empties it."
+          }
+        ],
+        "grow": [
+          "INT",
+          {
+            "default": 0,
+            "min": -128,
+            "max": 256,
+            "step": 1,
+            "tooltip": "Grow the picked area by this many pixels. Below zero shrinks it. 0 keeps the exact outline."
+          }
+        ],
+        "soften": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 100,
+            "step": 0.1,
+            "tooltip": "Soften the mask's edge by this many pixels. 0 keeps a hard edge."
+          }
+        ],
+        "smooth": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Round off a ragged outline by this many pixels. 0 leaves the outline as found."
+          }
+        ],
+        "fill_holes": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "Closes pinholes inside the picked area. Larger openings stay open, like a mug's handle."
+          }
+        ],
+        "if_nothing": [
+          [
+            "stop the run",
+            "empty mask"
+          ],
+          {
+            "default": "stop the run",
+            "tooltip": "When nothing is picked. Stop the run: the workflow stops here with a message, and nothing after this node runs. Empty mask: the run goes on with a mask of nothing."
+          }
+        ]
+      },
+      "optional": {
+        "free_vram": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Takes SAM 3 out of the graphics card's memory when the workflow has run this node. Turn it on in a workflow that loads a big model after this node."
+          }
+        ],
+        "invert": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Turns the mask round: white everywhere except what you picked. With nothing picked the mask stays empty."
+          }
+        ],
+        "ask": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": false,
+            "tooltip": "Used by the node's own picture for a single run. Leave it empty: it is never saved with the workflow."
+          }
+        ],
+        "fine_edges": [
+          [
+            "off",
+            "birefnet.safetensors"
+          ],
+          {
+            "default": "off",
+            "tooltip": "Hair and fur, strand by strand: where what you picked ends at the outline of the picture's main subject, that outline is taken from ComfyUI's background-removal model. The cut-out also loses the colour of the old background. Off keeps the edge as found. The ? page says where to get the model file."
+          }
+        ]
+      },
+      "hidden": {
+        "unique_id": "UNIQUE_ID"
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "model",
+        "clip",
+        "touches",
+        "grow",
+        "soften",
+        "smooth",
+        "fill_holes",
+        "if_nothing"
+      ],
+      "optional": [
+        "free_vram",
+        "invert",
+        "ask",
+        "fine_edges"
+      ],
+      "hidden": [
+        "unique_id"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "mask",
+      "cut_out",
+      "names"
+    ],
+    "name": "AUSBOSS_NODES_MaskByTouch",
+    "display_name": "Mask by Touch 🆎",
+    "description": "Click a thing on the picture, or paint over it, and get its mask. No name to type and no MaskEditor. Moving over the picture lights up what a click would take. A painted stroke takes the thing under it, or exactly the paint. What is lit is what the mask will be. When nothing is picked it stops the run with a plain message, so nothing after it runs on an empty mask (or it can pass an empty mask on: a setting). It uses ComfyUI's own SAM 3: wire model and clip from a Load Checkpoint that loads the SAM 3 file. It also returns the picked area cut out on a see-through background, and the names of what you picked as text.",
+    "python_module": "custom_nodes.ausboss-nodes",
+    "category": "🆎 AusBoss/Mask",
+    "output_node": true,
+    "has_intermediate_output": false,
+    "output_tooltips": [
+      "White where the picked area is. One mask per picture.",
+      "The picture with everything but the picked area see-through (RGBA).",
+      "The names of the things you picked, in the order you picked them, like: jacket, hat. Empty when nothing you picked has a name."
+    ],
+    "search_aliases": [
+      "quick select",
+      "magic wand",
+      "click to mask",
+      "segment",
+      "segment anything",
+      "sam",
+      "sam3",
+      "select",
+      "pick",
+      "brush mask",
+      "inpaint mask",
+      "paint mask",
+      "point",
+      "tap",
+      "touch",
+      "object mask",
+      "auto mask",
+      "ausboss"
+    ]
+  },
   "AUSBOSS_NODES_StitchInpaint": {
     "input": {
       "required": {
@@ -7512,6 +7698,56 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "File3DToSplat": {
+    "input": {
+      "required": {
+        "model_3d": [
+          "FILE_3D,FILE_3D_SPLAT_ANY,FILE_3D_PLY,FILE_3D_SPLAT,FILE_3D_KSPLAT,FILE_3D_SPZ",
+          {
+            "tooltip": "A gaussian splat 3D file"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model_3d"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "SPLAT"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "splat"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "File3DToSplat",
+    "display_name": "Get Splat",
+    "description": "Parse a splat File3D into a gaussian splat. Inverse of Create 3D File (from Splat). Supported format:  PLY, SPLAT, KSPLAT, SPZ. PLY carries full spherical harmonics, the other formats are base color only. Format is auto-detected from the file contents.",
+    "python_module": "comfy_extras.nodes_gaussian_splat",
+    "category": "3d/splat",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "load splat",
+      "ply to splat",
+      "import splat",
+      "file to splat"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "Flux2Scheduler": {
     "input": {
       "required": {
@@ -8414,6 +8650,7 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "H3AdvancedSwapPlan": null,
   "H3CharacterSwapAssemble": null,
   "H3CharacterSwapController": null,
   "H3CharacterSwapExpandMask": null,
@@ -8424,6 +8661,549 @@
   "H3CharacterSwapSettings": null,
   "H3CharacterSwapShot": null,
   "H3CharacterSwapWindowPlan": null,
+  "H3ClipShots": null,
+  "H3FaceChunks": null,
+  "H3FaceJoin": null,
+  "H3FaceMaskSAM": {
+    "input": {
+      "required": {
+        "crops": [
+          "IMAGE",
+          {
+            "tooltip": "Wire the INPUT crops here - the 'crops' output of H3 Face Track + Crop - NOT the refined/decoded result.\n\nThis matches FaceDetailer: make_sam_mask() runs on the SOURCE image and the resulting mask is what the enhanced patch is later pasted through. Generation never feeds back into the mask.\n\nMasking the generated result instead is actively wrong: if the model nudges the face inward, the mask traces the NEW, smaller silhouette and the ORIGINAL face pokes out past it - most visibly the nose on profile shots. Masking the input covers where the face actually is in the footage being replaced.\n\nIt is also cheaper: no dependency on the sampler, so SAM need not be resident alongside the video model."
+          }
+        ],
+        "sam_model": [
+          "SAM_MODEL"
+        ],
+        "transform": [
+          "H3FACEXFORM"
+        ],
+        "threshold": [
+          "FLOAT",
+          {
+            "default": 0.93,
+            "min": 0,
+            "max": 1,
+            "step": 0.01
+          }
+        ],
+        "dilation": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 128,
+            "step": 2,
+            "tooltip": "Mirrors FaceDetailer's sam_dilation default of 0. SAM masks are accurate, so they rarely need growing."
+          }
+        ],
+        "temporal_smooth": [
+          "INT",
+          {
+            "default": 5,
+            "min": 1,
+            "max": 31,
+            "step": 2,
+            "tooltip": "Frames of averaging across the mask stack. 1 disables it and you will likely see the mask edge shimmer."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "crops",
+        "sam_model",
+        "transform",
+        "threshold",
+        "dilation",
+        "temporal_smooth"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "masks",
+      "report"
+    ],
+    "name": "H3FaceMaskSAM",
+    "display_name": "H3 Face Mask (SAM)",
+    "description": "Per-frame SAM face masks on the stabilised crops, temporally smoothed.",
+    "python_module": "custom_nodes.ComfyUI-H3-FaceRefine",
+    "category": "MiniMax H3/Face Refine",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3FaceStitch": {
+    "input": {
+      "required": {
+        "base_images": [
+          "IMAGE"
+        ],
+        "refined_crops": [
+          "IMAGE"
+        ],
+        "transform": [
+          "H3FACEXFORM"
+        ],
+        "paste_region": [
+          [
+            "face_only",
+            "face_ellipse",
+            "full_crop"
+          ],
+          {
+            "default": "face_only",
+            "tooltip": "WHAT gets composited back. face_only / face_ellipse paste just the detected face box (FaceDetailer's behaviour - the wider crop exists to give the sampler context, not to be pasted). full_crop pastes the whole crop including hair, shoulders and background, which risks a visible rectangle if H3 alters them."
+          }
+        ],
+        "mask_dilation": [
+          "INT",
+          {
+            "default": 16,
+            "min": 0,
+            "max": 256,
+            "step": 2,
+            "tooltip": "Grow the face box before blurring, in canvas px. Impact Pack dilates the same way so the blur has room and the blend does not eat into the face itself."
+          }
+        ],
+        "feather": [
+          "INT",
+          {
+            "default": 6,
+            "min": 0,
+            "max": 256,
+            "step": 2,
+            "tooltip": "Gaussian blur radius on the paste mask, in SOURCE pixels. Measured against the final frame, not the canvas, so the blend is the same physical width whatever this frame's magnification happens to be.\n\nCanvas-relative feather is a trap: a 75px crop blown up to 512 makes a 40px canvas feather only ~6 source px, while a 720px crop makes it ~56. The blend ends up TIGHTEST exactly where the face is smallest and the composite needs the most help - which reads as a hard edge appearing as a shot zooms out."
+          }
+        ],
+        "colour_match": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": 0,
+            "max": 1,
+            "step": 0.05,
+            "tooltip": "Match the refined crop's per-channel mean/std to the region it replaces. The crop and the full frame went through independent passes, so without this the face can come back subtly brighter or differently tinted and read as pasted on."
+          }
+        ],
+        "blend": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": 0,
+            "max": 1,
+            "step": 0.05,
+            "tooltip": "Global opacity of the refined face. Below 1.0 mixes back toward the original - useful to dial back over-sharpening."
+          }
+        ],
+        "undetected_frames": [
+          [
+            "fade_out",
+            "skip",
+            "composite_anyway"
+          ],
+          {
+            "default": "fade_out",
+            "tooltip": "What to do on frames where no FACE was found (turned away / occluded). ALL frames are still sent through H3 either way - that is what keeps it temporally consistent - this only controls whether the result is pasted back.\nfade_out: ramp the composite to zero across the gap (smooth, no pop, recommended).\nskip: hard cut - those frames keep original pixels exactly.\ncomposite_anyway: paste regardless. Risks H3 hallucinating a face onto the back of a head."
+          }
+        ]
+      },
+      "optional": {
+        "feather_scales_with_crop": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Old behaviour: treat feather as CANVAS pixels, so the blend narrows as the crop shrinks. Leave off."
+          }
+        ],
+        "masks": [
+          "MASK",
+          {
+            "tooltip": "Optional per-frame paste masks in CANVAS space, e.g. from H3 Face Mask (SAM). Overrides paste_region. This is the FaceDetailer bbox+SAM path: the mask follows the actual face so the blend falls on the jaw and hairline instead of an arbitrary rectangle. With a SAM mask use a SMALL feather (4-8); a rectangle needs much more."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "base_images",
+        "refined_crops",
+        "transform",
+        "paste_region",
+        "mask_dilation",
+        "feather",
+        "colour_match",
+        "blend",
+        "undetected_frames"
+      ],
+      "optional": [
+        "feather_scales_with_crop",
+        "masks"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "images"
+    ],
+    "name": "H3FaceStitch",
+    "display_name": "H3 Face Stitch Back",
+    "description": "Composite H3-refined face crops back into the source frames.",
+    "python_module": "custom_nodes.ComfyUI-H3-FaceRefine",
+    "category": "MiniMax H3/Face Refine",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3FaceTrackCrop": {
+    "input": {
+      "required": {
+        "images": [
+          "IMAGE"
+        ],
+        "detector": [
+          [
+            "face_yolov8m.pt",
+            "bbox\\face_yolov8m.pt",
+            "segm\\person_yolov8m-seg.pt"
+          ]
+        ],
+        "confidence": [
+          "FLOAT",
+          {
+            "default": 0.35,
+            "min": 0.05,
+            "max": 0.95,
+            "step": 0.05
+          }
+        ],
+        "crop_factor": [
+          "FLOAT",
+          {
+            "default": 2.5,
+            "min": 1.2,
+            "max": 8,
+            "step": 0.1,
+            "tooltip": "Crop side as a multiple of detected face HEIGHT. 2.5 puts the face at ~40% of the crop, comfortably inside H3's good regime. Bigger = more context so the seam lands in hair/background, but less magnification. 2.0-3.0 is the useful range."
+          }
+        ],
+        "canvas_width": [
+          "INT",
+          {
+            "default": 768,
+            "min": 128,
+            "max": 1344,
+            "step": 32,
+            "tooltip": "Resolution H3 generates at. 768 is H3's native short edge and the default here; 512 is cheaper. In manual mode this is used exactly as typed, high or low. Ignored when canvas_mode is not 'manual', where the canvas comes from the crop instead and never falls below 512x512. Cost scales with area: 768 is 2.25x the latent tokens of 512."
+          }
+        ],
+        "canvas_height": [
+          "INT",
+          {
+            "default": 768,
+            "min": 128,
+            "max": 1344,
+            "step": 32
+          }
+        ],
+        "canvas_mode": [
+          [
+            "manual",
+            "auto_no_downscale",
+            "auto_capped_768"
+          ],
+          {
+            "default": "manual",
+            "tooltip": "manual: use canvas_width/height as given.\nauto_no_downscale: size the canvas from the LARGEST crop in the video so no frame is ever downscaled (magnification never drops below 1.0x). Can get expensive on videos that include close-ups.\nauto_capped_768: same, but clamped to 768 - H3's native short edge and a sane VRAM ceiling.\nBoth auto modes clamp UP to a minimum of 512x512, whatever the crop, so a small face in a low-resolution clip is still magnified. manual is not clamped - it uses canvas_width and canvas_height exactly as typed."
+          }
+        ],
+        "smooth_window": [
+          "INT",
+          {
+            "default": 21,
+            "min": 1,
+            "max": 201,
+            "step": 2,
+            "tooltip": "Frames of smoothing on the crop CENTRE. 21 at 24fps is ~0.9s. Raise if the box still shivers; lower if it lags behind fast head movement."
+          }
+        ],
+        "size_smooth_window": [
+          "INT",
+          {
+            "default": 51,
+            "min": 1,
+            "max": 201,
+            "step": 2,
+            "tooltip": "Frames of smoothing on the crop SIZE. Wants MORE than the centre: size jitter makes the crop breathe, which changes the resample factor every frame and reads as shimmer. Real zoom moves are slow, so heavy smoothing here costs nothing."
+          }
+        ],
+        "smooth_method": [
+          [
+            "gaussian",
+            "savgol",
+            "moving_average"
+          ],
+          {
+            "default": "gaussian",
+            "tooltip": "gaussian: best jitter rejection. savgol: preserves the shape of a push-in better at large windows. moving_average: the old boxcar, leaves residual jitter."
+          }
+        ],
+        "size_mode": [
+          [
+            "max_of_clip",
+            "per_frame"
+          ],
+          {
+            "default": "per_frame",
+            "tooltip": "per_frame: constant face-fraction in every crop (correct for push-ins). max_of_clip: one size for the whole video, only useful when the shot is genuinely static."
+          }
+        ]
+      },
+      "optional": {
+        "identity_reference": [
+          "IMAGE",
+          {
+            "tooltip": "A clear face image of the person to track. When supplied, the subject is chosen by FACE IDENTITY rather than by size, so a crowd scene locks onto the right person even when someone else is briefly larger or nearer.\n\nOPTIONAL on this node. identity_track works without it: the anchor is then built FROM THE CLIP, off frames where one face clearly dominates, which is usually the better anchor since a stylised reference sits in a different domain. Supply one only to name a specific person.\n\nRead only while identity_track is ON. With it off this input is ignored, and the report says so.\n\nWithout either, 'largest_face' has no notion of WHO it is following - it just takes the biggest box each frame, which switches subject whenever the framing changes.\n\nFOR MULTIPLE PEOPLE: run the pipeline once per subject, each with that person's reference here and their own refs on the H3 node, and chain them - feed run 1's stitched output in as run 2's base_images. The composites accumulate."
+          }
+        ],
+        "identity_track": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "Hold one subject through a crowd. Continuity (nearest box to the previous position) decides most frames; the face-identity embedding is consulted only when two candidates are similarly plausible or their boxes overlap - which is both the accurate and the cheap arrangement, since the embedding model then runs on a handful of frames instead of all of them. The anchor is taken FROM THE CLIP by default (frames where one face clearly dominates), because an external stylised reference sits in a different domain - measured similarity between an illustration and a render of the same character was only 0.305, where same-domain faces score 0.5-0.7.\n\nThis switch also gates identity_reference: with it OFF a connected reference is not read at all, and the subject is chosen by select instead. The report says so when that happens."
+          }
+        ],
+        "identity_threshold": [
+          "FLOAT",
+          {
+            "default": 0.28,
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "tooltip": "Minimum score to accept a face as the reference person. Below this the frame falls back to continuity (nearest to the previous position at a similar size), which is what carries tracking through profiles and partial occlusion where embeddings become unreliable.\nThe scale depends on identity_model. 0.28 suits insightface cosine; clip_vision sits much higher (~0.80) because its similarities are compressed; ccip scores 0.5 at its own published operating point.\nSET 0 to use whichever default the chosen model recommends. The report prints the scores actually seen, so it can be tuned from evidence rather than guessed."
+          }
+        ],
+        "select": [
+          [
+            "largest_face",
+            "smallest_face",
+            "left_most",
+            "right_most",
+            "top_most",
+            "bottom_most",
+            "centre_most",
+            "closest_to_xy",
+            "detector_score"
+          ],
+          {
+            "default": "largest_face",
+            "tooltip": "How the subject is chosen. It is chosen ONCE per shot, on the first frame that holds it, and continuity follows that same face from there - it is NOT re-ranked each frame. A subject who walks from the left of frame to the right while someone else crosses the other way is still tracked correctly.\n\nlargest_face / smallest_face: biggest or smallest face by height.\nleft_most / right_most / top_most / bottom_most: by the CENTRE of the face box.\ncentre_most: nearest the centre of the frame.\nclosest_to_xy: nearest the X, Y you give, measured on frame_index.\ndetector_score: the detection the detector is most confident about.\n\nAT A HARD CUT a rank means nothing across the join - everyone is renumbered. With cut_detection ON, each shot chooses again by this rule, so a cut can land on a different person. With it OFF the video counts as one shot and continuity runs straight through a real cut onto whichever face is nearest the last position, which may be anyone.\n\nTo hold one person across cuts, wire identity_reference, or choose the face in H3 Load Video + Face Select.\n\nUsed only when no identity_reference is connected."
+          }
+        ],
+        "fallback_detector": [
+          [
+            "none",
+            "face_yolov8m.pt",
+            "bbox\\face_yolov8m.pt",
+            "segm\\person_yolov8m-seg.pt"
+          ],
+          {
+            "default": "none",
+            "tooltip": "Used only on frames where the FACE detector finds nothing (subject turned away). A person/body model such as segm\\person_yolov8m-seg.pt gives a real head position from the top of the body box, which beats interpolating blindly between the last and next face. Set 'none' to interpolate instead."
+          }
+        ],
+        "fallback_head_frac": [
+          "FLOAT",
+          {
+            "default": 0.5,
+            "min": 0,
+            "max": 1.5,
+            "step": 0.05,
+            "tooltip": "Head centre as a multiple of face height below the top of the person box. 0.5 puts it half a face-height down, which is about right for a head seen from behind."
+          }
+        ],
+        "select_index": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 63,
+            "tooltip": "Which face in that ranking to track. 0 is the first, 1 the second, and so on.\nThe subject is locked on the first frame that actually contains this index, so a video that opens on one face and only later shows a crowd still finds face 1. Frames before that lock-on are interpolated from it and faded out of the composite, the same as a detection dropout; the report counts them. Clamped, with a warning in the report, if the video never shows that many faces at once. Ignored entirely when identity_reference is connected.\nH3 Load Video + Face Select shows the faces numbered, if you need to see which number is who."
+          }
+        ],
+        "identity_model": [
+          [
+            "insightface",
+            "clip_vision",
+            "ccip"
+          ],
+          {
+            "default": "insightface",
+            "tooltip": "Which model decides that two faces are the same person.\ninsightface: ArcFace/buffalo_l. Photographed human faces. It reaches faces through its OWN detector, which does not fire on illustration - so on anime it finds no candidates at all and tracking quietly falls back to continuity.\nclip_vision: ComfyUI's CLIP vision, wired into identity_clip_vision from a CLIPVisionLoader. No extra install, works on any domain - anime, 3D, stylised - but it describes appearance rather than identity, so two characters with a similar palette can collide.\nccip: the illustration counterpart of ArcFace, purpose-built for 'same anime character?'. Best on anime. Needs 'pip install dghs-imgutils', which this pack deliberately does not install for you - it pins numpy<2 and pulls opencv-contrib-python.\nThe last two embed the boxes YOUR detector found, so pair them with an anime face model in the detector slot."
+          }
+        ],
+        "cut_detection": [
+          [
+            "none",
+            "auto (pyscenedetect)"
+          ],
+          {
+            "default": "none",
+            "tooltip": "Hard-cut detection, so the crop is not smoothed ACROSS a cut.\nnone: off. Correct for single-shot videos, which is what H3 generates.\nauto: split at the cuts and treat each shot as its own window for the smoothing, interpolation and composite fade. The canvas is still sized once for the whole video."
+          }
+        ],
+        "cut_threshold": [
+          "FLOAT",
+          {
+            "default": 3,
+            "min": 0.5,
+            "max": 20,
+            "step": 0.25,
+            "tooltip": "How far a frame has to stand out from its NEIGHBOURS to count as a cut. 3.0 is PySceneDetect's adaptive default.\nLower catches more and risks splitting a continuous shot, which costs smoothing on both sides. Higher takes only unambiguous cuts.\nOnly used when cut detection is on. The report says how many cuts were found and where, so tune it from that."
+          }
+        ],
+        "identity_clip_vision": [
+          "CLIP_VISION",
+          {
+            "tooltip": "A CLIP vision model from a CLIPVisionLoader, used only when identity_model is clip_vision. Any of the usual ComfyUI clip_vision checkpoints works; the bigger ViT-L/H models separate characters better than the small ones."
+          }
+        ],
+        "absent_shots": [
+          [
+            "off",
+            "by_identity"
+          ],
+          {
+            "default": "off",
+            "tooltip": "Find shots the subject is not in, so they are not rendered at all.\nby_identity: a shot where no sampled face matches the identity anchor above identity_threshold is treated as not containing the subject. Its frames keep their original pixels and drop out of the batch. Needs identity matching to be working - it does nothing without an anchor.\nSampled, not exhaustive, so a brief appearance can be missed. The report names every shot it drops and the score it saw."
+          }
+        ],
+        "X": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1,
+            "tooltip": "Only used by select=closest_to_xy.\n\nHorizontal position in PIXELS of the source video frame, measured from the TOP-LEFT corner, increasing to the right. On a 960x544 clip, 0 is the left edge, 960 the right, 480 the middle.\n\nThe point does not have to sit on a face: the nearest face CENTRE wins, however far away it is."
+          }
+        ],
+        "Y": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1,
+            "tooltip": "Only used by select=closest_to_xy.\n\nVertical position in PIXELS of the source video frame, measured from the TOP-LEFT corner, increasing DOWNWARD. On a 960x544 clip, 0 is the top edge, 544 the bottom, 272 the middle."
+          }
+        ],
+        "frame_index": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 999999,
+            "step": 1,
+            "tooltip": "Only used by select=closest_to_xy.\n\nThe frame the X, Y measurement is taken on, counting from 0 for the FIRST frame. It counts the frames this node loaded, so with skip_first_frames or select_every_nth set it counts from the first frame kept, not the first frame of the file.\n\nThe face found there is followed forwards and backwards through its shot, so pick a frame where the subject is clearly visible rather than one the detector may miss them on."
+          }
+        ],
+        "face_pick": [
+          "H3FACEPICK",
+          {
+            "tooltip": "The subject chosen upstream by H3 Load Video + Face Select.\nDecides who to follow, per shot, and carries the boxes and shot boundaries with it so this node does not detect the video again. select, select_index, cut_detection and cut_threshold are then unused, and detector and confidence are too unless a fallback_detector or a crop-based identity_model still needs them - they are then unused - the report names the detector that actually produced the boxes."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "images",
+        "detector",
+        "confidence",
+        "crop_factor",
+        "canvas_width",
+        "canvas_height",
+        "canvas_mode",
+        "smooth_window",
+        "size_smooth_window",
+        "smooth_method",
+        "size_mode"
+      ],
+      "optional": [
+        "identity_reference",
+        "identity_track",
+        "identity_threshold",
+        "select",
+        "fallback_detector",
+        "fallback_head_frac",
+        "select_index",
+        "identity_model",
+        "cut_detection",
+        "cut_threshold",
+        "identity_clip_vision",
+        "absent_shots",
+        "X",
+        "Y",
+        "frame_index",
+        "face_pick"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "H3FACEXFORM",
+      "IMAGE",
+      "STRING",
+      "INT",
+      "INT",
+      "INT"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "crops",
+      "transform",
+      "preview",
+      "report",
+      "canvas_w",
+      "canvas_h",
+      "frame_count"
+    ],
+    "name": "H3FaceTrackCrop",
+    "display_name": "H3 Face Track + Crop",
+    "description": "Per-frame face track -> smoothed, normalised crop -> constant-size batch for H3, plus the transform needed to paste the result back.",
+    "python_module": "custom_nodes.ComfyUI-H3-FaceRefine",
+    "category": "MiniMax H3/Face Refine",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3FillShots": null,
+  "H3GreyMannequins": null,
+  "H3ObjectSwapPlan": null,
+  "H3PeopleMask": null,
   "H3RelayAppendWindow": {
     "input": {
       "required": {
@@ -9364,6 +10144,7 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "H3RoleMask": null,
   "H3SLAAttention": {
     "input": {
       "required": {
@@ -9576,6 +10357,11 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "H3SoundtrackOrSilence": null,
+  "H3SourceSlice": null,
+  "H3SubjectPrompt": null,
+  "H3TrackCrops": null,
+  "H3TrackRoles": null,
   "Hunyuan3Dv2Conditioning": {
     "input": {
       "required": {
@@ -10600,6 +11386,7 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "ImageDetailContrast": null,
   "ImageFromBatch": {
     "input": {
       "required": {
@@ -14739,6 +15526,108 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "Load3D": {
+    "input": {
+      "required": {
+        "model_file": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": [
+              "none"
+            ],
+            "file_upload": true
+          }
+        ],
+        "image": [
+          "LOAD_3D",
+          {}
+        ],
+        "width": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 1,
+            "max": 4096,
+            "step": 1
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 1,
+            "max": 4096,
+            "step": 1
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model_file",
+        "image",
+        "width",
+        "height"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "STRING",
+      "IMAGE",
+      "LOAD3D_CAMERA",
+      "VIDEO",
+      "FILE_3D",
+      "LOAD3D_MODEL_INFO"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "image",
+      "mask",
+      "mesh_path",
+      "normal",
+      "camera_info",
+      "recording_video",
+      "model_3d",
+      "model_3d_info"
+    ],
+    "output_tooltips": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "Load3D",
+    "display_name": "Load 3D & Animation",
+    "description": "",
+    "python_module": "comfy_extras.nodes_load_3d",
+    "category": "3d",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": "Basics",
+    "has_intermediate_output": false
+  },
   "LoadAudio": {
     "input": {
       "required": {
@@ -15577,6 +16466,94 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "MaskComposite": {
+    "input": {
+      "required": {
+        "destination": [
+          "MASK",
+          {}
+        ],
+        "source": [
+          "MASK",
+          {}
+        ],
+        "x": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "y": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "operation": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": [
+              "multiply",
+              "add",
+              "subtract",
+              "and",
+              "or",
+              "xor"
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "destination",
+        "source",
+        "x",
+        "y",
+        "operation"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MASK"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "MaskComposite",
+    "display_name": "Combine Masks",
+    "description": "",
+    "python_module": "comfy_extras.nodes_mask",
+    "category": "image/mask",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "combine masks",
+      "blend masks",
+      "layer masks",
+      "masks composition"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "MaskToImage": {
     "input": {
       "required": {
@@ -15797,6 +16774,83 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "Metric3D-NormalMapPreprocessor": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE"
+        ]
+      },
+      "optional": {
+        "backbone": [
+          [
+            "vit-small",
+            "vit-large",
+            "vit-giant2"
+          ],
+          {
+            "default": "vit-small"
+          }
+        ],
+        "fx": [
+          "INT",
+          {
+            "default": 1000,
+            "min": 1,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "fy": [
+          "INT",
+          {
+            "default": 1000,
+            "min": 1,
+            "max": 16384,
+            "step": 1
+          }
+        ],
+        "resolution": [
+          "INT",
+          {
+            "default": 512,
+            "min": 64,
+            "max": 16384,
+            "step": 64
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image"
+      ],
+      "optional": [
+        "backbone",
+        "fx",
+        "fy",
+        "resolution"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "IMAGE"
+    ],
+    "name": "Metric3D-NormalMapPreprocessor",
+    "display_name": "Metric3D Normal Map",
+    "description": "",
+    "python_module": "custom_nodes.comfyui_controlnet_aux",
+    "category": "ControlNet Preprocessors/Normal and Depth Estimators",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "MiniMaxH3AddGuide": {
     "input": {
       "required": {
@@ -15887,6 +16941,17 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "MiniMaxH3ChainAssemble": null,
+  "MiniMaxH3ChainContext": null,
+  "MiniMaxH3ChainCurrent": null,
+  "MiniMaxH3ChainLoopEnd": null,
+  "MiniMaxH3ChainLoopStart": null,
+  "MiniMaxH3ChainPlanModern": null,
+  "MiniMaxH3ChainReview": null,
+  "MiniMaxH3ChainSegmentSave": null,
+  "MiniMaxH3ContexMaskedTarget": null,
+  "MiniMaxH3FantasticVideoEditLatent": null,
+  "MiniMaxH3GenerationProfile": null,
   "MiniMaxH3ImageToVideo": {
     "input": {
       "required": {
@@ -15992,6 +17057,7 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "MiniMaxH3LoopTrim": null,
   "MiniMaxH3ReferenceToVideo": {
     "input": {
       "required": {
@@ -16259,6 +17325,7 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "MiniMaxH3SourceTimeline": null,
   "MiniMaxH3TurboLoRA": {
     "input": {
       "required": {
@@ -17842,6 +18909,7 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "Orion4D_FXMax_DCTLToneMapper": null,
   "Pixal3DConditioning": {
     "input": {
       "required": {
@@ -18230,6 +19298,641 @@
     ],
     "essentials_category": "Basics",
     "has_intermediate_output": false
+  },
+  "QWMComposite": {
+    "input": {
+      "required": {
+        "original": [
+          "IMAGE"
+        ],
+        "edited_crop": [
+          "IMAGE"
+        ],
+        "mask": [
+          "MASK"
+        ],
+        "geometry": [
+          "QWM_GEOMETRY"
+        ],
+        "feather": [
+          "INT",
+          {
+            "default": 6,
+            "min": 0,
+            "max": 64,
+            "tooltip": "贴回边缘的颜色过渡宽度（原图像素）。只缓和边界色差，不能补齐漏选范围；残影应调 expand/dilation。"
+          }
+        ],
+        "align": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "根据遮罩外上下文估计小幅位移并对齐。报告出现 warning 时应人工检查。"
+          }
+        ]
+      },
+      "optional": {
+        "color_match": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "用遮罩外配对像素做有限 RGB 校正，减少局部色漂；不把原遮挡像素混回生成结果。"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "original",
+        "edited_crop",
+        "mask",
+        "geometry",
+        "feather",
+        "align"
+      ],
+      "optional": [
+        "color_match"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "restored_image",
+      "comparison",
+      "report"
+    ],
+    "name": "QWMComposite",
+    "display_name": "06 对齐 / 保色贴回",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMDetect": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE"
+        ],
+        "mode": [
+          [
+            "auto_qwen",
+            "manual_boxes",
+            "manual_mask"
+          ]
+        ],
+        "boxes_json": [
+          "STRING",
+          {
+            "default": "{\"coordinate_space\":\"pixels\",\"boxes\":[]}",
+            "multiline": true,
+            "tooltip": "手动框 JSON。坐标可用像素、xyxy_1000 或 normalized；auto_qwen 模式会用模型输出覆盖它。"
+          }
+        ],
+        "detection_side": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 256,
+            "max": 2048,
+            "step": 32,
+            "tooltip": "送入 Qwen3-VL 的定位图最长边。越大越容易看清小 Logo，显存和耗时也随之增加。"
+          }
+        ],
+        "expand": [
+          "INT",
+          {
+            "default": 8,
+            "min": 0,
+            "max": 64,
+            "tooltip": "矩形框向外扩的像素数，用于覆盖描边、阴影和接缝。它只影响 box 范围，不负责羽化。"
+          }
+        ],
+        "max_tokens": [
+          "INT",
+          {
+            "default": 512,
+            "min": 64,
+            "max": 2048,
+            "tooltip": "定位模型输出 JSON 的最大 token 数。多水印或复杂描述时增加；普通图片保持 512。"
+          }
+        ],
+        "hint": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "给定位模型的补充线索，例如“左下角灰色文字”和“右下角圆形 Logo”；不改变编辑指令。"
+          }
+        ],
+        "edit_prompt": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "给 Qwen Image 的补充编辑要求。写保留结构、材质和位置约束；不要只写“去水印”。"
+          }
+        ],
+        "padding_ratio": [
+          "FLOAT",
+          {
+            "default": 0.35,
+            "min": 0,
+            "max": 1,
+            "step": 0.05,
+            "tooltip": "自动检测框按比例扩边；程序会按水印类型设上限。手动框模式不使用此比例。"
+          }
+        ]
+      },
+      "optional": {
+        "clip": [
+          "CLIP"
+        ],
+        "manual_mask": [
+          "MASK"
+        ],
+        "min_confidence": [
+          "FLOAT",
+          {
+            "default": 0.65,
+            "min": 0,
+            "max": 1,
+            "tooltip": "保留自动候选的最低置信度。调高可减少误检，调低可减少低对比水印漏检；低于 0.65 的结果应人工确认。"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "mode",
+        "boxes_json",
+        "detection_side",
+        "expand",
+        "max_tokens",
+        "hint",
+        "edit_prompt",
+        "padding_ratio"
+      ],
+      "optional": [
+        "clip",
+        "manual_mask",
+        "min_confidence"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "STRING",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "watermark_mask",
+      "boxes_json",
+      "preview",
+      "edit_prompt"
+    ],
+    "name": "QWMDetect",
+    "display_name": "02 自动定位 / 手动改框",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMFinal": {
+    "input": {
+      "required": {
+        "original": [
+          "IMAGE"
+        ],
+        "initial_mask": [
+          "MASK"
+        ],
+        "detection_report": [
+          "STRING"
+        ]
+      },
+      "optional": {
+        "first_pass": [
+          "IMAGE",
+          {
+            "lazy": true
+          }
+        ],
+        "first_report": [
+          "STRING",
+          {
+            "lazy": true
+          }
+        ],
+        "residual_report": [
+          "STRING",
+          {
+            "lazy": true
+          }
+        ],
+        "second_pass": [
+          "IMAGE",
+          {
+            "lazy": true
+          }
+        ],
+        "second_report": [
+          "STRING",
+          {
+            "lazy": true
+          }
+        ],
+        "residual_mask": [
+          "MASK",
+          {
+            "lazy": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "original",
+        "initial_mask",
+        "detection_report"
+      ],
+      "optional": [
+        "first_pass",
+        "first_report",
+        "residual_report",
+        "second_pass",
+        "second_report",
+        "residual_mask"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "final_image",
+      "comparison",
+      "quality_report"
+    ],
+    "name": "QWMFinal",
+    "display_name": "12 质量检查 / 选择最终结果",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMPrepare": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE"
+        ],
+        "mask": [
+          "MASK"
+        ],
+        "context_pixels": [
+          "INT",
+          {
+            "default": 96,
+            "min": 0,
+            "max": 2048,
+            "tooltip": "裁剪区四周保留的原图上下文像素。普通文字用 96；贴近人体或建筑结构用 256~384。"
+          }
+        ],
+        "max_side": [
+          "INT",
+          {
+            "default": 768,
+            "min": 256,
+            "max": 2048,
+            "step": 32,
+            "tooltip": "局部裁剪送入编辑模型的最长边。8GB 显存建议 768；细节复杂且显存足够时用 1024。"
+          }
+        ],
+        "pre_inpaint": [
+          [
+            "auto",
+            "none",
+            "telea",
+            "ns"
+          ]
+        ],
+        "inpaint_radius": [
+          "INT",
+          {
+            "default": 3,
+            "min": 1,
+            "max": 15,
+            "tooltip": "Telea / NS 预清理的半径，仅作用于遮罩内。色块或贴纸用 3~5；纹理复杂时可关闭预清理。"
+          }
+        ]
+      },
+      "optional": {
+        "edit_prompt": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "裁剪节点接收的编辑要求；通常由“02 自动定位 / 手动改框”连线，不需手动填写。"
+          }
+        ],
+        "boxes_json": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "检测报告 JSON，用于按 overlay_type 选择预清理策略；通常由定位或残留节点连线。"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "mask",
+        "context_pixels",
+        "max_side",
+        "pre_inpaint",
+        "inpaint_radius"
+      ],
+      "optional": [
+        "edit_prompt",
+        "boxes_json"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "QWM_GEOMETRY",
+      "STRING",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "reference_crop",
+      "crop_mask",
+      "geometry",
+      "status",
+      "edit_prompt"
+    ],
+    "name": "QWMPrepare",
+    "display_name": "04 裁剪并记录坐标",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMRefineMask": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE"
+        ],
+        "mask": [
+          "MASK"
+        ],
+        "boxes_json": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "method": [
+          [
+            "auto",
+            "sam",
+            "box"
+          ]
+        ],
+        "sam_model": [
+          "STRING",
+          {
+            "default": "sam_vit_b_01ec64.pth",
+            "tooltip": "SAM 权重文件名；放在 ComfyUI/models/sams/。"
+          }
+        ],
+        "device": [
+          [
+            "auto",
+            "cpu",
+            "cuda"
+          ]
+        ],
+        "dilation": [
+          "INT",
+          {
+            "default": 12,
+            "min": 0,
+            "max": 64,
+            "tooltip": "SAM 或手绘遮罩向外扩的基础像素数，用于覆盖白边、透明边和投影。不规则贴纸开启自适应时会按短边再扩大安全边，最多 64px；它不等于 feather。"
+          }
+        ],
+        "adaptive_dilation": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "按大型贴纸短边自动增加外扩，最多 64px。人物、头发或建筑边缘敏感时可关闭。"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "mask",
+        "boxes_json",
+        "method",
+        "sam_model",
+        "device",
+        "dilation",
+        "adaptive_dilation"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "refined_mask",
+      "preview",
+      "status"
+    ],
+    "name": "QWMRefineMask",
+    "display_name": "03 不规则轮廓细化（SAM）",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMResidualDetect": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE"
+        ],
+        "clip": [
+          "CLIP"
+        ],
+        "detection_side": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 256,
+            "max": 2048,
+            "step": 32,
+            "tooltip": "残留分区送入 Qwen3-VL 的最长边。小残片漏检时提高到 1280；8GB 显存保持 1024。"
+          }
+        ],
+        "expand": [
+          "INT",
+          {
+            "default": 24,
+            "min": 0,
+            "max": 96,
+            "tooltip": "残留候选向外扩的安全边，随后与第一次修复范围取交集。它不会扩大到原遮罩之外。"
+          }
+        ],
+        "max_tokens": [
+          "INT",
+          {
+            "default": 384,
+            "min": 64,
+            "max": 2048,
+            "tooltip": "残留复检 JSON 的最大 token 数。只检查残片，通常 384 足够。"
+          }
+        ],
+        "edit_prompt": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "二采追加的局部修复要求。只描述残留和需要保持的结构；留空使用自动提示词。"
+          }
+        ]
+      },
+      "optional": {
+        "allowed_mask": [
+          "MASK"
+        ],
+        "enabled": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "是否运行第一次修复后的残留复检。关闭后不会触发二采，最终报告会保留 needs_review。"
+          }
+        ],
+        "first_report": [
+          "STRING",
+          {
+            "default": ""
+          }
+        ],
+        "min_confidence": [
+          "FLOAT",
+          {
+            "default": 0.8,
+            "min": 0,
+            "max": 1,
+            "tooltip": "触发二采的残留置信度阈值。默认 0.8，只处理高置信度残片，避免把自然纹理再次生成。"
+          }
+        ],
+        "original_image": [
+          "IMAGE"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "clip",
+        "detection_side",
+        "expand",
+        "max_tokens",
+        "edit_prompt"
+      ],
+      "optional": [
+        "allowed_mask",
+        "enabled",
+        "first_report",
+        "min_confidence",
+        "original_image"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "STRING",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "residual_mask",
+      "boxes_json",
+      "preview",
+      "edit_prompt"
+    ],
+    "name": "QWMResidualDetect",
+    "display_name": "07 第一次修复后检查残留",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
   },
   "QuadrupleCLIPLoader": {
     "input": {
@@ -19361,6 +21064,92 @@
     "api_node": false,
     "price_badge": null,
     "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "RegexMatch": {
+    "input": {
+      "required": {
+        "string": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "regex_pattern": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ]
+      },
+      "optional": {
+        "case_insensitive": [
+          "BOOLEAN",
+          {
+            "advanced": true,
+            "default": true
+          }
+        ],
+        "multiline": [
+          "BOOLEAN",
+          {
+            "advanced": true,
+            "default": false
+          }
+        ],
+        "dotall": [
+          "BOOLEAN",
+          {
+            "advanced": true,
+            "default": false
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "string",
+        "regex_pattern"
+      ],
+      "optional": [
+        "case_insensitive",
+        "multiline",
+        "dotall"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "BOOLEAN"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "matches"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "RegexMatch",
+    "display_name": "Match Text",
+    "description": "",
+    "python_module": "comfy_extras.nodes_string",
+    "category": "text",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "regex match",
+      "regex",
+      "pattern match",
+      "text contains",
+      "string match"
+    ],
     "essentials_category": null,
     "has_intermediate_output": false
   },
@@ -20875,6 +22664,56 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "SAMLoader": {
+    "input": {
+      "required": {
+        "model_name": [
+          [
+            "sam_vit_b_01ec64.pth",
+            "sam_vit_h_4b8939.pth",
+            "sam_vit_l_0b3195.pth"
+          ],
+          {
+            "tooltip": "The detection accuracy varies depending on the SAM model. ESAM can only be used if ComfyUI-YoloWorld-EfficientSAM is installed."
+          }
+        ],
+        "device_mode": [
+          [
+            "AUTO",
+            "Prefer GPU",
+            "CPU"
+          ],
+          {
+            "tooltip": "AUTO: Only applicable when a GPU is available. It temporarily loads the SAM_MODEL into VRAM only when the detection function is used.\nPrefer GPU: Tries to keep the SAM_MODEL on the GPU whenever possible. This can be used when there is sufficient VRAM available.\nCPU: Always loads only on the CPU."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model_name",
+        "device_mode"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "SAM_MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "SAM_MODEL"
+    ],
+    "name": "SAMLoader",
+    "display_name": "SAMLoader (Impact)",
+    "description": "Load the SAM (Segment Anything) model. This can be used in places that utilize SAM detection functionality, such as SAMDetector or SimpleDetector.\nThe SAM detection functionality in Impact Pack must use the SAM_MODEL loaded through this node.",
+    "python_module": "custom_nodes.ComfyUI-Impact-Pack",
+    "category": "ImpactPack",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "SamplerCustom": {
     "input": {
       "required": {
@@ -21236,6 +23075,89 @@
     ],
     "essentials_category": null,
     "has_intermediate_output": false
+  },
+  "SaveAnimatedWEBP": {
+    "input": {
+      "required": {
+        "images": [
+          "IMAGE",
+          {}
+        ],
+        "filename_prefix": [
+          "STRING",
+          {
+            "default": "ComfyUI"
+          }
+        ],
+        "fps": [
+          "FLOAT",
+          {
+            "default": 6,
+            "min": 0.01,
+            "max": 1000,
+            "step": 0.01
+          }
+        ],
+        "lossless": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "quality": [
+          "INT",
+          {
+            "default": 80,
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "method": [
+          "COMBO",
+          {
+            "options": [
+              "default",
+              "fastest",
+              "slowest"
+            ]
+          }
+        ]
+      },
+      "hidden": {
+        "prompt": "PROMPT",
+        "extra_pnginfo": "EXTRA_PNGINFO"
+      }
+    },
+    "input_order": {
+      "required": [
+        "images",
+        "filename_prefix",
+        "fps",
+        "lossless",
+        "quality",
+        "method"
+      ],
+      "hidden": [
+        "prompt",
+        "extra_pnginfo"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "images"
+    ],
+    "name": "SaveAnimatedWEBP",
+    "display_name": "Save Animated WEBP",
+    "description": "",
+    "python_module": "comfy_extras.nodes_images",
+    "category": "image",
+    "output_node": true
   },
   "SaveAudio": {
     "input": {
@@ -23065,6 +24987,10 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "SolarRendererConditioning": null,
+  "SolarRendererLoraLoader": null,
+  "SolarRendererModel": null,
+  "SolarRendererSigmas": null,
   "SolidMask": {
     "input": {
       "required": {
@@ -24697,7 +26623,7 @@
                         "default": 0.7,
                         "min": 0.01,
                         "max": 2,
-                        "step": 1e-06
+                        "step": 0.000001
                       }
                     ],
                     "top_k": [
@@ -27867,6 +29793,83 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "VRAM_Debug": {
+    "input": {
+      "required": {
+        "empty_cache": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "gc_collect": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "unload_all_models": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ]
+      },
+      "optional": {
+        "any_input": [
+          "*"
+        ],
+        "image_pass": [
+          "IMAGE"
+        ],
+        "model_pass": [
+          "MODEL"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "empty_cache",
+        "gc_collect",
+        "unload_all_models"
+      ],
+      "optional": [
+        "any_input",
+        "image_pass",
+        "model_pass"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "*",
+      "IMAGE",
+      "MODEL",
+      "INT",
+      "INT"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "any_output",
+      "image_pass",
+      "model_pass",
+      "freemem_before",
+      "freemem_after"
+    ],
+    "name": "VRAM_Debug",
+    "display_name": "VRAM Debug",
+    "description": "\nReturns the inputs unchanged, they are only used as triggers,  \nand performs comfy model management functions and garbage collection,  \nreports free VRAM before and after the operations.\n",
+    "python_module": "custom_nodes.ComfyUI-KJNodes",
+    "category": "KJNodes/memory",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "VaeDecodeShapeTrellis": {
     "input": {
       "required": {
@@ -29260,7 +31263,7 @@
             "default": 0.5,
             "min": 0,
             "max": 1,
-            "step": 1e-09
+            "step": 1e-9
           }
         ],
         "fy": [
@@ -29270,7 +31273,7 @@
             "default": 0.5,
             "min": 0,
             "max": 1,
-            "step": 1e-09
+            "step": 1e-9
           }
         ],
         "cx": [

@@ -1,13 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
+import { dbBytes } from "./helpers/auth-db";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-auth-"));
+const dir = tempDir("fuobe-auth-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 const auth = await import("@/server/auth");
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 describe("auth", () => {
   it("is off until a password is set", () => {
@@ -21,7 +19,7 @@ describe("auth", () => {
     expect(auth.authEnabled()).toBe(true);
     expect(auth.checkPassword("correct horse")).toBe(true);
     expect(auth.checkPassword("wrong horse")).toBe(false);
-    expect(fs.readFileSync(path.join(dir, "auth.json"), "utf8")).not.toContain("correct horse");
+    expect(dbBytes(dir)).not.toContain("correct horse");
   });
 
   it("signs sessions and signs everyone out when the password changes", () => {
@@ -40,7 +38,7 @@ describe("auth", () => {
     expect(auth.validToken(`Bearer ${token}`)).toBe(true);
     expect(auth.validToken(`Bearer ${token}x`)).toBe(false);
     expect(auth.validToken(token)).toBe(false);
-    expect(fs.readFileSync(path.join(dir, "auth.json"), "utf8")).not.toContain(token);
+    expect(dbBytes(dir)).not.toContain(token);
     expect(auth.authStatus().tokens[0]).toMatchObject({ name: "CI", prefix: token.slice(0, 12) });
     expect(auth.authStatus().tokens[0]).not.toHaveProperty("hash");
     auth.revokeToken(info.id);

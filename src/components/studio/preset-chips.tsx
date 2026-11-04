@@ -8,6 +8,7 @@ import type { Preset } from "@/lib/catalog/types";
 import { presetCover } from "@/lib/preset-covers";
 import { featuredAll } from "@/lib/preset-featured";
 import { cn } from "@/lib/utils";
+import { onAttr, TAB_PILL, TabRow } from "@/components/ui/tab-row";
 import { CoverScrollBox, CoverTile, usePickerPlayback } from "@/components/cover-tile";
 import { PRESET_ICONS } from "@/components/preset-icons";
 import { loadFullCatalog, useCatalog } from "./catalog";
@@ -16,7 +17,8 @@ import { Chip, ClearableChip } from "./chip";
 /**
  * Camera-motion / effect picker and Mix. Loaded as its own chunk (with the preset icons and the slim
  * covers map), and the preset lists come from the full catalog chunk, fetched on first hover or open.
- * A preset shows its real cover, as in the galleries, else its drawn tile. Both list them as the galleries do
+ * A preset shows its real cover, as in the galleries and in their shape (4:3, so it shows whole), else its drawn tile.
+ * Both list them as the galleries do
  * (featuredAll), with the category tabs in catalog order.
  */
 
@@ -31,7 +33,7 @@ function PresetTile({ preset: p, picked, onPick }: { preset: Preset; picked: boo
         cover={presetCover(p.id)}
         playing={playing}
         picked={picked}
-        className="aspect-video w-full rounded-md"
+        className="aspect-[4/3] w-full rounded-md"
         fallback={
           <span className="absolute inset-0 grid place-items-center text-white" style={{ background: `linear-gradient(135deg, ${p.look.from}, ${p.look.to})` }}>
             <PI className="size-5 transition-transform duration-300 group-hover:scale-125" />
@@ -56,19 +58,13 @@ export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] 
   const cats = ["All", ...new Set(list.map((p) => p.category))];
   return (
     <>
-      <div className="scrollbar-none mb-2 flex shrink-0 gap-1 overflow-x-auto" role="tablist" aria-label="Categories">
+      <TabRow className="mb-1 shrink-0" role="tablist" aria-label="Categories" follow>
         {cats.map((c) => (
-          <button
-            key={c}
-            role="tab"
-            aria-selected={cat === c}
-            onClick={() => setCat(c)}
-            className={cn("h-7 shrink-0 rounded-full px-2.5 text-[12px] font-medium text-muted-foreground hover:bg-accent", cat === c && "bg-secondary text-foreground")}
-          >
+          <button key={c} role="tab" aria-selected={cat === c} onClick={() => setCat(c)} className={TAB_PILL} {...onAttr(cat === c)}>
             {c}
           </button>
         ))}
-      </div>
+      </TabRow>
       <CoverScrollBox value={box}>
         {/* The box scrolls and gives way in the picker (min-h-0); the grid inside keeps its rows whole. */}
         <div ref={box} className="max-h-[28rem] min-h-0 overflow-y-auto overscroll-contain">
@@ -78,7 +74,7 @@ export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] 
                 <CoverTile
                   cover={undefined}
                   picked={!value}
-                  className="aspect-video w-full rounded-md"
+                  className="aspect-[4/3] w-full rounded-md"
                   fallback={
                     <span className="absolute inset-0 grid place-items-center text-muted-foreground">
                       <Ban className="size-5" />
@@ -105,7 +101,7 @@ const prefetch = () => void loadFullCatalog();
 /**
  * A picker opens on the side of its chip with more of the screen (below a chip in the upper half), and is as tall as
  * that room allows: its scroll box gives way (min-h-0), the categories and Mix's sliders keep their height, and the
- * covers get up to 28rem, four rows. The side is picked as it opens, so a list still loading (a short box) doesn't keep
+ * covers get up to 28rem, three rows and part of a fourth. The side is picked as it opens, so a list still loading (a short box) doesn't keep
  * it on the side with less room.
  */
 const POPOVER_HEIGHT = "max-h-[var(--radix-popover-content-available-height)]";

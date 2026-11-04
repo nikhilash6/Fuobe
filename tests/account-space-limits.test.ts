@@ -1,12 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
+import { setAccountCreatedAt } from "./helpers/auth-db";
 const jar = { set: vi.fn(), delete: vi.fn(), get: vi.fn() };
 vi.mock("next/headers", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/headers")>()), cookies: async () => jar }));
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-space-limits-"));
+const dir = tempDir("fuobe-space-limits-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -33,13 +32,8 @@ beforeAll(() => {
   fresh = auth.createAccount("fresh@example.com", "long enough").id;
   old = auth.createAccount("old@example.com", "long enough").id;
   for (const id of [fresh, old]) auth.setAccountGpu(id, { url: "https://gpu.example.com" });
-  // An account made 8 days ago (auth.json is the accounts' store).
-  const file = path.join(dir, "auth.json");
-  const data = JSON.parse(fs.readFileSync(file, "utf8")) as { accounts: { id: string; createdAt: number }[] };
-  for (const a of data.accounts) if (a.id === old) a.createdAt = Date.now() - 8 * DAY;
-  fs.writeFileSync(file, JSON.stringify(data));
-  // A new modified time, so the auth module reads the file again (it caches by that time).
-  fs.utimesSync(file, new Date(), new Date(Date.now() + 5000));
+  // An account made 8 days ago.
+  setAccountCreatedAt(old, Date.now() - 8 * DAY);
 });
 afterEach(() => {
   delete process.env.FUOBE_ACCOUNTS_DISK_GB;
@@ -49,9 +43,6 @@ afterEach(() => {
 });
 afterAll(() => {
   globalThis.__fuobeTestDiskFree = undefined;
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 /** A result of `account` that weighs `bytes` (only its row says so). */

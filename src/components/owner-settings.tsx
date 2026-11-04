@@ -1,16 +1,17 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff, Info, KeyRound, Loader2, LogOut, Scale, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Heart, KeyRound, Loader2, LogOut, Scale, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { FUOBE_CREDITS } from "@/lib/connections";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import { GitHubMark } from "@/components/github-mark";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { announceAuthChange, leaveNotice, rememberViewer, signInHref, signOut, useHydrated, useViewer } from "@/lib/api";
+import { FUOBE_REPO } from "@/lib/connections";
 import { cn } from "@/lib/utils";
 
 /** Settings' line under its title: what this viewer finds on the page. Nothing until the viewer is known (as below). */
@@ -20,13 +21,13 @@ export function SettingsIntro() {
   if (!hydrated || !v) return null;
   if (v.owner)
     return "Choose open source, paid APIs or both, connect providers, point Fuobe at your ComfyUI server, and choose how prompts get enhanced. Keys stay on this server.";
-  return v.account ? "Your account, your GPU and your keys." : "Connect your GPU, and read every model's licence.";
+  return v.account ? "Your account, your GPU and your keys." : "Connect your GPU, and see the open models and code Fuobe is built on.";
 }
 
 /**
  * The install's settings, for its owner only. A guest (public sign-up) is offered an account, which
  * connects its own GPU here; an account sees Your GPU (AccountGpuSection) and its account, nothing of the install's.
- * Both can read the licences.
+ * Both can read Thanks & licences.
  */
 export function OwnerSettings({ children }: { children: React.ReactNode }) {
   // The server renders nothing here (it doesn't know the viewer), so hydration must too, even when the browser's
@@ -62,24 +63,39 @@ export function OwnerSettings({ children }: { children: React.ReactNode }) {
 
 const linkCard = "inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors hover:bg-accent";
 
-/** The licence pages, which everyone may read (the owner finds them in the settings form). */
-function Licences() {
+/**
+ * About's links: Thanks & licences and the source on GitHub for everyone, and the owner's Models & licences (its
+ * switches; also its own section of the settings form).
+ */
+export function AboutLinks({ owner }: { owner?: boolean }) {
   return (
-    <section aria-labelledby="licences-title" className="grid grid-cols-[minmax(0,1fr)] gap-4 py-8 md:grid-cols-[260px_minmax(0,1fr)]">
-      <div className="min-w-0">
-        <h2 id="licences-title" className="text-[15px] font-semibold">
-          Licences
-        </h2>
-        <p className="mt-1 text-[13px] text-muted-foreground">Every model&apos;s licence, and the credits for the open models Fuobe uses.</p>
-      </div>
-      <div className="flex flex-wrap content-start gap-2">
+    <div className="flex flex-wrap content-start gap-2">
+      <Link href="/settings/licences" className={linkCard}>
+        <Heart className="size-4 text-muted-foreground" /> Thanks &amp; licences
+      </Link>
+      {owner && (
         <Link href="/settings/models" className={linkCard}>
           <Scale className="size-4 text-muted-foreground" /> Models &amp; licences
         </Link>
-        <a href={FUOBE_CREDITS} target="_blank" rel="noopener" className={linkCard}>
-          <Info className="size-4 text-muted-foreground" /> Credits
-        </a>
+      )}
+      <a href={FUOBE_REPO} target="_blank" rel="noreferrer" className={linkCard}>
+        <GitHubMark className="size-4 text-muted-foreground" /> Source on GitHub
+      </a>
+    </div>
+  );
+}
+
+/** About, which everyone may read (the owner finds it in the settings form). */
+function Licences() {
+  return (
+    <section id="about" aria-labelledby="about-title" className="grid grid-cols-[minmax(0,1fr)] gap-4 py-8 md:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="min-w-0">
+        <h2 id="about-title" className="text-[15px] font-semibold">
+          About
+        </h2>
+        <p className="mt-1 text-[13px] text-muted-foreground">The open models, LoRAs and code Fuobe is built on, who made them and their licences, and Fuobe&rsquo;s own source code.</p>
       </div>
+      <AboutLinks />
     </section>
   );
 }

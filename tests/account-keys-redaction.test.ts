@@ -1,16 +1,14 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ModelDef, ModelRoute } from "@/lib/catalog/types";
 import { startFakeFal, startFakeReplicate, type FakeCloud } from "./helpers/fake-cloud";
+import { tempDir } from "./helpers/temp-dir";
 
 /**
  * Your keys: a key never shows up in an error. The stand-ins here refuse with a body that repeats the request's
  * Authorization header (as some proxies do): the message Fuobe keeps holds neither the key nor either half of a fal.ai
  * key_id:key_secret. An account's refused key, or empty balance, is said the way to fix it.
  */
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-keys-redaction-"));
+const dir = tempDir("fuobe-keys-redaction-");
 process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 
@@ -46,9 +44,6 @@ afterAll(async () => {
   globalThis.__fuobeTestReplicateUrl = undefined;
   await fal.close();
   await rep.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 
 const model = { id: "m", name: "M", kind: "image", engine: "cloud", routes: [] } as unknown as ModelDef;

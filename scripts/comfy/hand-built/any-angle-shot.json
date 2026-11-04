@@ -1,0 +1,229 @@
+{
+  "1": {
+    "inputs": {
+      "image": "subject.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Photo (image 1)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "model_file": "3d/fuobe_splat.spz",
+      "image": {
+        "image": "subject.png",
+        "mask": "subject.png",
+        "normal": "subject.png",
+        "recording": "",
+        "camera_info": null
+      },
+      "width": 1024,
+      "height": 1024
+    },
+    "class_type": "Load3D",
+    "_meta": {
+      "title": "Load the 3D view"
+    }
+  },
+  "13": {
+    "inputs": {
+      "model_3d": [
+        "2",
+        6
+      ]
+    },
+    "class_type": "File3DToSplat",
+    "_meta": {
+      "title": "Get Splat"
+    }
+  },
+  "20": {
+    "inputs": {
+      "mode": "orbit",
+      "mode.yaw": 125,
+      "mode.pitch": 10,
+      "mode.distance": 1.83,
+      "target_x": 0,
+      "target_y": 0,
+      "target_z": 0,
+      "roll": 0,
+      "fov": 33,
+      "zoom": 1,
+      "camera_type": "perspective"
+    },
+    "class_type": "CreateCameraInfo",
+    "_meta": {
+      "title": "Create Camera Info"
+    }
+  },
+  "30": {
+    "inputs": {
+      "width": 1536,
+      "height": 1152,
+      "frames": 0,
+      "splat_scale": 1,
+      "sharpen": 2,
+      "headlight_shading": 0,
+      "opacity_threshold": 0,
+      "render_style": "color",
+      "background": "#000000",
+      "splat": [
+        "13",
+        0
+      ],
+      "camera_info": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "RenderSplat",
+    "_meta": {
+      "title": "Render Splat"
+    }
+  },
+  "50": {
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "51": {
+    "inputs": {
+      "lora_name": "QI2.1_AnyAngle.safetensors",
+      "strength_model": 1,
+      "model": [
+        "50",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "AnyAngle LoRA"
+    }
+  },
+  "52": {
+    "inputs": {
+      "device": "auto",
+      "dtype": "default",
+      "model": [
+        "51",
+        0
+      ]
+    },
+    "class_type": "QwenImage21Cache",
+    "_meta": {
+      "title": "Qwen-Image 2.1 Cache"
+    }
+  },
+  "53": {
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "54": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "55": {
+    "inputs": {
+      "prompt": "Change the camera angle from <image2> to <image1>.",
+      "negative_prompt": "",
+      "resolution": 1024,
+      "clip": [
+        "53",
+        0
+      ],
+      "vae": [
+        "54",
+        0
+      ],
+      "images.image_1": [
+        "1",
+        0
+      ],
+      "images.image_2": [
+        "30",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImage21",
+    "_meta": {
+      "title": "Text Encode (Qwen-Image 2.1)"
+    }
+  },
+  "56": {
+    "inputs": {
+      "seed": 46,
+      "steps": 25,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "52",
+        0
+      ],
+      "positive": [
+        "55",
+        0
+      ],
+      "negative": [
+        "55",
+        1
+      ],
+      "latent_image": [
+        "55",
+        2
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "57": {
+    "inputs": {
+      "samples": [
+        "56",
+        0
+      ],
+      "vae": [
+        "54",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "58": {
+    "inputs": {
+      "filename_prefix": "fuobe/any-angle-shot",
+      "images": [
+        "57",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save the angle"
+    }
+  }
+}

@@ -23,7 +23,7 @@ describe("Design a voice: the model each engine runs", () => {
     expect(designModelFor("voxcpm", "cloud")).toBeNull();
     expect(designBlocker("voxcpm", "cloud")).toMatch(/runs on your GPU/);
     expect(designBlocker("qwen", "cloud")).toBeNull();
-    expect(DESIGN_MODELS.find((m) => m.key === "qwen")!.label).toBe("Qwen3-TTS · both engines");
+    expect(DESIGN_MODELS.find((m) => m.key === "qwen")!.label).toBe("Qwen3-TTS");
   });
 
   it("names catalog models that design voices and clone them", () => {
@@ -40,8 +40,8 @@ describe("Design a voice: the model each engine runs", () => {
   });
 
   it("says what a saved voice was designed with", () => {
-    expect(voiceOrigin({ modelId: "qwen-3-tts", engine: "cloud" })).toBe("Designed with Qwen3-TTS · both engines");
-    expect(voiceOrigin({ modelId: "oss-voxcpm2", engine: "open" })).toBe("Designed with VoxCPM2 · your GPU");
+    expect(voiceOrigin({ modelId: "qwen-3-tts", engine: "cloud" })).toBe("Designed with Qwen3-TTS");
+    expect(voiceOrigin({ modelId: "oss-voxcpm2", engine: "open" })).toBe("Designed with VoxCPM2");
     expect(voiceOrigin(undefined)).toBeNull();
   });
 });

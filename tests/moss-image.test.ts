@@ -1,19 +1,17 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
 import { buildPayload, sizeValue } from "@/lib/catalog/payload";
 import { controlSets, estimateCost, planGeneration, routesFor } from "@/lib/catalog/plan";
 import type { GenerationRequest, ModelRoute } from "@/lib/catalog/types";
 import { layoutCompilerFor, type LayoutDraft } from "@/lib/layout-prompt";
+import { tempDir } from "./helpers/temp-dir";
 
 // N7-1 (docs/research/new-models-7.md §4.7): MOSS-Image on fal from research #7's endpointRecords, priced per megapixel, and
 // on your GPU; the layout flag on the models that read layouts; the Settings → Models & licences rows.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-moss-"));
+const tmp = tempDir("fuobe-moss-");
 process.env.FUOBE_DATA_DIR = tmp;
 const { modelLicence, accessList } = await import("@/server/model-access");
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 type Spec = { type?: string; values?: unknown[]; minimum?: number; maximum?: number; default?: unknown; desc?: string; maxItems?: number; itemSchema?: Record<string, Spec> };
 type Record7 = { endpoint: string; provider: string; inputs: Record<string, Spec>; pricing: { usd: number | null; unit: string } };

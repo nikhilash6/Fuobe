@@ -1,15 +1,13 @@
-import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { listenInRange, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
 
-// nm10-music3 under public sign-up: an account's song on this install's GPUs (hosted runs) plans and prices as any studio run
+// Full songs under public sign-up: an account's song on this install's GPUs (hosted runs) plans and prices as any studio run
 // (MiniMax Music 3 and YuE2 are open models on core nodes); a model that needs words is refused before anything is
 // priced or held.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-music3-hosted-"));
+const dir = tempDir("fuobe-music3-hosted-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 delete process.env.FUOBE_PASSWORD;
@@ -42,9 +40,6 @@ afterAll(async () => {
   for (const k of ["FUOBE_HOSTED_RUNS", "FUOBE_BILLING_URL", "FUOBE_BILLING_TOKEN"]) delete process.env[k];
   await fake.close();
   await comfy.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(() => {
   resetRates();

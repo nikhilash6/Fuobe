@@ -1,10 +1,11 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { keysSeen, startFakeFal, startFakeReplicate, type FakeCloud } from "./helpers/fake-cloud";
 import { TINY_PNG } from "./helpers/fake-comfy-runner";
+import { tempDir } from "./helpers/temp-dir";
+import { dbBytes } from "./helpers/auth-db";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.mock("next/headers", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/headers")>()), cookies: async () => ({ delete: () => {}, get: () => undefined }) }));
@@ -15,7 +16,7 @@ vi.mock("next/headers", async (importOriginal) => ({ ...(await importOriginal<ty
  * The owner's keys are set in Settings and in the environment all along, and the stand-ins accept them, so any leak
  * would succeed and show in their logs. An account without a key, or whose key can't be opened, sends nothing.
  */
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-keys-isolation-"));
+const dir = tempDir("fuobe-keys-isolation-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
 process.env.COMFYUI_URL = "http://owner-comfy.test:8188";
@@ -81,9 +82,6 @@ afterAll(async () => {
   globalThis.__fuobeTestDiskFree = undefined;
   await fal.close();
   await rep.close();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
 });
 beforeEach(async () => {
   resetRates();
@@ -364,7 +362,7 @@ describe("deleting an account stops its paid runs with its key, then forgets the
       const cancel = fal.log.find((r) => r.path.endsWith("/cancel"));
       expect(cancel?.authorization, how).toBe("Key acct-fal-E");
       expect(auth.accountById(id), how).toBeUndefined();
-      expect(fs.readFileSync(path.join(dir, "auth.json"), "utf8")).not.toContain(`gone-${how}@example.com`);
+      expect(dbBytes(dir)).not.toContain(`gone-${how}@example.com`);
       expect(keysSeen(fal.log)).toEqual(["Key acct-fal-E"]);
     }
   });

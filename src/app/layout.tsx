@@ -7,9 +7,23 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
   weight: "400",
-  style: ["normal", "italic"],
+  style: "normal",
   variable: "--font-instrument-serif",
   display: "swap",
+});
+/**
+ * The italic face of the same family (its @font-face rules join the family above, so --font-instrument-serif sets
+ * both), loaded on its own so it can wait for its file: Home's second headline line is italic and right-aligned, and
+ * drawn first in the fallback its words would slide sideways when the face arrives. The text waits unseen instead (up
+ * to 3 s, the browser's block period; the file is preloaded). Its fallback's metrics are in globals.css.
+ */
+const instrumentSerifItalic = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: "italic",
+  variable: "--font-instrument-serif-italic",
+  display: "block",
+  adjustFontFallback: false,
 });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
@@ -26,6 +40,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // The page runs under the notch and home indicator; the bars pad themselves with the safe-area insets.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#121213" },
@@ -37,7 +53,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${instrumentSerif.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${instrumentSerif.variable} ${instrumentSerifItalic.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <Providers>{children}</Providers>

@@ -56,7 +56,7 @@
 //   gridPrompt, sheetPrompt               (contact-sheet / turnaround framing text placed before the prompt)
 // Keys added with the nm10-flux3-klein workflows (research #10 §6.3):
 //   image5 … image10                      (further reference images: FLUX 3 Image Klein's edit takes up to 10)
-// Keys added with the nm10-music3 workflows (research #10 §6.6). * = the provider fills it from the canonical request:
+// Keys added with the full-song workflows (new-models-10 §6.6). * = the provider fills it from the canonical request:
 //   tiledDecode*                          (MiniMax Music 3: decode the song in tiles, less VRAM; on for songs over 2 minutes)
 // Keys added with the av-tools workflows (Wave B):
 //   frameIndex                            (Extract frame: which frame of the Trim Video window, -1 = its last, 0 = its first)
@@ -120,7 +120,7 @@
 // Keys added with MOSS-Image (docs/research/new-models-7.md §4.6). Model settings (params.extra; MOSS-Image's Quality control writes them):
 //   sampler, scheduler                    (KSampler sampler_name / scheduler)
 //   unet                                  (UNETLoader file: the Fast tier's drop-in 8-step DMD file, listed in optionalModels)
-// Keys added with Design a voice (nm10-voice-design). * = the provider fills it:
+// Keys added with Design a voice. * = the provider fills it:
 //   voiceDescription*                     (the voice in words: params.voiceDescription, op voice-design)
 //   voiceTranscript*                      (what the voice sample says: params.voiceTranscript, or a saved voice's line)
 //   device*                               (VoxCPM2's device combo: the server's first torch device, cuda | mps | cpu)
@@ -157,6 +157,27 @@
 //   rtxQuality                            (RTX Video Super Resolution quality: ULTRA | HIGHBITRATE_ULTRA …; Frame Generation mode: LOW | MEDIUM | HIGH)
 // Entry field gpu: the card a graph's nodes need, which the GPU pre-flight checks by the card's name: "nvidia-rtx" (an NVIDIA
 // RTX card) or "nvidia-rtx-40" (RTX 40 series or later). The manifest and requirements.json carry it.
+// Keys added with Any Angle (any-angle-3d, any-angle-shot), each angle's camera from src/lib/catalog/any-angle.ts (params.extra):
+//   splatFile*                            (Load3D model_file: the 3D build's .spz, uploaded like any input; Load3D's own check
+//                                          takes any file in the input folder. The provider points its image entry at the photo)
+//   cameraYaw, cameraPitch, cameraDistance, cameraFov (CreateCameraInfo orbit: degrees, degrees, splat units, degrees)
+//   targetX, targetY, targetZ             (CreateCameraInfo look-at point: a close-up aims at the face's height)
+// Output roles added with Any Angle: "sweep" and "sweep-mask" (the turntable at 192 px as lossless animated WebP, colour and
+// coverage, that the server measures the photo's front view on), "mesh" (a GLB made from a splat, for the 3D viewer).
+// Keys added with Head Swap, model controls (params.extra):
+//   maskBlur                              (GrowMaskWithBlur blur radius of a paste-back edge, px)
+//   pasteBack                             (true: only the masked area comes from the edit, the rest is the input's pixels)
+// Keys added with the Outfit Swap app. Model settings (params.extra; the app's Shoes choice writes it):
+//   request                               (the sentence after the swap: "Replace everything they wear." | "Keep their own shoes and legwear.")
+// Keys added with the Watermark Remover (ComfyUI-Qwen-Watermark). * = the provider fills it:
+//   boxes*                                (QWMDetect boxes_json: the marks the visitor kept, params.extra.boxes, checked and rebuilt
+//                                          by src/lib/watermark.ts: pixels, 1-32 boxes clamped to the picture, known types only)
+//   detectMode*                           (QWMDetect mode: manual_boxes with boxes, manual_mask on the brush graph, else auto_qwen)
+//   detectExpand*                         (QWMDetect expand: 0 for the kept marks, whose boxes carry the scan's margin; 20 in auto_qwen)
+//   maxSize*                              (here QWMPrepare max_side on both passes: 1024; 1536 past 3000 px; 768 on a GPU under 16 GB)
+// Output role "quality": a node's JSON verdict on the run (QWMFinal), folded into the image outputs' meta.quality.
+// Output role "scan-tile": a tile's QWMDetect report (the scan's four quarters, in scanTiles order), merged by the provider
+// into the "report" output (mergeScanReports in src/lib/watermark.ts), never a result of its own.
 
 import fs from 'node:fs';
 
@@ -217,15 +238,15 @@ export const CUSTOM_NODE_REPOS = {
   'Comfyui-Hi3d-T8': 'https://github.com/T8mars/Comfyui-Hi3d-T8/tree/73848490976e6a9b0c735ce02984c03866a495e7',
   // Live edit: Fuobe's own node file (src/lib/comfy-live-nodes.ts), shipped with Fuobe rather than cloned from a repo.
   'fuobe-live': 'https://github.com/workingprototype/Fuobe',
-  // nm10-qwen21-fast: Qwen-Image 2.1 on a 16 GB card: recoilme's Zen Image Edit nodes (Qwen3.5-0.8B encoder + fusion adapter),
+  // Qwen-Image 2.1 on a 16 GB card: recoilme's Zen Image Edit nodes (Qwen3.5-0.8B encoder + fusion adapter),
   // Apache-2.0 code, release v2 (adapter_v12). Not on the validation server (needs transformers >= 5.17; the pinned
   // ComfyUI's venv has 5.22.1).
   'zen-image-edit-comfyui': 'https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d',
-  // nm10-rtx-video: Comfy-Org's NVIDIA VFX nodes 0.2.1 (Apache-2.0; registry comfyui_nvidia_rtx_nodes) over NVIDIA's
+  // NVIDIA RTX Video: Comfy-Org's NVIDIA VFX nodes 0.2.1 (Apache-2.0; registry comfyui_nvidia_rtx_nodes) over NVIDIA's
   // nvidia-vfx runtime (RTX Video SDK, NVIDIA Software License Agreement). An NVIDIA RTX card only (frame generation: RTX 40
   // or later) and a CUDA PyTorch: install-comfyui.sh adds it on an NVIDIA RTX host only; never on the validation server.
   ComfyUI_Nvidia_VFX_Nodes: 'https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40',
-  // nm10-voice-design: Design a voice. 1038lab's Qwen3-TTS nodes (GPL-3.0 code, Apache-2.0 weights) and Saganaki22's VoxCPM2
+  // Design a voice: 1038lab's Qwen3-TTS nodes (GPL-3.0 code, Apache-2.0 weights) and Saganaki22's VoxCPM2
   // nodes (Apache-2.0). Neither is on the validation server; both download their weights from Hugging Face on first run.
   'ComfyUI-QwenTTS': 'https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293',
   'ComfyUI-VoxCPM2': 'https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f',
@@ -244,6 +265,25 @@ export const CUSTOM_NODE_REPOS = {
   // World mode (nm10-hy-nomas-world): Nynxz's native Hy-Nomas port (Apache-2.0, no Python dependencies; it registers the
   // DiT and the PixelUMM decoder with the core loaders). Read at this commit (2026-10-24); not on the validation server.
   'ComfyUI-HyNomas': 'https://github.com/Nynxz/ComfyUI-HyNomas/tree/a89e0515619924da71093aa3fe52dbb7104cb06e',
+  // Relight (qwen-image-21-relight): Viggle's speed-LoRA loader and step schedule, one file in the model repo itself
+  // (comfyui/viggle_turbo.py), pinned at a revision. The address
+  // is the file: it is downloaded as custom_nodes/viggle_turbo/__init__.py, never cloned (the repo holds the weights).
+  // Qwen Research License (a Qwen-Image 2.1 derivative). Not on the validation server: the entry lists it with `packs`.
+  viggle_turbo: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/comfyui/viggle_turbo.py',
+  // Genjutsu's Openjutsu modes (D3voz/openjutsu @ 7fe118bb): pinned in install-comfyui.sh (OPENJUTSU_MODES=1), not on the
+  // validation server (the entries list them with `packs`). H3-FaceRefine, Impact Pack and controlnet_aux are registry packs.
+  'ComfyUI-MiniMaxH3-Context-Loop': 'https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop/tree/43afeffcc570beb5f7382593e79e4b211c7e02f6',
+  'ComfyUI-Fantastic-MiniMaxH3-PromptBuilder': 'https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder/tree/22e719fe89336c628383363182a4da3cb58d4f9b',
+  'comfyui-h3-oneclick-swap': 'https://github.com/D3voz/comfyui-h3-oneclick-swap/tree/e44a56e92920000e675d14be484aea0d7498d63e',
+  'comfyui-image-detail-contrast': 'https://github.com/D3voz/comfyui-image-detail-contrast/tree/485a5e246424ce012b998862b45f06d21e8d63b2',
+  Orion4D_FXMax: 'https://github.com/orion4d/Orion4D_FXMax/tree/7048e8423ad7d1a6a52119d0d4870c2b7fc2885f',
+  SolarRenderer: 'https://github.com/Enderfga/SolarRenderer/tree/0ca4f5e45b062cc9e9aee506de46aabdc22e4c3d',
+  'ComfyUI-H3-FaceRefine': 'https://github.com/Carasibana/ComfyUI-H3-FaceRefine',
+  'ComfyUI-Impact-Pack': 'https://github.com/ltdrdata/ComfyUI-Impact-Pack',
+  comfyui_controlnet_aux: 'https://github.com/Fannovel16/comfyui_controlnet_aux/tree/a587a4c1594524c1d2de5cd1a86cd868ff448e1c',
+  // Watermark Remover: overflowofedge's Qwen watermark nodes (MIT), read at this commit: no network, subprocess, eval or
+  // file writes. Not on the validation server (the image-watermark-* entries list it with `packs`); pinned in install-comfyui.sh.
+  'ComfyUI-Qwen-Watermark': 'https://github.com/overflowofedge/ComfyUI-Qwen-Watermark/tree/eef829d34d6e9d0d2ae0c1386fab7371a864cf34',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -280,6 +320,19 @@ export const PACK_CLASSES = {
   kandinsky6: /^Kandinsky6(BeautifyPrompt|Sampler|EmptyLatent|ImageToVideoAudio|RemoveReferenceLatent|AudioVAELoader|AudioVAEDecode|TextEncode|MagCache)$/,
   'kandinsky6-sr': /^Kandinsky6(SRVAELoader|LatentUpscalerLoader|VSRUpscale)$/,
   'ComfyUI-HyNomas': /^Nomas(WorldPrompt|PromptJSON|CameraPath|WorldGenerate|WorldContinue|Explore)$/,
+  viggle_turbo: /^ViggleTurbo(Lora|Sigmas)$/,
+  // Genjutsu's Openjutsu modes.
+  'ComfyUI-MiniMaxH3-Context-Loop': /^MiniMaxH3(GenerationProfile|ChainPlanModern|SourceTimeline|ChainLoopStart|ChainCurrent|ChainContext|ContexMaskedTarget|ContexMaskGridPreview|ContexLoopMaskSlice|LoopTrim|ChainSegmentSave|ChainReview|ChainLoopEnd|ChainAssemble)$/,
+  'ComfyUI-Fantastic-MiniMaxH3-PromptBuilder': /^MiniMaxH3FantasticVideoEditLatent$/,
+  'comfyui-h3-oneclick-swap': /^H3(OneClickSwapPlan|AdvancedSwapPlan|ObjectSwapPlan|SourceSlice|ClipShots|FillShots|PeopleMask|GreyMannequins|TrackCrops|TrackRoles|RoleMask|SubjectPrompt|Montage(People|Tracks|Picks|Plan|Pass)|FaceChunks|FaceJoin|AddFitCheck|SoundtrackOrSilence|ObjectPlacementMask|AddMovingArea|PaintedEditArea|RelightPass)$/,
+  'comfyui-image-detail-contrast': /^ImageDetailContrast$/,
+  Orion4D_FXMax: /^Orion4D_FXMax_/,
+  SolarRenderer: /^SolarRenderer(Model|LoraLoader|Conditioning|Sigmas)$/,
+  'ComfyUI-H3-FaceRefine': /^H3Face(TrackCrop|MaskSAM|Stitch)$/,
+  'ComfyUI-Impact-Pack': /^SAMLoader$/,
+  comfyui_controlnet_aux: /^Metric3D-NormalMapPreprocessor$/,
+  'ComfyUI-KJNodes': /^VRAM_Debug$/,
+  'ComfyUI-Qwen-Watermark': /^QWM(Detect|ResidualDetect|RefineMask|Prepare|Composite|Final)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -310,18 +363,26 @@ export const KNOWN_MODELS = {
   'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/latent_upscaler/config.json': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/latent_upscaler/config.json' },
   'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/model_index.json': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/model_index.json' },
   'Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/scheduler/scheduler_config.json': { folder: 'diffusion_models', url: 'https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/3d6672923a4dfcd387961864654e123dd53b8ee4/scheduler/scheduler_config.json' },
-  // nm10-music3: MiniMax Music 3 and YuE2 as Comfy-Org repacked them (the files the core templates audio_minimax_music_3,
+  // MiniMax Music 3 and YuE2 as Comfy-Org repacked them (the files the core templates audio_minimax_music_3,
   // audio_yue2_text2music and audio_yue2_music_cover load), pinned in model-pins.json at the revisions read on 2026-11-01.
   'minimax_music3_dit_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/diffusion_models/minimax_music3_dit_int8_convrot.safetensors' },
   'minimax_music3_text_encoder_pruned_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors' },
   'minimax_music3_dav.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/vae/minimax_music3_dav.safetensors' },
   'yue2_3b_int8_convrot.safetensors': { folder: 'checkpoints', url: 'https://huggingface.co/Comfy-Org/YuE2/resolve/main/checkpoints/yue2_3b_int8_convrot.safetensors' },
   'sheetsage2_bf16.safetensors': { folder: 'audio_encoders', url: 'https://huggingface.co/Comfy-Org/YuE2/resolve/main/audio_encoders/sheetsage2_bf16.safetensors' },
+  // Watermark Remover: Meta's SAM ViT-B (Apache-2.0), the file ComfyUI-Qwen-Watermark's QWMRefineMask loads. Meta hosts it
+  // outside Hugging Face, so this is ybelkada's mirror at a pinned revision: its LFS SHA-256 (ec2df627…) is Meta's file's, and
+  // the setup commands check it (a .pth can run code when it loads).
+  'sam_vit_b_01ec64.pth': { folder: 'sams', url: 'https://huggingface.co/ybelkada/segment-anything/resolve/7790786db131bcdc639f24a915d9f2c331d843ee/checkpoints/sam_vit_b_01ec64.pth' },
   // archive-restore: Lightricks' Detail Refine IC-LoRA (stage 2 of Restore & colourise), gated, at the researched commit.
   'ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors': { folder: 'loras', url: 'https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details/resolve/4912c478b35dd96b6cdcc5f7c7ff9d72c2c57929/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors' },
   // Live edit: linoyts' 2-step DMD2 LoRA for Qwen-Image 2.1 (pytorch_lora_weights.safetensors upstream, kept under a
   // name of its own), pinned at the revision whose file was measured.
   'Qwen-Image-2.1-DMD2-2steps.safetensors': { folder: 'loras', url: 'https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights.safetensors' },
+  // Relight: Viggle's 6-step speed LoRA for Qwen-Image 2.1 (v0.2.1, rank 256, alpha 256; the r128 cut for smaller GPUs),
+  // pinned at a revision (file hashes r256 2a0148f5…, r128 bafb91d0…).
+  'Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors': { folder: 'loras', url: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors' },
+  'Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors': { folder: 'loras', url: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors' },
   'ltx-2.3-22b-distilled-fp8.safetensors': { folder: 'checkpoints', url: 'https://huggingface.co/Lightricks/LTX-2.3-fp8/resolve/main/ltx-2.3-22b-distilled-fp8.safetensors' },
   'gemma_3_12B_it_fp4_mixed.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors' },
   'RealESRGAN_x4plus.safetensors': { folder: 'upscale_models', url: 'https://huggingface.co/Comfy-Org/Real-ESRGAN_repackaged/resolve/main/RealESRGAN_x4plus.safetensors' },
@@ -400,7 +461,13 @@ export const KNOWN_MODELS = {
   'pika_h3_flex_fl2va_comfy_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/Pika-Labs/Pika-H3-Flex/resolve/3ff166447d5edb1406107ab8370c42000ce173e4/comfy/loras/pika_h3_flex_fl2va_comfy_bf16.safetensors' },
   'pika_h3_flex_ref2va_comfy_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/Pika-Labs/Pika-H3-Flex/resolve/3ff166447d5edb1406107ab8370c42000ce173e4/comfy/loras/pika_h3_flex_ref2va_comfy_bf16.safetensors' },
   'minimax_h3_flf2v_lora_v1.safetensors': { folder: 'loras', url: 'https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA/resolve/5ddbc2dbbe95edbbdaf5017c3e934b1d01791697/minimax_h3_flf2v_lora_v1.safetensors' },
-  // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu, research #10 §6.4): FastVideo's FastH3 V2 (8-step DMD2, int8 22.1 GB or
+  // Genjutsu's Openjutsu modes: Kijai's rank-39 DMAD 4-step LoRA (from ZhengmingYu/DMAD), mdevoz's rank-64 SolarRenderer
+  // pair (same speed and VRAM as rank 384, a sixth of the size) and BFL's int8 FLUX 3 prompt upsampler, at pinned revisions.
+  'minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/loras/minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors' },
+  'solarrenderer_4step_lora_rank64.safetensors': { folder: 'loras', url: 'https://huggingface.co/mdevoz/SolarRendererRank64/resolve/984a10b7c167bbb94614f9644d5fedbb93a8c6e6/solarrenderer_4step_lora_rank64.safetensors' },
+  'solarrenderer_control_lora_rank64.safetensors': { folder: 'loras', url: 'https://huggingface.co/mdevoz/SolarRendererRank64/resolve/984a10b7c167bbb94614f9644d5fedbb93a8c6e6/solarrenderer_control_lora_rank64.safetensors' },
+  'qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors' },
+  // MiniMax H3 on 8-31 GB cards (new-models-10 §6.4): FastVideo's FastH3 V2 (8-step DMD2, int8 22.1 GB or
   // NVFP4 13.6 GB for Blackwell) and FastH3 Trim (42 of 50 blocks, experimental; NVFP4 11.9 / fp8 19.7 / int8 ConvRot 18.9 GB),
   // each at the revision read on 2026-11-02. MiniMax H3 Community License (the repos' cards).
   'fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Comfy/resolve/ec1e3aa374a91c57b0b94a1623b7e657c0498cf2/diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors' },
@@ -478,7 +545,10 @@ export const KNOWN_MODELS = {
   'dino_v3_vit_h.safetensors': { folder: 'clip_vision', url: 'https://huggingface.co/VAST-AI/TripoSplat/resolve/main/clip_vision/dino_v3_vit_h.safetensors' },
   'triposplat_vae_decoder_fp16.safetensors': { folder: 'vae', url: 'https://huggingface.co/VAST-AI/TripoSplat/resolve/main/vae/triposplat_vae_decoder_fp16.safetensors' },
   'triposplat_fp16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/VAST-AI/TripoSplat/resolve/main/diffusion_models/triposplat_fp16.safetensors' },
-  // idol-1 (docs/research/idol-9.md §4.1): Speridlabs' Idol for the core TripoSplat nodes. A third-party conversion (ComfyUI-Idol
+  // Any Angle: lilylilith's AnyAngle LoRA for Qwen-Image 2.1 (Apache-2.0, rank 24, ComfyUI keys), at the revision whose file
+  // was measured (119,590,312 bytes).
+  'QI2.1_AnyAngle.safetensors': { folder: 'loras', url: 'https://huggingface.co/lilylilith/QI_2.1_AnyAngle/resolve/5c8b4c8e05ba6328d54bf8d34ec724fef5a414ae/QI2.1_AnyAngle.safetensors' },
+  // Idol 3D (docs/research/idol-9.md §4.1): Speridlabs' Idol for the core TripoSplat nodes. A third-party conversion (ComfyUI-Idol
   // scripts/convert.py at 4d3a4f6) of speridlabs/idol @ 2731c229 (Apache-2.0): pos_pe dropped (ComfyUI recomputes it), cast to fp16,
   // the two decoders merged under octree./gs., and spot-checked as faithful on 10 tensor prefixes (idol-9 §3, §4.1). Pinned to
   // nynxz/Idol @ c718f2b1: idol_fp16 741,107,210 B, sha256 cf452146f78e23a0d34be8f9f79bcde642b9a40ef493046c8e9d5f79096f6dd0;
@@ -530,18 +600,24 @@ export const KNOWN_MODELS = {
   'qwen3vl_8b_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors', variants: ['qwen3vl_8b_bf16.safetensors'] },
   'qwen_image_2.1_vae_bf16.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors' },
   'qwen-image-2.1-outpaint-v2.safetensors': { folder: 'loras', url: 'https://huggingface.co/ausboss/Qwen-Image-2.1-Outpaint-LoRA/resolve/main/qwen-image-2.1-outpaint-v2.safetensors' },
-  // nm10-qwen21-fast: Qwen-Image 2.1 speed tiers, the clean decoder and the 2.1 Next-Scene LoRA, each pinned at the revision
+  // Qwen-Image 2.1 speed tiers, the clean decoder and the 2.1 Next-Scene LoRA, each pinned at the revision
   // its card was read at (2026-11-01) and renamed where upstream uses a name many LoRAs share (pytorch_lora_weights).
   'Qwen-Image-2.1-DMD2-2steps-v1.5.safetensors': { folder: 'loras', url: 'https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights_v1_5.safetensors' },
   'Qwen-Image-2.1-Lightning-4steps.safetensors': { folder: 'loras', url: 'https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/6b0a1176327c01522a44276c5da67331a025b6fc/pytorch_lora_weights.safetensors' },
   'p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/PrunaAI/P-Q-Image-2.1-Comfy/resolve/aa7dcecb1767e220e31a55706e33fd057c9a3fca/p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors' },
   'Qwen-Image-2.1-Next-Scene-step2500.safetensors': { folder: 'loras', url: 'https://huggingface.co/akhaliq/Qwen-Image-2.1-Next-Scene-LoRA/resolve/67ce88cd413fe177758af5d91e25eb3a334aa06f/next_scene_step2500.safetensors' },
-  // qma-angles: gribbliest's QMA camera-angles LoRA for Qwen-Image 2.1 (96 views), pinned to 13007eec.
+  // The QMA camera-angles LoRA by gribbliest for Qwen-Image 2.1 (96 views), pinned to 13007eec.
   'qwen-image-2.1-qma-camera-angles.safetensors': { folder: 'loras', url: 'https://huggingface.co/gribbliest/qwen-image-2.1-qma-camera-angles/resolve/13007eec2648c09529e930164c2ccc9c8c12428c/qwen-image-2.1-qma-camera-angles.safetensors' },
-  // Zen Image Edit's fusion adapter (nm10-qwen21-fast): a GitHub release asset of recoilme/zen-image-edit-comfyui (release v2,
+  // Zen Image Edit's fusion adapter: a GitHub release asset of recoilme/zen-image-edit-comfyui (release v2,
   // sha256 and size in model-pins.json), kept in models/text_encoders; the loader is given its full path at run time.
   'adapter_v12.safetensors': { folder: 'text_encoders', url: 'https://github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors' },
   'texture_fix_vae_for_qwen_image_2.1_bf16.safetensors': { folder: 'vae', url: 'https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors' },
+  // Restore (restore-qwen-image-21): AusBoss's Restore LoRA (step 1,500, the card's "start here" file; revision, size and
+  // SHA-256 in model-pins.json), and the SeedVR2 7B int8 its hand-built graph enlarges with (the same file as the template's).
+  'qwen-image-2.1-restore.safetensors': { folder: 'loras', url: 'https://huggingface.co/ausboss/Qwen-Image-2.1-Restore-LoRA/resolve/main/qwen-image-2.1-restore.safetensors' },
+  'seedvr2_7b_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_7b_int8_convrot.safetensors' },
+  // Outfit Swap (the card's main file, step 1,000): holds the person picture in place, so only the clothes change.
+  'qwen-image-2.1-outfit-swap.safetensors': { folder: 'loras', url: 'https://huggingface.co/ausboss/Qwen-Image-2.1-Outfit-Swap-Consistency-LoRA/resolve/main/qwen-image-2.1-outfit-swap.safetensors' },
 
   // owner's SOTA families (2026-10-31): Ideogram 4 (Comfy-Org/Ideogram-4; its flux2-vae is the flux2-dev row above). `variants`:
   // the same weights in another precision in the same repository, which a ComfyUI may list instead of the pinned file.
@@ -579,7 +655,7 @@ export const KNOWN_MODELS = {
   'qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors', variants: ['qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors', 'qwen3.5_9b_flux3_prompt_upsampler_bf16.safetensors'] },
 };
 
-// FLUX 3 Image Klein (flux3-klein-*): every file's licence, as information (the owner's rule: never a gate).
+// FLUX 3 Image Klein (flux3-klein-*): every file's licence, as information (never a gate).
 const KLEIN_LICENSE =
   'FLUX Kommunity License v1.0 (FLUX 3 Image Klein and Klein Base: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross ' +
   'annual revenue; other commercial use needs a BFL licence; not blanket permission for commercial fine-tuning or distribution); Qwen3-VL-4B-Instruct ' +
@@ -614,7 +690,7 @@ const H3_NOTES_LAYOUT =
 const H3_NOTES_FILES =
   'Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) ' +
   'and the audio VAE (0.61 GB).';
-// Options → Decoder "Fast decode" (nm10-h3-any-gpu): Sol-H3-VAE in the decode loader (136, binding vae); the stock VAE
+// Options → Decoder "Fast decode": Sol-H3-VAE in the decode loader (136, binding vae); the stock VAE
 // still encodes the frames. Needs ComfyUI master from 2026-10-28 (#17411); not loadable by an older core.
 const H3_SOL_VAE = 'minimax_h3_sol_vae_int8_convrot.safetensors';
 const H3_NOTES_SOL =
@@ -625,7 +701,7 @@ const H3_NOTES_SOL =
 const H3_LICENSE_SOL =
   ' · Sol-H3-VAE (Efficient-Large-Model; the optional fast decoder): licence unconfirmed, no licence tag on its model page; its card says code Apache-2.0 ' +
   'and weights under the MiniMax H3 Community License';
-// The FastH3 tiers (nm10-h3-any-gpu): FastVideo's distills carry the MiniMax H3 Community License (their cards).
+// The FastH3 tiers: FastVideo's distills carry the MiniMax H3 Community License (their cards).
 const H3_LICENSE_FASTH3 = `${H3_LICENSE} · FastH3 V2 and FastH3 Trim (FastVideo): MiniMax H3 Community License`;
 const H3_NOTES_FASTH3_FILES =
   'Files: the FastH3 diffusion file, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB; every FastH3 template pairs it with every diffusion file; offloaded ' +
@@ -739,7 +815,7 @@ function wanI2V(variant) {
   };
 }
 
-// nm10-qwen21-fast: Options → Decoder "Clean" on every Qwen-Image 2.1 graph picks madebyollin's Texture-Fix VAE (the vae binding).
+// Options → Decoder "Clean" on every Qwen-Image 2.1 graph picks madebyollin's Texture-Fix VAE (the vae binding).
 const QWEN21_CLEAN_VAE = 'texture_fix_vae_for_qwen_image_2.1_bf16.safetensors';
 const QWEN21_LICENCE = 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only';
 const QWEN21_CLEAN_NOTE = ' Options → Decoder "Clean" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked).';
@@ -749,7 +825,7 @@ const ZEN_LICENCE = '; Zen Image Edit fusion adapter adapter_v12 (AiArtLab / rec
 const ZEN_FIRST_RUN = [
   'Qwen3.5-0.8B (1.7 GB, Apache-2.0), the text encoder: Fuobe uses the pinned copy in models/text_encoders/qwen3.5_0.8b when it is there (hf download Qwen/Qwen3.5-0.8B --revision 2fc06364715b967f1860aea9cf38778875588b17 --local-dir models/text_encoders/qwen3.5_0.8b); otherwise the loader downloads it from Hugging Face on first run',
 ];
-// The speed tiers' LoRAs (nm10-qwen21-fast, cards read 2026-11-01): file, licence, what the card says.
+// The speed tiers' LoRAs (cards read 2026-11-01): file, licence, what the card says.
 const QWEN21_TIERS = {
   draft: {
     title: '2 steps, DMD2 LoRA v1.5',
@@ -800,6 +876,13 @@ const K6_NOTES =
   '5 s = 121 frames (4n + 1) at 24 fps; width and height multiples of 16 (480p by default: 864x480 in the template, Fuobe\'s 16:9 is 848x480). ' +
   'VRAM is not published: 24 GB for Lite is an estimate (6.4 GB DiT; the 16.6 GB encoder and the VAE load in turn), Pro distilled holds a 60.3 GB DiT (an 80 GB GPU, or a lot of system RAM for ComfyUI to offload into). ' +
   'The kandinsky6 pack needs ComfyUI 0.38 or newer; the cloud half is kandinsky-6 on fal.';
+
+// Genjutsu's Openjutsu modes: the packs their H3 graphs need, and the licence line they share.
+const OJ_PACKS = ['ComfyUI-MiniMaxH3-Context-Loop', 'ComfyUI-Fantastic-MiniMaxH3-PromptBuilder', 'comfyui-h3-oneclick-swap', 'ComfyUI-KJNodes', 'ComfyUI-VideoHelperSuite'];
+const OJ_H3_LICENCE =
+  'MiniMax H3 Community License (H3 Ref2VA, its VAEs, the packaged Qwen3-VL text encoder, the DMAD LoRA derived from it): territory EXCLUDES the US, the EU, the UK and South Korea; ' +
+  'commercial use above US$20M yearly revenue needs MiniMax\'s written authorization; show "MiniMax H3" on the product\'s interface; no outputs used to improve other AI models · ' +
+  'Qwen3-VL 8B describer Apache-2.0 · SAM 3.1 under Meta\'s SAM License · graphs from D3voz/openjutsu (MIT) · Context Loop nodes GPL-3.0, Fantastic PromptBuilder MIT, H3 OneClick Swap MIT';
 
 export const SPEC = [
   // =========================================================================
@@ -1316,6 +1399,30 @@ export const SPEC = [
     notes: 'Native SeedVR2 nodes (core ComfyUI >= 0.28), one-step diffusion restoration. scale = output multiplier (template 4). The numz/ComfyUI-SeedVR2_VideoUpscaler pack is NOT used (it cannot register on CPU-only hosts and is superseded by core nodes).',
   },
   {
+    id: 'restore-qwen-image-21',
+    title: 'Restore an old or damaged photo, same faces and framing (Qwen-Image 2.1 + AusBoss Restore LoRA, then SeedVR2 2x)',
+    capability: 'edit',
+    handBuilt: 'hand-built/restore-qwen-image-21.json',
+    bindings: {
+      prompt: [b('30', 'prompt')], image: [b('10', 'image')],
+      seed: [b('32', 'seed'), b('56', 'seed')], steps: [b('32', 'steps')],
+      loraStrength: [b('4', 'strength_model')], scale: [b('52', 'resize_type.multiplier')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    defaults: { steps: 25, loraStrength: 1, scale: 2 },
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Restore LoRA by AusBoss under the same licence; SeedVR2 Apache-2.0',
+    notes:
+      'One restore pass as the Restore LoRA card sets it up, then a SeedVR2 enlargement. The photo is scaled to about 2 MP on the 32 grid (ImageScaleToTotalPixels, lanczos: ' +
+      'small prints grow to it, big noisy ones shrink to it, as the card asks) -> UNETLoader -> LoraLoaderModelOnly (qwen-image-2.1-restore, step 1,500; loraStrength 1.0, 0.5 for a blurry photo) -> ' +
+      'QwenImage21Cache -> TextEncodeQwenImage21 (the photo as image 1, resolution 0, no negative) -> KSampler on its latent, 25 steps, cfg 1, euler, simple, denoise 1 -> ' +
+      'VAEDecode -> SplitImageWithAlpha. Then SeedVR2 7B int8 one step (the nodes of the upscale-image-seedvr2 template): ResizeImageMaskNode x scale (2) lanczos -> Preprocess -> ' +
+      'VAEEncodeTiled 512/128 -> Conditioning -> KSampler 1 step -> VAEDecodeTiled -> PostProcessing (lab colour from the restored photo). About 8 MP out. ' +
+      'Prompt: one of the two instructions the LoRA was trained on, alone (a wrong "Scene:" description painted features that were not there). No turbo LoRA (25 steps sat closer: 0.15 px, face 0.90). ' +
+      'One pass only (a second came back crunchy); never with the Consistency or Outfit-Swap LoRA. Faces under about 100 px can come back as a slightly different person. ' +
+      'The open route of the Restore Photo app. RTX 5090: about 70 s a photo at 25 steps, peak about 31 GB.',
+  },
+  {
     id: 'bg-remove-birefnet',
     title: 'Remove Background (BiRefNet, native)',
     capability: 'bg-remove',
@@ -1459,7 +1566,7 @@ export const SPEC = [
     notes: 'Uses the Wan 2.2 I2V high/low experts. High->low switch at step 10 (end_at_step of node 84 / start_at_step of node 87, not a binding). Start and end images should share the output aspect ratio.',
   },
   {
-    // Keyframe animation (package inbetweening): Fuobe Animation on your GPU. The library file holds two keyframes (one pass);
+    // Keyframe animation: Fuobe Animation on your GPU. The library file holds two keyframes (one pass);
     // the provider rewrites it for 2-10 keyframes (expand: 'keyframes', src/lib/av/inbetween-graph.ts), all passes on one set of loaders.
     id: 'wan22-inbetween-anisora',
     title: 'Keyframe animation: Wan 2.2 14B first/last-frame in-betweens with AniSora 3.2, every Nth frame per gap, one video',
@@ -1523,6 +1630,8 @@ export const SPEC = [
       // (same thresholds the template uses in its bypassed 4-step variant) so a raw video works.
       { op: 'addNodes', nodes: { 1601: { class_type: 'Canny', inputs: { image: ['156', 0], low_threshold: 0.1, high_threshold: 0.6 }, _meta: { title: 'Canny (control preprocessing)' } } } },
       { op: 'set', node: '160', input: 'control_video', value: ['1601', 0] },
+      // Fuobe's own words in place of the template's sample (src/lib/comfy-prompts.ts writes them for every run).
+      { op: 'set', node: '99', input: 'text', value: 'The person from the reference picture, with their own face, hair, body and complete outfit, moves exactly like the person in the driving video, in the setting and light of the reference picture.' },
     ],
     bindings: {
       prompt: [b('99', 'text')],
@@ -1586,6 +1695,8 @@ export const SPEC = [
     title: 'Wan 2.2 S2V 14B Talking Video (image + audio)',
     capability: 'lipsync',
     export: 'video_wan2_2_14B_s2v',
+    // Fuobe's neutral line in place of the template's sample (src/lib/comfy-prompts.ts).
+    transforms: [{ op: 'set', node: '6', input: 'text', value: 'A person is talking to the camera.' }],
     bindings: {
       prompt: [b('6', 'text')],
       negativePrompt: [b('7', 'text')],
@@ -1611,6 +1722,8 @@ export const SPEC = [
       { op: 'removeOutputs', ids: ['292'] },
       { op: 'resolveSwitches' },
       { op: 'set', node: '672:585', input: 'text', value: 'The character performs exactly the same movements as the person in the driving video, background stationary' },
+      // Fuobe's own words in place of the template's sample (src/lib/comfy-prompts.ts writes them for every run).
+      { op: 'set', node: '672:582', input: 'text', value: 'Character Description: The person from the reference picture, with their own face, hair, body and complete outfit.\nBackground description: The setting, background and light of the reference picture.' },
     ],
     bindings: {
       prompt: [b('672:582', 'text')],
@@ -2020,7 +2133,7 @@ export const SPEC = [
       `(the template's; max keeps a 2048 px short edge for stronger identity and is several times slower). ${H3_FLEX_NOTES} ${H3_NOTES_SIZE} ${H3_NOTES_FILES.replace('fl2va', 'ref2va')} ` +
       'With Pika\'s Ref2VA adapter (1.96 GB). VideoHelperSuite loads the clips (runtimeNodes, so the GPU pre-flight asks for it).',
   },
-  // ---- MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu, research #10 §6.4): Comfy-Org's "FastVideo FastH3" templates
+  // ---- MiniMax H3 on 8-31 GB cards (new-models-10 §6.4): Comfy-Org's "FastVideo FastH3" templates
   // (workflow_templates video_fastvideo_fasth3_t2v / _i2v, the "First Last Frame to Video (FastVideo FastH3)" subgraph) as
   // API graphs. src/lib/gpu/h3-tier.ts picks the tier and binds `unet` to the card's file (NVFP4 on Blackwell, else int8, or
   // Trim's fp8 on a PyTorch without CUDA 13). Trim has text to video only: FastVideo's Trim cards name eight-step text-to-video.
@@ -2254,7 +2367,7 @@ export const SPEC = [
       { op: 'set', node: '94', input: 'bpm', value: 120 },
       { op: 'set', node: '94', input: 'duration', value: 60 },
       { op: 'set', node: '98', input: 'seconds', value: 60 },
-      // nm10-music3: a song with no words is an instrumental (the template's sample lyrics are never sung).
+      // A song with no words is an instrumental (the template's sample lyrics are never sung).
       { op: 'set', node: '94', input: 'lyrics', value: '[Instrumental]' },
     ],
     bindings: {
@@ -2270,7 +2383,7 @@ export const SPEC = [
     vramGb: 8,
     notes: 'Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers; "[Instrumental]" when there are no words (in place of the template sample lyrics). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4).',
   },
-  // nm10-music3 (research #10 §6.6): full songs on core nodes. MiniMax Music 3 from the template audio_minimax_music_3
+  // (new-models-10 §6.6) full songs on core nodes. MiniMax Music 3 from the template audio_minimax_music_3
   // (Comfy-Org's int8 DiT in place of its fp16 one, as the template's own note offers for low VRAM; its Tiled decode switch
   // kept, turned on by the provider for songs over 2 minutes); YuE2 from audio_yue2_text2music (ABC planning on, "full") and
   // audio_yue2_music_cover (SheetSage2 reads the song's melody, "melody" mode). The templates' PreviewAny pass-throughs are left out.
@@ -3082,6 +3195,84 @@ export const SPEC = [
       'threshold 0.4, every match merged into one mask) then MaskToImage. The WorldCast worker cuts its tight no_padding_black crops from it. Core nodes and the SAM 3.1 checkpoint only.',
   },
 
+  // ---- Watermark Remover (ComfyUI-Qwen-Watermark @ eef829d3) ----------------
+  // Scan, then remove the marks the visitor kept: the app's own page (src/components/watermark) runs both through
+  // POST /api/generations. Same Qwen files as Live edit and Inpaint, plus SAM ViT-B for sticker outlines.
+  {
+    id: 'image-watermark-scan-qwen3vl',
+    title: 'Find watermarks, captions, logos, stickers and mosaics on a photo (Qwen3-VL, ComfyUI-Qwen-Watermark)',
+    capability: 'watermark-scan',
+    handBuilt: 'hand-built/image-watermark-scan-qwen3vl.json',
+    packs: ['ComfyUI-Qwen-Watermark'],
+    bindings: { image: [b('1', 'image')] },
+    outputs: [
+      { node: '23', kind: 'text', role: 'report' },
+      { node: '70', kind: 'text', role: 'scan-tile' },
+      { node: '71', kind: 'text', role: 'scan-tile' },
+      { node: '72', kind: 'text', role: 'scan-tile' },
+      { node: '73', kind: 'text', role: 'scan-tile' },
+    ],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 10,
+    license: 'Qwen3-VL 8B Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
+    notes:
+      'The pack\'s detect-only workflow (qwen_watermark_detection.api.json) without its preview and save nodes: QWMDetect auto_qwen reads the picture once with ' +
+      'Qwen3-VL 8B (int8, detection side 1536, up to 2048 tokens, expand 20, padding 0.35, min confidence 0.65) and PreviewAny shows its report: JSON ' +
+      '{coordinate_space: "pixels", image_size, boxes: [{label, bbox (padded repair box), source_bbox (tight), overlay_type, mask_method, confidence}], ' +
+      'rejected_boxes (below 0.65), status}. Four more QWMDetect read the photo in quarters (ImageCrop, each 4/7 of the width and height from ' +
+      'GetImageSize and ComfyMathExpression a * 4 // 7, so a mark repeated over the photo comes back copy by copy); their reports (role scan-tile) ' +
+      'are merged into the report by the provider (mergeScanReports). The app draws source_bbox and sends the kept boxes to image-watermark-remove-qwen21. ' +
+      'The GPU pre-flight also checks image-watermark-remove-qwen21 for a scan (its companion graph).',
+  },
+  {
+    id: 'image-watermark-remove-qwen21',
+    title: 'Remove watermarks, captions, logos, stickers and mosaics, the rest unchanged (Qwen-Image 2.1, ComfyUI-Qwen-Watermark)',
+    capability: 'watermark-remove',
+    handBuilt: 'hand-built/image-watermark-remove-qwen21.json',
+    packs: ['ComfyUI-Qwen-Watermark'],
+    bindings: {
+      image: [b('1', 'image')],
+      seed: [b('12', 'seed'), b('30', 'seed')],
+      detectMode: [b('3', 'mode')],
+      boxes: [b('3', 'boxes_json')],
+      detectExpand: [b('3', 'expand')],
+      maxSize: [b('5', 'max_side'), b('28', 'max_side')],
+    },
+    outputs: [{ node: '33', kind: 'image' }, { node: '38', kind: 'text', role: 'quality' }],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Qwen3-VL 8B Apache-2.0; SAM ViT-B (segment-anything) Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
+    notes:
+      'The pack\'s main workflow (qwen21_watermark.api.json, plain settings) with the int8 UNET (qwen_image_2.1_int8_convrot, as Live edit) and without its ' +
+      'debug save and preview nodes. QWMDetect (manual_boxes with the kept boxes and a 32 px repair margin past the scan\'s box; auto_qwen with ' +
+      'expand 20 for API callers) -> QWMRefineMask (a rectangle for text, logos, ' +
+      'blocks and mosaics, a SAM ViT-B outline for stickers) -> QWMPrepare (context 96, max side maxSize, no pre-fill: the OpenCV pre-fill smeared the pattern of a mosaic into a large box) -> Qwen-Image 2.1 edit, 20 steps, ' +
+      'cfg 1 -> QWMComposite (feather 6, align, colour match) -> QWMResidualDetect (Qwen3-VL looks for leftovers inside the first mask) -> one more pass ' +
+      'when it finds some -> QWMFinal keeps the better pass and raises when any pixel outside the mask changed. Outputs: the picture (SaveImage, PNG) and ' +
+      'the quality report (PreviewAny, role quality: folded into the picture\'s meta, never a result of its own). Seeds are random per run. ' +
+      'The structure settings (denoise 0.65 / 0.55, context 384, no pre-fill) are the pack\'s alternative for faces.',
+  },
+  {
+    id: 'image-watermark-remove-qwen21-brush',
+    title: 'Remove what was brushed, the rest unchanged (Qwen-Image 2.1, ComfyUI-Qwen-Watermark)',
+    capability: 'watermark-remove',
+    handBuilt: 'hand-built/image-watermark-remove-qwen21-brush.json',
+    packs: ['ComfyUI-Qwen-Watermark'],
+    bindings: {
+      image: [b('1', 'image')],
+      mask: [b('50', 'image')],
+      seed: [b('12', 'seed'), b('30', 'seed')],
+      maxSize: [b('5', 'max_side'), b('28', 'max_side')],
+    },
+    outputs: [{ node: '33', kind: 'image' }, { node: '38', kind: 'text', role: 'quality' }],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Qwen3-VL 8B Apache-2.0; SAM ViT-B (segment-anything) Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
+    notes:
+      'image-watermark-remove-qwen21 with a painted mask: LoadImageMask (red channel, white = remove, the picture\'s size) into QWMDetect manual_mask. ' +
+      'The provider runs it when the request carries a mask, on the latest result.',
+  },
+
   // ---- palette / colour lock ----------------------------------------------
   {
     id: 'palette-transfer-image',
@@ -3369,6 +3560,49 @@ export const SPEC = [
       'No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. ' +
       'In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there).' + QWEN21_CLEAN_NOTE,
   },
+  // ---- Relight with placed lights (the Relight app's own tool, src/components/relight): Generate lighting and the scene read.
+  {
+    id: 'qwen-image-21-relight',
+    title: 'Relight with placed lights: Qwen-Image 2.1 + Viggle 6-step speed LoRA, the photo plus words written from the lights (viggle_turbo)',
+    capability: 'edit',
+    handBuilt: 'hand-built/qwen-image-21-relight.json',
+    packs: ['viggle_turbo'],
+    bindings: {
+      prompt: [b('30', 'prompt')], image: [b('10', 'image')], image2: [b('11', 'image')], seed: [b('70', 'noise_seed')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    limits: { maxWidth: 2048, maxHeight: 2048 },
+    vramGb: 24,
+    license:
+      'Qwen Research License Agreement (Qwen-Image 2.1 and Viggle\'s turbo LoRA, a derivative): NON-COMMERCIAL, research and evaluation only; ' +
+      'the viggle_turbo node file ships in the same model repo under the same terms',
+    notes:
+      'Built from Viggle\'s ComfyUI edit workflow (Viggle/Qwen-Image-2.1-viggle-turbo, comfyui/) with one reference: the int8 Qwen-Image 2.1 model, ' +
+      'the v0.2.1 6-step LoRA (r256) on ViggleTurboLora at 1.0 (applied unmerged; it reads lora_alpha / r from the file\'s metadata), QwenImage21Cache auto, ' +
+      'TextEncodeQwenImage21 at resolution 1024 (about 1 MP, sides on the 32 grid), positive only, BasicGuider (no CFG), euler, ' +
+      'ViggleTurboSigmas "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25" (the raw nodes, shifted for the latent\'s size), RandomNoise, SamplerCustomAdvanced, VAEDecode. ' +
+      'The words come from the placed lights ("Relight the photo with a strong sunset orange light coming from the left, at face height, far away. The scene is in ' +
+      'darkness, lit only by these lights …"), so the result is lit only by them and the page blends it with the original (Intensity). Image 2 is an optional ' +
+      'light-guide picture (the rig drawn over the darkened photo), dropped when not given. The seed comes from the photo, so moving one light changes only that light. ' +
+      'A Pruna 8-step v0.1 LoRA in its place must also load through ViggleTurboLora at 1.0: its x2 strength is only in the metadata, so LoraLoaderModelOnly at 1.0 gives half.',
+  },
+  {
+    id: 'relight-scene-read',
+    title: 'Relight scene read: depth (Depth Anything 3 mono large) and the subject\'s matte (BiRefNet) of one photo (core)',
+    capability: 'bg-remove',
+    handBuilt: 'hand-built/relight-scene-read.json',
+    bindings: { image: [b('1', 'image')] },
+    outputs: [
+      { node: '5', kind: 'image', role: 'depth' },
+      { node: '9', kind: 'image', role: 'matte' },
+    ],
+    vramGb: 6,
+    license: 'Depth Anything 3 mono large: Apache-2.0 (model card) · BiRefNet: MIT',
+    notes:
+      'One photo in, two grey PNGs out, for the Relight page\'s depth-true preview: DA3Inference (mono, 504, lower-bound resize) and DA3Render depth with ' +
+      'v2_style normalisation (near = bright), and the core background-removal nodes (birefnet.safetensors) with the mask saved as a picture (white = subject). ' +
+      'Runs once per photo; its runs are helper steps the Library leaves out.',
+  },
   {
     id: 'qwen-image-21-live-edit',
     title: 'Qwen-Image 2.1 Live Edit (2-step DMD2 LoRA, as you type)',
@@ -3412,6 +3646,32 @@ export const SPEC = [
       'Prompt: say what goes in the painted area like asking a person ("Replace the cup with a glass of orange juice").' + QWEN21_CLEAN_NOTE,
   },
   {
+    id: 'qwen-image-21-recolor',
+    title: 'Qwen-Image 2.1 Recolor (tap mask by name, crop, repaint, paste back)',
+    capability: 'recolor',
+    handBuilt: 'hand-built/qwen-image-21-recolor.json',
+    bindings: {
+      image: [b('10', 'image')], touches: [b('14', 'touches')], maskGrow: [b('15', 'expand')],
+      prompt: [b('22', 'values.a')], seed: [b('27', 'seed')], steps: [b('27', 'steps')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Meta SAM License (SAM 3.1); AusBoss nodes MIT',
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    notes:
+      'Tap to Recolor: qwen-image-21-inpaint with the mask made in the graph from the taps by AusBoss Mask by Touch on core SAM 3.1. ' +
+      'touches = the node\'s JSON {"v":1,"items":[{"t":"name","w":word,"x":int,"y":int,"op":1|0}]} in the photo\'s pixels: ' +
+      'each tap asks for the smallest thing of the piece\'s name under it (Jacket: jacket + clothing; Auto: clothing, bag, shoe, hat, scarf), a Leave out tap takes away a hand, arm, hair, ' +
+      'belt, bag strap or necklace under it. SAM 3.1\'s point prompt alone (SAM3_Detect) returned the whole person on every GPU test, so taps go through names. If nothing is found ' +
+      'the mask is empty and the photo comes back unchanged (if_nothing "empty mask"); free_vram unloads SAM before the repaint. -> GrowMask maskGrow (1) -> Crop For Inpaint ' +
+      '(context 1.4, blend 2 px, multiple 32, 1.5 MP, bicubic: a tight paste, since a wider one showed a blotchy rim on flat studio backgrounds) -> GrowMask 16 on the crop\'s mask ' +
+      '(the sampling mask: 8 left a thin line of the old colour along a draped neckline, smaller left old-colour specks at the edge) -> StringFormat "{a} Keep everything else in the picture exactly the same." -> TextEncodeQwenImage21 with ' +
+      'the crop as image 1 (resolution 0) -> VAEEncode + SetLatentNoiseMask -> QwenImage21Cache -> KSampler 20 steps, cfg 1, euler, simple (16 looked the same as 25 on the tests) -> ' +
+      'SplitImageWithAlpha -> Stitch Inpaint (classic, colour match 0: a tone match would pull the new colour back). Outside the piece the photo is bit-identical. ' +
+      'RTX 5090: about 32 s per colour warm at 1.5 MP (target_megapixels 1.0 + 16 steps: 19 s, slightly softer stripes), peak 23 GB. ' +
+      'Prompt: "Change the colour of <the piece> (Auto: the outfit) to <colour words (#hex)>. Keep its fabric, weave, folds, seams, stitching, sheen, print and shadows exactly as they are, so only the colour is new."',
+  },
+  {
     id: 'qwen-image-21-outpaint',
     title: 'Qwen-Image 2.1 Expand (outpaint-v2 LoRA, Qwen3-VL scene description)',
     capability: 'outpaint',
@@ -3437,9 +3697,9 @@ export const SPEC = [
       'prompt = the optional "what goes there" hint (the lead-in "Also include in the prompt:" is added); it must not name the subject, which then appears again in the margin. ' +
       'Removed: AusBoss Seed/Text/Compare/RunTimer/ShowText/WorkflowNote and its SaveImage (SaveImage).' + QWEN21_CLEAN_NOTE,
   },
-  // ---- nm10-qwen21-fast: Qwen-Image 2.1 in 2-6 steps (Options → Speed), the 2.1 Next-Scene LoRA, and a 16 GB route ---------
+  // ---- Qwen-Image 2.1 in 2-6 steps (Options → Speed), the 2.1 Next-Scene LoRA, and a 16 GB route ---------------------------
   // Each speed graph is its base graph with one LoRA + ManualSigmas branch (qwen21Tier above); the provider picks it from
-  // params.extra.speed (src/lib/comfy-variants.ts). Turbo is the owner's qwen-image-21-turbo-edit; Full is the base graph.
+  // params.extra.speed (src/lib/comfy-variants.ts). Turbo is qwen-image-21-turbo-edit; Full is the base graph.
   qwen21Tier('t2i', 'draft', { title: 'Qwen-Image 2.1 Text to Image', capability: 't2i', bindings: { prompt: [b('4', 'prompt')], width: [b('5', 'width')], height: [b('5', 'height')] }, output: '9', limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 32 } }),
   qwen21Tier('t2i', 'fast', { title: 'Qwen-Image 2.1 Text to Image', capability: 't2i', bindings: { prompt: [b('4', 'prompt')], width: [b('5', 'width')], height: [b('5', 'height')] }, output: '9', limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 32 } }),
   qwen21Tier('t2i', 'details', { title: 'Qwen-Image 2.1 Text to Image', capability: 't2i', bindings: { prompt: [b('4', 'prompt')], width: [b('5', 'width')], height: [b('5', 'height')] }, output: '9', limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 32 } }),
@@ -3472,7 +3732,7 @@ export const SPEC = [
       'Trained at 512 px on Sintel and Tears of Steel frame pairs: strongest on filmic scenes and establishing shots, static portraits are out of scope (card). ' +
       'storyboard-qwen-edit-2509-next-scene stays the classic choice on your GPU, and the cloud keeps Qwen-Image-Edit 2509 + its next-scene LoRA on fal (Qwen-Image 2.1 is not hosted).' + QWEN21_CLEAN_NOTE,
   },
-  // ---- qma-angles: QMA camera angles (96 views) on Qwen-Image 2.1 ------------------------------------------------------
+  // ---- QMA camera angles (96 views) on Qwen-Image 2.1 ------------------------------------------------------------------
   {
     id: 'qwen-image-21-qma',
     title: 'QMA Camera Angles (Qwen-Image 2.1 + the QMA LoRA, 96 views)',
@@ -3536,6 +3796,66 @@ export const SPEC = [
     notes:
       'The small-GPU edit, as zen-image-edit-comfyui\'s edit_api.json: ZenImage21TextEncode with the VAE linked (the DiT splices the references in as latents), resolution 1024 (references resized to about 1 MP on the 32 grid, the geometry adapter v12 was tuned at), ' +
       'image_1 the picture to change (the canvas follows it), image_2-4 optional references (left out when not given). Same sampler as qwen-image-21-t2i-small. English prompts only.' + QWEN21_CLEAN_NOTE,
+  },
+  // ---- Apps: Steam It (a creased outfit, pressed; nothing else changes) ---------------------------
+  {
+    id: 'steam-it-qwen-image-21',
+    title: 'Steam It: the clothes pressed, everything else kept (SAM 3.1 clothing mask + Qwen-Image 2.1 inpaint)',
+    capability: 'edit',
+    handBuilt: 'hand-built/steam-it-qwen-image-21.json',
+    bindings: { prompt: [b('23', 'prompt')], image: [b('10', 'image')], seed: [b('27', 'seed')], steps: [b('27', 'steps')] },
+    outputs: [{ node: '90', kind: 'image' }],
+    vramGb: 20,
+    license:
+      'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; SAM 3.1 under Meta\'s SAM License (commercial use allowed under its terms); AusBoss nodes MIT',
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    notes:
+      'The Steam It app\'s graph: qwen-image-21-inpaint with the mask found instead of painted. SAM3_Detect with the word "clothing" (threshold 0.4, 2 refine passes, every garment in one mask; works on a worn outfit ' +
+      'and on a flat-lay or a hanger) -> GrowMask 16 px on the full picture, so a hem or a sleeve can settle past its old outline and the paste-back follows the same mask -> Crop For Inpaint (context 1.3, ' +
+      'blend 8 px, multiple 32, 2 MP, bicubic) -> TextEncodeQwenImage21 with the crop as image 1 (resolution 0) and the app\'s instruction as the prompt -> VAEEncode of the crop + SetLatentNoiseMask -> ' +
+      'QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> SplitImageWithAlpha -> Stitch Inpaint (classic, no colour match): every pixel outside the grown mask and its 8 px blend is the upload\'s own. ' +
+      'No clothing found: the empty mask selects the whole picture and the stitch gives it back unchanged. The prompt names only the finished state (smooth, pressed fabric) and what stays the same. ' +
+      'RTX 5090: about 75 s a photo at 2048x1536 (25 steps), peak 26.5 GB.',
+  },
+  // Outfit Swap: AusBoss's Outfit Swap LoRA keeps the person picture in place (0.1 px against 3.6 px without it, on its card).
+  {
+    id: 'outfit-swap-qwen-image-21',
+    title: 'Qwen-Image 2.1 Outfit Swap (outfit photo; Outfit Swap LoRA, Qwen3-VL describes the outfit)',
+    capability: 'edit',
+    handBuilt: 'hand-built/outfit-swap-qwen-image-21.json',
+    bindings: {
+      prompt: [b('53', 'values.d')], request: [b('53', 'values.c')], image: [b('10', 'image')], image2: [b('11', 'image')],
+      seed: [b('32', 'seed')], steps: [b('32', 'steps')], loraStrength: [b('4', 'strength_model')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1 and the Outfit Swap LoRA by AusBoss, a derivative): NON-COMMERCIAL, research and evaluation only',
+    notes:
+      'AusBoss\'s "Qwen Image 2.1 Outfit Swap" workflow (the LoRA card\'s workflows/qwen-image-2.1-outfit-swap.json), its two subgraphs flattened onto core nodes: ' +
+      'the Outfit Swap LoRA (step 1,000, the card\'s main file) at 1 on the int8 model, the person to about 2 MP and the outfit to about 1 MP on the 32 grid (ImageScaleToTotalPixels, lanczos, ' +
+      'for the pack\'s Image Resize in megapixels mode), TextEncodeQwenImage21 with the person as image 1 and the outfit as image 2 (resolution 0, no negative), QwenImage21Cache, KSampler 25 steps, cfg 1, euler, simple, ' +
+      'SplitImageWithAlpha. The words: Qwen3-VL (the same text encoder, TextGenerate, thinking on) answers two yes/no checks on the person picture (feet, legs) and describes the outfit in one phrase, ' +
+      'leaving out shoes when the feet are not in the picture and everything below the waist when the legs are not; StringFormat writes "Dress the person in image 1 in <phrase>. Keep their face, hair, hands, pose and the background exactly the same. <request> <prompt>". ' +
+      'request = "Replace everything they wear." (the card\'s default: clears the old outfit) or "Keep their own shoes and legwear."; prompt = the person\'s own words, added at the end. ' +
+      'Changed from the card: the no-feet phrase ends "shown in image 2" (the card adds "without the shoes"; Fuobe\'s requests name only what is wanted). ' +
+      'Removed: the outfit picture\'s crop node (Fuobe sends the photo as it is), the typed/described switch (outfit-swap-qwen-image-21-text is the words route), the turbo LoRA row (off on the card), compare, timer, notes. Output follows the person picture at about 2 MP. RTX 5090: about 80 s a photo at 25 steps, peak about 29.5 GB.',
+  },
+  {
+    id: 'outfit-swap-qwen-image-21-text',
+    title: 'Qwen-Image 2.1 Outfit Swap (outfit in words; Outfit Swap LoRA)',
+    capability: 'edit',
+    handBuilt: 'hand-built/outfit-swap-qwen-image-21-text.json',
+    bindings: {
+      prompt: [b('53', 'values.b')], request: [b('53', 'values.c')], image: [b('10', 'image')],
+      seed: [b('32', 'seed')], steps: [b('32', 'steps')], loraStrength: [b('4', 'strength_model')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1 and the Outfit Swap LoRA by AusBoss, a derivative): NON-COMMERCIAL, research and evaluation only',
+    notes:
+      'Outfit Swap with no outfit photo (Fuobe runs it when the request has one picture): outfit-swap-qwen-image-21 without image 2 and the describer. ' +
+      'prompt = the outfit in words ("a black velvet tuxedo with satin lapels"), set into "Dress the person in image 1 in <prompt>. Keep their face, hair, hands, pose and the background exactly the same. <request>". ' +
+      'The LoRA was trained with an outfit picture as image 2: with one picture, loraStrength 1 and 0 (the plain 25-step edit) both dress the person as asked and keep the picture in place. RTX 5090: about 65 s a photo.',
   },
   // ---- Owner's SOTA image families: Ideogram 4 -------------------------------------------
   {
@@ -4900,9 +5220,9 @@ export const SPEC = [
       'H3 Relay\'s toolkit H3-Person-Removal.api.json at e2a7665b (Akatz Labs\' tool ships the same file). Changed: the clean first frame goes through an ImageScale (centre crop) to the video\'s exact size, so an edit that came back a little larger or smaller still fits; SAM 3.1\'s words default to "person"; the save prefix. ' +
       'video = the part already fitted to 24 fps on the 32-pixel grid (oss-fit-clip), image = the clean first frame (the app makes it with Qwen-Image-Edit from the part\'s first frame). 22-frame windows with 18 of history, 12 steps, er_sde / simple, CFG 1, LoRA 1.0, mask grown 5 px, seed 904234 by default (Akatz\'s settings). The output is silent: the app puts the clip\'s sound back. ' +
       'Needs the h3-relay pack (H3_RELAY=1) and FFmpeg. ' +
-      'windowControls = H3 Relay\'s Review Windows controls (originals o/person-remover-plus): {config_key, windows: {index: {seed, locked, record_id}}}; locked windows come back exactly from the checkpoints the Relay keeps in ComfyUI\'s output/__h3_removal_cache, the first unlocked one is drawn again with its seed (Redo from here). The provider reads the run\'s window previews from /h3_relay/removal/previews.',
+      'windowControls = H3 Relay\'s Review Windows controls: {config_key, windows: {index: {seed, locked, record_id}}}; locked windows come back exactly from the checkpoints the Relay keeps in ComfyUI\'s output/__h3_removal_cache, the first unlocked one is drawn again with its seed (Redo from here). The provider reads the run\'s window previews from /h3_relay/removal/previews.',
   },
-  // Remove object's mask first (originals o/person-remover-plus): the removal graph's own SAM 3.1 chain on the first seconds
+  // Remove object's mask first: the removal graph's own SAM 3.1 chain on the first seconds
   // of the fitted part, the person filled green exactly as the removal will see it (the model card: "check the saved
   // green-mask preview before running the full removal"). Native ComfyUI nodes only.
   {
@@ -5245,7 +5565,64 @@ export const SPEC = [
       '3.78 GB of weights (TripoSplat 0.74, DINOv3 ViT-H 1.68, TripoSplat VAE decoder 0.58, FLUX.2 VAE 0.34, BiRefNet 0.44).',
   },
   {
-    // idol-1 (docs/research/idol-9.md §5.5): Speridlabs' Idol, TripoSplat's architecture retrained, on the same core nodes.
+    // Any Angle (app-any-angle): the 3D view of one photo, built once and saved. Measured on an RTX 5090 (any-angle GPU test).
+    id: 'any-angle-3d',
+    title: 'Any Angle: a photo to a 3D view of its subject (TripoSplat), with a turntable, the sweep its front view is measured on and a GLB',
+    capability: 'splat',
+    handBuilt: 'hand-built/any-angle-3d.json',
+    bindings: {
+      // Only the photo: the seeds, the Gaussians and the 48 frames stay as the graph has them (the same photo, the same view).
+      image: [b('1', 'image')],
+    },
+    outputs: [
+      { node: '16', kind: 'model3d', role: 'splat' },
+      { node: '83', kind: 'video', role: 'turntable' },
+      { node: '85', kind: 'image', role: 'sweep' },
+      { node: '88', kind: 'image', role: 'sweep-mask' },
+      { node: '21', kind: 'image', role: 'matte' },
+      { node: '91', kind: 'model3d', role: 'mesh' },
+    ],
+    defaults: {},
+    vramGb: 8,
+    license:
+      'MIT (VAST-AI/TripoSplat weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT',
+    notes:
+      'Step 1 of Any Angle, run once per photo (the server keeps the result by the photo\'s sha256; feature any-angle-step, out of Library). image-to-splat-triposplat\'s chain with the cut-out always on ' +
+      '(without it a turned camera shows the photo as a flat card with black wedges), seeds fixed at 46 for the sampler and the decoder (the same photo gives the same 3D view), 20 steps, cfg 3, dpmpp_2m, 262,144 Gaussians. ' +
+      'Outputs: the splat as .spz (role splat, about 3 MB: every angle reloads it), a 48-frame turntable from yaw 0 at pitch 10, distance 2, fov 33, 512 px, 12 fps (role turntable, shown while picking), ' +
+      'the same frames at 192 px as lossless animated WebP, colour (role sweep) and RenderSplat\'s coverage mask (role sweep-mask), the BiRefNet cut-out (role matte) and a GLB from core SplatToMesh at 256 (role mesh, the desktop drag view). ' +
+      'The server compares the sweep with the cut-out photo (silhouette overlap and colour correlation, the GPU test\'s measure) to find the photo\'s front yaw and distance: ' +
+      'TripoSplat drops its own camera estimate and puts each subject in a pose of its own (the test found yaw 125, 75 and 90 on three photos). ' +
+      'GPU test (RTX 5090): cut-out 0.8-1.3 s, TripoSplat 1.0 + 18-19.4 + 0.4 s, .spz save under 0.05 s, 48 frames at 512 px 20-37 s, mesh 0.4-0.5 s; about 8.7 GiB peak.',
+  },
+  {
+    // Any Angle (app-any-angle): one angle from the saved 3D view, painted back into a photo by Qwen-Image 2.1 + the AnyAngle LoRA.
+    id: 'any-angle-shot',
+    title: 'Any Angle: one camera angle of a photo, the 3D view rendered there and repainted by Qwen-Image 2.1 + the AnyAngle LoRA',
+    capability: 'edit',
+    handBuilt: 'hand-built/any-angle-shot.json',
+    bindings: {
+      image: [b('1', 'image')], splatFile: [b('2', 'model_file')],
+      cameraYaw: [b('20', 'mode.yaw')], cameraPitch: [b('20', 'mode.pitch')], cameraDistance: [b('20', 'mode.distance')], cameraFov: [b('20', 'fov')],
+      targetX: [b('20', 'target_x')], targetY: [b('20', 'target_y')], targetZ: [b('20', 'target_z')],
+      width: [b('30', 'width')], height: [b('30', 'height')], seed: [b('56', 'seed')], steps: [b('56', 'steps')], cfg: [b('56', 'cfg')],
+    },
+    outputs: [{ node: '58', kind: 'image' }],
+    defaults: { steps: 25, cfg: 1 },
+    limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 8 },
+    vramGb: 32,
+    license:
+      'Qwen Research License Agreement (Qwen-Image 2.1, Qwen3-VL 8B encoder, VAE): NON-COMMERCIAL, research and evaluation only; the AnyAngle LoRA (lilylilith/QI_2.1_AnyAngle) Apache-2.0',
+    notes:
+      'Step 2 of Any Angle, one job per angle. The saved .spz goes in like any input (splatFile) and Load3D reads it without the browser: its image entry points at the photo (the provider fills it), ' +
+      'then File3DToSplat. CreateCameraInfo orbit takes the camera Fuobe works out (the photo\'s measured front view plus the preset\'s turn, height and distance; a close-up aims at the face\'s height), ' +
+      'RenderSplat renders it at the photo\'s shape (up to 2048 px, black background). Qwen-Image 2.1 int8 + the AnyAngle LoRA at 1.0, loaded here (one model loader, so no request LoRA lands on another), ' +
+      'TextEncodeQwenImage21 with the LoRA\'s own prompt "Change the camera angle from <image2> to <image1>.", image 1 the original photo, image 2 the render, resolution 1024 (about 1 MP out: 1184x896 from a 1536x1152 photo), ' +
+      'KSampler 25 steps, cfg 1, euler, simple, seed 46. GPU test (RTX 5090): reload + render 2.3 s (a rebuild would be about 20 s), text encode 5.4 s, sampler 22.6 s, about 30 s an angle, peak 28.4-29.2 GiB (card total, with the desktop): vramGb 32, since a 24 GB card has no room to spare. ' +
+      'Tested against the alternatives: the other image order gives back the original angle, cfg 3 is 5x slower and no better, bf16 is 2x slower, the photo behind the render adds a ghost second person, grey is no better than black.',
+  },
+  {
+    // Idol 3D (docs/research/idol-9.md §5.5): Speridlabs' Idol, TripoSplat's architecture retrained, on the same core nodes.
     id: 'image-to-splat-idol',
     title: 'Image to a Gaussian splat of one object (Idol on the TripoSplat core nodes) + an orbit video',
     capability: 'splat',
@@ -5368,6 +5745,35 @@ export const SPEC = [
       'index 0 is the front (the input view), 1 the object\'s left, 2 its back, 3 its right. The sign of frames sets the direction: +4 turns the camera ' +
       'about world +Y (three.js, Y up) toward the viewer\'s right, which is the object\'s left (checked with an asymmetric splat through RenderSplat on 0.41.0); -4 would give the right first. ' +
       'No splat file and no orbit video are saved. The views are renders of a 3D reconstruction and can look soft; faces of real people are the hardest case, so check them before use. Same weights, presets and VRAM listing as image-to-splat-idol.',
+  },
+  {
+    // Photo to 3D (app-photo-to-3d) and Image to 3D's quick model: Idol (TripoSplat's architecture, new weights) on core nodes,
+    // its splat turned into a GLB with core SplatToMesh (docs/research/idol-9.md §5.5).
+    id: 'image-to-3d-idol',
+    title: 'Image to a 3D model (.glb) + its Gaussian splat + an orbit video (Idol on core TripoSplat nodes, SplatToMesh)',
+    capability: 'image-to-3d',
+    handBuilt: 'hand-built/image-to-3d-idol.json',
+    bindings: {
+      image: [b('99', 'image')], cutout: [b('88:35', 'switch')], photoCrop: [b('88:104', 'switch')], seed: [b('88:6', 'seed'), b('88:55', 'seed')],
+      steps: [b('88:6', 'steps')], cfg: [b('88:6', 'cfg')], sampler: [b('88:6', 'sampler_name')], numGaussians: [b('88:55', 'num_gaussians')],
+      splatFormat: [b('92', 'format')], orbitFrames: [b('75', 'frames')], meshDetail: [b('60', 'resolution')], frontYaw: [b('79', 'mode.yaw'), b('80', 'mode.yaw')],
+    },
+    outputs: [{ node: '61', kind: 'model3d' }, { node: '51', kind: 'model3d', role: 'splat' }, { node: '42', kind: 'video', role: 'orbit' }, { node: '77', kind: 'image' }],
+    defaults: { splatFormat: 'spz', cutout: true, photoCrop: false },
+    limits: { maxGaussians: 1048576 },
+    vramGb: 10,
+    license:
+      'Apache-2.0 (speridlabs/Idol weights, via nynxz/Idol; built on TripoSplat, MIT, VAST-AI-Research); the dino_v3_vit_h image encoder is under the DINOv3 License ' +
+      '(royalty-free, commercial use allowed, trade-control limits; the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT',
+    notes:
+      'One photo of one person or product -> a vertex-coloured GLB (main output, no role: the server makes its web GLB), the splat (role splat, .spz), ' +
+      'a 4 s orbit of the splat (role orbit: the server skips its mesh turntable) and a front still (the poster). image-to-splat-triposplat with Idol\'s files and ' +
+      'reference sampler (50 euler steps, cfg 4; the shift 3 is built into the TripoSplat model class). BiRefNet cut-out (cutout false = the image\'s own alpha), ' +
+      'then TripoSplatPreprocessImage = Idol\'s "synthetic" 1.2 crop; photoCrop true scales it to 720 px on a black 1024 square, about Idol\'s "real" 1.7 crop (core nodes, not run). ' +
+      'SplatToMesh (meshDetail = its grid, 384 by default; min_opacity 0.05 drops Idol\'s faint halo, which RenderSplat\'s opacity_threshold 0.05 also hides in the clip and still; ' +
+      'the .spz keeps it: no core node prunes a splat). frontYaw turns the orbit\'s start and the still to the subject\'s front (calibrated on the GPU). ' +
+      'Backdrop #ece4da, the middle of the server turntable\'s studio sweep. New weights 1.32 GB (idol_fp16 0.74, idol_decoder_fp16 0.58); with TripoSplat\'s shared ' +
+      'DINOv3 ViT-H, FLUX.2 VAE and BiRefNet 3.78 GB. On an RTX 5090 a photo takes about 3.5 min with its orbit clip; the first run peaked at 12.7 GB on the card. frontYaw 90 turns the orbit and the still to the front.',
   },
   {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).
@@ -5608,7 +6014,7 @@ export const SPEC = [
       'target grid (resolution: 1080p | 2k | 4k), the refine re-noises it to startSigma (0.8, closer to the draft) and runs 3 Euler steps at CFG 1 with Sol-Attn and the prompt, the refined latent ' +
       'is saved again, the fast H3 VAE decoder decodes it, and Finish trims to the draft\'s frame count and puts the draft\'s own sound back at 24 fps.',
   },
-  // ---- Character swap in 2K (package n7-4-character-swap-2k; docs/research/new-models-7.md §2.10 rows 4-5): only the swapped
+  // ---- Character swap in 2K (docs/research/new-models-7.md §2.10 rows 4-5): only the swapped
   // character comes from the regenerate, over the original footage, with the footage's own sound.
   {
     id: 'video-composite-mask',
@@ -5845,5 +6251,193 @@ export const SPEC = [
       'No sound (Hy-Nomas makes none). No image input: Hy-Nomas starts every world from words. ' +
       'Speed and VRAM are the port author\'s: about 21 s per 3 s turn plus about 4 s of decode per 10-latent window on an RTX 5090 at 1280x704 int8; Tencent\'s single-4090 configuration uses an int8 DiT and cache, ' +
       'an FP8 decoder and CPU offload; plan on a 24 GB card. The pack patches the core loaders\' model detection (Load Diffusion Model, Load VAE) to recognise the Nomas files.',
+  },
+
+  // ---- Genjutsu's Openjutsu modes (D3voz/openjutsu @ 7fe118bb, MIT): Group swap, Scene edit, From picture, Fix faces,
+  // Fix colours. Fuobe's copies of its graphs (scripts/comfy/hand-built/), with the NVFP4 H3 text encoder, BFL's FLUX 3
+  // Klein file name, the rank-64 SolarRenderer pair and words that name only what is wanted. The provider writes each
+  // request's settings by node title (src/lib/openjutsu-graphs.ts, params.extra.openjutsu). Genjutsu trims and scales the
+  // part first (video-fit-clip: 24 fps, the target short edge, the clip's sound), so the VHS loaders read it whole.
+  {
+    id: 'video-group-swap-h3',
+    title: 'Group swap: 1-4 characters each take over one person, named by role (Openjutsu advanced: SAM 3.1 tracks, Qwen3-VL labels them, MiniMax H3 + DMAD redraw the labelled people clip by clip)',
+    capability: 'video-group-swap',
+    handBuilt: 'hand-built/video-group-swap-h3.json',
+    packs: OJ_PACKS,
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    bindings: { video: [b('14', 'video')], image: [b('2', 'image')], image2: [b('5', 'image')], image3: [b('8', 'image')], image4: [b('11', 'image')] },
+    outputs: [{ node: '82', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    license: OJ_H3_LICENCE,
+    notes:
+      'video = the part (Genjutsu fits it first), image..image4 = the characters (unused pictures, their shrink and describer are deleted). params.extra.openjutsu: pictures, roles (one line each, ordinal fill), quality 480p | 720p (pack 736p) | 1080p, motion 512 | 768, hats, mouthsFollowSound, edge tight | normal | loose (20 / 40 / 60 px), seed. ' +
+      'Every job runs under its own Context Loop run name (fuobe_<generation id>); the provider deletes output/h3_chains/<run> through the pack\'s run-folder routes once the result is in. Weights touched one stage after another: H3 21 GB, NVFP4 text encoder 15.7 GB, describer 9.4 GB, SAM 3.1 1.7 GB, VAEs 3.8 GB. Upstream timing: 6 s at 480p in 6-13 min on a 16 GB card.',
+  },
+  {
+    id: 'video-group-swap-h3-one-by-one',
+    title: 'Group swap, one by one: exactly 2 characters, each person redrawn on a pass of their own (Openjutsu advanced_maxq)',
+    capability: 'video-group-swap',
+    handBuilt: 'hand-built/video-group-swap-h3-one-by-one.json',
+    packs: OJ_PACKS,
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    bindings: { video: [b('8', 'video')], image: [b('2', 'image')], image2: [b('5', 'image')] },
+    outputs: [{ node: '96', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    license: OJ_H3_LICENCE,
+    notes: 'The same settings as video-group-swap-h3 with pictures 2; about twice as long, sharper on two people.',
+  },
+  {
+    id: 'video-scene-edit-h3',
+    title: 'Scene edit: change, remove or replace the background of what SAM 3.1 tracks, the rest of the shot and its sound kept (Openjutsu object, MiniMax H3 + DMAD)',
+    capability: 'video-scene-edit',
+    handBuilt: 'hand-built/video-scene-edit-h3.json',
+    packs: OJ_PACKS,
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    bindings: { video: [b('5', 'video')], image: [b('2', 'image')] },
+    outputs: [{ node: '55', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    license: OJ_H3_LICENCE,
+    notes:
+      'params.extra.openjutsu: action change | remove | background, target (SAM words, comma list; background: what stays), becomes, picture (image sent), biggestOnly, keepShape, edge (10 / 20 / 40 px), motion, quality, seed, paint (one run-length keyframe at <= 256 px). ' +
+      'Remove drops the picture and the grey shape; background flips the grown mask. Own run name and run-folder clean-up as video-group-swap-h3.',
+  },
+  {
+    id: 'image-from-picture-prepare',
+    title: 'From picture, first frame: FLUX 3 Image Klein puts the character in the pose of the part\'s first frame, in the picture\'s setting, or relights it (one pass)',
+    capability: 'image-from-picture',
+    handBuilt: 'hand-built/image-from-picture-prepare.json',
+    packs: ['ComfyUI-VideoHelperSuite'],
+    bindings: { video: [b('1', 'video')], startFrame: [b('1', 'skip_first_frames')], image: [b('4', 'image')] },
+    outputs: [{ node: '21', kind: 'image' }],
+    defaults: { fps: 24 },
+    vramGb: 16,
+    license: 'FLUX Kommunity License v1.0 (FLUX 3 Image Klein and its prompt upsampler) · Qwen3-VL 4B Apache-2.0 base · flux2-vae Apache-2.0',
+    notes:
+      'video = the clip, startFrame = round(part start x 24), image = the character (left out for the clip\'s own person). params.extra.openjutsu: light (the look\'s words), ownPerson, keepCrop (denoise 0.9 from the frame), adjust, seed; the canvas is the clip\'s shape at 768 px on the short side. ' +
+      'A light rebuilds it as one pass: the upsampler writes the pose from the frame, FLUX sees only the character at 3 MP.',
+  },
+  {
+    id: 'video-scene-describe',
+    title: 'From picture, what happens: Qwen3-VL 8B describes the part at 2 fps and rewrites it for the approved first frame',
+    capability: 'video-describe',
+    handBuilt: 'hand-built/video-scene-describe.json',
+    packs: ['ComfyUI-VideoHelperSuite'],
+    bindings: { video: [b('1', 'video')], startFrame: [b('1', 'skip_first_frames')], image: [b('74', 'image')] },
+    outputs: [{ node: '79', kind: 'text' }],
+    defaults: { fps: 24 },
+    vramGb: 12,
+    license: 'Qwen3-VL 8B: Apache-2.0',
+    notes: 'image = the approved first frame (left out for the clip\'s own person: pass 1 is then the description). params.extra.openjutsu: seconds, ownPerson. About 15-40 s.',
+  },
+  {
+    id: 'video-from-picture-solar',
+    title: 'From picture, the video: SolarRenderer (MiniMax H3 + its 4-step and control LoRAs) animates the approved first frame with the part\'s motion as Metric3D normals; the clip\'s sound kept',
+    capability: 'video-from-picture',
+    handBuilt: 'hand-built/video-from-picture-solar.json',
+    packs: [...OJ_PACKS, 'SolarRenderer', 'comfyui_controlnet_aux'],
+    bindings: { video: [b('1', 'video')], image: [b('20', 'image')] },
+    outputs: [{ node: '63', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    autoDownloads: ['Metric3D vit-small (metric_depth_vit_small_800k.pth) -> custom_nodes/comfyui_controlnet_aux/ckpts/JUGGHM/Metric3D (fetched on first run unless placed there)'],
+    license: `${OJ_H3_LICENCE} · SolarRenderer LoRAs (rank 64): MiniMax H3 Community License; SolarRenderer code Apache-2.0 · Metric3D BSD-2-Clause`,
+    notes:
+      'video = the fitted part, image = the approved first frame. params.extra.openjutsu: seconds (17k+5 frames at 24 fps), quality 480p | 720p (canvas clamped to 2048 px), motion 0 | 512 | 768, seed, scene (the editable description, opening the detailed description). ' +
+      'Parts over 170 frames need SolarRenderer\'s long-clip patch, which the install script applies.',
+  },
+  {
+    id: 'video-from-picture-h3',
+    title: 'From picture, the video on native MiniMax H3 (DMAD, 6 steps) from the approved first frame and the part\'s normals',
+    capability: 'video-from-picture',
+    handBuilt: 'hand-built/video-from-picture-h3.json',
+    packs: [...OJ_PACKS, 'comfyui_controlnet_aux'],
+    bindings: { video: [b('1', 'video')], image: [b('20', 'image')] },
+    outputs: [{ node: '63', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    autoDownloads: ['Metric3D vit-small (metric_depth_vit_small_800k.pth) -> custom_nodes/comfyui_controlnet_aux/ckpts/JUGGHM/Metric3D (fetched on first run unless placed there)'],
+    license: `${OJ_H3_LICENCE} · Metric3D BSD-2-Clause`,
+    notes: 'A second renderer for From picture, on native MiniMax H3; the same settings as video-from-picture-solar.',
+  },
+  {
+    id: 'video-motion-transfer-h3',
+    title: 'Motion transfer on native MiniMax H3 (DMAD, 6 steps): the character photo as the look, the part\'s Metric3D normals as the motion, the clip\'s sound kept',
+    capability: 'motion-transfer',
+    handBuilt: 'hand-built/video-motion-transfer-h3.json',
+    packs: [...OJ_PACKS, 'comfyui_controlnet_aux'],
+    bindings: { video: [b('1', 'video')], image: [b('20', 'image')] },
+    outputs: [{ node: '63', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 15 },
+    vramGb: 24,
+    autoDownloads: ['Metric3D vit-small (metric_depth_vit_small_800k.pth) -> custom_nodes/comfyui_controlnet_aux/ckpts/JUGGHM/Metric3D (fetched on first run unless placed there)'],
+    license: `${OJ_H3_LICENCE} · Metric3D BSD-2-Clause`,
+    notes: 'Genjutsu Motion transfer\'s "MiniMax H3" model (oss-h3-motion): video-from-picture-h3 with the character photo itself as Picture 1 (no prepared first frame) and words that put the character in the photo\'s setting. video = the part fitted at 24 fps, image = the character photo. params.extra.openjutsu: seconds, quality 480p | 720p, motion 0 | 512 | 768, seed (the same settings as From picture\'s video).',
+  },
+  {
+    id: 'video-fix-faces-h3',
+    title: 'Fix faces: H3-FaceRefine tracks the character\'s face, MiniMax H3 redraws it in overlapping sections and it is pasted back (faces over 20 % of the frame are left alone)',
+    capability: 'video-fix-faces',
+    handBuilt: 'hand-built/video-fix-faces-h3.json',
+    packs: [...OJ_PACKS, 'ComfyUI-H3-FaceRefine', 'ComfyUI-Impact-Pack'],
+    bindings: { video: [b('1', 'video')], image: [b('2', 'image')] },
+    outputs: [{ node: '30', kind: 'video' }],
+    defaults: {},
+    limits: { maxDurationSec: 10 },
+    vramGb: 24,
+    autoDownloads: ['YOLO face and person detectors (ultralytics/bbox/face_yolov8m.pt, ultralytics/segm/person_yolov8m-seg.pt), SAM ViT-B (sams/sam_vit_b_01ec64.pth) and InsightFace buffalo_l (insightface/models/buffalo_l), as H3-FaceRefine documents'],
+    license: `${OJ_H3_LICENCE} · YOLO face/person weights AGPL-3.0 · SAM ViT-B Apache-2.0 · InsightFace buffalo_l (identity tracking): NON-COMMERCIAL research only`,
+    notes: 'video = the finished video, image = the character photo. params.extra.openjutsu: faceStyle photo | mouth, chunkSeconds 4 | 6.5 | 10, seed. H3FaceTrackCrop.select is largest_face (H3-FaceRefine 1.1.1). The whole clip is decoded and pasted back at full size (two frame-sized copies of every frame: 1080p 10 s is about 12 GB), so a part is fitted to 1080 px on its short side and kept to 10 s.',
+  },
+  {
+    id: 'video-fix-colours',
+    title: 'Fix colours: a soft film finish (Image Detail Contrast + Orion4D\'s DCTL tone mapper), no model',
+    capability: 'video-tone',
+    handBuilt: 'hand-built/video-fix-colours.json',
+    packs: ['comfyui-image-detail-contrast', 'Orion4D_FXMax', 'ComfyUI-VideoHelperSuite'],
+    bindings: { video: [b('1', 'video')], framesPerBatch: [b('5', 'frames_per_batch')] },
+    outputs: [{ node: '4', kind: 'video' }],
+    defaults: { framesPerBatch: 48 },
+    limits: { maxDurationSec: 60 },
+    vramGb: 2,
+    license: 'n/a (no model; Image Detail Contrast MIT, Orion4D_FXMax MIT, VideoHelperSuite GPL-3.0 code)',
+    notes: 'params.extra.openjutsu: finish soft | filmic | rich | off (the tone mapper\'s settings travel in raw_settings, no preset files), strength 0-1 (Orion 0-0.5), soften 0-1 (detail contrast 0 to -0.6; 0 drops the step). Both steps work frame by frame, so the clip goes through in passes (VHS_BatchManager re-queues the prompt until the clip is done, as upscale-video-esrgan-chunked does) into one H.264 encode that stays open; the last pass writes the file with the source\'s sound. framesPerBatch: the provider sizes it from the clip\'s header so a pass holds about 1.5 GB of frames (three frame-sized copies: decoded, softened, toned), so memory stays flat whatever the length.',
+  },
+  // Head Swap (app-head-swap): the BFS head-swap LoRA on the Qwen-Image 2.1 edit, then the new head pasted onto the untouched shot.
+  {
+    id: 'head-swap-qwen-image-21',
+    title: 'Qwen-Image 2.1 Head Swap (BFS head LoRA V1.1, pasted back onto the shot)',
+    capability: 'edit',
+    handBuilt: 'hand-built/head-swap-qwen-image-21.json',
+    bindings: {
+      prompt: [b('30', 'prompt')], image: [b('10', 'image')], image2: [b('11', 'image')],
+      seed: [b('32', 'seed')], steps: [b('32', 'steps')], loraStrength: [b('4', 'strength_model')],
+      maskPrompt: [b('43', 'text')], maskGrow: [b('50', 'expand')], maskBlur: [b('50', 'blur_radius')], pasteBack: [b('52', 'switch')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    defaults: { maskPrompt: 'head', maskGrow: 32, maskBlur: 16, pasteBack: true },
+    limits: { maxWidth: 2048, maxHeight: 2048 },
+    modelUrls: {
+      'bfs_head_v1.1_qwen_2.1.safetensors': 'https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/0ca3913ade4b4ada458d60c232354e8586c4c181/bfs_head_v1.1_qwen_2.1.safetensors',
+      'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors',
+    },
+    vramGb: 20,
+    license: "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; BFS head-swap LoRA by Alissonerdx MIT; SAM 3.1 under Meta's SAM License (commercial use allowed under its terms); GrowMaskWithBlur from ComfyUI-KJNodes (GPL-3.0 code)",
+    notes:
+      "qwen-image-21-edit (int8, 25 steps, euler / simple, cfg 1, both pictures 2048 on the long side, resolution 0) with Alissonerdx's BFS head LoRA V1.1 at 1.0 and its training prompt " +
+      '("head_swap: start with <image1> as the base image ..."). image = the shot to keep (body, pose, light, background), image2 = the head (identity, hair, eye colour): body first, head second, as V1.1 was trained; ' +
+      'other BFS versions take other orders, so the file is pinned. V1.1 is V1 without the second-half img_mlp.gate_up modules (less skin softening, slightly weaker expression transfer); ' +
+      "the V1.1 \"alternative\" file copies expression better at about 1 degree more head-pose error. Paste-back (pasteBack, on by default): SAM 3.1 finds the head (\"head\") on the swap and on the shot scaled to the swap's size, " +
+      'the two masks are joined (ImageCompositeMasked of the mask images, so old long hair goes too), grown by maskGrow and blurred by maskBlur (GrowMaskWithBlur), and only that area comes from the swap: ' +
+      "every other pixel is the shot's, which removes Qwen 2.1's colour and detail drift over the whole picture. pasteBack false returns the whole swap (the switch is lazy, SAM does not run). " +
+      "No head found: the shot comes back unchanged. BFS's own workflow runs the Pruna 8-step LoRA with deis_2m (RES4LYF); this graph keeps core samplers. RTX 5090: about 130 s a photo warm, about 250 s when the models load, peak about 28 GB.",
   },
 ];

@@ -10,7 +10,7 @@ import path from "node:path";
 import { DESKTOP, PHONE, launch, openRoute } from "./_browser.mjs";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
-const app = args[0] ?? "http://localhost:3000";
+const app = args[0] ?? "http://localhost:3440";
 const out = args[1] ?? fs.mkdtempSync("/tmp/fuobe-dub-split-");
 fs.mkdirSync(out, { recursive: true });
 
@@ -53,13 +53,13 @@ try {
       await page.getByText(PRICE).first().waitFor({ timeout: 30_000 });
       const split = page.getByRole("combobox", { name: "Voice split" });
       check(await split.isVisible(), `${label}: the open engine shows a Voice split`);
-      check((await split.innerText()).includes("MelBand RoFormer"), `${label}: MelBand RoFormer is the default`);
+      check((await split.innerText()).includes("Standard"), `${label}: Standard (MelBand RoFormer) is the default`);
       check(await page.getByText("Music model: some sound effects may be lowered, and singing may be replaced.").isVisible(), `${label}: MelBand says what a music model does`);
       await page.screenshot({ path: path.join(out, `dub-open-melband-${dname}-${theme}.png`), fullPage: true });
       await split.click();
-      await page.getByRole("option", { name: "DBS: keeps music and effects, CPU-friendly" }).click();
+      await page.getByRole("option", { name: "Keep music and effects" }).click();
       check(await page.getByText("Keeps the music and sound effects of the original.").isVisible(), `${label}: DBS keeps the music and sound effects`);
-      check(await page.getByText(/Open source: DBS splits the dialogue from the music and effects/).isVisible(), `${label}: the route line follows the split`);
+      check(await page.getByText(/We separate the voice from the music and effects/).isVisible(), `${label}: the route line follows the split`);
       await page.getByText(PRICE).first().waitFor({ timeout: 20_000 });
       const price = await page.getByText(PRICE).first().innerText();
       check(PRICE.test(price), `${label}: the price line with DBS reads "${price}"`);

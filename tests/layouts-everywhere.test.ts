@@ -1,14 +1,12 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-// N7-8 (docs/research/new-models-7.md §5.9): layouts from Canvas, Marketing Studio, Ads Studio and Assist.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-layouts-everywhere-"));
+// Layouts everywhere (docs/research/new-models-7.md §5.9): layouts from Canvas, Marketing Studio, Ads Studio and Assist.
+const tmp = tempDir("fuobe-layouts-everywhere-");
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const { getModel, getPreset } = await import("@/lib/catalog");
 const { planGeneration } = await import("@/lib/catalog/plan");
@@ -30,6 +28,7 @@ import type { CanvasEdge, CanvasGraph, CanvasNode } from "@/lib/catalog/canvas";
 import type { BrandKit, Product } from "@/lib/catalog/marketing";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import type { LayoutDraft } from "@/lib/layout-prompt";
+import { tempDir } from "./helpers/temp-dir";
 
 setSetting("demoMode", "auto");
 

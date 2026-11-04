@@ -1,4 +1,4 @@
-import type { GpuInventory, IndexPack, RequirementIndex, StepKind } from "./types";
+import type { GpuInventory, IndexFile, IndexPack, RequirementIndex, StepKind } from "./types";
 
 /**
  * Copy-paste commands for a fix plan (SPEC §8.3, review item 4): bash for Mac / Linux and PowerShell for
@@ -114,7 +114,32 @@ function restartLine(inv: GpuInventory | null): string {
   return "Press Ctrl+C in the ComfyUI window, then start it again with the same flags";
 }
 
-function packLines(shell: Shell, l: Layout, name: string, p: IndexPack, kind: StepKind): string[] {
+/**
+ * A file a pack reads by its own path (no listing shows it, so no step asks for it): fetched with the pack when it isn't
+ * there yet, from its pinned link, and kept only when its SHA-256 matches (a .pth can run code when it loads).
+ */
+function packFileLines(shell: Shell, l: Layout, f: IndexFile): string[] {
+  const url = cleanUrl(f.pinnedUrl) ?? cleanUrl(f.url);
+  if (!url || !f.sha256 || !/^[0-9a-f]{64}$/.test(f.sha256) || !plain(f.file) || !plain(f.folder)) return [];
+  const dir = l.modelDir(shell, f.folder);
+  const target = l.modelDir(shell, f.folder, f.file);
+  if (shell === "ps") {
+    return [
+      comment(shell, `${f.file}, if you don't have it yet`),
+      `New-Item -ItemType Directory -Force -Path ${dir} | Out-Null`,
+      `if (-not (Test-Path ${target})) { curl.exe -L --fail -o ${target} "${url}" }`,
+      `if ((Get-FileHash -Algorithm SHA256 ${target}).Hash -ne "${f.sha256.toUpperCase()}") { Remove-Item -Force ${target}; Write-Error "${f.file} didn't match its checksum and was removed" }`,
+    ];
+  }
+  return [
+    comment(shell, `${f.file}, if you don't have it yet`),
+    `mkdir -p ${dir}`,
+    `[ -s ${target} ] || curl -L --fail -o ${target} "${url}"`,
+    `printf '%s  %s\\n' ${f.sha256} ${target} | sha256sum -c - || rm -f ${target}`,
+  ];
+}
+
+function packLines(shell: Shell, l: Layout, name: string, p: IndexPack, kind: StepKind, files: IndexFile[] = []): string[] {
   // A node file Fuobe ships itself: nothing to clone. Live edit's setup card and Settings → Your GPU download it.
   if (p.bundled) {
     if (!plain(p.bundled)) return [];
@@ -125,9 +150,18 @@ function packLines(shell: Shell, l: Layout, name: string, p: IndexPack, kind: St
   const dest = l.under(shell, "custom_nodes", name);
   const py = l.python(shell);
   const req = l.under(shell, "custom_nodes", name, "requirements.txt");
-  const pip = p.requirementsTxt ? [`${py} -m pip install -r ${req}`] : [];
+  // A pack's own requirements.txt, or the pinned packages packs.json names instead (only "name==version" ones are written).
+  const named = (p.pip ?? []).filter((s) => /^[A-Za-z0-9][A-Za-z0-9._-]*==[0-9][0-9A-Za-z.+-]*$/.test(s));
+  const pip = p.requirementsTxt ? [`${py} -m pip install -r ${req}`] : named.length ? [`${py} -m pip install ${named.join(" ")}`] : [];
   if (kind === "pack-repair") return [comment(shell, `${name} didn't start. Reinstall its Python packages, then restart ComfyUI`), ...pip];
+  if (p.file) {
+    // One node file in a model repo: fetched at the commit, as the package's __init__.py.
+    const url = `${p.repo}/resolve/${p.commit}/${p.file}`;
+    if (!plain(p.file) || !/\.py$/.test(p.file) || !PLAIN_URL.test(url)) return [comment(shell, `Install ${name} by hand: ${p.repo}`)];
+    return [...download(shell, dest, l.under(shell, "custom_nodes", name, "__init__.py"), url, "", kind === "pack-update"), ...pip];
+  }
   if (kind === "pack-update") return [`git -C ${dest} fetch origin`, `git -C ${dest} checkout ${p.commit}`, ...pip];
+  const own = files.flatMap((f) => packFileLines(shell, l, f));
   if (p.subdir && plain(p.subdir)) {
     const src = l.under(shell, "custom_nodes", `.${name}-src`);
     const from = l.under(shell, "custom_nodes", `.${name}-src`, ...p.subdir.split("/"));
@@ -137,9 +171,10 @@ function packLines(shell: Shell, l: Layout, name: string, p: IndexPack, kind: St
       `git -C ${src} checkout ${p.commit}`,
       shell === "ps" ? `Copy-Item -Recurse -Force ${from} ${dest}` : `cp -r ${from} ${dest}`,
       ...pip,
+      ...own,
     ];
   }
-  return [`git clone ${p.repo} ${dest}`, `git -C ${dest} checkout ${p.commit}`, ...pip];
+  return [`git clone ${p.repo} ${dest}`, `git -C ${dest} checkout ${p.commit}`, ...pip, ...own];
 }
 
 function download(shell: Shell, dir: string, target: string, url: string, auth: "" | "hf" | "civitai", replace: boolean, sha256?: string): string[] {
@@ -164,7 +199,9 @@ function stepLines(shell: Shell, l: Layout, s: CommandStep, ctx: CommandContext)
     case "pack-update":
     case "pack-repair": {
       const p = s.pack ? idx.packs[s.pack] : undefined;
-      return p && s.pack ? packLines(shell, l, s.pack, p, s.kind) : [];
+      // The files the pack reads by its own path (ComfyUI-Qwen-Watermark's SAM file), pinned and checked.
+      const own = Object.values(idx.files).filter((f) => f.packFolder === s.pack && f.presence === "unobservable" && !!f.sha256);
+      return p && s.pack ? packLines(shell, l, s.pack, p, s.kind, own) : [];
     }
     case "restart":
       return [comment(shell, restartLine(inv))];

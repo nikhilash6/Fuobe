@@ -1,14 +1,12 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { ComfyWorkflow } from "@/lib/comfy";
 import type { GenerationRequest, GenInput, ModelDef, ModelRoute } from "@/lib/catalog/types";
+import { tempDir } from "./helpers/temp-dir";
 
 // Fuobe DoP as a run (build plan O4): one model on both engines for the camera motions and effects, the cloud payload
 // from the research's FieldMaps (49 or 81 frames at 16 fps, interpolation off), Mix on both engines, the LTX-2.3 graphs
 // with LoRAs, the Fun Camera pose, the relight step and the grade the browser applies.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-dop-"));
+const dir = tempDir("fuobe-dop-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9"; // nothing listens here: open runs fall back to the demo
 
@@ -24,7 +22,6 @@ const { gradeOf, nextSteps } = await import("@/lib/output-actions");
 const { lorasFit } = await import("@/lib/catalog/loras");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const view = (id: string, engine: "open" | "cloud") => onEngine(getModel(id)!, engine);
 // A move's own route: as when the model its preview was made with (MiniMax H3) isn't in the catalog, or Fuobe DoP is picked.

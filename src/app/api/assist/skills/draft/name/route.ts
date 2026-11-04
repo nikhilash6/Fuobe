@@ -1,6 +1,5 @@
 import { badBody, DraftSource, recipeFailure } from "@/server/recipe-routes";
-import { draftFromCanvas } from "@/server/canvas-skills";
-import { draftFromGenerations, draftFromThread, nameDraft } from "@/server/recipe-builder";
+import { draftFromCanvas, draftFromGenerations, draftFromThread, nameDraft } from "@/server/recipe-builder";
 
 /**
  * The optional naming pass for a draft (Claude or Ollama, whichever this install allows): names for its inputs, slots in

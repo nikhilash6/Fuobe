@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "./helpers/temp-dir";
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-bodies-"));
+const dir = tempDir("fuobe-bodies-");
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.FUOBE_PUBLIC_SIGNUP = "1";
@@ -30,11 +28,6 @@ beforeAll(() => {
   account = auth.createSession(auth.createAccount("bodies@example.com", "long enough").id).value;
 });
 afterEach(() => delete process.env.FUOBE_ALLOWED_ORIGINS);
-afterAll(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
-});
 
 const MB = 2 ** 20;
 const bytes = (v: string | number | undefined) => {

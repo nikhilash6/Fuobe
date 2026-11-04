@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import {
   CAMERA_MOVES,
   isCover,
@@ -16,8 +16,11 @@ import {
   type PreviewLayer,
   type PreviewScene,
 } from "@/lib/preset-cards";
+import { coverFraming } from "@/lib/cover-framing";
+import { coverWidth, pickWidth } from "@/lib/media-pick";
 import { releaseVideo } from "@/lib/media-release";
 import { glyphFor } from "@/lib/move-glyphs";
+import { presetClipCopies, presetStillSources } from "@/lib/preset-hd";
 import { autoplays, browserPlaybackEnv, createPlaybackStore, playsWhenAsked, previewKind, untilPlace, type AutoPlay } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 
@@ -279,8 +282,14 @@ function Fx({ fx, scene }: { fx: NonNullable<Preview["fx"]>; scene: PreviewScene
   }
 }
 
+/** The cover clips' shape (width / height): every one is 4:3. */
+const CLIP_ASPECT = 4 / 3;
+
 /** When the clips' shared cycle began (performance.now()), set by the first clip ready to play by itself (Clip). */
 let cycleStart: number | undefined;
+
+/** The end of an effect clip that a loop ending early (rest.until) never reaches (s): where it fades back to its photo. */
+export const CLIP_TAIL = 0.4;
 
 /**
  * A real cover's clip, mounted only while it plays (a browser allows a page only so many live
@@ -297,7 +306,7 @@ let cycleStart: number | undefined;
  * however long each one takes to load, so they never loop in step. The clock starts with the first
  * clip ready, which plays at once. A hover or tap never waits.
  */
-function Clip({ src, rest, asked, place }: { src: string; rest?: Preview["rest"]; asked: boolean; place?: number }) {
+function Clip({ src, rest, asked, place, focus }: { src: string; rest?: Preview["rest"]; asked: boolean; place?: number; focus?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
   // Where it starts, fixed when it mounts: asked for, where the change starts; by itself, the frame the card rests on.
@@ -310,7 +319,8 @@ function Clip({ src, rest, asked, place }: { src: string; rest?: Preview["rest"]
   useLayoutEffect(() => {
     const v = ref.current;
     if (!v) return;
-    v.src = src;
+    // The narrowest copy at least as wide as the box shows it on this screen (preset-hd.ts; most clips have one).
+    v.src = pickWidth(presetClipCopies(src), coverWidth(v.clientWidth, v.clientHeight, CLIP_ASPECT, window.devicePixelRatio || 1)).src;
     void v.play().catch(() => {});
     return () => {
       releaseVideo(v);
@@ -330,6 +340,30 @@ function Clip({ src, rest, asked, place }: { src: string; rest?: Preview["rest"]
     const t = setTimeout(() => setDue(true), untilPlace(place!, now - cycleStart));
     return () => clearTimeout(t);
   }, [ready, due, place]);
+  // A loop that ends before the clip does (rest.until): back to rest.from from there, checked on every frame shown where
+  // the browser says when one is (requestVideoFrameCallback), else on each time update. The clip's last stretch
+  // (CLIP_TAIL), where an effect fades back to its photo, is never shown.
+  const until = rest?.until;
+  const from = rest?.from ?? 0;
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || until === undefined) return;
+    const end = () => Math.min(until, Number.isFinite(v.duration) && v.duration > 0 ? v.duration - CLIP_TAIL : until);
+    const check = () => {
+      if (v.currentTime >= end()) v.currentTime = from;
+    };
+    if (typeof v.requestVideoFrameCallback === "function") {
+      let id = 0;
+      const tick = () => {
+        check();
+        id = v.requestVideoFrameCallback(tick);
+      };
+      id = v.requestVideoFrameCallback(tick);
+      return () => v.cancelVideoFrameCallback(id);
+    }
+    v.addEventListener("timeupdate", check);
+    return () => v.removeEventListener("timeupdate", check);
+  }, [until, from]);
   const seeks = start > 0;
   return (
     <video
@@ -350,6 +384,7 @@ function Clip({ src, rest, asked, place }: { src: string; rest?: Preview["rest"]
           : undefined
       }
       className={cn("absolute inset-0 size-full object-cover", rest && "transition-opacity duration-150", !ready && "opacity-0")}
+      style={focus ? { objectPosition: focus } : undefined}
       aria-hidden
     />
   );
@@ -395,25 +430,56 @@ export const PresetPreview = memo(function PresetPreview({
   // mirroring (and no move glyph: the picture shows the preset itself), with its clip over it while it plays.
   if (preview.video || isCover(preview)) {
     const still = preview.rest?.src ?? preview.poster;
-    return (
+    // How the cover sits in a frame of another shape (cover-framing.ts): a focus point, or the whole picture.
+    const framing = coverFraming(still);
+    const focus = framing?.focus;
+    // Larger copies (preset-hd.ts), where the cover has them: the box takes one at least as wide as it shows.
+    const hd = sizes ? presetStillSources(still, thumbOf(still)) : undefined;
+    const img = (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={still}
+        srcSet={hd ? hd.jpeg : sizes ? `${thumbOf(still)} 320w, ${still} 512w` : undefined}
+        sizes={sizes}
+        alt=""
+        width={512}
+        height={384}
+        draggable={false}
+        loading={loading}
+        fetchPriority={fetchPriority}
+        decoding={fetchPriority ? undefined : "async"}
+        className="absolute inset-0 size-full object-cover"
+        style={focus ? { objectPosition: focus } : undefined}
+        aria-hidden
+      />
+    );
+    const cover = (
       <>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={still}
-          srcSet={sizes ? `${thumbOf(still)} 320w, ${still} 512w` : undefined}
-          sizes={sizes}
-          alt=""
-          width={512}
-          height={384}
-          draggable={false}
-          loading={loading}
-          fetchPriority={fetchPriority}
-          decoding={fetchPriority ? undefined : "async"}
-          className="absolute inset-0 size-full object-cover"
-          aria-hidden
-        />
-        {preview.video && playing && <Clip src={preview.video} rest={preview.rest} asked={asked} place={place} />}
+        {hd ? (
+          <picture>
+            <source type="image/avif" srcSet={hd.avif} sizes={sizes} />
+            {img}
+          </picture>
+        ) : (
+          img
+        )}
+        {preview.video && playing && <Clip src={preview.video} rest={preview.rest} asked={asked} place={place} focus={focus} />}
       </>
+    );
+    if (framing?.fit !== "whole") return cover;
+    // The whole 4:3 picture, as large as the frame allows and centred (the frame's size in container units), over
+    // the still filling the frame, blurred and dimmed. That backdrop is a background only a frame of another shape
+    // draws (.cover-whole in globals.css): in a 4:3 frame the picture covers it, and it is neither fetched nor painted.
+    return (
+      <span className="cover-whole absolute inset-0 grid place-items-center" aria-hidden>
+        <span
+          className="cover-whole-backdrop absolute inset-0 scale-125 bg-cover bg-center blur-xl brightness-[0.7] saturate-[1.3]"
+          style={{ "--cover-bg": `url(${sizes ? thumbOf(still) : still})` } as CSSProperties}
+        />
+        <span className="relative aspect-[4/3] w-[min(100cqw,133.334cqh)] overflow-hidden shadow-[0_10px_30px_-6px_rgb(0_0_0/0.6)] ring-1 ring-white/10">
+          {cover}
+        </span>
+      </span>
     );
   }
 

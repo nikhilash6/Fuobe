@@ -4,7 +4,7 @@ import { LAYOUT_PLAN_SYSTEM, planByRules, planRequest, readPlanned } from "@/lib
 import { llmText, llmTextBackend } from "./enhance";
 
 /**
- * "Plan layout" (the Layout editor; N7-8): the sentence becomes a draft on the editor's canvas. The install's AI helper
+ * "Plan layout" (the Layout editor): the sentence becomes a draft on the editor's canvas. The install's AI helper
  * (Claude when it is allowed, else a local model) writes it; an answer that doesn't read as a layout, or one that
  * validateLayout refuses, falls back to the rules, as does an install with no AI helper.
  */
