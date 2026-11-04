@@ -58,7 +58,7 @@ import type { CinemaFolder } from "@/lib/catalog/cinema";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { formatCost, timeAgo } from "@/lib/format";
 import { useEngineMode, useLikelyVisitor } from "@/lib/api";
-import { finishedTakes, finishIn2k } from "@/lib/catalog/regenerate";
+import { finishedTakes, finishIn2k, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
@@ -206,7 +206,9 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
   const elsewhere = foreign(u.g, projectId);
   // Finish in 2K: a MiniMax H3 take below 2K (fal renders it again at 2K; your GPU redraws it with Open-H3 Regenerate),
   // once: not on a take whose 2K finish is under way or made (a 2K run's own 768p draft included).
-  const finish = o?.kind === "video" && !u.tile && !finished.has(u.g.id) ? finishIn2k(u.g, engineMode) : null;
+  // A take from your GPU is finished by Open-H3 Regenerate (perSecond null): offered only while Regenerate is.
+  const offered = o?.kind === "video" && !u.tile && !finished.has(u.g.id) ? finishIn2k(u.g, engineMode) : null;
+  const finish = offered && (offered.perSecond !== null || REGEN_OFFERED) ? offered : null;
   const seconds = Number(u.g.request.params?.duration ?? 0);
   const finishPrice = !finish ? "" : finish.perSecond === null ? "Free" : seconds > 0 ? `≈ ${formatCost(finish.perSecond * seconds)}` : `$${finish.perSecond.toFixed(2)}/s`;
   return (

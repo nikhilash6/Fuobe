@@ -8,6 +8,9 @@ import type { Generation, GenerationRequest, GenInput } from "@/lib/catalog/type
 // GPU (a 768p draft that keeps its latent, then the 2K finish from it), Finish in 2K on a take, Cinema's tiers, Edit video's
 // Enhance with RIFE first for a 16 fps clip, and what an account may read.
 vi.setConfig({ testTimeout: 120_000 });
+// Regenerate is switched off for now (REGEN_OFFERED); these tests check it as it runs once switched on.
+// tests/regenerate-offered.test.ts checks that nothing offers it while it is off.
+vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-regen-more-"));
 process.env.FUOBE_DATA_DIR = dir;

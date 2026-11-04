@@ -672,8 +672,8 @@ const open: ModelDef[] = [
       durations: [3, 5, 10, 15],
       resolutions: ["768p"],
       // 2K in the Video studio and Cinema only: a 768p draft, then Open-H3 Regenerate at 2K from it (from its latent for
-      // text to video), on your GPU (n7-10).
-      finishTiers: ["2K"],
+      // text to video), on your GPU. Offered while Regenerate is (REGEN_OFFERED).
+      ...(REGEN_OFFERED && { finishTiers: ["2K"] }),
       seed: true,
       endFrame: true,
       audio: "always",

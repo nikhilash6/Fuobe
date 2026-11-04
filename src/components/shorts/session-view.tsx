@@ -23,7 +23,7 @@ import { MediaThumb } from "@/components/studio/result-media";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Viewer } from "@/components/studio/viewer";
 import { chainState, ENHANCE_COPY, formatSeconds, segmentSeconds, stitchCurrent, stitchSteps, takeSteps, type ChainState, type ShortsSessionSegment } from "@/lib/catalog/shorts";
-import { finishLengthProblem } from "@/lib/catalog/regenerate";
+import { finishLengthProblem, REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import { useEngineMode } from "@/lib/api";
 import type { Generation } from "@/lib/catalog/types";
 import { formatCost, ratioValue, timeAgo } from "@/lib/format";
@@ -255,7 +255,7 @@ function Session({ s }: { s: View }) {
                 onRegenerate={() => regenerate(i)}
                 regenerating={actions.regenerate.isPending && actions.regenerate.variables?.index === i}
                 busy={actions.regenerate.isPending}
-                enhanceable={s.engine === "open" && engineMode !== "cloud"}
+                enhanceable={REGEN_OFFERED && s.engine === "open" && engineMode !== "cloud"}
                 onEnhance={() => enhance(i)}
                 enhancing={actions.enhance.isPending && actions.enhance.variables?.index === i}
                 onPrimary={(gid) => actions.primary.mutate({ index: i, generationId: gid }, { onError: (e) => toastError(e) })}
@@ -263,7 +263,7 @@ function Session({ s }: { s: View }) {
             ))}
           </div>
           {/* A cloud short: Enhance (H3 regenerate) needs your GPU, said once rather than on every segment. */}
-          {s.engine === "cloud" && engineMode !== "cloud" && <p className="text-[12px] text-muted-foreground">{ENHANCE_COPY.cloudSession}.</p>}
+          {REGEN_OFFERED && s.engine === "cloud" && engineMode !== "cloud" && <p className="text-[12px] text-muted-foreground">{ENHANCE_COPY.cloudSession}.</p>}
         </section>
       </div>
       {open && <Viewer generation={open} index={0} onClose={() => setOpen(null)} />}

@@ -2,13 +2,16 @@ import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { listenInRange, startFakeBilling, type FakeBilling } from "./helpers/fake-billing";
 import { startFakeComfy, type FakeComfy } from "./helpers/fake-comfy-runner";
 
 // MiniMax H3 at 2K with hosted runs on (review 6 of package n7-10): an account's 2K run on this install's GPUs is planned
 // and priced with each take's Open-H3 Regenerate finish beside its 768p draft, and a policy that keeps the finish's model
 // off those GPUs keeps the whole run off, priced or run.
+// Regenerate is switched off for now (REGEN_OFFERED); these tests check it as it runs once switched on.
+// tests/regenerate-offered.test.ts checks that nothing offers it while it is off.
+vi.mock("@/lib/catalog/regenerate", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog/regenerate")>()), REGEN_OFFERED: true }));
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-regen-hosted-"));
 process.env.FUOBE_DATA_DIR = dir;
 process.env.FUOBE_PUBLIC_SIGNUP = "1";

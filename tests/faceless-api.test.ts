@@ -12,6 +12,7 @@ const { setSetting } = await import("@/server/settings");
 const { db } = await import("@/server/db");
 const gens = await import("@/server/generations");
 const faceless = await import("@/server/faceless");
+const { REGEN_OFFERED } = await import("@/lib/catalog/regenerate");
 const channelsRoute = await import("@/app/api/faceless/channels/route");
 const channelRoute = await import("@/app/api/faceless/channels/[id]/route");
 const topicsRoute = await import("@/app/api/faceless/topics/route");
@@ -256,7 +257,8 @@ describe("Episodes", () => {
       // Regenerate to 1080p (open engine only): every scene redrawn by Open-H3 Regenerate, joined and mixed again with the
       // episode's own narration and subtitles timing; the cloud shows no Regenerate.
       expect(doneCloud.regenerate).toBeNull();
-      expect(doneOpen.regenerate).toEqual({ scenes: 6, demo: true });
+      // Offered on the open engine while Regenerate is (REGEN_OFFERED, held for now); the action itself runs either way.
+      expect(doneOpen.regenerate).toEqual(REGEN_OFFERED ? { scenes: 6, demo: true } : null);
       expect((await actionRoute.POST(json("POST"), params({ id: cloudId, action: "regenerate" }))).status).toBe(422);
       const regenOpen: EpisodeView = await (await actionRoute.POST(json("POST"), params({ id: openId, action: "regenerate" }))).json();
       const rIds = regenOpen.episode.plan!.regenerated!.ids;

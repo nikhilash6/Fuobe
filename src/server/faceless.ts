@@ -85,6 +85,7 @@ import {
 } from "@/lib/catalog/faceless";
 import { routesFor } from "@/lib/catalog/plan";
 import { pricingAt } from "@/lib/catalog/promo";
+import { REGEN_OFFERED } from "@/lib/catalog/regenerate";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { DocxError, docxText } from "./assist/docx";
 import { PdfError, pdfText } from "./assist/pdf";
@@ -1144,7 +1145,8 @@ export function upscaleEpisode(id: string): FacelessEpisode {
 /** "Regenerate to 1080p" on this episode: offered on the open engine once the film is done (null otherwise). */
 function regenerateOffer(ep: FacelessEpisode, scenes: number): EpisodeView["regenerate"] {
   const modelId = ENGINE_MODELS[ep.settings.engine].regenerate;
-  if (!modelId || !getModel(modelId)) return null;
+  // Open-H3 Regenerate is held until it has run on a card that fits it (REGEN_OFFERED).
+  if (!REGEN_OFFERED || !modelId || !getModel(modelId)) return null;
   let demo = false;
   try {
     demo = runsAsDemo(modelId, "upscale-video");
