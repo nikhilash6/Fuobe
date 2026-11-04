@@ -82,17 +82,18 @@ export function presetOffered(rules: PoolRules | undefined, p: { id: string; ope
 }
 
 /**
- * "Try free" on preset cards: with hosted runs on, a card whose preset runs on this studio's GPUs for this viewer (a
- * guest, an account with no GPU of its own, or one whose runs go to this studio's GPUs first) says it can be tried there.
- * The rules hold presets whose model or kind is kept off too (poolRulesOf). Null (no card says it) with hosted runs off,
- * for a viewer whose runs go to its own GPU, and with cloud models only.
+ * The words on preset cards ("Try free"): with hosted runs on, a card whose preset runs on this studio's GPUs for this
+ * viewer (a guest, an account with no GPU of its own, or one whose runs go to this studio's GPUs first) says the words
+ * the server gives (`viewer.cardText`: the billing service's, or "Try free" when those runs are free with no service).
+ * The rules hold presets whose model or kind is kept off too (poolRulesOf). Null (no card says anything) with hosted
+ * runs off, with no words from the server, for a viewer whose runs go to its own GPU, and with cloud models only.
  */
 export function tryFreeFor(
-  viewer: { hosted?: boolean; prefer?: "pool"; gpu: { connected: boolean }; pool?: PoolRules } | undefined,
+  viewer: { hosted?: boolean; prefer?: "pool"; cardText?: string; gpu: { connected: boolean }; pool?: PoolRules } | undefined,
   engineMode: "cloud" | "open" | "both",
-): ((p: { id: string; open: boolean }) => boolean) | null {
-  if (!viewer?.hosted || engineMode === "cloud") return null;
+): { text: string; runs: (p: { id: string; open: boolean }) => boolean } | null {
+  if (!viewer?.hosted || !viewer.cardText || engineMode === "cloud") return null;
   if (viewer.gpu.connected && viewer.prefer !== "pool") return null;
   const rules = viewer.gpu.connected ? undefined : viewer.pool;
-  return (p) => p.open && poolRunsPreset(rules, p.id);
+  return { text: viewer.cardText, runs: (p) => p.open && poolRunsPreset(rules, p.id) };
 }

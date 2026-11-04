@@ -73,7 +73,7 @@ describe("presets kept off with their model or the kind they make", () => {
     { id: "effect-melt", model: { id: "oss-clip", kind: "video" as const } },
     { id: "app-cloud-only" },
   ];
-  const tryFree = (pool: Parameters<typeof poolRulesOf>[0]) => tryFreeFor({ hosted: true, gpu: { connected: false }, pool: poolRulesOf(pool, presets) }, "both")!;
+  const tryFree = (pool: Parameters<typeof poolRulesOf>[0]) => tryFreeFor({ hosted: true, cardText: "Try free", gpu: { connected: false }, pool: poolRulesOf(pool, presets) }, "both")!.runs;
 
   it("a preset on a model the policy denies, or of a kind it keeps off, says no Try free and leaves the pickers", () => {
     const denied = tryFree({ pool: { deny: ["oss-face"] } });
@@ -104,7 +104,7 @@ describe("presets kept off with their model or the kind they make", () => {
     const { kindAllowed } = await import("@/server/hosted-run");
     const policies = [{ pool: {} }, { pool: { deny: ["oss-face"] } }, { pool: { allow: ["oss-clip"] } }, { pool: {}, kinds: { video: false } }, { pool: { apps: { deny: ["app-portrait"] } } }];
     for (const p of policies) {
-      const free = tryFreeFor({ hosted: true, gpu: { connected: false }, pool: poolRulesOf(p, presets) }, "both")!;
+      const free = tryFreeFor({ hosted: true, cardText: "Try free", gpu: { connected: false }, pool: poolRulesOf(p, presets) }, "both")!.runs;
       for (const preset of presets.filter((x) => x.model)) {
         const server = poolAllows(p, preset.model!.id, preset.id) && kindAllowed(p, preset.model!.kind);
         expect(free({ id: preset.id, open: true }), JSON.stringify({ p, preset: preset.id })).toBe(server);
@@ -115,15 +115,23 @@ describe("presets kept off with their model or the kind they make", () => {
 
 describe("Try free on preset cards", () => {
   const card = { id: "app-x", open: true };
+  const words = "Try free";
   it("only with hosted runs on, for a viewer whose runs go to this studio's GPUs, on presets they run", () => {
     expect(tryFreeFor(undefined, "both")).toBeNull();
-    expect(tryFreeFor({ gpu: { connected: false } }, "both")).toBeNull();
-    expect(tryFreeFor({ hosted: true, gpu: { connected: false } }, "cloud")).toBeNull();
-    expect(tryFreeFor({ hosted: true, gpu: { connected: true } }, "both")).toBeNull();
-    expect(tryFreeFor({ hosted: true, gpu: { connected: true }, prefer: "pool" }, "both")?.(card)).toBe(true);
-    const guest = tryFreeFor({ hosted: true, gpu: { connected: false }, pool: { apps: { deny: ["app-x"] } } }, "both")!;
-    expect(guest(card)).toBe(false);
-    expect(guest({ id: "app-y", open: true })).toBe(true);
-    expect(guest({ id: "app-y", open: false })).toBe(false);
+    expect(tryFreeFor({ gpu: { connected: false }, cardText: words }, "both")).toBeNull();
+    expect(tryFreeFor({ hosted: true, cardText: words, gpu: { connected: false } }, "cloud")).toBeNull();
+    expect(tryFreeFor({ hosted: true, cardText: words, gpu: { connected: true } }, "both")).toBeNull();
+    expect(tryFreeFor({ hosted: true, cardText: words, gpu: { connected: true }, prefer: "pool" }, "both")?.runs(card)).toBe(true);
+    const guest = tryFreeFor({ hosted: true, cardText: words, gpu: { connected: false }, pool: { apps: { deny: ["app-x"] } } }, "both")!;
+    expect(guest.text).toBe(words);
+    expect(guest.runs(card)).toBe(false);
+    expect(guest.runs({ id: "app-y", open: true })).toBe(true);
+    expect(guest.runs({ id: "app-y", open: false })).toBe(false);
+  });
+
+  it("says only the server's words: none from it, no words on any card", () => {
+    expect(tryFreeFor({ hosted: true, gpu: { connected: false } }, "both")).toBeNull();
+    expect(tryFreeFor({ hosted: true, cardText: "", gpu: { connected: false } }, "both")).toBeNull();
+    expect(tryFreeFor({ hosted: true, cardText: "Included", gpu: { connected: false } }, "both")?.text).toBe("Included");
   });
 });

@@ -111,6 +111,11 @@ export interface Policy {
   prefer?: "pool" | "own";
   /** Which kinds of run may use this install's GPUs (absent: all; a kind set to false: not that kind). */
   kinds?: { image?: boolean; video?: boolean; audio?: boolean; text?: boolean; model3d?: boolean };
+  /**
+   * The words a preset card shows when its run would go to this install's GPUs, such as "Try free" (absent: the cards
+   * show none). Fuobe has no price words of its own: with a service, only the service says a run there is free.
+   */
+  cardText?: string;
   links?: Action[];
   notice?: { id: string; text: string; url?: string };
   ttlS: number;
@@ -215,12 +220,16 @@ export function accountFacts(a: Pick<Account, "id" | "email" | "createdAt"> & { 
   return { id: a.id, email: a.email || null, emailVerified: !!a.emailVerifiedAt, signIn: a.signIn ?? "password", createdAt: a.createdAt, adultAt: a.adultAt ?? null };
 }
 
-/** With no billing service: an account may use this install's GPUs (when hosted runs are on) within today's limits. */
+/**
+ * With no billing service: an account may use this install's GPUs (when hosted runs are on) within today's limits. Those
+ * runs are free (hosted runs with no service need FUOBE_HOSTED_FREE=1), so preset cards say so.
+ */
 export const OPEN_POLICY: Policy = {
   hosted: true,
   pool: {},
   uploads: { image: true, video: false, audio: false },
   limits: { activeRuns: 4, waiting: 4, runsPerHour: 60, outputsPerRun: 4, maxMegapixels: 0, maxSeconds: 0, keepDays: 0, spaceBytes: 0 },
+  cardText: "Try free",
   ttlS: 60,
 };
 

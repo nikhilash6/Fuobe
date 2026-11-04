@@ -12,8 +12,8 @@ export function usePoolRules(): PoolRules | undefined {
   return v?.hosted && !v.gpu.connected ? v.pool : undefined;
 }
 
-/** "Try free" on preset cards (tryFreeFor), once the page has hydrated: null until then, and with hosted runs off. */
-export function useTryFree(): ((p: { id: string; open: boolean }) => boolean) | null {
+/** The words on preset cards ("Try free", tryFreeFor), once the page has hydrated: null until then, and with none. */
+export function useTryFree(): ReturnType<typeof tryFreeFor> {
   const hydrated = useHydrated();
   const v = useStatus().data?.viewer;
   const mode = useEngineMode();

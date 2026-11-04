@@ -64,9 +64,14 @@ type Policy = {
   limits: { activeRuns: number; waiting: number; runsPerHour: number; outputsPerRun: number; maxMegapixels: number; maxSeconds: number; keepDays: number; spaceBytes: number; addressRunsPerHour?: number };
   prefer?: "pool" | "own";                                         // the default place (absent: "own")
   kinds?: { image?: boolean; video?: boolean; audio?: boolean; text?: boolean; model3d?: boolean };  // absent: all
+  cardText?: string;                                               // preset cards' words for a run there (absent: none)
   links?: Action[]; notice?: { id: string; text: string; url?: string }; ttlS: number;
 };
 ```
+
+`cardText` is what a preset card says when its run would go to this install's GPUs for the viewer, such as "Try free"
+(at most 40 characters). With a service set, the cards say only these words, and nothing when the policy has none.
+With no service, runs there are free (`FUOBE_HOSTED_FREE=1`), and the cards say "Try free".
 
 `megapixels` is the size of each picture or frame the run makes, about, as its workflow makes it: the canvas the
 workflow binds (a canvas the request names counts only there; else the aspect ratio and resolution, the model's

@@ -244,4 +244,23 @@ describe("what this install's GPUs keep off, in the status", () => {
     fake.policy = { ...FAKE_POLICY };
     expect((await visitorStatus(auth.accountById(a)!)).viewer.pool).toBeUndefined();
   });
+
+  it("the preset cards' words are the billing service's, or Try free when runs here are free with no service", async () => {
+    // Hosted runs off: no words.
+    process.env.FUOBE_HOSTED_FREE = "1";
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.cardText).toBeUndefined();
+    // Free with no service: Try free.
+    process.env.FUOBE_HOSTED_RUNS = "1";
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.cardText).toBe("Try free");
+    expect((await visitorStatus(null)).viewer.cardText).toBe("Try free");
+    // A billing service that says nothing about the cards: no words of Fuobe's own.
+    process.env.FUOBE_BILLING_URL = fake.url;
+    process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
+    billing.resetBillingCache();
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.cardText).toBeUndefined();
+    // Its words, as they are.
+    fake.policy = { ...FAKE_POLICY, cardText: "Free this week" };
+    billing.resetBillingCache();
+    expect((await visitorStatus(auth.accountById(a)!)).viewer.cardText).toBe("Free this week");
+  });
 });

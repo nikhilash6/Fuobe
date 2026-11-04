@@ -893,6 +893,8 @@ export interface StatusInfo {
     hosted?: boolean;
     /** "pool": runs go to this studio's GPUs first, even with its own GPU online (either can still be picked). */
     prefer?: "pool";
+    /** The words a preset card shows when its run would go to this studio's GPUs ("Try free"), from the server. None: no words. */
+    cardText?: string;
     /** What this studio's GPUs keep off, for a viewer with no GPU of its own: its pickers leave it out (src/lib/pool-rules.ts). */
     pool?: PoolRules;
     /** The billing service's words for the account's balance (src/server/billing.ts). */

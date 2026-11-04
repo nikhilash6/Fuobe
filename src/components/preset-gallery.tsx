@@ -66,7 +66,8 @@ export const PresetCard = memo(function PresetCard({
 }) {
   const badge = engine !== "cloud" ? parseBadgeKey(gpu) : null;
   // Hosted runs on, and this preset runs on this studio's GPUs for the viewer: the card says it can be tried there.
-  const tryFree = useTryFree()?.(preset) && !badge;
+  const card = useTryFree();
+  const tryFree = card && card.runs(preset) && !badge ? card.text : null;
   const Icon = PRESET_ICONS[preset.icon] ?? Sparkles;
   const { ref, playing, asked, handlers } = usePreviewPlayback<HTMLAnchorElement>(preset.id, preset.preview);
   const [more, setMore] = useState(false);
@@ -103,7 +104,7 @@ export const PresetCard = memo(function PresetCard({
         )}
         {tryFree && (
           <span data-try-free className="pointer-events-none absolute top-1.5 right-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10.5px] font-semibold text-primary-foreground">
-            Try free
+            {tryFree}
           </span>
         )}
         <CardPending />

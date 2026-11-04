@@ -189,6 +189,11 @@ export interface VisitorView {
    */
   prefer?: "pool";
   /**
+   * The words a preset card shows when its run would go to this install's GPUs (the billing service's policy, such as
+   * "Try free"; with no service, "Try free": those runs are free). Absent: the cards show none.
+   */
+  cardText?: string;
+  /**
    * What this install's GPUs keep off (the policy's model and app lists, and its kinds), for a visitor with no GPU of its
    * own: its pickers leave those out instead of failing at Run. Absent: nothing is kept off, or it has a GPU of its own.
    */
@@ -236,6 +241,8 @@ export async function visitorStatus(account: Account | null) {
     const p = await billingPolicy(account?.id ?? null);
     if (p?.hosted) viewer.hosted = true;
     if (p?.hosted && p.prefer === "pool") viewer.prefer = "pool";
+    const card = p?.hosted && typeof p.cardText === "string" ? p.cardText.trim().slice(0, 40) : "";
+    if (card) viewer.cardText = card;
     const rules = p?.hosted && !gpu ? poolRulesOf(p, presetModels()) : undefined;
     if (rules) viewer.pool = rules;
     if (account && p?.links?.length) viewer.links = p.links;
