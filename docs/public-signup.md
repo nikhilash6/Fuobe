@@ -83,8 +83,21 @@ An account is signed in, but it sees the owner's studio as a guest does:
   A Canvas Kinetic node renders in the owner's browser; keeping its run on the board
   (`PUT /api/canvases/<id>/runs/<node>`) is a canvas change like any other (403 `library` for an account, 401
   for a guest), and it takes only the owner's own finished Kinetic Motion results.
-  Canvas shows its ready boards to guests and accounts as read-only pages (`/canvas/start/<id>`):
-  what goes in, the steps and what comes out. Only the owner makes boards. Assist, Cinema Studio,
+  **Canvas is open to build in.** Each ready board has its page (`/canvas/start/<id>`: what goes in, the
+  steps and what comes out), and **Use this board** opens it in the Canvas editor (`/canvas/try/<id>`,
+  or `/canvas/try/blank` for a blank one) with every node and link in place, its inputs holding
+  Fuobe's published example files (by their public path, never a copy in anyone's storage) and its
+  last step showing the board's own published film. A guest builds and changes boards there; the
+  first change keeps the board in that browser only (`/canvas/draft/<id>`, localStorage, up to 20,
+  nothing sent to the server), and **Save** offers a free account. An account saves its boards to its
+  account (`/canvas/saved/<id>`; `GET`/`POST /api/account/canvases`, `GET`/`PATCH`/`DELETE
+  /api/account/canvases/<id>`): its own boards only (another account's reads as 404, a guest gets
+  401), up to 50 boards of 1 MB each and 120 saves a minute, deleted with the account. Its inputs
+  take its own uploads or Fuobe's published example files, nothing else. The owner's canvases
+  (`/api/canvases`) stay the owner's (403 `library` for an account). **Run** on a visitor's board
+  never runs: a canvas plans with the studio's own AI helpers, so it says what running needs and
+  links the Video effect that makes the same film in one step (or the studios). On a phone the
+  board shows read-only with its steps editable in Nodes. Assist, Cinema Studio,
   Storyboard, Elements, Faceless Studio, Content Factory, Explainer, Ads Studio, Click to Ad and
   Marketing Studio show their ready-made starters the same way (`<studio>/start/<id>`); making one
   (`POST /api/starters/<id>`) is the owner's, and an account gets 403 `library`. A starter without its
