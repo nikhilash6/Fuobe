@@ -4,8 +4,8 @@
  * scripts/gen-home-bento.mjs: run it again rather than editing.
  */
 export const HOME_BENTO_MEDIA: Record<string, string> = {
-  "/previews/home/reel-sand-storm-640.mp4": "79c89fa8",
-  "/previews/home/reel-sand-storm-1024.mp4": "a3911fc1",
+  "/previews/home/reel-sand-storm-640.mp4": "c2d13659",
+  "/previews/home/reel-sand-storm-1024.mp4": "638c4ef5",
   "/previews/home/reel-one-take-640.mp4": "175b3cd6",
   "/previews/home/reel-one-take-1024.mp4": "dd9a7c62",
   "/previews/home/rotation-640.mp4": "3efbab2a",
@@ -41,7 +41,7 @@ export const HOME_BENTO_REEL = [
   {
     "id": "effect-sand-storm",
     "name": "reel-sand-storm",
-    "frames": 84,
+    "frames": 124,
     "fps": 24,
     "position": "50% 0%"
   },
