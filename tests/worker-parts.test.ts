@@ -1,6 +1,7 @@
 /**
  * The worker program's smaller parts: its one retry policy for calls to the studio (bin/lib/worker/retry.mjs), keeping
  * the PC awake while it works (awake.mjs), how it makes clips and sound again (media.mjs), and the studio's address.
+ * It also covers the stop signals the command line ends on (bin/lib/signals.mjs).
  */
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
@@ -8,6 +9,7 @@ import { helperCommand, StayAwake } from "../bin/lib/worker/awake.mjs";
 import { encodeArgs, mediaKind } from "../bin/lib/worker/media.mjs";
 import { RETRY, retrying } from "../bin/lib/worker/retry.mjs";
 import { siteProblem } from "../bin/lib/worker/run.mjs";
+import { onSignals, STOP_SIGNALS } from "../bin/lib/signals.mjs";
 
 /** A clock that moves only when the policy sleeps. */
 function clock() {
@@ -184,5 +186,25 @@ describe("the studio's address", () => {
     expect(siteProblem("http://192.168.1.5:3000")).toMatch(/https/);
     expect(siteProblem("ftp://studio.example")).toMatch(/https/);
     expect(siteProblem("studio")).toMatch(/web address/);
+  });
+});
+
+describe("stop signals", () => {
+  it("a long-running command ends its own way on Ctrl+C and on a stop from the system; a wait only on Ctrl+C", () => {
+    const proc = new EventEmitter();
+    const seen: string[] = [];
+    const off = onSignals(() => seen.push("stop"), STOP_SIGNALS, proc as unknown as NodeJS.Process);
+    proc.emit("SIGTERM");
+    proc.emit("SIGINT");
+    expect(seen).toEqual(["stop", "stop"]);
+    off();
+    proc.emit("SIGTERM");
+    expect(seen).toHaveLength(2);
+    expect(proc.listenerCount("SIGINT") + proc.listenerCount("SIGTERM")).toBe(0);
+    const offWait = onSignals(() => seen.push("wait"), undefined, proc as unknown as NodeJS.Process);
+    proc.emit("SIGTERM");
+    proc.emit("SIGINT");
+    expect(seen.slice(2)).toEqual(["wait"]);
+    offWait();
   });
 });

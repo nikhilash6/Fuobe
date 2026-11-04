@@ -273,7 +273,9 @@ The worker keeps its jobs going by itself:
   found yet. A drive that comes back after a restart is noticed, and the studio gets the new list.
 - **When the studio stops the worker.** If the studio no longer knows the worker's token, `fuobe worker run` ends with
   exit code 3; any other stop that you did not ask for ends with exit code 1. The sign-in task that
-  `fuobe worker install` adds then starts the worker again after a minute. Ctrl+C ends with 0.
+  `fuobe worker install` adds then starts the worker again after a minute. Ctrl+C ends with 0. On Ctrl+C, and on a
+  stop from the system (SIGTERM), the worker stops its ComfyUI and empties its folders before it ends. Kept results
+  stay for its next start.
 
 ### The protocol
 

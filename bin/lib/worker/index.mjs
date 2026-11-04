@@ -40,7 +40,9 @@ export async function worker(args, io) {
         return 2;
       }
       const ctrl = new AbortController();
-      const off = io.onInterrupt?.(() => ctrl.abort());
+      // Ctrl+C, or a stop from the system: the worker stops its ComfyUI and cleans up before it exits (finished results
+      // stay for its next start).
+      const off = (io.onStop ?? io.onInterrupt)?.(() => ctrl.abort());
       say(`Fuobe worker for ${cfg.site}. ${cfg.port ? `Its own ComfyUI uses port ${cfg.port}` : "Its own ComfyUI takes a free local port at each start"}. Ctrl+C stops it.`);
       let why;
       try {
