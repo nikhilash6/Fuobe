@@ -7,5 +7,10 @@
 export const TEMPLATE_HD: Record<string, { w: number[]; v: string; still?: number }> = {
   "canvas/effect-chain-fallen-angel": { "w":[640,1024], "v":"38cc902a" },
   "canvas/effect-chain-monet-muse": { "w":[640,1024], "v":"74a2defd" },
-  "canvas/effect-chain-street-colossus": { "w":[640,1024], "v":"c7bdb6b9" }
+  "canvas/effect-chain-street-colossus": { "w":[640,1024], "v":"c7bdb6b9" },
+  "marketing/cta-clean-minimal": { "w":[640], "v":"d923f165", "still":384 },
+  "marketing/cta-red-carpet": { "w":[640], "v":"58fdb432", "still":384 },
+  "marketing/mm-clay-diorama": { "w":[640], "v":"f7c9d3eb", "still":384 },
+  "marketing/mm-scrapbook-flip": { "w":[640], "v":"2c9b8d17", "still":384 },
+  "marketing/ms-device-float": { "w":[640], "v":"e3edca76", "still":384 }
 };
