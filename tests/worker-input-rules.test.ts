@@ -140,6 +140,18 @@ describe("the worker's input rules", () => {
     expect(check({ "1": { class_type: "UNETLoader", inputs: { unet_name: "C:x.safetensors", weight_dtype: "default" } } })).toBe("unsafe-path");
   });
 
+  it("a model file the index keeps in a subfolder of its model folder is still a model file: verified there, or refused", () => {
+    const name = "Kandinsky-6.0-Lite-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors";
+    expect(catalog.requirements.files[`diffusion_models/${name}`]).toBeTruthy();
+    expect(rules.inputs.UNETLoader.unet_name).toMatchObject({ kind: "model-file", folders: expect.arrayContaining(["diffusion_models"]) });
+    const loader = (unet_name: string) => ({ "1": { class_type: "UNETLoader", inputs: { unet_name, weight_dtype: "default" } } });
+    expect(check(loader(name))).toBeNull();
+    // Not verified on this worker, under another subfolder, or outside the model folder: refused.
+    expect(vetGraph(loader(name), allowed, verified.filter((v) => v.name !== name), { rules, staged: SENT })).toBe("model-unverified");
+    expect(check(loader("Kandinsky-6.0-Lite-distill-5s-Diffusers/vae/diffusion_pytorch_model.safetensors"))).toBe("model-unverified");
+    expect(check(loader(`../${name}`))).toBe("unsafe-path");
+  });
+
   it("a model input takes only a verified file, whatever its name ends with, or the catalog's own values that name no file", () => {
     const none = { byName: verifiedIndex([]), staged: [] };
     const loras = { kind: "model-file", folders: ["loras"] };

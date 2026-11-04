@@ -116,10 +116,18 @@ export function inputRules(catalog) {
       }
     }
   }
-  // Which model folders each loader input reads.
+  // Which model folders each loader input reads, and the files the index names under a subfolder of one ("Kandinsky-…/
+  // transformer/…" in diffusion_models): a loader reads such a name as a model file, never as a path of its own.
+  const subfolderFiles = new Map();
   for (const f of Object.values(catalog.requirements.files ?? {})) {
-    for (const [cls, input] of f.loaders ?? []) pair(cls, input).folders.add(f.folder);
+    for (const [cls, input] of f.loaders ?? []) {
+      const p = pair(cls, input);
+      p.folders.add(f.folder);
+      if (/[\\/]/.test(f.file)) (subfolderFiles.get(p) ?? subfolderFiles.set(p, new Set()).get(p)).add(f.file);
+    }
   }
+  /** A value that looks like a path and isn't a model file the index names under one of this input's folders. */
+  const pathOf = (p) => (v) => looksLikePath(v) && !subfolderFiles.get(p)?.has(v);
 
   const inputs = {};
   const text = {};
@@ -151,7 +159,7 @@ export function inputRules(catalog) {
     // A save name the studio makes.
     else if (p.input === "filename_prefix" || b.includes("filenamePrefix")) set(p, { kind: "output-name" });
     // A model file, by its name in a model folder.
-    else if (!named && !strings.some(looksLikePath) && (p.folders.size || b.some((x) => MODEL_BINDING.test(x)) || strings.some((v) => MODEL_EXT.test(v) && !/\s/.test(v)))) {
+    else if (!named && !strings.some(pathOf(p)) && (p.folders.size || b.some((x) => MODEL_BINDING.test(x)) || strings.some((v) => MODEL_EXT.test(v) && !/\s/.test(v)))) {
       // The worker takes only a file it verified, or one of these catalog values that name no file ("None", say).
       const plain = [...new Set(strings.filter((v) => v !== "" && !FILE_EXT.test(v)))].sort();
       set(p, { kind: "model-file", folders: [...p.folders].sort(), ...(plain.length && { plain }) });
